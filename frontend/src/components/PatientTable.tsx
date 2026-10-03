@@ -1,15 +1,23 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useDeletePatient } from "../api/queries";
+import type { PatientCaution } from "../api/masterClient";
+import { usePatientCautions } from "../api/masterQueries";
+import {
+  useAllergiesForPatients,
+  useDeletePatient,
+  useFlagsForPatients,
+  useInfectionsForPatients,
+} from "../api/queries";
 import {
   addressLabelOf,
   ageWithMonthsLabel,
-  displayKana,
   displayName,
   genderShortLabel,
   homePhoneOf,
   mobilePhoneOf,
 } from "../fhir/patientHelpers";
-import { PatientDeceasedMark } from "./PatientRowCells";
+import { PatientDeceasedMark, PatientKana } from "./PatientRowCells";
+import { RowPictograms } from "./PatientListRowParts";
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
 import { useReturnLinkState } from "../returnTo";
@@ -18,6 +26,19 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
   const deletePatient = useDeletePatient();
   // カルテの「戻る」でこの一覧(検索条件つき)に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
+
+  const patientIds = useMemo(
+    () => patients.map((p) => p.id).filter((id): id is string => Boolean(id)),
+    [patients],
+  );
+  const cautions = usePatientCautions();
+  const cautionsByCode = useMemo(
+    () => new Map<string, PatientCaution>((cautions.data?.items ?? []).map((c) => [c.code, c])),
+    [cautions.data],
+  );
+  const flags = useFlagsForPatients(patientIds);
+  const allergies = useAllergiesForPatients(patientIds);
+  const infections = useInfectionsForPatients(patientIds);
 
   function handleDelete(patient: fhir4.Patient) {
     if (!patient.id) return;
@@ -38,7 +59,6 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
           <tr>
             <th>患者番号</th>
             <th>氏名</th>
-            <th>カナ</th>
             <th>性別</th>
             <th>生年月日</th>
             <th>住所</th>
@@ -52,10 +72,22 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
             <tr key={patient.id}>
               <td>{patient.identifier?.[0]?.value ?? "-"}</td>
               <td>
-                {displayName(patient)}
-                <PatientDeceasedMark patient={patient} />
+                {/* 外来患者一覧と同じく、カナは氏名の後ろに括弧書きで添え、ピクトグラムを続ける。 */}
+                <span className="outpatient__name-cell">
+                  <span className="outpatient__name">
+                    {displayName(patient) || "-"}
+                    <PatientKana patient={patient} />
+                  </span>
+                  <PatientDeceasedMark patient={patient} />
+                  <RowPictograms
+                    patientId={patient.id ?? ""}
+                    flags={flags.byPatient}
+                    allergies={allergies.byPatient}
+                    infections={infections.byPatient}
+                    cautionsByCode={cautionsByCode}
+                  />
+                </span>
               </td>
-              <td>{displayKana(patient)}</td>
               <td>{genderShortLabel(patient.gender)}</td>
               <td>
                 {patient.birthDate ?? "-"}
