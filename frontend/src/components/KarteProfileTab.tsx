@@ -59,14 +59,24 @@ import { PatientBasicSection } from "./PatientBasicSection";
 
 /**
  * カルテ画面の「プロファイル」タブ。時系列ではなく、患者の「現在の状態」を
- * 区画ごとに並べて読む。今は注意の区画だけで、身体(血液型・妊娠)・感染症・
- * 生活などの区画を後から足す前提の構造にしてある。
+ * 区画ごとに読む。区画はタブで切り替え、一度に一つだけ出す。
  *
  * URL の view は区画ごとの接頭辞つき("caution:<flagId>")。後から足す区画が
  * 別の接頭辞を使えるようにして、ID の取り違えを防ぐ。
  */
 
 const CAUTION_VIEW_PREFIX = "caution:";
+
+const SECTIONS = [
+  { key: "basic", label: "基本情報" },
+  { key: "coverage", label: "保険・公費" },
+  { key: "body", label: "身体情報" },
+  { key: "infection", label: "感染症" },
+  { key: "brought-medication", label: "持参薬" },
+  { key: "caution", label: "診療上の注意" },
+] as const;
+
+type SectionKey = (typeof SECTIONS)[number]["key"];
 
 type Mode =
   | { kind: "list" }
@@ -115,6 +125,10 @@ interface KarteProfileTabProps {
 
 export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileTabProps) {
   const [form, setForm] = useState<FormMode>(null);
+  // 詳細やフォームから戻ったときに元の区画を開いたままにするため、ここで持つ。
+  const [section, setSection] = useState<SectionKey>(() =>
+    view.startsWith(CAUTION_VIEW_PREFIX) ? "caution" : "basic",
+  );
 
   // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
   useEffect(() => setForm(null), [view]);
@@ -172,29 +186,51 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
 
   return (
     <div className="karte-tabpanel karte-profile">
-      <PatientBasicSection
-        patientId={patientId}
-        onEdit={() => setForm({ kind: "edit-patient" })}
-      />
-      {/* 保険は医事会計が正本なので参照だけ。取り込み済みの Coverage を見せる。 */}
-      <KarteCoverageSection patientId={patientId} />
-      <PatientBodySection
-        patientId={patientId}
-        onEditBloodType={() => setForm({ kind: "edit-blood-type" })}
-        onEditPregnancy={() => setForm({ kind: "edit-pregnancy" })}
-      />
-      <PatientInfectionSection
-        patientId={patientId}
-        onAdd={() => setForm({ kind: "create-infection" })}
-        onEdit={(observationId) => setForm({ kind: "edit-infection", observationId })}
-      />
-      <PatientBroughtMedicationSection patientId={patientId} />
-      <CautionSection
-        patientId={patientId}
-        onView={(flagId) => onViewChange(`${CAUTION_VIEW_PREFIX}${flagId}`)}
-        onCreate={() => setForm({ kind: "create" })}
-        onEdit={(flagId) => setForm({ kind: "edit", flagId })}
-      />
+      <div className="order-select__tabs karte-profile__tabs" role="tablist" aria-label="プロファイルの区画">
+        {SECTIONS.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            role="tab"
+            aria-selected={section === s.key}
+            className={section === s.key ? "order-select__tab is-active" : "order-select__tab"}
+            onClick={() => setSection(s.key)}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {section === "basic" ? (
+        <PatientBasicSection
+          patientId={patientId}
+          onEdit={() => setForm({ kind: "edit-patient" })}
+        />
+      ) : section === "coverage" ? (
+        // 保険は医事会計が正本なので参照だけ。取り込み済みの Coverage を見せる。
+        <KarteCoverageSection patientId={patientId} />
+      ) : section === "body" ? (
+        <PatientBodySection
+          patientId={patientId}
+          onEditBloodType={() => setForm({ kind: "edit-blood-type" })}
+          onEditPregnancy={() => setForm({ kind: "edit-pregnancy" })}
+        />
+      ) : section === "infection" ? (
+        <PatientInfectionSection
+          patientId={patientId}
+          onAdd={() => setForm({ kind: "create-infection" })}
+          onEdit={(observationId) => setForm({ kind: "edit-infection", observationId })}
+        />
+      ) : section === "brought-medication" ? (
+        <PatientBroughtMedicationSection patientId={patientId} />
+      ) : (
+        <CautionSection
+          patientId={patientId}
+          onView={(flagId) => onViewChange(`${CAUTION_VIEW_PREFIX}${flagId}`)}
+          onCreate={() => setForm({ kind: "create" })}
+          onEdit={(flagId) => setForm({ kind: "edit", flagId })}
+        />
+      )}
     </div>
   );
 }

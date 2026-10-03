@@ -581,9 +581,10 @@
   font-size: 11px;
 }
 
-/* プロファイルタブは区画を縦に積む。区画の間は見出しが埋もれない程度に空ける。 */
-.karte-profile__section + .karte-profile__section {
-  margin-top: 24px;
+/* プロファイルの区画切替。左ペインは幅が狭いので伝票の切替より詰める。 */
+.karte-profile__tabs .order-select__tab {
+  font-size: 13px;
+  padding: 4px 8px;
 }
 
 /* 「終了したものも表示」。常設の絞り込みなので、隣の新規登録ボタンより小さくして
