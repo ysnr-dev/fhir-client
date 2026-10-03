@@ -810,7 +810,7 @@ function OutpatientMenuItems({
           disabled={pending}
           onClick={() => onChangeStatus("booked")}
         >
-          受付を取り消す
+          受付取消
         </button>
       )}
       {/* 来なかった予約。取消と違って予約の記録は残し、枠も触らない。遅れて来たときは
@@ -832,7 +832,7 @@ function OutpatientMenuItems({
           disabled={pending}
           onClick={() => onChangeStatus("booked")}
         >
-          未来院を取り消す
+          未来院取消
         </button>
       )}
       {inExam && (
@@ -842,7 +842,7 @@ function OutpatientMenuItems({
           disabled={pending}
           onClick={onCancelExamStart}
         >
-          診察開始を取り消す
+          診察開始取消
         </button>
       )}
       {/* 会計はレセコン側に置くので、カルテからは診療行為と病名を送るだけ。
@@ -865,7 +865,7 @@ function OutpatientMenuItems({
           disabled={pending}
           onClick={onCancelExamFinish}
         >
-          診察終了を取り消す
+          診察終了取消
         </button>
       )}
       {/* 診察が始まった予約は取り消せない(先に診察開始を取り消す)。 */}
@@ -876,7 +876,7 @@ function OutpatientMenuItems({
           disabled={pending}
           onClick={onCancel}
         >
-          予約を取り消す
+          予約取消
         </button>
       )}
     </>

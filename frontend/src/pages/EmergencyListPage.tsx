@@ -577,7 +577,7 @@ function EmergencyTableRow({
               disabled={pending}
               onClick={onCancelExamStart}
             >
-              診察開始を取り消す
+              診察開始取消
             </button>
           )}
           {status === "finished" && (
@@ -587,7 +587,7 @@ function EmergencyTableRow({
               disabled={pending}
               onClick={onCancelDisposition}
             >
-              転帰を取り消す
+              転帰取消
             </button>
           )}
           {active && status !== "in-progress" && (
@@ -597,7 +597,7 @@ function EmergencyTableRow({
               disabled={pending}
               onClick={onCancel}
             >
-              受付を取り消す
+              受付取消
             </button>
           )}
         </RowMenu>
