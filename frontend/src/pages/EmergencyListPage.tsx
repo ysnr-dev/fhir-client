@@ -336,7 +336,7 @@ export function EmergencyListPage() {
           actions={
             <>
               <EmergencyRowButtons row={selectedRow} {...actionsFor(selectedRow)} />
-              <EmergencyMenuItems row={selectedRow} {...actionsFor(selectedRow)} />
+              <EmergencyMenuItems row={selectedRow} {...actionsFor(selectedRow)} inDrawer />
             </>
           }
           onClose={drawer.close}
@@ -622,7 +622,15 @@ function EmergencyMenuItems({
   onEdit,
   onIdentify,
   onCancel,
-}: { row: EmergencyRow } & EmergencyRowActions) {
+  inDrawer = false,
+}: {
+  row: EmergencyRow;
+  /**
+   * ドロワーに並べるとき。来院直後のトリアージはドロワーでは行のボタンとして
+   * 先に並べているので、重ねて出さない。
+   */
+  inDrawer?: boolean;
+} & EmergencyRowActions) {
   const { encounter, patient } = row;
   const level = emergencyTriageLevel(encounter);
   const active = isEmergencyActive(encounter);
@@ -631,7 +639,7 @@ function EmergencyMenuItems({
 
   return (
     <>
-      {active && (
+      {active && !(inDrawer && status === "arrived") && (
         <button type="button" className="row-menu__item" disabled={pending} onClick={onTriage}>
           {level ? "再トリアージ" : "トリアージ"}
         </button>

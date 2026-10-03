@@ -891,7 +891,7 @@ export function InpatientListPage() {
           actions={
             <>
               <PlannedRowButtons {...plannedActions(selectedPlannedRow)} />
-              <PlannedMenuItems {...plannedActions(selectedPlannedRow)} />
+              <PlannedMenuItems {...plannedActions(selectedPlannedRow)} inDrawer />
             </>
           }
           onClose={drawer.close}
@@ -1220,12 +1220,22 @@ function PlannedRowButtons({ onExecute }: PlannedMenuActions) {
 }
 
 /** 入院予定の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
-function PlannedMenuItems({ onExecute, onCancelPlan, cancelling }: PlannedMenuActions) {
+function PlannedMenuItems({
+  onExecute,
+  onCancelPlan,
+  cancelling,
+  inDrawer = false,
+}: PlannedMenuActions & {
+  /** ドロワーでは入院実施を行のボタンとして先に並べるので、重ねて出さない。 */
+  inDrawer?: boolean;
+}) {
   return (
     <>
-      <button type="button" className="row-menu__item" onClick={onExecute}>
-        入院実施
-      </button>
+      {!inDrawer && (
+        <button type="button" className="row-menu__item" onClick={onExecute}>
+          入院実施
+        </button>
+      )}
       <button
         type="button"
         className="row-menu__item row-menu__item--danger"

@@ -116,17 +116,20 @@ export function TransferPlanTable({
     );
   }
 
-  // 行のケバブとドロワーに同じ項目を並べる。
-  function menuItems(row: TransferPlanRow) {
+  // 行のケバブとドロワーに同じ項目を並べる。ドロワーでは実施を行のボタンとして
+  // 先に並べているので、ここでは重ねて出さない。
+  function menuItems(row: TransferPlanRow, inDrawer = false) {
     return (
       <>
-        <button
-          type="button"
-          className="row-menu__item"
-          onClick={() => setExecuteTarget(row)}
-        >
-          転科・転棟実施
-        </button>
+        {!inDrawer && (
+          <button
+            type="button"
+            className="row-menu__item"
+            onClick={() => setExecuteTarget(row)}
+          >
+            転科・転棟実施
+          </button>
+        )}
         <button
           type="button"
           className="row-menu__item row-menu__item--danger"
@@ -202,7 +205,7 @@ export function TransferPlanTable({
           actions={
             <>
               {rowButtons(selected)}
-              {menuItems(selected)}
+              {menuItems(selected, true)}
             </>
           }
           onClose={drawer.close}
@@ -257,17 +260,20 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
     );
   }
 
-  // 行のケバブとドロワーに同じ項目を並べる。
-  function menuItems(row: LeaveRow) {
+  // 行のケバブとドロワーに同じ項目を並べる。ドロワーでは実施を行のボタンとして
+  // 先に並べているので、ここでは重ねて出さない。
+  function menuItems(row: LeaveRow, inDrawer = false) {
     return (
       <>
-        <button
-          type="button"
-          className="row-menu__item"
-          onClick={() => setReturnTarget(row)}
-        >
-          帰院実施
-        </button>
+        {!inDrawer && (
+          <button
+            type="button"
+            className="row-menu__item"
+            onClick={() => setReturnTarget(row)}
+          >
+            帰院実施
+          </button>
+        )}
         <button
           type="button"
           className="row-menu__item row-menu__item--danger"
@@ -341,7 +347,7 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
           actions={
             <>
               {rowButtons(selected)}
-              {menuItems(selected)}
+              {menuItems(selected, true)}
             </>
           }
           onClose={drawer.close}
@@ -397,17 +403,20 @@ export function DischargePlanTable({
     );
   }
 
-  // 行のケバブとドロワーに同じ項目を並べる。
-  function menuItems(row: DischargePlanRow) {
+  // 行のケバブとドロワーに同じ項目を並べる。ドロワーでは実施を行のボタンとして
+  // 先に並べているので、ここでは重ねて出さない。
+  function menuItems(row: DischargePlanRow, inDrawer = false) {
     return (
       <>
-        <button
-          type="button"
-          className="row-menu__item"
-          onClick={() => setDischargeTarget(row)}
-        >
-          退院実施
-        </button>
+        {!inDrawer && (
+          <button
+            type="button"
+            className="row-menu__item"
+            onClick={() => setDischargeTarget(row)}
+          >
+            退院実施
+          </button>
+        )}
         <button
           type="button"
           className="row-menu__item row-menu__item--danger"
@@ -481,7 +490,7 @@ export function DischargePlanTable({
           actions={
             <>
               {rowButtons(selected)}
-              {menuItems(selected)}
+              {menuItems(selected, true)}
             </>
           }
           onClose={drawer.close}
