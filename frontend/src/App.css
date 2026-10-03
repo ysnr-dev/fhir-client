@@ -21810,3 +21810,389 @@ body.page-home .app__main {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* ---- 注射カレンダー(カルテ左ペイン「注射」タブ) ---- */
+
+.karte-tabpanel.injection-calendar-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.injection-calendar-panel .injection-calendar {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.injection-calendar__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.injection-calendar__legend li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.injection-calendar__slot {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.injection-calendar__time--performed {
+  color: var(--accent);
+}
+
+.injection-calendar__extra {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.injection-calendar__symbol {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.injection-calendar__symbol--completed {
+  color: var(--accent);
+}
+
+.injection-calendar__symbol--stopped,
+.injection-calendar__symbol--not-done {
+  color: var(--warning);
+}
+
+.injection-calendar__symbol--cancelled {
+  color: var(--text);
+}
+
+.injection-calendar__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.injection-calendar__range {
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.injection-calendar__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.injection-calendar {
+  overflow: auto;
+  max-width: 100%;
+}
+
+.injection-calendar__table {
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+.injection-calendar__table th,
+.injection-calendar__table td {
+  border: 1px solid var(--border);
+  padding: 0;
+  vertical-align: top;
+}
+
+.injection-calendar__head {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  background: var(--surface-panel);
+  text-align: left;
+  font-weight: normal;
+}
+
+thead .injection-calendar__head {
+  padding: 4px 8px;
+  vertical-align: middle;
+}
+
+.injection-calendar__head--indent .injection-calendar__head-body {
+  padding-left: 20px;
+  border-left: 3px solid var(--accent-border);
+}
+
+.injection-calendar__head-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px 4px 4px 8px;
+}
+
+.injection-calendar__label {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.injection-calendar__name {
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.injection-calendar__usage {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 日付の列は「● 16:10+」(予定外の実施)が収まる幅に揃える。中身で列ごとに幅が変わらないよう
+   見出しとマスの両方に最小・最大を与える(table-layout: fixed は表の幅が auto だと効かない)。 */
+.injection-calendar__day,
+.injection-calendar__cell {
+  box-sizing: border-box;
+  width: 68px;
+  min-width: 68px;
+  max-width: 68px;
+}
+
+.injection-calendar__day {
+  padding: 2px 4px;
+  background: var(--surface-panel);
+  font-weight: normal;
+  color: var(--text-h);
+}
+
+.injection-calendar__day > span {
+  display: block;
+  text-align: center;
+}
+
+.injection-calendar__weekday {
+  font-size: 11px;
+}
+
+.injection-calendar__day--saturday .injection-calendar__weekday,
+.injection-calendar__day--saturday > span:first-child {
+  color: var(--lab-low);
+}
+
+.injection-calendar__day--sunday .injection-calendar__weekday,
+.injection-calendar__day--sunday > span:first-child {
+  color: var(--lab-high);
+}
+
+.injection-calendar__day--today,
+.injection-calendar__cell--today {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.injection-calendar__cell {
+  height: 1px;
+}
+
+.injection-calendar__cell--selected {
+  background: var(--accent-bg);
+}
+
+.injection-calendar__empty {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.injection-calendar__empty:hover {
+  background: var(--surface-stripe);
+}
+
+.injection-calendar__entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  height: auto;
+  min-height: 40px;
+  padding: 2px 4px;
+  border: 0;
+  border-left: 3px solid var(--border);
+  border-radius: 0;
+  background: var(--surface-card);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  color: var(--text-h);
+}
+
+.injection-calendar__entry + .injection-calendar__entry {
+  border-top: 1px dashed var(--border);
+}
+
+.injection-calendar__entry--completed {
+  border-left-color: var(--accent);
+}
+
+.injection-calendar__entry--partial,
+.injection-calendar__entry--stopped,
+.injection-calendar__entry--not-done {
+  border-left-color: var(--warning);
+}
+
+.injection-calendar__entry--cancelled {
+  opacity: 0.55;
+}
+
+.injection-calendar__entry--cancelled .injection-calendar__time {
+  text-decoration: line-through;
+}
+
+.injection-calendar__marks {
+  display: flex;
+  gap: 2px;
+}
+
+.injection-calendar__mark {
+  padding: 0 3px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.injection-calendar__mark--changed {
+  color: var(--warning);
+}
+
+.injection-calendar__mark--dose {
+  color: var(--danger);
+}
+
+/* 右ペイン「その日の注射」 */
+
+.injection-day__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--text-h);
+}
+
+.injection-day__date {
+  font-weight: 600;
+}
+
+.injection-day__status {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.injection-day__status--completed {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.injection-day__status--cancelled {
+  color: var(--text);
+}
+
+.injection-day__diff {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--warning);
+  background: var(--surface-card);
+  font-size: 13px;
+}
+
+.injection-day__diff h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.injection-day__diff ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.injection-day__rp {
+  margin-bottom: 8px;
+}
+
+.injection-day__rp-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.injection-day__times {
+  color: var(--text-h);
+}
+
+.injection-day__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.injection-day__table th,
+.injection-day__table td {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.injection-day__table th {
+  background: var(--surface-panel);
+  font-weight: normal;
+}
+
+.injection-day__amount--differs {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* 継続のモーダル */
+
+.injection-continue {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.injection-continue label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.injection-continue__count {
+  font-size: 13px;
+  color: var(--text-h);
+}

@@ -956,6 +956,65 @@ export function buildInjectionBundle(
 }
 
 /**
+ * 束ねの継続で足す日付。束ねの最終日の翌日から終了日までを、束ねのパターンで間引く。
+ * N 日ごとは束ねの開始日を起点に数える(継続しても間隔がずれない)。上限は新規登録と同じ
+ * 14 件・最終日から 90 日。
+ */
+export function injectionExtensionDates(
+  series: Pick<InjectionSeries, "start" | "schedule">,
+  lastDay: string,
+  endDate: string,
+): string[] {
+  if (!lastDay || !endDate || endDate <= lastDay) return [];
+  const span = Math.min(diffDays(lastDay, endDate), MAX_INJECTION_SPAN_DAYS);
+  const { schedule } = series;
+  const dates: string[] = [];
+  for (let i = 1; i <= span && dates.length < MAX_INJECTION_ORDERS; i++) {
+    const date = addDays(lastDay, i);
+    if (schedule.kind === "interval") {
+      const step = Math.max(Math.trunc(schedule.intervalDays) || 1, 1);
+      if (diffDays(series.start, date) % step !== 0) continue;
+    } else if (schedule.kind === "weekly") {
+      if (!schedule.days.includes(dayOfWeekCode(date))) continue;
+    }
+    dates.push(date);
+  }
+  return dates;
+}
+
+/**
+ * 既存の束ねへ日を足す(継続)。足す日は同じ requisition・開始日・パターンで組むので、
+ * 「連日 N日目」は開始日との差のまま続番になる。束ねの終了日は足した日にだけ新しい値を
+ * 焼き付ける(既存の日は書き換えない。終了日は表示にも展開にも使っていない)。
+ * values は束ねの最終日の内容(薬剤行の id を落としたもの)。
+ */
+export function buildInjectionSeriesExtendBundle(
+  values: InjectionFormValues,
+  patientId: string,
+  requester: OrderContext,
+  series: InjectionSeries,
+  dates: string[],
+): fhir4.Bundle {
+  const extended: InjectionSeries = { ...series, end: dates[dates.length - 1] ?? series.end };
+  const authoredOn = registrationAuthoredOn();
+  const rps = values.rps.map((rp) => ({
+    ...rp,
+    medicines: rp.medicines.map(({ id: _id, ...rest }) => rest),
+  }));
+  return transactionBundle(
+    dates.flatMap((date) =>
+      buildInjectionDayEntries(
+        { ...values, rps, startDate: date, endDate: date },
+        patientId,
+        requester,
+        authoredOn,
+        extended,
+      ),
+    ),
+  );
+}
+
+/**
  * 単日(束ねない)の注射 1 件ぶんの transaction entry。化学療法レジメンの適用が、
  * 相対日を実日付に展開した 1 日ずつをこれで組み、束ねの印(requisition)は
  * レジメン側のものに差し替える(regimenOrderHelpers.ts)。

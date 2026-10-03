@@ -49,13 +49,13 @@ const MARK_LABELS: Record<FlowsheetMarkKind, string> = {
 };
 
 /** 薬剤名を「・」で連結。長さは表示側(CSS の省略)に任せる。 */
-function medicineLabel(rp: InjectionRpDisplay): string {
+export function injectionMedicineLabel(rp: InjectionRpDisplay): string {
   return rp.medicines.map((medicine) => medicine.name).filter(Boolean).join("・");
 }
 
-/** 行のキー。薬剤の組が同じでも、用法種別・経路が違えば別の行にする。 */
-function rowKeyOf(rp: InjectionRpDisplay): string {
-  return [medicineLabel(rp), rp.usageTypeDisplay ?? "", rp.routeDisplay ?? ""].join("/");
+/** 行のキー。薬剤の組が同じでも、用法種別・経路が違えば別の行にする。注射カレンダーと共用。 */
+export function injectionRowKeyOf(rp: InjectionRpDisplay): string {
+  return [injectionMedicineLabel(rp), rp.usageTypeDisplay ?? "", rp.routeDisplay ?? ""].join("/");
 }
 
 /** 実施記録の状態 → 印の種類。 */
@@ -129,8 +129,8 @@ export function buildInjectionRows(data: FlowsheetInjectionData): FlowsheetMarkR
     const performs = proceduresByOrderId.get(srId) ?? [];
 
     for (const rp of groupInjectionByRp(mrsByOrderId.get(srId) ?? [])) {
-      const key = rowKeyOf(rp);
-      const label = medicineLabel(rp);
+      const key = injectionRowKeyOf(rp);
+      const label = injectionMedicineLabel(rp);
       if (!label) continue;
       const usage = injectionUsageSummary(rp);
       let row = rows.get(key);

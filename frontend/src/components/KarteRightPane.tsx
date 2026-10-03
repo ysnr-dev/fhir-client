@@ -71,7 +71,14 @@ export type KartePaneState =
       broughtIds?: string[];
     }
   | { kind: "prescription-edit"; srId: string }
-  | { kind: "injection-create"; sourceSrId?: string; problem?: ProblemRef }
+  // startDate / endDate: 注射カレンダーで選んだ日(その日から、または複写先の期間)。
+  | {
+      kind: "injection-create";
+      sourceSrId?: string;
+      problem?: ProblemRef;
+      startDate?: string;
+      endDate?: string;
+    }
   | { kind: "injection-edit"; srId: string }
   | { kind: "lab-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "lab-order-edit"; srId: string }
@@ -254,7 +261,6 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${(state.broughtIds ?? []).join(",")}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
     // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
-    case "injection-create":
     case "lab-order-create":
     case "micro-order-create":
     case "patho-order-create":
@@ -269,7 +275,9 @@ function paneKey(state: KartePaneState): string {
     case "nutrition-guidance-order-create":
     case "consult-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
-    // 食事は暦の別の日を押したときも初期値(開始日)が変わるので、日付もキーに入れる。
+    // 注射・食事は暦の別の日を押したときも初期値(開始日)が変わるので、日付もキーに入れる。
+    case "injection-create":
+      return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${state.startDate ?? ""}:${state.endDate ?? ""}`;
     case "meal-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${state.startDate ?? ""}`;
     case "note-create":
@@ -641,6 +649,8 @@ function PaneContent({
           patientId={patientId}
           sourceSrId={state.sourceSrId}
           defaultProblem={state.problem}
+          startDate={state.startDate}
+          endDate={state.endDate}
           onSaved={onSaved}
         />
       );

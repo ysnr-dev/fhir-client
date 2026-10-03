@@ -71,6 +71,9 @@ export const KARTE_TABS = [
   { key: "brought-medication", label: "持参薬" },
   // 投薬歴。処方・注射・持参薬を「薬剤 × 日付」の表にして、いつ何をどれだけ使っていたかを読む。
   { key: "medication-history", label: "投薬歴" },
+  // 注射カレンダー。連日の注射は日ごとのカードに散らばるので、「RP × 日付」の表で
+  // 予定・進捗・実施を並べ、表から継続・変更・中止・実施まで行う。
+  { key: "injection", label: "注射" },
   // 化学療法。レジメンの投与スケジュールは日付の器(暦)で見る(食事と同じ考え方)。
   { key: "chemo", label: "化学療法" },
   // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る(紙のパスシートの形)。
@@ -116,7 +119,7 @@ export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
  */
 export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly KarteTabKey[] }> = [
   { label: "患者情報", keys: ["profile", "allergy", "brought-medication"] },
-  { label: "診療情報", keys: ["medication-history", "chemo", "pathway", "meal", "chart"] },
+  { label: "診療情報", keys: ["medication-history", "injection", "chemo", "pathway", "meal", "chart"] },
   {
     label: "検査結果",
     keys: ["lab", "lab-timeline", "micro", "patho", "rad-report", "physio-report", "endoscopy-report"],

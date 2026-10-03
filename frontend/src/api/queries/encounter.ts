@@ -40,7 +40,7 @@ import { buildOralPerformDeleteEntries, type OralPerformDisplay } from "../../fh
 import { addDays } from "../../fhir/scheduleHelpers";
 import { createResource, postBundle, searchResource } from "../fhirClient";
 import { fetchYakkaCodes } from "../masterClient";
-import { ORAL_LOOKBACK_DAYS, resourcesOfType, setOrderPeriod } from "./core";
+import { ORAL_LOOKBACK_DAYS, resourcesOfType, searchAllPages, setOrderPeriod } from "./core";
 import { splitLocationMatches } from "./location";
 import { fetchNursingPerforms, nursingOrderParams, nursingOrderSetOf, nursingPerformParams } from "./nursing";
 
@@ -534,11 +534,11 @@ export function usePatientSurgeryPerforms(patientId: string | undefined, from: s
 }
 
 /**
- * 経過表の注射欄に出す、その期間の注射オーダー一式。
+ * 経過表の注射欄と注射カレンダーに出す、その期間の注射オーダー一式。
  *
  * 注射は 1 施行(= 1 日)= 1 ServiceRequest で、薬剤(用法・開始時刻)・進捗・実施記録が
  * それぞれ別リソースに分かれる。カルテのタイムラインと同じ `_revinclude` の組みで
- * 1 回の検索にまとめて取る(上流で動作を確認済み)。
+ * 1 つの検索にまとめて取る(上流で動作を確認済み)。
  */
 export function usePatientInjectionOrders(
   patientId: string | undefined,
@@ -558,12 +558,15 @@ export function usePatientInjectionOrders(
       params.append("_revinclude", "Task:focus");
       params.append("_revinclude", "Procedure:based-on");
       params.append("_revinclude:iterate", "MedicationAdministration:part-of");
-      params.set("_count", "100");
 
-      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-      const resources = (bundle.entry ?? [])
-        .map((entry) => entry.resource)
-        .filter((r): r is fhir4.Resource => Boolean(r));
+      // 注射カレンダーは 2 週間ぶんを読むので、1 ページに収まらないこともある。
+      const { bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+        page: 100,
+        maxPages: 10,
+      });
+      const resources = bundles.flatMap((bundle) =>
+        (bundle.entry ?? []).map((entry) => entry.resource).filter((r): r is fhir4.Resource => Boolean(r)),
+      );
       const of = <T extends fhir4.Resource>(type: T["resourceType"]) =>
         resources.filter((r): r is T => r.resourceType === type);
 
@@ -576,6 +579,34 @@ export function usePatientInjectionOrders(
       };
     },
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
+  });
+}
+
+/**
+ * 注射カレンダーの右ペインに出す注射(1 日分)。比べる前の日のオーダーも一緒に読む。
+ * 中身は usePatientInjectionOrders と同じ組み(オーダー・薬剤・進捗・実施記録)。
+ */
+export function useInjectionDayOrders(srIds: string[]) {
+  const ids = srIds.filter(Boolean);
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "injection-day", ids.join(",")],
+    queryFn: async (): Promise<FlowsheetInjectionData> => {
+      const params = new URLSearchParams();
+      params.set("_id", ids.join(","));
+      params.append("_revinclude", "MedicationRequest:based-on");
+      params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "Procedure:based-on");
+      params.append("_revinclude:iterate", "MedicationAdministration:part-of");
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      return {
+        orders: resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest"),
+        medicationRequests: resourcesOfType<fhir4.MedicationRequest>(bundle, "MedicationRequest"),
+        tasks: resourcesOfType<fhir4.Task>(bundle, "Task"),
+        procedures: resourcesOfType<fhir4.Procedure>(bundle, "Procedure"),
+        administrations: resourcesOfType<fhir4.MedicationAdministration>(bundle, "MedicationAdministration"),
+      };
+    },
+    enabled: ids.length > 0,
   });
 }
 
@@ -608,12 +639,15 @@ export function usePatientOralPrescriptions(
       params.append("_revinclude", "Task:focus");
       params.append("_revinclude", "Procedure:based-on");
       params.append("_revinclude:iterate", "MedicationAdministration:part-of");
-      params.set("_count", "100");
 
-      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-      const resources = (bundle.entry ?? [])
-        .map((entry) => entry.resource)
-        .filter((r): r is fhir4.Resource => Boolean(r));
+      // 注射カレンダーは 2 週間ぶんを読むので、1 ページに収まらないこともある。
+      const { bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+        page: 100,
+        maxPages: 10,
+      });
+      const resources = bundles.flatMap((bundle) =>
+        (bundle.entry ?? []).map((entry) => entry.resource).filter((r): r is fhir4.Resource => Boolean(r)),
+      );
       const of = <T extends fhir4.Resource>(type: T["resourceType"]) =>
         resources.filter((r): r is T => r.resourceType === type);
 

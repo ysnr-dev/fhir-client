@@ -28,6 +28,9 @@ interface InjectionCreatePanelProps {
   /** DO(内容を流用して新規登録)する元の ServiceRequest id。 */
   sourceSrId?: string;
   defaultProblem?: ProblemRef;
+  /** 期間の初期値(注射カレンダーで選んだ日)。無ければ今日。 */
+  startDate?: string;
+  endDate?: string;
   onSaved: () => void;
 }
 
@@ -35,6 +38,8 @@ export function InjectionCreatePanel({
   patientId,
   sourceSrId,
   defaultProblem,
+  startDate,
+  endDate,
   onSaved,
 }: InjectionCreatePanelProps) {
   const createInjection = useCreatePrescription();
@@ -47,13 +52,13 @@ export function InjectionCreatePanel({
   // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
   const requester = useOrderContext();
 
-  const initialValues = useMemo(
-    () =>
-      source.initialValues
-        ? buildDoInjectionForm(source.initialValues, defaultSetting.setting)
-        : emptyInjectionForm(defaultProblem ?? null, defaultSetting.setting),
-    [source.initialValues, defaultProblem, defaultSetting.setting],
-  );
+  const initialValues = useMemo(() => {
+    const values = source.initialValues
+      ? buildDoInjectionForm(source.initialValues, defaultSetting.setting)
+      : emptyInjectionForm(defaultProblem ?? null, defaultSetting.setting);
+    if (!startDate) return values;
+    return { ...values, startDate, endDate: endDate && endDate > startDate ? endDate : startDate };
+  }, [source.initialValues, defaultProblem, defaultSetting.setting, startDate, endDate]);
 
   function handleSubmit(values: InjectionFormValues) {
     // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。

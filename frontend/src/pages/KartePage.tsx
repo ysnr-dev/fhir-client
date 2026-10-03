@@ -35,6 +35,7 @@ import { KarteFileTab } from "../components/KarteFileTab";
 import { KarteImagingTab } from "../components/KarteImagingTab";
 import { KarteMealTab } from "../components/KarteMealTab";
 import { KarteChemoTab } from "../components/KarteChemoTab";
+import { KarteInjectionTab } from "../components/KarteInjectionTab";
 import { KarteNursingTab } from "../components/KarteNursingTab";
 import { KartePathwayTab } from "../components/KartePathwayTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
@@ -931,6 +932,19 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
           // それ以外の日は、その日に出ている食事を引き継いだ新規登録(= その日からの食事変更)。
           onCreate={(date, sourceSrId) =>
             openForm({ kind: "meal-order-create", sourceSrId, startDate: date })
+          }
+        />
+      );
+    }
+    // 注射カレンダー。view は表示開始日と全画面。マスはタブのモーダルで開き、
+    // 変更・登録の入力は右ペインで行う。
+    if (key === "injection") {
+      return (
+        <KarteInjectionTab
+          {...props}
+          onEdit={(srId) => openForm({ kind: "injection-edit", srId })}
+          onCreate={(startDate, endDate, sourceSrId) =>
+            openForm({ kind: "injection-create", sourceSrId, startDate, endDate, problem: selectedProblem })
           }
         />
       );
