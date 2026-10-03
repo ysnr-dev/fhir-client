@@ -831,6 +831,75 @@ button:disabled {
   color: var(--text);
 }
 
+/* 患者検索の行。押すと右にプロファイルのドロワーを出す。 */
+.patient-table__row--clickable {
+  cursor: pointer;
+}
+
+.patient-table tbody tr.patient-table__row--selected > td {
+  background-image: linear-gradient(var(--accent-bg), var(--accent-bg));
+}
+
+/* 一覧を覆わずに右端へ重ねる。モーダル(z-index: 100)はこの上に出す。 */
+.patient-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 92vw);
+  padding: 16px 20px;
+  /* 一覧の地と同じ色だと境目が罫線だけになるので、一段浮かせた面の色にする。 */
+  background: var(--surface-panel);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  animation: patient-drawer-slide-in 0.2s ease-out;
+}
+
+@keyframes patient-drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .patient-drawer {
+    animation: none;
+  }
+}
+
+.patient-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.patient-drawer__header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.patient-drawer__number {
+  margin-right: 8px;
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--text);
+}
+
+.patient-drawer__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .row-menu {
   position: relative;
   display: inline-flex;

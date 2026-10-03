@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import type { PatientCaution } from "../api/masterClient";
 import { usePatientCautions } from "../api/masterQueries";
@@ -20,6 +20,7 @@ import { PatientDeceasedMark, PatientKana } from "./PatientRowCells";
 import { RowPictograms } from "./PatientListRowParts";
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
+import { PatientProfileDrawer } from "./PatientProfileDrawer";
 import { useReturnLinkState } from "../returnTo";
 
 export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
@@ -39,6 +40,21 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
   const flags = useFlagsForPatients(patientIds);
   const allergies = useAllergiesForPatients(patientIds);
   const infections = useInfectionsForPatients(patientIds);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 検索し直して一覧から消えた患者は、開いたままにせず閉じる。
+  const selected = patients.find((p): p is fhir4.Patient & { id: string } => p.id === selectedId);
+
+  // 行の中のボタン・リンク(カルテ、ピクトグラム、ケバブ)は各自の操作を優先する。
+  // ピクトグラムの吹き出しは body 直下へ出すが、React のイベントは行まで伝わって
+  // くるので、行の DOM の外からのクリックも除く。
+  function handleRowClick(event: MouseEvent<HTMLTableRowElement>, patientId: string | undefined) {
+    const target = event.target as HTMLElement;
+    if (!event.currentTarget.contains(target)) return;
+    if (target.closest("a, button, input, [role='menu']")) return;
+    if (!patientId) return;
+    setSelectedId((current) => (current === patientId ? null : patientId));
+  }
 
   function handleDelete(patient: fhir4.Patient) {
     if (!patient.id) return;
@@ -69,7 +85,15 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
         </thead>
         <tbody>
           {patients.map((patient) => (
-            <tr key={patient.id}>
+            <tr
+              key={patient.id}
+              className={
+                patient.id === selectedId
+                  ? "patient-table__row--clickable patient-table__row--selected"
+                  : "patient-table__row--clickable"
+              }
+              onClick={(e) => handleRowClick(e, patient.id)}
+            >
               <td>{patient.identifier?.[0]?.value ?? "-"}</td>
               <td>
                 {/* 外来患者一覧と同じく、カナは氏名の後ろに括弧書きで添え、ピクトグラムを続ける。 */}
@@ -120,6 +144,9 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
           ))}
         </tbody>
       </table>
+      {selected && (
+        <PatientProfileDrawer patient={selected} onClose={() => setSelectedId(null)} />
+      )}
     </>
   );
 }
