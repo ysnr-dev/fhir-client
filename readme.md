@@ -257,7 +257,8 @@ CSRF はチャート定義と同じ `/master` の基底)。
   受け取り、ページ遷移せずタブ内で表示を切り替えます。内容表示は `components/*DetailPanel.tsx`、
   検査結果タブにはさらに「時系列表示」(`components/LabResultTimelinePanel.tsx`)も置いてあります。
 - **カルテタブ**: 診療記録(`Composition`)・処方(`ServiceRequest` + `MedicationRequest`)・単独登録の
-  テンプレート回答(`QuestionnaireResponse`)を診療日ごとにまとめた時系列表示です。診療記録のセクションから
+  テンプレート回答(`QuestionnaireResponse`)を診療日ごとにまとめた時系列表示です。診療日の見出しには
+  曜日を添えます(`2026-09-01 (火)`)。診療記録のセクションから
   参照されている回答は記録カードの本文として描画済みなので、単独カードには出しません。カードは高さを
   制限して折りたたみ、溢れる場合だけ「続きを表示」を出します。
 - **無限スクロール**: 3 リソースをそれぞれ `_count=20` のオフセットページングで読み(`useKarte*Infinite`)、

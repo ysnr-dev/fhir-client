@@ -32,7 +32,7 @@ import { problemLabel, type ProblemRef } from "../fhir/conditionHelpers";
 import {
   KARTE_KIND_LABELS,
   karteItemKindLabel,
-  karteDayLabel,
+  karteDayHeadingLabel,
   karteItemKey,
   itemPathway,
   itemProblem,
@@ -286,7 +286,7 @@ export function KarteTimeline({
               key={dayKey}
               {...{ [KARTE_TARGET_ATTR]: dayKey }}
             >
-              <h3 className="karte-group__date">{karteDayLabel(group.day)}</h3>
+              <h3 className="karte-group__date">{karteDayHeadingLabel(group.day)}</h3>
               {group.items.map((item) => {
                 const key = karteItemKey(item);
                 return (

@@ -596,6 +596,18 @@ export function karteDayShortLabel(day: string): string {
   return `${month}/${date}(${weekday})`;
 }
 
+/**
+ * タイムラインの見出し用の表示名(例: 2026-09-01 (火))。日付未定・日付なしは
+ * karteDayLabel のまま。曜日の求め方は karteDayShortLabel と同じ。
+ */
+export function karteDayHeadingLabel(day: string): string {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!parts) return karteDayLabel(day);
+  const [, year, month, date] = parts;
+  const weekday = WEEKDAY_LABELS[new Date(Number(year), Number(month) - 1, Number(date)).getDay()];
+  return `${day} (${weekday})`;
+}
+
 export interface KarteDayYearGroup<T> {
   /** 年(YYYY)。日付未定・日付なしは年が無いので undefined(見出しを出さない)。 */
   year: string | undefined;
