@@ -79,7 +79,7 @@ export function radTaskActions(status: RadTaskStatus): RadTaskAction[] {
     case "completed":
       return [{ label: "取消", next: "accepted", secondary: true }];
     case "cancelled":
-      return [{ label: "中止を取消", next: "requested", secondary: true }];
+      return [{ label: "中止取消", next: "requested", secondary: true }];
   }
 }
 

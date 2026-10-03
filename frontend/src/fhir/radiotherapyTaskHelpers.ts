@@ -82,7 +82,7 @@ export function radiotherapyTaskActions(status: RadiotherapyTaskStatus): Radioth
       return [
         { label: "終了", next: "completed", asksTermination: "completed" },
         { label: "休止", next: "on-hold", asksTermination: "on-hold" },
-        { label: "治療開始を取消", next: "accepted", secondary: true },
+        { label: "治療開始取消", next: "accepted", secondary: true },
         { label: "中止", next: "cancelled", secondary: true, asksTermination: "cancelled" },
       ];
     // 休止から戻る先は治療中。休止のまま終える(治療をやめる)ときは中止。
@@ -92,9 +92,9 @@ export function radiotherapyTaskActions(status: RadiotherapyTaskStatus): Radioth
         { label: "中止", next: "cancelled", secondary: true, asksTermination: "cancelled" },
       ];
     case "completed":
-      return [{ label: "終了を取消", next: "in-progress", secondary: true }];
+      return [{ label: "終了取消", next: "in-progress", secondary: true }];
     case "cancelled":
-      return [{ label: "中止を取消", next: "requested", secondary: true }];
+      return [{ label: "中止取消", next: "requested", secondary: true }];
   }
 }
 

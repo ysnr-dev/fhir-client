@@ -307,7 +307,7 @@ export function useDeleteRehabPerform() {
  * status=active のまま残り、部門一覧の `occurrence=le{基準日}` に永久にヒットし
  * 続けるため(docs/rehab-order-design.md)。
  *
- * 逆に「終了を取消」では終了日を消さない。打ち切った期間まで巻き戻すと、その間に
+ * 逆に「終了取消」では終了日を消さない。打ち切った期間まで巻き戻すと、その間に
  * 積んだ実施記録との整合が取れなくなるため。期間を延ばしたいときはオーダーを編集する。
  */
 export function useUpdateRehabTaskStatus() {

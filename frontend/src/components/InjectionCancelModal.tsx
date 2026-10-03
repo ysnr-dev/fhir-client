@@ -37,7 +37,7 @@ export function InjectionCancelModal({
   const seriesLabel = injectionSeriesLabel(serviceRequest);
 
   const status: InjectionTaskStatus = mode === "cancel" ? "cancelled" : "requested";
-  // 「中止を取消」をそのまま動詞に埋めると「注射を中止を取消します」になるので、
+  // 「中止取消」をそのまま動詞に埋めると「注射を中止取消します」になるので、
   // 見出し・本文・ボタンの言い回しをモードごとに持つ。
   const words =
     mode === "cancel"

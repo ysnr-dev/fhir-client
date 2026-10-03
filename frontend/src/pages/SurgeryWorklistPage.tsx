@@ -1,5 +1,5 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -11,6 +11,7 @@ import {
   type SurgeryWorklistRow,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import { SurgeryPerformModal } from "../components/SurgeryPerformModal";
 import { SurgeryScheduleModal } from "../components/SurgeryScheduleModal";
@@ -109,6 +110,16 @@ export function SurgeryWorklistPage() {
   );
   const total = source?.rows.length ?? 0;
   const unscheduledCount = unscheduled.data?.rows.length ?? 0;
+
+  // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ。
+  // タブごとに選び直し、絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer(tab);
+  const selectedRow = rows.find((row) => row.patient?.id && row.order.id === drawer.selectedKey);
+  const pending = updateStatus.isPending || admit.isPending;
+
+  function changeStatus(row: SurgeryWorklistRow, status: SurgeryTaskStatus) {
+    updateStatus.mutate({ order: row.order, task: row.task, status });
+  }
 
   // 手術室・病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。名前はオーダーに
   // 焼き付けてあるのでマスタを引く必要がなく、その日に無い部屋を並べても仕方がない。
@@ -212,10 +223,8 @@ export function SurgeryWorklistPage() {
                     key={row.order.id}
                     row={row}
                     tab={tab}
-                    pending={updateStatus.isPending || admit.isPending}
-                    onChangeStatus={(status) =>
-                      updateStatus.mutate({ order: row.order, task: row.task, status })
-                    }
+                    pending={pending}
+                    onChangeStatus={(status) => changeStatus(row, status)}
                     onSchedule={() => setScheduling(row)}
                     onPerform={() => setPerforming(row)}
                     onAdmit={() =>
@@ -225,6 +234,7 @@ export function SurgeryWorklistPage() {
                         now: toDateTimeInput(new Date()),
                       })
                     }
+                    rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                   />
                 ))}
                 {rows.length === 0 && (
@@ -245,6 +255,23 @@ export function SurgeryWorklistPage() {
         </>
       )}
 
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          actions={
+            hasMenuItems(selectedRow, tab) ? (
+              <WorklistMenuItems
+                row={selectedRow}
+                tab={tab}
+                pending={pending}
+                onChangeStatus={(status) => changeStatus(selectedRow, status)}
+              />
+            ) : undefined
+          }
+          onClose={drawer.close}
+        />
+      )}
       {scheduling && (
         <SurgeryScheduleModal row={scheduling} onClose={() => setScheduling(null)} />
       )}
@@ -412,6 +439,22 @@ function FilterForm({
   );
 }
 
+/** 行のケバブに畳む操作。 */
+function menuContents(row: SurgeryWorklistRow, tab: Tab) {
+  const status = surgeryTaskStatus(row.task);
+  return {
+    secondaryActions: surgeryTaskActions(status).filter((action) => action.secondary),
+    // 麻酔チャートを開けるのは入室後(書き始める)と実施済(振り返りに読む)だけ。
+    // 日程未定タブは日程を確定する画面なので出さない。
+    showChart: tab === "scheduled" && (status === "in-progress" || status === "completed"),
+  };
+}
+
+function hasMenuItems(row: SurgeryWorklistRow, tab: Tab): boolean {
+  const { secondaryActions, showChart } = menuContents(row, tab);
+  return secondaryActions.length > 0 || showChart;
+}
+
 function WorklistRow({
   row,
   tab,
@@ -420,6 +463,7 @@ function WorklistRow({
   onSchedule,
   onPerform,
   onAdmit,
+  rowProps,
 }: {
   row: SurgeryWorklistRow;
   tab: Tab;
@@ -429,6 +473,8 @@ function WorklistRow({
   onPerform: () => void;
   /** 日程未定のまま入室する(緊急手術)。 */
   onAdmit: () => void;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
@@ -438,15 +484,11 @@ function WorklistRow({
   const status = surgeryTaskStatus(task);
   const requester = prescriptionRequester(order);
   const actions = surgeryTaskActions(status);
-  const secondaryActions = actions.filter((action) => action.secondary);
-  // 麻酔チャートを開けるのは入室後(書き始める)と実施済(振り返りに読む)だけ。
-  // 日程未定タブは日程を確定する画面なので出さない。
-  const showChart = tab === "scheduled" && (status === "in-progress" || status === "completed");
   const surgeon = summary.staff.find((line) => line.role === "surgeon");
   const others = summary.staff.filter((line) => line.role !== "surgeon");
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="rad-worklist__time sticky-table__fix-1">
         {tab === "scheduled" ? (
           <>
@@ -554,37 +596,65 @@ function WorklistRow({
             麻酔チャートも毎回は開かないので同じメニューに入れる。
             一覧は横スクロールできるよう overflow を持つため、メニューは
             escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
-        {(secondaryActions.length > 0 || showChart) && (
+        {hasMenuItems(row, tab) && (
           <RowMenu label="この手術の操作" escapesClipping>
-            {/* 麻酔チャート(術中リアルタイム記録)。書き始めるのは入室後、
-                実施済では振り返りに読む。docs/anesthesia-chart-design.md */}
-            {showChart && (
-              <Link
-                className="row-menu__item"
-                to={`/surgeries/${order.id}/anesthesia-chart`}
-                state={returnLinkState}
-              >
-                麻酔チャート
-              </Link>
-            )}
-            {secondaryActions.map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                // 中止は手術そのものを取りやめる操作なので目立たせる。取消は
-                // 1 つ前に戻すだけの訂正なので通常の項目にする。
-                className={`row-menu__item${
-                  action.next === "cancelled" ? " row-menu__item--danger" : ""
-                }`}
-                disabled={pending}
-                onClick={() => onChangeStatus(action.next)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <WorklistMenuItems
+              row={row}
+              tab={tab}
+              pending={pending}
+              onChangeStatus={onChangeStatus}
+            />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+/** 行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function WorklistMenuItems({
+  row,
+  tab,
+  pending,
+  onChangeStatus,
+}: {
+  row: SurgeryWorklistRow;
+  tab: Tab;
+  pending: boolean;
+  onChangeStatus: (status: SurgeryTaskStatus) => void;
+}) {
+  // 麻酔チャートの「戻る」でこの一覧に戻れるように遷移元を渡す。
+  const returnLinkState = useReturnLinkState();
+  const { secondaryActions, showChart } = menuContents(row, tab);
+
+  return (
+    <>
+      {/* 麻酔チャート(術中リアルタイム記録)。書き始めるのは入室後、
+          実施済では振り返りに読む。docs/anesthesia-chart-design.md */}
+      {showChart && (
+        <Link
+          className="row-menu__item"
+          to={`/surgeries/${row.order.id}/anesthesia-chart`}
+          state={returnLinkState}
+        >
+          麻酔チャート
+        </Link>
+      )}
+      {secondaryActions.map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          // 中止は手術そのものを取りやめる操作なので目立たせる。取消は
+          // 1 つ前に戻すだけの訂正なので通常の項目にする。
+          className={`row-menu__item${
+            action.next === "cancelled" ? " row-menu__item--danger" : ""
+          }`}
+          disabled={pending}
+          onClick={() => onChangeStatus(action.next)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }

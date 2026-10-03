@@ -291,7 +291,7 @@ function PerformStep({
       <div className="lab-order-item__actions karte-detail__actions">
         {!loading && found && !needsInput && (
           <button type="button" onClick={onComplete} disabled={completing}>
-            実施済にする
+            実施済
           </button>
         )}
         <button type="button" onClick={onClose}>

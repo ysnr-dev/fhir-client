@@ -93,7 +93,7 @@ export function surgeryTaskActions(status: SurgeryTaskStatus): SurgeryTaskAction
     case "completed":
       return [{ label: "実施取消", next: "in-progress", secondary: true }];
     case "cancelled":
-      return [{ label: "中止を取消", next: "requested", secondary: true }];
+      return [{ label: "中止取消", next: "requested", secondary: true }];
   }
 }
 

@@ -101,7 +101,7 @@ export function injectionTaskActions(status: InjectionTaskStatus): InjectionTask
     case "completed":
       return [];
     case "cancelled":
-      return [{ label: "中止を取消", next: "requested", secondary: true }];
+      return [{ label: "中止取消", next: "requested", secondary: true }];
   }
 }
 

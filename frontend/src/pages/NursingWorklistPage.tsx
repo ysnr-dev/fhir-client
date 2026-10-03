@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type FormEvent,
+} from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useNursingActLevels } from "../api/masterQueries";
@@ -17,6 +24,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { NursingOrderDetailModal } from "../components/NursingOrderDetailModal";
 import { NursingPerformModal } from "../components/NursingPerformModal";
 import { PathwayWardTasks } from "../components/PathwayWardTasks";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { PatientKana } from "../components/PatientRowCells";
 import { RowMenu } from "../components/RowMenu";
 import { encounterBedLabel, encounterPatientId } from "../fhir/encounterHelpers";
@@ -272,6 +280,21 @@ export function NursingWorklistPage() {
     (row) => isPending(row) && selected.has(row.order.id ?? ""),
   );
 
+  // 行を押すと右に患者プロファイルを出す。患者の見出し行は患者で、指示の行は指示で選ぶ。
+  // 選択はパスのタスクの表とひとつにし、どちらかで選んだら他方の選択は外れる。
+  // ビューや絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedGroup = groups.find(
+    (group) => group.patientId && patientRowKey(group.patientId) === drawer.selectedKey,
+  );
+  const selectedOrderRow = visibleRows.find(
+    (row) => row.order.id && row.order.id === drawer.selectedKey,
+  );
+  const selectedOrderGroup =
+    selectedOrderRow &&
+    groups.find((group) => group.rows.includes(selectedOrderRow) && group.patientId);
+  const drawerGroup = selectedGroup ?? selectedOrderGroup;
+
   const detailRow = allRows.find((row) => row.order.id === detailId) ?? null;
   const performingGroup = groups.find((group) => group.patientId === performingPatientId) ?? null;
   const ownerName = me.practitioner ? displayJapaneseName(me.practitioner.name) : "";
@@ -456,6 +479,7 @@ export function NursingWorklistPage() {
                     onPerform={() => setPerformingPatientId(group.patientId)}
                     onView={setDetailId}
                     onRevoke={handleRevoke}
+                    rowProps={drawer.rowProps}
                   />
                 ))}
                 {groups.length === 0 && (
@@ -487,11 +511,27 @@ export function NursingWorklistPage() {
               wardId={wardId}
               onlyUndone={view === "due"}
               returnLinkState={returnLinkState}
+              drawer={drawer}
             />
           )}
         </>
       )}
 
+      {drawerGroup && (
+        <PatientProfileDrawer
+          patientId={drawerGroup.patientId}
+          patient={drawerGroup.patient}
+          actions={
+            selectedOrderRow && selectedOrderRow.order.status === "active" ? (
+              <OrderMenuItems
+                pending={accept.isPending || revoke.isPending}
+                onRevoke={() => handleRevoke(selectedOrderRow)}
+              />
+            ) : undefined
+          }
+          onClose={drawer.close}
+        />
+      )}
       {performingGroup && (
         <NursingPerformModal
           patientName={performingGroup.patient ? displayName(performingGroup.patient) : undefined}
@@ -522,6 +562,11 @@ export function NursingWorklistPage() {
  */
 function roomOf(bedLabel: string): string {
   return bedLabel.split(" ")[0] ?? "";
+}
+
+/** 患者の見出し行の選択キー。指示の行(指示の id)と重ならないようにする。 */
+function patientRowKey(patientId: string): string {
+  return `patient:${patientId}`;
 }
 
 /** 未指示受けか(有効な指示で、まだ誰も受けていない)。 */
@@ -635,6 +680,8 @@ interface PatientGroupProps {
   onPerform: () => void;
   onView: (srId: string) => void;
   onRevoke: (row: NursingWorklistRow) => void;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: (key: string | undefined, className?: string) => ComponentProps<"tr">;
 }
 
 // 患者 1 人ぶん。見出し行に病室・氏名・未指示受け件数と「この患者を指示受け」を置く。
@@ -654,6 +701,7 @@ function PatientGroup({
   onPerform,
   onView,
   onRevoke,
+  rowProps,
 }: PatientGroupProps) {
   const rows = view === "pending" ? group.pendingRows : view === "due" ? group.dueRows : group.rows;
   const checkedCount = group.pendingRows.filter((row) =>
@@ -664,7 +712,12 @@ function PatientGroup({
 
   return (
     <>
-      <tr className="nursing-worklist__patient">
+      <tr
+        {...rowProps(
+          group.patientId ? patientRowKey(group.patientId) : undefined,
+          "nursing-worklist__patient",
+        )}
+      >
         {/* 患者ぶんをまとめて選ぶチェック。指示行のチェックと縦に揃える。 */}
         <th className="nursing-worklist__check">
           {group.pendingRows.length > 0 && (
@@ -722,6 +775,7 @@ function PatientGroup({
           onToggle={() => onToggle(row.order.id ?? "")}
           onView={() => onView(row.order.id ?? "")}
           onRevoke={() => onRevoke(row)}
+          rowProps={rowProps(group.patientId ? row.order.id : undefined)}
         />
       ))}
     </>
@@ -740,6 +794,7 @@ function OrderRow({
   onToggle,
   onView,
   onRevoke,
+  rowProps,
 }: {
   row: NursingWorklistRow;
   date: string;
@@ -754,13 +809,15 @@ function OrderRow({
   onToggle: () => void;
   onView: () => void;
   onRevoke: () => void;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
 }) {
   const summary = summarizeNursingOrder(row.order);
   const taskStatus = nursingTaskStatus(row.task);
   const acceptable = isPending(row);
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="nursing-worklist__check">
         {acceptable && (
           <input
@@ -840,17 +897,24 @@ function OrderRow({
         {/* 中止は押し間違えると指示が消えるので一段畳む。内容の編集はカルテの右ペイン。 */}
         {row.order.status === "active" && (
           <RowMenu label={`${summary.text} の操作`} escapesClipping>
-            <button
-              type="button"
-              className="row-menu__item row-menu__item--danger"
-              disabled={pending}
-              onClick={onRevoke}
-            >
-              中止
-            </button>
+            <OrderMenuItems pending={pending} onRevoke={onRevoke} />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+/** 指示の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function OrderMenuItems({ pending, onRevoke }: { pending: boolean; onRevoke: () => void }) {
+  return (
+    <button
+      type="button"
+      className="row-menu__item row-menu__item--danger"
+      disabled={pending}
+      onClick={onRevoke}
+    >
+      中止
+    </button>
   );
 }

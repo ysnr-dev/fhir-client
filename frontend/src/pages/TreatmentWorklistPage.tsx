@@ -1,5 +1,5 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -11,6 +11,7 @@ import {
 import type { TreatmentItem } from "../api/masterClient";
 import { useTreatmentItemsByCodes } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { TreatmentPerformModal } from "../components/TreatmentPerformModal";
 import { RowMenu } from "../components/RowMenu";
 import {
@@ -37,6 +38,7 @@ import {
   treatmentTaskActions,
   treatmentTaskStatus,
   treatmentTaskStatusDisplay,
+  type TreatmentTaskAction,
   type TreatmentTaskStatus,
 } from "../fhir/treatmentTaskHelpers";
 
@@ -138,6 +140,19 @@ export function TreatmentWorklistPage() {
     else updateStatus.mutate({ order: row.order, task: row.task, status: "completed" });
   }
 
+  function changeStatus(row: TreatmentWorklistRow, status: TreatmentTaskStatus) {
+    updateStatus.mutate({ order: row.order, task: row.task, status });
+  }
+
+  // マスタが読めるまでは実施入力の有無が決まらないので押させない。
+  const pending = updateStatus.isPending || items.isLoading;
+
+  // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
+  // (同じ患者が同じ日に複数の処置を持つこともある)。絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find((row) => row.patient?.id && row.order.id === drawer.selectedKey);
+  const selectedMenuActions = selectedRow ? secondaryActionsOf(selectedRow) : [];
+
   function handleDateChange(value: string) {
     // 日付を空にはさせない(空で検索すると全期間になってしまう)。
     if (value) setDate(value);
@@ -194,12 +209,10 @@ export function TreatmentWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
-                    // マスタが読めるまでは実施入力の有無が決まらないので押させない。
-                    pending={updateStatus.isPending || items.isLoading}
-                    onChangeStatus={(status) =>
-                      updateStatus.mutate({ order: row.order, task: row.task, status })
-                    }
+                    pending={pending}
+                    onChangeStatus={(status) => changeStatus(row, status)}
                     onPerform={() => handlePerform(row)}
+                    rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                   />
                 ))}
                 {rows.length === 0 && (
@@ -218,6 +231,22 @@ export function TreatmentWorklistPage() {
         </>
       )}
 
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          actions={
+            selectedMenuActions.length > 0 ? (
+              <WorklistMenuItems
+                actions={selectedMenuActions}
+                pending={pending}
+                onChangeStatus={(status) => changeStatus(selectedRow, status)}
+              />
+            ) : undefined
+          }
+          onClose={drawer.close}
+        />
+      )}
       {performing && (
         <TreatmentPerformModal row={performing} onClose={() => setPerforming(null)} />
       )}
@@ -334,16 +363,24 @@ function FilterForm({
   );
 }
 
+/** 訂正・取りやめ。押し間違えると進捗が巻き戻るので、行のケバブに畳む。 */
+function secondaryActionsOf(row: TreatmentWorklistRow) {
+  return treatmentTaskActions(treatmentTaskStatus(row.task)).filter((action) => action.secondary);
+}
+
 function WorklistRow({
   row,
   pending,
   onChangeStatus,
   onPerform,
+  rowProps,
 }: {
   row: TreatmentWorklistRow;
   pending: boolean;
   onChangeStatus: (status: TreatmentTaskStatus) => void;
   onPerform: () => void;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
@@ -353,10 +390,10 @@ function WorklistRow({
   const status = treatmentTaskStatus(task);
   const requester = prescriptionRequester(order);
   const actions = treatmentTaskActions(status);
-  const secondaryActions = actions.filter((action) => action.secondary);
+  const secondaryActions = secondaryActionsOf(row);
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="rad-worklist__time sticky-table__fix-1">{treatmentOrderTime(order) || "-"}</td>
       <td className="sticky-table__fix-2">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-3">
@@ -407,24 +444,45 @@ function WorklistRow({
             escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
         {secondaryActions.length > 0 && (
           <RowMenu label="この処置の操作" escapesClipping>
-            {secondaryActions.map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                // 中止は処置そのものを取りやめる操作なので目立たせる。取消は
-                // 1 つ前に戻すだけの訂正なので通常の項目にする。
-                className={`row-menu__item${
-                  action.next === "cancelled" ? " row-menu__item--danger" : ""
-                }`}
-                disabled={pending}
-                onClick={() => onChangeStatus(action.next)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <WorklistMenuItems
+              actions={secondaryActions}
+              pending={pending}
+              onChangeStatus={onChangeStatus}
+            />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+/** 行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function WorklistMenuItems({
+  actions,
+  pending,
+  onChangeStatus,
+}: {
+  actions: TreatmentTaskAction[];
+  pending: boolean;
+  onChangeStatus: (status: TreatmentTaskStatus) => void;
+}) {
+  return (
+    <>
+      {actions.map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          // 中止は処置そのものを取りやめる操作なので目立たせる。取消は
+          // 1 つ前に戻すだけの訂正なので通常の項目にする。
+          className={`row-menu__item${
+            action.next === "cancelled" ? " row-menu__item--danger" : ""
+          }`}
+          disabled={pending}
+          onClick={() => onChangeStatus(action.next)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }

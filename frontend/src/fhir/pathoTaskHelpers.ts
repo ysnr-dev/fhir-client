@@ -55,19 +55,19 @@ export function pathoTaskActions(status: PathoTaskStatus): PathoTaskAction[] {
   switch (status) {
     case "requested":
       return [
-        { label: "受付済にする", next: "accepted" },
+        { label: "受付済", next: "accepted" },
         { label: "中止", next: "cancelled", secondary: true },
       ];
     case "accepted":
       return [
-        { label: "検査済にする", next: "completed" },
+        { label: "検査済", next: "completed" },
         { label: "取消", next: "requested", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];
     case "completed":
       return [{ label: "取消", next: "accepted", secondary: true }];
     case "cancelled":
-      return [{ label: "中止を取消", next: "requested", secondary: true }];
+      return [{ label: "中止取消", next: "requested", secondary: true }];
   }
 }
 

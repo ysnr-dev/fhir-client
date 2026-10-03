@@ -392,7 +392,7 @@ export function KarteBroughtMedicationTab({
                           onClick={() => handleUndo(statement)}
                           disabled={transaction.isPending}
                         >
-                          判断を取消
+                          判断取消
                         </button>
                       )}
                       {summary.state !== "continued" && (

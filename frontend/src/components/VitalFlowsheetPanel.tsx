@@ -1092,7 +1092,7 @@ export function VitalFlowsheetPanel({
                         }}
                         disabled={cancelOralPerforms.isPending}
                       >
-                        与薬を取消
+                        与薬取消
                       </button>
                     )}
                   </>

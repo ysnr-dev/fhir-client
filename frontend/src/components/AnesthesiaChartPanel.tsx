@@ -318,7 +318,7 @@ function ChartBody({ data, patientId, write, onFinalize, onReopen, onCancel }: C
               onClick={onCancel}
               disabled={write.isPending}
             >
-              チャートを取消
+              チャート取消
             </button>
           </>
         )}

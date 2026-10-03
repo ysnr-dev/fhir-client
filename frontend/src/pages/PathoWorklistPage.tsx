@@ -1,5 +1,5 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -12,6 +12,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { PathoOrderDetailPanel } from "../components/PathoOrderDetailPanel";
 import { PathoResultDetailPanel } from "../components/PathoResultDetailPanel";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import {
   PathoResultCreateForm,
   PathoResultEditForm,
@@ -33,6 +34,7 @@ import {
   pathoTaskActions,
   pathoTaskStatus,
   pathoTaskStatusDisplay,
+  type PathoTaskAction,
   type PathoTaskStatus,
 } from "../fhir/pathoTaskHelpers";
 import { reportStatusDisplay } from "../fhir/pathoResultHelpers";
@@ -100,6 +102,16 @@ export function PathoWorklistPage() {
   const total = worklist.data?.rows.length ?? 0;
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const entering = worklist.data?.rows.find((row) => row.order.id === enteringId);
+
+  // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
+  // (同じ患者が同じ日に複数の検査を持つこともある)。絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find((row) => row.patient?.id && row.order.id === drawer.selectedKey);
+  const selectedMenuActions = selectedRow ? secondaryActionsOf(selectedRow) : [];
+
+  function changeStatus(row: PathoWorklistRow, status: PathoTaskStatus) {
+    updateStatus.mutate({ order: row.order, task: row.task, status });
+  }
 
   // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う(検体検査一覧と同じ考え方)。
   const wardOptions = useMemo(() => {
@@ -175,9 +187,8 @@ export function PathoWorklistPage() {
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onEnterReport={() => setEnteringId(row.order.id ?? null)}
-                    onChangeStatus={(status) =>
-                      updateStatus.mutate({ order: row.order, task: row.task, status })
-                    }
+                    onChangeStatus={(status) => changeStatus(row, status)}
+                    rowProps={drawer.rowProps(row.patient?.id && row.order.id, urgentRowClass(row))}
                   />
                 ))}
                 {rows.length === 0 && (
@@ -196,6 +207,22 @@ export function PathoWorklistPage() {
         </>
       )}
 
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          actions={
+            selectedMenuActions.length > 0 ? (
+              <WorklistMenuItems
+                actions={selectedMenuActions}
+                pending={updateStatus.isPending}
+                onChangeStatus={(status) => changeStatus(selectedRow, status)}
+              />
+            ) : undefined
+          }
+          onClose={drawer.close}
+        />
+      )}
       {viewing && <PathoOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
       {entering && (
         <PathoReportEntryModal row={entering} onClose={() => setEnteringId(null)} />
@@ -335,18 +362,30 @@ function FilterForm({
   );
 }
 
+/** 取消・中止。押し間違えると進捗が巻き戻るので、行のケバブに畳む。 */
+function secondaryActionsOf(row: PathoWorklistRow) {
+  return pathoTaskActions(pathoTaskStatus(row.task)).filter((action) => action.secondary);
+}
+
+function urgentRowClass(row: PathoWorklistRow): string | undefined {
+  return summarizePathoOrder(row.order).urgent ? "lab-worklist__row--urgent" : undefined;
+}
+
 function WorklistRow({
   row,
   pending,
   onView,
   onEnterReport,
   onChangeStatus,
+  rowProps,
 }: {
   row: PathoWorklistRow;
   pending: boolean;
   onView: () => void;
   onEnterReport: () => void;
   onChangeStatus: (status: PathoTaskStatus) => void;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
@@ -356,10 +395,10 @@ function WorklistRow({
   const requester = prescriptionRequester(order);
   const status = pathoTaskStatus(row.task);
   const actions = pathoTaskActions(status);
-  const secondaryActions = actions.filter((action) => action.secondary);
+  const secondaryActions = secondaryActionsOf(row);
 
   return (
-    <tr className={summary.urgent ? "lab-worklist__row--urgent" : undefined}>
+    <tr {...rowProps}>
       <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-2">
         {patient ? (
@@ -430,23 +469,44 @@ function WorklistRow({
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。 */}
         {secondaryActions.length > 0 && (
           <RowMenu label="この検査の操作" escapesClipping>
-            {secondaryActions.map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                className={`row-menu__item${
-                  action.next === "cancelled" ? " row-menu__item--danger" : ""
-                }`}
-                disabled={pending}
-                onClick={() => onChangeStatus(action.next)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <WorklistMenuItems
+              actions={secondaryActions}
+              pending={pending}
+              onChangeStatus={onChangeStatus}
+            />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+/** 行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function WorklistMenuItems({
+  actions,
+  pending,
+  onChangeStatus,
+}: {
+  actions: PathoTaskAction[];
+  pending: boolean;
+  onChangeStatus: (status: PathoTaskStatus) => void;
+}) {
+  return (
+    <>
+      {actions.map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          className={`row-menu__item${
+            action.next === "cancelled" ? " row-menu__item--danger" : ""
+          }`}
+          disabled={pending}
+          onClick={() => onChangeStatus(action.next)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }
 

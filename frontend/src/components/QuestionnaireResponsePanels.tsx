@@ -193,7 +193,7 @@ export function QuestionnaireResponseCreatePanel({
               }
             >
               {copied ? (
-                "複写を取り消す"
+                "複写取消"
               ) : (
                 <>
                   前回値を複写

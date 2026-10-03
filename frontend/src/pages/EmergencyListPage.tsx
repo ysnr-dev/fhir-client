@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { PatientCaution } from "../api/masterClient";
 import { usePatientCautions } from "../api/masterQueries";
@@ -27,6 +34,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import { useNow } from "../hooks/useNow";
 import { useStoredToggle } from "../hooks/useStoredToggle";
@@ -134,6 +142,14 @@ export function EmergencyListPage() {
 
   const allRows = useMemo(() => list.data?.rows ?? [], [list.data]);
   const rows = useMemo(() => allRows.filter((row) => matchesFilters(row, filters)), [allRows, filters]);
+
+  // 行を押すと右に患者プロファイルを出す。行は受診ごとなので受診で選ぶ。
+  // 絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find(
+    (row) => row.encounter.id && row.encounter.id === drawer.selectedKey,
+  );
+  const selectedPatientId = selectedRow && emergencyPatientId(selectedRow.encounter);
   const occupiedBedIds = useMemo(
     () => occupiedEmergencyBedIds(allRows.map((row) => row.encounter)),
     [allRows],
@@ -193,6 +209,21 @@ export function EmergencyListPage() {
   function handleCancel(row: EmergencyRow) {
     if (!window.confirm("この救急受付を取り消します。よろしいですか?")) return;
     update.mutate({ encounter: buildEmergencyCancelled(row.encounter) });
+  }
+
+  // 行の操作。行のボタン・ケバブと、ドロワーに並べるケバブの項目で共有する。
+  function actionsFor(row: EmergencyRow): EmergencyRowActions {
+    return {
+      pending: update.isPending,
+      onTriage: () => setTriageTarget(row),
+      onStartExam: () => handleStartExam(row),
+      onCancelExamStart: () => handleCancelExamStart(row),
+      onDisposition: () => setDispositionTarget(row),
+      onCancelDisposition: () => handleCancelDisposition(row),
+      onEdit: () => setEditTarget(row),
+      onIdentify: row.patient ? () => setIdentifyTarget(row.patient ?? null) : undefined,
+      onCancel: () => handleCancel(row),
+    };
   }
 
   return (
@@ -273,15 +304,11 @@ export function EmergencyListPage() {
                         />
                       }
                       orders={<OrderSummaryChips orders={orders.byPatient.get(patientId) ?? []} />}
-                      pending={update.isPending}
-                      onTriage={() => setTriageTarget(row)}
-                      onStartExam={() => handleStartExam(row)}
-                      onCancelExamStart={() => handleCancelExamStart(row)}
-                      onDisposition={() => setDispositionTarget(row)}
-                      onCancelDisposition={() => handleCancelDisposition(row)}
-                      onEdit={() => setEditTarget(row)}
-                      onIdentify={row.patient ? () => setIdentifyTarget(row.patient ?? null) : undefined}
-                      onCancel={() => handleCancel(row)}
+                      rowProps={drawer.rowProps(
+                        patientId ? row.encounter.id : undefined,
+                        isEmergencyActive(row.encounter) ? undefined : "emergency__row--finished",
+                      )}
+                      {...actionsFor(row)}
                     />
                   );
                 })}
@@ -301,6 +328,15 @@ export function EmergencyListPage() {
         </>
       )}
 
+      {selectedRow && selectedPatientId && (
+        <PatientProfileDrawer
+          patientId={selectedPatientId}
+          patient={selectedRow.patient}
+          fallbackName={selectedRow.encounter.subject?.display}
+          actions={<EmergencyMenuItems row={selectedRow} {...actionsFor(selectedRow)} />}
+          onClose={drawer.close}
+        />
+      )}
       {checkInOpen && (
         <EmergencyCheckInModal occupiedBedIds={occupiedBedIds} onClose={() => setCheckInOpen(false)} />
       )}
@@ -421,25 +457,7 @@ function arrivalTimeLabel(value: string | undefined): string {
   return value?.slice(0, 10) === today() ? label.slice(11) : label.slice(5);
 }
 
-function EmergencyTableRow({
-  row,
-  now,
-  pictograms,
-  orders,
-  pending,
-  onTriage,
-  onStartExam,
-  onCancelExamStart,
-  onDisposition,
-  onCancelDisposition,
-  onEdit,
-  onIdentify,
-  onCancel,
-}: {
-  row: EmergencyRow;
-  now: Date;
-  pictograms: ReactNode;
-  orders: ReactNode;
+interface EmergencyRowActions {
   pending: boolean;
   onTriage: () => void;
   onStartExam: () => void;
@@ -449,7 +467,24 @@ function EmergencyTableRow({
   onEdit: () => void;
   onIdentify?: () => void;
   onCancel: () => void;
-}) {
+}
+
+function EmergencyTableRow({
+  row,
+  now,
+  pictograms,
+  orders,
+  rowProps,
+  ...actions
+}: {
+  row: EmergencyRow;
+  now: Date;
+  pictograms: ReactNode;
+  orders: ReactNode;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
+} & EmergencyRowActions) {
+  const { pending, onTriage, onStartExam, onDisposition } = actions;
   const returnLinkState = useReturnLinkState();
   const { encounter, patient } = row;
   const patientId = emergencyPatientId(encounter);
@@ -468,7 +503,7 @@ function EmergencyTableRow({
       : "";
 
   return (
-    <tr className={active ? undefined : "emergency__row--finished"}>
+    <tr {...rowProps}>
       <td className="emergency__jtas sticky-table__fix-1">
         {level ? (
           <span className={`jtas-badge jtas--${level}`} title={`JTAS ${level} ${jtasLabel(level)}`}>
@@ -547,61 +582,87 @@ function EmergencyTableRow({
           </Link>
         )}
         <RowMenu label="この受診の操作" escapesClipping>
-          {active && (
-            <button type="button" className="row-menu__item" disabled={pending} onClick={onTriage}>
-              {level ? "再トリアージ" : "トリアージ"}
-            </button>
-          )}
-          {status === "arrived" && (
-            <button type="button" className="row-menu__item" disabled={pending} onClick={onStartExam}>
-              診察開始
-            </button>
-          )}
-          {(status === "arrived" || status === "triaged") && (
-            <button type="button" className="row-menu__item" disabled={pending} onClick={onDisposition}>
-              転帰
-            </button>
-          )}
-          <button type="button" className="row-menu__item" disabled={pending} onClick={onEdit}>
-            来院情報の編集
-          </button>
-          {provisional && onIdentify && (
-            <button type="button" className="row-menu__item" disabled={pending} onClick={onIdentify}>
-              身元判明
-            </button>
-          )}
-          {status === "in-progress" && (
-            <button
-              type="button"
-              className="row-menu__item"
-              disabled={pending}
-              onClick={onCancelExamStart}
-            >
-              診察開始取消
-            </button>
-          )}
-          {status === "finished" && (
-            <button
-              type="button"
-              className="row-menu__item"
-              disabled={pending}
-              onClick={onCancelDisposition}
-            >
-              転帰取消
-            </button>
-          )}
-          {active && status !== "in-progress" && (
-            <button
-              type="button"
-              className="row-menu__item row-menu__item--danger"
-              disabled={pending}
-              onClick={onCancel}
-            >
-              受付取消
-            </button>
-          )}
+          <EmergencyMenuItems row={row} {...actions} />
         </RowMenu>
       </td>
     </tr>
+  );
+}
+
+/** 受診の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function EmergencyMenuItems({
+  row,
+  pending,
+  onTriage,
+  onStartExam,
+  onCancelExamStart,
+  onDisposition,
+  onCancelDisposition,
+  onEdit,
+  onIdentify,
+  onCancel,
+}: { row: EmergencyRow } & EmergencyRowActions) {
+  const { encounter, patient } = row;
+  const level = emergencyTriageLevel(encounter);
+  const active = isEmergencyActive(encounter);
+  const status = encounter.status;
+  const provisional = isProvisionalPatient(patient);
+
+  return (
+    <>
+      {active && (
+        <button type="button" className="row-menu__item" disabled={pending} onClick={onTriage}>
+          {level ? "再トリアージ" : "トリアージ"}
+        </button>
+      )}
+      {status === "arrived" && (
+        <button type="button" className="row-menu__item" disabled={pending} onClick={onStartExam}>
+          診察開始
+        </button>
+      )}
+      {(status === "arrived" || status === "triaged") && (
+        <button type="button" className="row-menu__item" disabled={pending} onClick={onDisposition}>
+          転帰
+        </button>
+      )}
+      <button type="button" className="row-menu__item" disabled={pending} onClick={onEdit}>
+        来院情報の編集
+      </button>
+      {provisional && onIdentify && (
+        <button type="button" className="row-menu__item" disabled={pending} onClick={onIdentify}>
+          身元判明
+        </button>
+      )}
+      {status === "in-progress" && (
+        <button
+          type="button"
+          className="row-menu__item"
+          disabled={pending}
+          onClick={onCancelExamStart}
+        >
+          診察開始取消
+        </button>
+      )}
+      {status === "finished" && (
+        <button
+          type="button"
+          className="row-menu__item"
+          disabled={pending}
+          onClick={onCancelDisposition}
+        >
+          転帰取消
+        </button>
+      )}
+      {active && status !== "in-progress" && (
+        <button
+          type="button"
+          className="row-menu__item row-menu__item--danger"
+          disabled={pending}
+          onClick={onCancel}
+        >
+          受付取消
+        </button>
+      )}
+    </>
   );
 }

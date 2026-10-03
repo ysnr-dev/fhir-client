@@ -118,11 +118,11 @@ export function TransferPlanModal({
 
         <div className="walk-in__actions">
           <button type="button" onClick={handleSubmit} disabled={save.isPending}>
-            {save.isPending ? "登録中..." : existing ? "予定を更新" : "予定を登録"}
+            {save.isPending ? "登録中..." : existing ? "予定更新" : "予定登録"}
           </button>
           {existing && (
             <button type="button" onClick={handleClear} disabled={save.isPending}>
-              予定を取消
+              予定取消
             </button>
           )}
           <button type="button" onClick={onClose} disabled={save.isPending}>

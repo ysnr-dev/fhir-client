@@ -1,5 +1,5 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -10,6 +10,7 @@ import {
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import {
   PatientKana,
@@ -30,6 +31,7 @@ import {
   transfusionTaskActions,
   transfusionTaskStatus,
   transfusionTaskStatusDisplay,
+  type TransfusionTaskAction,
   type TransfusionTaskStatus,
 } from "../fhir/transfusionTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
@@ -104,6 +106,16 @@ export function TransfusionWorklistPage() {
   const total = worklist.data?.rows.length ?? 0;
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const performing = worklist.data?.rows.find((row) => row.order.id === performingId);
+
+  // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
+  // (同じ患者が同じ日に複数の輸血を持つこともある)。絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find((row) => row.patient?.id && row.order.id === drawer.selectedKey);
+  const selectedMenuActions = selectedRow ? secondaryActionsOf(selectedRow) : [];
+
+  function changeStatus(row: TransfusionWorklistRow, status: TransfusionTaskStatus) {
+    updateStatus.mutate({ order: row.order, task: row.task, status });
+  }
 
   // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う(病理一覧と同じ考え方)。
   const wardOptions = useMemo(() => {
@@ -180,9 +192,8 @@ export function TransfusionWorklistPage() {
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onPerform={() => setPerformingId(row.order.id ?? null)}
-                    onChangeStatus={(status) =>
-                      updateStatus.mutate({ order: row.order, task: row.task, status })
-                    }
+                    onChangeStatus={(status) => changeStatus(row, status)}
+                    rowProps={drawer.rowProps(row.patient?.id && row.order.id, attentionRowClass(row))}
                   />
                 ))}
                 {rows.length === 0 && (
@@ -201,6 +212,22 @@ export function TransfusionWorklistPage() {
         </>
       )}
 
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          actions={
+            selectedMenuActions.length > 0 ? (
+              <WorklistMenuItems
+                actions={selectedMenuActions}
+                pending={updateStatus.isPending}
+                onChangeStatus={(status) => changeStatus(selectedRow, status)}
+              />
+            ) : undefined
+          }
+          onClose={drawer.close}
+        />
+      )}
       {viewing && <TransfusionOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
       {performing && (
         <TransfusionPerformModal
@@ -352,18 +379,37 @@ function scheduledTime(order: fhir4.ServiceRequest): string {
   return occurrence.length > 10 ? occurrence.slice(11, 16) : "";
 }
 
+/** 取消・中止。押し間違えると進捗が巻き戻るので、行のケバブに畳む。 */
+function secondaryActionsOf(row: TransfusionWorklistRow) {
+  return transfusionTaskActions(transfusionTaskStatus(row.task)).filter(
+    (action) => action.secondary,
+  );
+}
+
+// 至急と、同意書が未取得のものを目立たせる。中止した行はもう出さないので警告しない。
+function attentionRowClass(row: TransfusionWorklistRow): string | undefined {
+  const summary = summarizeTransfusionOrder(row.order);
+  const needsAttention =
+    summary.urgent ||
+    (!summary.consentConfirmed && transfusionTaskStatus(row.task) !== "cancelled");
+  return needsAttention ? "lab-worklist__row--urgent" : undefined;
+}
+
 function WorklistRow({
   row,
   pending,
   onView,
   onPerform,
   onChangeStatus,
+  rowProps,
 }: {
   row: TransfusionWorklistRow;
   pending: boolean;
   onView: () => void;
   onPerform: () => void;
   onChangeStatus: (status: TransfusionTaskStatus) => void;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
@@ -373,14 +419,10 @@ function WorklistRow({
   const requester = prescriptionRequester(order);
   const status = transfusionTaskStatus(row.task);
   const actions = transfusionTaskActions(status);
-  const secondaryActions = actions.filter((action) => action.secondary);
-
-  // 至急と、同意書が未取得のものを目立たせる。中止した行はもう出さないので警告しない。
-  const needsAttention =
-    summary.urgent || (!summary.consentConfirmed && status !== "cancelled");
+  const secondaryActions = secondaryActionsOf(row);
 
   return (
-    <tr className={needsAttention ? "lab-worklist__row--urgent" : undefined}>
+    <tr {...rowProps}>
       <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-2">
         {patient ? (
@@ -455,23 +497,44 @@ function WorklistRow({
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(病理一覧と同じ)。 */}
         {secondaryActions.length > 0 && (
           <RowMenu label="この輸血の操作" escapesClipping>
-            {secondaryActions.map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                className={`row-menu__item${
-                  action.next === "cancelled" ? " row-menu__item--danger" : ""
-                }`}
-                disabled={pending}
-                onClick={() => onChangeStatus(action.next)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <WorklistMenuItems
+              actions={secondaryActions}
+              pending={pending}
+              onChangeStatus={onChangeStatus}
+            />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+/** 行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function WorklistMenuItems({
+  actions,
+  pending,
+  onChangeStatus,
+}: {
+  actions: TransfusionTaskAction[];
+  pending: boolean;
+  onChangeStatus: (status: TransfusionTaskStatus) => void;
+}) {
+  return (
+    <>
+      {actions.map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          className={`row-menu__item${
+            action.next === "cancelled" ? " row-menu__item--danger" : ""
+          }`}
+          disabled={pending}
+          onClick={() => onChangeStatus(action.next)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }
 

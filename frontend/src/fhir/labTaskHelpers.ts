@@ -59,22 +59,22 @@ export function labTaskActions(status: LabTaskStatus): LabTaskAction[] {
     case "requested":
       return [
         // 受付はラベル発行が兼ねる。これはラベルの帳票レイアウトが未登録で発行を
-        // 押せない環境のための手動フォールバック(実施済にする、と同じ扱い)。
-        { label: "受付済にする", next: "accepted", secondary: true },
+        // 押せない環境のための手動フォールバック(「実施済」と同じ扱い)。
+        { label: "受付済", next: "accepted", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];
     case "accepted":
       return [
         // 到着確認はスキャン(到着確認画面)が原則。これはスキャナが使えない場面の
         // 手動フォールバックで、管ごとの到着記録は付かず Task だけ進む。
-        { label: "実施済にする", next: "completed", secondary: true },
+        { label: "実施済", next: "completed", secondary: true },
         { label: "取消", next: "requested", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];
     case "completed":
       return [{ label: "取消", next: "accepted", secondary: true }];
     case "cancelled":
-      return [{ label: "中止を取消", next: "requested", secondary: true }];
+      return [{ label: "中止取消", next: "requested", secondary: true }];
   }
 }
 

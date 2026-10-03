@@ -72,7 +72,7 @@ export interface NutritionGuidanceTaskAction {
  * 終了は ServiceRequest 側に終了日も書く(nutritionGuidanceOrderHelpers の
  * buildNutritionGuidanceOrderCloseEntry)。Task だけを completed にすると、
  * status=active のまま部門一覧の `occurrence=le{基準日}` に永久にヒットし続けるため。
- * 「終了を取消」は Task だけを戻し、書き込んだ終了日は消さない(非対称。画面で注記する)。
+ * 「終了取消」は Task だけを戻し、書き込んだ終了日は消さない(非対称。画面で注記する)。
  */
 export function nutritionGuidanceTaskActions(
   status: NutritionGuidanceTaskStatus,
@@ -90,9 +90,9 @@ export function nutritionGuidanceTaskActions(
         { label: "中止", next: "cancelled", secondary: true },
       ];
     case "completed":
-      return [{ label: "終了を取消", next: "accepted", secondary: true }];
+      return [{ label: "終了取消", next: "accepted", secondary: true }];
     case "cancelled":
-      return [{ label: "中止を取消", next: "requested", secondary: true }];
+      return [{ label: "中止取消", next: "requested", secondary: true }];
   }
 }
 

@@ -1,5 +1,5 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -12,6 +12,7 @@ import { labLabelPdfUrl } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LabOrderViewModal } from "../components/LabOrderViewModal";
 import { LabResultEntryModal } from "../components/LabResultEntryModal";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import {
   PatientKana,
@@ -98,6 +99,11 @@ export function LabWorklistPage() {
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const entering = worklist.data?.rows.find((row) => row.order.id === enteringId);
 
+  // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
+  // (同じ患者が 1 日に複数のオーダーを持つこともある)。絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find((row) => row.order.id && row.order.id === drawer.selectedKey);
+
   // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。病棟名はオーダー登録時に
   // 焼き付けてあるので病棟マスタを引く必要がなく、その日に無い病棟を並べても仕方が
   // ないのは検体・モダリティの選択肢と同じ考え方。
@@ -129,6 +135,15 @@ export function LabWorklistPage() {
       a.code.localeCompare(b.code),
     );
   }, [worklist.data]);
+
+  // 行の進捗の操作。行のボタン・ケバブと、ドロワーに並べるケバブの項目で共有する。
+  function actionsFor(row: LabWorklistRow): WorklistRowActions {
+    return {
+      pending: updateStatus.isPending,
+      onChangeStatus: (status) =>
+        updateStatus.mutate({ order: row.order, task: row.task, status }),
+    };
+  }
 
   function handleDateChange(value: string) {
     // 日付を空にはさせない(空で検索すると全期間になってしまう)。
@@ -186,12 +201,13 @@ export function LabWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
-                    pending={updateStatus.isPending}
+                    rowProps={drawer.rowProps(
+                      row.patient?.id && row.order.id,
+                      summarizeLabOrder(row.order).urgent ? "lab-worklist__row--urgent" : undefined,
+                    )}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onEnterResult={() => setEnteringId(row.order.id ?? null)}
-                    onChangeStatus={(status) =>
-                      updateStatus.mutate({ order: row.order, task: row.task, status })
-                    }
+                    {...actionsFor(row)}
                   />
                 ))}
                 {rows.length === 0 && (
@@ -210,6 +226,18 @@ export function LabWorklistPage() {
         </>
       )}
 
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          actions={
+            secondaryActionsOf(selectedRow).length > 0 ? (
+              <WorklistMenuItems row={selectedRow} {...actionsFor(selectedRow)} />
+            ) : undefined
+          }
+          onClose={drawer.close}
+        />
+      )}
       {viewing && <LabOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
       {entering && <LabResultEntryModal row={entering} onClose={() => setEnteringId(null)} />}
     </div>
@@ -359,19 +387,30 @@ function specimenNames(groups: LabSpecimenGroup[]): string {
   return groups.map((group) => group.specimenName || group.specimenCode || "検体未設定").join("・");
 }
 
+interface WorklistRowActions {
+  pending: boolean;
+  onChangeStatus: (status: LabTaskStatus) => void;
+}
+
+/** ケバブに畳む操作(取消・中止など)。 */
+function secondaryActionsOf(row: LabWorklistRow) {
+  return labTaskActions(labTaskStatus(row.task)).filter((action) => action.secondary);
+}
+
 function WorklistRow({
   row,
-  pending,
+  rowProps,
   onView,
   onEnterResult,
-  onChangeStatus,
+  ...menuActions
 }: {
   row: LabWorklistRow;
-  pending: boolean;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
   onView: () => void;
   onEnterResult: () => void;
-  onChangeStatus: (status: LabTaskStatus) => void;
-}) {
+} & WorklistRowActions) {
+  const { pending, onChangeStatus } = menuActions;
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
@@ -380,10 +419,9 @@ function WorklistRow({
   const requester = prescriptionRequester(order);
   const status = labTaskStatus(row.task);
   const actions = labTaskActions(status);
-  const secondaryActions = actions.filter((action) => action.secondary);
 
   return (
-    <tr className={summary.urgent ? "lab-worklist__row--urgent" : undefined}>
+    <tr {...rowProps}>
       <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-2">
         {patient ? (
@@ -468,24 +506,35 @@ function WorklistRow({
           表示
         </button>
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(放射線検査一覧と同じ)。 */}
-        {secondaryActions.length > 0 && (
+        {secondaryActionsOf(row).length > 0 && (
           <RowMenu label="この検査の操作" escapesClipping>
-            {secondaryActions.map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                className={`row-menu__item${
-                  action.next === "cancelled" ? " row-menu__item--danger" : ""
-                }`}
-                disabled={pending}
-                onClick={() => onChangeStatus(action.next)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <WorklistMenuItems row={row} {...menuActions} />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+/** 検査の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function WorklistMenuItems({
+  row,
+  pending,
+  onChangeStatus,
+}: { row: LabWorklistRow } & WorklistRowActions) {
+  return (
+    <>
+      {secondaryActionsOf(row).map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          className={`row-menu__item${action.next === "cancelled" ? " row-menu__item--danger" : ""}`}
+          disabled={pending}
+          onClick={() => onChangeStatus(action.next)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }

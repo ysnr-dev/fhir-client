@@ -1,5 +1,5 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -10,6 +10,7 @@ import {
 } from "../api/queries";
 import { prescriptionPdfUrl } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import {
   PatientKana,
@@ -106,6 +107,13 @@ export function RxWorklistPage() {
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
 
+  // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ。
+  // 絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find(
+    (row) => row.patient?.id && row.order.id === drawer.selectedKey,
+  );
+
   // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。病棟名はオーダー登録時に
   // 焼き付けてあるので病棟マスタを引く必要がなく、その日に無い病棟を並べても仕方が
   // ないのは処方区分の選択肢と同じ考え方。
@@ -121,6 +129,10 @@ export function RxWorklistPage() {
       a.name.localeCompare(b.name),
     );
   }, [worklist.data]);
+
+  function changeStatus(row: RxWorklistRow, status: RxTaskStatus) {
+    updateStatus.mutate({ order: row.order, task: row.task, status });
+  }
 
   function handleDateChange(value: string) {
     // 日付を空にはさせない(空で検索すると全期間になってしまう)。
@@ -181,11 +193,10 @@ export function RxWorklistPage() {
                     key={row.order.id}
                     row={row}
                     pending={updateStatus.isPending}
+                    rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onDispense={() => setDispensingId(row.order.id ?? null)}
-                    onChangeStatus={(status) =>
-                      updateStatus.mutate({ order: row.order, task: row.task, status })
-                    }
+                    onChangeStatus={(status) => changeStatus(row, status)}
                   />
                 ))}
                 {rows.length === 0 && (
@@ -204,6 +215,22 @@ export function RxWorklistPage() {
         </>
       )}
 
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          actions={
+            hasRxMenuItems(selectedRow) && (
+              <RxMenuItems
+                row={selectedRow}
+                pending={updateStatus.isPending}
+                onChangeStatus={(status) => changeStatus(selectedRow, status)}
+              />
+            )
+          }
+          onClose={drawer.close}
+        />
+      )}
       {viewing && <RxOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
       {dispensing && (
         <RxDispenseModal row={dispensing} onClose={() => setDispensingId(null)} />
@@ -345,12 +372,15 @@ function FilterForm({
 function WorklistRow({
   row,
   pending,
+  rowProps,
   onView,
   onDispense,
   onChangeStatus,
 }: {
   row: RxWorklistRow;
   pending: boolean;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
   onView: () => void;
   onDispense: () => void;
   onChangeStatus: (status: RxTaskStatus) => void;
@@ -361,14 +391,7 @@ function WorklistRow({
   const summary = summarizeServiceRequest(order);
   const requester = prescriptionRequester(order);
   const status = rxTaskStatus(row.task);
-  // 持参の処方は薬剤部が調剤しない(持参薬を使う)。処方箋も刷らず、操作は中止と中止の取消だけ。
   const brought = isBroughtPrescription(order);
-  const actions = brought
-    ? rxTaskActions(status).filter((a) => a.next === "cancelled" || a.next === "requested")
-    : rxTaskActions(status);
-  // 発行済み(受付済以降)は処方箋を刷り直せる。中止した処方は刷らせない。
-  const canReissue =
-    !brought && (status === "accepted" || status === "in-progress" || status === "completed");
 
   // 処方内容の列。薬袋を作る側が何を揃えるかが分かればよいので、医薬品の名前だけを
   // 横に並べる。用法・用量まで要るときは「表示」か「調剤登録」で開く。
@@ -380,7 +403,7 @@ function WorklistRow({
   const regimen = regimenOrderOf(order);
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-2">
         {patient ? (
@@ -460,34 +483,71 @@ function WorklistRow({
         </button>
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。
             処方箋の再発行も同じメニューに置く(進捗は動かさず、同じ処方箋を開くだけ)。 */}
-        {(actions.length > 0 || canReissue) && (
+        {hasRxMenuItems(row) && (
           <RowMenu label="この処方の操作" escapesClipping>
-            {canReissue && (
-              <a
-                className="row-menu__item"
-                href={prescriptionPdfUrl(order.id ?? "")}
-                target="_blank"
-                rel="noopener"
-              >
-                処方箋再発行
-              </a>
-            )}
-            {actions.map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                className={`row-menu__item${
-                  action.next === "cancelled" ? " row-menu__item--danger" : ""
-                }`}
-                disabled={pending}
-                onClick={() => onChangeStatus(action.next)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <RxMenuItems row={row} pending={pending} onChangeStatus={onChangeStatus} />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+// ケバブに並べる操作。行のケバブとドロワーで共有する。
+function rxMenuState(row: RxWorklistRow) {
+  const status = rxTaskStatus(row.task);
+  // 持参の処方は薬剤部が調剤しない(持参薬を使う)。処方箋も刷らず、操作は中止と中止の取消だけ。
+  const brought = isBroughtPrescription(row.order);
+  const actions = brought
+    ? rxTaskActions(status).filter((a) => a.next === "cancelled" || a.next === "requested")
+    : rxTaskActions(status);
+  // 発行済み(受付済以降)は処方箋を刷り直せる。中止した処方は刷らせない。
+  const canReissue =
+    !brought && (status === "accepted" || status === "in-progress" || status === "completed");
+  return { actions, canReissue };
+}
+
+function hasRxMenuItems(row: RxWorklistRow): boolean {
+  const { actions, canReissue } = rxMenuState(row);
+  return actions.length > 0 || canReissue;
+}
+
+/** 処方の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function RxMenuItems({
+  row,
+  pending,
+  onChangeStatus,
+}: {
+  row: RxWorklistRow;
+  pending: boolean;
+  onChangeStatus: (status: RxTaskStatus) => void;
+}) {
+  const { actions, canReissue } = rxMenuState(row);
+  return (
+    <>
+      {canReissue && (
+        <a
+          className="row-menu__item"
+          href={prescriptionPdfUrl(row.order.id ?? "")}
+          target="_blank"
+          rel="noopener"
+        >
+          処方箋再発行
+        </a>
+      )}
+      {actions.map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          className={`row-menu__item${
+            action.next === "cancelled" ? " row-menu__item--danger" : ""
+          }`}
+          disabled={pending}
+          onClick={() => onChangeStatus(action.next)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }

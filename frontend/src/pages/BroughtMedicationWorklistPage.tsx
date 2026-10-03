@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { Link } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { readResource } from "../api/fhirClient";
@@ -9,6 +9,7 @@ import {
 } from "../api/queries";
 import { BroughtMedicationIdentifyModal } from "../components/BroughtMedicationIdentifyModal";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import {
   PatientKana,
   PatientProfileCells,
@@ -56,6 +57,13 @@ export function BroughtMedicationWorklistPage() {
 
   const items = worklist.data ?? [];
 
+  // 行を押すと右に患者プロファイルを出す。行は鑑別依頼ごとなので依頼で選ぶ。
+  // 鑑別済を隠して行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedItem = items.find(
+    (item) => item.patient?.id && item.task.id === drawer.selectedKey,
+  );
+
   // 患者の列と持参薬の列で横に長くなるので、処方一覧と同じくこの画面だけ幅を広げる。
   useEffect(() => {
     document.body.classList.add("page-wide");
@@ -87,6 +95,21 @@ export function BroughtMedicationWorklistPage() {
       setCompleteError(error);
     }
   }
+
+  // 行の操作。行のボタン・ケバブと、ドロワーに並べるケバブの項目で共有する。
+  function actionsFor(item: BroughtMedWorklistItem): WorklistRowActions {
+    return {
+      pending: transaction.isPending,
+      onChangeStatus: (status) => changeStatus(item, status),
+      onIdentify: () => setIdentifying(item),
+      onComplete: () => complete(item),
+    };
+  }
+
+  // ケバブを出さない行(鑑別済・取り下げ済)はドロワーにも項目を並べない。
+  const selectedReviewStatus = selectedItem && broughtMedReviewRowOf(selectedItem.task).status;
+  const selectedOpen =
+    selectedReviewStatus === "requested" || selectedReviewStatus === "in-progress";
 
   return (
     <div className="page">
@@ -131,10 +154,8 @@ export function BroughtMedicationWorklistPage() {
                 <WorklistRow
                   key={item.task.id}
                   item={item}
-                  pending={transaction.isPending}
-                  onChangeStatus={(status) => changeStatus(item, status)}
-                  onIdentify={() => setIdentifying(item)}
-                  onComplete={() => complete(item)}
+                  rowProps={drawer.rowProps(item.patient?.id && item.task.id)}
+                  {...actionsFor(item)}
                 />
               ))}
               {items.length === 0 && (
@@ -149,6 +170,18 @@ export function BroughtMedicationWorklistPage() {
         </div>
       )}
 
+      {selectedItem?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedItem.patient.id}
+          patient={selectedItem.patient}
+          actions={
+            selectedOpen ? (
+              <WorklistMenuItems item={selectedItem} {...actionsFor(selectedItem)} />
+            ) : undefined
+          }
+          onClose={drawer.close}
+        />
+      )}
       {identifying && (
         <BroughtMedicationIdentifyModal
           statements={identifying.statements.filter((s) => {
@@ -162,19 +195,23 @@ export function BroughtMedicationWorklistPage() {
   );
 }
 
-function WorklistRow({
-  item,
-  pending,
-  onChangeStatus,
-  onIdentify,
-  onComplete,
-}: {
-  item: BroughtMedWorklistItem;
+interface WorklistRowActions {
   pending: boolean;
   onChangeStatus: (status: BroughtMedReviewStatus) => void;
   onIdentify: () => void;
   onComplete: () => void;
-}) {
+}
+
+function WorklistRow({
+  item,
+  rowProps,
+  ...actions
+}: {
+  item: BroughtMedWorklistItem;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
+} & WorklistRowActions) {
+  const { pending, onChangeStatus, onIdentify, onComplete } = actions;
   const returnLinkState = useReturnLinkState();
   const row = broughtMedReviewRowOf(item.task);
   const { patient } = item;
@@ -186,7 +223,7 @@ function WorklistRow({
   const open = row.status === "requested" || row.status === "in-progress";
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-2">
         {patient ? (
@@ -243,27 +280,42 @@ function WorklistRow({
         )}
         {open && (
           <RowMenu label="この鑑別依頼の操作" escapesClipping>
-            {row.status === "in-progress" && (
-              <button
-                type="button"
-                className="row-menu__item"
-                disabled={pending}
-                onClick={() => onChangeStatus("requested")}
-              >
-                取消
-              </button>
-            )}
-            <button
-              type="button"
-              className="row-menu__item row-menu__item--danger"
-              disabled={pending}
-              onClick={() => onChangeStatus("cancelled")}
-            >
-              依頼を取り下げ
-            </button>
+            <WorklistMenuItems item={item} {...actions} />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+/** 鑑別依頼の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function WorklistMenuItems({
+  item,
+  pending,
+  onChangeStatus,
+}: { item: BroughtMedWorklistItem } & WorklistRowActions) {
+  const { status } = broughtMedReviewRowOf(item.task);
+
+  return (
+    <>
+      {status === "in-progress" && (
+        <button
+          type="button"
+          className="row-menu__item"
+          disabled={pending}
+          onClick={() => onChangeStatus("requested")}
+        >
+          取消
+        </button>
+      )}
+      <button
+        type="button"
+        className="row-menu__item row-menu__item--danger"
+        disabled={pending}
+        onClick={() => onChangeStatus("cancelled")}
+      >
+        依頼取下げ
+      </button>
+    </>
   );
 }

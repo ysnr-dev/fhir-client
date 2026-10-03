@@ -1,5 +1,5 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -12,6 +12,7 @@ import {
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import {
   PatientKana,
@@ -124,6 +125,19 @@ export function RehabWorklistPage() {
     );
   }, [rows, date]);
 
+  // 行を押すと右に患者プロファイルを出す。依頼ビューはオーダー、予約ビューは予約で
+  // 選ぶ(同じオーダーがその日 2 枠持つこともある)。ビューごとに選択を分け、
+  // 絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer(view);
+  const selectedOrderRow = rows.find(
+    (row) => row.patient?.id && row.order.id === drawer.selectedKey,
+  );
+  const selectedAppointmentRow = appointmentRows.find(
+    ({ row, appointment }) => row.patient?.id && appointment.id === drawer.selectedKey,
+  );
+  const selectedPatient =
+    view === "orders" ? selectedOrderRow?.patient : selectedAppointmentRow?.row.patient;
+
   const viewing = allRows.find((row) => row.order.id === viewingId);
   const performingRow = allRows.find((row) => row.order.id === performing?.orderId);
   const bookingRow = allRows.find((row) => row.order.id === booking?.orderId);
@@ -161,6 +175,43 @@ export function RehabWorklistPage() {
       return;
     }
     updateStatus.mutate({ order: row.order, task: row.task, status });
+  }
+
+  // 予約の行の操作。行のケバブとドロワーで共有する。
+  function appointmentActionsFor(
+    row: RehabWorklistRow,
+    appointment: fhir4.Appointment,
+  ): AppointmentMenuActions {
+    return {
+      pending: cancelAppointment.isPending,
+      onReschedule: () =>
+        setBooking({ orderId: row.order.id ?? "", appointmentId: appointment.id }),
+      onCancel: () => {
+        if (!window.confirm("この予約を取り消します。よろしいですか?")) return;
+        cancelAppointment.mutate(appointment);
+      },
+    };
+  }
+
+  // ドロワーに並べる操作。表示中のビューの行のケバブと同じもの。
+  function drawerActions() {
+    if (view === "orders") {
+      if (!selectedOrderRow || rehabSecondaryActions(selectedOrderRow).length === 0) return null;
+      const row = selectedOrderRow;
+      return (
+        <OrderMenuItems
+          row={row}
+          pending={updateStatus.isPending}
+          onChangeStatus={(status) => handleChangeStatus(row, status)}
+        />
+      );
+    }
+    if (!selectedAppointmentRow) return null;
+    return (
+      <AppointmentMenuItems
+        {...appointmentActionsFor(selectedAppointmentRow.row, selectedAppointmentRow.appointment)}
+      />
+    );
   }
 
   return (
@@ -246,6 +297,7 @@ export function RehabWorklistPage() {
                     row={row}
                     date={date}
                     pending={updateStatus.isPending}
+                    rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onPerform={() => setPerforming({ orderId: row.order.id ?? "" })}
                     onBook={() => setBooking({ orderId: row.order.id ?? "" })}
@@ -290,7 +342,7 @@ export function RehabWorklistPage() {
                     key={appointment.id}
                     row={row}
                     appointment={appointment}
-                    pending={cancelAppointment.isPending}
+                    rowProps={drawer.rowProps(row.patient?.id && appointment.id)}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onPerform={() =>
                       setPerforming({
@@ -299,13 +351,7 @@ export function RehabWorklistPage() {
                         time: (appointment.start ?? "").slice(11, 16),
                       })
                     }
-                    onReschedule={() =>
-                      setBooking({ orderId: row.order.id ?? "", appointmentId: appointment.id })
-                    }
-                    onCancel={() => {
-                      if (!window.confirm("この予約を取り消します。よろしいですか?")) return;
-                      cancelAppointment.mutate(appointment);
-                    }}
+                    {...appointmentActionsFor(row, appointment)}
                   />
                 ))}
                 {appointmentRows.length === 0 && (
@@ -320,6 +366,15 @@ export function RehabWorklistPage() {
           </div>
           <p className="order-select__muted lab-worklist__count">{appointmentRows.length} 件</p>
         </>
+      )}
+
+      {selectedPatient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedPatient.id}
+          patient={selectedPatient}
+          actions={drawerActions()}
+          onClose={drawer.close}
+        />
       )}
 
       {viewing && (
@@ -551,6 +606,7 @@ function OrderRow({
   row,
   date,
   pending,
+  rowProps,
   onView,
   onPerform,
   onBook,
@@ -559,6 +615,8 @@ function OrderRow({
   row: RehabWorklistRow;
   date: string;
   pending: boolean;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
   onView: () => void;
   onPerform: () => void;
   onBook: () => void;
@@ -571,14 +629,13 @@ function OrderRow({
   const requester = prescriptionRequester(order);
   const status = rehabTaskStatus(row.task);
   const actions = rehabTaskActions(status);
-  const secondaryActions = actions.filter((action) => action.secondary);
   const performed = todaySummary(row);
   const elapsed = rehabElapsedDays(summary.onsetDate, date);
   // 基準日以降で最初の予約。取れていない行は次回が決まっていない。
   const next = row.appointments.find((a) => (a.start ?? "") >= date);
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-2">
         {patient ? (
@@ -650,21 +707,9 @@ function OrderRow({
           表示
         </button>
         {/* 終了・取消・中止は押し間違えると期間や進捗が動くので一段畳む。 */}
-        {secondaryActions.length > 0 && (
+        {rehabSecondaryActions(row).length > 0 && (
           <RowMenu label="このリハビリの操作" escapesClipping>
-            {secondaryActions.map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                className={`row-menu__item${
-                  action.next === "cancelled" ? " row-menu__item--danger" : ""
-                }`}
-                disabled={pending}
-                onClick={() => onChangeStatus(action.next)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <OrderMenuItems row={row} pending={pending} onChangeStatus={onChangeStatus} />
           </RowMenu>
         )}
       </td>
@@ -672,23 +717,80 @@ function OrderRow({
   );
 }
 
+// ケバブに畳む操作(終了・取消・中止)。行のケバブとドロワーで共有する。
+function rehabSecondaryActions(row: RehabWorklistRow) {
+  return rehabTaskActions(rehabTaskStatus(row.task)).filter((action) => action.secondary);
+}
+
+/** 依頼の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function OrderMenuItems({
+  row,
+  pending,
+  onChangeStatus,
+}: {
+  row: RehabWorklistRow;
+  pending: boolean;
+  onChangeStatus: (status: RehabTaskStatus) => void;
+}) {
+  return (
+    <>
+      {rehabSecondaryActions(row).map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          className={`row-menu__item${
+            action.next === "cancelled" ? " row-menu__item--danger" : ""
+          }`}
+          disabled={pending}
+          onClick={() => onChangeStatus(action.next)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
+  );
+}
+
+interface AppointmentMenuActions {
+  pending: boolean;
+  onReschedule: () => void;
+  onCancel: () => void;
+}
+
+/** 予約の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function AppointmentMenuItems({ pending, onReschedule, onCancel }: AppointmentMenuActions) {
+  return (
+    <>
+      <button type="button" className="row-menu__item" onClick={onReschedule}>
+        日時変更
+      </button>
+      <button
+        type="button"
+        className="row-menu__item row-menu__item--danger"
+        disabled={pending}
+        onClick={onCancel}
+      >
+        予約取消
+      </button>
+    </>
+  );
+}
+
 function AppointmentRow({
   row,
   appointment,
-  pending,
+  rowProps,
   onView,
   onPerform,
-  onReschedule,
-  onCancel,
+  ...menuActions
 }: {
   row: RehabWorklistRow;
   appointment: fhir4.Appointment;
-  pending: boolean;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
   onView: () => void;
   onPerform: () => void;
-  onReschedule: () => void;
-  onCancel: () => void;
-}) {
+} & AppointmentMenuActions) {
   const returnLinkState = useReturnLinkState();
   const { patient } = row;
   const summary = summarizeRehabOrder(row.order);
@@ -696,7 +798,7 @@ function AppointmentRow({
   const performed = todaySummary(row);
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="sticky-table__fix-1">{appointmentTimeLabel(appointment) || "-"}</td>
       <td className="sticky-table__fix-2">
         {patient ? (
@@ -734,17 +836,7 @@ function AppointmentRow({
           表示
         </button>
         <RowMenu label="この予約の操作" escapesClipping>
-          <button type="button" className="row-menu__item" onClick={onReschedule}>
-            日時変更
-          </button>
-          <button
-            type="button"
-            className="row-menu__item row-menu__item--danger"
-            disabled={pending}
-            onClick={onCancel}
-          >
-            予約取消
-          </button>
+          <AppointmentMenuItems {...menuActions} />
         </RowMenu>
       </td>
     </tr>

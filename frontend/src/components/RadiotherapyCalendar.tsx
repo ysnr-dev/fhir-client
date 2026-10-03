@@ -833,7 +833,7 @@ function FractionCard({
           {fraction.notDone && (
             <>
               <button type="button" className="row-menu__item" onClick={() => onRestoreFraction(entry)}>
-                中止を取消
+                中止取消
               </button>
               <button
                 type="button"

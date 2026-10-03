@@ -1,5 +1,5 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -13,6 +13,7 @@ import { useRadItemsByCodes, useRadJj1017Catalog } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RadPerformModal } from "../components/RadPerformModal";
 import { ExamReportEntryModal } from "../components/ExamReportEntryModal";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import {
   PatientKana,
@@ -96,6 +97,11 @@ export function RadWorklistPage() {
   );
   const total = worklist.data?.rows.length ?? 0;
 
+  // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
+  // (同じ患者が 1 日に複数のオーダーを持つこともある)。絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find((row) => row.order.id && row.order.id === drawer.selectedKey);
+
   // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。病棟名はオーダー登録時に
   // 焼き付けてあるので病棟マスタを引く必要がなく、その日に無い病棟を並べても仕方が
   // ないのはモダリティの選択肢と同じ考え方。
@@ -146,6 +152,16 @@ export function RadWorklistPage() {
   function handlePerform(row: RadWorklistRow) {
     if (needsPerformInput(row)) setPerforming(row);
     else updateStatus.mutate({ order: row.order, task: row.task, status: "completed" });
+  }
+
+  // 行の進捗の操作。行のボタン・ケバブと、ドロワーに並べるケバブの項目で共有する。
+  function actionsFor(row: RadWorklistRow): WorklistRowActions {
+    return {
+      // マスタが読めるまでは実施入力の有無が決まらないので押させない。
+      pending: updateStatus.isPending || items.isLoading,
+      onChangeStatus: (status) =>
+        updateStatus.mutate({ order: row.order, task: row.task, status }),
+    };
   }
 
   function handleDateChange(value: string) {
@@ -206,11 +222,11 @@ export function RadWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
-                    // マスタが読めるまでは実施入力の有無が決まらないので押させない。
-                    pending={updateStatus.isPending || items.isLoading}
-                    onChangeStatus={(status) =>
-                      updateStatus.mutate({ order: row.order, task: row.task, status })
-                    }
+                    rowProps={drawer.rowProps(
+                      row.patient?.id && row.order.id,
+                      summarizeRadOrder(row.order).urgent ? "rad-worklist__row--urgent" : undefined,
+                    )}
+                    {...actionsFor(row)}
                     onPerform={() => handlePerform(row)}
                     onReport={() =>
                       setReporting({
@@ -237,6 +253,18 @@ export function RadWorklistPage() {
         </>
       )}
 
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          actions={
+            secondaryActionsOf(selectedRow).length > 0 ? (
+              <WorklistMenuItems row={selectedRow} {...actionsFor(selectedRow)} />
+            ) : undefined
+          }
+          onClose={drawer.close}
+        />
+      )}
       {performing && (
         <RadPerformModal row={performing} onClose={() => setPerforming(null)} />
       )}
@@ -387,19 +415,30 @@ function FilterForm({
   );
 }
 
-function WorklistRow({
-  row,
-  pending,
-  onChangeStatus,
-  onPerform,
-  onReport,
-}: {
-  row: RadWorklistRow;
+interface WorklistRowActions {
   pending: boolean;
   onChangeStatus: (status: RadTaskStatus) => void;
+}
+
+/** ケバブに畳む操作(訂正・取りやめ)。 */
+function secondaryActionsOf(row: RadWorklistRow) {
+  return radTaskActions(radTaskStatus(row.task)).filter((action) => action.secondary);
+}
+
+function WorklistRow({
+  row,
+  rowProps,
+  onPerform,
+  onReport,
+  ...menuActions
+}: {
+  row: RadWorklistRow;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
   onPerform: () => void;
   onReport: () => void;
-}) {
+} & WorklistRowActions) {
+  const { pending, onChangeStatus } = menuActions;
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
   const { order, patient, task } = row;
@@ -408,10 +447,9 @@ function WorklistRow({
   const status = radTaskStatus(task);
   const requester = prescriptionRequester(order);
   const actions = radTaskActions(status);
-  const secondaryActions = actions.filter((action) => action.secondary);
 
   return (
-    <tr className={summary.urgent ? "rad-worklist__row--urgent" : undefined}>
+    <tr {...rowProps}>
       <td className="rad-worklist__time sticky-table__fix-1">{radOrderTime(order) || "-"}</td>
       <td className="sticky-table__fix-2">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-3">
@@ -477,32 +515,41 @@ function WorklistRow({
         {/* 訂正・取りやめは押し間違えると進捗が巻き戻るので、一段畳んで置く。
             一覧は横スクロールできるよう overflow を持つため、メニューは
             escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
-        {secondaryActions.length > 0 && (
+        {secondaryActionsOf(row).length > 0 && (
           <RowMenu label="この検査の操作" escapesClipping>
-            {secondaryActions.map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                // 中止は検査そのものを取りやめる操作なので目立たせる。取消は
-                // 1 つ前に戻すだけの訂正なので通常の項目にする。
-                className={`row-menu__item${
-                  action.next === "cancelled" ? " row-menu__item--danger" : ""
-                }`}
-                // 読影レポートがある検査の実施を取り消すと、撮っていない検査に読影が残る。
-                disabled={pending || (status === "completed" && Boolean(row.reportId))}
-                title={
-                  status === "completed" && row.reportId
-                    ? "読影レポートがあるため取り消せません"
-                    : undefined
-                }
-                onClick={() => onChangeStatus(action.next)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <WorklistMenuItems row={row} {...menuActions} />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+/** 検査の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function WorklistMenuItems({
+  row,
+  pending,
+  onChangeStatus,
+}: { row: RadWorklistRow } & WorklistRowActions) {
+  // 読影レポートがある検査の実施を取り消すと、撮っていない検査に読影が残る。
+  const lockedByReport = radTaskStatus(row.task) === "completed" && Boolean(row.reportId);
+
+  return (
+    <>
+      {secondaryActionsOf(row).map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          // 中止は検査そのものを取りやめる操作なので目立たせる。取消は
+          // 1 つ前に戻すだけの訂正なので通常の項目にする。
+          className={`row-menu__item${action.next === "cancelled" ? " row-menu__item--danger" : ""}`}
+          disabled={pending || lockedByReport}
+          title={lockedByReport ? "読影レポートがあるため取り消せません" : undefined}
+          onClick={() => onChangeStatus(action.next)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }

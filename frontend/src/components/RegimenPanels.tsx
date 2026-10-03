@@ -281,7 +281,7 @@ export function RegimenDayPanel({
               中止
             </button>
             <button type="button" onClick={handleRestore} disabled={restorable.length === 0 || updateStatus.isPending}>
-              中止を取消
+              中止取消
             </button>
           </div>
         </>

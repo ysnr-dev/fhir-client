@@ -1,5 +1,5 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -17,6 +17,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import {
   CATEGORY_OPTIONS,
@@ -96,6 +97,18 @@ export function InjectionWorklistPage() {
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
 
+  // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
+  // (同じ患者が同じ日に複数の注射を持つこともある)。絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find((row) => row.patient?.id && row.order.id === drawer.selectedKey);
+
+  function changeStatus(row: InjectionWorklistRow, status: InjectionTaskStatus) {
+    updateStatus.mutate({
+      targets: [{ serviceRequest: row.order, task: row.task }],
+      status,
+    });
+  }
+
   const wardOptions = useMemo(() => {
     const byId = new Map<string, string>();
     for (const row of worklist.data?.rows ?? []) {
@@ -159,12 +172,8 @@ export function InjectionWorklistPage() {
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onDispense={() => setDispensingId(row.order.id ?? null)}
-                    onChangeStatus={(status) =>
-                      updateStatus.mutate({
-                        targets: [{ serviceRequest: row.order, task: row.task }],
-                        status,
-                      })
-                    }
+                    onChangeStatus={(status) => changeStatus(row, status)}
+                    rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                   />
                 ))}
                 {rows.length === 0 && (
@@ -183,6 +192,22 @@ export function InjectionWorklistPage() {
         </>
       )}
 
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          actions={
+            hasMenuItems(selectedRow) ? (
+              <WorklistMenuItems
+                row={selectedRow}
+                pending={updateStatus.isPending}
+                onChangeStatus={(status) => changeStatus(selectedRow, status)}
+              />
+            ) : undefined
+          }
+          onClose={drawer.close}
+        />
+      )}
       {viewing && <InjectionOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
       {dispensing && (
         <InjectionDispenseModal row={dispensing} onClose={() => setDispensingId(null)} />
@@ -309,31 +334,47 @@ function FilterForm({ date, filters, wards, departments, onDateChange, onChange 
   );
 }
 
+/** 行のケバブに畳む操作。 */
+function menuContents(row: InjectionWorklistRow) {
+  const status = injectionTaskStatus(row.task);
+  return {
+    status,
+    actions: injectionTaskActions(status),
+    // 発行済み(受付済以降)は注射箋を刷り直せる。中止した注射は刷らせない。
+    canReissue: status === "accepted" || status === "in-progress" || status === "completed",
+  };
+}
+
+function hasMenuItems(row: InjectionWorklistRow): boolean {
+  const { status, actions, canReissue } = menuContents(row);
+  return actions.length > 0 || canReissue || status !== "cancelled";
+}
+
 function WorklistRow({
   row,
   pending,
   onView,
   onDispense,
   onChangeStatus,
+  rowProps,
 }: {
   row: InjectionWorklistRow;
   pending: boolean;
   onView: () => void;
   onDispense: () => void;
   onChangeStatus: (status: InjectionTaskStatus) => void;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
 }) {
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
   const requester = prescriptionRequester(order);
   const status = injectionTaskStatus(row.task);
-  const actions = injectionTaskActions(status);
   const settingDisplay = categoryCoding(order, SETTING_SYSTEM)?.display ?? "";
   const categoryDisplay = categoryCoding(order, INJECTION_CATEGORY_SYSTEM)?.display ?? "";
   const seriesLabel = injectionSeriesLabel(order);
   // 化学療法(レジメン)から出たオーダーか。日オーダーの拡張で判る(§7.6 E-1)。
   const regimen = regimenOrderOf(order);
-  // 発行済み(受付済以降)は注射箋を刷り直せる。中止した注射は刷らせない。
-  const canReissue = status === "accepted" || status === "in-progress" || status === "completed";
 
   // 注射内容の列。払い出す側が何を揃えるかが分かればよいので医薬品の名前だけを並べ、
   // 用法・用量は「表示」か「払出登録」で開く。
@@ -343,7 +384,7 @@ function WorklistRow({
     .join("・");
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-2">
         {patient ? (
@@ -414,43 +455,58 @@ function WorklistRow({
         <button type="button" onClick={onView}>
           表示
         </button>
-        {(actions.length > 0 || canReissue || status !== "cancelled") && (
+        {hasMenuItems(row) && (
           <RowMenu label="この注射の操作" escapesClipping>
-            {canReissue && (
-              <a
-                className="row-menu__item"
-                href={injectionPdfUrl(order.id ?? "")}
-                target="_blank"
-                rel="noopener"
-              >
-                注射箋再発行
-              </a>
-            )}
-            {/* ラベルは進捗を動かさない。混注の準備で使うので払出前でも刷れる。 */}
-            {status !== "cancelled" && (
-              <a
-                className="row-menu__item"
-                href={injectionLabelPdfUrl(order.id ?? "")}
-                target="_blank"
-                rel="noopener"
-              >
-                注射ラベル発行
-              </a>
-            )}
-            {actions.map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                className={`row-menu__item${action.next === "cancelled" ? " row-menu__item--danger" : ""}`}
-                disabled={pending}
-                onClick={() => onChangeStatus(action.next)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <WorklistMenuItems row={row} pending={pending} onChangeStatus={onChangeStatus} />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+/** 行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function WorklistMenuItems({
+  row,
+  pending,
+  onChangeStatus,
+}: {
+  row: InjectionWorklistRow;
+  pending: boolean;
+  onChangeStatus: (status: InjectionTaskStatus) => void;
+}) {
+  const { status, actions, canReissue } = menuContents(row);
+  const orderId = row.order.id ?? "";
+
+  return (
+    <>
+      {canReissue && (
+        <a className="row-menu__item" href={injectionPdfUrl(orderId)} target="_blank" rel="noopener">
+          注射箋再発行
+        </a>
+      )}
+      {/* ラベルは進捗を動かさない。混注の準備で使うので払出前でも刷れる。 */}
+      {status !== "cancelled" && (
+        <a
+          className="row-menu__item"
+          href={injectionLabelPdfUrl(orderId)}
+          target="_blank"
+          rel="noopener"
+        >
+          注射ラベル発行
+        </a>
+      )}
+      {actions.map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          className={`row-menu__item${action.next === "cancelled" ? " row-menu__item--danger" : ""}`}
+          disabled={pending}
+          onClick={() => onChangeStatus(action.next)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }

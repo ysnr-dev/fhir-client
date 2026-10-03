@@ -888,7 +888,7 @@ const KarteCard = memo(function KarteCard({
                 className="row-menu__item"
                 onClick={() => setInjectionCancel("restore")}
               >
-                中止を取消
+                中止取消
               </button>
             )}
             <button type="button" className="row-menu__item" onClick={() => setJsonOpen(true)}>

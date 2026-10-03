@@ -80,7 +80,7 @@ export function consultTaskActions(status: ConsultTaskStatus): ConsultTaskAction
     case "completed":
       return [{ label: "回答取消", next: "accepted", secondary: true }];
     case "cancelled":
-      return [{ label: "取消を戻す", next: "requested", secondary: true }];
+      return [{ label: "取消戻し", next: "requested", secondary: true }];
   }
 }
 

@@ -822,7 +822,7 @@ function OutpatientMenuItems({
           disabled={pending}
           onClick={() => onChangeStatus("noshow")}
         >
-          未来院にする
+          未来院
         </button>
       )}
       {appointment.status === "noshow" && (

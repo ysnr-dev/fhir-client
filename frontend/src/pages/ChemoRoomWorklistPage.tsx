@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useChemoRoomList, type ChemoRoomRow } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "../components/PatientRowCells";
 import { appointmentTimeLabel } from "../fhir/appointmentHelpers";
 import { groupInjectionByRp } from "../fhir/injectionHelpers";
@@ -30,6 +31,13 @@ export function ChemoRoomWorklistPage() {
   const list = useChemoRoomList(date);
   const rows = list.data ?? [];
 
+  // 行を押すと右に患者プロファイルを出す。行は予約ごとなので予約で選ぶ。
+  // 日付を替えて行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find(
+    (row) => row.patient?.id && row.appointment.id === drawer.selectedKey,
+  );
+
   return (
     <div className="page">
       <h1>外来化学療法室</h1>
@@ -55,7 +63,11 @@ export function ChemoRoomWorklistPage() {
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <ChemoRoomTableRow key={row.appointment.id} row={row} />
+                  <ChemoRoomTableRow
+                    key={row.appointment.id}
+                    row={row}
+                    rowProps={drawer.rowProps(row.patient?.id && row.appointment.id)}
+                  />
                 ))}
                 {rows.length === 0 && (
                   <tr>
@@ -69,6 +81,14 @@ export function ChemoRoomWorklistPage() {
           </div>
           <p className="order-select__muted lab-worklist__count">{rows.length} 件</p>
         </>
+      )}
+
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          onClose={drawer.close}
+        />
       )}
     </div>
   );
@@ -95,7 +115,14 @@ function DateForm({ date, onChange }: { date: string; onChange: (date: string) =
   );
 }
 
-function ChemoRoomTableRow({ row }: { row: ChemoRoomRow }) {
+function ChemoRoomTableRow({
+  row,
+  rowProps,
+}: {
+  row: ChemoRoomRow;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
+}) {
   const returnLinkState = useReturnLinkState();
   const { appointment, patient, order, medicationRequests, task } = row;
   const regimen = order ? regimenOrderOf(order) : null;
@@ -108,7 +135,7 @@ function ChemoRoomTableRow({ row }: { row: ChemoRoomRow }) {
     .join("・");
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="lab-worklist__compact sticky-table__fix-1">{appointmentTimeLabel(appointment) || "-"}</td>
       <td className="sticky-table__fix-2">
         {patient ? (

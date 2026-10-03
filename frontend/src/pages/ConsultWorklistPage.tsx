@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -12,6 +12,7 @@ import { ConsultOrderDetailPanel } from "../components/ConsultOrderDetailPanel";
 import { ConsultReplyModal } from "../components/ConsultReplyModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import {
   PatientKana,
   PatientProfileCells,
@@ -109,6 +110,13 @@ export function ConsultWorklistPage() {
   const viewing = allRows.find((row) => row.order.id === viewingId);
   const replying = allRows.find((row) => row.order.id === replyingId);
 
+  // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ。
+  // 絞り込み・タブの切り替えで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find(
+    (row) => row.patient?.id && row.order.id === drawer.selectedKey,
+  );
+
   // 病棟の選択肢は読み込んだぶんのオーダーから拾う(リハビリ一覧と同じ考え方)。
   const wardOptions = useMemo(() => {
     const byId = new Map<string, string>();
@@ -204,6 +212,7 @@ export function ConsultWorklistPage() {
                     key={row.order.id}
                     row={row}
                     pending={updateStatus.isPending}
+                    rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onReply={() => setReplyingId(row.order.id ?? null)}
                     onChangeStatus={(status) => handleChangeStatus(row, status)}
@@ -225,6 +234,23 @@ export function ConsultWorklistPage() {
           </div>
           <p className="order-select__muted lab-worklist__count">{rows.length} 件</p>
         </>
+      )}
+
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          actions={
+            consultSecondaryActions(selectedRow).length > 0 && (
+              <ConsultMenuItems
+                row={selectedRow}
+                pending={updateStatus.isPending}
+                onChangeStatus={(status) => handleChangeStatus(selectedRow, status)}
+              />
+            )
+          }
+          onClose={drawer.close}
+        />
       )}
 
       {viewing && (
@@ -396,12 +422,15 @@ function FilterForm({ filters, wards, departments, onChange, onClear }: FilterFo
 function OrderRow({
   row,
   pending,
+  rowProps,
   onView,
   onReply,
   onChangeStatus,
 }: {
   row: ConsultWorklistRow;
   pending: boolean;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
   onView: () => void;
   onReply: () => void;
   onChangeStatus: (status: ConsultTaskStatus) => void;
@@ -413,10 +442,9 @@ function OrderRow({
   const requester = prescriptionRequester(order);
   const status = consultTaskStatus(row.task);
   const actions = consultTaskActions(status);
-  const secondaryActions = actions.filter((action) => action.secondary);
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-2">
         {patient ? (
@@ -477,24 +505,46 @@ function OrderRow({
           表示
         </button>
         {/* 取消・回答取消は押し間違えると進捗が動くので一段畳む。 */}
-        {secondaryActions.length > 0 && (
+        {consultSecondaryActions(row).length > 0 && (
           <RowMenu label="この他科依頼の操作" escapesClipping>
-            {secondaryActions.map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                className={`row-menu__item${
-                  action.next === "cancelled" ? " row-menu__item--danger" : ""
-                }`}
-                disabled={pending}
-                onClick={() => onChangeStatus(action.next)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <ConsultMenuItems row={row} pending={pending} onChangeStatus={onChangeStatus} />
           </RowMenu>
         )}
       </td>
     </tr>
+  );
+}
+
+// ケバブに畳む操作(取消・回答取消)。行のケバブとドロワーで共有する。
+function consultSecondaryActions(row: ConsultWorklistRow) {
+  return consultTaskActions(consultTaskStatus(row.task)).filter((action) => action.secondary);
+}
+
+/** 他科依頼の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function ConsultMenuItems({
+  row,
+  pending,
+  onChangeStatus,
+}: {
+  row: ConsultWorklistRow;
+  pending: boolean;
+  onChangeStatus: (status: ConsultTaskStatus) => void;
+}) {
+  return (
+    <>
+      {consultSecondaryActions(row).map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          className={`row-menu__item${
+            action.next === "cancelled" ? " row-menu__item--danger" : ""
+          }`}
+          disabled={pending}
+          onClick={() => onChangeStatus(action.next)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }

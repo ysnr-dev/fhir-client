@@ -16,6 +16,7 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { nowFhirDateTime, toFhirDateTime, today } from "../lib/dates";
 import type { useReturnLinkState } from "../returnTo";
 import { ErrorBanner } from "./ErrorBanner";
+import { PatientProfileDrawer, type useRowDrawer } from "./PatientProfileDrawer";
 import { PatientKana } from "./PatientRowCells";
 
 // 病棟の指示簿の「パスのタスク」。その病棟に入院している患者の、基準日の病日に置かれた
@@ -29,6 +30,8 @@ interface PathwayWardTasksProps {
   /** 実施予定のビューでは未実施のタスクだけを出す。 */
   onlyUndone: boolean;
   returnLinkState: ReturnType<typeof useReturnLinkState>;
+  /** 行を押して出す患者プロファイルの選択。上の指示の表とひとつにする。 */
+  drawer: ReturnType<typeof useRowDrawer>;
 }
 
 interface PatientTasks {
@@ -39,7 +42,13 @@ interface PatientTasks {
   tasks: PathwayWardTask[];
 }
 
-export function PathwayWardTasks({ date, wardId, onlyUndone, returnLinkState }: PathwayWardTasksProps) {
+export function PathwayWardTasks({
+  date,
+  wardId,
+  onlyUndone,
+  returnLinkState,
+  drawer,
+}: PathwayWardTasksProps) {
   const inpatients = useInpatientEncounters(date);
   const { bedWards, error: bedWardError } = useBedWardIndex();
   const record = useRecordPathwayEvaluation();
@@ -78,6 +87,14 @@ export function PathwayWardTasks({ date, wardId, onlyUndone, returnLinkState }: 
     }
     return [...byPatient.values()].sort((a, b) => a.bedLabel.localeCompare(b.bedLabel, "ja"));
   }, [tasks.data, onlyUndone, bedByPatientId, inpatients.data]);
+
+  // 見出し行は患者で、タスクの行はタスクで選ぶ。行が消えたら閉じる。
+  const selectedGroup = groups.find(
+    (group) =>
+      group.patientId &&
+      (pathwayPatientRowKey(group.patientId) === drawer.selectedKey ||
+        group.tasks.some((task) => pathwayTaskRowKey(task) === drawer.selectedKey)),
+  );
 
   const total = groups.reduce((n, g) => n + g.tasks.length, 0);
   const undone = (tasks.data ?? []).filter((t) => !t.done).length;
@@ -123,6 +140,7 @@ export function PathwayWardTasks({ date, wardId, onlyUndone, returnLinkState }: 
                   pending={record.isPending}
                   returnLinkState={returnLinkState}
                   onToggle={toggle}
+                  rowProps={drawer.rowProps}
                 />
               ))}
               {groups.length === 0 && (
@@ -143,8 +161,25 @@ export function PathwayWardTasks({ date, wardId, onlyUndone, returnLinkState }: 
           {groups.length} 人 / {total} 件
         </p>
       )}
+
+      {selectedGroup && (
+        <PatientProfileDrawer
+          patientId={selectedGroup.patientId}
+          patient={selectedGroup.patient}
+          onClose={drawer.close}
+        />
+      )}
     </section>
   );
+}
+
+// 選択キーは指示の表(指示の id・patient:患者 id)と重ならないようにする。
+function pathwayPatientRowKey(patientId: string): string {
+  return `pathway-patient:${patientId}`;
+}
+
+function pathwayTaskRowKey(task: PathwayWardTask): string | undefined {
+  return task.procedure.id && `pathway:${task.procedure.id}`;
 }
 
 function PatientTaskGroup({
@@ -152,11 +187,13 @@ function PatientTaskGroup({
   pending,
   returnLinkState,
   onToggle,
+  rowProps,
 }: {
   group: PatientTasks;
   pending: boolean;
   returnLinkState: ReturnType<typeof useReturnLinkState>;
   onToggle: (task: PathwayWardTask) => void;
+  rowProps: ReturnType<typeof useRowDrawer>["rowProps"];
 }) {
   const first = group.tasks[0];
   // 患者の名前から、カルテのパスタブをその病日の日めくりで開く。
@@ -167,7 +204,12 @@ function PatientTaskGroup({
 
   return (
     <>
-      <tr className="nursing-worklist__patient">
+      <tr
+        {...rowProps(
+          group.patientId ? pathwayPatientRowKey(group.patientId) : undefined,
+          "nursing-worklist__patient",
+        )}
+      >
         <th className="nursing-worklist__check" />
         <th colSpan={5}>
           <span className="nursing-worklist__room">{group.roomLabel || "-"}</span>
@@ -187,7 +229,13 @@ function PatientTaskGroup({
         </th>
       </tr>
       {group.tasks.map((task) => (
-        <tr key={task.procedure.id} className={task.done ? "nursing-worklist__pathway-done" : undefined}>
+        <tr
+          key={task.procedure.id}
+          {...rowProps(
+            group.patientId ? pathwayTaskRowKey(task) : undefined,
+            task.done ? "nursing-worklist__pathway-done" : undefined,
+          )}
+        >
           <td className="nursing-worklist__check">
             <input
               type="checkbox"

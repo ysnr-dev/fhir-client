@@ -77,7 +77,7 @@ export function rxTaskActions(status: RxTaskStatus): RxTaskAction[] {
       // 実施済を作る導線はまだ無い(別タスク)。操作もその設計と一緒に決める。
       return [];
     case "cancelled":
-      return [{ label: "中止を取消", next: "requested", secondary: true }];
+      return [{ label: "中止取消", next: "requested", secondary: true }];
   }
 }
 
