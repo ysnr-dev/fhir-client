@@ -14,6 +14,8 @@ interface KarteSidePaneProps {
   onLoadDay: (dayKey: string) => void;
   /** 読み込みを進めている対象の日。 */
   loadingKey: string | null;
+  /** タイムラインの先頭に見えている日(KarteDayList 参照)。 */
+  currentKey: string | null;
   mode: KarteSidePaneMode;
   onModeChange: (mode: KarteSidePaneMode) => void;
   filter: KarteCardFilter | null;
@@ -34,6 +36,7 @@ export function KarteSidePane({
   onSelect,
   onLoadDay,
   loadingKey,
+  currentKey,
   mode,
   onModeChange,
   filter,
@@ -73,6 +76,7 @@ export function KarteSidePane({
           onSelect={onSelect}
           onLoadDay={onLoadDay}
           loadingKey={loadingKey}
+          currentKey={currentKey}
         />
       ) : (
         <KarteCategoryList filter={filter} onSelect={onFilterChange} />

@@ -12,6 +12,7 @@ import {
 // 月日と曜日だけを出す(年が変わる境目だけ見出しで示す)。展開するとその日の情報
 // (処方・診療記録など)が出る。クリックでタイムラインの該当位置へスクロールする。
 // まだ読み込んでいない日はクリック・展開で読み込みを進めてもらう(親が行う)。
+// タイムラインの先頭に見えている日の行は色を付け、いまどこを読んでいるかを示す。
 // ペインの枠と見出しは KarteSidePane 側が描く。
 
 interface KarteDayListProps {
@@ -21,9 +22,11 @@ interface KarteDayListProps {
   onLoadDay: (dayKey: string) => void;
   /** 読み込みを進めている対象の日。読み込み中の表示に使う。 */
   loadingKey: string | null;
+  /** タイムラインの先頭に見えている日(日付なしは "no-date")。 */
+  currentKey: string | null;
 }
 
-export function KarteDayList({ entries, onSelect, onLoadDay, loadingKey }: KarteDayListProps) {
+export function KarteDayList({ entries, onSelect, onLoadDay, loadingKey, currentKey }: KarteDayListProps) {
   // ツリービューのイメージに合わせて既定は閉じた状態。
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -53,7 +56,7 @@ export function KarteDayList({ entries, onSelect, onLoadDay, loadingKey }: Karte
               const isLoading = loadingKey === day;
               return (
                 <li key={day}>
-                  <div className="karte-daylist__day">
+                  <div className={`karte-daylist__day${day === currentKey ? " karte-daylist__day--current" : ""}`}>
                     <button
                       type="button"
                       className="karte-daylist__toggle"

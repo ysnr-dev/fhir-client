@@ -7190,6 +7190,16 @@ body.karte-wide {
   color: var(--text-h);
 }
 
+/* タイムラインの先頭に見えている日の行。 */
+.karte-daylist__day--current {
+  background: var(--accent-bg);
+  border-radius: 4px;
+}
+
+.karte-daylist__day--current .karte-daylist__date {
+  color: var(--accent);
+}
+
 /* 未読の日へ飛ぶ・展開するときの自動読み込み中。控えめに薄くするだけにとどめる。 */
 .karte-daylist__date--loading {
   opacity: 0.5;

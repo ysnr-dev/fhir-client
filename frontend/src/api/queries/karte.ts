@@ -209,7 +209,12 @@ export function useKartePendingOrders(
     [unscheduled.data, upcoming.data],
   );
 
-  return { bundles, error: unscheduled.error ?? upcoming.error ?? null };
+  return {
+    bundles,
+    error: unscheduled.error ?? upcoming.error ?? null,
+    // 先読みが届くとタイムラインの上に日が足されるので、初期位置を決める側が待つ。
+    isPending: unscheduled.isPending || upcoming.isPending,
+  };
 }
 
 export function useKarteQuestionnaireResponsesInfinite(

@@ -583,6 +583,51 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   }, []);
   useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
 
+  // 本日のカルテのペインを出していないときは、カルテを本日の位置で開く。タイムラインは
+  // 新しい日が上(日付未定・先の予定・本日・過去の順)なので、先の予定があると本日が下に
+  // 隠れる。本日の項目が無ければ、本日より前で最も新しい日にする。患者ごとに 1 回だけで、
+  // 先読み(日付未定・先の予定)と最初のページが揃ってから合わせる(後から上に日が足されて
+  // ずれないように)。強調はしない(飛んだのではなく、開いた位置なので)。
+  // タイムラインの先頭に見えている日。診療日ペインのその行に色を付ける。スクロールのたびに
+  // 日の見出し(section)を上から見て、下端がまだ枠の上端より下にある最初の日を取る。
+  // requestAnimationFrame は使わない(隠れたタブで止まり、更新が来なくなる)。
+  const [currentDayKey, setCurrentDayKey] = useState<string | null>(null);
+  useEffect(() => {
+    const container = timelineRef.current;
+    if (!container) return;
+    function update() {
+      if (!container) return;
+      const top = container.getBoundingClientRect().top;
+      const sections = container.querySelectorAll<HTMLElement>(`section[${KARTE_TARGET_ATTR}]`);
+      let key: string | null = null;
+      for (const section of sections) {
+        if (section.getBoundingClientRect().bottom > top + 1) {
+          key = section.getAttribute(KARTE_TARGET_ATTR);
+          break;
+        }
+      }
+      setCurrentDayKey(key);
+    }
+    update();
+    container.addEventListener("scroll", update, { passive: true });
+    return () => container.removeEventListener("scroll", update);
+  }, [filteredGroups, tab, mode, todayVisible]);
+
+  const initialScrollPatient = useRef<string | null>(null);
+  const timelineReady =
+    !notes.isPending && !prescriptions.isPending && !responses.isPending && !vitals.isPending && !pendingOrders.isPending;
+  useLayoutEffect(() => {
+    if (!patientId || initialScrollPatient.current === patientId || !timelineReady) return;
+    const container = timelineRef.current;
+    if (!container) return;
+    initialScrollPatient.current = patientId;
+    if (todayVisible) return;
+    const target = filteredGroups.find((group) => /^\d{4}-\d{2}-\d{2}$/.test(group.day) && group.day <= todayDay);
+    const element = target && container.querySelector(`[${KARTE_TARGET_ATTR}="${target.day}"]`);
+    if (!element) return;
+    container.scrollTop += element.getBoundingClientRect().top - container.getBoundingClientRect().top;
+  }, [patientId, timelineReady, todayVisible, filteredGroups, todayDay]);
+
   // 診療日ペインは全日付を出すので、まだ読み込んでいない日も選べる。その場合は
   // 該当の日が表示範囲に入るまで自動で読み進めてから飛ぶ。scroll はクリック
   // (飛ぶ)か展開だけ(項目を出す)かの区別。
@@ -810,6 +855,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         onSelect={handleSideSelect}
         onLoadDay={handleLoadDay}
         loadingKey={pendingDay?.key ?? null}
+        currentKey={currentDayKey}
         mode={effectiveSidePaneMode}
         onModeChange={selectSidePaneMode}
         filter={cardFilter}
