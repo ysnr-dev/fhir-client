@@ -25,6 +25,7 @@ import { DischargeModal } from "./DischargeModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { InpatientBodyCells, InpatientHeadCells, KarteLink } from "./InpatientRowCells";
 import { LeaveReturnModal } from "./LeaveReturnModal";
+import { PatientProfileDrawer, useRowDrawer } from "./PatientProfileDrawer";
 import { RowMenu } from "./RowMenu";
 import { TransferExecuteModal } from "./TransferExecuteModal";
 
@@ -98,6 +99,35 @@ export function TransferPlanTable({
     cancelPlan.mutate(buildTransferPlanEncounter(row.encounter, null));
   }
 
+  // 行を押すと右に患者プロファイルを出す。行が一覧から消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selected = rows.find(
+    (row) => row.patient?.id && row.encounter.id === drawer.selectedKey,
+  );
+
+  // 行のケバブとドロワーに同じ項目を並べる。
+  function menuItems(row: TransferPlanRow) {
+    return (
+      <>
+        <button
+          type="button"
+          className="row-menu__item"
+          onClick={() => setExecuteTarget(row)}
+        >
+          転科・転棟実施
+        </button>
+        <button
+          type="button"
+          className="row-menu__item row-menu__item--danger"
+          onClick={() => handleCancel(row)}
+          disabled={cancelPlan.isPending}
+        >
+          転科・転棟予定取消
+        </button>
+      </>
+    );
+  }
+
   if (rows.length === 0) return <EmptyMessage filtering={filtering} name="転科・転棟予定" />;
 
   return (
@@ -115,7 +145,7 @@ export function TransferPlanTable({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.encounter.id}>
+              <tr key={row.encounter.id} {...drawer.rowProps(row.patient?.id && row.encounter.id)}>
                 {/* 病室・ベッド・診療科は移動先(この病棟に移ってくる患者の一覧なので、
                     移動後の姿で並べる)。今どこに居るかは右の列に添える。 */}
                 <InpatientBodyCells
@@ -142,21 +172,7 @@ export function TransferPlanTable({
                     label={`${row.patient ? displayName(row.patient) : "この患者"} の操作`}
                     escapesClipping
                   >
-                    <button
-                      type="button"
-                      className="row-menu__item"
-                      onClick={() => setExecuteTarget(row)}
-                    >
-                      転科・転棟実施
-                    </button>
-                    <button
-                      type="button"
-                      className="row-menu__item row-menu__item--danger"
-                      onClick={() => handleCancel(row)}
-                      disabled={cancelPlan.isPending}
-                    >
-                      転科・転棟予定取消
-                    </button>
+                    {menuItems(row)}
                   </RowMenu>
                 </td>
               </tr>
@@ -175,11 +191,25 @@ export function TransferPlanTable({
           onClose={() => setExecuteTarget(null)}
         />
       )}
+
+      {selected?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selected.patient.id}
+          patient={selected.patient}
+          actions={menuItems(selected)}
+          onClose={drawer.close}
+        />
+      )}
     </>
   );
 }
 
 // ---- 外出泊 ----
+
+// 1 人が複数の外出泊を持てるので、行の key は Encounter だけでは足りない。
+function leaveRowKey(row: LeaveRow): string {
+  return `${row.encounter.id}-${row.leave.id || row.leave.start}`;
+}
 
 export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: boolean }) {
   const [returnTarget, setReturnTarget] = useState<LeaveRow | null>(null);
@@ -202,6 +232,35 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
     });
   }
 
+  // 行を押すと右に患者プロファイルを出す。行が一覧から消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selected = rows.find(
+    (row) => row.patient?.id && leaveRowKey(row) === drawer.selectedKey,
+  );
+
+  // 行のケバブとドロワーに同じ項目を並べる。
+  function menuItems(row: LeaveRow) {
+    return (
+      <>
+        <button
+          type="button"
+          className="row-menu__item"
+          onClick={() => setReturnTarget(row)}
+        >
+          帰院実施
+        </button>
+        <button
+          type="button"
+          className="row-menu__item row-menu__item--danger"
+          onClick={() => handleCancel(row)}
+          disabled={cancelLeave.isPending}
+        >
+          外出泊取消
+        </button>
+      </>
+    );
+  }
+
   if (rows.length === 0) return <EmptyMessage filtering={filtering} name="外出泊" />;
 
   return (
@@ -220,8 +279,7 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
           </thead>
           <tbody>
             {rows.map((row) => (
-              // 1 人が複数の外出泊を持てるので、行の key は Encounter だけでは足りない。
-              <tr key={`${row.encounter.id}-${row.leave.id || row.leave.start}`}>
+              <tr key={leaveRowKey(row)} {...drawer.rowProps(row.patient?.id && leaveRowKey(row))}>
                 <InpatientBodyCells
                   roomName={row.roomName}
                   bedName={row.bedName}
@@ -246,21 +304,7 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
                     label={`${row.patient ? displayName(row.patient) : "この患者"} の操作`}
                     escapesClipping
                   >
-                    <button
-                      type="button"
-                      className="row-menu__item"
-                      onClick={() => setReturnTarget(row)}
-                    >
-                      帰院実施
-                    </button>
-                    <button
-                      type="button"
-                      className="row-menu__item row-menu__item--danger"
-                      onClick={() => handleCancel(row)}
-                      disabled={cancelLeave.isPending}
-                    >
-                      外出泊取消
-                    </button>
+                    {menuItems(row)}
                   </RowMenu>
                 </td>
               </tr>
@@ -276,6 +320,15 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
           patient={returnTarget.patient}
           leave={returnTarget.leave}
           onClose={() => setReturnTarget(null)}
+        />
+      )}
+
+      {selected?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selected.patient.id}
+          patient={selected.patient}
+          actions={menuItems(selected)}
+          onClose={drawer.close}
         />
       )}
     </>
@@ -311,6 +364,35 @@ export function DischargePlanTable({
     });
   }
 
+  // 行を押すと右に患者プロファイルを出す。行が一覧から消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selected = rows.find(
+    (row) => row.patient?.id && row.encounter.id === drawer.selectedKey,
+  );
+
+  // 行のケバブとドロワーに同じ項目を並べる。
+  function menuItems(row: DischargePlanRow) {
+    return (
+      <>
+        <button
+          type="button"
+          className="row-menu__item"
+          onClick={() => setDischargeTarget(row)}
+        >
+          退院実施
+        </button>
+        <button
+          type="button"
+          className="row-menu__item row-menu__item--danger"
+          onClick={() => handleCancel(row)}
+          disabled={cancelPlan.isPending}
+        >
+          退院予定取消
+        </button>
+      </>
+    );
+  }
+
   if (rows.length === 0) return <EmptyMessage filtering={filtering} name="退院予定" />;
 
   return (
@@ -328,7 +410,7 @@ export function DischargePlanTable({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.encounter.id}>
+              <tr key={row.encounter.id} {...drawer.rowProps(row.patient?.id && row.encounter.id)}>
                 <InpatientBodyCells
                   roomName={row.roomName}
                   bedName={row.bedName}
@@ -352,21 +434,7 @@ export function DischargePlanTable({
                     label={`${row.patient ? displayName(row.patient) : "この患者"} の操作`}
                     escapesClipping
                   >
-                    <button
-                      type="button"
-                      className="row-menu__item"
-                      onClick={() => setDischargeTarget(row)}
-                    >
-                      退院実施
-                    </button>
-                    <button
-                      type="button"
-                      className="row-menu__item row-menu__item--danger"
-                      onClick={() => handleCancel(row)}
-                      disabled={cancelPlan.isPending}
-                    >
-                      退院予定取消
-                    </button>
+                    {menuItems(row)}
                   </RowMenu>
                 </td>
               </tr>
@@ -384,6 +452,15 @@ export function DischargePlanTable({
           patient={dischargeTarget.patient}
           bedLabel={encounterBedLabel(dischargeTarget.encounter)}
           onClose={() => setDischargeTarget(null)}
+        />
+      )}
+
+      {selected?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selected.patient.id}
+          patient={selected.patient}
+          actions={menuItems(selected)}
+          onClose={drawer.close}
         />
       )}
     </>
@@ -429,6 +506,39 @@ export function DischargedTable({
     });
   }
 
+  // 行を押すと右に患者プロファイルを出す。行が一覧から消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selected = rows.find(
+    (row) => row.patient?.id && row.encounter.id === drawer.selectedKey,
+  );
+
+  // 行のケバブとドロワーに同じ項目を並べる。
+  function menuItems(row: DischargedRow) {
+    return (
+      <>
+        {/* カルテの右ペインをこの入院の退院時サマリーで開く。 */}
+        {row.patient?.id && row.encounter.id && (
+          <Link
+            className="row-menu__item"
+            to={`/patients/${row.patient.id}/karte?${KARTE_OPEN_PARAM}=${encodeURIComponent(
+              formatKarteOpen({ kind: "discharge-summary", encounterId: row.encounter.id }),
+            )}`}
+          >
+            退院時サマリー
+          </Link>
+        )}
+        <button
+          type="button"
+          className="row-menu__item row-menu__item--danger"
+          onClick={() => handleCancel(row)}
+          disabled={cancelDischarge.isPending}
+        >
+          退院取消
+        </button>
+      </>
+    );
+  }
+
   if (rows.length === 0) return <EmptyMessage filtering={filtering} name="退院患者" />;
 
   return (
@@ -447,7 +557,7 @@ export function DischargedTable({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.encounter.id}>
+              <tr key={row.encounter.id} {...drawer.rowProps(row.patient?.id && row.encounter.id)}>
                 <InpatientBodyCells
                   roomName={row.roomName}
                   bedName={row.bedName}
@@ -463,25 +573,7 @@ export function DischargedTable({
                     label={`${row.patient ? displayName(row.patient) : "この患者"} の操作`}
                     escapesClipping
                   >
-                    {/* カルテの右ペインをこの入院の退院時サマリーで開く。 */}
-                    {row.patient?.id && row.encounter.id && (
-                      <Link
-                        className="row-menu__item"
-                        to={`/patients/${row.patient.id}/karte?${KARTE_OPEN_PARAM}=${encodeURIComponent(
-                          formatKarteOpen({ kind: "discharge-summary", encounterId: row.encounter.id }),
-                        )}`}
-                      >
-                        退院時サマリー
-                      </Link>
-                    )}
-                    <button
-                      type="button"
-                      className="row-menu__item row-menu__item--danger"
-                      onClick={() => handleCancel(row)}
-                      disabled={cancelDischarge.isPending}
-                    >
-                      退院取消
-                    </button>
+                    {menuItems(row)}
                   </RowMenu>
                 </td>
               </tr>
@@ -490,6 +582,15 @@ export function DischargedTable({
         </table>
       </div>
       <p className="order-select__muted">退院患者 {rows.length} 件</p>
+
+      {selected?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selected.patient.id}
+          patient={selected.patient}
+          actions={menuItems(selected)}
+          onClose={drawer.close}
+        />
+      )}
     </>
   );
 }

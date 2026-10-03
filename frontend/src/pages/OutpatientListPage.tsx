@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import type { PatientCaution } from "../api/masterClient";
@@ -36,6 +44,7 @@ import {
 import { NewPatientCheckInModal } from "../components/NewPatientCheckInModal";
 import { ORDER_LEGEND, OrderSummaryChips, RowPictograms } from "../components/PatientListRowParts";
 import { OutpatientReceptionModal } from "../components/OutpatientReceptionModal";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import { WalkInCheckInModal } from "../components/WalkInCheckInModal";
 import { useNow } from "../hooks/useNow";
@@ -213,6 +222,15 @@ export function OutpatientListPage() {
     () => (list.data?.rows ?? []).filter((row) => matchesFilters(row, filters)),
     [list.data, filters],
   );
+
+  // 行を押すと右に患者プロファイルを出す。行は予約ごとなので予約で選ぶ
+  // (同じ患者が 1 日に 2 つ予約を持つこともある)。絞り込みで行が消えたら閉じる。
+  const drawer = useRowDrawer();
+  const selectedRow = rows.find(
+    (row) => row.appointment.id && row.appointment.id === drawer.selectedKey,
+  );
+  const selectedPatientId =
+    selectedRow && (selectedRow.patient?.id ?? appointmentActorId(selectedRow.appointment, "Patient"));
   const total = list.data?.rows.length ?? 0;
 
   // 状態ごとの件数。状態以外の絞り込み(診療科・担当医・診察室)だけを掛けて数える
@@ -312,6 +330,23 @@ export function OutpatientListPage() {
       appointment: row.appointment,
       appointmentStatus: "checked-in",
     });
+  }
+
+  // 行の操作。行のボタン・ケバブと、ドロワーに並べるケバブの項目で共有する。
+  function actionsFor(row: OutpatientRow): OutpatientRowActions {
+    return {
+      pending:
+        updateStatus.isPending || cancel.isPending || startExam.isPending || updateExam.isPending,
+      canMarkNoShow: date <= today(),
+      onChangeStatus: (status) => updateStatus.mutate({ appointment: row.appointment, status }),
+      onStartExam: () => handleStartExam(row),
+      onFinishExam: () => handleFinishExam(row),
+      onCancelExamStart: () => handleCancelExamStart(row),
+      onCancelExamFinish: () => handleCancelExamFinish(row),
+      onSendBilling: receiptStatus.data?.enabled ? () => openBillingSend(row) : undefined,
+      onCancel: () => handleCancel(row.appointment),
+      onEditReception: () => setReceptionTarget(row),
+    };
   }
 
   function handleCancel(appointment: fhir4.Appointment) {
@@ -426,25 +461,8 @@ export function OutpatientListPage() {
                         row.patient?.id ?? appointmentActorId(row.appointment, "Patient"),
                       ) ?? []
                     }
-                    pending={
-                      updateStatus.isPending ||
-                      cancel.isPending ||
-                      startExam.isPending ||
-                      updateExam.isPending
-                    }
-                    canMarkNoShow={date <= today()}
-                    onChangeStatus={(status) =>
-                      updateStatus.mutate({ appointment: row.appointment, status })
-                    }
-                    onStartExam={() => handleStartExam(row)}
-                    onFinishExam={() => handleFinishExam(row)}
-                    onCancelExamStart={() => handleCancelExamStart(row)}
-                    onCancelExamFinish={() => handleCancelExamFinish(row)}
-                    onSendBilling={
-                      receiptStatus.data?.enabled ? () => openBillingSend(row) : undefined
-                    }
-                    onCancel={() => handleCancel(row.appointment)}
-                    onEditReception={() => setReceptionTarget(row)}
+                    rowProps={drawer.rowProps(row.appointment.id)}
+                    {...actionsFor(row)}
                   />
                 ))}
                 {rows.length === 0 && (
@@ -463,6 +481,15 @@ export function OutpatientListPage() {
         </>
       )}
 
+      {selectedRow && selectedPatientId && (
+        <PatientProfileDrawer
+          patientId={selectedPatientId}
+          patient={selectedRow.patient}
+          fallbackName={appointmentActorDisplay(selectedRow.appointment, "Patient")}
+          actions={<OutpatientMenuItems row={selectedRow} {...actionsFor(selectedRow)} />}
+          onClose={drawer.close}
+        />
+      )}
       {receptionTarget && (
         <OutpatientReceptionModal
           row={receptionTarget}
@@ -619,30 +646,7 @@ function normalizePatientNumber(number: string | undefined): string {
   return /^\d+$/.test(text) ? text.replace(/^0+(?=\d)/, "") : text;
 }
 
-function OutpatientTableRow({
-  row,
-  settled,
-  waitingMinutes,
-  pictograms,
-  orders,
-  pending,
-  canMarkNoShow,
-  onChangeStatus,
-  onStartExam,
-  onFinishExam,
-  onCancelExamStart,
-  onCancelExamFinish,
-  onSendBilling,
-  onCancel,
-  onEditReception,
-}: {
-  row: OutpatientRow;
-  /** レセコンで会計が済んでいる。 */
-  settled: boolean;
-  /** 受付からの待ち時間(分)。待っていない行・当日でない一覧は undefined。 */
-  waitingMinutes?: number;
-  pictograms: ReactNode;
-  orders: OutpatientOrderSummary[];
+interface OutpatientRowActions {
   pending: boolean;
   /** 未来院にできる日か(診察日が今日以前)。先の日付の予約はまだ来ないだけなので付けない。 */
   canMarkNoShow: boolean;
@@ -655,7 +659,28 @@ function OutpatientTableRow({
   onSendBilling?: () => void;
   onCancel: () => void;
   onEditReception: () => void;
-}) {
+}
+
+function OutpatientTableRow({
+  row,
+  settled,
+  waitingMinutes,
+  pictograms,
+  orders,
+  rowProps,
+  ...actions
+}: {
+  row: OutpatientRow;
+  /** レセコンで会計が済んでいる。 */
+  settled: boolean;
+  /** 受付からの待ち時間(分)。待っていない行・当日でない一覧は undefined。 */
+  waitingMinutes?: number;
+  pictograms: ReactNode;
+  orders: OutpatientOrderSummary[];
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
+} & OutpatientRowActions) {
+  const { pending, onChangeStatus, onStartExam, onFinishExam, onSendBilling } = actions;
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
   const { appointment, patient, encounter } = row;
@@ -665,12 +690,9 @@ function OutpatientTableRow({
     : appointmentActorDisplay(appointment, "Patient");
   const inExam = isExamInProgress(encounter);
   const examFinished = isExamFinished(encounter);
-  // 受付の取消・予約の取消は、診察が始まる前に限る(始まってからの巻き戻しは
-  // 診察開始の取消が先)。
-  const checkedIn = appointment.status === "checked-in" && !encounter;
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="outpatient__time sticky-table__fix-1">
         {appointmentBookedTimeLabel(appointment)}
       </td>
@@ -743,94 +765,120 @@ function OutpatientTableRow({
             巻き戻るので、一段畳んで置く。一覧は横スクロールできるよう overflow を
             持つため、メニューは escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
         <RowMenu label="この予約の操作" escapesClipping>
-          {/* 診療科・担当医・診察室の編集。枠から引き継いだあとでも、当日に担当医が
-              替わる・別の診察室に回すことがあるので、受付の前後を問わず編集できる。 */}
-          <button
-            type="button"
-            className="row-menu__item"
-            disabled={pending}
-            onClick={onEditReception}
-          >
-            編集
-          </button>
-          {checkedIn && (
-            <button
-              type="button"
-              className="row-menu__item"
-              disabled={pending}
-              onClick={() => onChangeStatus("booked")}
-            >
-              受付を取り消す
-            </button>
-          )}
-          {/* 来なかった予約。取消と違って予約の記録は残し、枠も触らない。遅れて来たときは
-              取り消して予約済に戻してから受付する。 */}
-          {canMarkNoShow && canCheckInAppointment(appointment) && (
-            <button
-              type="button"
-              className="row-menu__item"
-              disabled={pending}
-              onClick={() => onChangeStatus("noshow")}
-            >
-              未来院にする
-            </button>
-          )}
-          {appointment.status === "noshow" && (
-            <button
-              type="button"
-              className="row-menu__item"
-              disabled={pending}
-              onClick={() => onChangeStatus("booked")}
-            >
-              未来院を取り消す
-            </button>
-          )}
-          {inExam && (
-            <button
-              type="button"
-              className="row-menu__item"
-              disabled={pending}
-              onClick={onCancelExamStart}
-            >
-              診察開始を取り消す
-            </button>
-          )}
-          {/* 会計はレセコン側に置くので、カルテからは診療行為と病名を送るだけ。
-              受付済み以降ならいつでも送れる(診察終了を待たなくてよい)。診察終了後は
-              行に「医事送信」が出るので、メニューには重ねて出さない。 */}
-          {onSendBilling && !examFinished && appointment.status !== "noshow" && (
-            <button
-              type="button"
-              className="row-menu__item"
-              disabled={pending}
-              onClick={onSendBilling}
-            >
-              医事送信
-            </button>
-          )}
-          {examFinished && (
-            <button
-              type="button"
-              className="row-menu__item"
-              disabled={pending}
-              onClick={onCancelExamFinish}
-            >
-              診察終了を取り消す
-            </button>
-          )}
-          {/* 診察が始まった予約は取り消せない(先に診察開始を取り消す)。 */}
-          {isActiveAppointment(appointment) && !encounter && (
-            <button
-              type="button"
-              className="row-menu__item row-menu__item--danger"
-              disabled={pending}
-              onClick={onCancel}
-            >
-              予約を取り消す
-            </button>
-          )}
+          <OutpatientMenuItems row={row} {...actions} />
         </RowMenu>
       </td>
     </tr>
+  );
+}
+
+/** 予約の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function OutpatientMenuItems({
+  row,
+  pending,
+  canMarkNoShow,
+  onChangeStatus,
+  onCancelExamStart,
+  onCancelExamFinish,
+  onSendBilling,
+  onCancel,
+  onEditReception,
+}: { row: OutpatientRow } & OutpatientRowActions) {
+  const { appointment, encounter } = row;
+  const inExam = isExamInProgress(encounter);
+  const examFinished = isExamFinished(encounter);
+  // 受付の取消・予約の取消は、診察が始まる前に限る(始まってからの巻き戻しは
+  // 診察開始の取消が先)。
+  const checkedIn = appointment.status === "checked-in" && !encounter;
+
+  return (
+    <>
+      {/* 診療科・担当医・診察室の編集。枠から引き継いだあとでも、当日に担当医が
+          替わる・別の診察室に回すことがあるので、受付の前後を問わず編集できる。 */}
+      <button
+        type="button"
+        className="row-menu__item"
+        disabled={pending}
+        onClick={onEditReception}
+      >
+        編集
+      </button>
+      {checkedIn && (
+        <button
+          type="button"
+          className="row-menu__item"
+          disabled={pending}
+          onClick={() => onChangeStatus("booked")}
+        >
+          受付を取り消す
+        </button>
+      )}
+      {/* 来なかった予約。取消と違って予約の記録は残し、枠も触らない。遅れて来たときは
+          取り消して予約済に戻してから受付する。 */}
+      {canMarkNoShow && canCheckInAppointment(appointment) && (
+        <button
+          type="button"
+          className="row-menu__item"
+          disabled={pending}
+          onClick={() => onChangeStatus("noshow")}
+        >
+          未来院にする
+        </button>
+      )}
+      {appointment.status === "noshow" && (
+        <button
+          type="button"
+          className="row-menu__item"
+          disabled={pending}
+          onClick={() => onChangeStatus("booked")}
+        >
+          未来院を取り消す
+        </button>
+      )}
+      {inExam && (
+        <button
+          type="button"
+          className="row-menu__item"
+          disabled={pending}
+          onClick={onCancelExamStart}
+        >
+          診察開始を取り消す
+        </button>
+      )}
+      {/* 会計はレセコン側に置くので、カルテからは診療行為と病名を送るだけ。
+          受付済み以降ならいつでも送れる(診察終了を待たなくてよい)。診察終了後は
+          行に「医事送信」が出るので、メニューには重ねて出さない。 */}
+      {onSendBilling && !examFinished && appointment.status !== "noshow" && (
+        <button
+          type="button"
+          className="row-menu__item"
+          disabled={pending}
+          onClick={onSendBilling}
+        >
+          医事送信
+        </button>
+      )}
+      {examFinished && (
+        <button
+          type="button"
+          className="row-menu__item"
+          disabled={pending}
+          onClick={onCancelExamFinish}
+        >
+          診察終了を取り消す
+        </button>
+      )}
+      {/* 診察が始まった予約は取り消せない(先に診察開始を取り消す)。 */}
+      {isActiveAppointment(appointment) && !encounter && (
+        <button
+          type="button"
+          className="row-menu__item row-menu__item--danger"
+          disabled={pending}
+          onClick={onCancel}
+        >
+          予約を取り消す
+        </button>
+      )}
+    </>
   );
 }

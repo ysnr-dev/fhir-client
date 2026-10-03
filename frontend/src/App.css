@@ -831,12 +831,14 @@ button:disabled {
   color: var(--text);
 }
 
-/* 患者検索の行。押すと右にプロファイルのドロワーを出す。 */
+/* 患者の一覧(患者検索・外来・入院)の行。押すと右にプロファイルのドロワーを出す。
+   選んだ行の色はマウスが乗った行と同じ当て方(理由は上の hover のコメント)。 */
 .patient-table__row--clickable {
   cursor: pointer;
 }
 
-.patient-table tbody tr.patient-table__row--selected > td {
+tbody tr.patient-table__row--selected > td:not([rowspan]),
+tbody tr.patient-table__row--selected > td[rowspan="1"] {
   background-image: linear-gradient(var(--accent-bg), var(--accent-bg));
 }
 
@@ -898,6 +900,42 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* 行のケバブと同じ操作。メニューの項目(.row-menu__item)をボタンとして横に並べる。
+   button は全体の button {} がそのまま効くので、リンクの項目だけ見た目を合わせる。 */
+.patient-drawer__menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.patient-drawer__menu .row-menu__item {
+  --control-height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.patient-drawer__menu a.row-menu__item {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-height);
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.patient-drawer__menu .row-menu__item--danger {
+  border-color: rgba(224, 104, 122, 0.5);
+  color: #e0687a;
+  background: rgba(224, 104, 122, 0.1);
 }
 
 .row-menu {

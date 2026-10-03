@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   useCancelAdmission,
@@ -36,6 +36,7 @@ import {
 } from "../components/PatientRowCells";
 import { PathwayNameLinks } from "../components/PathwayNameLinks";
 import { PlannedAdmissionModal } from "../components/PlannedAdmissionModal";
+import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import { TransferPlanModal } from "../components/TransferPlanModal";
 import {
@@ -545,6 +546,34 @@ export function InpatientListPage() {
     updateEncounter.mutate(buildPlanCancelledEncounter(row.encounter));
   }
 
+  // 行を押すと右に患者プロファイルを出す。入院患者タブと入院予定タブの表で使う
+  // (他のタブの表は InpatientPlanTables 側で持つ)。タブを切り替えたら閉じる。
+  const drawer = useRowDrawer(tab);
+  const selectedRow =
+    tab === "current" ? rows.find((row) => row.bed.id === drawer.selectedKey) : undefined;
+  const selectedPlannedRow =
+    tab === "planned"
+      ? plannedRows.find((row) => row.encounter.id === drawer.selectedKey)
+      : undefined;
+
+  // 入院中の行の操作。行のケバブとドロワーで共有する。
+  function inpatientActions(row: InpatientRow) {
+    return {
+      onDischarge: () => setDischargeTarget(row),
+      onCancelAdmission: () => handleCancelAdmission(row),
+      onRowAction: (kind: RowAction["kind"]) => setRowAction({ kind, row }),
+      cancelling: cancelAdmission.isPending,
+    };
+  }
+
+  function plannedActions(row: PlannedRow) {
+    return {
+      onExecute: () => setExecuteTarget(row),
+      onCancelPlan: () => handleCancelPlan(row),
+      cancelling: updateEncounter.isPending,
+    };
+  }
+
   const occupied = rows.filter((row) => row.encounter).length;
   const beds = rows.length;
   const loading =
@@ -585,9 +614,8 @@ export function InpatientListPage() {
                     <PlannedTableRow
                       key={row.encounter.id}
                       row={row}
-                      onExecute={() => setExecuteTarget(row)}
-                      onCancelPlan={() => handleCancelPlan(row)}
-                      cancelling={updateEncounter.isPending}
+                      rowProps={drawer.rowProps(row.patient?.id && row.encounter.id)}
+                      {...plannedActions(row)}
                     />
                   ))}
                 </tbody>
@@ -660,10 +688,10 @@ export function InpatientListPage() {
                         roomName: locationDisplayName(row.room),
                       })
                     }
-                    onDischarge={() => setDischargeTarget(row)}
-                    onCancelAdmission={() => handleCancelAdmission(row)}
-                    onRowAction={(kind) => setRowAction({ kind, row })}
-                    cancelling={cancelAdmission.isPending}
+                    rowProps={drawer.rowProps(
+                      row.encounter && row.patient?.id ? row.bed.id : undefined,
+                    )}
+                    {...inpatientActions(row)}
                     pendingNursingCount={
                       nursingPending.countByPatientId.get(row.patient?.id ?? "") ?? 0
                     }
@@ -848,6 +876,23 @@ export function InpatientListPage() {
         renderTable()
       )}
 
+      {selectedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedRow.patient.id}
+          patient={selectedRow.patient}
+          actions={<InpatientMenuItems {...inpatientActions(selectedRow)} />}
+          onClose={drawer.close}
+        />
+      )}
+      {selectedPlannedRow?.patient?.id && (
+        <PatientProfileDrawer
+          patientId={selectedPlannedRow.patient.id}
+          patient={selectedPlannedRow.patient}
+          actions={<PlannedMenuItems {...plannedActions(selectedPlannedRow)} />}
+          onClose={drawer.close}
+        />
+      )}
+
       {admissionTarget && (
         <AdmissionModal
           bed={admissionTarget.bed}
@@ -930,30 +975,33 @@ export function InpatientListPage() {
   );
 }
 
-function InpatientTableRow({
-  row,
-  date,
-  onAdmit,
-  onDischarge,
-  onCancelAdmission,
-  onRowAction,
-  cancelling,
-  pendingNursingCount,
-  pathways,
-}: {
-  row: InpatientRow;
-  date: string;
-  /** 空床のケバブから入院登録を開く。 */
-  onAdmit: () => void;
+interface InpatientMenuActions {
   onDischarge: () => void;
   onCancelAdmission: () => void;
   onRowAction: (kind: RowAction["kind"]) => void;
   cancelling: boolean;
+}
+
+function InpatientTableRow({
+  row,
+  date,
+  rowProps,
+  onAdmit,
+  pendingNursingCount,
+  pathways,
+  ...actions
+}: {
+  row: InpatientRow;
+  date: string;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
+  /** 空床のケバブから入院登録を開く。 */
+  onAdmit: () => void;
   /** まだ看護師が受けていない看護指示の件数。0 なら出さない。 */
   pendingNursingCount: number;
   /** 進行中のパスの適用(無ければ空)。 */
   pathways: PathwayApplicationSummary[];
-}) {
+} & InpatientMenuActions) {
   const returnLinkState = useReturnLinkState();
   const { room, bed, roomRowSpan, encounter, patient } = row;
   const patientId = patient?.id;
@@ -962,7 +1010,7 @@ function InpatientTableRow({
   const planTags = encounter ? planTagLabels(encounter, date) : [];
 
   return (
-    <tr>
+    <tr {...rowProps}>
       {roomRowSpan > 0 && (
         <td rowSpan={roomRowSpan} className="inpatient__room sticky-table__fix-1">
           {locationDisplayName(room)}
@@ -1020,45 +1068,7 @@ function InpatientTableRow({
               label={`${patient ? displayName(patient) : "この患者"} の操作`}
               escapesClipping
             >
-              <button
-                type="button"
-                className="row-menu__item"
-                onClick={() => onRowAction("bedTransfer")}
-              >
-                転室・転床
-              </button>
-              <button
-                type="button"
-                className="row-menu__item"
-                onClick={() => onRowAction("leave")}
-              >
-                外出泊
-              </button>
-              <button
-                type="button"
-                className="row-menu__item"
-                onClick={() => onRowAction("transferPlan")}
-              >
-                転科・転棟予定
-              </button>
-              <button
-                type="button"
-                className="row-menu__item"
-                onClick={() => onRowAction("dischargePlan")}
-              >
-                退院予定
-              </button>
-              <button type="button" className="row-menu__item" onClick={onDischarge}>
-                退院
-              </button>
-              <button
-                type="button"
-                className="row-menu__item row-menu__item--danger"
-                onClick={onCancelAdmission}
-                disabled={cancelling}
-              >
-                入院取消
-              </button>
+              <InpatientMenuItems {...actions} />
             </RowMenu>
           </td>
         </>
@@ -1084,23 +1094,28 @@ function InpatientTableRow({
   );
 }
 
-function PlannedTableRow({
-  row,
-  onExecute,
-  onCancelPlan,
-  cancelling,
-}: {
-  row: PlannedRow;
+interface PlannedMenuActions {
   onExecute: () => void;
   onCancelPlan: () => void;
   cancelling: boolean;
-}) {
+}
+
+function PlannedTableRow({
+  row,
+  rowProps,
+  ...actions
+}: {
+  row: PlannedRow;
+  /** 行を押してドロワーを開くための className と onClick。 */
+  rowProps: ComponentProps<"tr">;
+} & PlannedMenuActions) {
+  const { onExecute } = actions;
   const returnLinkState = useReturnLinkState();
   const { encounter, patient } = row;
   const patientId = patient?.id;
 
   return (
-    <tr>
+    <tr {...rowProps}>
       <td className="inpatient__room sticky-table__fix-1">{plannedRoomName(encounter)}</td>
       <td className="sticky-table__fix-2">{plannedBedName(encounter)}</td>
       <td className="inpatient__name sticky-table__fix-3">
@@ -1134,19 +1149,80 @@ function PlannedTableRow({
           label={`${patient ? displayName(patient) : "この患者"} の操作`}
           escapesClipping
         >
-          <button type="button" className="row-menu__item" onClick={onExecute}>
-            入院実施
-          </button>
-          <button
-            type="button"
-            className="row-menu__item row-menu__item--danger"
-            onClick={onCancelPlan}
-            disabled={cancelling}
-          >
-            入院予定取消
-          </button>
+          <PlannedMenuItems {...actions} />
         </RowMenu>
       </td>
     </tr>
+  );
+}
+
+/** 入院中の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function InpatientMenuItems({
+  onDischarge,
+  onCancelAdmission,
+  onRowAction,
+  cancelling,
+}: InpatientMenuActions) {
+  return (
+    <>
+      <button
+        type="button"
+        className="row-menu__item"
+        onClick={() => onRowAction("bedTransfer")}
+      >
+        転室・転床
+      </button>
+      <button
+        type="button"
+        className="row-menu__item"
+        onClick={() => onRowAction("leave")}
+      >
+        外出泊
+      </button>
+      <button
+        type="button"
+        className="row-menu__item"
+        onClick={() => onRowAction("transferPlan")}
+      >
+        転科・転棟予定
+      </button>
+      <button
+        type="button"
+        className="row-menu__item"
+        onClick={() => onRowAction("dischargePlan")}
+      >
+        退院予定
+      </button>
+      <button type="button" className="row-menu__item" onClick={onDischarge}>
+        退院
+      </button>
+      <button
+        type="button"
+        className="row-menu__item row-menu__item--danger"
+        onClick={onCancelAdmission}
+        disabled={cancelling}
+      >
+        入院取消
+      </button>
+    </>
+  );
+}
+
+/** 入院予定の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
+function PlannedMenuItems({ onExecute, onCancelPlan, cancelling }: PlannedMenuActions) {
+  return (
+    <>
+      <button type="button" className="row-menu__item" onClick={onExecute}>
+        入院実施
+      </button>
+      <button
+        type="button"
+        className="row-menu__item row-menu__item--danger"
+        onClick={onCancelPlan}
+        disabled={cancelling}
+      >
+        入院予定取消
+      </button>
+    </>
   );
 }
