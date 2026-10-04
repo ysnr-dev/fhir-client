@@ -68,7 +68,7 @@ export function ConditionDetailPanel({
             </fieldset>
 
             <details className="prescription-detail__raw">
-              <summary>FHIR JSON を表示</summary>
+              <summary>FHIR JSON 表示</summary>
               <JsonBlock value={condition} />
             </details>
           </div>

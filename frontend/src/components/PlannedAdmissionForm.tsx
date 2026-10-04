@@ -193,7 +193,7 @@ export function PlannedAdmissionForm({
 
       <div className="walk-in__actions">
         <button type="button" onClick={handleSubmit} disabled={register.isPending}>
-          {register.isPending ? "登録中..." : "入院予定を登録"}
+          {register.isPending ? "登録中..." : "入院予定登録"}
         </button>
         {onCancel && (
           <button type="button" onClick={onCancel} disabled={register.isPending}>

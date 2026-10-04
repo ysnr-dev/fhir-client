@@ -456,7 +456,7 @@ function rowButtonContents(row: SurgeryWorklistRow, tab: Tab) {
 }
 
 function hasRowButtons(row: SurgeryWorklistRow, tab: Tab): boolean {
-  // 日程未定タブには常に「日程を確定」がある。
+  // 日程未定タブには常に「日程確定」がある。
   return tab === "unscheduled" || rowButtonContents(row, tab).primaryActions.length > 0;
 }
 
@@ -637,7 +637,7 @@ function WorklistRowButtons({
     return (
       <>
         <button type="button" disabled={pending} onClick={onSchedule}>
-          日程を確定
+          日程確定
         </button>
         {showAdmit && (
           <button type="button" disabled={pending} onClick={onAdmit}>

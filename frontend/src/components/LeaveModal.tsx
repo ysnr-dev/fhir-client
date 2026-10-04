@@ -178,7 +178,7 @@ export function LeaveModal({
 
         <div className="walk-in__actions">
           <button type="button" onClick={handleSubmit} disabled={save.isPending || !meal.ready}>
-            {save.isPending ? "登録中..." : "外出泊を登録"}
+            {save.isPending ? "登録中..." : "外出泊登録"}
           </button>
           <button type="button" onClick={onClose} disabled={save.isPending}>
             キャンセル

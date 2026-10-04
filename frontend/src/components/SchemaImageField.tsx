@@ -60,7 +60,7 @@ export function SchemaImageField({
           </button>
           {annotation && (
             <button type="button" onClick={() => onChange(instanceKey, null)}>
-              編集を削除
+              描き込み削除
             </button>
           )}
         </div>
@@ -70,7 +70,7 @@ export function SchemaImageField({
           <SchemaPaintModal
             title={item.text ? `シェーマ編集: ${item.text}` : "シェーマ編集"}
             backgroundDataUrl={displaySrc}
-            saveLabel="編集を保存"
+            saveLabel="保存"
             onClose={() => setAnnotating(false)}
             onSave={(dataUrl) => {
               onChange(instanceKey, { binaryId: null, dataUrl });

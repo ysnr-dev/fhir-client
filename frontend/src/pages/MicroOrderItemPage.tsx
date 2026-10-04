@@ -69,7 +69,7 @@ function OrderItemTab() {
     <>
       <div className="page__header-actions">
         <button type="button" onClick={() => setEditing("new")}>
-          検査項目を追加
+          検査項目追加
         </button>
       </div>
       <p className="dose-conversion__lead">
@@ -271,12 +271,9 @@ function CollectionSiteTab() {
     <>
       <div className="page__header-actions">
         <button type="button" onClick={() => setEditing("new")}>
-          採取部位を追加
+          採取部位追加
         </button>
       </div>
-      <p className="dose-conversion__lead">
-        「左右あり」の部位を選んだときだけ、オーダー画面で左右を入力できます。
-      </p>
 
       <ErrorBanner error={list.error} />
 
@@ -427,7 +424,7 @@ function CollectionMethodTab() {
     <>
       <div className="page__header-actions">
         <button type="button" onClick={() => setEditing("new")}>
-          採取方法を追加
+          採取方法追加
         </button>
       </div>
 

@@ -93,7 +93,7 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
                       })
                     }
                   >
-                    {template.active ? "無効にする" : "有効にする"}
+                    {template.active ? "無効化" : "有効化"}
                   </button>
                   <button
                     type="button"

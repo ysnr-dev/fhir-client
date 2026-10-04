@@ -120,10 +120,6 @@ export function DepartmentForm({
           })}
         </select>
       </label>
-      <p className="organization-form__hint">
-        SS-MIX2 統一診療科コード表 V1.0(使用者定義表-#0069 診療部門)。2 ケタ科と、その細分の
-        3 ケタ科から選べます。
-      </p>
 
       <label>
         診療科名(必須)

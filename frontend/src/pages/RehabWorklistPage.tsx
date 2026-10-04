@@ -978,7 +978,7 @@ function RehabFinishModal({
         </p>
         <div className="walk-in__actions">
           <button type="submit" disabled={pending}>
-            {pending ? "終了中..." : "終了する"}
+            {pending ? "終了中..." : "終了"}
           </button>
           <button type="button" onClick={onClose} disabled={pending}>
             キャンセル

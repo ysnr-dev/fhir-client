@@ -503,7 +503,7 @@ export function PathwayEditorPage() {
                         className="row-menu__item"
                         onClick={() => setPicker({ kind: "branch", phaseKey: phase.phaseKey })}
                       >
-                        分岐を編集
+                        分岐編集
                       </button>
                       <button
                         type="button"
@@ -526,7 +526,7 @@ export function PathwayEditorPage() {
                         className="row-menu__item row-menu__item--danger"
                         onClick={() => removePhase(phase)}
                       >
-                        このフェーズを削除
+                        フェーズ削除
                       </button>
                     </RowMenu>
                   </div>

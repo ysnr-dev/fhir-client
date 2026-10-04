@@ -63,7 +63,7 @@ export function AllergyDetailPanel({
             </fieldset>
 
             <details className="prescription-detail__raw">
-              <summary>FHIR JSON を表示</summary>
+              <summary>FHIR JSON 表示</summary>
               <JsonBlock value={allergy} />
             </details>
           </div>

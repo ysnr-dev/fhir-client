@@ -71,7 +71,7 @@ export function LabSpecimenPage() {
         <h1>検体マスタ</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            検体を追加
+            検体追加
           </button>
         </div>
       </div>

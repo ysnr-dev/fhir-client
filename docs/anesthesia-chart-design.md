@@ -168,7 +168,7 @@ Procedure に partOf でぶら下がる子だけ**を消すように直した(�
    持続の行には「終了」(end を入れて completed)。一覧に削除。
 6. **確定 / 再開**: 確定でハブを completed にし performedPeriod.end を打つ。
    確定後は入力 UI を出さない(閲覧のみ)。「再開」で in-progress に戻す。
-   「チャートを取消」(記録ごと削除)はケバブ相当の副次操作で、confirm を挟む。
+   「チャート取消」(記録ごと削除)はケバブ相当の副次操作で、confirm を挟む。
 
 ### 3.3 保存の単位
 
@@ -219,7 +219,7 @@ Procedure に partOf でぶら下がる子だけ**を消すように直した(�
 5. **時点の削除**: 01:10 の × でその時点の Observation 一式が 1 transaction で消え、
    表・グラフから消える → 同値を再追加
 6. **確定 / 再開**: 確定でハブ completed + performedPeriod.end、入力 UI が消えて
-   閲覧のみ。「再開(確定を解除)」で in-progress + end 除去 → 再度確定
+   閲覧のみ。「再開(確定解除)」で in-progress + end 除去 → 再度確定
 7. **実施取消の巻き添え防止(§2.2)**: 実施記録(手術ハブ)がある状態で実施取消 →
    手術ハブだけが消え、**チャート(ハブ + Observation 20 件 + MedicationAdministration
    2 件)は無傷**で残ることを上流への直接検索で確認。その後実施を再登録し、

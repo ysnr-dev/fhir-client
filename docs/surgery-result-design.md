@@ -122,7 +122,7 @@ ServiceRequest(申込) ←basedOn── Procedure ハブ(実施記録。オー�
 Task を入室中にするところまでを 1 transaction で書く(`useAdmitUnscheduledSurgery`。
 既存の `buildSurgeryScheduleBundle`「オーダー PUT + Task」がそのまま使える)。
 
-緊急手術は日程を決めてから始めるものではないので、「日程を確定 → 入室」の 2 操作を
+緊急手術は日程を決めてから始めるものではないので、「日程確定 → 入室」の 2 操作を
 踏ませると現場が先に手術を始めて記録が後追いになる。入室した事実の方が確かなので、
 それを予定日時として記録する。入室すると occurrence が入るので未定タブから消え、
 予定日別タブの当日ぶんに入室中で並ぶ。

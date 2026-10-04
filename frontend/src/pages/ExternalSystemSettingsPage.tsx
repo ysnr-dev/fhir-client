@@ -180,7 +180,7 @@ function SettingsForm({ system }: { system: ExternalSystemDetail }) {
           )}
           <div className="connection-settings-form__actions">
             <button type="button" disabled={regenerate.isPending} onClick={() => regenerate.mutate()}>
-              {regenerate.isPending ? "発行中..." : "受信トークンを再発行"}
+              {regenerate.isPending ? "発行中..." : "受信トークン再発行"}
             </button>
           </div>
         </>

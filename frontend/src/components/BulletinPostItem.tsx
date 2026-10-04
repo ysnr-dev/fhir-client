@@ -4,7 +4,7 @@ import { today } from "../lib/dates";
 
 interface BulletinPostItemProps {
   post: BulletinPost;
-  /** ホームのカード向け。長い本文は畳んで「続きを読む」で開く。 */
+  /** ホームのカード向け。長い本文は畳んで「続き」で開く。 */
   compact?: boolean;
   /** 直せる投稿に「編集」を出す。省略すると出さない。 */
   onEdit?: (post: BulletinPost) => void;
@@ -63,7 +63,7 @@ export function BulletinPostItem({ post, compact = false, onEdit }: BulletinPost
           className="bulletin__post-toggle"
           onClick={() => setExpanded((value) => !value)}
         >
-          {expanded ? "閉じる" : "続きを読む"}
+          {expanded ? "閉じる" : "続き"}
         </button>
       )}
     </article>

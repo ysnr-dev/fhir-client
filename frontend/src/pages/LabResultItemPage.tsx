@@ -124,7 +124,7 @@ export function LabResultItemPage() {
         <h1>検査結果項目マスタ</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            項目を追加
+            項目追加
           </button>
         </div>
       </div>
@@ -658,7 +658,7 @@ function ReferenceRangesEditor({ resultItemCode, unit, ranges }: ReferenceRanges
       <div className="lab-order-item__section-head">
         <h3>基準値・パニック値{unit ? `(${unit})` : ""}</h3>
         <button type="button" onClick={add} disabled={mutations.create.isPending}>
-          行を追加
+          行追加
         </button>
       </div>
 
@@ -692,7 +692,7 @@ function ReferenceRangesEditor({ resultItemCode, unit, ranges }: ReferenceRanges
             {ranges.length === 0 && (
               <tr>
                 <td colSpan={8} className="master-search__empty">
-                  基準値がありません。「行を追加」で下限・上限を登録すると、結果登録時に H/L を自動判定します。
+                  基準値がありません。「行追加」で下限・上限を登録すると、結果登録時に H/L を自動判定します。
                   パニック値を入れると、外れたときに HH/LL と緊急異常値の通知が出ます。
                 </td>
               </tr>

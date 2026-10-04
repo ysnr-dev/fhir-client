@@ -146,7 +146,7 @@ export function MedicineDoseConversionPage() {
       <div className="page__header">
         <h1>投与量換算マスタ</h1>
         <button type="button" onClick={() => generate.mutate()} disabled={busy}>
-          {generate.isPending ? "作成中..." : "未紐付けを一括作成"}
+          {generate.isPending ? "作成中..." : "未紐付け一括作成"}
         </button>
       </div>
 
@@ -370,7 +370,7 @@ export function MedicineDoseConversionPage() {
                     </td>
                     <td className="master-search__actions">
                       <button type="button" onClick={() => handleAdd(medicine)} disabled={busy || !ready}>
-                        換算を追加
+                        換算追加
                       </button>
                     </td>
                   </tr>

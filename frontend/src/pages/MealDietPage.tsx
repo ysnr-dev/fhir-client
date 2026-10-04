@@ -110,7 +110,7 @@ export function MealDietPage() {
         <h1>食種マスタ</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            食種を追加
+            食種追加
           </button>
         </div>
       </div>

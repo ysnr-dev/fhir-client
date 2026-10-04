@@ -902,7 +902,7 @@ function IsolateFieldset({
           onClick={onAddFrequentDrugs}
           disabled={isolate.susceptibilities.length >= MAX_SUSCEPTIBILITIES}
         >
-          頻用抗菌薬を一括追加
+          頻用抗菌薬一括追加
         </button>
         {isolate.susceptibilities.length >= MAX_SUSCEPTIBILITIES && (
           <span className="order-select__muted">

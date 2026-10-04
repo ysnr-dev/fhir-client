@@ -803,7 +803,7 @@ export function EndoscopyOrderForm({
                         </span>
                         {hasBooking ? (
                           <button type="button" onClick={() => openBooking(code)}>
-                            予約日時を変更
+                            予約日時変更
                           </button>
                         ) : (
                           <span className="rad-order-frame__note">(予約が見つかりません)</span>
@@ -910,7 +910,7 @@ export function EndoscopyOrderForm({
         <EndoscopyPerformInputModal
           items={performSplit.values.items}
           initialValues={performs[performSplit.key] ?? null}
-          submitLabel="実施内容を確定"
+          submitLabel="実施内容確定"
           onSubmit={(performValues) => {
             setPerforms((current) => ({ ...current, [performSplit.key]: performValues }));
             setPerformTarget(null);

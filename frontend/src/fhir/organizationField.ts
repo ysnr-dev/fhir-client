@@ -1,6 +1,6 @@
 // テンプレートの項目に「医療機関(Organization)のどの情報を入れるか」を指定する
 // 独自拡張。回答フォームでは、この拡張を持つ子項目があるグループに
-// 「医療機関を選択」ボタンが出て、選んだ Organization の値が一括で入る。
+// 「医療機関選択」ボタンが出て、選んだ Organization の値が一括で入る。
 //
 // JASPEHR は item.type "reference" を禁止している(questionnaire-item-type-Jaspehr)
 // ため、Organization 参照そのものは回答に持てない。選択結果は文字列としてコピー

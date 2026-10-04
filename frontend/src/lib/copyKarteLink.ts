@@ -1,6 +1,6 @@
 import { karteLinkHtml, type KarteLink } from "../fhir/karteLinkHelpers";
 
-// 「リンクを取得」。HTML(リンク)と文字の両方を載せ、診療記録のエディタに
+// 「リンク取得」。HTML(リンク)と文字の両方を載せ、診療記録のエディタに
 // 貼るとリンクに、他所へ貼ると文字になるようにする。
 export async function copyKarteLink(link: KarteLink, patientId: string): Promise<void> {
   try {

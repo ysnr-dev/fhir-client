@@ -48,7 +48,7 @@ export function SurgeryPendingPanel({
 }: Props) {
   // 日程未定は一覧タブと同じクエリ(queryKey が同じなので読み直しは起きない)。
   const unscheduled = useSurgeryUnscheduledList();
-  // ドラッグを使わずに日程を入れる経路。一覧タブの「日程を確定」と同じモーダル。
+  // ドラッグを使わずに日程を入れる経路。一覧タブの「日程確定」と同じモーダル。
   const [scheduling, setScheduling] = useState<SurgeryWorklistRow | null>(null);
 
   const dateless = roomDayRows(unscheduled.data?.rows ?? [], {});
@@ -228,7 +228,7 @@ function PendingCard({
               className="row-menu__item"
               onClick={() => onSchedule(row)}
             >
-              日程を確定
+              日程確定
             </button>
             {/* 日程だけでなく申込の中身を直したいとき(術式・スタッフの変更)。 */}
             <button type="button" className="row-menu__item" onClick={() => onEdit(row)}>

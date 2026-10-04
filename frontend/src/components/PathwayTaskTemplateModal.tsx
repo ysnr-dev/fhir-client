@@ -12,7 +12,7 @@ import { Modal } from "./Modal";
 import { ORDER_SET_TYPES, ORDER_SET_TYPE_LABELS, ORDER_SET_TYPE_ORDER } from "./orderSetRegistry";
 
 // パスのタスクに持たせるオーダー雛形の編集。オーダーセットの登録画面と同じく既存の
-// オーダー登録フォームを set モード(患者なし)で出し、「この内容にする」で外から
+// オーダー登録フォームを set モード(患者なし)で出し、「適用」で外から
 // submit して値を受け取る。閉じたら破棄し、確定した値だけを draft に戻す。
 // フォームを病日 × タスクぶん常時マウントすると重く縦にも伸びるので、1 件ずつモーダルで開く。
 
@@ -103,7 +103,7 @@ export function PathwayTaskTemplateModal({ taskName, template, defaultOrderType,
       )}
       <div className="lab-order-item__actions">
         <button type="button" onClick={handleCommit}>
-          この内容にする
+          適用
         </button>
         <button type="button" onClick={onClose}>
           閉じる

@@ -635,7 +635,7 @@ function ClinicalInfoFieldset({
             className="micro-order__suggest-toggle"
             onClick={() => setSuggestionsOpen((open) => !open)}
           >
-            {suggestionsOpen ? "候補を閉じる" : "処方から取り込み"}
+            {suggestionsOpen ? "閉じる" : "処方から取り込み"}
           </button>
         )}
         {suggestionsOpen && (

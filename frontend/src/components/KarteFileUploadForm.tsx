@@ -119,7 +119,7 @@ export function KarteFileUploadForm({
       >
         <p>ここにファイルをドロップ</p>
         <button type="button" disabled={busy} onClick={() => fileInputRef.current?.click()}>
-          ファイルを選択
+          ファイル選択
         </button>
         <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
       </div>
@@ -171,7 +171,7 @@ export function KarteFileUploadForm({
 
       <div className="karte-file-form__actions">
         <button type="button" disabled={busy || drafts.length === 0} onClick={handleSubmit}>
-          {createFiles.isPending ? "登録中..." : `${drafts.length} 件を登録`}
+          {createFiles.isPending ? "登録中..." : `${drafts.length} 件登録`}
         </button>
       </div>
     </div>

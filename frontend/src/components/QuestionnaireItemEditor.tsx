@@ -331,7 +331,7 @@ export function QuestionnaireItemEditor({
             type="button"
             onClick={() => patch({ answerOptions: [...item.answerOptions, newAnswerOption()] })}
           >
-            + 選択肢を追加
+            + 選択肢追加
           </button>
 
           <div className="qe-item__children">
@@ -360,7 +360,7 @@ export function QuestionnaireItemEditor({
                 item.answerOptions.length === 0 ? "選択肢を追加すると設定できます" : undefined
               }
             >
-              + 条件付きグループを追加
+              + 条件付きグループ追加
             </button>
           </div>
         </div>
@@ -517,7 +517,7 @@ export function QuestionnaireItemEditor({
               />
             ))}
             <button type="button" className="qe-add-item" onClick={() => onAppendChild(item.id)}>
-              + 子項目を追加
+              + 子項目追加
             </button>
           </div>
         </div>
@@ -601,7 +601,7 @@ export function QuestionnaireItemEditor({
                 </table>
               )}
               <button type="button" onClick={() => patch({ codes: [...item.codes, newItemCode()] })}>
-                + 項目コードを追加
+                + 項目コード追加
               </button>
             </div>
           )}
@@ -729,7 +729,7 @@ export function QuestionnaireItemEditor({
             {(item.organizationField || item.practitionerField) && (
               <p className="qe-hint">
                 回答画面で、このグループ内に出る「
-                {item.organizationField ? "医療機関を選択" : "医療従事者を選択"}
+                {item.organizationField ? "医療機関選択" : "医療従事者選択"}
                 」ボタンから一括入力されます。
                 {item.practitionerField &&
                   "職種の初期値は、選択モーダルの職種フィルタの初期値になります。"}
@@ -749,7 +749,7 @@ export function QuestionnaireItemEditor({
             <div className="schema-image__preview">
               <img className="schema-image__thumb" src={imageSrc} alt="シェーマ画像" />
               <button type="button" onClick={() => patch({ image: null })}>
-                画像を削除
+                画像削除
               </button>
             </div>
           )}

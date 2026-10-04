@@ -87,10 +87,6 @@ export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void })
       <ErrorBanner error={update.error} />
       <ErrorBanner error={remove.error} />
 
-      <p className="category-modal__hint">
-        テンプレート選択のプルダウンで使う分類です。並び順はプルダウンの表示順になります。
-      </p>
-
       {isLoading ? (
         <p>読み込み中...</p>
       ) : categories.length === 0 ? (

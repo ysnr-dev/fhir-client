@@ -68,7 +68,7 @@ export function PhysioPerformModal({ row, onClose }: Props) {
   return (
     <PhysioPerformInputModal
       items={items}
-      submitLabel="実施を登録"
+      submitLabel="実施登録"
       submitting={register.isPending}
       submitError={register.error}
       onSubmit={(values) =>
@@ -221,7 +221,7 @@ export function PhysioPerformInputModal({
           <div className="lab-order-item__section-head">
             <h3>手技料</h3>
             <button type="button" onClick={() => setAdding("procedure")}>
-              診療行為を追加
+              診療行為追加
             </button>
           </div>
           <LineTable
@@ -240,7 +240,7 @@ export function PhysioPerformInputModal({
           <div className="lab-order-item__section-head">
             <h3>薬剤</h3>
             <button type="button" onClick={() => setAdding("medicine")}>
-              薬剤を追加
+              薬剤追加
             </button>
           </div>
           <div className="lab-order-item__table-wrap">
@@ -325,7 +325,7 @@ export function PhysioPerformInputModal({
           <div className="lab-order-item__section-head">
             <h3>使用器材</h3>
             <button type="button" onClick={() => setAdding("material")}>
-              器材を追加
+              器材追加
             </button>
           </div>
           <div className="lab-order-item__table-wrap">

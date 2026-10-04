@@ -51,7 +51,6 @@ export function WardRoomEditPage() {
         submitting={saveRoom.isPending}
         submitError={saveRoom.error}
         submitLabel="更新"
-        editing
       />
     </div>
   );

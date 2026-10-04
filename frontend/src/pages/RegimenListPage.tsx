@@ -44,7 +44,7 @@ export function RegimenListPage() {
         <h1>レジメン</h1>
         <div className="page__header-actions">
           <Link to="/regimens/new" className="button">
-            レジメンを追加
+            レジメン追加
           </Link>
         </div>
       </div>

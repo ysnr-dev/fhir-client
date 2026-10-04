@@ -45,15 +45,15 @@ export function InjectionCancelModal({
           title: "注射の中止",
           body: (d: string) => `${d} の注射を中止します。`,
           one: "この日のみ中止",
-          all: (n: number) => `この日以降 ${n} 日分を中止`,
+          all: (n: number) => `この日以降 ${n} 日分中止`,
           only: "中止",
         }
       : {
           title: "注射の中止取消",
           body: (d: string) => `${d} の注射の中止を取り消します(依頼済に戻します)。`,
-          one: "この日のみ取り消す",
-          all: (n: number) => `この日以降 ${n} 日分を取り消す`,
-          only: "取り消す",
+          one: "この日のみ取消",
+          all: (n: number) => `この日以降 ${n} 日分取消`,
+          only: "取消",
         };
 
   function run(withLater: boolean) {

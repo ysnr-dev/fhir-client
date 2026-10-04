@@ -194,11 +194,11 @@ export function AllergyForm({
           >
             {source === "medicine"
               ? values.allergen
-                ? "医薬品を変更"
-                : "医薬品を選択"
+                ? "医薬品変更"
+                : "医薬品選択"
               : values.allergen
-                ? "アレルゲンを変更"
-                : "アレルゲンを選択"}
+                ? "アレルゲン変更"
+                : "アレルゲン選択"}
           </button>
         </div>
 

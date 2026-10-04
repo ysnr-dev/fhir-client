@@ -40,7 +40,7 @@ export function SlotCalendar({
   if (rows.length === 0) {
     return (
       <p className="patient-table__empty">
-        この週には枠がありません。「枠を一括生成」で作成してください。
+        この週には枠がありません。「枠一括生成」で作成してください。
       </p>
     );
   }

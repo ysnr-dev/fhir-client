@@ -523,7 +523,7 @@ function WardMapEditor({
           自動配置
         </button>
         <button type="button" onClick={arrangeRooms}>
-          {selectedIds.size > 0 && selected.some((o) => o.type === "room") ? "選んだ病室を整列" : "全病室を整列"}
+          {selectedIds.size > 0 && selected.some((o) => o.type === "room") ? "選択病室整列" : "全病室整列"}
         </button>
         <span className="ward-map-edit__toolbar-group" role="group" aria-label="表示倍率">
           <button type="button" onClick={viewport.zoomOut} disabled={!viewport.canZoomOut} aria-label="縮小">
@@ -541,7 +541,7 @@ function WardMapEditor({
         </span>
         {dirty && <span className="ward-map-edit__dirty">未保存の変更があります</span>}
         <Link className="button ward-map-edit__toolbar-link" to={`/ward-map?ward=${wardId}`}>
-          マップを見る
+          マップ表示
         </Link>
       </div>
 

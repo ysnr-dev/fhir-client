@@ -78,7 +78,7 @@ function SimpleMasterPage<T extends Row>({ title, itemLabel, hooks, fields, defa
         <h1>{title}</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            {itemLabel}を追加
+            {itemLabel}追加
           </button>
         </div>
       </div>

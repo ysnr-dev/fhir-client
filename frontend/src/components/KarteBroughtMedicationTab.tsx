@@ -269,7 +269,7 @@ export function KarteBroughtMedicationTab({
           <div className="brought-med__bulk">
             <span>{selected.size} 剤を選択中</span>
             <button type="button" onClick={handleContinue}>
-              継続(院内処方にする)
+              継続(院内処方)
             </button>
             <button type="button" onClick={() => handleDecide("hold")}>
               休止
@@ -371,7 +371,7 @@ export function KarteBroughtMedicationTab({
                               className="row-menu__item"
                               onClick={() => onOpenPrescription(summary.convertedOrderId as string)}
                             >
-                              処方を開く
+                              処方
                             </button>
                           )}
                           <button

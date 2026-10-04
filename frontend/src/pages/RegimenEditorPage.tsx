@@ -326,7 +326,7 @@ export function RegimenEditorPage() {
         <div className="lab-order-item__section-head">
           <h3>適応疾患</h3>
           <button type="button" onClick={() => setPicker({ kind: "disease" })}>
-            病名を追加
+            病名追加
           </button>
         </div>
         <table className="master-search__table regimen-editor__rows">
@@ -454,7 +454,7 @@ export function RegimenEditorPage() {
         <div className="lab-order-item__section-head">
           <h3>適応基準(検査結果値)</h3>
           <button type="button" onClick={() => update("labCriteria", [...draft.labCriteria, emptyLabCriterionDraft()])}>
-            検査基準を追加
+            検査基準追加
           </button>
         </div>
         <div className="lab-order-item__table-wrap">
@@ -613,7 +613,7 @@ export function RegimenEditorPage() {
             type="button"
             onClick={() => update("adverseEvents", [...draft.adverseEvents, emptyAdverseEventDraft()])}
           >
-            副作用を追加
+            副作用追加
           </button>
         </div>
         <table className="master-search__table regimen-editor__rows">
@@ -1178,7 +1178,7 @@ function StepCard({
           <span className="rp-card__usage-label">用法</span>
           <div className="rp-card__usage-row">
             <button type="button" className="rp-card__compact-button" onClick={onPickUsage}>
-              {step.usage ? "用法を変更" : "用法を選択"}
+              {step.usage ? "用法変更" : "用法選択"}
             </button>
             {step.usage ? (
               <span className="rp-card__usage-value">{step.usage.name || step.usage.code}</span>

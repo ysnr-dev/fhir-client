@@ -1193,13 +1193,6 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   margin-top: 4px;
 }
 
-.connection-settings-form__hint {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text);
-}
-
 .connection-settings-form__success {
   margin: 0;
   font-size: 14px;
@@ -3045,12 +3038,6 @@ fieldset.rp-card {
   color: var(--text);
 }
 
-.placeholder-list__note {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: var(--text);
-}
-
 .placeholder-list__copy {
   height: auto;
   font-size: 11px;
@@ -3307,14 +3294,6 @@ fieldset.rp-card {
   margin-bottom: 10px;
   font-size: 13px;
   color: var(--text-h);
-}
-
-.oauth-client-form__hint {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text);
 }
 
 .oauth-client-form__uri-row {
@@ -5434,7 +5413,7 @@ button.populate-expression__option--active {
   color: var(--text);
 }
 
-/* グループ枠内の先頭に置く「医療機関を選択」「医療従事者を選択」。
+/* グループ枠内の先頭に置く「医療機関選択」「医療従事者選択」。
    入力欄より控えめに見せたいので、グローバルの button より小さくする。 */
 .qp-group__pickers {
   display: flex;
@@ -5621,7 +5600,7 @@ button.populate-expression__option--active {
 
 /* ---- 患者テンプレート(QuestionnaireResponse) ---- */
 
-/* テンプレートのプルダウンと「前回値を複写」を 1 行に並べる。プルダウンにはラベルが
+/* テンプレートのプルダウンと「前回値複写」を 1 行に並べる。プルダウンにはラベルが
    乗るので、下端(コントロールの高さ)で揃える。 */
 .qr-template-select {
   --control-height: 32px;
@@ -5781,12 +5760,6 @@ button.populate-expression__option--active {
 }
 
 /* ---- カテゴリ管理モーダル(テンプレートカテゴリ・ファイルカテゴリ) ---- */
-
-.category-modal__hint {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: var(--text);
-}
 
 .category-modal__list {
   display: flex;
@@ -6008,19 +5981,9 @@ button.populate-expression__option--active {
   margin-top: 12px;
 }
 
-/* ---- 医療機関(Organization) ---- */
-
-/* 入力欄の直下に置く補足。.patient-form の gap を詰めて欄と一体に見せる。 */
-.organization-form__hint {
-  margin: -12px 0 0;
-  font-size: 13px;
-  color: var(--text);
-}
-
 /* ---- 診療科(Organization / partOf あり) ---- */
 
-/* コード表からの一括登録ボタンと、その説明・結果メッセージを 1 区画にまとめる。
-   .organization-form__hint と違い入力欄の直下ではないので、負の margin は付けない。 */
+/* コード表からの一括登録ボタンと、その説明・結果メッセージを 1 区画にまとめる。 */
 .department-seed {
   display: flex;
   flex-wrap: wrap;
@@ -15304,7 +15267,7 @@ button.meal-calendar__cell:hover {
 }
 
 /* 病棟の指示簿(ワークリスト)の患者見出し行。指示簿タブの区分見出しと同じ地色で、
-   右側に未指示受け件数と「この患者を指示受け」を並べる。 */
+   右側に未指示受け件数と「指示受け」を並べる。 */
 .nursing-worklist__patient th {
   text-align: left;
   background: var(--surface-sunken);
@@ -21580,7 +21543,7 @@ body.page-home .app__main {
   font-size: 12px;
 }
 
-/* 本文は改行をそのまま出す。ホームでは数行に畳み、「続きを読む」で開く。 */
+/* 本文は改行をそのまま出す。ホームでは数行に畳み、「続き」で開く。 */
 .bulletin__post-body {
   margin: 6px 0 0;
   font-size: 13px;

@@ -114,7 +114,7 @@ export function ConsultReplyModal({ order, task, patientId, patientName, onClose
         onSubmit={handleSubmit}
         submitting={saveReply.isPending}
         validationError={validationError}
-        submitLabel="回答を登録"
+        submitLabel="回答登録"
       />
     </Modal>
   );

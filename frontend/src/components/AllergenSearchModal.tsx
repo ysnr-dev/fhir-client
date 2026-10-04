@@ -61,7 +61,6 @@ export function AllergenSearchModal({ onSelect, onClose }: AllergenSearchModalPr
   const groupNames = new Map(groupItems.map((g) => [groupPrefix(g.jfagy_code), g.name]));
 
   const hasNext = data ? page * data.per < data.total : false;
-  const emptyByMainOnly = mainOnly && data?.items.length === 0;
 
   return (
     <Modal title="アレルゲンを選択" onClose={onClose} className="modal--wide">
@@ -110,11 +109,6 @@ export function AllergenSearchModal({ onSelect, onClose }: AllergenSearchModalPr
           />
           主要な品目のみ表示
         </label>
-        {emptyByMainOnly && (
-          <p className="master-search__preset-hint">
-            主要な品目に絞り込み中です。見つからない場合はチェックを外して全品目から検索してください。
-          </p>
-        )}
       </div>
       <ErrorBanner error={error ?? groups.error} />
       <div className="master-search__table-wrap">

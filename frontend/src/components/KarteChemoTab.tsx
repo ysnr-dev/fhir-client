@@ -299,7 +299,7 @@ export function KarteChemoTab({
             onClick={() => onAddCycle(selected.id)}
             disabled={reachedPlanned}
           >
-            第 {nextCycle.cycle} クールを登録
+            第 {nextCycle.cycle} クール登録
           </button>
         )}
       </div>

@@ -396,7 +396,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
         )}
         {list.length > 0 && (
           <button type="button" className="pathway-sheet__fullscreen" onClick={() => updateView({ fullscreen: !fullscreen })}>
-            {fullscreen ? "全画面を終了" : "全画面"}
+            {fullscreen ? "全画面終了" : "全画面"}
           </button>
         )}
         {/* よく使う操作は見出しの行にアイコンで並べる(見出し帯の行は増やさない)。取り消しはケバブに畳む。 */}

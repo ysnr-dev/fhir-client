@@ -35,7 +35,7 @@ export function PathoOrganPage() {
         <h1>病理臓器・検査材料</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            施設追加コードを追加
+            施設追加コード追加
           </button>
         </div>
       </div>

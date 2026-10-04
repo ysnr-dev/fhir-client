@@ -45,7 +45,7 @@ export function PathwayListPage() {
         <h1>パス定義</h1>
         <div className="page__header-actions">
           <Link to="/pathways/new" className="button">
-            パスを追加
+            パス追加
           </Link>
         </div>
       </div>

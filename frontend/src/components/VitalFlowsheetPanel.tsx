@@ -714,7 +714,7 @@ export function VitalFlowsheetPanel({
         )}
         <span className="lab-timeline__hint" />
         <button type="button" onClick={() => setFullscreen(!fullscreen)}>
-          {fullscreen ? "全画面を終了" : "全画面"}
+          {fullscreen ? "全画面終了" : "全画面"}
         </button>
       </div>
 

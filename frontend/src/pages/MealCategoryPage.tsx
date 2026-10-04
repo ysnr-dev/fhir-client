@@ -70,7 +70,7 @@ export function MealCategoryPage() {
         <h1>食種 種別</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            種別を追加
+            種別追加
           </button>
         </div>
       </div>

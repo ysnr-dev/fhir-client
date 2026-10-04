@@ -121,7 +121,7 @@ export function PathwayTaskPanel({ applyId, procedureId, onSaved }: PathwayTaskP
       <div className="lab-order-item__actions">
         {task.done ? (
           <button type="button" onClick={() => save(false)} disabled={record.isPending}>
-            {record.isPending ? "保存中..." : "未実施に戻す"}
+            {record.isPending ? "保存中..." : "実施取消"}
           </button>
         ) : (
           <button type="button" onClick={() => save(true)} disabled={record.isPending}>

@@ -136,7 +136,7 @@ export function PhysioItemPage() {
         <h1>生理検査オーダー項目マスタ</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            項目を追加
+            項目追加
           </button>
         </div>
       </div>
@@ -729,7 +729,7 @@ function SetItemsEditor({ setItemCode, setItems, examTypes }: SetItemsEditorProp
   const mutations = usePhysioSetItemMutations();
   const [adding, setAdding] = useState(false);
   // 目当ての項目が分かっているときはその場で足せるよう、打った語を名称・検査種別の
-  // どちらにも当てる。一覧を見ながら探すときは「項目を追加」の検索モーダルを使う。
+  // どちらにも当てる。一覧を見ながら探すときは「項目追加」の検索モーダルを使う。
   const [query, setQuery] = useState("");
   const searching = query.trim().length > 0;
   const candidates = usePhysioItemSearch({ keyword: query }, 1, searching);
@@ -758,7 +758,7 @@ function SetItemsEditor({ setItemCode, setItems, examTypes }: SetItemsEditorProp
           placeholder="名称・検査種別で検索"
         />
         <button type="button" onClick={() => setAdding(true)}>
-          項目を追加
+          項目追加
         </button>
       </div>
 
@@ -815,7 +815,7 @@ function SetItemsEditor({ setItemCode, setItems, examTypes }: SetItemsEditorProp
             {setItems.length === 0 && (
               <tr>
                 <td colSpan={4} className="master-search__empty">
-                  構成項目がありません。名称で検索するか「項目を追加」から選んでください。
+                  構成項目がありません。名称で検索するか「項目追加」から選んでください。
                 </td>
               </tr>
             )}

@@ -231,7 +231,7 @@ function InjectionDispenseForm({
 
         <div className="prescription-form__submit">
           <button type="submit" disabled={register.isPending}>
-            {register.isPending ? "送信中..." : "払出を登録"}
+            {register.isPending ? "送信中..." : "払出登録"}
           </button>
         </div>
       </form>

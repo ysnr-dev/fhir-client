@@ -49,7 +49,7 @@ export function LabContainerPage() {
         <h1>採取管マスタ</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            採取管を追加
+            採取管追加
           </button>
         </div>
       </div>

@@ -76,7 +76,7 @@ import { useReturnLinkState } from "../returnTo";
 // マップが未作成の病棟は、病室とベッドを機械的に並べて出す(保存はしない)。
 //
 // 今日の表示では患者カードを掴んで床から床へ運べる。落としても書き込まず、保留中の
-// 移動(fhir/bedMovePlanHelpers.ts)として積み、「転床を確定」でまとめて書く。
+// 移動(fhir/bedMovePlanHelpers.ts)として積み、「転床確定」でまとめて書く。
 
 const LEGEND: LegendItem[] = [
   { modifier: "empty", label: "空床" },
@@ -522,7 +522,7 @@ export function WardMapPage() {
           </Link>
           {wardId && (
             <Link className="button" to={`/wards/${wardId}/map/edit`}>
-              マップを編集
+              マップ編集
             </Link>
           )}
         </span>

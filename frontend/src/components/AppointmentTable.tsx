@@ -97,7 +97,7 @@ export function AppointmentTable({
                           onClick={() => appointment.id && onReschedule(appointment.id)}
                           disabled={busy}
                         >
-                          日時を変更
+                          日時変更
                         </button>
                         <button
                           type="button"

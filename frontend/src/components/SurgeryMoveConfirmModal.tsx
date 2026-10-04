@@ -207,8 +207,8 @@ export function SurgeryMoveConfirmModal({ row, target, onClose, onMoved }: Props
               : conflict.rows.length > 0 || conflict.truncated || conflict.unknown
                 ? `重なりを承知で${sameSlot ? "変更" : "移動"}`
                 : sameSlot
-                  ? "変更する"
-                  : "移動する"}
+                  ? "変更"
+                  : "移動"}
           </button>
           <button type="button" onClick={onClose} disabled={move.isPending}>
             戻る

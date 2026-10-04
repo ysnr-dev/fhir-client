@@ -40,10 +40,10 @@ export function WardRoomListPage() {
         <h1>{locationDisplayName(ward)} の病室</h1>
         <div className="page__header-actions">
           <Link to={`/wards/${wardId}/rooms/new`} className="button">
-            病室を追加
+            病室追加
           </Link>
           <Link to={`/wards/${wardId}/edit`} className="button">
-            病棟を編集
+            病棟編集
           </Link>
           <Link to="/wards" className="button">
             ← 病棟一覧に戻る

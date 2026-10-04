@@ -142,7 +142,7 @@ Task を completed にするだけだと ServiceRequest は status=active のま
 `rehab-order-end` を書く(`useUpdateRehabTaskStatus` の endDate)。退院時も同じ扱いで、
 `buildRehabOrderStopEntries` を退院の transaction に同梱する(食事と同じ形)。
 
-［導出］逆に「終了を取消」では終了日を消さない。打ち切った期間まで巻き戻すと、その間に
+［導出］逆に「終了取消」では終了日を消さない。打ち切った期間まで巻き戻すと、その間に
 積んだ実施記録と整合が取れなくなる。期間を延ばしたいときはオーダーを編集する。
 **この非対称は意図したもの。**
 

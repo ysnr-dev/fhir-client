@@ -230,7 +230,7 @@ function medicationDisplay(mr: fhir4.MedicationRequest): string {
 
 /**
  * 入院期間のデータから下書きを組み立てる。既存の値(existing)を渡すと、本文と
- * 選択済みの参照は残し、候補だけを集め直す(「下書きを集め直す」ボタン)。
+ * 選択済みの参照は残し、候補だけを集め直す(「再収集」ボタン)。
  */
 export function draftDischargeSummaryForm(
   sources: DischargeSummarySources,

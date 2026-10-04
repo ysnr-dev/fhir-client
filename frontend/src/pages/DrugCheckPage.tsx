@@ -114,7 +114,7 @@ function InteractionTab({ query }: { query: string }) {
       <div className="page__header">
         <p className="master-search__count">{interactions.data?.length ?? 0} 件</p>
         <button type="button" onClick={() => setEditing("new")}>
-          相互作用を追加
+          相互作用追加
         </button>
       </div>
       <table className="master-search__table">
@@ -317,7 +317,7 @@ function DoseRuleTab({ query }: { query: string }) {
       <div className="page__header">
         <p className="master-search__count">{rules.data?.length ?? 0} 件</p>
         <button type="button" onClick={() => setEditing("new")}>
-          規則を追加
+          規則追加
         </button>
       </div>
       <table className="master-search__table">
@@ -666,7 +666,7 @@ function DrugField({
             required
           />
           <button type="button" onClick={onPick}>
-            医薬品から選ぶ
+            医薬品選択
           </button>
         </>
       ) : (

@@ -90,7 +90,7 @@ export function TemplateEntryForm({
   defaultCanonical,
   extractsObservations = false,
   questionnaireId: selectedQuestionnaireId,
-  submitLabel = "記載を反映",
+  submitLabel = "記載反映",
   submitting = false,
   showToc = false,
   showHeader,

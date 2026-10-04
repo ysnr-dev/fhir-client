@@ -13,7 +13,7 @@ import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 
 // パスの終了・中止。パスシートの見出しから開き、適用の CarePlan と Goal を 1 回で書く。
-// 終わったパスを開くと記録した内容が出て、「進行中に戻す」で取り消せる。
+// 終わったパスを開くと記録した内容が出て、「終了取消」で取り消せる。
 // 設計は docs/clinical-pathway-design.md §7.5。
 
 interface PathwayClosePanelProps {
@@ -140,11 +140,11 @@ export function PathwayClosePanel({ patientId, applyId, onSaved }: PathwayCloseP
 
       <div className="lab-order-item__actions">
         <button type="button" onClick={handleSave} disabled={close.isPending}>
-          {close.isPending ? "保存中..." : closed ? "記録し直す" : `${closingTypeLabel(values.closing)}にする`}
+          {close.isPending ? "保存中..." : closed ? "記録し直す" : closingTypeLabel(values.closing)}
         </button>
         {closed && (
           <button type="button" onClick={handleReopen} disabled={close.isPending}>
-            進行中に戻す
+            終了取消
           </button>
         )}
       </div>

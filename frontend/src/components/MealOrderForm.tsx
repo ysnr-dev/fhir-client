@@ -333,7 +333,7 @@ export function MealOrderForm({
                 <span className="meal-diet-field__placeholder">選択してください</span>
               )}
               <button type="button" onClick={() => setPickingDiet(true)}>
-                {values.diet ? "変更" : "食種を選択"}
+                {values.diet ? "変更" : "食種選択"}
               </button>
             </div>
             {/* 主成分量(1 日あたりの標準値)と適応。食種の性質なのでマスタから引く

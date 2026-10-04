@@ -4,7 +4,6 @@ import {
   addMonths,
   emptySlotPattern,
   generateSlots,
-  schedulePeriodLabel,
   slotPatternOf,
   today,
   validateSlotPattern,
@@ -102,11 +101,6 @@ export function SlotGenerateModal({ schedule, onClose, onGenerated }: SlotGenera
             />
           </label>
         </div>
-        <p className="organization-form__hint">
-          {unlimited
-            ? "この枠表は無期限です。生成する期間を指定してください(既定は今日から 1 か月)。"
-            : `既定はこの枠表の有効期間(${schedulePeriodLabel(schedule)})です。`}
-        </p>
 
         <SlotPatternFields value={pattern} onChange={setPattern} />
 

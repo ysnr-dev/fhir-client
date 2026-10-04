@@ -68,7 +68,7 @@ export function InjectionDeleteModal({ serviceRequest, onClose, onDeleted }: Inj
                 onClick={() => handleDelete([ownId, ...laterIds])}
                 disabled={remove.isPending}
               >
-                {`この日以降 ${laterTargets.length + 1} 日分を削除`}
+                {`この日以降 ${laterTargets.length + 1} 日分削除`}
               </button>
             )}
           </div>

@@ -749,7 +749,7 @@ export function FacilitySettingsPage() {
                   className="rp-card__compact-button"
                   onClick={() => setPickingSide(side)}
                 >
-                  + 項目を追加
+                  + 項目追加
                 </button>
               </div>
             ))}

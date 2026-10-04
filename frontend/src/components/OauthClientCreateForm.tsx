@@ -90,9 +90,6 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
             onChange={() => setShape("backend")}
           />
           バックエンド連携（SMART Backend Services）
-          <span className="oauth-client-form__hint">
-            サーバー間連携。<code>system/</code> スコープで、患者を限定せず読み書きします。
-          </span>
         </label>
         <label>
           <input
@@ -102,9 +99,6 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
             onChange={() => setShape("launch")}
           />
           アプリ連携（SMART App Launch）
-          <span className="oauth-client-form__hint">
-            患者本人がログインして同意するアプリ。<code>patient/</code> スコープの参照のみです。
-          </span>
         </label>
       </fieldset>
 
@@ -133,9 +127,6 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
               placeholder='{"keys":[...]}  private_key_jwt で認証する場合のみ'
               onChange={(e) => setJwksText(e.target.value)}
             />
-            <span className="oauth-client-form__hint">
-              入力すると公開鍵による認証（private_key_jwt）になり、client_secret は発行されません。
-            </span>
           </label>
         </>
       ) : (
@@ -174,11 +165,8 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
               </div>
             ))}
             <button type="button" onClick={() => setRedirectUris([...redirectUris, ""])}>
-              URIを追加
+              URI追加
             </button>
-            <p className="oauth-client-form__hint">
-              完全一致で照合します（前方一致やワイルドカードは使えません）。
-            </p>
           </fieldset>
 
           <fieldset>
@@ -191,9 +179,6 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
                 onChange={() => setClientType("public")}
               />
               public（シークレットなし）
-              <span className="oauth-client-form__hint">
-                SPA・モバイルアプリ向け。シークレットの代わりに PKCE が所有証明になります。
-              </span>
             </label>
             <label>
               <input
@@ -203,9 +188,6 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
                 onChange={() => setClientType("confidential")}
               />
               confidential（シークレットあり）
-              <span className="oauth-client-form__hint">
-                サーバー側でシークレットを秘匿できるアプリ向け。
-              </span>
             </label>
           </fieldset>
         </>

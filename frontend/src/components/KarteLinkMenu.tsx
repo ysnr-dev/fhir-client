@@ -20,7 +20,7 @@ export function KarteLinkMenu({
         disabled={!link}
         onClick={() => link && void copyKarteLink(link, patientId)}
       >
-        リンクを取得
+        リンク取得
       </button>
     </RowMenu>
   );

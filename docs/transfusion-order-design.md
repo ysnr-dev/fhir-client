@@ -396,7 +396,7 @@ display: bag.productName }]` を組み立てるが、`productCode` はマスタ�
 
 - 初期行の製剤名を書き換えると、`code` はオーダー時の製剤のまま `display`/`text` だけが
   変わり、**コードと表示が別の製剤を指す** Coding が黙って保存される。
-- 「バッグを追加」した行は `productCode` が空のままで、検証が `productName` しか
+- 「バッグ追加」した行は `productCode` が空のままで、検証が `productName` しか
   見ていなかったため、`code: ""`(FHIR の `code` 型として不正)がそのまま出る。
 
 製剤番号を必須にして遡及調査の起点にしている以上、製剤コードが実物と食い違ってはいけない。

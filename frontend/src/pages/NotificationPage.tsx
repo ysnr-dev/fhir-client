@@ -163,7 +163,7 @@ export function NotificationPage() {
             disabled={selected.length === 0 || complete.isPending}
             onClick={() => completeRows(selected)}
           >
-            選択を対応済みにする{selected.length > 0 ? `（${selected.length} 件）` : ""}
+            一括対応済{selected.length > 0 ? `（${selected.length} 件）` : ""}
           </button>
         </div>
       </div>

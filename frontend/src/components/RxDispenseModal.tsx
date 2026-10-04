@@ -304,7 +304,7 @@ function RxDispenseForm({
                   className="rp-card__compact-button"
                   onClick={() => setModal({ kind: "usage", rpIndex })}
                 >
-                  用法を変更
+                  用法変更
                 </button>
                 {rp.usage ? (
                   <span className="rp-card__usage-value">{rp.usage.usage_name}</span>
@@ -363,7 +363,7 @@ function RxDispenseForm({
 
         <div className="prescription-form__submit">
           <button type="submit" disabled={register.isPending}>
-            {register.isPending ? "送信中..." : "調剤を登録"}
+            {register.isPending ? "送信中..." : "調剤登録"}
           </button>
         </div>
       </form>

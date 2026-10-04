@@ -70,7 +70,7 @@ home / other-hcf / snf / hosp / aadvice / exp / oth)。退院モーダルの任�
 `occurrence` の範囲、`_revinclude:iterate=ServiceRequest:based-on`、`_revinclude=Procedure:based-on`)、
 退院処方(`category=prescription-category|discharge`、`_revinclude=MedicationRequest:based-on`)、アレルギー。
 
-「下書きを集め直す」(`draftDischargeSummaryForm(sources, existing)`)は候補だけを集め直し、
+「再収集」(`draftDischargeSummaryForm(sources, existing)`)は候補だけを集め直し、
 書いた本文と選択状態は残す。既存に無くなった参照(削除された病名など)は、選択されていれば残す。
 
 ## 4. 画面

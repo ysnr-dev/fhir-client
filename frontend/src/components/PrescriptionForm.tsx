@@ -551,7 +551,7 @@ export function PrescriptionForm({
                 className="rp-card__compact-button"
                 onClick={() => setModal({ kind: "usage", rpIndex })}
               >
-                {rp.usage ? "用法を変更" : "用法を選択"}
+                {rp.usage ? "用法変更" : "用法選択"}
               </button>
               {rp.usage ? (
                 <span className="rp-card__usage-value">{rp.usage.usage_name}</span>

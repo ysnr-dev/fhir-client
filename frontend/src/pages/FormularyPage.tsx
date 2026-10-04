@@ -118,7 +118,7 @@ export function FormularyPage() {
       <div className="page__header">
         <h1>フォーミュラリ</h1>
         <button type="button" onClick={() => setEditing("new")}>
-          薬効群を追加
+          薬効群追加
         </button>
       </div>
 
@@ -186,7 +186,7 @@ export function FormularyPage() {
                   <span className="lab-order-item__code">{selected.code}</span>
                 </h2>
                 <button type="button" onClick={() => setAdding(true)} disabled={busy}>
-                  薬剤を追加
+                  薬剤追加
                 </button>
               </div>
               <table className="master-search__table">

@@ -207,7 +207,7 @@ export function RehabPerformModal({
 
         <div className="prescription-form__actions">
           <button type="submit" disabled={register.isPending}>
-            {register.isPending ? "登録中..." : "実施を登録"}
+            {register.isPending ? "登録中..." : "実施登録"}
           </button>
           <button type="button" onClick={onClose} disabled={register.isPending}>
             キャンセル

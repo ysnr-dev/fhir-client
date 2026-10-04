@@ -183,7 +183,7 @@ export function ScheduleForm({
         有効(active)
       </label>
 
-      {/* ここで決めた条件は枠表に保存され、カレンダーの「枠を一括生成」の初期値になる。 */}
+      {/* ここで決めた条件は枠表に保存され、カレンダーの「枠一括生成」の初期値になる。 */}
       <fieldset className="schedule-form__pattern">
         <legend>枠のパターン</legend>
         <SlotPatternFields

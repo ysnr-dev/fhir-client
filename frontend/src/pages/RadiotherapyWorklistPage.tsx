@@ -645,7 +645,7 @@ function CourseCard({
                 disabled={pending}
                 onClick={onClearPlanned}
               >
-                予定をすべて削除
+                予定全削除
               </button>
             )}
             {actions

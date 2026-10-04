@@ -225,7 +225,7 @@ export function MicroResultDetailPanel({ reportId }: { reportId: string }) {
             ))}
 
             <details className="prescription-detail__raw">
-              <summary>FHIR JSON を表示</summary>
+              <summary>FHIR JSON 表示</summary>
               <FhirJsonView resource={detail.data?.data} />
             </details>
           </div>

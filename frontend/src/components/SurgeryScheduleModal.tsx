@@ -155,7 +155,7 @@ export function SurgeryScheduleModal({ row, onClose }: Props) {
 
         <div className="lab-order-item__actions">
           <button type="submit" disabled={confirm.isPending || conflictCheck.checking}>
-            {confirm.isPending ? "送信中..." : conflictCheck.checking ? "確認中..." : "確定する"}
+            {confirm.isPending ? "送信中..." : conflictCheck.checking ? "確認中..." : "確定"}
           </button>
           <button type="button" onClick={onClose}>
             キャンセル

@@ -75,7 +75,7 @@ export function PathwayOverviewTable({
         <h3>概要表</h3>
         {onLinkSameNames && (
           <button type="button" onClick={onLinkSameNames}>
-            同じ名前を続きにまとめる
+            同名連結
           </button>
         )}
       </div>

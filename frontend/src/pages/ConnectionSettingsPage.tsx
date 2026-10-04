@@ -139,10 +139,6 @@ function ConnectionSettingsForm({ settings }: { settings: ConnectionSettings }) 
           placeholder={adminTokenSet ? "設定済み（変更する場合のみ入力）" : "未設定"}
           onChange={(e) => setAdminToken(e.target.value)}
         />
-        <span className="connection-settings-form__field-hint">
-          上流 FHIR サーバーの <code>FHIR_ADMIN_TOKEN</code> と同じ値。OAuth クライアントの
-          一覧・登録・削除に使います（client_secret とは別のトークンです）。
-        </span>
       </label>
 
       <div className="connection-settings-form__actions">
@@ -157,9 +153,6 @@ function ConnectionSettingsForm({ settings }: { settings: ConnectionSettings }) 
           {test.isPending ? "接続テスト中...(最大90秒)" : "接続テスト"}
         </button>
       </div>
-      <p className="connection-settings-form__hint">
-        接続テストは保存済みの設定に対して実行されます。上流がスリープ中の場合、初回は最大90秒ほどかかることがあります。
-      </p>
 
       {update.isSuccess && (
         <p className="connection-settings-form__success" role="status">

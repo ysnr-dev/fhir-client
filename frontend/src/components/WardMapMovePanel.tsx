@@ -40,7 +40,7 @@ export function WardMapMovePanel({
       )}
       <div className="ward-map__move-actions">
         <button type="button" onClick={onConfirm} disabled={moves.length === 0}>
-          転床を確定
+          転床確定
         </button>
         <button type="button" onClick={onClear} disabled={moves.length === 0}>
           すべて破棄

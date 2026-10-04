@@ -18,8 +18,6 @@ interface RoomFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel: string;
-  /** 編集時のみ true。ベッドの増減について注意書きを出す。 */
-  editing?: boolean;
 }
 
 export function RoomForm({
@@ -28,7 +26,6 @@ export function RoomForm({
   submitting,
   submitError,
   submitLabel,
-  editing = false,
 }: RoomFormProps) {
   const [values, setValues] = useState<RoomFormValues>(initialValues ?? emptyRoomForm);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -92,11 +89,6 @@ export function RoomForm({
           required
         />
       </label>
-      {editing && (
-        <p className="organization-form__hint">
-          ベッドは番号順(1、2、…)に作られます。数を減らすと番号の大きいベッドから削除されます。
-        </p>
-      )}
 
       <label>
         状態

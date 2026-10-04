@@ -41,7 +41,7 @@ export function LabOrderItemLayoutPage() {
         <h1>検査オーダーレイアウト</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setCreating(true)}>
-            レイアウトを追加
+            レイアウト追加
           </button>
         </div>
       </div>
@@ -467,7 +467,7 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
               />
             </label>
             <button type="button" onClick={() => setSearching(true)}>
-              項目を選択
+              項目選択
             </button>
           </div>
           {hasQuery && (

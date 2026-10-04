@@ -78,7 +78,7 @@ export function LabImportGroupCard({
               title={blocker ?? undefined}
               onClick={() => context && onRegister(group, context)}
             >
-              この候補を登録
+              候補登録
             </button>
           )}
         </div>
@@ -223,7 +223,7 @@ function LabImportRowCells({ row, group, item, subject, onResolve }: RowProps) {
       <td>
         {pending && (
           <button type="button" onClick={onResolve}>
-            結果項目を選ぶ
+            結果項目選択
           </button>
         )}
         {row.status !== "registered" && (

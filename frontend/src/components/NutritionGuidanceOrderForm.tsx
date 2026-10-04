@@ -221,7 +221,7 @@ export function NutritionGuidanceOrderForm({
                   <span className="meal-diet-field__placeholder">選択してください</span>
                 )}
                 <button type="button" onClick={() => setPickingDiet(true)}>
-                  {values.targetDiet ? "変更" : "食種を選択"}
+                  {values.targetDiet ? "変更" : "食種選択"}
                 </button>
                 {values.targetDiet && (
                   <button type="button" onClick={() => update("targetDiet", null)}>
@@ -239,7 +239,7 @@ export function NutritionGuidanceOrderForm({
                     className="nutrition-guidance-form__diet-copy"
                     onClick={() => update("targetDiet", currentDiet)}
                   >
-                    指示食種に写す
+                    指示食種へ複写
                   </button>
                 </p>
               )}

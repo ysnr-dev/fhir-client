@@ -120,7 +120,7 @@ export function SurgeryItemPage() {
         <h1>術式マスタ</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            術式を追加
+            術式追加
           </button>
         </div>
       </div>

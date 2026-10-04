@@ -233,7 +233,7 @@ function DateMonthsEditor({
           className="comment-add-button"
           onClick={() => onChange([...value, { month: nextMonth, days: [] }])}
         >
-          ＋月を追加
+          ＋月追加
         </button>
       )}
     </div>

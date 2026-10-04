@@ -142,7 +142,7 @@ QuestionnaireResponse として残して拡張から参照する。オーダー�
 **実施しても Task は動かさない。** 実施は `Procedure` を 1 件足すだけ。理由と注意は
 `docs/rehab-order-design.md` §4 と同じなのでそちらを参照。「終了」で Task を completed
 にすると同時に ServiceRequest に終了日拡張を書く(書かないと `status=active &
-occurrence=le{基準日}` に永久にヒットし続ける。同 §6.1)。「終了を取消」で終了日は
+occurrence=le{基準日}` に永久にヒットし続ける。同 §6.1)。「終了取消」で終了日は
 消さない非対称も踏襲する。
 
 ---

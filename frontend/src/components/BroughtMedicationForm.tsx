@@ -223,7 +223,7 @@ export function BroughtMedicationForm({
                   setValues((v) => ({ ...v, lines: v.lines.filter((_, i) => i !== index) }))
                 }
               >
-                この持参薬を削除
+                持参薬削除
               </button>
             </div>
           )}

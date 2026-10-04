@@ -220,7 +220,7 @@ export function AppointmentSlotPicker({
             className="appointment-picker__clear"
             onClick={clearFilters}
           >
-            絞り込みを解除
+            絞り込み解除
           </button>
         )}
       </div>
@@ -242,7 +242,7 @@ export function AppointmentSlotPicker({
       {!scheduleOptions.isLoading && scheduleOptions.schedules.length === 0 && (
         <p className="appointment-picker__hint">
           {filtered
-            ? "この条件に合う予約枠がありません。「絞り込みを解除」ですべての枠表から選べます。"
+            ? "この条件に合う予約枠がありません。「絞り込み解除」ですべての枠表から選べます。"
             : "有効な予約枠がありません。マスタメンテの「予約枠」で登録してください。"}
         </p>
       )}
@@ -251,11 +251,7 @@ export function AppointmentSlotPicker({
       <ErrorBanner error={monthSlots.error} />
       <ErrorBanner error={daySlots.error} />
 
-      {!schedule ? (
-        <p className="appointment-picker__hint">
-          予約枠を選ぶと、空いている日と時間が表示されます。
-        </p>
-      ) : (
+      {schedule && (
         <>
           <div className="appointment-month__header">
             {/* 過ぎた日には予約できないので、当月より前には戻さない。 */}

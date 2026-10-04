@@ -57,7 +57,7 @@ export function RadJj1017CodePage() {
                 : "この要素は JJ1017 指針で施設拡張が認められていません"
             }
           >
-            拡張コードを追加
+            拡張コード追加
           </button>
         </div>
       </div>

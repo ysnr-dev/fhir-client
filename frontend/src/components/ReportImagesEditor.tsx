@@ -195,14 +195,14 @@ export function ReportImagesEditor({
                 className="row-menu__item"
                 onClick={() => void openPaint(index, "source")}
               >
-                元画像から描き直す
+                描き直し
               </button>
               <button
                 type="button"
                 className="row-menu__item row-menu__item--danger"
                 onClick={() => update(index, { annotated: null })}
               >
-                描き込みを外す
+                描き込み削除
               </button>
             </RowMenu>
           ) : (
@@ -251,7 +251,7 @@ export function ReportImagesEditor({
           onChange={handleFileInput}
         />
         <button type="button" disabled={adding} onClick={() => fileInputRef.current?.click()}>
-          {adding ? "読み込み中..." : "＋画像を添付"}
+          {adding ? "読み込み中..." : "＋画像添付"}
         </button>
       </div>
 
@@ -260,7 +260,7 @@ export function ReportImagesEditor({
           <SchemaPaintModal
             title={`画像${paint.index + 1}への描き込み`}
             backgroundDataUrl={paint.background}
-            saveLabel="描き込みを確定"
+            saveLabel="描き込み確定"
             colors={darkImages ? DARK_IMAGE_PEN_COLORS : undefined}
             exportFormat="jpeg"
             onSave={savePaint}

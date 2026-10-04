@@ -895,7 +895,7 @@ export function QuestionnaireResponseForm({
               setOrganizationPicker({ prefix: childPrefix, targets: organizationTargets })
             }
           >
-            医療機関を選択
+            医療機関選択
           </button>
         )}
         {practitionerTargets.length > 0 && (
@@ -911,7 +911,7 @@ export function QuestionnaireResponseForm({
               })
             }
           >
-            医療従事者を選択
+            医療従事者選択
           </button>
         )}
       </div>

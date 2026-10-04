@@ -179,10 +179,10 @@ export function RadFrequentCodeSearchModal({
             disabled={selected.size === 0 || pending}
             onClick={() => onConfirm?.(Array.from(selected.values()))}
           >
-            {pending ? "作成中..." : `選択した ${selected.size} 件を作成`}
+            {pending ? "作成中..." : `選択した ${selected.size} 件作成`}
           </button>
           <button type="button" onClick={() => setSelected(new Map())} disabled={selected.size === 0}>
-            選択を解除
+            選択解除
           </button>
         </div>
       )}

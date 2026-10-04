@@ -30,7 +30,7 @@ export function MicroAntimicrobialPage() {
         <h1>JANIS抗菌薬コード</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            施設追加コードを追加
+            施設追加コード追加
           </button>
         </div>
       </div>

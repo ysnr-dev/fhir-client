@@ -291,7 +291,7 @@ export function BillingSendModal({
                 })
               }
             >
-              {cancel.isPending ? "取消中..." : "医事会計から取り消す"}
+              {cancel.isPending ? "取消中..." : "送信取消"}
             </button>
           )}
           <button type="button" onClick={onClose}>

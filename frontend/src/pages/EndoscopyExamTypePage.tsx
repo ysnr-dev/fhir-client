@@ -81,7 +81,7 @@ export function EndoscopyExamTypePage() {
         <h1>内視鏡 検査種別</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            検査種別を追加
+            検査種別追加
           </button>
         </div>
       </div>

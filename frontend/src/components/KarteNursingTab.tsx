@@ -149,7 +149,7 @@ export function KarteNursingTab({ patientId, view, onViewChange, onCreate, onEdi
             </button>
           )}
           <button type="button" onClick={onCreate}>
-            指示を追加
+            指示追加
           </button>
         </div>
       </div>
@@ -171,7 +171,7 @@ export function KarteNursingTab({ patientId, view, onViewChange, onCreate, onEdi
                 onClick={() => handleAccept(selectedRows)}
                 title={canAccept ? undefined : "医療従事者に紐づくアカウントでログインしてください"}
               >
-                選択した {selectedRows.length} 件を指示受け
+                {selectedRows.length} 件指示受け
               </button>
               <button
                 type="button"

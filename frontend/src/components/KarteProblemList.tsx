@@ -144,8 +144,8 @@ export function KarteProblemList({
     (problem) => isActiveCondition(problem) || resolvedVisible || problem.id === selectedId,
   );
   const resolvedLabel = resolvedVisible
-    ? "解決済みを隠す"
-    : `解決済み ${resolvedCount} 件を表示`;
+    ? "解決済み非表示"
+    : `解決済み ${resolvedCount} 件表示`;
   // 絞り込み中はモードの設定にかかわらず、チップの選択も絞り込みの切り替えになる
   // (URL で開いた状態と操作の意味が食い違わないようにする)。
   const selectsFilter = filterActive || mode === "filter";

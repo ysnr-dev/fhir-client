@@ -42,7 +42,7 @@ interface RichTextEditorProps {
   patientId: string;
 }
 
-// カルテ内リンク(fhir/karteLinkHelpers)。「リンクを取得」でコピーしたものを貼ったときだけ
+// カルテ内リンク(fhir/karteLinkHelpers)。「リンク取得」でコピーしたものを貼ったときだけ
 // リンクになり、外部 URL は文字のまま。編集中のクリックでは開かない。
 const KarteLinkMark = Link.extend({
   addAttributes() {

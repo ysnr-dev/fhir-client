@@ -30,7 +30,7 @@ export function MicroOrganismPage() {
         <h1>JANIS病原体コード</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            施設追加コードを追加
+            施設追加コード追加
           </button>
         </div>
       </div>

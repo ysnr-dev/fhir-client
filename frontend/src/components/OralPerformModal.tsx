@@ -205,7 +205,7 @@ export function OralPerformModal({ order, medicationRequests, slotAt, schedule, 
 
         <div className="lab-order-item__actions">
           <button type="submit" disabled={register.isPending}>
-            {register.isPending ? "保存中..." : "与薬を登録"}
+            {register.isPending ? "保存中..." : "与薬登録"}
           </button>
         </div>
       </form>

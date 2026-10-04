@@ -75,7 +75,7 @@ export function SurgeryRoomBlockPage() {
         <h1>手術室 ブロックスケジュール</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            割り当てを追加
+            割り当て追加
           </button>
         </div>
       </div>

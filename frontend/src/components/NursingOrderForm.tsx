@@ -128,7 +128,7 @@ export function NursingOrderForm({
                 <div className="nursing-order-form__line-head">
                   <span className="nursing-order-form__line-no">{index + 1}</span>
                   <button type="button" onClick={() => setPicking(index)}>
-                    {line.item ? "用語を変更" : "用語を選択"}
+                    {line.item ? "用語変更" : "用語選択"}
                   </button>
                   <span className="nursing-order-form__item">
                     {line.item
@@ -137,7 +137,7 @@ export function NursingOrderForm({
                   </span>
                   {line.item && (
                     <button type="button" onClick={() => updateLine(index, { item: null })}>
-                      用語を外す
+                      用語解除
                     </button>
                   )}
                   {line.item?.kind === "act" && (
@@ -148,7 +148,7 @@ export function NursingOrderForm({
                   )}
                   {!singleLine && values.lines.length > 1 && (
                     <button type="button" onClick={() => removeLine(index)}>
-                      行を削除
+                      行削除
                     </button>
                   )}
                 </div>
@@ -207,7 +207,7 @@ export function NursingOrderForm({
           </div>
           {!singleLine && (
             <button type="button" onClick={addLine}>
-              行を追加
+              行追加
             </button>
           )}
         </fieldset>
@@ -359,7 +359,7 @@ function NursingScheduleFields({
           ))}
           {schedule.kind === "times" && (
             <button type="button" onClick={() => updateTimes([...schedule.times, ""])}>
-              時刻を追加
+              時刻追加
             </button>
           )}
         </span>

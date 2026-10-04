@@ -190,7 +190,7 @@ export function AdverseEventEditor({
         </button>
         {editingId && (
           <button type="button" onClick={reset} disabled={save.isPending}>
-            編集をやめる
+            キャンセル
           </button>
         )}
       </div>

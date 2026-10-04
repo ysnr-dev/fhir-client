@@ -145,7 +145,7 @@ export function RadiotherapyProtocolPage() {
         <h1>放射線治療プロトコルマスタ</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            プロトコルを追加
+            プロトコル追加
           </button>
         </div>
       </div>
@@ -338,7 +338,7 @@ function ProtocolEditModal({
                 })
               }
             >
-              標的を追加
+              標的追加
             </button>
           </div>
           <table className="master-search__table radiotherapy-protocol__rows radiotherapy-protocol__volumes">
@@ -449,7 +449,7 @@ function ProtocolEditModal({
                     setDraft({ ...draft, phases: draft.phases.filter((_, i) => i !== index) })
                   }
                 >
-                  Phase を削除
+                  Phase 削除
                 </button>
               </div>
               <div className="lab-order-item__fields">

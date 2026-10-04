@@ -1001,7 +1001,7 @@ function RegimenApplyForm({
 
       <div className="lab-order-item__actions">
         <button type="button" onClick={handleSubmit} disabled={submitting}>
-          {mode === "apply" ? "レジメンを適用" : "クールを登録"}
+          {mode === "apply" ? "レジメン適用" : "クール登録"}
         </button>
       </div>
     </div>

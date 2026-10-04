@@ -83,7 +83,7 @@ export function RadMaterialPage() {
       <div className="page__header">
         <h1>放射線器材マスタ</h1>
         <button type="button" onClick={() => setEditing("new")}>
-          器材を追加
+          器材追加
         </button>
       </div>
 
@@ -448,14 +448,14 @@ function ReceiptMaterialField({
               選び直す
             </button>
             <button type="button" onClick={onClear}>
-              紐付けを外す
+              紐付け解除
             </button>
           </>
         ) : (
           <>
             <span className="order-select__muted">未紐付け</span>
             <button type="button" onClick={onSearch}>
-              特定器材を検索
+              特定器材検索
             </button>
           </>
         )}

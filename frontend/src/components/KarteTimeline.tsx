@@ -630,7 +630,7 @@ const KarteCard = memo(function KarteCard({
                 className="row-menu__item"
                 onClick={() => void copyKarteLink(karteLinkOfItem(item), linkActions.patientId)}
               >
-                リンクを取得
+                リンク取得
               </button>
             )}
             {/* 検体検査・細菌検査は、結果が登録済みのオーダーだけ結果内容を開ける。 */}
@@ -869,7 +869,7 @@ const KarteCard = memo(function KarteCard({
                 評価はアウトカムの記録なので、カードからは消させない。 */}
             {item.kind === "pathway-evaluation" ? (
               <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
-                パスで開く
+                パス表示
               </button>
             ) : (
               <>
@@ -998,7 +998,7 @@ function consultReplyId(sr: fhir4.ServiceRequest): string {
   return consultReply(sr).replyId;
 }
 
-// 「リンクを取得」で貼るリンク。開き方はカードの詳細モーダルと同じ。
+// 「リンク取得」で貼るリンク。開き方はカードの詳細モーダルと同じ。
 function karteLinkOfItem(
   item: Exclude<KarteTimelineItem, { kind: "vital" } | { kind: "pathway-evaluation" }>,
 ): KarteLink {
@@ -1590,7 +1590,7 @@ function CollapsibleBody({ children }: { children: ReactNode }) {
           className="karte-card__toggle"
           onClick={() => setExpanded((v) => !v)}
         >
-          {expanded ? "折りたたむ" : "続きを表示"}
+          {expanded ? "折りたたむ" : "続き表示"}
         </button>
       )}
     </>

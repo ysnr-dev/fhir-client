@@ -83,7 +83,7 @@ export function TreatmentDatasetPage() {
       <div className="page__header">
         <h1>実施入力データセット</h1>
         <button type="button" onClick={() => setEditing("new")}>
-          データセットを追加
+          データセット追加
         </button>
       </div>
 
@@ -330,19 +330,19 @@ const SECTIONS: {
   {
     type: "procedure",
     title: "手技料",
-    addLabel: "診療行為を追加",
+    addLabel: "診療行為追加",
     quantity: false,
   },
   {
     type: "medicine",
     title: "薬剤",
-    addLabel: "薬剤を追加",
+    addLabel: "薬剤追加",
     quantity: true,
   },
   {
     type: "material",
     title: "特定器材",
-    addLabel: "器材を追加",
+    addLabel: "器材追加",
     quantity: true,
   },
 ];

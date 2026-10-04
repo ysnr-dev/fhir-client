@@ -90,7 +90,7 @@ export function TransfusionProductPage() {
         <h1>輸血製剤マスタ</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            製剤を追加
+            製剤追加
           </button>
         </div>
       </div>

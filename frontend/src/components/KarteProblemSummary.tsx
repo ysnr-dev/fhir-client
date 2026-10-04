@@ -74,7 +74,7 @@ export function KarteProblemSummary({
 }: KarteProblemSummaryProps) {
   const clearButton = (
     <button type="button" className="karte-problem-summary__clear" onClick={onClear}>
-      絞り込みを解除
+      絞り込み解除
     </button>
   );
 

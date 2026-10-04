@@ -102,7 +102,7 @@ export function BroughtMedicationDetailPanel({
                       type="button"
                       onClick={() => onOpenPrescription(summary.convertedOrderId as string)}
                     >
-                      処方を開く
+                      処方
                     </button>
                   ) : (
                     summary.convertedOrderId
@@ -117,7 +117,7 @@ export function BroughtMedicationDetailPanel({
       </fieldset>
 
       <details className="prescription-detail__raw">
-        <summary>FHIR JSON を表示</summary>
+        <summary>FHIR JSON 表示</summary>
         <JsonBlock value={statement} />
       </details>
     </div>

@@ -346,7 +346,7 @@ export function PathoOrderForm({
         </ul>
         <div className="patho-order__specimen-add">
           <button type="button" className="comment-add-button" onClick={addSpecimen}>
-            ＋検体を追加
+            ＋検体追加
           </button>
         </div>
       </fieldset>
@@ -377,7 +377,7 @@ export function PathoOrderForm({
           )}
           <div className="patho-order__schema-actions">
             <button type="button" onClick={() => setSchemaPickOpen(true)}>
-              ＋シェーマを追加
+              ＋シェーマ追加
             </button>
             {values.schemas.map((schema, index) => (
               <button
@@ -386,7 +386,7 @@ export function PathoOrderForm({
                 onClick={() => removeSchema(index)}
                 title={`${schema.name || "シェーマ"}を外す`}
               >
-                {`${index + 1}枚目を外す`}
+                {`${index + 1}枚目削除`}
               </button>
             ))}
           </div>

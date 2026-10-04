@@ -131,13 +131,13 @@ export function ScheduleSlotCalendarPage() {
         <h1>予約枠カレンダー</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setAdding({ date: week, time: "" })}>
-            枠を追加
+            枠追加
           </button>
           <button type="button" onClick={() => setGenerating(true)}>
-            枠を一括生成
+            枠一括生成
           </button>
           <Link to={`/schedules/${schedule.id}/edit`} className="button">
-            枠表を編集
+            枠表編集
           </Link>
           <Link to="/schedules" className="button">
             ← 一覧に戻る
@@ -180,7 +180,7 @@ export function ScheduleSlotCalendarPage() {
       <div className="slot-calendar__actions">
         <span>選択 {selectedSlots.length} 件</span>
         <button type="button" onClick={selectAllFree} disabled={slots.length === 0}>
-          予約以外を全選択
+          予約以外全選択
         </button>
         <button type="button" onClick={() => setSelectedIds(new Set())} disabled={!selectedSlots.length}>
           選択解除
@@ -190,14 +190,14 @@ export function ScheduleSlotCalendarPage() {
           onClick={() => handleStatusChange("busy-unavailable")}
           disabled={busy || !selectedSlots.length}
         >
-          停止にする
+          停止
         </button>
         <button
           type="button"
           onClick={() => handleStatusChange("free")}
           disabled={busy || !selectedSlots.length}
         >
-          空きに戻す
+          再開
         </button>
         <button
           type="button"

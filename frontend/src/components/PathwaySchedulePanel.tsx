@@ -219,7 +219,7 @@ export function PathwaySchedulePanel({ patientId, applyId, onSaved }: PathwaySch
           onClick={handleSave}
           disabled={shift.isPending || plan.days === 0 || plan.blockers.length > 0}
         >
-          {shift.isPending ? "送信中..." : "変更する"}
+          {shift.isPending ? "送信中..." : "変更"}
         </button>
       </div>
     </div>

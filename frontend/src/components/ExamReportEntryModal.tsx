@@ -288,7 +288,7 @@ export function ExamReportEntry({
           {report && (
             <div className="exam-report-entry__actions">
               <button type="button" disabled={remove.isPending} onClick={handleDelete}>
-                {`${labels.report}を削除`}
+                {`${labels.report}削除`}
               </button>
             </div>
           )}

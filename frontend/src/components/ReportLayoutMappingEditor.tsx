@@ -167,7 +167,7 @@ export function ReportLayoutMappingEditor({
           </div>
         ))}
         <button type="button" onClick={() => update([...rule.show, ""])}>
-          ID を追加
+          ID 追加
         </button>
       </div>
     );
@@ -269,7 +269,7 @@ export function ReportLayoutMappingEditor({
               className="mapping-editor__add"
               onClick={() => updateRules([...rules, { kind: "value", linkId: "", tlfId: "" }])}
             >
-              ルールを追加
+              ルール追加
             </button>
           </>
         ) : (

@@ -319,7 +319,7 @@ export function PractitionerForm({
       {!partner && (
         <fieldset className="practitioner-form__role">
           <legend>所属診療科</legend>
-          {organizationId ? (
+          {organizationId && (
             <>
               <div className="practitioner-form__department-add">
                 <select
@@ -342,11 +342,7 @@ export function PractitionerForm({
                   追加
                 </button>
               </div>
-              {values.departments.length === 0 ? (
-                <p className="practitioner-form__login-hint">
-                  診療科は未選択です。複数選べます(1つが既定診療科になります)。
-                </p>
-              ) : (
+              {values.departments.length > 0 && (
                 <ul className="practitioner-form__department-list">
                   {values.departments.map((department) => (
                     <li key={department.organizationId}>
@@ -373,10 +369,6 @@ export function PractitionerForm({
                 </ul>
               )}
             </>
-          ) : (
-            <p className="practitioner-form__login-hint">
-              先に所属医療機関を選ぶと、その医療機関の診療科を追加できます。
-            </p>
           )}
         </fieldset>
       )}

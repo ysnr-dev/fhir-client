@@ -224,7 +224,7 @@ export function TransfusionPerformModal({
           <div className="lab-order-item__section-head">
             <h3>輸血したバッグ *</h3>
             <button type="button" onClick={addBag}>
-              バッグを追加
+              バッグ追加
             </button>
           </div>
           <ul className="transfusion-order__products">
@@ -241,7 +241,7 @@ export function TransfusionPerformModal({
               />
             ))}
             {values.bags.length === 0 && (
-              <li className="order-select__muted">「バッグを追加」から入れてください。</li>
+              <li className="order-select__muted">「バッグ追加」から入れてください。</li>
             )}
           </ul>
         </section>
@@ -299,7 +299,7 @@ export function TransfusionPerformModal({
 
         <div className="lab-order-item__actions">
           <button type="submit" disabled={register.isPending}>
-            {register.isPending ? "保存中..." : "実施を登録"}
+            {register.isPending ? "保存中..." : "実施登録"}
           </button>
         </div>
       </form>

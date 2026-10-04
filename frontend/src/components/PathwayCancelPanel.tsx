@@ -149,7 +149,7 @@ export function PathwayCancelPanel({ patientId, applyId, phaseKey, onCancelled }
           onClick={handleCancel}
           disabled={running || plan.blockers.length > 0}
         >
-          {running && progress ? `取り消し中...(オーダー ${progress.done} / ${progress.total})` : "取り消す"}
+          {running && progress ? `取り消し中...(オーダー ${progress.done} / ${progress.total})` : "取消"}
         </button>
       </div>
     </div>

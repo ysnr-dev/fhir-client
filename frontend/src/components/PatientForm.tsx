@@ -323,7 +323,7 @@ export function PatientForm({
         ))}
         <div className="patient-fields__row">
           <button type="button" onClick={addContact}>
-            連絡先を追加
+            連絡先追加
           </button>
         </div>
       </fieldset>
@@ -337,10 +337,10 @@ export function PatientForm({
             <input type="text" value={values.generalPractitionerName} readOnly />
           </label>
           <button type="button" onClick={() => setOpenModal("organization")}>
-            医療機関から選ぶ
+            医療機関選択
           </button>
           <button type="button" onClick={() => setOpenModal("practitioner")}>
-            医師から選ぶ
+            医師選択
           </button>
           {values.generalPractitionerRef && (
             <button

@@ -256,7 +256,7 @@ export function KarteMedicationHistoryTab({ patientId, view, onViewChange, onOpe
           ))}
         </div>
         <button type="button" onClick={() => updateView({ ...parsed, fullscreen: !fullscreen })}>
-          {fullscreen ? "全画面を終了" : "全画面"}
+          {fullscreen ? "全画面終了" : "全画面"}
         </button>
       </div>
 

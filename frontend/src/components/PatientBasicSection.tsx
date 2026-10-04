@@ -13,7 +13,7 @@ import { ErrorBanner } from "./ErrorBanner";
 /**
  * プロファイルタブの「基本」区画。カルテを開いたまま連絡先やかかりつけ医を
  * 確かめられるようにするための区画で、ここは読み取り専用。
- * 「患者情報を編集」は患者編集画面へ遷移せず、注意の登録・編集と同じく
+ * 「患者情報編集」は患者編集画面へ遷移せず、注意の登録・編集と同じく
  * タブの中で開く(カルテを見ているところから離れないため)。
  */
 export function PatientBasicSection({
@@ -34,7 +34,7 @@ export function PatientBasicSection({
         <h3>基本情報</h3>
         <div className="karte-tabpanel__actions">
           <button type="button" onClick={onEdit}>
-            患者情報を編集
+            患者情報編集
           </button>
         </div>
       </div>

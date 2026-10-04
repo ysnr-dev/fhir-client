@@ -309,7 +309,7 @@ export function InjectionPerformModal({
 
         <div className="lab-order-item__actions">
           <button type="submit" disabled={register.isPending}>
-            {register.isPending ? "保存中..." : "実施を登録"}
+            {register.isPending ? "保存中..." : "実施登録"}
           </button>
         </div>
       </form>

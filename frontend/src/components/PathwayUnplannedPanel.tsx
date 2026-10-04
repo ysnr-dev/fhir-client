@@ -415,7 +415,7 @@ function UnplannedForm({
 
       <div className="lab-order-item__actions">
         <button type="button" onClick={handleSave} disabled={add.isPending}>
-          {add.isPending ? "追加中..." : orderCount > 0 ? `追加する(オーダー ${orderCount} 件)` : "追加する"}
+          {add.isPending ? "追加中..." : orderCount > 0 ? `追加(オーダー ${orderCount} 件)` : "追加"}
         </button>
       </div>
     </div>

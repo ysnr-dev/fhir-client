@@ -119,7 +119,7 @@ export function WardMapEditorProperties({
             )}
             {canArrange && (
               <button type="button" onClick={onArrange}>
-                ベッドを整列
+                ベッド整列
               </button>
             )}
             <button type="button" onClick={onRemove}>
@@ -188,7 +188,7 @@ export function WardMapEditorProperties({
             )}
             {single.type === "room" && (
               <button type="button" onClick={onArrange}>
-                ベッドを整列
+                ベッド整列
               </button>
             )}
             <button type="button" onClick={onRemove}>

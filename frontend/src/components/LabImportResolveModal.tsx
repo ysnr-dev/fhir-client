@@ -84,7 +84,7 @@ export function LabImportResolveModal({ row, onClose }: Props) {
 
         <div className="lab-import-resolve__selected">
           <button type="button" onClick={() => setSearching(true)}>
-            結果項目を探す
+            検索
           </button>
           {selected && (
             <span>

@@ -41,7 +41,7 @@ export function RadItemLayoutPage() {
         <h1>放射線オーダーレイアウト</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setCreating(true)}>
-            レイアウトを追加
+            レイアウト追加
           </button>
         </div>
       </div>
@@ -356,7 +356,7 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
   const [labelText, setLabelText] = useState("");
   const [searching, setSearching] = useState(false);
   // 目当ての項目が分かっているときはその場で置けるよう、打った語を名称・モダリティ・
-  // 部位のどれにも当てる。一覧を見ながら探すときは「項目を選択」の検索モーダルを使う。
+  // 部位のどれにも当てる。一覧を見ながら探すときは「項目選択」の検索モーダルを使う。
   const [query, setQuery] = useState("");
   const hasQuery = query.trim().length > 0;
   const candidates = useRadItemSearch({ keyword: query }, 1, hasQuery);
@@ -469,7 +469,7 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
               />
             </label>
             <button type="button" onClick={() => setSearching(true)}>
-              項目を選択
+              項目選択
             </button>
           </div>
           {hasQuery && (

@@ -24,7 +24,7 @@ import type { RadiotherapySlot } from "./RadiotherapyCalendar";
 // 空き枠から始まるのは新しいオーダーではなく**既にあるコースの日程**。手術カレンダーの
 // 「未確定の手術を格子に落として日程を確定する」に当たる。
 //
-// - 予定を組む … 残りの回数ぶんを、この枠(装置・開始時刻・所要時間・開始日)で一括登録する
+// - 予定登録 … 残りの回数ぶんを、この枠(装置・開始時刻・所要時間・開始日)で一括登録する
 // - 1 回だけ追加 … 次の回をこの枠に 1 件だけ入れる(振替・飛んだ日の埋め合わせ)
 
 /** 掴んだ枠を一括登録の初期値にする。 */
@@ -44,7 +44,7 @@ interface Props {
   slot: RadiotherapySlot;
   /** 進行中の治療コース。予定を足せるもの・足せないものに、ここで分ける。 */
   courses: { row: RadiotherapyWorklistRow; fractions: RadiotherapyFractionDisplay[] }[];
-  /** 「予定を組む」。一括登録を、この枠を初期値にして開く。 */
+  /** 「予定登録」。一括登録を、この枠を初期値にして開く。 */
   onPlan: (row: RadiotherapyWorklistRow) => void;
   onClose: () => void;
 }
@@ -141,7 +141,7 @@ export function RadiotherapySlotModal({ slot, courses, onPlan, onClose }: Props)
                     </td>
                     <td className="radiotherapy-slot__actions">
                       <button type="button" onClick={() => onPlan(row)} disabled={register.isPending}>
-                        予定を組む
+                        予定登録
                       </button>
                       <button
                         type="button"

@@ -262,7 +262,7 @@ export default function DicomViewerModal({
           元に戻す
         </button>
         <button type="button" onClick={() => viewportRef.current?.clearAnnotations()}>
-          注釈を消去
+          注釈消去
         </button>
         <button type="button" onClick={() => viewportRef.current?.reset()}>
           リセット
@@ -271,7 +271,7 @@ export default function DicomViewerModal({
           タグ
         </button>
         <button type="button" disabled={!currentImage || capturing} onClick={handleCapture}>
-          画像を保存
+          画像保存
         </button>
         {savedNotice && (
           <span className="dicom-viewer__notice" role="status">

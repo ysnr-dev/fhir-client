@@ -60,7 +60,7 @@ export function SurgeryPerformModal({ row, onClose }: Props) {
   return (
     <SurgeryPerformInputModal
       row={row}
-      submitLabel="実施を登録"
+      submitLabel="実施登録"
       submitting={register.isPending}
       submitError={register.error}
       onSubmit={(values) =>

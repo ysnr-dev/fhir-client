@@ -359,7 +359,7 @@ export function PathoResultForm({
                 setValues((v) => ({ ...v, specimens: [emptyPathoResultSpecimen()] }))
               }
             >
-              ＋検体を手入力
+              ＋検体手入力
             </button>
           </p>
         ) : (
@@ -515,10 +515,10 @@ export function PathoResultForm({
               onChange={(e) => void handleFile(e)}
             />
             <button type="button" onClick={() => fileInputRef.current?.click()}>
-              ＋写真を添付
+              ＋写真添付
             </button>
             <button type="button" onClick={() => setSchemaPickOpen(true)}>
-              ＋切り出し図を描く
+              ＋切り出し図
             </button>
           </div>
         </div>

@@ -95,7 +95,7 @@ export function PopulateExpressionModal({
             )}
             {onSelect && (
               <button type="button" onClick={() => onSelect(selected.expression)}>
-                この式を使う
+                適用
               </button>
             )}
           </div>

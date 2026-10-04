@@ -262,7 +262,7 @@ export function ChartDefinitionEditorModal({
 
         <div className="chart-editor__add">
           <button type="button" onClick={() => setLabSearch(true)}>
-            検査項目を追加
+            検査項目追加
           </button>
           <select
             value=""
@@ -371,7 +371,7 @@ export function ChartDefinitionEditorModal({
 
         <div className="chart-editor__add">
           <button type="button" onClick={() => setDrugSearch(true)}>
-            薬剤を追加
+            薬剤追加
           </button>
         </div>
 

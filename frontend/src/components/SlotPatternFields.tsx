@@ -80,7 +80,7 @@ export function SlotPatternFields({ value, onChange, fixedCapacity }: SlotPatter
             </div>
           ))}
           <button type="button" onClick={addBlock}>
-            時間帯を追加
+            時間帯追加
           </button>
         </div>
       </div>

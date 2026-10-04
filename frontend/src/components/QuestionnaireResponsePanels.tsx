@@ -209,7 +209,7 @@ export function QuestionnaireResponseCreatePanel({
                 "複写取消"
               ) : (
                 <>
-                  前回値を複写
+                  前回値複写
                   <span className="qr-copy-previous__date">
                     {formatAuthored(latest.authored)}
                   </span>

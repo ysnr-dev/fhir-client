@@ -169,7 +169,7 @@ export function SchemaMasterPage() {
         <h1>シェーママスタ</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setSchemaEditing("new")}>
-            シェーマを追加
+            シェーマ追加
           </button>
         </div>
       </div>
@@ -197,7 +197,7 @@ export function SchemaMasterPage() {
               disabled={busy}
               onClick={() => setCategoryEditing({ mode: "new", parentId: null })}
             >
-              カテゴリを追加
+              カテゴリ追加
             </button>
           </div>
           <ul className="schema-master__cat-tree">

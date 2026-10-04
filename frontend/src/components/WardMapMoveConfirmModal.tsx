@@ -116,7 +116,7 @@ export function WardMapMoveConfirmModal({
 
         <div className="walk-in__actions">
           <button type="button" onClick={handleConfirm} disabled={busy || issues.length > 0 || moves.length === 0}>
-            {busy ? "登録中..." : `${moves.length} 件を確定`}
+            {busy ? "登録中..." : `${moves.length} 件確定`}
           </button>
           <button type="button" onClick={onClose} disabled={busy}>
             キャンセル

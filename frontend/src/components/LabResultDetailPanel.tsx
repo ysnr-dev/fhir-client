@@ -241,7 +241,7 @@ export function LabResultDetailPanel({
           )
         }
       >
-        リンクを取得
+        リンク取得
       </button>
       <button
         type="button"
@@ -253,7 +253,7 @@ export function LabResultDetailPanel({
         選択項目の変更履歴
       </button>
       <button type="button" className="row-menu__item" onClick={() => setJsonOpen(true)}>
-        FHIR JSON を表示
+        FHIR JSON 表示
       </button>
     </RowMenu>
   );

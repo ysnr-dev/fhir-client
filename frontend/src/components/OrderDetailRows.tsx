@@ -27,7 +27,7 @@ export function RegisteredAtRow({ authoredOn }: { authoredOn: string | undefined
  * - 代行入力 … 登録が代行(入力者 ≠ 指示医師)だったとき。入力者と指示医師
  * - 最終更新 … 編集があったとき。最後に編集した人と日時
  * - 承認     … 代行の活動があるとき。承認済なら承認した医師と日時、未承認なら
- *              指示医師本人にだけ「承認する」ボタン(登録と編集の承認待ちはまとめて承認する)
+ *              指示医師本人にだけ「承認」ボタン(登録と編集の承認待ちはまとめて承認する)
  */
 export function EnteredByRow({ serviceRequestId }: { serviceRequestId: string | undefined }) {
   const provenance = useOrderProvenance(serviceRequestId);
@@ -67,7 +67,7 @@ export function EnteredByRow({ serviceRequestId }: { serviceRequestId: string | 
                     disabled={approve.isPending}
                     onClick={() => approve.mutate(pending.map((p) => p.id ?? ""))}
                   >
-                    承認する
+                    承認
                   </button>
                 )}
               </span>

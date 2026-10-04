@@ -152,7 +152,7 @@ export function DischargeSummaryForm({
           <legend>内容</legend>
           <div className="discharge-summary__tools">
             <button type="button" onClick={recollect} disabled={!sources}>
-              下書きを集め直す
+              再収集
             </button>
           </div>
           {SUMMARY_SECTIONS.map((def) => (

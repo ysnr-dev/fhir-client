@@ -119,7 +119,7 @@ export function DpcForm1Form({
 
   /**
    * いつも出しておくレコード。必須のものに加えて、併存症・続発症・手術は「ある場合に入力」
-   * でも毎回確かめる項目なので、行が無くても見出しと「行を追加」を出す。
+   * でも毎回確かめる項目なので、行が無くても見出しと「行追加」を出す。
    */
   const alwaysShown = (def: Dpc1RecordDef): boolean =>
     dpc1RecordRequired(def, ctx) || Boolean(def.repeat && def.custom);
@@ -252,7 +252,7 @@ export function DpcForm1Form({
                           className="rp-card__compact-button"
                           onClick={copyMainDiagnosis}
                         >
-                          入院契機・医療資源に写す
+                          入院契機・医療資源へ複写
                         </button>
                       )}
                       {def.repeat && rows.length < def.repeat.max && (
@@ -261,7 +261,7 @@ export function DpcForm1Form({
                           className="rp-card__compact-button"
                           onClick={() => setRows(def.code, [...rows, emptyDpc1Row()])}
                         >
-                          + 行を追加
+                          + 行追加
                         </button>
                       )}
                       {!alwaysShown(def) && !def.repeat && (

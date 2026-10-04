@@ -256,8 +256,13 @@ export function RegimenDetailView({
       {(active || held) && (
         <div className="lab-order-item__actions">
           {active && (
-            <button type="button" onClick={onAddCycle} disabled={reachedPlanned}>
-              第 {next.cycle} クールを登録
+            <button
+              type="button"
+              onClick={onAddCycle}
+              disabled={reachedPlanned}
+              title={reachedPlanned ? "予定クール数まで登録済み" : undefined}
+            >
+              第 {next.cycle} クール登録
             </button>
           )}
           {active ? (
@@ -270,23 +275,16 @@ export function RegimenDetailView({
             </button>
           )}
           <button type="button" onClick={onEditHeader}>
-            適用を編集
+            適用編集
           </button>
           <button type="button" onClick={handleComplete} disabled={updateStatus.isPending}>
-            完了にする
+            完了
           </button>
           <button type="button" onClick={() => setRevoking(true)} disabled={updateStatus.isPending}>
-            レジメンを中止
+            レジメン中止
           </button>
         </div>
       )}
-      {reachedPlanned && active && (
-        <p className="injection-scope__note">
-          予定クール数({application.plannedCycles})まで登録済みです。すべて実施したら「完了にする」で閉じます。
-          続ける場合は「適用を編集」で予定クール数を増やします。
-        </p>
-      )}
-      {held && <p className="injection-scope__note">休止中は次クールを登録できません。登録済みの投与日はそのまま残ります。</p>}
 
       {revoking && (
         <RegimenRevokeModal

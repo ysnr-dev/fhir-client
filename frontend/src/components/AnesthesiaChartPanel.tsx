@@ -276,7 +276,7 @@ function ChartBody({ data, patientId, write, onFinalize, onReopen, onCancel }: C
       <div className="anes-chart__footer">
         {readOnly ? (
           <button type="button" onClick={onReopen} disabled={write.isPending}>
-            再開(確定を解除)
+            再開(確定解除)
           </button>
         ) : (
           <>
@@ -863,7 +863,7 @@ function DrugsSection({ data, readOnly, onAdd, onFinish, onDelete }: DrugsSectio
 
       {!readOnly && !draft && (
         <button type="button" onClick={() => setSearching(true)}>
-          薬剤を追加
+          薬剤追加
         </button>
       )}
 

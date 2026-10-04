@@ -439,7 +439,7 @@ export function RegimenMoveModal({ patientId, from, todays, following, to, onClo
         </button>
         {movableFollowing.length > 0 && (
           <button type="button" onClick={() => run(true)} disabled={move.isPending}>
-            {`この日以降 ${movableToday.length + movableFollowing.length} 件を移動`}
+            {`この日以降 ${movableToday.length + movableFollowing.length} 件移動`}
           </button>
         )}
       </div>
@@ -504,7 +504,7 @@ export function RegimenRevokeModal({ application, header, orders, onClose, onDon
           キャンセル
         </button>
         <button type="button" onClick={run} disabled={revoke.isPending}>
-          中止する
+          中止
         </button>
       </div>
     </Modal>
@@ -637,9 +637,6 @@ export function RegimenHeaderPanel({
           </label>
         </div>
       </fieldset>
-      <p className="injection-scope__note">
-        入外区分は次に登録するクールから使います。登録済みの投与日はそのままです。
-      </p>
 
       <div className="lab-order-item__actions">
         <button type="button" onClick={handleSubmit} disabled={update.isPending}>

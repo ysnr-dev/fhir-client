@@ -51,10 +51,10 @@ export function PatientBodySection({
         <h3>身体</h3>
         <div className="karte-tabpanel__actions">
           <button type="button" onClick={onEditBloodType}>
-            {summary ? "血液型を編集" : "血液型を登録"}
+            {summary ? "血液型編集" : "血液型登録"}
           </button>
           <button type="button" onClick={onEditPregnancy}>
-            {pregnancySummary ? "妊娠・授乳を編集" : "妊娠・授乳を登録"}
+            {pregnancySummary ? "妊娠・授乳編集" : "妊娠・授乳登録"}
           </button>
         </div>
       </div>

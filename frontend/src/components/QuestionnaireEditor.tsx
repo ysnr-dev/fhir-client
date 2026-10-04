@@ -200,11 +200,6 @@ export function QuestionnaireEditor({
 
         <fieldset id="qe-section-observation" className="qe-section">
           <legend>回答から Observation を生成</legend>
-          <p className="qe-hint">
-            有効にすると、項目コード(各項目の「詳細設定 &gt; 項目コード」)を設定した設問の回答が
-            Observation として保存され、検査結果と同じ構造化データになります。回答と同時に
-            作られ、回答を編集・削除すると作り直し・削除されます。
-          </p>
           <div className="qe-meta__grid">
             <label className="qe-item__checkbox">
               <input
@@ -233,9 +228,6 @@ export function QuestionnaireEditor({
 
         <fieldset id="qe-section-variables" className="qe-section">
           <legend>変数(FHIRPath)</legend>
-          {values.variables.length === 0 && (
-            <p className="qe-hint">計算式から %変数名 で参照できる変数を定義できます。</p>
-          )}
           {values.variables.map((variable) => (
             <div className="qe-variable__row" key={variable.id}>
               <input
@@ -270,7 +262,7 @@ export function QuestionnaireEditor({
             </div>
           ))}
           <button type="button" onClick={() => update("variables", [...values.variables, newVariable()])}>
-            + 変数を追加
+            + 変数追加
           </button>
         </fieldset>
 
@@ -290,7 +282,7 @@ export function QuestionnaireEditor({
             />
           ))}
           <button type="button" className="qe-add-item" onClick={() => handleAppendChild(null)}>
-            + 項目を追加
+            + 項目追加
           </button>
         </fieldset>
 

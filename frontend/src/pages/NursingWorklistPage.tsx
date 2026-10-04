@@ -170,7 +170,7 @@ export function NursingWorklistPage() {
   }, [wardId, wardOptions.wards]);
 
   // 病棟や日付が変わると行がまるごと入れ替わる。前の病棟の id を選んだまま
-  // 「選択した N 件を指示受け」を押せてしまうので、選択を捨てる。
+  // 「N 件指示受け」を押せてしまうので、選択を捨てる。
   useEffect(() => setSelected(new Set()), [wardId, date]);
 
   const allRows = useMemo(() => worklist.data?.rows ?? [], [worklist.data]);
@@ -434,7 +434,7 @@ export function NursingWorklistPage() {
                 onClick={() => handleAccept(selectedRows)}
                 title={canAccept ? undefined : "医療従事者に紐づくアカウントでログインしてください"}
               >
-                選択した {selectedRows.length} 件を指示受け
+                {selectedRows.length} 件指示受け
               </button>
               <button
                 type="button"
@@ -688,7 +688,7 @@ interface PatientGroupProps {
   rowProps: (key: string | undefined, className?: string) => ComponentProps<"tr">;
 }
 
-// 患者 1 人ぶん。見出し行に病室・氏名・未指示受け件数と「この患者を指示受け」を置く。
+// 患者 1 人ぶん。見出し行に病室・氏名・未指示受け件数と「指示受け」を置く。
 function PatientGroup({
   group,
   view,

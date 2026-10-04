@@ -228,7 +228,7 @@ export function RadiotherapyPlanModal({
 
         <div className="prescription-form__actions">
           <button type="submit" disabled={register.isPending || rows.length === 0}>
-            {register.isPending ? "登録中..." : `${rows.length} 回ぶんを登録`}
+            {register.isPending ? "登録中..." : `${rows.length} 回ぶん登録`}
           </button>
         </div>
       </form>
@@ -366,7 +366,7 @@ export function RadiotherapyFractionCancelModal({
         </fieldset>
         <div className="prescription-form__actions">
           <button type="submit" disabled={markNotDone.isPending}>
-            {markNotDone.isPending ? "保存中..." : "中止にする"}
+            {markNotDone.isPending ? "保存中..." : "中止"}
           </button>
         </div>
       </form>

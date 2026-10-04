@@ -70,9 +70,6 @@ export function OrganizationForm({
           placeholder="1310000001"
         />
       </label>
-      <p className="organization-form__hint">
-        10桁の数字(都道府県2桁 + 点数表1桁 + 医療機関コード7桁)。未入力でも登録できます。
-      </p>
 
       <label>
         種別

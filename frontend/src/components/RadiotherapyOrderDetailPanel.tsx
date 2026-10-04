@@ -115,7 +115,7 @@ export function RadiotherapyOrderDetailPanel({
             {consult ? (
               onOpenConsult ? (
                 <button type="button" onClick={() => onOpenConsult(consult.id)}>
-                  {consult.display || "依頼を表示"}
+                  {consult.display || "依頼表示"}
                 </button>
               ) : (
                 consult.display || "あり"

@@ -101,7 +101,7 @@ export function LabResultImportDetailPage() {
             disabled={!batch || resolve.isPending}
             onClick={() => batch && resolve.mutate(batch.id)}
           >
-            保留行を引き当て直す
+            再引当
           </button>
           <button type="button" disabled={registering || groups.length === 0} onClick={handleRegisterAll}>
             {registering ? "登録中..." : "すべて登録"}

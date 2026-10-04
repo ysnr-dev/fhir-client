@@ -100,13 +100,13 @@ export function PathwayEventCard({
         <div className="pathway-event__tools">
           <RowMenu label={`病日 ${event.elapsedDays} の操作`}>
             <button type="button" className="row-menu__item" onClick={onCopy}>
-              この日を複製
+              複製
             </button>
             <button type="button" className="row-menu__item" onClick={onSplit}>
-              この日を分割
+              分割
             </button>
             <button type="button" className="row-menu__item row-menu__item--danger" onClick={onRemove}>
-              この日を削除
+              削除
             </button>
           </RowMenu>
         </div>

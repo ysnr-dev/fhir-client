@@ -136,7 +136,7 @@ export function LabOrderItemPage() {
         <h1>検査オーダー項目マスタ</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            項目を追加
+            項目追加
           </button>
         </div>
       </div>
@@ -758,7 +758,7 @@ function ResultItemsEditor({ orderItem }: ResultItemsEditorProps) {
           placeholder="対応づける結果項目を名称で検索"
         />
         <button type="button" onClick={() => setSearching(true)}>
-          一覧から選ぶ
+          選択
         </button>
         {!hasSameCode && (
           <button
@@ -766,7 +766,7 @@ function ResultItemsEditor({ orderItem }: ResultItemsEditorProps) {
             onClick={createSameCodeResultItem}
             disabled={resultItemMutations.create.isPending || mutations.create.isPending}
           >
-            同じコードで結果項目を作成
+            結果項目作成
           </button>
         )}
       </div>

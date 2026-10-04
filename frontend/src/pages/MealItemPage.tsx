@@ -74,7 +74,7 @@ export function MealItemPage() {
         <h1>食事オーダー項目マスタ(主食・副食形態)</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
-            項目を追加
+            項目追加
           </button>
         </div>
       </div>

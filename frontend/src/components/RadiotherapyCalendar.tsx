@@ -810,7 +810,7 @@ function FractionCard({
         )}
         <RowMenu label="この照射の操作" escapesClipping>
           <button type="button" className="row-menu__item" onClick={() => onView(entry)}>
-            コースを表示
+            コース表示
           </button>
           {fraction.planned && (
             <>
@@ -820,14 +820,14 @@ function FractionCard({
               {/* 照射しなかった回として残す(体調不良・休診など)。実施の入力とは別の操作で、
                   コースそのものの中止は右の一覧のカードから。 */}
               <button type="button" className="row-menu__item" onClick={() => onCancelFraction(entry)}>
-                この回を中止
+                この回中止
               </button>
               <button
                 type="button"
                 className="row-menu__item row-menu__item--danger"
                 onClick={() => onDeletePlanned(entry)}
               >
-                予定を削除
+                予定削除
               </button>
             </>
           )}
@@ -841,7 +841,7 @@ function FractionCard({
                 className="row-menu__item row-menu__item--danger"
                 onClick={() => onDeletePlanned(entry)}
               >
-                記録を削除
+                記録削除
               </button>
             </>
           )}

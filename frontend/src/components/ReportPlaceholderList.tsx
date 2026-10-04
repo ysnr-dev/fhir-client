@@ -13,7 +13,6 @@ export function ReportPlaceholderList({
 }) {
   const rows = questionnairePlaceholders(questionnaire);
   const hasCollision = rows.some((row) => row.collision);
-  const hasRepeat = rows.some((row) => row.inRepeatingGroup);
 
   return (
     <details className="placeholder-list">
@@ -69,14 +68,6 @@ export function ReportPlaceholderList({
           ))}
         </tbody>
       </table>
-
-      {hasRepeat && (
-        <p className="placeholder-list__note">
-          (繰り返し)の項目は 2 件目以降を <code>ID_2</code>, <code>ID_3</code> ...
-          の ID で配置します(レイアウトに置いた個数まで印字)。描き込み画像は
-          <code>ID_img_2</code> のように <code>_img</code> の後に付けます。
-        </p>
-      )}
     </details>
   );
 }

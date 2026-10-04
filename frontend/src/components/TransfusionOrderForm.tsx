@@ -418,7 +418,7 @@ export function TransfusionOrderForm({
           ))}
           <li className="transfusion-order__product-add">
             <button type="button" onClick={addProduct}>
-              ＋製剤を追加
+              ＋製剤追加
             </button>
           </li>
         </ul>

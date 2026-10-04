@@ -258,7 +258,7 @@ export function ConditionForm({
               )}
             </label>
             <button type="button" onClick={() => setModal({ kind: "disease" })}>
-              {values.disease ? "病名を変更" : "病名を選択"}
+              {values.disease ? "病名変更" : "病名選択"}
             </button>
           </div>
         )}

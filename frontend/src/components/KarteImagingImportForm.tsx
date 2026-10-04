@@ -177,10 +177,10 @@ export default function KarteImagingImportForm({
         <p>ここにファイル・フォルダ・ZIP をドロップ</p>
         <div className="karte-imaging-import__pickers">
           <button type="button" disabled={busy} onClick={() => fileInputRef.current?.click()}>
-            ファイルを選択
+            ファイル選択
           </button>
           <button type="button" disabled={busy} onClick={() => folderInputRef.current?.click()}>
-            フォルダを選択
+            フォルダ選択
           </button>
         </div>
         <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
@@ -263,7 +263,7 @@ export default function KarteImagingImportForm({
           </span>
         )}
         <button type="button" disabled={busy || selectedStudies.length === 0} onClick={handleSubmit}>
-          {failed.size > 0 ? `${targets.length} 枚を再送` : `${targets.length} 枚を取込`}
+          {failed.size > 0 ? `${targets.length} 枚再送` : `${targets.length} 枚取込`}
         </button>
       </div>
     </div>
