@@ -16,7 +16,9 @@ import {
   DEFAULT_APPOINTMENT_TYPE,
   appointmentTypeLabel,
   scheduleName,
+  scheduleSummary,
   serviceTypeCode,
+  slotDate,
   slotTime,
   toDateInput,
 } from "./scheduleHelpers";
@@ -409,6 +411,13 @@ export interface SlotSelection {
    * (先頭が開始、末尾が終了)。
    */
   slots: fhir4.Slot[];
+}
+
+/** 予約済みの枠の表示。「2026-08-19 09:00-10:00 CT枠(...)」。 */
+export function bookingLabel(selection: SlotSelection): string {
+  const first = selection.slots[0];
+  const last = selection.slots[selection.slots.length - 1];
+  return `${slotDate(first)} ${slotTime(first)}-${last.end.slice(11, 16)} ${scheduleSummary(selection.schedule)}`;
 }
 
 /**

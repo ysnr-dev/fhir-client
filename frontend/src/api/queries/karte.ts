@@ -15,7 +15,7 @@ import { PATHWAY_MARKER_CODE, PATHWAY_MARKER_SYSTEM } from "../../fhir/pathwayAp
 import { buildPathwayEvaluationCards, type PathwayEvaluationCard } from "../../fhir/pathwayKarteHelpers";
 import { EVALUATION_ITEM_SYSTEM } from "../../fhir/pathwayEvaluationHelpers";
 import { today } from "../../lib/dates";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { NURSING_ORDER_TYPE } from "../../fhir/nursingOrderHelpers";
 import { postBundle, searchResource } from "../fhirClient";
 import { fetchDistinctDates, resourcesOfType, searchAllPages } from "./core";

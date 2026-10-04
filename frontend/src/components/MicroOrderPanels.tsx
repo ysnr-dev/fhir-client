@@ -8,7 +8,7 @@ import {
   emptyMicroOrderForm,
   type MicroOrderFormValues,
 } from "../fhir/microOrderHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import { useMicroOrderInitialValues } from "../hooks/useMicroOrderInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
@@ -99,7 +99,7 @@ export function MicroOrderEditPanel({ patientId, srId, onSaved }: MicroOrderEdit
         patientId,
         serviceRequest,
         itemIds,
-        prescriptionRequester(serviceRequest),
+        orderRequester(serviceRequest),
       ),
       { onSuccess: onSaved },
     );

@@ -8,7 +8,7 @@ import {
   type LabResultFormValues,
   type LabResultSetting,
 } from "../fhir/labResultHelpers";
-import { departmentOf } from "../fhir/prescriptionHelpers";
+import { departmentOf } from "../fhir/orderHeader";
 import { useLabOrderResultLines } from "../hooks/useLabOrderResultLines";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultForm } from "./LabResultForm";

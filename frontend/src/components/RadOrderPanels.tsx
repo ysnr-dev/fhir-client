@@ -8,7 +8,7 @@ import {
 } from "../api/queries";
 import type { SlotSelection } from "../fhir/appointmentHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import {
   buildDoRadOrderForm,
   buildRadOrderBundle,
@@ -157,7 +157,7 @@ export function RadOrderEditPanel({ patientId, srId, onSaved }: RadOrderEditPane
           serviceRequest,
           itemIds,
           responseIds,
-          prescriptionRequester(serviceRequest),
+          orderRequester(serviceRequest),
         ),
         booking: selection && appointment ? { appointment, slots: selection.slots } : null,
       },

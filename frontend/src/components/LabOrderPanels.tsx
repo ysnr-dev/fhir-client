@@ -8,7 +8,7 @@ import {
   emptyLabOrderForm,
   type LabOrderFormValues,
 } from "../fhir/labOrderHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import { useLabOrderInitialValues } from "../hooks/useLabOrderInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
@@ -100,7 +100,7 @@ export function LabOrderEditPanel({ patientId, srId, onSaved }: LabOrderEditPane
         patientId,
         serviceRequest,
         itemIds,
-        prescriptionRequester(serviceRequest),
+        orderRequester(serviceRequest),
       ),
       { onSuccess: onSaved },
     );

@@ -29,6 +29,7 @@ import { useLabResultPerformerDefaults } from "../hooks/useLabResultPerformerDef
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultItemSearchModal } from "./LabResultItemSearchModal";
 import { TrashIcon } from "./icons/TrashIcon";
+import { NoteIcon } from "./icons/NoteIcon";
 
 interface LabResultFormProps {
   initialValues?: LabResultFormValues;
@@ -49,20 +50,6 @@ interface LabResultFormProps {
 }
 
 type ModalState = { lineIndex: number } | null;
-
-function NoteIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 3.5h11v7.5h-6.2L4.5 13.5V11h-2z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 /**
  * オーダーから展開した項目を、いま入力中の行に反映する。

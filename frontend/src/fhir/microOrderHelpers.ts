@@ -15,12 +15,11 @@ import {
 import { toFhirDateTime } from "../lib/dates";
 
 export { PRIORITY_OPTIONS };
-import { labOrderItemRequests } from "./labOrderHelpers";
+import { containedSpecimenOf, labOrderItemRequests } from "./labOrderHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
   SETTING_SYSTEM,
-  applyOrderContext,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -188,7 +187,6 @@ export function emptyMicroOrderForm(
     items: [],
   };
 }
-
 
 export function lateralityDisplay(code: string): string {
   return code ? displayOf(LATERALITY_OPTIONS, code) : "";
@@ -582,17 +580,6 @@ export function summarizeMicroOrder(sr: fhir4.ServiceRequest): MicroOrderSummary
     priorityDisplay: priorityDisplay(sr.priority),
     urgent: sr.priority === "urgent",
   };
-}
-
-function containedSpecimenOf(request: fhir4.ServiceRequest): fhir4.Specimen | undefined {
-  const reference = request.specimen?.[0]?.reference;
-  if (!reference?.startsWith("#")) return undefined;
-
-  const id = reference.slice(1);
-  return (request.contained ?? []).find(
-    (resource): resource is fhir4.Specimen =>
-      resource.resourceType === "Specimen" && resource.id === id,
-  );
 }
 
 /** 明細が検体グループ(contained Specimen を持つ)かどうか。検査項目との振り分けに使う。 */

@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EXAM_REPORT_CONFIGS, isExamReport } from "../../fhir/examReportHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import {
   buildPhysioOrderDeleteBundle,
   isPhysioServiceRequest,

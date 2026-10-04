@@ -14,10 +14,9 @@ import {
   type InjectionRpValues,
 } from "./injectionHelpers";
 import type { InjectionTaskStatus } from "./injectionTaskHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext, orderRequester, type OrderAttribution } from "./orderHeader";
 import {
-  ORDER_TYPE_SYSTEM,
   SETTING_SYSTEM,
-  applyOrderContext,
   buildPrescriptionBundle,
   buildPrescriptionUpdateBundle,
   MEDICINE_CODE_SYSTEM,
@@ -26,9 +25,7 @@ import {
   identifierValue,
   parsePrescriptionForm,
   prescriptionCategoryOf,
-  prescriptionRequester,
   type MedicineLineValues,
-  type OrderAttribution,
   type PrescriptionFormValues,
   type PrescriptionSetting,
   type RpValues,
@@ -1283,7 +1280,7 @@ export function buildRegimenMoveBundle(
   const entries = orders.flatMap((order) => {
     const sr = order.serviceRequest;
     const newDate = addDays(order.date, deltaDays);
-    const requester = prescriptionRequester(sr);
+    const requester = orderRequester(sr);
     const mrIds = order.medicationRequests.map((mr) => mr.id).filter((id): id is string => Boolean(id));
     const ref = stampRefOf(order.ref);
     if (order.kind === "injection") {

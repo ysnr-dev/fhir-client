@@ -5,8 +5,8 @@ import {
   observationIdsFromReport,
   settingCategory,
 } from "./labResultHelpers";
-import { categoryCoding, codingBySystem } from "./shared";
-import { departmentExtension, departmentOf } from "./prescriptionHelpers";
+import { categoryCoding, type CodeOption, codingBySystem, displayOf, LOINC_SYSTEM } from "./shared";
+import { departmentExtension, departmentOf } from "./orderHeader";
 import type { SchemaImageRef } from "./questionnaireResponseHelpers";
 import { binaryIdFromAttachment, imageBinaryEntry } from "./schemaImage";
 import {
@@ -44,7 +44,6 @@ import {
 
 // ---- コードシステム ----
 
-const LOINC_SYSTEM = "http://loinc.org";
 // JAHIS 病理診断レポート構造化記述規約 のセクションコード(すべて LOINC)。
 const LOINC_PATHO_REPORT_CODE = "11526-1"; // Pathology study(一般病理診断レポート)
 const CODE_GROSS = "22634-0"; // Pathology report gross observation(肉眼所見)
@@ -75,10 +74,7 @@ const SPECIMEN_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Spec
 
 // ---- 選択肢 ----
 
-export interface CodeOption {
-  code: string;
-  display: string;
-}
+export type { CodeOption };
 
 /**
  * 報告区分。preliminary/final はユーザーが選び、確定後の編集保存で amended に遷移する
@@ -105,12 +101,8 @@ export const CYTO_JUDGEMENT_OPTIONS: CodeOption[] = [
   { code: "unsatisfactory", display: "検体不適正" },
 ];
 
-export function optionDisplay(options: CodeOption[], code: string): string {
-  return options.find((o) => o.code === code)?.display ?? code;
-}
-
 export function cytoJudgementDisplay(code: string): string {
-  return code ? optionDisplay(CYTO_JUDGEMENT_OPTIONS, code) : "";
+  return code ? displayOf(CYTO_JUDGEMENT_OPTIONS, code) : "";
 }
 
 /** レポートに添える画像の種別。表示ではこの順に並べる。 */
@@ -122,7 +114,7 @@ export const REPORT_IMAGE_KIND_OPTIONS: CodeOption[] = [
 ];
 
 export function reportImageKindDisplay(code: string): string {
-  return code ? optionDisplay(REPORT_IMAGE_KIND_OPTIONS, code) : "";
+  return code ? displayOf(REPORT_IMAGE_KIND_OPTIONS, code) : "";
 }
 
 // ---- フォーム値 ----

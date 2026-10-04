@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { searchResource } from "../api/fhirClient";
 import { fetchMedicinesByCodes } from "../api/masterClient";
 import { INJECTION_ORDER_TYPE } from "../fhir/injectionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../fhir/orderHeader";
 import {
   MEDICINE_CODE_SYSTEM,
-  ORDER_TYPE_SYSTEM,
   PRESCRIPTION_CATEGORY_SYSTEM,
   codingBySystem,
 } from "../fhir/prescriptionHelpers";

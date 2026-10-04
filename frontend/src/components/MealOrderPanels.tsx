@@ -8,7 +8,7 @@ import {
 } from "../api/queries";
 import { serviceRequestsOf } from "../fhir/labOrderHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import {
   buildDoMealOrderForm,
@@ -140,7 +140,7 @@ export function MealOrderEditPanel({ patientId, srId, onSaved }: MealOrderEditPa
         values,
         patientId,
         serviceRequest,
-        prescriptionRequester(serviceRequest),
+        orderRequester(serviceRequest),
       ),
       { onSuccess: onSaved },
     );

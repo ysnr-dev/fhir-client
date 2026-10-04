@@ -1,4 +1,4 @@
-import { departmentOf, wardOf } from "../fhir/prescriptionHelpers";
+import { departmentOf, wardOf } from "../fhir/orderHeader";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import {
   NURSING_ORDER_STATE_LABELS,

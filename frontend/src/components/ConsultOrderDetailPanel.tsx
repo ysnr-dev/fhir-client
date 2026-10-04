@@ -4,7 +4,7 @@ import {
   consultOrderProblem,
   summarizeConsultOrder,
 } from "../fhir/consultOrderHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 他科依頼の内容表示。カルテの詳細モーダルと部門一覧・回答モーダルから使う
@@ -52,7 +52,7 @@ export function ConsultOrderDetailPanel({
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <dt>回答</dt>
           <dd>{summary.replyId ? `回答済${summary.replierName ? ` | ${summary.replierName}` : ""}` : "未回答"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />

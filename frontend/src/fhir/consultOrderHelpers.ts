@@ -12,14 +12,8 @@ import {
   transactionBundle,
   withVersionLock,
 } from "./shared";
-import {
-  ORDER_TYPE_SYSTEM,
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
-  applyOrderContext,
-  type OrderAttribution,
-  type PrescriptionSetting,
-} from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
+import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
 
 // 他科依頼(コンサルテーション)オーダー(docs/consult-order-design.md)。
 //

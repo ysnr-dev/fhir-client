@@ -13,13 +13,8 @@ import {
   ABBREVIATION_SYSTEM,
   withVersionLock,
 } from "./shared";
-import {
-  ORDER_TYPE_SYSTEM,
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
-  applyOrderContext,
-  type PrescriptionSetting,
-} from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
+import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
 
 // 手術オーダー(申込)。他の同型オーダー(放射線・生理・内視鏡・処置)と同じく
 // ヘッダは ServiceRequest、明細(術式 1 件)も 1 件ずつ独立した ServiceRequest。

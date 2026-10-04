@@ -1,4 +1,5 @@
 import { today } from "../lib/dates";
+import { LOINC_SYSTEM } from "./shared";
 
 /**
  * 感染症(HBs 抗原・HCV 抗体・HIV など)。
@@ -15,7 +16,7 @@ import { today } from "../lib/dates";
  * 確認日の新しいものを採る。
  */
 
-const LOINC = "http://loinc.org";
+const LOINC = LOINC_SYSTEM;
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
 
 /** 手入力分の区分。検体検査の結果(laboratory)と混ざらないようにする。 */

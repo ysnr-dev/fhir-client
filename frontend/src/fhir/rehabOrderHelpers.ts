@@ -1,4 +1,4 @@
-import { today } from "../lib/dates";
+import { shortDate, today } from "../lib/dates";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   categoryCoding,
@@ -10,14 +10,8 @@ import {
   transactionBundle,
   withVersionLock,
 } from "./shared";
-import {
-  ORDER_TYPE_SYSTEM,
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
-  applyOrderContext,
-  type OrderAttribution,
-  type PrescriptionSetting,
-} from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
+import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
 
 // リハビリオーダー。食事オーダー(mealOrderHelpers.ts)と同じ「期間継続型」で、
 // 1 つのオーダーが数週間〜数か月続き、その間に実施が何度も積み上がる
@@ -478,12 +472,6 @@ export function rehabOrderTherapyTypes(sr: fhir4.ServiceRequest): RehabTherapyTy
 export function rehabOrderUnits(sr: fhir4.ServiceRequest): number | undefined {
   const value = sr.quantityQuantity?.value;
   return typeof value === "number" ? value : undefined;
-}
-
-/** 「8/29」形式の短い日付。 */
-function shortDate(date: string): string {
-  const [, month, day] = date.split("-");
-  return month && day ? `${Number(month)}/${Number(day)}` : date;
 }
 
 export interface RehabOrderSummary {

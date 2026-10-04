@@ -3,7 +3,7 @@
 // https://jaspehr.jp/wp-content/docs/full-ig_v1.0.0/site/index.html
 import { nowFhirDateTime } from "../lib/dates";
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
-import { departmentExtension, departmentOf, type DepartmentRef } from "./prescriptionHelpers";
+import { departmentExtension, departmentOf, type DepartmentRef } from "./orderHeader";
 import { annotationOf, binaryIdFromAttachment } from "./schemaImage";
 
 export const JASPEHR_QUESTIONNAIRE_RESPONSE_PROFILE_URL =
@@ -352,6 +352,17 @@ export interface TemplateBinding {
   responseId: string | null;
   // 直近のモーダル記入内容。保存済みで再編集していなければ null。
   draft: TemplateDraft | null;
+}
+
+/** オーダーの拡張(url)が参照している、保存済みのテンプレート回答の id。 */
+export function templateResponseIdOf(request: fhir4.ServiceRequest, url: string): string | null {
+  const reference = request.extension?.find((e) => e.url === url)?.valueReference?.reference;
+  return reference?.match(/^QuestionnaireResponse\/(.+)$/)?.[1] ?? null;
+}
+
+/** 保存済みの回答 id からの紐付け(記入内容は読み直すまで持たない)。 */
+export function templateBindingOf(responseId: string | null): TemplateBinding | null {
+  return responseId ? { responseId, draft: null } : null;
 }
 
 /** テンプレート名を見出しに付けた平文。単独の文書として見せる「平文表示」用。 */

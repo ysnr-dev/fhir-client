@@ -8,7 +8,7 @@ import {
   type NotificationRowBase,
 } from "./notificationHelpers";
 import { orderSetOf } from "./orderSetHelpers";
-import { orderContextSummary, prescriptionRequester } from "./prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "./orderHeader";
 import {
   isHeaderEntry,
   needsApproval,
@@ -88,7 +88,7 @@ function approvalTaskInputs(
   if (dayLabel) inputs.push({ type: { text: DAY_INPUT }, valueString: dayLabel });
 
   if (first) {
-    const context = orderContextSummary(prescriptionRequester(first));
+    const context = orderContextSummary(orderRequester(first));
     if (context) inputs.push({ type: { text: CONTEXT_INPUT }, valueString: context });
     const orderSet = orderSetOf(first);
     if (orderSet?.name) inputs.push({ type: { text: ORDER_SET_INPUT }, valueString: orderSet.name });

@@ -13,7 +13,7 @@ import {
   type MealTiming,
 } from "./mealOrderHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
-import { ORDER_TYPE_SYSTEM } from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import { codingBySystem } from "./shared";
 
 // 経過表の食事摂取量。

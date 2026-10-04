@@ -19,13 +19,12 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { PrescriptionForm } from "./PrescriptionForm";
 import type { ProblemRef } from "../fhir/conditionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import {
   buildDoPrescriptionForm,
   buildPrescriptionBundle,
   buildPrescriptionUpdateBundle,
   emptyPrescriptionForm,
-  prescriptionRequester,
-  withOrderWard,
   type PrescriptionFormValues,
 } from "../fhir/prescriptionHelpers";
 import { preserveRegimenStamp } from "../fhir/regimenOrderHelpers";
@@ -192,7 +191,7 @@ export function PrescriptionEditPanel({ patientId, srId, onSaved }: Prescription
     // 依頼科・依頼医師は登録時のものを引き継ぐ(編集した人・その時のヘッダーの選択で
     // 上書きしない)。診療記録の author と同じ考え方。
     const originalIds = mrs.map((mr) => mr.id).filter((id): id is string => Boolean(id));
-    const bundle = buildPrescriptionUpdateBundle(values, patientId, sr, originalIds, prescriptionRequester(sr));
+    const bundle = buildPrescriptionUpdateBundle(values, patientId, sr, originalIds, orderRequester(sr));
     // レジメンの内服の日オーダーなら、フォームが持たないレジメンの印を元のオーダーから写す
     // (注射の編集と同じ。写さないと化学療法の暦から消える)。
     updatePrescription.mutate(

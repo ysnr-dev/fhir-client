@@ -8,7 +8,7 @@ import {
   emptyConsultOrderForm,
   type ConsultOrderFormValues,
 } from "../fhir/consultOrderHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import { useConsultOrderInitialValues } from "../hooks/useConsultOrderInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
@@ -102,7 +102,7 @@ export function ConsultOrderEditPanel({ patientId, srId, onSaved }: ConsultOrder
         values,
         patientId,
         serviceRequest,
-        prescriptionRequester(serviceRequest),
+        orderRequester(serviceRequest),
       ),
       { onSuccess: onSaved },
     );

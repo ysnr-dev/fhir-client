@@ -5,14 +5,15 @@ import {
   type InjectionRpDisplay,
 } from "./injectionHelpers";
 import { buildInjectionTaskUpdate } from "./injectionTaskHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import {
   MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
-  ORDER_TYPE_SYSTEM,
   RP_NUMBER_SYSTEM,
   YJ_CODE_SYSTEM,
   identifierValue,
 } from "./prescriptionHelpers";
+import { conceptLabel, referenceIdOfType } from "./shared";
 
 // 注射の実施記録(施用)。輸血(transfusionResultHelpers)と同じ形で、実施 1 回を
 // Procedure のハブにし、薬剤ごとの MedicationAdministration をぶら下げる。
@@ -344,16 +345,6 @@ export function isInjectionProcedure(procedure: fhir4.Procedure): boolean {
   );
 }
 
-function referenceId(reference: string | undefined, resourceType: string): string {
-  return reference?.match(new RegExp(`^${resourceType}/(.+)$`))?.[1] ?? "";
-}
-
-function conceptLabel(concept: fhir4.CodeableConcept | undefined): string {
-  if (!concept) return "";
-  const coding = concept.coding?.find((c) => c.display) ?? concept.coding?.[0];
-  return concept.text || coding?.display || coding?.code || "";
-}
-
 /** 「YYYY-MM-DD HH:mm〜HH:mm」。日をまたぐときは終了側も日付ごと出す。 */
 function periodLabel(period: fhir4.Period | undefined): string {
   if (!period?.start) return "";
@@ -390,7 +381,7 @@ export function injectionPerformsByOrderId(
   for (const hub of hubs) {
     const hubId = hub.id ?? "";
     const children = administrations.filter((a) =>
-      (a.partOf ?? []).some((r) => referenceId(r.reference, "Procedure") === hubId),
+      (a.partOf ?? []).some((r) => referenceIdOfType(r.reference, "Procedure") === hubId),
     );
 
     const display: InjectionPerformDisplay = {
@@ -406,7 +397,7 @@ export function injectionPerformsByOrderId(
     };
 
     for (const basedOn of hub.basedOn ?? []) {
-      const orderId = referenceId(basedOn.reference, "ServiceRequest");
+      const orderId = referenceIdOfType(basedOn.reference, "ServiceRequest");
       if (!orderId) continue;
       const list = byOrderId.get(orderId);
       if (list) list.push(display);

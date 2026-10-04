@@ -1,7 +1,7 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderDay } from "../fhir/shared";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { schemaAnnotatedLines } from "../fhir/questionnaireResponseHelpers";
 import {
   bodySiteLabel,
@@ -55,7 +55,7 @@ export function RadOrderDetailPanel({
           <dt>至急区分</dt>
           <dd>{summary.priorityDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
           <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>

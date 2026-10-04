@@ -7,7 +7,7 @@ import {
   specimenGroupLabel,
   summarizeLabOrder,
 } from "../fhir/labOrderHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { orderDay } from "../fhir/shared";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
@@ -48,7 +48,7 @@ export function LabOrderDetailPanel({
           <dt>至急区分</dt>
           <dd>{summary.priorityDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <dt>検査コメント</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />

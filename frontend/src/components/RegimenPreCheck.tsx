@@ -7,8 +7,8 @@ import {
   REGIMEN_EMETIC_RISK_OPTIONS,
   REGIMEN_LAB_CATEGORY_OPTIONS,
   REGIMEN_PURPOSE_OPTIONS,
-  displayOfOption,
 } from "../fhir/regimenHelpers";
+import { displayOf } from "../fhir/shared";
 
 // 適用フォーム・次クール登録フォームの上に出す「読むための面」。レジメンマスタが
 // 持っている適応基準・中止基準・副作用は、投与量を決める前に医師が見るものなので、
@@ -55,7 +55,7 @@ export function RegimenLabCheck({
               <td>
                 {check.criterion.item_name}
                 <span className="lab-order-item__code">
-                  {displayOfOption(REGIMEN_LAB_CATEGORY_OPTIONS, check.criterion.category)}
+                  {displayOf(REGIMEN_LAB_CATEGORY_OPTIONS, check.criterion.category)}
                 </span>
               </td>
               <td>{check.range}</td>
@@ -97,8 +97,8 @@ export function RegimenInfoView({ regimen }: { regimen: RegimenDetail }) {
   const rows: { label: string; value: React.ReactNode }[] = [];
 
   const head = [
-    displayOfOption(REGIMEN_PURPOSE_OPTIONS, regimen.purpose),
-    regimen.emetic_risk ? `制吐リスク ${displayOfOption(REGIMEN_EMETIC_RISK_OPTIONS, regimen.emetic_risk)}` : "",
+    displayOf(REGIMEN_PURPOSE_OPTIONS, regimen.purpose),
+    regimen.emetic_risk ? `制吐リスク ${displayOf(REGIMEN_EMETIC_RISK_OPTIONS, regimen.emetic_risk)}` : "",
   ]
     .filter(Boolean)
     .join(" · ");

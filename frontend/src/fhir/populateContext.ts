@@ -36,12 +36,12 @@ import { groupByRp, splitPrescriptionDetailBundle, summarizeServiceRequest } fro
 import {
   BLOOD_PRESSURE,
   DIASTOLIC,
-  LOINC_SYSTEM,
   SYSTOLIC,
   VITAL_MEASURES,
   groupVitalEntries,
   vitalDisplayRows,
 } from "./vitalHelpers";
+import { LOINC_SYSTEM } from "./shared";
 
 export interface PopulateSources {
   patient: fhir4.Patient;

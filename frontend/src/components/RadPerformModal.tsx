@@ -33,7 +33,8 @@ import { MedicalProcedureSearchModal } from "./MedicalProcedureSearchModal";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
 import { RadMaterialSearchModal } from "./RadMaterialSearchModal";
-import { TrashIcon } from "./icons/TrashIcon";
+import { RemoveRowButton } from "./RemoveRowButton";
+import { replaceAt } from "../lib/arrays";
 
 // 放射線検査の実施入力。設計は docs/rad-result-design.md を参照。
 //
@@ -48,21 +49,6 @@ import { TrashIcon } from "./icons/TrashIcon";
 // そのまま「登録」で終われるようにしている。
 
 type Adding = "procedure" | "medicine" | "material" | null;
-
-/** 行を外すボタン。3 種の明細で同じ見た目・同じ意味なのでまとめる。 */
-function RemoveRowButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      className="rp-card__icon-button"
-      title="外す"
-      aria-label="外す"
-      onClick={onClick}
-    >
-      <TrashIcon />
-    </button>
-  );
-}
 
 interface Props {
   row: RadWorklistRow;
@@ -555,10 +541,6 @@ function pushDetail(lines: Lines, detail: RadDatasetDetail) {
       unitName: detail.resolved_unit_name ?? "",
     });
   }
-}
-
-function replaceAt<T>(list: T[], index: number, next: T): T[] {
-  return list.map((item, i) => (i === index ? next : item));
 }
 
 // 名称とコードだけを並べる表。削除ボタンの付け方を手技料と揃えるために切り出す。

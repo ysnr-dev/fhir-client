@@ -1,12 +1,11 @@
 import type { RxWorklistRow } from "../api/queries";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import { displayName } from "../fhir/patientHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
   groupByRp,
   hasDoseDays,
-  orderContextSummary,
   prescriptionComment,
-  prescriptionRequester,
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
@@ -37,7 +36,7 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
     summary.date,
     summary.settingDisplay,
     summary.categoryDisplay,
-    orderContextSummary(prescriptionRequester(order)),
+    orderContextSummary(orderRequester(order)),
     regimen ? `${regimen.name} ${cycleDayLabel(regimen)}` : "",
   ].filter(Boolean);
 

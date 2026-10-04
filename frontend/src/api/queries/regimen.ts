@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orderDay, referenceId } from "../../fhir/shared";
 import { buildInjectionTaskUpdate, injectionTasksByOrderId, type InjectionTaskStatus } from "../../fhir/injectionTaskHelpers";
 import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { buildRxTaskUpdate, rxTasksByOrderId, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
 import {
   buildRegimenMoveBundle,

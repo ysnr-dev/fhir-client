@@ -17,16 +17,15 @@ import type { ProblemRef } from "../fhir/conditionHelpers";
 import { calculateAge } from "../fhir/patientHelpers";
 import { checkLabCriteria, compareWeight, summarizeLabChecks } from "../fhir/regimenCheckHelpers";
 import { CATEGORY_OPTIONS as INJECTION_CATEGORY_OPTIONS } from "../fhir/injectionHelpers";
+import { withOrderWard } from "../fhir/orderHeader";
 import {
   CATEGORY_OPTIONS as PRESCRIPTION_CATEGORY_OPTIONS,
-  withOrderWard,
   type PrescriptionSetting,
 } from "../fhir/prescriptionHelpers";
 import {
   REGIMEN_DRUG_ROLE_OPTIONS,
   REGIMEN_PURPOSE_OPTIONS,
   REGIMEN_STEP_USAGE_TYPE_OPTIONS,
-  displayOfOption,
   doseBasisLabel,
 } from "../fhir/regimenHelpers";
 import {
@@ -53,7 +52,7 @@ import {
   type RegimenApplyValues,
   type RegimenDrugPlan,
 } from "../fhir/regimenOrderHelpers";
-import { SETTING_OPTIONS } from "../fhir/shared";
+import { displayOf, SETTING_OPTIONS } from "../fhir/shared";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useProblemOptions } from "../hooks/useProblemOptions";
@@ -126,7 +125,7 @@ function RegimenPicker({ onSelect }: { onSelect: (regimenId: number) => void }) 
               <span className="regimen-picker__meta">
                 {[
                   regimen.department_name,
-                  displayOfOption(REGIMEN_PURPOSE_OPTIONS, regimen.purpose),
+                  displayOf(REGIMEN_PURPOSE_OPTIONS, regimen.purpose),
                   regimen.cycle_days > 0 ? `${regimen.cycle_days} 日/クール` : "",
                   regimen.planned_cycles !== null ? `${regimen.planned_cycles} クール` : "",
                 ]
@@ -873,7 +872,7 @@ function RegimenApplyForm({
               <span className="regimen-apply__step-meta">
                 {[
                   `Day ${plan.step.days.join(", ")}`,
-                  displayOfOption(REGIMEN_STEP_USAGE_TYPE_OPTIONS, plan.step.usage_type),
+                  displayOf(REGIMEN_STEP_USAGE_TYPE_OPTIONS, plan.step.usage_type),
                   plan.step.usage_type === "drip" && plan.step.infusion_minutes ? `${plan.step.infusion_minutes} 分` : "",
                   plan.step.usage_type === "oral" && plan.step.usage ? plan.step.usage.usage_name : "",
                   plan.step.usage_type === "oral" && plan.step.dose_days ? `${plan.step.dose_days} 日分` : "",
@@ -896,7 +895,7 @@ function RegimenApplyForm({
               <tbody>
                 {plan.drugs.map((d, drugIndex) => (
                   <tr key={d.drug.id}>
-                    <td>{displayOfOption(REGIMEN_DRUG_ROLE_OPTIONS, d.drug.drug_role)}</td>
+                    <td>{displayOf(REGIMEN_DRUG_ROLE_OPTIONS, d.drug.drug_role)}</td>
                     <td>{d.drug.resolved_name ?? d.drug.medicine_code}</td>
                     <td>
                       {d.drug.dose_value !== null

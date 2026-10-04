@@ -14,8 +14,9 @@ import {
 import { NURSING_OBSERVATION_RESULT_SYSTEM, nursingVitalCodeOf } from "./nursingPerformHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { buildBloodPressureComponents } from "./vitalHelpers";
-import { departmentExtension, type DepartmentRef } from "./prescriptionHelpers";
+import { departmentExtension, type DepartmentRef } from "./orderHeader";
 import { pathwayVarianceTaskEntries, type PathwayVarianceNotice } from "./pathwayVarianceHelpers";
+import { LOINC_SYSTEM } from "./shared";
 
 // クリニカルパスの日次評価(1 病日 × 1 OAT ユニット)の FHIR 構造。ePath の適用後パスデータに倣う。
 // React に依存しない。設計は docs/clinical-pathway-design.md §7.4。
@@ -234,7 +235,6 @@ export function resultInputOf(observation: fhir4.Observation | undefined): [stri
 
 // ---- 実績値の候補(経過表) ----
 
-const LOINC_SYSTEM = "http://loinc.org";
 const BLOOD_PRESSURE_CODE = "85354-9";
 const SYSTOLIC_CODE = "8480-6";
 const DIASTOLIC_CODE = "8462-4";

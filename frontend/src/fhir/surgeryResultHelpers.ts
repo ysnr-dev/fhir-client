@@ -1,7 +1,14 @@
-import { MEDICAL_MATERIAL_SYSTEM } from "./shared";
+import {
+  conceptLabel,
+  materialLabel,
+  MEDICAL_MATERIAL_SYSTEM,
+  quantityLabel,
+  referenceIdOfType,
+} from "./shared";
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { ROUTE_SYSTEM, type CodeOption } from "./injectionHelpers";
-import { MEDICINE_CODE_SYSTEM, ORDER_TYPE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
+import { MEDICINE_CODE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
 import {
   STAFF_ROLE_SYSTEM,
   SURGERY_ORDER_TYPE,
@@ -530,7 +537,7 @@ export function buildSurgeryPerformDeleteEntries(
   const surgeryIds = new Set(surgeryProcedures.map((procedure) => procedure.id).filter(Boolean));
   const belongsToSurgery = (resource: { partOf?: fhir4.Reference[] }) =>
     (resource.partOf ?? []).some((reference) =>
-      surgeryIds.has(referenceId(reference.reference, "Procedure")),
+      surgeryIds.has(referenceIdOfType(reference.reference, "Procedure")),
     );
 
   const deleteEntry = (resourceType: string, id: string | undefined): fhir4.BundleEntry[] =>
@@ -589,26 +596,6 @@ export function isSurgeryProcedure(procedure: fhir4.Procedure): boolean {
       (c) => c.system === ORDER_TYPE_SYSTEM && c.code === SURGERY_ORDER_TYPE.code,
     ),
   );
-}
-
-function referenceId(reference: string | undefined, resourceType: string): string {
-  return reference?.match(new RegExp(`^${resourceType}/(.+)$`))?.[1] ?? "";
-}
-
-function conceptLabel(concept: fhir4.CodeableConcept | undefined): string {
-  if (!concept) return "";
-  const coding = concept.coding?.find((c) => c.display) ?? concept.coding?.[0];
-  return concept.text || coding?.display || coding?.code || "";
-}
-
-function quantityLabel(quantity: fhir4.Quantity | undefined): string {
-  if (!quantity || quantity.value == null) return "";
-  return `${quantity.value}${quantity.unit ?? ""}`;
-}
-
-function materialLabel(usedCode: fhir4.CodeableConcept): string {
-  const extension = usedCode.extension?.find((e) => e.url === MATERIAL_QUANTITY_EXT_URL);
-  return [conceptLabel(usedCode), quantityLabel(extension?.valueQuantity)].filter(Boolean).join(" ");
 }
 
 function medicineLabel(administration: fhir4.MedicationAdministration): string {
@@ -703,7 +690,7 @@ export function surgeryPerformsByOrderId(
   const childrenByHub = new Map<string, fhir4.Procedure[]>();
   const hubs: fhir4.Procedure[] = [];
   for (const procedure of surgeryProcedures) {
-    const hubId = referenceId(procedure.partOf?.[0]?.reference, "Procedure");
+    const hubId = referenceIdOfType(procedure.partOf?.[0]?.reference, "Procedure");
     if (!hubId) {
       hubs.push(procedure);
       continue;
@@ -721,7 +708,7 @@ export function surgeryPerformsByOrderId(
     const partIds = new Set([hubId, ...children.map((child) => child.id ?? "")].filter(Boolean));
     const partOf = (resource: { partOf?: fhir4.Reference[] }) =>
       (resource.partOf ?? []).some((reference) =>
-        partIds.has(referenceId(reference.reference, "Procedure")),
+        partIds.has(referenceIdOfType(reference.reference, "Procedure")),
       );
 
     const display: SurgeryPerformDisplay = {
@@ -731,7 +718,9 @@ export function surgeryPerformsByOrderId(
       staff: staffOf(hub),
       procedures: [hub, ...children].map((p) => conceptLabel(p.code)).filter(Boolean),
       medicines: administrations.filter(partOf).map(medicineLabel).filter(Boolean),
-      materials: (hub.usedCode ?? []).map(materialLabel).filter(Boolean),
+      materials: (hub.usedCode ?? [])
+        .map((usedCode) => materialLabel(usedCode, MATERIAL_QUANTITY_EXT_URL))
+        .filter(Boolean),
       observations: observations
         .filter(partOf)
         .map((observation) =>
@@ -746,7 +735,7 @@ export function surgeryPerformsByOrderId(
     };
 
     for (const basedOn of hub.basedOn ?? []) {
-      const orderId = referenceId(basedOn.reference, "ServiceRequest");
+      const orderId = referenceIdOfType(basedOn.reference, "ServiceRequest");
       if (!orderId) continue;
       const list = byOrderId.get(orderId);
       if (list) list.push(display);

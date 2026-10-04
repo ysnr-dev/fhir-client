@@ -21,16 +21,14 @@ import {
 import { RxDispenseModal } from "../components/RxDispenseModal";
 import { RxOrderViewModal } from "../components/RxOrderViewModal";
 import { displayName } from "../fhir/patientHelpers";
+import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
 import {
   BROUGHT_CATEGORY,
   CATEGORY_OPTIONS,
   isBroughtPrescription,
   SETTING_OPTIONS,
   groupByRp,
-  orderContextSummary,
-  prescriptionRequester,
   summarizeServiceRequest,
-  wardOf,
 } from "../fhir/prescriptionHelpers";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import {
@@ -258,7 +256,7 @@ function matchesFilters(row: RxWorklistRow, filters: Filters): boolean {
   // 病棟で絞ると消える。
   if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
 
-  const requester = prescriptionRequester(row.order);
+  const requester = orderRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
   if (filters.status && rxTaskStatus(row.task) !== filters.status) return false;
@@ -399,7 +397,7 @@ function WorklistRow({
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
   const summary = summarizeServiceRequest(order);
-  const requester = prescriptionRequester(order);
+  const requester = orderRequester(order);
   const status = rxTaskStatus(row.task);
   const brought = isBroughtPrescription(order);
 

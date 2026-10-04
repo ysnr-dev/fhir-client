@@ -1,6 +1,6 @@
-import { today } from "../lib/dates";
+import { shortDate, today } from "../lib/dates";
 import { toFhirDateTime } from "./clinicalNoteHelpers";
-import { ORDER_TYPE_SYSTEM } from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import {
   REHAB_ORDER_TYPE,
   REHAB_UNIT_LABEL,
@@ -9,6 +9,7 @@ import {
   therapyTypeShort,
   type RehabTherapyType,
 } from "./rehabOrderHelpers";
+import { referenceIdOfType } from "./shared";
 
 // リハビリの実施記録。1 回の実施 = Procedure 1 件で、期間中に何件も積み上がる。
 //
@@ -197,18 +198,8 @@ export function isRehabProcedure(procedure: fhir4.Procedure): boolean {
   );
 }
 
-function referenceId(reference: string | undefined, resourceType: string): string {
-  return reference?.match(new RegExp(`^${resourceType}/(.+)$`))?.[1] ?? "";
-}
-
 export function rehabPerformedUnits(procedure: fhir4.Procedure): number | undefined {
   return procedure.extension?.find((e) => e.url === PERFORMED_UNITS_EXT_URL)?.valueInteger;
-}
-
-/** 「8/29」形式の短い日付。 */
-function shortDate(date: string): string {
-  const [, month, day] = date.split("-");
-  return month && day ? `${Number(month)}/${Number(day)}` : date;
 }
 
 function toDisplay(procedure: fhir4.Procedure): RehabPerformDisplay {
@@ -252,7 +243,7 @@ export function rehabPerformsByOrderId(
   for (const procedure of procedures) {
     // 誤登録として取り消されたものは実施していないのと同じなので出さない。
     if (!isRehabProcedure(procedure) || procedure.status === "entered-in-error") continue;
-    const orderId = referenceId(procedure.basedOn?.[0]?.reference, "ServiceRequest");
+    const orderId = referenceIdOfType(procedure.basedOn?.[0]?.reference, "ServiceRequest");
     if (!orderId) continue;
 
     const list = byOrderId.get(orderId);

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_VITAL_THRESHOLDS } from "../../fhir/vitalHelpers";
 import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
-import { DEFAULT_PRESCRIPTION_CATEGORY, ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
+import { DEFAULT_PRESCRIPTION_CATEGORY } from "../../fhir/prescriptionHelpers";
 import { DEFAULT_MEDICATION_SCHEDULE } from "../../fhir/medicationScheduleHelpers";
 import { DEFAULT_MEAL_SCHEDULE, isMealServiceRequest, MEAL_ORDER_TYPE } from "../../fhir/mealOrderHelpers";
 import { deleteResource, postBundle, searchResource } from "../fhirClient";

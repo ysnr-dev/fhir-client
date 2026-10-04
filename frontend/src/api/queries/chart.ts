@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { INJECTION_ORDER_TYPE } from "../../fhir/injectionHelpers";
-import { ORDER_TYPE_SYSTEM, PRESCRIPTION_CATEGORY_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
+import { PRESCRIPTION_CATEGORY_SYSTEM } from "../../fhir/prescriptionHelpers";
 import { addDays } from "../../fhir/scheduleHelpers";
 import { ORAL_LOOKBACK_DAYS, resourcesOfType, searchAllPages } from "./core";
 

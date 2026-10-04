@@ -16,11 +16,10 @@ import {
 
 export { PRIORITY_OPTIONS };
 import { ABBREVIATION_SYSTEM, JLAC10_SYSTEM, JLAC11_SPECIMEN_SYSTEM, JLAC11_SYSTEM } from "./labResultHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
   SETTING_SYSTEM,
-  applyOrderContext,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -307,7 +306,7 @@ function buildItemSpecimen(item: LabOrderItemLine, patientId: string): fhir4.Spe
 
 // 明細が指している検体。ServiceRequest.specimen は contained への内部参照なので、
 // 参照先を contained の中から引く。
-function containedSpecimenOf(request: fhir4.ServiceRequest): fhir4.Specimen | undefined {
+export function containedSpecimenOf(request: fhir4.ServiceRequest): fhir4.Specimen | undefined {
   const reference = request.specimen?.[0]?.reference;
   if (!reference?.startsWith("#")) return undefined;
 

@@ -20,18 +20,11 @@ import { ORDER_SET_TYPE_LABELS } from "./orderSetRegistry";
 import { isOrderSetOrderType } from "../fhir/orderSetHelpers";
 import { RowMenu } from "./RowMenu";
 import { TrashIcon } from "./icons/TrashIcon";
+import { moveItem } from "../lib/arrays";
 
 // パス定義の病日カードと、その中の OAT ユニットカード。1 病日 = 1 カードで、OAT ユニット
 // (アウトカム + 観察項目 + タスク)を縦に積む。検索モーダルと雛形モーダルはページが開くので、
 // ここは「どの行で押されたか」を返すだけ。
-
-export function moveItem<T>(items: T[], index: number, delta: number): T[] {
-  const target = index + delta;
-  if (target < 0 || target >= items.length) return items;
-  const next = items.slice();
-  [next[index], next[target]] = [next[target], next[index]];
-  return next;
-}
 
 interface EventCardProps {
   event: PathwayEventDraft;

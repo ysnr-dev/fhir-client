@@ -43,7 +43,7 @@ import {
   type EndoscopyImmediatePerforms,
   type EndoscopyPerformFormValues,
 } from "../fhir/endoscopyResultHelpers";
-import { scheduleSummary, slotDate, slotTime, today } from "../fhir/scheduleHelpers";
+import { slotDate, slotTime, today } from "../fhir/scheduleHelpers";
 import type { SlotSelection } from "../fhir/appointmentHelpers";
 import { AppointmentSlotPicker } from "./AppointmentSlotPicker";
 import { Modal } from "./Modal";
@@ -57,6 +57,7 @@ import { ProblemSelect } from "./ProblemSelect";
 import { EndoscopyPerformInputModal } from "./EndoscopyPerformModal";
 import { TemplateSchemaImages } from "./SchemaImageGallery";
 import { TrashIcon } from "./icons/TrashIcon";
+import { bookingLabel } from "../fhir/appointmentHelpers";
 
 // 内視鏡オーダーの入力フォーム。検査伝票(内視鏡オーダーレイアウト)のタブと
 // 個別検索から項目を選び、選んだ内容を GP ごとに確認・記入してから登録する。
@@ -955,13 +956,6 @@ export function EndoscopyOrderForm({
       )}
     </>
   );
-}
-
-/** 予約済みの枠の表示。「2026-08-19 09:00-10:00 CT枠(...)」。 */
-function bookingLabel(selection: SlotSelection): string {
-  const first = selection.slots[0];
-  const last = selection.slots[selection.slots.length - 1];
-  return `${slotDate(first)} ${slotTime(first)}-${last.end.slice(11, 16)} ${scheduleSummary(selection.schedule)}`;
 }
 
 /** 即実施の設定(オーダー単位)。編集画面では使わないので null を渡す。 */

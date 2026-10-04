@@ -19,7 +19,8 @@ import {
 import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pathoTaskHelpers";
 import { pathwayOf } from "./pathwayApplyHelpers";
 import type { PathwayEvaluationCard } from "./pathwayKarteHelpers";
-import { departmentOf, ORDER_TYPE_SYSTEM, prescriptionProblem } from "./prescriptionHelpers";
+import { departmentOf, ORDER_TYPE_SYSTEM } from "./orderHeader";
+import { prescriptionProblem } from "./prescriptionHelpers";
 import { categoryCoding } from "./shared";
 import {
   isRadServiceRequest,

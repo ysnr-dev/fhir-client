@@ -25,7 +25,7 @@ import {
   serviceRequestsOf,
 } from "../../fhir/labOrderHelpers";
 import { MICRO_ORDER_TYPE, microOrderLabel } from "../../fhir/microOrderHelpers";
-import { departmentOf, ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { departmentOf, ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { postBundle, readHistory, searchResource } from "../fhirClient";
 import {
   fetchDistinctDates,

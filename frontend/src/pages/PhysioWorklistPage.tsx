@@ -31,12 +31,8 @@ import {
 } from "../components/PatientRowCells";
 import { EXAM_REPORT_CONFIGS, examReportStatusDisplay } from "../fhir/examReportHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import {
-  SETTING_OPTIONS,
-  orderContextSummary,
-  prescriptionRequester,
-  wardOf,
-} from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
+import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import {
   entryLabel,
   orderEntries,
@@ -318,7 +314,7 @@ function matchesFilters(row: PhysioWorklistRow, filters: Filters): boolean {
   // 病棟で絞ると消える。
   if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
 
-  const requester = prescriptionRequester(row.order);
+  const requester = orderRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
   if (filters.status && physioTaskStatus(row.task) !== filters.status) return false;
@@ -460,7 +456,7 @@ function WorklistRow({
   const summary = summarizePhysioOrder(order);
   const entries = orderEntries(physioOrderItems(order, row.itemRequests));
   const status = physioTaskStatus(task);
-  const requester = prescriptionRequester(order);
+  const requester = orderRequester(order);
 
   return (
     <tr {...rowProps}>

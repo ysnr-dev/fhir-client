@@ -54,7 +54,7 @@ import {
 } from "../fhir/nursingScheduleHelpers";
 import { useNow } from "../hooks/useNow";
 import { locationDisplayName } from "../fhir/locationHelpers";
-import { prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderRequester } from "../fhir/orderHeader";
 import { today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
 
@@ -585,7 +585,7 @@ function isPending(row: NursingWorklistRow): boolean {
 
 function matchesFilters(row: NursingWorklistRow, filters: Filters): boolean {
   if (filters.departmentId) {
-    const requester = prescriptionRequester(row.order);
+    const requester = orderRequester(row.order);
     if (requester.departmentId !== filters.departmentId) return false;
   }
   if (filters.status && nursingTaskStatus(row.task) !== filters.status) return false;

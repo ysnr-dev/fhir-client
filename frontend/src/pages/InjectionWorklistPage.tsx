@@ -34,12 +34,8 @@ import {
 } from "../fhir/injectionTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
-import {
-  SETTING_OPTIONS,
-  orderContextSummary,
-  prescriptionRequester,
-  wardOf,
-} from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
+import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import { categoryCoding } from "../fhir/shared";
 import { SETTING_SYSTEM } from "../fhir/prescriptionHelpers";
 
@@ -231,7 +227,7 @@ function matchesFilters(row: InjectionWorklistRow, filters: Filters): boolean {
   if (filters.setting && setting !== filters.setting) return false;
   if (filters.category && category !== filters.category) return false;
   if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
-  const requester = prescriptionRequester(row.order);
+  const requester = orderRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
   if (filters.status && injectionTaskStatus(row.task) !== filters.status) return false;
   // 化学療法は調製・監査の手順が違うので、その日のぶんだけを抜き出せるようにする。
@@ -377,7 +373,7 @@ function WorklistRow({
 }) {
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
-  const requester = prescriptionRequester(order);
+  const requester = orderRequester(order);
   const status = injectionTaskStatus(row.task);
   const settingDisplay = categoryCoding(order, SETTING_SYSTEM)?.display ?? "";
   const categoryDisplay = categoryCoding(order, INJECTION_CATEGORY_SYSTEM)?.display ?? "";

@@ -7,7 +7,7 @@ import {
   injectionSeriesOf,
   parseInjectionForm,
 } from "../fhir/injectionHelpers";
-import { withOrderWard } from "../fhir/prescriptionHelpers";
+import { withOrderWard } from "../fhir/orderHeader";
 import { referenceId } from "../fhir/shared";
 import { addDays } from "../lib/dates";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";

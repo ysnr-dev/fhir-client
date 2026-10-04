@@ -1,7 +1,7 @@
 // オーダー・結果ヘルパー(処方・注射・検体検査・細菌検査・放射線)で共通の部品。
 // ドメイン固有の CodeSystem/IdSystem はここに置かず、必要なら引数で受け取る。
 
-import { nowFhirDateTime } from "../lib/dates";
+import { dateTimeLabel, nowFhirDateTime } from "../lib/dates";
 
 // ---- オーダーの日付(全種別で共通の意味) ----
 //
@@ -52,11 +52,15 @@ export function categoryCoding(
   return undefined;
 }
 
-/** {code, display} の選択肢から code の表示名を引く(見つからなければ code のまま)。 */
-export function displayOf<T extends { code: string; display: string }>(
-  options: T[],
-  code: string,
-): string {
+/** コードと表示名の組(選択肢)。 */
+export interface CodeOption {
+  code: string;
+  display: string;
+}
+
+/** 選択肢から code の表示名を引く(見つからなければ code のまま、code が空なら空文字)。 */
+export function displayOf(options: readonly CodeOption[], code: string | null | undefined): string {
+  if (!code) return "";
   return options.find((o) => o.code === code)?.display ?? code;
 }
 
@@ -108,6 +112,45 @@ export function parentRequestId(sr: fhir4.ServiceRequest): string | undefined {
 /** "ResourceType/id" 形式(サーバーによっては絶対 URL)の参照から id を取り出す。 */
 export function referenceId(reference: string | undefined): string | undefined {
   return reference?.split("/").pop() || undefined;
+}
+
+export const LOINC_SYSTEM = "http://loinc.org";
+
+/** Observation の LOINC コード(無ければ空)。 */
+export function loincOf(observation: fhir4.Observation): string {
+  return observation.code?.coding?.find((c) => c.system === LOINC_SYSTEM)?.code ?? "";
+}
+
+/** "ResourceType/id" の参照が指定した型のときだけ id を返す(違う型・未設定は空文字)。 */
+export function referenceIdOfType(reference: string | undefined, resourceType: string): string {
+  return reference?.match(new RegExp(`^${resourceType}/(.+)$`))?.[1] ?? "";
+}
+
+/** CodeableConcept の表示名。text、表示名を持つ coding、先頭の coding のコードの順で採る。 */
+export function conceptLabel(concept: fhir4.CodeableConcept | undefined): string {
+  if (!concept) return "";
+  const coding = concept.coding?.find((c) => c.display) ?? concept.coding?.[0];
+  return concept.text || coding?.display || coding?.code || "";
+}
+
+/** 数量の表示(「2mL」)。値が無ければ空。 */
+export function quantityLabel(quantity: fhir4.Quantity | undefined): string {
+  if (!quantity || quantity.value == null) return "";
+  return `${quantity.value}${quantity.unit ?? ""}`;
+}
+
+/**
+ * 実施記録に使った器材の表示(名称と数量)。usedCode は数量を持てないので、登録時に付けた
+ * 拡張(部門ごとの quantityExtensionUrl)から数量を読む。
+ */
+export function materialLabel(usedCode: fhir4.CodeableConcept, quantityExtensionUrl: string): string {
+  const extension = usedCode.extension?.find((e) => e.url === quantityExtensionUrl);
+  return [conceptLabel(usedCode), quantityLabel(extension?.valueQuantity)].filter(Boolean).join(" ");
+}
+
+/** 実施日時の表示。カードの診療日と実施日は別日になりうるので日付ごと出す。 */
+export function performedLabel(procedure: fhir4.Procedure): string {
+  return dateTimeLabel(procedure.performedDateTime ?? procedure.performedPeriod?.start);
 }
 
 /** 書き込みの単位。エントリを 1 つの transaction Bundle にまとめる。 */

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useCreatePrescription, useUpdateSurgeryOrder } from "../api/queries";
 import type { ProblemRef } from "../fhir/conditionHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import {
   buildDoSurgeryOrderForm,
   buildSurgeryOrderBundle,
@@ -118,7 +118,7 @@ export function SurgeryOrderEditPanel({ patientId, srId, onSaved }: SurgeryOrder
         patientId,
         serviceRequest,
         itemIds,
-        prescriptionRequester(serviceRequest),
+        orderRequester(serviceRequest),
         responseIds,
       ),
       { onSuccess: onSaved },

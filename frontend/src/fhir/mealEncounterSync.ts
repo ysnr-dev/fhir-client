@@ -24,7 +24,7 @@ import {
 } from "./mealOrderHelpers";
 import { mealStapleText, summarizeMealOrder } from "./mealOrderHelpers";
 import type { LeaveValues } from "./encounterHelpers";
-import type { OrderAttribution } from "./prescriptionHelpers";
+import type { OrderAttribution } from "./orderHeader";
 
 // 入退院・外出泊と食事オーダーの連動。
 //

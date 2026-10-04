@@ -5,8 +5,8 @@ import {
   observationIdsFromReport,
   settingCategory,
 } from "./labResultHelpers";
-import { categoryCoding, codingBySystem } from "./shared";
-import { departmentExtension, departmentOf } from "./prescriptionHelpers";
+import { categoryCoding, type CodeOption, codingBySystem, displayOf, LOINC_SYSTEM } from "./shared";
+import { departmentExtension, departmentOf } from "./orderHeader";
 import { SPECIMEN_TYPE_SYSTEM, ORGANISM_SYSTEM } from "./microOrderHelpers";
 
 // 細菌検査結果。検体検査結果(labResultHelpers)と同型の
@@ -59,7 +59,6 @@ const INTERPRETATION_SYSTEM =
 
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
 const REPORT_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";
-const LOINC_SYSTEM = "http://loinc.org";
 const LOINC_MICRO_REPORT_CODE = "18725-2"; // Microbiology studies (set)
 const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
 
@@ -83,10 +82,7 @@ const CODE_GRADE = "susceptibility-grade";
 
 // ---- 選択肢 ----
 
-export interface CodeOption {
-  code: string;
-  display: string;
-}
+export type { CodeOption };
 
 export type MicroReportStatus = "preliminary" | "final";
 
@@ -173,10 +169,6 @@ export const GRADE_OPTIONS: CodeOption[] = [
   { code: "++", display: "＋＋" },
   { code: "+++", display: "＋＋＋" },
 ];
-
-export function optionDisplay(options: CodeOption[], code: string): string {
-  return options.find((o) => o.code === code)?.display ?? code;
-}
 
 // JANIS フォーマットの上限(分離菌 A〜E、菌ごとの感受性 30 薬剤)。
 export const MAX_ISOLATES = 5;
@@ -365,7 +357,7 @@ function buildFindingObservations(
     resource.valueCodeableConcept = conceptOf(
       CULTURE_RESULT_SYSTEM,
       values.culture,
-      optionDisplay(CULTURE_OPTIONS, values.culture),
+      displayOf(CULTURE_OPTIONS, values.culture),
     );
     findings.push({ resource, id: values.cultureId });
   }
@@ -383,7 +375,7 @@ function buildFindingObservations(
     resource.valueCodeableConcept = conceptOf(
       MILLER_JONES_SYSTEM,
       values.millerJones,
-      optionDisplay(MILLER_JONES_OPTIONS, values.millerJones),
+      displayOf(MILLER_JONES_OPTIONS, values.millerJones),
     );
     findings.push({ resource, id: values.millerJonesId });
   }
@@ -396,7 +388,7 @@ function buildFindingObservations(
     resource.valueCodeableConcept = conceptOf(
       GECKLER_SYSTEM,
       values.geckler,
-      optionDisplay(GECKLER_OPTIONS, values.geckler),
+      displayOf(GECKLER_OPTIONS, values.geckler),
     );
     findings.push({ resource, id: values.gecklerId });
   }
@@ -406,14 +398,14 @@ function buildFindingObservations(
       resource.method = conceptOf(
         PYURIA_METHOD_SYSTEM,
         values.pyuriaMethod,
-        optionDisplay(PYURIA_METHOD_OPTIONS, values.pyuriaMethod),
+        displayOf(PYURIA_METHOD_OPTIONS, values.pyuriaMethod),
       );
     }
     if (values.pyuriaResult) {
       resource.valueCodeableConcept = conceptOf(
         PYURIA_RESULT_SYSTEM,
         values.pyuriaResult,
-        optionDisplay(PYURIA_RESULT_OPTIONS, values.pyuriaResult),
+        displayOf(PYURIA_RESULT_OPTIONS, values.pyuriaResult),
       );
     }
     findings.push({ resource, id: values.pyuriaId });
@@ -440,7 +432,7 @@ function buildIsolateObservation(
       valueCodeableConcept: conceptOf(
         COLONY_QUANTITY_TYPE_SYSTEM,
         isolate.quantityType,
-        optionDisplay(QUANTITY_TYPE_OPTIONS, isolate.quantityType),
+        displayOf(QUANTITY_TYPE_OPTIONS, isolate.quantityType),
       ),
     });
   }
@@ -450,7 +442,7 @@ function buildIsolateObservation(
       valueCodeableConcept: conceptOf(
         COLONY_COUNT_SYSTEM,
         isolate.colonyCount,
-        optionDisplay(COLONY_COUNT_OPTIONS, isolate.colonyCount),
+        displayOf(COLONY_COUNT_OPTIONS, isolate.colonyCount),
       ),
     });
   }
@@ -460,7 +452,7 @@ function buildIsolateObservation(
       valueCodeableConcept: conceptOf(
         CAUSATIVE_SYSTEM,
         isolate.causative,
-        optionDisplay(CAUSATIVE_OPTIONS, isolate.causative),
+        displayOf(CAUSATIVE_OPTIONS, isolate.causative),
       ),
     });
   }
@@ -536,7 +528,7 @@ function buildSusceptibilityObservation(
       valueCodeableConcept: conceptOf(
         GRADE_SYSTEM,
         susceptibility.grade,
-        optionDisplay(GRADE_OPTIONS, susceptibility.grade),
+        displayOf(GRADE_OPTIONS, susceptibility.grade),
       ),
     });
   }

@@ -1,11 +1,13 @@
 import { today } from "../lib/dates";
-import { ORDER_TYPE_SYSTEM } from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import {
-  RADIOTHERAPY_ORDER_TYPE,
+  DOSE_UNIT,
+  doseQuantity,
   formatDose,
-  summarizeRadiotherapyOrder,
+  RADIOTHERAPY_ORDER_TYPE,
   type RadiotherapyCoded,
   type RadiotherapyOrderSummary,
+  summarizeRadiotherapyOrder,
 } from "./radiotherapyOrderHelpers";
 import {
   PROCEDURE_KIND_SYSTEM,
@@ -44,8 +46,6 @@ export const COURSE_SUMMARY_KIND = { code: "course-summary", display: "治療終
 const SUMMARY_EXT_URL = "http://fhir-client.local/StructureDefinition/radiotherapy-course-summary";
 const OUTCOME_SYSTEM = "http://fhir-client.local/CodeSystem/radiotherapy-course-outcome";
 const STOP_REASON_SYSTEM = "http://fhir-client.local/CodeSystem/radiotherapy-stop-reason";
-const UCUM_SYSTEM = "http://unitsofmeasure.org";
-const DOSE_UNIT = "Gy";
 
 /** 治療の結末。処方どおり照射しきったか、途中で終わったか。 */
 export const COURSE_OUTCOME_OPTIONS = [
@@ -128,10 +128,6 @@ export function validateRadiotherapyCourseSummary(
     return "中止の理由を入れてください。";
   }
   return "";
-}
-
-function doseQuantity(value: number): fhir4.Quantity {
-  return { value, unit: DOSE_UNIT, system: UCUM_SYSTEM, code: DOSE_UNIT };
 }
 
 function buildCourseSummaryProcedure(

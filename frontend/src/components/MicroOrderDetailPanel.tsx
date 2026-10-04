@@ -11,7 +11,7 @@ import {
   specimenLabel,
   summarizeMicroOrder,
 } from "../fhir/microOrderHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { orderDay } from "../fhir/shared";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
@@ -52,7 +52,7 @@ export function MicroOrderDetailPanel({
           <dt>至急区分</dt>
           <dd>{summary.priorityDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <dt>前投与抗菌薬</dt>
           <dd className="micro-order__multiline">
             {microOrderPriorAntimicrobial(serviceRequest) || "-"}

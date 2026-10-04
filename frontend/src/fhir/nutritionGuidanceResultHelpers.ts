@@ -1,7 +1,7 @@
-import { today } from "../lib/dates";
+import { shortDate, today } from "../lib/dates";
 import { toFhirDateTime } from "./clinicalNoteHelpers";
-import { ORDER_TYPE_SYSTEM } from "./prescriptionHelpers";
-import { displayOf } from "./shared";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
+import { displayOf, referenceIdOfType } from "./shared";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import {
   NUTRITION_GUIDANCE_ORDER_TYPE,
@@ -299,10 +299,6 @@ export function isNutritionGuidanceProcedure(procedure: fhir4.Procedure): boolea
   );
 }
 
-function referenceId(reference: string | undefined, resourceType: string): string {
-  return reference?.match(new RegExp(`^${resourceType}/(.+)$`))?.[1] ?? "";
-}
-
 export function nutritionGuidancePerformedMinutes(
   procedure: fhir4.Procedure,
 ): number | undefined {
@@ -312,13 +308,7 @@ export function nutritionGuidancePerformedMinutes(
 export function nutritionGuidanceRecordResponseId(procedure: fhir4.Procedure): string {
   const reference = procedure.extension?.find((e) => e.url === RECORD_TEMPLATE_EXT_URL)
     ?.valueReference?.reference;
-  return referenceId(reference, "QuestionnaireResponse");
-}
-
-/** 「9/1」形式の短い日付。 */
-function shortDate(date: string): string {
-  const [, month, day] = date.split("-");
-  return month && day ? `${Number(month)}/${Number(day)}` : date;
+  return referenceIdOfType(reference, "QuestionnaireResponse");
 }
 
 function toDisplay(procedure: fhir4.Procedure): NutritionGuidancePerformDisplay {
@@ -365,7 +355,7 @@ export function nutritionGuidancePerformsByOrderId(
     if (!isNutritionGuidanceProcedure(procedure) || procedure.status === "entered-in-error") {
       continue;
     }
-    const orderId = referenceId(procedure.basedOn?.[0]?.reference, "ServiceRequest");
+    const orderId = referenceIdOfType(procedure.basedOn?.[0]?.reference, "ServiceRequest");
     if (!orderId) continue;
 
     const list = byOrderId.get(orderId);

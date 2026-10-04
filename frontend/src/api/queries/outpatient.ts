@@ -11,7 +11,7 @@ import {
   type InjectionDayTarget,
   injectionSeriesOf,
 } from "../../fhir/injectionHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { appointmentActorId, isExamAppointment, withCheckedInAt } from "../../fhir/appointmentHelpers";
 import {
   EXAM_IN_PROGRESS_STATUS,

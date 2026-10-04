@@ -29,12 +29,8 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { displayName } from "../fhir/patientHelpers";
-import {
-  SETTING_OPTIONS,
-  orderContextSummary,
-  prescriptionRequester,
-  wardOf,
-} from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
+import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import {
   entryLabel,
   orderEntries,
@@ -315,7 +311,7 @@ function matchesFilters(row: RadWorklistRow, filters: Filters): boolean {
   // 病棟で絞ると消える。
   if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
 
-  const requester = prescriptionRequester(row.order);
+  const requester = orderRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
   if (filters.status && radTaskStatus(row.task) !== filters.status) return false;
@@ -461,7 +457,7 @@ function WorklistRow({
   const summary = summarizeRadOrder(order);
   const entries = orderEntries(radOrderItems(order, row.itemRequests));
   const status = radTaskStatus(task);
-  const requester = prescriptionRequester(order);
+  const requester = orderRequester(order);
 
   return (
     <tr {...rowProps}>

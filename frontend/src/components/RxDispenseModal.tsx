@@ -6,12 +6,11 @@ import { useRegisterRxDispense, type RxWorklistRow } from "../api/queries";
 import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
   hasDoseDays,
-  orderContextSummary,
   parsePrescriptionForm,
   prescriptionComment,
-  prescriptionRequester,
   summarizeServiceRequest,
   type MedicineLineValues,
   type PrescriptionFormValues,
@@ -190,7 +189,7 @@ function RxDispenseForm({
     summary.date,
     summary.settingDisplay,
     summary.categoryDisplay,
-    orderContextSummary(prescriptionRequester(order)),
+    orderContextSummary(orderRequester(order)),
   ].filter(Boolean);
 
   return (

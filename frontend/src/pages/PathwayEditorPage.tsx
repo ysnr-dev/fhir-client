@@ -31,7 +31,6 @@ import {
   isSplitDay,
   movePhaseDraft,
   linkSameNameSeries,
-  newDraftKey,
   nextDayNumber,
   orderEventsByPhases,
   phaseLabelOf,
@@ -57,7 +56,7 @@ import {
 } from "../fhir/pathwayHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useValidationError } from "../hooks/useValidationError";
-import { makeFieldUpdater } from "../lib/form";
+import { makeFieldUpdater, newDraftKey } from "../lib/form";
 
 // クリニカルパス(施設パス)定義の登録・編集。1 パス 1 ページで、本体と子(対象病名・病日・
 // OAT ユニット・観察項目・タスク)をローカルの draft に持ち、「保存」で 1 リクエストにまとめる。

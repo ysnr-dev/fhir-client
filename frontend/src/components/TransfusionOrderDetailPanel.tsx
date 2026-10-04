@@ -1,5 +1,5 @@
 import { problemLabel } from "../fhir/conditionHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
 import {
@@ -56,7 +56,7 @@ export function TransfusionOrderDetailPanel({
           <dt>至急区分</dt>
           <dd>{summary.priorityDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           {/* 同意書は輸血の必須要件。取得済でないオーダーは例外なので明示する。 */}
           <dt>輸血同意書</dt>
           <dd>{summary.consentConfirmed ? "取得済" : "未取得"}</dd>

@@ -14,12 +14,7 @@ import {
   summarizePhysioOrder,
 } from "./physioOrderHelpers";
 import { isPhysioProcedure } from "./physioResultHelpers";
-import {
-  departmentExtension,
-  departmentOf,
-  ORDER_TYPE_SYSTEM,
-  prescriptionRequester,
-} from "./prescriptionHelpers";
+import { departmentExtension, departmentOf, ORDER_TYPE_SYSTEM, orderRequester } from "./orderHeader";
 import type { SchemaImageRef, TemplateBinding } from "./questionnaireResponseHelpers";
 import {
   entryLabel as radEntryLabel,
@@ -29,7 +24,7 @@ import {
 } from "./radOrderHelpers";
 import { isRadProcedure } from "./radResultHelpers";
 import { binaryIdFromAttachment, imageBinaryEntry, newBinaryDataLength } from "./schemaImage";
-import { categoryCoding, codingBySystem, findSettingDisplay } from "./shared";
+import { categoryCoding, codingBySystem, findSettingDisplay, LOINC_SYSTEM } from "./shared";
 
 // 検査レポート(docs/exam-report-design.md)。放射線の読影レポート・生理検査の所見レポート・
 // 内視鏡の所見レポートで共通の形。
@@ -47,7 +42,6 @@ import { categoryCoding, codingBySystem, findSettingDisplay } from "./shared";
 
 // ---- コードシステム ----
 
-const LOINC_SYSTEM = "http://loinc.org";
 const DOCUMENT_CODES_SYSTEM = "http://jpfhir.jp/fhir/core/CodeSystem/JP_DocumentCodes_CS";
 const V2_0074_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
@@ -331,7 +325,7 @@ export function emptyExamReportForm(
   itemRequests: fhir4.ServiceRequest[],
   procedures: fhir4.Procedure[],
 ): ExamReportFormValues {
-  const requester = prescriptionRequester(order);
+  const requester = orderRequester(order);
   return {
     orderId: order.id ?? "",
     setting: (config.settingOf(order) || "outpatient") as LabResultSetting,

@@ -24,11 +24,11 @@ import {
   summarizeOrderSetValues,
   type OrderSetOrderType,
 } from "../fhir/orderSetHelpers";
+import { withOrderWard } from "../fhir/orderHeader";
 import {
   buildDoPrescriptionForm,
   buildPrescriptionBundle,
   emptyPrescriptionForm,
-  withOrderWard,
   type PrescriptionFormValues,
   type PrescriptionSetting,
 } from "../fhir/prescriptionHelpers";

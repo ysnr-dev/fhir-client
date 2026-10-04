@@ -10,7 +10,7 @@ import {
 } from "../../fhir/pathoOrderHelpers";
 import { buildPathoResultDeleteBundle } from "../../fhir/pathoResultHelpers";
 import { buildPathoTaskUpdate, pathoTasksByOrderId, type PathoTaskStatus } from "../../fhir/pathoTaskHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { postBundle, readResource } from "../fhirClient";
 import { makeOrderDetailHook, NOTIFICATION_TASK_KEY, ORDER_ITEM_REVINCLUDES } from "./core";
 import {

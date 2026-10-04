@@ -18,14 +18,8 @@ import {
   transactionBundle,
   withVersionLock,
 } from "./shared";
-import {
-  ORDER_TYPE_SYSTEM,
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
-  applyOrderContext,
-  type OrderAttribution,
-  type PrescriptionSetting,
-} from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
+import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
 
 // 放射線治療オーダー = 放射線治療医が書く「治療処方」(docs/radiotherapy-order-design.md)。
 //
@@ -77,7 +71,7 @@ const CONSULT_REQUEST_EXT_URL =
 
 const UCUM_SYSTEM = "http://unitsofmeasure.org";
 /** 線量は Gy で持つ(mCODE は cGy。輸出時に ×100。§2.6)。 */
-const DOSE_UNIT = "Gy";
+export const DOSE_UNIT = "Gy";
 
 // ---- 固定の分類 ----
 
@@ -392,7 +386,7 @@ function bodySiteConcept(volume: RadiotherapyVolumeValues): fhir4.CodeableConcep
   return { ...(coding.length > 0 ? { coding } : {}), text };
 }
 
-function doseQuantity(value: number): fhir4.Quantity {
+export function doseQuantity(value: number): fhir4.Quantity {
   return { value, unit: DOSE_UNIT, system: UCUM_SYSTEM, code: DOSE_UNIT };
 }
 

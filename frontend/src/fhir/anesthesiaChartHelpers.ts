@@ -1,8 +1,10 @@
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { ROUTE_SYSTEM } from "./injectionHelpers";
-import { MEDICINE_CODE_SYSTEM, ORDER_TYPE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
+import { MEDICINE_CODE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
 import { STAFF_ROLE_SYSTEM, surgeryStaffRoleDisplay } from "./surgeryOrderHelpers";
 import { SURGERY_ROUTE_OPTIONS, surgeryRouteDisplay } from "./surgeryResultHelpers";
+import { LOINC_SYSTEM } from "./shared";
 
 // 麻酔チャート(術中リアルタイム記録)。docs/anesthesia-chart-design.md。
 //
@@ -28,7 +30,7 @@ export const ANESTHESIA_CHART_TYPE = { code: "anesthesia-chart", display: "麻�
 /** イベント(麻酔開始・挿管など)の code。 */
 const ANESTHESIA_EVENT_SYSTEM = "http://fhir-client.local/CodeSystem/anesthesia-event";
 
-const LOINC = "http://loinc.org";
+const LOINC = LOINC_SYSTEM;
 const UCUM_SYSTEM = "http://unitsofmeasure.org";
 
 /** 血圧はバイタル入力と同じくパネル 1 件に component で収縮期・拡張期を持つ。 */

@@ -17,12 +17,11 @@ import {
 } from "./shared";
 
 export { PRIORITY_OPTIONS };
-import { labOrderItemRequests } from "./labOrderHelpers";
+import { containedSpecimenOf, labOrderItemRequests } from "./labOrderHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
   SETTING_SYSTEM,
-  applyOrderContext,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -235,7 +234,6 @@ export function emptyPathoOrderForm(
     schemas: [],
   };
 }
-
 
 export function lateralityDisplay(code: string): string {
   return code ? displayOf(LATERALITY_OPTIONS, code) : "";
@@ -690,17 +688,6 @@ export function summarizePathoOrder(sr: fhir4.ServiceRequest): PathoOrderSummary
     examCategory: category,
     urgent: sr.priority === "urgent",
   };
-}
-
-function containedSpecimenOf(request: fhir4.ServiceRequest): fhir4.Specimen | undefined {
-  const reference = request.specimen?.[0]?.reference;
-  if (!reference?.startsWith("#")) return undefined;
-
-  const id = reference.slice(1);
-  return (request.contained ?? []).find(
-    (resource): resource is fhir4.Specimen =>
-      resource.resourceType === "Specimen" && resource.id === id,
-  );
 }
 
 function parseSpecimenRequest(request: fhir4.ServiceRequest): PathoSpecimenValues {

@@ -8,8 +8,9 @@ import type {
   PathwayStatus,
   PathwayTaskCategoryLv1,
 } from "../api/masterClient";
-import type { CodeOption } from "./injectionHelpers";
 import { isOrderSetOrderType } from "./orderSetHelpers";
+import { displayOf } from "./shared";
+import { inputText, newDraftKey, numOrNull, textOrNull } from "../lib/form";
 
 // クリニカルパス(施設パス)定義マスタの選択肢と、画面の入力値(draft)と API の相互変換。
 // React に依存しない。設計は docs/clinical-pathway-design.md。分類のコードは ePath R4
@@ -146,14 +147,9 @@ export function defaultOrderTypeOfTask(lv1: string, lv2: string | null | undefin
   );
 }
 
-export function displayOfOption(options: readonly CodeOption[], code: string | null | undefined): string {
-  if (!code) return "";
-  return options.find((o) => o.code === code)?.display ?? code;
-}
-
 export function taskCategoryLabel(lv1: string, lv2: string | null | undefined): string {
-  const l1 = displayOfOption(TASK_CATEGORY_LV1_OPTIONS, lv1);
-  const l2 = lv2 ? displayOfOption(TASK_CATEGORY_LV2_OPTIONS, lv2) : "";
+  const l1 = displayOf(TASK_CATEGORY_LV1_OPTIONS, lv1);
+  const l2 = lv2 ? displayOf(TASK_CATEGORY_LV2_OPTIONS, lv2) : "";
   return l2 ? `${l1} / ${l2}` : l1;
 }
 
@@ -309,12 +305,6 @@ export interface PathwayDraft {
   events: PathwayEventDraft[];
 }
 
-let nextKey = 1;
-/** 行の React key。保存済みの id とは無関係で、画面を開いている間だけ一意。 */
-export function newDraftKey(): number {
-  return nextKey++;
-}
-
 /** OAT ユニット・観察項目・タスクの識別子。適用後データまで持ち越すので画面で採る。 */
 export function newPathwayUuid(): string {
   return crypto.randomUUID();
@@ -408,45 +398,41 @@ export function emptyTaskDraft(categoryLv1: PathwayTaskCategoryLv1 = "NC"): Path
   };
 }
 
-function str(value: string | number | null | undefined): string {
-  return value === null || value === undefined ? "" : String(value);
-}
-
 export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
   const phases: PathwayPhaseDraft[] = detail.phases.map((p) => ({
     key: newDraftKey(),
     phaseKey: p.phase_key,
-    name: str(p.name),
-    note: str(p.note),
-    branches: p.branches.map((b) => ({ key: newDraftKey(), toPhaseKey: str(b.to_phase_key), criteria: str(b.criteria) })),
+    name: inputText(p.name),
+    note: inputText(p.note),
+    branches: p.branches.map((b) => ({ key: newDraftKey(), toPhaseKey: inputText(b.to_phase_key), criteria: inputText(b.criteria) })),
   }));
   if (phases.length === 0) phases.push(emptyPhaseDraft());
   const phaseKeys = new Set(phases.map((p) => p.phaseKey));
   return {
     pathwayCode: detail.pathway_code,
     name: detail.name,
-    shortName: str(detail.short_name),
-    nameKana: str(detail.name_kana),
-    version: str(detail.version),
-    departmentCode: str(detail.department_code),
-    departmentName: str(detail.department_name),
+    shortName: inputText(detail.short_name),
+    nameKana: inputText(detail.name_kana),
+    version: inputText(detail.version),
+    departmentCode: inputText(detail.department_code),
+    departmentName: inputText(detail.department_name),
     setting: detail.setting,
-    scheduledDays: str(detail.scheduled_days),
-    adaptiveCriteria: str(detail.adaptive_criteria),
-    protocolBase: str(detail.protocol_base),
+    scheduledDays: inputText(detail.scheduled_days),
+    adaptiveCriteria: inputText(detail.adaptive_criteria),
+    protocolBase: inputText(detail.protocol_base),
     status: detail.status,
-    approvedOn: str(detail.approved_on),
-    approvedBy: str(detail.approved_by),
-    copiedFromCode: str(detail.copied_from_code),
-    validFrom: str(detail.valid_from),
-    validTo: str(detail.valid_to),
-    displayOrder: str(detail.display_order),
-    note: str(detail.note),
+    approvedOn: inputText(detail.approved_on),
+    approvedBy: inputText(detail.approved_by),
+    copiedFromCode: inputText(detail.copied_from_code),
+    validFrom: inputText(detail.valid_from),
+    validTo: inputText(detail.valid_to),
+    displayOrder: inputText(detail.display_order),
+    note: inputText(detail.note),
     indications: detail.indications.map((i) => ({
       key: newDraftKey(),
       managementNumber: i.management_number,
       name: i.name,
-      icd10: str(i.icd10),
+      icd10: inputText(i.icd10),
     })),
     phases,
     events: detail.events.map((e) => ({
@@ -454,43 +440,43 @@ export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
       phaseKey: phaseKeys.has(e.phase_key) ? e.phase_key : phases[0].phaseKey,
       elapsedDays: String(e.elapsed_days),
       pathStep: e.path_step,
-      pathStepName: str(e.path_step_name),
-      title: str(e.title),
-      note: str(e.note),
+      pathStepName: inputText(e.path_step_name),
+      title: inputText(e.title),
+      note: inputText(e.note),
       oatUnits: e.oat_units.map((u) => ({
         key: newDraftKey(),
         unitKey: u.unit_key,
         name: u.name,
         category: u.category ?? "",
         codeSystem: u.code_system ?? "",
-        code: str(u.code),
+        code: inputText(u.code),
         critical: u.critical,
-        note: str(u.note),
+        note: inputText(u.note),
         assessments: u.assessments.map((a) => ({
           key: newDraftKey(),
           assessmentKey: a.assessment_key,
           name: a.name,
-          categoryCode: str(a.category_code),
-          categoryName: str(a.category_name),
+          categoryCode: inputText(a.category_code),
+          categoryName: inputText(a.category_name),
           codeSystem: a.code_system ?? "",
-          code: str(a.code),
-          properValue: str(a.proper_value),
-          nursingObservationManageNo: str(a.nursing_observation_manage_no),
-          note: str(a.note),
+          code: inputText(a.code),
+          properValue: inputText(a.proper_value),
+          nursingObservationManageNo: inputText(a.nursing_observation_manage_no),
+          note: inputText(a.note),
         })),
         tasks: u.tasks.map((t) => ({
           key: newDraftKey(),
           taskKey: t.task_key,
-          assessmentKey: str(t.assessment_key),
+          assessmentKey: inputText(t.assessment_key),
           name: t.name,
           categoryLv1: t.category_lv1,
-          categoryLv2: str(t.category_lv2),
-          code: str(t.code),
-          note: str(t.note),
+          categoryLv2: inputText(t.category_lv2),
+          code: inputText(t.code),
+          note: inputText(t.note),
           template: t.order_type
             ? {
                 orderType: t.order_type,
-                label: str(t.order_label),
+                label: inputText(t.order_label),
                 values: t.order_values ?? {},
                 schemaVersion: t.order_schema_version ?? 1,
                 unsupported: !isOrderSetOrderType(t.order_type),
@@ -500,17 +486,6 @@ export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
       })),
     })),
   };
-}
-
-function numOrNull(text: string): number | null {
-  const trimmed = text.trim();
-  if (trimmed === "") return null;
-  const n = Number(trimmed);
-  return Number.isFinite(n) ? n : null;
-}
-
-function textOrNull(text: string): string | null {
-  return text.trim() === "" ? null : text;
 }
 
 /**

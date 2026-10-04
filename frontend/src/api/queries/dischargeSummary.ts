@@ -11,7 +11,8 @@ import {
   withEventWards,
 } from "../../fhir/encounterHelpers";
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
-import { ORDER_TYPE_SYSTEM, PRESCRIPTION_CATEGORY_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
+import { PRESCRIPTION_CATEGORY_SYSTEM } from "../../fhir/prescriptionHelpers";
 import {
   createResource,
   deleteResource,

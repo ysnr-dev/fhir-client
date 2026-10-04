@@ -1,13 +1,12 @@
 import type { ReactNode } from "react";
 import { problemLabel } from "../fhir/conditionHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
   groupByRp,
   hasDoseDays,
-  orderContextSummary,
   prescriptionComment,
   prescriptionProblem,
-  prescriptionRequester,
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
@@ -57,7 +56,7 @@ export function PrescriptionDetailPanel({
           <dt>処方区分</dt>
           <dd>{summary.categoryDisplay}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           {/* 化学療法から出た内服オーダーは、レジメンとクールが分かると調剤・監査の
               手順が決まる(注射の詳細と同じ。§7.6 E-5)。 */}
           {regimen && (

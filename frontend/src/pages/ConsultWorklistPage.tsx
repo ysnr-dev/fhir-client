@@ -31,12 +31,8 @@ import {
   type ConsultTaskStatus,
 } from "../fhir/consultTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import {
-  SETTING_OPTIONS,
-  orderContextSummary,
-  prescriptionRequester,
-  wardOf,
-} from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
+import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 
 // 他科依頼一覧(部門ワークリスト)。
@@ -302,7 +298,7 @@ function matchesFilters(row: ConsultWorklistRow, filters: Filters): boolean {
   // 病棟はオーダー登録時に焼き付けたもの。外来オーダーは病棟を持たない。
   if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
 
-  const requester = prescriptionRequester(row.order);
+  const requester = orderRequester(row.order);
   if (filters.requesterDepartmentId && requester.departmentId !== filters.requesterDepartmentId) {
     return false;
   }
@@ -449,7 +445,7 @@ function OrderRow({
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
   const summary = summarizeConsultOrder(order);
-  const requester = prescriptionRequester(order);
+  const requester = orderRequester(order);
   const status = consultTaskStatus(row.task);
 
   return (

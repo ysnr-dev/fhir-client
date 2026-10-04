@@ -13,7 +13,6 @@ import {
   CULTURE_OPTIONS,
   isolateLabel,
   micDisplay,
-  optionDisplay,
   parseMicroResultForm,
   reportStatusDisplay,
   splitMicroResultDetailBundle,
@@ -21,6 +20,7 @@ import {
 } from "../fhir/microResultHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { FhirJsonView } from "./FhirJsonView";
+import { displayOf } from "../fhir/shared";
 
 // 細菌検査結果の内容表示。カルテ画面の細菌検査タブと、カルテカードの
 // 詳細モーダルの双方から使う。操作ボタンと前後移動は呼び出し側が持つ。
@@ -58,26 +58,26 @@ function FindingsFieldset({ values }: { values: MicroResultFormValues }) {
         <DefinitionRow label="材料" value={values.specimenTypeName} />
         <DefinitionRow
           label="培養結果"
-          value={values.culture ? optionDisplay(CULTURE_OPTIONS, values.culture) : ""}
+          value={values.culture ? displayOf(CULTURE_OPTIONS, values.culture) : ""}
         />
         <DefinitionRow
           label="Miller&Jones分類"
-          value={values.millerJones ? optionDisplay(MILLER_JONES_OPTIONS, values.millerJones) : ""}
+          value={values.millerJones ? displayOf(MILLER_JONES_OPTIONS, values.millerJones) : ""}
         />
         <DefinitionRow
           label="Geckler分類"
-          value={values.geckler ? optionDisplay(GECKLER_OPTIONS, values.geckler) : ""}
+          value={values.geckler ? displayOf(GECKLER_OPTIONS, values.geckler) : ""}
         />
         <DefinitionRow
           label="膿尿評価法"
           value={
-            values.pyuriaMethod ? optionDisplay(PYURIA_METHOD_OPTIONS, values.pyuriaMethod) : ""
+            values.pyuriaMethod ? displayOf(PYURIA_METHOD_OPTIONS, values.pyuriaMethod) : ""
           }
         />
         <DefinitionRow
           label="膿尿評価結果"
           value={
-            values.pyuriaResult ? optionDisplay(PYURIA_RESULT_OPTIONS, values.pyuriaResult) : ""
+            values.pyuriaResult ? displayOf(PYURIA_RESULT_OPTIONS, values.pyuriaResult) : ""
           }
         />
       </dl>
@@ -155,7 +155,7 @@ export function MicroResultDetailPanel({ reportId }: { reportId: string }) {
                     label="菌量"
                     value={
                       isolate.quantityType
-                        ? optionDisplay(QUANTITY_TYPE_OPTIONS, isolate.quantityType)
+                        ? displayOf(QUANTITY_TYPE_OPTIONS, isolate.quantityType)
                         : ""
                     }
                   />
@@ -163,14 +163,14 @@ export function MicroResultDetailPanel({ reportId }: { reportId: string }) {
                     label="菌数"
                     value={
                       isolate.colonyCount
-                        ? optionDisplay(COLONY_COUNT_OPTIONS, isolate.colonyCount)
+                        ? displayOf(COLONY_COUNT_OPTIONS, isolate.colonyCount)
                         : ""
                     }
                   />
                   <DefinitionRow
                     label="起炎性"
                     value={
-                      isolate.causative ? optionDisplay(CAUSATIVE_OPTIONS, isolate.causative) : ""
+                      isolate.causative ? displayOf(CAUSATIVE_OPTIONS, isolate.causative) : ""
                     }
                   />
                 </dl>
@@ -215,7 +215,7 @@ export function MicroResultDetailPanel({ reportId }: { reportId: string }) {
                           >
                             {row.sir || "-"}
                           </td>
-                          <td>{row.grade ? optionDisplay(GRADE_OPTIONS, row.grade) : "-"}</td>
+                          <td>{row.grade ? displayOf(GRADE_OPTIONS, row.grade) : "-"}</td>
                         </tr>
                       ))}
                     </tbody>

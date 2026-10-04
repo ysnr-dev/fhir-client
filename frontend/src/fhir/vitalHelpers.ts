@@ -1,8 +1,8 @@
 import { epochOf, toDateTimeInputValue, toFhirDateTime, WEEKDAY_LABELS } from "../lib/dates";
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
-import { departmentExtension, departmentOf, type DepartmentRef } from "./prescriptionHelpers";
+import { departmentExtension, departmentOf, type DepartmentRef } from "./orderHeader";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
-import { codingBySystem } from "./shared";
+import { codingBySystem, LOINC_SYSTEM } from "./shared";
 
 // バイタルサイン(体温・血圧・脈拍・SpO2・呼吸数・身長・体重)の入力と表示。
 //
@@ -23,7 +23,6 @@ export const VITAL_PROBLEM_EXT_URL =
   "http://fhir-client.local/StructureDefinition/observation-problem";
 
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
-export const LOINC_SYSTEM = "http://loinc.org";
 const LOINC = LOINC_SYSTEM;
 const UCUM = "http://unitsofmeasure.org";
 

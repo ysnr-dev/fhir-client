@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { buildLabOrderDeleteBundle, isLabServiceRequest, LAB_ORDER_TYPE, labOrderItemRequests } from "../../fhir/labOrderHelpers";
 import { labelSpecimensByOrderId } from "../../fhir/labSpecimenHelpers";
 import { buildLabTaskUpdate, labTasksByOrderId, type LabTaskStatus } from "../../fhir/labTaskHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import {
   comparePatientNumber,
   deleteOrderWithItems,

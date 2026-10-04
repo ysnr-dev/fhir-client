@@ -7,10 +7,10 @@ import {
   type MedicationScheduleSettings,
 } from "./medicationScheduleHelpers";
 import type { NursingScheduleSettings } from "./nursingScheduleHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import {
   MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
-  ORDER_TYPE_SYSTEM,
   PRESCRIPTION_ORDER_TYPE,
   RP_NUMBER_SYSTEM,
   YJ_CODE_SYSTEM,
@@ -18,6 +18,7 @@ import {
   identifierValue,
 } from "./prescriptionHelpers";
 import { unevenDosesOf } from "./supplementaryUsage";
+import { conceptLabel, referenceIdOfType } from "./shared";
 
 // 内服の与薬実施(1 回ごとの服薬)。注射の実施(injectionPerformHelpers)と同じ形で、
 // 与薬 1 回を Procedure のハブにし、薬剤ごとの MedicationAdministration をぶら下げる。
@@ -367,16 +368,6 @@ export function isOralProcedure(procedure: fhir4.Procedure): boolean {
   );
 }
 
-function referenceId(reference: string | undefined, resourceType: string): string {
-  return reference?.match(new RegExp(`^${resourceType}/(.+)$`))?.[1] ?? "";
-}
-
-function conceptLabel(concept: fhir4.CodeableConcept | undefined): string {
-  if (!concept) return "";
-  const coding = concept.coding?.find((c) => c.display) ?? concept.coding?.[0];
-  return concept.text || coding?.display || coding?.code || "";
-}
-
 function medicineLabel(administration: fhir4.MedicationAdministration): string {
   const dose = administration.dosage?.dose;
   const amount = dose?.value == null ? "" : `${dose.value}${dose.unit ?? ""}`;
@@ -402,7 +393,7 @@ export function oralPerformsByOrderId(
   for (const hub of hubs) {
     const hubId = hub.id ?? "";
     const children = administrations.filter((a) =>
-      (a.partOf ?? []).some((r) => referenceId(r.reference, "Procedure") === hubId),
+      (a.partOf ?? []).some((r) => referenceIdOfType(r.reference, "Procedure") === hubId),
     );
 
     const display: OralPerformDisplay = {
@@ -419,7 +410,7 @@ export function oralPerformsByOrderId(
     };
 
     for (const basedOn of hub.basedOn ?? []) {
-      const orderId = referenceId(basedOn.reference, "ServiceRequest");
+      const orderId = referenceIdOfType(basedOn.reference, "ServiceRequest");
       if (!orderId) continue;
       const list = byOrderId.get(orderId);
       if (list) list.push(display);

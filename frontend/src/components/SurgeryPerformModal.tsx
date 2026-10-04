@@ -31,7 +31,8 @@ import { MedicalProcedureSearchModal } from "./MedicalProcedureSearchModal";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
 import { PractitionerSearchModal } from "./PractitionerSearchModal";
-import { TrashIcon } from "./icons/TrashIcon";
+import { RemoveRowButton } from "./RemoveRowButton";
+import { replaceAt } from "../lib/arrays";
 
 // 手術の実施記録。退室後にまとめて 1 回入れる。
 //
@@ -46,20 +47,6 @@ import { TrashIcon } from "./icons/TrashIcon";
 // 開腹移行・追加術式・当日の応援は差し替えて記録する。
 
 type Adding = "procedure-k" | "procedure-l" | "medicine" | "material" | null;
-
-function RemoveRowButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      className="rp-card__icon-button"
-      title="外す"
-      aria-label="外す"
-      onClick={onClick}
-    >
-      <TrashIcon />
-    </button>
-  );
-}
 
 interface Props {
   row: SurgeryWorklistRow;
@@ -622,10 +609,6 @@ export function SurgeryPerformInputModal({
       )}
     </Modal>
   );
-}
-
-function replaceAt<T>(list: T[], index: number, next: T): T[] {
-  return list.map((item, i) => (i === index ? next : item));
 }
 
 // 名称とコードだけを並べる表(処置の実施入力と同じ見せ方)。

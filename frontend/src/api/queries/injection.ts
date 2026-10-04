@@ -11,7 +11,7 @@ import {
   labelSpecimensByOrderId,
 } from "../../fhir/labSpecimenHelpers";
 import { buildLabTaskUpdate, labTasksByOrderId, type LabTaskStatus } from "../../fhir/labTaskHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { buildRxTaskUpdate, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
 import { DEFAULT_IDENTIFIER_SYSTEM } from "../../fhir/patientHelpers";
 import { postBundle, searchResource } from "../fhirClient";

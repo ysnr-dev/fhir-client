@@ -44,7 +44,7 @@ import {
   type RadImmediatePerforms,
   type RadPerformFormValues,
 } from "../fhir/radResultHelpers";
-import { scheduleSummary, slotDate, slotTime, today } from "../fhir/scheduleHelpers";
+import { slotDate, slotTime, today } from "../fhir/scheduleHelpers";
 import type { SlotSelection } from "../fhir/appointmentHelpers";
 import { AppointmentSlotPicker } from "./AppointmentSlotPicker";
 import { Modal } from "./Modal";
@@ -59,6 +59,7 @@ import { ProblemSelect } from "./ProblemSelect";
 import { RadPerformInputModal } from "./RadPerformModal";
 import { TemplateTextField } from "./TemplateTextField";
 import { TrashIcon } from "./icons/TrashIcon";
+import { bookingLabel } from "../fhir/appointmentHelpers";
 
 // 放射線検査オーダーの入力フォーム。撮影伝票(放射線オーダーレイアウト)のタブと
 // 個別検索から項目を選び、選んだ内容を GP ごとに確認・記入してから登録する。
@@ -957,13 +958,6 @@ export function RadOrderForm({
       )}
     </>
   );
-}
-
-/** 予約済みの枠の表示。「2026-08-19 09:00-10:00 CT枠(...)」。 */
-function bookingLabel(selection: SlotSelection): string {
-  const first = selection.slots[0];
-  const last = selection.slots[selection.slots.length - 1];
-  return `${slotDate(first)} ${slotTime(first)}-${last.end.slice(11, 16)} ${scheduleSummary(selection.schedule)}`;
 }
 
 /** 即実施の設定(オーダー単位)。編集画面では使わないので null を渡す。 */

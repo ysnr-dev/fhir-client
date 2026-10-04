@@ -1,5 +1,5 @@
 import { problemLabel } from "../fhir/conditionHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import {
   REHAB_UNIT_LABEL,
@@ -72,7 +72,7 @@ export function RehabOrderDetailPanel({
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <dt>リハ部門への指示</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />

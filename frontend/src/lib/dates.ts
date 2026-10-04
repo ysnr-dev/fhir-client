@@ -72,6 +72,12 @@ export function formatDateTime(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString("ja-JP");
 }
 
+/** 「8/29」形式の短い日付。YYYY-MM-DD として読めない値はそのまま返す。 */
+export function shortDate(date: string): string {
+  const [, month, day] = date.split("-");
+  return month && day ? `${Number(month)}/${Number(day)}` : date;
+}
+
 /** YYYY-MM-DD に日数を足す(負も可)。 */
 export function addDays(date: string, days: number): string {
   const [y, m, d] = date.split("-").map(Number);

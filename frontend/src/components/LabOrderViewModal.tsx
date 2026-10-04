@@ -11,7 +11,7 @@ import {
 import { labelNumberOf, specimenArrived, specimenTypeCodeOf } from "../fhir/labSpecimenHelpers";
 import { labTaskStatus, labTaskStatusDisplay } from "../fhir/labTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { Modal } from "./Modal";
 import { orderDay } from "../fhir/shared";
 
@@ -52,7 +52,7 @@ export function LabOrderViewModal({ row, onClose }: { row: LabWorklistRow; onClo
     orderDay(order),
     summary.settingDisplay,
     summary.urgent ? summary.priorityDisplay : "",
-    orderContextSummary(prescriptionRequester(order)),
+    orderContextSummary(orderRequester(order)),
   ].filter(Boolean);
 
   return (

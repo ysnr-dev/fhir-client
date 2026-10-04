@@ -36,12 +36,8 @@ import {
   type TransfusionTaskStatus,
 } from "../fhir/transfusionTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import {
-  SETTING_OPTIONS,
-  orderContextSummary,
-  prescriptionRequester,
-  wardOf,
-} from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
+import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 
 // 輸血一覧(部門ワークリスト)。投与予定日を決めて、その日に出す輸血を並べる。
 // 作りは病理検査一覧(PathoWorklistPage)に合わせてある。
@@ -266,7 +262,7 @@ function matchesFilters(row: TransfusionWorklistRow, filters: Filters): boolean 
   // 病棟で絞ると消える。
   if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
 
-  const requester = prescriptionRequester(row.order);
+  const requester = orderRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
   if (filters.status && transfusionTaskStatus(row.task) !== filters.status) return false;
@@ -424,7 +420,7 @@ function WorklistRow({
   const { order, patient } = row;
   const summary = summarizeTransfusionOrder(order);
   const products = transfusionOrderProducts(row.itemRequests);
-  const requester = prescriptionRequester(order);
+  const requester = orderRequester(order);
   const status = transfusionTaskStatus(row.task);
   const secondaryActions = secondaryActionsOf(row);
 

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { newDraftKey, phaseLabelOf } from "../fhir/pathwayHelpers";
+import { phaseLabelOf } from "../fhir/pathwayHelpers";
 import type { PathwayPhaseBranchDraft, PathwayPhaseDraft } from "../fhir/pathwayHelpers";
 import { Modal } from "./Modal";
-import { moveItem } from "./PathwayEventCard";
 import { TrashIcon } from "./icons/TrashIcon";
+import { moveItem } from "../lib/arrays";
+import { newDraftKey } from "../lib/form";
 
 // フェーズの終わりで選べる次の候補の編集。先頭が標準の経路。Modal は非ポータルで外側の form の
 // 中に出るので、ここには form を書かない。

@@ -34,7 +34,7 @@ import {
   type TreatmentImmediatePerforms,
   type TreatmentPerformFormValues,
 } from "../fhir/treatmentResultHelpers";
-import { scheduleSummary, slotDate, slotTime, today } from "../fhir/scheduleHelpers";
+import { slotDate, slotTime, today } from "../fhir/scheduleHelpers";
 import type { SlotSelection } from "../fhir/appointmentHelpers";
 import { AppointmentSlotPicker } from "./AppointmentSlotPicker";
 import { Modal } from "./Modal";
@@ -45,6 +45,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { TreatmentPerformInputModal } from "./TreatmentPerformModal";
 import { TrashIcon } from "./icons/TrashIcon";
+import { bookingLabel } from "../fhir/appointmentHelpers";
 
 // 処置オーダーの入力フォーム。処置伝票(処置オーダーレイアウト)のタブと
 // 個別検索から項目を選び、選んだ内容を GP ごとに確認してから登録する。
@@ -800,13 +801,6 @@ export function TreatmentOrderForm({
       )}
     </>
   );
-}
-
-/** 予約済みの枠の表示。「2026-08-19 09:00-10:00 CT枠(...)」。 */
-function bookingLabel(selection: SlotSelection): string {
-  const first = selection.slots[0];
-  const last = selection.slots[selection.slots.length - 1];
-  return `${slotDate(first)} ${slotTime(first)}-${last.end.slice(11, 16)} ${scheduleSummary(selection.schedule)}`;
 }
 
 /** 即実施の設定(オーダー単位)。編集画面では使わないので null を渡す。 */

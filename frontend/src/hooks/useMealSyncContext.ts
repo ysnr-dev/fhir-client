@@ -8,7 +8,7 @@ import {
 } from "../api/queries";
 import { encounterBedId, encounterPatientId } from "../fhir/encounterHelpers";
 import type { MealSyncContext } from "../fhir/mealEncounterSync";
-import { withOrderWard } from "../fhir/prescriptionHelpers";
+import { withOrderWard } from "../fhir/orderHeader";
 import { useOrderContext } from "./useOrderContext";
 
 // 入退院・外出泊の画面が食事オーダーの連動(fhir/mealEncounterSync)に渡す材料を揃える。

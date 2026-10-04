@@ -23,12 +23,8 @@ import {
 } from "../components/PatientRowCells";
 import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import {
-  SETTING_OPTIONS,
-  orderContextSummary,
-  prescriptionRequester,
-  wardOf,
-} from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
+import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import {
   summarizeSurgeryOrder,
   surgeryAnesthesiaMethodDisplay,
@@ -318,7 +314,7 @@ function matchesFilters(row: SurgeryWorklistRow, filters: Filters, tab: Tab): bo
   // 病棟で絞ると消える。
   if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
 
-  const requester = prescriptionRequester(row.order);
+  const requester = orderRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
   if (tab === "scheduled" && filters.status && surgeryTaskStatus(row.task) !== filters.status) {
@@ -507,7 +503,7 @@ function WorklistRow({
   const summary = summarizeSurgeryOrder(order);
   const items = surgeryOrderItems(order, row.itemRequests);
   const status = surgeryTaskStatus(task);
-  const requester = prescriptionRequester(order);
+  const requester = orderRequester(order);
   const surgeon = summary.staff.find((line) => line.role === "surgeon");
   const others = summary.staff.filter((line) => line.role !== "surgeon");
 

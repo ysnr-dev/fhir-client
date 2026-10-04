@@ -40,7 +40,7 @@ import {
   type PathwayOrderStart,
 } from "../fhir/pathwayApplyHelpers";
 import { phaseClosingEntries, planPhaseOrderClosings } from "../fhir/pathwayScheduleHelpers";
-import { PATHWAY_SETTING_OPTIONS, displayOfOption, eventDayStepLabel } from "../fhir/pathwayHelpers";
+import { PATHWAY_SETTING_OPTIONS, eventDayStepLabel } from "../fhir/pathwayHelpers";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
@@ -49,6 +49,7 @@ import { useValidationError } from "../hooks/useValidationError";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { ORDER_SET_TYPE_LABELS, ORDER_SET_TYPES } from "./orderSetRegistry";
+import { displayOf } from "../fhir/shared";
 
 // カルテ右ペインの「パス」。承認済のクリニカルパスを選び、入院(または入院予定)と入院日を
 // 決めて適用する。適用は CarePlan の木と未実施のタスクを 1 transaction で登録する
@@ -94,7 +95,7 @@ function PathwayPicker({ onSelect }: { onSelect: (pathwayId: number) => void }) 
               <span className="regimen-picker__meta">
                 {[
                   pathway.department_name,
-                  displayOfOption(PATHWAY_SETTING_OPTIONS, pathway.setting),
+                  displayOf(PATHWAY_SETTING_OPTIONS, pathway.setting),
                   pathway.scheduled_days !== null ? `${pathway.scheduled_days} 日` : "",
                   pathway.event_count ? `病日 ${pathway.event_count} 日分` : "",
                 ]

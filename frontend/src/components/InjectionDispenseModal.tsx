@@ -18,7 +18,7 @@ import {
 } from "../fhir/injectionHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
@@ -126,7 +126,7 @@ function InjectionDispenseForm({
     injectionDayOf(order),
     summary.settingDisplay,
     summary.categoryDisplay,
-    orderContextSummary(prescriptionRequester(order)),
+    orderContextSummary(orderRequester(order)),
   ].filter(Boolean);
 
   return (

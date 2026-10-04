@@ -7,6 +7,7 @@ import {
   type AboBloodType,
   type RhdBloodType,
 } from "./transfusionOrderHelpers";
+import { LOINC_SYSTEM, loincOf } from "./shared";
 
 /**
  * 患者の血液型(ABO / RhD)。
@@ -22,7 +23,7 @@ import {
  * コードの値集合は輸血オーダーと同じものを使い、2 か所に持たない。
  */
 
-const LOINC = "http://loinc.org";
+const LOINC = LOINC_SYSTEM;
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
 
 /** ABO 血液型 / RhD 血液型の LOINC。 */
@@ -161,10 +162,6 @@ function buildObservation({
 function codeOf(observation: fhir4.Observation, system: string): string {
   const coding = observation.valueCodeableConcept?.coding;
   return coding?.find((c) => c.system === system)?.code ?? coding?.[0]?.code ?? "";
-}
-
-function loincOf(observation: fhir4.Observation): string {
-  return observation.code?.coding?.find((c) => c.system === LOINC)?.code ?? "";
 }
 
 export interface BloodTypeSummary {

@@ -23,9 +23,9 @@ import {
   withDischargeDisposition,
   type EncounterEvent,
 } from "./encounterHelpers";
-import { departmentExtension, departmentOf, type DepartmentRef } from "./prescriptionHelpers";
+import { departmentExtension, departmentOf, type DepartmentRef } from "./orderHeader";
 import { practitionerDisplayName } from "./practitionerHelpers";
-import { orderDay } from "./shared";
+import { LOINC_SYSTEM, orderDay } from "./shared";
 
 // 退院時サマリー(退院時要約)。診療記録と同じ Composition の器で、
 // - type は LOINC 18842-5(Discharge summary)、encounter に入院を持つ(1 入院 1 サマリー)
@@ -38,8 +38,6 @@ import { orderDay } from "./shared";
 // - 転帰(退院先)は Encounter.hospitalization.dischargeDisposition に書く(標準要素)。
 // 集約は入院期間の日付範囲で行う(オーダーは Encounter を参照していないため。
 // 経過表と同じ手段)。
-
-const LOINC_SYSTEM = "http://loinc.org";
 
 export const DIAGNOSIS_SECTION = "11535-2";
 export const COURSE_SECTION = "8648-8";

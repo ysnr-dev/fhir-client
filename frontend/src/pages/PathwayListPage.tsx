@@ -8,8 +8,8 @@ import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers
 import {
   PATHWAY_SETTING_OPTIONS,
   PATHWAY_STATUS_OPTIONS,
-  displayOfOption,
 } from "../fhir/pathwayHelpers";
+import { displayOf } from "../fhir/shared";
 
 // クリニカルパス(施設パス)定義マスタの一覧。編集は 1 パス 1 ページ(/pathways/:id)。
 // 設計は docs/clinical-pathway-design.md。
@@ -142,7 +142,7 @@ export function PathwayListPage() {
                 )}
               </td>
               <td>{pathway.department_name ?? ""}</td>
-              <td className="rad-item__compact">{displayOfOption(PATHWAY_SETTING_OPTIONS, pathway.setting)}</td>
+              <td className="rad-item__compact">{displayOf(PATHWAY_SETTING_OPTIONS, pathway.setting)}</td>
               <td className="rad-item__compact">
                 {pathway.scheduled_days !== null ? `${pathway.scheduled_days} 日` : ""}
               </td>
@@ -152,7 +152,7 @@ export function PathwayListPage() {
               <td className="rad-item__compact">{pathway.version ?? ""}</td>
               <td className="rad-item__compact">
                 <span className={`regimen-status regimen-status--${pathway.status}`}>
-                  {displayOfOption(PATHWAY_STATUS_OPTIONS, pathway.status)}
+                  {displayOf(PATHWAY_STATUS_OPTIONS, pathway.status)}
                 </span>
               </td>
               <td className="rad-item__compact">

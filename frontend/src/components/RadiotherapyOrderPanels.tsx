@@ -5,7 +5,7 @@ import {
   useUpdateRadiotherapyOrder,
 } from "../api/queries";
 import type { ProblemRef } from "../fhir/conditionHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import {
   buildDoRadiotherapyOrderForm,
   buildRadiotherapyOrderBundle,
@@ -107,7 +107,7 @@ export function RadiotherapyOrderEditPanel({
         values,
         patientId,
         serviceRequest,
-        prescriptionRequester(serviceRequest),
+        orderRequester(serviceRequest),
       ),
       { onSuccess: onSaved },
     );

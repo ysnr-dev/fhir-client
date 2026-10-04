@@ -163,13 +163,11 @@ import {
 import type { EndoscopyPerformDisplay } from "../fhir/endoscopyResultHelpers";
 import { endoscopyTaskStatusDisplay } from "../fhir/endoscopyTaskHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
+import { departmentOf, orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
-  departmentOf,
   groupByRp,
   hasDoseDays,
-  orderContextSummary,
   prescriptionComment,
-  prescriptionRequester,
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 import {
@@ -1202,7 +1200,7 @@ function cardMeta(item: KarteTimelineItem): string {
       .filter(Boolean)
       .join(" | ");
   }
-  const requesterSummary = orderContextSummary(prescriptionRequester(item.serviceRequest));
+  const requesterSummary = orderContextSummary(orderRequester(item.serviceRequest));
   // 放射線検査は撮影時刻を指定できるので、依頼科・依頼医師の前に添える。記入時刻を
   // 出す診療記録と紛れないよう「撮影」と付ける(未指定のオーダーでは出さない)。
   if (item.kind === "rad-order") {

@@ -33,7 +33,7 @@ import {
   surgeryOrderItemRequests,
   surgeryOrderItems,
 } from "../fhir/surgeryOrderHelpers";
-import { TrashIcon } from "./icons/TrashIcon";
+import { RemoveRowButton } from "./RemoveRowButton";
 
 // 麻酔チャート(術中リアルタイム記録)の中身。docs/anesthesia-chart-design.md。
 //
@@ -45,21 +45,6 @@ import { TrashIcon } from "./icons/TrashIcon";
 /** datetime-local に入れる現在時刻。 */
 function nowInput(): string {
   return toDateTimeInput(new Date());
-}
-
-/** 行を消すボタン。イベント・薬剤で同じ見た目・同じ意味なのでまとめる。 */
-function RemoveRowButton({ onClick, title }: { onClick: () => void; title: string }) {
-  return (
-    <button
-      type="button"
-      className="rp-card__icon-button"
-      title={title}
-      aria-label={title}
-      onClick={onClick}
-    >
-      <TrashIcon />
-    </button>
-  );
 }
 
 /**

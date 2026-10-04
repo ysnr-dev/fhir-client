@@ -25,12 +25,8 @@ import { RehabOrderDetailPanel } from "../components/RehabOrderDetailPanel";
 import { RehabPerformModal } from "../components/RehabPerformModal";
 import { appointmentTimeLabel, appointmentScheduleLabel } from "../fhir/appointmentHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import {
-  SETTING_OPTIONS,
-  orderContextSummary,
-  prescriptionRequester,
-  wardOf,
-} from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
+import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import {
   DISEASE_CATEGORY_OPTIONS,
   REHAB_UNIT_LABEL,
@@ -485,7 +481,7 @@ function matchesFilters(row: RehabWorklistRow, filters: Filters): boolean {
   // 病棟で絞ると消える。
   if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
 
-  const requester = prescriptionRequester(row.order);
+  const requester = orderRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
   if (filters.status && rehabTaskStatus(row.task) !== filters.status) return false;
@@ -648,7 +644,7 @@ function OrderRow({
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
   const summary = summarizeRehabOrder(order);
-  const requester = prescriptionRequester(order);
+  const requester = orderRequester(order);
   const status = rehabTaskStatus(row.task);
   const performed = todaySummary(row);
   const elapsed = rehabElapsedDays(summary.onsetDate, date);

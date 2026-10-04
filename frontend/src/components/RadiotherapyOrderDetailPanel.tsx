@@ -1,6 +1,6 @@
 import { type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import { problemLabel } from "../fhir/conditionHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
   formatDose,
   radiotherapyOrderProblem,
@@ -129,7 +129,7 @@ export function RadiotherapyOrderDetailPanel({
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <dt>コメント</dt>
           <dd>{summary.comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />

@@ -8,7 +8,7 @@ import {
   emptyPathoOrderForm,
   type PathoOrderFormValues,
 } from "../fhir/pathoOrderHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import { usePathoOrderInitialValues } from "../hooks/usePathoOrderInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
@@ -99,7 +99,7 @@ export function PathoOrderEditPanel({ patientId, srId, onSaved }: PathoOrderEdit
         patientId,
         serviceRequest,
         itemIds,
-        prescriptionRequester(serviceRequest),
+        orderRequester(serviceRequest),
         responseIds,
       ),
       { onSuccess: onSaved },

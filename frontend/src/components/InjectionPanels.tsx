@@ -13,7 +13,7 @@ import {
   emptyInjectionForm,
   type InjectionFormValues,
 } from "../fhir/injectionHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import { preserveRegimenStamp } from "../fhir/regimenOrderHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useInjectionInitialValues } from "../hooks/useInjectionInitialValues";
@@ -113,7 +113,7 @@ export function InjectionEditPanel({ patientId, srId, onSaved }: InjectionEditPa
     // 別患者の注射を更新すると subject が URL の患者に書き換わってしまうので防ぐ。
     if (!sr || patientMismatch) return;
     // 依頼科・依頼医師は登録時のものを引き継ぐ(処方の編集と同じ考え方)。
-    const requester = prescriptionRequester(sr);
+    const requester = orderRequester(sr);
     const bundle =
       scope === "following" && laterTargets.length
         ? buildInjectionSeriesUpdateBundle(

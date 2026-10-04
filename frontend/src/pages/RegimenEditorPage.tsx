@@ -33,7 +33,6 @@ import {
   emptyLabCriterionDraft,
   emptyRegimenDraft,
   emptyStepDraft,
-  newDraftKey,
   parseDays,
   operationalPayloadFromDraft,
   payloadFromDraft,
@@ -46,8 +45,9 @@ import {
 } from "../fhir/regimenHelpers";
 import type { RegimenEmeticRisk, RegimenPurpose, RegimenSetting, RegimenStatus } from "../api/masterClient";
 import { useValidationError } from "../hooks/useValidationError";
-import { makeFieldUpdater } from "../lib/form";
+import { makeFieldUpdater, newDraftKey } from "../lib/form";
 import { TrashIcon } from "../components/icons/TrashIcon";
+import { moveItem } from "../lib/arrays";
 
 // 化学療法レジメンの登録・編集。1 レジメン 1 ページで、本体と子(適応疾患・投与
 // ステップ・薬剤・検査基準・副作用)をローカルの draft に持ち、「保存」で 1 リクエスト
@@ -62,14 +62,6 @@ type Picker =
   | { kind: "lab"; criterionKey: number }
   | { kind: "ctcae"; adverseEventKey: number }
   | null;
-
-function moveItem<T>(items: T[], index: number, delta: number): T[] {
-  const target = index + delta;
-  if (target < 0 || target >= items.length) return items;
-  const next = items.slice();
-  [next[index], next[target]] = [next[target], next[index]];
-  return next;
-}
 
 export function RegimenEditorPage() {
   const { regimenId } = useParams<{ regimenId: string }>();

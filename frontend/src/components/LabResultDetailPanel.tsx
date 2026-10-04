@@ -31,6 +31,7 @@ import { LabResultTimelinePanel } from "./LabResultTimelinePanel";
 import { Modal } from "./Modal";
 import { PictogramPopover } from "./PictogramPopover";
 import { RowMenu } from "./RowMenu";
+import { NoteIcon } from "./icons/NoteIcon";
 
 // 検査結果の内容表示。詳細ページとカルテ画面の検査結果タブの双方から使う。
 // DO・編集・削除の操作ボタンと前後移動は、遷移先が異なるので呼び出し側が持つ。
@@ -58,20 +59,6 @@ const UNKNOWN_CATEGORY = "その他";
 // 項目名セルのツールチップ。列を増やさずに済むよう、正式名称と測定法をここで読ませる。
 function itemTooltip(name: string, method: string): string | undefined {
   return [name, method && `測定法: ${method}`].filter(Boolean).join("\n") || undefined;
-}
-
-function NoteIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 3.5h11v7.5h-6.2L4.5 13.5V11h-2z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
 
 // 項目のコメント。列を増やさないよう行の右端に印だけ出し、押すとその場で中身を開く
@@ -307,7 +294,6 @@ export function LabResultDetailPanel({
                 <dd>{summary.orderId ? orderLabel : "紐付けなし"}</dd>
               </dl>
             </fieldset>
-
 
             <div className="lab-result-detail__actions">
               <span className="lab-result-detail__copy-result" role="status">

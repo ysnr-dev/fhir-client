@@ -1,13 +1,16 @@
-import { today } from "../lib/dates";
+import { shortDate, today } from "../lib/dates";
 import { toFhirDateTime } from "./clinicalNoteHelpers";
-import { ORDER_TYPE_SYSTEM } from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import {
-  RADIOTHERAPY_ORDER_TYPE,
+  DOSE_UNIT,
+  doseQuantity,
   formatDose,
-  summarizeRadiotherapyOrder,
+  RADIOTHERAPY_ORDER_TYPE,
   type RadiotherapyCoded,
   type RadiotherapyOrderSummary,
+  summarizeRadiotherapyOrder,
 } from "./radiotherapyOrderHelpers";
+import { referenceIdOfType } from "./shared";
 
 // 放射線治療の照射記録。**1 回の照射 = Procedure 1 件**で、治療コースの間に何十件も
 // 積み上がる(docs/radiotherapy-order-design.md §6.1)。
@@ -55,8 +58,6 @@ const FRACTION_EXT_URL = "http://fhir-client.local/StructureDefinition/radiother
 const DEVICE_SYSTEM = "http://fhir-client.local/CodeSystem/radiotherapy-device";
 const STOP_REASON_SYSTEM = "http://fhir-client.local/CodeSystem/radiotherapy-stop-reason";
 const IMAGE_GUIDANCE_SYSTEM = "http://fhir-client.local/CodeSystem/radiotherapy-image-guidance";
-const UCUM_SYSTEM = "http://unitsofmeasure.org";
-const DOSE_UNIT = "Gy";
 
 /** 位置照合(IGRT)の方法。施設で増減しないのでフロントの定数。 */
 export const IMAGE_GUIDANCE_OPTIONS = [
@@ -194,10 +195,6 @@ export function validateRadiotherapyFractionForm(
 }
 
 // ---- 組み立て ----
-
-function doseQuantity(value: number): fhir4.Quantity {
-  return { value, unit: DOSE_UNIT, system: UCUM_SYSTEM, code: DOSE_UNIT };
-}
 
 function buildFractionProcedure(
   values: RadiotherapyFractionFormValues,
@@ -578,15 +575,6 @@ export function isRadiotherapyFraction(procedure: fhir4.Procedure): boolean {
   return kind === undefined || kind === FRACTION_KIND.code;
 }
 
-function referenceId(reference: string | undefined, resourceType: string): string {
-  return reference?.match(new RegExp(`^${resourceType}/(.+)$`))?.[1] ?? "";
-}
-
-function shortDate(date: string): string {
-  const [, month, day] = date.split("-");
-  return month && day ? `${Number(month)}/${Number(day)}` : date;
-}
-
 function toDisplay(procedure: fhir4.Procedure): RadiotherapyFractionDisplay {
   const ext = procedure.extension?.find((e) => e.url === FRACTION_EXT_URL);
   const sub = (url: string) => ext?.extension?.find((e) => e.url === url);
@@ -646,7 +634,7 @@ export function radiotherapyFractionsByOrderId(
 
   for (const procedure of procedures) {
     if (!isRadiotherapyFraction(procedure) || procedure.status === "entered-in-error") continue;
-    const orderId = referenceId(procedure.basedOn?.[0]?.reference, "ServiceRequest");
+    const orderId = referenceIdOfType(procedure.basedOn?.[0]?.reference, "ServiceRequest");
     if (!orderId) continue;
 
     const list = byOrderId.get(orderId);

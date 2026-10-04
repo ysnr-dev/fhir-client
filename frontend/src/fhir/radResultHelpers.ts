@@ -1,8 +1,16 @@
-import { MEDICAL_MATERIAL_SYSTEM } from "./shared";
+import {
+  conceptLabel,
+  materialLabel,
+  MEDICAL_MATERIAL_SYSTEM,
+  performedLabel,
+  quantityLabel,
+  referenceIdOfType,
+} from "./shared";
 import type { OrderContext } from "../orderContext";
-import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
+import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { ROUTE_SYSTEM, type CodeOption } from "./injectionHelpers";
-import { MEDICINE_CODE_SYSTEM, ORDER_TYPE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
+import { MEDICINE_CODE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
 import {
   RAD_ORDER_TYPE,
   buildRadOrderSplitEntries,
@@ -539,27 +547,6 @@ export function isRadProcedure(procedure: fhir4.Procedure): boolean {
   );
 }
 
-function referenceId(reference: string | undefined, resourceType: string): string {
-  return reference?.match(new RegExp(`^${resourceType}/(.+)$`))?.[1] ?? "";
-}
-
-function conceptLabel(concept: fhir4.CodeableConcept | undefined): string {
-  if (!concept) return "";
-  const coding = concept.coding?.find((c) => c.display) ?? concept.coding?.[0];
-  return concept.text || coding?.display || coding?.code || "";
-}
-
-function quantityLabel(quantity: fhir4.Quantity | undefined): string {
-  if (!quantity || quantity.value == null) return "";
-  return `${quantity.value}${quantity.unit ?? ""}`;
-}
-
-// usedCode は数量を持てないので、登録時に付けた拡張から数量を読む。
-function materialLabel(usedCode: fhir4.CodeableConcept): string {
-  const extension = usedCode.extension?.find((e) => e.url === MATERIAL_QUANTITY_EXT_URL);
-  return [conceptLabel(usedCode), quantityLabel(extension?.valueQuantity)].filter(Boolean).join(" ");
-}
-
 function contrastLabel(administration: fhir4.MedicationAdministration): string {
   const dosage = administration.dosage;
   const route = dosage?.route?.coding?.find((c) => c.system === ROUTE_SYSTEM)?.code;
@@ -576,12 +563,6 @@ function doseLabel(observation: fhir4.Observation): string {
   return [conceptLabel(observation.code), quantityLabel(observation.valueQuantity)]
     .filter(Boolean)
     .join(" ");
-}
-
-/** 実施日時。カードの診療日と実施日は別日になりうるので日付ごと出す。 */
-function performedLabel(procedure: fhir4.Procedure): string {
-  const performed = procedure.performedDateTime ?? procedure.performedPeriod?.start;
-  return toDateTimeInput(performed).replace("T", " ");
 }
 
 /**
@@ -604,7 +585,7 @@ export function radPerformsByOrderId(
   const childrenByHub = new Map<string, fhir4.Procedure[]>();
   const hubs: fhir4.Procedure[] = [];
   for (const procedure of radProcedures) {
-    const hubId = referenceId(procedure.partOf?.[0]?.reference, "Procedure");
+    const hubId = referenceIdOfType(procedure.partOf?.[0]?.reference, "Procedure");
     if (!hubId) {
       hubs.push(procedure);
       continue;
@@ -622,7 +603,7 @@ export function radPerformsByOrderId(
     const partIds = new Set([hubId, ...children.map((child) => child.id ?? "")].filter(Boolean));
     const partOf = (resource: { partOf?: fhir4.Reference[] }) =>
       (resource.partOf ?? []).some((reference) =>
-        partIds.has(referenceId(reference.reference, "Procedure")),
+        partIds.has(referenceIdOfType(reference.reference, "Procedure")),
       );
 
     const display: RadPerformDisplay = {
@@ -631,14 +612,16 @@ export function radPerformsByOrderId(
       performerName: hub.performer?.[0]?.actor?.display ?? "",
       procedures: [hub, ...children].map((p) => conceptLabel(p.code)).filter(Boolean),
       contrasts: administrations.filter(partOf).map(contrastLabel).filter(Boolean),
-      materials: (hub.usedCode ?? []).map(materialLabel).filter(Boolean),
+      materials: (hub.usedCode ?? [])
+        .map((usedCode) => materialLabel(usedCode, MATERIAL_QUANTITY_EXT_URL))
+        .filter(Boolean),
       doses: observations.filter(partOf).map(doseLabel).filter(Boolean),
       comment: hub.note?.map((note) => note.text).filter(Boolean).join("\n") ?? "",
       statusNote: PROCEDURE_STATUS_NOTES[hub.status] ?? "",
     };
 
     for (const basedOn of hub.basedOn ?? []) {
-      const orderId = referenceId(basedOn.reference, "ServiceRequest");
+      const orderId = referenceIdOfType(basedOn.reference, "ServiceRequest");
       if (!orderId) continue;
       const list = byOrderId.get(orderId);
       if (list) list.push(display);

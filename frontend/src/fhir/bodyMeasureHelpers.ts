@@ -7,8 +7,8 @@
  */
 
 import { localDay } from "../lib/dates";
+import { loincOf } from "./shared";
 
-const LOINC = "http://loinc.org";
 const JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11";
 
 /** 身長・体重の LOINC。バイタル(vitalHelpers.ts)と同じコード。 */
@@ -26,10 +26,6 @@ export const WEIGHT_LOINC = "29463-7";
 export const CREATININE_ANALYTE = "C3002";
 export const CYSTATIN_C_ANALYTE = "C3003";
 const ANALYTE_LENGTH = 5;
-
-function loincOf(observation: fhir4.Observation): string {
-  return observation.code?.coding?.find((c) => c.system === LOINC)?.code ?? "";
-}
 
 function analyteOf(observation: fhir4.Observation): string {
   const jlac = observation.code?.coding?.find((c) => c.system === JLAC11_SYSTEM)?.code ?? "";

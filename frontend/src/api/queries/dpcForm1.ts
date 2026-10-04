@@ -9,7 +9,7 @@ import {
   ADMISSION_STATUS,
   DISCHARGED_STATUS,
 } from "../../fhir/encounterHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { referenceId, transactionBundle } from "../../fhir/shared";
 import { resourceFromBundleResponse } from "../../fhir/schemaImage";
 import { summarizeSurgeryOrder } from "../../fhir/surgeryOrderHelpers";

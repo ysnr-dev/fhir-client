@@ -10,7 +10,7 @@ import {
   type ClinicalNoteFormValues,
 } from "../fhir/clinicalNoteHelpers";
 import { consultOrderProblem, summarizeConsultOrder } from "../fhir/consultOrderHelpers";
-import { departmentOf } from "../fhir/prescriptionHelpers";
+import { departmentOf } from "../fhir/orderHeader";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ClinicalNoteForm } from "./ClinicalNoteForm";

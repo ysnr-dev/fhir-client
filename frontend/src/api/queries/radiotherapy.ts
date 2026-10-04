@@ -13,7 +13,7 @@ import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClie
 import { today } from "../../lib/dates";
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { CONSULT_ORDER_TYPE, isConsultServiceRequest } from "../../fhir/consultOrderHelpers";
 import {
   buildRadiotherapyOrderDeleteBundle,

@@ -2,11 +2,10 @@ import { toFhirDateTime } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { labOrderItemRequests } from "./labOrderHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
   SETTING_SYSTEM,
-  applyOrderContext,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";

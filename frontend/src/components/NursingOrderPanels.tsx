@@ -14,7 +14,7 @@ import {
   type NursingOrderFormValues,
 } from "../fhir/nursingOrderHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
@@ -99,7 +99,7 @@ export function NursingOrderEditPanel({ patientId, srId, onSaved }: NursingOrder
         values.problem,
         patientId,
         order,
-        prescriptionRequester(order),
+        orderRequester(order),
       ),
       { onSuccess: onSaved },
     );

@@ -13,7 +13,7 @@ import {
   specimenTypeDisplay,
   summarizePathoOrder,
 } from "../fhir/pathoOrderHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { schemaAnnotatedLines } from "../fhir/questionnaireResponseHelpers";
 import { ResponseSchemaImages, SchemaImageGallery } from "./SchemaImageGallery";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
@@ -60,7 +60,7 @@ export function PathoOrderDetailPanel({
           <dt>至急区分</dt>
           <dd>{summary.priorityDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <dt>報告希望日</dt>
           <dd>{pathoOrderReportDueDate(serviceRequest) || "-"}</dd>
           {/* 手術室番号は術中迅速でしか入らないので、値があるときだけ出す。 */}

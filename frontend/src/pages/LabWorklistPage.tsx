@@ -41,12 +41,8 @@ import {
   type LabTaskStatus,
 } from "../fhir/labTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import {
-  SETTING_OPTIONS,
-  orderContextSummary,
-  prescriptionRequester,
-  wardOf,
-} from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
+import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 
 // 検体検査一覧(部門ワークリスト)。検査日を決めて、その日に検体を採る検査を並べる。
 // 作りは放射線検査一覧(RadWorklistPage)に合わせてある。
@@ -279,7 +275,7 @@ function matchesFilters(row: LabWorklistRow, filters: Filters): boolean {
   // 病棟で絞ると消える。
   if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
 
-  const requester = prescriptionRequester(row.order);
+  const requester = orderRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
   if (filters.status && labTaskStatus(row.task) !== filters.status) return false;
@@ -433,7 +429,7 @@ function WorklistRow({
   const { order, patient } = row;
   const summary = summarizeLabOrder(order);
   const groups = groupBySpecimen(labOrderItems(order, row.itemRequests));
-  const requester = prescriptionRequester(order);
+  const requester = orderRequester(order);
   const status = labTaskStatus(row.task);
 
   return (

@@ -1,5 +1,5 @@
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
-import { ORDER_TYPE_SYSTEM } from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import {
   PRODUCT_SYSTEM,
   TRANSFUSION_ORDER_TYPE,
@@ -7,6 +7,7 @@ import {
   type TransfusionProductValues,
 } from "./transfusionOrderHelpers";
 import { buildTransfusionTaskUpdate } from "./transfusionTaskHelpers";
+import { conceptLabel, referenceIdOfType } from "./shared";
 
 // 輸血の実施記録。手術(docs/surgery-result-design.md)と同じ形。
 //
@@ -316,7 +317,7 @@ export function buildTransfusionPerformDeleteEntries(
   const hubIds = new Set(hubs.map((procedure) => procedure.id).filter(Boolean));
   const belongsToHub = (resource: { partOf?: fhir4.Reference[] }) =>
     (resource.partOf ?? []).some((reference) =>
-      hubIds.has(referenceId(reference.reference, "Procedure")),
+      hubIds.has(referenceIdOfType(reference.reference, "Procedure")),
     );
 
   const deleteEntry = (resourceType: string, id: string | undefined): fhir4.BundleEntry[] =>
@@ -371,16 +372,6 @@ export function isTransfusionProcedure(procedure: fhir4.Procedure): boolean {
   );
 }
 
-function referenceId(reference: string | undefined, resourceType: string): string {
-  return reference?.match(new RegExp(`^${resourceType}/(.+)$`))?.[1] ?? "";
-}
-
-function conceptLabel(concept: fhir4.CodeableConcept | undefined): string {
-  if (!concept) return "";
-  const coding = concept.coding?.find((c) => c.display) ?? concept.coding?.[0];
-  return concept.text || coding?.display || coding?.code || "";
-}
-
 /** 「YYYY-MM-DD HH:mm〜HH:mm」。日をまたぐときは終了側も日付ごと出す。 */
 function periodLabel(period: fhir4.Period | undefined): string {
   if (!period?.start) return "";
@@ -433,7 +424,7 @@ export function transfusionPerformsByOrderId(
     const hubId = hub.id ?? "";
     const partOfHub = (resource: { partOf?: fhir4.Reference[] }) =>
       (resource.partOf ?? []).some(
-        (reference) => referenceId(reference.reference, "Procedure") === hubId,
+        (reference) => referenceIdOfType(reference.reference, "Procedure") === hubId,
       );
 
     const display: TransfusionPerformDisplay = {
@@ -447,7 +438,7 @@ export function transfusionPerformsByOrderId(
     };
 
     for (const basedOn of hub.basedOn ?? []) {
-      const orderId = referenceId(basedOn.reference, "ServiceRequest");
+      const orderId = referenceIdOfType(basedOn.reference, "ServiceRequest");
       if (!orderId) continue;
       const list = byOrderId.get(orderId);
       if (list) list.push(display);

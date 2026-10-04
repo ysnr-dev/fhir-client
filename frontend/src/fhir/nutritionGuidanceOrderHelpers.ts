@@ -1,4 +1,4 @@
-import { today } from "../lib/dates";
+import { shortDate, today } from "../lib/dates";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { MEAL_TYPE_SYSTEM, type MealItemRef } from "./mealOrderHelpers";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
@@ -12,14 +12,8 @@ import {
   transactionBundle,
   withVersionLock,
 } from "./shared";
-import {
-  ORDER_TYPE_SYSTEM,
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
-  applyOrderContext,
-  type OrderAttribution,
-  type PrescriptionSetting,
-} from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
+import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
 
 // 栄養指導オーダー。リハビリ(rehabOrderHelpers.ts)と同じ「期間継続型」で、1 つの
 // オーダーが数週間〜数か月続き、その間に指導(実施)が何度も積み上がる
@@ -510,12 +504,6 @@ export function nutritionGuidancePurposeTemplate(
 
 export function nutritionGuidanceFormat(sr: fhir4.ServiceRequest): string {
   return codingBySystem(sr.code?.coding, GUIDANCE_FORMAT_SYSTEM)?.code ?? "";
-}
-
-/** 「8/29」形式の短い日付。 */
-function shortDate(date: string): string {
-  const [, month, day] = date.split("-");
-  return month && day ? `${Number(month)}/${Number(day)}` : date;
 }
 
 export interface NutritionGuidanceOrderSummary {

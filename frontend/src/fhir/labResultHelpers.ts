@@ -1,10 +1,11 @@
 import { nowFhirDateTime, today } from "../lib/dates";
 import {
+  ABBREVIATION_SYSTEM,
   categoryCoding,
   codingBySystem,
   findSettingDisplay,
+  LOINC_SYSTEM,
   SETTING_OPTIONS,
-  ABBREVIATION_SYSTEM,
 } from "./shared";
 
 export { SETTING_OPTIONS };
@@ -18,7 +19,7 @@ import {
 import { buildCancelledNotificationTask } from "./notificationHelpers";
 import { calculateAge } from "./patientHelpers";
 import { urgentAwareReviewTaskEntries, urgentNotificationOpenAfter } from "./resultReviewHelpers";
-import { departmentExtension, departmentOf } from "./prescriptionHelpers";
+import { departmentExtension, departmentOf } from "./orderHeader";
 
 // ローカル拡張・コードシステム。正式な CodeSystem が定義されていない(または
 // 不明な)項目を表現するための、この検査結果機能専用の URI。
@@ -168,7 +169,6 @@ const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/obser
 // Observation.referenceRange.type(normal = 基準範囲)。
 const REFERENCE_RANGE_MEANING_SYSTEM = "http://terminology.hl7.org/CodeSystem/referencerange-meaning";
 const REPORT_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";
-const LOINC_SYSTEM = "http://loinc.org";
 const LOINC_LAB_REPORT_CODE = "11502-2"; // Laboratory report
 export const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
 

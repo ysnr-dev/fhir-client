@@ -11,7 +11,7 @@ import type {
   RegimenStatus,
   RegimenStepUsageType,
 } from "../api/masterClient";
-import type { CodeOption } from "./injectionHelpers";
+import { inputText, newDraftKey, numOrNull, textOrNull } from "../lib/form";
 
 // 化学療法レジメンマスタの選択肢と、画面の入力値(draft)と API の相互変換。
 // React に依存しない。設計は docs/chemo-regimen-design.md。
@@ -74,11 +74,6 @@ export const REGIMEN_LAB_CATEGORY_OPTIONS: { code: RegimenLabCategory; display: 
 ];
 
 export const CTCAE_GRADE_OPTIONS = ["1", "2", "3", "4", "5"];
-
-export function displayOfOption(options: readonly CodeOption[], code: string | null | undefined): string {
-  if (!code) return "";
-  return options.find((o) => o.code === code)?.display ?? code;
-}
 
 /** 算出基準ごとの投与量の単位表示(基準値・上限値の後ろに添える)。 */
 export function doseUnitSuffix(basis: RegimenDoseBasis, doseUnit: string): string {
@@ -240,12 +235,6 @@ export interface RegimenDraft {
   adverseEvents: RegimenAdverseEventDraft[];
 }
 
-let nextKey = 1;
-/** 行の React key。保存済みの id とは無関係で、画面を開いている間だけ一意。 */
-export function newDraftKey(): number {
-  return nextKey++;
-}
-
 export function emptyRegimenDraft(): RegimenDraft {
   return {
     regimenCode: "",
@@ -388,56 +377,52 @@ export function emptyAdverseEventDraft(): RegimenAdverseEventDraft {
   return { key: newDraftKey(), term: "", grade: "", note: "" };
 }
 
-function str(value: string | number | null | undefined): string {
-  return value === null || value === undefined ? "" : String(value);
-}
-
 export function draftFromRegimen(detail: RegimenDetail): RegimenDraft {
   return {
     regimenCode: detail.regimen_code,
     name: detail.name,
-    shortName: str(detail.short_name),
-    nameKana: str(detail.name_kana),
-    departmentCode: str(detail.department_code),
-    departmentName: str(detail.department_name),
+    shortName: inputText(detail.short_name),
+    nameKana: inputText(detail.name_kana),
+    departmentCode: inputText(detail.department_code),
+    departmentName: inputText(detail.department_name),
     purpose: detail.purpose ?? "",
     setting: detail.setting ?? "",
-    treatmentDays: str(detail.treatment_days),
-    restDays: str(detail.rest_days),
-    plannedCycles: str(detail.planned_cycles),
+    treatmentDays: inputText(detail.treatment_days),
+    restDays: inputText(detail.rest_days),
+    plannedCycles: inputText(detail.planned_cycles),
     emeticRisk: detail.emetic_risk ?? "",
     status: detail.status,
-    approvedOn: str(detail.approved_on),
-    approvedBy: str(detail.approved_by),
-    copiedFromCode: str(detail.copied_from_code),
-    indicationNote: str(detail.indication_note),
-    discontinuationCriteria: str(detail.discontinuation_criteria),
-    doseReductionCriteria: str(detail.dose_reduction_criteria),
-    referencesNote: str(detail.references_note),
-    validFrom: str(detail.valid_from),
-    validTo: str(detail.valid_to),
-    displayOrder: str(detail.display_order),
-    note: str(detail.note),
+    approvedOn: inputText(detail.approved_on),
+    approvedBy: inputText(detail.approved_by),
+    copiedFromCode: inputText(detail.copied_from_code),
+    indicationNote: inputText(detail.indication_note),
+    discontinuationCriteria: inputText(detail.discontinuation_criteria),
+    doseReductionCriteria: inputText(detail.dose_reduction_criteria),
+    referencesNote: inputText(detail.references_note),
+    validFrom: inputText(detail.valid_from),
+    validTo: inputText(detail.valid_to),
+    displayOrder: inputText(detail.display_order),
+    note: inputText(detail.note),
     indications: detail.indications.map((i) => ({
       key: newDraftKey(),
       managementNumber: i.management_number,
       name: i.name,
-      icd10: str(i.icd10),
+      icd10: inputText(i.icd10),
     })),
     steps: detail.steps.map((s) => ({
       key: newDraftKey(),
-      name: str(s.name),
+      name: inputText(s.name),
       daysText: formatDays(s.days),
       usageType: s.usage_type,
-      routeCode: str(s.route_code),
-      methodCode: str(s.method_code),
-      lineCode: str(s.line_code),
-      infusionMinutes: str(s.infusion_minutes),
-      rate: str(s.rate),
-      deviceNote: str(s.device_note),
+      routeCode: inputText(s.route_code),
+      methodCode: inputText(s.method_code),
+      lineCode: inputText(s.line_code),
+      infusionMinutes: inputText(s.infusion_minutes),
+      rate: inputText(s.rate),
+      deviceNote: inputText(s.device_note),
       usage: s.usage_code ? { code: s.usage_code, name: s.usage?.usage_name ?? "" } : null,
-      doseDays: str(s.dose_days),
-      note: str(s.note),
+      doseDays: inputText(s.dose_days),
+      note: inputText(s.note),
       drugs: s.drugs.map((d) => ({
         key: newDraftKey(),
         drugRole: d.drug_role,
@@ -448,40 +433,29 @@ export function draftFromRegimen(detail: RegimenDetail): RegimenDraft {
         },
         medicineRetirement: medicineRetirementNote(d),
         doseBasis: d.dose_basis,
-        doseValue: str(d.dose_value),
-        doseUnit: str(d.dose_unit),
-        doseMax: str(d.dose_max),
-        note: str(d.note),
+        doseValue: inputText(d.dose_value),
+        doseUnit: inputText(d.dose_unit),
+        doseMax: inputText(d.dose_max),
+        note: inputText(d.note),
       })),
     })),
     labCriteria: detail.lab_criteria.map((c) => ({
       key: newDraftKey(),
       category: c.category,
-      analyteCode: str(c.analyte_code),
+      analyteCode: inputText(c.analyte_code),
       itemName: c.item_name,
-      unit: str(c.unit),
-      lowerLimit: str(c.lower_limit),
-      upperLimit: str(c.upper_limit),
-      note: str(c.note),
+      unit: inputText(c.unit),
+      lowerLimit: inputText(c.lower_limit),
+      upperLimit: inputText(c.upper_limit),
+      note: inputText(c.note),
     })),
     adverseEvents: detail.adverse_events.map((a) => ({
       key: newDraftKey(),
       term: a.term,
-      grade: str(a.grade),
-      note: str(a.note),
+      grade: inputText(a.grade),
+      note: inputText(a.note),
     })),
   };
-}
-
-function numOrNull(text: string): number | null {
-  const trimmed = text.trim();
-  if (trimmed === "") return null;
-  const n = Number(trimmed);
-  return Number.isFinite(n) ? n : null;
-}
-
-function textOrNull(text: string): string | null {
-  return text.trim() === "" ? null : text;
 }
 
 /**

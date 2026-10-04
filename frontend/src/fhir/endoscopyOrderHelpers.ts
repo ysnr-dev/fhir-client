@@ -20,12 +20,11 @@ import {
 } from "./shared";
 
 export { EXAM_PRIORITY_OPTIONS, RETRO_PRIORITY };
-import type { TemplateBinding } from "./questionnaireResponseHelpers";
+import { templateBindingOf, templateResponseIdOf, type TemplateBinding } from "./questionnaireResponseHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
   SETTING_SYSTEM,
-  applyOrderContext,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -174,7 +173,6 @@ export function emptyEndoscopyOrderForm(
   };
 }
 
-
 // ---- オーダーの単位(GP) ----
 //
 // 1 GP = 単独で選んだオーダー項目 1 つ、またはセット 1 つ。セットは親を GP とし、
@@ -296,23 +294,13 @@ function buildItemRequest(
   return resource;
 }
 
-// 保存済みのテンプレート回答 id。拡張の参照から取り出す。
-function responseIdOf(request: fhir4.ServiceRequest, url: string): string | null {
-  const reference = request.extension?.find((e) => e.url === url)?.valueReference?.reference;
-  return reference?.match(/^QuestionnaireResponse\/(.+)$/)?.[1] ?? null;
-}
-
 /** 明細が参照しているテンプレート回答の id 一覧(更新・削除で孤児を残さないために使う)。 */
 export function endoscopyOrderResponseIds(itemRequests: fhir4.ServiceRequest[]): string[] {
   return itemRequests.flatMap((request) =>
-    [responseIdOf(request, PURPOSE_QR_EXT_URL), responseIdOf(request, REMARKS_QR_EXT_URL)].filter(
+    [templateResponseIdOf(request, PURPOSE_QR_EXT_URL), templateResponseIdOf(request, REMARKS_QR_EXT_URL)].filter(
       (id): id is string => Boolean(id),
     ),
   );
-}
-
-function bindingOf(responseId: string | null): TemplateBinding | null {
-  return responseId ? { responseId, draft: null } : null;
 }
 
 function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): EndoscopyOrderItemLine {
@@ -336,8 +324,8 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): En
     purpose: request.extension?.find((e) => e.url === EXAM_PURPOSE_EXT_URL)?.valueString ?? "",
     remarks: request.note?.[0]?.text ?? "",
     // draft は null = 「再編集されるまで回答は触らない」(診療記録と同じ)。
-    purposeTemplate: bindingOf(responseIdOf(request, PURPOSE_QR_EXT_URL)),
-    remarksTemplate: bindingOf(responseIdOf(request, REMARKS_QR_EXT_URL)),
+    purposeTemplate: templateBindingOf(templateResponseIdOf(request, PURPOSE_QR_EXT_URL)),
+    remarksTemplate: templateBindingOf(templateResponseIdOf(request, REMARKS_QR_EXT_URL)),
     parentCode,
     // 保存済みのオーダーには載っていない印なので、いったんグループ化として読む。
     // 編集・DO では、登録前にオーダー画面が今のマスタから入れ直す。

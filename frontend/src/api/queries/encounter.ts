@@ -18,10 +18,10 @@ import {
 } from "../../fhir/encounterHelpers";
 import { INJECTION_ORDER_TYPE } from "../../fhir/injectionHelpers";
 import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import {
   groupByRp,
   isPrescriptionServiceRequest,
-  ORDER_TYPE_SYSTEM,
   PRESCRIPTION_CATEGORY_SYSTEM,
 } from "../../fhir/prescriptionHelpers";
 import { rpEndDate } from "../../fhir/medicationScheduleHelpers";

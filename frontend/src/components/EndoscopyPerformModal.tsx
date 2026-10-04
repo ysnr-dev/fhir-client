@@ -31,7 +31,8 @@ import { MedicalMaterialSearchModal } from "./MedicalMaterialSearchModal";
 import { MedicalProcedureSearchModal } from "./MedicalProcedureSearchModal";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
-import { TrashIcon } from "./icons/TrashIcon";
+import { RemoveRowButton } from "./RemoveRowButton";
+import { replaceAt } from "../lib/arrays";
 
 // 内視鏡の実施入力。放射線検査(docs/rad-result-design.md)と同じ形。
 //
@@ -49,21 +50,6 @@ import { TrashIcon } from "./icons/TrashIcon";
 // 器材マスタを挟まず、算定コードである特定保険医療材料を直接選ぶ。
 
 type Adding = "procedure" | "medicine" | "material" | null;
-
-/** 行を外すボタン。3 種の明細で同じ見た目・同じ意味なのでまとめる。 */
-function RemoveRowButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      className="rp-card__icon-button"
-      title="外す"
-      aria-label="外す"
-      onClick={onClick}
-    >
-      <TrashIcon />
-    </button>
-  );
-}
 
 interface Props {
   row: EndoscopyWorklistRow;
@@ -521,10 +507,6 @@ function pushDetail(lines: Lines, detail: EndoscopyDatasetDetail) {
       unitName: detail.resolved_unit_name ?? "",
     });
   }
-}
-
-function replaceAt<T>(list: T[], index: number, next: T): T[] {
-  return list.map((item, i) => (i === index ? next : item));
 }
 
 // 名称とコードだけを並べる表。削除ボタンの付け方を手技料と揃えるために切り出す。

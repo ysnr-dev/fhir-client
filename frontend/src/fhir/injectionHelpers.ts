@@ -3,6 +3,7 @@ import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   categoryCoding,
+  type CodeOption,
   displayOf,
   orderComment,
   orderDay,
@@ -10,16 +11,15 @@ import {
   transactionBundle,
   withVersionLock,
 } from "./shared";
+import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
   MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
-  ORDER_TYPE_SYSTEM,
   RP_NUMBER_SYSTEM,
   SETTING_OPTIONS,
   SETTING_SYSTEM,
   UNITS_OF_MEASURE_SYSTEM,
   YJ_CODE_SYSTEM,
-  applyOrderContext,
   codingBySystem,
   identifierValue,
   medicineFromCoding,
@@ -43,7 +43,7 @@ import {
 //   - 用法種別(点滴/ワンショット): 対応する標準コード表が存在しないためローカル拡張
 
 // 処方の ServiceRequest と区別するためのオーダー種別(CodeSystem は
-// prescriptionHelpers の ORDER_TYPE_SYSTEM を検体検査と共有する)。
+// orderHeader の ORDER_TYPE_SYSTEM を検体検査と共有する)。
 export const INJECTION_ORDER_TYPE = { code: "injection", display: "注射" };
 
 // 注射区分。処方区分(処方の CATEGORY_SYSTEM)と選択肢が違うので別のコードシステムにする。
@@ -215,10 +215,7 @@ const METHOD_SYSTEM = "urn:oid:1.2.392.200250.2.2.20.40";
 const LINE_EXT_URL = "http://jpfhir.jp/fhir/core/Extension/StructureDefinition/JP_MedicationDosage_Line";
 const LINE_SYSTEM = "http://fhir-client.local/CodeSystem/injection-line";
 
-export interface CodeOption {
-  code: string;
-  display: string;
-}
+export type { CodeOption };
 
 // 注射区分。入外区分(処方と共通の SETTING_OPTIONS)で選択肢が変わる。
 export const CATEGORY_OPTIONS: Record<Exclude<PrescriptionSetting, "">, CodeOption[]> = {

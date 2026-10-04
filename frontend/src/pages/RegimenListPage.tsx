@@ -9,8 +9,8 @@ import {
   REGIMEN_PURPOSE_OPTIONS,
   REGIMEN_SETTING_OPTIONS,
   REGIMEN_STATUS_OPTIONS,
-  displayOfOption,
 } from "../fhir/regimenHelpers";
+import { displayOf } from "../fhir/shared";
 
 // 化学療法レジメンマスタの一覧。編集は 1 レジメン 1 ページ(/regimens/:id)。
 // 設計は docs/chemo-regimen-design.md。
@@ -129,8 +129,8 @@ export function RegimenListPage() {
                 )}
               </td>
               <td>{regimen.department_name ?? ""}</td>
-              <td className="rad-item__compact">{displayOfOption(REGIMEN_PURPOSE_OPTIONS, regimen.purpose)}</td>
-              <td className="rad-item__compact">{displayOfOption(REGIMEN_SETTING_OPTIONS, regimen.setting)}</td>
+              <td className="rad-item__compact">{displayOf(REGIMEN_PURPOSE_OPTIONS, regimen.purpose)}</td>
+              <td className="rad-item__compact">{displayOf(REGIMEN_SETTING_OPTIONS, regimen.setting)}</td>
               <td className="rad-item__compact">
                 {regimen.cycle_days > 0
                   ? `${regimen.cycle_days} 日(投与 ${regimen.treatment_days ?? 0}・休薬 ${regimen.rest_days ?? 0})`
@@ -141,7 +141,7 @@ export function RegimenListPage() {
               </td>
               <td className="rad-item__compact">
                 <span className={`regimen-status regimen-status--${regimen.status}`}>
-                  {displayOfOption(REGIMEN_STATUS_OPTIONS, regimen.status)}
+                  {displayOf(REGIMEN_STATUS_OPTIONS, regimen.status)}
                 </span>
               </td>
               <td className="rad-item__compact">

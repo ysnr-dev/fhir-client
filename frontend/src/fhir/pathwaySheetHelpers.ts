@@ -1,8 +1,9 @@
 import type { PathwayApplicationRecord, PathwayEventRecord } from "./pathwayApplyHelpers";
 import { achievementLabel, resultValueLabel, type Achievement, type PathwayEvaluationState } from "./pathwayEvaluationHelpers";
-import { TASK_CATEGORY_LV1_OPTIONS, displayOfOption } from "./pathwayHelpers";
+import { TASK_CATEGORY_LV1_OPTIONS } from "./pathwayHelpers";
 import { isNursingServiceRequest } from "./nursingOrderHelpers";
 import { orderPerformedOn, type OrderProgress } from "./orderProgressHelpers";
+import { displayOf } from "./shared";
 
 // パスシート(病日 × OAT ユニット)の行と列。適用 1 件の木(parsePathwayApplication)を、
 // 紙のパスシートと同じ「行 = アウトカム・観察項目・タスク、列 = 病日」に組み直す。
@@ -187,7 +188,7 @@ export function buildPathwaySheet(
               unitKey,
               label: task.name,
               critical: false,
-              categoryLabel: displayOfOption(TASK_CATEGORY_LV1_OPTIONS, task.categoryLv1),
+              categoryLabel: displayOf(TASK_CATEGORY_LV1_OPTIONS, task.categoryLv1),
               childCount: 0,
               properValue: "",
               evaluated: false,

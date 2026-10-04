@@ -12,7 +12,7 @@ import {
   type TransfusionTaskStatus,
 } from "../../fhir/transfusionTaskHelpers";
 import { buildTransfusionPerformDeleteEntries } from "../../fhir/transfusionResultHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { postBundle, searchResource } from "../fhirClient";
 import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES } from "./core";
 import {

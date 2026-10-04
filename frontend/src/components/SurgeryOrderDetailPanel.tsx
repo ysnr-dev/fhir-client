@@ -1,5 +1,5 @@
 import { problemLabel } from "../fhir/conditionHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import { schemaAnnotatedLines } from "../fhir/questionnaireResponseHelpers";
 import {
@@ -68,7 +68,7 @@ export function SurgeryOrderDetailPanel({
           <dt>執刀科</dt>
           <dd>{summary.surgicalDepartmentName || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <dt>スタッフ</dt>
           <dd>
             {summary.staff.length > 0

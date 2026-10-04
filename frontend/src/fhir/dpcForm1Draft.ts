@@ -19,6 +19,7 @@ import {
 } from "./encounterHelpers";
 import { calculateAge, patientNumberOf } from "./patientHelpers";
 import { summarizePregnancy } from "./pregnancyHelpers";
+import { loincOf } from "./shared";
 
 /** 実施した手術 1 件(術式 1 つ)。 */
 export interface DpcSurgerySource {
@@ -204,10 +205,6 @@ function surgeryRow(surgery: DpcSurgerySource): Dpc1Row {
 }
 
 // ---- 身体計測 ----
-
-function loincOf(observation: fhir4.Observation): string {
-  return observation.code?.coding?.find((c) => c.system === "http://loinc.org")?.code ?? "";
-}
 
 interface Measured {
   date: string;

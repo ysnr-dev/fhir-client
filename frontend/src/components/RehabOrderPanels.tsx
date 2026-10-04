@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useCreatePrescription, useUpdateRehabOrder } from "../api/queries";
 import type { ProblemRef } from "../fhir/conditionHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import {
   buildDoRehabOrderForm,
   buildRehabOrderBundle,
@@ -103,7 +103,7 @@ export function RehabOrderEditPanel({ patientId, srId, onSaved }: RehabOrderEdit
         values,
         patientId,
         serviceRequest,
-        prescriptionRequester(serviceRequest),
+        orderRequester(serviceRequest),
       ),
       { onSuccess: onSaved },
     );

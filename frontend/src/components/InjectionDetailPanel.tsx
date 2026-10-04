@@ -15,13 +15,8 @@ import {
   injectionTaskStatus,
   injectionTaskStatusDisplay,
 } from "../fhir/injectionTaskHelpers";
-import {
-  ORDER_IN_RP_SYSTEM,
-  RP_NUMBER_SYSTEM,
-  identifierValue,
-  orderContextSummary,
-  prescriptionRequester,
-} from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
+import { ORDER_IN_RP_SYSTEM, RP_NUMBER_SYSTEM, identifierValue } from "../fhir/prescriptionHelpers";
 import {
   cycleDayLabel,
   regimenDoseOf,
@@ -132,7 +127,7 @@ export function InjectionDetailPanel({
           <dt>注射区分</dt>
           <dd>{summary.categoryDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <dt>注射コメント</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />

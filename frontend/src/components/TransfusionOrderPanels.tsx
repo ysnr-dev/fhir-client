@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useCreatePrescription, useUpdatePrescription } from "../api/queries";
 import type { ProblemRef } from "../fhir/conditionHelpers";
-import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import {
   buildDoTransfusionOrderForm,
   buildTransfusionOrderBundle,
@@ -107,7 +107,7 @@ export function TransfusionOrderEditPanel({
         patientId,
         serviceRequest,
         itemIds,
-        prescriptionRequester(serviceRequest),
+        orderRequester(serviceRequest),
       ),
       { onSuccess: onSaved },
     );

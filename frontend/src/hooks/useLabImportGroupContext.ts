@@ -9,7 +9,7 @@ import {
 } from "../api/queries";
 import type { LabImportGroup, LabImportOrderContext } from "../fhir/labImportHelpers";
 import { isValidLabelNumber, specimenOrderIdOf } from "../fhir/labSpecimenHelpers";
-import { departmentOf } from "../fhir/prescriptionHelpers";
+import { departmentOf } from "../fhir/orderHeader";
 import type { LabResultSetting } from "../fhir/labResultHelpers";
 
 // 取込の候補(ORC/OBR 群)を、どの患者のどのオーダーに載せるかを決める。

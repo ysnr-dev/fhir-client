@@ -1,7 +1,7 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderDay } from "../fhir/shared";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
   entryLabel,
   orderEntries,
@@ -50,7 +50,7 @@ export function TreatmentOrderDetailPanel({
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
           <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>

@@ -12,7 +12,6 @@ import {
   BLOOD_PRESSURE,
   BMI,
   DIASTOLIC,
-  LOINC_SYSTEM,
   SYSTOLIC,
   VITAL_MEASURES,
   vitalInterpretationOf,
@@ -25,16 +24,16 @@ import type { EncounterEvent } from "./encounterHelpers";
 import type { RegimenApplication, RegimenDayOrder } from "./regimenOrderHelpers";
 import type { RadiotherapyFractionDisplay } from "./radiotherapyResultHelpers";
 import { summarizeRadiotherapyOrder } from "./radiotherapyOrderHelpers";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import {
   GENERAL_ORDER_CODE_SYSTEM,
   MEDICINE_CODE_SYSTEM,
-  ORDER_TYPE_SYSTEM,
   YJ_CODE_SYSTEM,
   groupByRp,
   hasDoseDays,
 } from "./prescriptionHelpers";
 import type { MedicineLineDisplay } from "./prescriptionHelpers";
-import { orderDay } from "./shared";
+import { LOINC_SYSTEM, orderDay } from "./shared";
 import {
   conditionCategoryOf,
   outcomeDisplay,

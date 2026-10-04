@@ -1,4 +1,5 @@
 import { today } from "../lib/dates";
+import { LOINC_SYSTEM, loincOf } from "./shared";
 
 /**
  * 妊娠・授乳。
@@ -11,7 +12,7 @@ import { today } from "../lib/dates";
  * 授乳中、という状態がありうる)。血液型(bloodTypeHelpers.ts)と同じ作り。
  */
 
-const LOINC = "http://loinc.org";
+const LOINC = LOINC_SYSTEM;
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
 
 /** 妊娠状態 / 授乳状態の LOINC。 */
@@ -158,10 +159,6 @@ export function buildPregnancyObservations(
   }
 
   return observations;
-}
-
-function loincOf(observation: fhir4.Observation): string {
-  return observation.code?.coding?.find((c) => c.system === LOINC)?.code ?? "";
 }
 
 function valueCodeOf(observation: fhir4.Observation | undefined): string {

@@ -54,16 +54,16 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 
 ### 次の候補(今回やらない)
 
-1. 部門ごとの結果 helper のコピー(型付き `referenceId` 11 か所、`conceptLabel` 8、`quantityLabel` 5、`materialLabel` 5、
-   `RemoveRowButton` 5 ほか)を `fhir/shared.ts` に。第 2 回の候補 1(生理・内視鏡・処置の全層統一)より手前でできる。
-2. 第 2 回の候補 7(`departmentOf` などを `fhir/orderHeader.ts` へ)。参照が約 72 ファイルに増え、記録にも使うようになった。
+1. (同日実施 → 下の「追加で実施」)部門ごとの helper のコピーの集約。
+2. (同日実施 → 下の「追加で実施」)オーダー共通の処理を `fhir/orderHeader.ts` へ。
 3. `api/` の `resourcesOfType` の再実装約 38 か所と、型を見ずに `Boolean(r)` で拾う約 22 か所。
 4. (同日実施 → 下の「追加で実施」)transaction の PUT の楽観ロック。
 5. (同日実施 → 下の「追加で実施」)backend の「今日」。
 6. テーマ変数を使わない警告・危険色 61 か所、文になっているボタン名・フォーム内の説明文。
 7. `api/` 外からの FHIR 呼び出し 4 か所、`KarteTimeline.tsx` のカード本体(約 1,600 行)の分割。
+8. 医療従事者の編集で、所属(PractitionerRole)の PUT に版のロックが無い(本体の Practitioner はロック済み)。
 
-### 追加で実施(次の候補 4・5)
+### 追加で実施(次の候補 1・2・4・5)
 
 **transaction の PUT の楽観ロック**
 
@@ -89,6 +89,30 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
   `Master::ValidityPeriod`(`active_on`)に 1 本化し、モデル 10 本の同じスコープと、コントローラ 9 本の直書きを置き換えた。
 - spec も `FacilityClock.today` に(UTC と日本時間で日付が違う時間帯に、掲示板の spec 4 件が落ちる状態だった)。
   境界の spec を追加(backend rspec 1824 件通過)。
+
+**部門ごとの helper のコピーの集約(候補 1)**
+
+本体が同一の定義 約 75 個を 1 つずつにした(差し引き約 400 行減)。
+
+- `fhir/shared.ts`: `referenceIdOfType`(型付きの参照 id、11 か所)、`conceptLabel`(8)、`quantityLabel`(5)、
+  `materialLabel`(5。数量の拡張 URL は部門ごとなので引数で渡す)、`performedLabel`(4)、`loincOf`(4)と `LOINC_SYSTEM`(15)、
+  `CodeOption`(3)。`displayOfOption`(2)と `optionDisplay`(2)は `displayOf` に統一(code が空なら空文字を返すよう広げた)。
+- `lib/dates`: `shortDate`(5)。`lib/arrays`: `replaceAt`(5)・`moveItem`(2)。`lib/form`: `newDraftKey`・`numOrNull`・
+  `textOrNull`・`inputText`(パスとレジメンの編集で各 2)。
+- `questionnaireResponseHelpers`: `templateResponseIdOf` / `templateBindingOf`(放射線・生理・内視鏡の 3)。
+  `labOrderHelpers` の `containedSpecimenOf`(3)、`radiotherapyOrderHelpers` の `doseQuantity` / `DOSE_UNIT`(3)、
+  `appointmentHelpers` の `bookingLabel`(4)。
+- 部品: `components/RemoveRowButton.tsx`(6)、`components/icons/NoteIcon.tsx`(2)。
+- `performedLabel` は `lib/dates` の `dateTimeLabel` を使う。時刻を持たない実施日は日付だけになる(以前は 09:00 が付いた)。
+- 残した差のあるもの: `medicineLabel`(経路の表示が部門ごと)、`examReportHelpers` の `responseIdOf`、
+  `surgeryResultHelpers` の `optionDisplay`、`WardMapPage` の `shortDate`。
+
+**オーダー共通の処理を `fhir/orderHeader.ts` へ(候補 2)**
+
+- `prescriptionHelpers.ts` から、種別(`ORDER_TYPE_SYSTEM`)・依頼科(`departmentExtension` / `departmentOf` / `DepartmentRef`)・
+  病棟(`wardExtension` / `wardOf`)・依頼元(`OrderAttribution` / `withOrderWard` / `applyOrderContext` / `orderContextSummary`)を移した。
+  診療記録・テンプレート回答・バイタルも記録した科を同じ拡張で持つので、処方の下に置く理由が無くなっていた。
+- `prescriptionRequester` は全オーダーで使うので `orderRequester` に改名した。import 元 129 ファイルを書き換え、再 export は残していない。
 
 ## 第 2 回（2026-09-27）
 

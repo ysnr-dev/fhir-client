@@ -1,8 +1,8 @@
 import type { NursingObservation } from "../api/masterClient";
 import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { NURSING_ORDER_TYPE, nursingOrderItem, summarizeNursingOrder } from "./nursingOrderHelpers";
-import { ORDER_TYPE_SYSTEM } from "./prescriptionHelpers";
-import { referenceId } from "./shared";
+import { ORDER_TYPE_SYSTEM } from "./orderHeader";
+import { LOINC_SYSTEM, referenceId } from "./shared";
 import {
   VITAL_MEASURES,
   bloodPressureCodeableConcept,
@@ -36,7 +36,7 @@ export const NURSING_PERFORM_ENTRY_SYSTEM = "http://fhir-client.local/nursing-pe
 export const NURSING_OBSERVATION_RESULT_SYSTEM =
   "http://fhir-client.local/CodeSystem/nursing-observation-result";
 
-const LOINC = "http://loinc.org";
+const LOINC = LOINC_SYSTEM;
 const UCUM = "http://unitsofmeasure.org";
 const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Procedure";
 

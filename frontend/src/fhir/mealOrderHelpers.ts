@@ -9,14 +9,8 @@ import {
   transactionBundle,
   withVersionLock,
 } from "./shared";
-import {
-  ORDER_TYPE_SYSTEM,
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
-  applyOrderContext,
-  prescriptionRequester,
-  type OrderAttribution,
-} from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM, applyOrderContext, orderRequester, type OrderAttribution } from "./orderHeader";
+import { SETTING_OPTIONS, SETTING_SYSTEM } from "./prescriptionHelpers";
 
 // 食事(給食)オーダー。SS-MIX2 標準化ストレージの給食オーダメッセージ
 // (OMD^O03)を参考仕様にしている。
@@ -780,7 +774,7 @@ export function buildMealOrderRewriteEntry(
   const resource = buildMealOrderServiceRequest(
     values,
     sr.subject?.reference?.split("/").pop() ?? "",
-    prescriptionRequester(sr),
+    orderRequester(sr),
     {
       serviceRequestId: sr.id,
       // 登録日時は元のまま(書き換えで今日に動かさない)。

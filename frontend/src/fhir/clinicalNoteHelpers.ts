@@ -1,6 +1,6 @@
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 import { draftObservationEntries } from "./observationExtract";
-import { departmentExtension, departmentOf, type DepartmentRef } from "./prescriptionHelpers";
+import { departmentExtension, departmentOf, type DepartmentRef } from "./orderHeader";
 import { practitionerDisplayName } from "./practitionerHelpers";
 import {
   SCHEMA_IMAGE_NOTE,
@@ -19,8 +19,6 @@ import {
 //   文字装飾は inline style、画像は data: URI の <img> として本文に埋め込む
 //   (FHIR の narrative 規約は data: URI の画像埋め込みを許容している)。
 // - Binary リソースは使わない。1 リソースで完結させ、transaction Bundle も不要。
-
-const LOINC_SYSTEM = "http://loinc.org";
 
 export const PROGRESS_NOTE_TYPE: fhir4.CodeableConcept = {
   coding: [{ system: LOINC_SYSTEM, code: "11506-3", display: "Progress note" }],
@@ -238,6 +236,7 @@ export function emptyClinicalNoteForm(
 // toFhirDateTime の実体は lib/dates.ts(オーダーの登録日時 nowFhirDateTime と同じ場所)。
 // ここからも出す。
 import { nowFhirDateTime, toFhirDateTime } from "../lib/dates";
+import { LOINC_SYSTEM } from "./shared";
 
 export { toFhirDateTime };
 

@@ -1,5 +1,5 @@
 import { problemLabel } from "../fhir/conditionHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { mealOrderProblem, mealStapleText, summarizeMealOrder } from "../fhir/mealOrderHelpers";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
@@ -63,7 +63,7 @@ export function MealOrderDetailPanel({
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
           <dt>依頼科 | 依頼医師</dt>
-          <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
           <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>
