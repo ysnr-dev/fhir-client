@@ -110,6 +110,17 @@ export function dateTimeLabel(value: string | undefined): string {
 }
 
 /**
+ * FHIR の dateTime の時刻「HH:mm」(端末のローカル時刻)。日付だけの値と読めない値は空文字。
+ */
+export function clockTime(value: string): string {
+  if (value.length <= 10) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
  * FHIR の dateTime を「YYYY-MM-DD HH:mm:ss」にする。秒を持たない値は分まで、時刻を持たない値は
  * 日付だけ返す。オーダーの登録日時のように、同じ分に何件も並びうるものに使う。
  */

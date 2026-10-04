@@ -33,27 +33,85 @@ class ChartDefinition < ApplicationRecord
   SCOPES = %w[facility department practitioner].freeze
 
   SCHEMA_VERSION = 1
-  DEFINITION_KEYS = %w[schema_version axis items events drugs overlay background].freeze
-  AXIS_KEYS = %w[unit columns].freeze
   AXIS_UNITS = %w[day month year].freeze
-  # 画面が使う範囲(日 7〜92 / 月 3〜36 / 年 1〜10)より広く取る。単位ごとの妥当な
-  # 範囲は画面の都合なので、ここでは桁が壊れていないことだけを見る。
-  COLUMNS_RANGE = (1..120)
-  ITEM_KEYS = %w[key source name unit codings components options scale].freeze
   ITEM_SOURCES = %w[lab vital template].freeze
   # 選択肢の尺度。省略は順序あり(並び順 = 程度)。nominal は順序なし(陽性/陰性など)。
   ITEM_SCALES = %w[ordinal nominal].freeze
-  CODING_KEYS = %w[system code display].freeze
-  COMPONENT_KEYS = %w[code name].freeze
-  OPTION_KEYS = %w[system code display].freeze
   EVENT_KINDS = %w[condition encounter surgery chemo radiotherapy adverse exam injection prescription].freeze
   MAX_ITEMS = 30
-  DRUG_KEYS = %w[key name yj7 codes].freeze
   MAX_DRUGS = 20
-  BACKGROUND_KEYS = %w[kind key event].freeze
   BACKGROUND_KINDS = %w[item drug event].freeze
   # 網掛けにできるのは期間を持つ種別だけ。
   BACKGROUND_EVENT_KINDS = %w[encounter chemo adverse].freeze
+
+  ITEM_SHAPE = {
+    fields: {
+      "key" => :text,
+      "source" => { enum: ITEM_SOURCES },
+      "name" => :text,
+      "unit" => :string,
+      "scale" => { enum: ITEM_SCALES },
+      "codings" => {
+        list: { fields: { "system" => :text, "code" => :text, "display" => :any }, required: %w[system code] },
+        min: 1
+      },
+      "components" => { list: { fields: { "code" => :text, "name" => :text }, required: %w[code name] } },
+      # テンプレートの選択肢項目の選択肢。並び順を程度の順として画面が使う。
+      "options" => {
+        list: { fields: { "system" => :string, "code" => :text, "display" => :text }, required: %w[code display] }
+      }
+    },
+    required: %w[key source name codings]
+  }.freeze
+
+  DRUG_SHAPE = {
+    fields: {
+      "key" => :text,
+      "name" => :text,
+      "yj7" => { pattern: /\A\d{7}\z/, label: " 7 桁の数字", strict: true },
+      "codes" => { list: :text }
+    },
+    required: %w[key name],
+    check: lambda { |drug, path|
+      next [] if drug["yj7"].present? || (drug["codes"].is_a?(Array) && drug["codes"].any?)
+
+      ["#{path} は yj7 か codes のどちらかが要ります"]
+    }
+  }.freeze
+
+  # 全レーンに網掛けする行。項目・薬剤は key で、イベントは種別(event)で指す。
+  BACKGROUND_SHAPE = {
+    fields: { "kind" => { enum: BACKGROUND_KINDS }, "key" => :text, "event" => { enum: BACKGROUND_EVENT_KINDS } },
+    required: %w[kind],
+    check: lambda { |background, path|
+      wanted, unwanted = background["kind"] == "event" ? %w[event key] : %w[key event]
+      [
+        ("#{path}.#{unwanted} は指定できません" if background.key?(unwanted)),
+        ("#{path}.#{wanted} は必須です" if background[wanted].nil?)
+      ].compact
+    }
+  }.freeze
+
+  # definition の形。検証は JsonShape がこの表から回す。
+  DEFINITION_SHAPE = {
+    fields: {
+      "schema_version" => { const: SCHEMA_VERSION },
+      "axis" => {
+        fields: {
+          "unit" => { enum: AXIS_UNITS },
+          # 画面が使う範囲(日 7〜92 / 月 3〜36 / 年 1〜10)より広く取る。単位ごとの妥当な
+          # 範囲は画面の都合なので、ここでは桁が壊れていないことだけを見る。
+          "columns" => { integer: { min: 1, max: 120, unit: "整数" } }
+        }
+      },
+      "items" => { list: ITEM_SHAPE, max: MAX_ITEMS, unique: "key" },
+      "events" => { list: { enum: EVENT_KINDS }, unique: true },
+      "drugs" => { list: DRUG_SHAPE, max: MAX_DRUGS, unique: "key" },
+      "overlay" => :boolean,
+      "background" => BACKGROUND_SHAPE
+    }
+  }.freeze
+  DEFINITION_KEYS = DEFINITION_SHAPE[:fields].keys.freeze
 
   DEFAULT_DEFINITION = {
     "schema_version" => SCHEMA_VERSION,
@@ -111,220 +169,10 @@ class ChartDefinition < ApplicationRecord
 
   def definition_shape
     return if definition.blank?
-    return errors.add(:definition, "は連想配列で指定してください") unless definition.is_a?(Hash)
 
-    unknown = definition.keys - DEFINITION_KEYS
-    errors.add(:definition, "に対象外の項目があります(#{unknown.join(', ')})") if unknown.any?
-
-    unless definition["schema_version"].nil? || definition["schema_version"] == SCHEMA_VERSION
-      errors.add(:definition, "の schema_version は #{SCHEMA_VERSION} のみ使えます")
+    # 先頭(definition そのもの)の文言は「は〜」で始まり、中の項目は位置から始まる。
+    JsonShape.errors(DEFINITION_SHAPE, definition).each do |message|
+      errors.add(:definition, message.start_with?("は") ? message : "の #{message}")
     end
-
-    validate_axis(definition["axis"])
-    validate_items(definition["items"])
-    validate_events(definition["events"])
-    validate_drugs(definition["drugs"])
-    validate_background(definition["background"])
-
-    overlay = definition["overlay"]
-    return if overlay.nil? || [true, false].include?(overlay)
-
-    errors.add(:definition, "の overlay は true / false で指定してください")
-  end
-
-  def validate_background(background)
-    return if background.nil?
-    return errors.add(:definition, "の background は連想配列で指定してください") unless background.is_a?(Hash)
-
-    unknown = background.keys - BACKGROUND_KEYS
-    errors.add(:definition, "の background に対象外の項目があります(#{unknown.join(', ')})") if unknown.any?
-
-    kind = background["kind"]
-    unless BACKGROUND_KINDS.include?(kind)
-      return errors.add(:definition, "の background.kind は #{BACKGROUND_KINDS.join(' / ')} のいずれかで指定してください")
-    end
-
-    if kind == "event"
-      errors.add(:definition, "の background に key は指定できません") if background.key?("key")
-      return if BACKGROUND_EVENT_KINDS.include?(background["event"])
-
-      errors.add(:definition, "の background.event は #{BACKGROUND_EVENT_KINDS.join(' / ')} のいずれかで指定してください")
-    else
-      errors.add(:definition, "の background に event は指定できません") if background.key?("event")
-      return if background["key"].is_a?(String) && background["key"].present?
-
-      errors.add(:definition, "の background.key は必須です")
-    end
-  end
-
-  def validate_axis(axis)
-    return if axis.nil?
-    return errors.add(:definition, "の axis は連想配列で指定してください") unless axis.is_a?(Hash)
-
-    unknown = axis.keys - AXIS_KEYS
-    errors.add(:definition, "の axis に対象外の項目があります(#{unknown.join(', ')})") if unknown.any?
-
-    unless axis["unit"].nil? || AXIS_UNITS.include?(axis["unit"])
-      errors.add(:definition, "の axis.unit は #{AXIS_UNITS.join(' / ')} のいずれかで指定してください")
-    end
-    return if axis["columns"].nil?
-    return if axis["columns"].is_a?(Integer) && COLUMNS_RANGE.cover?(axis["columns"])
-
-    errors.add(:definition, "の axis.columns は #{COLUMNS_RANGE.min}〜#{COLUMNS_RANGE.max} の整数で指定してください")
-  end
-
-  def validate_items(items)
-    return if items.nil?
-    return errors.add(:definition, "の items は配列で指定してください") unless items.is_a?(Array)
-    return errors.add(:definition, "の items は #{MAX_ITEMS} 件までです") if items.size > MAX_ITEMS
-
-    keys = Set.new
-    items.each_with_index { |item, index| validate_item(item, index, keys) }
-  end
-
-  def validate_item(item, index, keys)
-    label = "の items[#{index}]"
-    return errors.add(:definition, "#{label} は連想配列で指定してください") unless item.is_a?(Hash)
-
-    unknown = item.keys - ITEM_KEYS
-    errors.add(:definition, "#{label} に対象外の項目があります(#{unknown.join(', ')})") if unknown.any?
-
-    key = item["key"]
-    if key.is_a?(String) && key.present?
-      errors.add(:definition, "#{label} の key が重複しています") unless keys.add?(key)
-    else
-      errors.add(:definition, "#{label} の key は必須です")
-    end
-
-    unless ITEM_SOURCES.include?(item["source"])
-      errors.add(:definition, "#{label} の source は #{ITEM_SOURCES.join(' / ')} のいずれかで指定してください")
-    end
-    errors.add(:definition, "#{label} の name は必須です") unless item["name"].is_a?(String) && item["name"].present?
-    if item.key?("unit") && !item["unit"].is_a?(String)
-      errors.add(:definition, "#{label} の unit は文字列で指定してください")
-    end
-    if item.key?("scale") && !ITEM_SCALES.include?(item["scale"])
-      errors.add(:definition, "#{label} の scale は #{ITEM_SCALES.join(' / ')} のいずれかで指定してください")
-    end
-
-    validate_codings(item["codings"], label)
-    validate_components(item["components"], label)
-    validate_options(item["options"], label)
-  end
-
-  # テンプレートの選択肢項目の選択肢。並び順を程度の順として画面が使う。
-  def validate_options(options, label)
-    return if options.nil?
-    return errors.add(:definition, "#{label} の options は配列で指定してください") unless options.is_a?(Array)
-
-    options.each_with_index do |option, index|
-      unless option.is_a?(Hash)
-        next errors.add(:definition, "#{label} の options[#{index}] は連想配列で指定してください")
-      end
-
-      unknown = option.keys - OPTION_KEYS
-      if unknown.any?
-        errors.add(:definition, "#{label} の options[#{index}] に対象外の項目があります(#{unknown.join(', ')})")
-      end
-      %w[code display].each do |key|
-        next if option[key].is_a?(String) && option[key].present?
-
-        errors.add(:definition, "#{label} の options[#{index}].#{key} は必須です")
-      end
-      if option.key?("system") && !option["system"].is_a?(String)
-        errors.add(:definition, "#{label} の options[#{index}].system は文字列で指定してください")
-      end
-    end
-  end
-
-  def validate_codings(codings, label)
-    unless codings.is_a?(Array) && codings.any?
-      return errors.add(:definition, "#{label} の codings は 1 件以上の配列で指定してください")
-    end
-
-    codings.each_with_index do |coding, index|
-      unless coding.is_a?(Hash)
-        next errors.add(:definition, "#{label} の codings[#{index}] は連想配列で指定してください")
-      end
-
-      unknown = coding.keys - CODING_KEYS
-      if unknown.any?
-        errors.add(:definition, "#{label} の codings[#{index}] に対象外の項目があります(#{unknown.join(', ')})")
-      end
-      %w[system code].each do |key|
-        value = coding[key]
-        next if value.is_a?(String) && value.present?
-
-        errors.add(:definition, "#{label} の codings[#{index}].#{key} は必須です")
-      end
-    end
-  end
-
-  def validate_components(components, label)
-    return if components.nil?
-    return errors.add(:definition, "#{label} の components は配列で指定してください") unless components.is_a?(Array)
-
-    components.each_with_index do |component, index|
-      unless component.is_a?(Hash)
-        next errors.add(:definition, "#{label} の components[#{index}] は連想配列で指定してください")
-      end
-
-      unknown = component.keys - COMPONENT_KEYS
-      if unknown.any?
-        errors.add(:definition, "#{label} の components[#{index}] に対象外の項目があります(#{unknown.join(', ')})")
-      end
-      COMPONENT_KEYS.each do |key|
-        value = component[key]
-        next if value.is_a?(String) && value.present?
-
-        errors.add(:definition, "#{label} の components[#{index}].#{key} は必須です")
-      end
-    end
-  end
-
-  def validate_events(events)
-    return if events.nil?
-    return errors.add(:definition, "の events は配列で指定してください") unless events.is_a?(Array)
-
-    unknown = events - EVENT_KINDS
-    errors.add(:definition, "の events に対象外の種別があります(#{unknown.join(', ')})") if unknown.any?
-    errors.add(:definition, "の events が重複しています") if events.size != events.uniq.size
-  end
-
-  def validate_drugs(drugs)
-    return if drugs.nil?
-    return errors.add(:definition, "の drugs は配列で指定してください") unless drugs.is_a?(Array)
-    return errors.add(:definition, "の drugs は #{MAX_DRUGS} 件までです") if drugs.size > MAX_DRUGS
-
-    keys = Set.new
-    drugs.each_with_index { |drug, index| validate_drug(drug, index, keys) }
-  end
-
-  def validate_drug(drug, index, keys)
-    label = "の drugs[#{index}]"
-    return errors.add(:definition, "#{label} は連想配列で指定してください") unless drug.is_a?(Hash)
-
-    unknown = drug.keys - DRUG_KEYS
-    errors.add(:definition, "#{label} に対象外の項目があります(#{unknown.join(', ')})") if unknown.any?
-
-    key = drug["key"]
-    if key.is_a?(String) && key.present?
-      errors.add(:definition, "#{label} の key が重複しています") unless keys.add?(key)
-    else
-      errors.add(:definition, "#{label} の key は必須です")
-    end
-    errors.add(:definition, "#{label} の name は必須です") unless drug["name"].is_a?(String) && drug["name"].present?
-
-    yj7 = drug["yj7"]
-    unless yj7.nil? || (yj7.is_a?(String) && yj7.match?(/\A\d{7}\z/))
-      errors.add(:definition, "#{label} の yj7 は 7 桁の数字で指定してください")
-    end
-    codes = drug["codes"]
-    unless codes.nil? || (codes.is_a?(Array) && codes.all? { |code| code.is_a?(String) && code.present? })
-      errors.add(:definition, "#{label} の codes は文字列の配列で指定してください")
-    end
-    return if yj7.present? || codes.is_a?(Array) && codes.any?
-
-    errors.add(:definition, "#{label} は yj7 か codes のどちらかが要ります")
   end
 end

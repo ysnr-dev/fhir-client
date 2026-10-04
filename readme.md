@@ -1724,7 +1724,7 @@ jsonb 1 列**にまとめて入れます。backend はこれらを検索にも�
 **項目を足すときに書くのは `FacilitySettings::SETTINGS`（項目表）だけです。** 検証・既定値の
 穴埋め・読み書きのメソッド（`meal_schedule` / `meal_schedule_with_defaults` /
 `FacilitySettings.meal_schedule`）・管理 API の受け取りと応答は、項目表から
-`FacilitySettings::Schema` が回します（migration も要りません）。
+`JsonShape`(`app/models/json_shape.rb`。チャート定義の検証と共用)が回します（migration も要りません）。
 
 ```ruby
 "prescription_category" => {

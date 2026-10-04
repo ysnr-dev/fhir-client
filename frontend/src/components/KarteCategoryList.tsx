@@ -8,6 +8,7 @@ import {
   type KarteCardFilter,
   type KarteItemKind,
 } from "../fhir/karteTimeline";
+import { ORDER_KINDS } from "../fhir/orderKinds";
 
 // カルテ左端のペインの「カテゴリ」表示。情報の種別を選ぶとタイムラインがその種別の
 // カードだけになる。テンプレートは種別が 1 つしか無く、社会歴のように「そのテンプレート
@@ -27,20 +28,7 @@ const PLAIN_KINDS: KarteItemKind[] = [
   "vital",
   "prescription",
   "injection",
-  "lab-order",
-  "micro-order",
-  "patho-order",
-  "rad-order",
-  "physio-order",
-  "endoscopy-order",
-  "treatment-order",
-  "surgery-order",
-  "meal-order",
-  "transfusion-order",
-  "rehab-order",
-  "radiotherapy-order",
-  "nutrition-guidance-order",
-  "consult-order",
+  ...ORDER_KINDS,
   "pathway-evaluation",
 ];
 

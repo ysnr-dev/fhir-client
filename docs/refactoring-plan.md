@@ -213,6 +213,31 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 - 滞在中・来院日の 2 本の検索が 1 ページ 500 件で、続きを確かめていなかった。`searchAllPages`(2 ページ)に
   寄せ、切れたら一覧に「一部のみ」を出す。
 
+**チャート定義の検証を宣言方式に(第 2 回の候補 6)**
+
+- 施設設定の検証エンジン(`FacilitySettings::Schema`)を共用の `JsonShape`(`backend/app/models/json_shape.rb`)に移し、
+  必須(`required`)・並びの件数(`min` / `max`)・重複(`unique`)・連想配列の並び・構造で書けない決まり(`check`)と、
+  葉(`:boolean` / `:string` / `:text` / `:any` / `const` / 整数の上限 / 文字列だけを通す `pattern`)を足した。
+- `chart_definition.rb` の手書きの検証を、形を宣言した表(`DEFINITION_SHAPE`)に置き換えた(330 行 → 178 行)。
+  エラー文言は位置の書き方が揃う(「items[1] の key は必須です」→「items[1].key は必須です」)。開発 DB の定義 18 件は
+  すべて有効のまま。backend rspec 1828 件通過(`JsonShape` の spec を 4 件追加)。
+
+**オーダー種別の対応表(第 2 回の候補 5)**
+
+- 部門オーダー 14 種別(検体検査〜他科依頼)の並列の分岐を、対応表に置き換えた。どれも `Record<OrderKind, …>` なので、
+  種別を足して対応表に足し忘れると型エラーになる。
+  - `fhir/orderKinds.ts`: 種別の一覧・名称・ヘッダからの判定・プロブレムの読み出し。カルテの種別名、`orderKindOf`、
+    `itemProblem`、URL の種別(`karteUrl.ts`)、種別フィルタの並びがここから回る。
+  - `components/orderKindRegistry.tsx`: カードの見出し・メタ行・進捗表示・DO の可否・本文と、種別ごとの削除。
+  - `KarteCardModals.tsx` の `ORDER_DETAILS` / `ORDER_JSONS`: 内容表示と FHIR JSON。
+  - `KarteRightPane.tsx` の `ORDER_PANES`: 登録・編集フォームと見出し。状態の型も `${OrderKind}-create` /
+    `${OrderKind}-edit` にまとめ、`KartePage.tsx` の編集・DO は 1 行ずつになった。
+- 処方と注射は対応表に入れていない(どの種別にも当たらないヘッダが処方、という判定の順序があり、レジメンの印など
+  カードの組み立ても別)。種別固有の機能(検査結果のバッジ・麻酔チャート・輸血の実施入力など)は分岐のまま残した。
+- 種別フィルタの URL(`?card=`)に他科依頼が抜けていて、リンクで開くと絞り込みが外れていたのも直った。
+- 検証: テスト太郎のカルテ全 65 日・153 枚(リハビリ以外の全種別)を変更前後で突き合わせ、カードの文字・進捗表示 81 個・
+  DO ボタン 106 個が一致。内容表示 13 種別、DO(放射線検査・他科依頼)、編集(検体検査)、FHIR JSON を画面で確認。
+
 ## 第 2 回（2026-09-27）
 
 第 1 回以降に約 80k 行が加わった（医事会計連携・放射線治療・マルチチャート・持参薬・検査結果取込・
@@ -304,9 +329,9 @@ DICOM・施設設定の jsonb 化ほか）。その新規コードを中心に�
 3. **ワークリスト 12 画面の共通部品**（`wardOptions`、`matchesFilters` の末尾、`FilterForm` の 4 select、患者セル）約 1,500 行。
 4. **マスタ画面の factory 化**（`radiotherapyMasterClient()` / `radiotherapyMasterHooks()` が既にある形。
    `ItemLayoutPage` 5 本・`DatasetPage` 4 本）。`masterClient.ts` の `if (!res.ok) throw await buildError(res);` 312 回も同じ。
-5. **オーダー種別の fan-out**（`karteTimeline.ts` / `KarteTimeline.tsx` / `KarteCardModals.tsx` / `KarteRightPane.tsx` の
+5. (第 3 回で実施)**オーダー種別の fan-out**（`karteTimeline.ts` / `KarteTimeline.tsx` / `KarteCardModals.tsx` / `KarteRightPane.tsx` の
    並列 switch）→ `notificationRegistry.tsx` と同じ `orderKindRegistry`。
-6. **`chart_definition.rb` の手書き JSON 検証 250 行**を `FacilitySettings::Schema` と同じ宣言方式に。
+6. (第 3 回で実施)**`chart_definition.rb` の手書き JSON 検証 250 行**を `FacilitySettings::Schema` と同じ宣言方式に。
 7. `prescriptionHelpers.ts` に置かれたオーダー共通の `departmentOf` / `wardOf` / `prescriptionRequester`（57 ファイル参照）を `fhir/orderHeader.ts` へ。
 
 ### 残すと判断したもの

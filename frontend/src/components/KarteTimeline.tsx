@@ -1,20 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   useDeleteClinicalNote,
-  useDeleteLabOrder,
-  useDeleteMicroOrder,
-  useDeletePathoOrder,
-  useDeleteRadOrder,
-  useDeletePhysioOrder,
-  useDeleteTreatmentOrder,
-  useDeleteMealOrder,
-  useDeleteConsultOrder,
-  useDeleteRadiotherapyOrder,
-  useDeleteRehabOrder,
-  useDeleteNutritionGuidanceOrder,
-  useDeleteTransfusionOrder,
-  useDeleteSurgeryOrder,
-  useDeleteEndoscopyOrder,
   useCancelInjectionPerforms,
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
@@ -38,12 +24,14 @@ import {
   itemPathway,
   itemProblem,
   referencesProblem,
+  isOrderItem,
   type KarteDayGroup,
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
 import { karteLinkLabel, type KarteLink } from "../fhir/karteLinkHelpers";
 import type { KarteDetailTarget } from "../karteUrl";
 import { copyKarteLink } from "../lib/copyKarteLink";
+import { clockTime } from "../lib/dates";
 import {
   groupInjectionByRp,
   injectionComment,
@@ -52,60 +40,14 @@ import {
   injectionUsageSummary,
   summarizeInjectionServiceRequest,
 } from "../fhir/injectionHelpers";
-import {
-  summarizeLabOrder,
-} from "../fhir/labOrderHelpers";
-import { labTaskStatusDisplay } from "../fhir/labTaskHelpers";
-import {
-  summarizeMicroOrder,
-} from "../fhir/microOrderHelpers";
-import {
-  summarizePathoOrder,
-} from "../fhir/pathoOrderHelpers";
-import { pathoTaskStatusDisplay } from "../fhir/pathoTaskHelpers";
-import {
-  radOrderTime,
-  summarizeRadOrder,
-} from "../fhir/radOrderHelpers";
-import { radTaskStatusDisplay } from "../fhir/radTaskHelpers";
-import {
-  physioOrderTime,
-  summarizePhysioOrder,
-} from "../fhir/physioOrderHelpers";
-import { physioTaskStatusDisplay } from "../fhir/physioTaskHelpers";
-import {
-  treatmentOrderTime,
-  summarizeTreatmentOrder,
-} from "../fhir/treatmentOrderHelpers";
-import { summarizeMealOrder } from "../fhir/mealOrderHelpers";
-import { consultReply, summarizeConsultOrder } from "../fhir/consultOrderHelpers";
-import { consultTaskStatusDisplay } from "../fhir/consultTaskHelpers";
+import { consultReply } from "../fhir/consultOrderHelpers";
 import { summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
-import { radiotherapyTaskStatusDisplay } from "../fhir/radiotherapyTaskHelpers";
 import {
   canCancelInjection,
   canRestoreInjection,
   injectionTaskStatusDisplay,
 } from "../fhir/injectionTaskHelpers";
-import { summarizeRehabOrder } from "../fhir/rehabOrderHelpers";
-import { summarizeNutritionGuidanceOrder } from "../fhir/nutritionGuidanceOrderHelpers";
-import { transfusionTaskStatusDisplay } from "../fhir/transfusionTaskHelpers";
-import { rehabTaskStatusDisplay } from "../fhir/rehabTaskHelpers";
-import { nutritionGuidanceTaskStatusDisplay } from "../fhir/nutritionGuidanceTaskHelpers";
 import { TransfusionPerformModal } from "./TransfusionPerformModal";
-import {
-  summarizeTransfusionOrder,
-} from "../fhir/transfusionOrderHelpers";
-import { treatmentTaskStatusDisplay } from "../fhir/treatmentTaskHelpers";
-import {
-  summarizeSurgeryOrder,
-} from "../fhir/surgeryOrderHelpers";
-import { surgeryTaskStatusDisplay } from "../fhir/surgeryTaskHelpers";
-import {
-  endoscopyOrderTime,
-  summarizeEndoscopyOrder,
-} from "../fhir/endoscopyOrderHelpers";
-import { endoscopyTaskStatusDisplay } from "../fhir/endoscopyTaskHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import { departmentOf, orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
@@ -132,26 +74,13 @@ import { ExamReportEntryModal } from "./ExamReportEntryModal";
 import { EXAM_REPORT_CONFIGS, EXAM_REPORT_KIND_OF_ORDER } from "../fhir/examReportHelpers";
 import { InjectionDeleteModal } from "./InjectionDeleteModal";
 import { KarteCardJsonModal } from "./KarteCardModals";
+import { orderKindDefOf, useOrderKindDeletes } from "./orderKindRegistry";
 import { PlainTextModal } from "./PlainTextModal";
 import { RichTextView } from "./RichTextView";
 import { ResponseSchemaImages, SchemaImageGallery } from "./SchemaImageGallery";
 import { RowMenu } from "./RowMenu";
 import { useKarteLinkActions } from "./KarteLinkContext";
-import { LabOrderCardBody } from "./karteCardBodies/LabOrderCardBody";
-import { PathoOrderCardBody } from "./karteCardBodies/PathoOrderCardBody";
-import { MicroOrderCardBody } from "./karteCardBodies/MicroOrderCardBody";
-import { RadOrderCardBody } from "./karteCardBodies/RadOrderCardBody";
-import { PhysioOrderCardBody } from "./karteCardBodies/PhysioOrderCardBody";
-import { SurgeryOrderCardBody } from "./karteCardBodies/SurgeryOrderCardBody";
-import { MealOrderCardBody } from "./karteCardBodies/MealOrderCardBody";
-import { RehabOrderCardBody } from "./karteCardBodies/RehabOrderCardBody";
-import { NutritionGuidanceOrderCardBody } from "./karteCardBodies/NutritionGuidanceOrderCardBody";
-import { ConsultOrderCardBody } from "./karteCardBodies/ConsultOrderCardBody";
-import { RadiotherapyOrderCardBody } from "./karteCardBodies/RadiotherapyOrderCardBody";
 import { InjectionPerformSection } from "./karteCardBodies/InjectionPerformSection";
-import { TransfusionOrderCardBody } from "./karteCardBodies/TransfusionOrderCardBody";
-import { TreatmentOrderCardBody } from "./karteCardBodies/TreatmentOrderCardBody";
-import { EndoscopyOrderCardBody } from "./karteCardBodies/EndoscopyOrderCardBody";
 import { PathwayEvaluationCardBody } from "./karteCardBodies/PathwayEvaluationCardBody";
 
 interface KarteTimelineProps {
@@ -290,28 +219,7 @@ function useKarteItemDelete(onDeleted: (item: KarteTimelineItem) => void) {
   const mutations = {
     note: useDeleteClinicalNote(),
     prescription: useDeletePrescription(),
-    // 検体検査・細菌検査・放射線検査・生理検査・内視鏡・処置は明細も ServiceRequest
-    // なので、専用の削除でまとめて消す。
-    "lab-order": useDeleteLabOrder(),
-    "micro-order": useDeleteMicroOrder(),
-    "patho-order": useDeletePathoOrder(),
-    "rad-order": useDeleteRadOrder(),
-    "physio-order": useDeletePhysioOrder(),
-    "endoscopy-order": useDeleteEndoscopyOrder(),
-    "treatment-order": useDeleteTreatmentOrder(),
-    "surgery-order": useDeleteSurgeryOrder(),
-    // 食事は明細を持たないので ServiceRequest 1 件を消すだけ。
-    "meal-order": useDeleteMealOrder(),
-    // 輸血は製剤明細も ServiceRequest なので、専用の削除でまとめて消す。
-    "transfusion-order": useDeleteTransfusionOrder(),
-    // リハビリは明細を持たないが、リハ部門が取った予約を道連れで取り消す。
-    "rehab-order": useDeleteRehabOrder(),
-    "nutrition-guidance-order": useDeleteNutritionGuidanceOrder(),
-    // 他科依頼も明細を持たないが、回答済のものは消させない(回答という別の医師の
-    // 記録がぶら下がっているため。mutation 側で拒否してエラー帯に出す)。
-    "consult-order": useDeleteConsultOrder(),
-    // 放射線治療は部門が受け付けた後は消させない(mutation 側で拒否してエラー帯に出す)。
-    "radiotherapy-order": useDeleteRadiotherapyOrder(),
+    ...useOrderKindDeletes(),
     qr: useDeleteQuestionnaireResponse(),
     vital: useDeleteVitalEntry(),
   };
@@ -335,23 +243,13 @@ function useKarteItemDelete(onDeleted: (item: KarteTimelineItem) => void) {
       onError: (error: unknown) => setFailure({ key, error }),
       onSettled: () => setDeletingKey((current) => (current === key ? null : current)),
     };
+    if (isOrderItem(item)) {
+      m[item.kind].mutate(item.id, options);
+      return;
+    }
     switch (item.kind) {
       case "note":
       case "prescription":
-      case "lab-order":
-      case "micro-order":
-      case "patho-order":
-      case "rad-order":
-      case "physio-order":
-      case "endoscopy-order":
-      case "treatment-order":
-      case "surgery-order":
-      case "meal-order":
-      case "transfusion-order":
-      case "rehab-order":
-      case "nutrition-guidance-order":
-      case "consult-order":
-      case "radiotherapy-order":
         m[item.kind].mutate(item.id, options);
         break;
       // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
@@ -434,6 +332,14 @@ const KarteCard = memo(function KarteCard({
         }
       : null;
 
+  // 部門の進捗(依頼済・受付済・実施済・中止)。カードだけで分かるよう、メタ行の先頭に添える。
+  const status =
+    item.kind === "injection"
+      ? { code: item.status, label: injectionTaskStatusDisplay(item.status) }
+      : isOrderItem(item)
+        ? orderKindDefOf(item).status?.(item)
+        : undefined;
+
   // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
   // 他の種別では canonical を渡さないので照会自体が走らない。
   const { data: layoutStatus } = useReportLayoutStatus(
@@ -512,46 +418,10 @@ const KarteCard = memo(function KarteCard({
             {/* 検体検査・放射線検査・生理検査は部門の進捗(依頼済・受付済・実施済・中止)が
                 カードだけで分かるよう、時刻・依頼元の先頭に添える。バッジにはせず、
                 メタデータの 1 項目として同じ区切りで並べる(理由は .karte-card__status)。 */}
-            {(item.kind === "rad-order" ||
-              item.kind === "injection" ||
-              item.kind === "physio-order" ||
-              item.kind === "endoscopy-order" ||
-              item.kind === "treatment-order" ||
-              item.kind === "surgery-order" ||
-              item.kind === "patho-order" ||
-              item.kind === "transfusion-order" ||
-              item.kind === "rehab-order" ||
-              item.kind === "nutrition-guidance-order" ||
-              item.kind === "consult-order" ||
-              item.kind === "radiotherapy-order" ||
-              item.kind === "lab-order") && (
+            {status && (
               <>
-                <span className={`karte-card__status karte-card__status--${item.status}`}>
-                  {item.kind === "injection"
-                    ? injectionTaskStatusDisplay(item.status)
-                    : item.kind === "rad-order"
-                    ? radTaskStatusDisplay(item.status)
-                    : item.kind === "physio-order"
-                      ? physioTaskStatusDisplay(item.status)
-                      : item.kind === "endoscopy-order"
-                        ? endoscopyTaskStatusDisplay(item.status)
-                        : item.kind === "treatment-order"
-                          ? treatmentTaskStatusDisplay(item.status)
-                          : item.kind === "surgery-order"
-                            ? surgeryTaskStatusDisplay(item.status)
-                            : item.kind === "patho-order"
-                              ? pathoTaskStatusDisplay(item.status)
-                              : item.kind === "transfusion-order"
-                                ? transfusionTaskStatusDisplay(item.status)
-                                : item.kind === "rehab-order"
-                                  ? rehabTaskStatusDisplay(item.status)
-                                  : item.kind === "nutrition-guidance-order"
-                                    ? nutritionGuidanceTaskStatusDisplay(item.status)
-                                    : item.kind === "consult-order"
-                                      ? consultTaskStatusDisplay(item.status)
-                                      : item.kind === "radiotherapy-order"
-                                        ? radiotherapyTaskStatusDisplay(item.status)
-                                        : labTaskStatusDisplay(item.status)}
+                <span className={`karte-card__status karte-card__status--${status.code}`}>
+                  {status.label}
                 </span>
                 {cardMeta(item) && <span aria-hidden="true">|</span>}
               </>
@@ -567,20 +437,8 @@ const KarteCard = memo(function KarteCard({
               (docs/chemo-regimen-design.md §8.14 N-13)。 */}
           {!regimenDay &&
             (item.kind === "prescription" ||
-            item.kind === "injection" ||
-            item.kind === "lab-order" ||
-            item.kind === "micro-order" ||
-            item.kind === "patho-order" ||
-            item.kind === "rad-order" ||
-            item.kind === "physio-order" ||
-            item.kind === "endoscopy-order" ||
-            item.kind === "treatment-order" ||
-            item.kind === "surgery-order" ||
-            item.kind === "transfusion-order" ||
-            item.kind === "rehab-order" ||
-            item.kind === "nutrition-guidance-order" ||
-            item.kind === "consult-order" ||
-            item.kind === "radiotherapy-order") && (
+              item.kind === "injection" ||
+              (isOrderItem(item) && orderKindDefOf(item).doable)) && (
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
@@ -1031,102 +889,12 @@ function cardTitle(item: KarteTimelineItem): string {
     const summary = summarizeInjectionServiceRequest(item.serviceRequest);
     return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
   }
-  // 処置は至急区分を持たないので入外区分だけ。
-  if (item.kind === "treatment-order") {
-    return summarizeTreatmentOrder(item.serviceRequest).settingDisplay;
-  }
-  // 食事は入外区分が常に入院なのでタイトルに出さず、いつからいつまでかを出す。
-  if (item.kind === "meal-order") {
-    const summary = summarizeMealOrder(item.serviceRequest);
-    return `${summary.startLabel}〜${summary.continuing ? " 継続中" : ` ${summary.endLabel}`}`;
-  }
-  // リハビリは入外区分と期間。期間継続型なので「いつからいつまで」が見出しに要る
-  // (食事と同じ。ただし入外区分は入院・外来どちらもありうるので出す)。
-  if (item.kind === "rehab-order") {
-    const summary = summarizeRehabOrder(item.serviceRequest);
-    return [summary.settingDisplay, summary.periodLabel].filter(Boolean).join(" | ");
-  }
-  // 栄養指導もリハビリと同じ期間継続型なので、入外区分と期間を見出しに出す。
-  if (item.kind === "nutrition-guidance-order") {
-    const summary = summarizeNutritionGuidanceOrder(item.serviceRequest);
-    return [summary.settingDisplay, summary.periodLabel].filter(Boolean).join(" | ");
-  }
-  // 放射線治療は「第何コースで何が目的か」が見出し。
-  if (item.kind === "radiotherapy-order") {
-    const summary = summarizeRadiotherapyOrder(item.serviceRequest);
-    return [summary.settingDisplay, `第${summary.courseNumber}コース`, summary.intentDisplay]
-      .filter(Boolean)
-      .join(" | ");
-  }
-  // 他科依頼は「どこへ出したか」が見出しそのもの。至急のときだけ緊急度も並べる
-  // (手術と同じ流儀で、通常はわざわざ出さない)。
-  if (item.kind === "consult-order") {
-    const summary = summarizeConsultOrder(item.serviceRequest);
-    return [summary.settingDisplay, summary.targetLabel, summary.urgent ? "至急" : ""]
-      .filter(Boolean)
-      .join(" | ");
-  }
-  // 手術は入外区分と、緊急・準緊急のときだけ予定区分を並べる(予定はわざわざ出さない)。
-  if (item.kind === "surgery-order") {
-    const summary = summarizeSurgeryOrder(item.serviceRequest);
-    return [summary.settingDisplay, summary.priority !== "routine" ? summary.priorityDisplay : ""]
-      .filter(Boolean)
-      .join(" | ");
-  }
-  // 病理は検査区分(組織診・細胞診・術中迅速)が「何を依頼したか」そのものなので、
-  // 処方区分と同じくタイトルに並べる。他の検査は検査項目がカード本文に出るが、
-  // 病理は本文が検体の一覧なので、区分が見出しに無いと何の検査か分からない。
-  if (item.kind === "patho-order") {
-    const summary = summarizePathoOrder(item.serviceRequest);
-    return [
-      summary.settingDisplay,
-      summary.examCategoryDisplay,
-      summary.urgent ? summary.priorityDisplay : "",
-    ]
-      .filter(Boolean)
-      .join(" | ");
-  }
-  // 輸血は検査区分(交差適合試験・T&S)が輸血部門の作業を決める軸なので、病理と同じく
-  // タイトルに並べる。同意書が未取得のオーダーは例外なので、そのことも見出しに出す。
-  if (item.kind === "transfusion-order") {
-    const summary = summarizeTransfusionOrder(item.serviceRequest);
-    return [
-      summary.settingDisplay,
-      summary.testTypeDisplay,
-      summary.urgent ? summary.priorityDisplay : "",
-      summary.consentConfirmed ? "" : "同意書未取得",
-    ]
-      .filter(Boolean)
-      .join(" | ");
-  }
-  // 検体検査・細菌検査・放射線検査・生理検査・内視鏡は入外区分と、至急のときだけ
-  // 至急区分を並べる(通常はわざわざ出さない)。
-  if (
-    item.kind === "lab-order" ||
-    item.kind === "micro-order" ||
-    item.kind === "rad-order" ||
-    item.kind === "physio-order" ||
-    item.kind === "endoscopy-order"
-  ) {
-    const summary =
-      item.kind === "lab-order"
-        ? summarizeLabOrder(item.serviceRequest)
-        : item.kind === "micro-order"
-          ? summarizeMicroOrder(item.serviceRequest)
-          : item.kind === "rad-order"
-            ? summarizeRadOrder(item.serviceRequest)
-            : item.kind === "physio-order"
-              ? summarizePhysioOrder(item.serviceRequest)
-              : summarizeEndoscopyOrder(item.serviceRequest);
-    return [summary.settingDisplay, summary.urgent ? summary.priorityDisplay : ""]
-      .filter(Boolean)
-      .join(" | ");
-  }
+  if (isOrderItem(item)) return orderKindDefOf(item).title(item);
   return item.label;
 }
 
 function cardMeta(item: KarteTimelineItem): string {
-  const time = timeOf(item.dateTime);
+  const time = clockTime(item.dateTime);
   // 記録系のカードも、オーダーの「依頼科 | 依頼医師」と同じ並びで診療科・記入者を出す。
   if (item.kind === "note") {
     return [
@@ -1159,45 +927,8 @@ function cardMeta(item: KarteTimelineItem): string {
       .join(" | ");
   }
   const requesterSummary = orderContextSummary(orderRequester(item.serviceRequest));
-  // 放射線検査は撮影時刻を指定できるので、依頼科・依頼医師の前に添える。記入時刻を
-  // 出す診療記録と紛れないよう「撮影」と付ける(未指定のオーダーでは出さない)。
-  if (item.kind === "rad-order") {
-    const shotTime = radOrderTime(item.serviceRequest);
-    return [shotTime && `撮影 ${shotTime}`, requesterSummary].filter(Boolean).join(" | ");
-  }
-  // 生理検査も実施時刻を指定できる。放射線と同じ位置に「検査」と付けて添える。
-  if (item.kind === "physio-order") {
-    const examTime = physioOrderTime(item.serviceRequest);
-    return [examTime && `検査 ${examTime}`, requesterSummary].filter(Boolean).join(" | ");
-  }
-  if (item.kind === "endoscopy-order") {
-    const examTime = endoscopyOrderTime(item.serviceRequest);
-    return [examTime && `検査 ${examTime}`, requesterSummary].filter(Boolean).join(" | ");
-  }
-  // 処置も実施時刻を指定できる。同じ位置に「実施」と付けて添える。
-  if (item.kind === "treatment-order") {
-    const performTime = treatmentOrderTime(item.serviceRequest);
-    return [performTime && `実施 ${performTime}`, requesterSummary].filter(Boolean).join(" | ");
-  }
-  // 手術は入室予定時刻と手術室を添える(日付はカードの載る日で分かる。未定なら明示)。
-  if (item.kind === "surgery-order") {
-    const summary = summarizeSurgeryOrder(item.serviceRequest);
-    const scheduled = summary.scheduledDate
-      ? `予定 ${summary.scheduledDate} ${summary.scheduledTime}`.trim()
-      : "日付未定";
-    return [scheduled, summary.roomName, requesterSummary].filter(Boolean).join(" | ");
-  }
-  // 輸血も投与予定時刻を指定できる。同じ位置に「投与」と付けて添える。
-  if (item.kind === "transfusion-order") {
-    const scheduled = timeOf(item.serviceRequest.occurrenceDateTime ?? "");
-    return [scheduled && `投与 ${scheduled}`, requesterSummary].filter(Boolean).join(" | ");
-  }
-  // 他科依頼は希望日が必須でカードもその日に載るので、日付は添えない。
-  if (item.kind === "consult-order") {
-    const summary = summarizeConsultOrder(item.serviceRequest);
-    return [summary.replierName && `回答 ${summary.replierName}`, requesterSummary]
-      .filter(Boolean)
-      .join(" | ");
+  if (isOrderItem(item)) {
+    return [...(orderKindDefOf(item).metaLead?.(item) ?? []), requesterSummary].filter(Boolean).join(" | ");
   }
   // 連日オーダーの注射は「何日目」かを添える(単日のオーダーでは出ない)。レジメンから
   // 出た注射・処方は「レジメン名 C1 Day8」を添え、種別バッジが「化学療法」になるぶん
@@ -1223,16 +954,6 @@ function cardMeta(item: KarteTimelineItem): string {
   // (authoredOn)はカードには出さない(カードの日はオーダー開始日で、いつ登録したかは
   // 詳細の「登録日時」で見る)。
   return requesterSummary;
-}
-
-// 診療日はグループ見出しに出るのでカードには時刻だけを添える。
-// 日付のみの値(時刻を指定していない開始日)は時刻を持たないので空文字。
-function timeOf(dateTime: string): string {
-  if (dateTime.length <= 10) return "";
-  const date = new Date(dateTime);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function KarteCardBody({ item }: { item: KarteTimelineItem }) {
@@ -1384,110 +1105,9 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
     );
   }
 
-  if (item.kind === "lab-order") {
-    return <LabOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />;
-  }
-
-  if (item.kind === "micro-order") {
-    return (
-      <MicroOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />
-    );
-  }
-
-  if (item.kind === "patho-order") {
-    return (
-      <PathoOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />
-    );
-  }
-
-  if (item.kind === "rad-order") {
-    return (
-      <RadOrderCardBody
-        serviceRequest={item.serviceRequest}
-        itemRequests={item.itemRequests}
-        performs={item.performs}
-      />
-    );
-  }
-
-  if (item.kind === "physio-order") {
-    return (
-      <PhysioOrderCardBody
-        serviceRequest={item.serviceRequest}
-        itemRequests={item.itemRequests}
-        performs={item.performs}
-      />
-    );
-  }
-
-  if (item.kind === "endoscopy-order") {
-    return (
-      <EndoscopyOrderCardBody
-        serviceRequest={item.serviceRequest}
-        itemRequests={item.itemRequests}
-        performs={item.performs}
-      />
-    );
-  }
-
-  if (item.kind === "treatment-order") {
-    return (
-      <TreatmentOrderCardBody
-        serviceRequest={item.serviceRequest}
-        itemRequests={item.itemRequests}
-        performs={item.performs}
-      />
-    );
-  }
-
-  if (item.kind === "surgery-order") {
-    return (
-      <SurgeryOrderCardBody
-        serviceRequest={item.serviceRequest}
-        itemRequests={item.itemRequests}
-        performs={item.performs}
-      />
-    );
-  }
-
-  if (item.kind === "meal-order") {
-    return <MealOrderCardBody serviceRequest={item.serviceRequest} />;
-  }
-
-  if (item.kind === "transfusion-order") {
-    return (
-      <TransfusionOrderCardBody
-        serviceRequest={item.serviceRequest}
-        itemRequests={item.itemRequests}
-        performs={item.performs}
-      />
-    );
-  }
-
-  if (item.kind === "rehab-order") {
-    return <RehabOrderCardBody serviceRequest={item.serviceRequest} performs={item.performs} />;
-  }
-
-  if (item.kind === "nutrition-guidance-order") {
-    return (
-      <NutritionGuidanceOrderCardBody
-        serviceRequest={item.serviceRequest}
-        performs={item.performs}
-      />
-    );
-  }
-
-  if (item.kind === "consult-order") {
-    return <ConsultOrderCardBody serviceRequest={item.serviceRequest} />;
-  }
-  if (item.kind === "radiotherapy-order") {
-    return (
-      <RadiotherapyOrderCardBody
-        serviceRequest={item.serviceRequest}
-        fractions={item.fractions}
-        hasCourseSummary={item.hasCourseSummary}
-      />
-    );
+  if (isOrderItem(item)) {
+    const { Body } = orderKindDefOf(item);
+    return <Body item={item} />;
   }
 
   if (item.kind === "pathway-evaluation") {

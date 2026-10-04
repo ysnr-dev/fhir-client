@@ -16,7 +16,7 @@
 # backend はこれらを検索にも集計にも使わず(読むのは frontend と、会計送信のコード引き当て
 # だけ)、列に分けても索引も WHERE も使わないため。**項目を足すときに書くのは下の SETTINGS だけ**で、
 # 検証・既定値の穴埋め・読み書きのメソッド・管理 API の受け取りと応答は
-# FacilitySettings::Schema が項目表から回す(migration も要らない)。
+# JsonShape が項目表から回す(migration も要らない)。
 #
 # どの設定も「登録時の初期値」か「表示時の判定」のどちらかで、**登録済みの
 # リソースは動かさない**(オーダーや Task には値が焼き付いている)。
@@ -25,7 +25,6 @@ class FacilitySettings < ApplicationRecord
   attribute :singleton_guard, :integer, default: 0
   validates :singleton_guard, inclusion: { in: [0] }, uniqueness: true
 
-  TIME_PATTERN = /\A([01]\d|2[0-3]):[0-5]\d\z/
   # MEDIS の管理番号は 8 桁の数字。
   MANAGE_NO_PATTERN = /\A\d{8}\z/
 
@@ -172,7 +171,7 @@ class FacilitySettings < ApplicationRecord
   # 設定項目の表。ここに 1 項目足せば、検証・既定値・読み書き・管理 API がすべて付く。
   #
   #   default: 保存されていないときに返す値
-  #   shape:   構造(節の書き方は FacilitySettings::Schema のコメント)
+  #   shape:   構造(節の書き方は JsonShape のコメント)
   #   check:   構造では書けない決まりごと(任意。エラー文言の配列を返す)
   SETTINGS = {
     "nursing_schedule" => {
@@ -252,7 +251,7 @@ class FacilitySettings < ApplicationRecord
 
     define_method("#{key}=") { |value| self.settings = stored_settings.merge(key => value) }
 
-    define_method("#{key}_with_defaults") { Schema.fill(spec[:shape], spec[:default], stored_settings[key]) }
+    define_method("#{key}_with_defaults") { JsonShape.fill(spec[:shape], spec[:default], stored_settings[key]) }
 
     singleton_class.define_method(key) { current.public_send("#{key}_with_defaults") }
   end
@@ -272,7 +271,7 @@ class FacilitySettings < ApplicationRecord
   def apply_settings(incoming)
     merged = (incoming || {}).to_h do |key, value|
       spec = SETTINGS[key.to_s]
-      [key.to_s, spec ? Schema.coerce(spec[:shape], value) : value]
+      [key.to_s, spec ? JsonShape.coerce(spec[:shape], value) : value]
     end
     self.settings = stored_settings.merge(merged)
   end
@@ -301,7 +300,7 @@ class FacilitySettings < ApplicationRecord
       spec = SETTINGS[key.to_s]
       next errors.add(:settings, "#{key} は対象外の項目です") if spec.nil?
 
-      messages = Schema.errors(spec[:shape], value) + Array(spec[:check]&.call(value))
+      messages = JsonShape.errors(spec[:shape], value) + Array(spec[:check]&.call(value))
       messages.each { |message| errors.add(key.to_sym, message) }
     end
   end

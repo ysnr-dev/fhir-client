@@ -1,4 +1,5 @@
 import { isKarteNoteType, type KarteCardFilter, type KarteItemKind } from "./fhir/karteTimeline";
+import { ORDER_KINDS } from "./fhir/orderKinds";
 
 // カルテ画面の URL パラメータ。
 //
@@ -166,20 +167,7 @@ export const DETAIL_KINDS: KarteDetailKind[] = [
   "note",
   "prescription",
   "injection",
-  "lab-order",
-  "micro-order",
-  "patho-order",
-  "rad-order",
-  "physio-order",
-  "endoscopy-order",
-  "treatment-order",
-  "surgery-order",
-  "meal-order",
-  "transfusion-order",
-  "rehab-order",
-  "radiotherapy-order",
-  "nutrition-guidance-order",
-  "consult-order",
+  ...ORDER_KINDS,
   "lab-result",
   "micro-result",
   "patho-result",
@@ -407,19 +395,7 @@ const CARD_KINDS: KarteItemKind[] = [
   "vital",
   "prescription",
   "injection",
-  "lab-order",
-  "micro-order",
-  "patho-order",
-  "rad-order",
-  "physio-order",
-  "endoscopy-order",
-  "treatment-order",
-  "surgery-order",
-  "meal-order",
-  "transfusion-order",
-  "rehab-order",
-  "radiotherapy-order",
-  "nutrition-guidance-order",
+  ...ORDER_KINDS,
   "qr",
   "pathway-evaluation",
 ];

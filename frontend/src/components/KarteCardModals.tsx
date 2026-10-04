@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import {
   useClinicalNote,
   useLabOrderDetail,
@@ -32,6 +32,7 @@ import {
   useQuestionnaireResponseWithQuestionnaire,
 } from "../api/queries";
 import { karteItemKindLabel, type KarteTimelineItem } from "../fhir/karteTimeline";
+import { isOrderKind, ORDER_KIND_LABELS, ORDER_KINDS, type OrderKind } from "../fhir/orderKinds";
 import { labOrderItemRequests, serviceRequestsOf } from "../fhir/labOrderHelpers";
 import { microOrderItemRequests } from "../fhir/microOrderHelpers";
 import { pathoOrderItemRequests } from "../fhir/pathoOrderHelpers";
@@ -91,20 +92,10 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   note: "診療記録詳細",
   prescription: "処方内容",
   injection: "注射内容",
-  "lab-order": "検体検査内容",
-  "micro-order": "細菌検査内容",
-  "patho-order": "病理検査内容",
-  "rad-order": "放射線検査内容",
-  "physio-order": "生理検査内容",
-  "endoscopy-order": "内視鏡内容",
-  "treatment-order": "処置内容",
-  "surgery-order": "手術内容",
-  "meal-order": "食事内容",
-  "transfusion-order": "輸血内容",
-  "rehab-order": "リハビリ内容",
-  "nutrition-guidance-order": "栄養指導内容",
-  "consult-order": "他科依頼内容",
-  "radiotherapy-order": "放射線治療内容",
+  ...(Object.fromEntries(ORDER_KINDS.map((kind) => [kind, `${ORDER_KIND_LABELS[kind]}内容`])) as Record<
+    OrderKind,
+    string
+  >),
   "lab-result": "検査結果内容",
   "micro-result": "細菌検査結果内容",
   "patho-result": "病理診断レポート",
@@ -113,6 +104,35 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "endoscopy-result": EXAM_REPORT_CONFIGS.endoscopy.labels.report,
   qr: "テンプレート表示",
 };
+
+interface OrderDetailProps {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}
+
+// 部門オーダーの内容表示。種別を足したら 1 行足す(足し忘れは型エラーになる)。
+const ORDER_DETAILS: Record<OrderKind, ComponentType<OrderDetailProps>> = {
+  "lab-order": LabOrderDetail,
+  "micro-order": MicroOrderDetail,
+  "patho-order": PathoOrderDetail,
+  "rad-order": RadOrderDetail,
+  "physio-order": PhysioOrderDetail,
+  "endoscopy-order": EndoscopyOrderDetail,
+  "treatment-order": TreatmentOrderDetail,
+  "surgery-order": SurgeryOrderDetail,
+  "meal-order": MealOrderDetail,
+  "transfusion-order": TransfusionOrderDetail,
+  "rehab-order": RehabOrderDetail,
+  "radiotherapy-order": RadiotherapyOrderDetail,
+  "nutrition-guidance-order": NutritionGuidanceOrderDetail,
+  "consult-order": ConsultOrderDetail,
+};
+
+function OrderDetail({ kind, ...props }: OrderDetailProps & { kind: OrderKind }) {
+  const Detail = ORDER_DETAILS[kind];
+  return <Detail {...props} />;
+}
 
 // 対象は URL から来るので、タイムラインに読み込み済みかどうかに関わらず
 // ID から引き直す。別患者の ID を指す URL は内容を出さない。
@@ -138,42 +158,8 @@ export function KarteDetailModal({
         <PrescriptionDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "injection" ? (
         <InjectionDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "lab-order" ? (
-        <LabOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "micro-order" ? (
-        <MicroOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "patho-order" ? (
-        <PathoOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "rad-order" ? (
-        <RadOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "physio-order" ? (
-        <PhysioOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "endoscopy-order" ? (
-        <EndoscopyOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "treatment-order" ? (
-        <TreatmentOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "surgery-order" ? (
-        <SurgeryOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "meal-order" ? (
-        <MealOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "transfusion-order" ? (
-        <TransfusionOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "rehab-order" ? (
-        <RehabOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "nutrition-guidance-order" ? (
-        <NutritionGuidanceOrderDetail
-          patientId={patientId}
-          srId={target.id}
-          problemsById={problemsById}
-        />
-      ) : target.kind === "consult-order" ? (
-        <ConsultOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
-      ) : target.kind === "radiotherapy-order" ? (
-        <RadiotherapyOrderDetail
-          patientId={patientId}
-          srId={target.id}
-          problemsById={problemsById}
-        />
+      ) : isOrderKind(target.kind) ? (
+        <OrderDetail kind={target.kind} patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
         <LabResultDetail patientId={patientId} reportId={target.id} />
       ) : target.kind === "micro-result" ? (
@@ -830,54 +816,70 @@ export function KarteCardJsonModal({
     >
       {item.kind === "prescription" || item.kind === "injection" ? (
         <PrescriptionJson srId={item.id} />
-      ) : item.kind === "lab-order" ? (
-        <LabOrderJson srId={item.id} />
-      ) : item.kind === "micro-order" ? (
-        <MicroOrderJson srId={item.id} />
-      ) : item.kind === "rad-order" ? (
-        <ExamOrderJson
-          config={EXAM_REPORT_CONFIGS.rad}
-          useOrderDetail={useRadOrderDetail}
-          usePerformDetail={useRadPerformDetail}
-          srId={item.id}
-        />
-      ) : item.kind === "physio-order" ? (
-        <ExamOrderJson
-          config={EXAM_REPORT_CONFIGS.physio}
-          useOrderDetail={usePhysioOrderDetail}
-          usePerformDetail={usePhysioPerformDetail}
-          srId={item.id}
-        />
-      ) : item.kind === "endoscopy-order" ? (
-        <ExamOrderJson
-          config={EXAM_REPORT_CONFIGS.endoscopy}
-          useOrderDetail={useEndoscopyOrderDetail}
-          usePerformDetail={useEndoscopyPerformDetail}
-          srId={item.id}
-        />
-      ) : item.kind === "treatment-order" ? (
-        <TreatmentOrderJson srId={item.id} />
-      ) : item.kind === "surgery-order" ? (
-        <SurgeryOrderJson srId={item.id} />
-      ) : item.kind === "meal-order" ? (
-        <MealOrderJson srId={item.id} />
-      ) : item.kind === "patho-order" ? (
-        <PathoOrderJson srId={item.id} />
-      ) : item.kind === "transfusion-order" ? (
-        <TransfusionOrderJson srId={item.id} />
-      ) : item.kind === "rehab-order" ? (
-        <RehabOrderJson srId={item.id} />
-      ) : item.kind === "nutrition-guidance-order" ? (
-        <NutritionGuidanceOrderJson srId={item.id} />
-      ) : item.kind === "consult-order" ? (
-        <ConsultOrderJson srId={item.id} />
-      ) : item.kind === "radiotherapy-order" ? (
-        <RadiotherapyOrderJson srId={item.id} />
+      ) : isOrderKind(item.kind) ? (
+        <OrderJson kind={item.kind} srId={item.id} />
       ) : (
         <FhirJsonView resource={jsonResource(item)} />
       )}
     </Modal>
   );
+}
+
+// 放射線・生理検査・内視鏡は同じ形(オーダー + 実施記録)なので、設定と hook を渡して共用する。
+function RadOrderJson({ srId }: { srId: string }) {
+  return (
+    <ExamOrderJson
+      config={EXAM_REPORT_CONFIGS.rad}
+      useOrderDetail={useRadOrderDetail}
+      usePerformDetail={useRadPerformDetail}
+      srId={srId}
+    />
+  );
+}
+
+function PhysioOrderJson({ srId }: { srId: string }) {
+  return (
+    <ExamOrderJson
+      config={EXAM_REPORT_CONFIGS.physio}
+      useOrderDetail={usePhysioOrderDetail}
+      usePerformDetail={usePhysioPerformDetail}
+      srId={srId}
+    />
+  );
+}
+
+function EndoscopyOrderJson({ srId }: { srId: string }) {
+  return (
+    <ExamOrderJson
+      config={EXAM_REPORT_CONFIGS.endoscopy}
+      useOrderDetail={useEndoscopyOrderDetail}
+      usePerformDetail={useEndoscopyPerformDetail}
+      srId={srId}
+    />
+  );
+}
+
+// 部門オーダーの FHIR JSON。ヘッダと明細・実施記録をまとめて見せる。
+const ORDER_JSONS: Record<OrderKind, ComponentType<{ srId: string }>> = {
+  "lab-order": LabOrderJson,
+  "micro-order": MicroOrderJson,
+  "patho-order": PathoOrderJson,
+  "rad-order": RadOrderJson,
+  "physio-order": PhysioOrderJson,
+  "endoscopy-order": EndoscopyOrderJson,
+  "treatment-order": TreatmentOrderJson,
+  "surgery-order": SurgeryOrderJson,
+  "meal-order": MealOrderJson,
+  "transfusion-order": TransfusionOrderJson,
+  "rehab-order": RehabOrderJson,
+  "radiotherapy-order": RadiotherapyOrderJson,
+  "nutrition-guidance-order": NutritionGuidanceOrderJson,
+  "consult-order": ConsultOrderJson,
+};
+
+function OrderJson({ kind, srId }: { kind: OrderKind; srId: string }) {
+  const Json = ORDER_JSONS[kind];
+  return <Json srId={srId} />;
 }
 
 // オーダー系以外でモーダルにそのまま出すリソース。バイタルは 1 回の測定が項目ごとの

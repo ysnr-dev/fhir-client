@@ -1,19 +1,24 @@
 import { epochOf, isDateOnly, localDay, WEEKDAY_LABELS, weekdayOf } from "../lib/dates";
 import { clinicalNoteProblem, isDischargeSummary, referencedResponseIds } from "./clinicalNoteHelpers";
 import type { ProblemRef } from "./conditionHelpers";
+import {
+  departmentOrderKindOf,
+  isOrderKind,
+  ORDER_KIND_CORE,
+  ORDER_KIND_LABELS,
+  type OrderKind,
+} from "./orderKinds";
 import { isInjectionServiceRequest } from "./injectionHelpers";
 import {
   isLabServiceRequest,
   isOrderItemRequest,
   labOrderItemRequests,
-  labOrderProblem,
 } from "./labOrderHelpers";
 import { labTaskStatus, labTasksByOrderId, type LabTaskStatus } from "./labTaskHelpers";
-import { isMicroServiceRequest, microOrderItemRequests, microOrderProblem } from "./microOrderHelpers";
+import { isMicroServiceRequest, microOrderItemRequests } from "./microOrderHelpers";
 import {
   isPathoServiceRequest,
   pathoOrderItemRequests,
-  pathoOrderProblem,
   pathoOrderResponseIds,
 } from "./pathoOrderHelpers";
 import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pathoTaskHelpers";
@@ -25,7 +30,6 @@ import { categoryCoding } from "./shared";
 import {
   isRadServiceRequest,
   radOrderItemRequests,
-  radOrderProblem,
   radOrderResponseIds,
 } from "./radOrderHelpers";
 import { radPerformsByOrderId, type RadPerformDisplay } from "./radResultHelpers";
@@ -33,7 +37,6 @@ import { radTaskStatus, radTasksByOrderId, type RadTaskStatus } from "./radTaskH
 import {
   isPhysioServiceRequest,
   physioOrderItemRequests,
-  physioOrderProblem,
   physioOrderResponseIds,
 } from "./physioOrderHelpers";
 import { physioPerformsByOrderId, type PhysioPerformDisplay } from "./physioResultHelpers";
@@ -45,14 +48,12 @@ import {
 import {
   isTreatmentServiceRequest,
   treatmentOrderItemRequests,
-  treatmentOrderProblem,
 } from "./treatmentOrderHelpers";
 import { treatmentPerformsByOrderId, type TreatmentPerformDisplay } from "./treatmentResultHelpers";
-import { isMealServiceRequest, mealOrderProblem } from "./mealOrderHelpers";
+import { isMealServiceRequest } from "./mealOrderHelpers";
 import { isNursingServiceRequest } from "./nursingOrderHelpers";
 import { isRegimenServiceRequest, regimenOrderOf } from "./regimenOrderHelpers";
 import {
-  consultOrderProblem,
   consultOrderResponseIds,
   isConsultServiceRequest,
 } from "./consultOrderHelpers";
@@ -73,7 +74,6 @@ import {
 import {
   isTransfusionServiceRequest,
   transfusionOrderItemRequests,
-  transfusionOrderProblem,
 } from "./transfusionOrderHelpers";
 import {
   transfusionTaskStatus,
@@ -87,7 +87,6 @@ import {
 import {
   isRadiotherapyServiceRequest,
   radiotherapyConsultRequest,
-  radiotherapyOrderProblem,
 } from "./radiotherapyOrderHelpers";
 import {
   radiotherapyFractionsByOrderId,
@@ -99,12 +98,11 @@ import {
   radiotherapyTasksByOrderId,
   type RadiotherapyTaskStatus,
 } from "./radiotherapyTaskHelpers";
-import { isRehabServiceRequest, rehabOrderProblem } from "./rehabOrderHelpers";
+import { isRehabServiceRequest } from "./rehabOrderHelpers";
 import { rehabTaskStatus, rehabTasksByOrderId, type RehabTaskStatus } from "./rehabTaskHelpers";
 import { rehabPerformsByOrderId, type RehabPerformDisplay } from "./rehabResultHelpers";
 import {
   isNutritionGuidanceServiceRequest,
-  nutritionGuidanceOrderProblem,
   nutritionGuidanceOrderResponseIds,
 } from "./nutritionGuidanceOrderHelpers";
 import {
@@ -125,7 +123,6 @@ import {
   SURGERY_ORDER_TYPE,
   isSurgeryServiceRequest,
   surgeryOrderItemRequests,
-  surgeryOrderProblem,
   surgeryOrderResponseIds,
 } from "./surgeryOrderHelpers";
 import {
@@ -137,7 +134,6 @@ import { surgeryPerformsByOrderId, type SurgeryPerformDisplay } from "./surgeryR
 import {
   isEndoscopyServiceRequest,
   endoscopyOrderItemRequests,
-  endoscopyOrderProblem,
   endoscopyOrderResponseIds,
 } from "./endoscopyOrderHelpers";
 import { endoscopyPerformsByOrderId, type EndoscopyPerformDisplay } from "./endoscopyResultHelpers";
@@ -174,20 +170,7 @@ export type KarteItemKind =
   | "vital"
   | "prescription"
   | "injection"
-  | "lab-order"
-  | "micro-order"
-  | "patho-order"
-  | "rad-order"
-  | "physio-order"
-  | "endoscopy-order"
-  | "treatment-order"
-  | "surgery-order"
-  | "meal-order"
-  | "transfusion-order"
-  | "rehab-order"
-  | "radiotherapy-order"
-  | "nutrition-guidance-order"
-  | "consult-order"
+  | OrderKind
   | "qr"
   | "pathway-evaluation";
 
@@ -196,20 +179,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   vital: "バイタル",
   prescription: "処方",
   injection: "注射",
-  "lab-order": "検体検査",
-  "micro-order": "細菌検査",
-  "patho-order": "病理検査",
-  "rad-order": "放射線検査",
-  "physio-order": "生理検査",
-  "endoscopy-order": "内視鏡",
-  "treatment-order": "処置",
-  "surgery-order": "手術",
-  "meal-order": "食事",
-  "transfusion-order": "輸血",
-  "rehab-order": "リハビリ",
-  "radiotherapy-order": "放射線治療",
-  "nutrition-guidance-order": "栄養指導",
-  "consult-order": "他科依頼",
+  ...ORDER_KIND_LABELS,
   qr: "テンプレート",
   "pathway-evaluation": "パス評価",
 };
@@ -225,20 +195,8 @@ export function orderKindOf(
   if (isOrderItemRequest(sr)) return null;
   if (isNursingServiceRequest(sr)) return "nursing-order";
   if (isRegimenServiceRequest(sr)) return "chemo-regimen";
-  if (isLabServiceRequest(sr)) return "lab-order";
-  if (isMicroServiceRequest(sr)) return "micro-order";
-  if (isPathoServiceRequest(sr)) return "patho-order";
-  if (isRadServiceRequest(sr)) return "rad-order";
-  if (isPhysioServiceRequest(sr)) return "physio-order";
-  if (isEndoscopyServiceRequest(sr)) return "endoscopy-order";
-  if (isTreatmentServiceRequest(sr)) return "treatment-order";
-  if (isSurgeryServiceRequest(sr)) return "surgery-order";
-  if (isMealServiceRequest(sr)) return "meal-order";
-  if (isTransfusionServiceRequest(sr)) return "transfusion-order";
-  if (isRehabServiceRequest(sr)) return "rehab-order";
-  if (isRadiotherapyServiceRequest(sr)) return "radiotherapy-order";
-  if (isNutritionGuidanceServiceRequest(sr)) return "nutrition-guidance-order";
-  if (isConsultServiceRequest(sr)) return "consult-order";
+  const departmentKind = departmentOrderKindOf(sr);
+  if (departmentKind) return departmentKind;
   if (isInjectionServiceRequest(sr)) return "injection";
   return "prescription";
 }
@@ -257,6 +215,13 @@ export function karteItemKindLabel(
   // 退院時サマリーは診療記録と同じ器だが、バッジでは文書として見分けられるようにする。
   if (item.kind === "note" && item.note && isDischargeSummary(item.note)) return "退院時サマリー";
   return KARTE_KIND_LABELS[item.kind];
+}
+
+/** 部門オーダー(orderKinds.ts の種別)のカード。 */
+export type KarteOrderItem = Extract<KarteTimelineItem, { kind: OrderKind }>;
+
+export function isOrderItem(item: KarteTimelineItem): item is KarteOrderItem {
+  return isOrderKind(item.kind);
 }
 
 interface KarteItemBase {
@@ -1397,22 +1362,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "note") return clinicalNoteProblem(item.note);
   if (item.kind === "qr") return questionnaireResponseProblem(item.response);
   if (item.kind === "vital") return vitalEntryProblem(item.entry);
-  if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
-  if (item.kind === "micro-order") return microOrderProblem(item.serviceRequest);
-  if (item.kind === "patho-order") return pathoOrderProblem(item.serviceRequest);
-  if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);
-  if (item.kind === "physio-order") return physioOrderProblem(item.serviceRequest);
-  if (item.kind === "endoscopy-order") return endoscopyOrderProblem(item.serviceRequest);
-  if (item.kind === "treatment-order") return treatmentOrderProblem(item.serviceRequest);
-  if (item.kind === "surgery-order") return surgeryOrderProblem(item.serviceRequest);
-  if (item.kind === "meal-order") return mealOrderProblem(item.serviceRequest);
-  if (item.kind === "transfusion-order") return transfusionOrderProblem(item.serviceRequest);
-  if (item.kind === "rehab-order") return rehabOrderProblem(item.serviceRequest);
-  if (item.kind === "radiotherapy-order") return radiotherapyOrderProblem(item.serviceRequest);
-  if (item.kind === "nutrition-guidance-order") {
-    return nutritionGuidanceOrderProblem(item.serviceRequest);
-  }
-  if (item.kind === "consult-order") return consultOrderProblem(item.serviceRequest);
+  if (isOrderItem(item)) return ORDER_KIND_CORE[item.kind].problem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }

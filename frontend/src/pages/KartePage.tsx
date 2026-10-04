@@ -79,6 +79,7 @@ import {
   buildKarteTimeline,
   filterKarteGroupsByCard,
   filterKarteGroupsByScope,
+  isOrderItem,
   mergeDayIndex,
   pathwayEvaluationDays,
   type KarteCardFilter,
@@ -769,25 +770,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     }
     else if (item.kind === "prescription") openForm({ kind: "prescription-edit", srId: item.id });
     else if (item.kind === "injection") openForm({ kind: "injection-edit", srId: item.id });
-    else if (item.kind === "lab-order") openForm({ kind: "lab-order-edit", srId: item.id });
-    else if (item.kind === "micro-order") openForm({ kind: "micro-order-edit", srId: item.id });
-    else if (item.kind === "patho-order") openForm({ kind: "patho-order-edit", srId: item.id });
-    else if (item.kind === "rad-order") openForm({ kind: "rad-order-edit", srId: item.id });
-    else if (item.kind === "physio-order") openForm({ kind: "physio-order-edit", srId: item.id });
-    else if (item.kind === "endoscopy-order")
-      openForm({ kind: "endoscopy-order-edit", srId: item.id });
-    else if (item.kind === "treatment-order")
-      openForm({ kind: "treatment-order-edit", srId: item.id });
-    else if (item.kind === "surgery-order") openForm({ kind: "surgery-order-edit", srId: item.id });
-    else if (item.kind === "meal-order") openForm({ kind: "meal-order-edit", srId: item.id });
-    else if (item.kind === "transfusion-order")
-      openForm({ kind: "transfusion-order-edit", srId: item.id });
-    else if (item.kind === "rehab-order") openForm({ kind: "rehab-order-edit", srId: item.id });
-    else if (item.kind === "radiotherapy-order")
-      openForm({ kind: "radiotherapy-order-edit", srId: item.id });
-    else if (item.kind === "nutrition-guidance-order")
-      openForm({ kind: "nutrition-guidance-order-edit", srId: item.id });
-    else if (item.kind === "consult-order") openForm({ kind: "consult-order-edit", srId: item.id });
+    else if (isOrderItem(item)) openForm({ kind: `${item.kind}-edit`, srId: item.id });
     // バイタルの id は 1 回の測定を束ねる identifier。
     else if (item.kind === "vital") openForm({ kind: "vital-edit", entryId: item.id });
     // パス評価はパスタブの日めくりでその病日を開く(記載はそこから評価で書き直す)。
@@ -795,38 +778,11 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     else openForm({ kind: "qr-edit", qrId: item.id });
   }, [openForm]);
 
-  // DO(複写して新規登録)。処方・注射・検体検査で開くフォームが違う。
+  // DO(複写して新規登録)。種別ごとの登録フォームを、複写元を指して開く。
   const handleDo = useCallback((item: KarteTimelineItem) => {
     if (item.kind === "prescription") openForm({ kind: "prescription-create", sourceSrId: item.id });
     else if (item.kind === "injection") openForm({ kind: "injection-create", sourceSrId: item.id });
-    else if (item.kind === "lab-order") openForm({ kind: "lab-order-create", sourceSrId: item.id });
-    else if (item.kind === "micro-order") {
-      openForm({ kind: "micro-order-create", sourceSrId: item.id });
-    } else if (item.kind === "patho-order") {
-      openForm({ kind: "patho-order-create", sourceSrId: item.id });
-    } else if (item.kind === "rad-order") {
-      openForm({ kind: "rad-order-create", sourceSrId: item.id });
-    } else if (item.kind === "physio-order") {
-      openForm({ kind: "physio-order-create", sourceSrId: item.id });
-    } else if (item.kind === "endoscopy-order") {
-      openForm({ kind: "endoscopy-order-create", sourceSrId: item.id });
-    } else if (item.kind === "treatment-order") {
-      openForm({ kind: "treatment-order-create", sourceSrId: item.id });
-    } else if (item.kind === "surgery-order") {
-      openForm({ kind: "surgery-order-create", sourceSrId: item.id });
-    } else if (item.kind === "meal-order") {
-      openForm({ kind: "meal-order-create", sourceSrId: item.id });
-    } else if (item.kind === "transfusion-order") {
-      openForm({ kind: "transfusion-order-create", sourceSrId: item.id });
-    } else if (item.kind === "rehab-order") {
-      openForm({ kind: "rehab-order-create", sourceSrId: item.id });
-    } else if (item.kind === "radiotherapy-order") {
-      openForm({ kind: "radiotherapy-order-create", sourceSrId: item.id });
-    } else if (item.kind === "nutrition-guidance-order") {
-      openForm({ kind: "nutrition-guidance-order-create", sourceSrId: item.id });
-    } else if (item.kind === "consult-order") {
-      openForm({ kind: "consult-order-create", sourceSrId: item.id });
-    }
+    else if (isOrderItem(item)) openForm({ kind: `${item.kind}-create`, sourceSrId: item.id });
   }, [openForm]);
 
   // 開いている情報が消えたら、それを見ている UI も閉じる。

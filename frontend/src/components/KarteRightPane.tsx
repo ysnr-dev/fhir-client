@@ -1,4 +1,6 @@
+import type { ComponentType } from "react";
 import type { ProblemRef } from "../fhir/conditionHelpers";
+import { isOrderKind, ORDER_KINDS, type OrderKind } from "../fhir/orderKinds";
 import { AppointmentCreatePanel, AppointmentReschedulePanel } from "./AppointmentPanels";
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
 import { DischargeSummaryCreatePanel, DischargeSummaryEditPanel } from "./DischargeSummaryPanels";
@@ -46,6 +48,30 @@ import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
 
+/**
+ * 部門オーダー(fhir/orderKinds.ts の種別)の登録。DO(sourceSrId あり)では対象プロブレムも
+ * DO 元から引き継ぐので problem は使わない。startDate は食事の暦で食事の無い日を押したときの、その日。
+ */
+interface OrderCreateState {
+  kind: `${OrderKind}-create`;
+  sourceSrId?: string;
+  problem?: ProblemRef;
+  startDate?: string;
+}
+
+interface OrderEditState {
+  kind: `${OrderKind}-edit`;
+  srId: string;
+}
+
+function isOrderCreateState(state: KartePaneState): state is OrderCreateState {
+  return state.kind.endsWith("-create") && isOrderKind(state.kind.slice(0, -"-create".length));
+}
+
+function isOrderEditState(state: KartePaneState): state is OrderEditState {
+  return state.kind.endsWith("-edit") && isOrderKind(state.kind.slice(0, -"-edit".length));
+}
+
 export type KartePaneState =
   | { kind: "empty" }
   // problem: 登録ボタンを押した時点で選択されていたプロブレム(対象の初期値)。
@@ -80,35 +106,8 @@ export type KartePaneState =
       endDate?: string;
     }
   | { kind: "injection-edit"; srId: string }
-  | { kind: "lab-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "lab-order-edit"; srId: string }
-  | { kind: "micro-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "micro-order-edit"; srId: string }
-  | { kind: "patho-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "patho-order-edit"; srId: string }
-  | { kind: "rad-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "rad-order-edit"; srId: string }
-  | { kind: "physio-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "physio-order-edit"; srId: string }
-  | { kind: "endoscopy-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "endoscopy-order-edit"; srId: string }
-  | { kind: "treatment-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "treatment-order-edit"; srId: string }
-  | { kind: "surgery-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "surgery-order-edit"; srId: string }
-  // startDate: 暦(食事タブ)で食事の無い日を押したときの、その日。
-  | { kind: "meal-order-create"; sourceSrId?: string; problem?: ProblemRef; startDate?: string }
-  | { kind: "meal-order-edit"; srId: string }
-  | { kind: "transfusion-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "transfusion-order-edit"; srId: string }
-  | { kind: "rehab-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "rehab-order-edit"; srId: string }
-  | { kind: "radiotherapy-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "radiotherapy-order-edit"; srId: string }
-  | { kind: "nutrition-guidance-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "nutrition-guidance-order-edit"; srId: string }
-  | { kind: "consult-order-create"; sourceSrId?: string; problem?: ProblemRef }
-  | { kind: "consult-order-edit"; srId: string }
+  | OrderCreateState
+  | OrderEditState
   | { kind: "nursing-order-create"; problem?: ProblemRef }
   | { kind: "nursing-order-edit"; srId: string }
   | { kind: "qr-create"; problem?: ProblemRef }
@@ -140,7 +139,101 @@ export type KartePaneState =
   // 放射線治療コースの週次レビュー(治療中の診察)。テンプレート回答として残す。
   | { kind: "radiotherapy-review"; srId: string };
 
+interface OrderCreatePanelProps {
+  patientId: string;
+  sourceSrId?: string;
+  defaultProblem?: ProblemRef;
+  startDate?: string;
+  onSaved: () => void;
+}
+
+interface OrderEditPanelProps {
+  patientId: string;
+  srId: string;
+  onSaved: () => void;
+}
+
+// 部門オーダーの登録・編集フォーム。種別を足したら 1 要素足す(足し忘れは型エラーになる)。
+const ORDER_PANES: Record<
+  OrderKind,
+  {
+    create: { title: string; Panel: ComponentType<OrderCreatePanelProps> };
+    edit: { title: string; Panel: ComponentType<OrderEditPanelProps> };
+  }
+> = {
+  "lab-order": {
+    create: { title: "検体検査登録", Panel: LabOrderCreatePanel },
+    edit: { title: "検体検査編集", Panel: LabOrderEditPanel },
+  },
+  "micro-order": {
+    create: { title: "細菌検査登録", Panel: MicroOrderCreatePanel },
+    edit: { title: "細菌検査編集", Panel: MicroOrderEditPanel },
+  },
+  "patho-order": {
+    create: { title: "病理検査登録", Panel: PathoOrderCreatePanel },
+    edit: { title: "病理検査編集", Panel: PathoOrderEditPanel },
+  },
+  "rad-order": {
+    create: { title: "放射線検査登録", Panel: RadOrderCreatePanel },
+    edit: { title: "放射線検査編集", Panel: RadOrderEditPanel },
+  },
+  "physio-order": {
+    create: { title: "生理検査登録", Panel: PhysioOrderCreatePanel },
+    edit: { title: "生理検査編集", Panel: PhysioOrderEditPanel },
+  },
+  "endoscopy-order": {
+    create: { title: "内視鏡登録", Panel: EndoscopyOrderCreatePanel },
+    edit: { title: "内視鏡編集", Panel: EndoscopyOrderEditPanel },
+  },
+  "treatment-order": {
+    create: { title: "処置登録", Panel: TreatmentOrderCreatePanel },
+    edit: { title: "処置編集", Panel: TreatmentOrderEditPanel },
+  },
+  "surgery-order": {
+    create: { title: "手術申込", Panel: SurgeryOrderCreatePanel },
+    edit: { title: "手術編集", Panel: SurgeryOrderEditPanel },
+  },
+  "meal-order": {
+    create: {
+      title: "食事登録",
+      Panel: ({ startDate, ...props }) => <MealOrderCreatePanel {...props} defaultStartDate={startDate} />,
+    },
+    edit: { title: "食事編集", Panel: MealOrderEditPanel },
+  },
+  "transfusion-order": {
+    create: { title: "輸血登録", Panel: TransfusionOrderCreatePanel },
+    edit: { title: "輸血編集", Panel: TransfusionOrderEditPanel },
+  },
+  "rehab-order": {
+    create: { title: "リハビリ登録", Panel: RehabOrderCreatePanel },
+    edit: { title: "リハビリ編集", Panel: RehabOrderEditPanel },
+  },
+  "radiotherapy-order": {
+    create: { title: "放射線治療登録", Panel: RadiotherapyOrderCreatePanel },
+    edit: { title: "放射線治療編集", Panel: RadiotherapyOrderEditPanel },
+  },
+  "nutrition-guidance-order": {
+    create: { title: "栄養指導登録", Panel: NutritionGuidanceOrderCreatePanel },
+    edit: { title: "栄養指導編集", Panel: NutritionGuidanceOrderEditPanel },
+  },
+  "consult-order": {
+    create: { title: "他科依頼登録", Panel: ConsultOrderCreatePanel },
+    edit: { title: "他科依頼編集", Panel: ConsultOrderEditPanel },
+  },
+};
+
+const orderKindOfPane = (state: OrderCreateState | OrderEditState) =>
+  state.kind.replace(/-(create|edit)$/, "") as OrderKind;
+
+const ORDER_PANE_TITLES = Object.fromEntries(
+  ORDER_KINDS.flatMap((kind) => [
+    [`${kind}-create`, ORDER_PANES[kind].create.title],
+    [`${kind}-edit`, ORDER_PANES[kind].edit.title],
+  ]),
+) as Record<OrderCreateState["kind"] | OrderEditState["kind"], string>;
+
 const PANE_TITLES: Record<KartePaneState["kind"], string> = {
+  ...ORDER_PANE_TITLES,
   empty: "",
   "note-create": "診療記録登録",
   "note-edit": "診療記録編集",
@@ -155,34 +248,6 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "prescription-edit": "処方編集",
   "injection-create": "注射登録",
   "injection-edit": "注射編集",
-  "lab-order-create": "検体検査登録",
-  "lab-order-edit": "検体検査編集",
-  "micro-order-create": "細菌検査登録",
-  "micro-order-edit": "細菌検査編集",
-  "patho-order-create": "病理検査登録",
-  "patho-order-edit": "病理検査編集",
-  "rad-order-create": "放射線検査登録",
-  "rad-order-edit": "放射線検査編集",
-  "physio-order-create": "生理検査登録",
-  "physio-order-edit": "生理検査編集",
-  "endoscopy-order-create": "内視鏡登録",
-  "endoscopy-order-edit": "内視鏡編集",
-  "treatment-order-create": "処置登録",
-  "treatment-order-edit": "処置編集",
-  "surgery-order-create": "手術申込",
-  "surgery-order-edit": "手術編集",
-  "meal-order-create": "食事登録",
-  "meal-order-edit": "食事編集",
-  "transfusion-order-create": "輸血登録",
-  "transfusion-order-edit": "輸血編集",
-  "rehab-order-create": "リハビリ登録",
-  "rehab-order-edit": "リハビリ編集",
-  "radiotherapy-order-create": "放射線治療登録",
-  "radiotherapy-order-edit": "放射線治療編集",
-  "nutrition-guidance-order-create": "栄養指導登録",
-  "nutrition-guidance-order-edit": "栄養指導編集",
-  "consult-order-create": "他科依頼登録",
-  "consult-order-edit": "他科依頼編集",
   "nursing-order-create": "看護指示登録",
   "nursing-order-edit": "看護指示編集",
   "qr-create": "テンプレート登録",
@@ -205,6 +270,13 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
 // 対象が切り替わったらフォームを作り直すためのキー。各フォームは初期値を useState の
 // 初期値としてのみ読むため、同じ種類の別リソースへ切り替えるにはリマウントが要る。
 function paneKey(state: KartePaneState): string {
+  if (isOrderEditState(state)) return `${state.kind}:${state.srId}`;
+  // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
+  // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
+  // 食事は暦の別の日を押したときも開始日が変わるので、日付もキーに入れる。
+  if (isOrderCreateState(state)) {
+    return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${state.startDate ?? ""}`;
+  }
   switch (state.kind) {
     case "note-edit":
     case "summary-edit":
@@ -216,20 +288,6 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.responseId}`;
     case "prescription-edit":
     case "injection-edit":
-    case "lab-order-edit":
-    case "micro-order-edit":
-    case "patho-order-edit":
-    case "rad-order-edit":
-    case "physio-order-edit":
-    case "endoscopy-order-edit":
-    case "treatment-order-edit":
-    case "surgery-order-edit":
-    case "meal-order-edit":
-    case "transfusion-order-edit":
-    case "rehab-order-edit":
-    case "radiotherapy-order-edit":
-    case "nutrition-guidance-order-edit":
-    case "consult-order-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
@@ -259,27 +317,9 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.regimenSrId}`;
     case "prescription-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${(state.broughtIds ?? []).join(",")}`;
-    // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
-    // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
-    case "lab-order-create":
-    case "micro-order-create":
-    case "patho-order-create":
-    case "rad-order-create":
-    case "physio-order-create":
-    case "endoscopy-order-create":
-    case "treatment-order-create":
-    case "surgery-order-create":
-    case "transfusion-order-create":
-    case "rehab-order-create":
-    case "radiotherapy-order-create":
-    case "nutrition-guidance-order-create":
-    case "consult-order-create":
-      return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
-    // 注射・食事は暦の別の日を押したときも初期値(開始日)が変わるので、日付もキーに入れる。
+    // 注射は暦の別の日を押したときも初期値(開始日)が変わるので、日付もキーに入れる。
     case "injection-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${state.startDate ?? ""}:${state.endDate ?? ""}`;
-    case "meal-order-create":
-      return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${state.startDate ?? ""}`;
     case "note-create":
     case "qr-create":
     case "vital-create":
@@ -522,6 +562,22 @@ function PaneContent({
   onSaved: () => void;
   onStateChange: (state: KartePaneState) => void;
 }) {
+  if (isOrderCreateState(state)) {
+    const { Panel } = ORDER_PANES[orderKindOfPane(state)].create;
+    return (
+      <Panel
+        patientId={patientId}
+        sourceSrId={state.sourceSrId}
+        defaultProblem={state.problem}
+        startDate={state.startDate}
+        onSaved={onSaved}
+      />
+    );
+  }
+  if (isOrderEditState(state)) {
+    const { Panel } = ORDER_PANES[orderKindOfPane(state)].edit;
+    return <Panel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+  }
   switch (state.kind) {
     case "order-set":
       return (
@@ -656,106 +712,6 @@ function PaneContent({
       );
     case "injection-edit":
       return <InjectionEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "lab-order-create":
-      return (
-        <LabOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "lab-order-edit":
-      return <LabOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "micro-order-create":
-      return (
-        <MicroOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "micro-order-edit":
-      return <MicroOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "patho-order-create":
-      return (
-        <PathoOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "patho-order-edit":
-      return <PathoOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "rad-order-create":
-      return (
-        <RadOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "rad-order-edit":
-      return <RadOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "physio-order-create":
-      return (
-        <PhysioOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "physio-order-edit":
-      return <PhysioOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "endoscopy-order-create":
-      return (
-        <EndoscopyOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "endoscopy-order-edit":
-      return <EndoscopyOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "treatment-order-create":
-      return (
-        <TreatmentOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "treatment-order-edit":
-      return <TreatmentOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "surgery-order-create":
-      return (
-        <SurgeryOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "surgery-order-edit":
-      return <SurgeryOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "meal-order-create":
-      return (
-        <MealOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultStartDate={state.startDate}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "meal-order-edit":
-      return <MealOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "nursing-order-create":
       return (
         <NursingOrderCreatePanel
@@ -766,71 +722,6 @@ function PaneContent({
       );
     case "nursing-order-edit":
       return <NursingOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "transfusion-order-create":
-      return (
-        <TransfusionOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "transfusion-order-edit":
-      return (
-        <TransfusionOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />
-      );
-    case "rehab-order-create":
-      return (
-        <RehabOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "rehab-order-edit":
-      return <RehabOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
-    case "radiotherapy-order-create":
-      return (
-        <RadiotherapyOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "radiotherapy-order-edit":
-      return (
-        <RadiotherapyOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />
-      );
-    case "nutrition-guidance-order-create":
-      return (
-        <NutritionGuidanceOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "nutrition-guidance-order-edit":
-      return (
-        <NutritionGuidanceOrderEditPanel
-          patientId={patientId}
-          srId={state.srId}
-          onSaved={onSaved}
-        />
-      );
-    case "consult-order-create":
-      return (
-        <ConsultOrderCreatePanel
-          patientId={patientId}
-          sourceSrId={state.sourceSrId}
-          defaultProblem={state.problem}
-          onSaved={onSaved}
-        />
-      );
-    case "consult-order-edit":
-      return <ConsultOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "qr-create":
       return (
         <QuestionnaireResponseCreatePanel

@@ -93,6 +93,8 @@ docker compose exec frontend node scripts/import-cycles.cjs src/api/queries
 - `Modal` はポータルではない。フォーム内のモーダルに `<form>` を書かない(外側がネイティブ submit される)。
 - 1 行に収まらないトグル類は行のケバブメニュー(RowMenu)に畳む。
 - 通知は Task に統一。種別を足すときはレジストリに 1 要素足す。
+- 部門オーダーの種別を足すときは `fhir/orderKinds.ts` に 1 行足し、型エラーになった対応表
+  (`components/orderKindRegistry.tsx`・`KarteCardModals.tsx`・`KarteRightPane.tsx`)を埋める。種別ごとの if を並べない。
 - fabric.js v7 は originX/originY の既定が center。生成時に left/top と origin を明示する。
 
 ## 作業の進め方
