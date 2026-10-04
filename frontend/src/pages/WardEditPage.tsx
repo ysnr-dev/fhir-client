@@ -5,11 +5,12 @@ import { useLocation, useUpdateLocation } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { WardForm } from "../components/WardForm";
 import { buildWard, parseWard, type WardFormValues } from "../fhir/wardHelpers";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 export function WardEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: result, isLoading, error: loadError } = useLocation(id);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(useLocation(id), id);
   const updateWard = useUpdateLocation();
   const [conflict, setConflict] = useState(false);
 

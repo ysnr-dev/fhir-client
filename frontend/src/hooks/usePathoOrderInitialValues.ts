@@ -7,11 +7,12 @@ import {
   parsePathoOrderForm,
 } from "../fhir/pathoOrderHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
+import { useEditSnapshot } from "./useEditSnapshot";
 
 // 保存済みの病理検査オーダーをフォームの初期値に復元する。編集と DO の双方から使う。
 // 検体明細も ServiceRequest なので、ヘッダと一緒に取得した明細から組み立てる。
 export function usePathoOrderInitialValues(srId: string | undefined, patientId?: string) {
-  const detail = usePathoOrderDetail(srId);
+  const detail = useEditSnapshot(usePathoOrderDetail(srId), srId);
 
   const { serviceRequest, itemRequests } = useMemo(() => {
     const requests = serviceRequestsOf(detail.data?.data);

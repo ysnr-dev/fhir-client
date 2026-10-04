@@ -5,11 +5,12 @@ import { useSchedule, useUpdateSchedule } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { ScheduleForm, type ScheduleActorNames } from "../components/ScheduleForm";
 import { buildSchedule, parseSchedule, type ScheduleFormValues } from "../fhir/scheduleHelpers";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 export function ScheduleEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: result, isLoading, error: loadError } = useSchedule(id);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(useSchedule(id), id);
   const updateSchedule = useUpdateSchedule();
   const [conflict, setConflict] = useState(false);
 

@@ -6,12 +6,13 @@ import {
   parseTransfusionOrderForm,
   transfusionOrderItemRequests,
 } from "../fhir/transfusionOrderHelpers";
+import { useEditSnapshot } from "./useEditSnapshot";
 
 // 保存済みの輸血オーダーをフォームの初期値に復元する。編集と DO の双方から使う。
 // 製剤明細も ServiceRequest なので、ヘッダと一緒に取得した明細から組み立てる
 // (病理の usePathoOrderInitialValues と同じ形)。
 export function useTransfusionOrderInitialValues(srId: string | undefined, patientId?: string) {
-  const detail = useTransfusionOrderDetail(srId);
+  const detail = useEditSnapshot(useTransfusionOrderDetail(srId), srId);
 
   const { serviceRequest, itemRequests } = useMemo(() => {
     const requests = serviceRequestsOf(detail.data?.data);

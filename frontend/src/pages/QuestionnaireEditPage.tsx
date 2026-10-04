@@ -10,11 +10,12 @@ import {
   parseQuestionnaireForm,
   type QuestionnaireFormValues,
 } from "../fhir/questionnaireHelpers";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 export function QuestionnaireEditPage() {
   const { questionnaireId } = useParams<{ questionnaireId: string }>();
   const navigate = useNavigate();
-  const { data: result, isLoading, error: loadError } = useQuestionnaire(questionnaireId);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(useQuestionnaire(questionnaireId), questionnaireId);
   const updateQuestionnaire = useUpdateQuestionnaire();
   const [conflict, setConflict] = useState(false);
 

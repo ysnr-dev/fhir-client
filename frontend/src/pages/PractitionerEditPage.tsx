@@ -15,10 +15,11 @@ import {
   parseDepartmentRoles,
   parsePractitionerRole,
 } from "../fhir/practitionerRoleHelpers";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 export function PractitionerEditPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: result, isLoading, error: loadError } = usePractitioner(id);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(usePractitioner(id), id);
   const role = usePractitionerRoles(id);
   // ログイン設定(backend の /auth/account)。フォームの初期値になるため、
   // 職種・所属と同様に取得完了を待ってから描画する。

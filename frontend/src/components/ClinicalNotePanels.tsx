@@ -18,6 +18,7 @@ import { isPatientMismatch } from "../fhir/patientHelpers";
 import { parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
 import { useOrderContext } from "../hooks/useOrderContext";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // 診療記録の登録・編集 UI。ページ(/patients/:id/clinical-notes/new など)と
 // カルテ画面の右ペインの双方から使うため、保存後の遷移は onSaved に委ねる。
@@ -93,7 +94,7 @@ interface ClinicalNoteEditPanelProps {
 }
 
 export function ClinicalNoteEditPanel({ patientId, noteId, onSaved }: ClinicalNoteEditPanelProps) {
-  const { data: result, isLoading, error } = useClinicalNote(noteId);
+  const { data: result, isLoading, error } = useEditSnapshot(useClinicalNote(noteId), noteId);
   const note = result?.data;
   const patientMismatch = isPatientMismatch(patientId, note?.subject);
 

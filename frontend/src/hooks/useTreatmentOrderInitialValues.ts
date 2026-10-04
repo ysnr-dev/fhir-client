@@ -6,11 +6,12 @@ import {
   parseTreatmentOrderForm,
   treatmentOrderItemRequests,
 } from "../fhir/treatmentOrderHelpers";
+import { useEditSnapshot } from "./useEditSnapshot";
 
 // 保存済みの処置オーダーをフォームの初期値に復元する。編集と DO の双方から使う。
 // 明細も ServiceRequest なので、ヘッダと一緒に取得した明細から項目を組み立てる。
 export function useTreatmentOrderInitialValues(srId: string | undefined, patientId?: string) {
-  const detail = useTreatmentOrderDetail(srId);
+  const detail = useEditSnapshot(useTreatmentOrderDetail(srId), srId);
 
   const { serviceRequest, itemRequests } = useMemo(() => {
     const requests = serviceRequestsOf(detail.data?.data);

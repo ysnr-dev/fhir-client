@@ -7,11 +7,12 @@ import {
   surgeryOrderItemRequests,
   surgeryOrderResponseIds,
 } from "../fhir/surgeryOrderHelpers";
+import { useEditSnapshot } from "./useEditSnapshot";
 
 // 保存済みの手術オーダーをフォームの初期値に復元する。編集と DO の双方から使う。
 // 明細(術式)も ServiceRequest なので、ヘッダと一緒に取得した明細から組み立てる。
 export function useSurgeryOrderInitialValues(srId: string | undefined, patientId?: string) {
-  const detail = useSurgeryOrderDetail(srId);
+  const detail = useEditSnapshot(useSurgeryOrderDetail(srId), srId);
 
   const { serviceRequest, itemRequests } = useMemo(() => {
     const requests = serviceRequestsOf(detail.data?.data);

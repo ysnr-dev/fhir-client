@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { usePathoResultDetail } from "../api/queries";
 import { parsePathoResultForm, splitPathoResultDetailBundle } from "../fhir/pathoResultHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
+import { useEditSnapshot } from "./useEditSnapshot";
 
 // 保存済みの病理レポートをフォームの初期値に復元する。臓器名・検体タイプ名は
 // coding.display にマスタの写しとして保存されているため、マスタ引き直しは不要で
@@ -12,7 +13,7 @@ import { isPatientMismatch } from "../fhir/patientHelpers";
 // patientId は URL 上の患者。レポートの subject と食い違う場合は他患者のもの
 // なので初期値を返さず patientMismatch を立てる(呼び出し側でフォームを出さない)。
 export function usePathoResultInitialValues(reportId: string | undefined, patientId?: string) {
-  const detail = usePathoResultDetail(reportId);
+  const detail = useEditSnapshot(usePathoResultDetail(reportId), reportId);
 
   const split = useMemo(
     () =>

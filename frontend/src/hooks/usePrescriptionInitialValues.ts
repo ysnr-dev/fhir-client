@@ -5,6 +5,7 @@ import {
   parsePrescriptionForm,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
+import { useEditSnapshot } from "./useEditSnapshot";
 
 // 保存済みの処方を処方フォームの初期値に復元する。編集(そのまま復元)と
 // 新規作成(DO)の双方から使う。呼び出し側は ready を待ってからフォームを描画すること
@@ -13,7 +14,7 @@ import {
 // patientId は URL 上の患者。処方の subject と食い違う場合は他患者の処方なので
 // 初期値を返さず patientMismatch を立てる(呼び出し側でフォームを出さないこと)。
 export function usePrescriptionInitialValues(srId: string | undefined, patientId?: string) {
-  const detail = usePrescriptionDetail(srId);
+  const detail = useEditSnapshot(usePrescriptionDetail(srId), srId);
 
   const split = useMemo(
     () =>

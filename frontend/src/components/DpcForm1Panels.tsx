@@ -34,6 +34,7 @@ import { today } from "../lib/dates";
 import { DpcForm1Form } from "./DpcForm1Form";
 import { ErrorBanner } from "./ErrorBanner";
 import type { KartePaneState } from "./KarteRightPane";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // DPC 様式1 の登録・編集(カルテ右ペイン)。
 //
@@ -152,7 +153,7 @@ interface DpcForm1EditPanelProps {
 }
 
 export function DpcForm1EditPanel({ patientId, responseId, onSaved }: DpcForm1EditPanelProps) {
-  const { data: result, isLoading, error } = useDpcForm1(responseId);
+  const { data: result, isLoading, error } = useEditSnapshot(useDpcForm1(responseId), responseId);
   const response = result?.data;
   const patientMismatch = isPatientMismatch(patientId, response?.subject);
   const encounter = useEncounter(dpcForm1EncounterId(response) || undefined);

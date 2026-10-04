@@ -6,10 +6,16 @@ import { parseRadiotherapyOrderForm } from "../fhir/radiotherapyOrderHelpers";
 import { radiotherapyFractionsByOrderId } from "../fhir/radiotherapyResultHelpers";
 import { radiotherapyCourseSummariesByOrderId } from "../fhir/radiotherapySummaryHelpers";
 import { radiotherapyTaskStatus, radiotherapyTasksByOrderId } from "../fhir/radiotherapyTaskHelpers";
+import { useEditSnapshot } from "./useEditSnapshot";
 
 // 保存済みの放射線治療オーダーをフォームの初期値に復元する。編集と DO の双方から使う。
-export function useRadiotherapyOrderInitialValues(srId: string | undefined, patientId?: string) {
-  const detail = useRadiotherapyOrderDetail(srId);
+export function useRadiotherapyOrderInitialValues(
+  srId: string | undefined,
+  patientId?: string,
+  /** 詳細表示では true。照射の実施などの読み直しに追随する(編集フォームは開いた時点の版に固定)。 */
+  live = false,
+) {
+  const detail = useEditSnapshot(useRadiotherapyOrderDetail(srId), srId, !live);
 
   const serviceRequest = useMemo(
     () => serviceRequestsOf(detail.data?.data).find((request) => request.id === srId),

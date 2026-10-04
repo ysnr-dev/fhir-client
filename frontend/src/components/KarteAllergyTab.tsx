@@ -8,6 +8,7 @@ import { AllergyForm } from "./AllergyForm";
 import { AllergyTable } from "./AllergyTable";
 import { ErrorBanner } from "./ErrorBanner";
 import { Pagination } from "./Pagination";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // カルテ画面の「アレルギー」タブ。一覧・表示・登録・編集・削除を左ペイン内で完結させる。
 //
@@ -148,7 +149,7 @@ function EditForm({
   allergyId: string;
   onSaved: () => void;
 }) {
-  const { data: result, isLoading, error: loadError } = useAllergy(allergyId);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(useAllergy(allergyId), allergyId);
   const updateAllergy = useUpdateAllergy();
   const [conflict, setConflict] = useState(false);
 

@@ -5,11 +5,12 @@ import { useLocation, useUpdateLocation } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LocationForm } from "../components/LocationForm";
 import { buildLocation, parseLocation, type LocationFormValues } from "../fhir/locationHelpers";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 export function LocationEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: result, isLoading, error: loadError } = useLocation(id);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(useLocation(id), id);
   const updateLocation = useUpdateLocation();
   const [conflict, setConflict] = useState(false);
 

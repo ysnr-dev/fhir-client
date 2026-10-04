@@ -5,6 +5,7 @@ import {
   splitMicroResultDetailBundle,
 } from "../fhir/microResultHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
+import { useEditSnapshot } from "./useEditSnapshot";
 
 // 保存済みの細菌検査結果を結果フォームの初期値に復元する。名称(菌名・薬剤名など)は
 // すべて coding.display にマスタの写しとして保存されているため、検体検査結果の
@@ -15,7 +16,7 @@ import { isPatientMismatch } from "../fhir/patientHelpers";
 // patientId は URL 上の患者。結果の subject と食い違う場合は他患者の結果なので
 // 初期値を返さず patientMismatch を立てる(呼び出し側でフォームを出さないこと)。
 export function useMicroResultInitialValues(reportId: string | undefined, patientId?: string) {
-  const detail = useMicroResultDetail(reportId);
+  const detail = useEditSnapshot(useMicroResultDetail(reportId), reportId);
 
   const split = useMemo(
     () =>

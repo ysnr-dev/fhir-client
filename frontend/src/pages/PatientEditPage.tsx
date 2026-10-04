@@ -5,11 +5,12 @@ import { usePatient, useUpdatePatient } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientForm } from "../components/PatientForm";
 import { buildPatient, parsePatient, type PatientFormValues } from "../fhir/patientHelpers";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 export function PatientEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: result, isLoading, error: loadError } = usePatient(id);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(usePatient(id), id);
   const updatePatient = useUpdatePatient();
   const [conflict, setConflict] = useState(false);
 

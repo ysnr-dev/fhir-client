@@ -9,6 +9,7 @@ import {
   parseOrganization,
   type OrganizationFormValues,
 } from "../fhir/organizationHelpers";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 interface OrganizationEditPageProps {
   /** 保存後・「一覧に戻る」の戻り先。連携先医療機関の編集で差し替える。 */
@@ -22,7 +23,7 @@ export function OrganizationEditPage({
 }: OrganizationEditPageProps = {}) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: result, isLoading, error: loadError } = useOrganization(id);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(useOrganization(id), id);
   const updateOrganization = useUpdateOrganization();
   const [conflict, setConflict] = useState(false);
 

@@ -28,6 +28,7 @@ import { KarteLinkMenu } from "./KarteLinkMenu";
 import { Pagination } from "./Pagination";
 import { PatientFileGrid } from "./PatientFileGrid";
 import { PatientFileTable } from "./PatientFileTable";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // カルテ画面の「ファイル」タブ(docs/patient-file-design.md)。
 // 一覧・表示・取込・編集・差し替え・削除を左ペイン内で完結させる。
@@ -350,7 +351,7 @@ function EditForm({
   fileId: string;
   onSaved: () => void;
 }) {
-  const { data: result, isLoading, error: loadError } = usePatientFileDocument(fileId);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(usePatientFileDocument(fileId), fileId);
   const { data: categories = [] } = useFileCategories();
   const updateFile = useUpdatePatientFile();
   const [values, setValues] = useState<PatientFileValues | null>(null);

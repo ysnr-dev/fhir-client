@@ -3,11 +3,12 @@ import { useConsultOrderDetail } from "../api/queries";
 import { parseConsultOrderForm } from "../fhir/consultOrderHelpers";
 import { serviceRequestsOf } from "../fhir/labOrderHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
+import { useEditSnapshot } from "./useEditSnapshot";
 
 // 保存済みの他科依頼をフォームの初期値に復元する。編集と DO の双方から使う。
 // 明細を持たないので、リハビリ(useRehabOrderInitialValues)と同じくヘッダ 1 件だけを見る。
 export function useConsultOrderInitialValues(srId: string | undefined, patientId?: string) {
-  const detail = useConsultOrderDetail(srId);
+  const detail = useEditSnapshot(useConsultOrderDetail(srId), srId);
 
   const serviceRequest = useMemo(
     () => serviceRequestsOf(detail.data?.data).find((request) => request.id === srId),

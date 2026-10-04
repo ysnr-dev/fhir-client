@@ -33,6 +33,7 @@ import {
   validateQuestionnaireResponseMeta,
 } from "../fhir/questionnaireResponseHelpers";
 import { stripResponseAnnotations } from "../fhir/schemaImage";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // 複写ボタンに添える「いつの回答か」。日付だけで足りる。
 function formatAuthored(authored: string | undefined): string {
@@ -266,7 +267,7 @@ export function QuestionnaireResponseEditPanel({
   qrId,
   onSaved,
 }: QuestionnaireResponseEditPanelProps) {
-  const { data: result, isLoading, error } = useQuestionnaireResponse(qrId);
+  const { data: result, isLoading, error } = useEditSnapshot(useQuestionnaireResponse(qrId), qrId);
   const response = result?.data;
 
   const {

@@ -10,12 +10,13 @@ import {
   type PractitionerFormValues,
 } from "../fhir/practitionerHelpers";
 import { emptyPractitionerRole, parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // 連携先医師の編集。自院スタッフの編集(PractitionerEditPage)と違い、
 // ログイン設定と所属診療科は扱わない。
 export function PartnerPractitionerEditPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: result, isLoading, error: loadError } = usePractitioner(id);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(usePractitioner(id), id);
   const role = usePractitionerRoles(id);
 
   const header = (

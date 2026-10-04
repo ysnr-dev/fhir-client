@@ -73,6 +73,7 @@ docker compose exec frontend node scripts/import-cycles.cjs src/api/queries
 - 楽観ロックは `If-Match`(ETag)。単体の更新は `FhirResult.etag` を引き回す。transaction の PUT は、読んだリソースを
   書き換えて送れば `postBundle` が版(`meta.versionId`)を `ifMatch` に添える。フォームから組み直す更新は
   `withVersionLock(bundle, 元のリソース)`(`fhir/shared.ts`)。版違いは 412。
+  編集フォームの元データは `useEditSnapshot`(`hooks/`)で開いた時点の版に固定する(読み直された版で保存させない)。
 
 ## 実装上の約束
 

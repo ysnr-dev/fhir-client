@@ -29,6 +29,7 @@ import { useOrderContext } from "../hooks/useOrderContext";
 import type { KartePaneState } from "./KarteRightPane";
 import { DischargeSummaryForm } from "./DischargeSummaryForm";
 import { ErrorBanner } from "./ErrorBanner";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // 退院時サマリーの登録・編集(カルテ右ペイン)。
 //
@@ -172,7 +173,7 @@ interface DischargeSummaryEditPanelProps {
 }
 
 export function DischargeSummaryEditPanel({ patientId, noteId, onSaved }: DischargeSummaryEditPanelProps) {
-  const { data: result, isLoading, error } = useClinicalNote(noteId);
+  const { data: result, isLoading, error } = useEditSnapshot(useClinicalNote(noteId), noteId);
   const note = result?.data;
   const patientMismatch = isPatientMismatch(patientId, note?.subject);
   const encounterId = dischargeSummaryEncounterId(note);

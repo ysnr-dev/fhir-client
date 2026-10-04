@@ -19,6 +19,7 @@ import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { NursingOrderForm } from "./NursingOrderForm";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // 看護指示の登録・編集 UI。カルテ画面の右ペインから使う。
 
@@ -81,7 +82,7 @@ interface NursingOrderEditPanelProps {
 /** 編集は指示 1 行を直すだけ。束ね(requisition)と発行日は元のまま。 */
 export function NursingOrderEditPanel({ patientId, srId, onSaved }: NursingOrderEditPanelProps) {
   const update = useUpdateNursingOrder();
-  const detail = useNursingOrderDetail(srId);
+  const detail = useEditSnapshot(useNursingOrderDetail(srId), srId);
   const order = detail.data?.order;
   const patientMismatch = isPatientMismatch(patientId, order?.subject);
 

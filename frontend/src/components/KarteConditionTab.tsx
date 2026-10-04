@@ -20,6 +20,7 @@ import { ConditionForm } from "./ConditionForm";
 import { ConditionTable } from "./ConditionTable";
 import { ErrorBanner } from "./ErrorBanner";
 import { Pagination } from "./Pagination";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // カルテ画面の「病名」タブ。一覧・表示・登録・編集・削除を左ペイン内で完結させる。
 //
@@ -171,7 +172,7 @@ function EditForm({
   conditionId: string;
   onSaved: () => void;
 }) {
-  const { data: result, isLoading, error: loadError } = useCondition(conditionId);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(useCondition(conditionId), conditionId);
   const updateCondition = useUpdateCondition();
   const problemNumberFor = useProblemNumbering(patientId);
   const problems = useProblemConditions(patientId);

@@ -55,6 +55,7 @@ import { FlagForm } from "./FlagForm";
 import { FlagTable } from "./FlagTable";
 import { Pagination } from "./Pagination";
 import { PatientBasicSection } from "./PatientBasicSection";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 /**
  * カルテ画面の「プロファイル」タブ。時系列ではなく、患者の「現在の状態」を
@@ -336,7 +337,7 @@ function EditForm({
   flagId: string;
   onSaved: () => void;
 }) {
-  const { data: result, isLoading, error: loadError } = useFlag(flagId);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(useFlag(flagId), flagId);
   const updateFlag = useUpdateFlag();
   const cautions = usePatientCautions();
   const { practitionerId } = useCurrentPractitioner();
@@ -402,7 +403,7 @@ function EditForm({
  * 楽観ロックと競合時の扱いは患者編集画面と同じ。
  */
 function PatientEditForm({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
-  const { data: result, isLoading, error: loadError } = usePatient(patientId);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(usePatient(patientId), patientId);
   const updatePatient = useUpdatePatient();
   const [conflict, setConflict] = useState(false);
 

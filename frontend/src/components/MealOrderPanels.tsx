@@ -22,6 +22,7 @@ import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { MealOrderForm } from "./MealOrderForm";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // 食事オーダーの登録・編集 UI。カルテ画面の右ペインから使う。
 // 送信は他のオーダーと同じ transaction Bundle の POST なので mutation を共用する。
@@ -171,7 +172,7 @@ export function MealOrderEditPanel({ patientId, srId, onSaved }: MealOrderEditPa
 // 保存済みの食事オーダーをフォームの初期値に復元する。編集と DO の双方から使う。
 // 明細を持たないので、他のオーダーと違いヘッダ 1 件だけを見ればよい。
 function useMealOrderInitialValues(srId: string | undefined, patientId?: string) {
-  const detail = useMealOrderDetail(srId);
+  const detail = useEditSnapshot(useMealOrderDetail(srId), srId);
 
   const serviceRequest = useMemo(
     () => serviceRequestsOf(detail.data?.data).find((request) => request.id === srId),

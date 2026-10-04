@@ -1141,7 +1141,7 @@ function RadiotherapyOrderDetail({
   problemsById: Map<string, fhir4.Condition>;
 }) {
   const { serviceRequest, taskStatus, fractions, courseSummary, ready, patientMismatch, error } =
-    useRadiotherapyOrderInitialValues(srId, patientId);
+    useRadiotherapyOrderInitialValues(srId, patientId, true);
   // 有害事象と診察(週次レビュー)はコースに紐づくので治療処方の id で引く(§6.3)。
   const adverseEvents = useTreatmentAdverseEvents(srId);
   const reviews = useRadiotherapyCourseReviews(srId);

@@ -45,6 +45,7 @@ import { Modal } from "./Modal";
 import { PhysioOrderDetailPanel } from "./PhysioOrderDetailPanel";
 import { RadOrderDetailPanel } from "./RadOrderDetailPanel";
 import { withVersionLock } from "../fhir/shared";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 // 検査レポート(読影・生理検査・内視鏡の所見)の登録・編集(docs/rad-report-design.md §4.1)。
 // 部門一覧のボタンとカルテのカードはモーダルで、カルテの検査結果タブはタブの中で開く。
@@ -197,7 +198,7 @@ export function ExamReportEntry({
   const { labels } = config;
   const order = adapter.useOrderDetail(orderId);
   const perform = adapter.usePerformDetail(orderId);
-  const existing = useExamReportByOrder(config, orderId);
+  const existing = useEditSnapshot(useExamReportByOrder(config, orderId), orderId);
   const save = useSaveExamReport(config);
   const remove = useDeleteExamReport(config);
   const selfOrganization = useSelfOrganization();

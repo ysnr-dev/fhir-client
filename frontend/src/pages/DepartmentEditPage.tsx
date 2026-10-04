@@ -9,11 +9,12 @@ import {
   parseDepartment,
   type DepartmentFormValues,
 } from "../fhir/departmentHelpers";
+import { useEditSnapshot } from "../hooks/useEditSnapshot";
 
 export function DepartmentEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: result, isLoading, error: loadError } = useOrganization(id);
+  const { data: result, isLoading, error: loadError } = useEditSnapshot(useOrganization(id), id);
   const updateDepartment = useUpdateOrganization();
   const [conflict, setConflict] = useState(false);
 
