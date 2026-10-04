@@ -22795,3 +22795,66 @@ input.nursing-picker__search {
 .nursing-summary__problems .nursing-tree {
   margin: 2px 0 0 22px;
 }
+
+/* マスタメンテの一覧(/masters)。領域ごとのカードは行数がまちまちなので、格子ではなく
+   段組みで上から詰める。段の数は幅で決まり、狭い画面では段が減って縦に送る。 */
+.master-hub__filter {
+  width: 240px;
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.master-hub__groups {
+  columns: 240px;
+  column-gap: 16px;
+}
+
+.master-hub__group {
+  break-inside: avoid;
+  margin: 0 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-card-shadow);
+  overflow: hidden;
+}
+
+/* 領域名は押せないので、項目(リンク)と見分けがつくよう地の色を変えた帯にして太字にする。 */
+.master-hub__group h2 {
+  margin: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-sunken);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: normal;
+}
+
+.master-hub__group ul {
+  margin: 0;
+  padding: 6px 14px 8px;
+  list-style: none;
+}
+
+.master-hub__group a {
+  display: block;
+  padding: 4px 0;
+  font-size: 14px;
+  color: var(--text-h);
+  text-decoration: none;
+}
+
+.master-hub__group a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.master-hub__empty {
+  color: var(--text);
+}

@@ -16,6 +16,7 @@ import { ExternalSystemSettingsPage } from "./pages/ExternalSystemSettingsPage";
 import { FacilitySettingsPage } from "./pages/FacilitySettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
+import { MasterMenuPage } from "./pages/MasterMenuPage";
 import { LabContainerPage } from "./pages/LabContainerPage";
 import { SchemaMasterPage } from "./pages/SchemaMasterPage";
 import { LabOrderItemLayoutPage } from "./pages/LabOrderItemLayoutPage";
@@ -101,6 +102,7 @@ import { PatientListPage } from "./pages/PatientListPage";
 import { KartePage } from "./pages/KartePage";
 import { KartePanePage } from "./pages/KartePanePage";
 import { KARTE_PANE_PATH, useKartePaneHost } from "./kartePaneChannel";
+import { isMasterPath } from "./masterMenu";
 import { DepartmentCreatePage } from "./pages/DepartmentCreatePage";
 import { DepartmentEditPage } from "./pages/DepartmentEditPage";
 import { DepartmentListPage } from "./pages/DepartmentListPage";
@@ -155,7 +157,8 @@ function KarteRedirect() {
 function App() {
   // カルテの左ペインを出す別タブ。サブモニターに置いて参照するだけの画面なので、
   // アプリのヘッダー(ナビ)を出さず縦幅をカルテに回す。
-  const detachedPane = useLocation().pathname.startsWith(KARTE_PANE_PATH);
+  const { pathname } = useLocation();
+  const detachedPane = pathname.startsWith(KARTE_PANE_PATH);
   // メインタブは、別タブから見た「生きているか」「いま誰のカルテか」の応答口になる。
   useKartePaneHost(!detachedPane);
 
@@ -211,9 +214,9 @@ function App() {
               セット登録
             </Link>
           </HoverMenu>
-          {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテと、
-              マスタメンテの間に置く。項目が増えたのでマスタメンテと同じく部門ごとに
-              入れ子にする(1 項目だけの部門も並びを揃えるためサブメニューにする)。 */}
+          {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテの
+              次に置く。項目が多いので部門ごとに入れ子にする
+              (1 項目だけの部門も並びを揃えるためサブメニューにする)。 */}
           <HoverMenu label="部門業務">
             <SubMenu label="臨床検査部門">
               <Link to="/lab-worklist" className="row-menu__item">
@@ -306,7 +309,7 @@ function App() {
             </SubMenu>
           </HoverMenu>
           {/* 予約枠は診療科がオーダーを出す前段(いつ診るかを決める)なので、
-              部門業務とマスタメンテの間に独立して置く。 */}
+              部門業務の次に独立して置く。 */}
           <NavLink to="/schedules">予約枠</NavLink>
           {/* 掲示板は院内のお知らせ。職種を問わず全員が読むので独立して置く(ホームにも出る)。 */}
           <NavLink to="/bulletin">掲示板</NavLink>
@@ -316,274 +319,15 @@ function App() {
               DPC様式1
             </Link>
           </HoverMenu>
-          {/* マスタメンテは項目が増えるため、診療領域ごとに入れ子にする。
-              どの領域にも属さないものは「共通」にまとめる。
-              マスタ取込は領域をまたぐので直下に置く。 */}
-          <HoverMenu label="マスタメンテ">
-            <Link to="/master-import" className="row-menu__item">
-              マスタ取込
-            </Link>
-            {/* 自院のマスタ。診療科・診察室・スタッフは自院のものしか登録しない
-                (他院は下の「連携先」)。 */}
-            <SubMenu label="共通">
-              <Link to="/organizations" className="row-menu__item">
-                医療機関
-              </Link>
-              <Link to="/departments" className="row-menu__item">
-                診療科
-              </Link>
-              <Link to="/practitioners" className="row-menu__item">
-                医療従事者
-              </Link>
-              <Link to="/locations" className="row-menu__item">
-                診察室・撮影室
-              </Link>
-              <Link to="/wards" className="row-menu__item">
-                病棟・病室
-              </Link>
-              <Link to="/patient-cautions" className="row-menu__item">
-                注意区分
-              </Link>
-              <Link to="/clinical-note-titles" className="row-menu__item">
-                診療記録タイトル
-              </Link>
-            </SubMenu>
-            {/* 他院。診療情報提供書の送付先候補として登録する。 */}
-            <SubMenu label="連携先">
-              <Link to="/partner-organizations" className="row-menu__item">
-                連携先医療機関
-              </Link>
-              <Link to="/partner-practitioners" className="row-menu__item">
-                連携先医師
-              </Link>
-            </SubMenu>
-            <SubMenu label="テンプレート">
-              <Link to="/questionnaires" className="row-menu__item">
-                テンプレート
-              </Link>
-              <Link to="/report-layouts" className="row-menu__item">
-                帳票レイアウト
-              </Link>
-              <Link to="/document-templates" className="row-menu__item">
-                文書テンプレート
-              </Link>
-              <Link to="/schemas" className="row-menu__item">
-                シェーマ
-              </Link>
-            </SubMenu>
-            <SubMenu label="医薬品">
-              <Link to="/medicine-dose-conversions" className="row-menu__item">
-                投与量換算
-              </Link>
-              <Link to="/formularies" className="row-menu__item">
-                フォーミュラリ
-              </Link>
-              <Link to="/drug-checks" className="row-menu__item">
-                薬剤チェック
-              </Link>
-              <Link to="/insulin-scale-sets" className="row-menu__item">
-                スケールセット
-              </Link>
-            </SubMenu>
-            {/* 化学療法のマスタ。レジメンは審査委員会で承認する施設共通の参照表なので
-                マスタメンテに置く(docs/chemo-regimen-design.md)。 */}
-            <SubMenu label="化学療法">
-              <Link to="/regimens" className="row-menu__item">
-                レジメン
-              </Link>
-            </SubMenu>
-            {/* クリニカルパス(施設パス)の定義。承認制の施設共通マスタ(docs/clinical-pathway-design.md)。 */}
-            <SubMenu label="クリニカルパス">
-              <Link to="/pathways" className="row-menu__item">
-                パス定義
-              </Link>
-            </SubMenu>
-            <SubMenu label="検体検査">
-              <Link to="/lab-order-items" className="row-menu__item">
-                検査オーダー項目
-              </Link>
-              <Link to="/lab-result-items" className="row-menu__item">
-                検査結果項目
-              </Link>
-              <Link to="/lab-order-item-layouts" className="row-menu__item">
-                検査オーダーレイアウト
-              </Link>
-              <Link to="/lab-specimens" className="row-menu__item">
-                検体
-              </Link>
-              <Link to="/lab-containers" className="row-menu__item">
-                採取管
-              </Link>
-            </SubMenu>
-            {/* 細菌検査は検体を扱う点で検体検査に近いので、その下に並べる。 */}
-            <SubMenu label="細菌検査">
-              <Link to="/micro-order-items" className="row-menu__item">
-                検査項目・採取部位
-              </Link>
-              <Link to="/micro-specimen-types" className="row-menu__item">
-                JANIS材料コード
-              </Link>
-              <Link to="/micro-organisms" className="row-menu__item">
-                JANIS病原体コード
-              </Link>
-              <Link to="/micro-antimicrobials" className="row-menu__item">
-                JANIS抗菌薬コード
-              </Link>
-              <Link to="/micro-susceptibility-methods" className="row-menu__item">
-                JANIS感受性測定法コード
-              </Link>
-            </SubMenu>
-            <SubMenu label="病理検査">
-              <Link to="/patho-organs" className="row-menu__item">
-                臓器・検査材料
-              </Link>
-              <Link to="/patho-collection-methods" className="row-menu__item">
-                採取法
-              </Link>
-            </SubMenu>
-            <SubMenu label="放射線検査">
-              <Link to="/rad-items" className="row-menu__item">
-                放射線オーダー項目
-              </Link>
-              <Link to="/rad-item-layouts" className="row-menu__item">
-                放射線オーダーレイアウト
-              </Link>
-              <Link to="/rad-jj1017-codes" className="row-menu__item">
-                JJ1017コード
-              </Link>
-              {/* 実施入力で使う器材。実際の製品を登録し、算定用の特定器材コードを紐付ける。 */}
-              <Link to="/rad-materials" className="row-menu__item">
-                放射線器材
-              </Link>
-              {/* 実施入力の初期明細。撮影項目に紐付けて使う。 */}
-              <Link to="/rad-datasets" className="row-menu__item">
-                実施入力データセット
-              </Link>
-            </SubMenu>
-            {/* 生理検査。JJ1017 に収載されていないので部品コード・頻用コードは無く、
-                モダリティの代わりに施設が定義する「検査種別」を持つ。 */}
-            <SubMenu label="生理検査">
-              <Link to="/physio-items" className="row-menu__item">
-                生理検査オーダー項目
-              </Link>
-              <Link to="/physio-item-layouts" className="row-menu__item">
-                生理検査オーダーレイアウト
-              </Link>
-              {/* 心電図・超音波検査などの検査分野。放射線のモダリティに当たる。 */}
-              <Link to="/physio-exam-types" className="row-menu__item">
-                検査種別
-              </Link>
-              {/* 実施入力の初期明細。検査項目に紐付けて使う。 */}
-              <Link to="/physio-datasets" className="row-menu__item">
-                実施入力データセット
-              </Link>
-            </SubMenu>
-            {/* 内視鏡。生理検査と同じ構成。 */}
-            <SubMenu label="内視鏡">
-              <Link to="/endoscopy-items" className="row-menu__item">
-                内視鏡オーダー項目
-              </Link>
-              <Link to="/endoscopy-item-layouts" className="row-menu__item">
-                内視鏡オーダーレイアウト
-              </Link>
-              {/* 上部・下部などの検査分野。JED の4区分との対応を持てる。 */}
-              <Link to="/endoscopy-exam-types" className="row-menu__item">
-                検査種別
-              </Link>
-              {/* 実施入力の初期明細。検査項目に紐付けて使う。 */}
-              <Link to="/endoscopy-datasets" className="row-menu__item">
-                実施入力データセット
-              </Link>
-            </SubMenu>
-            {/* 処置。生理検査と同じ構成だが、検査種別に当たる分類軸は持たない。 */}
-            <SubMenu label="処置">
-              <Link to="/treatment-items" className="row-menu__item">
-                処置オーダー項目
-              </Link>
-              <Link to="/treatment-item-layouts" className="row-menu__item">
-                処置オーダーレイアウト
-              </Link>
-              {/* 実施入力の初期明細。処置項目に紐付けて使う。 */}
-              <Link to="/treatment-datasets" className="row-menu__item">
-                実施入力データセット
-              </Link>
-            </SubMenu>
-            {/* 手術。術式は検索で選ぶだけなのでレイアウト・データセットのマスタは無い。 */}
-            <SubMenu label="手術">
-              <Link to="/surgery-items" className="row-menu__item">
-                術式マスタ
-              </Link>
-              {/* 術式の分類。点数表 第10部の「款 → 区分」に合わせて入れ子にできる。 */}
-              <Link to="/surgery-categories" className="row-menu__item">
-                術式種別
-              </Link>
-              <Link to="/surgery-room-blocks" className="row-menu__item">
-                手術室 ブロックスケジュール
-              </Link>
-            </SubMenu>
-            {/* 食事。食種(種別・食止め・主成分量を持つ)と、主食・副食形態のリスト。
-                セット・レイアウト・データセットは持たない。 */}
-            <SubMenu label="食事">
-              <Link to="/meal-diets" className="row-menu__item">
-                食種
-              </Link>
-              <Link to="/meal-items" className="row-menu__item">
-                主食・副食形態
-              </Link>
-              {/* 食種の分類(一般食・特別食 など)。主食には付けない。 */}
-              <Link to="/meal-categories" className="row-menu__item">
-                食種種別
-              </Link>
-            </SubMenu>
-            {/* 輸血。食事と同じく製剤マスタ 1 本だけ(セット・レイアウト・
-                データセットは持たない)。 */}
-            <SubMenu label="輸血">
-              <Link to="/transfusion-products" className="row-menu__item">
-                輸血製剤マスタ
-              </Link>
-            </SubMenu>
-            {/* 放射線治療。装置・技法・定型の線量分割は施設ごとに違うので、選択肢をマスタで持つ。 */}
-            <SubMenu label="放射線治療">
-              <Link to="/radiotherapy-protocols" className="row-menu__item">
-                治療プロトコルマスタ
-              </Link>
-              <Link to="/radiotherapy-modalities" className="row-menu__item">
-                照射モダリティマスタ
-              </Link>
-              <Link to="/radiotherapy-techniques" className="row-menu__item">
-                照射技法マスタ
-              </Link>
-              <Link to="/radiotherapy-devices" className="row-menu__item">
-                治療装置マスタ
-              </Link>
-              <Link to="/radiotherapy-stop-reasons" className="row-menu__item">
-                休止・中止理由マスタ
-              </Link>
-            </SubMenu>
-            {/* 看護。MEDIS 看護実践用語標準マスターの閲覧(取込で洗い替える読み取り専用)と、
-                看護計画の用語・標準看護計画。 */}
-            <SubMenu label="看護">
-              <Link to="/nursing-acts" className="row-menu__item">
-                看護行為マスタ
-              </Link>
-              <Link to="/nursing-observations" className="row-menu__item">
-                看護観察マスタ
-              </Link>
-              <Link to="/nursing-diagnoses" className="row-menu__item">
-                看護診断マスタ
-              </Link>
-              <Link to="/nursing-outcomes" className="row-menu__item">
-                看護成果マスタ
-              </Link>
-              <Link to="/nursing-interventions" className="row-menu__item">
-                看護介入マスタ
-              </Link>
-              <Link to="/nursing-standard-plans" className="row-menu__item">
-                標準看護計画マスタ
-              </Link>
-            </SubMenu>
-          </HoverMenu>
           <HoverMenu label="管理">
+            {/* マスタメンテは項目が多くメニューに収まらないので、一覧のページ(/masters)へ送る。
+                そこから入ったマスタの画面にいる間も、戻り先としてこの項目を強調する。 */}
+            <Link
+              to="/masters"
+              className={`row-menu__item${isMasterPath(pathname) ? " active" : ""}`}
+            >
+              マスタメンテ
+            </Link>
             <Link to="/oauth-clients" className="row-menu__item">
               OAuth クライアント
             </Link>
@@ -726,6 +470,7 @@ function App() {
           <Route path="/surgery-worklist" element={<SurgeryWorklistPage />} />
           <Route path="/surgery-calendar" element={<SurgeryCalendarPage />} />
           <Route path="/surgeries/:orderId/anesthesia-chart" element={<AnesthesiaChartPage />} />
+          <Route path="/masters" element={<MasterMenuPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/formularies" element={<FormularyPage />} />
