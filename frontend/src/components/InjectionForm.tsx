@@ -1,6 +1,6 @@
 import { makeFieldUpdater } from "../lib/form";
 import { diffDays } from "../lib/dates";
-import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { searchMedicineDoseConversions, type Medicine } from "../api/masterClient";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
@@ -48,7 +48,7 @@ import {
   validateInsulinScale,
   withInsulinUnit,
 } from "../fhir/insulinScaleHelpers";
-import { useMedicineDoseFactors } from "../api/masterQueries";
+import { useInsulinScaleSets, useMedicineDoseFactors } from "../api/masterQueries";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
@@ -195,6 +195,10 @@ export function InjectionForm({
       rp.medicines.map((m) => m.medicine?.medicine_code).filter((c): c is string => Boolean(c)),
     ),
   );
+
+  // スケールの入力で選ぶ施設のスケールセット。インスリンの行があるときだけ引く。
+  const hasInsulin = values.rps.some((rp) => rp.medicines.some((m) => isInsulinMedicine(m.medicine, conversions)));
+  const scaleSets = useInsulinScaleSets(hasInsulin);
 
   function doseTotalOf(rp: InjectionRpValues): RpDoseTotal {
     return rpDoseTotal(rp.medicines, conversions);
@@ -699,80 +703,87 @@ export function InjectionForm({
             </thead>
             <tbody>
               {rp.medicines.map((med, medIndex) => (
-                <tr key={medIndex}>
-                  <td>
-                    <div className="rp-card__medicine-cell">
-                      <button
-                        type="button"
-                        onClick={() => setModal({ kind: "medicine", rpIndex, medIndex })}
-                      >
-                        {med.medicine ? "変更" : "選択"}
-                      </button>
-                      {med.medicine ? (
-                        <span className="rp-card__medicine-name">
-                          {med.medicine.name}
-                          <MedicineCautionMarks medicine={med.medicine} />
-                          <FormularyMark medicine={med.medicine} />
-                        </span>
-                      ) : (
-                        <span className="rp-card__usage-value--empty">未選択</span>
+                <Fragment key={medIndex}>
+                  <tr className={med.insulinScale ? "insulin-scale-owner" : undefined}>
+                    <td>
+                      <div className="rp-card__medicine-cell">
+                        <button
+                          type="button"
+                          onClick={() => setModal({ kind: "medicine", rpIndex, medIndex })}
+                        >
+                          {med.medicine ? "変更" : "選択"}
+                        </button>
+                        {med.medicine ? (
+                          <span className="rp-card__medicine-name">
+                            {med.medicine.name}
+                            <MedicineCautionMarks medicine={med.medicine} />
+                            <FormularyMark medicine={med.medicine} />
+                          </span>
+                        ) : (
+                          <span className="rp-card__usage-value--empty">未選択</span>
+                        )}
+                      </div>
+                      <MedicineWarnings warnings={warnings[rpIndex]?.[medIndex]} />
+                      {!med.insulinScale && isInsulinMedicine(med.medicine, conversions) && (
+                          <div className="rp-card__actions insulin-scale-toggle">
+                            <button
+                              type="button"
+                              className="rp-card__compact-button"
+                              onClick={() =>
+                                updateMedicine(rpIndex, medIndex, { insulinScale: emptyInsulinScale() })
+                              }
+                            >
+                              + スケール
+                            </button>
+                          </div>
                       )}
-                    </div>
-                    <MedicineWarnings warnings={warnings[rpIndex]?.[medIndex]} />
-                    {med.insulinScale ? (
-                      <InsulinScaleEditor
-                        scale={med.insulinScale}
-                        onChange={(insulinScale) => updateMedicine(rpIndex, medIndex, { insulinScale })}
-                        onRemove={() => updateMedicine(rpIndex, medIndex, { insulinScale: null })}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        className="rp-card__dose-input"
+                        value={med.dose}
+                        onChange={(e) => updateMedicine(rpIndex, medIndex, { dose: e.target.value })}
                       />
-                    ) : (
-                      isInsulinMedicine(med.medicine, conversions) && (
-                        <div className="rp-card__actions insulin-scale-toggle">
-                          <button
-                            type="button"
-                            className="rp-card__compact-button"
-                            onClick={() =>
-                              updateMedicine(rpIndex, medIndex, { insulinScale: emptyInsulinScale() })
-                            }
-                          >
-                            + スケール
-                          </button>
-                        </div>
-                      )
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      className="rp-card__dose-input"
-                      value={med.dose}
-                      onChange={(e) => updateMedicine(rpIndex, medIndex, { dose: e.target.value })}
-                    />
-                  </td>
-                  <td className="rp-card__medicine-unit">{med.medicine?.unit_name ?? "-"}</td>
-                  <td>
-                    <input
-                      type="text"
-                      value={med.comment}
-                      onChange={(e) => updateMedicine(rpIndex, medIndex, { comment: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    {rp.medicines.length > 1 && (
-                      <button
-                        type="button"
-                        className="rp-card__icon-button"
-                        title="この医薬品を削除"
-                        aria-label="この医薬品を削除"
-                        onClick={() => removeMedicine(rpIndex, medIndex)}
-                      >
-                        <TrashIcon />
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                    </td>
+                    <td className="rp-card__medicine-unit">{med.medicine?.unit_name ?? "-"}</td>
+                    <td>
+                      <input
+                        type="text"
+                        value={med.comment}
+                        onChange={(e) => updateMedicine(rpIndex, medIndex, { comment: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      {rp.medicines.length > 1 && (
+                        <button
+                          type="button"
+                          className="rp-card__icon-button"
+                          title="この医薬品を削除"
+                          aria-label="この医薬品を削除"
+                          onClick={() => removeMedicine(rpIndex, medIndex)}
+                        >
+                          <TrashIcon />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {/* スケールは幅が要るので、薬剤の行の下に表の幅いっぱいで置く。 */}
+                  {med.insulinScale && (
+                    <tr className="insulin-scale-row">
+                      <td colSpan={5}>
+                        <InsulinScaleEditor
+                          scale={med.insulinScale}
+                          sets={scaleSets.data?.items}
+                          onChange={(insulinScale) => updateMedicine(rpIndex, medIndex, { insulinScale })}
+                          onRemove={() => updateMedicine(rpIndex, medIndex, { insulinScale: null })}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

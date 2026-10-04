@@ -470,8 +470,8 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
 ## 10. インスリン指示(単位指定・血糖スケール・食事量スケール)
 
 施設の電子カルテ機能一覧(インスリン指示・血糖測定指示・インスリン実施入力・血糖管理経過表)のうち、
-単位指定・血糖スケール・食事量スケール・単位指定+スケールを注射オーダーに載せた。
-フリースケール・施設のスケールセット(マスタ)・血糖インスリン指示患者一覧・低血糖時指示は未実装。
+単位指定・血糖スケール・食事量スケール・フリースケール・単位指定+スケールと、施設のスケールセット(マスタ)を
+注射オーダーに載せた。血糖インスリン指示患者一覧・低血糖時指示は未実装。
 
 ### 10.1 インスリンの判定と単位
 
@@ -487,14 +487,15 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
 
 | 子拡張 | 型 | 内容 |
 | --- | --- | --- |
-| `kind` | Coding(`.../CodeSystem/insulin-scale-kind`) | `glucose`(血糖 mg/dL) / `meal`(主食の摂取量 %) |
-| `row`(繰り返し) | 複合 | `low` / `high`(decimal、両端を含む整数。片側省略可)・`dose`(Quantity 単位)・`note`(string) |
+| `kind` | Coding(`.../CodeSystem/insulin-scale-kind`) | `glucose`(血糖 mg/dL) / `meal`(主食の摂取量 %) / `free`(フリースケール) |
+| `set` | Coding(`.../CodeSystem/insulin-scale-set`) | 写した元のスケールセット(code = マスタの id、display = 名称)。写した後に行を直したら付けない |
+| `row`(繰り返し) | 複合 | `low` / `high`(decimal、両端を含む整数。片側省略可)・`condition`(string、フリースケールの条件)・`dose`(Quantity 単位)・`note`(string) |
 
 - **単位指定+スケール**: `doseQuantity` に基本量、施行量 = 基本量 + 当たった行の単位。
 - **スケールのみ**: `doseQuantity` を出さず `doseRange`(施行しうる最小〜最大)。dose[x] は choice なので両方は持てない。
   単一の量を前提にした読み手(払出数量・カード)が量を見失わないため。払出は最大量で数える。
 - `dosageInstruction.text` に要約(「基本 2単位 + 血糖スケール 〜150: 0単位 / …」)を足す。
-- 幅は重なり・抜けを登録前に弾く(`validateInsulinScale`)。
+- 幅は重なり・抜けを登録前に弾く(`validateInsulinScale`)。フリースケールは条件と単位が必須で、行は入力した順に持つ。
 
 ### 10.3 実施入力
 
@@ -507,6 +508,8 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
 - その場で入れた血糖値は看護観察と同じ形の `Observation`(`buildGlucoseObservation`、category `order-type|nursing`)。
   有効な血糖測定の看護指示があれば `basedOn` に付ける。
 - 注射カレンダーの「量」の印はスケールの行には付けない(施用ごとに量が変わるのが指示どおり)。
+- フリースケールは測定値を読まず、当てはまる行を選んでもらう(施行量 = 基本量 + その行の単位)。選んだ行は
+  `MedicationAdministration.note` に「スケール: <条件>」で残す。
 
 ### 10.4 血糖測定と経過表
 
@@ -517,3 +520,10 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
   輸血製剤の「2単位」はコードを持たない)を薬剤ごとの行にして枠に単位を並べる
   (`fhir/flowsheetInsulinHelpers.ts`)。
 
+### 10.5 スケールセット(マスタ)
+
+- `master_insulin_scale_sets`(`name` / `kind` / `rows` jsonb / `display_order`)。`/master/insulin_scale_sets`、
+  画面はマスタメンテ > 医薬品 > スケールセット(`pages/InsulinScaleSetPage.tsx`)。入力欄はオーダーと同じ
+  `InsulinScaleEditor`、検証も同じ `validateInsulinScale`(backend は形だけを見る)。
+- オーダーではスケールの「セット」で選ぶと種別と行が写り(`insulinScaleFromSet`)、拡張の `set` に元を残す。
+  マスタを後で直してもオーダーの行は変わらない(写した時点の内容で指示したことになる)。

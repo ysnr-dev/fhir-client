@@ -84,6 +84,7 @@ import { PathoOrganPage } from "./pages/PathoOrganPage";
 import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
 import { PatientCautionPage } from "./pages/PatientCautionPage";
 import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
+import { InsulinScaleSetPage } from "./pages/InsulinScaleSetPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { FormularyPage } from "./pages/FormularyPage";
 import { DrugCheckPage } from "./pages/DrugCheckPage";
@@ -375,6 +376,9 @@ function App() {
               </Link>
               <Link to="/drug-checks" className="row-menu__item">
                 薬剤チェック
+              </Link>
+              <Link to="/insulin-scale-sets" className="row-menu__item">
+                スケールセット
               </Link>
             </SubMenu>
             {/* 化学療法のマスタ。レジメンは審査委員会で承認する施設共通の参照表なので
@@ -707,6 +711,7 @@ function App() {
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/formularies" element={<FormularyPage />} />
           <Route path="/drug-checks" element={<DrugCheckPage />} />
+          <Route path="/insulin-scale-sets" element={<InsulinScaleSetPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />
           <Route path="/lab-result-items" element={<LabResultItemPage />} />
           <Route path="/lab-order-item-layouts" element={<LabOrderItemLayoutPage />} />

@@ -306,6 +306,7 @@ Rails.application.routes.draw do
     # FHIR Flag が持ち、このマスタは選択肢と患者帯のピクトグラムを決める。
     resources :patient_cautions, only: %i[index create update destroy]
     resources :clinical_note_titles, only: %i[index create update destroy]
+    resources :insulin_scale_sets, only: %i[index create update destroy]
     resources :diseases, only: %i[index show create update destroy] do
       collection { post :import }
     end

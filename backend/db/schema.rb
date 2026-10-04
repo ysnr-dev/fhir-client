@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_03_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_04_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -640,6 +640,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_03_090000) do
     t.index ["sales_name"], name: "idx_master_hot_codes_sales_name_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["sales_name"], name: "index_master_hot_codes_on_sales_name"
     t.index ["yakka_code"], name: "index_master_hot_codes_on_yakka_code"
+  end
+
+  create_table "master_insulin_scale_sets", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "kind", null: false
+    t.jsonb "rows", default: [], null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "master_jfagy_allergens", force: :cascade do |t|

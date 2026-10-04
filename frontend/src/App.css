@@ -1796,7 +1796,15 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   font-size: 14px;
 }
 
-/* インスリンのスケール(注射の薬剤行の下)。 */
+/* インスリンのスケール(注射の薬剤行の下)。薬剤の行とスケールの行は 1 つの組として区切り線を 1 本にする。 */
+.rp-card__medicines tr.insulin-scale-owner td {
+  border-bottom: none;
+}
+
+.rp-card__medicines tr.insulin-scale-row td {
+  padding-top: 0;
+}
+
 .insulin-scale {
   margin-top: 6px;
   padding: 6px 8px;
@@ -1806,9 +1814,13 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
 
 .insulin-scale__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 8px 12px;
+}
+
+.insulin-scale__remove {
+  margin-left: auto;
 }
 
 .prescription-form label.insulin-scale__kind {
@@ -1863,6 +1875,13 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
 .prescription-form .insulin-scale__table input[type="text"] {
   padding: 4px 6px;
   font-size: 14px;
+}
+
+/* フリースケールの条件は文を書くので、列いっぱいに広げる。 */
+.prescription-form .insulin-scale__condition input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 12em;
 }
 
 .insulin-scale-summary {
@@ -22258,4 +22277,9 @@ label.insulin-perform__reason {
   gap: 6px;
   margin-top: 4px;
   font-size: 13px;
+}
+
+.transfusion-perform .insulin-perform__choice {
+  min-width: 0;
+  max-width: 100%;
 }

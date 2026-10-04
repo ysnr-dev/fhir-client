@@ -21,10 +21,13 @@ import {
   latestScaleMeasurement,
 } from "../fhir/injectionPerformHelpers";
 import {
+  filledInsulinScaleRows,
   guideInsulinDose,
-  insulinScaleRangeLabel,
+  guideInsulinDoseByRow,
+  insulinScaleRowLabel,
   insulinScaleSummary,
-  type InsulinScaleKind,
+  isMeasuredInsulinScaleKind,
+  type MeasuredInsulinScaleKind,
 } from "../fhir/insulinScaleHelpers";
 import { isNursingOrderRunningOn } from "../fhir/nursingOrderHelpers";
 import { clockTime } from "../lib/dates";
@@ -73,11 +76,16 @@ export function InjectionPerformModal({
   const scheduled = scheduledPerformCount(medicationRequests);
   const done = performs.filter((p) => p.counted).length;
 
-  // スケールのインスリン。施用時刻の前後の血糖値・主食の摂取量から実施量を案内する。
+  // スケールのインスリン。施用時刻の前後の血糖値・主食の摂取量から実施量を案内する
+  // (フリースケールは行を選んでもらう)。
   const patientId = referenceIdOfType(order.subject?.reference, "Patient");
   const day = values.startedAt.slice(0, 10);
   const scaleKinds = new Set(
-    values.medicines.filter((m) => !m.skipped && m.insulinScale).map((m) => m.insulinScale!.kind),
+    values.medicines
+      .filter((m) => !m.skipped)
+      .map((m) => m.insulinScale?.kind)
+      .filter((kind) => kind !== undefined)
+      .filter(isMeasuredInsulinScaleKind),
   );
   const insulinInputs = useInsulinScaleInputs(patientId, day, scaleKinds.size > 0);
   const scaleObservations = insulinInputs.data?.observations ?? [];
@@ -87,7 +95,7 @@ export function InjectionPerformModal({
   };
 
   /** 手で入れた値があればそれ、無ければ直近の記録。 */
-  function measurementOf(kind: InsulinScaleKind): InsulinMeasurement | null {
+  function measurementOf(kind: MeasuredInsulinScaleKind): InsulinMeasurement | null {
     const manual = kind === "glucose" ? values.glucose : values.mealPercent;
     if (manual !== null) {
       return manual.trim() !== "" && Number.isFinite(Number(manual)) ? { value: Number(manual) } : null;
@@ -97,8 +105,11 @@ export function InjectionPerformModal({
   }
 
   function guideOf(m: InjectionPerformMedicineLine) {
-    if (!m.insulinScale) return null;
-    return guideInsulinDose(m.insulinScale, m.orderedDose ?? null, measurementOf(m.insulinScale.kind)?.value ?? null);
+    const scale = m.insulinScale;
+    if (!scale) return null;
+    const base = m.orderedDose ?? null;
+    if (!isMeasuredInsulinScaleKind(scale.kind)) return guideInsulinDoseByRow(scale, base, m.scaleRowIndex ?? null);
+    return guideInsulinDose(scale, base, measurementOf(scale.kind)?.value ?? null);
   }
 
   /** 実施量。スケールの行は手で直していなければ案内量。 */
@@ -113,7 +124,7 @@ export function InjectionPerformModal({
     return Boolean(m.insulinScale && m.doseTouched && guide != null && Number(m.dose) !== guide);
   }
 
-  function measurementInputValue(kind: InsulinScaleKind): string {
+  function measurementInputValue(kind: MeasuredInsulinScaleKind): string {
     const manual = kind === "glucose" ? values.glucose : values.mealPercent;
     if (manual !== null) return manual;
     const record = records[kind];
@@ -175,6 +186,7 @@ export function InjectionPerformModal({
       for (const m of given) {
         const dose = doseOf(m);
         if (m.insulinScale) {
+          if (m.insulinScale.kind === "free" && m.scaleRowIndex == null) return `${m.name}: スケールを選んでください。`;
           if (dose === "" || Number(dose) < 0) return `${m.name}: 実施量を入れてください。`;
           if (differsFromGuide(m) && !m.doseReason?.trim()) return `${m.name}: 変更理由を入れてください。`;
           continue;
@@ -359,6 +371,30 @@ export function InjectionPerformModal({
                               {insulinScaleSummary(m.insulinScale, m.orderedDose)}
                             </span>
                           )}
+                          {m.insulinScale?.kind === "free" && (
+                            <label className="insulin-perform__reason">
+                              スケール *
+                              <select
+                                className="insulin-perform__choice"
+                                value={m.scaleRowIndex ?? ""}
+                                disabled={m.skipped}
+                                onChange={(e) =>
+                                  updateMedicine(index, {
+                                    scaleRowIndex: e.target.value === "" ? null : Number(e.target.value),
+                                  })
+                                }
+                              >
+                                <option value="">選択してください</option>
+                                {filledInsulinScaleRows(m.insulinScale).map((row, rowIndex) => (
+                                  <option key={rowIndex} value={rowIndex}>
+                                    {`${insulinScaleRowLabel(row)} → ${
+                                      guideInsulinDoseByRow(m.insulinScale!, m.orderedDose ?? null, rowIndex).dose ?? "-"
+                                    }`}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
                           {differsFromGuide(m) && (
                             <label className="insulin-perform__reason">
                               変更理由 *
@@ -371,7 +407,14 @@ export function InjectionPerformModal({
                           )}
                         </td>
                         <td>
-                          {m.insulinScale ? <InsulinGuide guide={guideOf(m)} /> : (m.orderedDose ?? "-")}
+                          {/* フリースケールは条件をスケールの選択に出しているので、ここは量だけ。 */}
+                          {m.insulinScale?.kind === "free" ? (
+                            (guideOf(m)?.dose ?? "-")
+                          ) : m.insulinScale ? (
+                            <InsulinGuide guide={guideOf(m)} />
+                          ) : (
+                            (m.orderedDose ?? "-")
+                          )}
                         </td>
                         <td>
                           <input
@@ -453,7 +496,7 @@ function InsulinGuide({ guide }: { guide: ReturnType<typeof guideInsulinDose> | 
   const note = guide.row.note.trim();
   return (
     <span className="insulin-perform__guide">
-      {`${insulinScaleRangeLabel(guide.row)} → ${guide.dose ?? "-"}`}
+      {`${insulinScaleRowLabel(guide.row)} → ${guide.dose ?? "-"}`}
       {note && <span className="insulin-perform__guide-note">{note}</span>}
     </span>
   );

@@ -1,7 +1,7 @@
 import type { Medicine } from "../api/masterClient";
 import type { MedicineDoseConversionMap } from "./doseConversionHelpers";
 
-// インスリンの指示(単位指定・血糖スケール・食事量スケール・単位指定+スケール)。
+// インスリンの指示(単位指定・血糖スケール・食事量スケール・フリースケール・単位指定+スケール)。
 //
 // 注射オーダーの薬剤行(MedicationRequest)の dosageInstruction[0] に持つ:
 //   - 単位指定        doseAndRate.doseQuantity(単位)
@@ -11,6 +11,10 @@ import type { MedicineDoseConversionMap } from "./doseConversionHelpers";
 // dose[x] は choice なので doseQuantity と doseRange は併せ持てない。スケールのみで doseRange を
 // 置くのは、単一の量を前提にした読み手(払出数量・カードの量の表示)が量を見失わないため。
 // dosageInstruction.text にはスケールの要約を入れ、拡張を読めない相手にも読めるようにする。
+//
+// フリースケールは幅の代わりに条件を文で書き(「BS 200 以上かつ食事 5 割以上」)、実施入力で
+// 当てはまる行を手で選ぶ。施設のスケールセット(マスタ)から写したときは、どのセットかを拡張に残す
+// (写した後に行を直せば外す)。
 
 export const INSULIN_SCALE_EXT_URL = "http://fhir-client.local/StructureDefinition/insulin-scale";
 const INSULIN_SCALE_KIND_SYSTEM = "http://fhir-client.local/CodeSystem/insulin-scale-kind";
@@ -23,13 +27,25 @@ export const INSULIN_UCUM = "[iU]";
 /** すい臓ホルモン剤の薬効分類。グルカゴン(mg)も含むので、単位の換算行と併せて判定する。 */
 const INSULIN_YAKKO_CODE = "2492";
 
-/** 主食の摂取量(%)で単位を変えるときの基準。経過表の食事摂取量(主食)と同じ値を読む。 */
-export type InsulinScaleKind = "glucose" | "meal";
+const INSULIN_SCALE_SET_SYSTEM = "http://fhir-client.local/CodeSystem/insulin-scale-set";
+
+/**
+ * スケールの種別。血糖(mg/dL)・食事量(主食の摂取量 %。経過表の食事摂取量と同じ値を読む)は
+ * 測った値で行が決まり、フリースケールは条件の文を読んで行を選ぶ。
+ */
+export type InsulinScaleKind = "glucose" | "meal" | "free";
+/** 測った値で行が決まる種別。 */
+export type MeasuredInsulinScaleKind = Exclude<InsulinScaleKind, "free">;
 
 export const INSULIN_SCALE_KIND_OPTIONS: { code: InsulinScaleKind; display: string; unit: string }[] = [
   { code: "glucose", display: "血糖", unit: "mg/dL" },
   { code: "meal", display: "食事量", unit: "%" },
+  { code: "free", display: "フリー", unit: "" },
 ];
+
+export function isMeasuredInsulinScaleKind(kind: InsulinScaleKind): kind is MeasuredInsulinScaleKind {
+  return kind !== "free";
+}
 
 export function insulinScaleKindDisplay(kind: InsulinScaleKind): string {
   return INSULIN_SCALE_KIND_OPTIONS.find((o) => o.code === kind)?.display ?? kind;
@@ -43,19 +59,29 @@ export function insulinScaleKindUnit(kind: InsulinScaleKind): string {
 export interface InsulinScaleRow {
   low: string;
   high: string;
-  /** その幅で施行する単位(単位指定+スケールでは基本量への上乗せ)。 */
+  /** フリースケールの条件(幅の代わり)。 */
+  condition: string;
+  /** その行で施行する単位(単位指定+スケールでは基本量への上乗せ)。 */
   dose: string;
   /** 「Dr コール」など。 */
   note: string;
 }
 
+/** 写した元のスケールセット(マスタ)。 */
+export interface InsulinScaleSetRef {
+  id: number;
+  name: string;
+}
+
 export interface InsulinScaleValues {
   kind: InsulinScaleKind;
   rows: InsulinScaleRow[];
+  /** スケールセットから写したまま直していなければ、その元。 */
+  set?: InsulinScaleSetRef | null;
 }
 
 export function emptyInsulinScaleRow(): InsulinScaleRow {
-  return { low: "", high: "", dose: "", note: "" };
+  return { low: "", high: "", condition: "", dose: "", note: "" };
 }
 
 export function emptyInsulinScale(kind: InsulinScaleKind = "glucose"): InsulinScaleValues {
@@ -98,11 +124,18 @@ function numberOrNull(value: string): number | null {
 
 /** 単位が入っている行だけ。幅も単位も空の行はフォームの空き行として捨てる。 */
 export function filledInsulinScaleRows(scale: InsulinScaleValues): InsulinScaleRow[] {
-  return scale.rows.filter((row) => row.low.trim() || row.high.trim() || row.dose.trim() || row.note.trim());
+  return scale.rows.filter(
+    (row) => row.low.trim() || row.high.trim() || row.condition.trim() || row.dose.trim() || row.note.trim(),
+  );
 }
 
-/** 行を幅の小さい順に。下限の無い行が先頭。 */
-function sortedRows(rows: InsulinScaleRow[]): InsulinScaleRow[] {
+/**
+ * 並べる順。血糖・食事量は幅の小さい順(下限の無い行が先頭)、フリースケールは入力した順
+ * (条件に大小が無い)。
+ */
+function orderedRows(scale: InsulinScaleValues): InsulinScaleRow[] {
+  const rows = filledInsulinScaleRows(scale);
+  if (scale.kind === "free") return rows;
   return [...rows].sort((a, b) => (numberOrNull(a.low) ?? -Infinity) - (numberOrNull(b.low) ?? -Infinity));
 }
 
@@ -111,6 +144,14 @@ export function validateInsulinScale(scale: InsulinScaleValues): string[] {
   const rows = filledInsulinScaleRows(scale);
   if (rows.length === 0) return ["スケールの行がありません"];
   const errors: string[] = [];
+  if (scale.kind === "free") {
+    for (const row of rows) {
+      const dose = numberOrNull(row.dose);
+      if (!row.condition.trim()) errors.push("各行の条件を入力してください");
+      if (dose === null || dose < 0) errors.push("各行の単位を 0 以上で入力してください");
+    }
+    return errors;
+  }
   for (const row of rows) {
     const low = numberOrNull(row.low);
     const high = numberOrNull(row.high);
@@ -123,7 +164,7 @@ export function validateInsulinScale(scale: InsulinScaleValues): string[] {
   }
   if (errors.length) return errors;
 
-  const sorted = sortedRows(rows);
+  const sorted = orderedRows(scale);
   for (let i = 1; i < sorted.length; i++) {
     const prevHigh = numberOrNull(sorted[i - 1].high);
     const low = numberOrNull(sorted[i].low);
@@ -138,6 +179,11 @@ export function validateInsulinScale(scale: InsulinScaleValues): string[] {
   return errors;
 }
 
+/** 行の見出し。血糖・食事量は幅(「〜150」「151〜200」「301〜」)、フリースケールは条件。 */
+export function insulinScaleRowLabel(row: InsulinScaleRow): string {
+  return row.condition.trim() || insulinScaleRangeLabel(row);
+}
+
 /** 「〜150」「151〜200」「301〜」。 */
 export function insulinScaleRangeLabel(row: Pick<InsulinScaleRow, "low" | "high">): string {
   const low = row.low.trim();
@@ -149,10 +195,10 @@ export function insulinScaleRangeLabel(row: Pick<InsulinScaleRow, "low" | "high"
 
 /** 「血糖スケール 〜150: 0単位 / 151〜200: 2単位 / 301〜: 4単位 Dr コール」。基本量があれば「基本 4単位 + 」を前に付ける。 */
 export function insulinScaleSummary(scale: InsulinScaleValues, baseDose?: number | null): string {
-  const rows = sortedRows(filledInsulinScaleRows(scale)).map((row) => {
+  const rows = orderedRows(scale).map((row) => {
     const dose = row.dose.trim() ? `${row.dose}${INSULIN_UNIT}` : "";
     const note = row.note.trim();
-    return `${insulinScaleRangeLabel(row)}: ${[dose, note].filter(Boolean).join(" ")}`;
+    return `${insulinScaleRowLabel(row)}: ${[dose, note].filter(Boolean).join(" ")}`;
   });
   const base = baseDose != null ? `基本 ${baseDose}${INSULIN_UNIT} + ` : "";
   return `${base}${insulinScaleKindDisplay(scale.kind)}スケール ${rows.join(" / ")}`;
@@ -171,8 +217,9 @@ export function insulinDoseRange(
   return { low: base + Math.min(...doses), high: base + Math.max(...doses) };
 }
 
-/** 測定値(血糖 mg/dL・主食 %)に当たる行。どの幅にも入らなければ null。 */
+/** 測定値(血糖 mg/dL・主食 %)に当たる行。どの幅にも入らなければ null。フリースケールは選ぶので常に null。 */
 export function matchInsulinScaleRow(scale: InsulinScaleValues, value: number): InsulinScaleRow | null {
+  if (scale.kind === "free") return null;
   return (
     filledInsulinScaleRows(scale).find((row) => {
       const low = numberOrNull(row.low);
@@ -200,6 +247,31 @@ export function guideInsulinDose(
   return { dose: dose === null ? null : (baseDose ?? 0) + dose, row };
 }
 
+/** 選んだ行(フリースケール)から施行量を出す。行が無ければ null。 */
+export function guideInsulinDoseByRow(
+  scale: InsulinScaleValues,
+  baseDose: number | null,
+  rowIndex: number | null,
+): InsulinDoseGuide {
+  const row = rowIndex === null ? null : (filledInsulinScaleRows(scale)[rowIndex] ?? null);
+  const dose = row ? numberOrNull(row.dose) : null;
+  return { dose: dose === null ? null : (baseDose ?? 0) + dose, row };
+}
+
+/** スケールセットの行を写したスケール。元のセットを覚えておく。 */
+export function insulinScaleFromSet(set: {
+  id: number;
+  name: string;
+  kind: InsulinScaleKind;
+  rows: Partial<InsulinScaleRow>[];
+}): InsulinScaleValues {
+  return {
+    kind: set.kind,
+    rows: set.rows.map((row) => ({ ...emptyInsulinScaleRow(), ...row })),
+    set: { id: set.id, name: set.name },
+  };
+}
+
 // ---- FHIR ----
 
 export function buildInsulinScaleExtension(scale: InsulinScaleValues): fhir4.Extension {
@@ -208,7 +280,15 @@ export function buildInsulinScaleExtension(scale: InsulinScaleValues): fhir4.Ext
     url: INSULIN_SCALE_EXT_URL,
     extension: [
       { url: "kind", valueCoding: { system: INSULIN_SCALE_KIND_SYSTEM, code: scale.kind, display: kind?.display } },
-      ...sortedRows(filledInsulinScaleRows(scale)).map((row) => {
+      ...(scale.set
+        ? [
+            {
+              url: "set",
+              valueCoding: { system: INSULIN_SCALE_SET_SYSTEM, code: String(scale.set.id), display: scale.set.name },
+            },
+          ]
+        : []),
+      ...orderedRows(scale).map((row) => {
         const low = numberOrNull(row.low);
         const high = numberOrNull(row.high);
         const dose = numberOrNull(row.dose);
@@ -217,6 +297,7 @@ export function buildInsulinScaleExtension(scale: InsulinScaleValues): fhir4.Ext
           extension: [
             ...(low !== null ? [{ url: "low", valueDecimal: low }] : []),
             ...(high !== null ? [{ url: "high", valueDecimal: high }] : []),
+            ...(row.condition.trim() ? [{ url: "condition", valueString: row.condition.trim() }] : []),
             ...(dose !== null ? [{ url: "dose", valueQuantity: insulinQuantity(dose) }] : []),
             ...(row.note.trim() ? [{ url: "note", valueString: row.note.trim() }] : []),
           ],
@@ -231,7 +312,9 @@ export function insulinScaleOf(dosage: fhir4.Dosage | undefined): InsulinScaleVa
   const extension = dosage?.extension?.find((e) => e.url === INSULIN_SCALE_EXT_URL);
   if (!extension) return null;
   const code = extension.extension?.find((e) => e.url === "kind")?.valueCoding?.code;
-  const kind: InsulinScaleKind = code === "meal" ? "meal" : "glucose";
+  const kind: InsulinScaleKind = code === "meal" || code === "free" ? code : "glucose";
+  const setCoding = extension.extension?.find((e) => e.url === "set")?.valueCoding;
+  const setId = Number(setCoding?.code);
   const rows = (extension.extension ?? [])
     .filter((e) => e.url === "row")
     .map((e) => {
@@ -242,9 +325,14 @@ export function insulinScaleOf(dosage: fhir4.Dosage | undefined): InsulinScaleVa
       return {
         low: low != null ? String(low) : "",
         high: high != null ? String(high) : "",
+        condition: part("condition")?.valueString ?? "",
         dose: dose != null ? String(dose) : "",
         note: part("note")?.valueString ?? "",
       };
     });
-  return { kind, rows };
+  return {
+    kind,
+    rows,
+    set: setCoding && Number.isInteger(setId) ? { id: setId, name: setCoding.display ?? "" } : null,
+  };
 }

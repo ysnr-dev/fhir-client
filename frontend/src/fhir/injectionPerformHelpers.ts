@@ -7,9 +7,12 @@ import {
 import { buildInjectionTaskUpdate } from "./injectionTaskHelpers";
 import {
   INSULIN_UNIT,
+  filledInsulinScaleRows,
   insulinQuantity,
+  insulinScaleRowLabel,
   type InsulinScaleKind,
   type InsulinScaleValues,
+  type MeasuredInsulinScaleKind,
 } from "./insulinScaleHelpers";
 import { MEAL_INTAKE_STAPLE_MANAGE_NO } from "./flowsheetMealHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
@@ -92,6 +95,8 @@ export interface InjectionPerformMedicineLine {
   doseTouched?: boolean;
   /** 案内量と違う量にした理由。 */
   doseReason?: string;
+  /** フリースケールで選んだ行(記入のある行の並びでの位置)。 */
+  scaleRowIndex?: number | null;
 }
 
 export interface InjectionPerformFormValues {
@@ -149,7 +154,9 @@ export function medicineLinesFromOrder(
       skipped: false,
       added: false,
       // スケールのインスリンは実施量を案内量から入れる(InjectionPerformModal)。
-      ...(med.insulinScale ? { insulinScale: med.insulinScale, dose: "", doseTouched: false, doseReason: "" } : {}),
+      ...(med.insulinScale
+        ? { insulinScale: med.insulinScale, dose: "", doseTouched: false, doseReason: "", scaleRowIndex: null }
+        : {}),
     })),
   );
 }
@@ -174,14 +181,6 @@ export function emptyInjectionPerformForm(
     glucose: null,
     mealPercent: null,
   };
-}
-
-/** スケールの種別に使う測定値。 */
-export function insulinMeasurementOf(
-  context: InsulinPerformContext | undefined,
-  kind: InsulinScaleKind,
-): InsulinMeasurement | null {
-  return (kind === "meal" ? context?.meal : context?.glucose) ?? null;
 }
 
 // ---- FHIR リソースの組み立て ----
@@ -292,12 +291,20 @@ function buildAdministration(
     if (measurementReference) administration.supportingInformation = [{ reference: measurementReference }];
     const notes = [
       manualMealPercent !== null && line.insulinScale.kind === "meal" ? `主食 ${manualMealPercent}%` : "",
+      freeScaleChoiceNote(line),
       line.doseReason?.trim() ?? "",
     ].filter(Boolean);
     if (notes.length) administration.note = notes.map((text) => ({ text }));
   }
 
   return administration;
+}
+
+/** フリースケールで選んだ行(「スケール: BS 200 以上かつ食事 5 割以上」)。測定値の参照の代わりに残す。 */
+function freeScaleChoiceNote(line: InjectionPerformMedicineLine): string {
+  if (line.insulinScale?.kind !== "free" || line.scaleRowIndex == null) return "";
+  const row = filledInsulinScaleRows(line.insulinScale)[line.scaleRowIndex];
+  return row ? `スケール: ${insulinScaleRowLabel(row)}` : "";
 }
 
 /** 実施記録一式(ハブの Procedure・薬剤)の POST エントリ。 */
@@ -524,7 +531,7 @@ export function buildInjectionPerformDeleteEntries(
 // ---- 実施入力の測定値 ----
 
 /** 施用時刻より前に遡って測定値を探す幅(分)と、施用後に入れた記録を拾う幅(分)。 */
-const MEASUREMENT_WINDOWS: Record<InsulinScaleKind, { before: number; after: number }> = {
+const MEASUREMENT_WINDOWS: Record<MeasuredInsulinScaleKind, { before: number; after: number }> = {
   // 食前の血糖を測ってから打つ。
   glucose: { before: 120, after: 30 },
   // 食後に食べた量を見て打つ。摂取量の記録は食事の時刻(08/12/18)に置かれる。
@@ -561,7 +568,7 @@ export function isStapleIntakeObservation(observation: fhir4.Observation): boole
  */
 export function latestScaleMeasurement(
   observations: fhir4.Observation[],
-  kind: InsulinScaleKind,
+  kind: MeasuredInsulinScaleKind,
   at: string,
 ): ScaleMeasurementRecord | null {
   const base = new Date(at).getTime();
