@@ -260,7 +260,7 @@ function NursingList({
     return [...map.entries()];
   }, [rows, groupName]);
 
-  if (rows.length === 0) return <p className="karte-tabpanel__empty">看護指示はありません。</p>;
+  if (rows.length === 0) return <p className="patient-table__empty">看護指示はありません。</p>;
 
   // 列は左ペインの幅に収まる数に絞る(他タブと同じ 6 列)。指示医・発行日・コード・
   // 備考の全文・指示受けの日時は詳細モーダルで見る。
@@ -404,7 +404,7 @@ function NursingHistory({ rows, at }: { rows: Row[]; at: string }) {
     );
   }, [rows]);
 
-  if (batches.length === 0) return <p className="karte-tabpanel__empty">看護指示はありません。</p>;
+  if (batches.length === 0) return <p className="patient-table__empty">看護指示はありません。</p>;
 
   return (
     <div className="nursing-tab__history">

@@ -547,7 +547,7 @@ function StandardPlanPicker({
   const chosen = items.find((p) => p.code === code) ?? items[0];
 
   if (plans.isPending) return <p>読み込み中...</p>;
-  if (items.length === 0) return <p className="karte-tabpanel__empty">標準看護計画はありません。</p>;
+  if (items.length === 0) return <p className="order-select__muted">標準看護計画はありません。</p>;
   return (
     <div className="nursing-problem-form__row">
       <select value={chosen?.code ?? ""} onChange={(e) => setCode(e.target.value)} aria-label="標準看護計画">

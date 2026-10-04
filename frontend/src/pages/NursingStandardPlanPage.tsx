@@ -139,11 +139,21 @@ function PlanEditModal({ item, onClose }: { item: NursingStandardPlan | null; on
           </label>
           <label>
             名称
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
+            <input
+              type="text"
+              className="nursing-term-master__name-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </label>
           <label>
             カナ
-            <input type="text" value={nameKana} onChange={(e) => setNameKana(e.target.value)} />
+            <input
+              type="text"
+              className="nursing-term-master__name-input"
+              value={nameKana}
+              onChange={(e) => setNameKana(e.target.value)}
+            />
           </label>
           <label>
             看護診断
@@ -173,6 +183,7 @@ function PlanEditModal({ item, onClose }: { item: NursingStandardPlan | null; on
               <div key={index} className="nursing-problem-form__row">
                 <input type="text" value={goal.text} onChange={(e) => setGoal(index, { text: e.target.value })} aria-label="目標" />
                 <select
+                  className="nursing-standard-plan__term-select"
                   value={goal.outcome_code ?? ""}
                   onChange={(e) => setGoal(index, { outcome_code: e.target.value })}
                   aria-label="看護成果"
@@ -218,18 +229,6 @@ function PlanEditModal({ item, onClose }: { item: NursingStandardPlan | null; on
                       onChange={(e) => setActivity(index, { text: e.target.value })}
                       aria-label="内容"
                     />
-                    <select
-                      value={activity.intervention_code ?? ""}
-                      onChange={(e) => setActivity(index, { intervention_code: e.target.value })}
-                      aria-label="看護介入"
-                    >
-                      <option value="">-</option>
-                      {termsOf(interventions.data).map((t) => (
-                        <option key={t.code} value={t.code}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
                     {activity.item_kind ? (
                       <span className="nursing-term-chip">
                         {activity.item_kind === "act" ? "行為" : "観察"}: {activity.item_name ?? ""}
@@ -248,6 +247,19 @@ function PlanEditModal({ item, onClose }: { item: NursingStandardPlan | null; on
                         用語
                       </button>
                     )}
+                    <select
+                      className="nursing-standard-plan__term-select"
+                      value={activity.intervention_code ?? ""}
+                      onChange={(e) => setActivity(index, { intervention_code: e.target.value })}
+                      aria-label="看護介入"
+                    >
+                      <option value="">-</option>
+                      {termsOf(interventions.data).map((t) => (
+                        <option key={t.code} value={t.code}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       className="rp-card__icon-button"

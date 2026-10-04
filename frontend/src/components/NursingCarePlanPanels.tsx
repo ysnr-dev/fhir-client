@@ -332,7 +332,7 @@ export function NursingPlanOrderPanel({
     <div className="prescription-form">
       <p className="nursing-problem-form__selected">{view.name}</p>
       {activities.length === 0 ? (
-        <p className="karte-tabpanel__empty">計画の行がありません。</p>
+        <p className="order-select__muted">計画の行がありません。</p>
       ) : (
         <div className="nursing-problem-form__block">
           {activities.map((activity) => (

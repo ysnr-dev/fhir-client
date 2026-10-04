@@ -52,12 +52,16 @@ export function NursingTermMasterPage({ taxonomy }: { taxonomy: NursingTaxonomy 
       <div className="page__header">
         <h1>{TAXONOMY_TITLES[taxonomy]}</h1>
         <div className="page__header-actions">
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="検索" />
           <button type="button" onClick={() => setEditing("new")}>
             追加
           </button>
         </div>
       </div>
+
+      {/* 入力した時点で絞り込むので、送信では何もしない。 */}
+      <form className="master-search__form master-search__form--row" onSubmit={(e) => e.preventDefault()}>
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="名称・カナ・コード" />
+      </form>
 
       <ErrorBanner error={list.error} />
 
@@ -197,11 +201,22 @@ function TermEditModal({
           </label>
           <label>
             名称
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+            <input
+              type="text"
+              className="nursing-term-master__name-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
           </label>
           <label>
             カナ
-            <input type="text" value={nameKana} onChange={(e) => setNameKana(e.target.value)} />
+            <input
+              type="text"
+              className="nursing-term-master__name-input"
+              value={nameKana}
+              onChange={(e) => setNameKana(e.target.value)}
+            />
           </label>
           {taxonomy === "diagnosis" && level === "term" && (
             <label>

@@ -22614,8 +22614,21 @@ label.insulin-perform__reason {
   padding-left: 3em !important;
 }
 
-input.nursing-term-master__item-code {
+/* 付随項目のコードは短いので固定幅(行の入力欄は名称だけを伸ばす)。 */
+.prescription-form .nursing-problem-form__row > input.nursing-term-master__item-code {
+  flex: 0 0 7em;
   width: 7em;
+}
+
+/* 標準看護計画の行の看護成果・看護介入。行ごとに幅が揃うよう固定幅にする。 */
+.prescription-form .nursing-problem-form__row > select.nursing-standard-plan__term-select {
+  flex: 0 0 10em;
+  width: 10em;
+}
+
+/* 名称・カナは長い用語が切れないよう広めに取る。 */
+.lab-order-item__fields input.nursing-term-master__name-input {
+  width: 20em;
 }
 
 /* ---- 看護サマリ ---- */
@@ -22638,7 +22651,7 @@ input.nursing-term-master__item-code {
 
 .nursing-summary__records {
   list-style: none;
-  margin: 0;
+  margin: 0 0 12px;
   padding: 0;
   display: flex;
   flex-direction: column;

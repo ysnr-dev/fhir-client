@@ -97,7 +97,7 @@ export function KarteNursingCarePlanTab({
             <section key={section.entry} className="nursing-plan__section">
               <h4 className="nursing-plan__section-title">{section.title}</h4>
               {shown.length === 0 ? (
-                <p className="karte-tabpanel__empty">看護問題はありません。</p>
+                <p className="patient-table__empty">看護問題はありません。</p>
               ) : (
                 <div className="nursing-plan__list">
                   {shown.map((view) => {
