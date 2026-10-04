@@ -18,7 +18,7 @@ const INSULIN_SCALE_KIND_SYSTEM = "http://fhir-client.local/CodeSystem/insulin-s
 /** インスリンの量の単位。投与量換算マスタの from_unit と同じ表記。 */
 export const INSULIN_UNIT = "単位";
 const UCUM = "http://unitsofmeasure.org";
-const INSULIN_UCUM = "[iU]";
+export const INSULIN_UCUM = "[iU]";
 
 /** すい臓ホルモン剤の薬効分類。グルカゴン(mg)も含むので、単位の換算行と併せて判定する。 */
 const INSULIN_YAKKO_CODE = "2492";

@@ -1,9 +1,10 @@
 import { clockTime } from "../lib/dates";
-import { INSULIN_UNIT } from "./insulinScaleHelpers";
+import { INSULIN_UCUM, INSULIN_UNIT } from "./insulinScaleHelpers";
 
 // 経過表のインスリン欄。注射欄は施用の有無を印で出すだけなので、インスリンは施行した単位を
-// 時刻の枠に並べる(血糖値は測定の行に「血糖」として並ぶ)。単位で記録された
-// MedicationAdministration をインスリンとみなす(注射オーダーでインスリンの量は「単位」で出す)。
+// 時刻の枠に並べる(血糖値は測定の行に「血糖」として並ぶ)。量が UCUM の国際単位([iU])で
+// 記録された MedicationAdministration をインスリンとみなす(インスリンの実施入力だけがこの形で書く。
+// 輸血製剤の「2単位」などは表示名が同じ「単位」でもコードを持たない)。
 
 export interface InsulinFlowsheetCell {
   /** 施用の開始日時(FHIR の dateTime)。枠の決定とホバーに使う。 */
@@ -19,7 +20,8 @@ export interface InsulinFlowsheetRow {
 
 function isInsulinAdministration(administration: fhir4.MedicationAdministration): boolean {
   if (administration.status !== "completed" && administration.status !== "stopped") return false;
-  return administration.dosage?.dose?.unit === INSULIN_UNIT && administration.dosage.dose.value != null;
+  const dose = administration.dosage?.dose;
+  return dose?.code === INSULIN_UCUM && dose.value != null;
 }
 
 /** 施行したインスリンを薬剤ごとの行にする。施用の無い薬剤は行を作らない。 */

@@ -22243,6 +22243,7 @@ thead .injection-calendar__head {
   display: inline-flex;
   flex-direction: column;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .insulin-perform__guide-note {
