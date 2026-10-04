@@ -192,9 +192,12 @@ function nursingWorklistParams(
   date: string,
   wardId: string | undefined,
   page: number,
+  code?: string,
 ): URLSearchParams {
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${NURSING_ORDER_TYPE.code}`);
+  // 観察項目で絞る(血糖インスリン指示患者一覧の「血糖値」など)。`system|code`。
+  if (code) params.set("code", code);
   params.set("status", "active");
   setOrderPeriod(params, date, date);
   // 病棟はオーダー登録時に焼き付けた order-ward 拡張。上流の ward 検索で絞る。
@@ -216,11 +219,12 @@ function isNursingPending(row: NursingWorklistRow): boolean {
 async function fetchNursingWorklist(
   date: string,
   wardId: string | undefined,
+  code?: string,
 ): Promise<NursingWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
-    (page) => nursingWorklistParams(date, wardId, page),
+    (page) => nursingWorklistParams(date, wardId, page, code),
     (resource) => {
       if (resource.resourceType !== "ServiceRequest") return false;
       const request = resource as fhir4.ServiceRequest;
@@ -257,10 +261,10 @@ async function fetchNursingWorklist(
  * 基準日に効いている看護指示(病棟ぶん)。病棟を選んでいないうちは読みに行かない
  * (病棟なしで引くと全病院ぶんになるため)。
  */
-export function useNursingWorklist(date: string, wardId: string | undefined) {
+export function useNursingWorklist(date: string, wardId: string | undefined, code?: string) {
   return useQuery({
-    queryKey: ["ServiceRequest", "nursing-worklist", date, wardId ?? ""],
-    queryFn: () => fetchNursingWorklist(date, wardId),
+    queryKey: ["ServiceRequest", "nursing-worklist", date, wardId ?? "", code ?? ""],
+    queryFn: () => fetchNursingWorklist(date, wardId, code),
     enabled: Boolean(date) && Boolean(wardId),
     placeholderData: keepPreviousData,
   });

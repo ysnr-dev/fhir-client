@@ -85,6 +85,7 @@ import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
 import { PatientCautionPage } from "./pages/PatientCautionPage";
 import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
 import { InsulinScaleSetPage } from "./pages/InsulinScaleSetPage";
+import { InsulinWorklistPage } from "./pages/InsulinWorklistPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { FormularyPage } from "./pages/FormularyPage";
 import { DrugCheckPage } from "./pages/DrugCheckPage";
@@ -696,6 +697,7 @@ function App() {
           <Route path="/bulletin" element={<BulletinPage />} />
           <Route path="/order-sets" element={<OrderSetPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
+          <Route path="/insulin-worklist" element={<InsulinWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
           <Route path="/brought-med-worklist" element={<BroughtMedicationWorklistPage />} />

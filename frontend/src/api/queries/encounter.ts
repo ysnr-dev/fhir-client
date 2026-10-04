@@ -529,7 +529,9 @@ export function usePatientSurgeryPerforms(patientId: string | undefined, from: s
  * オーダーと、薬剤・進捗・実施記録(ハブの Procedure と薬剤ごとの MedicationAdministration)を
  * 1 つの検索で揃える。経過表・注射カレンダーは期間ぶんを読むので、ページを辿って全件読む。
  */
-type OrdersWithPerforms = FlowsheetInjectionData & {
+export type OrdersWithPerforms = FlowsheetInjectionData & {
+  /** 検索に `_include=ServiceRequest:subject` を付けたときの患者。付けなければ空。 */
+  patients: fhir4.Patient[];
   /** 取得の上限に達し、期間のオーダーの一部が欠けている。 */
   truncated: boolean;
 };
@@ -551,8 +553,31 @@ async function fetchOrdersWithPerforms(params: URLSearchParams): Promise<OrdersW
     tasks: of<fhir4.Task>("Task"),
     procedures: of<fhir4.Procedure>("Procedure"),
     administrations: of<fhir4.MedicationAdministration>("MedicationAdministration"),
+    // `_include=ServiceRequest:subject` を付けたときだけ入る(患者をまたぐ一覧用)。
+    patients: of<fhir4.Patient>("Patient"),
     truncated,
   };
+}
+
+/**
+ * 病棟の 1 日ぶんの注射オーダー一式(血糖インスリン指示患者一覧)。病棟は登録時に焼き付けた
+ * order-ward で上流が絞る。インスリンかどうかは薬剤の明細を見ないと決まらないので画面側で選ぶ。
+ */
+export function useWardInjectionOrders(date: string, wardId: string | undefined) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "ward-injections", date, wardId ?? ""],
+    queryFn: async (): Promise<OrdersWithPerforms> => {
+      const params = new URLSearchParams();
+      params.set("category", `${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`);
+      params.set("based-on:missing", "true");
+      params.set("occurrence", date);
+      params.set("ward", `Location/${wardId}`);
+      params.set("_include", "ServiceRequest:subject");
+      return fetchOrdersWithPerforms(params);
+    },
+    enabled: Boolean(date) && Boolean(wardId),
+    placeholderData: keepPreviousData,
+  });
 }
 
 /**

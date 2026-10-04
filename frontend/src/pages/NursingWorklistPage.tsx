@@ -359,9 +359,16 @@ export function NursingWorklistPage() {
         <h1>指示簿</h1>
         {/* 病棟の患者そのもの(ベッドの埋まり具合・担当看護師)を見たいときの戻り先。
             見ている病棟と基準日をそのまま渡す。 */}
-        <Link className="button" to={`/inpatients?ward=${wardId}&date=${date}`}>
-          入院患者一覧
-        </Link>
+        <div className="page__header-actions">
+          <Link className="button" to={`/inpatients?ward=${wardId}&date=${date}`}>
+            入院患者一覧
+          </Link>
+          <RowMenu label="指示簿の関連画面">
+            <Link className="row-menu__item" to={`/insulin-worklist?ward=${wardId}&date=${date}`}>
+              血糖インスリン
+            </Link>
+          </RowMenu>
+        </div>
       </div>
 
       {/* 2 つのビューは絞り込みではなく見る軸の切り替えなのでタブに出す
