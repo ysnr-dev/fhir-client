@@ -1,136 +1,4426 @@
 {
   "terms": [
-    { "taxonomy": "diagnosis", "level": "domain", "code": "LD01", "name": "安全", "display_order": 1 },
-    { "taxonomy": "diagnosis", "level": "class", "code": "LC01", "parent_code": "LD01", "name": "身体の損傷", "display_order": 1 },
-    { "taxonomy": "diagnosis", "level": "class", "code": "LC02", "parent_code": "LD01", "name": "感染", "display_order": 2 },
-    { "taxonomy": "diagnosis", "level": "domain", "code": "LD02", "name": "安楽", "display_order": 2 },
-    { "taxonomy": "diagnosis", "level": "class", "code": "LC03", "parent_code": "LD02", "name": "身体の安楽", "display_order": 1 },
     {
-      "taxonomy": "diagnosis", "level": "term", "code": "L0001", "parent_code": "LC01",
-      "name": "転倒転落の危険がある状態", "name_kana": "テントウテンラクノキケンガアルジョウタイ", "diagnosis_type": "risk",
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD01",
+      "name": "健康の維持・増進",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD02",
+      "name": "栄養",
+      "display_order": 2
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD03",
+      "name": "排泄とガス交換",
+      "display_order": 3
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD04",
+      "name": "活動と休息",
+      "display_order": 4
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD05",
+      "name": "知覚と認知",
+      "display_order": 5
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD06",
+      "name": "自己の捉え方",
+      "display_order": 6
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD07",
+      "name": "役割と人間関係",
+      "display_order": 7
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD08",
+      "name": "性",
+      "display_order": 8
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD09",
+      "name": "ストレスへの対処",
+      "display_order": 9
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD10",
+      "name": "価値観と信念",
+      "display_order": 10
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD11",
+      "name": "安全と防御",
+      "display_order": 11
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD12",
+      "name": "安楽",
+      "display_order": 12
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "domain",
+      "code": "LD13",
+      "name": "成長と発達",
+      "display_order": 13
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC01",
+      "parent_code": "LD01",
+      "name": "健康管理",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC02",
+      "parent_code": "LD02",
+      "name": "摂取",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC03",
+      "parent_code": "LD02",
+      "name": "水分と電解質",
+      "display_order": 2
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC04",
+      "parent_code": "LD02",
+      "name": "代謝",
+      "display_order": 3
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC05",
+      "parent_code": "LD03",
+      "name": "排尿",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC06",
+      "parent_code": "LD03",
+      "name": "消化管の働き",
+      "display_order": 2
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC07",
+      "parent_code": "LD03",
+      "name": "呼吸とガス交換",
+      "display_order": 3
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC08",
+      "parent_code": "LD04",
+      "name": "睡眠と休息",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC09",
+      "parent_code": "LD04",
+      "name": "活動と運動",
+      "display_order": 2
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC10",
+      "parent_code": "LD04",
+      "name": "心肺の反応",
+      "display_order": 3
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC11",
+      "parent_code": "LD04",
+      "name": "セルフケア",
+      "display_order": 4
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC12",
+      "parent_code": "LD05",
+      "name": "認知",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC13",
+      "parent_code": "LD05",
+      "name": "意思の疎通",
+      "display_order": 2
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC14",
+      "parent_code": "LD06",
+      "name": "身体の受け止め方",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC15",
+      "parent_code": "LD07",
+      "name": "家族の関係",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC16",
+      "parent_code": "LD08",
+      "name": "性の機能",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC17",
+      "parent_code": "LD09",
+      "name": "心理的な反応",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC18",
+      "parent_code": "LD10",
+      "name": "価値観と行動",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC19",
+      "parent_code": "LD11",
+      "name": "感染",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC20",
+      "parent_code": "LD11",
+      "name": "身体の損傷",
+      "display_order": 2
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC21",
+      "parent_code": "LD12",
+      "name": "身体の安楽",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "class",
+      "code": "LC22",
+      "parent_code": "LD13",
+      "name": "成長と発達",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0001",
+      "parent_code": "LC20",
+      "name": "転倒転落の危険がある状態",
+      "name_kana": "テントウテンラクノキケンガアルジョウタイ",
+      "diagnosis_type": "risk",
       "definition": "転んだりベッドから落ちたりして、けがをするおそれが高まっている状態。",
       "guidance": "入院時と状態が変わったときに転倒転落のアセスメントを行い、点数が高いときに立案する。",
       "items": [
-        { "item_type": "risk_factor", "code": "LR0101", "name": "歩行が不安定" },
-        { "item_type": "risk_factor", "code": "LR0102", "name": "睡眠薬・鎮静薬の使用" },
-        { "item_type": "risk_factor", "code": "LR0103", "name": "夜間の頻尿" },
-        { "item_type": "risk_factor", "code": "LR0104", "name": "見当識の低下" }
+        {
+          "item_type": "risk_factor",
+          "code": "LR0101",
+          "name": "歩行が不安定"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR0102",
+          "name": "睡眠薬・鎮静薬の使用"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR0103",
+          "name": "夜間の頻尿"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR0104",
+          "name": "見当識の低下"
+        }
       ],
       "display_order": 1
     },
     {
-      "taxonomy": "diagnosis", "level": "term", "code": "L0002", "parent_code": "LC02",
-      "name": "感染の危険がある状態", "name_kana": "カンセンノキケンガアルジョウタイ", "diagnosis_type": "risk",
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0002",
+      "parent_code": "LC19",
+      "name": "感染の危険がある状態",
+      "name_kana": "カンセンノキケンガアルジョウタイ",
+      "diagnosis_type": "risk",
       "definition": "病原体が入り込み、感染を起こすおそれが高まっている状態。",
       "guidance": "カテーテル・ドレーン・創がある間は継続して評価する。",
       "items": [
-        { "item_type": "risk_factor", "code": "LR0201", "name": "留置カテーテルがある" },
-        { "item_type": "risk_factor", "code": "LR0202", "name": "手術創がある" },
-        { "item_type": "risk_factor", "code": "LR0203", "name": "低栄養" }
+        {
+          "item_type": "risk_factor",
+          "code": "LR0201",
+          "name": "留置カテーテルがある"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR0202",
+          "name": "手術創がある"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR0203",
+          "name": "低栄養"
+        }
       ],
       "display_order": 1
     },
     {
-      "taxonomy": "diagnosis", "level": "term", "code": "L0003", "parent_code": "LC03",
-      "name": "急な痛みがある状態", "name_kana": "キュウナイタミガアルジョウタイ", "diagnosis_type": "problem",
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0003",
+      "parent_code": "LC21",
+      "name": "急な痛みがある状態",
+      "name_kana": "キュウナイタミガアルジョウタイ",
+      "diagnosis_type": "problem",
       "definition": "手術や病気によって、急に起きた痛みを感じている状態。",
       "guidance": "痛みの強さはペインスコアで記録し、鎮痛薬の効果を時間を決めて評価する。",
       "items": [
-        { "item_type": "defining_characteristic", "code": "LD0301", "name": "痛みを訴える" },
-        { "item_type": "defining_characteristic", "code": "LD0302", "name": "痛みをかばう姿勢をとる" },
-        { "item_type": "defining_characteristic", "code": "LD0303", "name": "眠れない" },
-        { "item_type": "related_factor", "code": "LF0301", "name": "手術による組織の損傷" },
-        { "item_type": "related_factor", "code": "LF0302", "name": "炎症" }
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0301",
+          "name": "痛みを訴える"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0302",
+          "name": "痛みをかばう姿勢をとる"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0303",
+          "name": "眠れない"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0301",
+          "name": "手術による組織の損傷"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0302",
+          "name": "炎症"
+        }
       ],
       "display_order": 1
     },
-
-    { "taxonomy": "outcome", "level": "domain", "code": "LOD01", "name": "健康の知識と行動", "display_order": 1 },
-    { "taxonomy": "outcome", "level": "class", "code": "LOC01", "parent_code": "LOD01", "name": "危険の管理", "display_order": 1 },
-    { "taxonomy": "outcome", "level": "domain", "code": "LOD02", "name": "身体の健康", "display_order": 2 },
-    { "taxonomy": "outcome", "level": "class", "code": "LOC02", "parent_code": "LOD02", "name": "症状の状態", "display_order": 1 },
     {
-      "taxonomy": "outcome", "level": "term", "code": "LO001", "parent_code": "LOC01", "name": "転倒を防ぐ行動",
+      "taxonomy": "outcome",
+      "level": "domain",
+      "code": "LOD01",
+      "name": "健康の知識と行動",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC01",
+      "parent_code": "LOD01",
+      "name": "危険の管理",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "domain",
+      "code": "LOD02",
+      "name": "身体の健康",
+      "display_order": 2
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC02",
+      "parent_code": "LOD02",
+      "name": "症状の状態",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO001",
+      "parent_code": "LOC01",
+      "name": "転倒を防ぐ行動",
       "definition": "転倒を防ぐために本人や家族がとる行動。",
       "items": [
-        { "item_type": "indicator", "code": "LO00101", "name": "移動のときにナースコールを押す" },
-        { "item_type": "indicator", "code": "LO00102", "name": "滑りにくい履物を使う" }
+        {
+          "item_type": "indicator",
+          "code": "LO00101",
+          "name": "移動のときにナースコールを押す"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00102",
+          "name": "滑りにくい履物を使う"
+        }
       ],
       "display_order": 1
     },
     {
-      "taxonomy": "outcome", "level": "term", "code": "LO002", "parent_code": "LOC02", "name": "痛みの程度",
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO002",
+      "parent_code": "LOC02",
+      "name": "痛みの程度",
       "definition": "感じている痛みの強さ。",
       "items": [
-        { "item_type": "indicator", "code": "LO00201", "name": "痛みの訴え" },
-        { "item_type": "indicator", "code": "LO00202", "name": "痛みのための不眠" }
+        {
+          "item_type": "indicator",
+          "code": "LO00201",
+          "name": "痛みの訴え"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00202",
+          "name": "痛みのための不眠"
+        }
       ],
       "display_order": 1
     },
-
-    { "taxonomy": "intervention", "level": "domain", "code": "LID01", "name": "安全", "display_order": 1 },
-    { "taxonomy": "intervention", "level": "class", "code": "LIC01", "parent_code": "LID01", "name": "危険の管理", "display_order": 1 },
-    { "taxonomy": "intervention", "level": "domain", "code": "LID02", "name": "身体の基本", "display_order": 2 },
-    { "taxonomy": "intervention", "level": "class", "code": "LIC02", "parent_code": "LID02", "name": "安楽の促進", "display_order": 1 },
     {
-      "taxonomy": "intervention", "level": "term", "code": "LI001", "parent_code": "LIC01", "name": "転倒予防",
+      "taxonomy": "intervention",
+      "level": "domain",
+      "code": "LID01",
+      "name": "安全",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC01",
+      "parent_code": "LID01",
+      "name": "危険の管理",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "domain",
+      "code": "LID02",
+      "name": "身体の基本",
+      "display_order": 2
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC02",
+      "parent_code": "LID02",
+      "name": "安楽の促進",
+      "display_order": 1
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI001",
+      "parent_code": "LIC01",
+      "name": "転倒予防",
       "definition": "転倒の危険がある人に、環境と行動の両面から予防策をとる。",
       "items": [
-        { "item_type": "activity", "code": "", "name": "ベッドを低い位置にする" },
-        { "item_type": "activity", "code": "", "name": "よく使う物を手の届く場所に置く" }
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "ベッドを低い位置にする"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "よく使う物を手の届く場所に置く"
+        }
       ],
       "display_order": 1
     },
     {
-      "taxonomy": "intervention", "level": "term", "code": "LI002", "parent_code": "LIC02", "name": "疼痛管理",
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI002",
+      "parent_code": "LIC02",
+      "name": "疼痛管理",
       "definition": "痛みを和らげ、本人が受け入れられる程度に保つ。",
       "items": [
-        { "item_type": "activity", "code": "", "name": "痛みの部位・強さ・性質を評価する" },
-        { "item_type": "activity", "code": "", "name": "鎮痛薬の効果と副作用を観察する" }
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "痛みの部位・強さ・性質を評価する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "鎮痛薬の効果と副作用を観察する"
+        }
       ],
       "display_order": 2
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0004",
+      "name": "褥瘡ができる危険がある状態",
+      "display_order": 2,
+      "parent_code": "LC20",
+      "name_kana": "ジョクソウガデキルキケンガアルジョウタイ",
+      "diagnosis_type": "risk",
+      "definition": "同じ部位への圧迫やずれ、湿潤によって皮膚と皮下組織が傷つくおそれが高まっている状態。",
+      "guidance": "入院時と状態が変わったときに褥瘡の危険度を点数で評価し、危険が高いときに立案する。",
+      "items": [
+        {
+          "item_type": "risk_factor",
+          "code": "LR0401",
+          "name": "自分で体位を変えられない"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR0402",
+          "name": "低栄養"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR0403",
+          "name": "失禁などによる皮膚の湿潤"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR0404",
+          "name": "骨の突出"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0005",
+      "name": "皮膚に傷がある状態",
+      "display_order": 3,
+      "parent_code": "LC20",
+      "name_kana": "ヒフニキズガアルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "手術や圧迫などによって皮膚や皮下組織が損なわれている状態。",
+      "guidance": "創の大きさ・深さ・浸出液・周囲の皮膚を同じ方法で続けて記録する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0501",
+          "name": "創がある"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0502",
+          "name": "発赤や浸出液がある"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0501",
+          "name": "手術"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0502",
+          "name": "圧迫やずれ"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0006",
+      "name": "長く続く痛みがある状態",
+      "display_order": 2,
+      "parent_code": "LC21",
+      "name_kana": "ナガクツヅクイタミガアルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "3か月以上続く痛みがあり、生活に影響している状態。",
+      "guidance": "痛みの強さだけでなく、睡眠や活動への影響も合わせて評価する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0601",
+          "name": "長く続く痛みを訴える"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0602",
+          "name": "痛みのために活動が制限される"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0601",
+          "name": "がん"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0602",
+          "name": "骨・関節の病気"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0007",
+      "name": "吐き気や嘔吐がある状態",
+      "display_order": 3,
+      "parent_code": "LC21",
+      "name_kana": "ハキケヤオウトガアルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "吐き気や嘔吐があり、食事や水分がとりにくくなっている状態。",
+      "guidance": "化学療法・術後・消化器の病気などの原因と、出る時間帯を確かめる。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0701",
+          "name": "吐き気を訴える"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0702",
+          "name": "嘔吐する"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0701",
+          "name": "抗がん剤"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0702",
+          "name": "消化管の通過障害"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0008",
+      "name": "不安が強い状態",
+      "display_order": 1,
+      "parent_code": "LC17",
+      "name_kana": "フアンガツヨイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "病気や治療、生活の先行きに対して強い不安を感じている状態。",
+      "guidance": "不安の内容を本人の言葉で聞き取り、記録に残す。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0801",
+          "name": "落ち着かない"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0802",
+          "name": "眠れない"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0803",
+          "name": "同じ質問を繰り返す"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0801",
+          "name": "病気や治療の見通しが立たない"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0802",
+          "name": "入院による環境の変化"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0009",
+      "name": "体を思うように動かせない状態",
+      "display_order": 1,
+      "parent_code": "LC09",
+      "name_kana": "カラダヲオモウヨウニウゴカセナイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "起き上がる・立つ・歩くなどの動作が思うようにできない状態。",
+      "guidance": "安静度の指示と、できる動作・介助が要る動作を分けて記録する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0901",
+          "name": "自力で起き上がれない"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD0902",
+          "name": "歩行が不安定"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0901",
+          "name": "安静の指示"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0902",
+          "name": "筋力の低下"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF0903",
+          "name": "痛み"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0010",
+      "name": "動くとすぐに疲れる状態",
+      "display_order": 1,
+      "parent_code": "LC10",
+      "name_kana": "ウゴクトスグニツカレルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "日常の動作で息切れや強い疲労が出て、活動を続けられない状態。",
+      "guidance": "動作の前後で脈拍・呼吸数・SpO2 を比べ、負荷の目安を決める。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1001",
+          "name": "動くと息切れがする"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1002",
+          "name": "疲労感を訴える"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1001",
+          "name": "心臓や肺の働きの低下"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1002",
+          "name": "貧血"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0011",
+      "name": "眠れない状態",
+      "display_order": 1,
+      "parent_code": "LC08",
+      "name_kana": "ネムレナイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "寝つけない・途中で目が覚めるなどして、十分に眠れていない状態。",
+      "guidance": "夜間の睡眠の様子を記録し、日中の眠気や活動への影響も確かめる。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1101",
+          "name": "寝つけない"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1102",
+          "name": "夜間に何度も目が覚める"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1101",
+          "name": "痛み"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1102",
+          "name": "不安"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1103",
+          "name": "入院による環境の変化"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0012",
+      "name": "身の回りのことを自分でできない状態",
+      "display_order": 1,
+      "parent_code": "LC11",
+      "name_kana": "ミノマワリノコトヲジブンデデキナイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "清潔・更衣・食事・排泄などを自分で行えず、介助が要る状態。",
+      "guidance": "動作ごとに自立・一部介助・全介助を記録し、できることは本人に任せる。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1201",
+          "name": "清潔や更衣に介助が要る"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1202",
+          "name": "食事や排泄に介助が要る"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1201",
+          "name": "麻痺"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1202",
+          "name": "意識の障害"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1203",
+          "name": "安静の指示"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0013",
+      "name": "栄養が足りない状態",
+      "display_order": 1,
+      "parent_code": "LC02",
+      "name_kana": "エイヨウガタリナイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "必要な量の栄養がとれず、体重や体力が落ちている状態。",
+      "guidance": "食事摂取量と体重を続けて記録し、栄養サポートチームへの相談を考える。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1301",
+          "name": "体重が減っている"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1302",
+          "name": "食事摂取量が少ない"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1301",
+          "name": "食欲の低下"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1302",
+          "name": "飲み込みにくさ"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0014",
+      "name": "誤嚥の危険がある状態",
+      "display_order": 4,
+      "parent_code": "LC20",
+      "name_kana": "ゴエンノキケンガアルジョウタイ",
+      "diagnosis_type": "risk",
+      "definition": "食べ物や唾液が気管に入るおそれが高まっている状態。",
+      "guidance": "食事の前に嚥下の状態を確かめ、食形態と姿勢を決める。",
+      "items": [
+        {
+          "item_type": "risk_factor",
+          "code": "LR1401",
+          "name": "飲み込む力の低下"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR1402",
+          "name": "意識レベルの低下"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR1403",
+          "name": "経管栄養"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0015",
+      "name": "脱水の危険がある状態",
+      "display_order": 1,
+      "parent_code": "LC03",
+      "name_kana": "ダッスイノキケンガアルジョウタイ",
+      "diagnosis_type": "risk",
+      "definition": "水分が失われる・足りないことで、体内の水分が不足するおそれが高まっている状態。",
+      "guidance": "水分の出入りを記録し、皮膚や口の乾燥、尿量の減少に注意する。",
+      "items": [
+        {
+          "item_type": "risk_factor",
+          "code": "LR1501",
+          "name": "嘔吐や下痢"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR1502",
+          "name": "発熱"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR1503",
+          "name": "飲水量の不足"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0016",
+      "name": "体に水分がたまっている状態",
+      "display_order": 2,
+      "parent_code": "LC03",
+      "name_kana": "カラダニスイブンガタマッテイルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "体内の水分が多くなり、むくみや体重増加、息苦しさが出ている状態。",
+      "guidance": "毎日同じ条件で体重を測り、水分の出入りと合わせて評価する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1601",
+          "name": "むくみがある"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1602",
+          "name": "体重が増えている"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1603",
+          "name": "息苦しさがある"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1601",
+          "name": "心臓の働きの低下"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1602",
+          "name": "腎臓の働きの低下"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0017",
+      "name": "血糖が乱れる危険がある状態",
+      "display_order": 1,
+      "parent_code": "LC04",
+      "name_kana": "ケットウガミダレルキケンガアルジョウタイ",
+      "diagnosis_type": "risk",
+      "definition": "血糖が高くなりすぎたり低くなりすぎたりするおそれがある状態。",
+      "guidance": "血糖測定の値と食事摂取量、インスリンの量を合わせて記録する。",
+      "items": [
+        {
+          "item_type": "risk_factor",
+          "code": "LR1701",
+          "name": "糖尿病"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR1702",
+          "name": "インスリン療法"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR1703",
+          "name": "食事摂取量の変動"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR1704",
+          "name": "ステロイドの使用"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0018",
+      "name": "尿が漏れる状態",
+      "display_order": 1,
+      "parent_code": "LC05",
+      "name_kana": "ニョウガモレルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "意図せず尿が漏れてしまう状態。",
+      "guidance": "漏れる時間帯と量、尿意の有無を記録して排尿の間隔を決める。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1801",
+          "name": "意図せず尿が漏れる"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1802",
+          "name": "急な尿意がある"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1801",
+          "name": "骨盤底の筋力の低下"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1802",
+          "name": "認知機能の低下"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0019",
+      "name": "便秘がある状態",
+      "display_order": 1,
+      "parent_code": "LC06",
+      "name_kana": "ベンピガアルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "排便の回数が減ったり、硬い便で出しにくくなっている状態。",
+      "guidance": "最終排便日と便の性状を毎日確かめる。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1901",
+          "name": "3日以上排便がない"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1902",
+          "name": "硬い便"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD1903",
+          "name": "おなかが張る"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1901",
+          "name": "活動量の低下"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1902",
+          "name": "水分や食物繊維の不足"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF1903",
+          "name": "薬の影響"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0020",
+      "name": "下痢がある状態",
+      "display_order": 2,
+      "parent_code": "LC06",
+      "name_kana": "ゲリガアルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "水のような便や柔らかい便が何度も出ている状態。",
+      "guidance": "回数・性状・量を記録し、脱水と肛門周囲の皮膚に注意する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2001",
+          "name": "水様便が続く"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2002",
+          "name": "排便回数が多い"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2001",
+          "name": "感染"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2002",
+          "name": "経管栄養"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2003",
+          "name": "薬の影響"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0021",
+      "name": "痰をうまく出せない状態",
+      "display_order": 1,
+      "parent_code": "LC07",
+      "name_kana": "タンヲウマクダセナイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "痰がたまっているのに、自分で十分に出せない状態。",
+      "guidance": "呼吸音と痰の量・性状を記録し、体位や加湿で出しやすくする。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2101",
+          "name": "痰がからむ"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2102",
+          "name": "湿った咳"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2101",
+          "name": "痛みで咳ができない"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2102",
+          "name": "痰が粘っこい"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2103",
+          "name": "筋力の低下"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0022",
+      "name": "息がしにくい状態",
+      "display_order": 2,
+      "parent_code": "LC07",
+      "name_kana": "イキガシニクイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "呼吸が苦しく、十分に息ができていない状態。",
+      "guidance": "呼吸数・SpO2・呼吸の様子を続けて記録し、悪化時の報告基準を決めておく。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2201",
+          "name": "息苦しさを訴える"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2202",
+          "name": "呼吸数が増えている"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2201",
+          "name": "肺の病気"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2202",
+          "name": "手術後"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0023",
+      "name": "出血の危険がある状態",
+      "display_order": 5,
+      "parent_code": "LC20",
+      "name_kana": "シュッケツノキケンガアルジョウタイ",
+      "diagnosis_type": "risk",
+      "definition": "出血しやすく、出血が止まりにくくなっている状態。",
+      "guidance": "抗凝固薬の使用と血小板数を確かめ、出血の徴候を観察する。",
+      "items": [
+        {
+          "item_type": "risk_factor",
+          "code": "LR2301",
+          "name": "抗凝固薬の使用"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR2302",
+          "name": "血小板の減少"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR2303",
+          "name": "手術後"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0024",
+      "name": "せん妄が起こる危険がある状態",
+      "display_order": 1,
+      "parent_code": "LC12",
+      "name_kana": "センモウガオコルキケンガアルジョウタイ",
+      "diagnosis_type": "risk",
+      "definition": "意識の混乱や注意の障害が急に起こるおそれが高まっている状態。",
+      "guidance": "入院時と手術後にせん妄の評価を行い、夜間の様子を記録する。",
+      "items": [
+        {
+          "item_type": "risk_factor",
+          "code": "LR2401",
+          "name": "高齢"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR2402",
+          "name": "手術・麻酔"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR2403",
+          "name": "睡眠の乱れ"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR2404",
+          "name": "環境の変化"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0025",
+      "name": "混乱がある状態",
+      "display_order": 2,
+      "parent_code": "LC12",
+      "name_kana": "コンランガアルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "時間・場所・人がわからなくなったり、話のつじつまが合わなくなっている状態。",
+      "guidance": "混乱の起こる時間帯ときっかけを記録し、安全を確保する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2501",
+          "name": "時間や場所がわからない"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2502",
+          "name": "落ち着きがない"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2501",
+          "name": "せん妄"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2502",
+          "name": "認知症"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0026",
+      "name": "療養に必要な知識が足りない状態",
+      "display_order": 1,
+      "parent_code": "LC01",
+      "name_kana": "リョウヨウニヒツヨウナチシキガタリナイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "病気や治療、生活の注意点について、必要な知識が足りていない状態。",
+      "guidance": "本人の理解の程度を確かめてから、資料を使って段階的に説明する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2601",
+          "name": "病気や治療について質問が多い"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2602",
+          "name": "誤った理解がある"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2601",
+          "name": "初めての病気"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2602",
+          "name": "情報が足りない"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0027",
+      "name": "治療を続けることが難しい状態",
+      "display_order": 2,
+      "parent_code": "LC01",
+      "name_kana": "チリョウヲツヅケルコトガムズカシイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "服薬や食事療法などの治療を、決められたとおりに続けられていない状態。",
+      "guidance": "続けられない理由を本人と一緒に整理する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2701",
+          "name": "薬を飲み忘れる"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2702",
+          "name": "食事療法が守れない"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2701",
+          "name": "治療の負担が大きい"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2702",
+          "name": "理解が足りない"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2703",
+          "name": "経済的な負担"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0028",
+      "name": "家族の介護の負担が大きい状態",
+      "display_order": 1,
+      "parent_code": "LC15",
+      "name_kana": "カゾクノカイゴノフタンガオオキイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "家族が介護の負担を強く感じ、心身の疲れが出ている状態。",
+      "guidance": "主に介護する家族の健康状態と、使える社会資源を確かめる。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2801",
+          "name": "家族が疲れを訴える"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2802",
+          "name": "介護の方法がわからない"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2801",
+          "name": "介護する人が少ない"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2802",
+          "name": "介護の期間が長い"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "domain",
+      "code": "LOD03",
+      "name": "機能の健康",
+      "display_order": 3
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "domain",
+      "code": "LOD04",
+      "name": "心理社会的な健康",
+      "display_order": 4
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "domain",
+      "code": "LOD05",
+      "name": "家族の健康",
+      "display_order": 5
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC03",
+      "name": "健康の知識",
+      "display_order": 2,
+      "parent_code": "LOD01"
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC04",
+      "name": "組織の状態",
+      "display_order": 2,
+      "parent_code": "LOD02"
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC05",
+      "name": "栄養",
+      "display_order": 3,
+      "parent_code": "LOD02"
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC06",
+      "name": "排泄",
+      "display_order": 4,
+      "parent_code": "LOD02"
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC07",
+      "name": "呼吸",
+      "display_order": 5,
+      "parent_code": "LOD02"
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC08",
+      "name": "活動・セルフケア",
+      "display_order": 1,
+      "parent_code": "LOD03"
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC09",
+      "name": "睡眠",
+      "display_order": 2,
+      "parent_code": "LOD03"
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC10",
+      "name": "不安への対処",
+      "display_order": 1,
+      "parent_code": "LOD04"
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC11",
+      "name": "認知",
+      "display_order": 2,
+      "parent_code": "LOD04"
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "class",
+      "code": "LOC12",
+      "name": "家族の介護",
+      "display_order": 1,
+      "parent_code": "LOD05"
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO003",
+      "name": "感染の徴候がない",
+      "display_order": 3,
+      "parent_code": "LOC01",
+      "definition": "発熱や創の発赤など、感染を示す変化が見られないこと。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO00301",
+          "name": "体温が平熱"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00302",
+          "name": "創や刺入部の発赤・腫れがない"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO004",
+      "name": "皮膚が傷ついていない",
+      "display_order": 4,
+      "parent_code": "LOC04",
+      "definition": "圧迫やずれによる皮膚の傷が新たにできていないこと。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO00401",
+          "name": "持続する発赤がない"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00402",
+          "name": "皮膚の湿潤がない"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO005",
+      "name": "創が治っていく",
+      "display_order": 5,
+      "parent_code": "LOC04",
+      "definition": "創が小さくなり、感染なく治っていくこと。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO00501",
+          "name": "創が小さくなる"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00502",
+          "name": "浸出液が減る"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO006",
+      "name": "栄養状態が保たれる",
+      "display_order": 6,
+      "parent_code": "LOC05",
+      "definition": "必要な栄養がとれ、体重や検査値が保たれていること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO00601",
+          "name": "食事摂取量"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00602",
+          "name": "体重の変化"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00603",
+          "name": "血清アルブミン値"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO007",
+      "name": "安全に飲み込める",
+      "display_order": 7,
+      "parent_code": "LOC05",
+      "definition": "むせや誤嚥なく食事がとれること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO00701",
+          "name": "むせがない"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00702",
+          "name": "発熱や肺炎がない"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO008",
+      "name": "水分のバランスが保たれる",
+      "display_order": 8,
+      "parent_code": "LOC05",
+      "definition": "体内の水分が不足も過剰もない状態に保たれていること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO00801",
+          "name": "水分の出入り"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00802",
+          "name": "むくみ"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00803",
+          "name": "体重の変化"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO009",
+      "name": "血糖が目標の範囲にある",
+      "display_order": 9,
+      "parent_code": "LOC05",
+      "definition": "血糖が目標の範囲に保たれ、低血糖が起こらないこと。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO00901",
+          "name": "血糖値"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO00902",
+          "name": "低血糖の症状がない"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO010",
+      "name": "排尿が整う",
+      "display_order": 10,
+      "parent_code": "LOC06",
+      "definition": "尿漏れが減り、排尿を自分で管理できること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO01001",
+          "name": "尿漏れの回数"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01002",
+          "name": "トイレで排尿できる"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO011",
+      "name": "排便が整う",
+      "display_order": 11,
+      "parent_code": "LOC06",
+      "definition": "苦痛なく、決まった間隔で排便があること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO01101",
+          "name": "排便の間隔"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01102",
+          "name": "便の性状"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO012",
+      "name": "楽に呼吸ができる",
+      "display_order": 12,
+      "parent_code": "LOC07",
+      "definition": "息苦しさがなく、十分に呼吸ができること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO01201",
+          "name": "呼吸数"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01202",
+          "name": "SpO2"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01203",
+          "name": "息苦しさの訴え"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO013",
+      "name": "痰を出せる",
+      "display_order": 13,
+      "parent_code": "LOC07",
+      "definition": "痰を自分で、または援助で出せること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO01301",
+          "name": "痰を出せる"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01302",
+          "name": "呼吸音の副雑音がない"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO014",
+      "name": "動ける範囲が広がる",
+      "display_order": 14,
+      "parent_code": "LOC08",
+      "definition": "安全に、できる動作が増えていくこと。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO01401",
+          "name": "起き上がり"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01402",
+          "name": "歩行の距離"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO015",
+      "name": "身の回りのことを自分でできる",
+      "display_order": 15,
+      "parent_code": "LOC08",
+      "definition": "清潔・更衣・食事・排泄を自分でできる範囲が広がること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO01501",
+          "name": "清潔"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01502",
+          "name": "更衣"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01503",
+          "name": "食事"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01504",
+          "name": "排泄"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO016",
+      "name": "十分に眠れる",
+      "display_order": 16,
+      "parent_code": "LOC09",
+      "definition": "夜間に眠れ、日中に休めたと感じられること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO01601",
+          "name": "睡眠時間"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01602",
+          "name": "熟眠感"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO017",
+      "name": "不安が和らぐ",
+      "display_order": 17,
+      "parent_code": "LOC10",
+      "definition": "不安を言葉にでき、落ち着いて過ごせること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO01701",
+          "name": "不安の訴え"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01702",
+          "name": "睡眠への影響"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO018",
+      "name": "混乱がない",
+      "display_order": 18,
+      "parent_code": "LOC11",
+      "definition": "時間・場所・人がわかり、落ち着いて過ごせること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO01801",
+          "name": "見当識"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01802",
+          "name": "落ち着き"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO019",
+      "name": "療養の方法を理解している",
+      "display_order": 19,
+      "parent_code": "LOC03",
+      "definition": "病気・治療・生活の注意点を自分の言葉で説明できること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO01901",
+          "name": "説明できる"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO01902",
+          "name": "実際に行える"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO020",
+      "name": "治療を続けられる",
+      "display_order": 20,
+      "parent_code": "LOC03",
+      "definition": "服薬や食事療法を決められたとおりに続けられること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO02001",
+          "name": "服薬"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO02002",
+          "name": "食事療法"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO021",
+      "name": "家族が介護を続けられる",
+      "display_order": 21,
+      "parent_code": "LOC12",
+      "definition": "家族が無理なく介護を続けられること。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO02101",
+          "name": "家族の疲労の訴え"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO02102",
+          "name": "社会資源の利用"
+        }
+      ]
+    },
+    {
+      "taxonomy": "outcome",
+      "level": "term",
+      "code": "LO022",
+      "name": "出血がない",
+      "display_order": 22,
+      "parent_code": "LOC04",
+      "definition": "出血の徴候が見られないこと。",
+      "items": [
+        {
+          "item_type": "indicator",
+          "code": "LO02201",
+          "name": "皮下出血がない"
+        },
+        {
+          "item_type": "indicator",
+          "code": "LO02202",
+          "name": "便や尿に血が混じらない"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "domain",
+      "code": "LID03",
+      "name": "身体の複雑な管理",
+      "display_order": 3
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "domain",
+      "code": "LID04",
+      "name": "行動",
+      "display_order": 4
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "domain",
+      "code": "LID05",
+      "name": "家族",
+      "display_order": 5
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "domain",
+      "code": "LID06",
+      "name": "健康管理",
+      "display_order": 6
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC03",
+      "name": "感染の管理",
+      "display_order": 2,
+      "parent_code": "LID01"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC04",
+      "name": "皮膚・創の管理",
+      "display_order": 1,
+      "parent_code": "LID03"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC05",
+      "name": "呼吸の管理",
+      "display_order": 2,
+      "parent_code": "LID03"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC06",
+      "name": "水分・栄養の管理",
+      "display_order": 3,
+      "parent_code": "LID03"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC07",
+      "name": "活動・運動の援助",
+      "display_order": 2,
+      "parent_code": "LID02"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC08",
+      "name": "セルフケアの援助",
+      "display_order": 3,
+      "parent_code": "LID02"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC09",
+      "name": "排泄の援助",
+      "display_order": 4,
+      "parent_code": "LID02"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC10",
+      "name": "睡眠の援助",
+      "display_order": 5,
+      "parent_code": "LID02"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC11",
+      "name": "心理的な支援",
+      "display_order": 1,
+      "parent_code": "LID04"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC12",
+      "name": "認知の援助",
+      "display_order": 2,
+      "parent_code": "LID04"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC13",
+      "name": "家族の支援",
+      "display_order": 1,
+      "parent_code": "LID05"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "class",
+      "code": "LIC14",
+      "name": "療養の教育",
+      "display_order": 1,
+      "parent_code": "LID06"
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI003",
+      "name": "感染予防",
+      "display_order": 3,
+      "parent_code": "LIC03",
+      "definition": "感染の原因を減らし、早く気づけるようにする。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "体温と炎症所見を観察する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "刺入部・創を清潔に保つ"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "手洗いを励行する"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI004",
+      "name": "褥瘡予防",
+      "display_order": 4,
+      "parent_code": "LIC04",
+      "definition": "圧迫とずれを減らし、皮膚を清潔で乾いた状態に保つ。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "定期的に体位を変える"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "体圧分散マットレスを使う"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "皮膚の状態を毎日観察する"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI005",
+      "name": "創傷ケア",
+      "display_order": 5,
+      "parent_code": "LIC04",
+      "definition": "創を清潔に保ち、治りを助ける。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "創の大きさ・浸出液を観察する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "指示どおりに処置を行う"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI006",
+      "name": "気道の清浄化",
+      "display_order": 6,
+      "parent_code": "LIC05",
+      "definition": "痰を出しやすくし、気道を保つ。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "呼吸音と痰の性状を観察する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "体位ドレナージを行う"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "必要時に吸引する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "加湿を行う"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI007",
+      "name": "呼吸の援助",
+      "display_order": 7,
+      "parent_code": "LIC05",
+      "definition": "楽に呼吸ができるよう姿勢や環境を整える。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "呼吸数とSpO2を観察する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "上体を起こした姿勢を整える"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "指示どおりに酸素を投与する"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI008",
+      "name": "水分の管理",
+      "display_order": 8,
+      "parent_code": "LIC06",
+      "definition": "体内の水分の出入りを整える。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "水分の出入りを記録する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "体重を毎日測る"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "むくみを観察する"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI009",
+      "name": "栄養の管理",
+      "display_order": 9,
+      "parent_code": "LIC06",
+      "definition": "必要な栄養がとれるように援助する。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "食事摂取量を記録する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "食べやすい形態を工夫する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "栄養士と連携する"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI010",
+      "name": "嚥下の援助",
+      "display_order": 10,
+      "parent_code": "LIC06",
+      "definition": "安全に飲み込めるよう姿勢と食形態を整える。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "食事の前に嚥下の状態を確かめる"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "座った姿勢で食事をとる"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "口腔ケアを行う"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI011",
+      "name": "血糖の管理",
+      "display_order": 11,
+      "parent_code": "LIC06",
+      "definition": "血糖を目標の範囲に保つ。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "血糖値を測る"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "低血糖の症状を観察する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "食事摂取量に合わせてインスリンの量を確かめる"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI012",
+      "name": "活動の援助",
+      "display_order": 12,
+      "parent_code": "LIC07",
+      "definition": "安全に動ける範囲を広げる。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "安静度に合わせて離床を進める"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "歩行を介助する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "関節を動かす運動を行う"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI013",
+      "name": "セルフケアの援助",
+      "display_order": 13,
+      "parent_code": "LIC08",
+      "definition": "できることは本人に任せ、できない部分を介助する。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "清潔を介助する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "更衣を介助する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "食事を介助する"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI014",
+      "name": "排尿の援助",
+      "display_order": 14,
+      "parent_code": "LIC09",
+      "definition": "排尿のリズムを整え、尿漏れを減らす。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "排尿の時間と量を記録する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "時間を決めてトイレに誘導する"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI015",
+      "name": "排便の援助",
+      "display_order": 15,
+      "parent_code": "LIC09",
+      "definition": "排便を整える。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "排便の状況と便の性状を確かめる"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "水分と食物繊維をとるよう勧める"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "腹部のマッサージを行う"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI016",
+      "name": "睡眠の援助",
+      "display_order": 16,
+      "parent_code": "LIC10",
+      "definition": "眠りやすい環境と生活リズムを整える。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "睡眠の状態を観察する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "夜間の照明と騒音を減らす"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "日中の活動を促す"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI017",
+      "name": "不安の軽減",
+      "display_order": 17,
+      "parent_code": "LIC11",
+      "definition": "不安を表出でき、和らぐよう支える。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "話を傾聴する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "治療の見通しを説明する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "リラクセーションを勧める"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI018",
+      "name": "見当識の援助",
+      "display_order": 18,
+      "parent_code": "LIC12",
+      "definition": "時間・場所・人がわかるよう手がかりを示す。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "日付と場所を会話の中で伝える"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "時計やカレンダーを見える所に置く"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "昼夜のリズムを整える"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI019",
+      "name": "療養の教育",
+      "display_order": 19,
+      "parent_code": "LIC14",
+      "definition": "病気・治療・生活の注意点を理解できるよう教える。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "理解の程度を確かめる"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "資料を使って説明する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "実際にやってみてもらう"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI020",
+      "name": "家族の支援",
+      "display_order": 20,
+      "parent_code": "LIC13",
+      "definition": "家族が介護を続けられるよう支える。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "家族の思いを聞く"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "介護の方法を説明する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "社会資源を紹介する"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI021",
+      "name": "出血の予防",
+      "display_order": 21,
+      "parent_code": "LIC03",
+      "definition": "出血を防ぎ、早く気づけるようにする。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "皮下出血や血便を観察する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "転倒や打撲を防ぐ"
+        }
+      ]
+    },
+    {
+      "taxonomy": "intervention",
+      "level": "term",
+      "code": "LI022",
+      "name": "せん妄の予防",
+      "display_order": 22,
+      "parent_code": "LIC12",
+      "definition": "せん妄の原因を減らし、早く気づけるようにする。",
+      "items": [
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "夜間の様子を観察する"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "睡眠のリズムを整える"
+        },
+        {
+          "item_type": "activity",
+          "code": "",
+          "name": "家族の面会を勧める"
+        }
+      ]
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0029",
+      "parent_code": "LC13",
+      "name": "思いを言葉で伝えにくい状態",
+      "name_kana": "オモイヲコトバデツタエニクイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "病気や障害のために、考えや気持ちを言葉で伝えることが難しくなっている状態。",
+      "guidance": "うなずき・文字盤・筆談など、本人が使える伝え方を記録してチームで共有する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2901",
+          "name": "言葉が出にくい"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD2902",
+          "name": "伝わらずにいら立つ"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2901",
+          "name": "失語"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF2902",
+          "name": "気管挿管・気管切開"
+        }
+      ],
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0030",
+      "parent_code": "LC14",
+      "name": "体の変化を受け止めにくい状態",
+      "name_kana": "カラダノヘンカヲウケトメニクイジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "手術や病気による体の見た目や働きの変化を、受け止めにくく感じている状態。",
+      "guidance": "変化した部位を見る・触れる様子と、そのときの言葉を記録する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD3001",
+          "name": "変化した部位を見ようとしない"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD3002",
+          "name": "変化について否定的に話す"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF3001",
+          "name": "ストーマの造設"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF3002",
+          "name": "乳房や四肢の切除"
+        }
+      ],
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0031",
+      "parent_code": "LC16",
+      "name": "性の機能が変わることへの心配がある状態",
+      "name_kana": "セイノキノウガカワルコトヘノシンパイガアルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "病気や治療によって性の機能や生活が変わることを心配している状態。",
+      "guidance": "本人が話したいときに話せるよう、場所と時間に配慮する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD3101",
+          "name": "性の機能や生活についての心配を話す"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF3101",
+          "name": "骨盤内の手術"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF3102",
+          "name": "ホルモン療法"
+        }
+      ],
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0032",
+      "parent_code": "LC18",
+      "name": "治療の選択に迷っている状態",
+      "name_kana": "チリョウノセンタクニマヨッテイルジョウタイ",
+      "diagnosis_type": "problem",
+      "definition": "治療をどうするか、自分の価値観に照らして決められずにいる状態。",
+      "guidance": "本人が大切にしていることを聞き取り、医師との話し合いの場を調整する。",
+      "items": [
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD3201",
+          "name": "決められないと話す"
+        },
+        {
+          "item_type": "defining_characteristic",
+          "code": "LD3202",
+          "name": "選択肢の間で迷う"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF3201",
+          "name": "治療の利点と負担がわかりにくい"
+        },
+        {
+          "item_type": "related_factor",
+          "code": "LF3202",
+          "name": "家族と意見が違う"
+        }
+      ],
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis",
+      "level": "term",
+      "code": "L0033",
+      "parent_code": "LC22",
+      "name": "成長や発達が遅れる危険がある状態",
+      "name_kana": "セイチョウヤハッタツガオクレルキケンガアルジョウタイ",
+      "diagnosis_type": "risk",
+      "definition": "病気や長い入院のために、年齢に応じた成長や発達が遅れるおそれがある状態。",
+      "guidance": "年齢に応じた発達の目安と比べて、身長・体重と日々の様子を記録する。",
+      "items": [
+        {
+          "item_type": "risk_factor",
+          "code": "LR3301",
+          "name": "長期の入院"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR3302",
+          "name": "栄養の不足"
+        },
+        {
+          "item_type": "risk_factor",
+          "code": "LR3303",
+          "name": "遊びや学びの機会が少ない"
+        }
+      ],
+      "display_order": 1
     }
   ],
   "standard_plans": [
     {
-      "code": "LSP001", "name": "転倒転落予防", "diagnosis_code": "L0001", "display_order": 1,
+      "code": "LSP001",
+      "name": "転倒転落予防",
+      "diagnosis_code": "L0001",
+      "display_order": 1,
       "goals": [
-        { "text": "入院中に転倒・転落しない", "outcome_code": "" },
-        { "text": "移動のときにナースコールを押せる", "outcome_code": "LO001" }
+        {
+          "text": "入院中に転倒・転落しない",
+          "outcome_code": ""
+        },
+        {
+          "text": "移動のときにナースコールを押せる",
+          "outcome_code": "LO001"
+        }
       ],
       "activities": [
-        { "activity_type": "op", "text": "ふらつきの有無", "item_kind": "observation", "manage_no": "31005024", "item_name": "ふらつき" },
-        { "activity_type": "op", "text": "危険行動(転落)の有無", "item_kind": "observation", "manage_no": "31002779", "item_name": "危険行動（転落）" },
-        { "activity_type": "tp", "text": "低床ベッドへ交換する", "intervention_code": "LI001", "item_kind": "act", "code16": "A001B006C051D031", "manage_no": "12000956", "item_name": "低床ベッドへ交換" },
-        { "activity_type": "tp", "text": "ベッド柵を確認する", "intervention_code": "LI001", "item_kind": "act", "code16": "A001B006C051D032", "manage_no": "12000963", "item_name": "ベッド柵確認" },
-        { "activity_type": "ep", "text": "移動のときはナースコールを押すよう説明する", "item_kind": "act", "code16": "A003B020C372D445", "manage_no": "12001948", "item_name": "患者への指導" },
-        { "activity_type": "ep", "text": "家族に転倒の危険と予防策を説明する", "item_kind": "act", "code16": "A003B020C372D446", "manage_no": "12001949", "item_name": "家族、親族への指導" }
+        {
+          "activity_type": "op",
+          "text": "ふらつきの有無",
+          "item_kind": "observation",
+          "manage_no": "31005024",
+          "item_name": "ふらつき"
+        },
+        {
+          "activity_type": "op",
+          "text": "危険行動(転落)の有無",
+          "item_kind": "observation",
+          "manage_no": "31002779",
+          "item_name": "危険行動（転落）"
+        },
+        {
+          "activity_type": "tp",
+          "text": "低床ベッドへ交換する",
+          "intervention_code": "LI001",
+          "item_kind": "act",
+          "code16": "A001B006C051D031",
+          "manage_no": "12000956",
+          "item_name": "低床ベッドへ交換"
+        },
+        {
+          "activity_type": "tp",
+          "text": "ベッド柵を確認する",
+          "intervention_code": "LI001",
+          "item_kind": "act",
+          "code16": "A001B006C051D032",
+          "manage_no": "12000963",
+          "item_name": "ベッド柵確認"
+        },
+        {
+          "activity_type": "ep",
+          "text": "移動のときはナースコールを押すよう説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        },
+        {
+          "activity_type": "ep",
+          "text": "家族に転倒の危険と予防策を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D446",
+          "manage_no": "12001949",
+          "item_name": "家族、親族への指導"
+        }
       ]
     },
     {
-      "code": "LSP002", "name": "感染予防", "diagnosis_code": "L0002", "display_order": 2,
+      "code": "LSP002",
+      "name": "感染予防",
+      "diagnosis_code": "L0002",
+      "display_order": 2,
       "goals": [
-        { "text": "感染の徴候がない", "outcome_code": "" }
+        {
+          "text": "感染の徴候がない",
+          "outcome_code": ""
+        }
       ],
       "activities": [
-        { "activity_type": "op", "text": "体温", "item_kind": "observation", "manage_no": "31001368", "item_name": "体温" },
-        { "activity_type": "op", "text": "刺入部・創の発赤と腫脹", "item_kind": "observation", "manage_no": "31000452", "item_name": "腫脹" },
-        { "activity_type": "tp", "text": "清拭を行う", "item_kind": "act", "code16": "E017F057G144H088", "manage_no": "13000257", "item_name": "清拭" },
-        { "activity_type": "ep", "text": "手洗いとうがいの方法を説明する", "item_kind": "act", "code16": "A003B020C372D445", "manage_no": "12001948", "item_name": "患者への指導" }
+        {
+          "activity_type": "op",
+          "text": "体温",
+          "item_kind": "observation",
+          "manage_no": "31001368",
+          "item_name": "体温"
+        },
+        {
+          "activity_type": "op",
+          "text": "刺入部・創の発赤と腫脹",
+          "item_kind": "observation",
+          "manage_no": "31000452",
+          "item_name": "腫脹"
+        },
+        {
+          "activity_type": "tp",
+          "text": "清拭を行う",
+          "item_kind": "act",
+          "code16": "E017F057G144H088",
+          "manage_no": "13000257",
+          "item_name": "清拭"
+        },
+        {
+          "activity_type": "ep",
+          "text": "手洗いとうがいの方法を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
       ]
     },
     {
-      "code": "LSP003", "name": "急性疼痛の緩和", "diagnosis_code": "L0003", "display_order": 3,
+      "code": "LSP003",
+      "name": "急性疼痛の緩和",
+      "diagnosis_code": "L0003",
+      "display_order": 3,
       "goals": [
-        { "text": "ペインスコアが3以下で過ごせる", "outcome_code": "LO002" },
-        { "text": "痛みで眠れない夜がない", "outcome_code": "LO002" }
+        {
+          "text": "ペインスコアが3以下で過ごせる",
+          "outcome_code": "LO002"
+        },
+        {
+          "text": "痛みで眠れない夜がない",
+          "outcome_code": "LO002"
+        }
       ],
       "activities": [
-        { "activity_type": "op", "text": "疼痛ペインスコア", "intervention_code": "LI002", "item_kind": "observation", "manage_no": "31000473", "item_name": "疼痛ペインスコア" },
-        { "activity_type": "op", "text": "疼痛の部位", "item_kind": "observation", "manage_no": "31000472", "item_name": "疼痛部位" },
-        { "activity_type": "tp", "text": "痛みの少ない体位を整える", "intervention_code": "LI002", "item_kind": "act", "code16": "A003B020C289D405", "manage_no": "12001331", "item_name": "疼痛緩和体位" },
-        { "activity_type": "tp", "text": "冷罨法を行う", "item_kind": "act", "code16": "A001B008C064D044", "manage_no": "12000143", "item_name": "冷罨法" },
-        { "activity_type": "ep", "text": "痛いときは我慢せず伝えるよう説明する", "item_kind": "act", "code16": "A003B020C372D445", "manage_no": "12001948", "item_name": "患者への指導" }
+        {
+          "activity_type": "op",
+          "text": "疼痛ペインスコア",
+          "intervention_code": "LI002",
+          "item_kind": "observation",
+          "manage_no": "31000473",
+          "item_name": "疼痛ペインスコア"
+        },
+        {
+          "activity_type": "op",
+          "text": "疼痛の部位",
+          "item_kind": "observation",
+          "manage_no": "31000472",
+          "item_name": "疼痛部位"
+        },
+        {
+          "activity_type": "tp",
+          "text": "痛みの少ない体位を整える",
+          "intervention_code": "LI002",
+          "item_kind": "act",
+          "code16": "A003B020C289D405",
+          "manage_no": "12001331",
+          "item_name": "疼痛緩和体位"
+        },
+        {
+          "activity_type": "tp",
+          "text": "冷罨法を行う",
+          "item_kind": "act",
+          "code16": "A001B008C064D044",
+          "manage_no": "12000143",
+          "item_name": "冷罨法"
+        },
+        {
+          "activity_type": "ep",
+          "text": "痛いときは我慢せず伝えるよう説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ]
+    },
+    {
+      "code": "LSP004",
+      "name": "褥瘡予防",
+      "display_order": 4,
+      "goals": [
+        {
+          "text": "入院中に褥瘡ができない",
+          "outcome_code": "LO004"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "皮膚の発赤の有無と部位",
+          "intervention_code": "LI004",
+          "item_kind": "observation",
+          "manage_no": "31000427",
+          "item_name": "発赤部位"
+        },
+        {
+          "activity_type": "op",
+          "text": "ブレーデンスケール",
+          "item_kind": "observation",
+          "manage_no": "31001373",
+          "item_name": "褥瘡ブレーデンスケール（知覚の認知）"
+        },
+        {
+          "activity_type": "tp",
+          "text": "体圧分散マットレスを使う",
+          "intervention_code": "LI004",
+          "item_kind": "act",
+          "code16": "A001B010C369D491",
+          "manage_no": "12001860",
+          "item_name": "二層式エアマットレス"
+        },
+        {
+          "activity_type": "tp",
+          "text": "皮膚を保湿する",
+          "intervention_code": "LI004",
+          "item_kind": "act",
+          "code16": "A001B001C018D447",
+          "manage_no": "12001697",
+          "item_name": "皮膚の保湿"
+        },
+        {
+          "activity_type": "ep",
+          "text": "除圧の方法を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C291D427",
+          "manage_no": "12001363",
+          "item_name": "褥瘡予防の指導 除圧方法"
+        }
+      ],
+      "diagnosis_code": "L0004"
+    },
+    {
+      "code": "LSP005",
+      "name": "創のケア",
+      "display_order": 5,
+      "goals": [
+        {
+          "text": "感染なく創が治っていく",
+          "outcome_code": "LO005"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "創部からの出血",
+          "intervention_code": "LI005",
+          "item_kind": "observation",
+          "manage_no": "31000342",
+          "item_name": "出血（創部）"
+        },
+        {
+          "activity_type": "op",
+          "text": "創周囲の発赤",
+          "item_kind": "observation",
+          "manage_no": "31000427",
+          "item_name": "発赤部位"
+        },
+        {
+          "activity_type": "op",
+          "text": "体温",
+          "item_kind": "observation",
+          "manage_no": "31001368",
+          "item_name": "体温"
+        },
+        {
+          "activity_type": "tp",
+          "text": "指示どおりに創の処置を行う",
+          "intervention_code": "LI005"
+        },
+        {
+          "activity_type": "ep",
+          "text": "創を濡らさない・触らないよう説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ],
+      "diagnosis_code": "L0005"
+    },
+    {
+      "code": "LSP006",
+      "name": "長く続く痛みの緩和",
+      "display_order": 6,
+      "goals": [
+        {
+          "text": "痛みと付き合いながら日常生活を送れる",
+          "outcome_code": "LO017"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "疼痛ペインスコア",
+          "item_kind": "observation",
+          "manage_no": "31000473",
+          "item_name": "疼痛ペインスコア"
+        },
+        {
+          "activity_type": "op",
+          "text": "睡眠への影響",
+          "item_kind": "observation",
+          "manage_no": "31000404",
+          "item_name": "睡眠時間"
+        },
+        {
+          "activity_type": "tp",
+          "text": "痛みの少ない体位を整える",
+          "item_kind": "act",
+          "code16": "A003B020C289D405",
+          "manage_no": "12001331",
+          "item_name": "疼痛緩和体位"
+        },
+        {
+          "activity_type": "tp",
+          "text": "リラクセーションを行う",
+          "intervention_code": "LI017",
+          "item_kind": "act",
+          "code16": "A001B008C064D327",
+          "manage_no": "12000673",
+          "item_name": "リラクセーション（呼吸法）"
+        },
+        {
+          "activity_type": "ep",
+          "text": "鎮痛薬の使い方を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C132D403",
+          "manage_no": "12001169",
+          "item_name": "内服薬の管理方法"
+        }
+      ],
+      "diagnosis_code": "L0006"
+    },
+    {
+      "code": "LSP007",
+      "name": "吐き気・嘔吐の緩和",
+      "display_order": 7,
+      "goals": [
+        {
+          "text": "吐き気が和らぎ、水分がとれる",
+          "outcome_code": "LO008"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "悪心",
+          "item_kind": "observation",
+          "manage_no": "31002422",
+          "item_name": "悪心"
+        },
+        {
+          "activity_type": "op",
+          "text": "嘔吐量",
+          "item_kind": "observation",
+          "manage_no": "31000039",
+          "item_name": "嘔吐量"
+        },
+        {
+          "activity_type": "op",
+          "text": "水分摂取量",
+          "item_kind": "observation",
+          "manage_no": "31004080",
+          "item_name": "総水分摂取量"
+        },
+        {
+          "activity_type": "tp",
+          "text": "嘔吐後に含嗽を行う",
+          "item_kind": "act",
+          "code16": "A001B001C014D000",
+          "manage_no": "12000023",
+          "item_name": "含嗽"
+        },
+        {
+          "activity_type": "tp",
+          "text": "においの少ない環境を整える"
+        },
+        {
+          "activity_type": "ep",
+          "text": "吐き気が強いときは早めに伝えるよう説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ],
+      "diagnosis_code": "L0007"
+    },
+    {
+      "code": "LSP008",
+      "name": "不安の軽減",
+      "display_order": 8,
+      "goals": [
+        {
+          "text": "不安を言葉にでき、落ち着いて過ごせる",
+          "outcome_code": "LO017"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "不安の訴え",
+          "item_kind": "observation",
+          "manage_no": "31000405",
+          "item_name": "不安"
+        },
+        {
+          "activity_type": "op",
+          "text": "睡眠時間",
+          "item_kind": "observation",
+          "manage_no": "31000404",
+          "item_name": "睡眠時間"
+        },
+        {
+          "activity_type": "tp",
+          "text": "話を傾聴する",
+          "intervention_code": "LI017",
+          "item_kind": "act",
+          "code16": "A002B016C120D084",
+          "manage_no": "12000245",
+          "item_name": "訴えの傾聴"
+        },
+        {
+          "activity_type": "tp",
+          "text": "精神的に支える",
+          "intervention_code": "LI017",
+          "item_kind": "act",
+          "code16": "A004B029C234D000",
+          "manage_no": "12000391",
+          "item_name": "精神的サポート"
+        },
+        {
+          "activity_type": "ep",
+          "text": "治療の予定と見通しを説明する",
+          "intervention_code": "LI017",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ],
+      "diagnosis_code": "L0008"
+    },
+    {
+      "code": "LSP009",
+      "name": "動ける範囲を広げる",
+      "display_order": 9,
+      "goals": [
+        {
+          "text": "安全に病棟内を歩ける",
+          "outcome_code": "LO014"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "歩行の様子",
+          "item_kind": "observation",
+          "manage_no": "31001009",
+          "item_name": "すり足歩行"
+        },
+        {
+          "activity_type": "op",
+          "text": "痛み",
+          "item_kind": "observation",
+          "manage_no": "31000470",
+          "item_name": "疼痛"
+        },
+        {
+          "activity_type": "tp",
+          "text": "歩行を介助する",
+          "intervention_code": "LI012",
+          "item_kind": "act",
+          "code16": "A001B005C048D002",
+          "manage_no": "12000105",
+          "item_name": "歩行介助 部分介助"
+        },
+        {
+          "activity_type": "tp",
+          "text": "関節可動域訓練を行う",
+          "intervention_code": "LI012",
+          "item_kind": "act",
+          "code16": "A003B023C202D000",
+          "manage_no": "12000359",
+          "item_name": "関節可動域訓練"
+        },
+        {
+          "activity_type": "tp",
+          "text": "移乗を介助する",
+          "item_kind": "act",
+          "code16": "A001B005C334D000",
+          "manage_no": "12001405",
+          "item_name": "移乗介助"
+        },
+        {
+          "activity_type": "ep",
+          "text": "動くときはナースコールで呼ぶよう説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ],
+      "diagnosis_code": "L0009"
+    },
+    {
+      "code": "LSP010",
+      "name": "疲れにくい活動の調整",
+      "display_order": 10,
+      "goals": [
+        {
+          "text": "息切れなく身の回りの動作ができる",
+          "outcome_code": "LO015"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "動作前後の脈拍",
+          "item_kind": "observation",
+          "manage_no": "31001390",
+          "item_name": "脈拍数"
+        },
+        {
+          "activity_type": "op",
+          "text": "呼吸困難感",
+          "item_kind": "observation",
+          "manage_no": "31000523",
+          "item_name": "呼吸困難感（労作時）"
+        },
+        {
+          "activity_type": "tp",
+          "text": "休憩を入れながら動作を行う",
+          "intervention_code": "LI012"
+        },
+        {
+          "activity_type": "tp",
+          "text": "車椅子で移送する",
+          "item_kind": "act",
+          "code16": "A001B005C047D026",
+          "manage_no": "12000100",
+          "item_name": "移送 車椅子"
+        },
+        {
+          "activity_type": "ep",
+          "text": "疲れたら休むよう説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ],
+      "diagnosis_code": "L0010"
+    },
+    {
+      "code": "LSP011",
+      "name": "睡眠の援助",
+      "display_order": 11,
+      "goals": [
+        {
+          "text": "夜間に眠れたと感じられる",
+          "outcome_code": "LO016"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "睡眠時間",
+          "intervention_code": "LI016",
+          "item_kind": "observation",
+          "manage_no": "31000404",
+          "item_name": "睡眠時間"
+        },
+        {
+          "activity_type": "op",
+          "text": "不安",
+          "item_kind": "observation",
+          "manage_no": "31000405",
+          "item_name": "不安"
+        },
+        {
+          "activity_type": "tp",
+          "text": "足浴で入眠を促す",
+          "intervention_code": "LI016",
+          "item_kind": "act",
+          "code16": "A001B007C061D039",
+          "manage_no": "12000136",
+          "item_name": "入眠を促す援助 足浴法"
+        },
+        {
+          "activity_type": "tp",
+          "text": "午睡を避けるよう調整する",
+          "intervention_code": "LI016",
+          "item_kind": "act",
+          "code16": "A001B007C063D042",
+          "manage_no": "12000141",
+          "item_name": "睡眠パターンの調整 午睡を避ける"
+        },
+        {
+          "activity_type": "ep",
+          "text": "生活リズムを整えるよう説明する",
+          "item_kind": "act",
+          "code16": "A003B024C210D000",
+          "manage_no": "12000367",
+          "item_name": "生活リズムの指導"
+        }
+      ],
+      "diagnosis_code": "L0011"
+    },
+    {
+      "code": "LSP012",
+      "name": "セルフケアの援助",
+      "display_order": 12,
+      "goals": [
+        {
+          "text": "できる部分は自分で行える",
+          "outcome_code": "LO015"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "倦怠感",
+          "item_kind": "observation",
+          "manage_no": "31000409",
+          "item_name": "全身倦怠感"
+        },
+        {
+          "activity_type": "tp",
+          "text": "全身清拭を行う",
+          "intervention_code": "LI013",
+          "item_kind": "act",
+          "code16": "A001B001C008D005",
+          "manage_no": "12000014",
+          "item_name": "清拭 全身"
+        },
+        {
+          "activity_type": "tp",
+          "text": "更衣を介助する",
+          "intervention_code": "LI013",
+          "item_kind": "act",
+          "code16": "A001B002C023D002",
+          "manage_no": "12000049",
+          "item_name": "更衣 部分介助"
+        },
+        {
+          "activity_type": "tp",
+          "text": "口腔清拭を行う",
+          "intervention_code": "LI013",
+          "item_kind": "act",
+          "code16": "A001B001C011D000",
+          "manage_no": "12000020",
+          "item_name": "口腔清拭"
+        },
+        {
+          "activity_type": "tp",
+          "text": "洗髪を行う",
+          "item_kind": "act",
+          "code16": "A001B001C006D390",
+          "manage_no": "12001137",
+          "item_name": "洗髪 床上"
+        }
+      ],
+      "diagnosis_code": "L0012"
+    },
+    {
+      "code": "LSP013",
+      "name": "栄養状態の改善",
+      "display_order": 13,
+      "goals": [
+        {
+          "text": "食事を7割以上とれる",
+          "outcome_code": "LO006"
+        },
+        {
+          "text": "体重が減らない",
+          "outcome_code": "LO006"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "食事摂取量(主食)",
+          "intervention_code": "LI009",
+          "item_kind": "observation",
+          "manage_no": "31001628",
+          "item_name": "食事摂取量（主食）"
+        },
+        {
+          "activity_type": "op",
+          "text": "体重",
+          "item_kind": "observation",
+          "manage_no": "31000296",
+          "item_name": "体重"
+        },
+        {
+          "activity_type": "tp",
+          "text": "食事を介助する",
+          "intervention_code": "LI009",
+          "item_kind": "act",
+          "code16": "A001B003C026D002",
+          "manage_no": "12000057",
+          "item_name": "食事介助（ハイリスク） 部分介助"
+        },
+        {
+          "activity_type": "ep",
+          "text": "栄養と食品の選び方を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C142D098",
+          "manage_no": "12000277",
+          "item_name": "食事指導 栄養と適正な食品・量"
+        }
+      ],
+      "diagnosis_code": "L0013"
+    },
+    {
+      "code": "LSP014",
+      "name": "誤嚥の予防",
+      "display_order": 14,
+      "goals": [
+        {
+          "text": "むせずに食事ができる",
+          "outcome_code": "LO007"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "むせ",
+          "intervention_code": "LI010",
+          "item_kind": "observation",
+          "manage_no": "31001364",
+          "item_name": "むせ"
+        },
+        {
+          "activity_type": "op",
+          "text": "嚥下困難",
+          "item_kind": "observation",
+          "manage_no": "31000893",
+          "item_name": "嚥下困難"
+        },
+        {
+          "activity_type": "op",
+          "text": "体温",
+          "item_kind": "observation",
+          "manage_no": "31001368",
+          "item_name": "体温"
+        },
+        {
+          "activity_type": "tp",
+          "text": "口腔清拭を行う",
+          "intervention_code": "LI010",
+          "item_kind": "act",
+          "code16": "A001B001C011D000",
+          "manage_no": "12000020",
+          "item_name": "口腔清拭"
+        },
+        {
+          "activity_type": "tp",
+          "text": "嚥下訓練(アイスマッサージ)を行う",
+          "item_kind": "act",
+          "code16": "A003B023C300D299",
+          "manage_no": "12000856",
+          "item_name": "嚥下訓練 間接訓練（アイスマッサージ）"
+        },
+        {
+          "activity_type": "ep",
+          "text": "食べ方と姿勢を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C142D101",
+          "manage_no": "12000280",
+          "item_name": "食事指導 摂食・嚥下方法"
+        }
+      ],
+      "diagnosis_code": "L0014"
+    },
+    {
+      "code": "LSP015",
+      "name": "脱水の予防",
+      "display_order": 15,
+      "goals": [
+        {
+          "text": "脱水の症状がない",
+          "outcome_code": "LO008"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "総水分摂取量",
+          "intervention_code": "LI008",
+          "item_kind": "observation",
+          "manage_no": "31004080",
+          "item_name": "総水分摂取量"
+        },
+        {
+          "activity_type": "op",
+          "text": "尿量",
+          "item_kind": "observation",
+          "manage_no": "31000021",
+          "item_name": "尿量"
+        },
+        {
+          "activity_type": "op",
+          "text": "体温",
+          "item_kind": "observation",
+          "manage_no": "31001368",
+          "item_name": "体温"
+        },
+        {
+          "activity_type": "tp",
+          "text": "飲水を介助する",
+          "intervention_code": "LI008",
+          "item_kind": "act",
+          "code16": "A001B003C365D000",
+          "manage_no": "12001823",
+          "item_name": "飲水介助"
+        },
+        {
+          "activity_type": "ep",
+          "text": "こまめに水分をとるよう説明する",
+          "item_kind": "act",
+          "code16": "A003B020C131D298",
+          "manage_no": "12001518",
+          "item_name": "疾患・症状に対する指導 水分摂取"
+        }
+      ],
+      "diagnosis_code": "L0015"
+    },
+    {
+      "code": "LSP016",
+      "name": "水分の過剰の管理",
+      "display_order": 16,
+      "goals": [
+        {
+          "text": "むくみと息苦しさが和らぐ",
+          "outcome_code": "LO008"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "浮腫",
+          "intervention_code": "LI008",
+          "item_kind": "observation",
+          "manage_no": "31000468",
+          "item_name": "浮腫"
+        },
+        {
+          "activity_type": "op",
+          "text": "体重",
+          "item_kind": "observation",
+          "manage_no": "31000296",
+          "item_name": "体重"
+        },
+        {
+          "activity_type": "op",
+          "text": "尿量",
+          "item_kind": "observation",
+          "manage_no": "31000021",
+          "item_name": "尿量"
+        },
+        {
+          "activity_type": "op",
+          "text": "呼吸困難感",
+          "item_kind": "observation",
+          "manage_no": "31000522",
+          "item_name": "呼吸困難感"
+        },
+        {
+          "activity_type": "tp",
+          "text": "下肢を挙上する"
+        },
+        {
+          "activity_type": "ep",
+          "text": "水分制限の目的と方法を説明する",
+          "item_kind": "act",
+          "code16": "A003B021C183D298",
+          "manage_no": "12000846",
+          "item_name": "生活制限に関するオリエンテーション 水分摂取"
+        }
+      ],
+      "diagnosis_code": "L0016"
+    },
+    {
+      "code": "LSP017",
+      "name": "血糖の管理",
+      "display_order": 17,
+      "goals": [
+        {
+          "text": "低血糖を起こさない",
+          "outcome_code": "LO009"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "血糖値",
+          "intervention_code": "LI011",
+          "item_kind": "observation",
+          "manage_no": "31000303",
+          "item_name": "血糖値"
+        },
+        {
+          "activity_type": "op",
+          "text": "食事摂取量(主食)",
+          "item_kind": "observation",
+          "manage_no": "31001628",
+          "item_name": "食事摂取量（主食）"
+        },
+        {
+          "activity_type": "tp",
+          "text": "低血糖時の対応を準備する",
+          "intervention_code": "LI011"
+        },
+        {
+          "activity_type": "ep",
+          "text": "低血糖の症状と対処を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C148D255",
+          "manage_no": "12000747",
+          "item_name": "糖尿病管理の指導 低血糖時の対処方法"
+        },
+        {
+          "activity_type": "ep",
+          "text": "フットケアの方法を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C137D000",
+          "manage_no": "12000263",
+          "item_name": "フットケアの指導"
+        }
+      ],
+      "diagnosis_code": "L0017"
+    },
+    {
+      "code": "LSP018",
+      "name": "尿失禁のケア",
+      "display_order": 18,
+      "goals": [
+        {
+          "text": "尿漏れが減る",
+          "outcome_code": "LO010"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "尿失禁の有無",
+          "intervention_code": "LI014",
+          "item_kind": "observation",
+          "manage_no": "31000318",
+          "item_name": "尿失禁"
+        },
+        {
+          "activity_type": "op",
+          "text": "尿回数",
+          "item_kind": "observation",
+          "manage_no": "31000027",
+          "item_name": "尿回数"
+        },
+        {
+          "activity_type": "tp",
+          "text": "時間を決めてトイレに誘導する",
+          "intervention_code": "LI014",
+          "item_kind": "act",
+          "code16": "A001B004C044D000",
+          "manage_no": "12000090",
+          "item_name": "トイレ誘導"
+        },
+        {
+          "activity_type": "tp",
+          "text": "陰部洗浄を行う",
+          "item_kind": "act",
+          "code16": "A001B001C009D000",
+          "manage_no": "12000018",
+          "item_name": "陰部洗浄"
+        },
+        {
+          "activity_type": "ep",
+          "text": "骨盤底筋の体操を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ],
+      "diagnosis_code": "L0018"
+    },
+    {
+      "code": "LSP019",
+      "name": "便秘のケア",
+      "display_order": 19,
+      "goals": [
+        {
+          "text": "2〜3日に1回、苦痛なく排便がある",
+          "outcome_code": "LO011"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "便の性状",
+          "intervention_code": "LI015",
+          "item_kind": "observation",
+          "manage_no": "31000038",
+          "item_name": "便性状"
+        },
+        {
+          "activity_type": "op",
+          "text": "腸蠕動音",
+          "item_kind": "observation",
+          "manage_no": "31000929",
+          "item_name": "腸蠕動音"
+        },
+        {
+          "activity_type": "op",
+          "text": "排ガス",
+          "item_kind": "observation",
+          "manage_no": "31000954",
+          "item_name": "排ガス"
+        },
+        {
+          "activity_type": "tp",
+          "text": "腹部のマッサージを行う",
+          "intervention_code": "LI015",
+          "item_kind": "act",
+          "code16": "A001B004C033D018",
+          "manage_no": "12000073",
+          "item_name": "腸管運動促進 腹部マッサージ"
+        },
+        {
+          "activity_type": "tp",
+          "text": "腹部を温める",
+          "item_kind": "act",
+          "code16": "A001B004C033D017",
+          "manage_no": "12000072",
+          "item_name": "腸管運動促進 腹部罨法"
+        },
+        {
+          "activity_type": "ep",
+          "text": "水分と食物繊維をとるよう説明する",
+          "intervention_code": "LI015",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ],
+      "diagnosis_code": "L0019"
+    },
+    {
+      "code": "LSP020",
+      "name": "下痢のケア",
+      "display_order": 20,
+      "goals": [
+        {
+          "text": "下痢が治まり、肛門周囲の皮膚が保たれる",
+          "outcome_code": "LO011"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "便の性状",
+          "item_kind": "observation",
+          "manage_no": "31003849",
+          "item_name": "便性状（ブリストルスケール）"
+        },
+        {
+          "activity_type": "op",
+          "text": "総水分摂取量",
+          "item_kind": "observation",
+          "manage_no": "31004080",
+          "item_name": "総水分摂取量"
+        },
+        {
+          "activity_type": "tp",
+          "text": "陰部洗浄を行う",
+          "item_kind": "act",
+          "code16": "A001B001C009D000",
+          "manage_no": "12000018",
+          "item_name": "陰部洗浄"
+        },
+        {
+          "activity_type": "tp",
+          "text": "肛門周囲の皮膚を保護する",
+          "item_kind": "act",
+          "code16": "A001B001C018D447",
+          "manage_no": "12001697",
+          "item_name": "皮膚の保湿"
+        },
+        {
+          "activity_type": "ep",
+          "text": "水分をとるよう説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ],
+      "diagnosis_code": "L0020"
+    },
+    {
+      "code": "LSP021",
+      "name": "痰を出しやすくする",
+      "display_order": 21,
+      "goals": [
+        {
+          "text": "痰を自分で出せる",
+          "outcome_code": "LO013"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "喀痰の性状",
+          "intervention_code": "LI006",
+          "item_kind": "observation",
+          "manage_no": "31000569",
+          "item_name": "喀痰粘稠度"
+        },
+        {
+          "activity_type": "op",
+          "text": "喀出の状況",
+          "item_kind": "observation",
+          "manage_no": "31000568",
+          "item_name": "喀痰喀出状況"
+        },
+        {
+          "activity_type": "op",
+          "text": "呼吸音の減弱",
+          "item_kind": "observation",
+          "manage_no": "31000541",
+          "item_name": "呼吸音減弱"
+        },
+        {
+          "activity_type": "tp",
+          "text": "排痰を援助する",
+          "intervention_code": "LI006",
+          "item_kind": "act",
+          "code16": "A001B009C074D000",
+          "manage_no": "12000171",
+          "item_name": "排痰"
+        },
+        {
+          "activity_type": "tp",
+          "text": "必要時に吸引する",
+          "intervention_code": "LI006",
+          "item_kind": "act",
+          "code16": "A001B009C075D000",
+          "manage_no": "12000172",
+          "item_name": "経鼻吸引"
+        },
+        {
+          "activity_type": "ep",
+          "text": "呼吸訓練の方法を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C147D117",
+          "manage_no": "12000297",
+          "item_name": "呼吸管理の指導 呼吸訓練"
+        }
+      ],
+      "diagnosis_code": "L0021"
+    },
+    {
+      "code": "LSP022",
+      "name": "呼吸の援助",
+      "display_order": 22,
+      "goals": [
+        {
+          "text": "息苦しさが和らぐ",
+          "outcome_code": "LO012"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "呼吸数",
+          "intervention_code": "LI007",
+          "item_kind": "observation",
+          "manage_no": "31001369",
+          "item_name": "呼吸数"
+        },
+        {
+          "activity_type": "op",
+          "text": "呼吸困難感",
+          "item_kind": "observation",
+          "manage_no": "31000522",
+          "item_name": "呼吸困難感"
+        },
+        {
+          "activity_type": "op",
+          "text": "チアノーゼ",
+          "item_kind": "observation",
+          "manage_no": "31000544",
+          "item_name": "チアノーゼ"
+        },
+        {
+          "activity_type": "tp",
+          "text": "指示どおりに酸素を投与する",
+          "intervention_code": "LI007",
+          "item_kind": "act",
+          "code16": "A001B009C081D060",
+          "manage_no": "12000178",
+          "item_name": "酸素吸入 鼻カニューレ"
+        },
+        {
+          "activity_type": "tp",
+          "text": "上体を起こした姿勢を整える",
+          "intervention_code": "LI007"
+        },
+        {
+          "activity_type": "ep",
+          "text": "楽な呼吸の方法を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C147D117",
+          "manage_no": "12000297",
+          "item_name": "呼吸管理の指導 呼吸訓練"
+        }
+      ],
+      "diagnosis_code": "L0022"
+    },
+    {
+      "code": "LSP023",
+      "name": "出血の予防",
+      "display_order": 23,
+      "goals": [
+        {
+          "text": "出血がない",
+          "outcome_code": "LO022"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "出血量",
+          "intervention_code": "LI021",
+          "item_kind": "observation",
+          "manage_no": "31000294",
+          "item_name": "出血量"
+        },
+        {
+          "activity_type": "tp",
+          "text": "転倒や打撲を防ぐ環境を整える",
+          "intervention_code": "LI021"
+        },
+        {
+          "activity_type": "ep",
+          "text": "出血したときはすぐ伝えるよう説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ],
+      "diagnosis_code": "L0023"
+    },
+    {
+      "code": "LSP024",
+      "name": "せん妄の予防",
+      "display_order": 24,
+      "goals": [
+        {
+          "text": "せん妄を起こさない",
+          "outcome_code": "LO018"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "夜間のせん妄",
+          "intervention_code": "LI022",
+          "item_kind": "observation",
+          "manage_no": "31004117",
+          "item_name": "夜間せん妄"
+        },
+        {
+          "activity_type": "op",
+          "text": "失見当識",
+          "item_kind": "observation",
+          "manage_no": "31001238",
+          "item_name": "失見当識"
+        },
+        {
+          "activity_type": "op",
+          "text": "睡眠時間",
+          "item_kind": "observation",
+          "manage_no": "31000404",
+          "item_name": "睡眠時間"
+        },
+        {
+          "activity_type": "tp",
+          "text": "昼夜のリズムを整える",
+          "intervention_code": "LI022"
+        },
+        {
+          "activity_type": "ep",
+          "text": "家族に面会を勧める",
+          "intervention_code": "LI022",
+          "item_kind": "act",
+          "code16": "A003B020C372D446",
+          "manage_no": "12001949",
+          "item_name": "家族、親族への指導"
+        }
+      ],
+      "diagnosis_code": "L0024"
+    },
+    {
+      "code": "LSP025",
+      "name": "混乱のある人の安全と安心",
+      "display_order": 25,
+      "goals": [
+        {
+          "text": "けがをせずに落ち着いて過ごせる",
+          "outcome_code": "LO018"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "せん妄",
+          "item_kind": "observation",
+          "manage_no": "31001182",
+          "item_name": "せん妄"
+        },
+        {
+          "activity_type": "op",
+          "text": "危険行動(転落)",
+          "item_kind": "observation",
+          "manage_no": "31002779",
+          "item_name": "危険行動（転落）"
+        },
+        {
+          "activity_type": "tp",
+          "text": "日付と場所を会話の中で伝える",
+          "intervention_code": "LI018"
+        },
+        {
+          "activity_type": "tp",
+          "text": "ベッド柵を確認する",
+          "item_kind": "act",
+          "code16": "A001B006C052D032",
+          "manage_no": "12000119",
+          "item_name": "転落防止ケア ベッド柵確認"
+        },
+        {
+          "activity_type": "ep",
+          "text": "家族に関わり方を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D446",
+          "manage_no": "12001949",
+          "item_name": "家族、親族への指導"
+        }
+      ],
+      "diagnosis_code": "L0025"
+    },
+    {
+      "code": "LSP026",
+      "name": "療養の知識の習得",
+      "display_order": 26,
+      "goals": [
+        {
+          "text": "病気と治療について自分の言葉で説明できる",
+          "outcome_code": "LO019"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "理解の程度"
+        },
+        {
+          "activity_type": "tp",
+          "text": "資料を使って段階的に説明する",
+          "intervention_code": "LI019"
+        },
+        {
+          "activity_type": "ep",
+          "text": "退院後の生活について説明する",
+          "intervention_code": "LI019",
+          "item_kind": "act",
+          "code16": "A003B024C209D445",
+          "manage_no": "12001674",
+          "item_name": "退院後の生活に対する指導 本人"
+        }
+      ],
+      "diagnosis_code": "L0026"
+    },
+    {
+      "code": "LSP027",
+      "name": "治療の継続の支援",
+      "display_order": 27,
+      "goals": [
+        {
+          "text": "服薬を忘れずに続けられる",
+          "outcome_code": "LO020"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "服薬の状況"
+        },
+        {
+          "activity_type": "tp",
+          "text": "服薬の確認方法を一緒に決める"
+        },
+        {
+          "activity_type": "ep",
+          "text": "薬の管理方法を説明する",
+          "intervention_code": "LI019",
+          "item_kind": "act",
+          "code16": "A003B020C132D403",
+          "manage_no": "12001169",
+          "item_name": "内服薬の管理方法"
+        }
+      ],
+      "diagnosis_code": "L0027"
+    },
+    {
+      "code": "LSP028",
+      "name": "家族の介護負担の軽減",
+      "display_order": 28,
+      "goals": [
+        {
+          "text": "家族が無理なく介護を続けられる",
+          "outcome_code": "LO021"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "家族の疲労の訴え"
+        },
+        {
+          "activity_type": "tp",
+          "text": "家族の思いを聞く",
+          "intervention_code": "LI020"
+        },
+        {
+          "activity_type": "ep",
+          "text": "介護の方法を家族に説明する",
+          "intervention_code": "LI020",
+          "item_kind": "act",
+          "code16": "A003B020C372D446",
+          "manage_no": "12001949",
+          "item_name": "家族、親族への指導"
+        }
+      ],
+      "diagnosis_code": "L0028"
+    },
+    {
+      "code": "LSP029",
+      "name": "思いを伝える手段の確保",
+      "diagnosis_code": "L0029",
+      "display_order": 29,
+      "goals": [
+        {
+          "text": "本人が使える方法で思いを伝えられる",
+          "outcome_code": "LO017"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "伝えたいことが伝わっているか"
+        },
+        {
+          "activity_type": "tp",
+          "text": "文字盤や筆談具を手の届く所に置く"
+        },
+        {
+          "activity_type": "ep",
+          "text": "家族に伝え方を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D446",
+          "manage_no": "12001949",
+          "item_name": "家族、親族への指導"
+        }
+      ]
+    },
+    {
+      "code": "LSP030",
+      "name": "体の変化の受け止めの支援",
+      "diagnosis_code": "L0030",
+      "display_order": 30,
+      "goals": [
+        {
+          "text": "変化した部位のケアに参加できる",
+          "outcome_code": "LO019"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "不安の訴え",
+          "item_kind": "observation",
+          "manage_no": "31000405",
+          "item_name": "不安"
+        },
+        {
+          "activity_type": "tp",
+          "text": "話を傾聴する",
+          "intervention_code": "LI017",
+          "item_kind": "act",
+          "code16": "A002B016C120D084",
+          "manage_no": "12000245",
+          "item_name": "訴えの傾聴"
+        },
+        {
+          "activity_type": "ep",
+          "text": "ストーマ周囲のスキンケアを説明する",
+          "item_kind": "act",
+          "code16": "A003B020C145D109",
+          "manage_no": "12000289",
+          "item_name": "ストーマ周囲スキンケア"
+        }
+      ]
+    },
+    {
+      "code": "LSP031",
+      "name": "性の機能への心配の支援",
+      "diagnosis_code": "L0031",
+      "display_order": 31,
+      "goals": [
+        {
+          "text": "心配を言葉にして相談できる",
+          "outcome_code": "LO017"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "心配の内容"
+        },
+        {
+          "activity_type": "tp",
+          "text": "話せる場所と時間を整える",
+          "intervention_code": "LI017"
+        },
+        {
+          "activity_type": "ep",
+          "text": "相談できる窓口を紹介する",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ]
+    },
+    {
+      "code": "LSP032",
+      "name": "治療の意思決定の支援",
+      "diagnosis_code": "L0032",
+      "display_order": 32,
+      "goals": [
+        {
+          "text": "納得して治療を選べる",
+          "outcome_code": "LO019"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "本人が大切にしていること"
+        },
+        {
+          "activity_type": "tp",
+          "text": "医師との話し合いの場を調整する"
+        },
+        {
+          "activity_type": "ep",
+          "text": "治療の利点と負担を説明する",
+          "intervention_code": "LI019",
+          "item_kind": "act",
+          "code16": "A003B020C372D445",
+          "manage_no": "12001948",
+          "item_name": "患者への指導"
+        }
+      ]
+    },
+    {
+      "code": "LSP033",
+      "name": "成長・発達の支援",
+      "diagnosis_code": "L0033",
+      "display_order": 33,
+      "goals": [
+        {
+          "text": "年齢に応じた体重の増加がある",
+          "outcome_code": "LO006"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "体重",
+          "item_kind": "observation",
+          "manage_no": "31000296",
+          "item_name": "体重"
+        },
+        {
+          "activity_type": "tp",
+          "text": "遊びや学習の時間をつくる"
+        },
+        {
+          "activity_type": "ep",
+          "text": "家族に関わり方を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D446",
+          "manage_no": "12001949",
+          "item_name": "家族、親族への指導"
+        }
+      ]
+    },
+    {
+      "code": "LSP101",
+      "name": "手術前の準備",
+      "display_order": 34,
+      "goals": [
+        {
+          "text": "不安なく手術に臨める",
+          "outcome_code": "LO017"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "不安",
+          "item_kind": "observation",
+          "manage_no": "31000405",
+          "item_name": "不安"
+        },
+        {
+          "activity_type": "tp",
+          "text": "術前オリエンテーションを行う",
+          "item_kind": "act",
+          "code16": "A003B021C172D000",
+          "manage_no": "12000329",
+          "item_name": "術前オリエンテーション"
+        },
+        {
+          "activity_type": "ep",
+          "text": "深呼吸の練習を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C280D221",
+          "manage_no": "12000702",
+          "item_name": "術前訓練の指導 深呼吸"
+        },
+        {
+          "activity_type": "ep",
+          "text": "禁煙を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C280D220",
+          "manage_no": "12000701",
+          "item_name": "術前訓練の指導 禁煙"
+        }
+      ]
+    },
+    {
+      "code": "LSP102",
+      "name": "退院に向けた支援",
+      "display_order": 35,
+      "goals": [
+        {
+          "text": "退院後の生活の注意点を理解できる",
+          "outcome_code": "LO019"
+        }
+      ],
+      "activities": [
+        {
+          "activity_type": "op",
+          "text": "理解の程度"
+        },
+        {
+          "activity_type": "ep",
+          "text": "退院後の生活について説明する",
+          "item_kind": "act",
+          "code16": "A003B024C209D445",
+          "manage_no": "12001674",
+          "item_name": "退院後の生活に対する指導 本人"
+        },
+        {
+          "activity_type": "ep",
+          "text": "家族に退院後の生活を説明する",
+          "item_kind": "act",
+          "code16": "A003B020C372D446",
+          "manage_no": "12001949",
+          "item_name": "家族、親族への指導"
+        }
       ]
     }
   ]
