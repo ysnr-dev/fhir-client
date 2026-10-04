@@ -66,14 +66,12 @@ module BillingFhirFixtures
     def read_or_nil(type, id) = @resources[type].find { |r| r["id"] == id }
   end
 
-  # 処方のヘッダは order-type を持たない(それで処方と判定する規約)。
   def order_header(order_type:, id: "hdr-1", date: "2026-09-20", status: "active", name: nil)
-    category = if order_type == "prescription"
-                 [{ "coding" => [{ "system" => "#{ORDER_TYPE.sub('order-type', 'prescription-setting')}",
-                                   "code" => "outpatient" }] }]
-               else
-                 [{ "coding" => [{ "system" => ORDER_TYPE, "code" => order_type }] }]
-               end
+    category = [{ "coding" => [{ "system" => ORDER_TYPE, "code" => order_type }] }]
+    if order_type == "prescription"
+      category << { "coding" => [{ "system" => "#{ORDER_TYPE.sub('order-type', 'prescription-setting')}",
+                                   "code" => "outpatient" }] }
+    end
     {
       "resourceType" => "ServiceRequest", "id" => id, "status" => status,
       "authoredOn" => "#{date}T09:00:00+09:00", "occurrenceDateTime" => "#{date}T10:00:00+09:00",

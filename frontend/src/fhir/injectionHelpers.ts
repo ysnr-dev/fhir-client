@@ -567,8 +567,7 @@ export function injectionTimesLabel(times: InjectionTimeValues[]): string {
 
 // ---- FHIR リソースの組み立て ----
 
-// ServiceRequest が注射オーダーかどうか。処方(order-type を持たない。種別が無いものを
-// 処方とする)との振り分けに使うため、category のローカルコードだけを見る。
+// ServiceRequest が注射オーダーかどうか。category のオーダー種別だけを見る。
 export function isInjectionServiceRequest(sr: fhir4.ServiceRequest): boolean {
   return (sr.category ?? []).some((category) =>
     category.coding?.some(
@@ -760,8 +759,7 @@ function buildInjectionMedicationRequest(
   return resource;
 }
 
-// 処方の buildPrescriptionTransactionBundle と同じ構成。ServiceRequest の category に
-// オーダー種別(注射)を持たせる点と、orderDetail の拡張 URL を共用する点だけ異なる。
+// 処方の buildPrescriptionTransactionBundle と同じ構成。orderDetail の拡張 URL も共用する。
 const ORDER_DETAIL_MR_EXT_URL =
   "http://fhir-client.local/StructureDefinition/prescription-medication-request";
 

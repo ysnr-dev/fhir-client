@@ -34,15 +34,13 @@ export { codingBySystem, SETTING_OPTIONS };
 // (URI の "prescription-" は登録済みデータと揃えるためそのまま)。
 
 /**
- * 処方のオーダー種別。**ServiceRequest には付けない**(種別を持たない ServiceRequest が
- * 処方という上の取り決めを壊すため)。内服の与薬の実施記録(Procedure /
- * MedicationAdministration)を注射・処置の記録と振り分けるのに使う。
+ * 処方のオーダー種別。ヘッダ ServiceRequest の category の先頭に持たせるほか、内服の与薬の
+ * 実施記録(Procedure / MedicationAdministration)を注射・処置の記録と振り分けるのにも使う。
  */
 export const PRESCRIPTION_ORDER_TYPE = { code: "prescription", display: "処方" };
 
 export const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting";
-// 処方区分。処方オーダーだけが持つ CodeSystem なので、処方一覧では上流の
-// category 検索(system のみ指定)で処方オーダーだけを絞り込むのにも使う。
+// 処方区分。
 export const PRESCRIPTION_CATEGORY_SYSTEM =
   "http://fhir-client.local/CodeSystem/prescription-category";
 const ORDER_DETAIL_MR_EXT_URL =
@@ -457,6 +455,7 @@ function buildPrescriptionTransactionBundle(
     status: "active",
     intent: "order",
     category: [
+      { coding: [{ system: ORDER_TYPE_SYSTEM, ...PRESCRIPTION_ORDER_TYPE }] },
       {
         coding: [
           { system: SETTING_SYSTEM, code: values.setting, display: findSettingDisplay(values.setting) },
@@ -619,15 +618,9 @@ export interface PrescriptionSummary {
   medicineCount: number;
 }
 
-/**
- * ServiceRequest が処方オーダーかどうか。処方はオーダー種別(order-type)を持たないので、
- * 種別が無いことで判定する
- * (karteTimeline の振り分けと同じ規約)。
- */
+/** ServiceRequest が処方オーダー(order-type|prescription)かどうか。 */
 export function isPrescriptionServiceRequest(sr: fhir4.ServiceRequest): boolean {
-  return !(sr.category ?? []).some((category) =>
-    category.coding?.some((c) => c.system === ORDER_TYPE_SYSTEM),
-  );
+  return categoryCoding(sr, ORDER_TYPE_SYSTEM)?.code === PRESCRIPTION_ORDER_TYPE.code;
 }
 
 export function summarizeServiceRequest(sr: fhir4.ServiceRequest): PrescriptionSummary {

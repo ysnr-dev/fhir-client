@@ -43,6 +43,7 @@ class PrescriptionReport
   SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting".freeze
   PRESCRIPTION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-category".freeze
   BROUGHT_CATEGORY = "brought".freeze
+  PRESCRIPTION_ORDER_TYPE = "prescription".freeze
   RP_NUMBER_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/IdSystem/Medication-RPGroupNumber".freeze
   ORDER_IN_RP_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/IdSystem/MedicationAdministrationIndex".freeze
   MEDICINE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-code".freeze
@@ -88,12 +89,9 @@ class PrescriptionReport
 
   attr_reader :order_id, :gateway
 
-  # 処方オーダーは order-type を持たない(種別が無いものを処方とする。
-  # frontend の isPrescriptionServiceRequest と同じ判定)。
+  # frontend の isPrescriptionServiceRequest と同じ判定(order-type|prescription)。
   def prescription_order?(order)
-    Array(order["category"]).none? do |category|
-      Array(category["coding"]).any? { |coding| coding["system"] == ORDER_TYPE_SYSTEM }
-    end
+    category_code(order, ORDER_TYPE_SYSTEM) == PRESCRIPTION_ORDER_TYPE
   end
 
   # 院外処方(外来 かつ 処方区分「院外」)だけが国の様式。院内・入院すべてと、

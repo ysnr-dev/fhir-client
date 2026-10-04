@@ -25,7 +25,7 @@
 |---|---|---|
 | `:procedure` | rad / physio / endoscopy / treatment / surgery / injection(Phase 2〜: transfusion / rehab / radiotherapy / nutrition-guidance) | `Procedure?subject&date=当日&status=completed&_revinclude=Procedure:part-of&_revinclude:iterate=MedicationAdministration:part-of` → ハブ(`partOf` 無し、category = order-type)ごとに 1 剤 |
 | `:order` | lab / micro(Phase 3: pathology) | ヘッダ SR を `occurrence=当日` で集め、明細 SR を `_revinclude=ServiceRequest:based-on` |
-| 処方 | prescription | 同じ検索の `_revinclude:iterate=MedicationRequest:based-on`。処方のヘッダは order-type を持たない(それで処方と判定する frontend の規約と同じ)。RP 番号ごとに 1 剤 |
+| 処方 | prescription | 同じ検索の `_revinclude:iterate=MedicationRequest:based-on`。処方のヘッダは `order-type|prescription`。RP 番号ごとに 1 剤 |
 
 ［事実］上流への往復は Procedure 1 回 + ServiceRequest 1 回。Task の照会は「実施記録が無いのに
 実施入力不要の項目だけのオーダー」があるときだけ 1 オーダー 1 回。

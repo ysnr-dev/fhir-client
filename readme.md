@@ -648,6 +648,9 @@ CSRF はチャート定義と同じ `/master` の基底)。
   頓用なら「投与回数」、頓用でない内服なら「投与日数」を入力します。判定は
   `fhir/medicationScheduleHelpers.ts` の `isAsNeededUsage` と `fhir/prescriptionHelpers.ts` の
   `hasDoseDays` に集約していて、フォーム・調剤登録・カードの表示が同じ関数を通ります。
+- **オーダー種別**: ほかのオーダーと同じく `ServiceRequest.category` の先頭にオーダー種別
+  `order-type|prescription` を持ち、処方一覧・カルテ・経過表などはこの種別で引きます。続けて入外区分
+  (`.../prescription-setting`)と処方区分(`.../prescription-category`)を入れます。
 - **入院のオーダー**: 入院中に登録した処方は `ServiceRequest.encounter` にその入院を入れます
   (与薬の実施記録がここから Encounter を写します)。
 - **処方区分の初期値**: 入外区分で選択肢が違う(入院=定期/継続/臨時/退院/緊急、外来=院外/院内)ので、
@@ -698,7 +701,7 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
 - **処方との判別**: `ServiceRequest.category` にローカルのオーダー種別
   (`http://fhir-client.local/CodeSystem/order-type` = `injection`)を付与します。カルテの
   タイムラインは処方と同じ `ServiceRequest` 検索(1本のページング)で取得し、この category で
-  処方カード/注射カードに振り分けます(処方の `ServiceRequest` はオーダー種別を持たない)。
+  処方カード/注射カードに振り分けます(処方は `order-type|prescription`)。
 - **入外区分・注射区分**: `category` にはオーダー種別に続けてこの2つも入れます。入外区分
   (入院/外来)は処方と同じコードシステム(`.../prescription-setting`)を共用し、注射区分は
   選択肢が処方と異なるため専用のコードシステム(`.../injection-category`)にしています

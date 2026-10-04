@@ -22,7 +22,7 @@ import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import {
   groupByRp,
   isPrescriptionServiceRequest,
-  PRESCRIPTION_CATEGORY_SYSTEM,
+  PRESCRIPTION_ORDER_TYPE,
 } from "../../fhir/prescriptionHelpers";
 import { rpEndDate } from "../../fhir/medicationScheduleHelpers";
 import { type ActiveMedication, ingredientKey } from "../../fhir/medicationSafetyHelpers";
@@ -601,10 +601,7 @@ export function useInjectionDayOrders(srIds: string[]) {
 /**
  * 経過表の内服欄に出す、その期間にかかる入院処方と与薬の記録。
  *
- * 処方の ServiceRequest は order-type の category を持たない(持たないこと自体が処方の
- * 印)ので、注射のように種別で絞れない。処方だけが持つ `PRESCRIPTION_CATEGORY_SYSTEM` を
- * **system だけ指定**して絞り(処方ワークリストと同じ手)、入外区分と処方かどうかの最終
- * 判定はクライアントで行う。
+ * 処方のオーダー種別で絞り、入外区分の判定はクライアントで行う。
  *
  * 処方は 1 件が投与日数ぶん続くので、期間の開始より前に始まったものも要る。投与日数は
  * 上流で索引できないため、下限は「期間の開始 − 92 日」で引く(注射の連日展開の上限
@@ -620,7 +617,7 @@ export function usePatientOralPrescriptions(
     queryFn: async (): Promise<FlowsheetOralData & { truncated: boolean }> => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
-      params.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
+      params.set("category", `${ORDER_TYPE_SYSTEM}|${PRESCRIPTION_ORDER_TYPE.code}`);
       params.append("occurrence", `ge${addDays(rangeStart, -ORAL_LOOKBACK_DAYS)}`);
       params.append("occurrence", `le${rangeEnd}`);
       return fetchOrdersWithPerforms(params);
@@ -644,7 +641,7 @@ export function useActiveMedications(patientId: string | undefined, onDate: stri
     queryFn: async (): Promise<ActiveMedication[]> => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
-      params.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
+      params.set("category", `${ORDER_TYPE_SYSTEM}|${PRESCRIPTION_ORDER_TYPE.code}`);
       params.append("occurrence", `ge${rangeStart}`);
       params.append("occurrence", `le${onDate}`);
       params.append("_revinclude", "MedicationRequest:based-on");

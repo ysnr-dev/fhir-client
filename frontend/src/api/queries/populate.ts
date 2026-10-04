@@ -4,7 +4,8 @@ import type { PatientCaution } from "../masterClient";
 import { usePatientCautions } from "../masterQueries";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../../fhir/infectionHelpers";
 import type { PopulateSources } from "../../fhir/populateContext";
-import { PRESCRIPTION_CATEGORY_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
+import { PRESCRIPTION_ORDER_TYPE } from "../../fhir/prescriptionHelpers";
 import { today as todayString } from "../../lib/dates";
 import { useAuthSession } from "../authQueries";
 import { searchResource } from "../fhirClient";
@@ -68,8 +69,7 @@ export function usePopulateSources(patientId: string | undefined) {
 
   const rxParams = new URLSearchParams();
   if (patientId) rxParams.set("patient", `Patient/${patientId}`);
-  // 処方だけが持つ処方区分の system で絞る(注射も同じ ServiceRequest として保存されるため)。
-  rxParams.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
+  rxParams.set("category", `${ORDER_TYPE_SYSTEM}|${PRESCRIPTION_ORDER_TYPE.code}`);
   rxParams.set("_count", "1");
   rxParams.set("_sort", "-authoredon");
   rxParams.set("_revinclude", "MedicationRequest:based-on");

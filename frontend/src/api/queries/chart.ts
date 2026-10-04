@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { INJECTION_ORDER_TYPE } from "../../fhir/injectionHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
-import { PRESCRIPTION_CATEGORY_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { PRESCRIPTION_ORDER_TYPE } from "../../fhir/prescriptionHelpers";
 import { addDays } from "../../fhir/scheduleHelpers";
 import { ORAL_LOOKBACK_DAYS, type PagedItems, resourcesOfType, searchAllPages } from "./core";
 
@@ -164,8 +164,7 @@ export function usePatientChartPrescriptions(
     queryFn: () =>
       fetchChartMedicationOrders(
         patientId ?? "",
-        // 処方はオーダー種別(order-type)を持たず、処方区分の system で見分ける。
-        `${PRESCRIPTION_CATEGORY_SYSTEM}|`,
+        `${ORDER_TYPE_SYSTEM}|${PRESCRIPTION_ORDER_TYPE.code}`,
         // 飲み始めが範囲より前でも、範囲に掛かっていれば出したいので少し遡って引く。
         ORAL_LOOKBACK_DAYS,
         rangeStart,

@@ -40,15 +40,12 @@ ServiceRequest(処方。投与開始日と RP を持つ)
            dosage  = 用量(オーダーから写す)
 ```
 
-### 2.1 ServiceRequest には order-type を付けない
+### 2.1 オーダー種別は SR と実施記録で同じ
 
-`Procedure` / `MedicationAdministration` の `category` には
-`order-type|prescription`(`PRESCRIPTION_ORDER_TYPE`)を付けて、注射・処置・手術の記録と
-振り分ける。**この区分を処方の `ServiceRequest` には付けない**。
-
-処方は注射より前から存在するため、「**order-type を持たない ServiceRequest は処方**」という
-取り決めになっている(`isPrescriptionServiceRequest`)。SR に付けると処方一覧・ワークリスト・
-カルテのタイムラインが一斉に壊れる。
+処方のヘッダ `ServiceRequest` も、`Procedure` / `MedicationAdministration` の `category` も
+`order-type|prescription`(`PRESCRIPTION_ORDER_TYPE`)を持つ。SR 側はほかの部門オーダーと同じく
+処方一覧・カルテ・経過表がこの種別で引き(`isPrescriptionServiceRequest`)、実施記録の側は
+注射・処置・手術の記録と振り分けるのに使う。どの種別にも当たらない SR は処方とみなさない。
 
 ### 2.2 「途中で中止」は無い
 

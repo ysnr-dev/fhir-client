@@ -213,9 +213,7 @@ function buildHubProcedure(
     resourceType: "Procedure",
     meta: { profile: [PROCEDURE_PROFILE] },
     status: values.outcome,
-    // 注射・処置・手術の Procedure と振り分けるための区分。処方の ServiceRequest には
-    // order-type を付けない(付けると isPrescriptionServiceRequest が壊れる)ので、
-    // このコードが出てくるのは実施の側だけ。
+    // 注射・処置・手術の Procedure と振り分けるための区分。
     category: { coding: [{ system: ORDER_TYPE_SYSTEM, ...PRESCRIPTION_ORDER_TYPE }] },
     code: { text: "与薬" },
     subject,

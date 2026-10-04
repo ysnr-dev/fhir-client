@@ -5,8 +5,7 @@ import { emptyOrderContext, type OrderContext } from "../orderContext";
 // 拡張で持つ。
 
 // オーダー種別。処方・注射・検体検査はどれも ServiceRequest で保存するので、
-// どの種類のオーダーかを category に持たせて振り分ける(処方は種別を持たず、
-// 種別を持たない ServiceRequest は処方として扱う)。
+// どの種類のオーダーかを category に持たせて振り分ける。
 export const ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type";
 
 // 依頼科(診療科 Organization)。ServiceRequest / MedicationRequest には診療科を持つ

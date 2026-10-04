@@ -25,7 +25,7 @@ import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pa
 import { pathwayOf } from "./pathwayApplyHelpers";
 import type { PathwayEvaluationCard } from "./pathwayKarteHelpers";
 import { departmentOf, ORDER_TYPE_SYSTEM } from "./orderHeader";
-import { prescriptionProblem } from "./prescriptionHelpers";
+import { isPrescriptionServiceRequest, prescriptionProblem } from "./prescriptionHelpers";
 import { categoryCoding } from "./shared";
 import {
   isRadServiceRequest,
@@ -186,8 +186,8 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
 
 /**
  * オーダーのヘッダ ServiceRequest の種別。buildKarteTimeline の振り分けと同じ順で判定する
- * (明細と看護指示を先に外し、どの種別にも当たらない SR は処方)。カルテ外の一覧
- * (承認待ち)が種別名と詳細モーダルの kind を出すために使う。明細なら null。
+ * (明細と看護指示を先に外す)。カルテ外の一覧(承認待ち)が種別名と詳細モーダルの kind を
+ * 出すために使う。明細と、どの種別にも当たらない SR は null。
  */
 export function orderKindOf(
   sr: fhir4.ServiceRequest,
@@ -198,7 +198,8 @@ export function orderKindOf(
   const departmentKind = departmentOrderKindOf(sr);
   if (departmentKind) return departmentKind;
   if (isInjectionServiceRequest(sr)) return "injection";
-  return "prescription";
+  if (isPrescriptionServiceRequest(sr)) return "prescription";
+  return null;
 }
 
 /**
@@ -801,8 +802,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
 
   // 検体検査・放射線検査の明細(検査項目・構成項目)は ServiceRequest だが単独の
   // カードにはしない。オーダーのヘッダに紐づけて、カードの中身として出す。
-  // 看護指示はカルテのカードにせず指示簿タブで見せる。ここで外さないと下の
-  // 振り分けの最後(どの種別にも当たらない SR は処方)に落ちて処方カードになる。
+  // 看護指示はカルテのカードにせず指示簿タブで見せる。
   // 化学療法のレジメン適用(ヘッダ)も同じで、化学療法タブの暦で見せる(日ごとの
   // 注射・処方は通常のカードとして出る)。
   const orderRequests = serviceRequests.filter(
@@ -811,8 +811,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const itemRequests = serviceRequests.filter(isOrderItemRequest);
 
   // 処方・注射・検体検査・放射線検査は同じ検索結果に混ざって届くので、category の
-  // オーダー種別で振り分ける(処方の ServiceRequest はオーダー種別を持たない。
-  // 種別が無いものを処方とする)。
+  // オーダー種別で振り分ける。どの種別にも当たらない SR はカードにしない。
   // 他科依頼 → それを受けた放射線治療の治療処方。
   const radiotherapyByConsultId = new Map<string, string[]>();
   for (const request of orderRequests) {
@@ -825,7 +824,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     ]);
   }
 
-  const prescriptionItems: KarteTimelineItem[] = orderRequests.map((serviceRequest) => {
+  const prescriptionItems = orderRequests.map((serviceRequest): KarteTimelineItem | null => {
     const base = {
       id: serviceRequest.id ?? "",
       day: orderCardDay(serviceRequest),
@@ -1046,8 +1045,9 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         performs: injectionPerformByOrderId.get(serviceRequest.id ?? "") ?? [],
       };
     }
+    if (!isPrescriptionServiceRequest(serviceRequest)) return null;
     return { ...withMedications, kind: "prescription" as const, label: KARTE_KIND_LABELS.prescription };
-  });
+  }).filter((item): item is KarteTimelineItem => item !== null);
 
   const vitalEntries = groupVitalEntries(
     pickByType<fhir4.Observation>(vitalResources, "Observation"),

@@ -82,12 +82,12 @@ module Integrations
                      }).uniq { |r| [r["resourceType"], r["id"]] }
       end
 
-      # 当日のオーダーのヘッダ。処方オーダーは order-type を持たないので、種別が無いことで
-      # 処方と判定する(frontend の isPrescriptionServiceRequest と同じ規約)。
+      # 当日のオーダーのヘッダ。prescription: true なら処方(order-type|prescription)だけ、
+      # 既定は種別を持つヘッダすべて(処方は OrderCatalog の IGNORED で外れる)。
       # 明細(basedOn を持つ)はヘッダではない。
       def headers_of(requests, date, prescription: false)
         requests.select { |r| r["resourceType"] == "ServiceRequest" && Array(r["basedOn"]).empty? }
-                .select { |r| order_type_of(r).present? != prescription }
+                .select { |r| prescription ? order_type_of(r) == "prescription" : order_type_of(r).present? }
                 .select { |r| alive?(r) && on_date?(r, date) }
       end
 

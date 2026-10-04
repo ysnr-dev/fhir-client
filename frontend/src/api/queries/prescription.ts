@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   buildPrescriptionDeleteBundle,
   isPrescriptionServiceRequest,
-  PRESCRIPTION_CATEGORY_SYSTEM,
+  PRESCRIPTION_ORDER_TYPE,
 } from "../../fhir/prescriptionHelpers";
 import { INJECTION_ORDER_TYPE } from "../../fhir/injectionHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
@@ -21,10 +21,6 @@ import { comparePatientNumber, fetchWorklistBundles, worklistParams } from "./wo
 // された処方」を当日に受け取って開始日の前日までに調剤するため。入院の定期処方は木曜に
 // 出して月曜開始のような形になるので、開始日で引くと月曜まで一覧に出てこない。開始日は
 // 一覧の列で見せる。
-//
-// 処方オーダーはオーダー種別(order-type)を持たない(種別が無いものを処方とする)ので、
-// 検体検査・放射線検査のように種別コードでは引けない。代わりに処方オーダーだけが持つ
-// 処方区分の CodeSystem を system だけ指定して引く(FHIR token 検索の `system|` 形式)。
 
 /** 処方一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
 export interface RxWorklistRow {
@@ -48,8 +44,7 @@ export async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
     (page) => {
-      // 処方区分の system だけで引く(節の冒頭)。注射は別の CodeSystem なので混ざらない。
-      const params = worklistParams(`${PRESCRIPTION_CATEGORY_SYSTEM}|`, date, page, "authoredon");
+      const params = worklistParams(`${ORDER_TYPE_SYSTEM}|${PRESCRIPTION_ORDER_TYPE.code}`, date, page, "authoredon");
       // 処方明細も同じ応答に添えてもらう。
       params.set("_revinclude", "MedicationRequest:based-on");
       params.append("_revinclude", "Task:focus");
@@ -60,8 +55,6 @@ export async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
         medicationRequests.push(resource as fhir4.MedicationRequest);
       } else if (resource.resourceType === "ServiceRequest") {
         const request = resource as fhir4.ServiceRequest;
-        // 検索で絞り込んではいるが、オーダー種別を持たないことも確かめてから並べる
-        // (注射・検体検査が処方として混ざらないようにする最後の砦)。
         if (isPrescriptionServiceRequest(request) && !request.basedOn?.length) {
           orders.push(request);
           return true;
@@ -119,10 +112,10 @@ export async function fetchRecentMedicationRequests(
 ): Promise<fhir4.MedicationRequest[]> {
   const params = new URLSearchParams();
   params.set("patient", `Patient/${patientId}`);
-  // 処方(処方区分の system を持つ)と注射(オーダー種別)のヘッダだけ。
+  // 処方と注射のヘッダだけ。
   params.set(
     "category",
-    `${PRESCRIPTION_CATEGORY_SYSTEM}|,${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`,
+    `${ORDER_TYPE_SYSTEM}|${PRESCRIPTION_ORDER_TYPE.code},${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`,
   );
   params.set("based-on:missing", "true");
   params.set("_sort", "-authoredon");

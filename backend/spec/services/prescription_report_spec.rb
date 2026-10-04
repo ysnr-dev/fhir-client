@@ -18,6 +18,7 @@ RSpec.describe PrescriptionReport do
       "resourceType" => "ServiceRequest",
       "id" => "o1",
       "category" => [
+        { "coding" => [{ "system" => described_class::ORDER_TYPE_SYSTEM, "code" => "prescription" }] },
         { "coding" => [{ "system" => described_class::SETTING_SYSTEM, "code" => setting }] },
         { "coding" => [{ "system" => described_class::PRESCRIPTION_CATEGORY_SYSTEM, "code" => category }] }
       ],
@@ -156,7 +157,7 @@ RSpec.describe PrescriptionReport do
 
   it "falls back to the internal layout when the category is missing" do
     stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)],
-               order_body: order.except("category"))
+               order_body: order.merge("category" => order["category"].first(1)))
     captured = capture_renderer
 
     described_class.new("o1", gateway: gateway).generate

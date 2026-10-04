@@ -18,8 +18,7 @@ import { isTreatmentServiceRequest, treatmentOrderProblem } from "./treatmentOrd
 // components/orderKindRegistry.tsx)。種別を足すときはここに 1 行足す ——
 // カルテの種別名・ヘッダからの種別判定・プロブレムの読み出し・URL の種別はここから回る。
 //
-// 処方と注射は入っていない。どの種別にも当たらない ServiceRequest が処方、という
-// 判定の順序があり、レジメンの印などカードの組み立ても別なので karteTimeline が直接扱う。
+// 処方と注射は入っていない。レジメンの印などカードの組み立てが別なので karteTimeline が直接扱う。
 
 export const ORDER_KINDS = [
   "lab-order",
