@@ -2,15 +2,16 @@ import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
-  PRIORITY_OPTIONS,
   categoryCoding,
   displayOf,
   itemNumber,
   orderComment,
   orderDay,
   parentRequestId,
-  registrationAuthoredOn,
+  PRIORITY_OPTIONS,
   priorityDisplay,
+  registrationAuthoredOn,
+  resourcesOfType,
   withVersionLock,
 } from "./shared";
 
@@ -649,9 +650,7 @@ export function labOrderItems(
 
 /** 検索結果の Bundle から ServiceRequest だけを取り出す(ヘッダと明細が混ざって届く)。 */
 export function serviceRequestsOf(bundle: fhir4.Bundle | undefined): fhir4.ServiceRequest[] {
-  return (bundle?.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter((resource): resource is fhir4.ServiceRequest => resource?.resourceType === "ServiceRequest");
+  return resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest");
 }
 
 /** ServiceRequest の一覧から、指定のオーダーにぶら下がる明細だけを取り出す。 */

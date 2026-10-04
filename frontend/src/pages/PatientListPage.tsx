@@ -5,6 +5,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { Pagination } from "../components/Pagination";
 import { PatientSearchForm } from "../components/PatientSearchForm";
 import { PatientTable } from "../components/PatientTable";
+import { resourcesOfType } from "../fhir/shared";
 
 export function PatientListPage() {
   const [search, setSearch] = useState<PatientSearchParams>({});
@@ -17,7 +18,7 @@ export function PatientListPage() {
   }, []);
 
   const { bundle, total, count, hasPrevious, hasNext, isLoading, error } = usePatientSearch(search, offset);
-  const patients = bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Patient => Boolean(r)) ?? [];
+  const patients = resourcesOfType<fhir4.Patient>(bundle, "Patient");
 
   function handleSearch(params: PatientSearchParams) {
     setSearch(params);

@@ -1,5 +1,11 @@
 import { useMemo } from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { referenceId } from "../../fhir/shared";
 import {
   HAS_LAB_MAPPED_TYPES,
@@ -594,7 +600,7 @@ export function useExportQuestionnaire() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { data } = await readResource<fhir4.Questionnaire>("Questionnaire", id);
-      const exported = await buildQuestionnaireExport(data);
+      const exported = await buildQuestionnaireExport(data, fetchBinaryImage);
 
       const canonical = questionnaireCanonical(data);
       const [summary] = await fetchReportLayouts(canonical);
@@ -696,13 +702,21 @@ export function useQuestionnaireOptions(options?: { status?: fhir4.Questionnaire
 
 // シェーマ画像(Binary)を dataURL で取得する。本アプリでは Binary は不変
 // (差し替えは常に新規作成)なのでキャッシュを無期限に保持する。
-export function useBinaryImage(binaryId: string | undefined) {
-  return useQuery({
+function binaryImageQuery(binaryId: string) {
+  return {
     queryKey: ["Binary", binaryId, "image"],
-    queryFn: () => fetchBinaryImage(binaryId as string),
-    enabled: Boolean(binaryId),
+    queryFn: () => fetchBinaryImage(binaryId),
     staleTime: Infinity,
-  });
+  };
+}
+
+export function useBinaryImage(binaryId: string | undefined) {
+  return useQuery({ ...binaryImageQuery(binaryId as string), enabled: Boolean(binaryId) });
+}
+
+/** useBinaryImage と同じキャッシュから、操作の中で画像(dataURL)を読む。 */
+export function fetchBinaryImageCached(queryClient: QueryClient, binaryId: string): Promise<string> {
+  return queryClient.fetchQuery(binaryImageQuery(binaryId));
 }
 
 // QuestionnaireResponse.questionnaire(canonical "<url>|<version>")から

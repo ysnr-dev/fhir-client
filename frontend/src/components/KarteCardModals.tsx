@@ -82,6 +82,7 @@ import { RadiotherapyOrderDetailPanel } from "./RadiotherapyOrderDetailPanel";
 import { useRadiotherapyOrderInitialValues } from "../hooks/useRadiotherapyOrderInitialValues";
 import { rehabPerformsByOrderId } from "../fhir/rehabResultHelpers";
 import { nutritionGuidancePerformsByOrderId } from "../fhir/nutritionGuidanceResultHelpers";
+import { resourcesOfType } from "../fhir/shared";
 
 // カルテのタイムラインから開くモーダル。詳細表示は各リソースの詳細ページと同じ
 // パネルを使うので、カードでは省いている情報(処方の DI リンクなど)も参照できる。
@@ -524,9 +525,7 @@ function RehabOrderDetail({
   );
   const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
 
-  const procedures = (detail.data?.data.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter((r): r is fhir4.Procedure => r?.resourceType === "Procedure");
+  const procedures = resourcesOfType<fhir4.Procedure>(detail.data?.data, "Procedure");
   const performs = rehabPerformsByOrderId(procedures).get(srId) ?? [];
 
   return (
@@ -566,9 +565,7 @@ function NutritionGuidanceOrderDetail({
   );
   const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
 
-  const procedures = (detail.data?.data.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter((r): r is fhir4.Procedure => r?.resourceType === "Procedure");
+  const procedures = resourcesOfType<fhir4.Procedure>(detail.data?.data, "Procedure");
   const performs = nutritionGuidancePerformsByOrderId(procedures).get(srId) ?? [];
 
   return (

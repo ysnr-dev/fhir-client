@@ -56,6 +56,7 @@ import { FlagTable } from "./FlagTable";
 import { Pagination } from "./Pagination";
 import { PatientBasicSection } from "./PatientBasicSection";
 import { useEditSnapshot } from "../hooks/useEditSnapshot";
+import { resourcesOfType } from "../fhir/shared";
 
 /**
  * カルテ画面の「プロファイル」タブ。時系列ではなく、患者の「現在の状態」を
@@ -251,7 +252,7 @@ function CautionSection({ patientId, onView, onCreate, onEdit }: CautionSectionP
     activeOnly,
   );
   const flags =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Flag => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Flag>(bundle, "Flag");
   const cautionsByCode = new Map<string, PatientCaution>(
     (cautions.data?.items ?? []).map((c) => [c.code, c]),
   );

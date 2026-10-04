@@ -1,4 +1,5 @@
 import { nowFhirDateTime } from "../lib/dates";
+import { resourcesOfType } from "./shared";
 
 // オーダーの来歴(Provenance)。「誰が入力し、誰の指示によるものか、指示医師が確認したか」を、
 // オーダー本体を書き換えずに残す。医師以外のログインは代行入力になり(orderContext.ts 冒頭)、
@@ -349,7 +350,5 @@ export function summarizeOrderProvenance(provenances: fhir4.Provenance[]): Order
 
 /** 検索結果の Bundle から Provenance だけを取り出す。 */
 export function provenancesOf(bundle: fhir4.Bundle | undefined): fhir4.Provenance[] {
-  return (bundle?.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter((resource): resource is fhir4.Provenance => resource?.resourceType === "Provenance");
+  return resourcesOfType<fhir4.Provenance>(bundle, "Provenance");
 }

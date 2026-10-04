@@ -20,7 +20,7 @@ import {
   type AdmissionFormValues,
 } from "../fhir/encounterHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
-import { SETTING_OPTIONS } from "../fhir/shared";
+import { resourcesOfType, SETTING_OPTIONS } from "../fhir/shared";
 import { displayKana, displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { bedDisplayName } from "../fhir/wardHelpers";
@@ -265,7 +265,7 @@ export function AdmissionPatientSearch({ onSelect }: { onSelect: (patient: fhir4
   }, [inpatients.data, bedWards.bedWards]);
 
   const searchedPatients =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Patient => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Patient>(bundle, "Patient");
 
   // 入院で絞っているときの一覧。在院患者を病棟・患者番号・氏名で絞る。
   const inpatientRows = useMemo(() => {

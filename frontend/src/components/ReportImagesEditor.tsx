@@ -8,7 +8,7 @@ import {
   type ClipboardEvent,
   type DragEvent,
 } from "react";
-import { fetchBinaryImage } from "../api/fhirClient";
+import { fetchBinaryImageCached } from "../api/queries";
 import {
   examReportImageRefs,
   examReportViewerImages,
@@ -134,11 +134,7 @@ export function ReportImagesEditor({
 
   async function dataUrlOf(data: ExamReportImageData): Promise<string> {
     if (data.dataUrl) return data.dataUrl;
-    return queryClient.fetchQuery({
-      queryKey: ["Binary", data.binaryId, "image"],
-      queryFn: () => fetchBinaryImage(data.binaryId),
-      staleTime: Infinity,
-    });
+    return fetchBinaryImageCached(queryClient, data.binaryId);
   }
 
   async function openPaint(index: number, mode: PaintMode) {

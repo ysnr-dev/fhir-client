@@ -7,6 +7,7 @@ import { radiotherapyFractionsByOrderId } from "../fhir/radiotherapyResultHelper
 import { radiotherapyCourseSummariesByOrderId } from "../fhir/radiotherapySummaryHelpers";
 import { radiotherapyTaskStatus, radiotherapyTasksByOrderId } from "../fhir/radiotherapyTaskHelpers";
 import { useEditSnapshot } from "./useEditSnapshot";
+import { resourcesOfType } from "../fhir/shared";
 
 // 保存済みの放射線治療オーダーをフォームの初期値に復元する。編集と DO の双方から使う。
 export function useRadiotherapyOrderInitialValues(
@@ -23,18 +24,14 @@ export function useRadiotherapyOrderInitialValues(
   );
 
   const taskStatus = useMemo(() => {
-    const tasks = (detail.data?.data.entry ?? [])
-      .map((e) => e.resource)
-      .filter((r): r is fhir4.Task => r?.resourceType === "Task");
+    const tasks = resourcesOfType<fhir4.Task>(detail.data?.data, "Task");
     return radiotherapyTaskStatus(radiotherapyTasksByOrderId(tasks).get(srId ?? ""));
   }, [detail.data, srId]);
 
   // 照射記録と治療終了サマリーは同じ検索に _revinclude で届く(詳細の表示と、次の回の既定値)。
   const procedures = useMemo(
     () =>
-      (detail.data?.data.entry ?? [])
-        .map((entry) => entry.resource)
-        .filter((resource): resource is fhir4.Procedure => resource?.resourceType === "Procedure"),
+      resourcesOfType<fhir4.Procedure>(detail.data?.data, "Procedure"),
     [detail.data],
   );
   const fractions = useMemo(

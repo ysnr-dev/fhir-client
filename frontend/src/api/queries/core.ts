@@ -8,6 +8,7 @@ import {
   typeOperation,
   updateResource,
 } from "../fhirClient";
+import { resourcesOfType } from "../../fhir/shared";
 
 /**
  * 内服の予定を出すのに遡る日数。処方の投与日数には上限が無いが、上流は投与日数を
@@ -159,15 +160,7 @@ export function setOrderPeriod(params: URLSearchParams, from: string, to: string
   params.append("order-period", `le${to}`);
 }
 
-/** Bundle から指定した型のリソースだけを取り出す(_include / _revinclude で混ざった他の型は落とす)。 */
-export function resourcesOfType<T extends fhir4.Resource>(
-  bundle: fhir4.Bundle | undefined,
-  type: T["resourceType"],
-): T[] {
-  return (bundle?.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is T => r?.resourceType === type);
-}
+export { resourcesOfType };
 
 interface PagedSearch<T extends fhir4.Resource> {
   /** 検索対象の型のリソース(ページ順)。 */

@@ -8,6 +8,7 @@ import {
 import { ErrorBanner } from "../components/ErrorBanner";
 import { OrganizationTable } from "../components/OrganizationTable";
 import { Pagination } from "../components/Pagination";
+import { resourcesOfType } from "../fhir/shared";
 
 const emptySearch: OrganizationSearchParams = { name: "", identifier: "" };
 
@@ -26,7 +27,7 @@ export function PartnerOrganizationListPage() {
     selfOrganizationId,
   );
   const organizations =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Organization>(bundle, "Organization");
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();

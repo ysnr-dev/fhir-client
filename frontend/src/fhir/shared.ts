@@ -158,6 +158,16 @@ export function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
   return { resourceType: "Bundle", type: "transaction", entry };
 }
 
+/** Bundle から指定した型のリソースだけを取り出す(_include / _revinclude で混ざった他の型は落とす)。 */
+export function resourcesOfType<T extends fhir4.Resource>(
+  bundle: fhir4.Bundle | undefined,
+  type: T["resourceType"],
+): T[] {
+  return (bundle?.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is T => r?.resourceType === type);
+}
+
 /** 読んだ時点の版を表す ETag(`W/"3"`)。版を持たないリソースは undefined。 */
 export function versionEtag(resource: { meta?: fhir4.Meta } | undefined): string | undefined {
   const versionId = resource?.meta?.versionId;

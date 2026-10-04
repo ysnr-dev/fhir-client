@@ -1,6 +1,7 @@
 import { useLabResultDetail, useMarkResultReviewed, useResultReviewProvenance } from "../api/queries";
 import { isPreliminaryReport } from "../fhir/labResultHelpers";
 import { dateTimeLabel } from "../lib/dates";
+import { resourcesOfType } from "../fhir/shared";
 
 // 検査結果の確認(既読)。3 種別ともカルテタブの見出し行(登録・編集の並び)の左端に置く。
 //
@@ -21,11 +22,7 @@ function reviewedAfterUpdate(at: string, lastUpdated: string | undefined): boole
 }
 
 function reportOf(bundle: fhir4.Bundle | undefined): fhir4.DiagnosticReport | undefined {
-  return (bundle?.entry ?? [])
-    .map((entry) => entry.resource)
-    .find((resource): resource is fhir4.DiagnosticReport =>
-      Boolean(resource && resource.resourceType === "DiagnosticReport"),
-    );
+  return resourcesOfType<fhir4.DiagnosticReport>(bundle, "DiagnosticReport")[0];
 }
 
 export function ResultReviewAction({ reportId }: { reportId: string }) {

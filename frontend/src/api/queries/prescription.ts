@@ -4,8 +4,11 @@ import {
   isPrescriptionServiceRequest,
   PRESCRIPTION_CATEGORY_SYSTEM,
 } from "../../fhir/prescriptionHelpers";
+import { INJECTION_ORDER_TYPE } from "../../fhir/injectionHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { rxTasksByOrderId } from "../../fhir/rxTaskHelpers";
-import { postBundle } from "../fhirClient";
+import { resourcesOfType } from "../../fhir/shared";
+import { postBundle, searchResource } from "../fhirClient";
 import { comparePatientNumber, fetchWorklistBundles, worklistParams } from "./worklist";
 
 // ---- 処方一覧(部門ワークリスト) ----
@@ -104,4 +107,27 @@ export function useDeletePrescription() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
   });
+}
+
+/**
+ * 患者の処方・注射の薬剤(MedicationRequest)を、オーダーの新しい順に orderCount オーダーぶん読む。
+ * 細菌検査オーダーの前投与抗菌薬の候補(useAntimicrobialSuggestions)に使う。
+ */
+export async function fetchRecentMedicationRequests(
+  patientId: string,
+  orderCount: number,
+): Promise<fhir4.MedicationRequest[]> {
+  const params = new URLSearchParams();
+  params.set("patient", `Patient/${patientId}`);
+  // 処方(処方区分の system を持つ)と注射(オーダー種別)のヘッダだけ。
+  params.set(
+    "category",
+    `${PRESCRIPTION_CATEGORY_SYSTEM}|,${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`,
+  );
+  params.set("based-on:missing", "true");
+  params.set("_sort", "-authoredon");
+  params.set("_count", String(orderCount));
+  params.set("_revinclude", "MedicationRequest:based-on");
+  const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+  return resourcesOfType<fhir4.MedicationRequest>(bundle, "MedicationRequest");
 }

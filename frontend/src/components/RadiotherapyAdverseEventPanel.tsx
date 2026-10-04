@@ -4,6 +4,7 @@ import { adverseEventsOf } from "../fhir/adverseEventHelpers";
 import { summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
 import { AdverseEventEditor } from "./AdverseEventEditor";
 import { ErrorBanner } from "./ErrorBanner";
+import { serviceRequestsOf } from "../fhir/labOrderHelpers";
 
 // カルテ右ペインの「放射線治療(有害事象)」。治療コース 1 件に対して記録する
 // (docs/radiotherapy-order-design.md §6.3)。
@@ -23,10 +24,7 @@ export function RadiotherapyAdverseEventPanel({ patientId, srId }: RadiotherapyA
   const events = useTreatmentAdverseEvents(srId);
 
   const order = useMemo(
-    () =>
-      (detail.data?.data.entry ?? [])
-        .map((entry) => entry.resource)
-        .find((r): r is fhir4.ServiceRequest => r?.resourceType === "ServiceRequest" && r.id === srId),
+    () => serviceRequestsOf(detail.data?.data).find((request) => request.id === srId),
     [detail.data, srId],
   );
 

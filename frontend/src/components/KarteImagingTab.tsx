@@ -8,6 +8,7 @@ import { ImagingStudyTable } from "./ImagingStudyTable";
 import { KarteImagingDetail } from "./KarteImagingDetail";
 import { KarteLinkMenu } from "./KarteLinkMenu";
 import { Pagination } from "./Pagination";
+import { resourcesOfType } from "../fhir/shared";
 
 // ZIP の展開と DICOM のタグ解析は、取込を開いたときだけ読み込む。
 const KarteImagingImportForm = lazy(() => import("./KarteImagingImportForm"));
@@ -51,10 +52,7 @@ export function KarteImagingTab({ patientId, view, onViewChange }: KarteImagingT
     offset,
   );
   const studies =
-    bundle?.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.ImagingStudy => r?.resourceType === "ImagingStudy")
-      .map(parseImagingStudy) ?? [];
+    resourcesOfType<fhir4.ImagingStudy>(bundle, "ImagingStudy").map(parseImagingStudy);
 
   function backToList() {
     setImporting(false);

@@ -14,6 +14,7 @@ import {
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { QuestionnaireResponseCreatePanel } from "./QuestionnaireResponsePanels";
+import { serviceRequestsOf } from "../fhir/labOrderHelpers";
 
 // カルテ右ペインの「放射線治療(週次レビュー)」。照射期間中の診察を、テンプレート回答として
 // 治療処方に結んで残す(docs/radiotherapy-order-design.md §6.3)。
@@ -39,10 +40,7 @@ export function RadiotherapyReviewPanel({ patientId, srId, onSaved }: Radiothera
   const closeDue = useCloseRadiotherapyReviewDue();
 
   const order = useMemo(
-    () =>
-      (detail.data?.data.entry ?? [])
-        .map((entry) => entry.resource)
-        .find((r): r is fhir4.ServiceRequest => r?.resourceType === "ServiceRequest" && r.id === srId),
+    () => serviceRequestsOf(detail.data?.data).find((request) => request.id === srId),
     [detail.data, srId],
   );
 

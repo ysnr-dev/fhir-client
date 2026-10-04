@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { Link } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { readResource } from "../api/fhirClient";
 import {
+  fetchEncounter,
   useBroughtMedicationTransaction,
   useBroughtMedWorklist,
   type BroughtMedWorklistItem,
@@ -82,7 +82,7 @@ export function BroughtMedicationWorklistPage() {
     try {
       const encounterId = item.task.encounter?.reference?.split("/").pop();
       if (!encounterId) throw new Error("鑑別依頼に入院がありません。");
-      const encounter = (await readResource<fhir4.Encounter>("Encounter", encounterId)).data;
+      const encounter = await fetchEncounter(encounterId);
       const patientId = item.task.for?.reference?.split("/").pop() ?? "";
       const counts = countBroughtStates(item.statements);
       const entries = [

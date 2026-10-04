@@ -9,6 +9,7 @@ import { AllergyTable } from "./AllergyTable";
 import { ErrorBanner } from "./ErrorBanner";
 import { Pagination } from "./Pagination";
 import { useEditSnapshot } from "../hooks/useEditSnapshot";
+import { resourcesOfType } from "../fhir/shared";
 
 // カルテ画面の「アレルギー」タブ。一覧・表示・登録・編集・削除を左ペイン内で完結させる。
 //
@@ -51,8 +52,7 @@ export function KarteAllergyTab({ patientId, view, onViewChange }: KarteAllergyT
     offset,
   );
   const allergies =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.AllergyIntolerance => Boolean(r)) ??
-    [];
+    resourcesOfType<fhir4.AllergyIntolerance>(bundle, "AllergyIntolerance");
 
   function backToList() {
     setForm(null);

@@ -14,7 +14,6 @@
 // 新規作成と同じ経路(画像 Binary と本体を 1 つの transaction Bundle で保存)に
 // 乗る。エディタが扱わない要素・拡張はエクスポート時には保たれるが、インポート
 // 時に失われる(本アプリで作成したテンプレートの移行を前提とする)。
-import { fetchBinaryImage } from "../api/fhirClient";
 import {
   parseQuestionnaireForm,
   validateQuestionnaireForm,
@@ -39,14 +38,20 @@ export interface TransferExport {
   reportLayout: TransferReportLayout;
 }
 
+/** Binary の id から画像(dataURL)を読む関数。読み方は呼び出し側(api)が渡す。 */
+type ImageLoader = (binaryId: string) => Promise<string>;
+
 // シェーマ画像を Binary 参照から data 埋め込みへ置き換えた item ツリーを返す。
-async function embedItemImages(item: fhir4.QuestionnaireItem): Promise<fhir4.QuestionnaireItem> {
+async function embedItemImages(
+  item: fhir4.QuestionnaireItem,
+  loadImage: ImageLoader,
+): Promise<fhir4.QuestionnaireItem> {
   const attachment = itemMediaOf(item);
   const binaryId = binaryIdFromAttachment(attachment);
   let result = item;
 
   if (binaryId) {
-    const dataUrl = await fetchBinaryImage(binaryId);
+    const dataUrl = await loadImage(binaryId);
     const embedded: fhir4.Attachment = {
       contentType: attachment?.contentType ?? "image/png",
       data: dataUrl.slice(dataUrl.indexOf(",") + 1),
@@ -60,7 +65,10 @@ async function embedItemImages(item: fhir4.QuestionnaireItem): Promise<fhir4.Que
   }
 
   if (item.item?.length) {
-    result = { ...result, item: await Promise.all(item.item.map(embedItemImages)) };
+    result = {
+      ...result,
+      item: await Promise.all(item.item.map((child) => embedItemImages(child, loadImage))),
+    };
   }
   return result;
 }
@@ -69,13 +77,14 @@ async function embedItemImages(item: fhir4.QuestionnaireItem): Promise<fhir4.Que
 // 残し、サーバー固有の id / versionId / lastUpdated は含めない。
 export async function buildQuestionnaireExport(
   questionnaire: fhir4.Questionnaire,
+  loadImage: ImageLoader,
 ): Promise<fhir4.Questionnaire> {
   const exported: fhir4.Questionnaire = { ...questionnaire };
   delete exported.id;
   delete exported.meta;
   if (questionnaire.meta?.profile) exported.meta = { profile: questionnaire.meta.profile };
   if (questionnaire.item?.length) {
-    exported.item = await Promise.all(questionnaire.item.map(embedItemImages));
+    exported.item = await Promise.all(questionnaire.item.map((item) => embedItemImages(item, loadImage)));
   }
   return exported;
 }

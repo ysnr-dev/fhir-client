@@ -5,6 +5,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { Pagination } from "../components/Pagination";
 import { QuestionnaireCategoryModal } from "../components/QuestionnaireCategoryModal";
 import { QuestionnaireTable } from "../components/QuestionnaireTable";
+import { resourcesOfType } from "../fhir/shared";
 
 export function QuestionnaireListPage() {
   const [offset, setOffset] = useState(0);
@@ -14,7 +15,7 @@ export function QuestionnaireListPage() {
   const { bundle, total, count, hasPrevious, hasNext, isLoading, error } =
     useQuestionnaireSearch(offset);
   const questionnaires =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Questionnaire => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Questionnaire>(bundle, "Questionnaire");
 
   const importQuestionnaire = useImportQuestionnaire();
 

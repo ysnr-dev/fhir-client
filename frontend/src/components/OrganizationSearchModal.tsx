@@ -11,6 +11,7 @@ import {
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { Pagination } from "./Pagination";
+import { resourcesOfType } from "../fhir/shared";
 
 interface OrganizationSearchModalProps {
   onSelect: (organization: fhir4.Organization) => void;
@@ -43,7 +44,7 @@ export function OrganizationSearchModal({
     excludeSelf ? selfOrganizationId : undefined,
   );
   const organizations =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Organization>(bundle, "Organization");
 
   function runSearch() {
     setSearch(inputs);

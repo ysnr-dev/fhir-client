@@ -21,6 +21,7 @@ import { ConditionTable } from "./ConditionTable";
 import { ErrorBanner } from "./ErrorBanner";
 import { Pagination } from "./Pagination";
 import { useEditSnapshot } from "../hooks/useEditSnapshot";
+import { resourcesOfType } from "../fhir/shared";
 
 // カルテ画面の「病名」タブ。一覧・表示・登録・編集・削除を左ペイン内で完結させる。
 //
@@ -63,7 +64,7 @@ export function KarteConditionTab({ patientId, view, onViewChange }: KarteCondit
     offset,
   );
   const conditions =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Condition => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Condition>(bundle, "Condition");
 
   function backToList() {
     setForm(null);

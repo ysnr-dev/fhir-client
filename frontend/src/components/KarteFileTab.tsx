@@ -29,6 +29,7 @@ import { Pagination } from "./Pagination";
 import { PatientFileGrid } from "./PatientFileGrid";
 import { PatientFileTable } from "./PatientFileTable";
 import { useEditSnapshot } from "../hooks/useEditSnapshot";
+import { resourcesOfType } from "../fhir/shared";
 
 // カルテ画面の「ファイル」タブ(docs/patient-file-design.md)。
 // 一覧・表示・取込・編集・差し替え・削除を左ペイン内で完結させる。
@@ -77,10 +78,7 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
     offset,
   );
   const files =
-    bundle?.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.DocumentReference => r?.resourceType === "DocumentReference")
-      .map(parsePatientFile) ?? [];
+    resourcesOfType<fhir4.DocumentReference>(bundle, "DocumentReference").map(parsePatientFile);
 
   function backToList() {
     setForm(null);

@@ -60,11 +60,11 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 4. (同日実施 → 下の「追加で実施」)transaction の PUT の楽観ロック。
 5. (同日実施 → 下の「追加で実施」)backend の「今日」。
 6. 文になっているボタン名・フォーム内の説明文(警告・危険色は同日実施 → 下の「追加で実施」)。
-7. `api/` 外からの FHIR 呼び出し 4 か所、`KarteTimeline.tsx` のカード本体(約 1,600 行)の分割。
+7. (同日実施 → 下の「追加で実施」)`api/` 外からの FHIR 呼び出しと、`KarteTimeline.tsx` のカード本体の分割。
 8. (同日実施 → 下の「追加で実施」)医療従事者の所属(PractitionerRole)の版のロック。
-9. `api/` の外(components / pages)に残る Bundle からの取り出し約 26 か所。
+9. (同日実施 → 下の「追加で実施」)`api/` の外に残る Bundle からの取り出し。
 
-### 追加で実施(次の候補 1〜5・8 と、6 の色)
+### 追加で実施(次の候補 1〜5・7〜9 と、6 の色)
 
 **transaction の PUT の楽観ロック**
 
@@ -137,6 +137,27 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
   `var(--danger, #c0392b)` など 26 か所も `var(--danger)` / `var(--warning)` に揃えた。
 - 残した直書きは意図した配色: チャートの系列色、バイタルの系列色、暦の日曜の色、予約枠の空き・仮押さえ、
   ABO 血液型のチップ、病棟マップの什器、DICOM ビューア、ペン色・文字色の見本。
+
+**`api/` の外に残る Bundle からの取り出し(候補 9)**
+
+- `resourcesOfType` の本体を `fhir/shared.ts` に移した(`api/queries/core.ts` からも同じ名前で出す)。部品・ページ・hook の
+  23 か所と、`fhir/` の `serviceRequestsOf` / `provenancesOf` の中身を置き換えた。型を見ずに拾っていた 10 か所の検索は
+  どれも `_include` を使わないので結果は変わらない。
+- 残りは `karteTimeline.ts`(複数の型が混ざった結果を振り分ける)と `resultReviewHelpers.ts`(Bundle ではなく entry の配列)。
+
+**`api/` 外からの FHIR 呼び出し(候補 7)**
+
+- `useAntimicrobialSuggestions` の検索 → `api/queries/prescription.ts` の `fetchRecentMedicationRequests`。
+- 持参薬一覧の入院の読み直し → `fetchEncounter`。所見レポートの画像の読み込み → `fetchBinaryImageCached`
+  (`useBinaryImage` と同じキャッシュ)。
+- `fhir/questionnaireTransfer.ts` は画像の読み方を引数で受け取る形にし、`api` への依存を外した。
+- `api/fhirClient` を `api/` の外から import しているのは、エラーの型(`FhirError`)だけになった。
+
+**`KarteTimeline.tsx` のカード本体の分割(候補 7)**
+
+- オーダー種別ごとのカード本体と実施情報の欄 16 個を `components/karteCardBodies/` に 1 種別 1 ファイルで移した
+  (2,898 行 → 1,598 行)。中身は変えていない。カード本体から `KarteTimeline.tsx` 側の関数への参照は無かった。
+- 輸血の実施情報の説明が注射の欄の上に置かれていたので、輸血のファイルへ移した。
 
 ## 第 2 回（2026-09-27）
 

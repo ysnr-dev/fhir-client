@@ -23,6 +23,7 @@ import {
 import { makeFieldUpdater } from "../lib/form";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
+import { resourcesOfType } from "../fhir/shared";
 
 // 照射入力(1 回ぶんの照射記録。docs/radiotherapy-order-design.md §6.1)。
 //
@@ -298,9 +299,7 @@ export function RadiotherapyPerformModalByOrder({
 }) {
   const detail = useRadiotherapyOrderDetail(order.id);
   const fractions = useMemo(() => {
-    const procedures = (detail.data?.data.entry ?? [])
-      .map((entry) => entry.resource)
-      .filter((resource): resource is fhir4.Procedure => resource?.resourceType === "Procedure");
+    const procedures = resourcesOfType<fhir4.Procedure>(detail.data?.data, "Procedure");
     return radiotherapyFractionsByOrderId(procedures).get(order.id ?? "") ?? [];
   }, [detail.data, order.id]);
 

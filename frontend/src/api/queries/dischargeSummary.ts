@@ -52,10 +52,15 @@ export function usePatientAdmissions(patientId: string | undefined) {
 }
 
 /** 入院 1 件の読み出し(退院時サマリーの編集で対象の入院を引くのに使う)。 */
+/** 入院(Encounter)を 1 件読む。操作の中で最新の内容が要るとき用(画面の表示は useEncounter)。 */
+export async function fetchEncounter(id: string): Promise<fhir4.Encounter> {
+  return (await readResource<fhir4.Encounter>("Encounter", id)).data;
+}
+
 export function useEncounter(id: string | undefined) {
   return useQuery({
     queryKey: ["Encounter", "read", id],
-    queryFn: async () => (await readResource<fhir4.Encounter>("Encounter", id as string)).data,
+    queryFn: () => fetchEncounter(id as string),
     enabled: Boolean(id),
   });
 }

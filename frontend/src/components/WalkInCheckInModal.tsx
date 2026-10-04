@@ -19,6 +19,7 @@ import {
   emptyReceptionSelects,
   type ReceptionSelects,
 } from "./ReceptionFields";
+import { resourcesOfType } from "../fhir/shared";
 
 // 当日受付。予約なしで来院した患者を探して、その場で受付済の予約を作る。
 //
@@ -108,7 +109,7 @@ export function WalkInPatientSearch({ onSelect }: { onSelect: (patient: fhir4.Pa
     offset,
   );
   const patients =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Patient => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Patient>(bundle, "Patient");
 
   function runSearch() {
     setSearch(inputs);
