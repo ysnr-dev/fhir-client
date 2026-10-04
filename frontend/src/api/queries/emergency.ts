@@ -11,6 +11,7 @@ import {
 } from "../../fhir/emergencyEncounterHelpers";
 import { referenceId, transactionBundle } from "../../fhir/shared";
 import { postBundle, searchResource } from "../fhirClient";
+import { resourcesOfType } from "./core";
 
 // ---- 救急患者一覧 ----
 //
@@ -158,9 +159,7 @@ export function useEmergencyTriageHistory(encounterId: string | undefined) {
       params.set("code", `${EMERGENCY_OBSERVATION_SYSTEM}|${JTAS_OBSERVATION_CODE}`);
       params.set("_count", "50");
       const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
-      return (bundle.entry ?? [])
-        .map((e) => e.resource)
-        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation")
+      return resourcesOfType<fhir4.Observation>(bundle, "Observation")
         .map(parseTriageObservation)
         .filter((r): r is TriageRecord => r !== null)
         .sort((x, y) => y.at.localeCompare(x.at));
@@ -180,9 +179,7 @@ export function usePatientEmergency(patientId: string | undefined) {
       params.set("status", EMERGENCY_ACTIVE_STATUSES.join(","));
       params.set("_count", "10");
       const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
-      const encounters = (bundle.entry ?? [])
-        .map((e) => e.resource)
-        .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter");
+      const encounters = resourcesOfType<fhir4.Encounter>(bundle, "Encounter");
       // 同じ患者の滞在が 2 件並ぶことは無い想定だが、あれば来院が新しい方を採る。
       return (
         encounters.reduce<fhir4.Encounter | undefined>(

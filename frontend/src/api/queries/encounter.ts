@@ -139,9 +139,7 @@ async function fetchBedWardIndex(): Promise<Map<string, BedWard>> {
   wardParams.set("_count", "100");
   const { data: wardBundle } = await searchResource<fhir4.Location>("Location", wardParams);
   const wards =
-    wardBundle.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Location => r?.resourceType === "Location") ?? [];
+    resourcesOfType<fhir4.Location>(wardBundle, "Location");
   if (wards.length === 0) return new Map();
 
   const PAGE = 100;
@@ -404,9 +402,7 @@ async function fetchPatientAdmission(patientId: string): Promise<PatientAdmissio
 
   const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
   const encounters =
-    bundle.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [];
+    resourcesOfType<fhir4.Encounter>(bundle, "Encounter");
   // 同じ患者に入院中が 2 件並ぶことは無い想定だが、あれば入院日が新しい方を採る
   // (データがおかしくてもカルテの見出しが壊れないように)。
   const encounter = encounters.reduce<fhir4.Encounter | undefined>(
@@ -430,9 +426,7 @@ async function fetchPatientAdmission(patientId: string): Promise<PatientAdmissio
     locationParams,
   );
   const locations =
-    locationBundle.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Location => r?.resourceType === "Location") ?? [];
+    resourcesOfType<fhir4.Location>(locationBundle, "Location");
   const ofType = (code: string) =>
     locations.find((location) =>
       location.physicalType?.coding?.some(
@@ -488,9 +482,7 @@ export function usePatientEncounterEvents(
     queryFn: async (): Promise<{ events: EncounterEvent[]; stays: EncounterStay[] }> => {
       const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
       const encounters =
-        bundle.entry
-          ?.map((e) => e.resource)
-          .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [];
+        resourcesOfType<fhir4.Encounter>(bundle, "Encounter");
       const events = encounters
         .flatMap((encounter) => encounterEvents(encounter))
         .filter((event) => event.date >= rangeStart && event.date <= rangeEnd);

@@ -19,6 +19,7 @@ import {
   updateResource,
 } from "../fhirClient";
 import { hasRelation } from "./patient";
+import { resourcesOfType } from "./core";
 
 // ---- 場所(Location) ----
 //
@@ -52,9 +53,7 @@ export function useLocationSearch(search: LocationSearchParams, offset: number) 
   return {
     ...query,
     locations:
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Location => Boolean(r)) ?? [],
+      resourcesOfType<fhir4.Location>(query.data?.data, "Location"),
     total: query.data?.data.total ?? 0,
     count: LOCATION_COUNT,
     hasPrevious: hasRelation(query.data?.data, "previous"),
@@ -80,9 +79,7 @@ export function useLocationOptions() {
     // 表示順 → 名称の順。上流は独自拡張で _sort できないのでここで並べる
     // (全件を 1 回で読む選択肢なので、読み手で並べても取りこぼしは出ない)。
     locations: sortLocations(
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Location => Boolean(r)) ?? [],
+      resourcesOfType<fhir4.Location>(query.data?.data, "Location"),
     ),
   };
 }
@@ -245,9 +242,7 @@ export function useRoomBeds(roomId: string | undefined) {
   return {
     ...query,
     beds:
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Location => Boolean(r)) ?? [],
+      resourcesOfType<fhir4.Location>(query.data?.data, "Location"),
   };
 }
 
@@ -315,9 +310,7 @@ export function useWardOptions() {
   return {
     ...query,
     wards:
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Location => Boolean(r)) ?? [],
+      resourcesOfType<fhir4.Location>(query.data?.data, "Location"),
   };
 }
 

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type AnesthesiaChartData, buildAnesthesiaChartData, isAnesthesiaChartHub } from "../../fhir/anesthesiaChartHelpers";
 import { postBundle, searchResource } from "../fhirClient";
+import { resourcesOfType } from "./core";
 
 // ---- 麻酔チャート(docs/anesthesia-chart-design.md) ----
 
@@ -47,9 +48,7 @@ async function fetchAnesthesiaChart(orderId: string): Promise<AnesthesiaChartDat
   params.set("based-on", `ServiceRequest/${orderId}`);
   params.set("_count", "100");
   const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
-  const hub = (bundle.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter((resource): resource is fhir4.Procedure => resource?.resourceType === "Procedure")
+  const hub = resourcesOfType<fhir4.Procedure>(bundle, "Procedure")
     .find(
       (procedure) => isAnesthesiaChartHub(procedure) && procedure.status !== "entered-in-error",
     );

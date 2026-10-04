@@ -14,7 +14,7 @@ import {
 import { buildTransfusionPerformDeleteEntries } from "../../fhir/transfusionResultHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { postBundle, searchResource } from "../fhirClient";
-import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES } from "./core";
+import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
 import {
   cancelsPerform,
   comparePatientNumber,
@@ -117,9 +117,7 @@ export function usePretransfusionResults(patientId: string | undefined) {
       params.set("_sort", "-date");
 
       const { data } = await searchResource<fhir4.Observation>("Observation", params);
-      const observations = (data.entry ?? [])
-        .map((entry) => entry.resource)
-        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation");
+      const observations = resourcesOfType<fhir4.Observation>(data, "Observation");
 
       return PRETRANSFUSION_LABELS.map(({ code, label }) => {
         // _sort=-date で新しい順に並んでいるので、最初に見つかったものが最新。

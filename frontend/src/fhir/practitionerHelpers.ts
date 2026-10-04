@@ -21,6 +21,7 @@ import {
   type PractitionerDepartmentValues,
   type PractitionerRoleValues,
 } from "./practitionerRoleHelpers";
+import { withVersionLock } from "./shared";
 
 // 医籍登録番号。JP_Practitioner では identifier ではなく
 // qualification:medicalRegistrationNumber スライスに入れる。
@@ -139,7 +140,7 @@ export function parsePractitioner(practitioner: fhir4.Practitioner): Practitione
 // 医療従事者と職種・所属・所属診療科(PractitionerRole)を 1 つの transaction Bundle
 // で保存する。片方だけ保存されて職種の無い医療従事者や孤児 PractitionerRole が
 // 残るのを防ぐ。職種・所属が両方空になったら所属ロールは削除し、外された診療科の
-// ロールも同じ Bundle で消す。
+// ロールも同じ Bundle で消す。更新するロールには、画面が読んだ時点の版を ifMatch で添える。
 export function buildPractitionerSaveBundle(args: {
   values: PractitionerFormValues;
   practitionerId?: string;
@@ -202,7 +203,7 @@ export function buildPractitionerSaveBundle(args: {
     }
   }
 
-  return { resourceType: "Bundle", type: "transaction", entry };
+  return withVersionLock({ resourceType: "Bundle", type: "transaction", entry }, ...existingRoles);
 }
 
 // transaction レスポンス Bundle から、新規作成された Practitioner の ID を取り出す。

@@ -477,9 +477,7 @@ export function useVitalEntry(entryId: string | undefined) {
       params.set("identifier", `${VITAL_ENTRY_SYSTEM}|${entryId}`);
       params.set("_count", "50");
       const { data } = await searchResource<fhir4.Observation>("Observation", params);
-      const observations = (data.entry ?? [])
-        .map((entry) => entry.resource)
-        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation");
+      const observations = resourcesOfType<fhir4.Observation>(data, "Observation");
       return groupVitalEntries(observations)[0] ?? null;
     },
     enabled: Boolean(entryId),

@@ -18,6 +18,7 @@ import {
 } from "../fhir/resultReviewHelpers";
 import { TASK_CODE_SYSTEM } from "../fhir/taskHelpers";
 import { searchResource } from "./fhirClient";
+import { resourcesOfType } from "./queries/core";
 
 // 承認の transaction を組み立てる。承認待ち一覧(通知)とオーダー詳細モーダルの
 // どちらからでも同じ結果になるよう、1 か所に置く。React には依存しない。
@@ -33,9 +34,7 @@ async function fetchApprovalTasks(provenanceIds: string[]): Promise<fhir4.Task[]
   params.set("status", "requested");
   params.set("_count", "100");
   const { data } = await searchResource<fhir4.Task>("Task", params);
-  return (data.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter((resource): resource is fhir4.Task => resource?.resourceType === "Task");
+  return resourcesOfType<fhir4.Task>(data, "Task");
 }
 
 /** 承認する来歴。渡された id の最新を読む(一覧が古いまま上書きしないように)。 */
@@ -45,9 +44,7 @@ async function fetchProvenances(provenanceIds: string[]): Promise<fhir4.Provenan
   params.set("_id", provenanceIds.join(","));
   params.set("_count", "100");
   const { data } = await searchResource<fhir4.Provenance>("Provenance", params);
-  return (data.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter((resource): resource is fhir4.Provenance => resource?.resourceType === "Provenance");
+  return resourcesOfType<fhir4.Provenance>(data, "Provenance");
 }
 
 /**
@@ -121,11 +118,7 @@ async function fetchReports(reportIds: string[]): Promise<fhir4.DiagnosticReport
   params.set("_id", reportIds.join(","));
   params.set("_count", "100");
   const { data } = await searchResource<fhir4.DiagnosticReport>("DiagnosticReport", params);
-  return (data.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter(
-      (resource): resource is fhir4.DiagnosticReport => resource?.resourceType === "DiagnosticReport",
-    );
+  return resourcesOfType<fhir4.DiagnosticReport>(data, "DiagnosticReport");
 }
 
 async function fetchOpenReviewTasks(reportIds: string[]): Promise<fhir4.Task[]> {
@@ -136,7 +129,5 @@ async function fetchOpenReviewTasks(reportIds: string[]): Promise<fhir4.Task[]> 
   params.set("status", "requested");
   params.set("_count", "100");
   const { data } = await searchResource<fhir4.Task>("Task", params);
-  return (data.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter((resource): resource is fhir4.Task => resource?.resourceType === "Task");
+  return resourcesOfType<fhir4.Task>(data, "Task");
 }

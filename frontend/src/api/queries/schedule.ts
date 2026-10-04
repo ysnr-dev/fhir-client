@@ -16,7 +16,7 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { fetchDateCounts } from "./core";
+import { fetchDateCounts, resourcesOfType } from "./core";
 import { hasRelation } from "./patient";
 
 // ---- 予約枠(Schedule / Slot) ----
@@ -50,9 +50,7 @@ export function useScheduleSearch(search: ScheduleSearchParams, offset: number) 
   return {
     ...query,
     schedules:
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Schedule => Boolean(r)) ?? [],
+      resourcesOfType<fhir4.Schedule>(query.data?.data, "Schedule"),
     total: query.data?.data.total ?? 0,
     count: SCHEDULE_COUNT,
     hasPrevious: hasRelation(query.data?.data, "previous"),
@@ -144,7 +142,7 @@ async function fetchScheduleSlots(
 
     const { data: bundle } = await searchResource<fhir4.Slot>("Slot", params);
     const page =
-      bundle.entry?.map((e) => e.resource).filter((r): r is fhir4.Slot => Boolean(r)) ?? [];
+      resourcesOfType<fhir4.Slot>(bundle, "Slot");
     slots.push(...page);
     if (page.length < PAGE) return slots;
   }
@@ -275,9 +273,7 @@ export function useScheduleOptions(filter: {
   });
 
   const all =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Schedule => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Schedule>(query.data?.data, "Schedule");
 
   const byType = filter.scheduleType
     ? all.filter((schedule) => scheduleTypeOf(schedule) === filter.scheduleType)

@@ -305,9 +305,7 @@ export function useActiveAllergies(patientId: string | undefined) {
   });
 
   const allergies =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.AllergyIntolerance => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.AllergyIntolerance>(query.data?.data, "AllergyIntolerance");
 
   return { ...query, allergies };
 }

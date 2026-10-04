@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useDeleteLoginAccount, useLoginAccount, useUpsertLoginAccount } from "../api/authQueries";
 import { FhirError } from "../api/fhirClient";
-import { usePractitioner, usePractitionerRoles, useUpdatePractitioner } from "../api/queries";
+import { usePractitioner, useUpdatePractitioner } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PractitionerForm, type PractitionerLoginValues } from "../components/PractitionerForm";
 import {
@@ -16,11 +16,12 @@ import {
   parsePractitionerRole,
 } from "../fhir/practitionerRoleHelpers";
 import { useEditSnapshot } from "../hooks/useEditSnapshot";
+import { usePractitionerRolesForEdit } from "../hooks/usePractitionerRolesForEdit";
 
 export function PractitionerEditPage() {
   const { id } = useParams<{ id: string }>();
   const { data: result, isLoading, error: loadError } = useEditSnapshot(usePractitioner(id), id);
-  const role = usePractitionerRoles(id);
+  const role = usePractitionerRolesForEdit(id);
   // ログイン設定(backend の /auth/account)。フォームの初期値になるため、
   // 職種・所属と同様に取得完了を待ってから描画する。
   const account = useLoginAccount(id);

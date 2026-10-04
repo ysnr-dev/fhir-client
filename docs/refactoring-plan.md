@@ -56,14 +56,15 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 
 1. (同日実施 → 下の「追加で実施」)部門ごとの helper のコピーの集約。
 2. (同日実施 → 下の「追加で実施」)オーダー共通の処理を `fhir/orderHeader.ts` へ。
-3. `api/` の `resourcesOfType` の再実装約 38 か所と、型を見ずに `Boolean(r)` で拾う約 22 か所。
+3. (同日実施 → 下の「追加で実施」)`api/` の `resourcesOfType` の再実装。
 4. (同日実施 → 下の「追加で実施」)transaction の PUT の楽観ロック。
 5. (同日実施 → 下の「追加で実施」)backend の「今日」。
 6. テーマ変数を使わない警告・危険色 61 か所、文になっているボタン名・フォーム内の説明文。
 7. `api/` 外からの FHIR 呼び出し 4 か所、`KarteTimeline.tsx` のカード本体(約 1,600 行)の分割。
-8. 医療従事者の編集で、所属(PractitionerRole)の PUT に版のロックが無い(本体の Practitioner はロック済み)。
+8. (同日実施 → 下の「追加で実施」)医療従事者の所属(PractitionerRole)の版のロック。
+9. `api/` の外(components / pages)に残る Bundle からの取り出し約 26 か所。
 
-### 追加で実施(次の候補 1・2・4・5)
+### 追加で実施(次の候補 1〜5・8)
 
 **transaction の PUT の楽観ロック**
 
@@ -113,6 +114,19 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
   病棟(`wardExtension` / `wardOf`)・依頼元(`OrderAttribution` / `withOrderWard` / `applyOrderContext` / `orderContextSummary`)を移した。
   診療記録・テンプレート回答・バイタルも記録した科を同じ拡張で持つので、処方の下に置く理由が無くなっていた。
 - `prescriptionRequester` は全オーダーで使うので `orderRequester` に改名した。import 元 129 ファイルを書き換え、再 export は残していない。
+
+**`api/` の `resourcesOfType` の再実装(候補 3)**
+
+- Bundle から 1 つの型を取り出す書き方 70 か所のうち 59 か所を `resourcesOfType` に置き換えた(`bundle` が undefined でも
+  受けるようにした)。型を見ずに `Boolean(r)` で拾っていた 21 か所はどれも `_include` を使わない検索だったので、
+  結果は変わらない。`populate.ts` の同じ中身の `resourcesOf` も削除。
+- 残した 9 か所は、複数の型が混ざった結果をそのあと型ごとに振り分けるもの(`encounter.ts` / `pathway.ts` /
+  `outpatient.ts` / `nursing.ts` / `broughtMedication.ts`)と、`_include` の行を除く `anesthesia.ts`。
+
+**医療従事者の所属の版のロック(候補 8)**
+
+- `buildPractitionerSaveBundle` が、更新する PractitionerRole に画面が読んだ時点の版を添える。編集ページは
+  `usePractitionerRolesForEdit` で所属ロールも開いた時点の版に固定する。
 
 ## 第 2 回（2026-09-27）
 

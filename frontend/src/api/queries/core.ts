@@ -159,8 +159,12 @@ export function setOrderPeriod(params: URLSearchParams, from: string, to: string
   params.append("order-period", `le${to}`);
 }
 
-export function resourcesOfType<T extends fhir4.Resource>(bundle: fhir4.Bundle, type: T["resourceType"]): T[] {
-  return (bundle.entry ?? [])
+/** Bundle から指定した型のリソースだけを取り出す(_include / _revinclude で混ざった他の型は落とす)。 */
+export function resourcesOfType<T extends fhir4.Resource>(
+  bundle: fhir4.Bundle | undefined,
+  type: T["resourceType"],
+): T[] {
+  return (bundle?.entry ?? [])
     .map((e) => e.resource)
     .filter((r): r is T => r?.resourceType === type);
 }

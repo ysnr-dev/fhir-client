@@ -171,9 +171,7 @@ export const deleteRadiotherapyOrderRequest = async (srId: string) => {
   params.set("_id", srId);
   params.set("_revinclude", "Task:focus");
   const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-  const tasks = (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Task => r?.resourceType === "Task");
+  const tasks = resourcesOfType<fhir4.Task>(bundle, "Task");
   const status = radiotherapyTaskStatus(radiotherapyTasksByOrderId(tasks).get(srId));
   if (status !== "requested") {
     throw new Error(

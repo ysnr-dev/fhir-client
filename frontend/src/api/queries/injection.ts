@@ -17,6 +17,7 @@ import { DEFAULT_IDENTIFIER_SYSTEM } from "../../fhir/patientHelpers";
 import { postBundle, searchResource } from "../fhirClient";
 import { fetchRxWorklist } from "./prescription";
 import { comparePatientNumber, fetchWorklistBundles, makeUpdateTaskStatusHook, worklistParams } from "./worklist";
+import { resourcesOfType } from "./core";
 
 // ---- 注射一覧(部門ワークリスト) ----
 //
@@ -213,9 +214,7 @@ export async function fetchPatientByNumber(number: string): Promise<fhir4.Patien
   params.set("_count", "10");
 
   const { data: bundle } = await searchResource<fhir4.Patient>("Patient", params);
-  const patients = (bundle.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter((resource): resource is fhir4.Patient => resource?.resourceType === "Patient");
+  const patients = resourcesOfType<fhir4.Patient>(bundle, "Patient");
   const exact = patients.find((patient) =>
     patient.identifier?.some(
       (identifier) =>
@@ -231,10 +230,7 @@ export async function fetchLabelSpecimenByNumber(number: string): Promise<fhir4.
   params.set("accession", `${LAB_LABEL_NUMBER_SYSTEM}|${number}`);
 
   const { data: bundle } = await searchResource<fhir4.Specimen>("Specimen", params);
-  const specimen = (bundle.entry ?? [])
-    .map((entry) => entry.resource)
-    .find((resource): resource is fhir4.Specimen => resource?.resourceType === "Specimen");
-  return specimen ?? null;
+  return resourcesOfType<fhir4.Specimen>(bundle, "Specimen")[0] ?? null;
 }
 
 /** オーダーの管(ラベル発行が作った Specimen)の一覧。orderId が空なら空配列。 */
@@ -245,9 +241,7 @@ export async function fetchLabelSpecimens(orderId: string): Promise<fhir4.Specim
   params.set("_count", "100");
 
   const { data: bundle } = await searchResource<fhir4.Specimen>("Specimen", params);
-  return (bundle.entry ?? [])
-    .map((entry) => entry.resource)
-    .filter((resource): resource is fhir4.Specimen => resource?.resourceType === "Specimen")
+  return resourcesOfType<fhir4.Specimen>(bundle, "Specimen")
     .filter(isLabelSpecimen);
 }
 

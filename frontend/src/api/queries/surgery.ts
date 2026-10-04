@@ -20,7 +20,7 @@ import {
 } from "../../fhir/surgeryTaskHelpers";
 import { buildSurgeryPerformDeleteEntries } from "../../fhir/surgeryResultHelpers";
 import { postBundle, searchResource } from "../fhirClient";
-import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, WORKLIST_PAGE } from "./core";
+import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType, WORKLIST_PAGE } from "./core";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import {
   cancelsPerform,
@@ -189,9 +189,7 @@ async function fetchSurgeryItems(order: fhir4.ServiceRequest): Promise<fhir4.Ser
   params.set("_count", "200");
   const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
   return surgeryOrderItemRequests(
-    (bundle.entry ?? [])
-      .map((entry) => entry.resource)
-      .filter((r): r is fhir4.ServiceRequest => r?.resourceType === "ServiceRequest"),
+    resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest"),
     order.id,
   );
 }

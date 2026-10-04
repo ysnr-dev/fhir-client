@@ -39,16 +39,10 @@ export function usePractitionerSearch(
     enabled,
   });
 
-  const entries = query.data?.data.entry ?? [];
-
   return {
     ...query,
-    practitioners: entries
-      .map((e) => e.resource)
-      .filter((r): r is fhir4.Practitioner => r?.resourceType === "Practitioner"),
-    roles: entries
-      .map((e) => e.resource)
-      .filter((r): r is fhir4.PractitionerRole => r?.resourceType === "PractitionerRole"),
+    practitioners: resourcesOfType<fhir4.Practitioner>(query.data?.data, "Practitioner"),
+    roles: resourcesOfType<fhir4.PractitionerRole>(query.data?.data, "PractitionerRole"),
     total: query.data?.data.total ?? 0,
     count: PRACTITIONER_COUNT,
     hasPrevious: hasRelation(query.data?.data, "previous"),
@@ -70,9 +64,7 @@ export function usePractitionerRoles(practitionerId: string | undefined) {
   });
 
   const roles =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.PractitionerRole => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.PractitionerRole>(query.data?.data, "PractitionerRole");
 
   return { ...query, roles, role: baseRoleOf(roles) };
 }
@@ -125,17 +117,10 @@ export function usePractitionerRoleSearch(
     enabled,
   });
 
-  const entries = query.data?.data.entry ?? [];
-  const practitioners = entries
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Practitioner => r?.resourceType === "Practitioner");
-
   return {
     ...query,
-    practitioners,
-    roles: entries
-      .map((e) => e.resource)
-      .filter((r): r is fhir4.PractitionerRole => r?.resourceType === "PractitionerRole"),
+    practitioners: resourcesOfType<fhir4.Practitioner>(query.data?.data, "Practitioner"),
+    roles: resourcesOfType<fhir4.PractitionerRole>(query.data?.data, "PractitionerRole"),
     total: query.data?.data.total ?? 0,
     count: PRACTITIONER_ROLE_COUNT,
     hasPrevious: hasRelation(query.data?.data, "previous"),
@@ -154,9 +139,7 @@ async function fetchDepartmentMembers(departmentId: string): Promise<fhir4.Pract
 
   const { data: bundle } = await searchResource<fhir4.Resource>("PractitionerRole", params);
   return (
-    bundle.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Practitioner => r?.resourceType === "Practitioner") ?? []
+    resourcesOfType<fhir4.Practitioner>(bundle, "Practitioner")
   );
 }
 

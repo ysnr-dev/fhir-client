@@ -439,9 +439,7 @@ export function useLabObservationHistories(observationIds: string[]) {
       );
       return results.map(({ data }, index) => ({
         id: observationIds[index],
-        versions: (data.entry ?? [])
-          .map((entry) => entry.resource)
-          .filter((r): r is fhir4.Observation => r?.resourceType === "Observation"),
+        versions: resourcesOfType<fhir4.Observation>(data, "Observation"),
       }));
     },
     enabled: observationIds.length > 0,

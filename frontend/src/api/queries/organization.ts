@@ -10,6 +10,7 @@ import {
 } from "../fhirClient";
 import { fetchFacilitySettings } from "../facilityClient";
 import { hasRelation } from "./patient";
+import { resourcesOfType } from "./core";
 
 // --- 自院 --------------------------------------------------------------------
 //
@@ -103,9 +104,7 @@ export function useOrganizationOptions() {
   return {
     ...query,
     organizations:
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Organization => Boolean(r)) ?? [],
+      resourcesOfType<fhir4.Organization>(query.data?.data, "Organization"),
   };
 }
 
@@ -187,7 +186,7 @@ async function fetchAllDepartments(search: DepartmentSearchParams): Promise<fhir
     params.set("_offset", String(offset));
     const { data: bundle } = await searchResource<fhir4.Organization>("Organization", params);
     const page =
-      bundle.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? [];
+      resourcesOfType<fhir4.Organization>(bundle, "Organization");
     departments.push(...page);
     if (page.length < PAGE) return departments;
   }
@@ -226,9 +225,7 @@ export function useDepartmentPage(search: DepartmentSearchParams, offset: number
   return {
     ...query,
     departments:
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Organization => Boolean(r)) ?? [],
+      resourcesOfType<fhir4.Organization>(query.data?.data, "Organization"),
     total: query.data?.data.total ?? 0,
     count: DEPARTMENT_COUNT,
     hasPrevious: hasRelation(query.data?.data, "previous"),

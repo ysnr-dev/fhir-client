@@ -95,9 +95,7 @@ export function usePathwayApplications(patientId: string | undefined) {
     queryFn: async () => {
       const { data: bundle } = await searchResource<fhir4.CarePlan>("CarePlan", params);
       const roots =
-        bundle.entry
-          ?.map((e) => e.resource)
-          .filter((r): r is fhir4.CarePlan => r?.resourceType === "CarePlan") ?? [];
+        resourcesOfType<fhir4.CarePlan>(bundle, "CarePlan");
       return { roots, applications: roots.map(summarizePathwayApplication) };
     },
     enabled: Boolean(patientId),
@@ -116,9 +114,7 @@ export function usePathwayApplyGoal(applyId: string | undefined) {
     queryKey: ["Goal", "search", "pathway-apply", applyId],
     queryFn: async () => {
       const { data: bundle } = await searchResource<fhir4.Goal>("Goal", params);
-      return (
-        bundle.entry?.map((e) => e.resource).find((r): r is fhir4.Goal => r?.resourceType === "Goal") ?? null
-      );
+      return resourcesOfType<fhir4.Goal>(bundle, "Goal")[0] ?? null;
     },
     enabled: Boolean(applyId),
   });
@@ -161,9 +157,7 @@ export function usePathwayWardTasks(date: string, patientIds: string[]) {
       eventParams.set("_include", "CarePlan:part-of");
       eventParams.set("_count", "500");
       const { data: eventBundle } = await searchResource<fhir4.Resource>("CarePlan", eventParams);
-      const heads = (eventBundle.entry ?? [])
-        .map((e) => e.resource)
-        .filter((r): r is fhir4.CarePlan => r?.resourceType === "CarePlan");
+      const heads = resourcesOfType<fhir4.CarePlan>(eventBundle, "CarePlan");
       const events = heads.filter((cp) =>
         cp.category?.some((c) => c.coding?.some((x) => x.system === PATHWAY_LEVEL_SYSTEM && x.code === "event")),
       );
@@ -432,9 +426,7 @@ export function usePatientPlannedAdmissions(patientId: string | undefined) {
     queryFn: async () => {
       const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
       return sortPlannedAdmissions(
-        bundle.entry
-          ?.map((e) => e.resource)
-          .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [],
+        resourcesOfType<fhir4.Encounter>(bundle, "Encounter"),
       );
     },
     enabled: Boolean(patientId),
@@ -588,9 +580,7 @@ export function usePathwayObservations(patientId: string | undefined) {
     queryFn: async () => {
       const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
       return (
-        bundle.entry
-          ?.map((e) => e.resource)
-          .filter((r): r is fhir4.Observation => r?.resourceType === "Observation") ?? []
+        resourcesOfType<fhir4.Observation>(bundle, "Observation")
       );
     },
     enabled: Boolean(patientId),

@@ -10,14 +10,13 @@ import {
   pendingRegimenOrders,
   regimenDayTaskEntry,
 } from "./regimen";
+import { resourcesOfType } from "./core";
 
 // ---- 有害事象(CTCAE Grade。§7.6 C-3) ----
 
 /** 患者の有害事象の記録。適用・クールでの絞り込みは画面側(1 患者で多くても数十件)。 */
 function parseAdverseEvents(bundle: fhir4.Bundle<fhir4.Observation>): AdverseEventRecord[] {
-  return (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Observation => r?.resourceType === "Observation")
+  return resourcesOfType<fhir4.Observation>(bundle, "Observation")
     .map(parseAdverseEvent)
     .filter((r): r is AdverseEventRecord => r !== null);
 }

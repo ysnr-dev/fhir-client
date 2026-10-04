@@ -20,18 +20,10 @@ import {
   useManualInfections,
 } from "./patientProfile";
 import { usePractitioner, usePractitionerRoles } from "./practitioner";
+import { resourcesOfType } from "./core";
 
 /** 項目ごとの最新値を拾うのに読むバイタルの件数(新しい順)。測定 10 回ぶん程度。 */
 const VITAL_COUNT = 50;
-
-function resourcesOf<T extends fhir4.Resource>(
-  bundle: fhir4.Bundle | undefined,
-  type: T["resourceType"],
-): T[] {
-  return (bundle?.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is T => r?.resourceType === type);
-}
 
 /**
  * テンプレート回答フォームの初期値式(populateContext.ts の %変数)の元データ取得。
@@ -148,27 +140,27 @@ export function usePopulateSources(patientId: string | undefined) {
     );
     return {
       today,
-      conditions: resourcesOf<fhir4.Condition>(conditions.data?.data, "Condition"),
-      allConditions: resourcesOf<fhir4.Condition>(allConditions.data?.data, "Condition"),
+      conditions: resourcesOfType<fhir4.Condition>(conditions.data?.data, "Condition"),
+      allConditions: resourcesOfType<fhir4.Condition>(allConditions.data?.data, "Condition"),
       labDetail: labDetail.data?.data,
       prescriptionDetail: rxDetail.data?.data,
-      allergies: resourcesOf<fhir4.AllergyIntolerance>(allergies.data?.data, "AllergyIntolerance"),
-      bloodType: resourcesOf<fhir4.Observation>(bloodType.data?.data, "Observation"),
+      allergies: resourcesOfType<fhir4.AllergyIntolerance>(allergies.data?.data, "AllergyIntolerance"),
+      bloodType: resourcesOfType<fhir4.Observation>(bloodType.data?.data, "Observation"),
       infections: summarizeInfections(
-        resourcesOf<fhir4.Observation>(manualInfections.data?.data, "Observation"),
-        resourcesOf<fhir4.Observation>(labInfections.data?.data, "Observation"),
+        resourcesOfType<fhir4.Observation>(manualInfections.data?.data, "Observation"),
+        resourcesOfType<fhir4.Observation>(labInfections.data?.data, "Observation"),
       ),
-      flags: resourcesOf<fhir4.Flag>(flags.data?.data, "Flag"),
+      flags: resourcesOfType<fhir4.Flag>(flags.data?.data, "Flag"),
       cautionsByCode,
-      bodyMeasures: resourcesOf<fhir4.Observation>(bodyMeasures.data?.data, "Observation"),
-      vitals: resourcesOf<fhir4.Observation>(vitals.data?.data, "Observation"),
+      bodyMeasures: resourcesOfType<fhir4.Observation>(bodyMeasures.data?.data, "Observation"),
+      vitals: resourcesOfType<fhir4.Observation>(vitals.data?.data, "Observation"),
       admission: admission.data ?? null,
       activeMedications: activeMedications.data ?? [],
       facility: facility.organization ?? null,
       author: author
         ? {
             practitioner: author,
-            roles: resourcesOf<fhir4.PractitionerRole>(authorRoles, "PractitionerRole"),
+            roles: resourcesOfType<fhir4.PractitionerRole>(authorRoles, "PractitionerRole"),
           }
         : null,
     };

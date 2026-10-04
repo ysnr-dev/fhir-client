@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FhirError } from "../api/fhirClient";
-import { usePractitioner, usePractitionerRoles, useUpdatePractitioner } from "../api/queries";
+import { usePractitioner, useUpdatePractitioner } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PractitionerForm } from "../components/PractitionerForm";
 import {
@@ -11,13 +11,14 @@ import {
 } from "../fhir/practitionerHelpers";
 import { emptyPractitionerRole, parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
 import { useEditSnapshot } from "../hooks/useEditSnapshot";
+import { usePractitionerRolesForEdit } from "../hooks/usePractitionerRolesForEdit";
 
 // 連携先医師の編集。自院スタッフの編集(PractitionerEditPage)と違い、
 // ログイン設定と所属診療科は扱わない。
 export function PartnerPractitionerEditPage() {
   const { id } = useParams<{ id: string }>();
   const { data: result, isLoading, error: loadError } = useEditSnapshot(usePractitioner(id), id);
-  const role = usePractitionerRoles(id);
+  const role = usePractitionerRolesForEdit(id);
 
   const header = (
     <div className="page__header">

@@ -12,7 +12,7 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { HISTORY_COUNT, NOTIFICATION_TASK_KEY, saveWithImages } from "./core";
+import { HISTORY_COUNT, NOTIFICATION_TASK_KEY, resourcesOfType, saveWithImages } from "./core";
 import { useLabResultDetail } from "./labResult";
 import { withResultReviewTask } from "./notification";
 import { hasRelation } from "./patient";
@@ -182,9 +182,7 @@ export function useCoverages(patientId: string | undefined) {
   });
 
   const coverages =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Coverage => r?.resourceType === "Coverage") ?? [];
+    resourcesOfType<fhir4.Coverage>(query.data?.data, "Coverage");
 
   return { ...query, coverages };
 }
@@ -202,9 +200,7 @@ export function useKarteConditions(patientId: string | undefined) {
   });
 
   const conditions =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Condition => r?.resourceType === "Condition") ?? [];
+    resourcesOfType<fhir4.Condition>(query.data?.data, "Condition");
 
   return { ...query, conditions };
 }
@@ -232,9 +228,7 @@ export function useClinicalNoteHistory(id: string | undefined, enabled: boolean)
   return {
     ...query,
     // 上流の _history は新しい版から返す(回帰 spec で固定済み)。
-    versions: (query.data?.entry ?? [])
-      .map((e) => e.resource)
-      .filter((r): r is fhir4.Composition => r?.resourceType === "Composition"),
+    versions: resourcesOfType<fhir4.Composition>(query.data, "Composition"),
   };
 }
 

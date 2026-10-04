@@ -33,9 +33,7 @@ export function useAppointmentSearch(patientId: string | undefined) {
   return {
     ...query,
     appointments:
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Appointment => Boolean(r)) ?? [],
+      resourcesOfType<fhir4.Appointment>(query.data?.data, "Appointment"),
   };
 }
 

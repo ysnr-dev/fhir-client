@@ -12,6 +12,7 @@ import {
   isOpenBroughtMedReview,
 } from "../../fhir/broughtMedTaskHelpers";
 import { useOrderEnterer } from "./provenance";
+import { resourcesOfType } from "./core";
 
 // ---- 持参薬(MedicationStatement) ----
 //
@@ -20,9 +21,7 @@ import { useOrderEnterer } from "./provenance";
 
 function statementsOf(bundle: fhir4.Bundle | undefined): fhir4.MedicationStatement[] {
   return (
-    bundle?.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.MedicationStatement => r?.resourceType === "MedicationStatement") ?? []
+    resourcesOfType<fhir4.MedicationStatement>(bundle, "MedicationStatement")
   );
 }
 
@@ -126,9 +125,7 @@ export function useBroughtMedTasks(encounterId: string | undefined) {
   });
   const tasks = useMemo(
     () =>
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Task => r?.resourceType === "Task") ?? [],
+      resourcesOfType<fhir4.Task>(query.data?.data, "Task"),
     [query.data],
   );
   return { ...query, tasks };

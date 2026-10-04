@@ -25,7 +25,7 @@ import {
 } from "../../fhir/outpatientOrderProgressHelpers";
 import { createResource, postBundle, readResource, searchResource } from "../fhirClient";
 import { invalidateAppointments, orderAppointmentCancelEntries } from "./appointment";
-import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES } from "./core";
+import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
 import { makePerformDetailHook, taskBundleEntry } from "./worklist";
 
 // ---- 外来一覧(受付ワークリスト) ----
@@ -77,9 +77,7 @@ async function fetchOutpatientExams(date: string): Promise<Map<string, fhir4.Enc
 
     const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
     const matched =
-      bundle.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [];
+      resourcesOfType<fhir4.Encounter>(bundle, "Encounter");
     encounters.push(...matched);
     if (matched.length < OUTPATIENT_PAGE) break;
   }
@@ -379,9 +377,7 @@ async function fetchPatientOutpatientExam(patientId: string): Promise<Outpatient
 
   const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
   const encounters =
-    bundle.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [];
+    resourcesOfType<fhir4.Encounter>(bundle, "Encounter");
   // 同じ患者の診察が 2 件並ぶことは無い想定だが、あれば開始が新しい方を採る
   // (データがおかしくてもカルテの見出しが壊れないように)。
   const encounter = encounters.reduce<fhir4.Encounter | undefined>(

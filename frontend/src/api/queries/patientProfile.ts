@@ -28,7 +28,7 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { saveWithImages } from "./core";
+import { resourcesOfType, saveWithImages } from "./core";
 import { hasRelation } from "./patient";
 
 // ---- 診療上の注意(Flag) ----
@@ -88,7 +88,7 @@ export function useActiveFlags(patientId: string | undefined) {
   });
 
   const flags =
-    query.data?.data.entry?.map((e) => e.resource).filter((r): r is fhir4.Flag => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Flag>(query.data?.data, "Flag");
 
   return { ...query, flags };
 }
@@ -298,9 +298,7 @@ export function useBloodType(patientId: string | undefined) {
   });
 
   const observations =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Observation>(query.data?.data, "Observation");
 
   return { ...query, observations };
 }
@@ -352,9 +350,7 @@ export function usePregnancy(patientId: string | undefined) {
   });
 
   const observations =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Observation>(query.data?.data, "Observation");
 
   return { ...query, observations };
 }
@@ -405,9 +401,7 @@ export function useManualInfections(patientId: string | undefined) {
   });
 
   const observations =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Observation>(query.data?.data, "Observation");
 
   return { ...query, observations };
 }
@@ -438,9 +432,7 @@ export function useLabInfectionResults(patientId: string | undefined, enabled: b
   });
 
   const observations =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Observation>(query.data?.data, "Observation");
 
   return { ...query, observations };
 }
@@ -490,9 +482,7 @@ export function useBodyMeasures(patientId: string | undefined) {
   });
 
   const observations =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Observation>(query.data?.data, "Observation");
 
   return { ...query, observations };
 }
@@ -517,9 +507,7 @@ export function useRecentLabResults(patientId: string | undefined) {
   });
 
   const observations =
-    query.data?.data.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+    resourcesOfType<fhir4.Observation>(query.data?.data, "Observation");
 
   return { ...query, observations };
 }
@@ -702,9 +690,7 @@ export function useQuestionnaireOptions(options?: { status?: fhir4.Questionnaire
   return {
     ...query,
     questionnaires:
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Questionnaire => Boolean(r)) ?? [],
+      resourcesOfType<fhir4.Questionnaire>(query.data?.data, "Questionnaire"),
   };
 }
 
