@@ -9,12 +9,12 @@ import {
   type NotificationRowBase,
 } from "./notificationHelpers";
 
-// 看護サマリの差戻し(通知 Task)。承認者が却下したとき、理由を添えて作成者あてに出す。
+// 看護サマリーの差戻し(通知 Task)。承認者が却下したとき、理由を添えて作成者あてに出す。
 // 作成者が直して確定し直したら閉じる(docs/nursing-care-plan-design.md)。
 
-export const NURSING_SUMMARY_RETURNED_TASK_CODE = { code: "nursing-summary-returned", display: "看護サマリ差戻し" };
+export const NURSING_SUMMARY_RETURNED_TASK_CODE = { code: "nursing-summary-returned", display: "看護サマリー差戻し" };
 
-export const NURSING_SUMMARY_RETURNED_NOTE = "看護サマリを確定し直しました。";
+export const NURSING_SUMMARY_RETURNED_NOTE = "看護サマリーを確定し直しました。";
 
 const SUMMARY_LABEL_INPUT = "看護サマリ";
 const REASON_INPUT = "理由";

@@ -20,7 +20,7 @@ import { saveClinicalNote } from "./micro";
 import { fetchNursingCarePlans } from "./nursingCarePlan";
 import { useOrderEnterer } from "./provenance";
 
-// 看護サマリ(docs/nursing-care-plan-design.md)。作成の材料集め・保存・病棟単位の承認一覧。
+// 看護サマリー(docs/nursing-care-plan-design.md)。作成の材料集め・保存・病棟単位の承認一覧。
 
 const NURSING_SUMMARY_KEY = ["Composition", "search", "nursing-summary"];
 
@@ -39,7 +39,7 @@ function recordOf(composition: fhir4.Composition): NursingRecordSource {
 }
 
 /**
- * 看護サマリの下書きの材料。病名・アレルギー・看護計画と、入院期間の看護記録(看護職が書いた
+ * 看護サマリーの下書きの材料。病名・アレルギー・看護計画と、入院期間の看護記録(看護職が書いた
  * 経過記録)を集める。看護記録は期間を絞って選ぶので、入院期間ぶんを引いておく。
  */
 export function useNursingSummarySources(patientId: string, encounter: fhir4.Encounter | undefined) {
@@ -97,7 +97,7 @@ export function useNursingSummarySources(patientId: string, encounter: fhir4.Enc
   });
 }
 
-/** その入院の看護サマリ(新しい順)。 */
+/** その入院の看護サマリー(新しい順)。 */
 export function useNursingSummariesFor(encounterId: string | undefined) {
   return useQuery({
     queryKey: [...NURSING_SUMMARY_KEY, "encounter", encounterId],
@@ -114,7 +114,7 @@ export function useNursingSummariesFor(encounterId: string | undefined) {
   });
 }
 
-/** 看護サマリへの未対応の差戻し(通知 Task)。 */
+/** 看護サマリーへの未対応の差戻し(通知 Task)。 */
 export async function fetchReturnedTasks(compositionIds: string[]): Promise<fhir4.Task[]> {
   if (compositionIds.length === 0) return [];
   const params = new URLSearchParams();
@@ -143,7 +143,7 @@ function invalidateNursingSummaries(queryClient: ReturnType<typeof useQueryClien
   queryClient.invalidateQueries({ queryKey: ["Task"] });
 }
 
-/** 看護サマリの保存。確定し直したときは未対応の差戻しを同じ transaction で閉じる。 */
+/** 看護サマリーの保存。確定し直したときは未対応の差戻しを同じ transaction で閉じる。 */
 export function useSaveNursingSummary() {
   const queryClient = useQueryClient();
   const enterer = useOrderEnterer();
@@ -173,7 +173,7 @@ export interface WardNursingSummaries {
   returnedTasks: fhir4.Task[];
 }
 
-/** 病棟の看護サマリ(作成日が期間内)。患者を _include で添え、未対応の差戻しも引く。 */
+/** 病棟の看護サマリー(作成日が期間内)。患者を _include で添え、未対応の差戻しも引く。 */
 export function useWardNursingSummaries(wardId: string, from: string, to: string) {
   return useQuery({
     queryKey: [...NURSING_SUMMARY_KEY, "ward", wardId, from, to],

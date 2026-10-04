@@ -32,7 +32,7 @@ import { wardExtension, wardOf } from "./orderHeader";
 import { practitionerDisplayName } from "./practitionerHelpers";
 import { LOINC_SYSTEM } from "./shared";
 
-// 看護サマリ(docs/nursing-care-plan-design.md)。受け持ち看護師が中間・転棟・退院の区分で、
+// 看護サマリー(docs/nursing-care-plan-design.md)。受け持ち看護師が中間・転棟・退院の区分で、
 // 期間中のケアと状態を看護問題ごとに要約する。器は退院時サマリーと同じ Composition。
 // - type はローカルの nursing-summary、区分は category、対象の期間は event.period
 // - 病棟は作成時の病棟を order-ward 拡張に持つ(病棟単位の承認一覧で ward 検索する)
@@ -56,7 +56,7 @@ export function nursingSummaryKindLabel(kind: string | undefined): string {
 
 const BASIC_SECTION = "basic";
 const PAST_SECTION = "11348-0";
-// 病名は診療記録の対象プロブレム(LOINC 11450-4)と同じコードにすると、カードがサマリを
+// 病名は診療記録の対象プロブレム(LOINC 11450-4)と同じコードにすると、カードがサマリーを
 // 1 つのプロブレムの記録として扱うので、ローカルのコードにする。
 const CONDITION_SECTION = "conditions";
 const NURSING_PROBLEM_SECTION = "nursing-problems";
@@ -128,14 +128,14 @@ export interface NursingRecordSource {
 /** 下書きの材料。api/queries の useNursingSummarySources が集める。 */
 export interface NursingSummarySources {
   encounter: fhir4.Encounter;
-  /** 入院の今の(退院済みなら最後の)病棟。看護サマリに焼き付ける。 */
+  /** 入院の今の(退院済みなら最後の)病棟。看護サマリーに焼き付ける。 */
   ward: { wardId: string; wardName: string };
   patient: fhir4.Patient | undefined;
   conditions: fhir4.Condition[];
   allergies: fhir4.AllergyIntolerance[];
   nursingProblems: NursingProblemView[];
   nursingRecords: NursingRecordSource[];
-  /** その入院の看護サマリ(中間の期間の既定に使う)。 */
+  /** その入院の看護サマリー(中間の期間の既定に使う)。 */
   summaries: fhir4.Composition[];
 }
 
@@ -168,7 +168,7 @@ function linesToHtml(lines: string[]): string {
   return lines.map((line) => `<p>${escapeHtml(line)}</p>`).join("");
 }
 
-/** 対象期間の既定。退院・転棟は入院日から、中間は前回のサマリの翌日から。終わりは退院日か今日。 */
+/** 対象期間の既定。退院・転棟は入院日から、中間は前回のサマリーの翌日から。終わりは退院日か今日。 */
 export function defaultNursingSummaryPeriod(
   kind: NursingSummaryKind,
   encounter: fhir4.Encounter,
@@ -182,7 +182,7 @@ export function defaultNursingSummaryPeriod(
     .filter(Boolean)
     .sort()
     .at(-1);
-  // 前回のサマリが今日(退院日)まで書いてあれば、始まりが終わりを越えないよう終わりの日に揃える。
+  // 前回のサマリーが今日(退院日)まで書いてあれば、始まりが終わりを越えないよう終わりの日に揃える。
   const next = lastEnd ? addDays(lastEnd, 1) : admission;
   return { start: next > end ? end : next, end };
 }
@@ -199,7 +199,7 @@ const GENDER_LABELS: Record<string, string> = { male: "男性", female: "女性"
 
 /**
  * 看護問題 1 件の要約。1 行目が「#n 問題」、続く行が目標・計画(OP/TP/EP、看護介入)・最新の評価で、行頭を字下げする。
- * サマリの本文(section.text)と参照の表示(entry.display)にそのまま使う。入力フォームは 1 行目を見出しにし、中身はツリーで出す。
+ * サマリーの本文(section.text)と参照の表示(entry.display)にそのまま使う。入力フォームは 1 行目を見出しにし、中身はツリーで出す。
  */
 export function nursingProblemDigest(view: NursingProblemView, index: number, at: string): string {
   const indent = "　";
@@ -427,7 +427,7 @@ export function buildNursingSummary(
     encounter: { reference: `Encounter/${values.encounterId}` },
     date: toFhirDateTime(values.date),
     author,
-    title: `看護サマリ(${kindLabel})`,
+    title: `看護サマリー(${kindLabel})`,
     event: [{ period: { start: values.periodStart, end: values.periodEnd } }],
     section: sections,
   };

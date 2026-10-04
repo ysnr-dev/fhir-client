@@ -1,4 +1,4 @@
-# 看護計画・看護サマリ・看護サマリ承認 設計
+# 看護計画・看護サマリー・看護サマリー承認 設計
 
 functional.xlsx の「看護計画」(3615〜3622)「看護サマリ」(3772〜3783)「看護サマリ承認」(3784〜3786)の第 1 段階。
 看護プロファイル・看護仮診断・帳票印刷(PDF)・経過表タイトル連携・助産記録連携・承認権限(師長など)・NNN の配布データ取込は第 2 段階。
@@ -10,7 +10,7 @@ Condition(看護問題)  ← addresses ── CarePlan(看護計画: OP/TP/EP �
      ↑ reasonReference                ↑ 拡張 nursing-care-plan-activity(plan + 行の id)
 ServiceRequest(計画の行から展開した看護指示)
 Observation(評価)── focus → Goal / Condition、basedOn → CarePlan
-Composition(看護サマリ)── section.entry → Condition(病名)/ CarePlan(看護問題)
+Composition(看護サマリー)── section.entry → Condition(病名)/ CarePlan(看護問題)
 ```
 
 ### 1.1 看護問題 = Condition
@@ -63,13 +63,13 @@ Composition(看護サマリ)── section.entry → Condition(病名)/ CarePlan
 - 「解決」は同じ transaction で Condition を resolved、CarePlan を completed、継続中の Goal を completed、
   展開した看護指示に終了日(評価日)を書く。
 
-### 1.5 看護サマリ = Composition
+### 1.5 看護サマリー = Composition
 
 - type: `http://fhir-client.local/CodeSystem/document-type|nursing-summary`。種別に合う LOINC を確認できていないのでローカルだけ。
 - category: `http://fhir-client.local/CodeSystem/nursing-summary-kind|interim / transfer / discharge`。
 - encounter = 入院、event.period = 対象期間、拡張 `order-ward` = 作成時の病棟(退院済みなら最後の病棟)。
 - セクション: 基本情報・看護経過・現在の状態・継続看護・病名・看護問題はローカルの `nursing-summary-section`、既往歴は LOINC 11348-0。
-  病名を LOINC 11450-4 にすると診療記録の「対象プロブレム」と同じコードになり、カードがサマリを 1 つのプロブレムの記録として扱うため避けた。
+  病名を LOINC 11450-4 にすると診療記録の「対象プロブレム」と同じコードになり、カードがサマリーを 1 つのプロブレムの記録として扱うため避けた。
 - 状態:
 
 | 状態 | status | attester | 補助 |

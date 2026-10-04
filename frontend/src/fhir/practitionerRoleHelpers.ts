@@ -71,7 +71,7 @@ export function isDoctorRoleCode(code: string | undefined): boolean {
   return Boolean(code && DOCTOR_ROLE_CODES.includes(code));
 }
 
-// 看護職(看護記録の印・看護サマリの承認)。
+// 看護職(看護記録の印・看護サマリーの承認)。
 export const NURSE_ROLE_CODES: readonly string[] = ["nurse", "public-health-nurse", "midwife"];
 
 export function isNursingRoleCode(code: string | undefined): boolean {

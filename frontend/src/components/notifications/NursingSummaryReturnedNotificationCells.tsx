@@ -1,6 +1,6 @@
 import type { NursingSummaryReturnedRow } from "../../fhir/nursingSummaryTaskHelpers";
 
-/** 看護サマリの差戻しの内容セル。どのサマリを誰が差し戻したかと理由。 */
+/** 看護サマリーの差戻しの内容セル。どのサマリーを誰が差し戻したかと理由。 */
 export function NursingSummaryReturnedNotificationCells({ row }: { row: NursingSummaryReturnedRow }) {
   return (
     <>

@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { isOrderKind, ORDER_KINDS, type OrderKind } from "../fhir/orderKinds";
 import { AppointmentCreatePanel, AppointmentReschedulePanel } from "./AppointmentPanels";
@@ -83,7 +83,7 @@ export type KartePaneState =
   // 退院時サマリー。encounterId は対象の入院の初期値(通知・入院患者一覧のリンクから)。
   | { kind: "summary-create"; encounterId?: string }
   | { kind: "summary-edit"; noteId: string }
-  // 看護サマリ(中間・転棟・退院)。承認者もこの編集から承認する。
+  // 看護サマリー(中間・転棟・退院)。承認者もこの編集から承認する。
   | { kind: "nursing-summary-create"; encounterId?: string }
   | { kind: "nursing-summary-edit"; noteId: string }
   // DPC 様式1。encounterId は対象の入院の初期値(提出ファイルの一覧から)。
@@ -248,8 +248,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "note-edit": "診療記録編集",
   "summary-create": "退院時サマリー登録",
   "summary-edit": "退院時サマリー編集",
-  "nursing-summary-create": "看護サマリ登録",
-  "nursing-summary-edit": "看護サマリ",
+  "nursing-summary-create": "看護サマリー登録",
+  "nursing-summary-edit": "看護サマリー",
   "dpc-form1-create": "DPC様式1登録",
   "dpc-form1-edit": "DPC様式1編集",
   "document-create": "文書作成",
@@ -542,18 +542,29 @@ export function KarteRightPane({
         >
           栄養指導
         </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "nursing-order-create", problem: selectedProblem })}
-        >
-          看護指示
-        </button>
-        <button type="button" onClick={() => onStateChange({ kind: "nursing-problem-create", entry: "standard_plan" })}>
-          標準看護計画
-        </button>
-        <button type="button" onClick={() => onStateChange({ kind: "nursing-problem-create", entry: "diagnosis" })}>
-          看護診断
-        </button>
+        <PaneActionGroup label="看護">
+          <button
+            type="button"
+            onClick={() => onStateChange({ kind: "nursing-problem-create", entry: "standard_plan" })}
+          >
+            看護計画
+          </button>
+          <button
+            type="button"
+            onClick={() => onStateChange({ kind: "nursing-problem-create", entry: "diagnosis" })}
+          >
+            看護診断
+          </button>
+          <button
+            type="button"
+            onClick={() => onStateChange({ kind: "nursing-order-create", problem: selectedProblem })}
+          >
+            看護指示
+          </button>
+          <button type="button" onClick={() => onStateChange({ kind: "nursing-summary-create" })}>
+            看護サマリー
+          </button>
+        </PaneActionGroup>
         {/* 他科依頼は部門ではなく人(他の診療科の医師)への依頼なので、部門オーダーを
             並べた最後に置く。 */}
         <button
@@ -566,9 +577,6 @@ export function KarteRightPane({
         <button type="button" onClick={() => onStateChange({ kind: "summary-create" })}>
           退院時サマリー
         </button>
-        <button type="button" onClick={() => onStateChange({ kind: "nursing-summary-create" })}>
-          看護サマリ
-        </button>
         <button type="button" onClick={() => onStateChange({ kind: "dpc-form1-create" })}>
           DPC様式1
         </button>
@@ -577,6 +585,31 @@ export function KarteRightPane({
         </button>
       </div>
     </section>
+  );
+}
+
+// 登録ボタン列の中で、同じ領域のボタンを見出しのボタンの下に畳む。
+function PaneActionGroup({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="karte-right__group-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {label}
+        <span className="karte-right__group-caret" aria-hidden="true">
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
+      {open && (
+        <div className="karte-right__group" role="group" aria-label={label}>
+          {children}
+        </div>
+      )}
+    </>
   );
 }
 

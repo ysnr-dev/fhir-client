@@ -10,7 +10,7 @@ import {
 } from "../fhir/nursingCarePlanHelpers";
 import { nursingOrderState } from "../fhir/nursingOrderHelpers";
 
-// 看護問題 1 件の中身(因子・目標・計画・評価)をツリーで並べる。看護計画タブのカードと看護サマリの入力で使う。
+// 看護問題 1 件の中身(因子・目標・計画・評価)をツリーで並べる。看護計画タブのカードと看護サマリーの入力で使う。
 
 /** 計画の行 1 つ。展開した看護指示が効いていれば「指示中」を添える。 */
 function ActivityLeaf({ activity, view, at }: { activity: NursingActivityValues; view: NursingProblemView; at: string }) {

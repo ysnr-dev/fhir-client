@@ -289,7 +289,7 @@ const nursingSummaryReturnedKind = defineNotificationKind<NursingSummaryReturned
   label: NURSING_SUMMARY_RETURNED_TASK_CODE.display,
   toRow: nursingSummaryReturnedRowOf,
   Cells: NursingSummaryReturnedNotificationCells,
-  // カルテの右ペインをその看護サマリで開く(一回限りの open パラメータ)。
+  // カルテの右ペインをその看護サマリーで開く(一回限りの open パラメータ)。
   karteLink: (row) => {
     if (!row.patientId || !row.compositionId) return null;
     const params = new URLSearchParams();

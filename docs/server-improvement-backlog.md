@@ -312,9 +312,9 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 
 ## 2026-10-04 に対応済み
 
-### `Composition.ward` と `CarePlan.condition`(看護サマリ・看護計画)
+### `Composition.ward` と `CarePlan.condition`(看護サマリー・看護計画)
 
-- `Composition` に `ward`(ローカル。オーダーと同じ `order-ward` 拡張を引く)を追加。病棟単位の看護サマリ承認一覧で使う。
+- `Composition` に `ward`(ローカル。オーダーと同じ `order-ward` 拡張を引く)を追加。病棟単位の看護サマリー承認一覧で使う。
 - `CarePlan` に R4 標準の `condition`(`addresses`)と `_include=CarePlan:condition` を追加。看護計画の読み込みで
   看護問題を同じ応答に添える。
 

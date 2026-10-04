@@ -6494,7 +6494,7 @@ button.populate-expression__option--active {
 
 /* 退院時サマリー。固定の 8 セクションを見出し付きで縦に並べる。参照セクションは
    候補のチェックリスト、本文セクションは診療記録と同じエディタ。 */
-/* サマリの「内容」。セクションの間は .discharge-summary__section の余白で取るので、fieldset の gap は付けない。 */
+/* サマリーの「内容」。セクションの間は .discharge-summary__section の余白で取るので、fieldset の gap は付けない。 */
 .patient-form fieldset.discharge-summary__content {
   gap: 0;
 }
@@ -8147,6 +8147,25 @@ body.karte-wide {
   padding: 6px 7px;
   justify-content: center;
   flex: none;
+}
+
+.karte-right__group-toggle {
+  gap: 4px;
+}
+
+.karte-right__group-caret {
+  font-size: 10px;
+}
+
+/* 畳んだボタンは見出しのボタンより字下げし、左の線で同じ領域だと分かるようにする。 */
+.karte-right__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 2px solid var(--border);
 }
 
 /* 右ペインのフォームはペイン幅いっぱいに使う(既定の max-width を外す)。 */
@@ -22631,7 +22650,7 @@ label.insulin-perform__reason {
   width: 20em;
 }
 
-/* ---- 看護サマリ ---- */
+/* ---- 看護サマリー ---- */
 /* 期間は 1 つの項目として、見出しの下に始まりと終わりの日付を横に並べる(他の項目と高さを揃える)。 */
 .nursing-summary__range {
   display: inline-flex;
@@ -22639,7 +22658,7 @@ label.insulin-perform__reason {
   gap: 6px;
 }
 
-/* 退院時サマリー・看護サマリの「対象の入院」と、その下の入院情報の間の余白。 */
+/* 退院時サマリー・看護サマリーの「対象の入院」と、その下の入院情報の間の余白。 */
 .summary-admission-select {
   margin-bottom: 12px;
 }
@@ -22768,7 +22787,7 @@ input.nursing-picker__search {
   color: var(--text);
 }
 
-/* 看護サマリの看護問題・計画の候補。チェックボックスの下に看護計画のツリーを字下げして出す。 */
+/* 看護サマリーの看護問題・計画の候補。チェックボックスの下に看護計画のツリーを字下げして出す。 */
 .nursing-summary__problems > li + li {
   margin-top: 6px;
 }

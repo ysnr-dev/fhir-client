@@ -39,8 +39,8 @@ import { ErrorBanner } from "./ErrorBanner";
 import type { KartePaneState } from "./KarteRightPane";
 import { NursingSummaryForm, type NursingSummarySubmitMode } from "./NursingSummaryForm";
 
-// 看護サマリの登録・編集・承認(カルテ右ペイン)。登録は入院と種別を選ぶところから始め、
-// 退院の看護サマリが既にあれば編集に切り替える(中間・転棟は何件でも書ける)。
+// 看護サマリーの登録・編集・承認(カルテ右ペイン)。登録は入院と種別を選ぶところから始め、
+// 退院の看護サマリーが既にあれば編集に切り替える(中間・転棟は何件でも書ける)。
 
 function admissionLabel(encounter: fhir4.Encounter): string {
   const discharge = encounterDischargeDate(encounter);
@@ -198,7 +198,7 @@ export function NursingSummaryEditPanel({
       {isLoading || encounter.isLoading ? (
         <p>読み込み中...</p>
       ) : patientMismatch ? (
-        <p className="patient-table__empty">指定された看護サマリは別の患者のものです。</p>
+        <p className="patient-table__empty">指定された看護サマリーは別の患者のものです。</p>
       ) : !encounter.data ? (
         <p className="patient-table__empty">対象の入院が見つかりません。</p>
       ) : (
@@ -282,7 +282,7 @@ function EditForm({
       {conflict && (
         <div className="error-banner" role="alert">
           <p className="error-banner__line error-banner__line--error">
-            この看護サマリは他の操作によって更新されています。画面を再読込してから再度編集してください。
+            この看護サマリーは他の操作によって更新されています。画面を再読込してから再度編集してください。
           </p>
         </div>
       )}

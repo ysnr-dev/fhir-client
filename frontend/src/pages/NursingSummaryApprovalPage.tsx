@@ -27,8 +27,8 @@ import { useIsNursingLogin } from "../hooks/useIsNursingLogin";
 import { addDays, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
 
-// 看護サマリ承認。病棟の看護サマリを作成状態・承認状態とともに並べ、承認・却下する。
-// 修正して承認するときはカルテの看護サマリを開いて「修正承認」する。承認できるのは看護職で作成者以外。
+// 看護サマリー承認。病棟の看護サマリーを作成状態・承認状態とともに並べ、承認・却下する。
+// 修正して承認するときはカルテの看護サマリーを開いて「修正承認」する。承認できるのは看護職で作成者以外。
 
 interface Row {
   composition: fhir4.Composition;
@@ -133,7 +133,7 @@ export function NursingSummaryApprovalPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>看護サマリ承認</h1>
+        <h1>看護サマリー承認</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => void list.refetch()}>
             更新
@@ -240,7 +240,7 @@ export function NursingSummaryApprovalPage() {
               {visible.length === 0 && (
                 <tr>
                   <td colSpan={8} className="master-search__empty">
-                    {rows.length === 0 ? "この期間の看護サマリはありません。" : "絞り込みに一致する看護サマリがありません。"}
+                    {rows.length === 0 ? "この期間の看護サマリーはありません。" : "絞り込みに一致する看護サマリーがありません。"}
                   </td>
                 </tr>
               )}
@@ -263,7 +263,7 @@ export function NursingSummaryApprovalPage() {
                     rejecting.composition,
                     rejecting.patientId,
                     reason,
-                    `看護サマリ(${nursingSummaryKindLabel(rejecting.kind)})`,
+                    `看護サマリー(${nursingSummaryKindLabel(rejecting.kind)})`,
                     { practitionerId, display: practitionerDisplayName(practitioner) },
                   ),
                 ],
@@ -292,7 +292,7 @@ function RejectModal({
 }) {
   const [reason, setReason] = useState("");
   return (
-    <Modal title={`${row.patientName} 看護サマリ(${nursingSummaryKindLabel(row.kind)})`} onClose={onClose}>
+    <Modal title={`${row.patientName} 看護サマリー(${nursingSummaryKindLabel(row.kind)})`} onClose={onClose}>
       <div className="prescription-form">
         <label>
           理由

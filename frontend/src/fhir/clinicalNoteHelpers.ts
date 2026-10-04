@@ -59,12 +59,12 @@ export const DISCHARGE_SUMMARY_TYPE: fhir4.CodeableConcept = {
 export const DISCHARGE_SUMMARY_TYPE_SEARCH = `${LOINC_SYSTEM}|18842-5`;
 
 /**
- * 看護サマリ(中間・転棟・退院)。退院時サマリーと同じ Composition の器で、区分は category
+ * 看護サマリー(中間・転棟・退院)。退院時サマリーと同じ Composition の器で、区分は category
  * (fhir/nursingSummaryHelpers.ts)。種別に一致する標準コードを確認できていないのでローカルの type だけで持つ。
  */
 export const NURSING_SUMMARY_TYPE: fhir4.CodeableConcept = {
-  coding: [{ system: LOCAL_DOCUMENT_TYPE_SYSTEM, code: "nursing-summary", display: "看護サマリ" }],
-  text: "看護サマリ",
+  coding: [{ system: LOCAL_DOCUMENT_TYPE_SYSTEM, code: "nursing-summary", display: "看護サマリー" }],
+  text: "看護サマリー",
 };
 
 export const NURSING_SUMMARY_TYPE_SEARCH = `${LOCAL_DOCUMENT_TYPE_SYSTEM}|nursing-summary`;
@@ -79,7 +79,7 @@ export function isNursingSummary(composition: fhir4.Composition | undefined): bo
 
 /**
  * 看護職が書いた経過記録の印(Composition.category)。Composition には書いた人の職種が残らず、
- * 上流の検索も作成者の職種では引けないので、保存のときに付ける。看護サマリの「看護記録」の取り込みはこれで引く。
+ * 上流の検索も作成者の職種では引けないので、保存のときに付ける。看護サマリーの「看護記録」の取り込みはこれで引く。
  */
 export const NURSING_NOTE_CATEGORY: fhir4.CodeableConcept = {
   coding: [{ system: "http://fhir-client.local/CodeSystem/clinical-note-category", code: "nursing", display: "看護記録" }],

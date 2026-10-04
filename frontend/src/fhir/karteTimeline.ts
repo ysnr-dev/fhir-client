@@ -220,7 +220,7 @@ export function karteItemKindLabel(
   }
   // 退院時サマリーは診療記録と同じ器だが、バッジでは文書として見分けられるようにする。
   if (item.kind === "note" && item.note && isDischargeSummary(item.note)) return "退院時サマリー";
-  if (item.kind === "note" && item.note && isNursingSummary(item.note)) return "看護サマリ";
+  if (item.kind === "note" && item.note && isNursingSummary(item.note)) return "看護サマリー";
   return KARTE_KIND_LABELS[item.kind];
 }
 
@@ -1148,7 +1148,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
 export const KARTE_NOTE_TYPES = [
   { code: "progress", label: "診療記録" },
   { code: "discharge-summary", label: "退院時サマリー" },
-  { code: "nursing-summary", label: "看護サマリ" },
+  { code: "nursing-summary", label: "看護サマリー" },
 ] as const;
 export type KarteNoteType = (typeof KARTE_NOTE_TYPES)[number]["code"];
 
