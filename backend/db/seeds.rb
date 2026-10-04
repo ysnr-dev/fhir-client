@@ -1596,3 +1596,39 @@ if File.exist?(chart_presets_json)
 else
   puts "chart_definitions presets: #{chart_presets_json} not found, skipped"
 end
+
+# 看護計画の用語(看護診断・看護成果・看護介入)と標準看護計画のサンプル(db/seed_data/nursing_care/sample.json)。
+# NANDA-I・NIC・NOC はライセンス物なので同梱しない。ここに入れるのは開発とデモのための自作の用語で、
+# コードは L で始めて配布データの番号と混ざらないようにしてある(docs/nursing-care-plan-design.md)。
+# 用語は領域 → 類 → 用語の順に入れる(親の存在を検証するため)。既存のコードは上書きしない。
+# 標準看護計画の看護行為・看護観察は、MEDIS 看護実践用語標準マスターが未取込でコードが無ければ紐付けを外して入れる。
+nursing_care_json = Rails.root.join("db/seed_data/nursing_care/sample.json")
+if File.exist?(nursing_care_json)
+  data = JSON.parse(File.read(nursing_care_json))
+  terms_loaded = 0
+  %w[domain class term].each do |level|
+    data["terms"].select { |attrs| attrs["level"] == level }.each do |attrs|
+      next if Master::NursingTerm.exists?(taxonomy: attrs["taxonomy"], code: attrs["code"])
+
+      Master::NursingTerm.create!(attrs)
+      terms_loaded += 1
+    end
+  end
+  plans_loaded = 0
+  data["standard_plans"].each do |attrs|
+    next if Master::NursingStandardPlan.exists?(code: attrs["code"])
+
+    activities = attrs["activities"].map do |row|
+      linked = case row["item_kind"]
+               when "act" then Master::NursingAct.exists?(code_16: row["code16"])
+               when "observation" then Master::NursingObservation.exists?(manage_no: row["manage_no"])
+               end
+      linked ? row : row.except("item_kind", "code16", "manage_no", "item_name")
+    end
+    Master::NursingStandardPlan.create!(attrs.merge("activities" => activities))
+    plans_loaded += 1
+  end
+  puts "master_nursing_terms: seeded #{terms_loaded} rows, master_nursing_standard_plans: seeded #{plans_loaded} rows"
+else
+  puts "master_nursing_terms: #{nursing_care_json} not found, skipped"
+end

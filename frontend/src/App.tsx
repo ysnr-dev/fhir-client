@@ -53,6 +53,8 @@ import { MealItemPage } from "./pages/MealItemPage";
 import { MealCategoryPage } from "./pages/MealCategoryPage";
 import { TransfusionProductPage } from "./pages/TransfusionProductPage";
 import { NursingActPage } from "./pages/NursingActPage";
+import { NursingStandardPlanPage } from "./pages/NursingStandardPlanPage";
+import { NursingTermMasterPage } from "./pages/NursingTermMasterPage";
 import { NursingObservationPage } from "./pages/NursingObservationPage";
 import { TreatmentItemPage } from "./pages/TreatmentItemPage";
 import { TreatmentItemLayoutPage } from "./pages/TreatmentItemLayoutPage";
@@ -86,6 +88,7 @@ import { PatientCautionPage } from "./pages/PatientCautionPage";
 import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
 import { InsulinScaleSetPage } from "./pages/InsulinScaleSetPage";
 import { InsulinWorklistPage } from "./pages/InsulinWorklistPage";
+import { NursingSummaryApprovalPage } from "./pages/NursingSummaryApprovalPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { FormularyPage } from "./pages/FormularyPage";
 import { DrugCheckPage } from "./pages/DrugCheckPage";
@@ -557,13 +560,26 @@ function App() {
                 休止・中止理由マスタ
               </Link>
             </SubMenu>
-            {/* 看護。MEDIS 看護実践用語標準マスターの閲覧(取込で洗い替える読み取り専用)。 */}
+            {/* 看護。MEDIS 看護実践用語標準マスターの閲覧(取込で洗い替える読み取り専用)と、
+                看護計画の用語・標準看護計画。 */}
             <SubMenu label="看護">
               <Link to="/nursing-acts" className="row-menu__item">
                 看護行為マスタ
               </Link>
               <Link to="/nursing-observations" className="row-menu__item">
                 看護観察マスタ
+              </Link>
+              <Link to="/nursing-diagnoses" className="row-menu__item">
+                看護診断マスタ
+              </Link>
+              <Link to="/nursing-outcomes" className="row-menu__item">
+                看護成果マスタ
+              </Link>
+              <Link to="/nursing-interventions" className="row-menu__item">
+                看護介入マスタ
+              </Link>
+              <Link to="/nursing-standard-plans" className="row-menu__item">
+                標準看護計画マスタ
               </Link>
             </SubMenu>
           </HoverMenu>
@@ -698,6 +714,7 @@ function App() {
           <Route path="/order-sets" element={<OrderSetPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/insulin-worklist" element={<InsulinWorklistPage />} />
+          <Route path="/nursing-summary-approvals" element={<NursingSummaryApprovalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
           <Route path="/brought-med-worklist" element={<BroughtMedicationWorklistPage />} />
@@ -748,6 +765,13 @@ function App() {
           <Route path="/transfusion-products" element={<TransfusionProductPage />} />
           <Route path="/nursing-acts" element={<NursingActPage />} />
           <Route path="/nursing-observations" element={<NursingObservationPage />} />
+          <Route path="/nursing-diagnoses" element={<NursingTermMasterPage key="diagnosis" taxonomy="diagnosis" />} />
+          <Route path="/nursing-outcomes" element={<NursingTermMasterPage key="outcome" taxonomy="outcome" />} />
+          <Route
+            path="/nursing-interventions"
+            element={<NursingTermMasterPage key="intervention" taxonomy="intervention" />}
+          />
+          <Route path="/nursing-standard-plans" element={<NursingStandardPlanPage />} />
           <Route path="/surgery-items" element={<SurgeryItemPage />} />
           <Route path="/surgery-categories" element={<SurgeryCategoryPage />} />
           <Route path="/surgery-room-blocks" element={<SurgeryRoomBlockPage />} />

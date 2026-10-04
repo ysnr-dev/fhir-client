@@ -82,6 +82,13 @@ import { OrderApprovalNotificationCells } from "./OrderApprovalNotificationCells
 import { PathwayVarianceNotificationCells } from "./PathwayVarianceNotificationCells";
 import { ExamCriticalFindingNotificationCells } from "./ExamCriticalFindingNotificationCells";
 import { ResultReviewNotificationCells } from "./ResultReviewNotificationCells";
+import { NursingSummaryReturnedNotificationCells } from "./NursingSummaryReturnedNotificationCells";
+import {
+  NURSING_SUMMARY_RETURNED_NOTE,
+  NURSING_SUMMARY_RETURNED_TASK_CODE,
+  nursingSummaryReturnedRowOf,
+  type NursingSummaryReturnedRow,
+} from "../../fhir/nursingSummaryTaskHelpers";
 
 // 通知の種別ごとの振る舞いをまとめた対応表。通知そのものの形は notificationHelpers、
 // ここは「一覧でどう見せて、どう対応済みにするか」だけを持つ。
@@ -277,6 +284,24 @@ const broughtMedIdentifiedKind = defineNotificationKind<BroughtMedIdentifiedRow>
   action: { label: "対応済", noteText: BROUGHT_MED_IDENTIFIED_NOTE },
 });
 
+const nursingSummaryReturnedKind = defineNotificationKind<NursingSummaryReturnedRow>({
+  code: NURSING_SUMMARY_RETURNED_TASK_CODE.code,
+  label: NURSING_SUMMARY_RETURNED_TASK_CODE.display,
+  toRow: nursingSummaryReturnedRowOf,
+  Cells: NursingSummaryReturnedNotificationCells,
+  // カルテの右ペインをその看護サマリで開く(一回限りの open パラメータ)。
+  karteLink: (row) => {
+    if (!row.patientId || !row.compositionId) return null;
+    const params = new URLSearchParams();
+    params.set(KARTE_OPEN_PARAM, formatKarteOpen({ kind: "nursing-summary", compositionId: row.compositionId }));
+    return `/patients/${row.patientId}/karte?${params.toString()}`;
+  },
+  // 確定し直せば自動で閉じる。ここからは手で閉じる。
+  action: { label: "対応済", noteText: NURSING_SUMMARY_RETURNED_NOTE },
+  canAct: (row, practitionerId) =>
+    Boolean(practitionerId && row.task.owner?.reference === `Practitioner/${practitionerId}`),
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
@@ -287,6 +312,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   documentDueKind,
   radiotherapyReviewDueKind,
   broughtMedIdentifiedKind,
+  nursingSummaryReturnedKind,
 ];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */

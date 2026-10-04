@@ -1,5 +1,10 @@
 import { epochOf, isDateOnly, localDay, WEEKDAY_LABELS, weekdayOf } from "../lib/dates";
-import { clinicalNoteProblem, isDischargeSummary, referencedResponseIds } from "./clinicalNoteHelpers";
+import {
+  clinicalNoteProblem,
+  isDischargeSummary,
+  isNursingSummary,
+  referencedResponseIds,
+} from "./clinicalNoteHelpers";
 import type { ProblemRef } from "./conditionHelpers";
 import {
   departmentOrderKindOf,
@@ -215,6 +220,7 @@ export function karteItemKindLabel(
   }
   // 退院時サマリーは診療記録と同じ器だが、バッジでは文書として見分けられるようにする。
   if (item.kind === "note" && item.note && isDischargeSummary(item.note)) return "退院時サマリー";
+  if (item.kind === "note" && item.note && isNursingSummary(item.note)) return "看護サマリ";
   return KARTE_KIND_LABELS[item.kind];
 }
 
@@ -1142,6 +1148,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
 export const KARTE_NOTE_TYPES = [
   { code: "progress", label: "診療記録" },
   { code: "discharge-summary", label: "退院時サマリー" },
+  { code: "nursing-summary", label: "看護サマリ" },
 ] as const;
 export type KarteNoteType = (typeof KARTE_NOTE_TYPES)[number]["code"];
 
@@ -1150,7 +1157,8 @@ export function isKarteNoteType(value: string): value is KarteNoteType {
 }
 
 export function karteNoteTypeOf(note: fhir4.Composition): KarteNoteType {
-  return isDischargeSummary(note) ? "discharge-summary" : "progress";
+  if (isDischargeSummary(note)) return "discharge-summary";
+  return isNursingSummary(note) ? "nursing-summary" : "progress";
 }
 
 /**

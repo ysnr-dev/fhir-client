@@ -312,6 +312,12 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 
 ## 2026-10-04 に対応済み
 
+### `Composition.ward` と `CarePlan.condition`(看護サマリ・看護計画)
+
+- `Composition` に `ward`(ローカル。オーダーと同じ `order-ward` 拡張を引く)を追加。病棟単位の看護サマリ承認一覧で使う。
+- `CarePlan` に R4 標準の `condition`(`addresses`)と `_include=CarePlan:condition` を追加。看護計画の読み込みで
+  看護問題を同じ応答に添える。
+
 ### 記録の `department` 検索(Composition / QuestionnaireResponse / Observation)
 
 - **背景**: カルテの「自科」絞り込みは、オーダー以外の記録に診療科の検索が無いため、ページングの後に

@@ -90,6 +90,11 @@ docker compose exec frontend node scripts/import-cycles.cjs src/api/queries
   主ボタンは全体共通の `button` スタイル(`--control-height` 34px・文字 15px。単独の主ボタンのみ `--control-height-lg`)、
   カード内の補助ボタンは `rp-card__compact-button` 相当(文字 13px)、アイコンだけのボタンは `rp-card__icon-button` 相当。
   個別に height・padding・font-size を大きくする指定は足さない。
+- フォームに直接置く削除ボタン(入力行・目標・計画の行などを消す)は「×」ではなくゴミ箱アイコン(`components/icons/TrashIcon`)にし、
+  `title` と `aria-label` に「〜を削除」を入れる。選択中の項目を外す「×」(検体検査の選択済み項目など)と、
+  モーダルを閉じる「×」はそのままでよい。
+- カルテの右ペインを使うのは、右ペインの登録ボタンから始める登録(と、その編集)だけ。タブの中から行う操作(評価・展開など)は
+  タブの中のボタンとモーダルで行い、右ペインを開かない。
 - `Modal` はポータルではない。フォーム内のモーダルに `<form>` を書かない(外側がネイティブ submit される)。
 - 1 行に収まらないトグル類は行のケバブメニュー(RowMenu)に畳む。
 - 通知は Task に統一。種別を足すときはレジストリに 1 要素足す。

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { excludeNursingProblems } from "../../fhir/conditionHelpers";
 import { useQuery } from "@tanstack/react-query";
 import type { PatientCaution } from "../masterClient";
 import { usePatientCautions } from "../masterQueries";
@@ -48,6 +49,7 @@ export function usePopulateSources(patientId: string | undefined) {
   conditionParams.set("clinical-status", "active");
   conditionParams.set("_count", "500");
   conditionParams.set("_sort", "-onset-date");
+  excludeNursingProblems(conditionParams);
   const conditions = useQuery({
     queryKey: ["Condition", "populate", patientId],
     queryFn: () => searchResource<fhir4.Condition>("Condition", conditionParams),

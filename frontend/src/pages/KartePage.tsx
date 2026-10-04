@@ -29,7 +29,7 @@ import { useReceiptStatus } from "../api/receiptQueries";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { displayJapaneseName } from "../fhir/humanName";
-import { isDischargeSummary } from "../fhir/clinicalNoteHelpers";
+import { isDischargeSummary, isNursingSummary } from "../fhir/clinicalNoteHelpers";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { TruncatedNotice } from "../components/TruncatedNotice";
@@ -41,6 +41,7 @@ import { KarteImagingTab } from "../components/KarteImagingTab";
 import { KarteMealTab } from "../components/KarteMealTab";
 import { KarteChemoTab } from "../components/KarteChemoTab";
 import { KarteInjectionTab } from "../components/KarteInjectionTab";
+import { KarteNursingCarePlanTab } from "../components/KarteNursingCarePlanTab";
 import { KarteNursingTab } from "../components/KarteNursingTab";
 import { KartePathwayTab } from "../components/KartePathwayTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
@@ -355,7 +356,9 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         ? { kind: "summary-create", encounterId: openTarget.encounterId }
         : openTarget.kind === "dpc-form1"
           ? { kind: "dpc-form1-create", encounterId: openTarget.encounterId }
-          : { kind: "radiotherapy-review", srId: openTarget.srId },
+          : openTarget.kind === "nursing-summary"
+            ? { kind: "nursing-summary-edit", noteId: openTarget.compositionId }
+            : { kind: "radiotherapy-review", srId: openTarget.srId },
     );
     updateParams((params) => params.delete(KARTE_OPEN_PARAM));
     // URL から消した時点で openValue は null になる(同じ対象で再発火しない)。
@@ -765,7 +768,9 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
       openForm(
         isDischargeSummary(item.note)
           ? { kind: "summary-edit", noteId: item.id }
-          : { kind: "note-edit", noteId: item.id },
+          : isNursingSummary(item.note)
+            ? { kind: "nursing-summary-edit", noteId: item.id }
+            : { kind: "note-edit", noteId: item.id },
       );
     }
     else if (item.kind === "prescription") openForm({ kind: "prescription-edit", srId: item.id });
@@ -790,7 +795,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     (item: KarteTimelineItem) => {
       setPane((current) => {
         const openId =
-          current.kind === "note-edit" || current.kind === "summary-edit"
+          current.kind === "note-edit" || current.kind === "summary-edit" || current.kind === "nursing-summary-edit"
             ? current.noteId
             : current.kind === "prescription-edit" ||
                 current.kind === "injection-edit" ||
@@ -1063,6 +1068,16 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
           {...props}
           onCreate={() => openForm({ kind: "nursing-order-create", problem: selectedProblem })}
           onEdit={(srId) => openForm({ kind: "nursing-order-edit", srId })}
+        />
+      );
+    }
+    // 看護計画。立案・編集は右ペインで開く(評価・指示展開はタブの中のモーダル)。
+    if (key === "nursing-care-plan") {
+      return (
+        <KarteNursingCarePlanTab
+          patientId={patientId}
+          onCreate={(entry) => openForm({ kind: "nursing-problem-create", entry })}
+          onEdit={(carePlanId) => openForm({ kind: "nursing-problem-edit", carePlanId })}
         />
       );
     }

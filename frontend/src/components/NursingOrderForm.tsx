@@ -39,6 +39,8 @@ interface Props {
   setMode?: boolean;
   /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
   hideSubmit?: boolean;
+  /** 対象を固定する(看護計画から展開する指示の看護問題)。プロブレムの選択を出さない。 */
+  fixedProblem?: boolean;
 }
 
 // 看護指示の入力。1 回の登録で複数行(安静度・清潔・観察…)をまとめて出せるよう、
@@ -54,6 +56,7 @@ export function NursingOrderForm({
   bulkStartDate,
   setMode = false,
   hideSubmit = false,
+  fixedProblem = false,
 }: Props) {
   const [values, setValues] = useState<NursingOrderFormValues>(initialValues);
   const [validationError, setValidationError] = useState("");
@@ -104,7 +107,7 @@ export function NursingOrderForm({
     const error = validateNursingOrderForm(values, { requireDates: !setMode });
     setValidationError(error);
     if (error) return;
-    onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
+    onSubmit(fixedProblem ? values : { ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
   }
 
   return (
@@ -215,14 +218,18 @@ export function NursingOrderForm({
         {!setMode && (
           <fieldset>
             <legend>対象</legend>
-            <label>
-              対象プロブレム
-              <ProblemSelect
-                value={values.problem}
-                options={problemOptions}
-                onChange={(problem) => setValues((prev) => ({ ...prev, problem }))}
-              />
-            </label>
+            {fixedProblem ? (
+              <p>{values.problem?.display}</p>
+            ) : (
+              <label>
+                対象プロブレム
+                <ProblemSelect
+                  value={values.problem}
+                  options={problemOptions}
+                  onChange={(problem) => setValues((prev) => ({ ...prev, problem }))}
+                />
+              </label>
+            )}
           </fieldset>
         )}
 

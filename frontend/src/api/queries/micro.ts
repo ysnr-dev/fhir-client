@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { excludeNursingProblems } from "../../fhir/conditionHelpers";
 import { observationIdsFromReport, specimenIdsFromReport } from "../../fhir/labResultHelpers";
 import { buildMicroOrderDeleteBundle, microOrderItemRequests } from "../../fhir/microOrderHelpers";
 import { buildMicroResultDeleteBundle } from "../../fhir/microResultHelpers";
@@ -106,6 +107,7 @@ export function useConditionSearch(patientId: string | undefined, offset: number
   params.set("_offset", String(offset));
   // 開始日の降順(新しい順)。_sort のキーは検索パラメータ名 onset-date。
   params.set("_sort", "-onset-date");
+  excludeNursingProblems(params);
 
   const query = useQuery({
     queryKey: ["Condition", "search", patientId, offset],
@@ -197,6 +199,7 @@ export function useKarteConditions(patientId: string | undefined) {
   if (patientId) params.set("patient", `Patient/${patientId}`);
   params.set("_count", String(KARTE_CONDITION_COUNT));
   params.set("_sort", "-onset-date");
+  excludeNursingProblems(params);
 
   const query = useQuery({
     queryKey: ["Condition", "search", "karte", patientId],

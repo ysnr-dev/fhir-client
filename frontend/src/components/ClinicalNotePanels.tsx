@@ -15,7 +15,7 @@ import {
   type ClinicalNoteProblem,
 } from "../fhir/clinicalNoteHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
-import { parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
+import { isNursingRoleCode, parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useEditSnapshot } from "../hooks/useEditSnapshot";
@@ -60,9 +60,15 @@ export function ClinicalNoteCreatePanel({
       return;
     }
     setValidationError(null);
-    createNote.mutate(buildClinicalNote(values, { patientId, practitioner, department: orderContext }), {
-      onSuccess: onSaved,
-    });
+    createNote.mutate(
+      buildClinicalNote(values, {
+        patientId,
+        practitioner,
+        department: orderContext,
+        nursing: isNursingRoleCode(roleCode),
+      }),
+      { onSuccess: onSaved },
+    );
   }
 
   if (titles.isLoading || !login.ready) return <p>読み込み中...</p>;

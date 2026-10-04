@@ -58,6 +58,28 @@ const CATEGORY_CODES: Record<"problem" | "billing", { code: string; display: str
 const LOCAL_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/condition-category";
 const PAST_HISTORY_CODE = "past-history";
 
+// 看護問題(看護計画の対象。fhir/nursingCarePlanHelpers.ts)。既往歴と同じく problem-list-item を
+// 併記するのでレセコン送信の保険病名からは外れる。病名・プロブレムの一覧には出さないので、
+// 病名の検索には NOT_NURSING_PROBLEM_PARAM を付け、上流が条件を黙殺したときに備えて
+// splitConditions でも落とす。
+export const NURSING_PROBLEM_CODE = "nursing-problem";
+export const NURSING_PROBLEM_CATEGORY = {
+  system: LOCAL_CATEGORY_SYSTEM,
+  code: NURSING_PROBLEM_CODE,
+  display: "看護問題",
+} as const;
+
+export function isNursingProblem(condition: fhir4.Condition): boolean {
+  return (condition.category ?? []).some((concept) =>
+    concept.coding?.some((c) => c.system === LOCAL_CATEGORY_SYSTEM && c.code === NURSING_PROBLEM_CODE),
+  );
+}
+
+/** 病名の検索から看護問題を外す。 */
+export function excludeNursingProblems(params: URLSearchParams): void {
+  params.set("category:not", `${LOCAL_CATEGORY_SYSTEM}|${NURSING_PROBLEM_CODE}`);
+}
+
 export const CATEGORY_LABELS: Record<ConditionCategory, string> = {
   problem: "プロブレム",
   past: "既往歴",
@@ -115,6 +137,7 @@ export function splitConditions(conditions: fhir4.Condition[]): {
   const billings: fhir4.Condition[] = [];
   const pasts: fhir4.Condition[] = [];
   for (const condition of conditions) {
+    if (isNursingProblem(condition)) continue;
     const category = conditionCategoryOf(condition);
     if (category === "problem") problems.push(condition);
     else if (category === "past") pasts.push(condition);

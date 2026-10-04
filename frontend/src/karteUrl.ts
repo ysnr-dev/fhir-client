@@ -42,10 +42,16 @@ export const KARTE_OPEN_PARAM = "open";
 export type KarteOpenTarget =
   | { kind: "discharge-summary"; encounterId: string }
   | { kind: "dpc-form1"; encounterId: string }
-  | { kind: "radiotherapy-review"; srId: string };
+  | { kind: "radiotherapy-review"; srId: string }
+  | { kind: "nursing-summary"; compositionId: string };
 
 export function formatKarteOpen(target: KarteOpenTarget): string {
-  const id = target.kind === "radiotherapy-review" ? target.srId : target.encounterId;
+  const id =
+    target.kind === "radiotherapy-review"
+      ? target.srId
+      : target.kind === "nursing-summary"
+        ? target.compositionId
+        : target.encounterId;
   return `${target.kind}:${id}`;
 }
 
@@ -58,6 +64,7 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   if (!id) return null;
   if (kind === "discharge-summary" || kind === "dpc-form1") return { kind, encounterId: id };
   if (kind === "radiotherapy-review") return { kind, srId: id };
+  if (kind === "nursing-summary") return { kind, compositionId: id };
   return null;
 }
 
@@ -100,6 +107,8 @@ export const KARTE_TABS = [
   // 看護指示(指示簿)。「今なにが有効か」を区分ごとに見る情報なので、時系列の
   // カードにはせずタブでのみ見る。
   { key: "nursing", label: "指示簿" },
+  // 看護計画。看護問題ごとの目標・OP/TP/EP・評価を優先度順に読む(時系列のカードにしない)。
+  { key: "nursing-care-plan", label: "看護計画" },
   // 予約はカルテのカードにしない(タイムラインには出ない)ので、タブでのみ見る。
   { key: "appointment", label: "予約" },
   // 取り込んだファイル(紹介状・同意書・持参の検査結果など)。診療の経過そのもの
@@ -124,6 +133,7 @@ export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly Kar
     label: "検査結果",
     keys: ["lab", "lab-timeline", "micro", "patho", "rad-report", "physio-report", "endoscopy-report"],
   },
+  { label: "看護", keys: ["nursing", "nursing-care-plan"] },
 ];
 
 /** そのタブを畳んでいるグループ。畳んでいなければ undefined。 */

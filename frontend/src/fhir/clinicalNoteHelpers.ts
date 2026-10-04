@@ -43,7 +43,9 @@ export const CONSULT_NOTE_TYPE: fhir4.CodeableConcept = {
  * (docs/consult-order-design.md §5)。種別を増やしたらここに足す — 検索から漏れると
  * 記録は保存されているのにカルテに出ない、という気付きにくい欠落になる。
  */
-export const KARTE_NOTE_TYPE_SEARCH = `${LOINC_SYSTEM}|11506-3,${LOINC_SYSTEM}|11488-4,${LOINC_SYSTEM}|18842-5`;
+const LOCAL_DOCUMENT_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/document-type";
+
+export const KARTE_NOTE_TYPE_SEARCH = `${LOINC_SYSTEM}|11506-3,${LOINC_SYSTEM}|11488-4,${LOINC_SYSTEM}|18842-5,${LOCAL_DOCUMENT_TYPE_SYSTEM}|nursing-summary`;
 
 /**
  * 退院時サマリー(LOINC 18842-5 Discharge summary)。診療記録と同じ Composition の器で、
@@ -55,6 +57,34 @@ export const DISCHARGE_SUMMARY_TYPE: fhir4.CodeableConcept = {
 };
 
 export const DISCHARGE_SUMMARY_TYPE_SEARCH = `${LOINC_SYSTEM}|18842-5`;
+
+/**
+ * 看護サマリ(中間・転棟・退院)。退院時サマリーと同じ Composition の器で、区分は category
+ * (fhir/nursingSummaryHelpers.ts)。種別に一致する標準コードを確認できていないのでローカルの type だけで持つ。
+ */
+export const NURSING_SUMMARY_TYPE: fhir4.CodeableConcept = {
+  coding: [{ system: LOCAL_DOCUMENT_TYPE_SYSTEM, code: "nursing-summary", display: "看護サマリ" }],
+  text: "看護サマリ",
+};
+
+export const NURSING_SUMMARY_TYPE_SEARCH = `${LOCAL_DOCUMENT_TYPE_SYSTEM}|nursing-summary`;
+
+export function isNursingSummary(composition: fhir4.Composition | undefined): boolean {
+  return (
+    composition?.type?.coding?.some(
+      (c) => c.system === LOCAL_DOCUMENT_TYPE_SYSTEM && c.code === "nursing-summary",
+    ) ?? false
+  );
+}
+
+/**
+ * 看護職が書いた経過記録の印(Composition.category)。Composition には書いた人の職種が残らず、
+ * 上流の検索も作成者の職種では引けないので、保存のときに付ける。看護サマリの「看護記録」の取り込みはこれで引く。
+ */
+export const NURSING_NOTE_CATEGORY: fhir4.CodeableConcept = {
+  coding: [{ system: "http://fhir-client.local/CodeSystem/clinical-note-category", code: "nursing", display: "看護記録" }],
+};
+export const NURSING_NOTE_CATEGORY_SEARCH = "http://fhir-client.local/CodeSystem/clinical-note-category|nursing";
 
 export function isDischargeSummary(composition: fhir4.Composition | undefined): boolean {
   return (
@@ -107,6 +137,8 @@ export interface SectionOption {
   code: string;
   display: string;
   title: string;
+  /** コードの体系。省略時は LOINC(標準コードの無いセクションだけローカルの体系にする)。 */
+  system?: string;
 }
 
 // 自由記載モードで使う唯一のセクション。
@@ -445,7 +477,7 @@ export function buildBodySections(
         title: s.title || (option?.title ?? s.code),
         extension,
         code: {
-          coding: [{ system: LOINC_SYSTEM, code: s.code, display: option?.display }],
+          coding: [{ system: option?.system ?? LOINC_SYSTEM, code: s.code, display: option?.display }],
         },
         text: {
           // 手入力由来の narrative なので additional(構造化データの要約ではない)
@@ -456,9 +488,10 @@ export function buildBodySections(
     });
 }
 
-/** セクションの LOINC コード。 */
+/** セクションのコード。LOINC を優先し、無ければローカルの体系のコード。 */
 export function sectionCodeOf(section: fhir4.CompositionSection): string {
-  return section.code?.coding?.find((c) => c.system === LOINC_SYSTEM)?.code ?? "";
+  const codings = section.code?.coding ?? [];
+  return (codings.find((c) => c.system === LOINC_SYSTEM) ?? codings[0])?.code ?? "";
 }
 
 /** 保存済みセクションを編集フォームの下書きに戻す(コードの正規化は呼び出し側)。 */
@@ -491,9 +524,11 @@ export function buildClinicalNote(
      * 実施科と同じローカル拡張に入れる(参照を引き直さずに一覧・カードで出せるように)。
      */
     department?: DepartmentRef;
+    /** 看護職が書いた記録(新規のときだけ見る。編集では保存済みの印を引き継ぐ)。 */
+    nursing?: boolean;
   },
 ): ClinicalNoteSave {
-  const { patientId, practitioner, existing, consultOrderId, department } = options;
+  const { patientId, practitioner, existing, consultOrderId, department, nursing } = options;
   const entries: fhir4.BundleEntry[] = [];
   // 保存後も参照され続ける保存済み QR の id。既存 Composition が参照していたものとの
   // 差分で「参照が外れた QR」を求め、同じ transaction で削除する(孤児を残さない)。
@@ -559,6 +594,8 @@ export function buildClinicalNote(
   };
 
   if (event?.length) composition.event = event;
+  const category = existing ? existing.category : nursing ? [NURSING_NOTE_CATEGORY] : undefined;
+  if (category?.length) composition.category = category;
 
   // 診療科も同じく、新規は渡されたもの・編集は保存済みのものを引き継ぐ。
   const noteDepartment = department?.departmentId ? department : departmentOf(existing ?? {});

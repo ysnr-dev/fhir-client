@@ -148,16 +148,24 @@ export function DischargeSummaryForm({
           )}
         </fieldset>
 
-        <fieldset className="clinical-note-form__sections">
+        <fieldset className="clinical-note-form__sections discharge-summary__content">
           <legend>内容</legend>
-          <div className="discharge-summary__tools">
-            <button type="button" onClick={recollect} disabled={!sources}>
-              再収集
-            </button>
-          </div>
-          {SUMMARY_SECTIONS.map((def) => (
+          {SUMMARY_SECTIONS.map((def, index) => (
             <div key={def.code} className="discharge-summary__section">
-              <h3 className="discharge-summary__title">{def.title}</h3>
+              <h3 className="discharge-summary__title">
+                {def.title}
+                {/* 候補の集め直しは内容全体への操作なので、最初のセクションの見出しの右端に置く。 */}
+                {index === 0 && (
+                  <button
+                    type="button"
+                    className="rp-card__compact-button discharge-summary__recollect"
+                    onClick={recollect}
+                    disabled={!sources}
+                  >
+                    再収集
+                  </button>
+                )}
+              </h3>
               {def.kind === "entry" ? (
                 <EntryChecklist
                   candidates={values.entries[def.code as EntrySectionCode]}

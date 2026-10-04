@@ -32,6 +32,8 @@ export * from "./rehab";
 export * from "./nutritionGuidance";
 export * from "./consult";
 export * from "./nursing";
+export * from "./nursingCarePlan";
+export * from "./nursingSummary";
 export * from "./surgery";
 export * from "./anesthesia";
 export * from "./patho";

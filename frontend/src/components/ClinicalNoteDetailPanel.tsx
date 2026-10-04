@@ -3,6 +3,7 @@ import { useEncounter } from "../api/queries";
 import {
   clinicalNoteAttestation,
   isDischargeSummary,
+  isNursingSummary,
   noteBodySections,
   sectionResponseId,
   sectionTitle,
@@ -63,7 +64,9 @@ export function ClinicalNoteDetailPanel({
         </dl>
       </fieldset>
 
-      {isDischargeSummary(note) && <AdmissionInfo encounterId={dischargeSummaryEncounterId(note)} />}
+      {(isDischargeSummary(note) || isNursingSummary(note)) && (
+        <AdmissionInfo encounterId={dischargeSummaryEncounterId(note)} />
+      )}
 
       {noteBodySections(note).map((section, index) => {
         // テンプレート由来のセクションは、記入内容のシェーマ画像を本文の下に並べる

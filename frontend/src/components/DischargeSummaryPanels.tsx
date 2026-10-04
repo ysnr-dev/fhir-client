@@ -73,7 +73,7 @@ export function DischargeSummaryCreatePanel({
     <>
       <ErrorBanner error={admissions.error} />
       <ErrorBanner error={existing.error} />
-      <div className="patient-form">
+      <div className="patient-form summary-admission-select">
         <label>
           対象の入院
           <select value={encounterId} onChange={(e) => setEncounterId(e.target.value)}>

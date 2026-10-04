@@ -13,6 +13,7 @@ import {
   NURSING_ORDER_STATE_LABELS,
   nursingOrderPeriodLabel,
   nursingOrderState,
+  planActivityOf,
   summarizeNursingOrder,
   type NursingOrderGroup,
   type NursingOrderSummary,
@@ -337,6 +338,7 @@ function GroupRows({
             </td>
             <td>
               {row.summary.text}
+              {planActivityOf(row.order) && <span className="nursing-tab__plan-badge">看護計画</span>}
               {/* 状態の列は持たない。既定の一覧は有効な指示だけなので全行同じ値になる。
                   「終了・中止も表示」で混ざったときだけ、行の減光とバッジで示す。 */}
               {state !== "active" && (

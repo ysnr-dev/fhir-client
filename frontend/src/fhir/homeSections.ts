@@ -1,7 +1,7 @@
 import type { BedWard } from "../api/queries/encounter";
 import { ADMISSION_STATUS, encounterAttendingId, encounterBedId, encounterBedLabel, encounterNurseIds, encounterPatientId } from "./encounterHelpers";
 import { appointmentActorId } from "./appointmentHelpers";
-import { isDoctorRoleCode } from "./practitionerRoleHelpers";
+import { isDoctorRoleCode, isNursingRoleCode } from "./practitionerRoleHelpers";
 
 // ホーム(トップページ)の「誰に何を出すか」。職種(所属ロールの code)から表示する
 // セクションと絞り込みを決める。hook を持たない純関数だけにして、画面(pages/HomePage.tsx)
@@ -59,7 +59,6 @@ export const HOME_WORKLISTS: Record<HomeWorklistKey, HomeWorklistDef> = {
 
 export const HOME_WORKLIST_KEYS = Object.keys(HOME_WORKLISTS) as HomeWorklistKey[];
 
-const NURSE_ROLE_CODES: readonly string[] = ["nurse", "public-health-nurse", "midwife"];
 const CLERK_ROLE_CODES: readonly string[] = ["clerk", "medical-clerk"];
 
 export interface HomeProfile {
@@ -108,7 +107,7 @@ export function homeProfileOf(input: {
       inpatientBy: "attending",
     };
   }
-  if (code && NURSE_ROLE_CODES.includes(code)) {
+  if (isNursingRoleCode(code)) {
     return {
       kind: "nurse",
       sections: ["notifications", "inpatient", "launcher"],

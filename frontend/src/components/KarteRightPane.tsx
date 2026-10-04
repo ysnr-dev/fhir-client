@@ -17,6 +17,9 @@ import { EndoscopyOrderCreatePanel, EndoscopyOrderEditPanel } from "./EndoscopyO
 import { TreatmentOrderCreatePanel, TreatmentOrderEditPanel } from "./TreatmentOrderPanels";
 import { SurgeryOrderCreatePanel, SurgeryOrderEditPanel } from "./SurgeryOrderPanels";
 import { MealOrderCreatePanel, MealOrderEditPanel } from "./MealOrderPanels";
+import { NursingProblemCreatePanel, NursingProblemEditPanel } from "./NursingCarePlanPanels";
+import type { NursingProblemEntry } from "../fhir/nursingCarePlanHelpers";
+import { NursingSummaryCreatePanel, NursingSummaryEditPanel } from "./NursingSummaryPanels";
 import { NursingOrderCreatePanel, NursingOrderEditPanel } from "./NursingOrderPanels";
 import {
   TransfusionOrderCreatePanel,
@@ -80,6 +83,9 @@ export type KartePaneState =
   // 退院時サマリー。encounterId は対象の入院の初期値(通知・入院患者一覧のリンクから)。
   | { kind: "summary-create"; encounterId?: string }
   | { kind: "summary-edit"; noteId: string }
+  // 看護サマリ(中間・転棟・退院)。承認者もこの編集から承認する。
+  | { kind: "nursing-summary-create"; encounterId?: string }
+  | { kind: "nursing-summary-edit"; noteId: string }
   // DPC 様式1。encounterId は対象の入院の初期値(提出ファイルの一覧から)。
   | { kind: "dpc-form1-create"; encounterId?: string }
   | { kind: "dpc-form1-edit"; responseId: string }
@@ -110,6 +116,9 @@ export type KartePaneState =
   | OrderEditState
   | { kind: "nursing-order-create"; problem?: ProblemRef }
   | { kind: "nursing-order-edit"; srId: string }
+  // 看護計画の立案・編集。carePlanId は看護問題 1 件の CarePlan(評価・指示展開は看護計画タブのモーダル)。
+  | { kind: "nursing-problem-create"; entry: NursingProblemEntry }
+  | { kind: "nursing-problem-edit"; carePlanId: string }
   | { kind: "qr-create"; problem?: ProblemRef }
   | { kind: "qr-edit"; qrId: string }
   // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
@@ -239,6 +248,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "note-edit": "診療記録編集",
   "summary-create": "退院時サマリー登録",
   "summary-edit": "退院時サマリー編集",
+  "nursing-summary-create": "看護サマリ登録",
+  "nursing-summary-edit": "看護サマリ",
   "dpc-form1-create": "DPC様式1登録",
   "dpc-form1-edit": "DPC様式1編集",
   "document-create": "文書作成",
@@ -250,6 +261,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "injection-edit": "注射編集",
   "nursing-order-create": "看護指示登録",
   "nursing-order-edit": "看護指示編集",
+  "nursing-problem-create": "看護計画登録",
+  "nursing-problem-edit": "看護計画編集",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
   "appointment-create": "予約登録",
@@ -280,7 +293,10 @@ function paneKey(state: KartePaneState): string {
   switch (state.kind) {
     case "note-edit":
     case "summary-edit":
+    case "nursing-summary-edit":
       return `${state.kind}:${state.noteId}`;
+    case "nursing-summary-create":
+      return `${state.kind}:${state.encounterId ?? ""}`;
     case "summary-create":
     case "dpc-form1-create":
       return `${state.kind}:${state.encounterId ?? ""}`;
@@ -291,6 +307,10 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
+    case "nursing-problem-edit":
+      return `${state.kind}:${state.carePlanId}`;
+    case "nursing-problem-create":
+      return `${state.kind}:${state.entry}`;
     case "appointment-reschedule":
       return `${state.kind}:${state.appointmentId}`;
     case "vital-edit":
@@ -528,6 +548,12 @@ export function KarteRightPane({
         >
           看護指示
         </button>
+        <button type="button" onClick={() => onStateChange({ kind: "nursing-problem-create", entry: "standard_plan" })}>
+          標準看護計画
+        </button>
+        <button type="button" onClick={() => onStateChange({ kind: "nursing-problem-create", entry: "diagnosis" })}>
+          看護診断
+        </button>
         {/* 他科依頼は部門ではなく人(他の診療科の医師)への依頼なので、部門オーダーを
             並べた最後に置く。 */}
         <button
@@ -539,6 +565,9 @@ export function KarteRightPane({
         {/* 退院時サマリーは入院の締めくくりに書く文書なので、一番下に置く。 */}
         <button type="button" onClick={() => onStateChange({ kind: "summary-create" })}>
           退院時サマリー
+        </button>
+        <button type="button" onClick={() => onStateChange({ kind: "nursing-summary-create" })}>
+          看護サマリ
         </button>
         <button type="button" onClick={() => onStateChange({ kind: "dpc-form1-create" })}>
           DPC様式1
@@ -662,6 +691,17 @@ function PaneContent({
       );
     case "summary-edit":
       return <DischargeSummaryEditPanel patientId={patientId} noteId={state.noteId} onSaved={onSaved} />;
+    case "nursing-summary-create":
+      return (
+        <NursingSummaryCreatePanel
+          patientId={patientId}
+          defaultEncounterId={state.encounterId}
+          onSaved={onSaved}
+          onStateChange={onStateChange}
+        />
+      );
+    case "nursing-summary-edit":
+      return <NursingSummaryEditPanel patientId={patientId} noteId={state.noteId} onSaved={onSaved} />;
     case "dpc-form1-create":
       return (
         <DpcForm1CreatePanel
@@ -722,6 +762,10 @@ function PaneContent({
       );
     case "nursing-order-edit":
       return <NursingOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "nursing-problem-create":
+      return <NursingProblemCreatePanel patientId={patientId} entry={state.entry} onSaved={onSaved} />;
+    case "nursing-problem-edit":
+      return <NursingProblemEditPanel patientId={patientId} carePlanId={state.carePlanId} onSaved={onSaved} />;
     case "qr-create":
       return (
         <QuestionnaireResponseCreatePanel

@@ -6494,10 +6494,14 @@ button.populate-expression__option--active {
 
 /* 退院時サマリー。固定の 8 セクションを見出し付きで縦に並べる。参照セクションは
    候補のチェックリスト、本文セクションは診療記録と同じエディタ。 */
-.discharge-summary__tools {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
+/* サマリの「内容」。セクションの間は .discharge-summary__section の余白で取るので、fieldset の gap は付けない。 */
+.patient-form fieldset.discharge-summary__content {
+  gap: 0;
+}
+
+/* 「再収集」は最初のセクションの見出しの右端。 */
+.discharge-summary__title button.discharge-summary__recollect {
+  margin-left: auto;
 }
 
 .discharge-summary__section + .discharge-summary__section {
@@ -6505,6 +6509,9 @@ button.populate-expression__option--active {
 }
 
 .discharge-summary__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 4px;
   font-size: 14px;
   font-weight: 600;
@@ -15366,6 +15373,308 @@ button.meal-calendar__cell:hover {
   color: var(--lab-high);
 }
 
+/* ---- 看護計画タブ(看護問題ごとのカード) ---- */
+/* 立案の入口ごとの区画(標準看護計画 / 看護診断)。 */
+.nursing-plan__section + .nursing-plan__section {
+  margin-top: 16px;
+}
+
+.nursing-plan__section-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+/* カードの中身のツリー。枝は左の縦線と横の短い線で描く。 */
+.nursing-tree,
+.nursing-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nursing-tree {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.nursing-tree ul {
+  padding-left: 14px;
+}
+
+.nursing-tree li {
+  position: relative;
+  padding-left: 14px;
+  line-height: 1.6;
+}
+
+.nursing-tree li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--accent-border);
+}
+
+.nursing-tree li:last-child::before {
+  bottom: auto;
+  height: 0.8em;
+}
+
+.nursing-tree li::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.8em;
+  width: 9px;
+  border-top: 1px solid var(--accent-border);
+}
+
+.nursing-tree__label {
+  font-weight: bold;
+  color: var(--text-h);
+}
+
+.nursing-tree__kind {
+  margin-right: 6px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.nursing-plan__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nursing-plan__card {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-card-shadow);
+  padding: 6px 10px;
+}
+
+.nursing-plan__card--resolved {
+  opacity: 0.7;
+}
+
+.nursing-plan__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nursing-plan__title {
+  font-weight: bold;
+  color: var(--text-h);
+}
+
+.nursing-plan__dates {
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.nursing-plan__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 評価・指示展開・↑↓ はカルテのカードの DO ボタンより一回り大きい程度にする。 */
+.nursing-plan__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.nursing-plan__actions button.rp-card__icon-button {
+  width: 20px;
+  min-width: 20px;
+  padding: 0;
+}
+
+/* ケバブも ↑↓ と同じ大きさにする。 */
+.nursing-plan__head .row-menu__trigger {
+  width: 20px;
+  min-width: 20px;
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
+}
+
+.nursing-plan__goal--done,
+.nursing-plan__activity--stopped {
+  color: var(--text);
+  text-decoration: line-through;
+}
+
+.nursing-plan__due {
+  margin-left: 6px;
+  font-size: 11px;
+}
+
+.nursing-plan__due--overdue {
+  color: var(--lab-high);
+}
+
+.nursing-plan__outcome {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.nursing-plan__intervention {
+  color: var(--text-h);
+}
+
+.nursing-plan__achievement {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.nursing-plan__note {
+  white-space: pre-wrap;
+}
+
+.nursing-plan__guidance {
+  margin: 0;
+  font-size: 13px;
+}
+
+.nursing-plan__guidance dt {
+  font-weight: bold;
+  color: var(--text-h);
+  margin-top: 4px;
+}
+
+.nursing-plan__guidance dd {
+  margin: 0 0 0 1em;
+  white-space: pre-wrap;
+}
+
+/* ---- 看護問題の立案フォーム ---- */
+.nursing-problem-form__block {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nursing-problem-form__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.nursing-problem-form__row > input[type="text"] {
+  flex: 1 1 12em;
+}
+
+.prescription-form label.nursing-problem-form__inline,
+.prescription-form label.nursing-problem-form__check,
+.nursing-problem-form__check {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.prescription-form .nursing-problem-form__check input[type="checkbox"],
+.prescription-form .nursing-problem-form__inline input[type="checkbox"],
+.prescription-form .nursing-problem-form__inline input[type="radio"] {
+  width: auto;
+}
+
+/* 選んだ用語(MEDIS の看護行為・看護観察、看護診断)。ボタンと見分けがつくよう枠付きの札にし、
+   中の「×」で外す。選び直すときは外してから「用語」で選ぶ。 */
+.nursing-term-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px 0 6px;
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.nursing-term-chip button.nursing-term-chip__remove {
+  height: auto;
+  padding: 0 3px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nursing-term-chip button.nursing-term-chip__remove:hover {
+  color: var(--accent);
+}
+
+/* 看護介入 1 件(介入名と、その下の行動の行)。 */
+.nursing-problem-form__intervention {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--accent-border);
+}
+
+.nursing-problem-form__intervention-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--text-h);
+}
+
+/* 日付だけの欄は入力の幅に合わせる(列の幅いっぱいに伸ばさない)。 */
+.prescription-form label.nursing-problem-form__date {
+  align-self: flex-start;
+}
+
+.prescription-form label.nursing-problem-form__date input[type="date"] {
+  width: auto;
+}
+
+.nursing-problem-form__block > button {
+  align-self: flex-start;
+}
+
+.nursing-problem-form__selected {
+  font-weight: bold;
+  color: var(--text-h);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 看護計画の行から展開した指示の印。 */
+.nursing-tab__plan-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--accent-border);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--accent);
+}
+
 /* 病棟の指示簿(ワークリスト)の患者見出し行。指示簿タブの区分見出しと同じ地色で、
    右側に未指示受け件数と「指示受け」を並べる。 */
 .nursing-worklist__patient th {
@@ -22288,4 +22597,169 @@ label.insulin-perform__reason {
 .transfusion-perform .insulin-perform__choice {
   min-width: 0;
   max-width: 100%;
+}
+
+/* 看護計画の用語マスタ。木の階層を字下げで示す。 */
+.nursing-term-master__name--domain {
+  font-weight: bold;
+  color: var(--text-h);
+}
+
+.nursing-term-master__name--class {
+  padding-left: 1.5em !important;
+  font-weight: bold;
+}
+
+.nursing-term-master__name--term {
+  padding-left: 3em !important;
+}
+
+input.nursing-term-master__item-code {
+  width: 7em;
+}
+
+/* ---- 看護サマリ ---- */
+/* 期間は 1 つの項目として、見出しの下に始まりと終わりの日付を横に並べる(他の項目と高さを揃える)。 */
+.nursing-summary__range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 退院時サマリー・看護サマリの「対象の入院」と、その下の入院情報の間の余白。 */
+.summary-admission-select {
+  margin-bottom: 12px;
+}
+
+.nursing-summary__return {
+  color: var(--lab-high);
+  white-space: pre-wrap;
+}
+
+.nursing-summary__records {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.nursing-summary__record-text {
+  margin-left: 22px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+.nursing-summary__state {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.nursing-summary__state--pending {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.nursing-summary__state--returned {
+  border-color: var(--lab-high);
+  color: var(--lab-high);
+}
+
+.nursing-summary__state--approved {
+  color: var(--text-h);
+}
+
+/* ---- 看護問題の選択(看護診断・標準看護計画を階層でたどる) ---- */
+input.nursing-picker__search {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+}
+
+.nursing-picker__columns {
+  display: flex;
+  gap: 8px;
+  height: 60vh;
+}
+
+.nursing-picker__column {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.nursing-picker__column-title {
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text-h);
+  background: var(--surface-sunken);
+}
+
+.nursing-picker__list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 2px 0;
+}
+
+.nursing-picker__list button.nursing-picker__item {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nursing-picker__list button.nursing-picker__item:hover {
+  background: var(--surface-stripe);
+}
+
+.nursing-picker__list button.nursing-picker__item--selected {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.nursing-picker__note {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.nursing-picker__empty {
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 看護サマリの看護問題・計画の候補。チェックボックスの下に看護計画のツリーを字下げして出す。 */
+.nursing-summary__problems > li + li {
+  margin-top: 6px;
+}
+
+.nursing-summary__problems .nursing-tree {
+  margin: 2px 0 0 22px;
 }

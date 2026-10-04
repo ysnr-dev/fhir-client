@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { excludeNursingProblems } from "../../fhir/conditionHelpers";
 import { buildClinicalNoteDeleteBundle, DISCHARGE_SUMMARY_TYPE_SEARCH } from "../../fhir/clinicalNoteHelpers";
 import type { DischargeSummarySources } from "../../fhir/dischargeSummaryHelpers";
 import { buildCompletedDocumentDueEntries, cancelDocumentDueEntries, DOCUMENT_DUE_TASK_CODE } from "../../fhir/documentDueHelpers";
@@ -139,6 +140,7 @@ export function useDischargeSummarySources(
       conditionParams.set("patient", `Patient/${patientId}`);
       conditionParams.set("_count", String(KARTE_CONDITION_COUNT));
       conditionParams.set("_sort", "-onset-date");
+      excludeNursingProblems(conditionParams);
 
       const orderParams = new URLSearchParams();
       orderParams.set("patient", `Patient/${patientId}`);

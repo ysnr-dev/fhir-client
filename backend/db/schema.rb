@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_04_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_05_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1461,6 +1461,46 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_04_090000) do
     t.datetime "updated_at", null: false
     t.index ["active"], name: "index_master_nursing_observations_on_active"
     t.index ["manage_no"], name: "index_master_nursing_observations_on_manage_no"
+  end
+
+  create_table "master_nursing_standard_plans", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "search_name"
+    t.string "search_kana"
+    t.string "diagnosis_code"
+    t.jsonb "goals", default: [], null: false
+    t.jsonb "activities", default: [], null: false
+    t.text "note"
+    t.boolean "active", default: true, null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_nursing_standard_plans_on_code", unique: true
+    t.index ["diagnosis_code"], name: "index_master_nursing_standard_plans_on_diagnosis_code"
+  end
+
+  create_table "master_nursing_terms", force: :cascade do |t|
+    t.string "taxonomy", null: false
+    t.string "level", null: false
+    t.string "code", null: false
+    t.string "parent_code"
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "search_name"
+    t.string "search_kana"
+    t.string "diagnosis_type"
+    t.text "definition"
+    t.text "guidance"
+    t.jsonb "items", default: [], null: false
+    t.string "source", default: "local", null: false
+    t.boolean "active", default: true, null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["taxonomy", "code"], name: "index_master_nursing_terms_on_taxonomy_and_code", unique: true
+    t.index ["taxonomy", "parent_code"], name: "index_master_nursing_terms_on_taxonomy_and_parent_code"
   end
 
   create_table "master_nursing_units", force: :cascade do |t|

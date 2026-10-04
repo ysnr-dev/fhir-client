@@ -335,6 +335,9 @@ Rails.application.routes.draw do
     resources :nursing_units, only: %i[index] do
       collection { post :import }
     end
+    # 看護計画の用語(看護診断・看護成果・看護介入)と標準看護計画(docs/nursing-care-plan-design.md)。
+    resources :nursing_terms, only: %i[index show create update destroy]
+    resources :nursing_standard_plans, only: %i[index show create update destroy]
     # J-FAGYアレルゲンコードも検索専用(取込で全件洗い替え)のため CRUD は持たない。
     resources :jfagy_allergens, only: %i[index] do
       collection { post :import }

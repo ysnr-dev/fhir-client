@@ -11,7 +11,7 @@ import {
 } from "./shared";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
 import { SETTING_OPTIONS, SETTING_SYSTEM } from "./prescriptionHelpers";
-import { buildNursingTaskUpdate } from "./nursingTaskHelpers";
+import { buildNursingTaskUpdate, withTaskOwner } from "./nursingTaskHelpers";
 import {
   isValidTime,
   nursingScheduleExtension,
@@ -62,6 +62,19 @@ export const NURSING_ORDER_END_EXT_URL = "http://fhir-client.local/StructureDefi
 export const NURSING_REQUISITION_SYSTEM =
   "http://fhir-client.local/Identifier/nursing-order-requisition";
 
+/**
+ * 看護計画の行(CarePlan.activity)から展開した指示の印。複合拡張で、plan = 看護計画の CarePlan、
+ * activity = 行の id。basedOn に CarePlan を入れると指示がオーダーのヘッダと見なされなくなるので
+ * (provenanceHelpers の isHeaderEntry)、指示の側から拡張で指す(docs/nursing-care-plan-design.md)。
+ */
+export const NURSING_PLAN_ACTIVITY_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/nursing-care-plan-activity";
+
+export interface NursingPlanActivityRef {
+  carePlanId: string;
+  activityId: string;
+}
+
 // ---- フォームの値 ----
 
 /** マスタから選んだ用語。null は自由記載。 */
@@ -81,6 +94,8 @@ export interface NursingOrderLineValues {
   startDate: string;
   endDate: string;
   comment: string;
+  /** 看護計画の行から展開した指示。 */
+  planActivity?: NursingPlanActivityRef;
 }
 
 export interface NursingOrderFormValues {
@@ -174,9 +189,9 @@ interface BuildOptions {
   authoredOn?: string;
 }
 
-function itemCodeableConcept(line: NursingOrderLineValues): fhir4.CodeableConcept {
-  const text = line.text.trim();
-  const item = line.item;
+/** 用語と文言の CodeableConcept。看護計画の行(CarePlan.activity.detail.code)も同じ形で持つ。 */
+export function nursingItemConcept(item: NursingItemRef, rawText: string): fhir4.CodeableConcept {
+  const text = rawText.trim();
   if (!item) return { text };
   if (item.kind === "act") {
     return {
@@ -216,7 +231,7 @@ function buildNursingOrderServiceRequest(
         ],
       },
     ],
-    code: itemCodeableConcept(line),
+    code: nursingItemConcept(line.item, line.text),
     subject: { reference: `Patient/${patientId}` },
     authoredOn: options.authoredOn ?? registrationAuthoredOn(),
     occurrenceDateTime: line.startDate,
@@ -234,6 +249,7 @@ function buildNursingOrderServiceRequest(
   if (line.endDate) extensions.push({ url: NURSING_ORDER_END_EXT_URL, valueDate: line.endDate });
   const schedule = nursingScheduleExtension(line.schedule);
   if (schedule) extensions.push(schedule);
+  if (line.planActivity) extensions.push(planActivityExtension(line.planActivity));
   if (extensions.length > 0) resource.extension = extensions;
 
   if (line.comment.trim()) resource.note = [{ text: line.comment.trim() }];
@@ -253,16 +269,38 @@ function buildNursingOrderServiceRequest(
   return resource;
 }
 
+function planActivityExtension(ref: NursingPlanActivityRef): fhir4.Extension {
+  return {
+    url: NURSING_PLAN_ACTIVITY_EXT_URL,
+    extension: [
+      { url: "plan", valueReference: { reference: `CarePlan/${ref.carePlanId}` } },
+      { url: "activity", valueString: ref.activityId },
+    ],
+  };
+}
+
+/** 看護計画の行から展開した指示なら、その行。 */
+export function planActivityOf(sr: fhir4.ServiceRequest): NursingPlanActivityRef | undefined {
+  const ext = sr.extension?.find((e) => e.url === NURSING_PLAN_ACTIVITY_EXT_URL);
+  const carePlanId = ext?.extension
+    ?.find((e) => e.url === "plan")
+    ?.valueReference?.reference?.match(/^CarePlan\/(.+)$/)?.[1];
+  const activityId = ext?.extension?.find((e) => e.url === "activity")?.valueString;
+  return carePlanId && activityId ? { carePlanId, activityId } : undefined;
+}
+
 /**
  * 新規登録。行ごとに ServiceRequest と「指示受け待ち」の Task を作り、全行を
  * 1 transaction に載せる。Task の focus は同じ Bundle 内の fullUrl(urn:uuid)で、
  * 上流が transaction 内で実 id に解決する(生理検査の即実施と同じ作り)。
+ * acceptedBy を渡すと指示受け済みで作る(看護計画から看護師が自分で出す指示)。
  */
 export function buildNursingOrderBundle(
   values: NursingOrderFormValues,
   patientId: string,
   requester: OrderAttribution,
   encounterId: string | undefined,
+  acceptedBy?: { practitionerId: string; display: string },
 ): fhir4.Bundle {
   const requisition = crypto.randomUUID();
   return transactionBundle(
@@ -273,12 +311,12 @@ export function buildNursingOrderBundle(
         requisition,
         problem: values.problem,
       });
+      const task = acceptedBy
+        ? withTaskOwner(buildNursingTaskUpdate(undefined, sr, "accepted", fullUrl), acceptedBy)
+        : buildNursingTaskUpdate(undefined, sr, "requested", fullUrl);
       return [
         { fullUrl, resource: sr, request: { method: "POST", url: "ServiceRequest" } },
-        {
-          resource: buildNursingTaskUpdate(undefined, sr, "requested", fullUrl),
-          request: { method: "POST", url: "Task" },
-        },
+        { resource: task, request: { method: "POST", url: "Task" } },
       ];
     }),
   );
@@ -487,6 +525,7 @@ export function parseNursingOrderLine(sr: fhir4.ServiceRequest): NursingOrderLin
     startDate: nursingOrderStart(sr) || today(),
     endDate: nursingOrderEnd(sr),
     comment: orderComment(sr),
+    planActivity: planActivityOf(sr),
   };
 }
 

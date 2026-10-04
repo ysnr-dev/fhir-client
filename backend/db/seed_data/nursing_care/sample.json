@@ -1,0 +1,137 @@
+{
+  "terms": [
+    { "taxonomy": "diagnosis", "level": "domain", "code": "LD01", "name": "安全", "display_order": 1 },
+    { "taxonomy": "diagnosis", "level": "class", "code": "LC01", "parent_code": "LD01", "name": "身体の損傷", "display_order": 1 },
+    { "taxonomy": "diagnosis", "level": "class", "code": "LC02", "parent_code": "LD01", "name": "感染", "display_order": 2 },
+    { "taxonomy": "diagnosis", "level": "domain", "code": "LD02", "name": "安楽", "display_order": 2 },
+    { "taxonomy": "diagnosis", "level": "class", "code": "LC03", "parent_code": "LD02", "name": "身体の安楽", "display_order": 1 },
+    {
+      "taxonomy": "diagnosis", "level": "term", "code": "L0001", "parent_code": "LC01",
+      "name": "転倒転落の危険がある状態", "name_kana": "テントウテンラクノキケンガアルジョウタイ", "diagnosis_type": "risk",
+      "definition": "転んだりベッドから落ちたりして、けがをするおそれが高まっている状態。",
+      "guidance": "入院時と状態が変わったときに転倒転落のアセスメントを行い、点数が高いときに立案する。",
+      "items": [
+        { "item_type": "risk_factor", "code": "LR0101", "name": "歩行が不安定" },
+        { "item_type": "risk_factor", "code": "LR0102", "name": "睡眠薬・鎮静薬の使用" },
+        { "item_type": "risk_factor", "code": "LR0103", "name": "夜間の頻尿" },
+        { "item_type": "risk_factor", "code": "LR0104", "name": "見当識の低下" }
+      ],
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis", "level": "term", "code": "L0002", "parent_code": "LC02",
+      "name": "感染の危険がある状態", "name_kana": "カンセンノキケンガアルジョウタイ", "diagnosis_type": "risk",
+      "definition": "病原体が入り込み、感染を起こすおそれが高まっている状態。",
+      "guidance": "カテーテル・ドレーン・創がある間は継続して評価する。",
+      "items": [
+        { "item_type": "risk_factor", "code": "LR0201", "name": "留置カテーテルがある" },
+        { "item_type": "risk_factor", "code": "LR0202", "name": "手術創がある" },
+        { "item_type": "risk_factor", "code": "LR0203", "name": "低栄養" }
+      ],
+      "display_order": 1
+    },
+    {
+      "taxonomy": "diagnosis", "level": "term", "code": "L0003", "parent_code": "LC03",
+      "name": "急な痛みがある状態", "name_kana": "キュウナイタミガアルジョウタイ", "diagnosis_type": "problem",
+      "definition": "手術や病気によって、急に起きた痛みを感じている状態。",
+      "guidance": "痛みの強さはペインスコアで記録し、鎮痛薬の効果を時間を決めて評価する。",
+      "items": [
+        { "item_type": "defining_characteristic", "code": "LD0301", "name": "痛みを訴える" },
+        { "item_type": "defining_characteristic", "code": "LD0302", "name": "痛みをかばう姿勢をとる" },
+        { "item_type": "defining_characteristic", "code": "LD0303", "name": "眠れない" },
+        { "item_type": "related_factor", "code": "LF0301", "name": "手術による組織の損傷" },
+        { "item_type": "related_factor", "code": "LF0302", "name": "炎症" }
+      ],
+      "display_order": 1
+    },
+
+    { "taxonomy": "outcome", "level": "domain", "code": "LOD01", "name": "健康の知識と行動", "display_order": 1 },
+    { "taxonomy": "outcome", "level": "class", "code": "LOC01", "parent_code": "LOD01", "name": "危険の管理", "display_order": 1 },
+    { "taxonomy": "outcome", "level": "domain", "code": "LOD02", "name": "身体の健康", "display_order": 2 },
+    { "taxonomy": "outcome", "level": "class", "code": "LOC02", "parent_code": "LOD02", "name": "症状の状態", "display_order": 1 },
+    {
+      "taxonomy": "outcome", "level": "term", "code": "LO001", "parent_code": "LOC01", "name": "転倒を防ぐ行動",
+      "definition": "転倒を防ぐために本人や家族がとる行動。",
+      "items": [
+        { "item_type": "indicator", "code": "LO00101", "name": "移動のときにナースコールを押す" },
+        { "item_type": "indicator", "code": "LO00102", "name": "滑りにくい履物を使う" }
+      ],
+      "display_order": 1
+    },
+    {
+      "taxonomy": "outcome", "level": "term", "code": "LO002", "parent_code": "LOC02", "name": "痛みの程度",
+      "definition": "感じている痛みの強さ。",
+      "items": [
+        { "item_type": "indicator", "code": "LO00201", "name": "痛みの訴え" },
+        { "item_type": "indicator", "code": "LO00202", "name": "痛みのための不眠" }
+      ],
+      "display_order": 1
+    },
+
+    { "taxonomy": "intervention", "level": "domain", "code": "LID01", "name": "安全", "display_order": 1 },
+    { "taxonomy": "intervention", "level": "class", "code": "LIC01", "parent_code": "LID01", "name": "危険の管理", "display_order": 1 },
+    { "taxonomy": "intervention", "level": "domain", "code": "LID02", "name": "身体の基本", "display_order": 2 },
+    { "taxonomy": "intervention", "level": "class", "code": "LIC02", "parent_code": "LID02", "name": "安楽の促進", "display_order": 1 },
+    {
+      "taxonomy": "intervention", "level": "term", "code": "LI001", "parent_code": "LIC01", "name": "転倒予防",
+      "definition": "転倒の危険がある人に、環境と行動の両面から予防策をとる。",
+      "items": [
+        { "item_type": "activity", "code": "", "name": "ベッドを低い位置にする" },
+        { "item_type": "activity", "code": "", "name": "よく使う物を手の届く場所に置く" }
+      ],
+      "display_order": 1
+    },
+    {
+      "taxonomy": "intervention", "level": "term", "code": "LI002", "parent_code": "LIC02", "name": "疼痛管理",
+      "definition": "痛みを和らげ、本人が受け入れられる程度に保つ。",
+      "items": [
+        { "item_type": "activity", "code": "", "name": "痛みの部位・強さ・性質を評価する" },
+        { "item_type": "activity", "code": "", "name": "鎮痛薬の効果と副作用を観察する" }
+      ],
+      "display_order": 2
+    }
+  ],
+  "standard_plans": [
+    {
+      "code": "LSP001", "name": "転倒転落予防", "diagnosis_code": "L0001", "display_order": 1,
+      "goals": [
+        { "text": "入院中に転倒・転落しない", "outcome_code": "" },
+        { "text": "移動のときにナースコールを押せる", "outcome_code": "LO001" }
+      ],
+      "activities": [
+        { "activity_type": "op", "text": "ふらつきの有無", "item_kind": "observation", "manage_no": "31005024", "item_name": "ふらつき" },
+        { "activity_type": "op", "text": "危険行動(転落)の有無", "item_kind": "observation", "manage_no": "31002779", "item_name": "危険行動（転落）" },
+        { "activity_type": "tp", "text": "低床ベッドへ交換する", "intervention_code": "LI001", "item_kind": "act", "code16": "A001B006C051D031", "manage_no": "12000956", "item_name": "低床ベッドへ交換" },
+        { "activity_type": "tp", "text": "ベッド柵を確認する", "intervention_code": "LI001", "item_kind": "act", "code16": "A001B006C051D032", "manage_no": "12000963", "item_name": "ベッド柵確認" },
+        { "activity_type": "ep", "text": "移動のときはナースコールを押すよう説明する", "item_kind": "act", "code16": "A003B020C372D445", "manage_no": "12001948", "item_name": "患者への指導" },
+        { "activity_type": "ep", "text": "家族に転倒の危険と予防策を説明する", "item_kind": "act", "code16": "A003B020C372D446", "manage_no": "12001949", "item_name": "家族、親族への指導" }
+      ]
+    },
+    {
+      "code": "LSP002", "name": "感染予防", "diagnosis_code": "L0002", "display_order": 2,
+      "goals": [
+        { "text": "感染の徴候がない", "outcome_code": "" }
+      ],
+      "activities": [
+        { "activity_type": "op", "text": "体温", "item_kind": "observation", "manage_no": "31001368", "item_name": "体温" },
+        { "activity_type": "op", "text": "刺入部・創の発赤と腫脹", "item_kind": "observation", "manage_no": "31000452", "item_name": "腫脹" },
+        { "activity_type": "tp", "text": "清拭を行う", "item_kind": "act", "code16": "E017F057G144H088", "manage_no": "13000257", "item_name": "清拭" },
+        { "activity_type": "ep", "text": "手洗いとうがいの方法を説明する", "item_kind": "act", "code16": "A003B020C372D445", "manage_no": "12001948", "item_name": "患者への指導" }
+      ]
+    },
+    {
+      "code": "LSP003", "name": "急性疼痛の緩和", "diagnosis_code": "L0003", "display_order": 3,
+      "goals": [
+        { "text": "ペインスコアが3以下で過ごせる", "outcome_code": "LO002" },
+        { "text": "痛みで眠れない夜がない", "outcome_code": "LO002" }
+      ],
+      "activities": [
+        { "activity_type": "op", "text": "疼痛ペインスコア", "intervention_code": "LI002", "item_kind": "observation", "manage_no": "31000473", "item_name": "疼痛ペインスコア" },
+        { "activity_type": "op", "text": "疼痛の部位", "item_kind": "observation", "manage_no": "31000472", "item_name": "疼痛部位" },
+        { "activity_type": "tp", "text": "痛みの少ない体位を整える", "intervention_code": "LI002", "item_kind": "act", "code16": "A003B020C289D405", "manage_no": "12001331", "item_name": "疼痛緩和体位" },
+        { "activity_type": "tp", "text": "冷罨法を行う", "item_kind": "act", "code16": "A001B008C064D044", "manage_no": "12000143", "item_name": "冷罨法" },
+        { "activity_type": "ep", "text": "痛いときは我慢せず伝えるよう説明する", "item_kind": "act", "code16": "A003B020C372D445", "manage_no": "12001948", "item_name": "患者への指導" }
+      ]
+    }
+  ]
+}

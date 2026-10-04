@@ -10,7 +10,7 @@ module Integrations
         @store = store
       end
 
-      # プロブレム・既往歴と、誤登録・否定された病名は上流で除く(:not は値の無い行を残すので、
+      # プロブレム・既往歴(看護問題も problem-list-item を持つ)と、誤登録・否定された病名は上流で除く(:not は値の無い行を残すので、
       # category を持たない Condition も保険病名として扱う。カルテ側の conditionCategoryOf と同じ判定)。
       # 有効期間は onset / abatement の日付で見るので、ここで絞る。
       def call(patient_fhir_id:, perform_date:)

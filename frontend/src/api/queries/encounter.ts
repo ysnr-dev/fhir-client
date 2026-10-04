@@ -412,8 +412,18 @@ async function fetchPatientAdmission(patientId: string): Promise<PatientAdmissio
   );
   if (!encounter) return null;
 
+  return { encounter, ...(await fetchEncounterWard(encounter)) };
+}
+
+/**
+ * 入院の今の(退院済みなら最後の)ベッドから病室・病棟を辿る。先頭の location がそのベッド。
+ * 辿れなければ空文字。
+ */
+export async function fetchEncounterWard(
+  encounter: fhir4.Encounter,
+): Promise<{ wardId: string; wardName: string; roomName: string }> {
   const bedId = encounterBedId(encounter);
-  if (!bedId) return { encounter, wardId: "", wardName: "", roomName: "" };
+  if (!bedId) return { wardId: "", wardName: "", roomName: "" };
 
   // ベッドと、その上の病室・病棟をまとめて引く。階層は physicalType(wa/ro/bd)で見分ける。
   const locationParams = new URLSearchParams();
@@ -438,7 +448,6 @@ async function fetchPatientAdmission(patientId: string): Promise<PatientAdmissio
   const ward = ofType(WARD_PHYSICAL_TYPE.code);
 
   return {
-    encounter,
     wardId: ward?.id ?? "",
     wardName: ward?.name ?? "",
     roomName: room?.name ?? "",
