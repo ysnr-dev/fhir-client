@@ -9,8 +9,7 @@ import {
   updateResource,
 } from "../fhirClient";
 import { fetchFacilitySettings } from "../facilityClient";
-import { hasRelation } from "./patient";
-import { resourcesOfType } from "./core";
+import { hasRelation, resourcesOfType } from "./core";
 
 // --- 自院 --------------------------------------------------------------------
 //

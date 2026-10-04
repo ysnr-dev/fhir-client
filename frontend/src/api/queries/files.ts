@@ -19,7 +19,7 @@ import {
 } from "../fhirClient";
 import { deleteImagingStudy, fetchStoredStudies, fetchStudyInstances } from "../imagingClient";
 import { IMAGING_STUDY_SUMMARY_ELEMENTS } from "../../fhir/imagingHelpers";
-import { hasRelation } from "./patient";
+import { hasRelation } from "./core";
 
 // --- カルテに取り込んだファイル(docs/patient-file-design.md) ------------------
 

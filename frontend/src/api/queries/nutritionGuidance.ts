@@ -25,6 +25,7 @@ import {
   ORDER_PERFORM_REVINCLUDES,
   searchAllPages,
   setOrderPeriod,
+  type Truncatable,
   WORKLIST_PAGE,
 } from "./core";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
@@ -55,7 +56,11 @@ export function usePatientNutritionGuidanceOrders(patientId: string | undefined)
     queryKey: ["ServiceRequest", "search", "nutrition-guidance-patient", patientId],
     queryFn: async () => {
       // 打ち切りの対象を取りこぼさないよう、ページを辿って全件読む。
-      const { matches } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, { page: 500, maxPages: 4 });
+      const { matches } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+        page: 500,
+        maxPages: 4,
+        complete: true,
+      });
       return matches.filter(isNutritionGuidanceServiceRequest);
     },
     enabled: Boolean(patientId),
@@ -161,13 +166,13 @@ function nutritionGuidanceWorklistParams(date: string, page: number): URLSearchP
 /** 基準日 1 日ぶんの栄養指導の実施記録。オーダーの id ごとにまとめる。 */
 async function fetchNutritionGuidancePerformsOn(
   date: string,
-): Promise<Map<string, NutritionGuidancePerformDisplay[]>> {
+): Promise<Truncatable<Map<string, NutritionGuidancePerformDisplay[]>>> {
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${NUTRITION_GUIDANCE_ORDER_TYPE.code}`);
   params.set("date", date);
 
-  const { matches } = await searchAllPages<fhir4.Procedure>("Procedure", params, { page: 500, maxPages: 4 });
-  return nutritionGuidancePerformsByOrderId(matches);
+  const { matches, truncated } = await searchAllPages<fhir4.Procedure>("Procedure", params, { page: 500, maxPages: 4 });
+  return { value: nutritionGuidancePerformsByOrderId(matches), truncated };
 }
 
 /**
@@ -176,14 +181,14 @@ async function fetchNutritionGuidancePerformsOn(
  */
 async function fetchNutritionGuidanceAppointmentsFrom(
   from: string,
-): Promise<Map<string, fhir4.Appointment[]>> {
+): Promise<Truncatable<Map<string, fhir4.Appointment[]>>> {
   const params = new URLSearchParams();
   params.set("date", `ge${from}`);
   params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|nutrition-guidance`);
   setActiveAppointmentStatus(params);
   params.set("_sort", "date");
 
-  const { matches: appointments } = await searchAllPages<fhir4.Appointment>("Appointment", params, { page: 500, maxPages: 4 });
+  const { matches: appointments, truncated } = await searchAllPages<fhir4.Appointment>("Appointment", params, { page: 500, maxPages: 4 });
 
   const byOrderId = new Map<string, fhir4.Appointment[]>();
   for (const appointment of appointments) {
@@ -196,7 +201,7 @@ async function fetchNutritionGuidanceAppointmentsFrom(
   for (const list of byOrderId.values()) {
     list.sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""));
   }
-  return byOrderId;
+  return { value: byOrderId, truncated };
 }
 
 async function fetchNutritionGuidanceWorklist(
@@ -217,7 +222,7 @@ async function fetchNutritionGuidanceWorklist(
 
   // 実施記録はその日の分、予約は基準日以降の分だけが要るので別に引く。_revinclude だと
   // 継続中のオーダーの全期間ぶんが付いてくる。
-  const [performsByOrderId, appointmentsByOrderId] = await Promise.all([
+  const [performs, appointments] = await Promise.all([
     fetchNutritionGuidancePerformsOn(date),
     fetchNutritionGuidanceAppointmentsFrom(date),
   ]);
@@ -229,14 +234,14 @@ async function fetchNutritionGuidanceWorklist(
       order,
       patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
       task: taskByOrderId.get(order.id ?? ""),
-      todayPerforms: performsByOrderId.get(order.id ?? "") ?? [],
-      appointments: appointmentsByOrderId.get(order.id ?? "") ?? [],
+      todayPerforms: performs.value.get(order.id ?? "") ?? [],
+      appointments: appointments.value.get(order.id ?? "") ?? [],
     }));
 
   // 日単位の一覧では患者番号順が扱いやすい(リハビリ・病理と同じ)。
   rows.sort(comparePatientNumber);
 
-  return { rows, truncated };
+  return { rows, truncated: truncated || performs.truncated || appointments.truncated };
 }
 
 /** 基準日に効いている栄養指導オーダー。日付が未選択の間は読みに行かない。 */

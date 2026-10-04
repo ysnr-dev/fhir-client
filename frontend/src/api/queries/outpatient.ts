@@ -25,7 +25,7 @@ import {
 } from "../../fhir/outpatientOrderProgressHelpers";
 import { createResource, postBundle, readResource, searchResource } from "../fhirClient";
 import { invalidateAppointments, orderAppointmentCancelEntries } from "./appointment";
-import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
+import { hasNextPage, makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
 import { makePerformDetailHook, taskBundleEntry } from "./worklist";
 
 // ---- 外来一覧(受付ワークリスト) ----
@@ -117,7 +117,7 @@ async function fetchOutpatientList(date: string): Promise<OutpatientListResult> 
     }
 
     if (matched < OUTPATIENT_PAGE) break;
-    if (page === OUTPATIENT_MAX_PAGES - 1) truncated = true;
+    if (page === OUTPATIENT_MAX_PAGES - 1) truncated = hasNextPage(bundle);
   }
 
   const examByAppointment = await fetchOutpatientExams(date);

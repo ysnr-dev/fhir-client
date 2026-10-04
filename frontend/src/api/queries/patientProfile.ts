@@ -34,8 +34,7 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { resourcesOfType, saveWithImages } from "./core";
-import { hasRelation } from "./patient";
+import { hasRelation, resourcesOfType, saveWithImages } from "./core";
 
 // ---- 診療上の注意(Flag) ----
 

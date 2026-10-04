@@ -4,14 +4,16 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { ADMIN_SESSION_KEY } from './api/adminQueries'
 import { AUTH_SESSION_KEY } from './api/authQueries'
+import { SearchLimitError } from './api/queries/core'
 import { setUnauthorizedHandler } from './api/session'
 import App from './App.tsx'
 import './index.css'
 
 // 4xx は状態が変わらない限り何度投げても同じ結果なので再試行しない(上流の 401 は
-// backend が 502 に写すので、ここに来る 4xx はクライアント側の問題)。5xx とネットワーク
-// 断は 1 回だけ再試行する。
+// backend が 502 に写すので、ここに来る 4xx はクライアント側の問題)。取得の上限に達した
+// 読み込みも同じ。5xx とネットワーク断は 1 回だけ再試行する。
 function isClientError(error: unknown): boolean {
+  if (error instanceof SearchLimitError) return true
   const status = (error as { status?: unknown } | null)?.status
   return typeof status === "number" && status >= 400 && status < 500
 }

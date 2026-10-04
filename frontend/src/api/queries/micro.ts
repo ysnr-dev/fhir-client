@@ -12,10 +12,15 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { HISTORY_COUNT, NOTIFICATION_TASK_KEY, resourcesOfType, saveWithImages } from "./core";
+import {
+  hasRelation,
+  HISTORY_COUNT,
+  NOTIFICATION_TASK_KEY,
+  resourcesOfType,
+  saveWithImages,
+} from "./core";
 import { useLabResultDetail } from "./labResult";
 import { withResultReviewTask } from "./notification";
-import { hasRelation } from "./patient";
 import { fetchDerivedObservationRefs } from "./patientProfile";
 import { deleteOrderWithItems } from "./worklist";
 

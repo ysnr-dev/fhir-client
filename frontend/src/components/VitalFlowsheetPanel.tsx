@@ -78,6 +78,7 @@ import {
   type VitalThresholdSettings,
 } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { TruncatedNotice } from "./TruncatedNotice";
 
 // バイタルの経過表(POMR のフローシート)。読み取り専用で、編集はカルテの
 // バイタルカードから行う(編集の導線を 2 つ持つと同期の負債になるため)。
@@ -251,7 +252,7 @@ export function VitalFlowsheetPanel({
     [dayMode, periodDays, rangeStart],
   );
 
-  const { data: observations, isLoading, error } = useVitalFlowsheet(patientId, rangeStart, rangeEnd);
+  const { data: observations, isLoading, error, truncated } = useVitalFlowsheet(patientId, rangeStart, rangeEnd);
   // 異常値(H/L)の色付けは施設設定のしきい値で表示時に判定する。
   const thresholds = useVitalThresholds();
   const flowsheet = useMemo(
@@ -663,6 +664,9 @@ export function VitalFlowsheetPanel({
       <ErrorBanner
         error={error ?? encounters.error ?? surgeries.error ?? examOrders.error ?? injections.error}
       />
+      <TruncatedNotice show={truncated || injections.data?.truncated || oralPrescriptions.data?.truncated}>
+        件数が多いため、期間の一部を表示できていません。期間を短くしてください。
+      </TruncatedNotice>
 
       <div className="lab-timeline__controls">
         <label className="lab-timeline__count">

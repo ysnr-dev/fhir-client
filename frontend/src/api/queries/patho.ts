@@ -195,6 +195,7 @@ export function usePathoResultEntries(patientId: string | undefined) {
     entries: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
+    truncated: query.truncated,
   };
 }
 

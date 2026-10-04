@@ -18,6 +18,7 @@ import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useMicroResultInitialValues } from "../hooks/useMicroResultInitialValues";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
+import { TruncatedNotice } from "./TruncatedNotice";
 import { KarteLinkMenu } from "./KarteLinkMenu";
 import { MicroResultDetailPanel } from "./MicroResultDetailPanel";
 import { MicroResultForm } from "./MicroResultForm";
@@ -48,7 +49,7 @@ export function KarteMicroResultTab({ patientId, view, onViewChange }: KarteMicr
   // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
   useEffect(() => setForm(null), [view]);
 
-  const { entries, isLoading, error } = useMicroResultEntries(patientId);
+  const { entries, isLoading, error, truncated } = useMicroResultEntries(patientId);
   const unreviewed = useUnreviewedReportIds(patientId);
   const deleteMicroResult = useDeleteMicroResult();
 
@@ -142,6 +143,9 @@ export function KarteMicroResultTab({ patientId, view, onViewChange }: KarteMicr
         </div>
 
         <ErrorBanner error={error} />
+        <TruncatedNotice show={truncated}>
+          件数が多いため、古い結果の一部を表示できていません。
+        </TruncatedNotice>
         <ErrorBanner error={deleteMicroResult.error} />
 
         {isLoading ? (

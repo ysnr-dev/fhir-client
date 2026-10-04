@@ -16,8 +16,7 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { fetchDateCounts, resourcesOfType } from "./core";
-import { hasRelation } from "./patient";
+import { fetchDateCounts, hasRelation, resourcesOfType } from "./core";
 
 // ---- 予約枠(Schedule / Slot) ----
 

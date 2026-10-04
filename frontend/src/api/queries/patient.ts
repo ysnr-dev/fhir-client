@@ -10,6 +10,7 @@ import {
   typeOperation,
   updateResource,
 } from "../fhirClient";
+import { hasRelation } from "./core";
 
 export interface PatientSearchParams {
   name?: string;
@@ -45,13 +46,6 @@ function buildSearchParams(search: PatientSearchParams, offset: number): URLSear
   params.set("_count", String(PATIENT_COUNT));
   params.set("_offset", String(offset));
   return params;
-}
-
-export function hasRelation<T extends fhir4.Resource>(
-  bundle: fhir4.Bundle<T> | undefined,
-  relation: string,
-): boolean {
-  return Boolean(bundle?.link?.some((l) => l.relation === relation));
 }
 
 export function usePatientSearch(search: PatientSearchParams, offset: number) {

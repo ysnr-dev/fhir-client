@@ -22,10 +22,9 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { NOTIFICATION_TASK_KEY, resourcesOfType } from "./core";
+import { hasRelation, NOTIFICATION_TASK_KEY, resourcesOfType } from "./core";
 import { fetchWardNameByBed } from "./encounter";
 import { KARTE_CONDITION_COUNT, saveClinicalNote, staleObservationEntries } from "./micro";
-import { hasRelation } from "./patient";
 import { useOrderEnterer } from "./provenance";
 
 // ---- 退院時サマリー ----

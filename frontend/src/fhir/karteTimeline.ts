@@ -1326,7 +1326,7 @@ export function pathwayEvaluationDays(
 
 /**
  * 診療科・記録者で絞り込む。空になった診療日のグループは落とす。種別の絞り込み
- * (filterKarteGroupsByCard)と同じく、ページングの判定より後に行う。自科はサーバー検索でも
+ * (filterKarteGroupsByCard)と同じく、ページングの判定より後に行う。自科・個人はサーバー検索でも
  * 絞るので、ここで効くのは全件読んであるパス評価と、診療科を選んでいないときの空表示。
  */
 export function filterKarteGroupsByScope(

@@ -305,7 +305,11 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
               !meal.ready ||
               existingSummary.isLoading ||
               dueTasks.isLoading ||
-              broughtMedications.isLoading
+              broughtMedications.isLoading ||
+              // 打ち切る指示を読み切れていないまま退院させない(読めなかったぶんが有効なまま残る)。
+              !rehabOrders.isSuccess ||
+              !nutritionGuidanceOrders.isSuccess ||
+              !nursingOrders.isSuccess
             }
           >
             {discharge.isPending ? "退院処理中..." : "退院"}

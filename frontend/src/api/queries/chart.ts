@@ -3,7 +3,7 @@ import { INJECTION_ORDER_TYPE } from "../../fhir/injectionHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { PRESCRIPTION_CATEGORY_SYSTEM } from "../../fhir/prescriptionHelpers";
 import { addDays } from "../../fhir/scheduleHelpers";
-import { ORAL_LOOKBACK_DAYS, resourcesOfType, searchAllPages } from "./core";
+import { ORAL_LOOKBACK_DAYS, type PagedItems, resourcesOfType, searchAllPages } from "./core";
 
 // ---- チャート(数値の推移と治療イベントを重ねて読む画面) ----
 
@@ -15,7 +15,7 @@ async function fetchChartObservations(
   codeParam: string,
   rangeStart: string,
   rangeEnd: string,
-): Promise<fhir4.Observation[]> {
+): Promise<PagedItems<fhir4.Observation>> {
   const params = new URLSearchParams();
   params.set("patient", `Patient/${patientId}`);
   // 項目のコードをまとめて OR で引く(検体検査・バイタル・テンプレート抽出が混ざる)。
@@ -27,11 +27,11 @@ async function fetchChartObservations(
   params.set("status:not", "entered-in-error,cancelled");
   // 新しい順に読み、上限で切れるときは古い側を落とす(返すのは古い順)。
   params.set("_sort", "-date");
-  const { matches } = await searchAllPages<fhir4.Observation>("Observation", params, {
+  const { matches, truncated } = await searchAllPages<fhir4.Observation>("Observation", params, {
     page: CHART_OBSERVATION_PAGE,
     maxPages: CHART_OBSERVATION_MAX_PAGES,
   });
-  return matches.reverse();
+  return { items: matches.reverse(), truncated };
 }
 
 /**
@@ -47,7 +47,7 @@ export function usePatientChartObservations(
   rangeEnd: string,
 ) {
   const codeParam = codings.map((coding) => `${coding.system}|${coding.code}`).join(",");
-  return useQuery({
+  const query = useQuery({
     // 登録・更新・削除の invalidateQueries(["Observation", "search"]) でまとめて
     // 無効化されるよう search 配下のキーにしている。
     queryKey: ["Observation", "search", "patient-chart", patientId, codeParam, rangeStart, rangeEnd],
@@ -55,6 +55,7 @@ export function usePatientChartObservations(
     enabled: Boolean(patientId) && Boolean(codeParam) && Boolean(rangeStart) && Boolean(rangeEnd),
     placeholderData: keepPreviousData,
   });
+  return { ...query, data: query.data?.items, truncated: query.data?.truncated ?? false };
 }
 
 const CHART_PROCEDURE_PAGE = 500;
@@ -65,7 +66,7 @@ async function fetchChartProcedures(
   categoryParam: string,
   rangeStart: string,
   rangeEnd: string,
-): Promise<fhir4.Procedure[]> {
+): Promise<PagedItems<fhir4.Procedure>> {
   const params = new URLSearchParams();
   params.set("patient", `Patient/${patientId}`);
   params.set("category", categoryParam);
@@ -76,11 +77,11 @@ async function fetchChartProcedures(
   params.set("status:not", "entered-in-error,not-done");
   // 新しい順に読み、上限で切れるときは古い側を落とす(返すのは古い順)。
   params.set("_sort", "-date");
-  const { matches } = await searchAllPages<fhir4.Procedure>("Procedure", params, {
+  const { matches, truncated } = await searchAllPages<fhir4.Procedure>("Procedure", params, {
     page: CHART_PROCEDURE_PAGE,
     maxPages: CHART_PROCEDURE_MAX_PAGES,
   });
-  return matches.reverse();
+  return { items: matches.reverse(), truncated };
 }
 
 /**
@@ -97,13 +98,14 @@ export function usePatientPerformedProcedures(
   rangeEnd: string,
 ) {
   const categoryParam = orderTypeCodes.map((code) => `${ORDER_TYPE_SYSTEM}|${code}`).join(",");
-  return useQuery({
+  const query = useQuery({
     queryKey: ["Procedure", "search", "patient-chart", patientId, categoryParam, rangeStart, rangeEnd],
     queryFn: () => fetchChartProcedures(patientId ?? "", categoryParam, rangeStart, rangeEnd),
     enabled:
       Boolean(patientId) && Boolean(categoryParam) && Boolean(rangeStart) && Boolean(rangeEnd),
     placeholderData: keepPreviousData,
   });
+  return { ...query, data: query.data?.items, truncated: query.data?.truncated ?? false };
 }
 
 const CHART_PRESCRIPTION_PAGE = 500;
@@ -114,7 +116,7 @@ export interface ChartPrescriptions {
   medicationRequests: fhir4.MedicationRequest[];
   /** 進捗の Task(中止したオーダーを見分けるのに使う)。 */
   tasks: fhir4.Task[];
-  /** 取得の上限に達し、期間の後ろのオーダーを取りこぼしている。 */
+  /** 取得の上限に達し、期間の後ろのオーダーが欠けている。 */
   truncated: boolean;
 }
 

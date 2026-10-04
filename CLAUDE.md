@@ -65,7 +65,9 @@ docker compose exec frontend node scripts/import-cycles.cjs src/api/queries
 - 検索は既定で **lenient**:未対応パラメータは黙殺され全件が返る。新しい検索パラメータを使うときは上流の対応を確認する。
 - 絞り込み・並べ替え・結合は可能な限り上流に任せる(`_include` / `_revinclude[:iterate]` / `:not` / カンマ OR / `_summary=count`)。
   手元でのフィルタや N+1 の read を足さない。上流に足りない機能は `docs/server-improvement-backlog.md` に記録する。
-- `_count` の上限は 500。全件を読むときは `searchAllPages` を使う(`_include` 行は件数に数えない)。
+- `_count` の上限は 500。全件を読むときは `searchAllPages` を使う(`_include` 行は件数に数えない。続きの有無は `link[next]`)。
+  上限(`maxPages`)で欠けた結果を使えない読み込み(有無の判定・合計・打ち切りの対象)は `complete: true` を付け、
+  画面に並べるだけの読み込みは `truncated` を `TruncatedNotice` で出す。黙って切らない。
 - `_elements` は JSON キー完全一致(choice 型は `effectiveDateTime` など実キー名)。
 - 日付の検索値はタイムゾーン無しで渡してよい(上流が Asia/Tokyo で解釈)。
 - レート制限は 1 トークン 300 件/分。まとめて書くときは transaction Bundle にし、hook の連続呼び出しで読み直しを積み重ねない。

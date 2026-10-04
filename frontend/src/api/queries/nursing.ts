@@ -72,6 +72,7 @@ export function usePatientNursingOrders(patientId: string | undefined) {
       const { bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
         page: 500,
         maxPages: 4,
+        complete: true,
       });
       return nursingOrderSetOf({
         resourceType: "Bundle",
@@ -299,7 +300,7 @@ export async function fetchNursingPerforms(
   setParams(observationParams);
   setParams(procedureParams);
   // 実施記録の有無でパスの取消・指示の削除を止めるので、上限で切らずにページを辿る。
-  const paging = { page: 500, maxPages: 4 };
+  const paging = { page: 500, maxPages: 4, complete: true };
   const [observations, procedures] = await Promise.all([
     searchAllPages<fhir4.Observation>("Observation", observationParams, paging),
     searchAllPages<fhir4.Procedure>("Procedure", procedureParams, paging),

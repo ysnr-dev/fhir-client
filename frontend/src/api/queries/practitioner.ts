@@ -9,8 +9,7 @@ import {
 } from "../../fhir/practitionerRoleHelpers";
 import { deleteLoginAccount } from "../authClient";
 import { postBundle, readResource, searchResource } from "../fhirClient";
-import { resourcesOfType, searchAllPages } from "./core";
-import { hasRelation } from "./patient";
+import { hasRelation, resourcesOfType, searchAllPages } from "./core";
 
 export interface PractitionerSearchParams {
   name?: string;
@@ -259,6 +258,7 @@ export function usePractitionerOptions() {
       const { matches } = await searchAllPages<fhir4.Practitioner>("Practitioner", params, {
         page: 500,
         maxPages: 4,
+        complete: true,
       });
       return matches;
     },

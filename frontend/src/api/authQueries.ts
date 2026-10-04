@@ -64,6 +64,8 @@ export function useCurrentPractitioner() {
     practitioner: practitioner.data?.data ?? null,
     /** セッションをまだ読み込んでいる(practitionerId が決まっていない)。 */
     sessionLoading: session.isPending,
+    /** ログイン中の医療従事者(氏名)をまだ読み込んでいる。紐づく医療従事者が無ければ false。 */
+    practitionerLoading: session.isPending || (Boolean(practitionerId) && practitioner.isPending),
   };
 }
 

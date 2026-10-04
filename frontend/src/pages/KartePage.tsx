@@ -22,6 +22,7 @@ import {
   usePatientOutpatientExam,
   useUpdateOutpatientExam,
   type KarteProblemFilter,
+  type KarteScope,
   type OutpatientExam,
 } from "../api/queries";
 import { useReceiptStatus } from "../api/receiptQueries";
@@ -31,6 +32,7 @@ import { displayJapaneseName } from "../fhir/humanName";
 import { isDischargeSummary } from "../fhir/clinicalNoteHelpers";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { TruncatedNotice } from "../components/TruncatedNotice";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteBroughtMedicationTab } from "../components/KarteBroughtMedicationTab";
 import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
@@ -380,8 +382,11 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const [scopeFilter, setScopeFilter] = useState<KarteScopeFilter>(readScopeFilter);
   // 自科はヘッダーで選択中の診療科、個人はログイン中の医療従事者と突き合わせる。
   const orderContext = useOrderContext();
-  const { practitionerId: loginPractitionerId, practitioner: loginPractitioner } =
-    useCurrentPractitioner();
+  const {
+    practitionerId: loginPractitionerId,
+    practitioner: loginPractitioner,
+    practitionerLoading,
+  } = useCurrentPractitioner();
   const scopeTarget = useMemo<KarteScopeTarget>(
     () => ({
       departmentId: orderContext.departmentId,
@@ -390,9 +395,23 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     }),
     [orderContext.departmentId, loginPractitionerId, loginPractitioner],
   );
-  // 自科はサーバー検索で絞る(ページングと診療日ペインが絞り込み後の件数で進む)。
-  const timelineDepartmentId =
-    scopeFilter === "department" && orderContext.departmentId ? orderContext.departmentId : null;
+  // 自科・個人はサーバー検索で絞る(ページングと診療日ペインが絞り込み後の件数で進む)。
+  // 診療科を選んでいない自科は絞らずに読み、下の filterKarteGroupsByScope が空にする。
+  // 個人は、ログイン中の医療従事者を読み終えるまで取得を始めない(氏名でも突き合わせるため)。
+  const timelineScope = useMemo<KarteScope>(() => {
+    if (scopeFilter === "department") {
+      return orderContext.departmentId
+        ? { kind: "department", departmentId: orderContext.departmentId }
+        : null;
+    }
+    if (scopeFilter !== "self") return null;
+    if (practitionerLoading) return undefined;
+    return {
+      kind: "practitioner",
+      practitionerId: scopeTarget.practitionerId,
+      practitionerName: scopeTarget.practitionerName,
+    };
+  }, [scopeFilter, orderContext.departmentId, practitionerLoading, scopeTarget]);
   // 絞り込み中のプロブレム。これがあれば「関連する記録のみ表示」の状態。
   const filterProblemId = searchParams.get(KARTE_PROBLEM_PARAM);
   // 減光と絞り込みのどちらであれ、いま選ばれているプロブレム。
@@ -436,17 +455,17 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     return [...(activeProblemIds ?? [filterProblemId])].sort();
   }, [filterProblemId, conditionsPending, activeProblemIds]);
 
-  const notes = useKarteClinicalNotesInfinite(patientId, timelineProblemIds, timelineDepartmentId);
-  const prescriptions = useKartePrescriptionsInfinite(patientId, timelineProblemIds, timelineDepartmentId);
-  const responses = useKarteQuestionnaireResponsesInfinite(patientId, timelineProblemIds, timelineDepartmentId);
+  const notes = useKarteClinicalNotesInfinite(patientId, timelineProblemIds, timelineScope);
+  const prescriptions = useKartePrescriptionsInfinite(patientId, timelineProblemIds, timelineScope);
+  const responses = useKarteQuestionnaireResponsesInfinite(patientId, timelineProblemIds, timelineScope);
   // 日付未定・開始日が今日より後のオーダーは本流(開始日が今日以前)に乗らないので別に先読みする。
-  const pendingOrders = useKartePendingOrders(patientId, timelineProblemIds, timelineDepartmentId);
-  const vitals = useKarteVitalsInfinite(patientId, timelineProblemIds, timelineDepartmentId);
+  const pendingOrders = useKartePendingOrders(patientId, timelineProblemIds, timelineScope);
+  const vitals = useKarteVitalsInfinite(patientId, timelineProblemIds, timelineScope);
   // 記載のあるパスの評価。患者ぶんを全部読むので、ページングの判定には加わらない。
   const pathwayEvaluations = useKartePathwayEvaluations(patientId, timelineProblemIds);
   // 診療日ペイン用の全診療日。タイムラインのページングとは別に日付だけを読み切る
   // ので、スクロール(読み込み状況)に関係なく過去の日付まで最初から並ぶ。
-  const dayIndex = useKarteDayIndex(patientId, timelineProblemIds, timelineDepartmentId);
+  const dayIndex = useKarteDayIndex(patientId, timelineProblemIds, timelineScope);
 
   // 選択中のプロブレムは、診療記録を新規登録するときの対象の初期値にする。
   const selectedProblem = useMemo(() => {
@@ -561,8 +580,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     ],
   );
 
-  // プロブレムと自科の絞り込みはサーバー検索で済んでいる。ここで残るのは種別と個人、それに
-  // 全件読んであるパス評価の自科。ページングの判定(カットオフ・pending)より後に行う。判定は
+  // プロブレムと自科・個人の絞り込みはサーバー検索で済んでいる。ここで残るのは種別と、
+  // 全件読んであるパス評価の自科・個人。ページングの判定(カットオフ・pending)より後に行う。判定は
   // 読み込み済みの全データで決まるので、ここで件数が減っても読み進みには影響しない。
   const filteredGroups = useMemo(() => {
     const byCard = cardFilter ? filterKarteGroupsByCard(timeline.groups, cardFilter) : timeline.groups;
@@ -586,8 +605,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
 
   // 本日のカルテのペインに出す 1 日分。オーダーの本流は開始日が今日以前のものを新しい順に
   // 読むので、本日の分は常に最初のページに入っている(追加読み込みを待つ必要が無い)。
-  // 種別と個人の絞り込み(左端のペイン)は左のタイムラインを絞るためのものなので、ここには
-  // 効かせない。サーバー検索で絞るプロブレムと自科は、ここにも効く。
+  // 種別の絞り込み(左端のペイン)は左のタイムラインを絞るためのものなので、ここには
+  // 効かせない。サーバー検索で絞るプロブレムと自科・個人は、ここにも効く。
   const todayDay = today();
   const todayGroup = useMemo(
     () => timeline.groups.find((group) => group.day === todayDay),
@@ -934,6 +953,9 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         <ErrorBanner error={notes.error} />
         <ErrorBanner error={prescriptions.error} />
         <ErrorBanner error={pendingOrders.error} />
+        <TruncatedNotice show={pendingOrders.truncated}>
+          予定のオーダーが多いため、日付未定と今日より後の一部を表示できていません。
+        </TruncatedNotice>
         <ErrorBanner error={responses.error} />
         <ErrorBanner error={pathwayEvaluations.error} />
         <ErrorBanner error={conditionsError} />

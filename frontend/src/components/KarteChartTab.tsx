@@ -69,6 +69,7 @@ import {
 import { ChartScatterModal } from "./ChartScatterModal";
 import { ChartStratifyModal } from "./ChartStratifyModal";
 import { ErrorBanner } from "./ErrorBanner";
+import { TruncatedNotice } from "./TruncatedNotice";
 import { PatientChartGuide } from "./PatientChartGuide";
 import { PatientChartPanel } from "./PatientChartPanel";
 import { RowMenu } from "./RowMenu";
@@ -199,7 +200,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     [body.items, observations.data],
   );
 
-  const events = useChartEvents(patientId, body.events, range.rangeStart, range.rangeEnd);
+  const { events, truncated: eventsTruncated } = useChartEvents(patientId, body.events, range.rangeStart, range.rangeEnd);
   // 薬剤の行。処方は帯の「処方」と同じ検索なので、両方 ON でもキャッシュを分け合う。
   const drugPatientId = body.drugs.length > 0 ? patientId : undefined;
   const drugPrescriptions = usePatientChartPrescriptions(drugPatientId, range.rangeStart, range.rangeEnd);
@@ -564,6 +565,16 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           error ?? list.error ?? observations.error ?? drugPrescriptions.error ?? drugInjections.error
         }
       />
+      <TruncatedNotice
+        show={
+          observations.truncated ||
+          eventsTruncated ||
+          drugPrescriptions.data?.truncated ||
+          drugInjections.data?.truncated
+        }
+      >
+        件数が多いため、期間の一部を表示できていません。期間を短くしてください。
+      </TruncatedNotice>
 
       {listLoading ? (
         <p className="patient-chart__empty">読み込み中...</p>
@@ -751,7 +762,7 @@ function useChartEvents(
   kinds: readonly ChartEventKind[],
   rangeStart: string,
   rangeEnd: string,
-): ChartEvent[] {
+): { events: ChartEvent[]; truncated: boolean } {
   const wants = (kind: ChartEventKind) => (kinds.includes(kind) ? patientId : undefined);
 
   // 病名はカルテのプロブレム一覧と同じ検索(キャッシュを分け合う)。
@@ -786,7 +797,7 @@ function useChartEvents(
   // 有害事象は category で引く(code は用語の text だけなので、項目の code 検索には乗らない)。
   const adverse = usePatientAdverseEvents(wants("adverse"));
 
-  return useMemo(() => {
+  const events = useMemo(() => {
     const events: ChartEvent[] = [];
     if (conditions) events.push(...buildConditionChartEvents(conditions));
     if (encounters.data) {
@@ -827,4 +838,5 @@ function useChartEvents(
     prescriptions.data,
     rangeEnd,
   ]);
+  return { events, truncated: procedures.truncated || Boolean(prescriptions.data?.truncated) };
 }

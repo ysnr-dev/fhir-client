@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLabResultItemsByJlac11Codes } from "../api/masterQueries";
 import { useLabResultTimeline } from "../api/queries";
 import { ErrorBanner } from "./ErrorBanner";
+import { TruncatedNotice } from "./TruncatedNotice";
 import { LabTimelineChart, type LabTimelineSeries } from "./LabTimelineChart";
 import { Modal } from "./Modal";
 import {
@@ -95,6 +96,9 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
   return (
     <>
       <ErrorBanner error={error ?? legacyItems.error} />
+      <TruncatedNotice show={data?.truncated}>
+        件数が多いため、古い結果の一部を表示できていません。表示回数を減らしてください。
+      </TruncatedNotice>
 
       {isLoading || legacyItems.isLoading ? (
         <p>読み込み中...</p>

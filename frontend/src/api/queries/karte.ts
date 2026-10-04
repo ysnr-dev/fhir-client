@@ -17,9 +17,8 @@ import { EVALUATION_ITEM_SYSTEM } from "../../fhir/pathwayEvaluationHelpers";
 import { today } from "../../lib/dates";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { NURSING_ORDER_TYPE } from "../../fhir/nursingOrderHelpers";
-import { postBundle, searchResource } from "../fhirClient";
-import { fetchDistinctDates, resourcesOfType, searchAllPages } from "./core";
-import { hasRelation } from "./patient";
+import { type FhirResult, postBundle, searchResource } from "../fhirClient";
+import { fetchDistinctDates, hasRelation, type PagedItems, resourcesOfType, searchAllPages } from "./core";
 
 // ---- カルテ画面のタイムライン ----
 //
@@ -35,6 +34,7 @@ const KARTE_PAGE = 20;
 // 仕事なので溜まらない前提だが、1 ページを超えても取りこぼさないようページを辿る。
 const KARTE_PENDING_COUNT = 100;
 const KARTE_PENDING_MAX_PAGES = 5;
+const NO_PENDING_ORDERS: PagedItems<fhir4.Bundle> = { items: [], truncated: false };
 
 /**
  * カルテのオーダー検索から外す種別。看護指示はカルテのカードにせず指示簿タブで見せる
@@ -54,7 +54,8 @@ function karteNextOffset(bundle: fhir4.Bundle | undefined, lastOffset: number): 
  * なる(親プロブレムを選んだときは下位プロブレムの分も並ぶ)。
  *
  * null は絞り込みなし、undefined は「まだプロブレムが確定していない」= 取得を
- * 始めない、の意味。絞り込み前の並びを一瞬見せないための区別。
+ * 始めない、の意味。絞り込み前の並びを一瞬見せないための区別(引数に既定値を付けると
+ * undefined が null に化けるので付けない)。
  */
 export type KarteProblemFilter = string[] | null | undefined;
 
@@ -69,22 +70,65 @@ function problemQueryKey(problemIds: KarteProblemFilter): string | null {
 }
 
 /**
- * 「自科」の絞り込み。記録した診療科(オーダーは依頼科)の id で、null は絞り込みなし。
- * 診療記録・オーダー・テンプレート回答・バイタルとも同じローカル拡張を department で引く。
+ * 「自科」「個人」の絞り込み。null は絞り込みなし、undefined は「まだ相手が確定していない」=
+ * 取得を始めない(プロブレムと同じ区別)。
+ *
+ * - 自科: 記録した診療科(オーダーは依頼科)。どの種別も同じローカル拡張を department で引く。
+ * - 個人: 記録者。診療記録は author、オーダーは依頼医師(requester)。テンプレート回答の記入者は
+ *   contained の Practitioner(氏名だけ)なので、氏名を author-name で引く。バイタルは記録者を
+ *   持たないので、個人では読まない。
  */
-export type KarteDepartmentFilter = string | null;
+export type KarteScope =
+  | { kind: "department"; departmentId: string }
+  | { kind: "practitioner"; practitionerId: string; practitionerName: string }
+  | null
+  | undefined;
 
-function setDepartment(params: URLSearchParams, departmentId: KarteDepartmentFilter) {
-  if (departmentId) params.set("department", `Organization/${departmentId}`);
+type KarteScopeSource = "note" | "order" | "response" | "vital";
+
+// クエリキーは値が変われば別のページング列になる(プロブレムと同じ)。
+function scopeQueryKey(scope: KarteScope): string | null {
+  if (!scope) return null;
+  return scope.kind === "department"
+    ? `department:${scope.departmentId}`
+    : `practitioner:${scope.practitionerId}:${scope.practitionerName}`;
+}
+
+/** 絞り込みの条件を足す。その種別に該当が無いと分かっているときは false(検索しない)。 */
+function setScope(params: URLSearchParams, scope: KarteScope, source: KarteScopeSource): boolean {
+  if (!scope) return true;
+  if (scope.kind === "department") {
+    params.set("department", `Organization/${scope.departmentId}`);
+    return true;
+  }
+  switch (source) {
+    case "note":
+    case "order":
+      if (!scope.practitionerId) return false;
+      params.set(source === "note" ? "author" : "requester", `Practitioner/${scope.practitionerId}`);
+      return true;
+    case "response":
+      if (!scope.practitionerName.trim()) return false;
+      // 空白の有無は上流が吸収する(列も検索値も空白を除いて比べる)。
+      params.set("author-name:exact", scope.practitionerName);
+      return true;
+    case "vital":
+      return false;
+  }
+}
+
+/** 検索しないときに返す、0 件の検索結果。 */
+function emptySearch<T extends fhir4.Resource>(): FhirResult<fhir4.Bundle<T>> {
+  return { data: { resourceType: "Bundle", type: "searchset", total: 0, entry: [] }, etag: null };
 }
 
 export function useKarteClinicalNotesInfinite(
   patientId: string | undefined,
-  problemIds: KarteProblemFilter = null,
-  departmentId: KarteDepartmentFilter = null,
+  problemIds: KarteProblemFilter,
+  scope: KarteScope,
 ) {
   return useInfiniteQuery({
-    queryKey: ["Composition", "search", "karte", patientId, problemQueryKey(problemIds), departmentId],
+    queryKey: ["Composition", "search", "karte", patientId, problemQueryKey(problemIds), scopeQueryKey(scope)],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("subject", `Patient/${patientId}`);
@@ -92,7 +136,7 @@ export function useKarteClinicalNotesInfinite(
       // 対象プロブレムは問題リストセクション(LOINC 11450-4)の section.entry に持つので、
       // R4 標準の entry で引ける(参照検索のカンマは OR)。
       if (problemIds?.length) params.set("entry", problemSearchValue(problemIds));
-      setDepartment(params, departmentId);
+      if (!setScope(params, scope, "note")) return emptySearch<fhir4.Composition>();
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-date");
@@ -102,7 +146,7 @@ export function useKarteClinicalNotesInfinite(
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
-    enabled: Boolean(patientId) && problemIds !== undefined,
+    enabled: Boolean(patientId) && problemIds !== undefined && scope !== undefined,
   });
 }
 
@@ -116,20 +160,20 @@ export function useKarteClinicalNotesInfinite(
  */
 export function useKartePrescriptionsInfinite(
   patientId: string | undefined,
-  problemIds: KarteProblemFilter = null,
-  departmentId: KarteDepartmentFilter = null,
+  problemIds: KarteProblemFilter,
+  scope: KarteScope,
 ) {
   // 日を跨いで開きっぱなしのタブが古い境界で読み続けないよう、キーに今日を含める。
   const todayDay = today();
   return useInfiniteQuery({
-    queryKey: ["ServiceRequest", "search", "karte", patientId, problemQueryKey(problemIds), departmentId, todayDay],
+    queryKey: ["ServiceRequest", "search", "karte", patientId, problemQueryKey(problemIds), scopeQueryKey(scope), todayDay],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       // オーダーの対象プロブレムは reasonReference(R4 標準)。明細も親から
       // 引き継いだ理由を持つが、下の based-on:missing でヘッダだけに絞られる。
       if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
-      setDepartment(params, departmentId);
+      if (!setScope(params, scope, "order")) return emptySearch<fhir4.Resource>();
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-occurrence");
@@ -160,7 +204,7 @@ export function useKartePrescriptionsInfinite(
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
-    enabled: Boolean(patientId) && problemIds !== undefined,
+    enabled: Boolean(patientId) && problemIds !== undefined && scope !== undefined,
   });
 }
 
@@ -176,16 +220,17 @@ export function useKartePrescriptionsInfinite(
  */
 export function useKartePendingOrders(
   patientId: string | undefined,
-  problemIds: KarteProblemFilter = null,
-  departmentId: KarteDepartmentFilter = null,
+  problemIds: KarteProblemFilter,
+  scope: KarteScope,
 ) {
-  const enabled = Boolean(patientId) && problemIds !== undefined;
+  const enabled = Boolean(patientId) && problemIds !== undefined && scope !== undefined;
 
-  function baseParams(): URLSearchParams {
+  /** 絞り込みに該当が無いと分かっているときは null(検索しない)。 */
+  function baseParams(): URLSearchParams | null {
     const params = new URLSearchParams();
     params.set("patient", `Patient/${patientId}`);
     if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
-    setDepartment(params, departmentId);
+    if (!setScope(params, scope, "order")) return null;
     // カードになるのはヘッダだけ(明細は下の :iterate で添えてもらう)。
     params.set("based-on:missing", "true");
     params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
@@ -200,18 +245,19 @@ export function useKartePendingOrders(
     return params;
   }
 
-  async function fetchAll(params: URLSearchParams): Promise<fhir4.Bundle[]> {
-    const { bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+  async function fetchAll(params: URLSearchParams): Promise<PagedItems<fhir4.Bundle>> {
+    const { bundles, truncated } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
       page: KARTE_PENDING_COUNT,
       maxPages: KARTE_PENDING_MAX_PAGES,
     });
-    return bundles;
+    return { items: bundles, truncated };
   }
 
   const unscheduled = useQuery({
-    queryKey: ["ServiceRequest", "search", "karte-unscheduled", patientId, problemQueryKey(problemIds), departmentId],
+    queryKey: ["ServiceRequest", "search", "karte-unscheduled", patientId, problemQueryKey(problemIds), scopeQueryKey(scope)],
     queryFn: () => {
       const params = baseParams();
+      if (!params) return NO_PENDING_ORDERS;
       params.set("occurrence:missing", "true");
       params.set("_sort", "-authoredon");
       return fetchAll(params);
@@ -220,9 +266,10 @@ export function useKartePendingOrders(
   });
 
   const upcoming = useQuery({
-    queryKey: ["ServiceRequest", "search", "karte-upcoming", patientId, problemQueryKey(problemIds), departmentId],
+    queryKey: ["ServiceRequest", "search", "karte-upcoming", patientId, problemQueryKey(problemIds), scopeQueryKey(scope)],
     queryFn: () => {
       const params = baseParams();
+      if (!params) return NO_PENDING_ORDERS;
       // 今日より後の開始日。今日以前は本流(occurrence=le{今日})が読む。
       params.set("occurrence", `gt${today()}`);
       params.set("_sort", "occurrence");
@@ -232,12 +279,14 @@ export function useKartePendingOrders(
   });
 
   const bundles = useMemo(
-    () => [...(unscheduled.data ?? []), ...(upcoming.data ?? [])],
+    () => [...(unscheduled.data?.items ?? []), ...(upcoming.data?.items ?? [])],
     [unscheduled.data, upcoming.data],
   );
 
   return {
     bundles,
+    /** 取得の上限に達し、日付未定か今日より後の予定の一部が欠けている。 */
+    truncated: Boolean(unscheduled.data?.truncated || upcoming.data?.truncated),
     error: unscheduled.error ?? upcoming.error ?? null,
     // 先読みが届くとタイムラインの上に日が足されるので、初期位置を決める側が待つ。
     isPending: unscheduled.isPending || upcoming.isPending,
@@ -246,17 +295,17 @@ export function useKartePendingOrders(
 
 export function useKarteQuestionnaireResponsesInfinite(
   patientId: string | undefined,
-  problemIds: KarteProblemFilter = null,
-  departmentId: KarteDepartmentFilter = null,
+  problemIds: KarteProblemFilter,
+  scope: KarteScope,
 ) {
   return useInfiniteQuery({
-    queryKey: ["QuestionnaireResponse", "search", "karte", patientId, problemQueryKey(problemIds), departmentId],
+    queryKey: ["QuestionnaireResponse", "search", "karte", patientId, problemQueryKey(problemIds), scopeQueryKey(scope)],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       // 診療記録と同じローカル拡張による絞り込み。
       if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
-      setDepartment(params, departmentId);
+      if (!setScope(params, scope, "response")) return emptySearch<fhir4.Resource>();
       // DPC 様式1 も QuestionnaireResponse だが、カルテの記載ではないので出さない。
       params.set("questionnaire:not", DPC_FORM1_QUESTIONNAIRE);
       params.set("_count", String(KARTE_PAGE));
@@ -267,7 +316,7 @@ export function useKarteQuestionnaireResponsesInfinite(
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
-    enabled: Boolean(patientId) && problemIds !== undefined,
+    enabled: Boolean(patientId) && problemIds !== undefined && scope !== undefined,
   });
 }
 
@@ -276,18 +325,18 @@ export function useKarteQuestionnaireResponsesInfinite(
 // 回答のカードとして既に出るため、derived-from を持つものは除く。
 export function useKarteVitalsInfinite(
   patientId: string | undefined,
-  problemIds: KarteProblemFilter = null,
-  departmentId: KarteDepartmentFilter = null,
+  problemIds: KarteProblemFilter,
+  scope: KarteScope,
 ) {
   return useInfiniteQuery({
-    queryKey: ["Observation", "search", "karte-vital", patientId, problemQueryKey(problemIds), departmentId],
+    queryKey: ["Observation", "search", "karte-vital", patientId, problemQueryKey(problemIds), scopeQueryKey(scope)],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       params.set("category", "vital-signs");
       params.set("derived-from:missing", "true");
       if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
-      setDepartment(params, departmentId);
+      if (!setScope(params, scope, "vital")) return emptySearch<fhir4.Observation>();
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-date");
@@ -295,7 +344,7 @@ export function useKarteVitalsInfinite(
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
-    enabled: Boolean(patientId) && problemIds !== undefined,
+    enabled: Boolean(patientId) && problemIds !== undefined && scope !== undefined,
   });
 }
 
@@ -311,7 +360,7 @@ export function useKarteVitalsInfinite(
  */
 export function useKartePathwayEvaluations(
   patientId: string | undefined,
-  problemIds: KarteProblemFilter = null,
+  problemIds: KarteProblemFilter,
 ) {
   return useQuery({
     queryKey: ["Observation", "search", "pathway", "karte-cards", patientId, problemQueryKey(problemIds)],
@@ -356,27 +405,23 @@ async function fetchKarteDays(
 /** 診療日ペインに出す全診療日(降順)。 */
 export function useKarteDayIndex(
   patientId: string | undefined,
-  problemIds: KarteProblemFilter = null,
-  departmentId: KarteDepartmentFilter = null,
+  problemIds: KarteProblemFilter,
+  scope: KarteScope,
 ) {
-  const enabled = Boolean(patientId) && problemIds !== undefined;
+  const enabled = Boolean(patientId) && problemIds !== undefined && scope !== undefined;
   const problemKey = problemQueryKey(problemIds);
+  const scopeKey = scopeQueryKey(scope);
 
   const notes = useQuery({
-    queryKey: ["Composition", "search", "karte-days", patientId, problemKey, departmentId],
-    queryFn: () =>
-      fetchKarteDays(
-        "Composition",
-        (() => {
-          const params = new URLSearchParams();
-          params.set("subject", `Patient/${patientId}`);
-          params.set("type", KARTE_NOTE_TYPE_SEARCH);
-          if (problemIds?.length) params.set("entry", problemSearchValue(problemIds));
-          setDepartment(params, departmentId);
-          return params;
-        })(),
-        "date",
-      ),
+    queryKey: ["Composition", "search", "karte-days", patientId, problemKey, scopeKey],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.set("subject", `Patient/${patientId}`);
+      params.set("type", KARTE_NOTE_TYPE_SEARCH);
+      if (problemIds?.length) params.set("entry", problemSearchValue(problemIds));
+      if (!setScope(params, scope, "note")) return [];
+      return fetchKarteDays("Composition", params, "date");
+    },
     enabled,
   });
 
@@ -388,12 +433,12 @@ export function useKarteDayIndex(
   // 該当があるときだけ種別と登録日を引き直し、タイムラインと同じ orderCardDay で写す
   // —— 写さずに一律「日付未定」に足すと、カードが登録日に出るぶん空の「日付未定」が並ぶ。
   const orders = useQuery({
-    queryKey: ["ServiceRequest", "search", "karte-days-occurrence", patientId, problemKey, departmentId],
+    queryKey: ["ServiceRequest", "search", "karte-days-occurrence", patientId, problemKey, scopeKey],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
-      setDepartment(params, departmentId);
+      if (!setScope(params, scope, "order")) return [];
       params.set("based-on:missing", "true");
       params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
       // fetchDistinctDates は渡した params に集計用の値を足すので、引き直し用に写しを渡す。
@@ -416,39 +461,29 @@ export function useKarteDayIndex(
   });
 
   const responses = useQuery({
-    queryKey: ["QuestionnaireResponse", "search", "karte-days", patientId, problemKey, departmentId],
-    queryFn: () =>
-      fetchKarteDays(
-        "QuestionnaireResponse",
-        (() => {
-          const params = new URLSearchParams();
-          params.set("patient", `Patient/${patientId}`);
-          if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
-          setDepartment(params, departmentId);
-          params.set("questionnaire:not", DPC_FORM1_QUESTIONNAIRE);
-          return params;
-        })(),
-        "authored",
-      ),
+    queryKey: ["QuestionnaireResponse", "search", "karte-days", patientId, problemKey, scopeKey],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+      if (!setScope(params, scope, "response")) return [];
+      params.set("questionnaire:not", DPC_FORM1_QUESTIONNAIRE);
+      return fetchKarteDays("QuestionnaireResponse", params, "authored");
+    },
     enabled,
   });
 
   const vitals = useQuery({
-    queryKey: ["Observation", "search", "karte-days", patientId, problemKey, departmentId],
-    queryFn: () =>
-      fetchKarteDays(
-        "Observation",
-        (() => {
-          const params = new URLSearchParams();
-          params.set("patient", `Patient/${patientId}`);
-          params.set("category", "vital-signs");
-          params.set("derived-from:missing", "true");
-          if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
-          setDepartment(params, departmentId);
-          return params;
-        })(),
-        "date",
-      ),
+    queryKey: ["Observation", "search", "karte-days", patientId, problemKey, scopeKey],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("category", "vital-signs");
+      params.set("derived-from:missing", "true");
+      if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+      if (!setScope(params, scope, "vital")) return [];
+      return fetchKarteDays("Observation", params, "date");
+    },
     enabled,
   });
 
@@ -506,7 +541,7 @@ async function fetchVitalFlowsheetObservations(
   patientId: string,
   rangeStart: string,
   rangeEnd: string,
-): Promise<fhir4.Observation[]> {
+): Promise<PagedItems<fhir4.Observation>> {
   const params = new URLSearchParams();
   params.set("patient", `Patient/${patientId}`);
   params.set("category", VITAL_FLOWSHEET_CATEGORY);
@@ -514,11 +549,11 @@ async function fetchVitalFlowsheetObservations(
   params.append("date", `ge${rangeStart}`);
   params.append("date", `le${rangeEnd}`);
   params.set("_sort", "date");
-  const { matches } = await searchAllPages<fhir4.Observation>("Observation", params, {
+  const { matches, truncated } = await searchAllPages<fhir4.Observation>("Observation", params, {
     page: VITAL_FLOWSHEET_PAGE,
     maxPages: VITAL_FLOWSHEET_MAX_PAGES,
   });
-  return matches;
+  return { items: matches, truncated };
 }
 
 export function useVitalFlowsheet(
@@ -526,7 +561,7 @@ export function useVitalFlowsheet(
   rangeStart: string,
   rangeEnd: string,
 ) {
-  return useQuery({
+  const query = useQuery({
     // 登録・更新・削除の invalidateQueries(["Observation", "search"]) でまとめて
     // 無効化されるよう search 配下のキーにしている。
     queryKey: ["Observation", "search", "vital-flowsheet", patientId, rangeStart, rangeEnd],
@@ -534,6 +569,7 @@ export function useVitalFlowsheet(
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
     placeholderData: keepPreviousData,
   });
+  return { ...query, data: query.data?.items, truncated: query.data?.truncated ?? false };
 }
 
 export function useSaveVitalEntry() {

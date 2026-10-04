@@ -18,6 +18,7 @@ import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { usePathoResultInitialValues } from "../hooks/usePathoResultInitialValues";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
+import { TruncatedNotice } from "./TruncatedNotice";
 import { KarteLinkMenu } from "./KarteLinkMenu";
 import { PathoResultDetailPanel } from "./PathoResultDetailPanel";
 import { PathoResultForm } from "./PathoResultForm";
@@ -47,7 +48,7 @@ export function KartePathoResultTab({ patientId, view, onViewChange }: KartePath
   // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
   useEffect(() => setForm(null), [view]);
 
-  const { entries, isLoading, error } = usePathoResultEntries(patientId);
+  const { entries, isLoading, error, truncated } = usePathoResultEntries(patientId);
   const unreviewed = useUnreviewedReportIds(patientId);
   const deletePathoResult = useDeletePathoResult();
 
@@ -145,6 +146,9 @@ export function KartePathoResultTab({ patientId, view, onViewChange }: KartePath
         </div>
 
         <ErrorBanner error={error} />
+        <TruncatedNotice show={truncated}>
+          件数が多いため、古い結果の一部を表示できていません。
+        </TruncatedNotice>
         <ErrorBanner error={deletePathoResult.error} />
 
         {isLoading ? (

@@ -3,7 +3,7 @@ import { splitPerformBundle } from "../../fhir/radResultHelpers";
 import { isActiveAppointment } from "../../fhir/appointmentHelpers";
 import { postBundle, searchResource } from "../fhirClient";
 import { buildCancelEntriesOf } from "./appointment";
-import { resourcesOfType, WORKLIST_PAGE } from "./core";
+import { hasNextPage, resourcesOfType, WORKLIST_PAGE } from "./core";
 
 // 1 日のオーダーがこの件数を超えることは想定していない。超えた場合は読むのをやめ、
 // 画面に「一部のみ」と出す(黙って切り捨てると全件見えているように見えるため)。
@@ -67,7 +67,7 @@ export async function fetchWorklistBundles(
     }
 
     if (matched < WORKLIST_PAGE) break;
-    if (page === WORKLIST_MAX_PAGES - 1) truncated = true;
+    if (page === WORKLIST_MAX_PAGES - 1) truncated = hasNextPage(bundle);
   }
 
   return { patientsById, tasks, truncated };

@@ -18,8 +18,7 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { hasRelation } from "./patient";
-import { resourcesOfType } from "./core";
+import { hasRelation, resourcesOfType } from "./core";
 
 // ---- 場所(Location) ----
 //

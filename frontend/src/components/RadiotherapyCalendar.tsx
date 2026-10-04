@@ -19,6 +19,7 @@ import { minutesToTime } from "../fhir/surgeryConflictHelpers";
 import { useCardDrag, type DragState } from "../hooks/useCardDrag";
 import { clampGridRatio, readGridRatio, storeGridRatio } from "../surgeryCalendarLayout";
 import { ErrorBanner } from "./ErrorBanner";
+import { TruncatedNotice } from "./TruncatedNotice";
 import { KarteSplitter } from "./KarteSplitter";
 import { RowMenu } from "./RowMenu";
 import { weekdayOf } from "../lib/dates";
@@ -200,6 +201,7 @@ export function RadiotherapyCalendar({
       </div>
 
       <ErrorBanner error={calendar.error} />
+      <TruncatedNotice show={calendar.truncated} />
 
       <div
         className="surgery-calendar__split"

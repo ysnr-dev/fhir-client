@@ -31,6 +31,7 @@ import {
   fetchDistinctDates,
   HISTORY_COUNT,
   NOTIFICATION_TASK_KEY,
+  type PagedItems,
   resourcesOfType,
   searchAllPages,
 } from "./core";
@@ -305,7 +306,7 @@ const LAB_RESULT_ORDER_MAX_PAGES = 2;
 async function fetchLabResultSummaries(
   patientId: string,
   category: string,
-): Promise<LabResultSummary[]> {
+): Promise<PagedItems<LabResultSummary>> {
   const params = new URLSearchParams();
   params.set("patient", `Patient/${patientId}`);
   params.set("category", category);
@@ -315,20 +316,18 @@ async function fetchLabResultSummaries(
   // choice 型は基底名(effective)ではなく実際のキー名で指定する。
   // extension は診療科(ローカル拡張)を、basedOn は元のオーダーを要約に含めるために要る。
   params.set("_elements", "id,effectiveDateTime,category,extension,basedOn");
-  const { matches } = await searchAllPages<fhir4.DiagnosticReport>("DiagnosticReport", params, {
+  const { matches, truncated } = await searchAllPages<fhir4.DiagnosticReport>("DiagnosticReport", params, {
     page: LAB_RESULT_ORDER_PAGE,
     maxPages: LAB_RESULT_ORDER_MAX_PAGES,
   });
-  const summaries = matches.map(summarizeDiagnosticReport);
-
-  return summaries;
+  return { items: matches.map(summarizeDiagnosticReport), truncated };
 }
 
 // 検体採取日ペイン・内容ページの「前へ/次へ」の双方で使う検査結果の並び。
 export function useResultSummariesQuery(category: string, patientId: string | undefined) {
   // 作成・更新・削除時の invalidateQueries(["DiagnosticReport", "search"]) で
   // まとめて無効化されるよう search 配下のキーにしている。
-  return useQuery({
+  const query = useQuery({
     queryKey: ["DiagnosticReport", "search", "order", category, patientId],
     queryFn: () => fetchLabResultSummaries(patientId as string, category),
     enabled: Boolean(patientId),
@@ -336,6 +335,7 @@ export function useResultSummariesQuery(category: string, patientId: string | un
     // 少しだけ寝かせる。更新・削除時は invalidateQueries 側で無効化される。
     staleTime: 30_000,
   });
+  return { ...query, data: query.data?.items, truncated: query.data?.truncated ?? false };
 }
 
 /** 検査結果タブの検体採取日ペイン用。全検査結果の要約を新しい順で返す。 */
@@ -345,6 +345,7 @@ export function useLabResultEntries(patientId: string | undefined) {
     entries: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
+    truncated: query.truncated,
   };
 }
 
@@ -355,6 +356,7 @@ export function useMicroResultEntries(patientId: string | undefined) {
     entries: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
+    truncated: query.truncated,
   };
 }
 
@@ -368,6 +370,8 @@ const LAB_TIMELINE_MAX_PAGES = 2;
 export interface LabTimelineResources {
   reports: fhir4.DiagnosticReport[];
   observations: fhir4.Observation[];
+  /** 取得の上限に達し、古い側の報告が欠けている。 */
+  truncated: boolean;
 }
 
 // 時系列表示は「直近 dateCount 回分の検体採取日」を横軸にする。
@@ -383,7 +387,7 @@ async function fetchLabTimelineResources(
   const { dates } = await fetchDistinctDates("DiagnosticReport", dateParams, "date", {
     limit: dateCount,
   });
-  if (dates.length === 0) return { reports: [], observations: [] };
+  if (dates.length === 0) return { reports: [], observations: [], truncated: false };
 
   // 上流は日付をローカルタイムゾーンで解釈するので、下限はその日の 0 時になる。
   const oldest = dates[dates.length - 1];
@@ -393,7 +397,7 @@ async function fetchLabTimelineResources(
   params.set("date", `ge${oldest}`);
   params.set("_sort", "-date");
   params.set("_include", "DiagnosticReport:result");
-  const { matches, bundles } = await searchAllPages<fhir4.DiagnosticReport>(
+  const { matches, bundles, truncated } = await searchAllPages<fhir4.DiagnosticReport>(
     "DiagnosticReport",
     params,
     { page: LAB_TIMELINE_PAGE, maxPages: LAB_TIMELINE_MAX_PAGES },
@@ -403,6 +407,7 @@ async function fetchLabTimelineResources(
     observations: bundles.flatMap((bundle) =>
       resourcesOfType<fhir4.Observation>(bundle, "Observation"),
     ),
+    truncated,
   };
 }
 

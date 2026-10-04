@@ -12,6 +12,7 @@ import { canCancelInjection, injectionTaskStatus, injectionTasksByOrderId } from
 import { referenceId } from "../fhir/shared";
 import { addDays, isDateOnly, today, WEEKDAY_LABELS, weekdayOf } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
+import { TruncatedNotice } from "./TruncatedNotice";
 import { InjectionCancelModal } from "./InjectionCancelModal";
 import { InjectionContinueModal } from "./InjectionContinueModal";
 import { InjectionDayModal } from "./InjectionDayModal";
@@ -207,6 +208,7 @@ export function KarteInjectionTab({ patientId, view, onViewChange, onEdit, onCre
       </ul>
 
       <ErrorBanner error={query.error} />
+      <TruncatedNotice show={query.data?.truncated} />
 
       {query.isPending ? (
         <p>読み込み中...</p>

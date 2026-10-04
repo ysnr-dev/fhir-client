@@ -107,6 +107,7 @@ export function useExamReportEntries(config: ExamReportConfig, patientId: string
     entries: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
+    truncated: query.truncated,
   };
 }
 

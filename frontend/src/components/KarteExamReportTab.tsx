@@ -3,6 +3,7 @@ import { useExamReportEntries, useUnreviewedReportIds } from "../api/queries";
 import type { ExamReportConfig } from "../fhir/examReportHelpers";
 import { karteLinkLabel } from "../fhir/karteLinkHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { TruncatedNotice } from "./TruncatedNotice";
 import { ExamReportCreatePanel } from "./ExamReportCreatePanel";
 import { ExamReportDetailPanel } from "./ExamReportDetailPanel";
 import { ExamReportEntry } from "./ExamReportEntryModal";
@@ -34,7 +35,7 @@ export function KarteExamReportTab({
   onViewChange,
 }: KarteExamReportTabProps) {
   const [form, setForm] = useState<FormMode | null>(null);
-  const { entries, isLoading, error } = useExamReportEntries(config, patientId);
+  const { entries, isLoading, error, truncated } = useExamReportEntries(config, patientId);
   const unreviewed = useUnreviewedReportIds(patientId);
   const { labels } = config;
 
@@ -125,6 +126,9 @@ export function KarteExamReportTab({
         </div>
 
         <ErrorBanner error={error} />
+        <TruncatedNotice show={truncated}>
+          件数が多いため、古い結果の一部を表示できていません。
+        </TruncatedNotice>
 
         {isLoading ? (
           <p>読み込み中...</p>

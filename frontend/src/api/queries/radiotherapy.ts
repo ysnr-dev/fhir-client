@@ -46,6 +46,7 @@ import {
   makeOrderDetailHook,
   NOTIFICATION_TASK_KEY,
   ORDER_PERFORM_REVINCLUDES,
+  type PagedItems,
   resourcesOfType,
   searchAllPages,
   WORKLIST_PAGE,
@@ -399,9 +400,11 @@ async function fetchRadiotherapyProcedureChunk(orderIds: string[]): Promise<fhir
   params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
   params.set("status:not", "entered-in-error");
   params.set("_sort", "-date");
+  // 回数と累積線量を数えるので、欠けた結果は使わない。
   const { matches } = await searchAllPages<fhir4.Procedure>("Procedure", params, {
     page: WORKLIST_PAGE,
     maxPages: RADIOTHERAPY_PROCEDURE_MAX_PAGES,
+    complete: true,
   });
   return matches;
 }
@@ -524,7 +527,7 @@ export interface RadiotherapyCalendarEntry {
   patient?: fhir4.Patient;
 }
 
-async function fetchRadiotherapyCalendar(from: string, to: string): Promise<RadiotherapyCalendarEntry[]> {
+async function fetchRadiotherapyCalendar(from: string, to: string): Promise<PagedItems<RadiotherapyCalendarEntry>> {
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
   // 治療終了サマリーは同じ category に種別の coding を足して区別する。格子に載せるのは照射だけ。
@@ -535,7 +538,7 @@ async function fetchRadiotherapyCalendar(from: string, to: string): Promise<Radi
   params.append("_include", "Procedure:subject");
   params.append("_include", "Procedure:based-on");
 
-  const { matches, bundles } = await searchAllPages<fhir4.Procedure>("Procedure", params, {
+  const { matches, bundles, truncated } = await searchAllPages<fhir4.Procedure>("Procedure", params, {
     page: WORKLIST_PAGE,
     maxPages: RADIOTHERAPY_PROCEDURE_MAX_PAGES,
   });
@@ -557,15 +560,16 @@ async function fetchRadiotherapyCalendar(from: string, to: string): Promise<Radi
     const patient = patients.get(order?.subject?.reference?.split("/").pop() ?? "");
     for (const fraction of fractions) entries.push({ fraction, order, patient });
   }
-  return entries;
+  return { items: entries, truncated };
 }
 
 export function useRadiotherapyCalendar(from: string, to: string) {
-  return useQuery({
+  const query = useQuery({
     queryKey: ["Procedure", "search", "radiotherapy-calendar", from, to],
     queryFn: () => fetchRadiotherapyCalendar(from, to),
     placeholderData: keepPreviousData,
   });
+  return { ...query, data: query.data?.items, truncated: query.data?.truncated ?? false };
 }
 
 /** 照射予定の一括登録(処方の回数ぶんの Procedure を 1 つの transaction で作る)。 */

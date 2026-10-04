@@ -40,7 +40,7 @@ import { buildOralPerformDeleteEntries, type OralPerformDisplay } from "../../fh
 import { addDays } from "../../fhir/scheduleHelpers";
 import { createResource, postBundle, searchResource } from "../fhirClient";
 import { fetchYakkaCodes } from "../masterClient";
-import { ORAL_LOOKBACK_DAYS, resourcesOfType, searchAllPages, setOrderPeriod } from "./core";
+import { hasNextPage, ORAL_LOOKBACK_DAYS, resourcesOfType, searchAllPages, setOrderPeriod } from "./core";
 import { splitLocationMatches } from "./location";
 import { fetchNursingPerforms, nursingOrderParams, nursingOrderSetOf, nursingPerformParams } from "./nursing";
 
@@ -109,7 +109,7 @@ export async function fetchInpatients(date: string): Promise<InpatientResult> {
     }
 
     if (matched < INPATIENT_PAGE) break;
-    if (page === INPATIENT_MAX_PAGES - 1) truncated = true;
+    if (page === INPATIENT_MAX_PAGES - 1) truncated = hasNextPage(bundle);
   }
 
   return { byBed: latestEncounterByBed(encounters), patientsById, encounters, truncated };
@@ -361,7 +361,7 @@ async function fetchPlannedAdmissions(): Promise<PlannedAdmissionsResult> {
     }
 
     if (matched < INPATIENT_PAGE) break;
-    if (page === INPATIENT_MAX_PAGES - 1) truncated = true;
+    if (page === INPATIENT_MAX_PAGES - 1) truncated = hasNextPage(bundle);
   }
 
   return { encounters: sortPlannedAdmissions(encounters), patientsById, truncated };
@@ -529,12 +529,17 @@ export function usePatientSurgeryPerforms(patientId: string | undefined, from: s
  * オーダーと、薬剤・進捗・実施記録(ハブの Procedure と薬剤ごとの MedicationAdministration)を
  * 1 つの検索で揃える。経過表・注射カレンダーは期間ぶんを読むので、ページを辿って全件読む。
  */
-async function fetchOrdersWithPerforms(params: URLSearchParams): Promise<FlowsheetInjectionData> {
+type OrdersWithPerforms = FlowsheetInjectionData & {
+  /** 取得の上限に達し、期間のオーダーの一部が欠けている。 */
+  truncated: boolean;
+};
+
+async function fetchOrdersWithPerforms(params: URLSearchParams): Promise<OrdersWithPerforms> {
   params.append("_revinclude", "MedicationRequest:based-on");
   params.append("_revinclude", "Task:focus");
   params.append("_revinclude", "Procedure:based-on");
   params.append("_revinclude:iterate", "MedicationAdministration:part-of");
-  const { matches, bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+  const { matches, bundles, truncated } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
     page: 500,
     maxPages: 4,
   });
@@ -546,6 +551,7 @@ async function fetchOrdersWithPerforms(params: URLSearchParams): Promise<Flowshe
     tasks: of<fhir4.Task>("Task"),
     procedures: of<fhir4.Procedure>("Procedure"),
     administrations: of<fhir4.MedicationAdministration>("MedicationAdministration"),
+    truncated,
   };
 }
 
@@ -562,7 +568,7 @@ export function usePatientInjectionOrders(
 ) {
   return useQuery({
     queryKey: ["ServiceRequest", "search", "flowsheet-injections", patientId, rangeStart, rangeEnd],
-    queryFn: async (): Promise<FlowsheetInjectionData> => {
+    queryFn: async (): Promise<OrdersWithPerforms> => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       params.set("category", `${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`);
@@ -583,7 +589,7 @@ export function useInjectionDayOrders(srIds: string[]) {
   const ids = srIds.filter(Boolean);
   return useQuery({
     queryKey: ["ServiceRequest", "search", "injection-day", ids.join(",")],
-    queryFn: async (): Promise<FlowsheetInjectionData> => {
+    queryFn: async (): Promise<OrdersWithPerforms> => {
       const params = new URLSearchParams();
       params.set("_id", ids.join(","));
       return fetchOrdersWithPerforms(params);
@@ -611,7 +617,7 @@ export function usePatientOralPrescriptions(
 ) {
   return useQuery({
     queryKey: ["ServiceRequest", "search", "flowsheet-oral", patientId, rangeStart, rangeEnd],
-    queryFn: async (): Promise<FlowsheetOralData> => {
+    queryFn: async (): Promise<FlowsheetOralData & { truncated: boolean }> => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       params.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
@@ -643,7 +649,8 @@ export function useActiveMedications(patientId: string | undefined, onDate: stri
       params.append("occurrence", `le${onDate}`);
       params.append("_revinclude", "MedicationRequest:based-on");
       params.append("_revinclude", "Task:focus");
-      params.set("_sort", "occurrence");
+      // 新しい順に読み、上限で切れるときは古い側(効いている見込みの薄い側)を落とす。
+      params.set("_sort", "-occurrence");
 
       const { bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
         page: 500,

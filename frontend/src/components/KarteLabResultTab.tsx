@@ -19,6 +19,7 @@ import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useLabResultInitialValues } from "../hooks/useLabResultInitialValues";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
+import { TruncatedNotice } from "./TruncatedNotice";
 import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { LabResultForm } from "./LabResultForm";
 import { ResultReviewAction } from "./ResultReviewAction";
@@ -52,7 +53,7 @@ export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabRes
   // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
   useEffect(() => setForm(null), [view]);
 
-  const { entries, isLoading, error } = useLabResultEntries(patientId);
+  const { entries, isLoading, error, truncated } = useLabResultEntries(patientId);
   const unreviewed = useUnreviewedReportIds(patientId);
   const deleteLabResult = useDeleteLabResult();
 
@@ -147,6 +148,9 @@ export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabRes
         </div>
 
         <ErrorBanner error={error} />
+        <TruncatedNotice show={truncated}>
+          件数が多いため、古い結果の一部を表示できていません。
+        </TruncatedNotice>
         <ErrorBanner error={deleteLabResult.error} />
 
         {isLoading ? (

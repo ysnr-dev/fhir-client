@@ -9,7 +9,7 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   クライアント側の追随 F-4〜F-9 も同日実装）、2026-09-15（リファクタリング観点の再調査。上流が対応済みなのに
   クライアントが使っていない検索と C-9 を `refactoring-plan.md` にまとめた）、2026-09-27（第 2 回の再調査。
   `Encounter.appointment` を同日実装し、C-10〜C-16 を追加）、2026-10-04（第 3 回。記録の `department` 検索と
-  transaction PATCH の `ifMatch` を同日実装し、C-17〜C-20 を追加）。
+  transaction PATCH の `ifMatch`、QuestionnaireResponse の `author-name` を同日実装し、C-17〜C-19 を追加）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
@@ -329,6 +329,25 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   版違いでも黙って適用されていた(PUT は渡していた)。
 - **対応**: `if_match: req["ifMatch"]` を渡す。spec を 2 件追加。
 
+### QuestionnaireResponse の `author-name` 検索(記入者名)
+
+- **背景**: カルテの「個人」絞り込みは、ページングの後に手元で絞っていた(自科と同じ問題)。診療記録は
+  `author`、オーダーは `requester` で上流が引けるが、テンプレート回答は記入者を contained の Practitioner
+  (氏名だけ)で持つので `author` では引けない。
+- **対応**: 抽出列 `author_name_key`(contained の Practitioner の `name[0].text` から空白を除いた値)と、
+  それを引く string 型の `author-name` を追加。検索値も空白を除いて比べる(`compact: true`。Patient の
+  `phone` の `digits_only` と同じ仕組みを `string_fragment` の `reduce` にまとめた)。migration で列と索引を
+  足し、既存の回答を content から埋め戻す。spec を 5 件追加(上流の rspec 2147 件通過)。
+- **クライアント**: `api/queries/karte.ts` の `KarteScope` が、個人のとき `author` / `requester` /
+  `author-name:exact` を送る(バイタルは記録者を持たないので検索しない)。上流が旧版でも lenient で
+  黙殺されるだけで、手元の絞り込み(`filterKarteGroupsByScope`)が残っているので表示は変わらない。
+
+### 検索 Bundle の truncated(旧 C-16 / C-20)
+
+- 上流の変更は不要だった。上流は一致の総数から `link[next]` を正確に返すので、クライアントの
+  `searchAllPages` と手書きのページング(部門一覧・外来・入院)が、件数からの推測をやめて `next` の有無で
+  続きを判定する。上限で切れた結果の扱いは `docs/refactoring-plan.md` 第 3 回の「上限で切れた読み込み」。
+
 ## 2026-09-27 に対応済み
 
 ### `Encounter.appointment` 検索と `_include` / `_revinclude`
@@ -357,11 +376,7 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 ### C-19. `Observation.performer` の検索
 
 - **現状**: パス評価の「個人」絞り込みは記録者で手元で絞る(評価は全件読んでいるので実害は小さい)。
-
-### C-20. 検索 Bundle の truncated の明示(C-16 の具体化)
-
-- **現状**: `searchAllPages` は `maxPages` の上限で切れたかどうかを、最後のページが埋まっていたかで推測する。
-  マルチチャート・経過表など 10 か所ほどが上限で黙って切れうる(第 3 回で新しい側を残す並びにはした)。
+  ほかの記録の「個人」は 2026-10-04 に上流の検索へ寄せた。
 
 ### C-10. token の前方一致（`code:below`）か、成分 YJ 7 桁の派生 token
 
@@ -397,11 +412,6 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 ### C-15. `Observation/$lastn` か間引き・統計 operation
 
 - **現状**: マルチチャートは 5〜10 年の範囲を `_count=500` × 最大 4 ページで読む。遅くなってから検討する。
-
-### C-16. 検索 Bundle の truncated の明示
-
-- **現状**: `_count` 上限に当たったかはクライアントが件数で推定している（`searchAllPages` の `truncated`）。
-  `link[next]` は返るので、それを使う形に寄せるのが先。
 
 ### C-3. `_elements` の choice 型対応（仕様適合）
 

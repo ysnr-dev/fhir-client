@@ -162,24 +162,66 @@ export function setOrderPeriod(params: URLSearchParams, from: string, to: string
 
 export { resourcesOfType };
 
+export function hasRelation<T extends fhir4.Resource>(
+  bundle: fhir4.Bundle<T> | undefined,
+  relation: string,
+): boolean {
+  return Boolean(bundle?.link?.some((l) => l.relation === relation));
+}
+
+/** 続きのページがあるか。上流は一致の総数から `next` を出すので、件数からの推測より正確。 */
+export function hasNextPage(bundle: fhir4.Bundle | undefined): boolean {
+  return hasRelation(bundle, "next");
+}
+
+/** 全件が要る読み込みが取得の上限に達した。欠けたまま判定や集計に使わせないために投げる。 */
+export class SearchLimitError extends Error {
+  constructor() {
+    super("件数が多すぎて全件を読み込めませんでした。条件を絞ってやり直してください。");
+    this.name = "SearchLimitError";
+  }
+}
+
 interface PagedSearch<T extends fhir4.Resource> {
   /** 検索対象の型のリソース(ページ順)。 */
   matches: T[];
   /** 読んだページの Bundle。_include / _revinclude で添えられたリソースはこちらから拾う。 */
   bundles: fhir4.Bundle[];
-  /** maxPages まで読んでも 1 ページぶん埋まっていた(続きがあるかもしれない)。 */
+  /** maxPages まで読んでも続きのページが残っている。 */
   truncated: boolean;
 }
 
+/** 並べて見せる読み込みの結果。truncated のときは画面に「一部のみ」と出す(TruncatedNotice)。 */
+export interface PagedItems<T> {
+  items: T[];
+  truncated: boolean;
+}
+
+/** 配列でない結果(id ごとの Map など)に、欠けているかどうかを添える。 */
+export interface Truncatable<T> {
+  value: T;
+  truncated: boolean;
+}
+
+interface PagedSearchOptions {
+  page: number;
+  maxPages: number;
+  /**
+   * 欠けた結果を使えない読み込み(有無の判定・合計・打ち切りの対象)。上限に達したら
+   * SearchLimitError を投げる。画面に並べるだけの読み込みは付けず、truncated を画面に出す。
+   */
+  complete?: boolean;
+}
+
 /**
- * `_count` を 1 ページとして `_offset` で順に辿る。検索に一致した行(search.mode が include で
- * ないもの)が 1 ページに満たなければ終わり。_include / _revinclude の行は上流が `_count` に
- * 数えないので、entry の総数では判定しない(同じ型を _revinclude:iterate で添える検索もある)。
+ * `_count` を 1 ページとして `_offset` で順に辿る。応答に `next` のリンクが無くなれば終わり。
+ * 一致した行は search.mode が include でないものだけを数える(同じ型を _revinclude:iterate で
+ * 添える検索もある)。
  */
 export async function searchAllPages<T extends fhir4.Resource>(
   type: T["resourceType"],
   params: URLSearchParams,
-  options: { page: number; maxPages: number },
+  options: PagedSearchOptions,
 ): Promise<PagedSearch<T>> {
   const matches: T[] = [];
   const bundles: fhir4.Bundle[] = [];
@@ -194,7 +236,8 @@ export async function searchAllPages<T extends fhir4.Resource>(
       .filter((r): r is T => r?.resourceType === type);
     matches.push(...found);
     bundles.push(bundle);
-    if (found.length < options.page) return { matches, bundles, truncated: false };
+    if (!hasNextPage(bundle)) return { matches, bundles, truncated: false };
   }
+  if (options.complete) throw new SearchLimitError();
   return { matches, bundles, truncated: true };
 }

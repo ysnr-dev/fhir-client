@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type AnesthesiaChartData, buildAnesthesiaChartData, isAnesthesiaChartHub } from "../../fhir/anesthesiaChartHelpers";
 import { postBundle, searchResource } from "../fhirClient";
-import { resourcesOfType } from "./core";
+import { resourcesOfType, SearchLimitError } from "./core";
 
 // ---- 麻酔チャート(docs/anesthesia-chart-design.md) ----
 
 const PART_OF_PAGE = 500;
-// ページ数の上限は暴走ガード(超えたら以降を捨てる。4 ページ = 2000 件)。
+// ページ数の上限は暴走ガード(4 ページ = 2000 件)。超えたら欠けたチャートを出さずにエラーにする。
 const PART_OF_MAX_PAGES = 4;
 
 /**
@@ -34,7 +34,8 @@ async function fetchAllByPartOf<T extends fhir4.Resource>(
 
   const first = await fetchPage(0);
   const total = first.total ?? first.resources.length;
-  const pages = Math.min(Math.ceil(total / PART_OF_PAGE), PART_OF_MAX_PAGES);
+  const pages = Math.ceil(total / PART_OF_PAGE);
+  if (pages > PART_OF_MAX_PAGES) throw new SearchLimitError();
   if (pages <= 1) return first.resources;
 
   const rest = await Promise.all(
