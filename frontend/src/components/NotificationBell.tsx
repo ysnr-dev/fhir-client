@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { useNotificationCounts } from "../api/queries";
 import { useNotificationPolling } from "../hooks/useNotificationPolling";
+import { useNotificationRowCounts } from "./notifications/notificationQueries";
 
 /**
  * ヘッダーの通知ベル。ログイン中の医療従事者あての未対応件数を常に出す
@@ -20,7 +20,7 @@ import { useNotificationPolling } from "../hooks/useNotificationPolling";
 export function NotificationBell() {
   const { practitionerId } = useCurrentPractitioner();
   const [polling] = useNotificationPolling();
-  const counts = useNotificationCounts(practitionerId, polling);
+  const counts = useNotificationRowCounts(practitionerId, polling);
   const location = useLocation();
 
   // ベルは常に画面に居るので、react-query のマウント時再取得が効かない。

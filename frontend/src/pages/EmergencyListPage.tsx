@@ -28,6 +28,7 @@ import {
   EmergencyTriageModal,
 } from "../components/EmergencyRowModals";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { TruncatedNotice } from "../components/TruncatedNotice";
 import { ORDER_LEGEND, OrderSummaryChips, RowPictograms } from "../components/PatientListRowParts";
 import {
   PatientKana,
@@ -256,6 +257,9 @@ export function EmergencyListPage() {
 
       <ErrorBanner error={list.error ?? practitioners.error ?? beds.error} />
       <ErrorBanner error={update.error} />
+      <TruncatedNotice show={list.data?.truncated}>
+        救急の受診が多いため、一部のみ表示しています。
+      </TruncatedNotice>
 
       {list.isLoading ? (
         <p>読み込み中...</p>

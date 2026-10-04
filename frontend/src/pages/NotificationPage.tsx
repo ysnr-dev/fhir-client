@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { useCompleteNotifications, useNotifications } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientKana } from "../components/PatientRowCells";
+import {
+  useCompleteNotificationRows,
+  useNotificationRows,
+} from "../components/notifications/notificationQueries";
 import {
   NOTIFICATION_KINDS,
   type NotificationRow,
@@ -39,8 +42,8 @@ export function NotificationPage() {
   const [mine, setMine] = useState(true);
   const [kindCode, setKindCode] = useState("");
   const [severity, setSeverity] = useState<NotificationSeverity | "">("");
-  const notifications = useNotifications(mine ? practitionerId : undefined);
-  const complete = useCompleteNotifications();
+  const notifications = useNotificationRows(mine ? practitionerId : undefined);
+  const complete = useCompleteNotificationRows();
   const linkState = useReturnLinkState();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [polling, setPolling] = useNotificationPolling();

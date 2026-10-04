@@ -11,7 +11,7 @@ import {
 } from "../../fhir/emergencyEncounterHelpers";
 import { referenceId, transactionBundle } from "../../fhir/shared";
 import { postBundle, searchResource } from "../fhirClient";
-import { resourcesOfType } from "./core";
+import { resourcesOfType, searchAllPages } from "./core";
 
 // ---- 救急患者一覧 ----
 //
@@ -26,25 +26,24 @@ export interface EmergencyRow {
 
 export interface EmergencyListResult {
   rows: EmergencyRow[];
+  /** 取得の上限に達し、一部の受診が欠けている。 */
+  truncated: boolean;
 }
 
 const EMERGENCY_PAGE = 500;
+const EMERGENCY_MAX_PAGES = 2;
 
 async function searchEmergencyEncounters(
   params: URLSearchParams,
-): Promise<{ encounters: fhir4.Encounter[]; patients: fhir4.Patient[] }> {
+): Promise<{ encounters: fhir4.Encounter[]; patients: fhir4.Patient[]; truncated: boolean }> {
   params.set("class", EMERGENCY_CLASS_CODE);
   params.set("_include", "Encounter:subject");
-  params.set("_count", String(EMERGENCY_PAGE));
-  const { data: bundle } = await searchResource<fhir4.Resource>("Encounter", params);
-  const encounters: fhir4.Encounter[] = [];
-  const patients: fhir4.Patient[] = [];
-  for (const entry of bundle.entry ?? []) {
-    const resource = entry.resource;
-    if (resource?.resourceType === "Encounter") encounters.push(resource as fhir4.Encounter);
-    else if (resource?.resourceType === "Patient") patients.push(resource as fhir4.Patient);
-  }
-  return { encounters, patients };
+  const { matches, bundles, truncated } = await searchAllPages<fhir4.Encounter>("Encounter", params, {
+    page: EMERGENCY_PAGE,
+    maxPages: EMERGENCY_MAX_PAGES,
+  });
+  const patients = bundles.flatMap((bundle) => resourcesOfType<fhir4.Patient>(bundle, "Patient"));
+  return { encounters: matches, patients, truncated };
 }
 
 async function fetchEmergencyList(date: string): Promise<EmergencyListResult> {
@@ -76,7 +75,7 @@ async function fetchEmergencyList(date: string): Promise<EmergencyListResult> {
       encounter,
       patient: patientsById.get(referenceId(encounter.subject?.reference) ?? ""),
     }));
-  return { rows };
+  return { rows, truncated: a.truncated || b.truncated };
 }
 
 export const EMERGENCY_POLLING_INTERVAL = 60_000;

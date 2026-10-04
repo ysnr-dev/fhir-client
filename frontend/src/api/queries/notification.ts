@@ -16,21 +16,17 @@ import {
   resultReviewTaskEntries,
   type ReviewReportKind,
 } from "../../fhir/resultReviewHelpers";
-import {
-  completeNotificationEntries,
-  NOTIFICATION_CODES,
-  type NotificationRow,
-  notificationRows,
-} from "../../components/notifications/notificationRegistry";
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
 import { NOTIFICATION_TASK_KEY, resourcesOfType, WORKLIST_PAGE } from "./core";
 import { useOrderEnterer } from "./provenance";
+import type { OrderEnterer } from "../../fhir/provenanceHelpers";
 
 // 通知(Task) ------------------------------------------------------------------
 //
 // 緊急異常値・オーダー承認などの通知を 1 つのクエリで引く。種別ごとの見せ方と
-// 対応の仕方は components/notifications/notificationRegistry が持つ。
+// 対応の仕方は components/notifications/notificationRegistry が持ち、ここへは
+// 種別コード・行の組み立て・対応済みにする entry を引数で渡す(notificationQueries.ts)。
 
 /**
  * このレポートに付いている種別ごとの通知(種別コード → Task)。訂正で出し直す・取り下げるために
@@ -195,10 +191,13 @@ export async function withResultReviewTask(
   };
 }
 
-/** 一覧・件数に共通の検索条件。宛先を指定すると自分あてだけに絞る。 */
-function notificationParams(ownerId?: string | null): URLSearchParams {
+/**
+ * 一覧・件数に共通の検索条件。codes は種別の `system|code` をカンマで並べたもの(OR)。
+ * 宛先を指定すると自分あてだけに絞る。
+ */
+function notificationParams(codes: string, ownerId?: string | null): URLSearchParams {
   const params = new URLSearchParams();
-  params.set("code", NOTIFICATION_CODES);
+  params.set("code", codes);
   params.set("status", "requested");
   if (ownerId) params.set("owner", `Practitioner/${ownerId}`);
   return params;
@@ -210,8 +209,12 @@ function notificationParams(ownerId?: string | null): URLSearchParams {
  * カルテへ渡す)。種別の絞り込みは取得済みの行に対して画面側で行う
  * (種別ごとの件数を選択肢に出すので、サーバーで絞ると他の種別の件数が消える)。
  */
-export function useNotifications(ownerId?: string | null) {
-  const params = notificationParams(ownerId);
+export function useNotifications<Row>(
+  codes: string,
+  toRows: (tasks: fhir4.Task[], patients: Map<string, fhir4.Patient>) => Row[],
+  ownerId?: string | null,
+) {
+  const params = notificationParams(codes, ownerId);
   params.set("_include", "Task:subject");
   params.set("_sort", "-authored-on");
   params.set("_count", String(WORKLIST_PAGE));
@@ -221,7 +224,7 @@ export function useNotifications(ownerId?: string | null) {
     queryFn: () => searchResource<fhir4.Resource>("Task", params),
     select: (result) => {
       const { tasks, patients } = splitNotificationBundle(result.data);
-      return notificationRows(tasks, patients);
+      return toRows(tasks, patients);
     },
     staleTime: 60_000,
   });
@@ -238,9 +241,9 @@ export function useNotifications(ownerId?: string | null) {
  * 無償のサーバーでは開きっぱなしの画面が監査ログとインスタンスの稼働時間を食う。
  * 止めている間も、ページ遷移・ウィンドウのフォーカス復帰・通知の書き込みでは読み直す。
  */
-export function useNotificationCounts(ownerId: string | null | undefined, polling: boolean) {
-  const all = useNotificationCount(ownerId, polling);
-  const alert = useNotificationCount(ownerId, polling, ALERT_PRIORITY_PARAM);
+export function useNotificationCounts(codes: string, ownerId: string | null | undefined, polling: boolean) {
+  const all = useNotificationCount(codes, ownerId, polling);
+  const alert = useNotificationCount(codes, ownerId, polling, ALERT_PRIORITY_PARAM);
 
   return {
     total: all.data ?? 0,
@@ -254,11 +257,12 @@ export function useNotificationCounts(ownerId: string | null | undefined, pollin
 }
 
 function useNotificationCount(
+  codes: string,
   ownerId: string | null | undefined,
   polling: boolean,
   priority?: string,
 ) {
-  const params = notificationParams(ownerId);
+  const params = notificationParams(codes, ownerId);
   if (priority) params.set("priority", priority);
   params.set("_summary", "count");
 
@@ -278,13 +282,15 @@ function useNotificationCount(
  * オーダー承認のように別のリソース(来歴の署名)も要る種別は、レジストリが
  * その entry を同じ transaction に足す。
  */
-export function useCompleteNotifications() {
+export function useCompleteNotifications<Row>(
+  buildEntries: (rows: Row[], actor: OrderEnterer) => Promise<fhir4.BundleEntry[]>,
+) {
   const queryClient = useQueryClient();
   const enterer = useOrderEnterer();
   return useMutation({
-    mutationFn: async (rows: NotificationRow[]) => {
+    mutationFn: async (rows: Row[]) => {
       if (!enterer) throw new Error("医療従事者に紐付いたアカウントでログインしてください");
-      const entry = await completeNotificationEntries(rows, enterer);
+      const entry = await buildEntries(rows, enterer);
       if (entry.length === 0) return null;
       return postBundle({ resourceType: "Bundle", type: "transaction", entry });
     },

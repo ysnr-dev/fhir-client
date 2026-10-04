@@ -9,7 +9,6 @@ import {
   useFlagsForPatients,
   useInfectionsForPatients,
   useInpatientEncounters,
-  useNotifications,
   useNursingPendingCounts,
   useOutpatientList,
   usePractitionerRoles,
@@ -18,6 +17,7 @@ import {
 import { BulletinPostItem } from "../components/BulletinPostItem";
 import { BulletinPostModal } from "../components/BulletinPostModal";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { useNotificationRows } from "../components/notifications/notificationQueries";
 import type { NotificationRow } from "../components/notifications/notificationRegistry";
 import { HomeWorklistCard } from "../components/HomeWorklistCard";
 import { RowPictograms } from "../components/PatientListRowParts";
@@ -298,7 +298,7 @@ function BulletinCard() {
 // ---- 未対応の通知 ----
 
 function NotificationCard({ practitionerId }: { practitionerId: string | null }) {
-  const notifications = useNotifications(practitionerId);
+  const notifications = useNotificationRows(practitionerId);
   const linkState = useReturnLinkState();
 
   // 一覧と同じ 60 秒のキャッシュに乗るので、開いたときに古ければ読み直す。

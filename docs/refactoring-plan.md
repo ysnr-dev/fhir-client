@@ -200,6 +200,19 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 - 本日のカルテのペインにも個人が効くようになった(自科と同じ)。パス評価は全件読んでいるので手元のまま
   (C-19)。
 
+**`api` 層から部品への依存(第 2 回の候補 2)**
+
+- 通知の hook(`useNotifications` / `useNotificationCounts` / `useCompleteNotifications`)が
+  `components/notifications/notificationRegistry` を import していた。種別コード・行の組み立て・対応済みに
+  する entry を引数で受け取る形にし、対応表を渡す薄い hook を `components/notifications/notificationQueries.ts`
+  に置いた。対応表の `actionEntries` は `api/notificationActions` を使うので、提案にあった「`fhir/` へ移す」は
+  できない(`fhir/` は `api/` に依存しない)。`api/` から `components/` への import は 0 件。
+
+**救急患者一覧の上限**
+
+- 滞在中・来院日の 2 本の検索が 1 ページ 500 件で、続きを確かめていなかった。`searchAllPages`(2 ページ)に
+  寄せ、切れたら一覧に「一部のみ」を出す。
+
 ## 第 2 回（2026-09-27）
 
 第 1 回以降に約 80k 行が加わった（医事会計連携・放射線治療・マルチチャート・持参薬・検査結果取込・
@@ -287,7 +300,7 @@ DICOM・施設設定の jsonb 化ほか）。その新規コードを中心に�
 
 1. **生理・内視鏡・処置の全層統一**。内視鏡は生理と 97% 同一（helpers / forms / pages / queries / masterClient /
    masterQueries）、処置は要フラグ、放射線は JJ1017 と線量で別。`ExamDeptConfig` と `createExamOrderHelpers(cfg)` 等の設定方式。
-2. `api` 層が `components/notifications/notificationRegistry` に依存している点（純粋な関数を `fhir/` へ移す）。
+2. (第 3 回で実施)`api` 層が `components/notifications/notificationRegistry` に依存している点。
 3. **ワークリスト 12 画面の共通部品**（`wardOptions`、`matchesFilters` の末尾、`FilterForm` の 4 select、患者セル）約 1,500 行。
 4. **マスタ画面の factory 化**（`radiotherapyMasterClient()` / `radiotherapyMasterHooks()` が既にある形。
    `ItemLayoutPage` 5 本・`DatasetPage` 4 本）。`masterClient.ts` の `if (!res.ok) throw await buildError(res);` 312 回も同じ。
