@@ -1,7 +1,7 @@
 import { makeFieldUpdater } from "../lib/form";
 import { diffDays } from "../lib/dates";
 import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import type { Medicine } from "../api/masterClient";
+import { searchMedicineDoseConversions, type Medicine } from "../api/masterClient";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   CATEGORY_OPTIONS,
@@ -40,11 +40,20 @@ import {
   type PrescriptionSetting,
 } from "../fhir/prescriptionHelpers";
 import { presetInjectionUsageType } from "../fhir/usageMapping";
+import {
+  INSULIN_UNIT,
+  emptyInsulinScale,
+  hasInsulinYakkoCode,
+  isInsulinMedicine,
+  validateInsulinScale,
+  withInsulinUnit,
+} from "../fhir/insulinScaleHelpers";
 import { useMedicineDoseFactors } from "../api/masterQueries";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { InsulinScaleEditor } from "./InsulinScaleEditor";
 import {
   FormularyMark,
   MedicineCautionMarks,
@@ -109,6 +118,24 @@ function countDates(start: string, end: string, schedule: InjectionSchedule): nu
 // 総投与量。端数が出るのは濃度からの換算だけなので小数第 1 位まで出す。
 function formatMl(ml: number): string {
   return (Math.round(ml * 10) / 10).toLocaleString();
+}
+
+/** インスリンの既定の投与経路(皮下)。 */
+const INSULIN_ROUTE = "SC";
+
+/**
+ * 選んだ注射薬がインスリンか。薬効分類で当たりを付け、量を「単位」で出せる(換算行がある)ものだけ。
+ * フォームの換算マップは選ぶ前の薬剤ぶんしか引いていないので、この薬剤の換算行を引き直す。
+ */
+async function isInsulinSelection(medicine: Medicine): Promise<boolean> {
+  if (!hasInsulinYakkoCode(medicine)) return false;
+  try {
+    const result = await searchMedicineDoseConversions({ medicine_code: medicine.medicine_code, per: 100 });
+    const factors = new Map(result.items.map((row) => [row.from_unit, Number(row.factor)]));
+    return isInsulinMedicine(medicine, { factors: new Map([[medicine.medicine_code, factors]]), packUnits: new Map() });
+  } catch {
+    return false;
+  }
 }
 
 /** 曜日指定に切り替えたときの初期選択(注射日の曜日)。 */
@@ -369,13 +396,21 @@ export function InjectionForm({
     updateRpMedicines(rpIndex, (medicines) => medicines.filter((_, j) => j !== medIndex));
   }
 
-  function handleMedicineSelect(medicine: Medicine) {
+  async function handleMedicineSelect(selected: Medicine) {
     if (modal?.kind !== "medicine") return;
     const { rpIndex, medIndex } = modal;
-    updateRpMedicines(rpIndex, (medicines) =>
-      medicines.map((m, j) => (j === medIndex ? { ...m, medicine } : m)),
-    );
     setModal(null);
+    const medicine = (await isInsulinSelection(selected)) ? withInsulinUnit(selected) : selected;
+    const insulin = medicine.unit_name === INSULIN_UNIT;
+    updateRpMedicines(rpIndex, (medicines) =>
+      medicines.map((m, j) =>
+        j === medIndex ? { ...m, medicine, ...(insulin ? {} : { insulinScale: null }) } : m,
+      ),
+    );
+    // インスリンは皮下注。経路を選んでいなければ既定にする(手で選んだ経路は変えない)。
+    if (insulin && !values.rps[rpIndex]?.routeCode) {
+      updateRp(rpIndex, { routeCode: INSULIN_ROUTE, methodCode: methodForRoute(INSULIN_ROUTE, "") });
+    }
   }
 
   function addTime(rpIndex: number) {
@@ -456,6 +491,13 @@ export function InjectionForm({
       for (let j = 0; j < rp.medicines.length; j++) {
         const med = rp.medicines[j];
         if (!med.medicine) return `${rpLabel}: 医薬品を選択してください。`;
+        if (med.insulinScale) {
+          // スケールのみの指示は基本量を持たない(施行量はスケールで決まる)。
+          if (med.dose && Number(med.dose) < 0) return `${rpLabel}: 投与量は 0 以上で入力してください。`;
+          const scaleErrors = validateInsulinScale(med.insulinScale);
+          if (scaleErrors.length) return `${rpLabel}: ${scaleErrors[0]}`;
+          continue;
+        }
         if (!med.dose || Number(med.dose) <= 0) return `${rpLabel}: 投与量を入力してください。`;
       }
     }
@@ -677,6 +719,27 @@ export function InjectionForm({
                       )}
                     </div>
                     <MedicineWarnings warnings={warnings[rpIndex]?.[medIndex]} />
+                    {med.insulinScale ? (
+                      <InsulinScaleEditor
+                        scale={med.insulinScale}
+                        onChange={(insulinScale) => updateMedicine(rpIndex, medIndex, { insulinScale })}
+                        onRemove={() => updateMedicine(rpIndex, medIndex, { insulinScale: null })}
+                      />
+                    ) : (
+                      isInsulinMedicine(med.medicine, conversions) && (
+                        <div className="rp-card__actions insulin-scale-toggle">
+                          <button
+                            type="button"
+                            className="rp-card__compact-button"
+                            onClick={() =>
+                              updateMedicine(rpIndex, medIndex, { insulinScale: emptyInsulinScale() })
+                            }
+                          >
+                            + スケール
+                          </button>
+                        </div>
+                      )
+                    )}
                   </td>
                   <td>
                     <input

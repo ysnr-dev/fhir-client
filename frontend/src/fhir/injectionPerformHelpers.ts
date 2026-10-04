@@ -5,6 +5,16 @@ import {
   type InjectionRpDisplay,
 } from "./injectionHelpers";
 import { buildInjectionTaskUpdate } from "./injectionTaskHelpers";
+import {
+  INSULIN_UNIT,
+  insulinQuantity,
+  type InsulinScaleKind,
+  type InsulinScaleValues,
+} from "./insulinScaleHelpers";
+import { MEAL_INTAKE_STAPLE_MANAGE_NO } from "./flowsheetMealHelpers";
+import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
+import { NURSING_GLUCOSE_MANAGE_NO, buildGlucoseObservation } from "./nursingPerformHelpers";
+import { CAPILLARY_GLUCOSE } from "./vitalHelpers";
 import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import {
   MEDICINE_CODE_SYSTEM,
@@ -13,7 +23,7 @@ import {
   YJ_CODE_SYSTEM,
   identifierValue,
 } from "./prescriptionHelpers";
-import { conceptLabel, referenceIdOfType } from "./shared";
+import { LOINC_SYSTEM, conceptLabel, referenceIdOfType } from "./shared";
 
 // 注射の実施記録(施用)。輸血(transfusionResultHelpers)と同じ形で、実施 1 回を
 // Procedure のハブにし、薬剤ごとの MedicationAdministration をぶら下げる。
@@ -76,6 +86,12 @@ export interface InjectionPerformMedicineLine {
   skipped: boolean;
   /** オーダーに無く実施時に足した薬剤。request を持たない MedicationAdministration になる。 */
   added: boolean;
+  /** インスリンのスケール。実施量の初期値はスケールの案内量になる。 */
+  insulinScale?: InsulinScaleValues | null;
+  /** 実施量を手で直したか。直していなければ案内量を実施量にする。 */
+  doseTouched?: boolean;
+  /** 案内量と違う量にした理由。 */
+  doseReason?: string;
 }
 
 export interface InjectionPerformFormValues {
@@ -89,6 +105,23 @@ export interface InjectionPerformFormValues {
   reason: string;
   comment: string;
   medicines: InjectionPerformMedicineLine[];
+  /** 血糖値(mg/dL)を手で入れた値。null なら直近の記録を使う。 */
+  glucose: string | null;
+  /** 主食の摂取量(%)を手で入れた値。null なら直近の記録を使う。 */
+  mealPercent: string | null;
+}
+
+/** インスリンのスケールに使った測定値。記録から採ったものは Observation の id を持つ。 */
+export interface InsulinMeasurement {
+  value: number;
+  observationId?: string;
+}
+
+/** インスリンの実施で使う測定値と、新しく書く血糖値の basedOn にする血糖測定の看護指示。 */
+export interface InsulinPerformContext {
+  glucose: InsulinMeasurement | null;
+  meal: InsulinMeasurement | null;
+  glucoseOrder?: fhir4.ServiceRequest;
 }
 
 /** オーダーの薬剤から実施入力の初期行を作る。実施量はオーダーの投与量をそのまま置く。 */
@@ -115,6 +148,8 @@ export function medicineLinesFromOrder(
       orderedDose: med.dose,
       skipped: false,
       added: false,
+      // スケールのインスリンは実施量を案内量から入れる(InjectionPerformModal)。
+      ...(med.insulinScale ? { insulinScale: med.insulinScale, dose: "", doseTouched: false, doseReason: "" } : {}),
     })),
   );
 }
@@ -136,7 +171,17 @@ export function emptyInjectionPerformForm(
     reason: "",
     comment: "",
     medicines: medicineLinesFromOrder(mrs),
+    glucose: null,
+    mealPercent: null,
   };
+}
+
+/** スケールの種別に使う測定値。 */
+export function insulinMeasurementOf(
+  context: InsulinPerformContext | undefined,
+  kind: InsulinScaleKind,
+): InsulinMeasurement | null {
+  return (kind === "meal" ? context?.meal : context?.glucose) ?? null;
 }
 
 // ---- FHIR リソースの組み立て ----
@@ -190,14 +235,20 @@ function buildAdministration(
   values: InjectionPerformFormValues,
   subject: fhir4.Reference,
   hubReference: string,
+  /** スケールの測定値の参照(記録の Observation か、同じ transaction で書く血糖値)。 */
+  measurementReference: string | null,
+  /** 記録の無い主食の摂取量を手で入れたときの値(%)。 */
+  manualMealPercent: number | null,
 ): fhir4.MedicationAdministration {
   const period = performedPeriod(values);
   const instruction = mr?.dosageInstruction?.[0];
 
   const dosage: fhir4.MedicationAdministrationDosage = {};
   const dose = Number(line.dose);
-  if (Number.isFinite(dose) && dose > 0) {
-    dosage.dose = { value: dose, unit: line.unit || undefined };
+  // スケールで 0 単位と判断した施用も量として残す。
+  if (Number.isFinite(dose) && (dose > 0 || (line.insulinScale && line.dose !== ""))) {
+    dosage.dose =
+      line.unit === INSULIN_UNIT ? insulinQuantity(dose) : { value: dose, unit: line.unit || undefined };
   }
   // 経路・部位・手技はオーダーの用法をそのまま写す(施用時に変えることはまず無く、
   // 変えたなら別のオーダーになる)。
@@ -237,6 +288,14 @@ function buildAdministration(
       },
     ];
   }
+  if (line.insulinScale) {
+    if (measurementReference) administration.supportingInformation = [{ reference: measurementReference }];
+    const notes = [
+      manualMealPercent !== null && line.insulinScale.kind === "meal" ? `主食 ${manualMealPercent}%` : "",
+      line.doseReason?.trim() ?? "",
+    ].filter(Boolean);
+    if (notes.length) administration.note = notes.map((text) => ({ text }));
+  }
 
   return administration;
 }
@@ -246,6 +305,7 @@ function performEntries(
   values: InjectionPerformFormValues,
   order: fhir4.ServiceRequest,
   mrs: fhir4.MedicationRequest[],
+  insulin: InsulinPerformContext | undefined,
 ): fhir4.BundleEntry[] {
   const subject = order.subject ?? {};
   const hubReference = `urn:uuid:${crypto.randomUUID()}`;
@@ -262,7 +322,35 @@ function performEntries(
   // 実施せず のときは薬剤の記録を作らない(入れていない薬剤に投与記録があると嘘になる)。
   if (values.outcome === "not-done") return entries;
 
-  for (const line of values.medicines.filter((l) => !l.skipped)) {
+  const given = values.medicines.filter((l) => !l.skipped);
+  const usesScale = (kind: InsulinScaleKind) => given.some((l) => l.insulinScale?.kind === kind);
+
+  // 手で入れた血糖値は看護指示から記録したものと同じ形の Observation にする。
+  let glucoseReference: string | null = insulin?.glucose?.observationId
+    ? `Observation/${insulin.glucose.observationId}`
+    : null;
+  const patientId = referenceIdOfType(subject.reference, "Patient");
+  if (insulin?.glucose && !insulin.glucose.observationId && usesScale("glucose") && patientId) {
+    glucoseReference = `urn:uuid:${crypto.randomUUID()}`;
+    entries.push({
+      fullUrl: glucoseReference,
+      resource: buildGlucoseObservation({
+        patientId,
+        encounter: order.encounter,
+        value: insulin.glucose.value,
+        effectiveDateTime: toFhirDateTime(values.startedAt),
+        performer: values.performerId ? { id: values.performerId, name: values.performerName } : null,
+        order: insulin.glucoseOrder,
+      }),
+      request: { method: "POST", url: "Observation" },
+    });
+  }
+  const mealReference = insulin?.meal?.observationId ? `Observation/${insulin.meal.observationId}` : null;
+  const manualMeal = insulin?.meal && !insulin.meal.observationId ? insulin.meal.value : null;
+
+  for (const line of given) {
+    const reference =
+      line.insulinScale?.kind === "meal" ? mealReference : line.insulinScale ? glucoseReference : null;
     entries.push({
       fullUrl: `urn:uuid:${crypto.randomUUID()}`,
       resource: buildAdministration(
@@ -271,6 +359,8 @@ function performEntries(
         values,
         subject,
         hubReference,
+        reference,
+        manualMeal,
       ),
       request: { method: "POST", url: "MedicationAdministration" },
     });
@@ -299,8 +389,10 @@ export function buildInjectionPerformBundle(
   task: fhir4.Task | undefined,
   /** 既にあるこのオーダーの実施記録(実施せず を除いた件数)。 */
   donePerformCount: number,
+  /** スケールのインスリンを含むときの測定値。 */
+  insulin?: InsulinPerformContext,
 ): fhir4.Bundle {
-  const entries = performEntries(values, order, mrs);
+  const entries = performEntries(values, order, mrs, insulin);
 
   const counted = values.outcome !== "not-done";
   const reached = counted && donePerformCount + 1 >= scheduledPerformCount(mrs);
@@ -427,4 +519,65 @@ export function buildInjectionPerformDeleteEntries(
     })),
     { request: { method: "DELETE" as const, url: `Procedure/${perform.id}` } },
   ]);
+}
+
+// ---- 実施入力の測定値 ----
+
+/** 施用時刻より前に遡って測定値を探す幅(分)と、施用後に入れた記録を拾う幅(分)。 */
+const MEASUREMENT_WINDOWS: Record<InsulinScaleKind, { before: number; after: number }> = {
+  // 食前の血糖を測ってから打つ。
+  glucose: { before: 120, after: 30 },
+  // 食後に食べた量を見て打つ。摂取量の記録は食事の時刻(08/12/18)に置かれる。
+  meal: { before: 180, after: 60 },
+};
+
+export interface ScaleMeasurementRecord {
+  value: number;
+  observationId: string;
+  /** 記録の日時(FHIR の dateTime)。 */
+  at: string;
+}
+
+function hasCoding(observation: fhir4.Observation, system: string, code: string): boolean {
+  return Boolean(observation.code?.coding?.some((c) => c.system === system && c.code === code));
+}
+
+/** 簡易血糖の記録か(看護指示から記録したものも、インスリンの実施入力で書いたものも)。 */
+export function isCapillaryGlucoseObservation(observation: fhir4.Observation): boolean {
+  return (
+    hasCoding(observation, LOINC_SYSTEM, CAPILLARY_GLUCOSE.code) ||
+    hasCoding(observation, NURSING_OBSERVATION_CODE_SYSTEM, NURSING_GLUCOSE_MANAGE_NO)
+  );
+}
+
+/** 主食の摂取量(%)の記録か。 */
+export function isStapleIntakeObservation(observation: fhir4.Observation): boolean {
+  return hasCoding(observation, NURSING_OBSERVATION_CODE_SYSTEM, MEAL_INTAKE_STAPLE_MANAGE_NO);
+}
+
+/**
+ * 施用時刻(datetime-local の値)の前後で、スケールに使う直近の記録。幅の中でいちばん新しいもの。
+ * 見つからなければ null(実施入力でその場で入れてもらう)。
+ */
+export function latestScaleMeasurement(
+  observations: fhir4.Observation[],
+  kind: InsulinScaleKind,
+  at: string,
+): ScaleMeasurementRecord | null {
+  const base = new Date(at).getTime();
+  if (!Number.isFinite(base)) return null;
+  const window = MEASUREMENT_WINDOWS[kind];
+  const matches = kind === "meal" ? isStapleIntakeObservation : isCapillaryGlucoseObservation;
+  let latest: ScaleMeasurementRecord | null = null;
+  for (const observation of observations) {
+    const value = observation.valueQuantity?.value;
+    const effective = observation.effectiveDateTime;
+    if (!matches(observation) || value == null || !effective || !observation.id) continue;
+    const time = new Date(effective).getTime();
+    if (time < base - window.before * 60_000 || time > base + window.after * 60_000) continue;
+    if (!latest || time > new Date(latest.at).getTime()) {
+      latest = { value, observationId: observation.id, at: effective };
+    }
+  }
+  return latest;
 }

@@ -1,6 +1,7 @@
 import type { Medicine } from "../api/masterClient";
 import type { MedicineUsageFilters } from "../api/masterQueries";
 import type { InjectionUsageType } from "./injectionHelpers";
+import { INSULIN_UNIT } from "./insulinScaleHelpers";
 
 // 医薬品マスタから用法のプリセット（フォームの初期値）を導出する。いずれも確定マッチでは
 // ないため、常にユーザーが変更・解除できる前提で使うこと。
@@ -186,6 +187,8 @@ export function injectionUsageTypeOf(medicine: Medicine): InjectionUsageType | "
   const unit = medicine.unit_name ?? "";
   // 「点滴静注用」等。粉末バイアルでも点滴専用と分かるので包装より優先する。
   if (medicine.name.includes("点滴")) return "drip";
+  // インスリン(量を「単位」で出す行)はペン型キットでも皮下へのワンショット。
+  if (unit === INSULIN_UNIT) return "one-shot";
   // 筋注のプレフィルドシリンジがキット単位で登録されている（ゼプリオン水懸筋注シリンジ等）。
   const syringeKit = unit === "キット" && medicine.name.includes("シリンジ");
   if (unit === "袋") return "drip";

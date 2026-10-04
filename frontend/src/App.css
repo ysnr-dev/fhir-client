@@ -1796,6 +1796,81 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   font-size: 14px;
 }
 
+/* インスリンのスケール(注射の薬剤行の下)。 */
+.insulin-scale {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.insulin-scale__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.prescription-form label.insulin-scale__kind {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+/* 表の中は入力部品の高さが低いので、文字が切れないよう余白と文字を詰める(薬剤行の入力欄と同じ)。 */
+.prescription-form .insulin-scale__kind select {
+  width: auto;
+  padding: 2px 6px;
+  font-size: 14px;
+}
+
+.insulin-scale-toggle {
+  margin-top: 6px;
+}
+
+.insulin-scale__table {
+  width: 100%;
+  margin-top: 4px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.insulin-scale__table th {
+  font-weight: normal;
+  text-align: left;
+  color: var(--text);
+}
+
+.insulin-scale__table td {
+  padding: 2px 4px 2px 0;
+}
+
+.insulin-scale__range {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.prescription-form .insulin-scale__range input,
+.prescription-form .insulin-scale__dose {
+  width: 64px;
+  padding: 4px 6px;
+  font-size: 14px;
+}
+
+.prescription-form .insulin-scale__table input[type="text"] {
+  padding: 4px 6px;
+  font-size: 14px;
+}
+
+.insulin-scale-summary {
+  display: block;
+  font-size: 12px;
+  color: var(--text);
+}
+
 .rp-card__supplement-kind input[type="radio"] {
   width: auto;
   margin: 0;
@@ -22147,4 +22222,39 @@ thead .injection-calendar__head {
 .injection-continue__count {
   font-size: 13px;
   color: var(--text-h);
+}
+
+/* インスリンの実施入力(スケールの測定値・案内量・変更理由)。 */
+.transfusion-perform .insulin-perform__fields {
+  margin-top: 12px;
+}
+
+.insulin-perform__measure {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.insulin-perform__measure input {
+  width: 6em;
+}
+
+.insulin-perform__guide {
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.insulin-perform__guide-note {
+  color: var(--danger);
+  font-size: 12px;
+}
+
+label.insulin-perform__reason {
+  display: flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 13px;
 }

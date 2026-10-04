@@ -2,6 +2,7 @@ import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { toPackQuantity, type MedicineDoseConversionMap } from "./doseConversionHelpers";
 import { groupInjectionByRp } from "./injectionHelpers";
 import { buildInjectionTaskUpdate } from "./injectionTaskHelpers";
+import { insulinDoseRange } from "./insulinScaleHelpers";
 import {
   ORDER_IN_RP_SYSTEM,
   RP_NUMBER_SYSTEM,
@@ -68,7 +69,10 @@ export function dispenseLinesFromOrder(
       const mr = mrByKey.get(`${rp.rpNumber}-${med.orderInRp}`);
       const restored = mr ? medicineFromCoding(mr) : null;
       if (!mr?.id || !restored) return [];
-      const dose = med.dose ?? 0;
+      // スケールのインスリンは施行しうる最大量で数える(足りなくならないように)。
+      const dose = med.insulinScale
+        ? (insulinDoseRange(med.insulinScale, med.dose ?? null)?.high ?? med.dose ?? 0)
+        : (med.dose ?? 0);
       // 払出は製剤数(瓶・袋)で出す。力価(148.75 mg)で出たオーダーは換算マスタで製剤数に
       // 直し、単位も薬価算定単位に差し替える(MedicationDispense.quantity.unit になる)。
       // 換算できなければ数量を空にして手入力してもらう。

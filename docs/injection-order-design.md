@@ -466,3 +466,53 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
 
 行のメニューの「中止」は、表示中で今日以降の、中止も実施もしていない最初の日を起点に
 `InjectionCancelModal` を開く(「この日のみ / この日以降すべて」はモーダルで選ぶ)。
+
+## 10. インスリン指示(単位指定・血糖スケール・食事量スケール)
+
+施設の電子カルテ機能一覧(インスリン指示・血糖測定指示・インスリン実施入力・血糖管理経過表)のうち、
+単位指定・血糖スケール・食事量スケール・単位指定+スケールを注射オーダーに載せた。
+フリースケール・施設のスケールセット(マスタ)・血糖インスリン指示患者一覧・低血糖時指示は未実装。
+
+### 10.1 インスリンの判定と単位
+
+- 薬効分類(`yakko_code`)が 2492(すい臓ホルモン剤)で、投与量換算マスタに `from_unit = 単位` の行がある薬剤
+  (`isInsulinMedicine`、`fhir/insulinScaleHelpers.ts`)。2492 にはグルカゴン(mg)も入るので換算行と併せて見る。
+- 選んだ時点で `medicine.unit_name` を「単位」にする。`doseQuantity` は `{unit: "単位", system: UCUM, code: "[iU]"}`。
+  払出数量は既存の `toPackQuantity` で包装単位(キット・筒)に直る。総投与量(mL)には数えない。
+- 用法種別の既定は単位の行ならワンショット(`injectionUsageTypeOf`)、経路が未選択なら皮下。
+
+### 10.2 スケールの持ち方
+
+薬剤行の `dosageInstruction[0]` にローカル拡張 `http://fhir-client.local/StructureDefinition/insulin-scale`(複合):
+
+| 子拡張 | 型 | 内容 |
+| --- | --- | --- |
+| `kind` | Coding(`.../CodeSystem/insulin-scale-kind`) | `glucose`(血糖 mg/dL) / `meal`(主食の摂取量 %) |
+| `row`(繰り返し) | 複合 | `low` / `high`(decimal、両端を含む整数。片側省略可)・`dose`(Quantity 単位)・`note`(string) |
+
+- **単位指定+スケール**: `doseQuantity` に基本量、施行量 = 基本量 + 当たった行の単位。
+- **スケールのみ**: `doseQuantity` を出さず `doseRange`(施行しうる最小〜最大)。dose[x] は choice なので両方は持てない。
+  単一の量を前提にした読み手(払出数量・カード)が量を見失わないため。払出は最大量で数える。
+- `dosageInstruction.text` に要約(「基本 2単位 + 血糖スケール 〜150: 0単位 / …」)を足す。
+- 幅は重なり・抜けを登録前に弾く(`validateInsulinScale`)。
+
+### 10.3 実施入力
+
+- 施用時刻の前後から直近の記録を初期値にする(`latestScaleMeasurement`、`fhir/injectionPerformHelpers.ts`):
+  血糖は前 2 時間〜後 30 分の MEDIS 31000303 / LOINC 41653-7、食事量は前 3 時間〜後 1 時間の主食(MEDIS 31003419)。
+  読み出しは `useInsulinScaleInputs`(`api/queries/injection.ts`)。
+- 案内量を実施量の初期値にし、手で違う量にしたら変更理由を必須にする。
+- `MedicationAdministration.supportingInformation` に使った測定値の Observation、`note` に変更理由
+  (記録の無い食事量を手で入れたときは「主食 N%」も)。0 単位と判断した施用も量 0 で残す。
+- その場で入れた血糖値は看護観察と同じ形の `Observation`(`buildGlucoseObservation`、category `order-type|nursing`)。
+  有効な血糖測定の看護指示があれば `basedOn` に付ける。
+- 注射カレンダーの「量」の印はスケールの行には付けない(施用ごとに量が変わるのが指示どおり)。
+
+### 10.4 血糖測定と経過表
+
+- 看護指示で「血糖値」(MEDIS 31000303)を出せば、指示簿・実施入力・経過表は既存の看護観察の仕組みに乗る。
+  `NURSING_LOINC_MAP` で LOINC 41653-7 を併記し、経過表の既定行「血糖」に合流させる(検体検査の血糖とは別の行)。
+  しきい値は施設設定のバイタルの異常値(既定 70 以下 L / 300 以上 H)。
+- 経過表の「インスリン」節は、単位で記録された `MedicationAdministration` を薬剤ごとの行にして枠に単位を並べる
+  (`fhir/flowsheetInsulinHelpers.ts`)。
+

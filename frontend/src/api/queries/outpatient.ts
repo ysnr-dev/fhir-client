@@ -521,6 +521,8 @@ export function useRegisterInjectionPerform() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      // インスリンの実施入力では血糖値の Observation も書く(経過表・直近値の読み直し)。
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
     },
   });
 }

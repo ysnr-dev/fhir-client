@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { insulinScaleSummary } from "../fhir/insulinScaleHelpers";
 import {
   useDeleteClinicalNote,
   useCancelInjectionPerforms,
@@ -1076,6 +1077,11 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
                   )}
                   {medicine.comment && (
                     <span className="karte-rp__comment">{`（${medicine.comment}）`}</span>
+                  )}
+                  {medicine.insulinScale && (
+                    <span className="insulin-scale-summary">
+                      {insulinScaleSummary(medicine.insulinScale, medicine.dose)}
+                    </span>
                   )}
                 </li>
               ))}

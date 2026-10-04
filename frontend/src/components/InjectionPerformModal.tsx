@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { Medicine } from "../api/masterClient";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { useRegisterInjectionPerform } from "../api/queries";
+import { useInsulinScaleInputs, useRegisterInjectionPerform } from "../api/queries";
 import {
   groupInjectionByRp,
   injectionTimeLabel,
@@ -16,7 +16,19 @@ import {
   type InjectionPerformFormValues,
   type InjectionPerformMedicineLine,
   type InjectionPerformOutcome,
+  type InsulinMeasurement,
+  type InsulinPerformContext,
+  latestScaleMeasurement,
 } from "../fhir/injectionPerformHelpers";
+import {
+  guideInsulinDose,
+  insulinScaleRangeLabel,
+  insulinScaleSummary,
+  type InsulinScaleKind,
+} from "../fhir/insulinScaleHelpers";
+import { isNursingOrderRunningOn } from "../fhir/nursingOrderHelpers";
+import { clockTime } from "../lib/dates";
+import { referenceIdOfType } from "../fhir/shared";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
@@ -60,6 +72,53 @@ export function InjectionPerformModal({
 
   const scheduled = scheduledPerformCount(medicationRequests);
   const done = performs.filter((p) => p.counted).length;
+
+  // スケールのインスリン。施用時刻の前後の血糖値・主食の摂取量から実施量を案内する。
+  const patientId = referenceIdOfType(order.subject?.reference, "Patient");
+  const day = values.startedAt.slice(0, 10);
+  const scaleKinds = new Set(
+    values.medicines.filter((m) => !m.skipped && m.insulinScale).map((m) => m.insulinScale!.kind),
+  );
+  const insulinInputs = useInsulinScaleInputs(patientId, day, scaleKinds.size > 0);
+  const scaleObservations = insulinInputs.data?.observations ?? [];
+  const records = {
+    glucose: latestScaleMeasurement(scaleObservations, "glucose", values.startedAt),
+    meal: latestScaleMeasurement(scaleObservations, "meal", values.startedAt),
+  };
+
+  /** 手で入れた値があればそれ、無ければ直近の記録。 */
+  function measurementOf(kind: InsulinScaleKind): InsulinMeasurement | null {
+    const manual = kind === "glucose" ? values.glucose : values.mealPercent;
+    if (manual !== null) {
+      return manual.trim() !== "" && Number.isFinite(Number(manual)) ? { value: Number(manual) } : null;
+    }
+    const record = records[kind];
+    return record ? { value: record.value, observationId: record.observationId } : null;
+  }
+
+  function guideOf(m: InjectionPerformMedicineLine) {
+    if (!m.insulinScale) return null;
+    return guideInsulinDose(m.insulinScale, m.orderedDose ?? null, measurementOf(m.insulinScale.kind)?.value ?? null);
+  }
+
+  /** 実施量。スケールの行は手で直していなければ案内量。 */
+  function doseOf(m: InjectionPerformMedicineLine): string {
+    if (!m.insulinScale || m.doseTouched) return m.dose;
+    const guide = guideOf(m)?.dose;
+    return guide == null ? "" : String(guide);
+  }
+
+  function differsFromGuide(m: InjectionPerformMedicineLine): boolean {
+    const guide = guideOf(m)?.dose;
+    return Boolean(m.insulinScale && m.doseTouched && guide != null && Number(m.dose) !== guide);
+  }
+
+  function measurementInputValue(kind: InsulinScaleKind): string {
+    const manual = kind === "glucose" ? values.glucose : values.mealPercent;
+    if (manual !== null) return manual;
+    const record = records[kind];
+    return record ? String(record.value) : "";
+  }
 
   function update<K extends keyof InjectionPerformFormValues>(
     key: K,
@@ -111,8 +170,16 @@ export function InjectionPerformModal({
     if (values.outcome !== "not-done") {
       const given = values.medicines.filter((m) => !m.skipped);
       if (given.length === 0) return "施用した薬剤が 1 つもありません。実施せず を選んでください。";
+      if (scaleKinds.has("glucose") && !measurementOf("glucose")) return "血糖値を入れてください。";
+      if (scaleKinds.has("meal") && !measurementOf("meal")) return "主食の摂取量を入れてください。";
       for (const m of given) {
-        if (!m.dose || Number(m.dose) <= 0) return `${m.name}: 実施量を入れてください。`;
+        const dose = doseOf(m);
+        if (m.insulinScale) {
+          if (dose === "" || Number(dose) < 0) return `${m.name}: 実施量を入れてください。`;
+          if (differsFromGuide(m) && !m.doseReason?.trim()) return `${m.name}: 変更理由を入れてください。`;
+          continue;
+        }
+        if (!dose || Number(dose) <= 0) return `${m.name}: 実施量を入れてください。`;
       }
     }
     if (values.outcome !== "completed" && !values.reason.trim()) {
@@ -131,9 +198,18 @@ export function InjectionPerformModal({
       ...values,
       performerId: practitionerId ?? "",
       performerName: practitioner ? practitionerDisplayName(practitioner) : "",
+      medicines: values.medicines.map((m) => ({ ...m, dose: doseOf(m) })),
     };
+    const insulin: InsulinPerformContext | undefined =
+      scaleKinds.size > 0
+        ? {
+            glucose: scaleKinds.has("glucose") ? measurementOf("glucose") : null,
+            meal: scaleKinds.has("meal") ? measurementOf("meal") : null,
+            glucoseOrder: insulinInputs.data?.glucoseOrders.find((sr) => isNursingOrderRunningOn(sr, day)),
+          }
+        : undefined;
     register.mutate(
-      buildInjectionPerformBundle(submitted, order, medicationRequests, task, done),
+      buildInjectionPerformBundle(submitted, order, medicationRequests, task, done, insulin),
       { onSuccess: onClose },
     );
   }
@@ -222,6 +298,34 @@ export function InjectionPerformModal({
           )}
         </section>
 
+        {values.outcome !== "not-done" && scaleKinds.size > 0 && (
+          <div className="lab-order-item__fields insulin-perform__fields">
+            {(["glucose", "meal"] as const)
+              .filter((kind) => scaleKinds.has(kind))
+              .map((kind) => {
+                const manual = kind === "glucose" ? values.glucose : values.mealPercent;
+                const record = records[kind];
+                return (
+                  <label key={kind}>
+                    {kind === "glucose" ? "血糖値(mg/dL) *" : "主食の摂取量(%) *"}
+                    <span className="insulin-perform__measure">
+                      <input
+                        type="number"
+                        min={0}
+                        step={kind === "glucose" ? 1 : 10}
+                        value={measurementInputValue(kind)}
+                        onChange={(e) => update(kind === "glucose" ? "glucose" : "mealPercent", e.target.value)}
+                      />
+                      {manual === null && record && (
+                        <span className="order-select__muted">{`${clockTime(record.at)} 記録`}</span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+          </div>
+        )}
+
         {values.outcome !== "not-done" &&
           rps.map((rp) => (
             <section className="lab-order-item__section" key={rp.rpNumber}>
@@ -250,16 +354,33 @@ export function InjectionPerformModal({
                         <td>
                           {m.name}
                           {m.added && <span className="injection-perform__added">追加</span>}
+                          {m.insulinScale && (
+                            <span className="insulin-scale-summary">
+                              {insulinScaleSummary(m.insulinScale, m.orderedDose)}
+                            </span>
+                          )}
+                          {differsFromGuide(m) && (
+                            <label className="insulin-perform__reason">
+                              変更理由 *
+                              <input
+                                type="text"
+                                value={m.doseReason ?? ""}
+                                onChange={(e) => updateMedicine(index, { doseReason: e.target.value })}
+                              />
+                            </label>
+                          )}
                         </td>
-                        <td>{m.orderedDose ?? "-"}</td>
+                        <td>
+                          {m.insulinScale ? <InsulinGuide guide={guideOf(m)} /> : (m.orderedDose ?? "-")}
+                        </td>
                         <td>
                           <input
                             type="number"
                             min={0}
                             step="any"
-                            value={m.dose}
+                            value={doseOf(m)}
                             disabled={m.skipped}
-                            onChange={(e) => updateMedicine(index, { dose: e.target.value })}
+                            onChange={(e) => updateMedicine(index, { dose: e.target.value, doseTouched: true })}
                             className="injection-perform__dose"
                           />
                         </td>
@@ -323,5 +444,17 @@ export function InjectionPerformModal({
         />
       )}
     </Modal>
+  );
+}
+
+/** スケールの案内量(「151〜200 → 2」)。測定値が無い・どの幅にも入らなければ「-」。 */
+function InsulinGuide({ guide }: { guide: ReturnType<typeof guideInsulinDose> | null }) {
+  if (!guide?.row) return <>-</>;
+  const note = guide.row.note.trim();
+  return (
+    <span className="insulin-perform__guide">
+      {`${insulinScaleRangeLabel(guide.row)} → ${guide.dose ?? "-"}`}
+      {note && <span className="insulin-perform__guide-note">{note}</span>}
+    </span>
   );
 }

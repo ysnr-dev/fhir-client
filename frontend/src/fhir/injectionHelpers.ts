@@ -28,6 +28,15 @@ import {
   type PrescriptionSetting,
   emptyMedicineLine,
 } from "./prescriptionHelpers";
+import {
+  INSULIN_UNIT,
+  buildInsulinScaleExtension,
+  filledInsulinScaleRows,
+  insulinDoseRange,
+  insulinQuantity,
+  insulinScaleOf,
+  insulinScaleSummary,
+} from "./insulinScaleHelpers";
 
 // 注射オーダー(JAHIS注射データ交換規約 / JP_MedicationRequest_Injection 参考)。
 // 処方と同じく ServiceRequest(オーダーヘッダ) + 薬剤ごとの MedicationRequest で表現し、
@@ -368,6 +377,8 @@ export function rpDoseTotal(
     const code = line.medicine?.medicine_code;
     const dose = Number(line.dose);
     if (!code || !line.dose || !Number.isFinite(dose)) continue;
+    // インスリン(単位)は液量にすると 0.1 mL 未満で、総投与量に数えない。
+    if (line.medicine?.unit_name === INSULIN_UNIT) continue;
     const converted = toMilliliters(dose, line.medicine?.unit_name, code, conversions);
     if (converted === null) unconvertible += 1;
     else ml += converted;
@@ -689,11 +700,27 @@ function buildInjectionMedicationRequest(
   }
 
   const doseAndRate: fhir4.DosageDoseAndRate = {};
+  const insulinUnit = medLine.medicine?.unit_name === INSULIN_UNIT;
   if (medLine.dose) {
-    doseAndRate.doseQuantity = {
-      value: Number(medLine.dose),
-      unit: medLine.medicine?.unit_name ?? undefined,
-    };
+    doseAndRate.doseQuantity = insulinUnit
+      ? insulinQuantity(Number(medLine.dose))
+      : { value: Number(medLine.dose), unit: medLine.medicine?.unit_name ?? undefined };
+  }
+  // スケールは薬剤ごとの指示(insulinScaleHelpers の冒頭コメント)。
+  const scale = medLine.insulinScale ? filledInsulinScaleRows(medLine.insulinScale) : [];
+  if (medLine.insulinScale && scale.length > 0) {
+    const base = medLine.dose ? Number(medLine.dose) : null;
+    dosageInstruction.extension = [
+      ...(dosageInstruction.extension ?? []),
+      buildInsulinScaleExtension(medLine.insulinScale),
+    ];
+    dosageInstruction.text = [dosageInstruction.text, insulinScaleSummary(medLine.insulinScale, base)]
+      .filter(Boolean)
+      .join(" ");
+    const range = insulinDoseRange(medLine.insulinScale, base);
+    if (base === null && range) {
+      doseAndRate.doseRange = { low: insulinQuantity(range.low), high: insulinQuantity(range.high) };
+    }
   }
   // 投与速度は用法(RP)の値だが、FHIR 上は各 MedicationRequest に持つしかないので
   // 同じ RP の全薬剤に同じ値を入れる(用法コードなどと同じ扱い)。
@@ -705,7 +732,7 @@ function buildInjectionMedicationRequest(
       code: "mL/h",
     };
   }
-  if (doseAndRate.doseQuantity || doseAndRate.rateQuantity) {
+  if (doseAndRate.doseQuantity || doseAndRate.doseRange || doseAndRate.rateQuantity) {
     dosageInstruction.doseAndRate = [doseAndRate];
   }
 
@@ -1188,6 +1215,12 @@ export function injectionUsageSummary(rp: InjectionRpDisplay): string {
     .join(" | ");
 }
 
+/** 投与量の単位。スケールのみのインスリンは doseQuantity を持たないので doseRange から読む。 */
+function doseUnitOf(dosage: fhir4.Dosage | undefined): string | undefined {
+  const doseAndRate = dosage?.doseAndRate?.[0];
+  return doseAndRate?.doseQuantity?.unit ?? doseAndRate?.doseRange?.high?.unit;
+}
+
 export function groupInjectionByRp(mrs: fhir4.MedicationRequest[]): InjectionRpDisplay[] {
   const groups = new Map<number, InjectionRpDisplay>();
 
@@ -1223,8 +1256,9 @@ export function groupInjectionByRp(mrs: fhir4.MedicationRequest[]): InjectionRpD
       name: medicineCoding?.display ?? mr.medicationCodeableConcept?.text ?? "",
       yjCode: yjCoding?.code ?? undefined,
       dose: dosage?.doseAndRate?.[0]?.doseQuantity?.value,
-      unit: dosage?.doseAndRate?.[0]?.doseQuantity?.unit,
+      unit: doseUnitOf(dosage),
       comment: mr.note?.[0]?.text,
+      insulinScale: insulinScaleOf(dosage),
     });
   }
 
@@ -1291,11 +1325,14 @@ export function parseInjectionForm(
     }
 
     const doseValue = dosage?.doseAndRate?.[0]?.doseQuantity?.value;
+    const medicine = medicineFromCoding(mr);
+    const unit = doseUnitOf(dosage);
     group.medicinesByOrder.set(orderInRp, {
       id: mr.id,
-      medicine: medicineFromCoding(mr),
+      medicine: medicine && !medicine.unit_name && unit ? { ...medicine, unit_name: unit } : medicine,
       dose: doseValue != null ? String(doseValue) : "",
       comment: mr.note?.[0]?.text ?? "",
+      insulinScale: insulinScaleOf(dosage),
     });
   }
 

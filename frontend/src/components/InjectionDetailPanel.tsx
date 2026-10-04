@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { insulinScaleSummary } from "../fhir/insulinScaleHelpers";
 import { problemLabel } from "../fhir/conditionHelpers";
 import {
   groupInjectionByRp,
@@ -154,7 +155,14 @@ export function InjectionDetailPanel({
                 const perBsa = perBsaLabel(med.dose, med.unit, regimenApplication?.bsa ?? null);
                 return (
                 <tr key={med.orderInRp}>
-                  <td>{med.name}</td>
+                  <td>
+                    {med.name}
+                    {med.insulinScale && (
+                      <span className="insulin-scale-summary">
+                        {insulinScaleSummary(med.insulinScale, med.dose)}
+                      </span>
+                    )}
+                  </td>
                   <td>
                     {med.dose ?? "-"}
                     {/* 薬剤部の監査(§7.6 E-1)。指示は力価なので、レジメンの基準

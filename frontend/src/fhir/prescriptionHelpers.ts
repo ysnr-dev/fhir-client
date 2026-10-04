@@ -1,6 +1,7 @@
 import { today } from "../lib/dates";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import type { LineDose } from "./drugCheckHelpers";
+import type { InsulinScaleValues } from "./insulinScaleHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { isAsNeededUsage } from "./medicationScheduleHelpers";
 import {
@@ -170,6 +171,8 @@ export interface MedicineLineValues {
   unevenDoses?: string[] | null;
   /** 持参薬から起こした行の元の持参薬(MedicationStatement.id)。 */
   broughtMedicationId?: string;
+  /** インスリンのスケール(注射のみ)。null・未設定ならスケールを持たない。 */
+  insulinScale?: InsulinScaleValues | null;
 }
 
 export interface RpValues {
@@ -676,6 +679,8 @@ export interface MedicineLineDisplay {
   comment?: string;
   /** 不均等投与の表示(「朝 3.5錠・夕 1錠」)。 */
   unevenLabel?: string;
+  /** インスリンのスケール(注射のみ)。dose はスケールの基本量で、スケールのみなら空。 */
+  insulinScale?: InsulinScaleValues | null;
 }
 
 export interface RpDisplay {

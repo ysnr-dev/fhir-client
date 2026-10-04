@@ -14,6 +14,12 @@ import { buildLabTaskUpdate, labTasksByOrderId, type LabTaskStatus } from "../..
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { buildRxTaskUpdate, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
 import { DEFAULT_IDENTIFIER_SYSTEM } from "../../fhir/patientHelpers";
+import { MEAL_INTAKE_STAPLE_MANAGE_NO } from "../../fhir/flowsheetMealHelpers";
+import { NURSING_OBSERVATION_CODE_SYSTEM, NURSING_ORDER_TYPE } from "../../fhir/nursingOrderHelpers";
+import { NURSING_GLUCOSE_MANAGE_NO } from "../../fhir/nursingPerformHelpers";
+import { LOINC_SYSTEM } from "../../fhir/shared";
+import { CAPILLARY_GLUCOSE } from "../../fhir/vitalHelpers";
+import { addDays } from "../../lib/dates";
 import { postBundle, searchResource } from "../fhirClient";
 import { fetchRxWorklist } from "./prescription";
 import { comparePatientNumber, fetchWorklistBundles, makeUpdateTaskStatusHook, worklistParams } from "./worklist";
@@ -290,5 +296,49 @@ export function useUpdateLabArrival() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "lab-worklist"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
+  });
+}
+
+// ---- インスリンの実施入力 ----
+
+/**
+ * スケールのインスリンを施用する日の前後の簡易血糖・主食の摂取量と、有効な血糖測定の看護指示。
+ * 案内量の元になる直近の記録は画面で施用時刻から選ぶ(latestScaleMeasurement)。
+ */
+export function useInsulinScaleInputs(patientId: string | undefined, day: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["Observation", "search", "insulin-scale", patientId, day],
+    queryFn: async () => {
+      const observationParams = new URLSearchParams();
+      observationParams.set("patient", `Patient/${patientId}`);
+      observationParams.set(
+        "code",
+        [
+          `${LOINC_SYSTEM}|${CAPILLARY_GLUCOSE.code}`,
+          `${NURSING_OBSERVATION_CODE_SYSTEM}|${NURSING_GLUCOSE_MANAGE_NO}`,
+          `${NURSING_OBSERVATION_CODE_SYSTEM}|${MEAL_INTAKE_STAPLE_MANAGE_NO}`,
+        ].join(","),
+      );
+      observationParams.append("date", `ge${addDays(day, -1)}`);
+      observationParams.append("date", `le${addDays(day, 1)}`);
+      observationParams.set("_count", "200");
+
+      const orderParams = new URLSearchParams();
+      orderParams.set("subject", `Patient/${patientId}`);
+      orderParams.set("category", `${ORDER_TYPE_SYSTEM}|${NURSING_ORDER_TYPE.code}`);
+      orderParams.set("code", `${NURSING_OBSERVATION_CODE_SYSTEM}|${NURSING_GLUCOSE_MANAGE_NO}`);
+      orderParams.set("status", "active");
+      orderParams.set("_count", "50");
+
+      const [{ data: observationBundle }, { data: orderBundle }] = await Promise.all([
+        searchResource<fhir4.Observation>("Observation", observationParams),
+        searchResource<fhir4.ServiceRequest>("ServiceRequest", orderParams),
+      ]);
+      return {
+        observations: resourcesOfType<fhir4.Observation>(observationBundle, "Observation"),
+        glucoseOrders: resourcesOfType<fhir4.ServiceRequest>(orderBundle, "ServiceRequest"),
+      };
+    },
+    enabled: enabled && Boolean(patientId) && Boolean(day),
   });
 }

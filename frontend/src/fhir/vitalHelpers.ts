@@ -102,6 +102,19 @@ export const VITAL_MEASURES: VitalMeasure[] = [
   { key: "weight", label: "体重", code: "29463-7", display: "Body weight", unit: "kg", ucum: "kg", step: "0.1" },
 ];
 
+/**
+ * 病棟での簡易血糖測定(看護観察 MEDIS 31000303「血糖値」に併記する LOINC)。バイタルの入力欄には
+ * 出さないが、経過表では既定行に並べ、しきい値も持つ。検体検査の血糖(JLAC11)とは別の行。
+ */
+export const CAPILLARY_GLUCOSE = {
+  code: "41653-7",
+  display: "Glucose [Mass/volume] in Capillary blood by Glucometer",
+  label: "血糖",
+  unit: "mg/dL",
+  ucum: "mg/dL",
+  step: "1",
+} as const;
+
 /** 身長と体重から求める BMI。入力欄は持たず、両方が入っているときだけ作る。 */
 export const BMI = {
   code: "39156-5",
@@ -472,6 +485,7 @@ export const VITAL_THRESHOLD_ITEMS: { code: string; label: string; step: string 
   thresholdMeasure("pulse"),
   thresholdMeasure("spo2"),
   thresholdMeasure("respiration"),
+  { code: CAPILLARY_GLUCOSE.code, label: CAPILLARY_GLUCOSE.label, step: CAPILLARY_GLUCOSE.step },
 ];
 
 export const DEFAULT_VITAL_THRESHOLDS: VitalThresholdSettings = {
@@ -481,6 +495,7 @@ export const DEFAULT_VITAL_THRESHOLDS: VitalThresholdSettings = {
   [thresholdMeasure("pulse").code]: { low: 50, high: 100 },
   [thresholdMeasure("spo2").code]: { low: 90 },
   [thresholdMeasure("respiration").code]: { low: 10, high: 25 },
+  [CAPILLARY_GLUCOSE.code]: { low: 70, high: 300 },
 };
 
 /** 上限以上なら H、下限以下なら L。しきい値の無い項目・側は判定しない。 */
@@ -501,12 +516,14 @@ const FLOWSHEET_ORDER = [
   BLOOD_PRESSURE.code,
   ...VITAL_MEASURES.map((measure) => measure.code),
   BMI.code,
+  CAPILLARY_GLUCOSE.code,
 ];
 
 const FLOWSHEET_LABELS = new Map<string, string>([
   [BLOOD_PRESSURE.code, "血圧"],
   ...VITAL_MEASURES.map((measure) => [measure.code, measure.label] as [string, string]),
   [BMI.code, "BMI"],
+  [CAPILLARY_GLUCOSE.code, CAPILLARY_GLUCOSE.label],
 ]);
 
 function bloodPressureComponent(

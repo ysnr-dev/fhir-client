@@ -1,9 +1,15 @@
 import type { NursingObservation } from "../api/masterClient";
 import { toFhirDateTime } from "./clinicalNoteHelpers";
-import { NURSING_ORDER_TYPE, nursingOrderItem, summarizeNursingOrder } from "./nursingOrderHelpers";
+import {
+  NURSING_OBSERVATION_CODE_SYSTEM,
+  NURSING_ORDER_TYPE,
+  nursingOrderItem,
+  summarizeNursingOrder,
+} from "./nursingOrderHelpers";
 import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import { LOINC_SYSTEM, referenceId } from "./shared";
 import {
+  CAPILLARY_GLUCOSE,
   VITAL_MEASURES,
   bloodPressureCodeableConcept,
   buildBloodPressureComponents,
@@ -40,8 +46,11 @@ const LOINC = LOINC_SYSTEM;
 const UCUM = "http://unitsofmeasure.org";
 const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Procedure";
 
+/** 看護観察「血糖値」の管理番号。インスリンの実施入力もこの形で血糖値を書く。 */
+export const NURSING_GLUCOSE_MANAGE_NO = "31000303";
+
 /**
- * MEDIS 看護観察の管理番号 → LOINC(バイタル)。ここにある観察は経過表でバイタルの
+ * MEDIS 看護観察の管理番号 → LOINC(バイタルと簡易血糖)。ここにある観察は経過表の
  * 既定行に合流する。収縮期・拡張期の単独項目(31001848 / 31001849)は入れない
  * (血圧行とは別行になり、グラフの系列キーが血圧の内訳と衝突する)。
  */
@@ -61,6 +70,7 @@ const NURSING_LOINC_MAP: Record<string, LoincMapEntry> = {
   "31000296": measureEntry("weight"), // 体重(kg)
   "31000298": measureEntry("height"), // 身長(cm)
   "31002365": { kind: "bp" }, // 血圧(血圧型)
+  [NURSING_GLUCOSE_MANAGE_NO]: { kind: "measure", ...CAPILLARY_GLUCOSE }, // 血糖値
 };
 
 /** 看護観察の管理番号に対応する経過表のバイタル(LOINC)。血圧は内訳のどちらを読むかも返す。 */
@@ -401,6 +411,49 @@ function buildNursingProcedure(
   if (performer) procedure.performer = [{ actor: performer }];
   if (input.note.trim()) procedure.note = [{ text: input.note.trim() }];
   return procedure;
+}
+
+export interface GlucoseObservationInput {
+  patientId: string;
+  encounter?: fhir4.Reference;
+  value: number;
+  /** 測定日時(FHIR の dateTime)。 */
+  effectiveDateTime: string;
+  performer: { id: string; name: string } | null;
+  /** 有効な血糖測定の看護指示。無ければ basedOn を付けない。 */
+  order?: fhir4.ServiceRequest;
+}
+
+/**
+ * 看護指示の実施入力を経ずに書く血糖値(インスリンの実施入力から)。看護指示から記録したものと
+ * 同じ code・category にして、経過表・直近値の検索で区別せずに読めるようにする。
+ */
+export function buildGlucoseObservation(input: GlucoseObservationInput): fhir4.Observation {
+  const observation: fhir4.Observation = {
+    resourceType: "Observation",
+    status: "final",
+    category: [{ coding: [{ system: ORDER_TYPE_SYSTEM, ...NURSING_ORDER_TYPE }] }],
+    code: {
+      coding: [
+        { system: NURSING_OBSERVATION_CODE_SYSTEM, code: NURSING_GLUCOSE_MANAGE_NO, display: "血糖値" },
+        { system: LOINC, code: CAPILLARY_GLUCOSE.code, display: CAPILLARY_GLUCOSE.display },
+      ],
+      text: "血糖値",
+    },
+    subject: { reference: `Patient/${input.patientId}` },
+    ...(input.encounter ? { encounter: input.encounter } : {}),
+    ...(input.order?.id ? { basedOn: [{ reference: `ServiceRequest/${input.order.id}` }] } : {}),
+    effectiveDateTime: input.effectiveDateTime,
+    valueQuantity: {
+      value: input.value,
+      unit: CAPILLARY_GLUCOSE.unit,
+      system: UCUM,
+      code: CAPILLARY_GLUCOSE.ucum,
+    },
+  };
+  const performer = performerReference(input.performer);
+  if (performer) observation.performer = [performer];
+  return observation;
 }
 
 /**

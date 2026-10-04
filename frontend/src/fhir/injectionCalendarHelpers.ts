@@ -16,7 +16,13 @@ import {
   type InjectionTimeValues,
 } from "./injectionHelpers";
 import { isInjectionProcedure, scheduledPerformCount } from "./injectionPerformHelpers";
-import { ORDER_IN_RP_SYSTEM, RP_NUMBER_SYSTEM, identifierValue } from "./prescriptionHelpers";
+import { insulinScaleOf, insulinScaleSummary } from "./insulinScaleHelpers";
+import {
+  ORDER_IN_RP_SYSTEM,
+  RP_NUMBER_SYSTEM,
+  identifierValue,
+  type MedicineLineDisplay,
+} from "./prescriptionHelpers";
 import { injectionTaskStatus, injectionTasksByOrderId } from "./injectionTaskHelpers";
 import { regimenOrderLabel, regimenOrderOf } from "./regimenOrderHelpers";
 import { referenceId } from "./shared";
@@ -194,6 +200,8 @@ function doseDiffersByRp(
       const rpNumber = mr.id ? rpOfMr.get(mr.id) : undefined;
       if (rpNumber === undefined) continue;
       const given = children.find((a) => referenceId(a.request?.reference) === mr.id);
+      // スケールのインスリンは施用ごとに量が変わるのが指示どおりなので、量の違いでは印を付けない。
+      if (given && insulinScaleOf(mr.dosageInstruction?.[0])) continue;
       const ordered = mr.dosageInstruction?.[0]?.doseAndRate?.[0]?.doseQuantity?.value;
       if (!given || (ordered != null && given.dosage?.dose?.value !== ordered)) result.add(rpNumber);
     }
@@ -430,6 +438,12 @@ function amountLabel(value: number | undefined, unit: string | undefined): strin
   return value == null ? "" : `${value}${unit ?? ""}`;
 }
 
+/** 指示量。スケールのインスリンは量が決まっていないので「スケール」(基本量があれば添える)。 */
+function orderedAmountLabel(med: MedicineLineDisplay): string {
+  if (!med.insulinScale) return amountLabel(med.dose, med.unit);
+  return med.dose != null ? `${amountLabel(med.dose, med.unit)}+スケール` : "スケール";
+}
+
 /** その日の注射の予定(指示量)と実施(実施量)を薬剤ごとに並べる。 */
 export function injectionComparison(
   mrs: fhir4.MedicationRequest[],
@@ -457,7 +471,7 @@ export function injectionComparison(
       const mrId = mrIdOf(rp.rpNumber, med.orderInRp);
       return {
         name: med.name,
-        ordered: amountLabel(med.dose, med.unit),
+        ordered: orderedAmountLabel(med),
         performed: hubs.map((hub) => {
           const given = childrenOf(hub).find((a) => mrId && referenceId(a.request?.reference) === mrId);
           return given ? amountLabel(given.dosage?.dose?.value, given.dosage?.dose?.unit) : "";
@@ -504,7 +518,14 @@ export function injectionContentDiff(
   const before = groupInjectionByRp(previous);
   const after = groupInjectionByRp(current);
   const medsOf = (rps: InjectionRpDisplay[]) =>
-    new Map(rps.flatMap((rp) => rp.medicines.map((m) => [m.name, amountLabel(m.dose, m.unit)] as const)));
+    new Map(
+      rps.flatMap((rp) =>
+        rp.medicines.map(
+          (m) =>
+            [m.name, m.insulinScale ? insulinScaleSummary(m.insulinScale, m.dose) : amountLabel(m.dose, m.unit)] as const,
+        ),
+      ),
+    );
   const beforeMeds = medsOf(before);
   const afterMeds = medsOf(after);
   const lines: string[] = [];

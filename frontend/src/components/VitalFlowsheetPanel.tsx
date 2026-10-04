@@ -21,6 +21,8 @@ import {
   type MealIntakeKind,
   type MealIntakeSlot,
 } from "../fhir/flowsheetMealHelpers";
+import { buildInsulinRows, insulinCellLabel } from "../fhir/flowsheetInsulinHelpers";
+import { INSULIN_UNIT } from "../fhir/insulinScaleHelpers";
 import { DEFAULT_MEAL_SCHEDULE, mealOrderDietRef } from "../fhir/mealOrderHelpers";
 import { buildOralRows, oralGroupOrderId } from "../fhir/flowsheetOralHelpers";
 import { oralPerformsByOrderId } from "../fhir/oralPerformHelpers";
@@ -301,6 +303,10 @@ export function VitalFlowsheetPanel({
 
   const injectionRows = useMemo(
     () => (injections.data ? buildInjectionRows(injections.data) : []),
+    [injections.data],
+  );
+  const insulinRows = useMemo(
+    () => buildInsulinRows(injections.data?.administrations ?? []),
     [injections.data],
   );
   const examRows = useMemo(
@@ -972,6 +978,45 @@ export function VitalFlowsheetPanel({
                   ))}
                 </tbody>
               ) : null}
+
+              {/* インスリン。施行した単位を枠に並べる(血糖値は測定の行)。施用が無ければ出さない。 */}
+              {insulinRows.length > 0 && (
+                <tbody className="vital-flowsheet__injection-body">
+                  <tr className="vital-flowsheet__section-row">
+                    <th className="lab-timeline__item-col vital-flowsheet__section-head" colSpan={2}>
+                      インスリン
+                    </th>
+                    <td colSpan={columns.length} />
+                    <td className="vital-flowsheet__filler" />
+                  </tr>
+                  {insulinRows.map((row) => (
+                    <tr key={row.name}>
+                      <td className="lab-timeline__item-col" title={row.name}>
+                        <span className="lab-timeline__item-label">{row.name}</span>
+                      </td>
+                      <td className="lab-timeline__unit-col">{INSULIN_UNIT}</td>
+                      {dayGroups.map((group) => {
+                        const cells = row.cells.filter((cell) => slotKeyOf(cell.at) === group.key);
+                        return (
+                          <td
+                            key={group.key}
+                            className="lab-timeline__value"
+                            colSpan={group.count}
+                            title={cells.map(insulinCellLabel).join("\n") || undefined}
+                          >
+                            <span className="vital-flowsheet__meal-cell">
+                              {cells.map((cell) => (
+                                <span key={cell.at}>{cell.units}</span>
+                              ))}
+                            </span>
+                          </td>
+                        );
+                      })}
+                      <td className="vital-flowsheet__filler" />
+                    </tr>
+                  ))}
+                </tbody>
+              )}
 
               {/* 水分出納。印ではなく枠ごとの合計(mL)なので、測定項目と同じ値の行にする。
                   施設設定で対象の観察項目を選んでいなければ出さない。 */}
