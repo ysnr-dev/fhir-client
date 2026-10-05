@@ -1,0 +1,511 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/nursing-profile-admission-01",
+  "version": "1.0.0",
+  "name": "NP_ADMIT_01",
+  "title": "入院時情報",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "看護プロファイルの区画「入院時情報」。入院の経緯、病気・入院の受け止め、健康上の注意、生活背景を入院時に聴き取る。アレルギー・感染症・既往歴はカルテの登録内容を初期値に入れる(患者プロファイル・病名タブが本体なので、ここで直しても元の登録は変わらない)。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "d2a7c5e1-3b84-4f6a-9e10-7c4b2a8f5e36",
+        "display": "看護プロファイル"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp_admission",
+      "type": "group",
+      "text": "入院の経緯",
+      "item": [
+        {
+          "linkId": "adm_route",
+          "type": "choice",
+          "text": "入院経路",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "外来から"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "救急外来から"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "他院から"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "施設から"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "09",
+                "display": "その他"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "adm_arrival",
+          "type": "choice",
+          "text": "入院時の移動",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "独歩"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "車椅子"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "ストレッチャー"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "09",
+                "display": "その他"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "adm_history",
+          "type": "text",
+          "text": "入院までの経過"
+        },
+        {
+          "linkId": "adm_informant",
+          "type": "choice",
+          "text": "情報提供者",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "本人"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "家族"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "施設職員"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "09",
+                "display": "その他"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_perception",
+      "type": "group",
+      "text": "病気・入院の受け止め",
+      "item": [
+        {
+          "linkId": "perc_explained",
+          "type": "text",
+          "text": "医師からの説明"
+        },
+        {
+          "linkId": "perc_patient",
+          "type": "text",
+          "text": "本人の受け止め"
+        },
+        {
+          "linkId": "perc_family",
+          "type": "text",
+          "text": "家族の受け止め"
+        },
+        {
+          "linkId": "perc_wish",
+          "type": "text",
+          "text": "本人・家族の希望"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_caution",
+      "type": "group",
+      "text": "健康上の注意",
+      "item": [
+        {
+          "linkId": "allergies",
+          "type": "text",
+          "text": "アレルギー",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%allergies"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "infections",
+          "type": "text",
+          "text": "感染症",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%infections"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "past_history",
+          "type": "text",
+          "text": "既往歴",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%pastHistory"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "brought_meds",
+          "type": "choice",
+          "text": "持参薬",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "無"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "有"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_life",
+      "type": "group",
+      "text": "生活背景",
+      "item": [
+        {
+          "linkId": "living",
+          "type": "choice",
+          "text": "同居者",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "独居"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "配偶者"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "子"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "親"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "05",
+                "display": "兄弟姉妹"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "09",
+                "display": "その他"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "key_person",
+          "type": "string",
+          "text": "キーパーソン"
+        },
+        {
+          "linkId": "care_level",
+          "type": "choice",
+          "text": "介護保険",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "00",
+                "display": "未申請"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "申請中"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "11",
+                "display": "要支援1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "12",
+                "display": "要支援2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "21",
+                "display": "要介護1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "22",
+                "display": "要介護2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "23",
+                "display": "要介護3"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "24",
+                "display": "要介護4"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "25",
+                "display": "要介護5"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "services",
+          "type": "text",
+          "text": "利用中のサービス"
+        },
+        {
+          "linkId": "discharge_place",
+          "type": "choice",
+          "text": "退院後の生活の場",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "自宅"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "施設"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "転院"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "09",
+                "display": "未定"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "religion",
+          "type": "text",
+          "text": "宗教・信条上の配慮"
+        }
+      ]
+    }
+  ]
+}

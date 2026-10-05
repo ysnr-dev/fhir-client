@@ -15461,6 +15461,66 @@ button.meal-calendar__cell:hover {
   color: var(--text);
 }
 
+/* 看護プロファイル。右ペインの区画の切り替えは、記入済みの区画に「済」を添えたボタンの並び。 */
+.nursing-profile__target {
+  margin-bottom: 8px;
+}
+
+.nursing-profile__sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+/* 未選択は地に溶かし、選択中だけをカルテのタブの表示切り替え(karte-tabs__mode--active)と同じ色にする。 */
+.nursing-profile__section-button {
+  --control-height: 26px;
+  font-size: 13px;
+  gap: 4px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.nursing-profile__section-button:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.nursing-profile__section-button--selected {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.nursing-profile__done {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+/* タブの見出しの入院の選択。ファイルタブの絞り込み(karte-file-filter)と同じ見た目にする。 */
+.nursing-profile__encounter {
+  font: inherit;
+  font-size: 14px;
+  height: var(--control-height);
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* 区画の回答の平文。項目の入れ子は行頭の空白で表しているので、空白と改行をそのまま描く。 */
+.nursing-profile__text {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--text-h);
+}
+
 .nursing-plan__list {
   display: flex;
   flex-direction: column;
@@ -16023,6 +16083,15 @@ button.meal-calendar__cell:hover {
 
 .facility-settings__balance-list button:hover {
   color: var(--text-h);
+}
+
+/* 看護プロファイルの区画。名前の長さが違っても並べ替え・削除のボタンが縦に揃うよう、名前の欄を伸ばす。 */
+.facility-settings__profile-list {
+  min-width: 320px;
+}
+
+.facility-settings__profile-list li span {
+  flex: 1;
 }
 
 .facility-settings__times {

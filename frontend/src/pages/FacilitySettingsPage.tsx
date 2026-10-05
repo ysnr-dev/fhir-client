@@ -67,6 +67,8 @@ import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 import { CommentCandidates } from "../components/CommentCandidates";
 import { radiotherapyTechniqueHooks } from "../api/masterQueries";
+import { EMPTY_NURSING_PROFILE, type NursingProfileSettings } from "../fhir/nursingProfileHelpers";
+import { TrashIcon } from "../components/icons/TrashIcon";
 
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
 // 診療科・診察室・スタッフは自院のものしか登録しない。他院は診療情報提供書の
@@ -217,6 +219,30 @@ export function FacilitySettingsPage() {
     setConsultTemplateDraft(next);
   }
 
+  // 看護プロファイルの区画。テンプレートの url を並べた順が、カルテの区画の順になる。
+  const [profileDraft, setProfileDraft] = useState<NursingProfileSettings | undefined>(undefined);
+  const nursingProfile = profileDraft ?? settings.data?.nursing_profile ?? EMPTY_NURSING_PROFILE;
+  const [profileAdding, setProfileAdding] = useState("");
+  // 同じ url の版違いは 1 つにまとめて候補に出す(区画は版を持たない)。
+  const profileCandidates = templateOptions.questionnaires.filter(
+    (q, index, all) => q.url && all.findIndex((other) => other.url === q.url) === index,
+  );
+  function profileTitle(url: string): string {
+    const q = profileCandidates.find((candidate) => candidate.url === url);
+    return q?.title ?? q?.name ?? url;
+  }
+
+  function updateProfileTemplates(next: string[]) {
+    setProfileDraft({ ...nursingProfile, templates: next });
+  }
+
+  function moveProfileTemplate(index: number, delta: number) {
+    const next = [...nursingProfile.templates];
+    const [moved] = next.splice(index, 1);
+    next.splice(index + delta, 0, moved);
+    updateProfileTemplates(next);
+  }
+
   // 水分出納に数える看護観察。管理番号だけを保存し、名前はマスタから引く。
   const [balanceDraft, setBalanceDraft] = useState<WaterBalanceSettings | undefined>(undefined);
   const savedBalance = settings.data?.water_balance ?? EMPTY_WATER_BALANCE;
@@ -256,6 +282,7 @@ export function FacilitySettingsPage() {
       consult_default_templates: consultTemplates,
       radiotherapy_review: radiotherapyReview,
       receipt_codes: receiptCodes,
+      nursing_profile: nursingProfile,
     });
   }
 
@@ -753,6 +780,76 @@ export function FacilitySettingsPage() {
                 </button>
               </div>
             ))}
+          </div>
+        </details>
+
+        {/* 看護プロファイルの区画。並べた順がカルテのタブと右ペインの区画の順になる。値はテンプレートの
+            url で、版を上げても設定は直さなくてよい(新しく書く回答は有効な版を使う)。 */}
+        <details className="facility-settings__schedule">
+          <summary>看護プロファイルの区画</summary>
+          <div className="facility-settings__schedule-body">
+            <ul className="facility-settings__balance-list facility-settings__profile-list">
+              {nursingProfile.templates.map((url, index) => (
+                <li key={url}>
+                  <span>{profileTitle(url)}</span>
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title="上へ"
+                    aria-label={`${profileTitle(url)} を上へ`}
+                    disabled={index === 0}
+                    onClick={() => moveProfileTemplate(index, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title="下へ"
+                    aria-label={`${profileTitle(url)} を下へ`}
+                    disabled={index === nursingProfile.templates.length - 1}
+                    onClick={() => moveProfileTemplate(index, 1)}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title={`${profileTitle(url)} を削除`}
+                    aria-label={`${profileTitle(url)} を削除`}
+                    onClick={() => updateProfileTemplates(nursingProfile.templates.filter((u) => u !== url))}
+                  >
+                    <TrashIcon />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <label>
+              区画の追加
+              <span className="facility-settings__times">
+                <select value={profileAdding} onChange={(e) => setProfileAdding(e.target.value)}>
+                  <option value="">（選択）</option>
+                  {profileCandidates
+                    .filter((q) => !nursingProfile.templates.includes(q.url as string))
+                    .map((q) => (
+                      <option key={q.url} value={q.url}>
+                        {q.title ?? q.name ?? q.url}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="rp-card__compact-button"
+                  disabled={!profileAdding}
+                  onClick={() => {
+                    updateProfileTemplates([...nursingProfile.templates, profileAdding]);
+                    setProfileAdding("");
+                  }}
+                >
+                  追加
+                </button>
+              </span>
+            </label>
           </div>
         </details>
 

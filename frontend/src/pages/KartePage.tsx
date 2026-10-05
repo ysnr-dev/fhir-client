@@ -42,6 +42,7 @@ import { KarteMealTab } from "../components/KarteMealTab";
 import { KarteChemoTab } from "../components/KarteChemoTab";
 import { KarteInjectionTab } from "../components/KarteInjectionTab";
 import { KarteNursingCarePlanTab } from "../components/KarteNursingCarePlanTab";
+import { KarteNursingProfileTab } from "../components/KarteNursingProfileTab";
 import { KarteNursingTab } from "../components/KarteNursingTab";
 import { KartePathwayTab } from "../components/KartePathwayTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
@@ -1078,6 +1079,15 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
           patientId={patientId}
           onCreate={(entry) => openForm({ kind: "nursing-problem-create", entry })}
           onEdit={(carePlanId) => openForm({ kind: "nursing-problem-edit", carePlanId })}
+        />
+      );
+    }
+    // 看護プロファイル。区画の記入・編集は右ペインの「プロファイル」と同じ画面で開く。
+    if (key === "nursing-profile") {
+      return (
+        <KarteNursingProfileTab
+          {...props}
+          onEdit={(encounterId, templateUrl) => openForm({ kind: "nursing-profile", encounterId, templateUrl })}
         />
       );
     }

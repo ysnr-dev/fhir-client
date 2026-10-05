@@ -53,6 +53,14 @@ interface QuestionnaireResponseCreatePanelProps {
   basedOn?: fhir4.Reference[];
   /** 選択済みにしておくテンプレートの canonical。前回と同じ様式で書き始めるときに渡す。 */
   defaultQuestionnaireCanonical?: string;
+  /**
+   * 書くテンプレートが決まっている入口(看護プロファイルの区画)。テンプレートの選択欄を出さない。
+   */
+  fixedQuestionnaire?: fhir4.Questionnaire;
+  /** 回答が属する入院(看護プロファイル)。 */
+  encounterId?: string;
+  /** 対象プロブレムの欄を出すか。患者の状態を書く入口(看護プロファイル)では出さない。 */
+  showProblem?: boolean;
   onSaved: () => void;
 }
 
@@ -61,6 +69,9 @@ export function QuestionnaireResponseCreatePanel({
   defaultProblem,
   basedOn,
   defaultQuestionnaireCanonical,
+  fixedQuestionnaire,
+  encounterId,
+  showProblem = true,
   onSaved,
 }: QuestionnaireResponseCreatePanelProps) {
   const { data: patientResult } = usePatient(patientId);
@@ -73,7 +84,8 @@ export function QuestionnaireResponseCreatePanel({
     error,
   } = useQuestionnaireOptions({ status: "active" });
   const [questionnaireId, setQuestionnaireId] = useState("");
-  const questionnaire = activeQuestionnaires.find((q) => q.id === questionnaireId);
+  const questionnaire =
+    fixedQuestionnaire ?? activeQuestionnaires.find((q) => q.id === questionnaireId);
 
   // 前回と同じ様式で書き始める(週次レビューのように毎回同じテンプレートを使う入口用)。
   // テンプレートの一覧は非同期なので、届いてから、まだ選んでいないときだけ入れる。
@@ -143,6 +155,23 @@ export function QuestionnaireResponseCreatePanel({
 
   const createResponse = useCreateQuestionnaireResponse();
 
+  const copyPreviousButton = latest && (
+    <button
+      type="button"
+      className="qr-copy-previous"
+      onClick={() => setCopied(copied ? null : stripResponseAnnotations(latest))}
+    >
+      {copied ? (
+        "複写取消"
+      ) : (
+        <>
+          前回値複写
+          <span className="qr-copy-previous__date">{formatAuthored(latest.authored)}</span>
+        </>
+      )}
+    </button>
+  );
+
   function handleSubmit(
     items: fhir4.QuestionnaireResponseItem[],
     imageEntries: fhir4.BundleEntry[],
@@ -165,6 +194,7 @@ export function QuestionnaireResponseCreatePanel({
           problem,
           basedOn,
           department: orderContext,
+          encounterId,
         }),
         imageEntries,
       },
@@ -183,7 +213,13 @@ export function QuestionnaireResponseCreatePanel({
         </div>
       )}
 
-      {isLoading ? (
+      {fixedQuestionnaire ? (
+        latest && (
+          <div className="qr-template-select">
+            {copyPreviousButton}
+          </div>
+        )
+      ) : isLoading ? (
         <p>読み込み中...</p>
       ) : activeQuestionnaires.length === 0 ? (
         <p className="patient-table__empty">
@@ -197,26 +233,7 @@ export function QuestionnaireResponseCreatePanel({
             onChange={setQuestionnaireId}
           />
           {/* 複写はテンプレートを選んで初めて意味を持つので、プルダウンの右隣に置く。 */}
-          {questionnaire && latest && (
-            <button
-              type="button"
-              className="qr-copy-previous"
-              onClick={() =>
-                setCopied(copied ? null : stripResponseAnnotations(latest))
-              }
-            >
-              {copied ? (
-                "複写取消"
-              ) : (
-                <>
-                  前回値複写
-                  <span className="qr-copy-previous__date">
-                    {formatAuthored(latest.authored)}
-                  </span>
-                </>
-              )}
-            </button>
-          )}
+          {questionnaire && latest && copyPreviousButton}
         </div>
       )}
 
@@ -242,12 +259,14 @@ export function QuestionnaireResponseCreatePanel({
             showHeader={false}
           >
             <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />
-            <div className="qp-field">
-              <label>
-                <span className="qp-field__label">対象プロブレム</span>
-                <ProblemSelect value={problem} options={problemOptions} onChange={setProblem} />
-              </label>
-            </div>
+            {showProblem && (
+              <div className="qp-field">
+                <label>
+                  <span className="qp-field__label">対象プロブレム</span>
+                  <ProblemSelect value={problem} options={problemOptions} onChange={setProblem} />
+                </label>
+              </div>
+            )}
           </QuestionnaireResponseForm>
         ) : (
           <p>読み込み中...</p>
@@ -259,12 +278,15 @@ export function QuestionnaireResponseCreatePanel({
 interface QuestionnaireResponseEditPanelProps {
   patientId: string;
   qrId: string;
+  /** 対象プロブレムの欄を出すか(登録パネルと同じ)。出さないときは保存済みの対象を引き継ぐ。 */
+  showProblem?: boolean;
   onSaved: () => void;
 }
 
 export function QuestionnaireResponseEditPanel({
   patientId,
   qrId,
+  showProblem = true,
   onSaved,
 }: QuestionnaireResponseEditPanelProps) {
   const { data: result, isLoading, error } = useEditSnapshot(useQuestionnaireResponse(qrId), qrId);
@@ -299,6 +321,7 @@ export function QuestionnaireResponseEditPanel({
             etag={result?.etag ?? ""}
             questionnaire={questionnaire}
             patient={patient}
+            showProblem={showProblem}
             onSaved={onSaved}
           />
         )
@@ -313,12 +336,14 @@ function EditForm({
   etag,
   questionnaire,
   patient,
+  showProblem,
   onSaved,
 }: {
   response: fhir4.QuestionnaireResponse;
   etag: string;
   questionnaire: fhir4.Questionnaire;
   patient: fhir4.Patient;
+  showProblem: boolean;
   onSaved: () => void;
 }) {
   const [meta, setMeta] = useState(() => parseQuestionnaireResponseMeta(response));
@@ -390,12 +415,14 @@ function EditForm({
         submitting={updateResponse.isPending}
       >
         <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />
-        <div className="qp-field">
-          <label>
-            <span className="qp-field__label">対象プロブレム</span>
-            <ProblemSelect value={problem} options={problemOptions} onChange={setProblem} />
-          </label>
-        </div>
+        {showProblem && (
+          <div className="qp-field">
+            <label>
+              <span className="qp-field__label">対象プロブレム</span>
+              <ProblemSelect value={problem} options={problemOptions} onChange={setProblem} />
+            </label>
+          </div>
+        )}
       </QuestionnaireResponseForm>
     </>
   );

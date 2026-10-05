@@ -18,12 +18,7 @@ import {
   validateDischargeSummary,
   type DischargeSummaryFormValues,
 } from "../fhir/dischargeSummaryHelpers";
-import {
-  ADMISSION_STATUS,
-  encounterAdmissionDate,
-  encounterDepartmentName,
-  encounterDischargeDate,
-} from "../fhir/encounterHelpers";
+import { ADMISSION_STATUS, admissionLabel } from "../fhir/encounterHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import type { KartePaneState } from "./KarteRightPane";
@@ -98,11 +93,6 @@ export function DischargeSummaryCreatePanel({
       )}
     </>
   );
-}
-
-function admissionLabel(encounter: fhir4.Encounter): string {
-  const discharge = encounterDischargeDate(encounter);
-  return `${encounterAdmissionDate(encounter)} 〜 ${discharge === "-" ? "入院中" : discharge} ${encounterDepartmentName(encounter)}`;
 }
 
 function CreateForm({

@@ -1,0 +1,1176 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/nursing-profile-adl-01",
+  "version": "1.0.0",
+  "name": "NP_ADL_01",
+  "title": "生活・ADL",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "看護プロファイルの区画「生活・ADL」。障害高齢者・認知症高齢者の日常生活自立度、Barthel Index(合計は自動計算)、食事・排泄・睡眠・感覚の状態。回答から Observation を生成する(自立度 2 つと Barthel Index の合計)。Barthel Index の選択肢のコードは点数そのもの。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "d2a7c5e1-3b84-4f6a-9e10-7c4b2a8f5e36",
+        "display": "看護プロファイル"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract",
+      "valueBoolean": true
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observation-extract-category",
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+            "code": "survey"
+          }
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp_independence",
+      "type": "group",
+      "text": "日常生活自立度",
+      "item": [
+        {
+          "linkId": "bedridden_level",
+          "type": "choice",
+          "text": "障害高齢者の日常生活自立度",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "00",
+                "display": "自立"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "J1",
+                "display": "J1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "J2",
+                "display": "J2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "A1",
+                "display": "A1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "A2",
+                "display": "A2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "B1",
+                "display": "B1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "B2",
+                "display": "B2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "C1",
+                "display": "C1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "C2",
+                "display": "C2"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-BEDRIDDEN-LEVEL",
+              "display": "障害高齢者の日常生活自立度"
+            }
+          ]
+        },
+        {
+          "linkId": "dementia_level",
+          "type": "choice",
+          "text": "認知症高齢者の日常生活自立度",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "00",
+                "display": "自立"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "I",
+                "display": "I"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIa",
+                "display": "IIa"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIb",
+                "display": "IIb"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIIa",
+                "display": "IIIa"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIIb",
+                "display": "IIIb"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IV",
+                "display": "IV"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "M",
+                "display": "M"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-DEMENTIA-LEVEL",
+              "display": "認知症高齢者の日常生活自立度"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_barthel",
+      "type": "group",
+      "text": "Barthel Index",
+      "item": [
+        {
+          "linkId": "bi_feeding",
+          "type": "choice",
+          "text": "食事",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "10",
+                "display": "自立(10)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "一部介助(5)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "全介助(0)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bi_transfer",
+          "type": "choice",
+          "text": "車椅子とベッド間の移乗",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "15",
+                "display": "自立(15)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "10",
+                "display": "見守り・軽介助(10)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "座れるが移れない(5)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "全介助(0)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bi_grooming",
+          "type": "choice",
+          "text": "整容",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "自立(5)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "介助(0)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bi_toilet",
+          "type": "choice",
+          "text": "トイレ動作",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "10",
+                "display": "自立(10)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "一部介助(5)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "全介助(0)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bi_bathing",
+          "type": "choice",
+          "text": "入浴",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "自立(5)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "介助(0)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bi_mobility",
+          "type": "choice",
+          "text": "歩行",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "15",
+                "display": "45m以上自立(15)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "10",
+                "display": "45m以上介助・歩行器(10)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "車椅子で45m以上(5)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "上記以外(0)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bi_stairs",
+          "type": "choice",
+          "text": "階段昇降",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "10",
+                "display": "自立(10)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "介助・監視(5)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "不能(0)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bi_dressing",
+          "type": "choice",
+          "text": "着替え",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "10",
+                "display": "自立(10)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "一部介助(5)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "全介助(0)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bi_bowels",
+          "type": "choice",
+          "text": "排便コントロール",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "10",
+                "display": "失禁なし(10)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "時々失禁(5)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "失禁(0)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bi_bladder",
+          "type": "choice",
+          "text": "排尿コントロール",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "10",
+                "display": "失禁なし(10)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "時々失禁(5)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "失禁(0)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bi_total",
+          "type": "integer",
+          "text": "合計",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "点",
+                "display": "点"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "descendants().where(linkId.startsWith('bi_')).answer.value.select(code.toInteger()).sum()"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-BARTHEL-TOTAL",
+              "display": "Barthel Index 合計"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_eating",
+      "type": "group",
+      "text": "食事",
+      "item": [
+        {
+          "linkId": "diet_form",
+          "type": "choice",
+          "text": "食形態",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "常食"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "軟菜"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "刻み"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "ミキサー"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "05",
+                "display": "嚥下調整食"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "06",
+                "display": "経管栄養"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "07",
+                "display": "絶食"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "swallow",
+          "type": "choice",
+          "text": "嚥下",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "問題なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "むせあり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "嚥下障害あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "dentures",
+          "type": "choice",
+          "text": "義歯",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "部分義歯"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "総義歯"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "appetite",
+          "type": "choice",
+          "text": "食欲",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "良好"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "低下"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_excretion",
+      "type": "group",
+      "text": "排泄",
+      "item": [
+        {
+          "linkId": "urination",
+          "type": "choice",
+          "text": "排尿",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "トイレ"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "尿器・ポータブル"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "おむつ"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "留置カテーテル"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "bowel_habit",
+          "type": "string",
+          "text": "排便習慣"
+        },
+        {
+          "linkId": "laxative",
+          "type": "choice",
+          "text": "下剤",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "無"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "有"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_sleep",
+      "type": "group",
+      "text": "睡眠",
+      "item": [
+        {
+          "linkId": "sleep",
+          "type": "choice",
+          "text": "睡眠",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "良好"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "不良"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "hypnotic",
+          "type": "choice",
+          "text": "睡眠薬",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "無"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "有"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sleep_habit",
+          "type": "string",
+          "text": "睡眠の習慣"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_sense",
+      "type": "group",
+      "text": "感覚・コミュニケーション",
+      "item": [
+        {
+          "linkId": "vision",
+          "type": "choice",
+          "text": "視力",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "問題なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "眼鏡・コンタクト"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "障害あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "hearing",
+          "type": "choice",
+          "text": "聴力",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "問題なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "補聴器"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "障害あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "speech",
+          "type": "choice",
+          "text": "言語",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "問題なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "障害あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "communication_note",
+          "type": "text",
+          "text": "コミュニケーションの補足"
+        }
+      ]
+    }
+  ]
+}

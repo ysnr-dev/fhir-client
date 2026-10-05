@@ -16,6 +16,7 @@ import type { DocumentReminderSettings } from "../fhir/documentDueHelpers";
 import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
 import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
 import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
+import type { NursingProfileSettings } from "../fhir/nursingProfileHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
 export interface ConnectionSettings {
@@ -60,6 +61,8 @@ export interface FacilitySettings {
   radiotherapy_review: RadiotherapyReviewSettings;
   /** 医事会計へ送るレセプト電算コードのうち、施設基準で決まるもの。 */
   receipt_codes: ReceiptCodeSettings;
+  /** 看護プロファイルの区画(テンプレートの url を並べた順)。 */
+  nursing_profile: NursingProfileSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -74,6 +77,7 @@ export type FacilitySettingsPayload = Partial<{
   consult_default_templates: Record<string, string>;
   radiotherapy_review: RadiotherapyReviewSettings;
   receipt_codes: ReceiptCodeSettings;
+  nursing_profile: NursingProfileSettings;
 }>;
 
 export interface ConnectionTestResult {

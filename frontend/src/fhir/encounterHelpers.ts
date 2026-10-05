@@ -294,6 +294,12 @@ export function encounterDischargeDate(encounter: fhir4.Encounter): string {
   return end ? end.slice(0, 10) : "-";
 }
 
+/** 入院を選ぶプルダウンの表示(「入院日 〜 退院日 診療科」。入院中なら退院日の代わりに「入院中」)。 */
+export function admissionLabel(encounter: fhir4.Encounter): string {
+  const discharge = encounterDischargeDate(encounter);
+  return `${encounterAdmissionDate(encounter)} 〜 ${discharge === "-" ? "入院中" : discharge} ${encounterDepartmentName(encounter)}`;
+}
+
 /** 入院日時(FHIR dateTime そのまま。日付だけのこともある)。 */
 export function encounterAdmissionAt(encounter: fhir4.Encounter): string {
   return encounter.period?.start ?? "";

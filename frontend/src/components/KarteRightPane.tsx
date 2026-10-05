@@ -20,6 +20,7 @@ import { MealOrderCreatePanel, MealOrderEditPanel } from "./MealOrderPanels";
 import { NursingProblemCreatePanel, NursingProblemEditPanel } from "./NursingCarePlanPanels";
 import type { NursingProblemEntry } from "../fhir/nursingCarePlanHelpers";
 import { NursingSummaryCreatePanel, NursingSummaryEditPanel } from "./NursingSummaryPanels";
+import { NursingProfilePanel } from "./NursingProfilePanels";
 import { NursingOrderCreatePanel, NursingOrderEditPanel } from "./NursingOrderPanels";
 import {
   TransfusionOrderCreatePanel,
@@ -119,6 +120,8 @@ export type KartePaneState =
   // 看護計画の立案・編集。carePlanId は看護問題 1 件の CarePlan(評価・指示展開は看護計画タブのモーダル)。
   | { kind: "nursing-problem-create"; entry: NursingProblemEntry }
   | { kind: "nursing-problem-edit"; carePlanId: string }
+  // 看護プロファイル。入院 × 区画(テンプレートの url)で 1 件の回答を書く・直す。
+  | { kind: "nursing-profile"; encounterId?: string; templateUrl?: string }
   | { kind: "qr-create"; problem?: ProblemRef }
   | { kind: "qr-edit"; qrId: string }
   // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
@@ -263,6 +266,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "nursing-order-edit": "看護指示編集",
   "nursing-problem-create": "看護計画登録",
   "nursing-problem-edit": "看護計画編集",
+  "nursing-profile": "看護プロファイル",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
   "appointment-create": "予約登録",
@@ -311,6 +315,8 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.carePlanId}`;
     case "nursing-problem-create":
       return `${state.kind}:${state.entry}`;
+    case "nursing-profile":
+      return `${state.kind}:${state.encounterId ?? ""}:${state.templateUrl ?? ""}`;
     case "appointment-reschedule":
       return `${state.kind}:${state.appointmentId}`;
     case "vital-edit":
@@ -543,6 +549,11 @@ export function KarteRightPane({
           栄養指導
         </button>
         <PaneActionGroup label="看護">
+          {/* 看護過程の順(情報収集 → 計画 → 指示 → サマリー)に並べる。見出し「看護」の下なので
+              「看護」を付けない(列の幅は最長のラベルで決まる)。 */}
+          <button type="button" onClick={() => onStateChange({ kind: "nursing-profile" })}>
+            プロファイル
+          </button>
           <button
             type="button"
             onClick={() => onStateChange({ kind: "nursing-problem-create", entry: "standard_plan" })}
@@ -799,6 +810,15 @@ function PaneContent({
       return <NursingProblemCreatePanel patientId={patientId} entry={state.entry} onSaved={onSaved} />;
     case "nursing-problem-edit":
       return <NursingProblemEditPanel patientId={patientId} carePlanId={state.carePlanId} onSaved={onSaved} />;
+    case "nursing-profile":
+      return (
+        <NursingProfilePanel
+          patientId={patientId}
+          defaultEncounterId={state.encounterId}
+          defaultTemplateUrl={state.templateUrl}
+          onSaved={onSaved}
+        />
+      );
     case "qr-create":
       return (
         <QuestionnaireResponseCreatePanel

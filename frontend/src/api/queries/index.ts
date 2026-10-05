@@ -34,6 +34,7 @@ export * from "./consult";
 export * from "./nursing";
 export * from "./nursingCarePlan";
 export * from "./nursingSummary";
+export * from "./nursingProfile";
 export * from "./surgery";
 export * from "./anesthesia";
 export * from "./patho";

@@ -1,0 +1,542 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/nursing-profile-pressure-ulcer-01",
+  "version": "1.0.0",
+  "name": "NP_PU_01",
+  "title": "褥瘡リスク",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "看護プロファイルの区画「褥瘡リスク」。診療報酬の褥瘡対策に関する診療計画書(危険因子の評価)の項目に沿う。危険因子が 1 つでもあれば褥瘡対策の診療計画が要る。選択肢のコードは「あり・できない」が 1。回答から Observation を生成する(危険因子の数と褥瘡の有無)。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "d2a7c5e1-3b84-4f6a-9e10-7c4b2a8f5e36",
+        "display": "看護プロファイル"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "name": "puRisk",
+        "language": "text/fhirpath",
+        "expression": "descendants().where(linkId.startsWith('pu_risk_')).answer.value.select(code.toInteger()).sum()"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract",
+      "valueBoolean": true
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observation-extract-category",
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+            "code": "survey"
+          }
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp_pu_adl",
+      "type": "group",
+      "text": "日常生活自立度",
+      "item": [
+        {
+          "linkId": "pu_bedridden_level",
+          "type": "choice",
+          "text": "障害高齢者の日常生活自立度",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "J1",
+                "display": "J1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "J2",
+                "display": "J2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "A1",
+                "display": "A1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "A2",
+                "display": "A2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "B1",
+                "display": "B1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "B2",
+                "display": "B2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "C1",
+                "display": "C1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "C2",
+                "display": "C2"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_pu_risk",
+      "type": "group",
+      "text": "危険因子",
+      "item": [
+        {
+          "linkId": "pu_risk_turn",
+          "type": "choice",
+          "text": "基本的動作能力(ベッド上 自力体位変換)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "できる"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "できない"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pu_risk_sit",
+          "type": "choice",
+          "text": "基本的動作能力(イス上 坐位姿勢の保持・除圧)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "できる"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "できない"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pu_risk_bone",
+          "type": "choice",
+          "text": "病的骨突出",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pu_risk_contracture",
+          "type": "choice",
+          "text": "関節拘縮",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pu_risk_nutrition",
+          "type": "choice",
+          "text": "栄養状態低下",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pu_risk_moisture",
+          "type": "choice",
+          "text": "皮膚湿潤(多汗・尿失禁・便失禁)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pu_risk_edema",
+          "type": "choice",
+          "text": "皮膚の脆弱性(浮腫)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pu_risk_skintear",
+          "type": "choice",
+          "text": "皮膚の脆弱性(スキン-テアの保有・既往)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pu_count",
+          "type": "integer",
+          "text": "該当する危険因子",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "項目",
+                "display": "項目"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%puRisk"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-RISK-COUNT",
+              "display": "褥瘡の危険因子の数"
+            }
+          ]
+        },
+        {
+          "linkId": "pu_plan",
+          "type": "string",
+          "text": "褥瘡対策の診療計画",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "iif(%puRisk.exists(), iif(%puRisk > 0, '要', '不要'), {})"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_pu_current",
+      "type": "group",
+      "text": "褥瘡",
+      "item": [
+        {
+          "linkId": "pu_present",
+          "type": "choice",
+          "text": "現在の褥瘡",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-PRESENT",
+              "display": "褥瘡の有無"
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp_pu_detail",
+              "type": "group",
+              "text": "褥瘡の詳細",
+              "enableWhen": [
+                {
+                  "question": "pu_present",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "1"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "pu_detail",
+                  "type": "text",
+                  "text": "部位・状態"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

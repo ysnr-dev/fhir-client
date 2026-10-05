@@ -272,6 +272,44 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (nursing_profile)" do
+    let(:admission) { "http://fhir-client.local/Questionnaire/nursing-profile-admission-01" }
+    let(:adl) { "http://fhir-client.local/Questionnaire/nursing-profile-adl-01" }
+
+    it "returns no sections by default" do
+      get "/facility_settings"
+
+      expect(JSON.parse(response.body)["nursing_profile"]).to eq("templates" => [])
+    end
+
+    it "stores the templates in the given order" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { nursing_profile: { templates: [adl, admission] } }, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["nursing_profile"]).to eq("templates" => [adl, admission])
+    end
+
+    it "rejects a canonical with a version" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { nursing_profile: { templates: ["#{admission}|1.0.0"] } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "rejects the same template twice" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { nursing_profile: { templates: [adl, adl] } }, as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   # 設定は settings(jsonb)1 列にまとめて入るので、1 項目の保存が他の項目を
   # 消していないことを見る。
   describe "PATCH /admin/facility_settings (渡した項目だけ差し替える)" do

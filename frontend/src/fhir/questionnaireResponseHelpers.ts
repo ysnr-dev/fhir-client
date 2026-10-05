@@ -122,6 +122,11 @@ export interface BuildQuestionnaireResponseArgs {
    * 更新では保存済みの値を引き継ぐ。
    */
   department?: DepartmentRef;
+  /**
+   * 回答が属する入院(看護プロファイル。`fhir/nursingProfileHelpers.ts`)。入院に結び付いた回答は
+   * 入院単位の書類として扱い、カルテの時系列には出さない。更新では保存済みの値を引き継ぐ。
+   */
+  encounterId?: string;
   // 更新時は id と identifier(報告単位ID)を引き継ぐ。
   existing?: fhir4.QuestionnaireResponse;
 }
@@ -138,7 +143,7 @@ function buildIdentifierValue(
 export function buildQuestionnaireResponse(
   args: BuildQuestionnaireResponseArgs,
 ): fhir4.QuestionnaireResponse {
-  const { questionnaire, patient, items, meta, problem, basedOn, department, existing } = args;
+  const { questionnaire, patient, items, meta, problem, basedOn, department, encounterId, existing } = args;
 
   // contained の型は基底 Resource のため、いったん Practitioner として組み立てる。
   const author: fhir4.Practitioner = {
@@ -162,6 +167,8 @@ export function buildQuestionnaireResponse(
   };
 
   if (existing?.id) response.id = existing.id;
+  const encounter = encounterId ? { reference: `Encounter/${encounterId}` } : existing?.encounter;
+  if (encounter) response.encounter = encounter;
   // 更新では元の対象を引き継ぐ(編集の入口が対象を知らないことがある)。
   const target = basedOn ?? existing?.basedOn;
   if (target?.length) response.basedOn = target;

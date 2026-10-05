@@ -21,12 +21,7 @@ import {
   parseDpcForm1Form,
   validateDpcForm1,
 } from "../fhir/dpcForm1Helpers";
-import {
-  ADMISSION_STATUS,
-  encounterAdmissionDate,
-  encounterDepartmentName,
-  encounterDischargeDate,
-} from "../fhir/encounterHelpers";
+import { ADMISSION_STATUS, admissionLabel } from "../fhir/encounterHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
@@ -103,11 +98,6 @@ export function DpcForm1CreatePanel({
       )}
     </>
   );
-}
-
-function admissionLabel(encounter: fhir4.Encounter): string {
-  const discharge = encounterDischargeDate(encounter);
-  return `${encounterAdmissionDate(encounter)} 〜 ${discharge === "-" ? "入院中" : discharge} ${encounterDepartmentName(encounter)}`;
 }
 
 function CreateForm({

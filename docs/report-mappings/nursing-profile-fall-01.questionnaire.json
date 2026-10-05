@@ -1,0 +1,493 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/nursing-profile-fall-01",
+  "version": "1.0.0",
+  "name": "NP_FALL_01",
+  "title": "転倒・転落リスク",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "看護プロファイルの区画「転倒・転落リスク」。自作の簡易スコア(合計 0〜14 点。0〜3 点 I・4〜7 点 II・8 点以上 III)。施設の評価票に合わせて項目・配点を直して使う想定。選択肢のコードは点数そのもの。回答から Observation を生成する(合計と危険度)。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "d2a7c5e1-3b84-4f6a-9e10-7c4b2a8f5e36",
+        "display": "看護プロファイル"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "name": "fallScore",
+        "language": "text/fhirpath",
+        "expression": "descendants().where(linkId.startsWith('fr_') and linkId != 'fr_total' and linkId != 'fr_level').answer.value.select(code.toInteger()).sum()"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract",
+      "valueBoolean": true
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observation-extract-category",
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+            "code": "survey"
+          }
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp_fall",
+      "type": "group",
+      "text": "評価項目",
+      "item": [
+        {
+          "linkId": "fr_age",
+          "type": "choice",
+          "text": "年齢",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "69歳以下(0)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "70歳以上(2)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "fr_history",
+          "type": "choice",
+          "text": "過去1年の転倒",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし(0)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "あり(2)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "fr_walk",
+          "type": "choice",
+          "text": "歩行",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "自立(0)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "杖・歩行器(1)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "介助・車椅子(2)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "fr_cognition",
+          "type": "choice",
+          "text": "認知・判断",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "問題なし(0)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "見当識障害・判断力の低下(2)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "fr_excretion",
+          "type": "choice",
+          "text": "排泄",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "自立(0)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "頻尿・夜間の排泄(1)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "介助を要する(2)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "fr_drug",
+          "type": "choice",
+          "text": "転倒に関わる薬剤",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし(0)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "あり(2)"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp_drug_kind",
+              "type": "group",
+              "text": "薬剤の内訳",
+              "enableWhen": [
+                {
+                  "question": "fr_drug",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "2"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "drug_kind",
+                  "type": "choice",
+                  "text": "薬剤の種類",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "check-box"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "01",
+                        "display": "睡眠薬・鎮静薬"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "02",
+                        "display": "降圧薬・利尿薬"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "03",
+                        "display": "麻薬・鎮痛薬"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "04",
+                        "display": "抗精神病薬"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "09",
+                        "display": "その他"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "fr_sense",
+          "type": "choice",
+          "text": "視力・聴力",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "問題なし(0)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "低下あり(1)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "fr_line",
+          "type": "choice",
+          "text": "点滴・ドレーン等のライン",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし(0)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり(1)"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_fall_result",
+      "type": "group",
+      "text": "評価",
+      "item": [
+        {
+          "linkId": "fr_total",
+          "type": "integer",
+          "text": "合計",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "点",
+                "display": "点"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%fallScore"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-FALL-SCORE",
+              "display": "転倒・転落リスク 合計"
+            }
+          ]
+        },
+        {
+          "linkId": "fr_level",
+          "type": "string",
+          "text": "危険度",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "iif(%fallScore.exists(), iif(%fallScore >= 8, 'III', iif(%fallScore >= 4, 'II', 'I')), {})"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-FALL-LEVEL",
+              "display": "転倒・転落リスク 危険度"
+            }
+          ]
+        },
+        {
+          "linkId": "fr_plan",
+          "type": "text",
+          "text": "対策"
+        }
+      ]
+    }
+  ]
+}

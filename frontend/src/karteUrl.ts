@@ -104,6 +104,8 @@ export const KARTE_TABS = [
   { key: "rad-report", label: "放射線検査" },
   { key: "physio-report", label: "生理検査" },
   { key: "endoscopy-report", label: "内視鏡" },
+  // 看護プロファイル。入院ごとに区画(テンプレート)の最新の回答を読む(時系列のカードにしない)。
+  { key: "nursing-profile", label: "看護プロファイル" },
   // 看護指示(指示簿)。「今なにが有効か」を区分ごとに見る情報なので、時系列の
   // カードにはせずタブでのみ見る。
   { key: "nursing", label: "指示簿" },
@@ -133,7 +135,7 @@ export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly Kar
     label: "検査結果",
     keys: ["lab", "lab-timeline", "micro", "patho", "rad-report", "physio-report", "endoscopy-report"],
   },
-  { label: "看護", keys: ["nursing", "nursing-care-plan"] },
+  { label: "看護", keys: ["nursing-profile", "nursing", "nursing-care-plan"] },
 ];
 
 /** そのタブを畳んでいるグループ。畳んでいなければ undefined。 */

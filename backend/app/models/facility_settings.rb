@@ -131,6 +131,12 @@ class FacilitySettings < ApplicationRecord
     "template" => ""
   }.freeze
 
+  # 看護プロファイルの区画(docs/nursing-profile-design.md)。並べた順がタブと右ペインの区画の順で、
+  # 値はテンプレート(Questionnaire)の url。版を持たせないのは、テンプレートの版を上げても区画の
+  # 設定を直さずに済ませるため(新しく書く回答は有効な版を使い、書いた回答は書いた版で読む)。
+  DEFAULT_NURSING_PROFILE = { "templates" => [] }.freeze
+  QUESTIONNAIRE_URL = { pattern: %r{\Ahttps?://[^\s|]+\z}, label: "テンプレートの url" }.freeze
+
   # 医事会計へ送るレセプト電算コードのうち、施設基準や届出で決まる「1 施設 1 値」のもの
   # (docs/receipt-billing-design.md §5)。マスタを持たない種別(病理・リハビリ・栄養指導)の
   # 診療行為コードと、送信時にルールで足す加算。空なら送らず、送れない項目として報告する。
@@ -240,6 +246,10 @@ class FacilitySettings < ApplicationRecord
         days = value.is_a?(Hash) ? value["interval_days"] : nil
         ["診察の間隔は 1 日以上にしてください"] if days.is_a?(Integer) && days < 1
       }
+    },
+    "nursing_profile" => {
+      default: DEFAULT_NURSING_PROFILE,
+      shape: { fields: { "templates" => { list: QUESTIONNAIRE_URL, unique: true } } }
     }
   }.freeze
 

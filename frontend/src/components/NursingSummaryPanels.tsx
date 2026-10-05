@@ -12,12 +12,7 @@ import {
   useSaveNursingSummary,
 } from "../api/queries";
 import { clinicalNoteAttestation } from "../fhir/clinicalNoteHelpers";
-import {
-  ADMISSION_STATUS,
-  encounterAdmissionDate,
-  encounterDepartmentName,
-  encounterDischargeDate,
-} from "../fhir/encounterHelpers";
+import { ADMISSION_STATUS, admissionLabel } from "../fhir/encounterHelpers";
 import {
   buildApprovedNursingSummary,
   buildNursingSummary,
@@ -41,11 +36,6 @@ import { NursingSummaryForm, type NursingSummarySubmitMode } from "./NursingSumm
 
 // 看護サマリーの登録・編集・承認(カルテ右ペイン)。登録は入院と種別を選ぶところから始め、
 // 退院の看護サマリーが既にあれば編集に切り替える(中間・転棟は何件でも書ける)。
-
-function admissionLabel(encounter: fhir4.Encounter): string {
-  const discharge = encounterDischargeDate(encounter);
-  return `${encounterAdmissionDate(encounter)} 〜 ${discharge === "-" ? "入院中" : discharge} ${encounterDepartmentName(encounter)}`;
-}
 
 export function NursingSummaryCreatePanel({
   patientId,
