@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { scrollIntoViewVisibly } from "../lib/scroll";
 
 /**
  * 入力エラー(必須未入力など)の文言と、その表示先のエラーバナーへ付ける ref。
@@ -29,17 +30,8 @@ export function useValidationError(): [
   useEffect(() => {
     if (shownAt === 0) return;
     // 上にヘッダーやタブがある画面でも隠れないよう、上端ではなく中央に寄せる。
-    //
-    // 動きを見せるためにアニメーションさせる。いきなり最上部に切り替わると、
-    // 操作者には画面が変わったのかスクロールしたのかが分からず、バナーにも
-    // 気づきにくい。動く様子が見えれば「上に何か出た」と伝わる。
-    //
-    // OS 側で視差効果を減らす設定にしているときは即時移動にする。
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    ref.current?.scrollIntoView({
-      block: "center",
-      behavior: reduced ? "auto" : "smooth",
-    });
+    // 動く様子が見えれば「上に何か出た」と伝わる(lib/scroll.ts)。
+    scrollIntoViewVisibly(ref.current, "center");
   }, [shownAt]);
 
   return [error, show, ref];

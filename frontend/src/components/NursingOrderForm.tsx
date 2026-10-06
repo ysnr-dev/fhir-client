@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
+import { scrollIntoViewVisibly } from "../lib/scroll";
 import { useNursingActModifiers } from "../api/masterQueries";
 import { useFacilitySettings } from "../api/queries";
 import {
@@ -72,7 +73,7 @@ export function NursingOrderForm({
   );
 
   useEffect(() => {
-    if (validationError) validationErrorRef.current?.scrollIntoView({ block: "nearest" });
+    if (validationError) scrollIntoViewVisibly(validationErrorRef.current, "nearest");
   }, [validationError]);
 
   function updateLine(index: number, patch: Partial<NursingOrderLineValues>) {

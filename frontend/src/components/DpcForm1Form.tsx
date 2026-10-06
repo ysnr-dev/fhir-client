@@ -38,6 +38,7 @@ import {
 } from "../fhir/encounterHelpers";
 import { today } from "../lib/dates";
 import { ConditionPickerModal } from "./ConditionPickerModal";
+import { scrollIntoViewVisibly } from "../lib/scroll";
 import { DiseaseSearchModal } from "./DiseaseSearchModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicalProcedureSearchModal } from "./MedicalProcedureSearchModal";
@@ -98,7 +99,7 @@ export function DpcForm1Form({
   // 検証エラーはフォームの先頭に出る。確定ボタンは一番下にあるので、出たら見える位置へ送る。
   const errorRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (validationErrors.length) errorRef.current?.scrollIntoView({ block: "start" });
+    if (validationErrors.length) scrollIntoViewVisibly(errorRef.current);
   }, [validationErrors]);
 
   const conditions = useKarteConditions(patientId);

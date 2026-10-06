@@ -30,6 +30,7 @@ import {
   parsePractitionerRole,
 } from "../fhir/practitionerRoleHelpers";
 import { useStackedOrderForms } from "../hooks/useStackedOrderForms";
+import { scrollIntoViewVisibly } from "../lib/scroll";
 
 // オーダーセット(よく出すオーダーのひとまとめ)の登録画面。左ペインで 3 つの持ち主
 // (院内共通 / 診療科 / 自分)ごとのフォルダ・セットのツリーを管理し、右ペインで
@@ -491,13 +492,10 @@ function SetEditor({
     mutations.create.isPending || mutations.update.isPending || mutations.replaceEntries.isPending;
 
   // 病名は追加ボタン(末尾)から離れた位置に入るので、見出しが見えるところまで寄せる。
-  // どこへ足されたかが分かるよう滑らかに動かす(動きを減らす設定の端末では即座に)。
+  // どこへ足されたかが分かるよう滑らかに動かす(lib/scroll.ts)。
   useEffect(() => {
     if (scrollToId === null) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    document
-      .querySelector(`[data-order-set-entry="${scrollToId}"]`)
-      ?.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
+    scrollIntoViewVisibly(document.querySelector(`[data-order-set-entry="${scrollToId}"]`));
     setScrollToId(null);
   }, [scrollToId, entries]);
 

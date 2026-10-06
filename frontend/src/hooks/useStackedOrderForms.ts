@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { scrollIntoViewVisibly } from "../lib/scroll";
 
 // 縦に積んだ複数のオーダーフォームを外から一括 submit して、各フォームが onSubmit に
 // 返した値を集めるフック。オーダーセットの登録画面(患者なし)と適用パネル(患者あり)が
@@ -64,8 +65,10 @@ export function useStackedOrderForms<K extends string | number>(): StackedOrderF
   }, []);
 
   const scrollTo = useCallback((key: K) => {
-    // 自動化環境では smooth スクロールが動かないため既定の挙動で寄せる。
-    containers.current.get(key)?.scrollIntoView({ block: "start" });
+    // 入力欄ではなくエントリの枠(種別名の見出しを含む)へ寄せる。入力欄の先頭に合わせると、
+    // どの種別の誤りかを示す見出しが上に外れてしまう。
+    const container = containers.current.get(key);
+    scrollIntoViewVisibly(container?.closest(".order-set-stack__item") ?? container);
   }, []);
 
   return { registerContainer, submitAll, collect, scrollTo };
