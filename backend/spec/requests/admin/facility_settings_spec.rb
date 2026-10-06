@@ -310,6 +310,41 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (bulk_vital_entry)" do
+    it "returns every column by default" do
+      get "/facility_settings"
+
+      expect(JSON.parse(response.body)["bulk_vital_entry"]).to eq("items" => FacilitySettings::BULK_VITAL_ITEMS)
+    end
+
+    it "stores the columns in the given order" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { bulk_vital_entry: { items: %w[weight temperature] } }, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["bulk_vital_entry"]).to eq("items" => %w[weight temperature])
+    end
+
+    it "rejects an unknown column" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { bulk_vital_entry: { items: %w[height] } }, as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "rejects no columns and the same column twice" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { bulk_vital_entry: { items: [] } }, as: :json
+        expect(response).to have_http_status(:unprocessable_content)
+
+        patch "/admin/facility_settings", params: { bulk_vital_entry: { items: %w[pulse pulse] } }, as: :json
+        expect(response).to have_http_status(:unprocessable_content)
+      end
+    end
+  end
+
   # 設定は settings(jsonb)1 列にまとめて入るので、1 項目の保存が他の項目を
   # 消していないことを見る。
   describe "PATCH /admin/facility_settings (渡した項目だけ差し替える)" do

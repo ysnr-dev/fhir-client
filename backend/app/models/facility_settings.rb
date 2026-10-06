@@ -135,6 +135,11 @@ class FacilitySettings < ApplicationRecord
   # 値はテンプレート(Questionnaire)の url。版を持たせないのは、テンプレートの版を上げても区画の
   # 設定を直さずに済ませるため(新しく書く回答は有効な版を使い、書いた回答は書いた版で読む)。
   DEFAULT_NURSING_PROFILE = { "templates" => [] }.freeze
+
+  # 経過表一括入力(病棟の複数患者にまとめて入れる画面)に出す列。並べた順が列の順。
+  # 列の中身(LOINC・MEDIS のコード、単位)は frontend が持ち、ここはどれを出すかだけを決める。
+  BULK_VITAL_ITEMS = %w[blood_pressure temperature pulse spo2 respiration weight meal].freeze
+  DEFAULT_BULK_VITAL_ENTRY = { "items" => BULK_VITAL_ITEMS }.freeze
   QUESTIONNAIRE_URL = { pattern: %r{\Ahttps?://[^\s|]+\z}, label: "テンプレートの url" }.freeze
 
   # 医事会計へ送るレセプト電算コードのうち、施設基準や届出で決まる「1 施設 1 値」のもの
@@ -250,6 +255,10 @@ class FacilitySettings < ApplicationRecord
     "nursing_profile" => {
       default: DEFAULT_NURSING_PROFILE,
       shape: { fields: { "templates" => { list: QUESTIONNAIRE_URL, unique: true } } }
+    },
+    "bulk_vital_entry" => {
+      default: DEFAULT_BULK_VITAL_ENTRY,
+      shape: { fields: { "items" => { list: { enum: BULK_VITAL_ITEMS }, min: 1, unique: true } } }
     }
   }.freeze
 

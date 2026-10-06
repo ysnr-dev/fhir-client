@@ -839,7 +839,7 @@ export function InpatientListPage() {
             病棟マップ
           </Link>
         )}
-        {/* 病棟の一覧のうちボタンにしないもの(指示簿から派生する一覧・看護サマリー承認)はケバブに畳む。 */}
+        {/* 病棟の画面のうちボタンにしないもの(指示簿から派生する一覧・看護サマリー承認・経過表一括入力)はケバブに畳む。 */}
         {tab === "current" && wardId && (
           <span className="inpatient-tabs__menu">
             <RowMenu label="病棟の関連画面">
@@ -848,6 +848,9 @@ export function InpatientListPage() {
               </Link>
               <Link className="row-menu__item" to={`/nursing-summary-approvals?ward=${wardId}`}>
                 看護サマリー承認
+              </Link>
+              <Link className="row-menu__item" to={`/inpatients/bulk-vitals?ward=${wardId}`}>
+                経過表一括入力
               </Link>
             </RowMenu>
           </span>

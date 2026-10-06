@@ -89,6 +89,7 @@ import { PatientCautionPage } from "./pages/PatientCautionPage";
 import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
 import { InsulinScaleSetPage } from "./pages/InsulinScaleSetPage";
 import { InsulinWorklistPage } from "./pages/InsulinWorklistPage";
+import { BulkVitalEntryPage } from "./pages/BulkVitalEntryPage";
 import { NursingSummaryApprovalPage } from "./pages/NursingSummaryApprovalPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { FormularyPage } from "./pages/FormularyPage";
@@ -458,6 +459,7 @@ function App() {
           <Route path="/order-sets" element={<OrderSetPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/insulin-worklist" element={<InsulinWorklistPage />} />
+          <Route path="/inpatients/bulk-vitals" element={<BulkVitalEntryPage />} />
           <Route path="/nursing-summary-approvals" element={<NursingSummaryApprovalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />

@@ -109,6 +109,8 @@ Observation?patient=…&category=vital-signs,{order-type}|nursing
   時刻の見出しが押せるのは**手入力のバイタルだけ**で、束ね id(`VITAL_ENTRY_SYSTEM`)を
   持つ列に限る。看護観察・テンプレート抽出の値は束ね id が無いので押せない
   (`VitalFlowsheet.entryIds`)。
+- 病棟の複数患者にまとめて入れる画面は別にある(入院患者一覧のケバブメニューの「経過表一括入力」、readme の同名の節)。
+  経過表の上では入力させず、記録は右ペインのバイタル・食事の枠と同じ形で作る(`fhir/bulkVitalHelpers.ts`)。
 
 ### 2.1 異常値の強調
 

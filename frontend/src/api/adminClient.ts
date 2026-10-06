@@ -17,6 +17,7 @@ import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
 import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
 import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
 import type { NursingProfileSettings } from "../fhir/nursingProfileHelpers";
+import type { BulkVitalEntrySettings } from "../fhir/bulkVitalHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
 export interface ConnectionSettings {
@@ -63,6 +64,8 @@ export interface FacilitySettings {
   receipt_codes: ReceiptCodeSettings;
   /** 看護プロファイルの区画(テンプレートの url を並べた順)。 */
   nursing_profile: NursingProfileSettings;
+  /** 経過表の一括入力に出す列(並べた順)。 */
+  bulk_vital_entry: BulkVitalEntrySettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -78,6 +81,7 @@ export type FacilitySettingsPayload = Partial<{
   radiotherapy_review: RadiotherapyReviewSettings;
   receipt_codes: ReceiptCodeSettings;
   nursing_profile: NursingProfileSettings;
+  bulk_vital_entry: BulkVitalEntrySettings;
 }>;
 
 export interface ConnectionTestResult {

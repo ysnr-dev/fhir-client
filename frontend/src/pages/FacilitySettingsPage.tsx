@@ -68,6 +68,13 @@ import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 import { CommentCandidates } from "../components/CommentCandidates";
 import { radiotherapyTechniqueHooks } from "../api/masterQueries";
 import { EMPTY_NURSING_PROFILE, type NursingProfileSettings } from "../fhir/nursingProfileHelpers";
+import {
+  BULK_VITAL_ITEM_LABELS,
+  BULK_VITAL_ITEMS,
+  DEFAULT_BULK_VITAL_ENTRY,
+  type BulkVitalEntrySettings,
+  type BulkVitalItem,
+} from "../fhir/bulkVitalHelpers";
 import { TrashIcon } from "../components/icons/TrashIcon";
 
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
@@ -243,6 +250,18 @@ export function FacilitySettingsPage() {
     updateProfileTemplates(next);
   }
 
+  // 経過表一括入力の列。並べた順が画面の列の順で、1 列は残す。
+  const [bulkDraft, setBulkDraft] = useState<BulkVitalEntrySettings | undefined>(undefined);
+  const bulkVitalEntry = bulkDraft ?? settings.data?.bulk_vital_entry ?? DEFAULT_BULK_VITAL_ENTRY;
+  const [bulkAdding, setBulkAdding] = useState<BulkVitalItem | "">("");
+
+  function moveBulkItem(index: number, delta: number) {
+    const next = [...bulkVitalEntry.items];
+    const [moved] = next.splice(index, 1);
+    next.splice(index + delta, 0, moved);
+    setBulkDraft({ items: next });
+  }
+
   // 水分出納に数える看護観察。管理番号だけを保存し、名前はマスタから引く。
   const [balanceDraft, setBalanceDraft] = useState<WaterBalanceSettings | undefined>(undefined);
   const savedBalance = settings.data?.water_balance ?? EMPTY_WATER_BALANCE;
@@ -283,6 +302,7 @@ export function FacilitySettingsPage() {
       radiotherapy_review: radiotherapyReview,
       receipt_codes: receiptCodes,
       nursing_profile: nursingProfile,
+      bulk_vital_entry: bulkVitalEntry,
     });
   }
 
@@ -780,6 +800,82 @@ export function FacilitySettingsPage() {
                 </button>
               </div>
             ))}
+          </div>
+        </details>
+
+        {/* 経過表一括入力(入院患者一覧のケバブメニュー)に出す列。並べた順が列の順。 */}
+        <details className="facility-settings__schedule">
+          <summary>経過表一括入力の列</summary>
+          <div className="facility-settings__schedule-body">
+            <ul className="facility-settings__balance-list facility-settings__profile-list">
+              {bulkVitalEntry.items.map((item, index) => (
+                <li key={item}>
+                  <span>{BULK_VITAL_ITEM_LABELS[item]}</span>
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title="上へ"
+                    aria-label={`${BULK_VITAL_ITEM_LABELS[item]} を上へ`}
+                    disabled={index === 0}
+                    onClick={() => moveBulkItem(index, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title="下へ"
+                    aria-label={`${BULK_VITAL_ITEM_LABELS[item]} を下へ`}
+                    disabled={index === bulkVitalEntry.items.length - 1}
+                    onClick={() => moveBulkItem(index, 1)}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title={`${BULK_VITAL_ITEM_LABELS[item]} を削除`}
+                    aria-label={`${BULK_VITAL_ITEM_LABELS[item]} を削除`}
+                    disabled={bulkVitalEntry.items.length === 1}
+                    onClick={() =>
+                      setBulkDraft({ items: bulkVitalEntry.items.filter((i) => i !== item) })
+                    }
+                  >
+                    <TrashIcon />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <label>
+              列の追加
+              <span className="facility-settings__times">
+                <select
+                  value={bulkAdding}
+                  onChange={(e) => setBulkAdding(e.target.value as BulkVitalItem | "")}
+                >
+                  <option value="">（選択）</option>
+                  {BULK_VITAL_ITEMS.filter((item) => !bulkVitalEntry.items.includes(item)).map(
+                    (item) => (
+                      <option key={item} value={item}>
+                        {BULK_VITAL_ITEM_LABELS[item]}
+                      </option>
+                    ),
+                  )}
+                </select>
+                <button
+                  type="button"
+                  className="rp-card__compact-button"
+                  disabled={!bulkAdding}
+                  onClick={() => {
+                    if (!bulkAdding) return;
+                    setBulkDraft({ items: [...bulkVitalEntry.items, bulkAdding] });
+                    setBulkAdding("");
+                  }}
+                >
+                  追加
+                </button>
+              </span>
+            </label>
           </div>
         </details>
 

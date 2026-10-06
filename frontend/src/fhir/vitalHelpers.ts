@@ -164,8 +164,8 @@ function numberOf(value: string): number | null {
  * BMI = 体重(kg) / 身長(m)^2。小数第 1 位まで。
  * 身長・体重のどちらかが無ければ null。
  */
-export function vitalBmi(values: VitalFormValues): number | null {
-  const height = numberOf(values.height);
+export function vitalBmi(values: VitalFormValues, fallbackHeightCm?: number): number | null {
+  const height = numberOf(values.height) ?? fallbackHeightCm ?? null;
   const weight = numberOf(values.weight);
   if (height === null || weight === null || height <= 0) return null;
   const meters = height / 100;
@@ -213,6 +213,12 @@ export interface BuildVitalObservationsArgs {
   problem: ProblemRef | null;
   /** 記録した診療科。オーダーの依頼科と同じローカル拡張に入れ、カルテのカードに出す。 */
   department?: DepartmentRef;
+  /** 測定時の入院。病棟の一括入力が入院中の患者に付ける。 */
+  encounter?: fhir4.Reference;
+  /** 測定者。 */
+  performer?: fhir4.Reference;
+  /** 身長を入れずに体重だけ測ったとき、BMI に使う身長(その患者の最新の身長)。 */
+  fallbackHeightCm?: number;
 }
 
 /**
@@ -220,7 +226,7 @@ export interface BuildVitalObservationsArgs {
  * (0 や null の Observation を残すと「測って 0 だった」と読めてしまう)。
  */
 export function buildVitalObservations(args: BuildVitalObservationsArgs): fhir4.Observation[] {
-  const { values, patientId, entryId, problem, department } = args;
+  const { values, patientId, entryId, problem, department, encounter, performer } = args;
   // datetime-local はタイムゾーンを持たないので、端末のオフセットを付けて確定させる。
   const effectiveDateTime = toFhirDateTime(values.measuredAt);
   const extension = [
@@ -236,7 +242,9 @@ export function buildVitalObservations(args: BuildVitalObservationsArgs): fhir4.
     identifier: [{ system: VITAL_ENTRY_SYSTEM, value: entryId }],
     category: [{ coding: [{ system: OBSERVATION_CATEGORY_SYSTEM, code: "vital-signs" }] }],
     subject: { reference: `Patient/${patientId}` },
+    ...(encounter ? { encounter } : {}),
     effectiveDateTime,
+    ...(performer ? { performer: [performer] } : {}),
     ...(extension.length ? { extension } : {}),
   };
 
@@ -263,8 +271,9 @@ export function buildVitalObservations(args: BuildVitalObservationsArgs): fhir4.
   }
 
   // BMI は入力値そのものではないが、同じ測定の身長・体重から一意に決まるので
-  // 一緒に残す(経過表で身長・体重と並べて追えるようにするため)。
-  const bmi = vitalBmi(values);
+  // 一緒に残す(経過表で身長・体重と並べて追えるようにするため)。体重だけの測定は、
+  // 渡された最新の身長で求める。
+  const bmi = vitalBmi(values, args.fallbackHeightCm);
   if (bmi !== null) {
     observations.push({
       ...base,

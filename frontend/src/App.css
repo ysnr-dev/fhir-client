@@ -722,7 +722,9 @@ button:disabled {
 /* 一覧表の中に置く入力欄(感染症の検査項目の種類など)。フォームの外なので
    上のセレクタでは当たらず、素の見た目のまま残ってしまう。 */
 .master-search__table select,
-.master-search__table input {
+.master-search__table input,
+.bulk-vital select,
+.bulk-vital input {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
@@ -12843,6 +12845,97 @@ body.page-wide-md .app__main {
 /* 右寄せは先頭のリンクだけ。後ろのリンクは寄せ直さない。 */
 .inpatient-tabs__link ~ .inpatient-tabs__link {
   margin-left: 0;
+}
+
+/* 経過表一括入力。数値欄は 3〜4 桁が入る幅に詰め、列を横に並べる。 */
+/* 病棟の全員を 1 画面に収めたいので、行と入力欄を一覧表の既定より詰める。 */
+.bulk-vital {
+  --control-height: 28px;
+}
+
+.bulk-vital td {
+  vertical-align: middle;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.bulk-vital input,
+.bulk-vital select {
+  padding: 2px 6px;
+  font-size: 14px;
+}
+
+.bulk-vital__head {
+  white-space: nowrap;
+}
+
+.bulk-vital__unit {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--text);
+}
+
+.bulk-vital .bulk-vital__input {
+  width: 72px;
+}
+
+.bulk-vital .bulk-vital__input--high {
+  color: var(--lab-high);
+  font-weight: 700;
+}
+
+.bulk-vital .bulk-vital__input--low {
+  color: var(--lab-low);
+  font-weight: 700;
+}
+
+.bulk-vital__pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.bulk-vital__meal {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.bulk-vital__none {
+  color: var(--text);
+}
+
+.bulk-vital__row--dirty > td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* エラーの行は入力の行と 1 つに見せる(間の罫線を消し、上の余白を詰める)。 */
+.bulk-vital__row--has-error > td {
+  border-bottom: none;
+}
+
+.bulk-vital .bulk-vital__error-row > td {
+  padding-top: 0;
+}
+
+.bulk-vital__row--dirty + .bulk-vital__error-row > td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.bulk-vital__error {
+  color: var(--danger);
+  font-size: 12px;
+  white-space: normal;
+}
+
+.bulk-vital__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .inpatient-tabs__menu {

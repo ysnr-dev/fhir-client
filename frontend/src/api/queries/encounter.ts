@@ -28,6 +28,8 @@ import { rpEndDate } from "../../fhir/medicationScheduleHelpers";
 import { type ActiveMedication, ingredientKey } from "../../fhir/medicationSafetyHelpers";
 import { rxTasksByOrderId, rxTaskStatus } from "../../fhir/rxTaskHelpers";
 import { isMealServiceRequest, MEAL_ORDER_TYPE } from "../../fhir/mealOrderHelpers";
+import { HEIGHT_LOINC } from "../../fhir/bodyMeasureHelpers";
+import { LOINC_SYSTEM } from "../../fhir/shared";
 import { buildNursingOrderStopEntries } from "../../fhir/nursingOrderHelpers";
 import { buildRehabOrderStopEntries } from "../../fhir/rehabOrderHelpers";
 import { buildNutritionGuidanceOrderStopEntries } from "../../fhir/nutritionGuidanceOrderHelpers";
@@ -872,6 +874,71 @@ export function useSaveMealIntake() {
   return useMutation({
     mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search", "flowsheet-meal"] });
+    },
+  });
+}
+
+/**
+ * 経過表の一括入力の下読み。病棟の患者ぶんの最新の身長(体重だけの BMI 用)と、その日の
+ * 食事オーダー・食事摂取量の記録を、患者のカンマ OR でまとめて引く(患者ごとに読まない)。
+ */
+export function useBulkVitalContext(patientIds: string[], date: string) {
+  const sorted = [...new Set(patientIds)].sort();
+  return useQuery({
+    queryKey: ["Observation", "search", "bulk-vital", sorted.join(","), date],
+    queryFn: async () => {
+      const subjects = sorted.map((id) => `Patient/${id}`).join(",");
+
+      const heightParams = new URLSearchParams();
+      heightParams.set("patient", subjects);
+      heightParams.set("code", `${LOINC_SYSTEM}|${HEIGHT_LOINC}`);
+      heightParams.set("_sort", "-date");
+
+      const orderParams = new URLSearchParams();
+      orderParams.set("subject", subjects);
+      orderParams.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
+      orderParams.set("status", "active");
+      setOrderPeriod(orderParams, date, date);
+
+      const mealParams = new URLSearchParams();
+      mealParams.set("patient", subjects);
+      mealParams.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
+      mealParams.append("date", `ge${date}`);
+      mealParams.append("date", `le${date}`);
+
+      // 食事の枠と記録は欠けると「記録が無い」と読み違えて上書き・二重登録になるので
+      // complete。身長は新しい順なので、欠けても各患者の最新は先頭のページに残る。
+      const [heights, orders, meals] = await Promise.all([
+        searchAllPages<fhir4.Observation>("Observation", heightParams, { page: 500, maxPages: 4 }),
+        searchAllPages<fhir4.ServiceRequest>("ServiceRequest", orderParams, {
+          page: 500,
+          maxPages: 4,
+          complete: true,
+        }),
+        searchAllPages<fhir4.Observation>("Observation", mealParams, {
+          page: 500,
+          maxPages: 4,
+          complete: true,
+        }),
+      ]);
+      return {
+        heights: heights.matches,
+        mealOrders: orders.matches.filter(isMealServiceRequest),
+        mealObservations: meals.matches,
+      };
+    },
+    enabled: sorted.length > 0 && Boolean(date),
+  });
+}
+
+/** 経過表の一括入力の登録。全員ぶんのバイタルと食事摂取量を 1 transaction で送る。 */
+export function useSaveBulkVitals() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search", "flowsheet-meal"] });
     },
   });
