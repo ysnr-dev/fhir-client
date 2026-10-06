@@ -1,6 +1,8 @@
 import type { LeafProgress } from "../../api/queries";
+import { extractKindDef } from "../../fhir/extractKinds";
 import {
   EXTRACT_KIND_LABELS,
+  EXTRACT_KINDS,
   EXTRACT_MAX_DEPTH,
   LEAF_OUTPUT_FIELDS,
   leafOutputFieldsOf,
@@ -18,8 +20,6 @@ import {
 } from "../../fhir/extractQueryHelpers";
 import { TrashIcon } from "../icons/TrashIcon";
 import { ExtractLeafFields } from "./ExtractLeafFields";
-
-const KINDS = Object.keys(EXTRACT_KIND_LABELS) as ExtractKind[];
 
 interface Props {
   root: ExtractGroup;
@@ -80,7 +80,7 @@ function GroupEditor({
           }}
         >
           <option value="">＋条件</option>
-          {KINDS.map((kind) => (
+          {EXTRACT_KINDS.map((kind) => (
             <option key={kind} value={kind}>
               {EXTRACT_KIND_LABELS[kind]}
             </option>
@@ -256,7 +256,7 @@ function RelationFields({
 }) {
   const relation = leaf.relation;
   const anchor = anchors.find((a) => a.key === relation?.key);
-  const hasEnd = anchor?.kind === "admission" || anchor?.kind === "outpatient";
+  const hasEnd = anchor ? Boolean(extractKindDef(anchor.kind).hasEndDay?.(anchor)) : false;
   return (
     <div className="extract-leaf__row">
       <label className="extract-field">

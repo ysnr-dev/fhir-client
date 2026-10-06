@@ -70,7 +70,7 @@ import {
 export const RAD_ORDER_TYPE = { code: "rad", display: "放射線検査" };
 
 // 放射線オーダー項目マスタの独自コード。
-const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/rad-order-item";
+export const RAD_ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/rad-order-item";
 // JJ1017 の 32 桁コードと、その前半・後半(DICOM 連携で使う分割)。
 const JJ1017_32_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-32";
 const JJ1017_16M_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-16m";
@@ -265,7 +265,7 @@ function buildItemRequest(
   templateRefs: { purpose: string; remarks: string },
 ): fhir4.ServiceRequest {
   const coding: fhir4.Coding[] = [
-    { system: ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
+    { system: RAD_ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
   ];
   if (hasJj1017Code(item.jj1017Code)) {
     coding.push(
@@ -369,7 +369,7 @@ function buildBodySite(item: RadOrderItemLine): fhir4.CodeableConcept | undefine
 
 function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): RadOrderItemLine {
   const coding = request.code?.coding;
-  const itemCoding = codingBySystem(coding, ORDER_ITEM_SYSTEM);
+  const itemCoding = codingBySystem(coding, RAD_ORDER_ITEM_SYSTEM);
   const abbreviation = codingBySystem(coding, ABBREVIATION_SYSTEM);
   const modality = categoryCoding(request, JJ1017_MODALITY_SYSTEM);
   const bodySite = request.bodySite?.[0]?.coding;
@@ -517,7 +517,7 @@ function parseItemRequests(
   // 明細の id → 項目コード。構成項目に親のコードを持たせる。
   const codeById = new Map<string, string>();
   for (const request of requests) {
-    const code = codingBySystem(request.code?.coding, ORDER_ITEM_SYSTEM)?.code;
+    const code = codingBySystem(request.code?.coding, RAD_ORDER_ITEM_SYSTEM)?.code;
     if (request.id && code) codeById.set(request.id, code);
   }
 

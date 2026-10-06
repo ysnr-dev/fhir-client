@@ -46,14 +46,29 @@
   | condition | 病名(病名管理番号 or ICD10)・状態・日付(開始日 / 登録日)と期間 | その病名がある |
   | observation | 検査結果項目 / バイタル・値の範囲・期間 | 期間内にその記録がある(値の範囲に入る) |
   | medication | 薬剤(レセ電コード)・薬効分類(YJ コードの先頭 2〜4 桁)・区分(処方 / 注射 / 両方)・期間 | 期間内に処方・注射のオーダーがある |
+  | order | 部門オーダーの種別(`order_kind`。order-type のコード)・区分(`stage`: 依頼 / 実施)・項目(依頼のときだけ。任意)・期間・診療科 | 期間内にその部門オーダーの依頼(実施)がある |
   | admission | 期間・見方(期間中に入院していた / 入院した / 退院した)・診療科・病棟 | 入院がある |
   | outpatient | 期間 | 外来受診がある |
 
+- 条件の種類ごとの定義(初期値・表示名・検証・検索・記録の日付と中身・明細の列)は `fhir/extractKinds.ts` の
+  `EXTRACT_KIND_DEFS`(`Record<ExtractKind, …>`)に、入力欄は `components/extract/ExtractLeafFields.tsx` の
+  `KIND_FIELDS` にまとめる。種類を足すときは `fhir/extractQueryModel.ts` の `EXTRACT_KINDS` に 1 行足し、型エラーに
+  なった 2 つの表と backend の `ExtractQuery`(`KINDS`・`LEAF_FIELDS`・`LEAF_CHECK`)を埋める。
+- **部門オーダー**(`order`)の種別は `fhir/orderKinds.ts` の 15 種別(処方・注射は `medication`)。
+  - 依頼は 1 件 = オーダーのヘッダ 1 件。日付は実施予定日(occurrence)。中止・誤登録・下書きは数えない。
+    実施済みかどうかは Task が持つので区分では分けない。「依頼したが実施していない」は依頼と実施の除外で書く(患者単位)。
+  - 項目で絞れるのは、明細の ServiceRequest が項目マスタのコードを持ち、項目の検索画面がある検体検査・放射線・生理・
+    内視鏡・処置・手術。明細は日付・状態・依頼科を確かに持たない(ヘッダを取り消しても明細は active のまま)ので、
+    ヘッダを引いて明細の code を `_has` で当てる。セットの構成項目(セット親の下)は当たらない。
+  - 実施は 1 件 = 実施のハブの Procedure 1 件(`part-of:missing=true`、`status=completed`)。実施の Procedure を書く
+    放射線・生理・内視鏡・処置・手術・輸血・リハビリ・栄養指導・服薬指導だけ。放射線治療は照射ごとの Procedure と
+    治療終了サマリーが同じ category に載り、上流の category の索引(先頭の coding だけ)で分けられないので外す。
+    実施では項目を選べない。手術・輸血の実施は終了日を持つので、時間関係の基準に「終了日」を選べる(術後の再入院など)。
 - 病名の日付の既定は**開始日**(`onsetDateTime`)。この画面の病名登録は開始日を onsetDateTime に書き、
   recordedDate を書かないため(登録日は他のシステムから来た病名のための選択肢)。
 - **時間関係**(`relation`): 条件を同じ AND グループの別の条件(基準)に結び、「基準の記録の日から X〜Y 日」の
   記録だけを数える(負の日数は前)。基準の記録のどれか 1 つに対して窓に入れば数える。基準の日は開始日、
-  入院・外来は終了日も選べる。上流では表せないので、両方の記録を読んでから手元で突き合わせる(`applyRelation`)。
+  入院・外来・部門オーダーの実施は終了日も選べる。上流では表せないので、両方の記録を読んでから手元で突き合わせる(`applyRelation`)。
   基準は除外でも患者属性でもなく、自分も時間関係を持たない兄弟だけ(連鎖させない)。除外と組み合わせると
   「開始から 90 日以内に HbA1c の測定が無い」、入院どうしなら「退院の翌日〜30 日の再入院」が書ける。
   明細 CSV にも同じ絞り込みをかける。
@@ -80,6 +95,8 @@
 | medication | `MedicationRequest?code=…&authoredon=ge/le[&based-on.category=order-type\|prescription]&status:not=entered-in-error,cancelled&_elements=subject,authoredOn,medicationCodeableConcept`。処方 / 注射の区別はヘッダ ServiceRequest の order-type なので based-on のチェーンで引く |
 | admission | `Encounter?class=IMP&status=in-progress,finished&date=…[&service-provider=Organization/x][&location.partof.partof=Location/<病棟>]`。病棟はベッド → 病室 → 病棟のチェーン(転棟前のベッドも location に残るので、期間中にその病棟にいたことがある入院が当たる)。入院した = `date=sa{from-1}&date=le{to}`、退院した = `date=ge{from}&date=eb{to+1}` |
 | outpatient | `Encounter?class=AMB&status:not=cancelled,entered-in-error&date=ge/le` |
+| order(依頼) | `ServiceRequest?category=order-type\|<種別>&based-on:missing=true&status:not=revoked,entered-in-error,draft&occurrence=ge/le[&department=Organization/x][&_has:ServiceRequest:based-on:code=<項目>]` |
+| order(実施) | `Procedure?category=order-type\|<種別>&status=completed&part-of:missing=true&date=ge/le[&based-on.department=Organization/x]`。依頼科は実施の元のヘッダが持つのでチェーンで引く |
 | patient | `Patient?gender=…&birthdate=le/gt&active:not=false`(AND の下では引かない。下記) |
 
 - 共通: `_count=500`、`_offset` でページング、`_total=none`、strict。1 検索 20 ページ(1 万件)まで、1 回の実行で
@@ -101,13 +118,14 @@
   - 出力項目は**実行し直さなくても**今の結果に反映する(画面は今の条件の出力項目で列を組み直す)。条件の一部
     なので、変えると「未保存」になる。
 - **一覧**: 患者番号・氏名(カルテへのリンク)・患者の列と、条件ごとに選んだ項目をまとめた 1 セル
-  (「6件 2026-04-13〜2026-08-31 ネスプ…」。最新の中身は検査は値、病名は病名、薬は薬剤名、入院は期間)。
+  (「6件 2026-04-13〜2026-08-31 ネスプ…」。最新の中身は検査は値、病名は病名、薬は薬剤名、入院は期間、
+  部門オーダーは実施の手技名か種別名)。
   除外の条件と患者属性は列にしない。
 - **内訳**: 性別 × 年齢階級(10 歳刻み)の人数、条件を 1 つ選んでの月別・診療科別の件数と患者数
   (結果の患者の記録だけ。`leafBreakdown`)、条件ごとの「条件だけの該当」と「結果のうち」。
   - 月別・診療科別のために、抽出のときに記録 1 件ずつの日と診療科を要約して持つ(`leafRecordsOf`)。診療科は
-    処方・注射・検査・病名はオーダーの依頼科(order-department 拡張。`_elements` に extension を含める)、入院・
-    外来は serviceProvider。持たない記録は「不明」。
+    処方・注射・検査・病名・部門オーダーの依頼はオーダーの依頼科(order-department 拡張。`_elements` に extension を
+    含める)、入院・外来は serviceProvider。持たない記録(部門オーダーの実施など)は「不明」。
 - **CSV**: 一覧と同じ列(条件ごとに選んだ項目を 1 列ずつ)を BOM 付き UTF-8 で(`lib/csv.ts`)。
 - **明細CSV**: 条件に当たった記録を 1 件 1 行で(`extractDetailCsv`)。抽出では列に要る項目だけを読んでいるので、
   書き出すときに**結果の患者に絞って**記録を丸ごと引き直す(`subject=` に患者を 100 人ずつ、検索の条件は抽出と同じ。
@@ -116,7 +134,8 @@
     登録日・用量・用法・日数・診療科・記録ID。種類ごとに使わない列は空にして 1 つの表にそろえる(Excel で絞れるように)。
   - 種類ごとの中身: 検査結果は測定日時・項目・値・単位・判定(interpretation)・基準値(referenceRange.text)。
     病名は開始日(日付)・転帰日・状態・登録日。処方・注射はオーダー日時・薬剤・用量(doseQuantity)・用法(dosage.text)・
-    日数(expectedSupplyDuration)・依頼科。入院・外来は開始日・終了日・状態・診療科(serviceProvider)。
+    日数(expectedSupplyDuration)・依頼科。入院・外来は開始日・終了日・状態・診療科(serviceProvider)。部門オーダーの依頼は実施予定日・状態・登録日・依頼科、
+    実施は実施日時・終了日・手技(code)・状態。種類は「放射線検査 依頼」のように種別と区分。
   - 並びは患者番号 → 条件の順 → 日付の順。状態は日本語の表示名(表に無い値はコードのまま)。
 
 - **推移**: 保存した条件を**直さずに**実行したときだけ、該当人数と条件ごとの人数を `extract_query_runs` に残す
@@ -132,11 +151,13 @@
 - backend の登録・参照はチャート定義と共通の concern `Master::ScopedDefinitions`。院内共通・診療科に書けるのは
   医師だけ(画面で絞る。backend が守るのは「自分の条件の持ち主はログイン本人」だけ)。持ち主の選択肢は
   `hooks/useDefinitionOwners.ts`(マルチチャートと共通)。
-- 初期値(院内共通)8 件は `db/seed_data/extract_query_presets.json`(seed と migration
+- 初期値(院内共通)11 件は `db/seed_data/extract_query_presets.json`(seed と migration
   `20261006130100_seed_extract_query_presets.rb`・`20261006130200_seed_extract_query_antibiotic_preset.rb` が投入)。
   同じ名前があれば触らない。「抗菌薬の注射が30日に2回以上」は薬効分類 61・62、区分「注射」、件数 2 以上。
   時間関係の例として「退院後30日以内の再入院」「2型糖尿病の開始から90日以内にHbA1c未測定」
-  (migration `20261006130300_seed_extract_query_relation_presets.rb`)。
+  (migration `20261006130300_seed_extract_query_relation_presets.rb`)。部門オーダーの例として「直近30日の放射線検査の
+  実施」「内視鏡の依頼があり実施のない患者(90日)」「手術後30日以内の再入院」(手術の実施の終了日が基準。
+  migration `20261007120000_seed_extract_query_order_presets.rb`)。
 
 ## 6. 上流(fhir-server)
 
@@ -152,6 +173,13 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
 - 外来の診療科で絞れない(外来の Encounter は serviceProvider を持たない)。
 - 病名の ICD10 は前方一致できない(上記の展開で 3 桁だけ吸収する)。
 - 上流の集計 operation(C-25)は未対応。定点観測は画面で実行したときだけ記録する(決まった間隔での自動実行は無い)。
+- 部門オーダーの実施は依頼科の内訳を持たない(Procedure は依頼科を持たず、絞り込みはチェーンで行える)。
+  実施は項目で絞れない(実施の code はレセ電の手技で、項目マスタのコードではない)。
+- 今後の候補:
+  - 上流の変更が要らないもの: 有害事象(CTCAE・Grade)、アレルギー、注意フラグ・感染症(Flag)、救急受診
+    (`Encounter?class=EMER`)、クリニカルパスの適用とバリアンス(CarePlan / Task)。
+  - 上流の変更が要るもの: 血圧(component の値の検索)、ICD10 の前方一致(C-24)、「最新値が〜」の条件(C-15 の `$lastn`)。
+  - 出力: 検査値の最大・最小・平均の列、テンプレートの回答値での絞り込み(テンプレートタブの中で手元で絞る)。
 
 ## 8. テンプレートの抽出
 

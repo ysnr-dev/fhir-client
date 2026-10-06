@@ -64,7 +64,7 @@ import {
 export const PHYSIO_ORDER_TYPE = { code: "physio", display: "生理検査" };
 
 // 生理検査オーダー項目マスタの独自コード。
-const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/physio-order-item";
+export const PHYSIO_ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/physio-order-item";
 // 検査種別(心電図・超音波検査 など)。施設が定義するローカルコード。
 const EXAM_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/physio-exam-type";
 // 略称。検体検査・放射線検査と同じ CodeSystem を使う(検査項目の略称という意味は同じ)。
@@ -232,7 +232,7 @@ function buildItemRequest(
   templateRefs: { purpose: string; remarks: string },
 ): fhir4.ServiceRequest {
   const coding: fhir4.Coding[] = [
-    { system: ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
+    { system: PHYSIO_ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
   ];
   if (item.shortName) {
     coding.push({ system: ABBREVIATION_SYSTEM, code: item.shortName, display: item.shortName });
@@ -302,7 +302,7 @@ export function physioOrderResponseIds(itemRequests: fhir4.ServiceRequest[]): st
 
 function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): PhysioOrderItemLine {
   const coding = request.code?.coding;
-  const itemCoding = codingBySystem(coding, ORDER_ITEM_SYSTEM);
+  const itemCoding = codingBySystem(coding, PHYSIO_ORDER_ITEM_SYSTEM);
   const abbreviation = codingBySystem(coding, ABBREVIATION_SYSTEM);
   const examType = categoryCoding(request, EXAM_TYPE_SYSTEM);
   const reasonReference = request.reasonReference?.find((r) =>
@@ -442,7 +442,7 @@ function parseItemRequests(
   // 明細の id → 項目コード。構成項目に親のコードを持たせる。
   const codeById = new Map<string, string>();
   for (const request of requests) {
-    const code = codingBySystem(request.code?.coding, ORDER_ITEM_SYSTEM)?.code;
+    const code = codingBySystem(request.code?.coding, PHYSIO_ORDER_ITEM_SYSTEM)?.code;
     if (request.id && code) codeById.set(request.id, code);
   }
 

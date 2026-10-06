@@ -411,5 +411,99 @@
         ]
       }
     }
+  },
+  {
+    "name": "直近30日の放射線検査の実施",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "rad",
+            "kind": "order",
+            "label": "放射線検査の実施(直近30日)",
+            "order_kind": "rad",
+            "stage": "performed",
+            "period": {
+              "mode": "relative",
+              "days": 30
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "内視鏡の依頼があり実施のない患者(90日)",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "ord",
+            "kind": "order",
+            "label": "内視鏡の依頼(直近90日)",
+            "order_kind": "endoscopy",
+            "stage": "ordered",
+            "period": {
+              "mode": "relative",
+              "days": 90
+            }
+          },
+          {
+            "key": "done",
+            "kind": "order",
+            "label": "内視鏡の実施(直近90日)",
+            "not": true,
+            "order_kind": "endoscopy",
+            "stage": "performed",
+            "period": {
+              "mode": "relative",
+              "days": 90
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "手術後30日以内の再入院",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "ope",
+            "kind": "order",
+            "label": "手術の実施(直近365日)",
+            "order_kind": "surgery",
+            "stage": "performed",
+            "period": {
+              "mode": "relative",
+              "days": 365
+            }
+          },
+          {
+            "key": "re",
+            "kind": "admission",
+            "label": "入院(手術の翌日〜30日)",
+            "date_mode": "admitted",
+            "period": {
+              "mode": "relative",
+              "days": 365
+            },
+            "relation": {
+              "key": "ope",
+              "from_days": 1,
+              "to_days": 30,
+              "anchor_date": "end"
+            }
+          }
+        ]
+      }
+    }
   }
 ]

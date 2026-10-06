@@ -1,31 +1,58 @@
-import { useState } from "react";
-import type { Disease, LabResultItem, Medicine } from "../../api/masterClient";
+import { useState, type ComponentType } from "react";
+import type {
+  Disease,
+  EndoscopyItem,
+  LabOrderItem,
+  LabResultItem,
+  Medicine,
+  PhysioItem,
+  RadItem,
+  SurgeryItem,
+  TreatmentItem,
+} from "../../api/masterClient";
 import { useMedicineTypeOptions } from "../../api/masterQueries";
 import { useSelfDepartments, useWardOptions } from "../../api/queries";
 import { DISEASE_KEY_NUMBER_SYSTEM } from "../../fhir/conditionHelpers";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
+import { ENDOSCOPY_ORDER_ITEM_SYSTEM } from "../../fhir/endoscopyOrderHelpers";
+import { EXTRACT_ORDER_KINDS, extractOrderKindOf } from "../../fhir/extractKinds";
 import {
   ADMISSION_DATE_MODES,
   CLINICAL_STATUS_OPTIONS,
+  EXTRACT_ORDER_STAGES,
   EXTRACT_ORDER_TYPES,
   EXTRACT_VALUE_OPS,
   expandIcd10,
   type AdmissionDateMode,
   type ExtractCode,
   type ExtractDrugClass,
+  type ExtractKind,
   type ExtractLeaf,
+  type ExtractOrderStage,
   type ExtractOrderType,
   type ExtractPeriod,
   type ExtractValueOp,
 } from "../../fhir/extractQueryHelpers";
+import { LAB_ORDER_ITEM_SYSTEM } from "../../fhir/labOrderHelpers";
 import { RESULT_ITEM_SYSTEM } from "../../fhir/labResultHelpers";
 import { locationDisplayName } from "../../fhir/locationHelpers";
+import type { OrderKind } from "../../fhir/orderKinds";
+import { PHYSIO_ORDER_ITEM_SYSTEM } from "../../fhir/physioOrderHelpers";
 import { MEDICINE_CODE_SYSTEM } from "../../fhir/prescriptionHelpers";
+import { RAD_ORDER_ITEM_SYSTEM } from "../../fhir/radOrderHelpers";
 import { LOINC_SYSTEM } from "../../fhir/shared";
+import { SURGERY_ORDER_ITEM_SYSTEM } from "../../fhir/surgeryOrderHelpers";
+import { TREATMENT_ORDER_ITEM_SYSTEM } from "../../fhir/treatmentOrderHelpers";
 import { VITAL_MEASURES } from "../../fhir/vitalHelpers";
 import { DiseaseSearchModal } from "../DiseaseSearchModal";
+import { EndoscopyItemSearchModal } from "../EndoscopyItemSearchModal";
+import { LabOrderItemSearchModal } from "../LabOrderItemSearchModal";
 import { LabResultItemSearchModal } from "../LabResultItemSearchModal";
 import { MedicineSearchModal } from "../MedicineSearchModal";
+import { PhysioItemSearchModal } from "../PhysioItemSearchModal";
+import { RadItemSearchModal } from "../RadItemSearchModal";
+import { SurgeryItemSearchModal } from "../SurgeryItemSearchModal";
+import { TreatmentItemSearchModal } from "../TreatmentItemSearchModal";
 
 interface Props {
   leaf: ExtractLeaf;
@@ -34,82 +61,82 @@ interface Props {
 
 /** 条件の種類ごとの入力欄。 */
 export function ExtractLeafFields({ leaf, onChange }: Props) {
-  const patch = (next: Partial<ExtractLeaf>) => onChange({ ...leaf, ...next });
-  switch (leaf.kind) {
-    case "patient":
-      return <PatientFields leaf={leaf} patch={patch} />;
-    case "condition":
-      return (
-        <>
-          <ConditionCodes leaf={leaf} patch={patch} />
-          <div className="extract-leaf__row">
-            <CheckGroup
-              label="状態"
-              options={CLINICAL_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-              values={leaf.clinical_status ?? []}
-              onChange={(clinical_status) => patch({ clinical_status })}
-            />
-            <label className="extract-field">
-              日付
-              <select
-                value={leaf.date_field ?? "onset"}
-                onChange={(e) => patch({ date_field: e.target.value as "recorded" | "onset" })}
-              >
-                <option value="onset">開始日</option>
-                <option value="recorded">登録日</option>
-              </select>
-            </label>
-            <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />
-            <MinCountField leaf={leaf} patch={patch} />
-          </div>
-        </>
-      );
-    case "observation":
-      return (
-        <>
-          <ObservationCodes leaf={leaf} patch={patch} />
-          <div className="extract-leaf__row">
-            <ValueFields leaf={leaf} patch={patch} />
-            <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />
-            <MinCountField leaf={leaf} patch={patch} />
-          </div>
-        </>
-      );
-    case "medication":
-      return (
-        <>
-          <MedicationCodes leaf={leaf} patch={patch} />
-          <div className="extract-leaf__row">
-            <label className="extract-field">
-              区分
-              <select
-                value={leaf.order_type ?? ""}
-                onChange={(e) => patch({ order_type: (e.target.value || undefined) as ExtractOrderType | undefined })}
-              >
-                <option value="">処方・注射</option>
-                {EXTRACT_ORDER_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />
-            <MinCountField leaf={leaf} patch={patch} />
-          </div>
-        </>
-      );
-    case "admission":
-      return <AdmissionFields leaf={leaf} patch={patch} />;
-    case "outpatient":
-      return (
-        <div className="extract-leaf__row">
-          <PeriodFields period={leaf.period} onChange={(period) => patch({ period })} />
-          <MinCountField leaf={leaf} patch={patch} />
-        </div>
-      );
-  }
+  const Fields = KIND_FIELDS[leaf.kind];
+  return <Fields leaf={leaf} patch={(next) => onChange({ ...leaf, ...next })} />;
 }
+
+type FieldsProps = { leaf: ExtractLeaf; patch: Patch };
+
+// 種類ごとの入力欄の対応表(種類の定義は fhir/extractKinds.ts)。
+const KIND_FIELDS: Record<ExtractKind, ComponentType<FieldsProps>> = {
+  patient: PatientFields,
+  condition: ({ leaf, patch }) => (
+    <>
+      <ConditionCodes leaf={leaf} patch={patch} />
+      <div className="extract-leaf__row">
+        <CheckGroup
+          label="状態"
+          options={CLINICAL_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          values={leaf.clinical_status ?? []}
+          onChange={(clinical_status) => patch({ clinical_status })}
+        />
+        <label className="extract-field">
+          日付
+          <select
+            value={leaf.date_field ?? "onset"}
+            onChange={(e) => patch({ date_field: e.target.value as "recorded" | "onset" })}
+          >
+            <option value="onset">開始日</option>
+            <option value="recorded">登録日</option>
+          </select>
+        </label>
+        <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />
+        <MinCountField leaf={leaf} patch={patch} />
+      </div>
+    </>
+  ),
+  observation: ({ leaf, patch }) => (
+    <>
+      <ObservationCodes leaf={leaf} patch={patch} />
+      <div className="extract-leaf__row">
+        <ValueFields leaf={leaf} patch={patch} />
+        <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />
+        <MinCountField leaf={leaf} patch={patch} />
+      </div>
+    </>
+  ),
+  medication: ({ leaf, patch }) => (
+    <>
+      <MedicationCodes leaf={leaf} patch={patch} />
+      <div className="extract-leaf__row">
+        <label className="extract-field">
+          区分
+          <select
+            value={leaf.order_type ?? ""}
+            onChange={(e) => patch({ order_type: (e.target.value || undefined) as ExtractOrderType | undefined })}
+          >
+            <option value="">処方・注射</option>
+            {EXTRACT_ORDER_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />
+        <MinCountField leaf={leaf} patch={patch} />
+      </div>
+    </>
+  ),
+  order: OrderFields,
+  admission: AdmissionFields,
+  outpatient: ({ leaf, patch }) => (
+    <div className="extract-leaf__row">
+      <PeriodFields period={leaf.period} onChange={(period) => patch({ period })} />
+      <MinCountField leaf={leaf} patch={patch} />
+    </div>
+  ),
+};
 
 /** 期間内に何件以上あれば該当とするか(既定 1)。 */
 function MinCountField({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
@@ -423,9 +450,7 @@ function ValueFields({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
 }
 
 function AdmissionFields({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
-  const { departments } = useSelfDepartments();
   const { wards } = useWardOptions();
-  const options = sortDepartmentsByCode(departments).filter((d) => d.id);
   return (
     <div className="extract-leaf__row">
       <select
@@ -441,26 +466,7 @@ function AdmissionFields({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
       </select>
       <PeriodFields period={leaf.period} onChange={(period) => patch({ period })} />
       <MinCountField leaf={leaf} patch={patch} />
-      <label className="extract-field">
-        診療科
-        <select
-          value={leaf.department_id ?? ""}
-          onChange={(e) => {
-            const department = options.find((d) => d.id === e.target.value);
-            patch({
-              department_id: department?.id || undefined,
-              department_name: department ? departmentDisplayName(department) : undefined,
-            });
-          }}
-        >
-          <option value="">すべて</option>
-          {options.map((d) => (
-            <option key={d.id} value={d.id}>
-              {departmentDisplayName(d)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <DepartmentField leaf={leaf} patch={patch} />
       <label className="extract-field">
         病棟
         <select
@@ -479,6 +485,158 @@ function AdmissionFields({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
         </select>
       </label>
     </div>
+  );
+}
+
+function DepartmentField({ leaf, patch }: FieldsProps) {
+  const { departments } = useSelfDepartments();
+  const options = sortDepartmentsByCode(departments).filter((d) => d.id);
+  return (
+    <label className="extract-field">
+      診療科
+      <select
+        value={leaf.department_id ?? ""}
+        onChange={(e) => {
+          const department = options.find((d) => d.id === e.target.value);
+          patch({
+            department_id: department?.id || undefined,
+            department_name: department ? departmentDisplayName(department) : undefined,
+          });
+        }}
+      >
+        <option value="">すべて</option>
+        {options.map((d) => (
+          <option key={d.id} value={d.id}>
+            {departmentDisplayName(d)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+type ItemPicker = ComponentType<{ onPick: (code: ExtractCode) => void; onClose: () => void }>;
+
+// 項目で絞れる部門オーダー(明細の ServiceRequest の code に項目マスタのコードを持つ種別)。
+const ORDER_ITEM_PICKERS: Partial<Record<OrderKind, ItemPicker>> = {
+  "lab-order": ({ onPick, onClose }) => (
+    <LabOrderItemSearchModal
+      onSelect={(item: LabOrderItem) =>
+        onPick({ system: LAB_ORDER_ITEM_SYSTEM, code: item.order_item_code, display: item.short_name || item.name })
+      }
+      onClose={onClose}
+    />
+  ),
+  "rad-order": ({ onPick, onClose }) => (
+    <RadItemSearchModal
+      onSelect={(item: RadItem) =>
+        onPick({ system: RAD_ORDER_ITEM_SYSTEM, code: item.item_code, display: item.short_name || item.name })
+      }
+      onClose={onClose}
+    />
+  ),
+  "physio-order": ({ onPick, onClose }) => (
+    <PhysioItemSearchModal
+      onSelect={(item: PhysioItem) =>
+        onPick({ system: PHYSIO_ORDER_ITEM_SYSTEM, code: item.item_code, display: item.short_name || item.name })
+      }
+      onClose={onClose}
+    />
+  ),
+  "endoscopy-order": ({ onPick, onClose }) => (
+    <EndoscopyItemSearchModal
+      onSelect={(item: EndoscopyItem) =>
+        onPick({ system: ENDOSCOPY_ORDER_ITEM_SYSTEM, code: item.item_code, display: item.short_name || item.name })
+      }
+      onClose={onClose}
+    />
+  ),
+  "treatment-order": ({ onPick, onClose }) => (
+    <TreatmentItemSearchModal
+      onSelect={(item: TreatmentItem) =>
+        onPick({ system: TREATMENT_ORDER_ITEM_SYSTEM, code: item.item_code, display: item.short_name || item.name })
+      }
+      onClose={onClose}
+    />
+  ),
+  "surgery-order": ({ onPick, onClose }) => (
+    <SurgeryItemSearchModal
+      onSelect={(item: SurgeryItem) =>
+        onPick({ system: SURGERY_ORDER_ITEM_SYSTEM, code: item.item_code, display: item.short_name || item.name })
+      }
+      onClose={onClose}
+    />
+  ),
+};
+
+function OrderFields({ leaf, patch }: FieldsProps) {
+  const [picking, setPicking] = useState(false);
+  const kind = extractOrderKindOf(leaf.order_kind);
+  const stage = leaf.stage ?? "ordered";
+  const codes = leaf.codes ?? [];
+  const Picker = kind && stage === "ordered" ? ORDER_ITEM_PICKERS[kind.kind] : undefined;
+  return (
+    <>
+      <div className="extract-leaf__row">
+        <label className="extract-field">
+          種別
+          <select
+            value={leaf.order_kind ?? ""}
+            onChange={(e) => {
+              const next = extractOrderKindOf(e.target.value);
+              // 項目は種別ごとのコード体系なので、種別を変えたら外す。
+              patch({
+                order_kind: e.target.value,
+                codes: [],
+                stage: next?.performed ? stage : "ordered",
+              });
+            }}
+          >
+            {EXTRACT_ORDER_KINDS.map((k) => (
+              <option key={k.code} value={k.code}>
+                {k.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="extract-field">
+          区分
+          <select
+            value={stage}
+            onChange={(e) => {
+              const next = e.target.value as ExtractOrderStage;
+              patch({ stage: next, ...(next === "performed" ? { codes: [] } : {}) });
+            }}
+          >
+            {EXTRACT_ORDER_STAGES.map((s) => (
+              <option key={s.value} value={s.value} disabled={s.value === "performed" && !kind?.performed}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {Picker && (
+          <button type="button" className="rp-card__compact-button" onClick={() => setPicking(true)}>
+            項目
+          </button>
+        )}
+        <CodeChips codes={codes} onChange={(next) => patch({ codes: next })} />
+      </div>
+      <div className="extract-leaf__row">
+        <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />
+        <MinCountField leaf={leaf} patch={patch} />
+        <DepartmentField leaf={leaf} patch={patch} />
+      </div>
+      {Picker && picking && (
+        <Picker
+          onPick={(code) => {
+            patch({ codes: addCodes(codes, [code]) });
+            setPicking(false);
+          }}
+          onClose={() => setPicking(false)}
+        />
+      )}
+    </>
   );
 }
 

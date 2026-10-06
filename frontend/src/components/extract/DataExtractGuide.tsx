@@ -89,6 +89,12 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
                 <td>薬剤、または薬効分類(後から採用された薬も含む)。処方だけ / 注射だけ、期間</td>
               </tr>
               <tr>
+                <th>部門オーダー</th>
+                <td>
+                  検体検査・放射線・内視鏡・手術などの種別、依頼 / 実施、期間、診療科。依頼は項目でも絞れる(検体検査・放射線・生理・内視鏡・処置・手術)
+                </td>
+              </tr>
+              <tr>
                 <th>入院</th>
                 <td>期間中に入院していた / 入院した / 退院した、診療科、病棟</td>
               </tr>
@@ -128,6 +134,12 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
               <Leaf kind="入院">退院した(直近 365 日)</Leaf>
               <Leaf kind="入院">入院した / 基準の条件: 上の退院・基準の日: 終了日・1〜30 日</Leaf>
             </Example>
+            <Example title="内視鏡を依頼したが実施していない患者" op="AND">
+              <Leaf kind="部門オーダー">内視鏡 / 依頼(直近 90 日)</Leaf>
+              <Leaf kind="部門オーダー" not>
+                内視鏡 / 実施(直近 90 日)
+              </Leaf>
+            </Example>
           </div>
         </section>
 
@@ -163,6 +175,7 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
             <li>記録が多すぎて読み切れない条件があると、結果は出ません。期間を短くするか項目を絞ってください。</li>
             <li>外来受診は診療科で絞れません。</li>
             <li>入院の病棟は、転棟前にいた病棟でも当てはまります。</li>
+            <li>部門オーダーの実施は、検体検査・細菌・病理・食事・放射線治療・他科依頼では選べません。</li>
           </ul>
         </aside>
       </div>

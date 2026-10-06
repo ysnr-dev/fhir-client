@@ -67,7 +67,7 @@ import {
 export const ENDOSCOPY_ORDER_TYPE = { code: "endoscopy", display: "内視鏡" };
 
 // 内視鏡オーダー項目マスタの独自コード。
-const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/endoscopy-order-item";
+export const ENDOSCOPY_ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/endoscopy-order-item";
 // 検査種別(上部消化管内視鏡・下部消化管内視鏡 など)。施設が定義するローカルコード。
 const EXAM_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/endoscopy-exam-type";
 // 略称。検体検査・放射線検査と同じ CodeSystem を使う(オーダー項目の略称という意味は同じ)。
@@ -235,7 +235,7 @@ function buildItemRequest(
   templateRefs: { purpose: string; remarks: string },
 ): fhir4.ServiceRequest {
   const coding: fhir4.Coding[] = [
-    { system: ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
+    { system: ENDOSCOPY_ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
   ];
   if (item.shortName) {
     coding.push({ system: ABBREVIATION_SYSTEM, code: item.shortName, display: item.shortName });
@@ -305,7 +305,7 @@ export function endoscopyOrderResponseIds(itemRequests: fhir4.ServiceRequest[]):
 
 function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): EndoscopyOrderItemLine {
   const coding = request.code?.coding;
-  const itemCoding = codingBySystem(coding, ORDER_ITEM_SYSTEM);
+  const itemCoding = codingBySystem(coding, ENDOSCOPY_ORDER_ITEM_SYSTEM);
   const abbreviation = codingBySystem(coding, ABBREVIATION_SYSTEM);
   const examType = categoryCoding(request, EXAM_TYPE_SYSTEM);
   const reasonReference = request.reasonReference?.find((r) =>
@@ -445,7 +445,7 @@ function parseItemRequests(
   // 明細の id → 項目コード。構成項目に親のコードを持たせる。
   const codeById = new Map<string, string>();
   for (const request of requests) {
-    const code = codingBySystem(request.code?.coding, ORDER_ITEM_SYSTEM)?.code;
+    const code = codingBySystem(request.code?.coding, ENDOSCOPY_ORDER_ITEM_SYSTEM)?.code;
     if (request.id && code) codeById.set(request.id, code);
   }
 

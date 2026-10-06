@@ -41,7 +41,7 @@ import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./pre
 export const SURGERY_ORDER_TYPE = { code: "surgery", display: "手術" };
 
 // 術式マスタの独自コード。
-const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/surgery-order-item";
+export const SURGERY_ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/surgery-order-item";
 // レセ電算 診療行為コード(K章)。実施入力の手技(Procedure.code)と同じ発想で、
 // 明細にオーダー時点のコードを写す。
 const RECEIPT_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/surgery-procedure-code";
@@ -390,7 +390,7 @@ function buildItemRequest(
   parentReference: string,
 ): fhir4.ServiceRequest {
   const coding: fhir4.Coding[] = [
-    { system: ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
+    { system: SURGERY_ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
   ];
   if (item.receiptCode) {
     coding.push({ system: RECEIPT_CODE_SYSTEM, code: item.receiptCode });
@@ -464,7 +464,7 @@ function buildBodySite(item: SurgeryOrderItemLine): fhir4.CodeableConcept | unde
 
 function parseItemRequest(request: fhir4.ServiceRequest): SurgeryOrderItemLine {
   const coding = request.code?.coding;
-  const itemCoding = codingBySystem(coding, ORDER_ITEM_SYSTEM);
+  const itemCoding = codingBySystem(coding, SURGERY_ORDER_ITEM_SYSTEM);
   const abbreviation = codingBySystem(coding, ABBREVIATION_SYSTEM);
   const bodySite = request.bodySite?.[0];
   const laterality = codingBySystem(bodySite?.coding, LATERALITY_SYSTEM)?.code ?? "";

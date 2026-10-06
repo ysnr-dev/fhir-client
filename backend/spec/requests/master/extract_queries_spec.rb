@@ -77,6 +77,34 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       expect(errors_text).to include("性別か年齢")
     end
 
+    it "部門オーダーの依頼と実施を保存できる" do
+      rad_item = { "system" => "http://fhir-client.local/CodeSystem/rad-order-item", "code" => "CT001" }
+      create_query({ "op" => "and", "children" => [
+        { "key" => "a", "kind" => "order", "order_kind" => "rad", "stage" => "ordered", "codes" => [rad_item],
+          "period" => { "mode" => "relative", "days" => 30 } },
+        { "key" => "b", "kind" => "order", "order_kind" => "surgery", "stage" => "performed",
+          "department_id" => "12", "department_name" => "外科" },
+        { "key" => "c", "kind" => "admission", "period" => { "mode" => "relative", "days" => 90 },
+          "relation" => { "key" => "b", "from_days" => 1, "to_days" => 30, "anchor_date" => "end" } }
+      ] })
+      expect(response).to have_http_status(:created)
+    end
+
+    it "部門オーダーは種別が要り、実施は数えられる種別だけで項目を持たない" do
+      lab_item = { "system" => "http://fhir-client.local/CodeSystem/lab-order-item", "code" => "L001" }
+      create_query({ "op" => "and", "children" => [
+        { "key" => "a", "kind" => "order" },
+        { "key" => "b", "kind" => "order", "order_kind" => "lab", "stage" => "performed" },
+        { "key" => "c", "kind" => "order", "order_kind" => "rad", "stage" => "performed", "codes" => [lab_item] },
+        { "key" => "d", "kind" => "order", "order_kind" => "xray" }
+      ] })
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(errors_text).to include("order_kind は必須")
+      expect(errors_text).to include("lab は実施で数えられません")
+      expect(errors_text).to include("実施では codes を指定できません")
+      expect(errors_text).to include("order_kind")
+    end
+
     it "相対の期間は日数、絶対の期間は from か to が要る" do
       create_query({ "op" => "and", "children" => [
         { "key" => "a", "kind" => "outpatient", "period" => { "mode" => "relative" } },

@@ -43,7 +43,7 @@ import {
 export const LAB_ORDER_TYPE = { code: "lab", display: "検体検査" };
 
 // 検査項目コード(検体検査オーダー項目マスタの独自コード)。
-const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/lab-order-item";
+export const LAB_ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/lab-order-item";
 // 採取管。施設ごとのマスタなのでローカル URI。
 const CONTAINER_SYSTEM = "http://fhir-client.local/CodeSystem/lab-container";
 
@@ -228,7 +228,7 @@ function buildItemRequest(
   parentReference: string,
 ): fhir4.ServiceRequest {
   const coding: fhir4.Coding[] = [
-    { system: ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
+    { system: LAB_ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
   ];
   if (item.jlacCode) {
     coding.push({ system: jlacSystemOf(item.jlacCodeSystem), code: item.jlacCode, display: item.name });
@@ -322,7 +322,7 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): La
   const coding = request.code?.coding;
   // contained の明細は id がリソース内だけの文字列(item-1)なので拾わない。
   const id = request.id && !request.id.startsWith("item-") ? request.id : "";
-  const itemCoding = codingBySystem(coding, ORDER_ITEM_SYSTEM);
+  const itemCoding = codingBySystem(coding, LAB_ORDER_ITEM_SYSTEM);
   const jlac11 = codingBySystem(coding, JLAC11_SYSTEM);
   const jlac10 = codingBySystem(coding, JLAC10_SYSTEM);
   const abbreviation = codingBySystem(coding, ABBREVIATION_SYSTEM);
@@ -402,7 +402,7 @@ function buildItemEntries(
 // CodeableConcept として直接持っていた(パネルの構成項目は持てなかった)。
 // 過去のオーダーが「項目なし」に見えないよう、明細が無いときだけ読む。
 function parseLegacyOrderDetail(detail: fhir4.CodeableConcept): LabOrderItemLine {
-  const itemCoding = codingBySystem(detail.coding, ORDER_ITEM_SYSTEM);
+  const itemCoding = codingBySystem(detail.coding, LAB_ORDER_ITEM_SYSTEM);
   const jlac11 = codingBySystem(detail.coding, JLAC11_SYSTEM);
   const jlac10 = codingBySystem(detail.coding, JLAC10_SYSTEM);
   const specimen = detail.extension?.find((e) => e.url === SPECIMEN_EXT_URL)?.valueCodeableConcept
@@ -434,7 +434,7 @@ function parseItemRequests(
   // 明細の id(または contained id)→ 項目コード。構成項目に親のコードを持たせる。
   const codeById = new Map<string, string>();
   for (const request of requests) {
-    const code = codingBySystem(request.code?.coding, ORDER_ITEM_SYSTEM)?.code;
+    const code = codingBySystem(request.code?.coding, LAB_ORDER_ITEM_SYSTEM)?.code;
     if (request.id && code) codeById.set(request.id, code);
   }
 

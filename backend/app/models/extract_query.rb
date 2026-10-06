@@ -18,7 +18,7 @@
 #         "period": { "mode": "relative", "days": 90 }, "value": { "op": "ge", "value": 8 } },
 #       { "op": "or", "children": [ ... ] } ] } }
 #
-# 葉(kind)は patient / condition / observation / medication / admission / outpatient。
+# 葉(kind)は patient / condition / observation / medication / order / admission / outpatient。
 # 否定(not)は AND グループの直下で、否定でない兄弟が 1 つ以上あるときだけ(兄弟の積集合から
 # 差を取るため。OR の下や否定だけの AND は全患者の集合が要る)。
 # codes の中身(どのコード体系のどのコードか)は解釈しない(ChartDefinition と同じ考え)。
@@ -29,7 +29,7 @@ class ExtractQuery < ApplicationRecord
   MAX_DEPTH = 3
   MAX_LEAVES = 20
   MAX_CODES = 200
-  KINDS = %w[patient condition observation medication admission outpatient].freeze
+  KINDS = %w[patient condition observation medication order admission outpatient].freeze
   # 期間を必ず持つ種別(入院・外来は期間なしだと全受診になり、抽出の条件として意味が無い)。
   PERIOD_REQUIRED_KINDS = %w[admission outpatient].freeze
   CODE_KINDS = %w[condition observation medication].freeze
@@ -39,6 +39,16 @@ class ExtractQuery < ApplicationRecord
   DATE_MODES = %w[overlap admitted discharged].freeze
   VALUE_OPS = %w[ge gt le lt].freeze
   ORDER_TYPES = %w[prescription injection].freeze
+  # 部門オーダーの種別(ヘッダの order-type のコード。frontend の fhir/orderKinds.ts)。
+  ORDER_KINDS = %w[
+    lab micro pathology rad physio endoscopy treatment surgery meal transfusion rehab radiotherapy
+    nutrition-guidance medication-guidance consult
+  ].freeze
+  # 実施(Procedure)でも数えられる種別(frontend の fhir/extractKinds.ts の PERFORMED_ORDER_KINDS)。
+  PERFORMED_ORDER_KINDS = %w[
+    rad physio endoscopy treatment surgery transfusion rehab nutrition-guidance medication-guidance
+  ].freeze
+  ORDER_STAGES = %w[ordered performed].freeze
   # 出力項目(docs/data-extract-design.md §4)。患者番号・氏名はいつも出す。
   PATIENT_COLUMNS = %w[kana age gender birth_date postal_code address phone patient_id].freeze
   LEAF_OUTPUT_FIELDS = %w[count first last latest].freeze
@@ -107,10 +117,13 @@ class ExtractQuery < ApplicationRecord
     },
     # 処方・注射の区別(無ければ両方)。オーダーのヘッダの order-type で分ける。
     "order_type" => { enum: ORDER_TYPES },
+    # 部門オーダーの種別と、依頼(ServiceRequest)・実施(Procedure)のどちらを数えるか。
+    "order_kind" => { enum: ORDER_KINDS },
+    "stage" => { enum: ORDER_STAGES },
     # 一覧・CSV に出す項目(件数・最初・最後・最新)。無ければすべて。
     "output_fields" => { list: { enum: LEAF_OUTPUT_FIELDS }, unique: true, min: 1 },
     # 時間関係。同じ AND グループの別の条件(key)の記録の日から from_days〜to_days 日の記録だけを数える
-    # (負の日数は前)。anchor_date は基準の記録のどの日か(end は入院・外来の終了日)。
+    # (負の日数は前)。anchor_date は基準の記録のどの日か(end は入院・外来・実施の終了日)。
     "relation" => {
       fields: {
         "key" => :text,
@@ -138,6 +151,17 @@ class ExtractQuery < ApplicationRecord
     if kind == "patient" && Array(leaf["gender"]).empty? && leaf.dig("age", "min").nil? && leaf.dig("age", "max").nil?
       errors << "#{path} は性別か年齢のどちらかが要ります"
     end
+    errors + ORDER_CHECK.call(leaf, path)
+  }
+
+  ORDER_CHECK = lambda { |leaf, path|
+    next [] unless leaf["kind"] == "order"
+    next ["#{path}.order_kind は必須です"] if leaf["order_kind"].nil?
+    next [] unless leaf["stage"] == "performed"
+
+    errors = []
+    errors << "#{path} の #{leaf['order_kind']} は実施で数えられません" unless PERFORMED_ORDER_KINDS.include?(leaf["order_kind"])
+    errors << "#{path} の実施では codes を指定できません" unless Array(leaf["codes"]).empty?
     errors
   }
 

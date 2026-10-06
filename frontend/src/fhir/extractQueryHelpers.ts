@@ -1,9 +1,21 @@
 import { csvBlob } from "../lib/csv";
-import { addDays, dateTimeLabel, localDay } from "../lib/dates";
-import { excludeNursingProblems } from "./conditionHelpers";
-import { ADMISSION_CLASS_CODE, ADMISSION_STATUS, DISCHARGED_STATUS } from "./encounterHelpers";
-import { departmentOf, ORDER_TYPE_SYSTEM } from "./orderHeader";
-import { OUTPATIENT_CLASS_CODE } from "./outpatientEncounterHelpers";
+import { localDay } from "../lib/dates";
+import { DETAIL_COLUMNS, EXTRACT_KIND_DEFS, extractKindDef } from "./extractKinds";
+import {
+  EXTRACT_KINDS,
+  LEAF_OUTPUT_FIELDS,
+  ageToBirthDateRange,
+  type ExtractCode,
+  type ExtractGroup,
+  type ExtractKind,
+  type ExtractLeaf,
+  type ExtractNode,
+  type ExtractPeriod,
+  type ExtractRecord,
+  type ExtractRelation,
+  type LeafOutputField,
+  type LeafSearch,
+} from "./extractQueryModel";
 import {
   addressLabelOf,
   calculateAge,
@@ -14,120 +26,18 @@ import {
   mobilePhoneOf,
   patientNumberOf,
 } from "./patientHelpers";
-import { conceptLabel, quantityLabel, referenceIdOfType } from "./shared";
+import { referenceIdOfType } from "./shared";
 
-// データ抽出(docs/data-extract-design.md)。条件のモデル・条件ごとの FHIR 検索・集合の
-// 組み合わせ・結果の行と内訳・CSV。取得(上流を引く)は api/queries/extractQuery.ts が担い、
-// ここは純粋関数だけにする(データ源を DWH に差し替えるときも、ここと画面はそのまま使う)。
+export * from "./extractQueryModel";
 
-export type ExtractKind = "patient" | "condition" | "observation" | "medication" | "admission" | "outpatient";
+// データ抽出(docs/data-extract-design.md)。条件の組み合わせ・結果の行と内訳・CSV。条件の種類ごとの
+// 検索と記録の読み方は fhir/extractKinds.ts、条件のモデルは fhir/extractQueryModel.ts。取得(上流を
+// 引く)は api/queries/extractQuery.ts が担い、ここは純粋関数だけにする(データ源を DWH に差し替える
+// ときも、ここと画面はそのまま使う)。
 
-export const EXTRACT_KIND_LABELS: Record<ExtractKind, string> = {
-  patient: "患者属性",
-  condition: "病名",
-  observation: "検査結果・バイタル",
-  medication: "処方・注射",
-  admission: "入院",
-  outpatient: "外来受診",
-};
-
-export interface ExtractCode {
-  system: string;
-  code: string;
-  display?: string;
-}
-
-/** 期間。absolute は日付(どちらか片方でもよい)、relative は今日から days 日前〜今日。 */
-export interface ExtractPeriod {
-  mode: "absolute" | "relative";
-  from?: string;
-  to?: string;
-  days?: number;
-}
-
-export type ExtractValueOp = "ge" | "gt" | "le" | "lt";
-export const EXTRACT_VALUE_OPS: { value: ExtractValueOp; label: string }[] = [
-  { value: "ge", label: "以上" },
-  { value: "gt", label: "より大きい" },
-  { value: "le", label: "以下" },
-  { value: "lt", label: "未満" },
-];
-
-export type AdmissionDateMode = "overlap" | "admitted" | "discharged";
-export const ADMISSION_DATE_MODES: { value: AdmissionDateMode; label: string }[] = [
-  { value: "overlap", label: "期間中に入院していた" },
-  { value: "admitted", label: "期間中に入院した" },
-  { value: "discharged", label: "期間中に退院した" },
-];
-
-export type ExtractOrderType = "prescription" | "injection";
-export const EXTRACT_ORDER_TYPES: { value: ExtractOrderType; label: string }[] = [
-  { value: "prescription", label: "処方" },
-  { value: "injection", label: "注射" },
-];
-
-/**
- * 時間関係。同じ AND グループの別の条件(key)の記録の日から from_days〜to_days 日に入る記録だけを
- * 数える(負の日数は前)。基準の記録のどれか 1 つに対して窓に入れば数える。anchor_date は基準の
- * 記録のどの日を使うか(end は入院・外来の終了日。再入院を「退院の翌日から 30 日」で見るときなど)。
- */
-export interface ExtractRelation {
-  key: string;
-  from_days: number;
-  to_days: number;
-  anchor_date?: "start" | "end";
-}
-
-/** 薬効分類(YJ コードの先頭 2〜4 桁)。実行時に医薬品コードへ展開する。 */
-export interface ExtractDrugClass {
-  code: string;
-  name?: string;
-}
-
-export const CLINICAL_STATUS_OPTIONS = [
-  { value: "active", label: "継続" },
-  { value: "resolved", label: "治癒" },
-  { value: "inactive", label: "中止" },
-  { value: "remission", label: "寛解" },
-] as const;
-
-export interface ExtractLeaf {
-  key: string;
-  kind: ExtractKind;
-  label?: string;
-  /** 除外(AND グループの直下で、除外でない兄弟があるときだけ)。 */
-  not?: boolean;
-  period?: ExtractPeriod | null;
-  /** 期間内に何件以上あれば該当とするか(既定 1)。 */
-  min_count?: number;
-  codes?: ExtractCode[];
-  gender?: string[];
-  age?: { min?: number | null; max?: number | null };
-  clinical_status?: string[];
-  /** 病名の日付。既定は開始日(onset)。 */
-  date_field?: "recorded" | "onset";
-  value?: { op: ExtractValueOp; value: number } | null;
-  date_mode?: AdmissionDateMode;
-  department_id?: string;
-  department_name?: string;
-  /** 入院の病棟(Location)。 */
-  ward_id?: string;
-  ward_name?: string;
-  /** 処方・注射の条件で薬効分類から指定した薬(codes と和をとる)。 */
-  drug_classes?: ExtractDrugClass[];
-  /** 処方・注射の区別。無ければ両方。 */
-  order_type?: ExtractOrderType;
-  relation?: ExtractRelation;
-  /** 一覧・CSV に出す項目。無ければすべて。 */
-  output_fields?: LeafOutputField[];
-}
-
-export interface ExtractGroup {
-  op: "and" | "or";
-  children: ExtractNode[];
-}
-
-export type ExtractNode = ExtractGroup | ExtractLeaf;
+export const EXTRACT_KIND_LABELS = Object.fromEntries(
+  EXTRACT_KINDS.map((kind) => [kind, EXTRACT_KIND_DEFS[kind].label]),
+) as Record<ExtractKind, string>;
 
 export interface ExtractQueryBody {
   schema_version: 1;
@@ -157,16 +67,6 @@ export const PATIENT_COLUMNS: { value: PatientColumn; label: string }[] = [
   { value: "address", label: "住所" },
   { value: "phone", label: "電話" },
   { value: "patient_id", label: "患者ID" },
-];
-
-/** 条件ごとに出す項目。 */
-export type LeafOutputField = "count" | "first" | "last" | "latest";
-
-export const LEAF_OUTPUT_FIELDS: { value: LeafOutputField; label: string }[] = [
-  { value: "count", label: "件数" },
-  { value: "first", label: "最初" },
-  { value: "last", label: "最後" },
-  { value: "latest", label: "最新" },
 ];
 
 export interface ExtractOutput {
@@ -209,21 +109,7 @@ function newKey(): string {
 }
 
 export function newLeaf(kind: ExtractKind): ExtractLeaf {
-  const key = newKey();
-  switch (kind) {
-    case "patient":
-      return { key, kind, gender: [], age: { min: null, max: null } };
-    case "condition":
-      return { key, kind, codes: [], clinical_status: ["active"], date_field: "onset", period: null };
-    case "observation":
-      return { key, kind, codes: [], period: { mode: "relative", days: 365 }, value: null };
-    case "medication":
-      return { key, kind, codes: [], period: { mode: "relative", days: 365 } };
-    case "admission":
-      return { key, kind, date_mode: "overlap", period: { mode: "relative", days: 30 } };
-    case "outpatient":
-      return { key, kind, period: { mode: "relative", days: 30 } };
-  }
+  return { key: newKey(), kind, ...EXTRACT_KIND_DEFS[kind].initial() };
 }
 
 export function newGroup(op: "and" | "or"): ExtractGroup {
@@ -256,31 +142,7 @@ export function leafLabel(leaf: ExtractLeaf): string {
   const period = [periodLabel(leaf.period), relation, (leaf.min_count ?? 1) > 1 ? `${leaf.min_count}件以上` : ""]
     .filter(Boolean)
     .join(" ");
-  switch (leaf.kind) {
-    case "patient": {
-      const gender = (leaf.gender ?? []).map(genderLabel).join("・");
-      const { min, max } = leaf.age ?? {};
-      const age = min != null && max != null ? `${min}〜${max}歳` : min != null ? `${min}歳以上` : max != null ? `${max}歳以下` : "";
-      return [gender, age].filter(Boolean).join(" ") || "患者属性";
-    }
-    case "observation": {
-      const op = EXTRACT_VALUE_OPS.find((o) => o.value === leaf.value?.op)?.label;
-      const value = leaf.value ? `${leaf.value.value}${op ?? ""}` : "";
-      return [names || "検査", value, period].filter(Boolean).join(" ");
-    }
-    case "admission": {
-      const mode = ADMISSION_DATE_MODES.find((m) => m.value === leaf.date_mode)?.label ?? "入院";
-      return [leaf.department_name, leaf.ward_name, mode, period].filter(Boolean).join(" ");
-    }
-    case "outpatient":
-      return ["外来受診", period].filter(Boolean).join(" ");
-    case "medication": {
-      const orderType = EXTRACT_ORDER_TYPES.find((t) => t.value === leaf.order_type)?.label;
-      return [orderType, names || "薬剤", period].filter(Boolean).join(" ");
-    }
-    default:
-      return [names || EXTRACT_KIND_LABELS[leaf.kind], period].filter(Boolean).join(" ");
-  }
+  return extractKindDef(leaf.kind).describe(leaf, names, period);
 }
 
 function relationLabel(relation: ExtractRelation): string {
@@ -320,14 +182,7 @@ export function validateExtractQuery(body: ExtractQueryBody): string[] {
 
   for (const leaf of leaves) {
     const name = leafLabel(leaf);
-    const hasDrugClasses = leaf.kind === "medication" && (leaf.drug_classes ?? []).length > 0;
-    if (["condition", "observation", "medication"].includes(leaf.kind) && !(leaf.codes ?? []).length && !hasDrugClasses) {
-      errors.push(`${name}: 項目を選んでください。`);
-    }
-    if (["admission", "outpatient"].includes(leaf.kind) && !leaf.period) errors.push(`${name}: 期間を入れてください。`);
-    if (leaf.kind === "patient" && !(leaf.gender ?? []).length && leaf.age?.min == null && leaf.age?.max == null) {
-      errors.push(`${name}: 性別か年齢を入れてください。`);
-    }
+    for (const message of extractKindDef(leaf.kind).validate(leaf)) errors.push(`${name}: ${message}`);
     if (leaf.period?.mode === "relative" && !(leaf.period.days && leaf.period.days > 0)) {
       errors.push(`${name}: 日数を入れてください。`);
     }
@@ -376,147 +231,9 @@ export function canNegate(parent: ExtractGroup, leaf: ExtractLeaf): boolean {
 
 // ---- 条件 → FHIR 検索 ----
 
-export interface ResolvedPeriod {
-  from?: string;
-  to?: string;
-}
-
-export function resolvePeriod(period: ExtractPeriod | null | undefined, today: string): ResolvedPeriod | null {
-  if (!period) return null;
-  if (period.mode === "relative") return { from: addDays(today, -(period.days ?? 0)), to: today };
-  return { from: period.from || undefined, to: period.to || undefined };
-}
-
-/** 年齢の範囲を生年月日の範囲に直す(min 歳以上 = 生年月日が今日の min 年前以前)。 */
-export function ageToBirthDateRange(age: ExtractLeaf["age"], today: string): { le?: string; gt?: string } {
-  const shift = (years: number) => {
-    const [y, m, d] = today.split("-").map(Number);
-    const date = new Date(Date.UTC(y - years, m - 1, d));
-    return date.toISOString().slice(0, 10);
-  };
-  return {
-    le: age?.min != null ? shift(age.min) : undefined,
-    gt: age?.max != null ? shift(age.max + 1) : undefined,
-  };
-}
-
-export const EXTRACT_CODE_CHUNK = 100;
-
-export interface LeafSearch {
-  resourceType: string;
-  /** コードが多い条件は分けて引き、患者の和集合を取る。 */
-  paramsList: URLSearchParams[];
-}
-
-function codeParam(codes: ExtractCode[]): string {
-  return codes.map((c) => `${c.system}|${c.code}`).join(",");
-}
-
-function withCodes(codes: ExtractCode[], build: (codeValue: string) => URLSearchParams): URLSearchParams[] {
-  const chunks: URLSearchParams[] = [];
-  for (let i = 0; i < codes.length; i += EXTRACT_CODE_CHUNK) {
-    chunks.push(build(codeParam(codes.slice(i, i + EXTRACT_CODE_CHUNK))));
-  }
-  return chunks;
-}
-
-function appendRange(params: URLSearchParams, name: string, range: ResolvedPeriod | null) {
-  if (range?.from) params.append(name, `ge${range.from}`);
-  if (range?.to) params.append(name, `le${range.to}`);
-}
-
-/**
- * 条件 1 つぶんの上流の検索。返る行は「患者が該当するかどうか」と一覧の列(件数・日付・最新値)
- * に要る項目だけ(_elements)。値の範囲は上流の value-quantity で絞る。
- */
+/** 条件 1 つぶんの上流の検索(種類ごとの検索は fhir/extractKinds.ts)。 */
 export function leafSearch(leaf: ExtractLeaf, today: string): LeafSearch {
-  const range = resolvePeriod(leaf.period, today);
-  const codes = leaf.codes ?? [];
-  switch (leaf.kind) {
-    case "patient": {
-      const params = new URLSearchParams();
-      if ((leaf.gender ?? []).length) params.set("gender", (leaf.gender ?? []).join(","));
-      const birth = ageToBirthDateRange(leaf.age, today);
-      if (birth.le) params.append("birthdate", `le${birth.le}`);
-      if (birth.gt) params.append("birthdate", `gt${birth.gt}`);
-      params.set("active:not", "false");
-      params.set("_elements", "gender,birthDate");
-      return { resourceType: "Patient", paramsList: [params] };
-    }
-    case "condition":
-      return {
-        resourceType: "Condition",
-        paramsList: withCodes(codes, (code) => {
-          const params = new URLSearchParams();
-          params.set("code", code);
-          if ((leaf.clinical_status ?? []).length) params.set("clinical-status", (leaf.clinical_status ?? []).join(","));
-          params.set("verification-status:not", "entered-in-error,refuted");
-          excludeNursingProblems(params);
-          // 病名の開始日は onsetDateTime(この画面の病名登録は recordedDate を書かない)。登録日は他の
-          // システムから来た病名のため。
-          appendRange(params, leaf.date_field === "recorded" ? "recorded-date" : "onset-date", range);
-          params.set("_elements", "subject,code,recordedDate,onsetDateTime,extension");
-          return params;
-        }),
-      };
-    case "observation":
-      return {
-        resourceType: "Observation",
-        paramsList: withCodes(codes, (code) => {
-          const params = new URLSearchParams();
-          params.set("code", code);
-          appendRange(params, "date", range);
-          if (leaf.value) params.set("value-quantity", `${leaf.value.op}${leaf.value.value}`);
-          params.set("status:not", "entered-in-error,cancelled");
-          params.set("_elements", "subject,code,effectiveDateTime,valueQuantity,extension");
-          return params;
-        }),
-      };
-    case "medication":
-      return {
-        resourceType: "MedicationRequest",
-        paramsList: withCodes(codes, (code) => {
-          const params = new URLSearchParams();
-          params.set("code", code);
-          appendRange(params, "authoredon", range);
-          // 処方と注射はオーダーのヘッダ(ServiceRequest)の order-type でしか分からないので、
-          // based-on のチェーンで引く。
-          if (leaf.order_type) params.set("based-on.category", `${ORDER_TYPE_SYSTEM}|${leaf.order_type}`);
-          params.set("status:not", "entered-in-error,cancelled");
-          params.set("_elements", "subject,authoredOn,medicationCodeableConcept,extension");
-          return params;
-        }),
-      };
-    case "admission": {
-      const params = new URLSearchParams();
-      params.set("class", ADMISSION_CLASS_CODE);
-      params.set("status", `${ADMISSION_STATUS},${DISCHARGED_STATUS}`);
-      // Encounter.date は入院期間との比較。sa / eb で入院日・退院日だけを見る。
-      if (leaf.date_mode === "admitted") {
-        if (range?.from) params.append("date", `sa${addDays(range.from, -1)}`);
-        if (range?.to) params.append("date", `le${range.to}`);
-      } else if (leaf.date_mode === "discharged") {
-        if (range?.from) params.append("date", `ge${range.from}`);
-        params.append("date", `eb${addDays(range?.to ?? today, 1)}`);
-      } else {
-        appendRange(params, "date", range);
-      }
-      if (leaf.department_id) params.set("service-provider", `Organization/${leaf.department_id}`);
-      // Encounter.location はベッド。ベッド → 病室 → 病棟と partOf を辿るチェーンで病棟に絞る
-      // (転棟前のベッドも location に残るので、期間中にその病棟にいたことがある入院が当たる)。
-      if (leaf.ward_id) params.set("location.partof.partof", `Location/${leaf.ward_id}`);
-      params.set("_elements", "subject,period,serviceProvider");
-      return { resourceType: "Encounter", paramsList: [params] };
-    }
-    case "outpatient": {
-      const params = new URLSearchParams();
-      params.set("class", OUTPATIENT_CLASS_CODE);
-      params.set("status:not", "cancelled,entered-in-error");
-      appendRange(params, "date", range);
-      params.set("_elements", "subject,period");
-      return { resourceType: "Encounter", paramsList: [params] };
-    }
-  }
+  return extractKindDef(leaf.kind).search(leaf, today);
 }
 
 const PAGING_PARAMS = new Set(["_elements", "_count", "_offset", "_total"]);
@@ -539,55 +256,13 @@ export interface LeafHit {
 
 export type LeafHits = Map<string, LeafHit>;
 
-/** 条件の検索で返る型。 */
-export type ExtractRecord =
-  | fhir4.Patient
-  | fhir4.Condition
-  | fhir4.Observation
-  | fhir4.MedicationRequest
-  | fhir4.Encounter;
-
 function subjectOf(resource: ExtractRecord): string {
   if (resource.resourceType === "Patient") return resource.id ?? "";
   return referenceIdOfType(resource.subject?.reference, "Patient");
 }
 
 function recordDate(leaf: ExtractLeaf, resource: ExtractRecord): string {
-  switch (resource.resourceType) {
-    case "Condition":
-      return (
-        (leaf.date_field === "recorded" ? resource.recordedDate : resource.onsetDateTime) ??
-        resource.onsetDateTime ??
-        resource.recordedDate ??
-        ""
-      );
-    case "Observation":
-      return resource.effectiveDateTime ?? "";
-    case "MedicationRequest":
-      return resource.authoredOn ?? "";
-    case "Encounter":
-      return resource.period?.start ?? "";
-    default:
-      return "";
-  }
-}
-
-function recordContent(resource: ExtractRecord): string {
-  switch (resource.resourceType) {
-    case "Condition":
-      return conceptLabel(resource.code);
-    case "Observation":
-      return quantityLabel(resource.valueQuantity);
-    case "MedicationRequest":
-      return conceptLabel(resource.medicationCodeableConcept);
-    case "Encounter": {
-      const start = localDay(resource.period?.start);
-      const end = localDay(resource.period?.end);
-      return end ? `${start}〜${end}` : `${start}〜`;
-    }
-    default:
-      return "";
-  }
+  return extractKindDef(leaf.kind).recordDate(leaf, resource);
 }
 
 /** 検索で返った行を患者ごとに畳む。min_count に届かない患者は外す。 */
@@ -597,7 +272,7 @@ export function leafHitsOf(leaf: ExtractLeaf, resources: ExtractRecord[]): LeafH
     const patientId = subjectOf(resource);
     if (!patientId) continue;
     const list = grouped.get(patientId) ?? [];
-    list.push({ date: recordDate(leaf, resource), content: recordContent(resource) });
+    list.push({ date: recordDate(leaf, resource), content: extractKindDef(leaf.kind).recordContent(resource) });
     grouped.set(patientId, list);
   }
   const hits: LeafHits = new Map();
@@ -623,19 +298,13 @@ export interface LeafRecord {
   department: string;
 }
 
-function recordDepartment(resource: ExtractRecord): string {
-  if (resource.resourceType === "Encounter") return resource.serviceProvider?.display ?? "";
-  if (resource.resourceType === "Patient") return "";
-  return departmentOf(resource).departmentName;
-}
-
 /** 検索で返った行を、内訳に使う要約にする。min_count に届かない患者の記録も含む(結果の患者で絞って使う)。 */
 export function leafRecordsOf(leaf: ExtractLeaf, resources: ExtractRecord[]): LeafRecord[] {
   return resources
     .map((resource) => ({
       patientId: subjectOf(resource),
       day: localDay(recordDate(leaf, resource)),
-      department: recordDepartment(resource),
+      department: extractKindDef(leaf.kind).recordDepartment(resource),
     }))
     .filter((record) => record.patientId);
 }
@@ -644,8 +313,8 @@ function startDay(leaf: ExtractLeaf, resource: ExtractRecord): string {
   return localDay(recordDate(leaf, resource));
 }
 
-function endDay(resource: ExtractRecord): string {
-  return resource.resourceType === "Encounter" ? localDay(resource.period?.end) : "";
+function endDay(leaf: ExtractLeaf, resource: ExtractRecord): string {
+  return extractKindDef(leaf.kind).endDay?.(resource) ?? "";
 }
 
 function dayDiff(from: string, to: string): number {
@@ -668,7 +337,7 @@ export function applyRelation(
   const anchorDays = new Map<string, string[]>();
   for (const record of anchorRecords) {
     const patientId = subjectOf(record);
-    const day = (relation.anchor_date === "end" ? endDay(record) : "") || startDay(anchor, record);
+    const day = (relation.anchor_date === "end" ? endDay(anchor, record) : "") || startDay(anchor, record);
     if (!patientId || !day) continue;
     anchorDays.set(patientId, [...(anchorDays.get(patientId) ?? []), day]);
   }
@@ -937,148 +606,6 @@ export interface ExtractDetail {
   records: ExtractRecord[];
 }
 
-/** 明細の、患者の列より後ろの見出し。 */
-const DETAIL_HEADER = [
-  "条件",
-  "種類",
-  "日付",
-  "終了日",
-  "コード",
-  "名称",
-  "値",
-  "単位",
-  "判定",
-  "基準値",
-  "状態",
-  "登録日",
-  "用量",
-  "用法",
-  "日数",
-  "診療科",
-  "記録ID",
-];
-
-const CLINICAL_STATUS_LABELS: Record<string, string> = Object.fromEntries(
-  CLINICAL_STATUS_OPTIONS.map((o) => [o.value, o.label]),
-);
-
-// 記録の状態(status)の表示名。表に無い値はコードのまま出す。
-const STATUS_LABELS: Record<string, Record<string, string>> = {
-  Observation: { final: "確定", preliminary: "速報", amended: "訂正", corrected: "訂正", registered: "登録" },
-  MedicationRequest: { active: "有効", completed: "終了", stopped: "中止", "on-hold": "保留", draft: "下書き" },
-  Encounter: { "in-progress": "入院中", finished: "終了", planned: "予定", arrived: "来院" },
-};
-
-function statusLabel(record: ExtractRecord): string {
-  const status = "status" in record ? (record.status ?? "") : "";
-  return STATUS_LABELS[record.resourceType]?.[status] ?? status;
-}
-
-/** 種類ごとに違う列(DETAIL_HEADER の「種類」以降)。 */
-function detailCells(record: ExtractRecord): (string | number)[] {
-  const firstCode = (concept: fhir4.CodeableConcept | undefined) => concept?.coding?.[0]?.code ?? "";
-  switch (record.resourceType) {
-    case "Observation":
-      return [
-        "検査結果",
-        dateTimeLabel(record.effectiveDateTime),
-        "",
-        firstCode(record.code),
-        conceptLabel(record.code),
-        record.valueQuantity?.value ?? "",
-        record.valueQuantity?.unit ?? "",
-        record.interpretation?.[0]?.coding?.[0]?.code ?? "",
-        record.referenceRange?.[0]?.text ?? "",
-        statusLabel(record),
-        "",
-        "",
-        "",
-        "",
-        departmentOf(record).departmentName,
-        record.id ?? "",
-      ];
-    case "Condition": {
-      const status = record.clinicalStatus?.coding?.[0]?.code ?? "";
-      return [
-        "病名",
-        localDay(record.onsetDateTime ?? record.recordedDate),
-        localDay(record.abatementDateTime),
-        firstCode(record.code),
-        conceptLabel(record.code),
-        "",
-        "",
-        "",
-        "",
-        CLINICAL_STATUS_LABELS[status] ?? status,
-        localDay(record.recordedDate),
-        "",
-        "",
-        "",
-        departmentOf(record).departmentName,
-        record.id ?? "",
-      ];
-    }
-    case "MedicationRequest": {
-      const dosage = record.dosageInstruction?.[0];
-      const dose = dosage?.doseAndRate?.[0]?.doseQuantity;
-      return [
-        "処方・注射",
-        dateTimeLabel(record.authoredOn),
-        "",
-        firstCode(record.medicationCodeableConcept),
-        conceptLabel(record.medicationCodeableConcept),
-        "",
-        "",
-        "",
-        "",
-        statusLabel(record),
-        "",
-        dose?.value != null ? `${dose.value}${dose.unit ?? ""}` : "",
-        dosage?.text ?? "",
-        record.dispenseRequest?.expectedSupplyDuration?.value ?? "",
-        departmentOf(record).departmentName,
-        record.id ?? "",
-      ];
-    }
-    case "Encounter":
-      return [
-        record.class?.code === OUTPATIENT_CLASS_CODE ? "外来受診" : "入院",
-        localDay(record.period?.start),
-        localDay(record.period?.end),
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        statusLabel(record),
-        "",
-        "",
-        "",
-        "",
-        record.serviceProvider?.display ?? "",
-        record.id ?? "",
-      ];
-    default:
-      return [];
-  }
-}
-
-function detailSortKey(record: ExtractRecord): string {
-  switch (record.resourceType) {
-    case "Observation":
-      return record.effectiveDateTime ?? "";
-    case "Condition":
-      return record.onsetDateTime ?? record.recordedDate ?? "";
-    case "MedicationRequest":
-      return record.authoredOn ?? "";
-    case "Encounter":
-      return record.period?.start ?? "";
-    default:
-      return "";
-  }
-}
-
 /**
  * 明細の CSV。結果の患者ごとに、条件に当たった記録を条件の順・日付の順に 1 件 1 行で並べる。
  * 種類ごとに使わない列は空にして、1 つの表にそろえる(Excel で絞り込めるように)。
@@ -1090,19 +617,28 @@ export function extractDetailCsv(rows: ExtractRow[], details: ExtractDetail[], o
     for (const { leaf, records } of details) {
       const mine = records
         .filter((record) => subjectOf(record) === row.patientId)
-        .sort((a, b) => detailSortKey(a).localeCompare(detailSortKey(b)));
+        .sort((a, b) => recordDate(leaf, a).localeCompare(recordDate(leaf, b)));
       for (const record of mine) {
         lines.push([
           row.patientNumber,
           row.name,
           ...patientColumns.map((column) => patientCell(row, column)),
           leafLabel(leaf),
-          ...detailCells(record),
+          ...detailCells(leaf, record),
         ]);
       }
     }
   }
-  return csvBlob(["患者番号", "氏名", ...patientColumns.map(patientColumnLabel), ...DETAIL_HEADER], lines);
+  return csvBlob(
+    ["患者番号", "氏名", ...patientColumns.map(patientColumnLabel), "条件", ...DETAIL_COLUMNS.map(([, label]) => label)],
+    lines,
+  );
+}
+
+/** 明細の、条件の列より後ろの値(種類ごとに使わない列は空)。 */
+function detailCells(leaf: ExtractLeaf, record: ExtractRecord): (string | number)[] {
+  const fields = extractKindDef(leaf.kind).detail(record);
+  return DETAIL_COLUMNS.map(([key]) => fields[key] ?? "");
 }
 
 // ---- 病名の ICD10 ----

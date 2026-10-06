@@ -46,7 +46,7 @@ import {
 export const TREATMENT_ORDER_TYPE = { code: "treatment", display: "処置" };
 
 // 処置オーダー項目マスタの独自コード。
-const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/treatment-order-item";
+export const TREATMENT_ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/treatment-order-item";
 // 略称。検体検査・放射線検査と同じ CodeSystem を使う(オーダー項目の略称という意味は同じ)。
 
 // 明細の並び順。独立したリソースは検索の戻り順が保証されないため、伝票で選んだ
@@ -174,7 +174,7 @@ function buildItemRequest(
   parentReference: string,
 ): fhir4.ServiceRequest {
   const coding: fhir4.Coding[] = [
-    { system: ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
+    { system: TREATMENT_ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
   ];
   if (item.shortName) {
     coding.push({ system: ABBREVIATION_SYSTEM, code: item.shortName, display: item.shortName });
@@ -201,7 +201,7 @@ function parseItemRequest(
   parentCode: string,
 ): TreatmentOrderItemLine {
   const coding = request.code?.coding;
-  const itemCoding = codingBySystem(coding, ORDER_ITEM_SYSTEM);
+  const itemCoding = codingBySystem(coding, TREATMENT_ORDER_ITEM_SYSTEM);
   const abbreviation = codingBySystem(coding, ABBREVIATION_SYSTEM);
 
   return {
@@ -279,7 +279,7 @@ function parseItemRequests(
   // 明細の id → 項目コード。構成項目に親のコードを持たせる。
   const codeById = new Map<string, string>();
   for (const request of requests) {
-    const code = codingBySystem(request.code?.coding, ORDER_ITEM_SYSTEM)?.code;
+    const code = codingBySystem(request.code?.coding, TREATMENT_ORDER_ITEM_SYSTEM)?.code;
     if (request.id && code) codeById.set(request.id, code);
   }
 
