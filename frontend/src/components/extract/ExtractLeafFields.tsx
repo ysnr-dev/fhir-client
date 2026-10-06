@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Disease, LabResultItem, Medicine } from "../../api/masterClient";
 import { useMedicineTypeOptions } from "../../api/masterQueries";
-import { useSelfDepartments } from "../../api/queries";
+import { useSelfDepartments, useWardOptions } from "../../api/queries";
 import { DISEASE_KEY_NUMBER_SYSTEM } from "../../fhir/conditionHelpers";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
@@ -19,6 +19,7 @@ import {
   type ExtractValueOp,
 } from "../../fhir/extractQueryHelpers";
 import { RESULT_ITEM_SYSTEM } from "../../fhir/labResultHelpers";
+import { locationDisplayName } from "../../fhir/locationHelpers";
 import { MEDICINE_CODE_SYSTEM } from "../../fhir/prescriptionHelpers";
 import { LOINC_SYSTEM } from "../../fhir/shared";
 import { VITAL_MEASURES } from "../../fhir/vitalHelpers";
@@ -423,6 +424,7 @@ function ValueFields({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
 
 function AdmissionFields({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
   const { departments } = useSelfDepartments();
+  const { wards } = useWardOptions();
   const options = sortDepartmentsByCode(departments).filter((d) => d.id);
   return (
     <div className="extract-leaf__row">
@@ -455,6 +457,23 @@ function AdmissionFields({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
           {options.map((d) => (
             <option key={d.id} value={d.id}>
               {departmentDisplayName(d)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="extract-field">
+        病棟
+        <select
+          value={leaf.ward_id ?? ""}
+          onChange={(e) => {
+            const ward = wards.find((w) => w.id === e.target.value);
+            patch({ ward_id: ward?.id || undefined, ward_name: ward ? locationDisplayName(ward) : undefined });
+          }}
+        >
+          <option value="">すべて</option>
+          {wards.map((w) => (
+            <option key={w.id} value={w.id}>
+              {locationDisplayName(w)}
             </option>
           ))}
         </select>

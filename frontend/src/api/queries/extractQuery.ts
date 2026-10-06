@@ -8,6 +8,7 @@ import {
   extractRows,
   isUnfiltered,
   leafHitsOf,
+  leafRecordsOf,
   leafSearch,
   patientFilterLeaves,
   patientMatches,
@@ -17,6 +18,7 @@ import {
   type ExtractRecord,
   type ExtractRow,
   type LeafHits,
+  type LeafRecord,
 } from "../../fhir/extractQueryHelpers";
 import { runWithConcurrency } from "../../lib/concurrency";
 import { today } from "../../lib/dates";
@@ -70,6 +72,8 @@ export interface ExtractResult {
   rows: ExtractRow[];
   leaves: ExtractLeaf[];
   hits: Map<string, LeafHits>;
+  /** 条件ごとの記録の要約(内訳の月別・診療科別に使う)。患者属性の条件は持たない。 */
+  records: Map<string, LeafRecord[]>;
   ranAt: string;
 }
 
@@ -239,6 +243,7 @@ export function useExtractRun() {
       };
       try {
         const hits = new Map<string, LeafHits>();
+        const recordsByLeaf = new Map<string, LeafRecord[]>();
         await runWithConcurrency(
           leaves
             .filter((leaf) => !filterKeys.has(leaf.key))
@@ -249,6 +254,7 @@ export function useExtractRun() {
                 const records = await fetchLeaf(leaf, context, labelOf(leaf));
                 const leafHits = leafHitsOf(leaf, records);
                 hits.set(leaf.key, leafHits);
+                if (leaf.kind !== "patient") recordsByLeaf.set(leaf.key, leafRecordsOf(leaf, records));
                 progress[leaf.key] = { state: "done", records: records.length, patients: leafHits.size };
               } catch (error) {
                 progress[leaf.key] = { ...progress[leaf.key], state: "error" };
@@ -288,6 +294,7 @@ export function useExtractRun() {
           rows: extractRows(ids, patients, leaves, hits),
           leaves,
           hits,
+          records: recordsByLeaf,
           ranAt: new Date().toISOString(),
         };
         publish({ running: false, result });

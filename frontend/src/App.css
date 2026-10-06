@@ -8862,6 +8862,24 @@ input.lot-number-cell__input.is-invalid {
   font-weight: 600;
 }
 
+.extract-breakdown__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.extract-breakdown__controls select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
 /* 検査オーダー関連マスタ ------------------------------------------------- */
 
 /* パネル構成もまとめて編集する詳細モーダル。列が多いので広幅にする。 */

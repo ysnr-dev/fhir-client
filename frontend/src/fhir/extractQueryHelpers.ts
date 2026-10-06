@@ -88,6 +88,9 @@ export interface ExtractLeaf {
   date_mode?: AdmissionDateMode;
   department_id?: string;
   department_name?: string;
+  /** 入院の病棟(Location)。 */
+  ward_id?: string;
+  ward_name?: string;
   /** 処方・注射の条件で薬効分類から指定した薬(codes と和をとる)。 */
   drug_classes?: ExtractDrugClass[];
   /** 処方・注射の区別。無ければ両方。 */
@@ -182,7 +185,7 @@ export function leafLabel(leaf: ExtractLeaf): string {
     }
     case "admission": {
       const mode = ADMISSION_DATE_MODES.find((m) => m.value === leaf.date_mode)?.label ?? "入院";
-      return [leaf.department_name, mode, period].filter(Boolean).join(" ");
+      return [leaf.department_name, leaf.ward_name, mode, period].filter(Boolean).join(" ");
     }
     case "outpatient":
       return ["外来受診", period].filter(Boolean).join(" ");
@@ -326,7 +329,7 @@ export function leafSearch(leaf: ExtractLeaf, today: string): LeafSearch {
           params.set("verification-status:not", "entered-in-error,refuted");
           excludeNursingProblems(params);
           appendRange(params, leaf.date_field === "onset" ? "onset-date" : "recorded-date", range);
-          params.set("_elements", "subject,code,recordedDate,onsetDateTime");
+          params.set("_elements", "subject,code,recordedDate,onsetDateTime,extension");
           return params;
         }),
       };
@@ -339,7 +342,7 @@ export function leafSearch(leaf: ExtractLeaf, today: string): LeafSearch {
           appendRange(params, "date", range);
           if (leaf.value) params.set("value-quantity", `${leaf.value.op}${leaf.value.value}`);
           params.set("status:not", "entered-in-error,cancelled");
-          params.set("_elements", "subject,code,effectiveDateTime,valueQuantity");
+          params.set("_elements", "subject,code,effectiveDateTime,valueQuantity,extension");
           return params;
         }),
       };
@@ -354,7 +357,7 @@ export function leafSearch(leaf: ExtractLeaf, today: string): LeafSearch {
           // based-on のチェーンで引く。
           if (leaf.order_type) params.set("based-on.category", `${ORDER_TYPE_SYSTEM}|${leaf.order_type}`);
           params.set("status:not", "entered-in-error,cancelled");
-          params.set("_elements", "subject,authoredOn,medicationCodeableConcept");
+          params.set("_elements", "subject,authoredOn,medicationCodeableConcept,extension");
           return params;
         }),
       };
@@ -373,6 +376,9 @@ export function leafSearch(leaf: ExtractLeaf, today: string): LeafSearch {
         appendRange(params, "date", range);
       }
       if (leaf.department_id) params.set("service-provider", `Organization/${leaf.department_id}`);
+      // Encounter.location はベッド。ベッド → 病室 → 病棟と partOf を辿るチェーンで病棟に絞る
+      // (転棟前のベッドも location に残るので、期間中にその病棟にいたことがある入院が当たる)。
+      if (leaf.ward_id) params.set("location.partof.partof", `Location/${leaf.ward_id}`);
       params.set("_elements", "subject,period,serviceProvider");
       return { resourceType: "Encounter", paramsList: [params] };
     }
@@ -476,6 +482,63 @@ export function leafHitsOf(leaf: ExtractLeaf, resources: ExtractRecord[]): LeafH
     });
   }
   return hits;
+}
+
+/** 内訳(月別・診療科別)に使う、記録 1 件ぶんの要約。 */
+export interface LeafRecord {
+  patientId: string;
+  /** 記録の日(YYYY-MM-DD)。 */
+  day: string;
+  department: string;
+}
+
+function recordDepartment(resource: ExtractRecord): string {
+  if (resource.resourceType === "Encounter") return resource.serviceProvider?.display ?? "";
+  if (resource.resourceType === "Patient") return "";
+  return departmentOf(resource).departmentName;
+}
+
+/** 検索で返った行を、内訳に使う要約にする。min_count に届かない患者の記録も含む(結果の患者で絞って使う)。 */
+export function leafRecordsOf(leaf: ExtractLeaf, resources: ExtractRecord[]): LeafRecord[] {
+  return resources
+    .map((resource) => ({
+      patientId: subjectOf(resource),
+      day: localDay(recordDate(leaf, resource)),
+      department: recordDepartment(resource),
+    }))
+    .filter((record) => record.patientId);
+}
+
+export type LeafBreakdownAxis = "month" | "department";
+
+export interface LeafBreakdownRow {
+  key: string;
+  records: number;
+  patients: number;
+}
+
+/**
+ * 条件 1 つの内訳。結果の患者の記録を月別(YYYY-MM、古い順)か診療科別(件数の多い順)に数える。
+ * 日付・診療科の無い記録は「不明」にまとめる。
+ */
+export function leafBreakdown(
+  records: LeafRecord[],
+  patientIds: Set<string>,
+  axis: LeafBreakdownAxis,
+): LeafBreakdownRow[] {
+  const groups = new Map<string, { records: number; patients: Set<string> }>();
+  for (const record of records) {
+    if (!patientIds.has(record.patientId)) continue;
+    const key = (axis === "month" ? record.day.slice(0, 7) : record.department) || "不明";
+    const group = groups.get(key) ?? { records: 0, patients: new Set<string>() };
+    group.records += 1;
+    group.patients.add(record.patientId);
+    groups.set(key, group);
+  }
+  const rows = [...groups].map(([key, g]) => ({ key, records: g.records, patients: g.patients.size }));
+  return axis === "month"
+    ? rows.sort((a, b) => (a.key === "不明" ? 1 : b.key === "不明" ? -1 : a.key.localeCompare(b.key)))
+    : rows.sort((a, b) => b.records - a.records || a.key.localeCompare(b.key));
 }
 
 // ---- 集合の組み合わせ ----

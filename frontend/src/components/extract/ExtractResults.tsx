@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import type { ExtractResult } from "../../api/queries";
 import {
   extractBreakdown,
+  leafBreakdown,
+  type LeafBreakdownAxis,
   leafLabel,
   resultColumns,
   type ExtractLeaf,
@@ -130,6 +132,7 @@ function BreakdownTable({ result }: { result: ExtractResult }) {
           </tr>
         </tbody>
       </table>
+      {columns.length > 0 && <LeafBreakdownTable result={result} columns={columns} />}
       {columns.length > 0 && (
         <table className="master-search__table extract-breakdown">
           <thead>
@@ -153,5 +156,83 @@ function BreakdownTable({ result }: { result: ExtractResult }) {
         </table>
       )}
     </>
+  );
+}
+
+/** 条件 1 つの記録を月別・診療科別に数える(結果の患者の記録だけ)。 */
+function LeafBreakdownTable({ result, columns }: { result: ExtractResult; columns: ExtractLeaf[] }) {
+  const [leafKey, setLeafKey] = useState(columns[0]?.key ?? "");
+  const [axis, setAxis] = useState<LeafBreakdownAxis>("month");
+  const leaf = columns.find((c) => c.key === leafKey) ?? columns[0];
+  const patientIds = new Set(result.rows.map((row) => row.patientId));
+  const rows = leaf ? leafBreakdown(result.records.get(leaf.key) ?? [], patientIds, axis) : [];
+  const total = rows.reduce((sum, row) => sum + row.records, 0);
+  // 患者数の計は行の和ではない(同じ患者が複数の月・科に出る)。
+  const totalPatients = new Set(
+    (leaf ? (result.records.get(leaf.key) ?? []) : []).filter((r) => patientIds.has(r.patientId)).map((r) => r.patientId),
+  ).size;
+
+  return (
+    <div className="extract-breakdown__leaf">
+      <div className="extract-breakdown__controls">
+        <select aria-label="内訳の条件" value={leaf?.key ?? ""} onChange={(e) => setLeafKey(e.target.value)}>
+          {columns.map((c) => (
+            <option key={c.key} value={c.key}>
+              {leafLabel(c)}
+            </option>
+          ))}
+        </select>
+        <span className="extract-group__ops" role="group" aria-label="内訳の切り口">
+          {(
+            [
+              { value: "month", label: "月別" },
+              { value: "department", label: "診療科別" },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={axis === option.value}
+              className={`extract-group__op${axis === option.value ? " is-active" : ""}`}
+              onClick={() => setAxis(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </span>
+      </div>
+      <table className="master-search__table extract-breakdown">
+        <thead>
+          <tr>
+            <th>{axis === "month" ? "月" : "診療科"}</th>
+            <th className="extract-breakdown__number">件数</th>
+            <th className="extract-breakdown__number">患者数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key}>
+              <td>{row.key}</td>
+              <td className="extract-breakdown__number">{row.records}</td>
+              <td className="extract-breakdown__number">{row.patients}</td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={3} className="master-search__empty">
+                記録はありません
+              </td>
+            </tr>
+          )}
+          {rows.length > 0 && (
+            <tr className="extract-breakdown__total">
+              <td>計</td>
+              <td className="extract-breakdown__number">{total}</td>
+              <td className="extract-breakdown__number">{totalPatients}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }

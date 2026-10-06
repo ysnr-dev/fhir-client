@@ -90,6 +90,9 @@ class ExtractQuery < ApplicationRecord
     "date_mode" => { enum: DATE_MODES },
     "department_id" => :string,
     "department_name" => :string,
+    # 入院の病棟(Location)。入院のベッドから病室・病棟を辿るチェーン検索で絞る。
+    "ward_id" => :string,
+    "ward_name" => :string,
     # 薬効分類(YJ コードの先頭 2〜4 桁)。実行時に医薬品コードへ展開する(新しい薬も拾える)。
     "drug_classes" => {
       list: {
