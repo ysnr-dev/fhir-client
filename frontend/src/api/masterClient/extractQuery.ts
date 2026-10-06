@@ -62,3 +62,34 @@ export async function deleteExtractQuery(id: number): Promise<void> {
   const res = await masterFetch(`${PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
+
+/** 実行の記録 1 件(定点観測の推移)。患者は持たない。 */
+export interface ExtractQueryRun {
+  id: number;
+  extract_query_id: number;
+  ran_at: string;
+  patient_count: number;
+  /** 条件の key → その条件だけで当たった人数。 */
+  leaf_counts: Record<string, number>;
+  ran_by_id: string | null;
+  ran_by_name: string | null;
+}
+
+export async function fetchExtractQueryRuns(queryId: number): Promise<ExtractQueryRun[]> {
+  const res = await masterFetch(`${PATH}/${queryId}/runs`);
+  if (!res.ok) throw await buildError(res);
+  return ((await res.json()) as { items: ExtractQueryRun[] }).items;
+}
+
+export async function createExtractQueryRun(
+  queryId: number,
+  payload: { patient_count: number; leaf_counts: Record<string, number>; ran_by_id?: string; ran_by_name?: string },
+): Promise<ExtractQueryRun> {
+  const res = await masterFetch(`${PATH}/${queryId}/runs`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as ExtractQueryRun;
+}

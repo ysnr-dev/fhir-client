@@ -57,6 +57,18 @@ export const EXTRACT_ORDER_TYPES: { value: ExtractOrderType; label: string }[] =
   { value: "injection", label: "注射" },
 ];
 
+/**
+ * 時間関係。同じ AND グループの別の条件(key)の記録の日から from_days〜to_days 日に入る記録だけを
+ * 数える(負の日数は前)。基準の記録のどれか 1 つに対して窓に入れば数える。anchor_date は基準の
+ * 記録のどの日を使うか(end は入院・外来の終了日。再入院を「退院の翌日から 30 日」で見るときなど)。
+ */
+export interface ExtractRelation {
+  key: string;
+  from_days: number;
+  to_days: number;
+  anchor_date?: "start" | "end";
+}
+
 /** 薬効分類(YJ コードの先頭 2〜4 桁)。実行時に医薬品コードへ展開する。 */
 export interface ExtractDrugClass {
   code: string;
@@ -83,6 +95,7 @@ export interface ExtractLeaf {
   gender?: string[];
   age?: { min?: number | null; max?: number | null };
   clinical_status?: string[];
+  /** 病名の日付。既定は開始日(onset)。 */
   date_field?: "recorded" | "onset";
   value?: { op: ExtractValueOp; value: number } | null;
   date_mode?: AdmissionDateMode;
@@ -95,6 +108,7 @@ export interface ExtractLeaf {
   drug_classes?: ExtractDrugClass[];
   /** 処方・注射の区別。無ければ両方。 */
   order_type?: ExtractOrderType;
+  relation?: ExtractRelation;
 }
 
 export interface ExtractGroup {
@@ -130,7 +144,7 @@ export function newLeaf(kind: ExtractKind): ExtractLeaf {
     case "patient":
       return { key, kind, gender: [], age: { min: null, max: null } };
     case "condition":
-      return { key, kind, codes: [], clinical_status: ["active"], date_field: "recorded", period: null };
+      return { key, kind, codes: [], clinical_status: ["active"], date_field: "onset", period: null };
     case "observation":
       return { key, kind, codes: [], period: { mode: "relative", days: 365 }, value: null };
     case "medication":
@@ -168,7 +182,8 @@ export function leafLabel(leaf: ExtractLeaf): string {
     ...(leaf.codes ?? []).map((c) => c.display || c.code),
   ];
   const names = codes.length > 2 ? `${codes.slice(0, 2).join("・")}ほか${codes.length - 2}件` : codes.join("・");
-  const period = [periodLabel(leaf.period), (leaf.min_count ?? 1) > 1 ? `${leaf.min_count}件以上` : ""]
+  const relation = leaf.relation ? relationLabel(leaf.relation) : "";
+  const period = [periodLabel(leaf.period), relation, (leaf.min_count ?? 1) > 1 ? `${leaf.min_count}件以上` : ""]
     .filter(Boolean)
     .join(" ");
   switch (leaf.kind) {
@@ -198,6 +213,12 @@ export function leafLabel(leaf: ExtractLeaf): string {
   }
 }
 
+function relationLabel(relation: ExtractRelation): string {
+  const day = (n: number) => (n === 0 ? "当日" : n > 0 ? `${n}日後` : `${-n}日前`);
+  const base = relation.anchor_date === "end" ? "終了" : "";
+  return `基準${base}の${day(relation.from_days)}〜${day(relation.to_days)}`;
+}
+
 // ---- 検証 ----
 
 /** 画面で弾く誤り(backend の ExtractQuery の検証と同じ決まり)。空なら実行できる。 */
@@ -216,6 +237,13 @@ export function validateExtractQuery(body: ExtractQueryBody): string[] {
     }
     for (const child of group.children) {
       if (isGroup(child)) visit(child, depth + 1);
+      else if (child.relation) {
+        const anchor = relationAnchorOf(group, child);
+        if (!anchor) errors.push(`${leafLabel(child)}: 基準の条件を選び直してください。`);
+        else if (child.relation.from_days > child.relation.to_days) {
+          errors.push(`${leafLabel(child)}: 日数の範囲が逆です。`);
+        }
+      }
     }
   };
   visit(body.root, 1);
@@ -242,6 +270,32 @@ export function validateExtractQuery(body: ExtractQueryBody): string[] {
     }
   }
   return Array.from(new Set(errors));
+}
+
+/** 時間関係の基準にできる兄弟(AND の直下の、除外でも患者属性でもなく、自分も時間関係を持たない条件)。 */
+export function relationAnchors(parent: ExtractGroup, leaf: ExtractLeaf): ExtractLeaf[] {
+  if (parent.op !== "and") return [];
+  return parent.children.filter(
+    (c): c is ExtractLeaf => !isGroup(c) && c !== leaf && !c.not && c.kind !== "patient" && !c.relation,
+  );
+}
+
+export function relationAnchorOf(parent: ExtractGroup, leaf: ExtractLeaf): ExtractLeaf | undefined {
+  if (!leaf.relation) return undefined;
+  return relationAnchors(parent, leaf).find((c) => c.key === leaf.relation!.key);
+}
+
+/** 条件 → それが属するグループ(時間関係の基準を探すため)。 */
+export function parentGroups(root: ExtractGroup): Map<string, ExtractGroup> {
+  const parents = new Map<string, ExtractGroup>();
+  const visit = (group: ExtractGroup) => {
+    for (const child of group.children) {
+      if (isGroup(child)) visit(child);
+      else parents.set(child.key, group);
+    }
+  };
+  visit(root);
+  return parents;
 }
 
 /** 除外にできる位置か(AND の直下で、ほかに除外でない兄弟がある)。 */
@@ -328,7 +382,9 @@ export function leafSearch(leaf: ExtractLeaf, today: string): LeafSearch {
           if ((leaf.clinical_status ?? []).length) params.set("clinical-status", (leaf.clinical_status ?? []).join(","));
           params.set("verification-status:not", "entered-in-error,refuted");
           excludeNursingProblems(params);
-          appendRange(params, leaf.date_field === "onset" ? "onset-date" : "recorded-date", range);
+          // 病名の開始日は onsetDateTime(この画面の病名登録は recordedDate を書かない)。登録日は他の
+          // システムから来た病名のため。
+          appendRange(params, leaf.date_field === "recorded" ? "recorded-date" : "onset-date", range);
           params.set("_elements", "subject,code,recordedDate,onsetDateTime,extension");
           return params;
         }),
@@ -429,7 +485,12 @@ function subjectOf(resource: ExtractRecord): string {
 function recordDate(leaf: ExtractLeaf, resource: ExtractRecord): string {
   switch (resource.resourceType) {
     case "Condition":
-      return (leaf.date_field === "onset" ? resource.onsetDateTime : resource.recordedDate) ?? resource.recordedDate ?? "";
+      return (
+        (leaf.date_field === "recorded" ? resource.recordedDate : resource.onsetDateTime) ??
+        resource.onsetDateTime ??
+        resource.recordedDate ??
+        ""
+      );
     case "Observation":
       return resource.effectiveDateTime ?? "";
     case "MedicationRequest":
@@ -507,6 +568,49 @@ export function leafRecordsOf(leaf: ExtractLeaf, resources: ExtractRecord[]): Le
       department: recordDepartment(resource),
     }))
     .filter((record) => record.patientId);
+}
+
+function startDay(leaf: ExtractLeaf, resource: ExtractRecord): string {
+  return localDay(recordDate(leaf, resource));
+}
+
+function endDay(resource: ExtractRecord): string {
+  return resource.resourceType === "Encounter" ? localDay(resource.period?.end) : "";
+}
+
+function dayDiff(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * 時間関係で記録を絞る。患者ごとに、基準の条件の記録のどれか 1 つから from_days〜to_days 日に
+ * 入る記録だけを残す。基準の日は anchor_date(終了日を持たない記録は開始日)。上流では表せない
+ * ので、両方の記録を読んでから手元で突き合わせる。
+ */
+export function applyRelation(
+  leaf: ExtractLeaf,
+  records: ExtractRecord[],
+  anchor: ExtractLeaf,
+  anchorRecords: ExtractRecord[],
+): ExtractRecord[] {
+  const relation = leaf.relation;
+  if (!relation) return records;
+  const anchorDays = new Map<string, string[]>();
+  for (const record of anchorRecords) {
+    const patientId = subjectOf(record);
+    const day = (relation.anchor_date === "end" ? endDay(record) : "") || startDay(anchor, record);
+    if (!patientId || !day) continue;
+    anchorDays.set(patientId, [...(anchorDays.get(patientId) ?? []), day]);
+  }
+  return records.filter((record) => {
+    const day = startDay(leaf, record);
+    const bases = anchorDays.get(subjectOf(record));
+    if (!day || !bases) return false;
+    return bases.some((base) => {
+      const diff = dayDiff(base, day);
+      return diff >= relation.from_days && diff <= relation.to_days;
+    });
+  });
 }
 
 export type LeafBreakdownAxis = "month" | "department";
@@ -732,7 +836,7 @@ const DETAIL_HEADER = [
   "判定",
   "基準値",
   "状態",
-  "発症日",
+  "登録日",
   "用量",
   "用法",
   "日数",
@@ -783,7 +887,7 @@ function detailCells(record: ExtractRecord): (string | number)[] {
       const status = record.clinicalStatus?.coding?.[0]?.code ?? "";
       return [
         "病名",
-        localDay(record.recordedDate),
+        localDay(record.onsetDateTime ?? record.recordedDate),
         localDay(record.abatementDateTime),
         firstCode(record.code),
         conceptLabel(record.code),
@@ -792,7 +896,7 @@ function detailCells(record: ExtractRecord): (string | number)[] {
         "",
         "",
         CLINICAL_STATUS_LABELS[status] ?? status,
-        localDay(record.onsetDateTime),
+        localDay(record.recordedDate),
         "",
         "",
         "",
@@ -851,7 +955,7 @@ function detailSortKey(record: ExtractRecord): string {
     case "Observation":
       return record.effectiveDateTime ?? "";
     case "Condition":
-      return record.recordedDate ?? "";
+      return record.onsetDateTime ?? record.recordedDate ?? "";
     case "MedicationRequest":
       return record.authoredOn ?? "";
     case "Encounter":

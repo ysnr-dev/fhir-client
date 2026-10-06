@@ -109,6 +109,28 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       expect(errors_text).to include("2〜4 桁")
     end
 
+    it "時間関係は同じ AND グループの、除外でも時間関係でもない条件を基準にできる" do
+      dis = { "key" => "dis", "kind" => "admission", "date_mode" => "discharged", "period" => { "mode" => "relative", "days" => 365 } }
+      re = { "key" => "re", "kind" => "admission", "period" => { "mode" => "relative", "days" => 365 },
+             "relation" => { "key" => "dis", "from_days" => 1, "to_days" => 30, "anchor_date" => "end" } }
+      create_query({ "op" => "and", "children" => [dis, re] })
+      expect(response).to have_http_status(:created)
+
+      create_query({ "op" => "or", "children" => [dis, re] }, name: "OR")
+      expect(errors_text).to include("OR の下には時間関係")
+
+      create_query({ "op" => "and", "children" => [dis.merge("not" => true), re] }, name: "除外が基準")
+      expect(errors_text).to include("基準が同じグループの条件ではありません")
+
+      create_query({ "op" => "and", "children" => [dis, re.merge("relation" => re["relation"].merge("key" => "none"))] },
+                   name: "基準なし")
+      expect(errors_text).to include("基準が同じグループの条件ではありません")
+
+      create_query({ "op" => "and", "children" => [dis, re.merge("relation" => re["relation"].merge("from_days" => 40))] },
+                   name: "逆")
+      expect(errors_text).to include("from_days を to_days 以下")
+    end
+
     it "グループに条件の項目は置けない" do
       create_query({ "op" => "and", "children" => [
         { "op" => "or", "kind" => "condition", "children" => [{ "key" => "a", "kind" => "condition", "codes" => dm }] }
@@ -128,6 +150,31 @@ RSpec.describe "Master::ExtractQueries", type: :request do
     it "院内共通 + 指定した診療科 + 指定した医師だけを返す" do
       get "/master/extract_queries", params: { department_id: "dept-1", practitioner_id: "prac-1" }
       expect(body["items"].map { |i| i["name"] }).to contain_exactly("共通", "内科", "自分")
+    end
+  end
+
+  describe "実行の記録" do
+    let!(:query) { ExtractQuery.create!(scope: "facility", name: "共通", definition: definition(valid_root)) }
+
+    it "人数と条件ごとの人数を残し、新しい順に返す。条件を消すと一緒に消える" do
+      post "/master/extract_queries/#{query.id}/runs",
+           params: { patient_count: 3, leaf_counts: { c1: 4, c2: 1 }, ran_by_name: "医師 一郎" }, as: :json
+      expect(response).to have_http_status(:created)
+      travel 1.minute do
+        post "/master/extract_queries/#{query.id}/runs", params: { patient_count: 5, leaf_counts: { c1: 6 } }, as: :json
+      end
+
+      get "/master/extract_queries/#{query.id}/runs"
+      expect(body["items"].map { |r| r["patient_count"] }).to eq([5, 3])
+      expect(body["items"].last["leaf_counts"]).to eq("c1" => 4, "c2" => 1)
+
+      delete "/master/extract_queries/#{query.id}"
+      expect(ExtractQueryRun.count).to eq(0)
+    end
+
+    it "人数は 0 以上の整数" do
+      post "/master/extract_queries/#{query.id}/runs", params: { patient_count: -1, leaf_counts: { c1: "x" } }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 

@@ -280,5 +280,136 @@
         ]
       }
     }
+  },
+  {
+    "name": "退院後30日以内の再入院",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "dis",
+            "kind": "admission",
+            "label": "退院(直近365日)",
+            "date_mode": "discharged",
+            "period": {
+              "mode": "relative",
+              "days": 365
+            }
+          },
+          {
+            "key": "re",
+            "kind": "admission",
+            "label": "再入院(退院の翌日〜30日)",
+            "date_mode": "admitted",
+            "period": {
+              "mode": "relative",
+              "days": 365
+            },
+            "relation": {
+              "key": "dis",
+              "from_days": 1,
+              "to_days": 30,
+              "anchor_date": "end"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "2型糖尿病の開始から90日以内にHbA1c未測定",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "dm",
+            "kind": "condition",
+            "label": "2型糖尿病",
+            "codes": [
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E11",
+                "display": "2型糖尿病"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E110",
+                "display": "2型糖尿病(E110)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E111",
+                "display": "2型糖尿病(E111)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E112",
+                "display": "2型糖尿病(E112)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E113",
+                "display": "2型糖尿病(E113)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E114",
+                "display": "2型糖尿病(E114)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E115",
+                "display": "2型糖尿病(E115)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E116",
+                "display": "2型糖尿病(E116)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E117",
+                "display": "2型糖尿病(E117)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E118",
+                "display": "2型糖尿病(E118)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E119",
+                "display": "2型糖尿病(E119)"
+              }
+            ],
+            "clinical_status": [
+              "active"
+            ]
+          },
+          {
+            "key": "a1c",
+            "kind": "observation",
+            "label": "HbA1c(開始から90日以内)",
+            "not": true,
+            "codes": [
+              {
+                "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+                "code": "160010010",
+                "display": "HbA1c"
+              }
+            ],
+            "relation": {
+              "key": "dm",
+              "from_days": 0,
+              "to_days": 90
+            }
+          }
+        ]
+      }
+    }
   }
 ]

@@ -103,7 +103,22 @@ class ExtractQuery < ApplicationRecord
       unique: "code"
     },
     # 処方・注射の区別(無ければ両方)。オーダーのヘッダの order-type で分ける。
-    "order_type" => { enum: ORDER_TYPES }
+    "order_type" => { enum: ORDER_TYPES },
+    # 時間関係。同じ AND グループの別の条件(key)の記録の日から from_days〜to_days 日の記録だけを数える
+    # (負の日数は前)。anchor_date は基準の記録のどの日か(end は入院・外来の終了日)。
+    "relation" => {
+      fields: {
+        "key" => :text,
+        "from_days" => { integer: { min: -3650, max: 3650, unit: "日" } },
+        "to_days" => { integer: { min: -3650, max: 3650, unit: "日" } },
+        "anchor_date" => { enum: %w[start end] }
+      },
+      required: %w[key from_days to_days],
+      check: lambda { |relation, path|
+        from, to = relation.values_at("from_days", "to_days")
+        from.is_a?(Integer) && to.is_a?(Integer) && from > to ? ["#{path} は from_days を to_days 以下にしてください"] : []
+      }
+    }
   }.freeze
 
   # 葉の種類ごとの決まりごと。
@@ -121,15 +136,27 @@ class ExtractQuery < ApplicationRecord
     errors
   }
 
-  # グループの決まりごと(否定の置き場所)。
+  # グループの決まりごと(否定と時間関係の置き場所)。
   GROUP_CHECK = lambda { |group, path|
     children = Array(group["children"]).select { |child| child.is_a?(Hash) }
     negated = children.select { |child| child["not"] == true }
-    next [] if negated.empty?
-    next ["#{path} の OR の下には除外の条件を置けません"] if group["op"] == "or"
-    next ["#{path} には除外でない条件が 1 つ以上要ります"] if negated.size == children.size
+    errors = []
+    unless negated.empty?
+      errors << "#{path} の OR の下には除外の条件を置けません" if group["op"] == "or"
+      errors << "#{path} には除外でない条件が 1 つ以上要ります" if negated.size == children.size
+    end
+    errors + RELATION_CHECK.call(group, children, path)
+  }
 
-    []
+  # 時間関係の基準は、同じ AND グループの、除外でも患者属性でもなく、自分も時間関係を持たない別の条件。
+  RELATION_CHECK = lambda { |group, children, path|
+    children.select { |child| child["relation"].is_a?(Hash) }.flat_map do |child|
+      next ["#{path} の OR の下には時間関係の条件を置けません"] if group["op"] == "or"
+
+      anchor = children.find { |c| c["kind"] && c["key"] == child.dig("relation", "key") }
+      valid = anchor && anchor != child && anchor["not"] != true && anchor["kind"] != "patient" && !anchor["relation"]
+      valid ? [] : ["#{path} の #{child['key']} の時間関係の基準が同じグループの条件ではありません"]
+    end
   }
 
   # ノード(グループか葉)の形。JsonShape は再帰を書けないので、深さごとに展開して作る。
@@ -188,6 +215,9 @@ class ExtractQuery < ApplicationRecord
 
     Array(node["children"]).flat_map { |child| collect_leaves(child) }
   end
+
+  # 実行の記録(定点観測の推移)。条件を消したら一緒に消す。
+  has_many :extract_query_runs, dependent: :delete_all
 
   before_validation :assign_code
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_06_130200) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_06_130400) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -156,6 +156,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_130200) do
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_extract_queries_on_code", unique: true
     t.index ["scope", "owner_id"], name: "index_extract_queries_on_scope_and_owner_id"
+  end
+
+  create_table "extract_query_runs", force: :cascade do |t|
+    t.bigint "extract_query_id", null: false
+    t.datetime "ran_at", null: false
+    t.integer "patient_count", null: false
+    t.jsonb "leaf_counts", default: {}, null: false
+    t.string "ran_by_id"
+    t.string "ran_by_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["extract_query_id", "ran_at"], name: "index_extract_query_runs_on_extract_query_id_and_ran_at"
+    t.index ["extract_query_id"], name: "index_extract_query_runs_on_extract_query_id"
   end
 
   create_table "facility_settings", force: :cascade do |t|
@@ -2499,6 +2512,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_130200) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "document_templates", "file_categories", on_delete: :nullify
+  add_foreign_key "extract_query_runs", "extract_queries", on_delete: :cascade
   add_foreign_key "master_formulary_entries", "master_formulary_groups", column: "formulary_group_id", on_delete: :cascade
   add_foreign_key "supervisor_group_members", "supervisor_groups", on_delete: :cascade
 end

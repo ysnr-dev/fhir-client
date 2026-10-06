@@ -52,11 +52,11 @@ export function ExtractLeafFields({ leaf, onChange }: Props) {
             <label className="extract-field">
               日付
               <select
-                value={leaf.date_field ?? "recorded"}
+                value={leaf.date_field ?? "onset"}
                 onChange={(e) => patch({ date_field: e.target.value as "recorded" | "onset" })}
               >
+                <option value="onset">開始日</option>
                 <option value="recorded">登録日</option>
-                <option value="onset">発症日</option>
               </select>
             </label>
             <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />

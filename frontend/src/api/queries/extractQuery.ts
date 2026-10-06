@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
+  applyRelation,
   collectLeaves,
   combineSets,
   detailLeaves,
@@ -179,6 +180,11 @@ async function fetchLeaf(leaf: ExtractLeaf, context: RunContext, label: string):
   return chunks.flat();
 }
 
+function referencePatientId(record: ExtractRecord): string {
+  if (record.resourceType === "Patient") return record.id ?? "";
+  return record.subject?.reference?.split("/").pop() ?? "";
+}
+
 /** 患者を id で引く(一覧の患者番号・氏名と、患者属性の条件を当てるため)。 */
 async function fetchPatients(
   ids: string[],
@@ -244,6 +250,7 @@ export function useExtractRun() {
       try {
         const hits = new Map<string, LeafHits>();
         const recordsByLeaf = new Map<string, LeafRecord[]>();
+        const resourcesByLeaf = new Map<string, ExtractRecord[]>();
         await runWithConcurrency(
           leaves
             .filter((leaf) => !filterKeys.has(leaf.key))
@@ -252,6 +259,7 @@ export function useExtractRun() {
               publish();
               try {
                 const records = await fetchLeaf(leaf, context, labelOf(leaf));
+                resourcesByLeaf.set(leaf.key, records);
                 const leafHits = leafHitsOf(leaf, records);
                 hits.set(leaf.key, leafHits);
                 if (leaf.kind !== "patient") recordsByLeaf.set(leaf.key, leafRecordsOf(leaf, records));
@@ -265,6 +273,23 @@ export function useExtractRun() {
             }),
           LEAF_CONCURRENCY,
         );
+
+        // 時間関係は基準の条件の記録と突き合わせて絞る(上流では表せない)。基準は min_count を
+        // 満たした患者の記録だけを使う。
+        for (const leaf of leaves.filter((l) => l.relation && resourcesByLeaf.has(l.key))) {
+          const anchor = leaves.find((l) => l.key === leaf.relation!.key);
+          if (!anchor) continue;
+          const anchorPatients = hits.get(anchor.key) ?? new Map();
+          const anchorRecords = (resourcesByLeaf.get(anchor.key) ?? []).filter((r) =>
+            anchorPatients.has(referencePatientId(r)),
+          );
+          const filtered = applyRelation(leaf, resourcesByLeaf.get(leaf.key) ?? [], anchor, anchorRecords);
+          const leafHits = leafHitsOf(leaf, filtered);
+          hits.set(leaf.key, leafHits);
+          recordsByLeaf.set(leaf.key, leafRecordsOf(leaf, filtered));
+          progress[leaf.key] = { state: "done", records: filtered.length, patients: leafHits.size };
+        }
+        publish();
 
         const setOf = (leaf: ExtractLeaf) => {
           const leafHits = hits.get(leaf.key);
@@ -341,7 +366,14 @@ async function fetchExtractDetails(result: ExtractResult, context: RunContext): 
     const records = (await runWithConcurrency(tasks, LEAF_CONCURRENCY)).flat();
     details.push({ leaf, records });
   }
-  return details;
+  // 時間関係は抽出と同じく基準の条件の記録で絞る(基準は除外でも患者属性でもないので明細にある)。
+  return details.map((detail) => {
+    const anchorKey = detail.leaf.relation?.key;
+    const anchor = anchorKey ? details.find((d) => d.leaf.key === anchorKey) : undefined;
+    return anchor
+      ? { ...detail, records: applyRelation(detail.leaf, detail.records, anchor.leaf, anchor.records) }
+      : detail;
+  });
 }
 
 /** 明細 CSV の書き出し。 */

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import type { ExtractQueryRun } from "../../api/masterClient";
 import type { ExtractResult } from "../../api/queries";
+import { dateTimeLabel } from "../../lib/dates";
 import {
   extractBreakdown,
   leafBreakdown,
@@ -11,26 +13,30 @@ import {
   type LeafHit,
 } from "../../fhir/extractQueryHelpers";
 
-type Tab = "list" | "breakdown";
+type Tab = "list" | "breakdown" | "history";
 
-/** 抽出の結果。一覧(患者 1 行)と内訳(性別 × 年齢階級)。 */
-export function ExtractResults({ result }: { result: ExtractResult }) {
+/**
+ * 抽出の結果。一覧(患者 1 行)・内訳・履歴(保存した条件を直さずに実行した記録。保存していない
+ * 条件や直した条件では出さない)。
+ */
+export function ExtractResults({ result, history }: { result: ExtractResult; history?: ExtractQueryRun[] }) {
   const [tab, setTab] = useState<Tab>("list");
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "list", label: "一覧" },
+    { key: "breakdown", label: "内訳" },
+    ...(history ? [{ key: "history" as const, label: "履歴" }] : []),
+  ];
+  const current = tab === "history" && !history ? "list" : tab;
   return (
     <section className="extract-results">
       <div className="inpatient-tabs" role="tablist" aria-label="結果の表示切替">
-        {(
-          [
-            { key: "list", label: "一覧" },
-            { key: "breakdown", label: "内訳" },
-          ] as const
-        ).map((item) => (
+        {tabs.map((item) => (
           <button
             key={item.key}
             type="button"
             role="tab"
-            aria-selected={tab === item.key}
-            className={`inpatient-tabs__tab${tab === item.key ? " is-active" : ""}`}
+            aria-selected={current === item.key}
+            className={`inpatient-tabs__tab${current === item.key ? " is-active" : ""}`}
             onClick={() => setTab(item.key)}
           >
             {item.label}
@@ -38,7 +44,9 @@ export function ExtractResults({ result }: { result: ExtractResult }) {
         ))}
         <span className="extract-results__count">{`該当 ${result.rows.length} 人`}</span>
       </div>
-      {tab === "list" ? <ResultTable result={result} /> : <BreakdownTable result={result} />}
+      {current === "list" && <ResultTable result={result} />}
+      {current === "breakdown" && <BreakdownTable result={result} />}
+      {current === "history" && history && <HistoryTable runs={history} leaves={result.leaves} />}
     </section>
   );
 }
@@ -229,6 +237,49 @@ function LeafBreakdownTable({ result, columns }: { result: ExtractResult; column
               <td>計</td>
               <td className="extract-breakdown__number">{total}</td>
               <td className="extract-breakdown__number">{totalPatients}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** 実行の記録(新しい順)。条件ごとの人数は今の条件の並びで出す(後から足した条件は前の記録では空)。 */
+function HistoryTable({ runs, leaves }: { runs: ExtractQueryRun[]; leaves: ExtractLeaf[] }) {
+  return (
+    <div className="extract-results__table-wrap">
+      <table className="master-search__table extract-breakdown extract-history">
+        <thead>
+          <tr>
+            <th>実行日時</th>
+            <th className="extract-breakdown__number">該当</th>
+            {leaves.map((leaf) => (
+              <th key={leaf.key} className="extract-breakdown__number">
+                {leafLabel(leaf)}
+              </th>
+            ))}
+            <th>実行者</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((run) => (
+            <tr key={run.id}>
+              <td className="extract-results__nowrap">{dateTimeLabel(run.ran_at)}</td>
+              <td className="extract-breakdown__number">{run.patient_count}</td>
+              {leaves.map((leaf) => (
+                <td key={leaf.key} className="extract-breakdown__number">
+                  {run.leaf_counts[leaf.key] ?? ""}
+                </td>
+              ))}
+              <td className="extract-results__nowrap">{run.ran_by_name ?? ""}</td>
+            </tr>
+          ))}
+          {runs.length === 0 && (
+            <tr>
+              <td colSpan={leaves.length + 3} className="master-search__empty">
+                記録はありません
+              </td>
             </tr>
           )}
         </tbody>
