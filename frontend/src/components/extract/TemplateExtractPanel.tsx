@@ -77,7 +77,7 @@ export function TemplateExtractPanel() {
 
   return (
     <>
-      <div className="data-extract__toolbar">
+      <div className="data-extract__toolbar data-extract__toolbar--fields">
         <TemplateSelect
           questionnaires={templates}
           value={selected?.id ?? ""}

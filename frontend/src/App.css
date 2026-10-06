@@ -9051,6 +9051,15 @@ input.lot-number-cell__input.is-invalid {
   margin-bottom: 12px;
 }
 
+/* 見出しつきの入力欄と並べるチェックは、見出しではなく入力欄の行に揃える。 */
+.data-extract__toolbar--fields {
+  align-items: flex-end;
+}
+
+.data-extract__toolbar--fields > .extract-checks__item {
+  min-height: var(--control-height);
+}
+
 .data-extract .template-select {
   width: 24em;
   max-width: 100%;
