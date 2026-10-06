@@ -6,12 +6,17 @@ import { dateTimeLabel, localDay } from "../../lib/dates";
 import { LabTimelineChart, type LabTimelineSeries } from "../LabTimelineChart";
 import {
   extractBreakdown,
+  leafCellText,
+  leafOutputFieldsOf,
+  patientCell,
+  patientColumnLabel,
+  patientColumnsOf,
+  type ExtractOutput,
   leafBreakdown,
   type LeafBreakdownAxis,
   leafLabel,
   resultColumns,
   type ExtractLeaf,
-  type LeafHit,
 } from "../../fhir/extractQueryHelpers";
 
 type Tab = "list" | "breakdown" | "history";
@@ -20,7 +25,18 @@ type Tab = "list" | "breakdown" | "history";
  * 抽出の結果。一覧(患者 1 行)・内訳・推移(保存した条件を直さずに実行した記録。保存していない
  * 条件や直した条件では出さない)。
  */
-export function ExtractResults({ result, history }: { result: ExtractResult; history?: ExtractQueryRun[] }) {
+export function ExtractResults({
+  result,
+  leaves,
+  output,
+  history,
+}: {
+  result: ExtractResult;
+  /** 出力項目を今の条件で反映した条件(実行し直さなくても出す列が変わる)。 */
+  leaves: ExtractLeaf[];
+  output: ExtractOutput | undefined;
+  history?: ExtractQueryRun[];
+}) {
   const [tab, setTab] = useState<Tab>("list");
   const tabs: { key: Tab; label: string }[] = [
     { key: "list", label: "一覧" },
@@ -45,21 +61,24 @@ export function ExtractResults({ result, history }: { result: ExtractResult; his
         ))}
         <span className="extract-results__count">{`該当 ${result.rows.length} 人`}</span>
       </div>
-      {current === "list" && <ResultTable result={result} />}
+      {current === "list" && <ResultTable result={result} leaves={leaves} output={output} />}
       {current === "breakdown" && <BreakdownTable result={result} />}
       {current === "history" && history && <HistoryTable runs={history} leaves={result.leaves} />}
     </section>
   );
 }
 
-function hitText(hit: LeafHit | undefined): string {
-  if (!hit) return "";
-  const range = hit.first === hit.last ? hit.last : `${hit.first}〜${hit.last}`;
-  return [`${hit.count}件`, range, hit.latest].filter(Boolean).join(" ");
-}
-
-function ResultTable({ result }: { result: ExtractResult }) {
-  const columns: ExtractLeaf[] = resultColumns(result.leaves);
+function ResultTable({
+  result,
+  leaves,
+  output,
+}: {
+  result: ExtractResult;
+  leaves: ExtractLeaf[];
+  output: ExtractOutput | undefined;
+}) {
+  const columns: ExtractLeaf[] = resultColumns(leaves);
+  const patientColumns = patientColumnsOf(output);
   return (
     <div className="extract-results__table-wrap">
       <table className="master-search__table extract-results__table">
@@ -67,8 +86,9 @@ function ResultTable({ result }: { result: ExtractResult }) {
           <tr>
             <th>患者番号</th>
             <th>氏名</th>
-            <th>年齢</th>
-            <th>性別</th>
+            {patientColumns.map((column) => (
+              <th key={column}>{patientColumnLabel(column)}</th>
+            ))}
             {columns.map((leaf) => (
               <th key={leaf.key}>{leafLabel(leaf)}</th>
             ))}
@@ -81,16 +101,19 @@ function ResultTable({ result }: { result: ExtractResult }) {
               <td className="extract-results__nowrap">
                 <Link to={`/patients/${row.patientId}/karte`}>{row.name || row.patientId}</Link>
               </td>
-              <td className="extract-results__nowrap">{row.age ?? "-"}</td>
-              <td className="extract-results__nowrap">{row.gender}</td>
+              {patientColumns.map((column) => (
+                <td key={column} className={column === "address" ? undefined : "extract-results__nowrap"}>
+                  {patientCell(row, column)}
+                </td>
+              ))}
               {columns.map((leaf) => (
-                <td key={leaf.key}>{hitText(row.hits[leaf.key])}</td>
+                <td key={leaf.key}>{leafCellText(row.hits[leaf.key], leafOutputFieldsOf(leaf))}</td>
               ))}
             </tr>
           ))}
           {result.rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length + 4} className="master-search__empty">
+              <td colSpan={columns.length + patientColumns.length + 2} className="master-search__empty">
                 該当する患者はいません
               </td>
             </tr>

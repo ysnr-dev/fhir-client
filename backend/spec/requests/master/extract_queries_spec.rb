@@ -131,6 +131,24 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       expect(errors_text).to include("from_days を to_days 以下")
     end
 
+    it "出力項目(患者の列と条件ごとの列)を持てる" do
+      root = { "op" => "and", "children" => [
+        { "key" => "a", "kind" => "condition", "codes" => dm, "output_fields" => %w[count latest] }
+      ] }
+      post "/master/extract_queries",
+           params: { scope: "facility", name: "出力", definition: definition(root).merge("output" => { "patient_columns" => %w[kana address] }) },
+           as: :json
+      expect(response).to have_http_status(:created)
+      expect(body["definition"]["output"]).to eq("patient_columns" => %w[kana address])
+
+      root["children"][0]["output_fields"] = %w[count bogus]
+      post "/master/extract_queries",
+           params: { scope: "facility", name: "誤り", definition: definition(root).merge("output" => { "patient_columns" => %w[email] }) },
+           as: :json
+      expect(errors_text).to include("output_fields")
+      expect(errors_text).to include("patient_columns")
+    end
+
     it "グループに条件の項目は置けない" do
       create_query({ "op" => "and", "children" => [
         { "op" => "or", "kind" => "condition", "children" => [{ "key" => "a", "kind" => "condition", "codes" => dm }] }

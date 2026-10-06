@@ -15,6 +15,7 @@ import {
   patientMatches,
   type ExtractDetail,
   type ExtractLeaf,
+  type ExtractOutput,
   type ExtractQueryBody,
   type ExtractRecord,
   type ExtractRow,
@@ -387,7 +388,7 @@ export function useExtractDetailExport() {
   const abortRef = useRef<AbortController | null>(null);
 
   const exportCsv = useCallback(
-    async (result: ExtractResult, fileName: string) => {
+    async (result: ExtractResult, fileName: string, output?: ExtractOutput) => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -402,7 +403,7 @@ export function useExtractDetailExport() {
       };
       try {
         const details = await fetchExtractDetails(result, context);
-        downloadBlob(extractDetailCsv(result.rows, details), fileName);
+        downloadBlob(extractDetailCsv(result.rows, details, output), fileName);
         setState({ exporting: false, requests: requests.count, error: null });
       } catch (error) {
         setState({ exporting: false, requests: requests.count, error: controller.signal.aborted ? null : error });

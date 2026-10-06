@@ -14,11 +14,15 @@ import { ExtractResults } from "../components/extract/ExtractResults";
 import { TrashIcon } from "../components/icons/TrashIcon";
 import { Modal } from "../components/Modal";
 import {
+  PATIENT_COLUMNS,
+  collectLeaves,
   emptyExtractQuery,
   extractCsv,
   leafLabel,
+  patientColumnsOf,
   validateExtractQuery,
   type ExtractQueryBody,
+  type PatientColumn,
 } from "../fhir/extractQueryHelpers";
 import { useDefinitionOwners, type DefinitionOwnerOption } from "../hooks/useDefinitionOwners";
 import { today } from "../lib/dates";
@@ -119,6 +123,15 @@ export function DataExtractPage() {
     mutations.remove.mutate(selected.id, { onSuccess: () => load(null) });
   }
 
+  // 出力項目は今の条件のものを使う(実行し直さなくても、出す列を変えれば結果に反映する)。
+  const outputLeaves = useMemo(() => {
+    const current = new Map(collectLeaves(body.root).map((leaf) => [leaf.key, leaf]));
+    return (extract.result?.leaves ?? []).map((leaf) => {
+      const now = current.get(leaf.key);
+      return now ? { ...leaf, output_fields: now.output_fields } : leaf;
+    });
+  }, [body.root, extract.result]);
+
   const mutationError =
     mutations.create.error ?? mutations.update.error ?? mutations.remove.error ?? recordRun.error ?? runs.error;
 
@@ -184,6 +197,14 @@ export function DataExtractPage() {
         progress={extract.progress}
       />
 
+      <PatientColumnsField
+        value={patientColumnsOf(body.output)}
+        selected={Boolean(body.output?.patient_columns?.length)}
+        onChange={(patient_columns) =>
+          setBody({ ...body, output: patient_columns.length ? { ...body.output, patient_columns } : undefined })
+        }
+      />
+
       {validation.length > 0 && (
         <div className="error-banner" role="alert">
           {validation.map((message) => (
@@ -219,7 +240,7 @@ export function DataExtractPage() {
               type="button"
               onClick={() =>
                 downloadBlob(
-                  extractCsv(extract.result!.rows, extract.result!.leaves),
+                  extractCsv(extract.result!.rows, outputLeaves, body.output),
                   `extract_${selected?.name ?? "条件"}_${today()}.csv`,
                 )
               }
@@ -235,7 +256,11 @@ export function DataExtractPage() {
                 type="button"
                 disabled={extract.result.rows.length === 0}
                 onClick={() =>
-                  void detail.exportCsv(extract.result!, `extract_detail_${selected?.name ?? "条件"}_${today()}.csv`)
+                  void detail.exportCsv(
+                    extract.result!,
+                    `extract_detail_${selected?.name ?? "条件"}_${today()}.csv`,
+                    body.output,
+                  )
                 }
               >
                 明細CSV
@@ -249,6 +274,8 @@ export function DataExtractPage() {
       {extract.result && (
         <ExtractResults
           result={extract.result}
+          leaves={outputLeaves}
+          output={body.output}
           history={selected && !dirty ? (runs.data ?? []) : undefined}
         />
       )}
@@ -340,5 +367,44 @@ function SaveModal({
         </div>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * 一覧・CSV に出す患者の列(患者番号・氏名はいつも出す)。選んでいないあいだは既定の列にチェックを
+ * 付けて見せ、1 つでも変えたら選んだ列だけを出す。
+ */
+function PatientColumnsField({
+  value,
+  selected,
+  onChange,
+}: {
+  value: PatientColumn[];
+  selected: boolean;
+  onChange: (columns: PatientColumn[]) => void;
+}) {
+  return (
+    <div className="data-extract__output" role="group" aria-label="出力する患者の項目">
+      <span className="extract-checks__label">出力項目</span>
+      {PATIENT_COLUMNS.map((column) => (
+        <label key={column.value} className="extract-checks__item">
+          <input
+            type="checkbox"
+            checked={value.includes(column.value)}
+            onChange={(e) =>
+              onChange(
+                e.target.checked ? [...value, column.value] : value.filter((v) => v !== column.value),
+              )
+            }
+          />
+          {column.label}
+        </label>
+      ))}
+      {selected && (
+        <button type="button" className="rp-card__compact-button" onClick={() => onChange([])}>
+          既定
+        </button>
+      )}
+    </div>
   );
 }

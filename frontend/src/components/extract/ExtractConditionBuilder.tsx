@@ -2,6 +2,8 @@ import type { LeafProgress } from "../../api/queries";
 import {
   EXTRACT_KIND_LABELS,
   EXTRACT_MAX_DEPTH,
+  LEAF_OUTPUT_FIELDS,
+  leafOutputFieldsOf,
   canNegate,
   isGroup,
   leafLabel,
@@ -12,6 +14,7 @@ import {
   type ExtractKind,
   type ExtractLeaf,
   type ExtractNode,
+  type LeafOutputField,
 } from "../../fhir/extractQueryHelpers";
 import { TrashIcon } from "../icons/TrashIcon";
 import { ExtractLeafFields } from "./ExtractLeafFields";
@@ -201,6 +204,37 @@ function LeafEditor({
       {leaf.kind !== "patient" && (anchors.length > 0 || leaf.relation) && (
         <RelationFields leaf={leaf} anchors={anchors} onChange={onChange} />
       )}
+      {leaf.kind !== "patient" && !leaf.not && <OutputFields leaf={leaf} onChange={onChange} />}
+    </div>
+  );
+}
+
+/** 一覧・CSV にこの条件のどの項目を出すか。全部選んだら既定(未指定)に戻し、最後の 1 つは外せない。 */
+function OutputFields({ leaf, onChange }: { leaf: ExtractLeaf; onChange: (leaf: ExtractLeaf) => void }) {
+  const fields = leafOutputFieldsOf(leaf);
+  const toggle = (field: LeafOutputField, checked: boolean) => {
+    const next = LEAF_OUTPUT_FIELDS.map((f) => f.value).filter((value) =>
+      value === field ? checked : fields.includes(value),
+    );
+    if (next.length === 0) return;
+    onChange({ ...leaf, output_fields: next.length === LEAF_OUTPUT_FIELDS.length ? undefined : next });
+  };
+  return (
+    <div className="extract-leaf__row">
+      <span className="extract-checks" role="group" aria-label="出力する項目">
+        <span className="extract-checks__label">出力</span>
+        {LEAF_OUTPUT_FIELDS.map((field) => (
+          <label key={field.value} className="extract-checks__item">
+            <input
+              type="checkbox"
+              checked={fields.includes(field.value)}
+              disabled={fields.length === 1 && fields.includes(field.value)}
+              onChange={(e) => toggle(field.value, e.target.checked)}
+            />
+            {field.label}
+          </label>
+        ))}
+      </span>
     </div>
   );
 }

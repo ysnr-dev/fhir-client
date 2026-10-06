@@ -39,6 +39,9 @@ class ExtractQuery < ApplicationRecord
   DATE_MODES = %w[overlap admitted discharged].freeze
   VALUE_OPS = %w[ge gt le lt].freeze
   ORDER_TYPES = %w[prescription injection].freeze
+  # 出力項目(docs/data-extract-design.md §4)。患者番号・氏名はいつも出す。
+  PATIENT_COLUMNS = %w[kana age gender birth_date postal_code address phone patient_id].freeze
+  LEAF_OUTPUT_FIELDS = %w[count first last latest].freeze
   MAX_DRUG_CLASSES = 20
   DATE_PATTERN = { pattern: /\A\d{4}-\d{2}-\d{2}\z/, label: " YYYY-MM-DD ", strict: true }.freeze
 
@@ -104,6 +107,8 @@ class ExtractQuery < ApplicationRecord
     },
     # 処方・注射の区別(無ければ両方)。オーダーのヘッダの order-type で分ける。
     "order_type" => { enum: ORDER_TYPES },
+    # 一覧・CSV に出す項目(件数・最初・最後・最新)。無ければすべて。
+    "output_fields" => { list: { enum: LEAF_OUTPUT_FIELDS }, unique: true, min: 1 },
     # 時間関係。同じ AND グループの別の条件(key)の記録の日から from_days〜to_days 日の記録だけを数える
     # (負の日数は前)。anchor_date は基準の記録のどの日か(end は入院・外来の終了日)。
     "relation" => {
@@ -191,7 +196,11 @@ class ExtractQuery < ApplicationRecord
   DEFINITION_SHAPE = {
     fields: {
       "schema_version" => { const: SCHEMA_VERSION },
-      "root" => ROOT_SHAPE
+      "root" => ROOT_SHAPE,
+      # 一覧・CSV に出す患者の項目。無ければ既定(年齢・性別・生年月日)。
+      "output" => {
+        fields: { "patient_columns" => { list: { enum: PATIENT_COLUMNS }, unique: true } }
+      }
     },
     required: %w[root],
     check: lambda { |definition, path|

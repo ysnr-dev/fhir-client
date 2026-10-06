@@ -4,7 +4,16 @@ import { excludeNursingProblems } from "./conditionHelpers";
 import { ADMISSION_CLASS_CODE, ADMISSION_STATUS, DISCHARGED_STATUS } from "./encounterHelpers";
 import { departmentOf, ORDER_TYPE_SYSTEM } from "./orderHeader";
 import { OUTPATIENT_CLASS_CODE } from "./outpatientEncounterHelpers";
-import { calculateAge, displayName, genderLabel, patientNumberOf } from "./patientHelpers";
+import {
+  addressLabelOf,
+  calculateAge,
+  displayKana,
+  displayName,
+  genderLabel,
+  homePhoneOf,
+  mobilePhoneOf,
+  patientNumberOf,
+} from "./patientHelpers";
 import { conceptLabel, quantityLabel, referenceIdOfType } from "./shared";
 
 // データ抽出(docs/data-extract-design.md)。条件のモデル・条件ごとの FHIR 検索・集合の
@@ -109,6 +118,8 @@ export interface ExtractLeaf {
   /** 処方・注射の区別。無ければ両方。 */
   order_type?: ExtractOrderType;
   relation?: ExtractRelation;
+  /** 一覧・CSV に出す項目。無ければすべて。 */
+  output_fields?: LeafOutputField[];
 }
 
 export interface ExtractGroup {
@@ -121,6 +132,65 @@ export type ExtractNode = ExtractGroup | ExtractLeaf;
 export interface ExtractQueryBody {
   schema_version: 1;
   root: ExtractGroup;
+  output?: ExtractOutput;
+}
+
+// ---- 出力項目 ----
+
+/** 一覧・CSV に出す患者の項目(患者番号・氏名はいつも出す)。 */
+export type PatientColumn =
+  | "kana"
+  | "age"
+  | "gender"
+  | "birth_date"
+  | "postal_code"
+  | "address"
+  | "phone"
+  | "patient_id";
+
+export const PATIENT_COLUMNS: { value: PatientColumn; label: string }[] = [
+  { value: "kana", label: "カナ" },
+  { value: "age", label: "年齢" },
+  { value: "gender", label: "性別" },
+  { value: "birth_date", label: "生年月日" },
+  { value: "postal_code", label: "郵便番号" },
+  { value: "address", label: "住所" },
+  { value: "phone", label: "電話" },
+  { value: "patient_id", label: "患者ID" },
+];
+
+/** 条件ごとに出す項目。 */
+export type LeafOutputField = "count" | "first" | "last" | "latest";
+
+export const LEAF_OUTPUT_FIELDS: { value: LeafOutputField; label: string }[] = [
+  { value: "count", label: "件数" },
+  { value: "first", label: "最初" },
+  { value: "last", label: "最後" },
+  { value: "latest", label: "最新" },
+];
+
+export interface ExtractOutput {
+  patient_columns?: PatientColumn[];
+}
+
+/** 出力項目を選んでいないときの患者の列。一覧も CSV も同じ列にする。 */
+export const DEFAULT_PATIENT_COLUMNS: PatientColumn[] = ["age", "gender", "birth_date"];
+
+/** 出す患者の列(PATIENT_COLUMNS の並び)。 */
+export function patientColumnsOf(output: ExtractOutput | undefined): PatientColumn[] {
+  const selected = output?.patient_columns;
+  const columns = selected && selected.length ? selected : DEFAULT_PATIENT_COLUMNS;
+  return PATIENT_COLUMNS.map((c) => c.value).filter((value) => columns.includes(value));
+}
+
+/** 条件の出す項目(LEAF_OUTPUT_FIELDS の並び)。選んでいなければすべて。 */
+export function leafOutputFieldsOf(leaf: ExtractLeaf): LeafOutputField[] {
+  const selected = leaf.output_fields;
+  return LEAF_OUTPUT_FIELDS.map((f) => f.value).filter((value) => !selected?.length || selected.includes(value));
+}
+
+export function patientColumnLabel(column: PatientColumn): string {
+  return PATIENT_COLUMNS.find((c) => c.value === column)?.label ?? column;
 }
 
 export const EXTRACT_MAX_DEPTH = 3;
@@ -709,10 +779,56 @@ export interface ExtractRow {
   patientId: string;
   patientNumber: string;
   name: string;
+  kana: string;
   birthDate: string;
   age: number | undefined;
   gender: string;
+  postalCode: string;
+  address: string;
+  phone: string;
   hits: Record<string, LeafHit | undefined>;
+}
+
+/** 患者の列の値。 */
+export function patientCell(row: ExtractRow, column: PatientColumn): string | number {
+  switch (column) {
+    case "kana":
+      return row.kana;
+    case "age":
+      return row.age ?? "";
+    case "gender":
+      return row.gender;
+    case "birth_date":
+      return row.birthDate;
+    case "postal_code":
+      return row.postalCode;
+    case "address":
+      return row.address;
+    case "phone":
+      return row.phone;
+    case "patient_id":
+      return row.patientId;
+  }
+}
+
+/** 条件の項目の値(CSV の 1 列ぶん)。 */
+export function leafFieldCell(hit: LeafHit | undefined, field: LeafOutputField): string | number {
+  if (!hit) return "";
+  return field === "count" ? hit.count : field === "first" ? hit.first : field === "last" ? hit.last : hit.latest;
+}
+
+/** 一覧のセルにまとめた条件の値(「6件 2026-04-24〜2026-09-11 8.5%」)。選んだ項目だけを並べる。 */
+export function leafCellText(hit: LeafHit | undefined, fields: LeafOutputField[]): string {
+  if (!hit) return "";
+  const parts: string[] = [];
+  if (fields.includes("count")) parts.push(`${hit.count}件`);
+  const first = fields.includes("first") ? hit.first : "";
+  const last = fields.includes("last") ? hit.last : "";
+  if (first && last) parts.push(first === last ? last : `${first}〜${last}`);
+  else if (first) parts.push(`${first}〜`);
+  else if (last) parts.push(`〜${last}`);
+  if (fields.includes("latest") && hit.latest) parts.push(hit.latest);
+  return parts.join(" ");
 }
 
 export function extractRows(
@@ -728,9 +844,13 @@ export function extractRows(
         patientId,
         patientNumber: (patient && patientNumberOf(patient)) ?? "",
         name: patient ? displayName(patient) : "",
+        kana: patient ? displayKana(patient) : "",
         birthDate: patient?.birthDate ?? "",
         age: patient?.birthDate ? calculateAge(patient.birthDate) : undefined,
         gender: genderLabel(patient?.gender),
+        postalCode: patient?.address?.[0]?.postalCode ?? "",
+        address: patient ? addressLabelOf(patient) : "",
+        phone: patient ? homePhoneOf(patient) || mobilePhoneOf(patient) : "",
         hits: Object.fromEntries(leaves.map((leaf) => [leaf.key, hitsByLeaf.get(leaf.key)?.get(patientId)])),
       };
     })
@@ -775,34 +895,25 @@ export function extractBreakdown(rows: ExtractRow[]): ExtractBreakdown {
   return { genders, bands, cells, totalsByGender, totalsByBand, total: rows.length };
 }
 
-/** 患者 1 行の CSV。条件ごとに件数・最初・最後・最新を並べる。 */
-export function extractCsv(rows: ExtractRow[], leaves: ExtractLeaf[]): Blob {
+/** 患者 1 行の CSV。患者の列と、条件ごとに選んだ項目(既定は件数・最初・最後・最新)を並べる。 */
+export function extractCsv(rows: ExtractRow[], leaves: ExtractLeaf[], output?: ExtractOutput): Blob {
+  const patientColumns = patientColumnsOf(output);
   const columns = resultColumns(leaves);
+  const fieldsByLeaf = new Map(columns.map((leaf) => [leaf.key, leafOutputFieldsOf(leaf)]));
+  const fieldLabel = (field: LeafOutputField) => LEAF_OUTPUT_FIELDS.find((f) => f.value === field)!.label;
   const header = [
     "患者番号",
     "氏名",
-    "年齢",
-    "性別",
-    "生年月日",
-    "患者ID",
-    ...columns.flatMap((leaf) => {
-      const label = leafLabel(leaf);
-      return [`${label} 件数`, `${label} 最初`, `${label} 最後`, `${label} 最新`];
-    }),
+    ...patientColumns.map(patientColumnLabel),
+    ...columns.flatMap((leaf) => fieldsByLeaf.get(leaf.key)!.map((field) => `${leafLabel(leaf)} ${fieldLabel(field)}`)),
   ];
   return csvBlob(
     header,
     rows.map((row) => [
       row.patientNumber,
       row.name,
-      row.age ?? "",
-      row.gender,
-      row.birthDate,
-      row.patientId,
-      ...columns.flatMap((leaf) => {
-        const hit = row.hits[leaf.key];
-        return hit ? [hit.count, hit.first, hit.last, hit.latest] : ["", "", "", ""];
-      }),
+      ...patientColumns.map((column) => patientCell(row, column)),
+      ...columns.flatMap((leaf) => fieldsByLeaf.get(leaf.key)!.map((field) => leafFieldCell(row.hits[leaf.key], field))),
     ]),
   );
 }
@@ -819,12 +930,8 @@ export interface ExtractDetail {
   records: ExtractRecord[];
 }
 
+/** 明細の、患者の列より後ろの見出し。 */
 const DETAIL_HEADER = [
-  "患者番号",
-  "氏名",
-  "年齢",
-  "性別",
-  "患者ID",
   "条件",
   "種類",
   "日付",
@@ -969,7 +1076,8 @@ function detailSortKey(record: ExtractRecord): string {
  * 明細の CSV。結果の患者ごとに、条件に当たった記録を条件の順・日付の順に 1 件 1 行で並べる。
  * 種類ごとに使わない列は空にして、1 つの表にそろえる(Excel で絞り込めるように)。
  */
-export function extractDetailCsv(rows: ExtractRow[], details: ExtractDetail[]): Blob {
+export function extractDetailCsv(rows: ExtractRow[], details: ExtractDetail[], output?: ExtractOutput): Blob {
+  const patientColumns = patientColumnsOf(output);
   const lines: (string | number)[][] = [];
   for (const row of rows) {
     for (const { leaf, records } of details) {
@@ -980,16 +1088,14 @@ export function extractDetailCsv(rows: ExtractRow[], details: ExtractDetail[]): 
         lines.push([
           row.patientNumber,
           row.name,
-          row.age ?? "",
-          row.gender,
-          row.patientId,
+          ...patientColumns.map((column) => patientCell(row, column)),
           leafLabel(leaf),
           ...detailCells(record),
         ]);
       }
     }
   }
-  return csvBlob(DETAIL_HEADER, lines);
+  return csvBlob(["患者番号", "氏名", ...patientColumns.map(patientColumnLabel), ...DETAIL_HEADER], lines);
 }
 
 // ---- 病名の ICD10 ----
