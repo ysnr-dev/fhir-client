@@ -5,6 +5,7 @@ import {
   type FhirResult,
   postBundle,
   searchResource,
+  type SearchOptions,
   typeOperation,
   updateResource,
 } from "../fhirClient";
@@ -204,7 +205,7 @@ export interface Truncatable<T> {
   truncated: boolean;
 }
 
-interface PagedSearchOptions {
+interface PagedSearchOptions extends SearchOptions {
   page: number;
   maxPages: number;
   /**
@@ -230,7 +231,10 @@ export async function searchAllPages<T extends fhir4.Resource>(
     const pageParams = new URLSearchParams(params);
     pageParams.set("_count", String(options.page));
     pageParams.set("_offset", String(page * options.page));
-    const { data: bundle } = await searchResource<fhir4.Resource>(type, pageParams);
+    const { data: bundle } = await searchResource<fhir4.Resource>(type, pageParams, {
+      strict: options.strict,
+      signal: options.signal,
+    });
     const found = (bundle.entry ?? [])
       .filter((entry) => entry.search?.mode !== "include")
       .map((entry) => entry.resource)

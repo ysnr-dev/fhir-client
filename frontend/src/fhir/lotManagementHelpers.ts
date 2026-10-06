@@ -1,3 +1,4 @@
+import { csvBlob } from "../lib/csv";
 import { dateTimeLabel } from "../lib/dates";
 import { ENDOSCOPY_ORDER_TYPE } from "./endoscopyOrderHelpers";
 import { INJECTION_ORDER_TYPE } from "./injectionHelpers";
@@ -92,22 +93,11 @@ export function lotRecordRows(
     .sort((a, b) => b.performedSort.localeCompare(a.performedSort));
 }
 
-function csvCell(value: string): string {
-  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
-
 /** 一覧の CSV(Excel で開けるよう BOM 付き UTF-8・CRLF)。 */
 export function lotRecordCsv(rows: LotRecordRow[]): Blob {
   const header = ["実施日時", "患者番号", "氏名", "種別", "医薬品コード", "医薬品名", "量", "ロット番号"];
-  const lines = [header, ...rows.map((r) => [
-    r.performedAt,
-    r.patientNumber,
-    r.patientName,
-    r.kind,
-    r.medicineCode,
-    r.medicineName,
-    r.dose,
-    r.lotNumber,
-  ])].map((cells) => cells.map(csvCell).join(","));
-  return new Blob(["﻿", lines.join("\r\n"), "\r\n"], { type: "text/csv;charset=utf-8" });
+  return csvBlob(
+    header,
+    rows.map((r) => [r.performedAt, r.patientNumber, r.patientName, r.kind, r.medicineCode, r.medicineName, r.dose, r.lotNumber]),
+  );
 }

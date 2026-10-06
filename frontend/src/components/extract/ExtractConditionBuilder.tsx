@@ -1,0 +1,195 @@
+import type { LeafProgress } from "../../api/queries";
+import {
+  EXTRACT_KIND_LABELS,
+  EXTRACT_MAX_DEPTH,
+  canNegate,
+  isGroup,
+  newGroup,
+  newLeaf,
+  type ExtractGroup,
+  type ExtractKind,
+  type ExtractLeaf,
+  type ExtractNode,
+} from "../../fhir/extractQueryHelpers";
+import { TrashIcon } from "../icons/TrashIcon";
+import { ExtractLeafFields } from "./ExtractLeafFields";
+
+const KINDS = Object.keys(EXTRACT_KIND_LABELS) as ExtractKind[];
+
+interface Props {
+  root: ExtractGroup;
+  onChange: (root: ExtractGroup) => void;
+  progress: Record<string, LeafProgress>;
+}
+
+/** 条件の組み立て。グループ(AND / OR)の中に条件とグループを入れ子で並べる。 */
+export function ExtractConditionBuilder({ root, onChange, progress }: Props) {
+  return <GroupEditor group={root} depth={1} onChange={onChange} progress={progress} />;
+}
+
+function GroupEditor({
+  group,
+  depth,
+  onChange,
+  onRemove,
+  progress,
+}: {
+  group: ExtractGroup;
+  depth: number;
+  onChange: (group: ExtractGroup) => void;
+  onRemove?: () => void;
+  progress: Record<string, LeafProgress>;
+}) {
+  const replaceChild = (index: number, child: ExtractNode | null) => {
+    const children = [...group.children];
+    if (child) children[index] = child;
+    else children.splice(index, 1);
+    // 除外は AND の直下でしか成り立たないので、OR にしたり兄弟を消したりで外れた除外は戻す。
+    onChange(normalizeNegation({ ...group, children }));
+  };
+  const setOp = (op: "and" | "or") => onChange(normalizeNegation({ ...group, op }));
+
+  return (
+    <div className={`extract-group extract-group--depth-${depth}`}>
+      <div className="extract-group__head">
+        <span className="extract-group__ops" role="group" aria-label="条件のつなぎ方">
+          {(["and", "or"] as const).map((op) => (
+            <button
+              key={op}
+              type="button"
+              aria-pressed={group.op === op}
+              className={`extract-group__op${group.op === op ? " is-active" : ""}`}
+              onClick={() => setOp(op)}
+            >
+              {op === "and" ? "AND" : "OR"}
+            </button>
+          ))}
+        </span>
+        <select
+          aria-label="条件を追加"
+          className="extract-group__add"
+          value=""
+          onChange={(e) => {
+            const kind = e.target.value as ExtractKind;
+            if (kind) onChange({ ...group, children: [...group.children, newLeaf(kind)] });
+          }}
+        >
+          <option value="">＋条件</option>
+          {KINDS.map((kind) => (
+            <option key={kind} value={kind}>
+              {EXTRACT_KIND_LABELS[kind]}
+            </option>
+          ))}
+        </select>
+        {depth < EXTRACT_MAX_DEPTH - 1 && (
+          <button
+            type="button"
+            className="rp-card__compact-button"
+            onClick={() => onChange({ ...group, children: [...group.children, newGroup(group.op === "and" ? "or" : "and")] })}
+          >
+            ＋グループ
+          </button>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            className="rp-card__icon-button extract-group__remove"
+            title="グループを削除"
+            aria-label="グループを削除"
+            onClick={onRemove}
+          >
+            <TrashIcon />
+          </button>
+        )}
+      </div>
+      <div className="extract-group__children">
+        {group.children.map((child, index) =>
+          isGroup(child) ? (
+            <GroupEditor
+              key={index}
+              group={child}
+              depth={depth + 1}
+              onChange={(next) => replaceChild(index, next)}
+              onRemove={() => replaceChild(index, null)}
+              progress={progress}
+            />
+          ) : (
+            <LeafEditor
+              key={child.key}
+              leaf={child}
+              negatable={canNegate(group, child)}
+              onChange={(next) => replaceChild(index, next)}
+              onRemove={() => replaceChild(index, null)}
+              progress={progress[child.key]}
+            />
+          ),
+        )}
+      </div>
+    </div>
+  );
+}
+
+function normalizeNegation(group: ExtractGroup): ExtractGroup {
+  const children = group.children.map((child) =>
+    !isGroup(child) && child.not && !canNegate(group, child) ? { ...child, not: false } : child,
+  );
+  return { ...group, children };
+}
+
+function LeafEditor({
+  leaf,
+  negatable,
+  onChange,
+  onRemove,
+  progress,
+}: {
+  leaf: ExtractLeaf;
+  negatable: boolean;
+  onChange: (leaf: ExtractLeaf) => void;
+  onRemove: () => void;
+  progress: LeafProgress | undefined;
+}) {
+  return (
+    <div className={`extract-leaf${leaf.not ? " extract-leaf--not" : ""}`}>
+      <div className="extract-leaf__head">
+        <span className="extract-leaf__kind">{EXTRACT_KIND_LABELS[leaf.kind]}</span>
+        <label className="extract-field extract-field--inline">
+          表示名
+          <input
+            type="text"
+            className="extract-field__label"
+            value={leaf.label ?? ""}
+            onChange={(e) => onChange({ ...leaf, label: e.target.value })}
+          />
+        </label>
+        <label className="extract-checks__item">
+          <input
+            type="checkbox"
+            checked={Boolean(leaf.not)}
+            disabled={!negatable && !leaf.not}
+            onChange={(e) => onChange({ ...leaf, not: e.target.checked })}
+          />
+          除外
+        </label>
+        <LeafStatus progress={progress} />
+        <button
+          type="button"
+          className="rp-card__icon-button extract-leaf__remove"
+          title="条件を削除"
+          aria-label="条件を削除"
+          onClick={onRemove}
+        >
+          <TrashIcon />
+        </button>
+      </div>
+      <ExtractLeafFields leaf={leaf} onChange={onChange} />
+    </div>
+  );
+}
+
+function LeafStatus({ progress }: { progress: LeafProgress | undefined }) {
+  if (!progress || progress.state === "pending") return null;
+  if (progress.state === "running") return <span className="extract-leaf__status">読込中</span>;
+  if (progress.state === "error") return <span className="extract-leaf__status extract-leaf__status--error">エラー</span>;
+  return <span className="extract-leaf__status">{`${progress.patients} 人`}</span>;
+}

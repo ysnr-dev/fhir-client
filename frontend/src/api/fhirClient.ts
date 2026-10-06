@@ -49,11 +49,24 @@ async function handle<T>(res: Response): Promise<FhirResult<T>> {
   return { data: body as T, etag };
 }
 
+export interface SearchOptions {
+  /**
+   * 上流に `Prefer: handling=strict` を送る。上流は既定で未知の検索条件を黙って読み飛ばし、
+   * 絞り込み無しの全件を返すので、条件が落ちると結果が嘘になる読み込み(データ抽出)で付ける。
+   */
+  strict?: boolean;
+  signal?: AbortSignal;
+}
+
 export function searchResource<T extends fhir4.Resource>(
   resourceType: string,
   params: URLSearchParams,
+  options: SearchOptions = {},
 ): Promise<FhirResult<fhir4.Bundle<T>>> {
-  return fhirFetch(`${BASE}/${resourceType}?${params.toString()}`).then((r) => handle(r));
+  return fhirFetch(`${BASE}/${resourceType}?${params.toString()}`, {
+    signal: options.signal,
+    headers: options.strict ? { Prefer: "handling=strict" } : undefined,
+  }).then((r) => handle(r));
 }
 
 /**

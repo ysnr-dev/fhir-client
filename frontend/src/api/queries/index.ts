@@ -48,3 +48,4 @@ export * from "./radiotherapy";
 export * from "./dpcForm1";
 export * from "./countersign";
 export * from "./lotManagement";
+export * from "./extractQuery";

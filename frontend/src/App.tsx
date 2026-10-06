@@ -149,6 +149,7 @@ import { RxWorklistPage } from "./pages/RxWorklistPage";
 import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklistPage";
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { LotManagementPage } from "./pages/LotManagementPage";
+import { DataExtractPage } from "./pages/DataExtractPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 import { HomePage } from "./pages/HomePage";
 import { BulletinPage } from "./pages/BulletinPage";
@@ -330,10 +331,13 @@ function App() {
           <NavLink to="/schedules">予約枠</NavLink>
           {/* 掲示板は院内のお知らせ。職種を問わず全員が読むので独立して置く(ホームにも出る)。 */}
           <NavLink to="/bulletin">掲示板</NavLink>
-          {/* 院外へ提出するデータの作成状況の確認と出力をまとめる(DPC 調査など)。 */}
-          <HoverMenu label="データ提出">
+          {/* 院外へ提出するデータ(DPC 調査など)と、患者を条件で抜き出す二次利用のデータをまとめる。 */}
+          <HoverMenu label="データ">
             <Link to="/dpc-form1-export" className="row-menu__item">
               DPC様式1
+            </Link>
+            <Link to="/data-extract" className="row-menu__item">
+              データ抽出
             </Link>
           </HoverMenu>
           <HoverMenu label="管理">
@@ -485,6 +489,7 @@ function App() {
           <Route path="/brought-med-worklist" element={<BroughtMedicationWorklistPage />} />
           <Route path="/injection-worklist" element={<InjectionWorklistPage />} />
           <Route path="/lot-management" element={<LotManagementPage />} />
+          <Route path="/data-extract" element={<DataExtractPage />} />
           <Route path="/chemo-room-worklist" element={<ChemoRoomWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
           <Route path="/endoscopy-worklist" element={<EndoscopyWorklistPage />} />

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_06_130100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -141,6 +141,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["system_key"], name: "index_external_system_connections_on_system_key", unique: true
+  end
+
+  create_table "extract_queries", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "scope", null: false
+    t.string "owner_id"
+    t.string "owner_name"
+    t.string "name", null: false
+    t.jsonb "definition", default: {}, null: false
+    t.integer "display_order"
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_extract_queries_on_code", unique: true
+    t.index ["scope", "owner_id"], name: "index_extract_queries_on_scope_and_owner_id"
   end
 
   create_table "facility_settings", force: :cascade do |t|

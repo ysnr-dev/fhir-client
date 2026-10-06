@@ -34,3 +34,4 @@ export * from "./radiotherapy";
 export * from "./labImport";
 export * from "./supervisorGroup";
 export * from "./medicineAttribute";
+export * from "./extractQuery";

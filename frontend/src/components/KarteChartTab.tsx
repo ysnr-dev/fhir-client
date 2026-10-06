@@ -19,15 +19,8 @@ import {
   useRegimenApplications,
   useRegimenDayOrders,
 } from "../api/queries";
-import { useCurrentPractitioner } from "../api/authQueries";
-import { findLabReportIdOf, usePractitionerRoles, useVitalThresholds } from "../api/queries";
-import {
-  baseRoleOf,
-  isDoctorRoleCode,
-  parseDepartmentRoles,
-  parsePractitionerRole,
-} from "../fhir/practitionerRoleHelpers";
-import { useOrderContext } from "../hooks/useOrderContext";
+import { findLabReportIdOf, useVitalThresholds } from "../api/queries";
+import { useDefinitionOwners } from "../hooks/useDefinitionOwners";
 import {
   CHART_AXIS_UNIT_LABELS,
   CHART_COLUMN_CHOICES,
@@ -61,11 +54,7 @@ import {
 import { buildStateTracks, findStateTrack } from "../fhir/chartStateHelpers";
 import { formatChartView, parseChartView, type KarteDetailTarget } from "../karteUrl";
 import { addDays, today } from "../lib/dates";
-import {
-  ChartDefinitionEditorModal,
-  type ChartDefinitionDraft,
-  type ChartOwnerOption,
-} from "./ChartDefinitionEditorModal";
+import { ChartDefinitionEditorModal, type ChartDefinitionDraft } from "./ChartDefinitionEditorModal";
 import { ChartScatterModal } from "./ChartScatterModal";
 import { ChartStratifyModal } from "./ChartStratifyModal";
 import { ErrorBanner } from "./ErrorBanner";
@@ -102,56 +91,15 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
 
 
 
-  const { practitionerId, practitioner, sessionLoading } = useCurrentPractitioner();
-  const practitionerRoles = usePractitionerRoles(practitionerId ?? undefined);
-  const baseRole = baseRoleOf(practitionerRoles.roles);
-  const isDoctor = isDoctorRoleCode(
-    baseRole ? parsePractitionerRole(baseRole).roleCode : undefined,
-  );
-  const myDepartments = useMemo(
-    () => parseDepartmentRoles(practitionerRoles.roles),
-    [practitionerRoles.roles],
-  );
-  // ヘッダーで選んでいる依頼科を優先し、無ければ担当科の先頭。
-  const orderContext = useOrderContext();
-  const department =
-    myDepartments.find((d) => d.organizationId === orderContext.departmentId) ?? myDepartments[0];
-
-  const practitionerName = practitioner
-    ? practitioner.name?.[0]?.text ||
-      [practitioner.name?.[0]?.family, ...(practitioner.name?.[0]?.given ?? [])]
-        .filter(Boolean)
-        .join(" ")
-    : "";
-  const owners: ChartOwnerOption[] = useMemo(() => {
-    return [
-      { scope: "facility", ownerId: null, ownerName: null, label: "院内共通", canEdit: isDoctor },
-      {
-        scope: "department",
-        ownerId: department?.organizationId ?? null,
-        ownerName: department?.name ?? null,
-        label: department?.name ?? "診療科",
-        canEdit: isDoctor && Boolean(department),
-      },
-      {
-        scope: "practitioner",
-        ownerId: practitionerId,
-        ownerName: practitionerName || null,
-        // 自分だけが見るチャートは医師でなくても持てる(読むための設定なので)。
-        label: "自分のチャート",
-        canEdit: Boolean(practitionerId),
-      },
-    ];
-  }, [isDoctor, department, practitionerId, practitionerName]);
-
-  // 持ち主(自分・診療科)が決まる前に引くと、院内共通だけの一覧を一度返して
-  // 「チャートがありません」がちらつくので、決まってから引く。
-  const ownersReady = !sessionLoading && (!practitionerId || !practitionerRoles.isPending);
-  const list = useChartDefinitions(
-    department?.organizationId,
-    practitionerId ?? undefined,
-    ownersReady,
-  );
+  // 自分だけが見るチャートは医師でなくても持てる(読むための設定なので)。
+  const {
+    owners,
+    ready: ownersReady,
+    departmentId,
+    practitionerId,
+    practitionerName,
+  } = useDefinitionOwners("自分のチャート");
+  const list = useChartDefinitions(departmentId, practitionerId, ownersReady);
   // この患者で最初に開くチャート(ピン留め)。患者につき 1 つで、利用者の間で共有する。
   const pin = usePatientChartPin(patientId);
   const pinMutation = usePatientChartPinMutation(patientId);

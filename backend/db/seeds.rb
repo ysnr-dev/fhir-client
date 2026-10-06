@@ -1597,6 +1597,16 @@ else
   puts "chart_definitions presets: #{chart_presets_json} not found, skipped"
 end
 
+# データ抽出の条件(院内共通)の初期値。db/seed_data/extract_query_presets.json をそのまま入れる
+# (ExtractQueryPresets)。同じ名前の院内共通の条件があれば上書きしない。
+extract_presets_json = Rails.root.join("db/seed_data/extract_query_presets.json")
+if File.exist?(extract_presets_json)
+  result = ExtractQueryPresets.load!(extract_presets_json)
+  puts "extract_queries presets: created #{result.created} (kept #{result.kept})"
+else
+  puts "extract_queries presets: #{extract_presets_json} not found, skipped"
+end
+
 # 看護計画の用語(看護診断・看護成果・看護介入)と標準看護計画のサンプル(db/seed_data/nursing_care/sample.json)。
 # NANDA-I・NIC・NOC はライセンス物なので同梱しない。ここに入れるのは開発とデモのための自作の用語で、
 # コードは L で始めて配布データの番号と混ざらないようにしてある(docs/nursing-care-plan-design.md)。

@@ -28,20 +28,15 @@ import {
   type ChartItem,
   type ChartTrackRef,
 } from "../fhir/chartDefinitionHelpers";
+import type { DefinitionOwnerOption } from "../hooks/useDefinitionOwners";
 import { ErrorBanner } from "./ErrorBanner";
 import { TrashIcon } from "./icons/TrashIcon";
 import { LabResultItemSearchModal } from "./LabResultItemSearchModal";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
 
-/** 持ち主の選択肢。呼び出し元が権限を見て canEdit を決める。 */
-export interface ChartOwnerOption {
-  scope: OrderSetScope;
-  ownerId: string | null;
-  ownerName: string | null;
-  label: string;
-  canEdit: boolean;
-}
+/** 持ち主の選択肢。呼び出し元が権限を見て canEdit を決める(useDefinitionOwners)。 */
+export type ChartOwnerOption = DefinitionOwnerOption;
 
 export interface ChartDefinitionDraft {
   name: string;

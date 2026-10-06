@@ -8590,6 +8590,267 @@ input.lot-number-cell__input.is-invalid {
   margin: 0;
 }
 
+/* データ抽出(docs/data-extract-design.md) --------------------------------- */
+
+.data-extract__toolbar,
+.data-extract__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.data-extract__actions {
+  margin-top: 12px;
+}
+
+.data-extract__dirty {
+  font-size: 12px;
+  color: var(--warning);
+}
+
+.data-extract__csv {
+  margin-left: auto;
+}
+
+.data-extract__save {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.data-extract input,
+.data-extract select,
+.data-extract__save input,
+.data-extract__save select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.data-extract input[type="checkbox"] {
+  padding: 0;
+}
+
+.extract-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.extract-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.extract-field-group {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.data-extract .extract-field__number {
+  width: 6em;
+}
+
+.data-extract .extract-field__code {
+  width: 7em;
+}
+
+.data-extract .extract-field__label {
+  width: 14em;
+}
+
+.extract-group {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.extract-group--depth-2 {
+  border-left: 3px solid var(--accent-border);
+  background: var(--bg);
+}
+
+.extract-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.extract-group__ops {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.extract-group__op {
+  height: auto;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  padding: 4px 10px;
+}
+
+.extract-group__op.is-active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.extract-group__remove,
+.extract-leaf__remove {
+  margin-left: auto;
+}
+
+.extract-group__children {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.extract-leaf {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.extract-leaf--not {
+  border-style: dashed;
+  border-color: var(--danger);
+}
+
+.extract-leaf__head,
+.extract-leaf__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.extract-leaf__head {
+  align-items: center;
+}
+
+.extract-leaf__kind {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.extract-leaf__status {
+  font-size: 12px;
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  border-radius: 3px;
+  padding: 0 6px;
+}
+
+.extract-leaf__status--error {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.extract-checks {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.extract-checks__label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.extract-checks__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.extract-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.extract-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--text-h);
+  border-radius: 12px;
+  padding: 1px 4px 1px 10px;
+}
+
+.extract-chip__remove {
+  height: auto;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0 4px;
+  font-size: 13px;
+}
+
+.extract-results {
+  margin-top: 12px;
+}
+
+.extract-results__count {
+  margin-left: auto;
+  align-self: center;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.extract-results__table-wrap {
+  overflow-x: auto;
+}
+
+.extract-results__table td.extract-results__nowrap {
+  white-space: nowrap;
+}
+
+.extract-breakdown {
+  width: auto;
+  min-width: 320px;
+  margin-bottom: 16px;
+}
+
+.extract-breakdown th.extract-breakdown__number,
+.extract-breakdown td.extract-breakdown__number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.extract-breakdown__total td {
+  font-weight: 600;
+}
+
 /* 検査オーダー関連マスタ ------------------------------------------------- */
 
 /* パネル構成もまとめて編集する詳細モーダル。列が多いので広幅にする。 */

@@ -13,6 +13,9 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   2026-10-06（特定生物由来製剤のロット番号の実装で、MedicationAdministration の `lot-number` 検索を同日実装。
   薬剤と輸血の両方のロット拡張を索引し、既存データを backfill する migration
   `20261006000001_add_lot_number_to_medication_administrations.rb` 付き。`docs/lot-number-design.md`）。
+  2026-10-06（データ抽出の実装で、Observation の `value-quantity`(数値の比較、検索型 `:quantity`)を同日実装。
+  既存の測定値を backfill する migration `20261007000001_add_value_quantity_to_observations.rb` 付き。
+  同時に C-23〜C-25 を追加。`docs/data-extract-design.md`）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
@@ -371,6 +374,25 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   「診察開始済み」に倒れ、予約を取り消せなくなる）。
 
 ## 優先度 C: 個別の検索パラメータ・仕様適合（残り）
+
+### C-23. MedicationRequest のオーダー種別(処方 / 注射)の索引
+
+- **現状**: データ抽出の「処方・注射」の条件は処方と注射を分けられない。区別はヘッダ ServiceRequest の category に
+  しか無く、`based-on.category=` のチェーンは 0..* 参照なので内側の id を Ruby に取り出す作りで、件数が多いと遅い。
+- **望ましいサーバー機能**: MedicationRequest に order-type の派生列(ヘッダの category を書き込み時に写す)か、
+  `based-on` のチェーンを SQL のサブクエリで解く。
+
+### C-24. token の前方一致(ICD10 の `:below` 相当)
+
+- **現状**: データ抽出の病名の ICD10 は完全一致なので、3 桁を 4 桁の細分類まで画面で広げて送っている(`expandIcd10`)。
+- **望ましいサーバー機能**: token の `:below`(前方一致)。C-10 と同じ機能で解ける。
+
+### C-25. 件数の内訳の operation(group-by)
+
+- **現状**: データ抽出の内訳(性別 × 年齢階級、診療科別・月別)は患者を読んでから手元で数える。上流が返せる集計は
+  `_summary=count` の総数と `$distinct-dates?count=true` の日付ごとの件数だけ。
+- **望ましいサーバー機能**: 検索条件 + 集計キー(code / 性別 / 月など)で件数を返す operation。該当が多い統計
+  (部門の月報など)を患者を読まずに出せる。
 
 ### C-17. `Composition:entry` の `_include`
 
