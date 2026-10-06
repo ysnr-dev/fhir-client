@@ -7,12 +7,12 @@ module Master
     # ePath のタスク分類(大)。TP 治療 / EX 検査 / ML 食事 / NO 観察項目 / NC ケア項目 /
     # EG 教育・指導・説明 / AL 活動・安静度 / MD 医療文書
     CATEGORIES_LV1 = %w[TP EX ML NO NC EG AL MD].freeze
-    # ePath のタスク分類(中)。先頭 2 文字が大分類。
+    # ePath のタスク分類(中)。先頭 2 文字が大分類。EGMG(服薬指導)はこのアプリで足した分類。
     CATEGORIES_LV2 = (
       %w[TPPR TPIN TPRE TPTR TPOP TPBT TPRH TPDI TPRT TPCI
          EXSP EXMB EXPH EXEN EXIM EXPA
          MLBR MLLU MLSU
-         EGNC EGCS EGIC EGEP] + (1..17).map { |n| format("NC%02d", n) }
+         EGNC EGMG EGCS EGIC EGEP] + (1..17).map { |n| format("NC%02d", n) }
     ).freeze
 
     validates :pathway_code, :unit_id, presence: true

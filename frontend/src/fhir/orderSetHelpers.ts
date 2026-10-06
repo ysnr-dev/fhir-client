@@ -10,6 +10,11 @@ import {
   guidanceFormatDisplay,
   type NutritionGuidanceOrderFormValues,
 } from "./nutritionGuidanceOrderHelpers";
+import {
+  guidanceConditionDisplay,
+  guidanceKindDisplay,
+  type MedicationGuidanceOrderFormValues,
+} from "./medicationGuidanceOrderHelpers";
 import type { PathoOrderFormValues } from "./pathoOrderHelpers";
 import type { PhysioOrderFormValues } from "./physioOrderHelpers";
 import type { PrescriptionFormValues } from "./prescriptionHelpers";
@@ -54,6 +59,7 @@ export type OrderSetOrderType =
   | "rehab-order"
   | "radiotherapy-order"
   | "nutrition-guidance-order"
+  | "medication-guidance-order"
   | "consult-order"
   | "nursing-order";
 
@@ -74,6 +80,7 @@ export const ORDER_SET_ORDER_TYPES: readonly OrderSetOrderType[] = [
   "rehab-order",
   "radiotherapy-order",
   "nutrition-guidance-order",
+  "medication-guidance-order",
   "consult-order",
   "nursing-order",
 ];
@@ -340,6 +347,10 @@ export function sanitizeValuesForSet(orderType: OrderSetOrderType, values: unkno
         purposeTemplate: null,
       } satisfies NutritionGuidanceOrderFormValues;
     }
+    case "medication-guidance-order": {
+      const v = values as MedicationGuidanceOrderFormValues;
+      return { ...v, problem: null, startDate: "", endDate: "" } satisfies MedicationGuidanceOrderFormValues;
+    }
     case "consult-order": {
       const v = values as ConsultOrderFormValues;
       return {
@@ -444,6 +455,10 @@ export function summarizeOrderSetValues(orderType: OrderSetOrderType, values: un
     case "nutrition-guidance-order": {
       const v = values as NutritionGuidanceOrderFormValues;
       return joinNames([guidanceFormatDisplay(v.format), v.targetDiet?.name ?? ""]);
+    }
+    case "medication-guidance-order": {
+      const v = values as MedicationGuidanceOrderFormValues;
+      return joinNames([guidanceKindDisplay(v.kind), ...v.conditions.map(guidanceConditionDisplay)]);
     }
     case "consult-order": {
       const v = values as ConsultOrderFormValues;

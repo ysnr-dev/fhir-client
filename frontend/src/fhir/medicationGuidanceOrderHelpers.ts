@@ -142,9 +142,13 @@ export function emptyMedicationGuidanceOrderForm(
 }
 
 /** 入力の検証。空文字なら妥当。 */
-export function validateMedicationGuidanceOrderForm(values: MedicationGuidanceOrderFormValues): string {
+export function validateMedicationGuidanceOrderForm(
+  values: MedicationGuidanceOrderFormValues,
+  /** requireDates を偽にすると開始日を求めない(セットの内容としての入力)。 */
+  { requireDates = true }: { requireDates?: boolean } = {},
+): string {
   if (!values.kind) return "指導区分を選んでください。";
-  if (!values.startDate) return "開始日を入れてください。";
+  if (requireDates && !values.startDate) return "開始日を入れてください。";
   if (values.endDate && values.endDate < values.startDate) {
     return "終了日は開始日と同じか、それより後にしてください。";
   }

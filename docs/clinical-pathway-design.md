@@ -73,7 +73,7 @@ PlanDefinition EP02(施設パス)
 
 - タスク分類 Lv1: TP 治療 / EX 検査 / ML 食事 / NO 観察項目 / NC ケア項目 / EG 教育・指導・説明 / AL 活動・安静度 / MD 医療文書
 - タスク分類 Lv2: TPPR 処方 TPIN 注射 TPRE レジメン TPTR 処置 TPOP 手術 TPBT 輸血 TPRH リハビリ TPDI 透析 TPRT 放射線治療 TPCI 条件付き指示 /
-  EXSP 検体 EXMB 細菌 EXPH 生理 EXEN 内視鏡 EXIM 画像 EXPA 病理 / MLBR 朝 MLLU 昼 MLSU 夕 / NC01〜NC17 ケア / EGNC 栄養指導 EGCS 指導 EGIC IC EGEP 看護 E プラン
+  EXSP 検体 EXMB 細菌 EXPH 生理 EXEN 内視鏡 EXIM 画像 EXPA 病理 / MLBR 朝 MLLU 昼 MLSU 夕 / NC01〜NC17 ケア / EGNC 栄養指導 EGMG 服薬指導(このアプリで足した分類) EGCS 指導 EGIC IC EGEP 看護 E プラン
 - 「タスクのみ」の OAT ユニットも、空の観察項目(コード ZZZZZZZZZZ)で包む。
 - BOM コードは学会の知財で IG には一部しか同梱されない。ローカルコード体系が正式に許容されている。
 
@@ -241,7 +241,7 @@ master_pathway_events          + phase_key(NOT NULL)。一意性は (pathway_cod
 - 種別の既定はタスク分類から決める(`defaultOrderTypeOfTask`: 中分類 `DEFAULT_ORDER_TYPE_BY_LV2` = 処方 → prescription、
   注射 → injection、処置 → treatment-order、手術 → surgery-order、輸血 → transfusion-order、リハビリ → rehab-order、検体検査 → lab-order、
   細菌検査 → micro-order、生理検査 → physio-order、内視鏡検査 → endoscopy-order、画像診断 → rad-order、病理診断 → patho-order、
-  朝/昼/夕 → meal-order、栄養指導 → nutrition-guidance-order、ケア項目(NC01〜)→ nursing-order。中分類が無ければ大分類で
+  朝/昼/夕 → meal-order、栄養指導 → nutrition-guidance-order、服薬指導(EGMG)→ medication-guidance-order、ケア項目(NC01〜)→ nursing-order。中分類が無ければ大分類で
   ケア項目 → 看護指示、食事 → 食事オーダー、それ以外は処方)。
 - 雛形を持てる種別は `ORDER_SET_TYPES` の全 16 種(病名を除く。2026-09-12 に看護指示・食事・手術・輸血・リハビリ・栄養指導・
   他科依頼・細菌・病理・内視鏡を追加。`docs/order-set-design.md` §7 Phase 2)と放射線治療(`TPRT`。

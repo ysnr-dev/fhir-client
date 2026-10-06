@@ -39,6 +39,8 @@ import { InjectionPerformModal } from "./InjectionPerformModal";
 import { KarteDetailModal } from "./KarteCardModals";
 import { Modal } from "./Modal";
 import { NutritionGuidancePerformModal } from "./NutritionGuidancePerformModal";
+import { MedicationGuidancePerformModal } from "./MedicationGuidancePerformModal";
+import { medicationGuidanceTasksByOrderId } from "../fhir/medicationGuidanceTaskHelpers";
 import { PhysioPerformModal } from "./PhysioPerformModal";
 import { RadPerformModal } from "./RadPerformModal";
 import { RadiotherapyPerformModalByOrder } from "./RadiotherapyPerformModal";
@@ -69,6 +71,7 @@ const DEPARTMENT_KINDS = new Set<PerformKind>([
 const SESSION_KINDS = new Set<PerformKind>([
   "rehab-order",
   "nutrition-guidance-order",
+  "medication-guidance-order",
   "radiotherapy-order",
 ]);
 
@@ -460,6 +463,17 @@ function SessionPerformLoader({
         order={order}
         defaultDate={defaultDate}
         acceptTask={{ task: rehabTasksByOrderId(tasks.data).get(order.id ?? "") }}
+        onClose={onClose}
+      />
+    );
+  }
+  if (kind === "medication-guidance-order") {
+    return (
+      <MedicationGuidancePerformModal
+        order={order}
+        patientId={patientId}
+        defaultDate={defaultDate}
+        acceptTask={{ task: medicationGuidanceTasksByOrderId(tasks.data).get(order.id ?? "") }}
         onClose={onClose}
       />
     );

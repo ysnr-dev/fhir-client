@@ -74,16 +74,21 @@ export function useUpdateMedicationGuidanceOrder() {
   });
 }
 
-/** オーダーを消す。明細・予約・テンプレート回答を持たないのでヘッダの DELETE だけ。 */
+/**
+ * オーダーを消す。明細・予約・テンプレート回答を持たないのでヘッダの DELETE だけ。
+ * useDeleteMedicationGuidanceOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。
+ */
+export const deleteMedicationGuidanceOrderRequest = (srId: string) =>
+  postBundle({
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [{ request: { method: "DELETE", url: `ServiceRequest/${srId}` } }],
+  });
+
 export function useDeleteMedicationGuidanceOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (srId: string) =>
-      postBundle({
-        resourceType: "Bundle",
-        type: "transaction",
-        entry: [{ request: { method: "DELETE", url: `ServiceRequest/${srId}` } }],
-      }),
+    mutationFn: deleteMedicationGuidanceOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });

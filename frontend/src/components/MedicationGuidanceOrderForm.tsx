@@ -11,6 +11,7 @@ import {
   type MedicationGuidanceOrderFormValues,
 } from "../fhir/medicationGuidanceOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -27,6 +28,12 @@ interface MedicationGuidanceOrderFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** オーダーセットの適用日。外から開始日をまとめて入れるときに渡す。 */
+  bulkStartDate?: string;
+  /** セットの内容として入力する(患者と日付に依存する入力を出さず、その検証も外す)。 */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 export function MedicationGuidanceOrderForm({
@@ -36,6 +43,9 @@ export function MedicationGuidanceOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: MedicationGuidanceOrderFormProps) {
   const [values, setValues] = useState<MedicationGuidanceOrderFormValues>(
     initialValues ?? emptyMedicationGuidanceOrderForm(""),
@@ -43,6 +53,7 @@ export function MedicationGuidanceOrderForm({
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const problemOptions = useProblemOptions(patientId);
+  useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, startDate: date })));
   const update = makeFieldUpdater(setValues);
 
   function toggleCondition(code: MedicationGuidanceCondition, checked: boolean) {
@@ -56,14 +67,14 @@ export function MedicationGuidanceOrderForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateMedicationGuidanceOrderForm(values);
+    const error = validateMedicationGuidanceOrderForm(values, { requireDates: !setMode });
     setValidationError(error);
     if (error) return;
     onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
   }
 
   return (
-    <form className="prescription-form medication-guidance-form" onSubmit={handleSubmit}>
+    <form className="prescription-form medication-guidance-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
       {validationError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -128,14 +139,16 @@ export function MedicationGuidanceOrderForm({
 
       <fieldset>
         <legend>依頼共通</legend>
-        <label>
-          対象プロブレム
-          <ProblemSelect
-            value={values.problem}
-            options={problemOptions}
-            onChange={(problem) => update("problem", problem)}
-          />
-        </label>
+        {!setMode && (
+          <label>
+            対象プロブレム
+            <ProblemSelect
+              value={values.problem}
+              options={problemOptions}
+              onChange={(problem) => update("problem", problem)}
+            />
+          </label>
+        )}
         <label>
           入外区分
           <select value={values.setting} onChange={(e) => update("setting", e.target.value as PrescriptionSetting)}>
@@ -175,11 +188,13 @@ export function MedicationGuidanceOrderForm({
         )}
       </fieldset>
 
-      <div className="prescription-form__actions">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "保存中..." : submitLabel}
-        </button>
-      </div>
+      {!hideSubmit && (
+        <div className="prescription-form__actions">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "保存中..." : submitLabel}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

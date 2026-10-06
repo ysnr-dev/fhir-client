@@ -145,6 +145,13 @@ import { MealOrderForm } from "./MealOrderForm";
 import { MicroOrderForm } from "./MicroOrderForm";
 import { NursingOrderForm } from "./NursingOrderForm";
 import { NutritionGuidanceOrderForm } from "./NutritionGuidanceOrderForm";
+import { MedicationGuidanceOrderForm } from "./MedicationGuidanceOrderForm";
+import {
+  buildDoMedicationGuidanceOrderForm,
+  buildMedicationGuidanceOrderBundle,
+  emptyMedicationGuidanceOrderForm,
+  type MedicationGuidanceOrderFormValues,
+} from "../fhir/medicationGuidanceOrderHelpers";
 import { PathoOrderForm } from "./PathoOrderForm";
 import { PhysioOrderForm } from "./PhysioOrderForm";
 import { PrescriptionForm } from "./PrescriptionForm";
@@ -811,6 +818,36 @@ const nutritionGuidanceOrder = defineOrderSetType<NutritionGuidanceOrderFormValu
   },
 );
 
+const medicationGuidanceOrder = defineOrderSetType<MedicationGuidanceOrderFormValues, []>(
+  "medication-guidance-order",
+  {
+    label: "服薬指導",
+    renderForm: (props) => (
+      <MedicationGuidanceOrderForm
+        patientId={props.patientId}
+        initialValues={props.initialValues}
+        onSubmit={props.onSubmit}
+        submitting={props.submitting}
+        submitError={props.submitError}
+        bulkStartDate={props.bulkStartDate}
+        setMode={props.setMode}
+        hideSubmit
+      />
+    ),
+    emptyValues: (setting) => emptyMedicationGuidanceOrderForm(setting),
+    buildDoValues: buildDoMedicationGuidanceOrderForm,
+    settingOf: (values) => values.setting,
+    buildBundle: (values, _extra, { patientId, requester, defaultSetting }) => ({
+      bundle: buildMedicationGuidanceOrderBundle(
+        values,
+        patientId,
+        withOrderWard(requester, values.setting, defaultSetting),
+      ),
+      invalidate: [],
+    }),
+  },
+);
+
 const consultOrder = defineOrderSetType<ConsultOrderFormValues, []>("consult-order", {
   label: "他科依頼",
   renderForm: (props) => (
@@ -856,6 +893,7 @@ export const ORDER_SET_TYPES: Partial<Record<OrderSetOrderType, OrderSetTypeDef>
   "rehab-order": rehabOrder,
   "radiotherapy-order": radiotherapyOrder,
   "nutrition-guidance-order": nutritionGuidanceOrder,
+  "medication-guidance-order": medicationGuidanceOrder,
   "consult-order": consultOrder,
   "nursing-order": nursingOrder,
 };
@@ -883,6 +921,7 @@ export const ORDER_SET_TYPE_LABELS: Record<OrderSetOrderType, string> = {
   "rehab-order": "リハビリ",
   "radiotherapy-order": "放射線治療",
   "nutrition-guidance-order": "栄養指導",
+  "medication-guidance-order": "服薬指導",
   "consult-order": "他科依頼",
   "nursing-order": "看護指示",
 };

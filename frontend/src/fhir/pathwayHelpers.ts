@@ -101,6 +101,8 @@ export const TASK_CATEGORY_LV2_OPTIONS: { code: string; display: string; lv1: Pa
     lv1: "NC" as const,
   })),
   { code: "EGNC", display: "栄養指導", lv1: "EG" },
+  // ePath に無い分類。服薬指導オーダーの雛形を置く(docs/medication-guidance-order-design.md)。
+  { code: "EGMG", display: "服薬指導", lv1: "EG" },
   { code: "EGCS", display: "指導", lv1: "EG" },
   { code: "EGIC", display: "IC", lv1: "EG" },
   { code: "EGEP", display: "看護Eプラン", lv1: "EG" },
@@ -129,6 +131,7 @@ export const DEFAULT_ORDER_TYPE_BY_LV2: Record<string, string> = {
   MLLU: "meal-order",
   MLSU: "meal-order",
   EGNC: "nutrition-guidance-order",
+  EGMG: "medication-guidance-order",
 };
 
 /** タスク分類(大)だけのタスクの既定の種別。ケア項目は看護指示、食事は食事オーダー。 */

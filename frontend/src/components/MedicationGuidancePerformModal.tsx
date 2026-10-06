@@ -4,6 +4,11 @@ import { usePractitionerOptions, useRegisterMedicationGuidancePerform } from "..
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { summarizeMedicationGuidanceOrder } from "../fhir/medicationGuidanceOrderHelpers";
 import {
+  buildMedicationGuidanceTaskUpdate,
+  medicationGuidanceTaskStatus,
+} from "../fhir/medicationGuidanceTaskHelpers";
+import { taskBundleEntry } from "../api/queries/worklist";
+import {
   UNDERSTANDING_OPTIONS,
   buildMedicationGuidancePerformBundle,
   defaultSessionTypeFor,
@@ -30,10 +35,22 @@ interface Props {
   patientId: string;
   /** 実施日の初期値。未指定なら当日。 */
   defaultDate?: string;
+  /**
+   * 受付を飛ばして実施するときの進捗 Task(クリニカルパスから開くとき)。渡すと、まだ依頼済なら
+   * 実施と一緒に受付済にする(完了にはしない)。部門の一覧は受付済の行からしか開かないので渡さない。
+   */
+  acceptTask?: { task: fhir4.Task | undefined };
   onClose: () => void;
 }
 
-export function MedicationGuidancePerformModal({ order, patientName, patientId, defaultDate, onClose }: Props) {
+export function MedicationGuidancePerformModal({
+  order,
+  patientName,
+  patientId,
+  defaultDate,
+  acceptTask,
+  onClose,
+}: Props) {
   const register = useRegisterMedicationGuidancePerform();
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const { practitioners, error: practitionersError } = usePractitionerOptions();
@@ -64,7 +81,11 @@ export function MedicationGuidancePerformModal({ order, patientName, patientId, 
     const error = validateMedicationGuidancePerformForm(values);
     setValidationError(error);
     if (error) return;
-    register.mutate(buildMedicationGuidancePerformBundle(values, order), { onSuccess: onClose });
+    const bundle = buildMedicationGuidancePerformBundle(values, order);
+    if (acceptTask && medicationGuidanceTaskStatus(acceptTask.task) === "requested") {
+      bundle.entry?.push(taskBundleEntry(buildMedicationGuidanceTaskUpdate(acceptTask.task, order, "accepted")));
+    }
+    register.mutate(bundle, { onSuccess: onClose });
   }
 
   return (

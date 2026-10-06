@@ -32,6 +32,7 @@ import { deleteMealOrderRequest } from "./meal";
 import { deleteMicroOrderRequest } from "./micro";
 import { invalidateNursing } from "./nursing";
 import { deleteNutritionGuidanceOrderRequest } from "./nutritionGuidance";
+import { deleteMedicationGuidanceOrderRequest } from "./medicationGuidance";
 import { deleteInjectionSeriesRequest } from "./outpatient";
 import { deletePathoOrderRequest } from "./patho";
 import { deletePhysioOrderRequest } from "./physio";
@@ -365,6 +366,9 @@ export function useCancelPathwayApplication() {
             break;
           case "nutrition-guidance-order":
             await deleteNutritionGuidanceOrderRequest(id);
+            break;
+          case "medication-guidance-order":
+            await deleteMedicationGuidanceOrderRequest(id);
             break;
           case "consult-order":
             await deleteConsultOrderRequest(id);

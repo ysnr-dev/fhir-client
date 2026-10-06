@@ -37,6 +37,7 @@ namespace :notifications do
     "rehab" => "rehab-order",
     "radiotherapy" => "radiotherapy-order",
     "nutrition-guidance" => "nutrition-guidance-order",
+    "medication-guidance" => "medication-guidance-order",
     "consult" => "consult-order",
     "injection" => "injection",
     "prescription" => "prescription"
