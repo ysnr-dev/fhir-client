@@ -459,6 +459,8 @@ function SetEditor({
   const [parentId, setParentId] = useState(initialParentId === null ? "" : String(initialParentId));
   const [active, setActive] = useState(set?.active ?? true);
   const [error, setError] = useState<string | null>(null);
+  // 追加した病名のエントリ。描画後にそこまでスクロールする。
+  const [scrollToId, setScrollToId] = useState<number | null>(null);
   const [entries, setEntries] = useState<LocalEntry[]>(() =>
     sortConditionsFirst((set?.entries ?? []).map((entry) => {
       const orderType = isOrderSetOrderType(entry.order_type) ? entry.order_type : null;
@@ -488,15 +490,27 @@ function SetEditor({
   const saving =
     mutations.create.isPending || mutations.update.isPending || mutations.replaceEntries.isPending;
 
+  // 病名は追加ボタン(末尾)から離れた位置に入るので、見出しが見えるところまで寄せる。
+  // どこへ足されたかが分かるよう滑らかに動かす(動きを減らす設定の端末では即座に)。
+  useEffect(() => {
+    if (scrollToId === null) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document
+      .querySelector(`[data-order-set-entry="${scrollToId}"]`)
+      ?.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
+    setScrollToId(null);
+  }, [scrollToId, entries]);
+
   function addEntry(orderType: OrderSetOrderType) {
     const def = ORDER_SET_TYPES[orderType];
     if (!def) return;
+    const localId = nextLocalId++;
     // 病名は病名の束の末尾(オーダーより上)、オーダーは全体の末尾に足す。
     setEntries((prev) =>
       sortConditionsFirst([
         ...prev,
         {
-          localId: nextLocalId++,
+          localId,
           orderType,
           initialValues: def.emptyValues("outpatient"),
           label: "",
@@ -506,6 +520,7 @@ function SetEditor({
         },
       ]),
     );
+    if (orderType === "condition") setScrollToId(localId);
   }
 
   // 病名とオーダーは別の束なので、↑↓で束をまたいで入れ替えない。
@@ -652,7 +667,7 @@ function SetEditor({
         {entries.map((entry, index) => {
           const def = ORDER_SET_TYPES[entry.orderType];
           return (
-            <section className="order-set-stack__item" key={entry.localId}>
+            <section className="order-set-stack__item" key={entry.localId} data-order-set-entry={entry.localId}>
               <div className="order-set-stack__head">
                 <button
                   type="button"

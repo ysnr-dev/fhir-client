@@ -16527,6 +16527,8 @@ button.meal-calendar__cell:hover {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-panel);
+  /* 追加した病名へ寄せたとき、追従するヘッダーの下に見出しが隠れないようにする。 */
+  scroll-margin-top: 80px;
 }
 
 .order-set-stack__item--excluded {
