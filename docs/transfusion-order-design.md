@@ -160,6 +160,10 @@ MedicationAdministration に直接付ける。既存のコードベースは処�
 実施記録の一属性として扱えば足りる(在庫引当をしないので Medication インスタンスを
 作る動機が無い)。
 
+［追記 2026-10-06］薬剤のロット番号(特定生物由来製品など)も同じ作法で、拡張
+`medication-lot-number` を MedicationAdministration に付ける。上流の `lot-number` 検索は
+両方の拡張を索引するので、製剤番号もロット管理画面の検索で引ける(`docs/lot-number-design.md`)。
+
 ### 2.7 副作用は Observation
 
 ［提案］手術の出血量・尿量(`surgeryResultHelpers.ts`)と同じく Observation にする。

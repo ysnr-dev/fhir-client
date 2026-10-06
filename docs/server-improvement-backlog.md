@@ -9,7 +9,10 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   クライアント側の追随 F-4〜F-9 も同日実装）、2026-09-15（リファクタリング観点の再調査。上流が対応済みなのに
   クライアントが使っていない検索と C-9 を `refactoring-plan.md` にまとめた）、2026-09-27（第 2 回の再調査。
   `Encounter.appointment` を同日実装し、C-10〜C-16 を追加）、2026-10-04（第 3 回。記録の `department` 検索と
-  transaction PATCH の `ifMatch`、QuestionnaireResponse の `author-name` を同日実装し、C-17〜C-19 を追加）。
+  transaction PATCH の `ifMatch`、QuestionnaireResponse の `author-name` を同日実装し、C-17〜C-19 を追加）、
+  2026-10-06（特定生物由来製剤のロット番号の実装で、MedicationAdministration の `lot-number` 検索を同日実装。
+  薬剤と輸血の両方のロット拡張を索引し、既存データを backfill する migration
+  `20261006000001_add_lot_number_to_medication_administrations.rb` 付き。`docs/lot-number-design.md`）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、

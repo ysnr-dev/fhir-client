@@ -27,6 +27,7 @@ import {
   identifierValue,
 } from "./prescriptionHelpers";
 import { LOINC_SYSTEM, conceptLabel, referenceIdOfType } from "./shared";
+import { lotNumberLabel, withLotNumber } from "./lotNumberHelpers";
 
 // 注射の実施記録(施用)。輸血(transfusionResultHelpers)と同じ形で、実施 1 回を
 // Procedure のハブにし、薬剤ごとの MedicationAdministration をぶら下げる。
@@ -95,6 +96,8 @@ export interface InjectionPerformMedicineLine {
   doseTouched?: boolean;
   /** 案内量と違う量にした理由。 */
   doseReason?: string;
+  /** ロット番号(薬剤付加情報でロット管理の薬)。docs/lot-number-design.md */
+  lotNumber?: string;
   /** フリースケールで選んだ行(記入のある行の並びでの位置)。 */
   scaleRowIndex?: number | null;
 }
@@ -257,7 +260,7 @@ function buildAdministration(
   const rate = instruction?.doseAndRate?.[0]?.rateQuantity;
   if (rate) dosage.rateQuantity = rate;
 
-  const administration: fhir4.MedicationAdministration = {
+  let administration: fhir4.MedicationAdministration = {
     resourceType: "MedicationAdministration",
     // 途中で中止した施用は、入った量を記録したうえで stopped にする。
     status: values.outcome === "stopped" ? "stopped" : "completed",
@@ -277,6 +280,7 @@ function buildAdministration(
     ...(Object.keys(dosage).length ? { dosage } : {}),
   };
 
+  if (line.lotNumber?.trim()) administration = withLotNumber(administration, line.lotNumber);
   if (values.performerId) {
     administration.performer = [
       {
@@ -461,7 +465,7 @@ function medicineLabel(administration: fhir4.MedicationAdministration): string {
   const name = conceptLabel(administration.medicationCodeableConcept);
   // request が無い = オーダーに無く実施時に足した薬剤。依頼と実施の差が読めるよう印を付ける。
   const added = administration.request ? "" : "(追加)";
-  return [name, amount, added].filter(Boolean).join(" ");
+  return [name, amount, added, lotNumberLabel(administration)].filter(Boolean).join(" ");
 }
 
 /**

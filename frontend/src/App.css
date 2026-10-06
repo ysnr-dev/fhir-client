@@ -8458,6 +8458,138 @@ body.karte-wide {
   padding: 0 4px;
 }
 
+/* 薬剤付加情報(docs/lot-number-design.md)。項目の列は定義から増えるので幅は中身なり。 */
+.medicine-attribute__table {
+  --control-height: 28px;
+}
+
+.medicine-attribute__table td.medicine-attribute__code {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.medicine-attribute__table .medicine-attribute__flag {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.medicine-attribute__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.medicine-attribute__table input.medicine-attribute__note {
+  width: 100%;
+  font-size: 14px;
+  padding: 4px 6px;
+}
+
+.medicine-attribute__badge,
+.medicine-attribute__default {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.medicine-attribute__default {
+  margin-left: 0;
+}
+
+.medicine-attribute__missing {
+  color: var(--text);
+}
+
+/* 実施入力の薬の行のロット番号(docs/lot-number-design.md)。 */
+.lot-number-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* 実施入力の表は table-layout: fixed が多いので、列の幅を決めて欄をセルの中に収める。 */
+th.lot-number-column,
+td.lot-number-column {
+  width: 9.5em;
+}
+
+input.lot-number-cell__input {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 9em;
+  font-size: 14px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+input.lot-number-cell__input.is-invalid {
+  border-color: var(--danger);
+}
+
+.lot-number-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.lot-number-cell__missing,
+.lot-number-cell__error {
+  font-size: 11px;
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.lot-number-cell__missing {
+  color: var(--warning);
+  border: 1px solid var(--warning);
+}
+
+.lot-number-cell__error {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+/* ロット管理(ロット検索・ロット未入力)。 */
+.lot-management__table td.lot-management__nowrap {
+  white-space: nowrap;
+}
+
+.lot-management__table td.master-search__actions {
+  white-space: nowrap;
+}
+
+.lot-management__table td.master-search__actions > * + * {
+  margin-left: 6px;
+}
+
+.lot-management__summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0 0 16px;
+  align-items: center;
+}
+
+.lot-management__summary dt {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.lot-management__summary dd {
+  margin: 0;
+}
+
 /* 検査オーダー関連マスタ ------------------------------------------------- */
 
 /* パネル構成もまとめて編集する詳細モーダル。列が多いので広幅にする。 */
@@ -10935,9 +11067,10 @@ body.page-wide-md .app__main {
 
 /* 実施入力・データセットの明細行に置く入力欄(使用量・数量・経路)。既定の入力欄は
    小さすぎて読みにくいので、他のフォーム欄と同じ文字サイズにする。ただし縦は
-   .master-search__table button と同じ高さ(26px)に収め、行を高くしない。 */
-.rad-quantity-input,
-.rad-route-select {
+   .master-search__table button と同じ高さ(26px)に収め、行を高くしない。表の中の入力欄の
+   一般の指定(.master-search__table select など)より優先させるため要素名を付ける。 */
+input.rad-quantity-input,
+select.rad-route-select {
   font: inherit;
   font-size: 14px;
   padding: 3px 6px;

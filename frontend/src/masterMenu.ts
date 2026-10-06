@@ -42,6 +42,7 @@ export const MASTER_MENU: MasterMenuGroup[] = [
     label: "医薬品",
     items: [
       { label: "投与量換算", to: "/medicine-dose-conversions" },
+      { label: "薬剤付加情報", to: "/medicine-attributes" },
       { label: "フォーミュラリ", to: "/formularies" },
       { label: "薬剤チェック", to: "/drug-checks" },
       { label: "スケールセット", to: "/insulin-scale-sets" },

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { Medicine } from "../api/masterClient";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useInsulinScaleInputs, useRegisterInjectionPerform } from "../api/queries";
+import { useLotRequiredCodes } from "../api/masterQueries";
 import {
   groupInjectionByRp,
   injectionTimeLabel,
@@ -33,9 +34,12 @@ import { isNursingOrderRunningOn } from "../fhir/nursingOrderHelpers";
 import { clockTime } from "../lib/dates";
 import { referenceIdOfType } from "../fhir/shared";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
+import { duplicateLotIndexes } from "../fhir/lotNumberHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { LotColumnHeading, LotNumberCell } from "./LotNumberCell";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
+import { RemoveRowButton } from "./RemoveRowButton";
 
 // 注射の実施入力(施用の記録)。輸血(TransfusionPerformModal)と同じく、実施記録一式と
 // Task の実施済を 1 つの transaction で登録する。
@@ -72,6 +76,11 @@ export function InjectionPerformModal({
   const [validationError, setValidationError] = useState<string | null>(null);
   // 医薬品検索を開いている RP。追加した行はその RP に属する。
   const [addingRp, setAddingRp] = useState<number | null>(null);
+
+  // ロット番号を記録する薬(薬剤付加情報)。対象の薬が 1 つでもあればロットの列を出す。
+  const lotCodes = useLotRequiredCodes(values.medicines.map((m) => m.code));
+  const showLot = values.medicines.some((m) => lotCodes.has(m.code) || m.lotNumber);
+  const duplicateLots = duplicateLotIndexes(values.medicines.map((m) => (m.skipped ? { code: "" } : m)));
 
   const scheduled = scheduledPerformCount(medicationRequests);
   const done = performs.filter((p) => p.counted).length;
@@ -193,6 +202,7 @@ export function InjectionPerformModal({
         }
         if (!dose || Number(dose) <= 0) return `${m.name}: 実施量を入れてください。`;
       }
+      if (duplicateLots.size > 0) return "同じ薬に同じロット番号が重なっています。";
     }
     if (values.outcome !== "completed" && !values.reason.trim()) {
       return "途中で中止・実施せず の理由を入れてください。";
@@ -355,6 +365,16 @@ export function InjectionPerformModal({
                     <th>オーダー量</th>
                     <th>実施量</th>
                     <th>単位</th>
+                    {showLot && (
+                      <th className="lot-number-column">
+                        <LotColumnHeading
+                          missing={values.medicines.some(
+                            (m) =>
+                              m.rpNumber === rp.rpNumber && !m.skipped && lotCodes.has(m.code) && !m.lotNumber?.trim(),
+                          )}
+                        />
+                      </th>
+                    )}
                     <th>施用</th>
                     <th className="rp-card__medicine-di"></th>
                   </tr>
@@ -428,6 +448,18 @@ export function InjectionPerformModal({
                           />
                         </td>
                         <td>{m.unit || "-"}</td>
+                        {showLot && (
+                          <td className="lot-number-column">
+                            <LotNumberCell
+                              required={lotCodes.has(m.code) && !m.skipped}
+                              value={m.lotNumber ?? ""}
+                              medicineName={m.name}
+                              disabled={m.skipped}
+                              duplicate={duplicateLots.has(index)}
+                              onChange={(lotNumber) => updateMedicine(index, { lotNumber })}
+                            />
+                          </td>
+                        )}
                         <td className="injection-perform__given">
                           {/* 混注のうち入れなかった薬剤。外すと投与記録を作らない。
                               列見出しが「施用」なので、セルはチェックボックスだけ。 */}
@@ -441,15 +473,7 @@ export function InjectionPerformModal({
                         <td className="rp-card__medicine-di">
                           {/* 足した行だけ消せる。オーダーの行は「施用」を外して残す。 */}
                           {m.added && (
-                            <button
-                              type="button"
-                              className="rp-card__icon-button"
-                              title="この薬剤を外す"
-                              aria-label={`${m.name} を外す`}
-                              onClick={() => removeMedicine(index)}
-                            >
-                              ×
-                            </button>
+                            <RemoveRowButton title={`${m.name}を削除`} onClick={() => removeMedicine(index)} />
                           )}
                         </td>
                       </tr>

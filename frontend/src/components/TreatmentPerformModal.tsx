@@ -6,7 +6,7 @@ import type {
   MedicalMaterial,
   MedicalProcedure,
 } from "../api/masterClient";
-import { useTreatmentDatasetLinesForItems } from "../api/masterQueries";
+import { useTreatmentDatasetLinesForItems, useLotRequiredCodes } from "../api/masterQueries";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useRegisterTreatmentPerform, type TreatmentWorklistRow } from "../api/queries";
 import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
@@ -27,12 +27,14 @@ import {
   type DatasetPickProps,
 } from "./DatasetPickList";
 import { ErrorBanner } from "./ErrorBanner";
+import { LotColumnHeading, LotNumberCell } from "./LotNumberCell";
 import { MedicalMaterialSearchModal } from "./MedicalMaterialSearchModal";
 import { MedicalProcedureSearchModal } from "./MedicalProcedureSearchModal";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
 import { RemoveRowButton } from "./RemoveRowButton";
 import { replaceAt } from "../lib/arrays";
+import { duplicateLotIndexes } from "../fhir/lotNumberHelpers";
 
 // 処置の実施入力。生理検査(docs/physio-order-design.md)と同じ形。
 //
@@ -131,6 +133,16 @@ export function TreatmentPerformInputModal({
   );
   const lines = edited ?? initial;
 
+  // ロット番号を記録する薬(薬剤付加情報)。対象の薬が 1 つでもあればロットの列を出す。
+  const lotCodes = useLotRequiredCodes(lines.medicines.map((line) => line.medicineCode));
+  const showLot = lines.medicines.some((line) => lotCodes.has(line.medicineCode) || line.lotNumber);
+  const missingLot = lines.medicines.some(
+    (line) => lotCodes.has(line.medicineCode) && !line.lotNumber?.trim(),
+  );
+  const duplicateLots = duplicateLotIndexes(
+    lines.medicines.map((line) => ({ code: line.medicineCode, lotNumber: line.lotNumber })),
+  );
+
   function patch(next: Partial<Lines>) {
     setEdited({ ...lines, ...next });
   }
@@ -180,6 +192,8 @@ export function TreatmentPerformInputModal({
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!performedAt) return;
+    // 重なった行はロットの欄にエラーを出している。
+    if (duplicateLots.size > 0) return;
 
     onSubmit(values);
   }
@@ -250,6 +264,11 @@ export function TreatmentPerformInputModal({
                   <th>名称</th>
                   <th className="rad-item__compact">使用量</th>
                   <th className="rad-item__compact">経路</th>
+                  {showLot && (
+                    <th className="rad-item__compact lot-number-column">
+                      <LotColumnHeading missing={missingLot} />
+                    </th>
+                  )}
                   <th></th>
                 </tr>
               </thead>
@@ -300,6 +319,19 @@ export function TreatmentPerformInputModal({
                         ))}
                       </select>
                     </td>
+                    {showLot && (
+                      <td className="rad-item__compact lot-number-column">
+                        <LotNumberCell
+                          required={lotCodes.has(line.medicineCode)}
+                          value={line.lotNumber ?? ""}
+                          medicineName={line.name}
+                          duplicate={duplicateLots.has(index)}
+                          onChange={(lotNumber) =>
+                            patch({ medicines: replaceAt(lines.medicines, index, { ...line, lotNumber }) })
+                          }
+                        />
+                      </td>
+                    )}
                     <td className="master-search__actions">
                       <RemoveRowButton
                         onClick={() =>
@@ -311,7 +343,7 @@ export function TreatmentPerformInputModal({
                 ))}
                 {lines.medicines.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="master-search__empty">
+                    <td colSpan={showLot ? 5 : 4} className="master-search__empty">
                       薬剤の使用はありません
                     </td>
                   </tr>
@@ -522,7 +554,7 @@ function LineTable({
 }) {
   return (
     <div className="lab-order-item__table-wrap">
-      <table className="master-search__table">
+      <table className="master-search__table rad-perform__lines">
         <thead>
           <tr>
             {columns.map((column) => (

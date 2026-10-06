@@ -147,6 +147,13 @@ Rails.application.routes.draw do
     resources :drug_dose_rules, only: %i[index show create update destroy]
     # 投与量の単位換算。配布ファイルではなく規格単位から生成 + 手動メンテするため
     # 取込ではなく generate を持つ。
+    # 薬剤付加情報(施設独自の薬剤の設定。いまはロット管理の対象。docs/lot-number-design.md)。
+    resources :medicine_attributes, only: %i[index show create update destroy] do
+      collection do
+        get :definitions
+        get :lookup
+      end
+    end
     resources :medicine_dose_conversions, only: %i[index show create update destroy] do
       collection do
         post :generate

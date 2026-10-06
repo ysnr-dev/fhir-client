@@ -19,6 +19,7 @@ import {
   type RadOrderFormValues,
 } from "./radOrderHelpers";
 import { buildRadTaskUpdate } from "./radTaskHelpers";
+import { lotNumberLabel, withLotNumber } from "./lotNumberHelpers";
 
 // 放射線検査の実施記録。設計は docs/rad-result-design.md を参照。
 //
@@ -131,6 +132,8 @@ export interface RadContrastLine {
   /** 医薬品マスタの単位名(本・筒・g など)。未取込の医薬品では空。 */
   unitName: string;
   routeCode: string;
+  /** ロット番号(薬剤付加情報でロット管理の薬)。docs/lot-number-design.md */
+  lotNumber?: string;
 }
 
 /** 器材の行。算定は receiptMaterialCode(特定器材コード)で行う。 */
@@ -247,7 +250,7 @@ function buildContrast(
     };
   }
 
-  return {
+  const administration: fhir4.MedicationAdministration = {
     resourceType: "MedicationAdministration",
     status: "completed",
     medicationCodeableConcept: { coding, text: line.name },
@@ -256,6 +259,7 @@ function buildContrast(
     partOf: [{ reference: hubReference }],
     ...(dosage.dose || dosage.route ? { dosage } : {}),
   };
+  return withLotNumber(administration, line.lotNumber ?? "");
 }
 
 function buildDoseObservation(
@@ -554,6 +558,7 @@ function contrastLabel(administration: fhir4.MedicationAdministration): string {
     conceptLabel(administration.medicationCodeableConcept),
     quantityLabel(dosage?.dose),
     route ? radRouteDisplay(route) : conceptLabel(dosage?.route),
+    lotNumberLabel(administration),
   ]
     .filter(Boolean)
     .join(" ");

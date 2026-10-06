@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { Medicine, MedicalMaterial, MedicalProcedure } from "../api/masterClient";
 import { useRegisterSurgeryPerform, type SurgeryWorklistRow } from "../api/queries";
+import { useLotRequiredCodes } from "../api/masterQueries";
 import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import {
@@ -26,6 +27,7 @@ import {
   type SurgeryPerformFormValues,
 } from "../fhir/surgeryResultHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { LotColumnHeading, LotNumberCell } from "./LotNumberCell";
 import { MedicalMaterialSearchModal } from "./MedicalMaterialSearchModal";
 import { MedicalProcedureSearchModal } from "./MedicalProcedureSearchModal";
 import { MedicineSearchModal } from "./MedicineSearchModal";
@@ -33,6 +35,7 @@ import { Modal } from "./Modal";
 import { PractitionerSearchModal } from "./PractitionerSearchModal";
 import { RemoveRowButton } from "./RemoveRowButton";
 import { replaceAt } from "../lib/arrays";
+import { duplicateLotIndexes } from "../fhir/lotNumberHelpers";
 
 // 手術の実施記録。退室後にまとめて 1 回入れる。
 //
@@ -113,6 +116,16 @@ export function SurgeryPerformInputModal({
   const [addingStaff, setAddingStaff] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // ロット番号を記録する薬(薬剤付加情報)。対象の薬が 1 つでもあればロットの列を出す。
+  const lotCodes = useLotRequiredCodes(values.medicines.map((line) => line.medicineCode));
+  const showLot = values.medicines.some((line) => lotCodes.has(line.medicineCode) || line.lotNumber);
+  const missingLot = values.medicines.some(
+    (line) => lotCodes.has(line.medicineCode) && !line.lotNumber?.trim(),
+  );
+  const duplicateLots = duplicateLotIndexes(
+    values.medicines.map((line) => ({ code: line.medicineCode, lotNumber: line.lotNumber })),
+  );
+
   function patch(next: Partial<SurgeryPerformFormValues>) {
     setValues((current) => ({ ...current, ...next }));
   }
@@ -127,6 +140,10 @@ export function SurgeryPerformInputModal({
     const timeError = validateSurgeryTimes(values);
     if (timeError) {
       setValidationError(timeError);
+      return;
+    }
+    if (duplicateLots.size > 0) {
+      setValidationError("同じ薬に同じロット番号が重なっています。");
       return;
     }
     if (values.procedures.length === 0) {
@@ -395,6 +412,11 @@ export function SurgeryPerformInputModal({
                   <th>名称</th>
                   <th>使用量</th>
                   <th>投与経路</th>
+                  {showLot && (
+                    <th className="lot-number-column">
+                      <LotColumnHeading missing={missingLot} />
+                    </th>
+                  )}
                   <th></th>
                 </tr>
               </thead>
@@ -441,6 +463,19 @@ export function SurgeryPerformInputModal({
                         ))}
                       </select>
                     </td>
+                    {showLot && (
+                      <td className="lot-number-column">
+                        <LotNumberCell
+                          required={lotCodes.has(line.medicineCode)}
+                          value={line.lotNumber ?? ""}
+                          medicineName={line.name}
+                          duplicate={duplicateLots.has(index)}
+                          onChange={(lotNumber) =>
+                            patch({ medicines: replaceAt(values.medicines, index, { ...line, lotNumber }) })
+                          }
+                        />
+                      </td>
+                    )}
                     <td className="master-search__actions">
                       <RemoveRowButton
                         onClick={() =>
@@ -452,7 +487,7 @@ export function SurgeryPerformInputModal({
                 ))}
                 {values.medicines.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="master-search__empty">
+                    <td colSpan={showLot ? 5 : 4} className="master-search__empty">
                       使用した薬剤はありません
                     </td>
                   </tr>
@@ -623,7 +658,7 @@ function LineTable({
 }) {
   return (
     <div className="lab-order-item__table-wrap">
-      <table className="master-search__table">
+      <table className="master-search__table rad-perform__lines">
         <thead>
           <tr>
             {columns.map((column) => (

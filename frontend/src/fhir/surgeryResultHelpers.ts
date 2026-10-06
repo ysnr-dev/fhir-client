@@ -16,6 +16,7 @@ import {
   type SurgeryStaffLine,
 } from "./surgeryOrderHelpers";
 import { buildSurgeryTaskUpdate } from "./surgeryTaskHelpers";
+import { lotNumberLabel, withLotNumber } from "./lotNumberHelpers";
 
 // 手術の実施記録。処置(docs/treatment-order-design.md)と同じ「ハブ Procedure に
 // 子をぶら下げる」形を骨格にし、手術に固有の記録を足したもの。
@@ -166,6 +167,8 @@ export interface SurgeryMedicineLine {
   dose: string;
   unitName: string;
   routeCode: string;
+  /** ロット番号(薬剤付加情報でロット管理の薬)。docs/lot-number-design.md */
+  lotNumber?: string;
 }
 
 /** 材料の行。コードを持たない手入力の行も許す(処置と同じ)。 */
@@ -339,7 +342,7 @@ function buildMedicationAdministration(
     };
   }
 
-  return {
+  const administration: fhir4.MedicationAdministration = {
     resourceType: "MedicationAdministration",
     status: "completed",
     medicationCodeableConcept: { coding, text: line.name },
@@ -348,6 +351,7 @@ function buildMedicationAdministration(
     partOf: [{ reference: hubReference }],
     ...(dosage.dose || dosage.route ? { dosage } : {}),
   };
+  return withLotNumber(administration, line.lotNumber ?? "");
 }
 
 /** 測定値 1 件。放射線の被曝線量と同じく category を持たず partOf でハブに紐づく。 */
@@ -605,6 +609,7 @@ function medicineLabel(administration: fhir4.MedicationAdministration): string {
     conceptLabel(administration.medicationCodeableConcept),
     quantityLabel(dosage?.dose),
     route ? surgeryRouteDisplay(route) : conceptLabel(dosage?.route),
+    lotNumberLabel(administration),
   ]
     .filter(Boolean)
     .join(" ");

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_06_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1152,6 +1152,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_090000) do
     t.index ["publication_order"], name: "index_master_medical_procedures_on_publication_order"
     t.index ["search_kana"], name: "idx_master_medical_procedures_search_kana_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["search_name"], name: "idx_master_medical_procedures_search_name_trgm", opclass: :gin_trgm_ops, using: :gin
+  end
+
+  create_table "master_medicine_attributes", force: :cascade do |t|
+    t.string "medicine_code", null: false
+    t.jsonb "settings", default: {}, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["medicine_code"], name: "index_master_medicine_attributes_on_medicine_code", unique: true
   end
 
   create_table "master_medicine_dose_conversions", force: :cascade do |t|

@@ -19,6 +19,7 @@ import {
   type TreatmentOrderFormValues,
 } from "./treatmentOrderHelpers";
 import { buildTreatmentTaskUpdate } from "./treatmentTaskHelpers";
+import { lotNumberLabel, withLotNumber } from "./lotNumberHelpers";
 
 // 処置の実施記録。生理検査(docs/physio-order-design.md)と同じ形。
 //
@@ -90,6 +91,8 @@ export interface TreatmentMedicineLine {
   /** 医薬品マスタの単位名(本・筒・g など)。未取込の医薬品では空。 */
   unitName: string;
   routeCode: string;
+  /** ロット番号(薬剤付加情報でロット管理の薬)。docs/lot-number-design.md */
+  lotNumber?: string;
 }
 
 /**
@@ -205,7 +208,7 @@ function buildMedicationAdministration(
     };
   }
 
-  return {
+  const administration: fhir4.MedicationAdministration = {
     resourceType: "MedicationAdministration",
     status: "completed",
     medicationCodeableConcept: { coding, text: line.name },
@@ -214,6 +217,7 @@ function buildMedicationAdministration(
     partOf: [{ reference: hubReference }],
     ...(dosage.dose || dosage.route ? { dosage } : {}),
   };
+  return withLotNumber(administration, line.lotNumber ?? "");
 }
 
 /**
@@ -448,6 +452,7 @@ function medicineLabel(administration: fhir4.MedicationAdministration): string {
     conceptLabel(administration.medicationCodeableConcept),
     quantityLabel(dosage?.dose),
     route ? treatmentRouteDisplay(route) : conceptLabel(dosage?.route),
+    lotNumberLabel(administration),
   ]
     .filter(Boolean)
     .join(" ");

@@ -521,7 +521,7 @@ function LineTable({
 }) {
   return (
     <div className="lab-order-item__table-wrap">
-      <table className="master-search__table">
+      <table className="master-search__table rad-perform__lines">
         <thead>
           <tr>
             {columns.map((column) => (

@@ -95,6 +95,7 @@ import { InsulinWorklistPage } from "./pages/InsulinWorklistPage";
 import { BulkVitalEntryPage } from "./pages/BulkVitalEntryPage";
 import { NursingSummaryApprovalPage } from "./pages/NursingSummaryApprovalPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
+import { MedicineAttributePage } from "./pages/MedicineAttributePage";
 import { FormularyPage } from "./pages/FormularyPage";
 import { DrugCheckPage } from "./pages/DrugCheckPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
@@ -147,6 +148,7 @@ import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { RxWorklistPage } from "./pages/RxWorklistPage";
 import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklistPage";
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
+import { LotManagementPage } from "./pages/LotManagementPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 import { HomePage } from "./pages/HomePage";
 import { BulletinPage } from "./pages/BulletinPage";
@@ -305,6 +307,9 @@ function App() {
               </Link>
               <Link to="/injection-worklist" className="row-menu__item">
                 注射一覧
+              </Link>
+              <Link to="/lot-management" className="row-menu__item">
+                ロット管理
               </Link>
             </SubMenu>
             <SubMenu label="処置">
@@ -479,6 +484,7 @@ function App() {
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
           <Route path="/brought-med-worklist" element={<BroughtMedicationWorklistPage />} />
           <Route path="/injection-worklist" element={<InjectionWorklistPage />} />
+          <Route path="/lot-management" element={<LotManagementPage />} />
           <Route path="/chemo-room-worklist" element={<ChemoRoomWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
           <Route path="/endoscopy-worklist" element={<EndoscopyWorklistPage />} />
@@ -489,6 +495,7 @@ function App() {
           <Route path="/masters" element={<MasterMenuPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
+          <Route path="/medicine-attributes" element={<MedicineAttributePage />} />
           <Route path="/formularies" element={<FormularyPage />} />
           <Route path="/drug-checks" element={<DrugCheckPage />} />
           <Route path="/insulin-scale-sets" element={<InsulinScaleSetPage />} />
