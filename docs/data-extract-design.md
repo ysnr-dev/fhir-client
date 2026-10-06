@@ -44,13 +44,17 @@
   | patient | 性別・年齢(以上 / 以下) | 患者の属性 |
   | condition | 病名(病名管理番号 or ICD10)・状態・日付(登録日 / 発症日)と期間 | その病名がある |
   | observation | 検査結果項目 / バイタル・値の範囲・期間 | 期間内にその記録がある(値の範囲に入る) |
-  | medication | 薬剤(レセ電コード)・期間 | 期間内に処方・注射のオーダーがある |
+  | medication | 薬剤(レセ電コード)・薬効分類(YJ コードの先頭 2〜4 桁)・区分(処方 / 注射 / 両方)・期間 | 期間内に処方・注射のオーダーがある |
   | admission | 期間・見方(期間中に入院していた / 入院した / 退院した)・診療科 | 入院がある |
   | outpatient | 期間 | 外来受診がある |
 
 - 期間は日付(`absolute`、片側だけでもよい)か直近 N 日(`relative`。定点観測で日付を直さずに済む)。保存には
   絶対日を書かず、実行時に今日で解決する。
-- `min_count`(期間内に N 件以上)はモデルだけ持つ(画面は第 2 段)。
+- 患者属性以外の条件は「件数(以上)」(`min_count`、既定 1)を持つ。期間内にその件数以上の記録がある患者だけが当たる
+  (「抗菌薬の注射が 30 日に 2 回以上」など)。判定は患者ごとに畳んだ件数で手元で行う。
+- 薬効分類(`drug_classes`)は保存した条件にはコードを持たず、**実行のたびに**医薬品マスタで医薬品コードに展開する
+  (`GET /master/medicines/codes?yakko_prefix=61,62`。廃止された薬も含む)。条件を保存した後に採用された薬も拾える。
+  薬剤と薬効分類の両方を指定したら和をとる。
 - **除外**(`not`)は AND グループの直下で、除外でない兄弟が 1 つ以上あるときだけ置ける。兄弟の積集合から差を
   取るため(OR の下や除外だけの AND は「全患者」の集合が要る)。
 - ICD10 の入力は上流の token が完全一致なので、3 桁(E11)を 4 桁の細分類(E110〜E119)まで広げて送る
@@ -64,7 +68,7 @@
 |---|---|
 | condition | `Condition?code=…&clinical-status=…&verification-status:not=entered-in-error,refuted&category:not=<看護問題>&recorded-date(onset-date)=ge/le&_elements=subject,code,recordedDate,onsetDateTime` |
 | observation | `Observation?code=…&date=ge/le&value-quantity=ge8&status:not=entered-in-error,cancelled&_elements=subject,code,effectiveDateTime,valueQuantity` |
-| medication | `MedicationRequest?code=…&authoredon=ge/le&status:not=entered-in-error,cancelled&_elements=subject,authoredOn,medicationCodeableConcept` |
+| medication | `MedicationRequest?code=…&authoredon=ge/le[&based-on.category=order-type\|prescription]&status:not=entered-in-error,cancelled&_elements=subject,authoredOn,medicationCodeableConcept`。処方 / 注射の区別はヘッダ ServiceRequest の order-type なので based-on のチェーンで引く |
 | admission | `Encounter?class=IMP&status=in-progress,finished&date=…[&service-provider=Organization/x]`。入院した = `date=sa{from-1}&date=le{to}`、退院した = `date=ge{from}&date=eb{to+1}` |
 | outpatient | `Encounter?class=AMB&status:not=cancelled,entered-in-error&date=ge/le` |
 | patient | `Patient?gender=…&birthdate=le/gt&active:not=false`(AND の下では引かない。下記) |
@@ -101,8 +105,9 @@
 - backend の登録・参照はチャート定義と共通の concern `Master::ScopedDefinitions`。院内共通・診療科に書けるのは
   医師だけ(画面で絞る。backend が守るのは「自分の条件の持ち主はログイン本人」だけ)。持ち主の選択肢は
   `hooks/useDefinitionOwners.ts`(マルチチャートと共通)。
-- 初期値(院内共通)5 件は `db/seed_data/extract_query_presets.json`(seed と migration
-  `20261006130100_seed_extract_query_presets.rb` が投入)。同じ名前があれば触らない。
+- 初期値(院内共通)6 件は `db/seed_data/extract_query_presets.json`(seed と migration
+  `20261006130100_seed_extract_query_presets.rb`・`20261006130200_seed_extract_query_antibiotic_preset.rb` が投入)。
+  同じ名前があれば触らない。「抗菌薬の注射が30日に2回以上」は薬効分類 61・62、区分「注射」、件数 2 以上。
 
 ## 6. 上流(fhir-server)
 
@@ -113,10 +118,9 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
 
 ## 7. 制限と第 2 段
 
-- 処方と注射を分けられない(MedicationRequest に区別の索引が無い。ヘッダ ServiceRequest の category を
-  `based-on.category` のチェーンで引けるが、上流の作りでは件数が多いと遅い)。
+- 処方 / 注射の区別は `based-on.category` のチェーンで引いている。上流は 0..* 参照のチェーンで内側の id を Ruby に
+  取り出すので、オーダーの多い施設では遅くなりうる(開発データでは 0.1〜0.2 秒。遅ければ上流の C-23)。
 - 外来の診療科で絞れない(外来の Encounter は serviceProvider を持たない)。入院の病棟は未対応。
 - 病名の ICD10 は前方一致できない(上記の展開で 3 桁だけ吸収する)。
-- 時間関係の条件(診断から 90 日以内の測定、30 日以内の再入院)、薬効分類での薬剤の指定、`min_count` の画面、
-  内訳の拡充(診療科別・月別)、上流の集計 operation、
+- 時間関係の条件(診断から 90 日以内の測定、30 日以内の再入院)、内訳の拡充(診療科別・月別)、上流の集計 operation、
   定点観測の履歴(件数のスナップショット)は第 2 段。

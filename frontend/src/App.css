@@ -8672,6 +8672,14 @@ input.lot-number-cell__input.is-invalid {
   width: 14em;
 }
 
+.data-extract select.extract-field__class {
+  max-width: 18em;
+}
+
+.extract-chip--class {
+  border-style: dashed;
+}
+
 .extract-group {
   border: 1px solid var(--border);
   border-radius: 6px;

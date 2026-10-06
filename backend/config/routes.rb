@@ -126,7 +126,10 @@ Rails.application.routes.draw do
       collection { post :import }
     end
     resources :medicines, only: %i[index show create update destroy] do
-      collection { post :import }
+      collection do
+        post :import
+        get :codes
+      end
     end
     resources :medicine_usages, only: %i[index show create update destroy] do
       collection do

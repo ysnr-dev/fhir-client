@@ -67,6 +67,28 @@ RSpec.describe "Master::Medicines", type: :request do
     end
   end
 
+  describe "GET /master/medicines/codes" do
+    before do
+      Master::Medicine.create!(medicine_code: "620000101", name: "セファゾリン注", yakka_code: "6132400D1")
+      Master::Medicine.create!(medicine_code: "620000102", name: "アモキシシリン", yakka_code: "6131001M1")
+      Master::Medicine.create!(medicine_code: "610000103", name: "ハルシオン", yakka_code: "1124007F1")
+      Master::Medicine.create!(medicine_code: "610000104", name: "分類なし", yakka_code: "")
+    end
+
+    it "YJ コードの先頭 2〜4 桁に当たる医薬品コードを全件返す" do
+      get "/master/medicines/codes", params: { yakko_prefix: "61" }
+      expect(JSON.parse(response.body)["codes"]).to eq(%w[620000101 620000102])
+
+      get "/master/medicines/codes", params: { yakko_prefix: "6132,1124" }
+      expect(JSON.parse(response.body)["codes"]).to eq(%w[610000103 620000101])
+    end
+
+    it "数字 2〜4 桁でない指定は無視する(全件を返さない)" do
+      get "/master/medicines/codes", params: { yakko_prefix: "6,abc,%" }
+      expect(JSON.parse(response.body)["codes"]).to eq([])
+    end
+  end
+
   describe "GET /master/medicines (薬効分類)" do
     before do
       Master::MedicineType.create!(code: "2325", name: "Ｈ２遮断剤")

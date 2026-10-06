@@ -2,7 +2,7 @@ import { csvBlob } from "../lib/csv";
 import { addDays, dateTimeLabel, localDay } from "../lib/dates";
 import { excludeNursingProblems } from "./conditionHelpers";
 import { ADMISSION_CLASS_CODE, ADMISSION_STATUS, DISCHARGED_STATUS } from "./encounterHelpers";
-import { departmentOf } from "./orderHeader";
+import { departmentOf, ORDER_TYPE_SYSTEM } from "./orderHeader";
 import { OUTPATIENT_CLASS_CODE } from "./outpatientEncounterHelpers";
 import { calculateAge, displayName, genderLabel, patientNumberOf } from "./patientHelpers";
 import { conceptLabel, quantityLabel, referenceIdOfType } from "./shared";
@@ -51,6 +51,18 @@ export const ADMISSION_DATE_MODES: { value: AdmissionDateMode; label: string }[]
   { value: "discharged", label: "期間中に退院した" },
 ];
 
+export type ExtractOrderType = "prescription" | "injection";
+export const EXTRACT_ORDER_TYPES: { value: ExtractOrderType; label: string }[] = [
+  { value: "prescription", label: "処方" },
+  { value: "injection", label: "注射" },
+];
+
+/** 薬効分類(YJ コードの先頭 2〜4 桁)。実行時に医薬品コードへ展開する。 */
+export interface ExtractDrugClass {
+  code: string;
+  name?: string;
+}
+
 export const CLINICAL_STATUS_OPTIONS = [
   { value: "active", label: "継続" },
   { value: "resolved", label: "治癒" },
@@ -76,6 +88,10 @@ export interface ExtractLeaf {
   date_mode?: AdmissionDateMode;
   department_id?: string;
   department_name?: string;
+  /** 処方・注射の条件で薬効分類から指定した薬(codes と和をとる)。 */
+  drug_classes?: ExtractDrugClass[];
+  /** 処方・注射の区別。無ければ両方。 */
+  order_type?: ExtractOrderType;
 }
 
 export interface ExtractGroup {
@@ -144,9 +160,14 @@ export function periodLabel(period: ExtractPeriod | null | undefined): string {
 /** 条件の表示名。手で付けた名前が無ければ中身から作る(一覧の列名・CSV の見出しにも使う)。 */
 export function leafLabel(leaf: ExtractLeaf): string {
   if (leaf.label?.trim()) return leaf.label.trim();
-  const codes = (leaf.codes ?? []).map((c) => c.display || c.code);
+  const codes = [
+    ...(leaf.drug_classes ?? []).map((c) => c.name || `薬効${c.code}`),
+    ...(leaf.codes ?? []).map((c) => c.display || c.code),
+  ];
   const names = codes.length > 2 ? `${codes.slice(0, 2).join("・")}ほか${codes.length - 2}件` : codes.join("・");
-  const period = periodLabel(leaf.period);
+  const period = [periodLabel(leaf.period), (leaf.min_count ?? 1) > 1 ? `${leaf.min_count}件以上` : ""]
+    .filter(Boolean)
+    .join(" ");
   switch (leaf.kind) {
     case "patient": {
       const gender = (leaf.gender ?? []).map(genderLabel).join("・");
@@ -165,6 +186,10 @@ export function leafLabel(leaf: ExtractLeaf): string {
     }
     case "outpatient":
       return ["外来受診", period].filter(Boolean).join(" ");
+    case "medication": {
+      const orderType = EXTRACT_ORDER_TYPES.find((t) => t.value === leaf.order_type)?.label;
+      return [orderType, names || "薬剤", period].filter(Boolean).join(" ");
+    }
     default:
       return [names || EXTRACT_KIND_LABELS[leaf.kind], period].filter(Boolean).join(" ");
   }
@@ -194,7 +219,8 @@ export function validateExtractQuery(body: ExtractQueryBody): string[] {
 
   for (const leaf of leaves) {
     const name = leafLabel(leaf);
-    if (["condition", "observation", "medication"].includes(leaf.kind) && !(leaf.codes ?? []).length) {
+    const hasDrugClasses = leaf.kind === "medication" && (leaf.drug_classes ?? []).length > 0;
+    if (["condition", "observation", "medication"].includes(leaf.kind) && !(leaf.codes ?? []).length && !hasDrugClasses) {
       errors.push(`${name}: 項目を選んでください。`);
     }
     if (["admission", "outpatient"].includes(leaf.kind) && !leaf.period) errors.push(`${name}: 期間を入れてください。`);
@@ -208,6 +234,9 @@ export function validateExtractQuery(body: ExtractQueryBody): string[] {
       errors.push(`${name}: 期間を入れてください。`);
     }
     if (leaf.value && !Number.isFinite(leaf.value.value)) errors.push(`${name}: 値を数値で入れてください。`);
+    if (leaf.min_count != null && !(Number.isInteger(leaf.min_count) && leaf.min_count >= 1)) {
+      errors.push(`${name}: 件数は 1 以上の整数で入れてください。`);
+    }
   }
   return Array.from(new Set(errors));
 }
@@ -321,6 +350,9 @@ export function leafSearch(leaf: ExtractLeaf, today: string): LeafSearch {
           const params = new URLSearchParams();
           params.set("code", code);
           appendRange(params, "authoredon", range);
+          // 処方と注射はオーダーのヘッダ(ServiceRequest)の order-type でしか分からないので、
+          // based-on のチェーンで引く。
+          if (leaf.order_type) params.set("based-on.category", `${ORDER_TYPE_SYSTEM}|${leaf.order_type}`);
           params.set("status:not", "entered-in-error,cancelled");
           params.set("_elements", "subject,authoredOn,medicationCodeableConcept");
           return params;

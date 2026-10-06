@@ -248,5 +248,37 @@
         ]
       }
     }
+  },
+  {
+    "name": "抗菌薬の注射が30日に2回以上",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "abx",
+            "kind": "medication",
+            "label": "抗菌薬の注射(直近30日・2回以上)",
+            "order_type": "injection",
+            "drug_classes": [
+              {
+                "code": "61",
+                "name": "抗生物質製剤"
+              },
+              {
+                "code": "62",
+                "name": "化学療法剤"
+              }
+            ],
+            "period": {
+              "mode": "relative",
+              "days": 30
+            },
+            "min_count": 2
+          }
+        ]
+      }
+    }
   }
 ]

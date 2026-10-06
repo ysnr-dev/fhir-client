@@ -21,7 +21,9 @@ import {
 import { runWithConcurrency } from "../../lib/concurrency";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
+import { MEDICINE_CODE_SYSTEM } from "../../fhir/prescriptionHelpers";
 import { FhirError, searchResource } from "../fhirClient";
+import { fetchMedicineCodesByClass } from "../masterClient";
 import { hasNextPage } from "./core";
 
 // データ抽出(docs/data-extract-design.md)の実行。条件ごとに上流を引いて患者の集合を作り、
@@ -134,11 +136,33 @@ async function fetchAll(
 }
 
 /**
+ * 薬効分類で指定した処方・注射の条件を、医薬品コードに展開した条件にする。展開は実行のたびに
+ * 医薬品マスタから引く(保存した条件に新しい薬も入る)。
+ */
+async function resolveLeaf(leaf: ExtractLeaf, context: RunContext): Promise<ExtractLeaf> {
+  const classes = leaf.kind === "medication" ? (leaf.drug_classes ?? []) : [];
+  if (classes.length === 0) return leaf;
+  const prefixes = classes.map((c) => c.code).sort();
+  const codes = await context.queryClient.fetchQuery({
+    queryKey: ["ExtractDrugClass", prefixes],
+    queryFn: () => fetchMedicineCodesByClass(prefixes),
+    staleTime: 30 * 60 * 1000,
+  });
+  const known = new Set((leaf.codes ?? []).map((c) => `${c.system}|${c.code}`));
+  const expanded = codes
+    .map((code) => ({ system: MEDICINE_CODE_SYSTEM, code }))
+    .filter((c) => !known.has(`${c.system}|${c.code}`));
+  return { ...leaf, codes: [...(leaf.codes ?? []), ...expanded] };
+}
+
+/**
  * 条件 1 つの行。同じ検索(条件を 1 つ直して再実行したときの他の条件)はしばらく覚えておき、
  * 引き直さない。相対の期間は今日に直してから検索にするので、日が変わればキーも変わる。
  */
 async function fetchLeaf(leaf: ExtractLeaf, context: RunContext, label: string): Promise<ExtractRecord[]> {
-  const search = leafSearch(leaf, today());
+  const resolved = await resolveLeaf(leaf, context);
+  if (resolved.kind === "medication" && (resolved.codes ?? []).length === 0) return [];
+  const search = leafSearch(resolved, today());
   const chunks = await Promise.all(
     search.paramsList.map((params) =>
       context.queryClient.fetchQuery({
@@ -297,7 +321,8 @@ async function fetchExtractDetails(result: ExtractResult, context: RunContext): 
   const day = today();
   const details: ExtractDetail[] = [];
   for (const leaf of detailLeaves(result.leaves)) {
-    const search = leafSearch(leaf, day);
+    const resolved = await resolveLeaf(leaf, context);
+    const search = leafSearch(resolved, day);
     const tasks = search.paramsList.flatMap((base) =>
       chunks.map((chunk) => () => {
         const params = new URLSearchParams(base);

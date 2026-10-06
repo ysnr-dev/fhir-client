@@ -377,8 +377,9 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 
 ### C-23. MedicationRequest のオーダー種別(処方 / 注射)の索引
 
-- **現状**: データ抽出の「処方・注射」の条件は処方と注射を分けられない。区別はヘッダ ServiceRequest の category に
-  しか無く、`based-on.category=` のチェーンは 0..* 参照なので内側の id を Ruby に取り出す作りで、件数が多いと遅い。
+- **現状**: データ抽出の「処方・注射」の区分は `MedicationRequest?based-on.category=order-type|prescription` の
+  チェーンで引いている(区別はヘッダ ServiceRequest の category にしか無い)。0..* 参照のチェーンは内側の id を
+  Ruby に取り出す作りなので、オーダーの多い施設では遅くなりうる(開発データでは 0.1〜0.2 秒)。
 - **望ましいサーバー機能**: MedicationRequest に order-type の派生列(ヘッダの category を書き込み時に写す)か、
   `based-on` のチェーンを SQL のサブクエリで解く。
 

@@ -154,6 +154,17 @@ export async function fetchYakkaCodes(medicineCodes: string[]): Promise<Map<stri
   return map;
 }
 
+/**
+ * 薬効分類(YJ コードの先頭 2〜4 桁)に当たる医薬品コード(廃止された薬も含む)。データ抽出の
+ * 「薬効分類で指定」を実行時に展開する。
+ */
+export async function fetchMedicineCodesByClass(prefixes: string[]): Promise<string[]> {
+  const search = new URLSearchParams({ yakko_prefix: prefixes.join(",") });
+  const res = await masterFetch(`/master/medicines/codes?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return ((await res.json()) as { codes: string[] }).codes;
+}
+
 // 薬効分類の選択プルダウン用。全件を薬効分類番号順で返す（ページングなし）。
 export async function fetchMedicineTypeOptions(): Promise<MedicineType[]> {
   const res = await masterFetch("/master/medicine_types/options");

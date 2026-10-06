@@ -11,6 +11,8 @@
 #       { "key": "c1", "kind": "condition", "label": "2型糖尿病",
 #         "codes": [{ "system": "...", "code": "E11", "display": "2型糖尿病" }],
 #         "clinical_status": ["active"], "date_field": "recorded" },
+#       { "key": "c3", "kind": "medication", "order_type": "prescription",
+#         "drug_classes": [{ "code": "61", "name": "抗生物質製剤" }], "min_count": 2 },
 #       { "key": "c2", "kind": "observation", "not": true,
 #         "codes": [{ "system": "...", "code": "...", "display": "HbA1c" }],
 #         "period": { "mode": "relative", "days": 90 }, "value": { "op": "ge", "value": 8 } },
@@ -36,6 +38,8 @@ class ExtractQuery < ApplicationRecord
   DATE_FIELDS = %w[recorded onset].freeze
   DATE_MODES = %w[overlap admitted discharged].freeze
   VALUE_OPS = %w[ge gt le lt].freeze
+  ORDER_TYPES = %w[prescription injection].freeze
+  MAX_DRUG_CLASSES = 20
   DATE_PATTERN = { pattern: /\A\d{4}-\d{2}-\d{2}\z/, label: " YYYY-MM-DD ", strict: true }.freeze
 
   PERIOD_SHAPE = {
@@ -85,14 +89,26 @@ class ExtractQuery < ApplicationRecord
     },
     "date_mode" => { enum: DATE_MODES },
     "department_id" => :string,
-    "department_name" => :string
+    "department_name" => :string,
+    # 薬効分類(YJ コードの先頭 2〜4 桁)。実行時に医薬品コードへ展開する(新しい薬も拾える)。
+    "drug_classes" => {
+      list: {
+        fields: { "code" => { pattern: /\A\d{2,4}\z/, label: "数字 2〜4 桁", strict: true }, "name" => :any },
+        required: %w[code]
+      },
+      max: MAX_DRUG_CLASSES,
+      unique: "code"
+    },
+    # 処方・注射の区別(無ければ両方)。オーダーのヘッダの order-type で分ける。
+    "order_type" => { enum: ORDER_TYPES }
   }.freeze
 
   # 葉の種類ごとの決まりごと。
   LEAF_CHECK = lambda { |leaf, path|
     errors = []
     kind = leaf["kind"]
-    if CODE_KINDS.include?(kind) && Array(leaf["codes"]).empty?
+    drug_classes = kind == "medication" ? Array(leaf["drug_classes"]) : []
+    if CODE_KINDS.include?(kind) && Array(leaf["codes"]).empty? && drug_classes.empty?
       errors << "#{path}.codes は 1 件以上要ります"
     end
     errors << "#{path}.period は必須です" if PERIOD_REQUIRED_KINDS.include?(kind) && leaf["period"].nil?

@@ -37,6 +37,18 @@ module Master
       render json: paginate(scope)
     end
 
+    # 薬効分類(YJ コードの先頭 2〜4 桁)に当たる医薬品コードを全件返す(データ抽出の
+    # 「薬効分類で指定」を実行時に展開する。docs/data-extract-design.md)。廃止された薬も
+    # 過去のオーダーにあるので含める。yakko_prefix はカンマ区切りで複数指定できる。
+    def codes
+      prefixes = params[:yakko_prefix].to_s.split(",").map(&:strip).select { |p| p.match?(/\A\d{2,4}\z/) }.uniq
+      return render json: { codes: [] } if prefixes.empty?
+
+      conditions = prefixes.map { "master_medicines.yakka_code LIKE ?" }.join(" OR ")
+      codes = Master::Medicine.where(conditions, *prefixes.map { |p| "#{p}%" }).order(:medicine_code).pluck(:medicine_code)
+      render json: { codes: codes }
+    end
+
     private
 
     # 院内フォーミュラリの印(docs/formulary-design.md)。検索結果の各行に、

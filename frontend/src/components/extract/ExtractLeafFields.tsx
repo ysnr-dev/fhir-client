@@ -1,16 +1,20 @@
 import { useState } from "react";
 import type { Disease, LabResultItem, Medicine } from "../../api/masterClient";
+import { useMedicineTypeOptions } from "../../api/masterQueries";
 import { useSelfDepartments } from "../../api/queries";
 import { DISEASE_KEY_NUMBER_SYSTEM } from "../../fhir/conditionHelpers";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
   ADMISSION_DATE_MODES,
   CLINICAL_STATUS_OPTIONS,
+  EXTRACT_ORDER_TYPES,
   EXTRACT_VALUE_OPS,
   expandIcd10,
   type AdmissionDateMode,
   type ExtractCode,
+  type ExtractDrugClass,
   type ExtractLeaf,
+  type ExtractOrderType,
   type ExtractPeriod,
   type ExtractValueOp,
 } from "../../fhir/extractQueryHelpers";
@@ -55,6 +59,7 @@ export function ExtractLeafFields({ leaf, onChange }: Props) {
               </select>
             </label>
             <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />
+            <MinCountField leaf={leaf} patch={patch} />
           </div>
         </>
       );
@@ -65,6 +70,7 @@ export function ExtractLeafFields({ leaf, onChange }: Props) {
           <div className="extract-leaf__row">
             <ValueFields leaf={leaf} patch={patch} />
             <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />
+            <MinCountField leaf={leaf} patch={patch} />
           </div>
         </>
       );
@@ -73,7 +79,22 @@ export function ExtractLeafFields({ leaf, onChange }: Props) {
         <>
           <MedicationCodes leaf={leaf} patch={patch} />
           <div className="extract-leaf__row">
+            <label className="extract-field">
+              区分
+              <select
+                value={leaf.order_type ?? ""}
+                onChange={(e) => patch({ order_type: (e.target.value || undefined) as ExtractOrderType | undefined })}
+              >
+                <option value="">処方・注射</option>
+                {EXTRACT_ORDER_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <PeriodFields period={leaf.period} optional onChange={(period) => patch({ period })} />
+            <MinCountField leaf={leaf} patch={patch} />
           </div>
         </>
       );
@@ -83,9 +104,31 @@ export function ExtractLeafFields({ leaf, onChange }: Props) {
       return (
         <div className="extract-leaf__row">
           <PeriodFields period={leaf.period} onChange={(period) => patch({ period })} />
+          <MinCountField leaf={leaf} patch={patch} />
         </div>
       );
   }
+}
+
+/** 期間内に何件以上あれば該当とするか(既定 1)。 */
+function MinCountField({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
+  return (
+    <label className="extract-field">
+      件数(以上)
+      <input
+        type="number"
+        min={1}
+        max={999}
+        step={1}
+        className="extract-field__number"
+        value={leaf.min_count ?? 1}
+        onChange={(e) => {
+          const count = numberOrNull(e.target.value);
+          patch({ min_count: count === null || count <= 1 ? undefined : Math.floor(count) });
+        }}
+      />
+    </label>
+  );
 }
 
 type Patch = (next: Partial<ExtractLeaf>) => void;
@@ -257,12 +300,76 @@ function ObservationCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) 
 
 function MedicationCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
   const [picking, setPicking] = useState(false);
+  const [classCode, setClassCode] = useState("");
+  const types = useMedicineTypeOptions(true);
   const codes = leaf.codes ?? [];
+  const classes = leaf.drug_classes ?? [];
+
+  const addClass = (drugClass: ExtractDrugClass) => {
+    if (!/^\d{2,4}$/.test(drugClass.code) || classes.some((c) => c.code === drugClass.code)) return;
+    patch({ drug_classes: [...classes, drugClass] });
+  };
+
   return (
     <div className="extract-leaf__row">
       <button type="button" className="rp-card__compact-button" onClick={() => setPicking(true)}>
         薬剤
       </button>
+      <select
+        aria-label="薬効分類"
+        className="extract-field__class"
+        value=""
+        onChange={(e) => {
+          const type = types.data?.find((t) => t.code === e.target.value);
+          if (type) addClass({ code: type.code, name: type.name ?? undefined });
+        }}
+      >
+        <option value="">薬効分類</option>
+        {(types.data ?? []).map((t) => (
+          <option key={t.id} value={t.code}>
+            {`${t.code} ${t.name ?? ""}`}
+          </option>
+        ))}
+      </select>
+      <label className="extract-field extract-field--inline">
+        分類コード
+        <input
+          type="text"
+          inputMode="numeric"
+          className="extract-field__code"
+          value={classCode}
+          onChange={(e) => setClassCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+        />
+      </label>
+      <button
+        type="button"
+        className="rp-card__compact-button"
+        disabled={classCode.length < 2}
+        onClick={() => {
+          const name = types.data?.find((t) => t.code === classCode)?.name ?? undefined;
+          addClass({ code: classCode, name });
+          setClassCode("");
+        }}
+      >
+        追加
+      </button>
+      {classes.length > 0 && (
+        <span className="extract-chips">
+          {classes.map((drugClass) => (
+            <span key={drugClass.code} className="extract-chip extract-chip--class">
+              {drugClass.name ? `${drugClass.code} ${drugClass.name}` : `薬効 ${drugClass.code}`}
+              <button
+                type="button"
+                className="extract-chip__remove"
+                aria-label={`薬効 ${drugClass.code} を外す`}
+                onClick={() => patch({ drug_classes: classes.filter((c) => c !== drugClass) })}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </span>
+      )}
       <CodeChips codes={codes} onChange={(next) => patch({ codes: next })} />
       {picking && (
         <MedicineSearchModal
@@ -331,6 +438,7 @@ function AdmissionFields({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
         ))}
       </select>
       <PeriodFields period={leaf.period} onChange={(period) => patch({ period })} />
+      <MinCountField leaf={leaf} patch={patch} />
       <label className="extract-field">
         診療科
         <select

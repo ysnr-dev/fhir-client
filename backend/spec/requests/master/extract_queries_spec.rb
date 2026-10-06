@@ -95,6 +95,20 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       expect(errors_text).to include("kind")
     end
 
+    it "処方・注射は薬効分類だけでも指定でき、処方 / 注射を分けられる" do
+      create_query({ "op" => "and", "children" => [
+        { "key" => "a", "kind" => "medication", "order_type" => "injection", "min_count" => 2,
+          "drug_classes" => [{ "code" => "61", "name" => "抗生物質製剤" }] }
+      ] })
+      expect(response).to have_http_status(:created)
+
+      create_query({ "op" => "and", "children" => [
+        { "key" => "a", "kind" => "medication", "order_type" => "tablet", "drug_classes" => [{ "code" => "6" }] }
+      ] }, name: "誤り")
+      expect(errors_text).to include("order_type")
+      expect(errors_text).to include("2〜4 桁")
+    end
+
     it "グループに条件の項目は置けない" do
       create_query({ "op" => "and", "children" => [
         { "op" => "or", "kind" => "condition", "children" => [{ "key" => "a", "kind" => "condition", "codes" => dm }] }
