@@ -13,6 +13,11 @@ import {
   nutritionGuidanceTaskStatusDisplay,
   nutritionGuidanceTasksByOrderId,
 } from "./nutritionGuidanceTaskHelpers";
+import {
+  medicationGuidanceTaskStatus,
+  medicationGuidanceTaskStatusDisplay,
+  medicationGuidanceTasksByOrderId,
+} from "./medicationGuidanceTaskHelpers";
 import { pathoTaskStatus, pathoTaskStatusDisplay, pathoTasksByOrderId } from "./pathoTaskHelpers";
 import { physioTaskStatus, physioTaskStatusDisplay, physioTasksByOrderId } from "./physioTaskHelpers";
 import { radTaskStatus, radTaskStatusDisplay, radTasksByOrderId } from "./radTaskHelpers";
@@ -55,7 +60,12 @@ export interface OrderProgress {
 }
 
 /** 実施を積み上げる種別。オーダー 1 件に実施記録が日ごとに付く。 */
-const SESSION_KINDS = new Set(["rehab-order", "nutrition-guidance-order", "radiotherapy-order"]);
+const SESSION_KINDS = new Set([
+  "rehab-order",
+  "nutrition-guidance-order",
+  "medication-guidance-order",
+  "radiotherapy-order",
+]);
 
 /** その日に実施したか。積み上げる種別はその日の実施記録、その他はオーダーが実施済みか。 */
 export function orderPerformedOn(progress: OrderProgress, date: string): boolean {
@@ -102,6 +112,11 @@ const TASK_KINDS: Partial<Record<string, TaskKind>> = {
     nutritionGuidanceTasksByOrderId,
     nutritionGuidanceTaskStatus,
     nutritionGuidanceTaskStatusDisplay,
+  ),
+  "medication-guidance-order": taskKind(
+    medicationGuidanceTasksByOrderId,
+    medicationGuidanceTaskStatus,
+    medicationGuidanceTaskStatusDisplay,
   ),
   "consult-order": taskKind(consultTasksByOrderId, consultTaskStatus, consultTaskStatusDisplay),
   "nursing-order": taskKind(nursingTasksByOrderId, nursingTaskStatus, nursingTaskStatusDisplay),

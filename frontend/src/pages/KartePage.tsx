@@ -813,6 +813,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
                 current.kind === "rehab-order-edit" ||
                 current.kind === "radiotherapy-order-edit" ||
                 current.kind === "nutrition-guidance-order-edit" ||
+                current.kind === "medication-guidance-order-edit" ||
                 current.kind === "consult-order-edit" ||
                 current.kind === "nursing-order-edit"
               ? current.srId

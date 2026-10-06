@@ -119,6 +119,16 @@ import {
   nutritionGuidancePerformsByOrderId,
   type NutritionGuidancePerformDisplay,
 } from "./nutritionGuidanceResultHelpers";
+import { isMedicationGuidanceServiceRequest } from "./medicationGuidanceOrderHelpers";
+import {
+  medicationGuidanceTaskStatus,
+  medicationGuidanceTasksByOrderId,
+  type MedicationGuidanceTaskStatus,
+} from "./medicationGuidanceTaskHelpers";
+import {
+  medicationGuidancePerformsByOrderId,
+  type MedicationGuidancePerformDisplay,
+} from "./medicationGuidanceResultHelpers";
 import {
   treatmentTaskStatus,
   treatmentTasksByOrderId,
@@ -410,6 +420,15 @@ export type KarteTimelineItem = KarteItemBase &
         status: NutritionGuidanceTaskStatus;
         /** 実施記録(新しい順)。 */
         performs: NutritionGuidancePerformDisplay[];
+      }
+    // 服薬指導。栄養指導と同じ期間継続型(docs/medication-guidance-order-design.md)。
+    | {
+        kind: "medication-guidance-order";
+        serviceRequest: fhir4.ServiceRequest;
+        /** 薬剤部の受け入れ状態。Task がまだ無いオーダーは依頼済。 */
+        status: MedicationGuidanceTaskStatus;
+        /** 実施記録(新しい順)。 */
+        performs: MedicationGuidancePerformDisplay[];
       }
     // 他科依頼。明細も実施記録も持たず、返ってくるのは回答の診療記録。
     // 回答への参照はオーダー自身が持つ(ServiceRequest のローカル拡張。
@@ -776,6 +795,9 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // 栄養指導もリハビリと同じ形(Task + Procedure がまとめて届く)。
   const nutritionGuidanceTaskByOrderId = nutritionGuidanceTasksByOrderId(tasks);
   const nutritionGuidancePerformByOrderId = nutritionGuidancePerformsByOrderId(procedures);
+  // 服薬指導も同じ形(Task + Procedure がまとめて届く)。
+  const medicationGuidanceTaskByOrderId = medicationGuidanceTasksByOrderId(tasks);
+  const medicationGuidancePerformByOrderId = medicationGuidancePerformsByOrderId(procedures);
   // 他科依頼は実施記録を持たない(返ってくるのは回答の診療記録)ので Task だけ。
   const consultTaskByOrderId = consultTasksByOrderId(tasks);
   // 放射線治療もリハビリと同じ形(Task と Procedure がまとめて届く)。
@@ -1010,6 +1032,20 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         performs:
           status === "accepted" || status === "completed"
             ? (nutritionGuidancePerformByOrderId.get(serviceRequest.id ?? "") ?? [])
+            : [],
+      };
+    }
+    if (isMedicationGuidanceServiceRequest(serviceRequest)) {
+      const status = medicationGuidanceTaskStatus(medicationGuidanceTaskByOrderId.get(serviceRequest.id ?? ""));
+      return {
+        ...base,
+        kind: "medication-guidance-order" as const,
+        label: KARTE_KIND_LABELS["medication-guidance-order"],
+        status,
+        // 栄養指導と同じ期間継続型なので、受付済以降は実施情報を常に出す。
+        performs:
+          status === "accepted" || status === "completed"
+            ? (medicationGuidancePerformByOrderId.get(serviceRequest.id ?? "") ?? [])
             : [],
       };
     }

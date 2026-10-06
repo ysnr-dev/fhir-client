@@ -91,8 +91,9 @@ module Integrations
 
       BY_TYPE = ALL.index_by(&:order_type).freeze
 
-      # 送り方が未実装の種別。今は無い(足すときは order_type => 表示名)。
-      PENDING = {}.freeze
+      # 送り方が未実装の種別(order_type => 表示名)。服薬指導は薬剤管理指導料の区分を
+      # 実施記録の指導種別から引く必要があり、まだ組んでいない(docs/medication-guidance-order-design.md)。
+      PENDING = { "medication-guidance" => "服薬指導" }.freeze
 
       # 出来高で請求する項目が無い種別と、別経路で送る処方。報告もしない。
       IGNORED = %w[prescription meal nursing consult chemo-regimen].freeze

@@ -78,6 +78,7 @@ import { RadiotherapyProtocolPage } from "./pages/RadiotherapyProtocolPage";
 import { RadiotherapyWorklistPage } from "./pages/RadiotherapyWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
+import { MedicationGuidanceWorklistPage } from "./pages/MedicationGuidanceWorklistPage";
 import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
 import { NotificationPage } from "./pages/NotificationPage";
 import { CountersignListPage } from "./pages/CountersignListPage";
@@ -298,6 +299,10 @@ function App() {
               <Link to="/brought-med-worklist" className="row-menu__item">
                 持参薬鑑別一覧
               </Link>
+              {/* 服薬指導は栄養指導と同じ期間継続型(1 オーダーに入院中の指導が積み上がる)。 */}
+              <Link to="/medication-guidance-worklist" className="row-menu__item">
+                服薬指導一覧
+              </Link>
               <Link to="/injection-worklist" className="row-menu__item">
                 注射一覧
               </Link>
@@ -458,6 +463,7 @@ function App() {
             path="/nutrition-guidance-worklist"
             element={<NutritionGuidanceWorklistPage />}
           />
+          <Route path="/medication-guidance-worklist" element={<MedicationGuidanceWorklistPage />} />
           <Route path="/consult-worklist" element={<ConsultWorklistPage />} />
           <Route path="/notifications" element={<NotificationPage />} />
           <Route path="/countersigns" element={<CountersignListPage />} />

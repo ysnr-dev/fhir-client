@@ -33,6 +33,7 @@ import { LOINC_SYSTEM } from "../../fhir/shared";
 import { buildNursingOrderStopEntries } from "../../fhir/nursingOrderHelpers";
 import { buildRehabOrderStopEntries } from "../../fhir/rehabOrderHelpers";
 import { buildNutritionGuidanceOrderStopEntries } from "../../fhir/nutritionGuidanceOrderHelpers";
+import { buildMedicationGuidanceOrderStopEntries } from "../../fhir/medicationGuidanceOrderHelpers";
 import { SURGERY_ORDER_TYPE } from "../../fhir/surgeryOrderHelpers";
 import { isSurgeryProcedure } from "../../fhir/surgeryResultHelpers";
 import { type EncounterStay, encounterStays, FLOWSHEET_EXAM_TYPES } from "../../fhir/flowsheetEventHelpers";
@@ -243,6 +244,7 @@ export function useDischargePatient() {
       mealEntries = [],
       rehabOrders = [],
       nutritionGuidanceOrders = [],
+      medicationGuidanceOrders = [],
       nursingOrders = [],
       extraEntries = [],
     }: {
@@ -257,6 +259,8 @@ export function useDischargePatient() {
       rehabOrders?: fhir4.ServiceRequest[];
       /** 一緒に終了させる栄養指導オーダー。退院日を終了日にする。 */
       nutritionGuidanceOrders?: fhir4.ServiceRequest[];
+      /** 一緒に終了させる服薬指導オーダー。退院日を終了日にする。 */
+      medicationGuidanceOrders?: fhir4.ServiceRequest[];
       /** 一緒に終了させる看護指示。退院日を終了日にする(指示受け Task は触らない)。 */
       nursingOrders?: fhir4.ServiceRequest[];
     }) => {
@@ -270,6 +274,7 @@ export function useDischargePatient() {
           ...buildRehabOrderStopEntries(rehabOrders, dischargeDate),
           // 栄養指導もリハビリと同じ期間継続型なので同じ扱い。
           ...buildNutritionGuidanceOrderStopEntries(nutritionGuidanceOrders, dischargeDate),
+          ...buildMedicationGuidanceOrderStopEntries(medicationGuidanceOrders, dischargeDate),
           ...buildNursingOrderStopEntries(nursingOrders, dischargeDate),
           ...extraEntries,
         ]),

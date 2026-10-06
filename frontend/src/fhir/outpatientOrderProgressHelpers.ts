@@ -44,6 +44,7 @@ const KIND_MARKS = {
   "rehab-order": "リ",
   "radiotherapy-order": "照",
   "nutrition-guidance-order": "栄",
+  "medication-guidance-order": "服",
   "consult-order": "他",
 } as const;
 

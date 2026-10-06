@@ -4,6 +4,7 @@ import {
   useDeleteEndoscopyOrder,
   useDeleteLabOrder,
   useDeleteMealOrder,
+  useDeleteMedicationGuidanceOrder,
   useDeleteMicroOrder,
   useDeleteNutritionGuidanceOrder,
   useDeletePathoOrder,
@@ -50,6 +51,9 @@ import { LabOrderCardBody } from "./karteCardBodies/LabOrderCardBody";
 import { MealOrderCardBody } from "./karteCardBodies/MealOrderCardBody";
 import { MicroOrderCardBody } from "./karteCardBodies/MicroOrderCardBody";
 import { NutritionGuidanceOrderCardBody } from "./karteCardBodies/NutritionGuidanceOrderCardBody";
+import { MedicationGuidanceOrderCardBody } from "./karteCardBodies/MedicationGuidanceOrderCardBody";
+import { summarizeMedicationGuidanceOrder } from "../fhir/medicationGuidanceOrderHelpers";
+import { medicationGuidanceTaskStatusDisplay } from "../fhir/medicationGuidanceTaskHelpers";
 import { PathoOrderCardBody } from "./karteCardBodies/PathoOrderCardBody";
 import { PhysioOrderCardBody } from "./karteCardBodies/PhysioOrderCardBody";
 import { RadOrderCardBody } from "./karteCardBodies/RadOrderCardBody";
@@ -290,6 +294,18 @@ export const ORDER_KIND_DEFS: { [K in OrderKind]: OrderKindDef<K> } = {
       <NutritionGuidanceOrderCardBody serviceRequest={item.serviceRequest} performs={item.performs} />
     ),
   },
+  "medication-guidance-order": {
+    // 栄養指導と同じ期間継続型なので、入外区分と期間を見出しに出す。
+    title: (item) => {
+      const summary = summarizeMedicationGuidanceOrder(item.serviceRequest);
+      return joinParts(summary.settingDisplay, summary.periodLabel);
+    },
+    status: (item) => ({ code: item.status, label: medicationGuidanceTaskStatusDisplay(item.status) }),
+    doable: true,
+    Body: ({ item }) => (
+      <MedicationGuidanceOrderCardBody serviceRequest={item.serviceRequest} performs={item.performs} />
+    ),
+  },
   "consult-order": {
     // 「どこへ出したか」が見出しそのもの。至急のときだけ緊急度も並べる。
     title: (item) => {
@@ -335,6 +351,7 @@ export function useOrderKindDeletes() {
     "rehab-order": useDeleteRehabOrder(),
     "radiotherapy-order": useDeleteRadiotherapyOrder(),
     "nutrition-guidance-order": useDeleteNutritionGuidanceOrder(),
+    "medication-guidance-order": useDeleteMedicationGuidanceOrder(),
     "consult-order": useDeleteConsultOrder(),
   } satisfies Record<OrderKind, unknown>;
 }

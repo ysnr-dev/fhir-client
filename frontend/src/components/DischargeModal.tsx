@@ -4,6 +4,7 @@ import {
   usePatientBroughtMedications,
   usePatientRehabOrders,
   usePatientNutritionGuidanceOrders,
+  usePatientMedicationGuidanceOrders,
   usePatientNursingOrders,
   useDischargePatient,
   useDischargeSummaryFor,
@@ -37,6 +38,10 @@ import {
   nutritionGuidanceOrderNeedsStop,
   summarizeNutritionGuidanceOrder,
 } from "../fhir/nutritionGuidanceOrderHelpers";
+import {
+  medicationGuidanceOrderNeedsStop,
+  summarizeMedicationGuidanceOrder,
+} from "../fhir/medicationGuidanceOrderHelpers";
 import { nursingOrderNeedsStop, summarizeNursingOrder } from "../fhir/nursingOrderHelpers";
 import { useMealSyncContext } from "../hooks/useMealSyncContext";
 import { nowDateTimeInput } from "../lib/dates";
@@ -50,7 +55,7 @@ import { Modal } from "./Modal";
 // 退院時刻と施設の食事提供時刻から決める(手で選ばせない)。退院予定で既に止めて
 // いれば理由を「退院」に上書きする。退院取消で戻せるよう理由を残す。
 //
-// リハビリ・栄養指導のオーダーも同じ期間継続型なので一緒に止める。こちらは食事のような
+// リハビリ・栄養指導・服薬指導のオーダーも同じ期間継続型なので一緒に止める。こちらは食事のような
 // 時間帯を持たないので退院日をそのまま終了日にする。外来リハ・外来栄養指導に切り替えて
 // 続けることもあるので、食事と別のチェックにして外せるようにしてある。
 
@@ -88,6 +93,12 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
   const nutritionGuidanceOrders = usePatientNutritionGuidanceOrders(patientId);
   const stoppingNutritionGuidance = (nutritionGuidanceOrders.data ?? []).filter((sr) =>
     nutritionGuidanceOrderNeedsStop(sr, dischargeDate),
+  );
+
+  const [stopMedicationGuidance, setStopMedicationGuidance] = useState(true);
+  const medicationGuidanceOrders = usePatientMedicationGuidanceOrders(patientId);
+  const stoppingMedicationGuidance = (medicationGuidanceOrders.data ?? []).filter((sr) =>
+    medicationGuidanceOrderNeedsStop(sr, dischargeDate),
   );
 
   const [stopNursing, setStopNursing] = useState(true);
@@ -148,6 +159,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
         mealEntries: stopMeals ? mealEntries : [],
         rehabOrders: stopRehab ? stoppingRehab : [],
         nutritionGuidanceOrders: stopNutritionGuidance ? stoppingNutritionGuidance : [],
+        medicationGuidanceOrders: stopMedicationGuidance ? stoppingMedicationGuidance : [],
         nursingOrders: stopNursing ? stoppingNursing : [],
       },
       { onSuccess: onClose },
@@ -160,6 +172,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
       <ErrorBanner error={meal.error} />
       <ErrorBanner error={rehabOrders.error} />
       <ErrorBanner error={nutritionGuidanceOrders.error} />
+      <ErrorBanner error={medicationGuidanceOrders.error} />
       <ErrorBanner error={nursingOrders.error} />
       {validationError && (
         <div className="error-banner" role="alert">
@@ -254,6 +267,29 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
           </div>
         )}
 
+        {stoppingMedicationGuidance.length > 0 && (
+          <div className="discharge__meal">
+            <label className="discharge__meal-toggle">
+              <input
+                type="checkbox"
+                checked={stopMedicationGuidance}
+                onChange={(e) => setStopMedicationGuidance(e.target.checked)}
+              />
+              服薬指導オーダーを退院日で終了する
+            </label>
+            <ul className="discharge__meal-list">
+              {stoppingMedicationGuidance.map((sr) => {
+                const summary = summarizeMedicationGuidanceOrder(sr);
+                return (
+                  <li key={sr.id}>
+                    {summary.kindShort} {summary.conditionsLabel} {summary.periodLabel}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
         {stoppingNursing.length > 0 && (
           <div className="discharge__meal">
             <label className="discharge__meal-toggle">
@@ -309,6 +345,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
               // 打ち切る指示を読み切れていないまま退院させない(読めなかったぶんが有効なまま残る)。
               !rehabOrders.isSuccess ||
               !nutritionGuidanceOrders.isSuccess ||
+              !medicationGuidanceOrders.isSuccess ||
               !nursingOrders.isSuccess
             }
           >

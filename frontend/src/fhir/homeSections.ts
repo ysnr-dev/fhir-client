@@ -22,6 +22,7 @@ export type HomeWorklistKey =
   | "rx"
   | "injection"
   | "broughtMed"
+  | "medicationGuidance"
   | "rehab"
   | "nutritionGuidance";
 
@@ -49,6 +50,11 @@ export const HOME_WORKLISTS: Record<HomeWorklistKey, HomeWorklistDef> = {
   rx: { label: "処方", path: "/rx-worklist", roleCodes: ["pharmacist"] },
   injection: { label: "注射", path: "/injection-worklist", roleCodes: ["pharmacist"] },
   broughtMed: { label: "持参薬鑑別", path: "/brought-med-worklist", roleCodes: ["pharmacist"] },
+  medicationGuidance: {
+    label: "服薬指導",
+    path: "/medication-guidance-worklist",
+    roleCodes: ["pharmacist"],
+  },
   rehab: { label: "リハビリ", path: "/rehab-worklist", roleCodes: REHAB_ROLE_CODES },
   nutritionGuidance: {
     label: "栄養指導",

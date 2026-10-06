@@ -21,6 +21,7 @@ import {
   useTreatmentAdverseEvents,
   useRehabOrderDetail,
   useNutritionGuidanceOrderDetail,
+  useMedicationGuidanceOrderDetail,
   useTransfusionOrderDetail,
   useTransfusionPerformDetail,
   useTreatmentOrderDetail,
@@ -83,6 +84,8 @@ import { RadiotherapyOrderDetailPanel } from "./RadiotherapyOrderDetailPanel";
 import { useRadiotherapyOrderInitialValues } from "../hooks/useRadiotherapyOrderInitialValues";
 import { rehabPerformsByOrderId } from "../fhir/rehabResultHelpers";
 import { nutritionGuidancePerformsByOrderId } from "../fhir/nutritionGuidanceResultHelpers";
+import { MedicationGuidanceOrderDetailPanel } from "./MedicationGuidanceOrderDetailPanel";
+import { medicationGuidancePerformsByOrderId } from "../fhir/medicationGuidanceResultHelpers";
 import { resourcesOfType } from "../fhir/shared";
 
 // カルテのタイムラインから開くモーダル。詳細表示は各リソースの詳細ページと同じ
@@ -126,6 +129,7 @@ const ORDER_DETAILS: Record<OrderKind, ComponentType<OrderDetailProps>> = {
   "rehab-order": RehabOrderDetail,
   "radiotherapy-order": RadiotherapyOrderDetail,
   "nutrition-guidance-order": NutritionGuidanceOrderDetail,
+  "medication-guidance-order": MedicationGuidanceOrderDetail,
   "consult-order": ConsultOrderDetail,
 };
 
@@ -574,6 +578,42 @@ function NutritionGuidanceOrderDetail({
   );
 }
 
+// 服薬指導も栄養指導と同じく、実施記録がオーダーの検索に _revinclude で添えてある。
+function MedicationGuidanceOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useMedicationGuidanceOrderDetail(srId);
+  const serviceRequest = serviceRequestsOf(detail.data?.data).find((request) => request.id === srId);
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+  const procedures = resourcesOfType<fhir4.Procedure>(detail.data?.data, "Procedure");
+  const performs = medicationGuidancePerformsByOrderId(procedures).get(srId) ?? [];
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された服薬指導オーダーは別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <MedicationGuidanceOrderDetailPanel
+          serviceRequest={serviceRequest}
+          performs={performs}
+          problemsById={problemsById}
+        />
+      ) : (
+        !detail.error && <NotFound label="服薬指導オーダー" />
+      )}
+    </>
+  );
+}
+
 function SurgeryOrderDetail({
   patientId,
   srId,
@@ -874,6 +914,7 @@ const ORDER_JSONS: Record<OrderKind, ComponentType<{ srId: string }>> = {
   "rehab-order": RehabOrderJson,
   "radiotherapy-order": RadiotherapyOrderJson,
   "nutrition-guidance-order": NutritionGuidanceOrderJson,
+  "medication-guidance-order": MedicationGuidanceOrderJson,
   "consult-order": ConsultOrderJson,
 };
 
@@ -1207,6 +1248,17 @@ function RehabOrderJson({ srId }: { srId: string }) {
 // 栄養指導もリハビリと同じく進捗 Task と実施 Procedure が _revinclude で届く。
 function NutritionGuidanceOrderJson({ srId }: { srId: string }) {
   const detail = useNutritionGuidanceOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+    </>
+  );
+}
+
+function MedicationGuidanceOrderJson({ srId }: { srId: string }) {
+  const detail = useMedicationGuidanceOrderDetail(srId);
 
   return (
     <>

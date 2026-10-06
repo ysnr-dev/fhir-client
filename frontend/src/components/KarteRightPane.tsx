@@ -35,6 +35,10 @@ import {
   NutritionGuidanceOrderCreatePanel,
   NutritionGuidanceOrderEditPanel,
 } from "./NutritionGuidanceOrderPanels";
+import {
+  MedicationGuidanceOrderCreatePanel,
+  MedicationGuidanceOrderEditPanel,
+} from "./MedicationGuidanceOrderPanels";
 import { ConsultOrderCreatePanel, ConsultOrderEditPanel } from "./ConsultOrderPanels";
 import {
   QuestionnaireResponseCreatePanel,
@@ -227,6 +231,10 @@ const ORDER_PANES: Record<
   "nutrition-guidance-order": {
     create: { title: "栄養指導登録", Panel: NutritionGuidanceOrderCreatePanel },
     edit: { title: "栄養指導編集", Panel: NutritionGuidanceOrderEditPanel },
+  },
+  "medication-guidance-order": {
+    create: { title: "服薬指導登録", Panel: MedicationGuidanceOrderCreatePanel },
+    edit: { title: "服薬指導編集", Panel: MedicationGuidanceOrderEditPanel },
   },
   "consult-order": {
     create: { title: "他科依頼登録", Panel: ConsultOrderCreatePanel },
@@ -547,6 +555,14 @@ export function KarteRightPane({
           }
         >
           栄養指導
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onStateChange({ kind: "medication-guidance-order-create", problem: selectedProblem })
+          }
+        >
+          服薬指導
         </button>
         <PaneActionGroup label="看護">
           {/* 看護過程の順(情報収集 → 計画 → 指示 → サマリー)に並べる。見出し「看護」の下なので

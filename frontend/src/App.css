@@ -16302,6 +16302,21 @@ button.meal-calendar__cell:hover {
   flex-basis: 100%;
 }
 
+/* ---- 服薬指導(docs/medication-guidance-order-design.md) ---- */
+
+/* 指導条件・対象薬剤・指導してほしいことは 1 行を丸ごと使う
+   (伝票フォームの fieldset は flex-wrap で入力欄を横に並べるため)。 */
+.medication-guidance-form .medication-guidance-form__wide {
+  flex-basis: 100%;
+}
+
+.medication-guidance-form__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
 /* オーダー詳細の「承認」行。未承認の文言と承認ボタンを 1 行に並べる。 */
 .order-approval__pending {
   display: inline-flex;

@@ -4,6 +4,7 @@ import {
   useBroughtMedWorklist,
   useInjectionWorklist,
   useLabWorklist,
+  useMedicationGuidanceWorklist,
   useNutritionGuidanceWorklist,
   usePathoWorklist,
   usePhysioWorklist,
@@ -17,6 +18,11 @@ import { BROUGHT_MED_REVIEW_STATUS_OPTIONS } from "../fhir/broughtMedTaskHelpers
 import { HOME_WORKLISTS, summarizeTaskStatuses, type HomeWorklistKey } from "../fhir/homeSections";
 import { INJECTION_TASK_STATUS_OPTIONS, injectionTaskStatus } from "../fhir/injectionTaskHelpers";
 import { LAB_TASK_STATUS_OPTIONS, labTaskStatus } from "../fhir/labTaskHelpers";
+import {
+  MEDICATION_GUIDANCE_TASK_STATUS_OPTIONS,
+  medicationGuidanceAssignee,
+  medicationGuidanceTaskStatus,
+} from "../fhir/medicationGuidanceTaskHelpers";
 import {
   NUTRITION_GUIDANCE_TASK_STATUS_OPTIONS,
   nutritionGuidanceTaskStatus,
@@ -273,6 +279,25 @@ function NutritionGuidanceCard({ date }: DateProps) {
   );
 }
 
+/** 服薬指導も期間オーダーなので、当日に効いている件数と、うち担当が決まっていない件数を出す。 */
+function MedicationGuidanceCard({ date }: DateProps) {
+  const query = useMedicationGuidanceWorklist(date);
+  const unassigned = query.data?.rows.filter(
+    (row) => medicationGuidanceTaskStatus(row.task) !== "cancelled" && !medicationGuidanceAssignee(row.task),
+  ).length;
+  return (
+    <WorklistCounts
+      kind="medicationGuidance"
+      isPending={query.isPending}
+      error={query.error}
+      statuses={query.data?.rows.map((row) => medicationGuidanceTaskStatus(row.task))}
+      options={MEDICATION_GUIDANCE_TASK_STATUS_OPTIONS}
+      truncated={query.data?.truncated}
+      extra={unassigned !== undefined ? [{ label: "担当未定", count: unassigned }] : undefined}
+    />
+  );
+}
+
 const WORKLIST_CARDS: Record<HomeWorklistKey, ComponentType<DateProps>> = {
   lab: LabCard,
   physio: PhysioCard,
@@ -283,6 +308,7 @@ const WORKLIST_CARDS: Record<HomeWorklistKey, ComponentType<DateProps>> = {
   rx: RxCard,
   injection: InjectionCard,
   broughtMed: BroughtMedCard,
+  medicationGuidance: MedicationGuidanceCard,
   rehab: RehabCard,
   nutritionGuidance: NutritionGuidanceCard,
 };

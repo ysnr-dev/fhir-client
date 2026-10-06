@@ -5,6 +5,7 @@ import { isLabServiceRequest, labOrderProblem } from "./labOrderHelpers";
 import { isMealServiceRequest, mealOrderProblem } from "./mealOrderHelpers";
 import { isMicroServiceRequest, microOrderProblem } from "./microOrderHelpers";
 import { isNutritionGuidanceServiceRequest, nutritionGuidanceOrderProblem } from "./nutritionGuidanceOrderHelpers";
+import { isMedicationGuidanceServiceRequest, medicationGuidanceOrderProblem } from "./medicationGuidanceOrderHelpers";
 import { isPathoServiceRequest, pathoOrderProblem } from "./pathoOrderHelpers";
 import { isPhysioServiceRequest, physioOrderProblem } from "./physioOrderHelpers";
 import { isRadServiceRequest, radOrderProblem } from "./radOrderHelpers";
@@ -34,6 +35,7 @@ export const ORDER_KINDS = [
   "rehab-order",
   "radiotherapy-order",
   "nutrition-guidance-order",
+  "medication-guidance-order",
   "consult-order",
 ] as const;
 
@@ -62,6 +64,7 @@ export const ORDER_KIND_CORE: Record<OrderKind, OrderKindCore> = {
   "rehab-order": { label: "リハビリ", matches: isRehabServiceRequest, problem: rehabOrderProblem },
   "radiotherapy-order": { label: "放射線治療", matches: isRadiotherapyServiceRequest, problem: radiotherapyOrderProblem },
   "nutrition-guidance-order": { label: "栄養指導", matches: isNutritionGuidanceServiceRequest, problem: nutritionGuidanceOrderProblem },
+  "medication-guidance-order": { label: "服薬指導", matches: isMedicationGuidanceServiceRequest, problem: medicationGuidanceOrderProblem },
   "consult-order": { label: "他科依頼", matches: isConsultServiceRequest, problem: consultOrderProblem },
 };
 
