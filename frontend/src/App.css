@@ -8605,6 +8605,199 @@ input.lot-number-cell__input.is-invalid {
   margin-top: 12px;
 }
 
+.page__header .data-extract__title {
+  align-items: center;
+  gap: 10px;
+}
+
+/* データ抽出の使い方(DataExtractGuide)。拾い読みできるよう、番号つきの流れ・表・用語の 2 列・例のカードで組む。 */
+.extract-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 4px 16px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-h);
+}
+
+.extract-guide h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  padding-left: 8px;
+  border-left: 3px solid var(--accent);
+}
+
+.extract-guide__lead {
+  margin: 0;
+  font-size: 14px;
+}
+
+.extract-guide__steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: extract-step;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.extract-guide__steps li {
+  counter-increment: extract-step;
+  position: relative;
+  padding: 8px 10px 8px 38px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.extract-guide__steps li::before {
+  content: counter(extract-step);
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.extract-guide__steps strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.extract-guide__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.extract-guide__table th,
+.extract-guide__table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.extract-guide__table th {
+  width: 9.5em;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.extract-guide__terms {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+}
+
+.extract-guide__terms dt {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.extract-guide__terms dd {
+  margin: 0;
+}
+
+.extract-guide__examples {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.extract-guide__example {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.extract-guide__example-title {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.extract-guide__example-body {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.extract-guide__op {
+  flex: none;
+  writing-mode: vertical-rl;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 4px;
+  padding: 4px 2px;
+  text-align: center;
+}
+
+.extract-guide__example ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.extract-guide__leaf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.extract-guide__leaf--not {
+  border-style: dashed;
+  border-color: var(--danger);
+}
+
+.extract-guide__badge {
+  font-size: 11px;
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.extract-guide__badge--not {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.extract-guide__note {
+  border: 1px solid var(--warning);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.extract-guide__note h3 {
+  border-left-color: var(--warning);
+}
+
+.extract-guide__note ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
 .data-extract__output {
   display: flex;
   flex-wrap: wrap;

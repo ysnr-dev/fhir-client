@@ -9,6 +9,7 @@ import {
 } from "../api/masterQueries";
 import { useExtractDetailExport, useExtractRun } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { DataExtractGuide } from "../components/extract/DataExtractGuide";
 import { ExtractConditionBuilder } from "../components/extract/ExtractConditionBuilder";
 import { ExtractResults } from "../components/extract/ExtractResults";
 import { TrashIcon } from "../components/icons/TrashIcon";
@@ -46,6 +47,7 @@ export function DataExtractPage() {
   const [savedJson, setSavedJson] = useState(JSON.stringify(emptyExtractQuery()));
   const [saving, setSaving] = useState(false);
   const [validation, setValidation] = useState<string[]>([]);
+  const [guideOpen, setGuideOpen] = useState(false);
   const extract = useExtractRun();
   const runs = useExtractQueryRuns(selectedId);
   const recordRun = useRecordExtractRun();
@@ -138,7 +140,18 @@ export function DataExtractPage() {
   return (
     <div className="page data-extract">
       <div className="page__header">
-        <h1>データ抽出</h1>
+        <div className="data-extract__title">
+          <h1>データ抽出</h1>
+          <button
+            type="button"
+            className="modal__help"
+            onClick={() => setGuideOpen(true)}
+            aria-label="データ抽出の使い方"
+            title="データ抽出の使い方"
+          >
+            ?
+          </button>
+        </div>
       </div>
 
       <div className="data-extract__toolbar">
@@ -280,6 +293,7 @@ export function DataExtractPage() {
         />
       )}
 
+      {guideOpen && <DataExtractGuide onClose={() => setGuideOpen(false)} />}
       {saving && (
         <SaveModal
           owners={owners}
