@@ -724,7 +724,8 @@ button:disabled {
 .master-search__table select,
 .master-search__table input,
 .bulk-vital select,
-.bulk-vital input {
+.bulk-vital input,
+.supervisor-groups select {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
@@ -22894,6 +22895,164 @@ label.insulin-perform__reason {
 
 .nursing-summary__state--approved {
   color: var(--text-h);
+}
+
+/* ---- 研修医の記録のカウンターサイン(記録の詳細・カルテ承認一覧) ---- */
+.countersign__state {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.countersign__state--pending {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.countersign__state--returned {
+  border-color: var(--lab-high);
+  color: var(--lab-high);
+}
+
+.countersign__state--approved {
+  color: var(--text-h);
+}
+
+.countersign__actions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 12px;
+}
+
+.countersign__reason {
+  color: var(--lab-high);
+  white-space: pre-wrap;
+}
+
+.countersign__comment-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.countersign__comment-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.countersign__comment-meta {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.countersign__comment-text {
+  flex: 1 1 auto;
+  white-space: pre-wrap;
+}
+
+.countersign__comment-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.countersign__comment-form {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.countersign__comment-form textarea {
+  flex: 1 1 auto;
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* ---- 指導医グループ(マスタ)。左にグループ、右に構成員 ---- */
+/* 構成員の行は氏名・役割・削除だけなので、右側は氏名が読める幅に留める。 */
+.supervisor-groups {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 560px);
+  gap: 16px;
+  align-items: start;
+}
+
+.supervisor-groups__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.supervisor-groups__item {
+  width: 100%;
+  height: auto;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--text-h);
+  display: flex;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.supervisor-groups__item.is-active {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.supervisor-groups__count {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.supervisor-groups__detail-header,
+.supervisor-groups__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.supervisor-groups__detail-header h2,
+.supervisor-groups__section-header h3 {
+  margin: 0;
+}
+
+.supervisor-groups__detail-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.supervisor-groups__note {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.supervisor-groups__section {
+  margin-top: 16px;
+}
+
+.supervisor-groups__section .patient-table__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 /* ---- 看護問題の選択(看護診断・標準看護計画を階層でたどる) ---- */

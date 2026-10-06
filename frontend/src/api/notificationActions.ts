@@ -1,8 +1,15 @@
 import {
+  NOTE_COUNTERSIGN_NOTE,
+  buildCountersignedNote,
+  closeNoteCountersignEntries,
+  countersignStateOf,
+} from "../fhir/countersignHelpers";
+import {
+  buildCancelledNotificationTask,
   buildCompletedNotificationTask,
   completeNotificationEntry,
 } from "../fhir/notificationHelpers";
-import { ORDER_APPROVAL_TASK_CODE } from "../fhir/orderApprovalTaskHelpers";
+import { ORDER_APPROVAL_TASK_CODE, isTraineeApprovalTask } from "../fhir/orderApprovalTaskHelpers";
 import {
   approvalBundleEntry,
   buildApprovedProvenance,
@@ -19,11 +26,13 @@ import {
 import { TASK_CODE_SYSTEM } from "../fhir/taskHelpers";
 import { searchResource } from "./fhirClient";
 import { resourcesOfType } from "./queries/core";
+import { fetchNoteTasks } from "./queries/countersign";
 
 // 承認の transaction を組み立てる。承認待ち一覧(通知)とオーダー詳細モーダルの
 // どちらからでも同じ結果になるよう、1 か所に置く。React には依存しない。
 
 export const APPROVAL_NOTE_TEXT = "代行入力を承認しました。";
+const TRAINEE_APPROVAL_NOTE_TEXT = "研修医のオーダーを承認しました。";
 
 /** その来歴あての承認待ち通知。id を渡して引く(複数まとめて 1 回)。 */
 async function fetchApprovalTasks(provenanceIds: string[]): Promise<fhir4.Task[]> {
@@ -48,7 +57,8 @@ async function fetchProvenances(provenanceIds: string[]): Promise<fhir4.Provenan
 }
 
 /**
- * 承認の transaction entry。来歴に verifier と署名を足し、その来歴あての通知を対応済みにする。
+ * 承認の transaction entry。来歴に verifier と署名を足し、その来歴あての通知を閉じる
+ * (自分あては対応済み、研修医の活動で他の指導医あてに並んでいたものは取り下げ)。
  *
  * 通知が見つからない来歴も承認は通す。通知を持たない時期の承認待ちが残っていても
  * 詳細モーダルから承認できるようにするため(readme「代行入力の記録と承認」)。
@@ -67,10 +77,52 @@ export async function approvalTransactionEntries(
 
   for (const task of tasks) {
     entries.push(
-      completeNotificationEntry(buildCompletedNotificationTask(task, actor, APPROVAL_NOTE_TEXT)),
+      completeNotificationEntry(
+        task.owner?.reference === `Practitioner/${actor.practitionerId}`
+          ? buildCompletedNotificationTask(
+              task,
+              actor,
+              isTraineeApprovalTask(task) ? TRAINEE_APPROVAL_NOTE_TEXT : APPROVAL_NOTE_TEXT,
+            )
+          : buildCancelledNotificationTask(task),
+      ),
     );
   }
 
+  return entries;
+}
+
+// ---- 研修医の診療記録のカウンターサイン ----
+
+/** 承認する記録。id の最新を読む(一覧が古いまま上書きしないように)。 */
+async function fetchCompositions(compositionIds: string[]): Promise<fhir4.Composition[]> {
+  if (compositionIds.length === 0) return [];
+  const params = new URLSearchParams();
+  params.set("_id", compositionIds.join(","));
+  params.set("_count", "100");
+  const { data } = await searchResource<fhir4.Composition>("Composition", params);
+  return resourcesOfType<fhir4.Composition>(data, "Composition");
+}
+
+/**
+ * 記録のカウンターサインの transaction entry。記録に指導医の署名(professional)を足して
+ * PUT し(読んだ版を postBundle が ifMatch に添える)、承認待ちの通知を閉じる。
+ * 既に承認済み・作成中に戻っている記録には署名を重ねない。
+ */
+export async function noteCountersignEntries(
+  rows: { compositionId: string }[],
+  actor: OrderEnterer,
+): Promise<fhir4.BundleEntry[]> {
+  const ids = Array.from(new Set(rows.map((row) => row.compositionId).filter(Boolean)));
+  const [compositions, tasks] = await Promise.all([fetchCompositions(ids), fetchNoteTasks(ids)]);
+
+  const entries: fhir4.BundleEntry[] = compositions
+    .filter((composition) => countersignStateOf(composition, false) === "pending")
+    .map((composition) => ({
+      resource: buildCountersignedNote(composition, actor),
+      request: { method: "PUT", url: `Composition/${composition.id}` },
+    }));
+  entries.push(...closeNoteCountersignEntries(tasks, actor, NOTE_COUNTERSIGN_NOTE));
   return entries;
 }
 

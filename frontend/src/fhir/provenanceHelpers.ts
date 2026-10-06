@@ -1,4 +1,5 @@
 import { nowFhirDateTime } from "../lib/dates";
+import type { TraineeLevel } from "./practitionerHelpers";
 import { resourcesOfType } from "./shared";
 
 // オーダーの来歴(Provenance)。「誰が入力し、誰の指示によるものか、指示医師が確認したか」を、
@@ -54,10 +55,17 @@ export function orderActivityLabel(activity: OrderActivity): string {
   return ORDER_ACTIVITY_LABELS[activity];
 }
 
+/** 研修医・学生が author の活動に付ける印(agent.role)。指導医のカウンターサインの対象。 */
+export const TRAINEE_ROLE_SYSTEM = "http://fhir-client.local/CodeSystem/trainee-level";
+
 /** 代行入力・承認を記録する相手。ログイン中の医療従事者。 */
 export interface OrderEnterer {
   practitionerId: string;
   display: string;
+  /** 研修医・学生なら区分。自分のオーダーが指導医のカウンターサイン待ちになる。 */
+  traineeLevel?: TraineeLevel | "";
+  /** 研修医として仰ぐ指導医。承認待ちの通知の宛先になる。 */
+  supervisors?: { practitionerId: string; display: string }[];
 }
 
 function agentType(code: string): fhir4.CodeableConcept {
@@ -91,9 +99,23 @@ export function isVerifiedProvenance(provenance: fhir4.Provenance): boolean {
   return Boolean(agentOfType(provenance, VERIFIER));
 }
 
-/** 承認待ちの活動か。代行で、まだ承認されていないもの。 */
+/** 研修医・学生が自分の指示として行った活動か(author に研修区分の role が付いている)。 */
+export function isTraineeProvenance(provenance: fhir4.Provenance): boolean {
+  return Boolean(
+    agentOfType(provenance, AUTHOR)?.role?.some((role) =>
+      role.coding?.some((coding) => coding.system === TRAINEE_ROLE_SYSTEM),
+    ),
+  );
+}
+
+/** 承認(確認)が要る活動か。代行か研修医のもの。 */
+export function requiresApproval(provenance: fhir4.Provenance): boolean {
+  return isProxyProvenance(provenance) || isTraineeProvenance(provenance);
+}
+
+/** 承認待ちの活動か。代行か研修医の活動で、まだ承認されていないもの。 */
 export function needsApproval(provenance: fhir4.Provenance): boolean {
-  return isProxyProvenance(provenance) && !isVerifiedProvenance(provenance);
+  return requiresApproval(provenance) && !isVerifiedProvenance(provenance);
 }
 
 /** 指示医師(author)の Practitioner 参照。承認できるのはこの人だけ。 */
@@ -193,13 +215,23 @@ function provenanceEntry(
   activity: OrderActivity,
   enterer: OrderEnterer,
 ): fhir4.BundleEntry {
+  // 研修医・学生が自分を指示医師として入れた活動には author に研修区分を付ける(指導医の
+  // カウンターサインの対象)。代行入力(入力者 ≠ 指示医師)では付けない。
+  const trainee =
+    enterer.traineeLevel && requester.reference === `Practitioner/${enterer.practitionerId}`
+      ? enterer.traineeLevel
+      : "";
   const provenance: fhir4.Provenance = {
     resourceType: "Provenance",
     target: targets.map((reference) => ({ reference })),
     recorded: nowFhirDateTime(),
     activity: { coding: [{ system: ACTIVITY_SYSTEM, code: activity }] },
     agent: [
-      { type: agentType(AUTHOR), who: requester },
+      {
+        type: agentType(AUTHOR),
+        who: requester,
+        ...(trainee ? { role: [{ coding: [{ system: TRAINEE_ROLE_SYSTEM, code: trainee }] }] } : {}),
+      },
       {
         type: agentType(ENTERER),
         // 氏名は保存時に display へ焼き付ける(この codebase は表示時に Practitioner を
@@ -300,8 +332,10 @@ export interface OrderProvenanceSummary {
   pending: fhir4.Provenance[];
   /** 最後の承認。承認が要る活動が一つも無ければ null。 */
   approval: ProvenanceActor | null;
-  /** 承認できる人(指示医師)の Practitioner 参照。 */
+  /** 指示医師の Practitioner 参照。代行の承認はこの人、研修医の活動はこの人の指導医が行う。 */
   authorReference: string | undefined;
+  /** 研修医・学生の活動を含む(指導医のカウンターサインの対象)。 */
+  traineeAuthor: boolean;
 }
 
 function byRecorded(a: fhir4.Provenance, b: fhir4.Provenance): number {
@@ -332,7 +366,7 @@ export function summarizeOrderProvenance(provenances: fhir4.Provenance[]): Order
     : null;
 
   const pending = sorted.filter(needsApproval);
-  const verified = sorted.filter((p) => isProxyProvenance(p) && isVerifiedProvenance(p));
+  const verified = sorted.filter((p) => requiresApproval(p) && isVerifiedProvenance(p));
   const lastVerified = verified[verified.length - 1];
   const lastSignature = lastVerified?.signature?.[lastVerified.signature.length - 1];
   const approval = lastVerified
@@ -345,6 +379,7 @@ export function summarizeOrderProvenance(provenances: fhir4.Provenance[]): Order
     pending,
     approval,
     authorReference: creation ? provenanceAuthorReference(creation) : undefined,
+    traineeAuthor: sorted.some(isTraineeProvenance),
   };
 }
 

@@ -32,3 +32,4 @@ export * from "./regimen";
 export * from "./pathway";
 export * from "./radiotherapy";
 export * from "./labImport";
+export * from "./supervisorGroup";

@@ -304,9 +304,10 @@ export async function saveClinicalNote(
   composition: fhir4.Composition,
   entries: fhir4.BundleEntry[],
   etag?: string,
+  fullUrl?: string,
 ): Promise<FhirResult<fhir4.Composition>> {
   const stale = await staleObservationEntries(entries);
-  return saveWithImages(composition, [...stale, ...entries], etag);
+  return saveWithImages(composition, [...stale, ...entries], etag, fullUrl);
 }
 
 export function useCreateClinicalNote() {
@@ -315,14 +316,18 @@ export function useCreateClinicalNote() {
     mutationFn: ({
       composition,
       entries,
+      fullUrl,
     }: {
       composition: fhir4.Composition;
       entries: fhir4.BundleEntry[];
-    }) => saveClinicalNote(composition, entries),
+      /** 同じ transaction の entry(カウンターサインの通知)が新規の記録を指すための urn:uuid。 */
+      fullUrl?: string;
+    }) => saveClinicalNote(composition, entries, undefined, fullUrl),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }
@@ -342,6 +347,7 @@ export function useUpdateClinicalNote() {
     onSuccess: (result: FhirResult<fhir4.Composition>) => {
       queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Composition", result.data.id] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse"] });
       queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
     },

@@ -11,6 +11,7 @@ import { orderSetOf } from "./orderSetHelpers";
 import { orderContextSummary, orderRequester } from "./orderHeader";
 import {
   isHeaderEntry,
+  isTraineeProvenance,
   needsApproval,
   orderActivityLabel,
   provenanceActivity,
@@ -42,6 +43,7 @@ const ORDER_INPUT = "対象オーダー";
 const DAY_INPUT = "開始日";
 const CONTEXT_INPUT = "依頼";
 const ORDER_SET_INPUT = "セット";
+const TRAINEE_INPUT = "研修医";
 
 type OrderKind = ReturnType<typeof orderKindOf>;
 
@@ -98,50 +100,73 @@ function approvalTaskInputs(
 }
 
 /**
- * 承認待ちの通知の entry。代行でない活動(医師本人の入力)には付けない。
+ * 承認待ちの通知の entry。承認の要らない活動(医師本人の入力)には付けない。
+ *
+ * 宛先は、代行入力なら指示医師 1 人。研修医・学生の活動なら、その人が仰ぐ指導医の全員に
+ * 1 件ずつ作る(1 通知 = 1 宛先)。誰かが承認すると残りは取り下げる(notificationActions)。
+ * 指導医が 1 人も登録されていなければ通知は作らない(承認は詳細モーダルからできる)。
  *
  * focus は同じ Bundle に積む Provenance の fullUrl(urn:uuid:)。上流の transaction が
  * `Provenance/{採番済 id}` に解決するので、クライアントが id を知る必要はない。
  */
-export function buildOrderApprovalTaskEntry(
+export function buildOrderApprovalTaskEntries(
   provenanceEntry: fhir4.BundleEntry,
   orders: { order: fhir4.ServiceRequest; reference: string | undefined }[],
   enterer: OrderEnterer,
-): fhir4.BundleEntry | null {
+): fhir4.BundleEntry[] {
   const provenance = provenanceEntry.resource as fhir4.Provenance | undefined;
   const focusReference = provenanceEntry.fullUrl;
-  if (!provenance || !focusReference || !needsApproval(provenance)) return null;
+  if (!provenance || !focusReference || !needsApproval(provenance)) return [];
 
   const first = orders[0]?.order;
-  const owner = first?.requester;
   const patientId = first?.subject?.reference?.split("/").pop() ?? "";
-  if (!owner?.reference || !patientId) return null;
+  if (!patientId) return [];
+
+  const trainee = isTraineeProvenance(provenance);
+  const owners: fhir4.Reference[] = trainee
+    ? (enterer.supervisors ?? []).map((s) => ({
+        reference: `Practitioner/${s.practitionerId}`,
+        display: s.display || undefined,
+      }))
+    : first?.requester?.reference
+      ? [first.requester]
+      : [];
+  if (owners.length === 0) return [];
 
   const activity = provenanceActivity(provenance);
   const kinds = Array.from(new Set(orders.map(({ order }) => approvalKindOf(order))));
-  const description = `${kinds.map(kindLabel).join(" / ")}の${orderActivityLabel(activity)}（入力: ${enterer.display}）`;
+  const who = trainee ? `研修医: ${enterer.display}` : `入力: ${enterer.display}`;
+  const description = `${kinds.map(kindLabel).join(" / ")}の${orderActivityLabel(activity)}（${who}）`;
+  const input = approvalTaskInputs(orders, activity);
+  if (trainee) input.push({ type: { text: TRAINEE_INPUT }, valueString: enterer.display });
 
-  const task = buildNotificationTask({
-    code: ORDER_APPROVAL_TASK_CODE,
-    // 承認は遅れても診療は止まらない(承認前でも部門にオーダーは流れる)。
-    severity: "info",
-    focusReference,
-    patientId,
-    owner,
-    requester: {
-      reference: `Practitioner/${enterer.practitionerId}`,
-      display: enterer.display || undefined,
-    },
-    // オーダー側から未承認を逆引きできるようにする(`_revinclude=Task:based-on`)。
-    basedOn: orders
-      .map(({ reference }) => reference)
-      .filter((reference): reference is string => Boolean(reference))
-      .map((reference) => ({ reference })),
-    description,
-    input: approvalTaskInputs(orders, activity),
-  });
+  return owners.map((owner) => ({
+    resource: buildNotificationTask({
+      code: ORDER_APPROVAL_TASK_CODE,
+      // 承認は遅れても診療は止まらない(承認前でも部門にオーダーは流れる)。
+      severity: "info",
+      focusReference,
+      patientId,
+      owner,
+      requester: {
+        reference: `Practitioner/${enterer.practitionerId}`,
+        display: enterer.display || undefined,
+      },
+      // オーダー側から未承認を逆引きできるようにする(`_revinclude=Task:based-on`)。
+      basedOn: orders
+        .map(({ reference }) => reference)
+        .filter((reference): reference is string => Boolean(reference))
+        .map((reference) => ({ reference })),
+      description,
+      input,
+    }),
+    request: { method: "POST", url: "Task" },
+  }));
+}
 
-  return { resource: task, request: { method: "POST", url: "Task" } };
+/** 研修医・学生の活動の承認待ちか(代行入力の承認待ちと対応の文言を分ける)。 */
+export function isTraineeApprovalTask(task: fhir4.Task): boolean {
+  return Boolean(taskInputOf(task, TRAINEE_INPUT)?.valueString);
 }
 
 /** 登録・編集の Bundle からヘッダとその参照を集める(来歴の target と同じ単位)。 */
@@ -166,6 +191,8 @@ export interface OrderApprovalRow extends NotificationRowBase {
   entererName: string;
   contextLabel: string;
   orderSetName: string;
+  /** 研修医・学生の活動なら、その人の氏名。代行入力なら空。 */
+  traineeName: string;
 }
 
 export function kindLabel(kind: OrderKind): string {
@@ -196,5 +223,6 @@ export function orderApprovalRowOf(
     entererName: task.requester?.display ?? "",
     contextLabel: taskInputOf(task, CONTEXT_INPUT)?.valueString ?? "",
     orderSetName: taskInputOf(task, ORDER_SET_INPUT)?.valueString ?? "",
+    traineeName: taskInputOf(task, TRAINEE_INPUT)?.valueString ?? "",
   };
 }

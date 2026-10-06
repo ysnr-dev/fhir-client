@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_06_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -2442,6 +2442,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_090000) do
     t.index ["questionnaire_url", "questionnaire_version"], name: "index_report_layouts_on_canonical", unique: true
   end
 
+  create_table "supervisor_group_members", force: :cascade do |t|
+    t.bigint "supervisor_group_id", null: false
+    t.string "practitioner_fhir_id", null: false
+    t.string "display_name", default: "", null: false
+    t.string "role", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["practitioner_fhir_id"], name: "index_supervisor_group_members_on_practitioner_fhir_id"
+    t.index ["supervisor_group_id", "practitioner_fhir_id"], name: "index_supervisor_group_members_on_group_and_practitioner", unique: true
+    t.index ["supervisor_group_id"], name: "index_supervisor_group_members_on_supervisor_group_id"
+  end
+
+  create_table "supervisor_groups", force: :cascade do |t|
+    t.string "name", null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_supervisor_groups_on_name", unique: true
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "login_id", null: false
     t.string "password_digest", null: false
@@ -2456,4 +2476,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_090000) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "document_templates", "file_categories", on_delete: :nullify
   add_foreign_key "master_formulary_entries", "master_formulary_groups", column: "formulary_group_id", on_delete: :cascade
+  add_foreign_key "supervisor_group_members", "supervisor_groups", on_delete: :cascade
 end

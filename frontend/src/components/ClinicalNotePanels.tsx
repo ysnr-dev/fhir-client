@@ -2,18 +2,34 @@ import { useState } from "react";
 import { FhirError } from "../api/fhirClient";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useClinicalNoteTitles } from "../api/masterQueries";
-import { useClinicalNote, useCreateClinicalNote, useUpdateClinicalNote } from "../api/queries";
+import {
+  useClinicalNote,
+  useCountersignContext,
+  useCreateClinicalNote,
+  useNoteTasks,
+  useUpdateClinicalNote,
+} from "../api/queries";
 import { ClinicalNoteForm } from "./ClinicalNoteForm";
 import { ErrorBanner } from "./ErrorBanner";
 import {
   buildClinicalNote,
   defaultSectionsForMode,
   emptyClinicalNoteForm,
+  isCountersignNote,
   parseClinicalNoteForm,
   validateClinicalNote,
   type ClinicalNoteFormValues,
   type ClinicalNoteProblem,
 } from "../fhir/clinicalNoteHelpers";
+import {
+  NOTE_COUNTERSIGN_NOTE,
+  buildCountersignedNote,
+  buildNoteCountersignEntries,
+  closeNoteCountersignEntries,
+  closeNoteReturnedEntries,
+  noteAuthorId,
+  noteLabelOf,
+} from "../fhir/countersignHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { isNursingRoleCode, parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
@@ -41,6 +57,8 @@ export function ClinicalNoteCreatePanel({
   const { practitionerId, practitioner } = useCurrentPractitioner();
   // 記録した診療科。ヘッダーで選択中の科を焼き付ける(オーダーの依頼科と同じ扱い)。
   const orderContext = useOrderContext();
+  // 研修医・学生の記録は印を付け、確定したら指導医あての承認待ちを同じ transaction で作る。
+  const countersign = useCountersignContext();
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // 初期値のタイトルは、職種がログイン中の医療従事者と一致するマスタの先頭(表示順)。
@@ -60,15 +78,28 @@ export function ClinicalNoteCreatePanel({
       return;
     }
     setValidationError(null);
-    createNote.mutate(
-      buildClinicalNote(values, {
-        patientId,
-        practitioner,
-        department: orderContext,
-        nursing: isNursingRoleCode(roleCode),
-      }),
-      { onSuccess: onSaved },
-    );
+    const trainee = Boolean(countersign.traineeLevel) && countersign.enterer;
+    const save = buildClinicalNote(values, {
+      patientId,
+      practitioner,
+      department: orderContext,
+      nursing: isNursingRoleCode(roleCode),
+      countersign: Boolean(trainee),
+    });
+    const fullUrl = `urn:uuid:${crypto.randomUUID()}`;
+    const entries = [...save.entries];
+    if (trainee && save.composition.status === "final") {
+      entries.push(
+        ...buildNoteCountersignEntries({
+          focusReference: fullUrl,
+          patientId,
+          noteLabel: noteLabelOf(save.composition),
+          trainee,
+          supervisors: countersign.supervisors,
+        }),
+      );
+    }
+    createNote.mutate({ composition: save.composition, entries, fullUrl }, { onSuccess: onSaved });
   }
 
   if (titles.isLoading || !login.ready) return <p>読み込み中...</p>;
@@ -145,6 +176,10 @@ function EditForm({
   // 署名(確定者)を修正した本人に更新するために使う。紐付けの無いアカウントでは
   // undefined になり、その場合は既存の署名をそのまま残す。
   const { practitioner } = useCurrentPractitioner();
+  // 研修医の記録のカウンターサイン。研修医本人が確定し直せばまた承認待ちに、
+  // 指導医が直して保存すればその内容で承認済みにする(修正承認)。
+  const countersign = useCountersignContext();
+  const noteTasks = useNoteTasks(isCountersignNote(note) ? note.id : undefined);
 
   // 確定済み(final/amended)の編集は保存で amended になる。ステータス選択は出さない。
   const statusLocked = note.status !== "preliminary";
@@ -158,10 +193,36 @@ function EditForm({
     }
     setValidationError(null);
     setConflict(false);
+    // 編集でも医療従事者を渡す。作成者(author)は既存を保つが、確定の署名は
+    // 「今その内容に責任を負う人」なので、修正した本人に更新する。
+    const save = buildClinicalNote(values, { patientId, practitioner, existing: note });
+    let composition = save.composition;
+    const entries = [...save.entries];
+    const actor = countersign.enterer;
+    if (isCountersignNote(note) && actor && composition.status !== "preliminary") {
+      const authorId = noteAuthorId(note);
+      const tasks = noteTasks.data ?? [];
+      if (authorId === actor.practitionerId) {
+        // 研修医本人の確定し直し。差戻しを閉じ、前の承認待ちを取り下げて出し直す。
+        entries.push(...closeNoteReturnedEntries(tasks, actor));
+        entries.push(...closeNoteCountersignEntries(tasks, actor, NOTE_COUNTERSIGN_NOTE));
+        entries.push(
+          ...buildNoteCountersignEntries({
+            focusReference: `Composition/${note.id}`,
+            patientId,
+            noteLabel: noteLabelOf(composition),
+            trainee: actor,
+            supervisors: countersign.supervisors,
+            encounter: composition.encounter,
+          }),
+        );
+      } else if (countersign.trainees.has(authorId)) {
+        composition = buildCountersignedNote(composition, actor);
+        entries.push(...closeNoteCountersignEntries(tasks, actor, NOTE_COUNTERSIGN_NOTE));
+      }
+    }
     updateNote.mutate(
-      // 編集でも医療従事者を渡す。作成者(author)は既存を保つが、確定の署名は
-      // 「今その内容に責任を負う人」なので、修正した本人に更新する。
-      { ...buildClinicalNote(values, { patientId, practitioner, existing: note }), etag },
+      { composition, entries, etag },
       {
         onSuccess: onSaved,
         onError: (err) => {
@@ -185,6 +246,10 @@ function EditForm({
       {statusLocked && (
         <p className="clinical-note-edit__hint">
           確定済みの記録です。保存するとステータスは「修正済み」になります。
+          {isCountersignNote(note) &&
+            countersign.practitionerId !== noteAuthorId(note) &&
+            countersign.trainees.has(noteAuthorId(note)) &&
+            "保存した内容でカウンターサインします。"}
         </p>
       )}
       <ClinicalNoteForm

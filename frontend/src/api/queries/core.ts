@@ -23,12 +23,13 @@ export async function saveWithImages<T extends fhir4.Resource & { id?: string }>
   resource: T,
   imageEntries: fhir4.BundleEntry[] | undefined,
   etag?: string,
+  fullUrl?: string,
 ): Promise<FhirResult<T>> {
   if (!imageEntries?.length) {
     return etag ? updateResource(resource, etag) : createResource(resource);
   }
 
-  const { data: bundle } = await postBundle(resourceWithImagesBundle(resource, imageEntries, etag));
+  const { data: bundle } = await postBundle(resourceWithImagesBundle(resource, imageEntries, etag, fullUrl));
   const saved = resourceFromBundleResponse<T>(bundle);
   if (!saved.resource) throw new Error("保存結果を取得できませんでした。");
   return { data: saved.resource, etag: saved.etag };

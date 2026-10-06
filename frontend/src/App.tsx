@@ -80,6 +80,8 @@ import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
 import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
 import { NotificationPage } from "./pages/NotificationPage";
+import { CountersignListPage } from "./pages/CountersignListPage";
+import { SupervisorGroupPage } from "./pages/SupervisorGroupPage";
 import { OrderSetPage } from "./pages/OrderSetPage";
 import { NotificationBell } from "./components/NotificationBell";
 import { NursingWorklistPage } from "./pages/NursingWorklistPage";
@@ -208,6 +210,10 @@ function App() {
                 医師なので診療業務に置く(readme「通知」)。件数はヘッダーのベルに出る。 */}
             <Link to="/notifications" className="row-menu__item">
               通知
+            </Link>
+            {/* 研修医・学生の記録とオーダーのカウンターサイン(指導医向け。docs/countersign-design.md)。 */}
+            <Link to="/countersigns" className="row-menu__item">
+              カルテ承認
             </Link>
             {/* よく出すオーダーのひとまとめ(オーダーセット)の登録。出すのは診療科の
                 医師なので部門業務ではなくここに置く(docs/order-set-design.md §1)。 */}
@@ -454,6 +460,8 @@ function App() {
           />
           <Route path="/consult-worklist" element={<ConsultWorklistPage />} />
           <Route path="/notifications" element={<NotificationPage />} />
+          <Route path="/countersigns" element={<CountersignListPage />} />
+          <Route path="/supervisor-groups" element={<SupervisorGroupPage />} />
           {/* 掲示板(院内のお知らせ)。ホームのカードは今日掲載中だけ、ここは全件。 */}
           <Route path="/bulletin" element={<BulletinPage />} />
           <Route path="/order-sets" element={<OrderSetPage />} />

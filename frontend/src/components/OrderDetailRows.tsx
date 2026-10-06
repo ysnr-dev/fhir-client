@@ -32,7 +32,7 @@ export function RegisteredAtRow({ authoredOn }: { authoredOn: string | undefined
 export function EnteredByRow({ serviceRequestId }: { serviceRequestId: string | undefined }) {
   const provenance = useOrderProvenance(serviceRequestId);
   const summary = summarizeOrderProvenance(provenancesOf(provenance.data?.data));
-  const canApprove = useCanApproveOrder(summary.authorReference);
+  const canApprove = useCanApproveOrder(summary);
   const approve = useApproveOrderProvenances();
 
   const { proxyEntry, lastUpdate, pending, approval } = summary;
@@ -44,6 +44,13 @@ export function EnteredByRow({ serviceRequestId }: { serviceRequestId: string | 
         <>
           <dt>代行入力</dt>
           <dd>{`${proxyEntry.entererName}（指示: ${proxyEntry.authorName}）`}</dd>
+        </>
+      )}
+      {/* 研修医・学生の活動は指導医のカウンターサインの対象。本人は承認できない。 */}
+      {summary.traineeAuthor && (
+        <>
+          <dt>研修医</dt>
+          <dd>{summary.authorReference ? "指導医のカウンターサイン対象" : "-"}</dd>
         </>
       )}
       {lastUpdate && (

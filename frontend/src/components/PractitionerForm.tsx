@@ -9,6 +9,7 @@ import {
 import { organizationDisplayName } from "../fhir/organizationHelpers";
 import {
   emptyPractitionerForm,
+  TRAINEE_LEVEL_OPTIONS,
   validatePractitionerForm,
   type PractitionerFormValues,
 } from "../fhir/practitionerHelpers";
@@ -228,6 +229,25 @@ export function PractitionerForm({
           onChange={(e) => update("medicalRegistrationNumber", e.target.value)}
         />
       </label>
+
+      {!partner && (
+        <label>
+          研修区分
+          <select
+            value={values.traineeLevel}
+            onChange={(e) =>
+              update("traineeLevel", e.target.value as PractitionerFormValues["traineeLevel"])
+            }
+          >
+            <option value="">（なし）</option>
+            {TRAINEE_LEVEL_OPTIONS.map((o) => (
+              <option key={o.code} value={o.code}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label>
         性別

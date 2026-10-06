@@ -667,7 +667,7 @@ CSRF はチャート定義と同じ `/master` の基底)。
   なります。承認できるのは `author` 本人のみ(`useCanApproveOrder`)。
 - **承認待ちは通知(Task)で拾います**。`enterer ≠ author` の来歴を書くとき、同じ transaction に
   指示医師あての `order-approval` の通知を積みます(`fhir/orderApprovalTaskHelpers.ts` の
-  `buildOrderApprovalTaskEntry`)。`focus` は来歴の `urn:uuid` で、上流の transaction が
+  `buildOrderApprovalTaskEntries`)。`focus` は来歴の `urn:uuid` で、上流の transaction が
   `Provenance/{id}` に解決します。真正性の正本は引き続き Provenance で、通知は宛先と未対応・対応済みだけを
   持ちます(後述の「通知(Task)」)。
 - **承認**すると、来歴への署名の PUT と通知を対応済みにする PUT を 1 つの transaction で送ります
@@ -691,6 +691,39 @@ CSRF はチャート定義と同じ `/master` の基底)。
   先読みは 100 件 × 2 本をカルテを開くたびに叩くので、そこに `_revinclude` は足していません。
 - 上流の `AuditEvent` は依然 OAuth クライアントしか記録せず、エンドユーザーは Provenance でしか追えません
   (認証回りの変更になるので別課題)。
+
+### 研修医のカウンターサイン
+
+研修医・学生が書いた診療記録とオーダーを、指導医が後から承認(カウンターサイン)・差戻し・コメントします
+(設計は `docs/countersign-design.md`)。承認前でも記録は読め、オーダーは部門へ流れます(代行入力と同じ方針)。
+
+- **研修医・学生の印**は医療従事者の「研修区分」(`Practitioner` のローカル拡張 `trainee-level`、
+  `resident` / `student`)です。職種は医師のままにします(研修医を職種にすると医師扱いでなくなり、オーダーが
+  代行入力の経路になるため)。学生は職種を医師にしないので、オーダーは今の代行入力の経路です。
+- **指導医グループ**(マスタメンテ > 共通 > 指導医グループ、backend の `supervisor_groups` /
+  `supervisor_group_members`)に指導医と研修医を入れます。研修医が属するグループの指導医なら**誰でも**
+  承認できるので、担当の指導医が不在でも止まりません。`GET /master/supervisor_groups/mine` が、ログイン中の
+  人から見た「仰ぐ指導医」と「受け持つ研修医」をグループをまたいで返し、画面はこれで承認の可否を決めます
+  (`useCountersignContext`)。
+- **診療記録**は看護サマリーの承認と同じ器です(`fhir/countersignHelpers.ts`)。研修医が書いた記録には
+  `Composition.category` に印(`countersign`)を付け、確定(`final`)すると研修医の `attester(legal)` だけの
+  **承認待ち**、指導医が承認すると `attester(professional)` を足して**承認済**、差戻しは `preliminary` に戻して
+  署名を外します(理由は通知に持つ)。研修医が確定し直すと `professional` が落ちてまた承認待ちになり、
+  指導医が直して保存すると(修正承認)その内容で承認済みになります。カルテのカードには「承認待ち」「承認済」の
+  バッジが出ます(Composition だけで決めるので、通知は引き直しません)。
+- **オーダー**は代行入力の承認と同じ `Provenance` です。研修医が自分を指示医師として入力した活動は、来歴の
+  `author` に研修区分の `role` が付き、承認待ちになります(`needsApproval` は「代行か研修医」)。承認できるのは
+  本人ではなく、受け持つ指導医です(`useCanApproveOrder`)。
+- **通知**は指導医ごとに 1 件ずつ作ります(`note-countersign` カルテ承認・`order-approval` オーダー承認)。
+  誰かが承認・差戻しすると、その人の通知を対応済みに、残りの指導医の通知を取り下げます
+  (`api/notificationActions.ts`)。差戻しは研修医あての `note-returned` で、確定し直すと自動で閉じます。
+  指導医が 1 人も登録されていなければ通知は作りません(承認は詳細からできます)。
+- **コメント**は承認待ちの通知(`Task.note`。対応の記録と見分ける印の拡張付き)に積みます。承認・差戻しに
+  添えても、単独でも書け、自分のものは直せます・消せます。閉じた通知のぶんも含めて記録の詳細に歴として並びます。
+- **画面**は 3 か所。記録の詳細(カルテの詳細モーダル)の「カウンターサイン」欄(状態・承認者・差戻し理由・
+  コメント歴と、指導医には承認・差戻し・コメントの操作)、診療業務 > **カルテ承認**(`/countersigns`。自分あての
+  記録・オーダーの承認待ちと承認済みを、種別・研修医で絞って並べ、記録はその場のモーダルで確かめて操作)、
+  通知(種別「カルテ承認」「カルテ差戻し」)。オーダーの承認は従来どおりカルテの詳細の「承認」行です。
 
 ### 日付未定オーダー
 
@@ -980,7 +1013,7 @@ NANDA-I / NOC / NIC と同じ論理構造)。用語には定義・ガイダン�
 ### 通知(Task)
 
 「相手を決めて何かしてもらう」お知らせを 1 つの器(`Task`)にまとめ、ヘッダーのベルと
-**診療業務 > 通知**(`/notifications`)に集約します。いまの種別は次の 6 つです。
+**診療業務 > 通知**(`/notifications`)に集約します。いまの種別は次のとおりです。
 
 | 種別(`Task.code`) | 強度 | 焦点(`focus`) | 宛先(`owner`) | 操作 |
 |---|---|---|---|---|
@@ -988,7 +1021,9 @@ NANDA-I / NOC / NIC と同じ論理構造)。用語には定義・ガイダン�
 | `result-review` 検査結果確認 | お知らせ | 検査結果(`DiagnosticReport`) | オーダーの依頼医 | 確認 |
 | `pathway-variance` パスのバリアンス | 注意 | パスの評価(`Observation`) | 入院の主治医 | 確認 |
 | `rad-critical-finding` / `physio-critical-finding` / `endoscopy-critical-finding` 重要所見 | アラート | 読影レポート・所見レポート(`DiagnosticReport`) | オーダーの依頼医 | 確認 |
-| `order-approval` オーダー承認 | お知らせ | 来歴(`Provenance`) | 指示医師 | 承認 |
+| `order-approval` オーダー承認 | お知らせ | 来歴(`Provenance`) | 指示医師(研修医の活動は指導医ごとに 1 件) | 承認 |
+| `note-countersign` カルテ承認 | お知らせ | 研修医の診療記録(`Composition`) | 指導医ごとに 1 件 | 承認(差戻し・コメントはカルテの詳細から) |
+| `note-returned` カルテ差戻し | お知らせ | 研修医の診療記録(`Composition`) | 記録した研修医 | 対応済(確定し直すと自動) |
 | `document-due` 文書作成 | お知らせ | 入院(`Encounter`) | 入院の主治医 | 対応済(文書の確定で自動) |
 | `nursing-summary-returned` 看護サマリー差戻し | お知らせ | 看護サマリー(`Composition`) | サマリーの作成者 | 対応済(確定し直すと自動) |
 

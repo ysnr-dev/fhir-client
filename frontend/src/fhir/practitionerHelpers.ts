@@ -31,10 +31,32 @@ const MEDICAL_LICENSE_CERTIFICATE_SYSTEM =
   "http://jpfhir.jp/fhir/core/CodeSystem/JP_MedicalLicenseCertificate_CS";
 const MEDICAL_REGISTRATION_CODE = "medical-registration";
 
+// 研修区分。研修医・学生が書いた診療記録とオーダーは指導医のカウンターサインの対象になる
+// (docs/countersign-design.md)。職種は医師のままにし、この印で見分ける(研修医を職種にすると
+// 医師扱いでなくなり、オーダーが代行入力の経路になるため)。
+export const TRAINEE_LEVEL_EXT_URL = "http://fhir-client.local/StructureDefinition/trainee-level";
+
+export type TraineeLevel = "resident" | "student";
+
+export const TRAINEE_LEVEL_OPTIONS: { code: TraineeLevel; label: string }[] = [
+  { code: "resident", label: "研修医" },
+  { code: "student", label: "学生" },
+];
+
+export function traineeLevelLabel(code: string | undefined): string {
+  return TRAINEE_LEVEL_OPTIONS.find((o) => o.code === code)?.label ?? "";
+}
+
+export function traineeLevelOf(practitioner: fhir4.Practitioner | null | undefined): TraineeLevel | "" {
+  const code = practitioner?.extension?.find((e) => e.url === TRAINEE_LEVEL_EXT_URL)?.valueCode;
+  return TRAINEE_LEVEL_OPTIONS.some((o) => o.code === code) ? (code as TraineeLevel) : "";
+}
+
 // Practitioner リソース自体の項目。職種・所属は別リソース(PractitionerRole)だが、
 // 画面では 1 つのフォームとして扱う。
 export interface PractitionerValues extends JapaneseNameParts {
   medicalRegistrationNumber: string;
+  traineeLevel: TraineeLevel | "";
   gender: Gender;
   birthDate: string;
   active: boolean;
@@ -52,6 +74,7 @@ export const emptyPractitionerForm: PractitionerFormValues = {
   ...emptyPractitionerRole,
   departments: [],
   medicalRegistrationNumber: "",
+  traineeLevel: "",
   gender: "",
   birthDate: "",
   active: true,
@@ -105,6 +128,10 @@ export function buildPractitioner(values: PractitionerValues, id?: string): fhir
   if (values.email) telecom.push({ system: "email", value: values.email });
   if (telecom.length) practitioner.telecom = telecom;
 
+  if (values.traineeLevel) {
+    practitioner.extension = [{ url: TRAINEE_LEVEL_EXT_URL, valueCode: values.traineeLevel }];
+  }
+
   return practitioner;
 }
 
@@ -129,6 +156,7 @@ export function parsePractitioner(practitioner: fhir4.Practitioner): Practitione
   return {
     ...parseJapaneseNames(practitioner.name),
     medicalRegistrationNumber: practitionerRegistrationNumber(practitioner),
+    traineeLevel: traineeLevelOf(practitioner),
     gender: (practitioner.gender as Gender) ?? "",
     birthDate: practitioner.birthDate ?? "",
     active: practitioner.active ?? true,

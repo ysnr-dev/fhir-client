@@ -1,5 +1,4 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCurrentPractitioner } from "../authQueries";
 import {
   buildLabResultBundle,
   buildLabResultDeleteBundle,
@@ -38,6 +37,8 @@ import {
 import { fetchLabelSpecimens } from "./injection";
 import { fetchReportTasks } from "./notification";
 import { invalidateProvenance, useOrderEnterer, useWithOrderProvenance } from "./provenance";
+import { useCountersignContext } from "./countersign";
+import type { OrderProvenanceSummary } from "../../fhir/provenanceHelpers";
 import { withVersionLock } from "../../fhir/shared";
 
 // ---- 検査結果に紐付けるオーダー(検体検査・細菌検査・病理)の候補 ----
@@ -258,10 +259,16 @@ export function useApproveOrderProvenances() {
   });
 }
 
-/** 承認ボタンを出すかどうか。ログイン中の医療従事者が指示医師(author)本人のときだけ。 */
-export function useCanApproveOrder(authorReference: string | undefined): boolean {
-  const { practitionerId } = useCurrentPractitioner();
-  return Boolean(practitionerId && authorReference === `Practitioner/${practitionerId}`);
+/**
+ * 承認ボタンを出すかどうか。代行入力は指示医師(author)本人だけ。研修医・学生の活動は
+ * 本人ではなく、その人を受け持つ指導医だけ(カウンターサイン)。
+ */
+export function useCanApproveOrder(summary: OrderProvenanceSummary): boolean {
+  const { practitionerId, trainees } = useCountersignContext();
+  const authorId = summary.authorReference?.match(/^Practitioner\/(.+)$/)?.[1];
+  if (!practitionerId || !authorId) return false;
+  if (summary.traineeAuthor) return authorId !== practitionerId && trainees.has(authorId);
+  return authorId === practitionerId;
 }
 
 export function useUpdatePrescription() {

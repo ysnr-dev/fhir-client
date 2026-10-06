@@ -217,6 +217,8 @@ export function resourceWithImagesBundle(
   resource: fhir4.Resource & { id?: string },
   imageEntries: fhir4.BundleEntry[],
   etag?: string,
+  /** 新規の本体を同じ Bundle の他の entry(通知 Task の focus など)から指すための urn:uuid。 */
+  fullUrl?: string,
 ): fhir4.Bundle {
   const request: fhir4.BundleEntryRequest = etag
     ? { method: "PUT", url: `${resource.resourceType}/${resource.id}`, ifMatch: etag }
@@ -225,7 +227,7 @@ export function resourceWithImagesBundle(
   return {
     resourceType: "Bundle",
     type: "transaction",
-    entry: [...imageEntries, { resource, request }],
+    entry: [...imageEntries, { ...(fullUrl && !etag ? { fullUrl } : {}), resource, request }],
   };
 }
 

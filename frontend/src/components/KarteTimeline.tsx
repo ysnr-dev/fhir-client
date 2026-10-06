@@ -15,6 +15,7 @@ import {
   statusLabel,
   stripSchemaImageNotes,
 } from "../fhir/clinicalNoteHelpers";
+import { countersignBadgeOf } from "../fhir/countersignHelpers";
 import { problemLabel, type ProblemRef } from "../fhir/conditionHelpers";
 import {
   KARTE_KIND_LABELS,
@@ -384,6 +385,13 @@ const KarteCard = memo(function KarteCard({
           <span className="karte-card__title">{cardTitle(item)}</span>
           <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
           <PathwayBadge pathway={itemPathway(item)} />
+          {/* 研修医・学生の記録は指導医のカウンターサインが済んだかをカードでも示す。 */}
+          {item.kind === "note" && countersignBadgeOf(item.note) === "pending" && (
+            <span className="micro-result__badge">承認待ち</span>
+          )}
+          {item.kind === "note" && countersignBadgeOf(item.note) === "approved" && (
+            <span className="micro-result__badge micro-result__badge--muted">承認済</span>
+          )}
           {/* 検体検査は中間報告と、確定後に直した訂正報告をカードで見分けられるようにする。 */}
           {item.kind === "lab-order" && item.reportStatus === "preliminary" && (
             <span className="micro-result__badge">結果:中間報告</span>

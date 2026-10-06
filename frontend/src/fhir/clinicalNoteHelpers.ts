@@ -81,10 +81,28 @@ export function isNursingSummary(composition: fhir4.Composition | undefined): bo
  * 看護職が書いた経過記録の印(Composition.category)。Composition には書いた人の職種が残らず、
  * 上流の検索も作成者の職種では引けないので、保存のときに付ける。看護サマリーの「看護記録」の取り込みはこれで引く。
  */
+const CLINICAL_NOTE_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/clinical-note-category";
 export const NURSING_NOTE_CATEGORY: fhir4.CodeableConcept = {
-  coding: [{ system: "http://fhir-client.local/CodeSystem/clinical-note-category", code: "nursing", display: "看護記録" }],
+  coding: [{ system: CLINICAL_NOTE_CATEGORY_SYSTEM, code: "nursing", display: "看護記録" }],
 };
-export const NURSING_NOTE_CATEGORY_SEARCH = "http://fhir-client.local/CodeSystem/clinical-note-category|nursing";
+export const NURSING_NOTE_CATEGORY_SEARCH = `${CLINICAL_NOTE_CATEGORY_SYSTEM}|nursing`;
+
+/**
+ * 研修医・学生が書いた記録の印(Composition.category)。指導医のカウンターサインの対象で、
+ * タイムラインのバッジと詳細の承認欄はこの印と attester だけで状態を読む(通知 Task を引き直さない)。
+ * 書いた時点の区分なので、後から研修を終えてもこの記録は承認が要る記録のまま(docs/countersign-design.md)。
+ */
+export const COUNTERSIGN_CATEGORY: fhir4.CodeableConcept = {
+  coding: [{ system: CLINICAL_NOTE_CATEGORY_SYSTEM, code: "countersign", display: "カウンターサイン対象" }],
+};
+
+export function isCountersignNote(composition: fhir4.Composition | undefined): boolean {
+  return (
+    composition?.category?.some((c) =>
+      c.coding?.some((coding) => coding.system === CLINICAL_NOTE_CATEGORY_SYSTEM && coding.code === "countersign"),
+    ) ?? false
+  );
+}
 
 export function isDischargeSummary(composition: fhir4.Composition | undefined): boolean {
   return (
@@ -526,9 +544,11 @@ export function buildClinicalNote(
     department?: DepartmentRef;
     /** 看護職が書いた記録(新規のときだけ見る。編集では保存済みの印を引き継ぐ)。 */
     nursing?: boolean;
+    /** 研修医・学生が書いた記録(同上)。指導医のカウンターサインの対象になる。 */
+    countersign?: boolean;
   },
 ): ClinicalNoteSave {
-  const { patientId, practitioner, existing, consultOrderId, department, nursing } = options;
+  const { patientId, practitioner, existing, consultOrderId, department, nursing, countersign } = options;
   const entries: fhir4.BundleEntry[] = [];
   // 保存後も参照され続ける保存済み QR の id。既存 Composition が参照していたものとの
   // 差分で「参照が外れた QR」を求め、同じ transaction で削除する(孤児を残さない)。
@@ -594,7 +614,9 @@ export function buildClinicalNote(
   };
 
   if (event?.length) composition.event = event;
-  const category = existing ? existing.category : nursing ? [NURSING_NOTE_CATEGORY] : undefined;
+  const category = existing
+    ? existing.category
+    : [...(nursing ? [NURSING_NOTE_CATEGORY] : []), ...(countersign ? [COUNTERSIGN_CATEGORY] : [])];
   if (category?.length) composition.category = category;
 
   // 診療科も同じく、新規は渡されたもの・編集は保存済みのものを引き継ぐ。

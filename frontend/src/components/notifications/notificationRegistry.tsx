@@ -89,6 +89,19 @@ import {
   nursingSummaryReturnedRowOf,
   type NursingSummaryReturnedRow,
 } from "../../fhir/nursingSummaryTaskHelpers";
+import {
+  NOTE_COUNTERSIGN_NOTE,
+  NOTE_COUNTERSIGN_TASK_CODE,
+  NOTE_RETURNED_DONE_NOTE,
+  NOTE_RETURNED_TASK_CODE,
+  noteCountersignRowOf,
+  noteReturnedRowOf,
+  type NoteCountersignRow,
+  type NoteReturnedRow,
+} from "../../fhir/countersignHelpers";
+import { noteCountersignEntries } from "../../api/notificationActions";
+import { NoteCountersignNotificationCells } from "./NoteCountersignNotificationCells";
+import { NoteReturnedNotificationCells } from "./NoteReturnedNotificationCells";
 
 // 通知の種別ごとの振る舞いをまとめた対応表。通知そのものの形は notificationHelpers、
 // ここは「一覧でどう見せて、どう対応済みにするか」だけを持つ。
@@ -302,6 +315,39 @@ const nursingSummaryReturnedKind = defineNotificationKind<NursingSummaryReturned
     Boolean(practitionerId && row.task.owner?.reference === `Practitioner/${practitionerId}`),
 });
 
+/** 研修医の記録を開いた状態のカルテ(詳細モーダル)。 */
+function noteKarteLink(row: { patientId: string; compositionId: string }): string | null {
+  if (!row.patientId || !row.compositionId) return null;
+  const params = new URLSearchParams();
+  params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind: "note", id: row.compositionId }));
+  return `/patients/${row.patientId}/karte?${params.toString()}`;
+}
+
+const noteCountersignKind = defineNotificationKind<NoteCountersignRow>({
+  code: NOTE_COUNTERSIGN_TASK_CODE.code,
+  label: NOTE_COUNTERSIGN_TASK_CODE.display,
+  toRow: noteCountersignRowOf,
+  Cells: NoteCountersignNotificationCells,
+  karteLink: noteKarteLink,
+  action: { label: "承認", noteText: NOTE_COUNTERSIGN_NOTE },
+  // 承認できるのは宛先の指導医本人(差戻し・コメントはカルテの詳細から)。
+  canAct: (row, practitionerId) =>
+    Boolean(practitionerId && row.task.owner?.reference === `Practitioner/${practitionerId}`),
+  actionEntries: (rows, actor) => noteCountersignEntries(rows, actor),
+});
+
+const noteReturnedKind = defineNotificationKind<NoteReturnedRow>({
+  code: NOTE_RETURNED_TASK_CODE.code,
+  label: NOTE_RETURNED_TASK_CODE.display,
+  toRow: noteReturnedRowOf,
+  Cells: NoteReturnedNotificationCells,
+  karteLink: noteKarteLink,
+  // 確定し直せば自動で閉じる。ここからは手で閉じる。
+  action: { label: "対応済", noteText: NOTE_RETURNED_DONE_NOTE },
+  canAct: (row, practitionerId) =>
+    Boolean(practitionerId && row.task.owner?.reference === `Practitioner/${practitionerId}`),
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
@@ -313,6 +359,8 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   radiotherapyReviewDueKind,
   broughtMedIdentifiedKind,
   nursingSummaryReturnedKind,
+  noteCountersignKind,
+  noteReturnedKind,
 ];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */

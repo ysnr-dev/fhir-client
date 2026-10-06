@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { useEncounter } from "../api/queries";
+import { NoteCountersignPanel } from "./NoteCountersignPanel";
 import {
   clinicalNoteAttestation,
+  isCountersignNote,
   isDischargeSummary,
   isNursingSummary,
   noteBodySections,
@@ -63,6 +65,9 @@ export function ClinicalNoteDetailPanel({
           )}
         </dl>
       </fieldset>
+
+      {/* 研修医・学生の記録は指導医のカウンターサインの状態と操作を続けて出す。 */}
+      {isCountersignNote(note) && <NoteCountersignPanel note={note} />}
 
       {(isDischargeSummary(note) || isNursingSummary(note)) && (
         <AdmissionInfo encounterId={dischargeSummaryEncounterId(note)} />
