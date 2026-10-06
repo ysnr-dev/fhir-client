@@ -3,12 +3,15 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   collectLeaves,
   combineSets,
+  detailLeaves,
+  extractDetailCsv,
   extractRows,
   isUnfiltered,
   leafHitsOf,
   leafSearch,
   patientFilterLeaves,
   patientMatches,
+  type ExtractDetail,
   type ExtractLeaf,
   type ExtractQueryBody,
   type ExtractRecord,
@@ -17,6 +20,7 @@ import {
 } from "../../fhir/extractQueryHelpers";
 import { runWithConcurrency } from "../../lib/concurrency";
 import { today } from "../../lib/dates";
+import { downloadBlob } from "../../lib/download";
 import { FhirError, searchResource } from "../fhirClient";
 import { hasNextPage } from "./core";
 
@@ -36,6 +40,10 @@ export const EXTRACT_MAX_PAGES = 20;
 export const EXTRACT_MAX_REQUESTS = 120;
 export const EXTRACT_MAX_PATIENTS = 5000;
 const LEAF_CONCURRENCY = 2;
+/** 明細の検索で 1 回に指定する患者の数(URL の長さ)。 */
+const DETAIL_PATIENT_CHUNK = 100;
+/** 明細の書き出し 1 回で上流へ送る検索の上限。 */
+export const EXTRACT_DETAIL_MAX_REQUESTS = 200;
 const PATIENT_CHUNK = 50;
 const RATE_LIMIT_WAIT_MS = 20_000;
 
@@ -67,6 +75,7 @@ interface RunContext {
   queryClient: QueryClient;
   signal: AbortSignal;
   requests: { count: number };
+  maxRequests: number;
   onRequest: () => void;
 }
 
@@ -86,7 +95,7 @@ async function fetchPage(
   params: URLSearchParams,
   context: RunContext,
 ): Promise<fhir4.Bundle> {
-  if (context.requests.count >= EXTRACT_MAX_REQUESTS) {
+  if (context.requests.count >= context.maxRequests) {
     throw new ExtractLimitError("検索の回数が上限に達しました。条件や期間を絞ってやり直してください。");
   }
   context.requests.count += 1;
@@ -197,7 +206,13 @@ export function useExtractRun() {
         setState((prev) => ({ ...prev, ...patch, progress: { ...progress }, requests: requests.count }));
       setState({ ...IDLE, running: true, progress: { ...progress } });
 
-      const context: RunContext = { queryClient, signal: controller.signal, requests, onRequest: () => publish() };
+      const context: RunContext = {
+        queryClient,
+        signal: controller.signal,
+        requests,
+        maxRequests: EXTRACT_MAX_REQUESTS,
+        onRequest: () => publish(),
+      };
       try {
         const hits = new Map<string, LeafHits>();
         await runWithConcurrency(
@@ -269,4 +284,69 @@ export function useExtractRun() {
   const clearCache = useCallback(() => queryClient.removeQueries({ queryKey: ["ExtractLeaf"] }), [queryClient]);
 
   return { ...state, run, cancel, reset, clearCache };
+}
+
+/**
+ * 明細(条件に当たった記録を 1 件 1 行)を引く。抽出のときは列に要る項目だけを読んでいるので、
+ * 書き出すときに結果の患者に絞って記録を丸ごと引き直す(検索の条件は抽出と同じ)。
+ */
+async function fetchExtractDetails(result: ExtractResult, context: RunContext): Promise<ExtractDetail[]> {
+  const ids = result.rows.map((row) => row.patientId);
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += DETAIL_PATIENT_CHUNK) chunks.push(ids.slice(i, i + DETAIL_PATIENT_CHUNK));
+  const day = today();
+  const details: ExtractDetail[] = [];
+  for (const leaf of detailLeaves(result.leaves)) {
+    const search = leafSearch(leaf, day);
+    const tasks = search.paramsList.flatMap((base) =>
+      chunks.map((chunk) => () => {
+        const params = new URLSearchParams(base);
+        params.delete("_elements");
+        params.set("subject", chunk.map((id) => `Patient/${id}`).join(","));
+        return fetchAll(search.resourceType, params, context, leaf.label || leaf.kind);
+      }),
+    );
+    const records = (await runWithConcurrency(tasks, LEAF_CONCURRENCY)).flat();
+    details.push({ leaf, records });
+  }
+  return details;
+}
+
+/** 明細 CSV の書き出し。 */
+export function useExtractDetailExport() {
+  const queryClient = useQueryClient();
+  const [state, setState] = useState<{ exporting: boolean; requests: number; error: unknown }>({
+    exporting: false,
+    requests: 0,
+    error: null,
+  });
+  const abortRef = useRef<AbortController | null>(null);
+
+  const exportCsv = useCallback(
+    async (result: ExtractResult, fileName: string) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const requests = { count: 0 };
+      setState({ exporting: true, requests: 0, error: null });
+      const context: RunContext = {
+        queryClient,
+        signal: controller.signal,
+        requests,
+        maxRequests: EXTRACT_DETAIL_MAX_REQUESTS,
+        onRequest: () => setState((prev) => ({ ...prev, requests: requests.count })),
+      };
+      try {
+        const details = await fetchExtractDetails(result, context);
+        downloadBlob(extractDetailCsv(result.rows, details), fileName);
+        setState({ exporting: false, requests: requests.count, error: null });
+      } catch (error) {
+        setState({ exporting: false, requests: requests.count, error: controller.signal.aborted ? null : error });
+      }
+    },
+    [queryClient],
+  );
+
+  const cancel = useCallback(() => abortRef.current?.abort(), []);
+  return { ...state, exportCsv, cancel };
 }

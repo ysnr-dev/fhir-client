@@ -8610,8 +8610,11 @@ input.lot-number-cell__input.is-invalid {
   color: var(--warning);
 }
 
-.data-extract__csv {
+.data-extract__exports {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .data-extract__save {

@@ -1,7 +1,8 @@
 import { csvBlob } from "../lib/csv";
-import { addDays, localDay } from "../lib/dates";
+import { addDays, dateTimeLabel, localDay } from "../lib/dates";
 import { excludeNursingProblems } from "./conditionHelpers";
 import { ADMISSION_CLASS_CODE, ADMISSION_STATUS, DISCHARGED_STATUS } from "./encounterHelpers";
+import { departmentOf } from "./orderHeader";
 import { OUTPATIENT_CLASS_CODE } from "./outpatientEncounterHelpers";
 import { calculateAge, displayName, genderLabel, patientNumberOf } from "./patientHelpers";
 import { conceptLabel, quantityLabel, referenceIdOfType } from "./shared";
@@ -605,6 +606,191 @@ export function extractCsv(rows: ExtractRow[], leaves: ExtractLeaf[]): Blob {
       }),
     ]),
   );
+}
+
+// ---- 明細 CSV(条件に当たった記録を 1 件 1 行) ----
+
+/** 明細に出す条件(除外は該当者に記録が無く、患者属性は記録を持たないので出さない)。 */
+export function detailLeaves(leaves: ExtractLeaf[]): ExtractLeaf[] {
+  return resultColumns(leaves);
+}
+
+export interface ExtractDetail {
+  leaf: ExtractLeaf;
+  records: ExtractRecord[];
+}
+
+const DETAIL_HEADER = [
+  "患者番号",
+  "氏名",
+  "年齢",
+  "性別",
+  "患者ID",
+  "条件",
+  "種類",
+  "日付",
+  "終了日",
+  "コード",
+  "名称",
+  "値",
+  "単位",
+  "判定",
+  "基準値",
+  "状態",
+  "発症日",
+  "用量",
+  "用法",
+  "日数",
+  "診療科",
+  "記録ID",
+];
+
+const CLINICAL_STATUS_LABELS: Record<string, string> = Object.fromEntries(
+  CLINICAL_STATUS_OPTIONS.map((o) => [o.value, o.label]),
+);
+
+// 記録の状態(status)の表示名。表に無い値はコードのまま出す。
+const STATUS_LABELS: Record<string, Record<string, string>> = {
+  Observation: { final: "確定", preliminary: "速報", amended: "訂正", corrected: "訂正", registered: "登録" },
+  MedicationRequest: { active: "有効", completed: "終了", stopped: "中止", "on-hold": "保留", draft: "下書き" },
+  Encounter: { "in-progress": "入院中", finished: "終了", planned: "予定", arrived: "来院" },
+};
+
+function statusLabel(record: ExtractRecord): string {
+  const status = "status" in record ? (record.status ?? "") : "";
+  return STATUS_LABELS[record.resourceType]?.[status] ?? status;
+}
+
+/** 種類ごとに違う列(DETAIL_HEADER の「種類」以降)。 */
+function detailCells(record: ExtractRecord): (string | number)[] {
+  const firstCode = (concept: fhir4.CodeableConcept | undefined) => concept?.coding?.[0]?.code ?? "";
+  switch (record.resourceType) {
+    case "Observation":
+      return [
+        "検査結果",
+        dateTimeLabel(record.effectiveDateTime),
+        "",
+        firstCode(record.code),
+        conceptLabel(record.code),
+        record.valueQuantity?.value ?? "",
+        record.valueQuantity?.unit ?? "",
+        record.interpretation?.[0]?.coding?.[0]?.code ?? "",
+        record.referenceRange?.[0]?.text ?? "",
+        statusLabel(record),
+        "",
+        "",
+        "",
+        "",
+        departmentOf(record).departmentName,
+        record.id ?? "",
+      ];
+    case "Condition": {
+      const status = record.clinicalStatus?.coding?.[0]?.code ?? "";
+      return [
+        "病名",
+        localDay(record.recordedDate),
+        localDay(record.abatementDateTime),
+        firstCode(record.code),
+        conceptLabel(record.code),
+        "",
+        "",
+        "",
+        "",
+        CLINICAL_STATUS_LABELS[status] ?? status,
+        localDay(record.onsetDateTime),
+        "",
+        "",
+        "",
+        departmentOf(record).departmentName,
+        record.id ?? "",
+      ];
+    }
+    case "MedicationRequest": {
+      const dosage = record.dosageInstruction?.[0];
+      const dose = dosage?.doseAndRate?.[0]?.doseQuantity;
+      return [
+        "処方・注射",
+        dateTimeLabel(record.authoredOn),
+        "",
+        firstCode(record.medicationCodeableConcept),
+        conceptLabel(record.medicationCodeableConcept),
+        "",
+        "",
+        "",
+        "",
+        statusLabel(record),
+        "",
+        dose?.value != null ? `${dose.value}${dose.unit ?? ""}` : "",
+        dosage?.text ?? "",
+        record.dispenseRequest?.expectedSupplyDuration?.value ?? "",
+        departmentOf(record).departmentName,
+        record.id ?? "",
+      ];
+    }
+    case "Encounter":
+      return [
+        record.class?.code === OUTPATIENT_CLASS_CODE ? "外来受診" : "入院",
+        localDay(record.period?.start),
+        localDay(record.period?.end),
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        statusLabel(record),
+        "",
+        "",
+        "",
+        "",
+        record.serviceProvider?.display ?? "",
+        record.id ?? "",
+      ];
+    default:
+      return [];
+  }
+}
+
+function detailSortKey(record: ExtractRecord): string {
+  switch (record.resourceType) {
+    case "Observation":
+      return record.effectiveDateTime ?? "";
+    case "Condition":
+      return record.recordedDate ?? "";
+    case "MedicationRequest":
+      return record.authoredOn ?? "";
+    case "Encounter":
+      return record.period?.start ?? "";
+    default:
+      return "";
+  }
+}
+
+/**
+ * 明細の CSV。結果の患者ごとに、条件に当たった記録を条件の順・日付の順に 1 件 1 行で並べる。
+ * 種類ごとに使わない列は空にして、1 つの表にそろえる(Excel で絞り込めるように)。
+ */
+export function extractDetailCsv(rows: ExtractRow[], details: ExtractDetail[]): Blob {
+  const lines: (string | number)[][] = [];
+  for (const row of rows) {
+    for (const { leaf, records } of details) {
+      const mine = records
+        .filter((record) => subjectOf(record) === row.patientId)
+        .sort((a, b) => detailSortKey(a).localeCompare(detailSortKey(b)));
+      for (const record of mine) {
+        lines.push([
+          row.patientNumber,
+          row.name,
+          row.age ?? "",
+          row.gender,
+          row.patientId,
+          leafLabel(leaf),
+          ...detailCells(record),
+        ]);
+      }
+    }
+  }
+  return csvBlob(DETAIL_HEADER, lines);
 }
 
 // ---- 病名の ICD10 ----

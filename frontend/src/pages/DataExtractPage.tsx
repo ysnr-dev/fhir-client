@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { ExtractQuery } from "../api/masterClient";
 import { useExtractQueries, useExtractQueryMutations } from "../api/masterQueries";
-import { useExtractRun } from "../api/queries";
+import { useExtractDetailExport, useExtractRun } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { ExtractConditionBuilder } from "../components/extract/ExtractConditionBuilder";
 import { ExtractResults } from "../components/extract/ExtractResults";
@@ -38,6 +38,7 @@ export function DataExtractPage() {
   const [saving, setSaving] = useState(false);
   const [validation, setValidation] = useState<string[]>([]);
   const extract = useExtractRun();
+  const detail = useExtractDetailExport();
 
   const selected = queries.find((q) => q.id === selectedId) ?? null;
   const dirty = JSON.stringify(body) !== savedJson;
@@ -178,22 +179,41 @@ export function DataExtractPage() {
           <span className="order-select__muted">{`検索 ${extract.requests} 回${extract.running ? "・実行中" : ""}`}</span>
         )}
         {extract.result && (
-          <button
-            type="button"
-            className="data-extract__csv"
-            onClick={() =>
-              downloadBlob(
-                extractCsv(extract.result!.rows, extract.result!.leaves),
-                `extract_${selected?.name ?? "条件"}_${today()}.csv`,
-              )
-            }
-          >
-            CSV
-          </button>
+          <span className="data-extract__exports">
+            {detail.exporting && (
+              <span className="order-select__muted">{`明細を読込中(検索 ${detail.requests} 回)`}</span>
+            )}
+            <button
+              type="button"
+              onClick={() =>
+                downloadBlob(
+                  extractCsv(extract.result!.rows, extract.result!.leaves),
+                  `extract_${selected?.name ?? "条件"}_${today()}.csv`,
+                )
+              }
+            >
+              CSV
+            </button>
+            {detail.exporting ? (
+              <button type="button" onClick={detail.cancel}>
+                中止
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={extract.result.rows.length === 0}
+                onClick={() =>
+                  void detail.exportCsv(extract.result!, `extract_detail_${selected?.name ?? "条件"}_${today()}.csv`)
+                }
+              >
+                明細CSV
+              </button>
+            )}
+          </span>
         )}
       </div>
 
-      <ErrorBanner error={extract.error} />
+      <ErrorBanner error={extract.error ?? detail.error} />
       {extract.result && <ExtractResults result={extract.result} />}
 
       {saving && (
