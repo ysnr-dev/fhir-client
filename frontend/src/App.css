@@ -8862,6 +8862,11 @@ input.lot-number-cell__input.is-invalid {
   font-weight: 600;
 }
 
+.extract-history__chart {
+  max-width: 720px;
+  margin-bottom: 12px;
+}
+
 .extract-breakdown__controls {
   display: flex;
   flex-wrap: wrap;

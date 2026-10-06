@@ -17,6 +17,8 @@ export interface LabTimelineSeries {
   unit: string;
   // 日付昇順
   points: LabTimelinePoint[];
+  /** 整数しか取らない値(人数など)。目盛りを整数だけにする。 */
+  integer?: boolean;
 }
 
 interface LabTimelineChartProps {
@@ -59,7 +61,7 @@ function ChartPanel({ series }: { series: LabTimelineSeries }) {
   const tMin = Math.min(...times);
   const tMax = Math.max(...times);
   const values = points.map((p) => p.value);
-  const ticks = niceTicks(Math.min(...values), Math.max(...values));
+  const ticks = niceTicks(Math.min(...values), Math.max(...values), series.integer ? 1 : 0);
   const yMin = ticks[0];
   const yMax = ticks[ticks.length - 1];
 

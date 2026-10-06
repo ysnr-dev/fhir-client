@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { ExtractQueryRun } from "../../api/masterClient";
 import type { ExtractResult } from "../../api/queries";
-import { dateTimeLabel } from "../../lib/dates";
+import { dateTimeLabel, localDay } from "../../lib/dates";
+import { LabTimelineChart, type LabTimelineSeries } from "../LabTimelineChart";
 import {
   extractBreakdown,
   leafBreakdown,
@@ -16,7 +17,7 @@ import {
 type Tab = "list" | "breakdown" | "history";
 
 /**
- * 抽出の結果。一覧(患者 1 行)・内訳・履歴(保存した条件を直さずに実行した記録。保存していない
+ * 抽出の結果。一覧(患者 1 行)・内訳・推移(保存した条件を直さずに実行した記録。保存していない
  * 条件や直した条件では出さない)。
  */
 export function ExtractResults({ result, history }: { result: ExtractResult; history?: ExtractQueryRun[] }) {
@@ -24,7 +25,7 @@ export function ExtractResults({ result, history }: { result: ExtractResult; his
   const tabs: { key: Tab; label: string }[] = [
     { key: "list", label: "一覧" },
     { key: "breakdown", label: "内訳" },
-    ...(history ? [{ key: "history" as const, label: "履歴" }] : []),
+    ...(history ? [{ key: "history" as const, label: "推移" }] : []),
   ];
   const current = tab === "history" && !history ? "list" : tab;
   return (
@@ -245,10 +246,43 @@ function LeafBreakdownTable({ result, columns }: { result: ExtractResult; column
   );
 }
 
+/**
+ * 推移のグラフ。1 日に何度実行しても点が重ならないよう、日ごとに最後の実行を 1 点にする(表には
+ * すべての実行を出す)。該当人数と、一覧の列になる条件ごとの人数を、条件ごとのパネルで縦に並べる。
+ */
+function historySeries(runs: ExtractQueryRun[], leaves: ExtractLeaf[]): LabTimelineSeries[] {
+  const latestByDay = new Map<string, ExtractQueryRun>();
+  for (const run of [...runs].sort((a, b) => a.ran_at.localeCompare(b.ran_at))) {
+    latestByDay.set(localDay(run.ran_at), run);
+  }
+  const days = [...latestByDay.keys()].sort();
+  const series: LabTimelineSeries[] = [
+    {
+      key: "total",
+      name: "該当",
+      unit: "人",
+      integer: true,
+      points: days.map((day) => ({ date: day, value: latestByDay.get(day)!.patient_count })),
+    },
+  ];
+  for (const leaf of resultColumns(leaves)) {
+    const points = days
+      .filter((day) => latestByDay.get(day)!.leaf_counts[leaf.key] != null)
+      .map((day) => ({ date: day, value: latestByDay.get(day)!.leaf_counts[leaf.key] }));
+    if (points.length) series.push({ key: leaf.key, name: leafLabel(leaf), unit: "人", integer: true, points });
+  }
+  return series;
+}
+
 /** 実行の記録(新しい順)。条件ごとの人数は今の条件の並びで出す(後から足した条件は前の記録では空)。 */
 function HistoryTable({ runs, leaves }: { runs: ExtractQueryRun[]; leaves: ExtractLeaf[] }) {
   return (
     <div className="extract-results__table-wrap">
+      {runs.length > 0 && (
+        <div className="extract-history__chart">
+          <LabTimelineChart series={historySeries(runs, leaves)} />
+        </div>
+      )}
       <table className="master-search__table extract-breakdown extract-history">
         <thead>
           <tr>

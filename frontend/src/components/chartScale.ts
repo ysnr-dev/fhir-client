@@ -12,14 +12,15 @@ export function formatPointDate(date: string): string {
 }
 
 // 値域を覆う「きりのよい」目盛り(4分割程度)を返す。
-export function niceTicks(min: number, max: number): number[] {
+export function niceTicks(min: number, max: number, minStep = 0): number[] {
   if (min === max) {
     // 全点が同じ値のときは値を中央に置ける適当な幅をとる。
     const pad = Math.abs(min) || 1;
     min -= pad / 2;
     max += pad / 2;
   }
-  const rawStep = (max - min) / 4;
+  // minStep は目盛りの最小の刻み(人数のように整数しか取らない値は 1 にして小数の目盛りを出さない)。
+  const rawStep = Math.max((max - min) / 4, minStep);
   const magnitude = 10 ** Math.floor(Math.log10(rawStep));
   const step = [1, 2, 5, 10].map((m) => m * magnitude).find((s) => s >= rawStep) ?? rawStep;
   const start = Math.floor(min / step) * step;
