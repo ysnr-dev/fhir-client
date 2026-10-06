@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuestionnaireOptions, useSelfDepartments, useTemplateExtract } from "../../api/queries";
+import { useExtractQueries } from "../../api/masterQueries";
+import { useExtractRun, useQuestionnaireOptions, useSelfDepartments, useTemplateExtract } from "../../api/queries";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
+  leafLabel,
   patientCell,
   patientColumnsOf,
   resolvePeriod,
@@ -17,27 +19,37 @@ import {
   templateExtractTable,
   templateFixedCells,
 } from "../../fhir/templateExtractHelpers";
+import { useDefinitionOwners } from "../../hooks/useDefinitionOwners";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
 import { TemplateSelect } from "../TemplateSelect";
 import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
+import { ExtractQuerySelect } from "./ExtractQuerySelect";
 import { PatientColumnsField } from "./PatientColumnsField";
 
 /** 画面に並べる行の上限(CSV にはすべて出す)。 */
 const DISPLAY_LIMIT = 500;
 
-/** テンプレートの抽出(docs/data-extract-design.md §8)。1 つのテンプレートの回答を表と CSV にする。 */
+/**
+ * テンプレートの抽出(docs/data-extract-design.md §8)。1 つのテンプレートの回答を表と CSV にする。
+ * 患者の条件を選んだら、先にその条件で患者を抽出し、該当した患者の回答だけを読む。
+ */
 export function TemplateExtractPanel() {
   const options = useQuestionnaireOptions();
   const { departments } = useSelfDepartments();
   const departmentOptions = sortDepartmentsByCode(departments).filter((d) => d.id);
+  const owners = useDefinitionOwners("自分の条件");
+  const queryList = useExtractQueries(owners.departmentId, owners.practitionerId, owners.ready);
+  const queries = useMemo(() => queryList.data?.items ?? [], [queryList.data]);
+  const patientExtract = useExtractRun();
   const extract = useTemplateExtract();
 
   const [templateUrl, setTemplateUrl] = useState("");
   const [period, setPeriod] = useState<ExtractPeriod>({ mode: "relative", days: 365 });
   const [departmentId, setDepartmentId] = useState("");
+  const [queryId, setQueryId] = useState<number | null>(null);
   const [latestOnly, setLatestOnly] = useState(false);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
 
@@ -61,16 +73,31 @@ export function TemplateExtractPanel() {
   );
   const rows = useMemo(() => (table ? (latestOnly ? latestPerPatient(table.rows) : table.rows) : []), [table, latestOnly]);
   const patientColumns = patientColumnsOf(output);
+  const query = queries.find((q) => q.id === queryId) ?? null;
+  const running = patientExtract.running || extract.running;
 
-  function handleRun() {
+  async function handleRun() {
     if (!selected?.url) return;
+    const url = selected.url;
+    let patientIds: string[] | undefined;
+    if (query) {
+      const result = await patientExtract.run(query.definition, leafLabel);
+      if (!result) return;
+      patientIds = result.rows.map((row) => row.patientId);
+    }
     const range = resolvePeriod(period, today());
     void extract.run({
-      url: selected.url,
+      url,
       from: range?.from ?? "",
       to: range?.to ?? "",
       departmentId: departmentId || undefined,
+      patientIds,
     });
+  }
+
+  function handleCancel() {
+    patientExtract.cancel();
+    extract.cancel();
   }
 
   const title = selected?.title ?? selected?.name ?? "テンプレート";
@@ -95,6 +122,15 @@ export function TemplateExtractPanel() {
             ))}
           </select>
         </label>
+        <label className="extract-field">
+          患者
+          <ExtractQuerySelect
+            queries={queries}
+            value={queryId}
+            emptyLabel="すべて"
+            onChange={(next) => setQueryId(next?.id ?? null)}
+          />
+        </label>
         <label className="extract-checks__item">
           <input type="checkbox" checked={latestOnly} onChange={(e) => setLatestOnly(e.target.checked)} />
           患者ごとに最新
@@ -107,17 +143,20 @@ export function TemplateExtractPanel() {
         onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
       />
 
-      <ErrorBanner error={options.error} />
+      <ErrorBanner error={options.error ?? queryList.error} />
 
       <div className="data-extract__actions">
-        {extract.running ? (
-          <button type="button" onClick={extract.cancel}>
+        {running ? (
+          <button type="button" onClick={handleCancel}>
             中止
           </button>
         ) : (
-          <button type="button" onClick={handleRun} disabled={!selected}>
+          <button type="button" onClick={() => void handleRun()} disabled={!selected}>
             実行
           </button>
+        )}
+        {patientExtract.running && (
+          <span className="order-select__muted">{`患者を抽出中(検索 ${patientExtract.requests} 回)`}</span>
         )}
         {extract.running && <span className="order-select__muted">実行中</span>}
         {table && (
@@ -135,13 +174,16 @@ export function TemplateExtractPanel() {
         )}
       </div>
 
-      <ErrorBanner error={extract.error} />
+      <ErrorBanner error={patientExtract.error ?? extract.error} />
       {table && (
         <section className="extract-results">
           <div className="extract-results__summary">
             <span className="extract-results__count">
               {latestOnly ? `${rows.length} 人` : `${rows.length} 件(${new Set(rows.map((r) => r.patientId)).size} 人)`}
             </span>
+            {query && patientExtract.result && (
+              <span className="order-select__muted">{`「${query.name}」に該当 ${patientExtract.result.rows.length} 人`}</span>
+            )}
           </div>
           <TruncatedNotice show={extract.result?.truncated}>
             回答が多いため、新しいものから一部だけを読みました。期間を絞ってください。

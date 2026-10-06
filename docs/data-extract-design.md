@@ -156,7 +156,12 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
 ## 8. テンプレートの抽出
 
 「テンプレート」タブ(`?tab=template`、`components/extract/TemplateExtractPanel.tsx`)は、テンプレート 1 つの回答を
-「回答 1 件 = 1 行、項目 = 列」の表と CSV にする。患者の抽出とは独立で、設定は保存しない。
+「回答 1 件 = 1 行、項目 = 列」の表と CSV にする。設定は保存しない。
+
+- **患者の条件**: 「患者」タブに保存した条件を 1 つ選べる(選択肢は「患者」タブと同じく持ち主ごと。
+  `components/extract/ExtractQuerySelect.tsx`)。選んだら実行のたびに先に `useExtractRun` でその条件の患者を抽出し
+  (上限・エラーは患者の抽出と同じ。定点観測の記録は残さない)、該当した患者を `subject=` に 100 人ずつ並べて
+  下の検索を患者の塊ごとに行う。該当 0 人なら回答は読まない。結果の上に「『条件名』に該当 N 人」を出す。
 
 - **取得**(`api/queries/templateExtract.ts`): `Questionnaire?url=<url>` で全版を引き、
   `QuestionnaireResponse?questionnaire=<url|版>,<url|版>…&authored=ge…&authored=le…&status=in-progress,completed,amended`

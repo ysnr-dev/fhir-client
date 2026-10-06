@@ -227,7 +227,7 @@ export function useExtractRun() {
   const abortRef = useRef<AbortController | null>(null);
 
   const run = useCallback(
-    async (body: ExtractQueryBody, labelOf: (leaf: ExtractLeaf) => string) => {
+    async (body: ExtractQueryBody, labelOf: (leaf: ExtractLeaf) => string): Promise<ExtractResult | null> => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -324,12 +324,10 @@ export function useExtractRun() {
           ranAt: new Date().toISOString(),
         };
         publish({ running: false, result });
+        return result;
       } catch (error) {
-        if (controller.signal.aborted) {
-          publish({ running: false });
-          return;
-        }
-        publish({ running: false, error });
+        publish(controller.signal.aborted ? { running: false } : { running: false, error });
+        return null;
       }
     },
     [queryClient],

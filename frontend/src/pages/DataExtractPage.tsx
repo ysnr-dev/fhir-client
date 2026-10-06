@@ -11,6 +11,7 @@ import { useExtractDetailExport, useExtractRun } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { DataExtractGuide } from "../components/extract/DataExtractGuide";
 import { ExtractConditionBuilder } from "../components/extract/ExtractConditionBuilder";
+import { ExtractQuerySelect } from "../components/extract/ExtractQuerySelect";
 import { ExtractResults } from "../components/extract/ExtractResults";
 import { PatientColumnsField } from "../components/extract/PatientColumnsField";
 import { TemplateExtractPanel } from "../components/extract/TemplateExtractPanel";
@@ -31,10 +32,9 @@ import { downloadBlob } from "../lib/download";
 
 // データ抽出(docs/data-extract-design.md)。「患者」タブは病名・検査結果・処方/注射・入院・外来・
 // 患者属性の条件を AND / OR で組み、該当する患者を一覧・内訳・CSV にする。条件は持ち主(院内共通 /
-// 診療科 / 自分)ごとに保存できる。「テンプレート」タブは 1 つのテンプレートの回答を表にする。
+// 診療科 / 自分)ごとに保存できる。「テンプレート」タブは 1 つのテンプレートの回答を表にする
+// (保存した患者の条件に該当する患者に絞れる)。
 // 抽出は上流 FHIR をその場で引く。
-
-const SCOPE_LABELS: Record<string, string> = { facility: "院内共通", department: "診療科", practitioner: "自分" };
 
 type Tab = "patient" | "template";
 
@@ -197,28 +197,15 @@ function PatientExtractTab() {
       <div className="data-extract__toolbar">
         <label className="extract-field extract-field--inline">
           条件
-          <select
-            value={selectedId ?? ""}
-            onChange={(e) => {
+          <ExtractQuerySelect
+            queries={queries}
+            value={selectedId}
+            emptyLabel="新しい条件"
+            onChange={(query) => {
               if (!confirmDiscard()) return;
-              load(queries.find((q) => q.id === Number(e.target.value)) ?? null);
+              load(query);
             }}
-          >
-            <option value="">新しい条件</option>
-            {(["practitioner", "department", "facility"] as const).map((scope) => {
-              const items = queries.filter((q) => q.scope === scope);
-              if (items.length === 0) return null;
-              return (
-                <optgroup key={scope} label={SCOPE_LABELS[scope]}>
-                  {items.map((q) => (
-                    <option key={q.id} value={q.id}>
-                      {q.name}
-                    </option>
-                  ))}
-                </optgroup>
-              );
-            })}
-          </select>
+          />
         </label>
         {dirty && <span className="data-extract__dirty">未保存</span>}
         {selected && canEditSelected && (

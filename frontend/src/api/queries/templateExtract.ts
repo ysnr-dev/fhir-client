@@ -4,18 +4,23 @@ import { searchResource } from "../fhirClient";
 import { searchAllPages } from "./core";
 
 // テンプレートの抽出(docs/data-extract-design.md §8)。同じ url の全版の回答を、記入日の期間で
-// 1 本の検索にして読む(questionnaire はカンマで OR、患者は _include で添える)。
+// 1 本の検索にして読む(questionnaire はカンマで OR、患者は _include で添える)。患者の条件で
+// 絞るときは、該当した患者を subject= に 100 人ずつ並べて同じ検索をする。
 
 export const TEMPLATE_EXTRACT_PAGE = 500;
 /** 読むページの上限(1 万件)。超えた分は読まずに truncated を立てる。 */
 export const TEMPLATE_EXTRACT_MAX_PAGES = 20;
 const PATIENT_CHUNK = 100;
+/** subject= に 1 回で並べる患者の数(URL の長さ)。 */
+const SUBJECT_CHUNK = 100;
 
 export interface TemplateExtractCriteria {
   url: string;
   from: string;
   to: string;
   departmentId?: string;
+  /** 患者の条件に該当した患者。指定したらこの患者の回答だけを読む。 */
+  patientIds?: string[];
 }
 
 export interface TemplateExtractResult {
@@ -90,16 +95,33 @@ export function useTemplateExtract() {
       if (criteria.departmentId) params.set("department", `Organization/${criteria.departmentId}`);
       params.set("_include", "QuestionnaireResponse:subject");
       params.set("_sort", "-authored");
-      const { matches, bundles, truncated } = await searchAllPages<fhir4.QuestionnaireResponse>(
-        "QuestionnaireResponse",
-        params,
-        { page: TEMPLATE_EXTRACT_PAGE, maxPages: TEMPLATE_EXTRACT_MAX_PAGES, strict: true, signal },
-      );
+      const subjectChunks: (string[] | null)[] = [];
+      if (criteria.patientIds) {
+        for (let i = 0; i < criteria.patientIds.length; i += SUBJECT_CHUNK) {
+          subjectChunks.push(criteria.patientIds.slice(i, i + SUBJECT_CHUNK));
+        }
+      } else {
+        subjectChunks.push(null);
+      }
+      const matches: fhir4.QuestionnaireResponse[] = [];
       const patients = new Map<string, fhir4.Patient>();
-      for (const bundle of bundles) {
-        for (const entry of bundle.entry ?? []) {
-          const patient = entry.resource;
-          if (patient?.resourceType === "Patient" && patient.id) patients.set(patient.id, patient as fhir4.Patient);
+      let truncated = false;
+      for (const chunk of subjectChunks) {
+        const chunkParams = new URLSearchParams(params);
+        if (chunk) chunkParams.set("subject", chunk.map((id) => `Patient/${id}`).join(","));
+        const page = await searchAllPages<fhir4.QuestionnaireResponse>("QuestionnaireResponse", chunkParams, {
+          page: TEMPLATE_EXTRACT_PAGE,
+          maxPages: TEMPLATE_EXTRACT_MAX_PAGES,
+          strict: true,
+          signal,
+        });
+        matches.push(...page.matches);
+        truncated ||= page.truncated;
+        for (const bundle of page.bundles) {
+          for (const entry of bundle.entry ?? []) {
+            const patient = entry.resource;
+            if (patient?.resourceType === "Patient" && patient.id) patients.set(patient.id, patient as fhir4.Patient);
+          }
         }
       }
       const ids = [...new Set(matches.map((r) => r.subject?.reference?.split("/").pop() ?? ""))];
