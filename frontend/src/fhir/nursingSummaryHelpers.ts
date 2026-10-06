@@ -28,6 +28,7 @@ import {
   nursingGoalViews,
   type NursingProblemView,
 } from "./nursingCarePlanHelpers";
+import type { NursingProfileDigest } from "./nursingProfileHelpers";
 import { wardExtension, wardOf } from "./orderHeader";
 import { practitionerDisplayName } from "./practitionerHelpers";
 import { LOINC_SYSTEM } from "./shared";
@@ -135,6 +136,8 @@ export interface NursingSummarySources {
   allergies: fhir4.AllergyIntolerance[];
   nursingProblems: NursingProblemView[];
   nursingRecords: NursingRecordSource[];
+  /** その入院の看護プロファイル(区画の順)。 */
+  nursingProfile: NursingProfileDigest[];
   /** その入院の看護サマリー(中間の期間の既定に使う)。 */
   summaries: fhir4.Composition[];
 }
@@ -166,6 +169,21 @@ function linesToCompactHtml(lines: string[]): string {
 
 function linesToHtml(lines: string[]): string {
   return lines.map((line) => `<p>${escapeHtml(line)}</p>`).join("");
+}
+
+/**
+ * 看護プロファイルの要約。区画ごとに「■見出し」と回答の行を 1 段落にする(回答の中のグループは【】で出る)。
+ * 平文の字下げ(半角スペース 2 つで 1 段)は HTML で潰れるので全角スペースに置き換える。
+ */
+function nursingProfileHtml(digests: NursingProfileDigest[]): string {
+  return digests
+    .map((d) =>
+      linesToCompactHtml([
+        `■${d.title}`,
+        ...d.text.split("\n").map((line) => line.replace(/^( {2})+/, (m) => "　".repeat(m.length / 2))),
+      ]),
+    )
+    .join("");
 }
 
 /** 対象期間の既定。退院・転棟は入院日から、中間は前回のサマリーの翌日から。終わりは退院日か今日。 */
@@ -228,6 +246,7 @@ export function nursingProblemDigest(view: NursingProblemView, index: number, at
 
 /**
  * 材料から下書きを作る。既存の値を渡すと本文と選択は残し、候補だけを集め直す。
+ * 基本情報・既往歴・現在の状態(看護プロファイルの要約)は空の区画にだけ入れる。
  * 看護経過は自動では入れない(看護記録はフォームで選んで取り込む)。
  */
 export function draftNursingSummaryForm(
@@ -282,6 +301,7 @@ export function draftNursingSummaryForm(
     [BASIC_SECTION]: linesToCompactHtml(basicLines),
     [PAST_SECTION]: linesToCompactHtml(pastLines.length ? pastLines : ["なし"]),
   };
+  if (sources.nursingProfile.length) drafts[STATUS_SECTION] = nursingProfileHtml(sources.nursingProfile);
   const sections = base.sections.map((section) =>
     isEmptyNoteHtml(section.html) && !section.template && drafts[section.code]
       ? { ...section, html: drafts[section.code] }

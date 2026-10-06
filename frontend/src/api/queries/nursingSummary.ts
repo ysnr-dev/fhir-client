@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nursingProfileDigests } from "../../fhir/nursingProfileHelpers";
 import {
   NURSING_NOTE_CATEGORY_SEARCH,
   NURSING_SUMMARY_TYPE_SEARCH,
@@ -18,6 +19,7 @@ import { NOTIFICATION_TASK_KEY, resourcesOfType, searchAllPages, type Truncatabl
 import { fetchEncounterWard } from "./encounter";
 import { saveClinicalNote } from "./micro";
 import { fetchNursingCarePlans } from "./nursingCarePlan";
+import { fetchNursingProfileResponses, useNursingProfileSettings } from "./nursingProfile";
 import { useOrderEnterer } from "./provenance";
 
 // 看護サマリー(docs/nursing-care-plan-design.md)。作成の材料集め・保存・病棟単位の承認一覧。
@@ -39,13 +41,21 @@ function recordOf(composition: fhir4.Composition): NursingRecordSource {
 }
 
 /**
- * 看護サマリーの下書きの材料。病名・アレルギー・看護計画と、入院期間の看護記録(看護職が書いた
- * 経過記録)を集める。看護記録は期間を絞って選ぶので、入院期間ぶんを引いておく。
+ * 看護サマリーの下書きの材料。病名・アレルギー・看護計画・看護プロファイルと、入院期間の看護記録
+ * (看護職が書いた経過記録)を集める。看護記録は期間を絞って選ぶので、入院期間ぶんを引いておく。
  */
 export function useNursingSummarySources(patientId: string, encounter: fhir4.Encounter | undefined) {
   const encounterId = encounter?.id;
+  const profile = useNursingProfileSettings();
   return useQuery({
-    queryKey: ["nursing-summary", "sources", patientId, encounterId, encounter?.period?.end ?? ""],
+    queryKey: [
+      "nursing-summary",
+      "sources",
+      patientId,
+      encounterId,
+      encounter?.period?.end ?? "",
+      profile.settings.templates,
+    ],
     queryFn: async (): Promise<NursingSummarySources> => {
       const start = encounter?.period?.start?.slice(0, 10) ?? "";
       const end = encounter?.period?.end?.slice(0, 10) ?? today();
@@ -73,7 +83,7 @@ export function useNursingSummarySources(patientId: string, encounter: fhir4.Enc
       summaryParams.set("type", NURSING_SUMMARY_TYPE_SEARCH);
       summaryParams.set("_count", "50");
 
-      const [patient, conditions, allergies, plans, records, summaries, ward] = await Promise.all([
+      const [patient, conditions, allergies, plans, records, summaries, ward, profileResponses] = await Promise.all([
         readResource<fhir4.Patient>("Patient", patientId),
         searchResource<fhir4.Condition>("Condition", conditionParams),
         searchResource<fhir4.AllergyIntolerance>("AllergyIntolerance", allergyParams),
@@ -81,6 +91,7 @@ export function useNursingSummarySources(patientId: string, encounter: fhir4.Enc
         searchAllPages<fhir4.Composition>("Composition", recordParams, { page: 200, maxPages: 3 }),
         searchResource<fhir4.Composition>("Composition", summaryParams),
         fetchEncounterWard(encounter as fhir4.Encounter),
+        fetchNursingProfileResponses(encounterId ?? ""),
       ]);
       return {
         encounter: encounter as fhir4.Encounter,
@@ -90,10 +101,16 @@ export function useNursingSummarySources(patientId: string, encounter: fhir4.Enc
         allergies: resourcesOfType<fhir4.AllergyIntolerance>(allergies.data, "AllergyIntolerance"),
         nursingProblems: plans.items,
         nursingRecords: records.matches.filter((c) => c.status !== "entered-in-error").map(recordOf),
+        nursingProfile: nursingProfileDigests(
+          profile.settings,
+          profileResponses.responses,
+          profileResponses.questionnaires,
+        ),
         summaries: resourcesOfType<fhir4.Composition>(summaries.data, "Composition"),
       };
     },
-    enabled: Boolean(patientId) && Boolean(encounterId),
+    // 区画の設定が読めてから集める(読めるまでは区画なしになり、現在の状態が空のまま下書きになる)。
+    enabled: Boolean(patientId) && Boolean(encounterId) && !profile.isLoading,
   });
 }
 

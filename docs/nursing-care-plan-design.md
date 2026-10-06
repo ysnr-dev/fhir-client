@@ -69,6 +69,8 @@ Composition(看護サマリー)── section.entry → Condition(病名)/ CareP
 - category: `http://fhir-client.local/CodeSystem/nursing-summary-kind|interim / transfer / discharge`。
 - encounter = 入院、event.period = 対象期間、拡張 `order-ward` = 作成時の病棟(退院済みなら最後の病棟)。
 - セクション: 基本情報・看護経過・現在の状態・継続看護・病名・看護問題はローカルの `nursing-summary-section`、既往歴は LOINC 11348-0。
+  下書きは基本情報・既往歴と、現在の状態に看護プロファイル(施設設定の区画の順、回答を書いた版のテンプレートで平文にしたもの)を
+  空の区画にだけ入れる。看護プロファイルは入院中に書き直していく「今の状態」なので、取込で選ばせず初期値にする。
   病名を LOINC 11450-4 にすると診療記録の「対象プロブレム」と同じコードになり、カードがサマリーを 1 つのプロブレムの記録として扱うため避けた。
 - 状態:
 

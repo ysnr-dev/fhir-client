@@ -1,7 +1,7 @@
 // 看護プロファイル(docs/nursing-profile-design.md)。入院時に看護師が聴き取る生活・看護上の状態を、
 // 施設設定で並べたテンプレート(区画)ごとに 1 入院 1 件の QuestionnaireResponse で持つ。
 // 書き直しは同じ回答の更新で、版の履歴は上流の _history に残る。
-import { questionnaireCanonical } from "./questionnaireResponseHelpers";
+import { questionnaireCanonical, questionnaireResponsePlainText } from "./questionnaireResponseHelpers";
 
 /** 施設設定の看護プロファイル。templates はテンプレートの url(版なし)を区画の順に並べたもの。 */
 export interface NursingProfileSettings {
@@ -50,5 +50,30 @@ export function nursingProfileSections(
       : undefined;
     const source = questionnaire ?? written;
     return { url, questionnaire, response, title: source?.title ?? source?.name ?? url };
+  });
+}
+
+/** 看護プロファイルの区画 1 つの要約(看護サマリーの下書きに使う)。 */
+export interface NursingProfileDigest {
+  title: string;
+  text: string;
+}
+
+/**
+ * 区画の順に、回答のある区画の見出しと平文を並べる。平文は回答を書いた版のテンプレートで組み立てる(単位を引くため)。
+ * 書いた版が読めない回答と、平文が空の回答は落とす。
+ */
+export function nursingProfileDigests(
+  settings: NursingProfileSettings,
+  responses: fhir4.QuestionnaireResponse[],
+  includedQuestionnaires: fhir4.Questionnaire[],
+): NursingProfileDigest[] {
+  return nursingProfileSections(settings, [], responses, includedQuestionnaires).flatMap((section) => {
+    const { response } = section;
+    const written = response
+      ? includedQuestionnaires.find((q) => questionnaireCanonical(q) === response.questionnaire)
+      : undefined;
+    const text = response && written ? questionnaireResponsePlainText(written, response) : "";
+    return text ? [{ title: section.title, text }] : [];
   });
 }
