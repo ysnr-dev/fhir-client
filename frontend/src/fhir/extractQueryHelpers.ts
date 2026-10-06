@@ -775,7 +775,8 @@ export function patientMatches(leaf: ExtractLeaf, patient: fhir4.Patient | undef
 
 // ---- 結果の行・内訳・CSV ----
 
-export interface ExtractRow {
+/** 結果の行の患者の部分(患者の抽出とテンプレートの抽出で共通)。 */
+export interface ExtractPatientRow {
   patientId: string;
   patientNumber: string;
   name: string;
@@ -786,11 +787,29 @@ export interface ExtractRow {
   postalCode: string;
   address: string;
   phone: string;
+}
+
+export interface ExtractRow extends ExtractPatientRow {
   hits: Record<string, LeafHit | undefined>;
 }
 
+export function patientRowOf(patientId: string, patient: fhir4.Patient | undefined): ExtractPatientRow {
+  return {
+    patientId,
+    patientNumber: (patient && patientNumberOf(patient)) ?? "",
+    name: patient ? displayName(patient) : "",
+    kana: patient ? displayKana(patient) : "",
+    birthDate: patient?.birthDate ?? "",
+    age: patient?.birthDate ? calculateAge(patient.birthDate) : undefined,
+    gender: genderLabel(patient?.gender),
+    postalCode: patient?.address?.[0]?.postalCode ?? "",
+    address: patient ? addressLabelOf(patient) : "",
+    phone: patient ? homePhoneOf(patient) || mobilePhoneOf(patient) : "",
+  };
+}
+
 /** 患者の列の値。 */
-export function patientCell(row: ExtractRow, column: PatientColumn): string | number {
+export function patientCell(row: ExtractPatientRow, column: PatientColumn): string | number {
   switch (column) {
     case "kana":
       return row.kana;
@@ -838,22 +857,10 @@ export function extractRows(
   hitsByLeaf: Map<string, LeafHits>,
 ): ExtractRow[] {
   return [...ids]
-    .map((patientId) => {
-      const patient = patients.get(patientId);
-      return {
-        patientId,
-        patientNumber: (patient && patientNumberOf(patient)) ?? "",
-        name: patient ? displayName(patient) : "",
-        kana: patient ? displayKana(patient) : "",
-        birthDate: patient?.birthDate ?? "",
-        age: patient?.birthDate ? calculateAge(patient.birthDate) : undefined,
-        gender: genderLabel(patient?.gender),
-        postalCode: patient?.address?.[0]?.postalCode ?? "",
-        address: patient ? addressLabelOf(patient) : "",
-        phone: patient ? homePhoneOf(patient) || mobilePhoneOf(patient) : "",
-        hits: Object.fromEntries(leaves.map((leaf) => [leaf.key, hitsByLeaf.get(leaf.key)?.get(patientId)])),
-      };
-    })
+    .map((patientId) => ({
+      ...patientRowOf(patientId, patients.get(patientId)),
+      hits: Object.fromEntries(leaves.map((leaf) => [leaf.key, hitsByLeaf.get(leaf.key)?.get(patientId)])),
+    }))
     .sort((a, b) => a.patientNumber.localeCompare(b.patientNumber, undefined, { numeric: true }));
 }
 

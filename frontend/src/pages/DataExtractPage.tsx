@@ -12,10 +12,11 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { DataExtractGuide } from "../components/extract/DataExtractGuide";
 import { ExtractConditionBuilder } from "../components/extract/ExtractConditionBuilder";
 import { ExtractResults } from "../components/extract/ExtractResults";
+import { PatientColumnsField } from "../components/extract/PatientColumnsField";
+import { TemplateExtractPanel } from "../components/extract/TemplateExtractPanel";
 import { TrashIcon } from "../components/icons/TrashIcon";
 import { Modal } from "../components/Modal";
 import {
-  PATIENT_COLUMNS,
   collectLeaves,
   emptyExtractQuery,
   extractCsv,
@@ -23,19 +24,74 @@ import {
   patientColumnsOf,
   validateExtractQuery,
   type ExtractQueryBody,
-  type PatientColumn,
 } from "../fhir/extractQueryHelpers";
 import { useDefinitionOwners, type DefinitionOwnerOption } from "../hooks/useDefinitionOwners";
 import { today } from "../lib/dates";
 import { downloadBlob } from "../lib/download";
 
-// データ抽出(docs/data-extract-design.md)。病名・検査結果・処方/注射・入院・外来・患者属性の
-// 条件を AND / OR で組み、該当する患者を一覧・内訳・CSV にする。条件は持ち主(院内共通 /
-// 診療科 / 自分)ごとに保存できる。抽出は上流 FHIR をその場で引く。
+// データ抽出(docs/data-extract-design.md)。「患者」タブは病名・検査結果・処方/注射・入院・外来・
+// 患者属性の条件を AND / OR で組み、該当する患者を一覧・内訳・CSV にする。条件は持ち主(院内共通 /
+// 診療科 / 自分)ごとに保存できる。「テンプレート」タブは 1 つのテンプレートの回答を表にする。
+// 抽出は上流 FHIR をその場で引く。
 
 const SCOPE_LABELS: Record<string, string> = { facility: "院内共通", department: "診療科", practitioner: "自分" };
 
+type Tab = "patient" | "template";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "patient", label: "患者" },
+  { key: "template", label: "テンプレート" },
+];
+
 export function DataExtractPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [guideOpen, setGuideOpen] = useState(false);
+  const tab: Tab = searchParams.get("tab") === "template" ? "template" : "patient";
+
+  // 結果の表は列が多いので、本文の幅制限を外して全画面にする。
+  useEffect(() => {
+    document.body.classList.add("page-wide");
+    return () => document.body.classList.remove("page-wide");
+  }, []);
+
+  return (
+    <div className="page data-extract">
+      <div className="page__header">
+        <div className="data-extract__title">
+          <h1>データ抽出</h1>
+          <button
+            type="button"
+            className="modal__help"
+            onClick={() => setGuideOpen(true)}
+            aria-label="データ抽出の使い方"
+            title="データ抽出の使い方"
+          >
+            ?
+          </button>
+        </div>
+      </div>
+      <div className="inpatient-tabs data-extract__tabs" role="tablist" aria-label="抽出の切替">
+        {TABS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.key}
+            className={`inpatient-tabs__tab${tab === item.key ? " is-active" : ""}`}
+            onClick={() => setSearchParams(item.key === "template" ? { tab: "template" } : {}, { replace: true })}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {tab === "patient" ? <PatientExtractTab /> : <TemplateExtractPanel />}
+      {guideOpen && <DataExtractGuide onClose={() => setGuideOpen(false)} />}
+    </div>
+  );
+}
+
+/** 条件に当てはまる患者の抽出。 */
+function PatientExtractTab() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { owners, ready, departmentId, practitionerId, practitionerName } = useDefinitionOwners("自分の条件");
   const list = useExtractQueries(departmentId, practitionerId, ready);
@@ -47,7 +103,6 @@ export function DataExtractPage() {
   const [savedJson, setSavedJson] = useState(JSON.stringify(emptyExtractQuery()));
   const [saving, setSaving] = useState(false);
   const [validation, setValidation] = useState<string[]>([]);
-  const [guideOpen, setGuideOpen] = useState(false);
   const extract = useExtractRun();
   const runs = useExtractQueryRuns(selectedId);
   const recordRun = useRecordExtractRun();
@@ -138,22 +193,7 @@ export function DataExtractPage() {
     mutations.create.error ?? mutations.update.error ?? mutations.remove.error ?? recordRun.error ?? runs.error;
 
   return (
-    <div className="page data-extract">
-      <div className="page__header">
-        <div className="data-extract__title">
-          <h1>データ抽出</h1>
-          <button
-            type="button"
-            className="modal__help"
-            onClick={() => setGuideOpen(true)}
-            aria-label="データ抽出の使い方"
-            title="データ抽出の使い方"
-          >
-            ?
-          </button>
-        </div>
-      </div>
-
+    <>
       <div className="data-extract__toolbar">
         <label className="extract-field extract-field--inline">
           条件
@@ -293,7 +333,6 @@ export function DataExtractPage() {
         />
       )}
 
-      {guideOpen && <DataExtractGuide onClose={() => setGuideOpen(false)} />}
       {saving && (
         <SaveModal
           owners={owners}
@@ -322,7 +361,7 @@ export function DataExtractPage() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -381,44 +420,5 @@ function SaveModal({
         </div>
       </form>
     </Modal>
-  );
-}
-
-/**
- * 一覧・CSV に出す患者の列(患者番号・氏名はいつも出す)。選んでいないあいだは既定の列にチェックを
- * 付けて見せ、1 つでも変えたら選んだ列だけを出す。
- */
-function PatientColumnsField({
-  value,
-  selected,
-  onChange,
-}: {
-  value: PatientColumn[];
-  selected: boolean;
-  onChange: (columns: PatientColumn[]) => void;
-}) {
-  return (
-    <div className="data-extract__output" role="group" aria-label="出力する患者の項目">
-      <span className="extract-checks__label">出力項目</span>
-      {PATIENT_COLUMNS.map((column) => (
-        <label key={column.value} className="extract-checks__item">
-          <input
-            type="checkbox"
-            checked={value.includes(column.value)}
-            onChange={(e) =>
-              onChange(
-                e.target.checked ? [...value, column.value] : value.filter((v) => v !== column.value),
-              )
-            }
-          />
-          {column.label}
-        </label>
-      ))}
-      {selected && (
-        <button type="button" className="rp-card__compact-button" onClick={() => onChange([])}>
-          既定
-        </button>
-      )}
-    </div>
   );
 }

@@ -31,8 +31,7 @@ const QR_STATUS_LABELS: Record<string, string> = {
   stopped: "中止",
 };
 
-// 表示用ラベルは summarizeQuestionnaireResponse 経由で使う。
-function qrStatusLabel(code: string | undefined): string {
+export function qrStatusLabel(code: string | undefined): string {
   return QR_STATUS_LABELS[code ?? ""] ?? code ?? "";
 }
 
@@ -63,7 +62,7 @@ export function emptyQuestionnaireResponseMeta(
 // contained で持つ(上流の Practitioner を参照するのではなく氏名を埋め込む)。
 const CONTAINED_PRACTITIONER_ID = "practitioner";
 
-function containedPractitionerName(qr: fhir4.QuestionnaireResponse): string {
+export function containedPractitionerName(qr: fhir4.QuestionnaireResponse): string {
   const practitioner = qr.contained?.find(
     (r): r is fhir4.Practitioner => r.resourceType === "Practitioner",
   );
@@ -219,9 +218,9 @@ export function summarizeQuestionnaireResponse(
 
 // ---- 平文表示 ----
 
-const UNIT_EXT_URL = "http://hl7.org/fhir/StructureDefinition/questionnaire-unit";
+export const UNIT_EXT_URL = "http://hl7.org/fhir/StructureDefinition/questionnaire-unit";
 
-function plainAnswerText(answer: fhir4.QuestionnaireResponseItemAnswer): string {
+export function plainAnswerText(answer: fhir4.QuestionnaireResponseItemAnswer): string {
   return (
     answer.valueCoding?.display ??
     answer.valueCoding?.code ??

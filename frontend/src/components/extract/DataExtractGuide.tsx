@@ -145,6 +145,17 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
           </dl>
         </section>
 
+        <section>
+          <h3>テンプレートの抽出</h3>
+          <dl className="extract-guide__terms">
+            <Term name="対象">「テンプレート」タブで選んだテンプレートの回答。版が違っても同じテンプレートならまとめて出す</Term>
+            <Term name="表">回答 1 件が 1 行、項目が列。記入日時・記入者・診療科・版・状態の列つき</Term>
+            <Term name="繰り返し">繰り返しのグループは「項目名_2」「項目名_3」… の列に分け、複数選択は「、」でつなぐ</Term>
+            <Term name="患者ごとに最新">期間内で患者ごとにいちばん新しい回答だけを出す</Term>
+            <Term name="CSV">表と同じ列ですべての行を出す(画面は先頭 500 行まで)</Term>
+          </dl>
+        </section>
+
         <aside className="extract-guide__note">
           <h3>気をつけること</h3>
           <ul>

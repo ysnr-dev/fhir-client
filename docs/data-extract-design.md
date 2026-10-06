@@ -152,3 +152,22 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
 - 外来の診療科で絞れない(外来の Encounter は serviceProvider を持たない)。
 - 病名の ICD10 は前方一致できない(上記の展開で 3 桁だけ吸収する)。
 - 上流の集計 operation(C-25)は未対応。定点観測は画面で実行したときだけ記録する(決まった間隔での自動実行は無い)。
+
+## 8. テンプレートの抽出
+
+「テンプレート」タブ(`?tab=template`、`components/extract/TemplateExtractPanel.tsx`)は、テンプレート 1 つの回答を
+「回答 1 件 = 1 行、項目 = 列」の表と CSV にする。患者の抽出とは独立で、設定は保存しない。
+
+- **取得**(`api/queries/templateExtract.ts`): `Questionnaire?url=<url>` で全版を引き、
+  `QuestionnaireResponse?questionnaire=<url|版>,<url|版>…&authored=ge…&authored=le…&status=in-progress,completed,amended`
+  (`&department=` は任意)`&_include=QuestionnaireResponse:subject&_sort=-authored` を strict で `searchAllPages`
+  (500 件 × 20 ページ)。上流の questionnaire 検索は版込みの完全一致なので、版はカンマ OR で並べる。患者は
+  include 行から取り、添わなかった患者だけ `_id` で補う。上限で切れたら新しい回答から読んだ分だけを出し、
+  `TruncatedNotice` を出す(並べるだけの読み込みなので欠けても使える)。
+- **列**(`fhir/templateExtractHelpers.ts`): 新しい版の項目の木を土台に、古い版にだけある項目を linkId で
+  足した木から作る(group・display は列にしない)。見出しは項目名と単位、同じ見出しが重なるときは親グループ名を前に
+  付ける。繰り返しグループは回答に現れた最大の件数まで「項目名_2」「項目名_3」… と列を増やす(入れ子は `_2_1`)。
+  choice の下の条件付き項目は `item.item` と `answer.item` の両方を辿る。複数回答は「、」でつなぐ。
+- **固定列**: 患者番号・氏名・患者の列(患者の抽出と同じ選択肢)・記入日時・記入者(contained の氏名)・診療科・版・状態。
+- **患者ごとに最新**: 読んだ回答のうち患者ごとに記入日時が最新の 1 件だけを出す(期間内での最新)。
+- 画面には先頭 500 行を出し、CSV にはすべて出す。
