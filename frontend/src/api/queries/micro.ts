@@ -3,6 +3,7 @@ import { excludeNursingProblems } from "../../fhir/conditionHelpers";
 import { observationIdsFromReport, specimenIdsFromReport } from "../../fhir/labResultHelpers";
 import { buildMicroOrderDeleteBundle, microOrderItemRequests } from "../../fhir/microOrderHelpers";
 import { buildMicroResultDeleteBundle } from "../../fhir/microResultHelpers";
+import { transactionBundle } from "../../fhir/shared";
 import {
   createResource,
   deleteResource,
@@ -152,6 +153,25 @@ export function useUpdateCondition() {
     onSuccess: (result: FhirResult<fhir4.Condition>) => {
       queryClient.invalidateQueries({ queryKey: ["Condition", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Condition", result.data.id] });
+    },
+  });
+}
+
+/** 病名の一括転帰・開始日の一括変更。書き換えた Condition をまとめて 1 つの transaction で PUT する。 */
+export function useBulkUpdateConditions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (conditions: fhir4.Condition[]) =>
+      postBundle(
+        transactionBundle(
+          conditions.map((condition) => ({
+            resource: condition,
+            request: { method: "PUT", url: `Condition/${condition.id}` },
+          })),
+        ),
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Condition"] });
     },
   });
 }

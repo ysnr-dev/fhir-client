@@ -7751,6 +7751,32 @@ body.karte-wide {
   opacity: 0.75;
 }
 
+/* 病名の一括変更モーダル。表の列が多いので通常のモーダルより広くとる。 */
+.modal.condition-bulk {
+  width: min(820px, 92vw);
+}
+
+.walk-in__fields .condition-bulk__show-ended {
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-end;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+.condition-bulk__show-ended input[type="checkbox"] {
+  margin: 0;
+}
+
+.condition-bulk__error {
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.condition-bulk__actions {
+  margin-top: 16px;
+}
+
 .karte-card__empty,
 .karte-card__note {
   margin: 0;

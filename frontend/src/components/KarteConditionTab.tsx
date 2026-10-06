@@ -15,6 +15,7 @@ import {
 } from "../fhir/conditionHelpers";
 import { useProblemNumbering } from "../hooks/useProblemNumbering";
 import { isPatientMismatch } from "../fhir/patientHelpers";
+import { ConditionBulkModal } from "./ConditionBulkModal";
 import { ConditionDetailPanel } from "./ConditionDetailPanel";
 import { ConditionForm } from "./ConditionForm";
 import { ConditionTable } from "./ConditionTable";
@@ -53,6 +54,7 @@ interface KarteConditionTabProps {
 export function KarteConditionTab({ patientId, view, onViewChange }: KarteConditionTabProps) {
   const [form, setForm] = useState<FormMode>(null);
   const [offset, setOffset] = useState(0);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
   useEffect(() => setForm(null), [view]);
@@ -105,10 +107,17 @@ export function KarteConditionTab({ patientId, view, onViewChange }: KarteCondit
     <div className="karte-tabpanel">
       <div className="karte-tabpanel__header">
         <h3>{MODE_TITLES.list}</h3>
-        <button type="button" onClick={() => setForm({ kind: "create" })}>
-          新規登録
-        </button>
+        <div className="karte-tabpanel__actions">
+          <button type="button" onClick={() => setBulkOpen(true)}>
+            一括転帰
+          </button>
+          <button type="button" onClick={() => setForm({ kind: "create" })}>
+            新規登録
+          </button>
+        </div>
       </div>
+
+      {bulkOpen && <ConditionBulkModal patientId={patientId} onClose={() => setBulkOpen(false)} />}
 
       <ErrorBanner error={error} />
 

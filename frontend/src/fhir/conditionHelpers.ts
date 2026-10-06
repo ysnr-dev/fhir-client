@@ -504,6 +504,56 @@ export function buildCondition(
   return condition;
 }
 
+// ---- 一括転帰・開始日の一括変更 ----
+
+/** 病名タブの一括操作。転帰は終了日とセットで付ける(終了日があるなら active 以外、FHIR con-4)。 */
+export type BulkConditionChange =
+  | { kind: "outcome"; outcome: Exclude<OutcomeCode, "active">; endDate: string }
+  | { kind: "onset"; startDate: string };
+
+/**
+ * 1 件の病名に一括操作をかけられない理由。かけられるなら null。
+ * 病名フォームと同じく、終了日は開始日以降でなければならない。
+ */
+export function bulkConditionChangeError(
+  condition: fhir4.Condition,
+  change: BulkConditionChange,
+): string | null {
+  const { startDate, endDate } = summarizeCondition(condition);
+  if (change.kind === "outcome") {
+    if (!change.endDate) return "終了日を入力してください";
+    if (startDate && change.endDate < startDate) return "終了日が開始日より前です";
+    return null;
+  }
+  if (!change.startDate) return "開始日を入力してください";
+  if (endDate && change.startDate > endDate) return "開始日が終了日より後です";
+  return null;
+}
+
+/**
+ * 読んだ Condition に一括操作をかけたもの。フォーム値から組み直す buildCondition は使わない
+ * (フォームに無い項目が落ちるため)。meta.versionId は残すので、postBundle で楽観ロックが効く。
+ */
+export function applyBulkConditionChange(
+  condition: fhir4.Condition,
+  change: BulkConditionChange,
+): fhir4.Condition {
+  if (change.kind === "onset") return { ...condition, onsetDateTime: change.startDate };
+  return {
+    ...condition,
+    clinicalStatus: {
+      coding: [
+        {
+          system: CLINICAL_STATUS_SYSTEM,
+          code: change.outcome,
+          display: outcomeDisplay(change.outcome),
+        },
+      ],
+    },
+    abatementDateTime: change.endDate,
+  };
+}
+
 /**
  * オーダーセットに保存した病名 → 画面に出すフォーム値(DO と同じ正規化)。
  * 保存値は開始日・転帰・関連を持たないので、開始日を当日・転帰を継続で埋める。

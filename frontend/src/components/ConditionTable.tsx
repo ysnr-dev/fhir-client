@@ -1,5 +1,9 @@
 import { useDeleteCondition } from "../api/queries";
-import { CATEGORY_LABELS, summarizeCondition } from "../fhir/conditionHelpers";
+import {
+  CATEGORY_LABELS,
+  summarizeCondition,
+  type ConditionSummary,
+} from "../fhir/conditionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
 
@@ -43,18 +47,7 @@ export function ConditionTable({ conditions, onView, onEdit }: ConditionTablePro
             return (
               <tr key={summary.id}>
                 <td>
-                  <span
-                    className={`condition-badge condition-badge--${summary.category}`}
-                    title={CATEGORY_LABELS[summary.category]}
-                  >
-                    {summary.category === "problem"
-                      ? summary.problemNumber === undefined
-                        ? "P"
-                        : `#${summary.problemNumber}`
-                      : summary.category === "past"
-                        ? "既往"
-                        : "保険"}
-                  </span>
+                  <ConditionCategoryBadge summary={summary} />
                 </td>
                 <td>{summary.name}</td>
                 <td>{summary.startDate || "-"}</td>
@@ -88,5 +81,23 @@ export function ConditionTable({ conditions, onView, onEdit }: ConditionTablePro
         </tbody>
       </table>
     </>
+  );
+}
+
+/** 区分のバッジ(プロブレムは番号、既往歴・保険病名は略称)。 */
+export function ConditionCategoryBadge({ summary }: { summary: ConditionSummary }) {
+  return (
+    <span
+      className={`condition-badge condition-badge--${summary.category}`}
+      title={CATEGORY_LABELS[summary.category]}
+    >
+      {summary.category === "problem"
+        ? summary.problemNumber === undefined
+          ? "P"
+          : `#${summary.problemNumber}`
+        : summary.category === "past"
+          ? "既往"
+          : "保険"}
+    </span>
   );
 }
