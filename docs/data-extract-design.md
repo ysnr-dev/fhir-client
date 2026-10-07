@@ -190,6 +190,10 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
   `components/extract/ExtractQuerySelect.tsx`)。選んだら実行のたびに先に `useExtractRun` でその条件の患者を抽出し
   (上限・エラーは患者の抽出と同じ。定点観測の記録は残さない)、該当した患者を `subject=` に 100 人ずつ並べて
   下の検索を患者の塊ごとに行う。該当 0 人なら回答は読まない。結果の上に「『条件名』に該当 N 人」を出す。
+- **患者フォルダ**: 患者フォルダ(`docs/patient-folder-design.md`)を 1 つ選べる(選択肢は持ち主ごと、階層は字下げ。
+  `components/extract/PatientFolderSelect.tsx`)。実行のたびに `/master/patient_folder_members?include_descendants=true`
+  で下位フォルダを含めた患者を読み、その患者の回答だけを読む。患者の条件と両方選んだら、両方に入る患者に絞る。
+  結果の上に「フォルダ『研究 / 大腸がん』に N 人」を出す。
 
 - **取得**(`api/queries/templateExtract.ts`): `Questionnaire?url=<url>` で全版を引き、
   `QuestionnaireResponse?questionnaire=<url|版>,<url|版>…&authored=ge…&authored=le…&status=in-progress,completed,amended`

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useExtractQueries } from "../../api/masterQueries";
+import { fetchPatientFolderMembers } from "../../api/masterClient";
+import { useExtractQueries, usePatientFolders } from "../../api/masterQueries";
 import { useExtractRun, useQuestionnaireOptions, useSelfDepartments, useTemplateExtract } from "../../api/queries";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
@@ -24,10 +25,12 @@ import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
 import { TemplateSelect } from "../TemplateSelect";
+import { patientFolderPath } from "../patientFolderTree";
 import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { ExtractQuerySelect } from "./ExtractQuerySelect";
 import { PatientColumnsField } from "./PatientColumnsField";
+import { PatientFolderSelect } from "./PatientFolderSelect";
 
 /** 画面に並べる行の上限(CSV にはすべて出す)。 */
 const DISPLAY_LIMIT = 500;
@@ -35,6 +38,7 @@ const DISPLAY_LIMIT = 500;
 /**
  * テンプレートの抽出(docs/data-extract-design.md §8)。1 つのテンプレートの回答を表と CSV にする。
  * 患者の条件を選んだら、先にその条件で患者を抽出し、該当した患者の回答だけを読む。
+ * 患者フォルダを選んだら、そのフォルダ(下位フォルダを含む)の患者の回答だけを読む。両方なら両方に入る患者。
  */
 export function TemplateExtractPanel() {
   const options = useQuestionnaireOptions();
@@ -43,6 +47,8 @@ export function TemplateExtractPanel() {
   const owners = useDefinitionOwners("自分の条件");
   const queryList = useExtractQueries(owners.departmentId, owners.practitionerId, owners.ready);
   const queries = useMemo(() => queryList.data?.items ?? [], [queryList.data]);
+  const folderList = usePatientFolders(owners.departmentId, owners.practitionerId);
+  const folders = useMemo(() => folderList.data?.items ?? [], [folderList.data]);
   const patientExtract = useExtractRun();
   const extract = useTemplateExtract();
 
@@ -50,6 +56,10 @@ export function TemplateExtractPanel() {
   const [period, setPeriod] = useState<ExtractPeriod>({ mode: "relative", days: 365 });
   const [departmentId, setDepartmentId] = useState("");
   const [queryId, setQueryId] = useState<number | null>(null);
+  const [folderId, setFolderId] = useState<number | null>(null);
+  // 実行したときのフォルダとその患者数(結果の上に出す)。
+  const [folderResult, setFolderResult] = useState<{ name: string; count: number } | null>(null);
+  const [folderError, setFolderError] = useState<unknown>(null);
   const [latestOnly, setLatestOnly] = useState(false);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
 
@@ -74,16 +84,30 @@ export function TemplateExtractPanel() {
   const rows = useMemo(() => (table ? (latestOnly ? latestPerPatient(table.rows) : table.rows) : []), [table, latestOnly]);
   const patientColumns = patientColumnsOf(output);
   const query = queries.find((q) => q.id === queryId) ?? null;
+  const folder = folders.find((f) => f.id === folderId) ?? null;
   const running = patientExtract.running || extract.running;
 
   async function handleRun() {
     if (!selected?.url) return;
     const url = selected.url;
     let patientIds: string[] | undefined;
+    setFolderResult(null);
+    setFolderError(null);
+    if (folder) {
+      try {
+        const members = await fetchPatientFolderMembers({ patient_folder_id: folder.id, include_descendants: true });
+        patientIds = [...new Set(members.items.map((m) => m.patient_id))];
+        setFolderResult({ name: patientFolderPath(folders, folder.id), count: patientIds.length });
+      } catch (error) {
+        setFolderError(error);
+        return;
+      }
+    }
     if (query) {
       const result = await patientExtract.run(query.definition, leafLabel);
       if (!result) return;
-      patientIds = result.rows.map((row) => row.patientId);
+      const matched = new Set(result.rows.map((row) => row.patientId));
+      patientIds = patientIds ? patientIds.filter((id) => matched.has(id)) : [...matched];
     }
     const range = resolvePeriod(period, today());
     void extract.run({
@@ -131,6 +155,15 @@ export function TemplateExtractPanel() {
             onChange={(next) => setQueryId(next?.id ?? null)}
           />
         </label>
+        <label className="extract-field">
+          患者フォルダ
+          <PatientFolderSelect
+            folders={folders}
+            value={folderId}
+            emptyLabel="すべて"
+            onChange={(next) => setFolderId(next?.id ?? null)}
+          />
+        </label>
         <label className="extract-checks__item">
           <input type="checkbox" checked={latestOnly} onChange={(e) => setLatestOnly(e.target.checked)} />
           患者ごとに最新
@@ -143,7 +176,7 @@ export function TemplateExtractPanel() {
         onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
       />
 
-      <ErrorBanner error={options.error ?? queryList.error} />
+      <ErrorBanner error={options.error ?? queryList.error ?? folderList.error} />
 
       <div className="data-extract__actions">
         {running ? (
@@ -174,7 +207,7 @@ export function TemplateExtractPanel() {
         )}
       </div>
 
-      <ErrorBanner error={patientExtract.error ?? extract.error} />
+      <ErrorBanner error={folderError ?? patientExtract.error ?? extract.error} />
       {table && (
         <section className="extract-results">
           <div className="extract-results__summary">
@@ -183,6 +216,9 @@ export function TemplateExtractPanel() {
             </span>
             {query && patientExtract.result && (
               <span className="order-select__muted">{`「${query.name}」に該当 ${patientExtract.result.rows.length} 人`}</span>
+            )}
+            {folderResult && (
+              <span className="order-select__muted">{`フォルダ「${folderResult.name}」に ${folderResult.count} 人`}</span>
             )}
           </div>
           <TruncatedNotice show={extract.result?.truncated}>
