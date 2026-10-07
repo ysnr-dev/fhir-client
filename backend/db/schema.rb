@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -2456,6 +2456,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
     t.datetime "updated_at", null: false
     t.index ["chart_definition_id"], name: "index_patient_chart_pins_on_chart_definition_id"
     t.index ["patient_id"], name: "index_patient_chart_pins_on_patient_id", unique: true
+  end
+
+  create_table "patient_folder_members", force: :cascade do |t|
+    t.bigint "patient_folder_id", null: false
+    t.string "patient_id", null: false
+    t.string "note"
+    t.string "added_by_id"
+    t.string "added_by_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["patient_folder_id", "patient_id"], name: "idx_on_patient_folder_id_patient_id_56778fa054", unique: true
+    t.index ["patient_id"], name: "index_patient_folder_members_on_patient_id"
+  end
+
+  create_table "patient_folders", force: :cascade do |t|
+    t.bigint "parent_id"
+    t.string "scope", null: false
+    t.string "owner_id"
+    t.string "owner_name"
+    t.string "name", null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["parent_id"], name: "index_patient_folders_on_parent_id"
+    t.index ["scope", "owner_id", "parent_id"], name: "index_patient_folders_on_scope_and_owner_id_and_parent_id"
   end
 
   create_table "questionnaire_categories", force: :cascade do |t|

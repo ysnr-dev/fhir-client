@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { PatientCaution } from "../api/masterClient";
 import { usePatientCautions } from "../api/masterQueries";
@@ -19,6 +19,7 @@ import {
 import { PatientDeceasedMark, PatientKana } from "./PatientRowCells";
 import { RowPictograms } from "./PatientListRowParts";
 import { ErrorBanner } from "./ErrorBanner";
+import { PatientFolderAssignModal } from "./PatientFolderAssignModal";
 import { RowMenu } from "./RowMenu";
 import { PatientProfileDrawer, useRowDrawer } from "./PatientProfileDrawer";
 import { useReturnLinkState } from "../returnTo";
@@ -42,6 +43,7 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
   const infections = useInfectionsForPatients(patientIds);
 
   const drawer = useRowDrawer();
+  const [folderTarget, setFolderTarget] = useState<fhir4.Patient | null>(null);
   // 検索し直して一覧から消えた患者は、開いたままにせず閉じる。
   const selected = patients.find((p) => p.id && p.id === drawer.selectedKey);
 
@@ -59,6 +61,9 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
         <Link className="row-menu__item" to={`/patients/${patient.id}/edit`}>
           患者編集
         </Link>
+        <button type="button" className="row-menu__item" onClick={() => setFolderTarget(patient)}>
+          フォルダ
+        </button>
         <button
           type="button"
           className="row-menu__item row-menu__item--danger"
@@ -140,6 +145,13 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
           patient={selected}
           actions={menuItems(selected)}
           onClose={drawer.close}
+        />
+      )}
+      {folderTarget?.id && (
+        <PatientFolderAssignModal
+          patientId={folderTarget.id}
+          patientLabel={displayName(folderTarget) || folderTarget.id}
+          onClose={() => setFolderTarget(null)}
         />
       )}
     </>

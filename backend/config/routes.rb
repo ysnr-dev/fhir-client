@@ -403,6 +403,9 @@ Rails.application.routes.draw do
     end
     # 患者ごとに最初に開くチャート(ピン留め)。患者につき 1 つ、利用者の間で共有する。
     resources :patient_chart_pins, only: %i[show update destroy], param: :patient_id
+    # 患者フォルダ(患者を任意の階層の分類に仕分ける。docs/patient-folder-design.md)。
+    resources :patient_folders, only: %i[index show create update destroy]
+    resources :patient_folder_members, only: %i[index create update destroy]
     # 掲示板(院内のお知らせ)。ホームのカードと掲示板の画面が読む。
     resources :bulletin_posts, only: %i[index show create update destroy]
     # 指導医グループ(研修医の記録・オーダーのカウンターサイン)。mine はログイン中の

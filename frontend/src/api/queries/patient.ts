@@ -73,6 +73,43 @@ export function usePatient(id: string | undefined) {
   });
 }
 
+const PATIENTS_BY_ID_CHUNK = 100;
+
+/**
+ * 患者を id でまとめて引く(患者フォルダのように、患者の id だけを持つ一覧に並べるため)。
+ * 見つからなかった id(削除された患者)は Map に入らない。
+ */
+export function usePatientsByIds(ids: string[]) {
+  const sorted = [...new Set(ids)].sort();
+  return useQuery({
+    queryKey: ["Patient", "by-ids", sorted],
+    queryFn: async () => {
+      const chunks: string[][] = [];
+      for (let i = 0; i < sorted.length; i += PATIENTS_BY_ID_CHUNK) {
+        chunks.push(sorted.slice(i, i + PATIENTS_BY_ID_CHUNK));
+      }
+      const bundles = await Promise.all(
+        chunks.map((chunk) => {
+          const params = new URLSearchParams();
+          params.set("_id", chunk.join(","));
+          params.set("_count", String(chunk.length));
+          return searchResource<fhir4.Patient>("Patient", params);
+        }),
+      );
+      const byId = new Map<string, fhir4.Patient>();
+      for (const { data } of bundles) {
+        for (const entry of data.entry ?? []) {
+          const patient = entry.resource;
+          if (patient?.resourceType === "Patient" && patient.id) byId.set(patient.id, patient);
+        }
+      }
+      return byId;
+    },
+    enabled: sorted.length > 0,
+    placeholderData: keepPreviousData,
+  });
+}
+
 // 患者番号の自動採番。上流の $next-identifier が「登録済み(削除済み含む)と払い出し済みの
 // 最大値 + 1」を直列化して返すので、同時に登録しても同じ番号にはならない。
 async function fetchNextPatientNumber(): Promise<string> {
