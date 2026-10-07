@@ -52,3 +52,4 @@ export * from "./extractQuery";
 export * from "./templateExtract";
 export * from "./labExtract";
 export * from "./microExtract";
+export * from "./surgeryExtract";

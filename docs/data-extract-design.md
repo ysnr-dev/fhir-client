@@ -180,7 +180,7 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
     (`Encounter?class=EMER`)、クリニカルパスの適用とバリアンス(CarePlan / Task)。
   - 上流の変更が要るもの: 血圧(component の値の検索)、ICD10 の前方一致(C-24)、「最新値が〜」の条件(C-15 の `$lastn`)。
   - 出力: テンプレートの回答値での絞り込み(テンプレートタブの中で手元で絞る)。
-  - 記録を表にするタブの追加: 手術実績(手術 1 件 = 1 行)、有害事象。
+  - 記録を表にするタブの追加: 有害事象。
   - 細菌検査: 材料・菌での絞り込み(上流の DiagnosticReport に材料・菌の検索が要る)、診療科での絞り込み(DiagnosticReport の
     department 検索が要る)、アンチバイオグラム(菌 × 抗菌薬の感性率)の集計表。
 
@@ -259,3 +259,25 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
   欠けた結果では初回を取り違えるので、読み切れなかった(truncated)ときは表を出さない。
 - 並びは採取日の新しい順 → 患者番号 → 菌番号。画面は先頭 500 行、CSV はすべて。
 - 診療科・材料・菌では絞れない(上流の DiagnosticReport に該当する検索が無い。§7)。
+
+## 11. 手術実績の抽出
+
+「手術」タブ(`?tab=surgery`、`components/extract/SurgeryExtractPanel.tsx`)は、手術の実施記録
+(`fhir/surgeryResultHelpers.ts`)を「手術 1 件 = 1 行」の表と CSV にする。設定は保存しない。
+
+- **取得**(`api/queries/surgeryExtract.ts`): `Procedure?category=order-type|surgery&part-of:missing=true&status:not=entered-in-error
+  &date=ge…&date=le…[&based-on.department=Organization/x]&_include=Procedure:based-on&_revinclude=Procedure:part-of
+  &_revinclude=Observation:part-of&_include=Procedure:subject&_sort=-date` を strict で `searchAllPages`(200 件 × 25 ページ)。
+  ハブ(partOf を持たない Procedure)が 1 件 = 1 回の手術。子の Procedure(2 件目以降の術式・麻酔の手技料)と測定値は
+  partOf でハブを指す。期間は入室日(performedPeriod)、依頼科は元のオーダーヘッダの order-department をチェーンで引く。
+  患者の絞り込みは §8 と同じ。
+- **術式**: 診療行為マスタ(`MedicalProcedureSearchModal`、既定は K 章。麻酔の L 章も選べる)から複数選ぶ。実施記録の術式は
+  レセ電算コード(`surgery-procedure-code`)で、主術式はハブの code、2 件目以降は子の code にあるので、
+  `code=<コード,…>`(ハブ)と `_has:Procedure:part-of:code=<コード,…>`(子)の 2 本を引いて手術を合わせる(どれかを含めば当たる)。
+- **解釈**: ハブ・子・測定値から `surgeryPerformRecord` で値を取り出す(実施記録の表示と同じ拡張・コード表)。申込の区分は
+  `summarizeSurgeryOrder`(オーダーヘッダ)。
+- **列**: 入室日・入室・麻酔開始・執刀開始・執刀終了・麻酔終了・退室(時刻)、在室時間(入室〜退室)・麻酔時間(麻酔開始〜終了)・
+  手術時間(執刀開始〜終了)の分、状態、予定区分・入外・依頼科・執刀科・手術室(申込)、術式・術式コード(ハブ)・他の術式・麻酔(子)、
+  麻酔方法・麻酔管理(申込)、執刀医〜臨床工学技士(実施記録の performer の役割ごと)、出血量・尿量・輸血量(mL)、
+  創分類・カウント・合併症・転帰。時刻が欠けていれば所要時間は空。
+- 並びは入室の新しい順。画面は先頭 500 件、CSV はすべて。薬剤・材料は列にしない(件数が手術ごとに違い、表に収まらない)。

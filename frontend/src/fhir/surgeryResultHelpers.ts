@@ -56,7 +56,7 @@ const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Pro
  * Procedure.code。申込明細の K コードと同じ system を使う(予定と実施を同じ
  * コード体系で突き合わせられるようにするため)。麻酔の手技料(L章)も同じ system。
  */
-const SURGERY_PROCEDURE_CODE_SYSTEM =
+export const SURGERY_PROCEDURE_CODE_SYSTEM =
   "http://fhir-client.local/CodeSystem/surgery-procedure-code";
 /** usedCode。算定に使うレセプト電算の特定器材コード。 */
 /** usedCode は CodeableConcept なので数量を持てない。拡張で添える(処置と同型)。 */
@@ -675,6 +675,77 @@ const SURGERY_PERFORM_STAFF_ROLE_INDEX = new Map<string, number>(
     (code, index) => [code, index],
   ),
 );
+
+/** 実施記録 1 件の値(データ抽出の表に使う)。日時は FHIR の dateTime のまま持つ。 */
+export interface SurgeryPerformRecord {
+  /** 入室・退室。 */
+  start: string;
+  end: string;
+  times: Record<SurgeryTimeKey, string>;
+  /** 役割の定義順。 */
+  staff: { role: string; name: string }[];
+  /** ハブの術式が先頭、続いて partOf の子(2 件目以降の術式・麻酔の手技料)。 */
+  procedures: { code: string; name: string }[];
+  /** 出血量・尿量・輸血量(mL)。 */
+  measures: Partial<Record<SurgeryObservationKey, number>>;
+  woundClass: string;
+  countCheck: string;
+  complication: string;
+  outcome: string;
+  status: string;
+}
+
+/** ハブの Procedure と、その子の Procedure・測定値 Observation から実施記録の値を取り出す。 */
+export function surgeryPerformRecord(
+  hub: fhir4.Procedure,
+  children: fhir4.Procedure[],
+  observations: fhir4.Observation[],
+): SurgeryPerformRecord {
+  const timeExtensions = hub.extension?.find((e) => e.url === PERFORM_TIMES_EXT_URL)?.extension ?? [];
+  const times = Object.fromEntries(
+    SURGERY_TIME_FIELDS.map((field) => [
+      field.key,
+      timeExtensions.find((t) => t.url === field.url)?.valueDateTime ?? "",
+    ]),
+  ) as Record<SurgeryTimeKey, string>;
+  const roleOrder = (code: string) =>
+    SURGERY_PERFORM_STAFF_ROLE_INDEX.get(code) ?? SURGERY_PERFORM_STAFF_ROLE_INDEX.size;
+  const staff = (hub.performer ?? [])
+    .map((performer) => ({
+      role: performer.function?.coding?.find((c) => c.system === STAFF_ROLE_SYSTEM)?.code ?? "",
+      name: performer.actor?.display ?? "",
+    }))
+    .filter((entry) => entry.name)
+    .sort((a, b) => roleOrder(a.role) - roleOrder(b.role));
+  const measures: Partial<Record<SurgeryObservationKey, number>> = {};
+  for (const observation of observations) {
+    const code = observation.code.coding?.find((c) => c.system === OBSERVATION_SYSTEM)?.code;
+    const field = SURGERY_OBSERVATION_FIELDS.find((f) => f.code === code);
+    const value = observation.valueQuantity?.value;
+    if (field && typeof value === "number") measures[field.key] = value;
+  }
+  const codingOf = (url: string) => hub.extension?.find((e) => e.url === url)?.valueCoding;
+  const woundClass = codingOf(WOUND_CLASS_EXT_URL);
+  const countCheck = codingOf(COUNT_CHECK_EXT_URL);
+  return {
+    start: hub.performedPeriod?.start ?? "",
+    end: hub.performedPeriod?.end ?? "",
+    times,
+    staff,
+    procedures: [hub, ...children]
+      .map((procedure) => ({
+        code: procedure.code?.coding?.find((c) => c.system === SURGERY_PROCEDURE_CODE_SYSTEM)?.code ?? "",
+        name: conceptLabel(procedure.code),
+      }))
+      .filter((procedure) => procedure.code || procedure.name),
+    measures,
+    woundClass: woundClass ? (woundClass.display ?? surgeryWoundClassDisplay(woundClass.code ?? "")) : "",
+    countCheck: countCheck ? (countCheck.display ?? surgeryCountCheckDisplay(countCheck.code ?? "")) : "",
+    complication: hub.complication?.map(conceptLabel).filter(Boolean).join("・") ?? "",
+    outcome: conceptLabel(hub.outcome),
+    status: hub.status,
+  };
+}
 
 /**
  * 実施記録をオーダー id ごとの表示内容にまとめる。

@@ -15,6 +15,7 @@ import { ExtractQuerySelect } from "../components/extract/ExtractQuerySelect";
 import { ExtractResults } from "../components/extract/ExtractResults";
 import { LabExtractPanel } from "../components/extract/LabExtractPanel";
 import { MicroExtractPanel } from "../components/extract/MicroExtractPanel";
+import { SurgeryExtractPanel } from "../components/extract/SurgeryExtractPanel";
 import { PatientColumnsField } from "../components/extract/PatientColumnsField";
 import { TemplateExtractPanel } from "../components/extract/TemplateExtractPanel";
 import { TrashIcon } from "../components/icons/TrashIcon";
@@ -35,17 +36,18 @@ import { downloadBlob } from "../lib/download";
 // データ抽出(docs/data-extract-design.md)。「患者」タブは病名・検査結果・処方/注射・入院・外来・
 // 患者属性の条件を AND / OR で組み、該当する患者を一覧・内訳・CSV にする。条件は持ち主(院内共通 /
 // 診療科 / 自分)ごとに保存できる。「テンプレート」タブは 1 つのテンプレートの回答を、「検査結果」タブは
-// 選んだ検査・バイタルの結果を、「細菌検査」タブは分離菌と薬剤感受性を表にする(いずれも保存した患者の
-// 条件や患者フォルダの患者に絞れる)。
+// 選んだ検査・バイタルの結果を、「細菌検査」タブは分離菌と薬剤感受性を、「手術」タブは手術の実施記録を
+// 表にする(いずれも保存した患者の条件や患者フォルダの患者に絞れる)。
 // 抽出は上流 FHIR をその場で引く。
 
-type Tab = "patient" | "template" | "lab" | "micro";
+type Tab = "patient" | "template" | "lab" | "micro" | "surgery";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "patient", label: "患者" },
   { key: "template", label: "テンプレート" },
   { key: "lab", label: "検査結果" },
   { key: "micro", label: "細菌検査" },
+  { key: "surgery", label: "手術" },
 ];
 
 function tabOf(value: string | null): Tab {
@@ -97,6 +99,7 @@ export function DataExtractPage() {
       {tab === "template" && <TemplateExtractPanel />}
       {tab === "lab" && <LabExtractPanel />}
       {tab === "micro" && <MicroExtractPanel />}
+      {tab === "surgery" && <SurgeryExtractPanel />}
       {guideOpen && <DataExtractGuide onClose={() => setGuideOpen(false)} />}
     </div>
   );

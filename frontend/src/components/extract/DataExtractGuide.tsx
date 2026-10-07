@@ -193,6 +193,17 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
           </dl>
         </section>
 
+        <section>
+          <h3>手術の抽出</h3>
+          <dl className="extract-guide__terms">
+            <Term name="表">手術 1 件が 1 行。時刻と所要時間(在室・麻酔・手術)、術式、麻酔方法、スタッフ、出血量などの列つき</Term>
+            <Term name="期間">入室日で絞る</Term>
+            <Term name="術式">選んだ術式・麻酔の手技料のどれかを含む手術(主術式でも 2 件目以降でも)</Term>
+            <Term name="依頼科">手術を申し込んだ診療科で絞る</Term>
+            <Term name="患者 / 患者フォルダ">テンプレートの抽出と同じように、該当する患者の手術だけを出す</Term>
+          </dl>
+        </section>
+
         <aside className="extract-guide__note">
           <h3>気をつけること</h3>
           <ul>
