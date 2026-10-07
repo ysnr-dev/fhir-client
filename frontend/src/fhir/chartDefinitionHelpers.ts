@@ -677,7 +677,7 @@ export interface ChartLaneData {
   series: ChartSeries[];
 }
 
-function observationAt(observation: fhir4.Observation): string {
+export function observationAt(observation: fhir4.Observation): string {
   return observation.effectiveDateTime ?? observation.effectivePeriod?.start ?? observation.issued ?? "";
 }
 
@@ -687,7 +687,7 @@ function observationAt(observation: fhir4.Observation): string {
  * テンプレート抽出の Observation は UTC("...Z")で書かれることがあり、文字列を
  * そのまま切り出すと時刻が時差のぶんずれて見える(横軸の位置は絶対時刻なので合う)。
  */
-function localDateTimeOf(value: string): string {
+export function localDateTimeOf(value: string): string {
   if (!/(?:Z|[+-]\d\d:\d\d)$/.test(value)) return value;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;

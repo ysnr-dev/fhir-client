@@ -640,7 +640,7 @@ function OrderFields({ leaf, patch }: FieldsProps) {
   );
 }
 
-function CheckGroup({
+export function CheckGroup({
   label,
   options,
   values,

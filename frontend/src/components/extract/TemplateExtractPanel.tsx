@@ -1,11 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchPatientFolderMembers } from "../../api/masterClient";
-import { useExtractQueries, usePatientFolders } from "../../api/masterQueries";
-import { useExtractRun, useQuestionnaireOptions, useSelfDepartments, useTemplateExtract } from "../../api/queries";
+import { useQuestionnaireOptions, useSelfDepartments, useTemplateExtract } from "../../api/queries";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
-  leafLabel,
   patientCell,
   patientColumnsOf,
   resolvePeriod,
@@ -20,17 +17,15 @@ import {
   templateExtractTable,
   templateFixedCells,
 } from "../../fhir/templateExtractHelpers";
-import { useDefinitionOwners } from "../../hooks/useDefinitionOwners";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
 import { TemplateSelect } from "../TemplateSelect";
-import { patientFolderPath } from "../patientFolderTree";
 import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
-import { ExtractQuerySelect } from "./ExtractQuerySelect";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientFolderSelect } from "./PatientFolderSelect";
+import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 
 /** 画面に並べる行の上限(CSV にはすべて出す)。 */
 const DISPLAY_LIMIT = 500;
@@ -44,22 +39,12 @@ export function TemplateExtractPanel() {
   const options = useQuestionnaireOptions();
   const { departments } = useSelfDepartments();
   const departmentOptions = sortDepartmentsByCode(departments).filter((d) => d.id);
-  const owners = useDefinitionOwners("自分の条件");
-  const queryList = useExtractQueries(owners.departmentId, owners.practitionerId, owners.ready);
-  const queries = useMemo(() => queryList.data?.items ?? [], [queryList.data]);
-  const folderList = usePatientFolders(owners.departmentId, owners.practitionerId);
-  const folders = useMemo(() => folderList.data?.items ?? [], [folderList.data]);
-  const patientExtract = useExtractRun();
+  const scope = useExtractPatientScope();
   const extract = useTemplateExtract();
 
   const [templateUrl, setTemplateUrl] = useState("");
   const [period, setPeriod] = useState<ExtractPeriod>({ mode: "relative", days: 365 });
   const [departmentId, setDepartmentId] = useState("");
-  const [queryId, setQueryId] = useState<number | null>(null);
-  const [folderId, setFolderId] = useState<number | null>(null);
-  // 実行したときのフォルダとその患者数(結果の上に出す)。
-  const [folderResult, setFolderResult] = useState<{ name: string; count: number } | null>(null);
-  const [folderError, setFolderError] = useState<unknown>(null);
   const [latestOnly, setLatestOnly] = useState(false);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
 
@@ -83,32 +68,13 @@ export function TemplateExtractPanel() {
   );
   const rows = useMemo(() => (table ? (latestOnly ? latestPerPatient(table.rows) : table.rows) : []), [table, latestOnly]);
   const patientColumns = patientColumnsOf(output);
-  const query = queries.find((q) => q.id === queryId) ?? null;
-  const folder = folders.find((f) => f.id === folderId) ?? null;
-  const running = patientExtract.running || extract.running;
+  const running = scope.running || extract.running;
 
   async function handleRun() {
     if (!selected?.url) return;
     const url = selected.url;
-    let patientIds: string[] | undefined;
-    setFolderResult(null);
-    setFolderError(null);
-    if (folder) {
-      try {
-        const members = await fetchPatientFolderMembers({ patient_folder_id: folder.id, include_descendants: true });
-        patientIds = [...new Set(members.items.map((m) => m.patient_id))];
-        setFolderResult({ name: patientFolderPath(folders, folder.id), count: patientIds.length });
-      } catch (error) {
-        setFolderError(error);
-        return;
-      }
-    }
-    if (query) {
-      const result = await patientExtract.run(query.definition, leafLabel);
-      if (!result) return;
-      const matched = new Set(result.rows.map((row) => row.patientId));
-      patientIds = patientIds ? patientIds.filter((id) => matched.has(id)) : [...matched];
-    }
+    const patientIds = await scope.resolve();
+    if (patientIds === null) return;
     const range = resolvePeriod(period, today());
     void extract.run({
       url,
@@ -120,7 +86,7 @@ export function TemplateExtractPanel() {
   }
 
   function handleCancel() {
-    patientExtract.cancel();
+    scope.cancel();
     extract.cancel();
   }
 
@@ -146,24 +112,7 @@ export function TemplateExtractPanel() {
             ))}
           </select>
         </label>
-        <label className="extract-field">
-          患者
-          <ExtractQuerySelect
-            queries={queries}
-            value={queryId}
-            emptyLabel="すべて"
-            onChange={(next) => setQueryId(next?.id ?? null)}
-          />
-        </label>
-        <label className="extract-field">
-          患者フォルダ
-          <PatientFolderSelect
-            folders={folders}
-            value={folderId}
-            emptyLabel="すべて"
-            onChange={(next) => setFolderId(next?.id ?? null)}
-          />
-        </label>
+        <PatientScopeFields scope={scope} />
         <label className="extract-checks__item">
           <input type="checkbox" checked={latestOnly} onChange={(e) => setLatestOnly(e.target.checked)} />
           患者ごとに最新
@@ -176,7 +125,7 @@ export function TemplateExtractPanel() {
         onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
       />
 
-      <ErrorBanner error={options.error ?? queryList.error ?? folderList.error} />
+      <ErrorBanner error={options.error ?? scope.listError} />
 
       <div className="data-extract__actions">
         {running ? (
@@ -188,9 +137,7 @@ export function TemplateExtractPanel() {
             実行
           </button>
         )}
-        {patientExtract.running && (
-          <span className="order-select__muted">{`患者を抽出中(検索 ${patientExtract.requests} 回)`}</span>
-        )}
+        <PatientScopeProgress scope={scope} />
         {extract.running && <span className="order-select__muted">実行中</span>}
         {table && (
           <span className="data-extract__exports">
@@ -207,19 +154,14 @@ export function TemplateExtractPanel() {
         )}
       </div>
 
-      <ErrorBanner error={folderError ?? patientExtract.error ?? extract.error} />
+      <ErrorBanner error={scope.error ?? extract.error} />
       {table && (
         <section className="extract-results">
           <div className="extract-results__summary">
             <span className="extract-results__count">
               {latestOnly ? `${rows.length} 人` : `${rows.length} 件(${new Set(rows.map((r) => r.patientId)).size} 人)`}
             </span>
-            {query && patientExtract.result && (
-              <span className="order-select__muted">{`「${query.name}」に該当 ${patientExtract.result.rows.length} 人`}</span>
-            )}
-            {folderResult && (
-              <span className="order-select__muted">{`フォルダ「${folderResult.name}」に ${folderResult.count} 人`}</span>
-            )}
+            <PatientScopeSummary scope={scope} />
           </div>
           <TruncatedNotice show={extract.result?.truncated}>
             回答が多いため、新しいものから一部だけを読みました。期間を絞ってください。

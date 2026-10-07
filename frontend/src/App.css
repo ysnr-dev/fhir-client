@@ -9127,6 +9127,11 @@ input.lot-number-cell__input.is-invalid {
   width: min(1120px, 96vw);
 }
 
+/* 項目が少ない選択モーダル(データ抽出のバイタル)。 */
+.modal--vital-item {
+  width: min(360px, 90vw);
+}
+
 /* クリックで編集モーダルを開く一覧の行。 */
 .master-search__row {
   cursor: pointer;

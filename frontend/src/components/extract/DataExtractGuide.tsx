@@ -170,6 +170,18 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
           </dl>
         </section>
 
+        <section>
+          <h3>検査結果の抽出</h3>
+          <dl className="extract-guide__terms">
+            <Term name="項目">「検査項目」で検査結果項目を、「バイタル」で体温・血圧などを選んで足す</Term>
+            <Term name="行">測定日時ごと / 日ごと(同じ日に複数あれば遅い時刻の値)/ 患者ごと</Term>
+            <Term name="集計">患者ごとの行で、項目ごとに最初・最新・最大・最小・平均・件数を列にする(最初・最新は日時の列つき)</Term>
+            <Term name="H/L">値の隣に H / L の列を出す(バイタルは施設のしきい値で判定)</Term>
+            <Term name="単位">単位がそろわない項目は単位の列を出す</Term>
+            <Term name="患者 / 患者フォルダ">テンプレートの抽出と同じように、該当する患者の結果だけを出す</Term>
+          </dl>
+        </section>
+
         <aside className="extract-guide__note">
           <h3>気をつけること</h3>
           <ul>

@@ -13,6 +13,7 @@ import { DataExtractGuide } from "../components/extract/DataExtractGuide";
 import { ExtractConditionBuilder } from "../components/extract/ExtractConditionBuilder";
 import { ExtractQuerySelect } from "../components/extract/ExtractQuerySelect";
 import { ExtractResults } from "../components/extract/ExtractResults";
+import { LabExtractPanel } from "../components/extract/LabExtractPanel";
 import { PatientColumnsField } from "../components/extract/PatientColumnsField";
 import { TemplateExtractPanel } from "../components/extract/TemplateExtractPanel";
 import { TrashIcon } from "../components/icons/TrashIcon";
@@ -32,21 +33,26 @@ import { downloadBlob } from "../lib/download";
 
 // データ抽出(docs/data-extract-design.md)。「患者」タブは病名・検査結果・処方/注射・入院・外来・
 // 患者属性の条件を AND / OR で組み、該当する患者を一覧・内訳・CSV にする。条件は持ち主(院内共通 /
-// 診療科 / 自分)ごとに保存できる。「テンプレート」タブは 1 つのテンプレートの回答を表にする
-// (保存した患者の条件に該当する患者に絞れる)。
+// 診療科 / 自分)ごとに保存できる。「テンプレート」タブは 1 つのテンプレートの回答を、「検査結果」タブは
+// 選んだ検査・バイタルの結果を表にする(どちらも保存した患者の条件や患者フォルダの患者に絞れる)。
 // 抽出は上流 FHIR をその場で引く。
 
-type Tab = "patient" | "template";
+type Tab = "patient" | "template" | "lab";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "patient", label: "患者" },
   { key: "template", label: "テンプレート" },
+  { key: "lab", label: "検査結果" },
 ];
+
+function tabOf(value: string | null): Tab {
+  return TABS.find((t) => t.key === value)?.key ?? "patient";
+}
 
 export function DataExtractPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [guideOpen, setGuideOpen] = useState(false);
-  const tab: Tab = searchParams.get("tab") === "template" ? "template" : "patient";
+  const tab = tabOf(searchParams.get("tab"));
 
   // 結果の表は列が多いので、本文の幅制限を外して全画面にする。
   useEffect(() => {
@@ -78,13 +84,15 @@ export function DataExtractPage() {
             role="tab"
             aria-selected={tab === item.key}
             className={`inpatient-tabs__tab${tab === item.key ? " is-active" : ""}`}
-            onClick={() => setSearchParams(item.key === "template" ? { tab: "template" } : {}, { replace: true })}
+            onClick={() => setSearchParams(item.key === "patient" ? {} : { tab: item.key }, { replace: true })}
           >
             {item.label}
           </button>
         ))}
       </div>
-      {tab === "patient" ? <PatientExtractTab /> : <TemplateExtractPanel />}
+      {tab === "patient" && <PatientExtractTab />}
+      {tab === "template" && <TemplateExtractPanel />}
+      {tab === "lab" && <LabExtractPanel />}
       {guideOpen && <DataExtractGuide onClose={() => setGuideOpen(false)} />}
     </div>
   );
