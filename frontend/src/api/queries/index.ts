@@ -51,3 +51,4 @@ export * from "./lotManagement";
 export * from "./extractQuery";
 export * from "./templateExtract";
 export * from "./labExtract";
+export * from "./microExtract";

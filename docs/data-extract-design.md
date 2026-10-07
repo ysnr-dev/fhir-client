@@ -180,7 +180,9 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
     (`Encounter?class=EMER`)、クリニカルパスの適用とバリアンス(CarePlan / Task)。
   - 上流の変更が要るもの: 血圧(component の値の検索)、ICD10 の前方一致(C-24)、「最新値が〜」の条件(C-15 の `$lastn`)。
   - 出力: テンプレートの回答値での絞り込み(テンプレートタブの中で手元で絞る)。
-  - 記録を表にするタブの追加: 細菌検査(分離菌 1 件 = 1 行、抗菌薬 = 列)、手術実績(手術 1 件 = 1 行)、有害事象。
+  - 記録を表にするタブの追加: 手術実績(手術 1 件 = 1 行)、有害事象。
+  - 細菌検査: 材料・菌での絞り込み(上流の DiagnosticReport に材料・菌の検索が要る)、診療科での絞り込み(DiagnosticReport の
+    department 検索が要る)、アンチバイオグラム(菌 × 抗菌薬の感性率)の集計表。
 
 ## 8. テンプレートの抽出
 
@@ -219,7 +221,8 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
 - **項目**: チャートの項目(`ChartItem`)と同じ形で持つ。「検査項目」(結果項目マスタ → `labChartItem`)、「バイタル」
   (`vitalChartItems` を `VitalItemSelectModal` で選ぶ。血圧は収縮期・拡張期の 2 列)。どちらもモーダルで 1 件ずつ選ぶ。50 項目まで。
 - **患者の絞り込み**: テンプレートの抽出(§8)と同じ。患者の条件・患者フォルダの解決は `hooks/useExtractPatientScope.ts`、
-  subject= の分割と _include の患者は `api/queries/extractRecords.ts` をテンプレートと共有する。
+  subject= の分割と _include の患者は `api/queries/extractRecords.ts` を、結果の表は `components/extract/RecordResultTable.tsx`
+  をテンプレート・細菌検査と共有する。
 - **取得**(`api/queries/labExtract.ts`): `Observation?code=<項目の coding>&date=ge…&date=le…&status:not=entered-in-error,cancelled`
   (`&department=` は任意)`&_include=Observation:subject&_sort=-date` を strict で `searchAllPages`(500 件 × 20 ページ)。
   コードは 100 件ずつに分けて引き、記録を合わせる。
@@ -236,3 +239,23 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
 - **単位**: 項目の結果の単位が 1 つなら見出しに付け、ばらつくなら単位の列を出す(患者ごとの行は使った単位を「、」で)。
   バイタルとテンプレートは項目の単位にそろえる。
 - **固定列**: 患者番号・氏名・患者の列(患者の抽出と同じ選択肢)・測定日時 / 日付。画面は先頭 500 行、CSV はすべて。
+
+## 10. 細菌検査の抽出
+
+「細菌検査」タブ(`?tab=micro`、`components/extract/MicroExtractPanel.tsx`)は、細菌検査結果
+(`docs/micro-result-design.md`)を「分離菌 1 株 = 1 行、抗菌薬 = 列」の表と CSV にする。設定は保存しない。
+
+- **取得**(`api/queries/microExtract.ts`): `DiagnosticReport?category=MB&date=ge…&date=le…&status:not=entered-in-error,cancelled
+  &_include=DiagnosticReport:result&_include=DiagnosticReport:specimen&_include=DiagnosticReport:subject&_sort=-date` を strict で
+  `searchAllPages`。1 レポートに Observation が数十件添うので、1 ページは 100 レポート × 50 ページ。患者の絞り込みは §8 と同じ。
+- **解釈**(`fhir/microExtractHelpers.ts`): レポートごとに `parseMicroResultForm`(結果画面の復元と同じ)で検体所見・分離菌・
+  感受性に分ける。Observation は `DiagnosticReport.result` の参照順に並べて渡す(分離菌 A〜E の順)。
+- **列**: 患者番号・氏名・患者の列、採取日・入外・診療科・報告区分・材料・培養・塗抹・喀痰品質(M&J・Geckler)・膿尿評価、
+  菌番号(A〜E)・菌名・菌コード(JANIS)・菌量・菌数・起炎性、抗菌薬。検体の列は分離菌の行ごとに繰り返す。
+  - 抗菌薬は表に残った行で値のある薬だけを JANIS 抗菌薬コードの順(系統ごと)に並べ、見出しは略号(無ければ名称)。
+    「感受性」で S/I/R と MIC(比較記号つき)を選び、両方なら薬ごとに 2 列。同じ株で同じ薬を 2 つの測定法で測っていれば「、」でつなぐ。
+- **分離菌なしの検体**: 選ぶと、分離菌の無いレポート(培養陰性・塗抹のみ)も菌の列を空にして 1 行出す。
+- **患者・菌ごとに初回**: 同じ患者の同じ菌(JANIS 菌コード)は採取日の最も古い 1 株だけを残す(アンチバイオグラムの集計の慣行)。
+  欠けた結果では初回を取り違えるので、読み切れなかった(truncated)ときは表を出さない。
+- 並びは採取日の新しい順 → 患者番号 → 菌番号。画面は先頭 500 行、CSV はすべて。
+- 診療科・材料・菌では絞れない(上流の DiagnosticReport に該当する検索が無い。§7)。

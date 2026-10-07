@@ -462,6 +462,9 @@ export interface ExtractRow extends ExtractPatientRow {
   hits: Record<string, LeafHit | undefined>;
 }
 
+/** 記録を表にするタブで画面に並べる行の上限(CSV にはすべて出す)。 */
+export const RECORD_DISPLAY_LIMIT = 500;
+
 export function patientRowOf(patientId: string, patient: fhir4.Patient | undefined): ExtractPatientRow {
   return {
     patientId,

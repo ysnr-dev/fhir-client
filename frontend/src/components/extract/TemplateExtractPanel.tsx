@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuestionnaireOptions, useSelfDepartments, useTemplateExtract } from "../../api/queries";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
-  patientCell,
+  RECORD_DISPLAY_LIMIT,
   patientColumnsOf,
   resolvePeriod,
   type ExtractOutput,
@@ -26,9 +25,7 @@ import { PeriodFields } from "./ExtractLeafFields";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
-
-/** 画面に並べる行の上限(CSV にはすべて出す)。 */
-const DISPLAY_LIMIT = 500;
+import { RecordResultTable } from "./RecordResultTable";
 
 /**
  * テンプレートの抽出(docs/data-extract-design.md §8)。1 つのテンプレートの回答を表と CSV にする。
@@ -166,58 +163,20 @@ export function TemplateExtractPanel() {
           <TruncatedNotice show={extract.result?.truncated}>
             回答が多いため、新しいものから一部だけを読みました。期間を絞ってください。
           </TruncatedNotice>
-          <TruncatedNotice show={rows.length > DISPLAY_LIMIT}>
-            {`先頭の ${DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
+          <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
+            {`先頭の ${RECORD_DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
           </TruncatedNotice>
-          <div className="extract-results__table-wrap">
-            <table className="master-search__table extract-results__table template-extract__table">
-              <thead>
-                <tr>
-                  {templateExtractHeader(table.columns, output).map((header, index) => (
-                    <th key={index}>{header}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.slice(0, DISPLAY_LIMIT).map((row) => (
-                  <tr key={row.responseId}>
-                    <td className="extract-results__nowrap">{row.patientNumber || "-"}</td>
-                    <td className="extract-results__nowrap">
-                      <Link to={`/patients/${row.patientId}/karte`}>{row.name || row.patientId}</Link>
-                    </td>
-                    {patientColumns.map((column) => (
-                      <td key={column} className={column === "address" ? undefined : "extract-results__nowrap"}>
-                        {patientCell(row, column)}
-                      </td>
-                    ))}
-                    {templateFixedCells(row).map((cell, index) => (
-                      <td key={`fixed-${index}`} className="extract-results__nowrap">
-                        {cell}
-                      </td>
-                    ))}
-                    {table.columns.map((column) => {
-                      const value = row.values.get(column.key) ?? "";
-                      return (
-                        <td key={column.key} title={value || undefined}>
-                          {value}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={templateExtractHeader(table.columns, output).length}
-                      className="master-search__empty"
-                    >
-                      該当する回答はありません
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <RecordResultTable
+            header={templateExtractHeader(table.columns, output)}
+            patientColumns={patientColumns}
+            rows={rows.map((row) => ({
+              key: row.responseId,
+              patient: row,
+              fixed: templateFixedCells(row),
+              values: table.columns.map((column) => row.values.get(column.key) ?? ""),
+            }))}
+            emptyLabel="該当する回答はありません"
+          />
         </section>
       )}
     </>

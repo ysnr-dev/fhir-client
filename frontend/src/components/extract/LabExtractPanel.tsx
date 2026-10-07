@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import type { LabResultItem } from "../../api/masterClient";
 import { useLabExtract, useSelfDepartments, useVitalThresholds } from "../../api/queries";
 import {
@@ -10,7 +9,7 @@ import {
 } from "../../fhir/chartDefinitionHelpers";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
-  patientCell,
+  RECORD_DISPLAY_LIMIT,
   patientColumnsOf,
   resolvePeriod,
   type ExtractOutput,
@@ -36,10 +35,8 @@ import { CheckGroup, PeriodFields } from "./ExtractLeafFields";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { RecordResultTable } from "./RecordResultTable";
 import { VitalItemSelectModal } from "./VitalItemSelectModal";
-
-/** 画面に並べる行の上限(CSV にはすべて出す)。 */
-const DISPLAY_LIMIT = 500;
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 const DEFAULT_AGGREGATES: LabExtractAggregate[] = ["latest"];
@@ -246,55 +243,20 @@ export function LabExtractPanel() {
           <TruncatedNotice show={incomplete}>
             結果が多く読み切れなかったため、患者ごとの集計は出せません。期間か患者を絞ってください。
           </TruncatedNotice>
-          <TruncatedNotice show={shownRows.length > DISPLAY_LIMIT}>
-            {`先頭の ${DISPLAY_LIMIT} 行を表示しています。すべては CSV に出ます。`}
+          <TruncatedNotice show={shownRows.length > RECORD_DISPLAY_LIMIT}>
+            {`先頭の ${RECORD_DISPLAY_LIMIT} 行を表示しています。すべては CSV に出ます。`}
           </TruncatedNotice>
-          <div className="extract-results__table-wrap">
-            <table className="master-search__table extract-results__table template-extract__table">
-              <thead>
-                <tr>
-                  {header.map((label, index) => (
-                    <th key={index}>{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {shownRows.slice(0, DISPLAY_LIMIT).map((row) => (
-                  <tr key={row.rowKey}>
-                    <td className="extract-results__nowrap">{row.patientNumber || "-"}</td>
-                    <td className="extract-results__nowrap">
-                      <Link to={`/patients/${row.patientId}/karte`}>{row.name || row.patientId}</Link>
-                    </td>
-                    {patientColumns.map((column) => (
-                      <td key={column} className={column === "address" ? undefined : "extract-results__nowrap"}>
-                        {patientCell(row, column)}
-                      </td>
-                    ))}
-                    {labFixedCells(row, mode).map((cell, index) => (
-                      <td key={`fixed-${index}`} className="extract-results__nowrap">
-                        {cell}
-                      </td>
-                    ))}
-                    {table.columns.map((column) => {
-                      const value = row.values.get(column.key) ?? "";
-                      return (
-                        <td key={column.key} title={value || undefined}>
-                          {value}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-                {shownRows.length === 0 && !incomplete && (
-                  <tr>
-                    <td colSpan={header.length} className="master-search__empty">
-                      該当する結果はありません
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <RecordResultTable
+            header={header}
+            patientColumns={patientColumns}
+            rows={shownRows.map((row) => ({
+              key: row.rowKey,
+              patient: row,
+              fixed: labFixedCells(row, mode),
+              values: table.columns.map((column) => row.values.get(column.key) ?? ""),
+            }))}
+            emptyLabel={incomplete ? "" : "該当する結果はありません"}
+          />
         </section>
       )}
       {picking === "lab" && (

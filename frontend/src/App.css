@@ -9056,7 +9056,8 @@ input.lot-number-cell__input.is-invalid {
   align-items: flex-end;
 }
 
-.data-extract__toolbar--fields > .extract-checks__item {
+.data-extract__toolbar--fields > .extract-checks__item,
+.data-extract__toolbar--fields > .extract-checks {
   min-height: var(--control-height);
 }
 

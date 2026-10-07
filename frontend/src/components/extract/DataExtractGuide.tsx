@@ -182,6 +182,17 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
           </dl>
         </section>
 
+        <section>
+          <h3>細菌検査の抽出</h3>
+          <dl className="extract-guide__terms">
+            <Term name="表">分離菌 1 株が 1 行、抗菌薬が列。材料・培養・塗抹などの検体の列と、菌名・菌量・菌数・起炎性の列つき</Term>
+            <Term name="感受性">抗菌薬の列に出す値(S/I/R・MIC)。両方選ぶと薬ごとに 2 列</Term>
+            <Term name="分離菌なしの検体">培養陰性や塗抹のみの検体も 1 行出す</Term>
+            <Term name="患者・菌ごとに初回">同じ患者の同じ菌は、いちばん古い 1 株だけを出す(感性率の集計向け)</Term>
+            <Term name="患者 / 患者フォルダ">テンプレートの抽出と同じように、該当する患者の結果だけを出す</Term>
+          </dl>
+        </section>
+
         <aside className="extract-guide__note">
           <h3>気をつけること</h3>
           <ul>
@@ -189,6 +200,7 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
             <li>外来受診は診療科で絞れません。</li>
             <li>入院の病棟は、転棟前にいた病棟でも当てはまります。</li>
             <li>部門オーダーの実施は、検体検査・細菌・病理・食事・放射線治療・他科依頼では選べません。</li>
+            <li>細菌検査は診療科・材料・菌では絞れません。CSV に出してから絞ってください。</li>
           </ul>
         </aside>
       </div>

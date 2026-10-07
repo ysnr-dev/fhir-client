@@ -14,8 +14,18 @@ const PATIENT_CHUNK = 100;
 export interface ExtractRecordSearch<T extends fhir4.Resource> {
   matches: T[];
   patients: Map<string, fhir4.Patient>;
+  /** params の _include で添った患者以外のリソース(id ごとに 1 件)。 */
+  included: fhir4.Resource[];
   truncated: boolean;
 }
+
+export interface ExtractRecordPaging {
+  /** 1 ページの件数。_include で添う行が多い検索は小さくする。 */
+  page: number;
+  maxPages: number;
+}
+
+const DEFAULT_PAGING: ExtractRecordPaging = { page: EXTRACT_RECORD_PAGE, maxPages: EXTRACT_RECORD_MAX_PAGES };
 
 /** 記録の subject の患者 id。 */
 export function subjectIdOf(resource: fhir4.Resource): string {
@@ -32,6 +42,7 @@ export async function searchExtractRecords<T extends fhir4.Resource>(
   params: URLSearchParams,
   patientIds: string[] | undefined,
   signal: AbortSignal,
+  paging: ExtractRecordPaging = DEFAULT_PAGING,
 ): Promise<ExtractRecordSearch<T>> {
   const chunks: (string[] | null)[] = [];
   if (patientIds) {
@@ -41,14 +52,15 @@ export async function searchExtractRecords<T extends fhir4.Resource>(
   }
   const matches = new Map<string, T>();
   const patients = new Map<string, fhir4.Patient>();
+  const included = new Map<string, fhir4.Resource>();
   let truncated = false;
   for (const chunk of chunks) {
     const chunkParams = new URLSearchParams(params);
-    chunkParams.set("_include", `${type}:subject`);
+    chunkParams.append("_include", `${type}:subject`);
     if (chunk) chunkParams.set("subject", chunk.map((id) => `Patient/${id}`).join(","));
     const page = await searchAllPages<T>(type, chunkParams, {
-      page: EXTRACT_RECORD_PAGE,
-      maxPages: EXTRACT_RECORD_MAX_PAGES,
+      page: paging.page,
+      maxPages: paging.maxPages,
       strict: true,
       signal,
     });
@@ -56,12 +68,14 @@ export async function searchExtractRecords<T extends fhir4.Resource>(
     truncated ||= page.truncated;
     for (const bundle of page.bundles) {
       for (const entry of bundle.entry ?? []) {
-        const patient = entry.resource;
-        if (patient?.resourceType === "Patient" && patient.id) patients.set(patient.id, patient as fhir4.Patient);
+        const resource = entry.resource;
+        if (!resource?.id || entry.search?.mode !== "include") continue;
+        if (resource.resourceType === "Patient") patients.set(resource.id, resource as fhir4.Patient);
+        else included.set(`${resource.resourceType}/${resource.id}`, resource);
       }
     }
   }
-  return { matches: [...matches.values()], patients, truncated };
+  return { matches: [...matches.values()], patients, included: [...included.values()], truncated };
 }
 
 /** _include で添わなかった患者(上流が読めない患者など)を id で補う。 */
