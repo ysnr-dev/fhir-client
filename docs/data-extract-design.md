@@ -176,7 +176,7 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
 - 部門オーダーの実施は依頼科の内訳を持たない(Procedure は依頼科を持たず、絞り込みはチェーンで行える)。
   実施は項目で絞れない(実施の code はレセ電の手技で、項目マスタのコードではない)。
 - 今後の候補:
-  - 上流の変更が要らないもの: アレルギー、注意フラグ・感染症(Flag)、救急受診(`Encounter?class=EMER`。§19 の区分に足せる)。
+  - 上流の変更が要らないもの: アレルギー、注意フラグ・感染症(Flag)。
   - 上流の変更が要るもの: 血圧(component の値の検索)、ICD10 の前方一致(C-24)、「最新値が〜」の条件(C-15 の `$lastn`)。
   - 出力: テンプレートの回答値での絞り込み(テンプレートタブの中で手元で絞る)。
   - 細菌検査: 材料・菌での絞り込み(上流の DiagnosticReport に材料・菌の検索が要る)、診療科での絞り込み(DiagnosticReport の
@@ -437,8 +437,8 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
 
 ## 19. 入院・外来の抽出
 
-「入院・外来」タブ(`?tab=encounter`、`components/extract/EncounterExtractPanel.tsx`)は、区分(入院 / 外来)を選んで、
-入院 1 件・外来受診 1 件(Encounter)を 1 行にした表と CSV にする。病院統計(平均在院日数・病床利用・外来患者数)の元データ。
+「入院・外来」タブ(`?tab=encounter`、`components/extract/EncounterExtractPanel.tsx`)は、区分(入院 / 外来 / 救急)を選んで、
+入院 1 件・外来受診 1 件・救急受診 1 件(Encounter)を 1 行にした表と CSV にする。病院統計(平均在院日数・病床利用・外来患者数)の元データ。
 条件は保存できる(§17。`tab` は `encounter`、項目は `kind` 必須・`date_mode`・診療科・病棟)。
 
 - **取得**(`api/queries/encounterExtract.ts`):
@@ -448,12 +448,17 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
   - 外来: `Encounter?class=AMB&status:not=cancelled,entered-in-error&date=…[&appointment.specialty=ssmix2-department-code|<コード>]
     &_include=Encounter:appointment&_sort=-date`。外来の Encounter は診療科を持たないので、受付(Appointment)の specialty に
     チェーンで絞る。診療科の選択肢(Organization)は identifier の SS-MIX2 コードに直して送る。
+  - 救急: `Encounter?class=EMER&status:not=entered-in-error&date=…&_sort=-date`。滞在中(period.end 無し)も date の重なりで日をまたいで
+    拾う。救急の受診は診療科を持たないので診療科の欄は出さない。来院方法・JTAS・主訴・転帰・処置ベッドは Encounter 自身が持つ
+    (`fhir/emergencyEncounterHelpers.ts`)ので、添えるものは無い。
 - **列**(`fhir/encounterExtractHelpers.ts`):
   - 入院: 入院日・退院日・在院日数(入院日から退院日まで、入院中は今日まで。両端を含む)・状態(入院中 / 退院)・診療科・病棟・病室・ベッド
     (入院登録で合成した表示。病室名が入っていなければ病室名を前に足す)・主治医・入院経路・予定・緊急(DPC の入院経路・入院区分)・
     救急車・紹介・退院先(dischargeDisposition)、担当看護師・メモ。
   - 外来: 受診日・開始・終了・診察時間(分)・状態(診察中 / 診察済)・診療科(受付の specialty)・初再診・当日受付・担当医・診察室。
-- 並びは開始の新しい順。内訳(§18)で病棟別・月別の件数などが出せる。救急(class=EMER)は区分にまだ入れていない。
+  - 救急: 来院日・来院・トリアージ(状態の履歴で「来院」を抜けた時刻)・診察開始・退室の時刻(来院日と日付が違えば月日も添える)、
+    来院から診察まで(分)・滞在時間(分。退室していれば)、状態・JTAS(「2 緊急」)・来院方法・転帰・担当医・処置ベッド、主訴。
+- 並びは開始の新しい順。内訳(§18)で病棟別・月別の件数、JTAS 別の来院から診察までの平均などが出せる。
 
 ## 20. 病名の抽出
 

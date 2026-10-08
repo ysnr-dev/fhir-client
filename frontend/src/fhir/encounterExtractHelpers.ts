@@ -8,6 +8,19 @@ import {
   visitKindLabel,
 } from "./appointmentHelpers";
 import {
+  arrivalModeLabel,
+  dispositionLabel,
+  emergencyArrivalMode,
+  emergencyAttendingName,
+  emergencyBedName,
+  emergencyComplaint,
+  emergencyDisposition,
+  emergencyExamStartedAt,
+  emergencyStatusLabel,
+  emergencyTriageLevel,
+  jtasLabel,
+} from "./emergencyEncounterHelpers";
+import {
   dischargeDispositionDisplay,
   encounterDischargeDisposition,
   encounterNote,
@@ -22,8 +35,9 @@ import {
   type ExtractPatientRow,
 } from "./extractQueryHelpers";
 
-// 入院・外来の抽出(docs/data-extract-design.md §19)。入院 1 件・外来受診 1 件を 1 行にする。
-// 入院は在院日数・病棟・入院経路・退院先、外来は受付の診療科・初再診・診察の時刻を列にする。
+// 入院・外来の抽出(docs/data-extract-design.md §19)。入院 1 件・外来受診 1 件・救急受診 1 件を 1 行にする。
+// 入院は在院日数・病棟・入院経路・退院先、外来は受付の診療科・初再診・診察の時刻、救急は来院から退室までの時刻と
+// JTAS・来院方法・転帰・主訴を列にする。
 
 export interface EncounterExtractRow extends ExtractPatientRow {
   rowKey: string;
@@ -51,6 +65,24 @@ const INPATIENT_FIXED = [
 ];
 const INPATIENT_VALUES = ["担当看護師", "メモ"];
 const OUTPATIENT_FIXED = ["受診日", "開始", "終了", "診察時間(分)", "状態", "診療科", "初再診", "当日受付", "担当医", "診察室"];
+const EMERGENCY_FIXED = [
+  "来院日",
+  "来院",
+  "トリアージ",
+  "診察開始",
+  "退室",
+  "来院から診察まで(分)",
+  "滞在時間(分)",
+  "状態",
+  "JTAS",
+  "来院方法",
+  "転帰",
+  "担当医",
+  "処置ベッド",
+];
+const EMERGENCY_VALUES = ["主訴"];
+
+type EncounterKind = "inpatient" | "outpatient" | "emergency";
 
 function referenceIdOf(reference: string | undefined, type: string): string {
   return reference?.startsWith(`${type}/`) ? reference.slice(type.length + 1) : "";
@@ -146,9 +178,46 @@ function outpatientRow(
   };
 }
 
-/** 入院・外来受診を表の行にする。行は開始の新しい順。 */
+/** 時刻「HH:mm」。来院日と日付が違えば(日をまたいだ滞在)日付も添える。 */
+function clockOn(value: string | undefined, day: string): string {
+  if (!value) return "";
+  const label = dateTimeLabel(value);
+  return label.slice(0, 10) === day ? label.slice(11, 16) : label.slice(5);
+}
+
+/** トリアージの時刻。「来院」の状態を抜けた時刻(statusHistory の来院の期間の終わり)。 */
+function triagedAt(encounter: fhir4.Encounter): string | undefined {
+  return (encounter.statusHistory ?? []).find((h) => h.status === "arrived")?.period.end;
+}
+
+function emergencyRow(encounter: fhir4.Encounter): Pick<EncounterExtractRow, "fixed" | "values"> {
+  const start = encounter.period?.start;
+  const day = localDay(start);
+  const examAt = emergencyExamStartedAt(encounter);
+  const level = emergencyTriageLevel(encounter);
+  return {
+    fixed: [
+      day,
+      clockOn(start, day),
+      clockOn(triagedAt(encounter), day),
+      clockOn(examAt, day),
+      clockOn(encounter.period?.end, day),
+      minutesBetween(start, examAt),
+      minutesBetween(start, encounter.period?.end),
+      emergencyStatusLabel(encounter.status),
+      level === undefined ? "" : `${level} ${jtasLabel(level)}`,
+      arrivalModeLabel(emergencyArrivalMode(encounter)),
+      dispositionLabel(emergencyDisposition(encounter)),
+      emergencyAttendingName(encounter),
+      emergencyBedName(encounter),
+    ],
+    values: [emergencyComplaint(encounter)],
+  };
+}
+
+/** 入院・外来受診・救急受診を表の行にする。行は開始の新しい順。 */
 export function encounterExtractRows(
-  kind: "inpatient" | "outpatient",
+  kind: EncounterKind,
   encounters: fhir4.Encounter[],
   locations: Map<string, fhir4.Location>,
   appointments: Map<string, fhir4.Appointment>,
@@ -161,7 +230,11 @@ export function encounterExtractRows(
       ...patientRowOf(patientId, patients.get(patientId)),
       rowKey: encounter.id ?? "",
       start: encounter.period?.start ?? "",
-      ...(kind === "inpatient" ? inpatientRow(encounter, locations, today) : outpatientRow(encounter, appointments)),
+      ...(kind === "inpatient"
+        ? inpatientRow(encounter, locations, today)
+        : kind === "outpatient"
+          ? outpatientRow(encounter, appointments)
+          : emergencyRow(encounter)),
     };
   });
   return rows.sort(
@@ -171,17 +244,18 @@ export function encounterExtractRows(
   );
 }
 
-export function encounterExtractHeader(kind: "inpatient" | "outpatient", output: ExtractOutput | undefined): string[] {
-  return [
-    "患者番号",
-    "氏名",
-    ...patientColumnsOf(output).map(patientColumnLabel),
-    ...(kind === "inpatient" ? [...INPATIENT_FIXED, ...INPATIENT_VALUES] : OUTPATIENT_FIXED),
-  ];
+const HEADERS: Record<EncounterKind, string[]> = {
+  inpatient: [...INPATIENT_FIXED, ...INPATIENT_VALUES],
+  outpatient: OUTPATIENT_FIXED,
+  emergency: [...EMERGENCY_FIXED, ...EMERGENCY_VALUES],
+};
+
+export function encounterExtractHeader(kind: EncounterKind, output: ExtractOutput | undefined): string[] {
+  return ["患者番号", "氏名", ...patientColumnsOf(output).map(patientColumnLabel), ...HEADERS[kind]];
 }
 
 export function encounterExtractCsv(
-  kind: "inpatient" | "outpatient",
+  kind: EncounterKind,
   rows: EncounterExtractRow[],
   output: ExtractOutput | undefined,
 ): Blob {

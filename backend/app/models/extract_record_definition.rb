@@ -116,7 +116,7 @@ module ExtractRecordDefinition
     },
     "encounter" => {
       fields: {
-        "kind" => { enum: %w[inpatient outpatient] },
+        "kind" => { enum: %w[inpatient outpatient emergency] },
         "date_mode" => { enum: ExtractQuery::DATE_MODES },
         "ward_id" => :string,
         "ward_name" => :string

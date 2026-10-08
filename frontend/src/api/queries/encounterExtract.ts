@@ -6,14 +6,16 @@ import {
   DISCHARGED_STATUS,
 } from "../../fhir/encounterHelpers";
 import type { AdmissionDateMode } from "../../fhir/extractQueryHelpers";
+import { EMERGENCY_CANCELLED_STATUS, EMERGENCY_CLASS_CODE } from "../../fhir/emergencyEncounterHelpers";
 import { OUTPATIENT_CLASS_CODE } from "../../fhir/outpatientEncounterHelpers";
 import { addDays } from "../../lib/dates";
 import { fetchMissingPatients, searchExtractRecords, subjectIdOf } from "./extractRecords";
 
 // 入院・外来の抽出(docs/data-extract-design.md §19)。入院(class=IMP)か外来受診(class=AMB)の Encounter を
 // 期間で引く。入院はベッド → 病室 → 病棟を _include(:iterate)で、外来は受付(Appointment)を _include で添える。
+// 救急(class=EMER)は 1 件の Encounter に来院方法・JTAS・主訴・転帰と状態の履歴を持つので、添えるものは無い。
 
-export type EncounterExtractKind = "inpatient" | "outpatient";
+export type EncounterExtractKind = "inpatient" | "outpatient" | "emergency";
 
 export interface EncounterExtractCriteria {
   kind: EncounterExtractKind;
@@ -82,7 +84,17 @@ function outpatientParams(criteria: EncounterExtractCriteria): URLSearchParams {
   return params;
 }
 
-/** 入院・外来の抽出の実行。条件を変えても自動では走らせない。 */
+function emergencyParams(criteria: EncounterExtractCriteria): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("class", EMERGENCY_CLASS_CODE);
+  params.set("status:not", EMERGENCY_CANCELLED_STATUS);
+  // 滞在中(period.end が無い)の受診も、上流の date(期間の重なり)で日をまたいで拾える。
+  if (criteria.from) params.append("date", `ge${criteria.from}`);
+  if (criteria.to) params.append("date", `le${criteria.to}`);
+  return params;
+}
+
+/** 入院・外来・救急の抽出の実行。条件を変えても自動では走らせない。 */
 export function useEncounterExtract() {
   const [state, setState] = useState<EncounterExtractState>(IDLE);
   const abortRef = useRef<AbortController | null>(null);
@@ -94,7 +106,12 @@ export function useEncounterExtract() {
     const signal = controller.signal;
     setState({ running: true, error: null, result: null });
     try {
-      const params = criteria.kind === "inpatient" ? inpatientParams(criteria) : outpatientParams(criteria);
+      const params =
+        criteria.kind === "inpatient"
+          ? inpatientParams(criteria)
+          : criteria.kind === "outpatient"
+            ? outpatientParams(criteria)
+            : emergencyParams(criteria);
       params.set("_sort", "-date");
       const page = await searchExtractRecords<fhir4.Encounter>("Encounter", params, criteria.patientIds, signal);
       const locations = new Map<string, fhir4.Location>();

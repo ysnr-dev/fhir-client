@@ -31,7 +31,10 @@ const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 30 };
 const KINDS: { value: EncounterExtractKind; label: string }[] = [
   { value: "inpatient", label: "入院" },
   { value: "outpatient", label: "外来" },
+  { value: "emergency", label: "救急" },
 ];
+
+const KIND_LABELS: Record<EncounterExtractKind, string> = { inpatient: "入院", outpatient: "外来受診", emergency: "救急受診" };
 
 /** 保存する条件(docs/data-extract-design.md §17)。 */
 interface EncounterCriteria extends ExtractRecordDefinition {
@@ -78,6 +81,8 @@ export function EncounterExtractPanel() {
   const patientColumns = patientColumnsOf(output);
   const running = scope.running || extract.running;
   const inpatient = kind === "inpatient";
+  // 救急の受診は診療科を持たないので、診療科では絞らない。
+  const byDepartment = kind !== "emergency";
 
   const definition = compactDefinition<EncounterCriteria>({
     schema_version: 1,
@@ -87,7 +92,7 @@ export function EncounterExtractPanel() {
     breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     kind,
     date_mode: inpatient ? dateMode : undefined,
-    department_id: departmentId || undefined,
+    department_id: byDepartment ? departmentId || undefined : undefined,
     ward_id: inpatient ? wardId || undefined : undefined,
   });
 
@@ -114,7 +119,7 @@ export function EncounterExtractPanel() {
       to: range?.to ?? "",
       dateMode,
       departmentId: inpatient ? departmentId || undefined : undefined,
-      departmentCode: !inpatient && department ? departmentCode(department) || undefined : undefined,
+      departmentCode: kind === "outpatient" && department ? departmentCode(department) || undefined : undefined,
       wardId: inpatient ? wardId || undefined : undefined,
       patientIds,
     });
@@ -152,17 +157,19 @@ export function EncounterExtractPanel() {
           </label>
         )}
         <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        <label className="extract-field">
-          診療科
-          <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">すべて</option>
-            {departmentOptions.map((d) => (
-              <option key={d.id} value={d.id}>
-                {departmentDisplayName(d)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {byDepartment && (
+          <label className="extract-field">
+            診療科
+            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+              <option value="">すべて</option>
+              {departmentOptions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {departmentDisplayName(d)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {inpatient && (
           <label className="extract-field">
             病棟
@@ -225,7 +232,7 @@ export function EncounterExtractPanel() {
         <section className="extract-results">
           <div className="extract-results__summary">
             <span className="extract-results__count">
-              {`${resultKind === "inpatient" ? "入院" : "外来受診"} ${rows.length} 件(${new Set(rows.map((r) => r.patientId)).size} 人)`}
+              {`${KIND_LABELS[resultKind]} ${rows.length} 件(${new Set(rows.map((r) => r.patientId)).size} 人)`}
             </span>
             <PatientScopeSummary scope={scope} />
           </div>
