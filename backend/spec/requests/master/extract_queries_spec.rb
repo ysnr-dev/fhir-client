@@ -235,6 +235,8 @@ RSpec.describe "Master::ExtractQueries", type: :request do
         "perform" => { "order_kind" => "rad" },
         "adverse" => { "treatment_type" => "chemo-regimen", "terms" => ["好中球数減少"], "mode" => "treatment" },
         "pathway" => { "pathway_code" => "900001" },
+        "condition" => { "codes" => [{ "system" => "icd10", "code" => "E11" }], "clinical_status" => ["active"],
+                         "category" => "billing", "suspected" => "exclude", "date_field" => "recorded" },
         "encounter" => { "kind" => "inpatient", "date_mode" => "discharged", "department_id" => "d1", "ward_id" => "w1" }
       }
       criteria.each do |tab, value|

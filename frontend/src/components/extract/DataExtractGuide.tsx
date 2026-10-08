@@ -167,6 +167,16 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>病名の抽出</h3>
+          <dl className="extract-guide__terms">
+            <Term name="表">病名 1 件が 1 行。開始日・転帰・区分・疑い・病名管理番号・ICD10 の列つき</Term>
+            <Term name="病名 / ICD10">「患者」タブの病名の条件と同じように選ぶ。選ばなければすべての病名</Term>
+            <Term name="区分">保険病名・プロブレム・既往歴のどれかに絞る</Term>
+            <Term name="疑い">疑い病名を含める / 除く / 疑いだけにする</Term>
+          </dl>
+        </section>
+
+        <section>
           <h3>テンプレートの抽出</h3>
           <dl className="extract-guide__terms">
             <Term name="対象">「テンプレート」タブで選んだテンプレートの回答。版が違っても同じテンプレートならまとめて出す</Term>

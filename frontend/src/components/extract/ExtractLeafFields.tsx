@@ -232,7 +232,7 @@ function addCodes(current: ExtractCode[], added: ExtractCode[]): ExtractCode[] {
   return [...current, ...added.filter((c) => !keys.has(`${c.system}|${c.code}`))];
 }
 
-function ConditionCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
+export function ConditionCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
   const [picking, setPicking] = useState(false);
   const [icd10, setIcd10] = useState("");
   const codes = leaf.codes ?? [];

@@ -443,3 +443,21 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
     救急車・紹介・退院先(dischargeDisposition)、担当看護師・メモ。
   - 外来: 受診日・開始・終了・診察時間(分)・状態(診察中 / 診察済)・診療科(受付の specialty)・初再診・当日受付・担当医・診察室。
 - 並びは開始の新しい順。内訳(§18)で病棟別・月別の件数などが出せる。救急(class=EMER)は区分にまだ入れていない。
+
+## 20. 病名の抽出
+
+「病名」タブ(`?tab=condition`、`components/extract/ConditionExtractPanel.tsx`)は、病名(Condition。看護問題は除く)
+1 件を 1 行にした表と CSV にする。疾病統計・がん登録の候補の抽出に使う。条件は保存できる(§17。`tab` は `condition`)。
+
+- **取得**(`api/queries/conditionExtract.ts`): `Condition?[code=<病名,…>][&clinical-status=…]&verification-status:not=entered-in-error,refuted
+  [,provisional]&<区分>&onset-date(recorded-date)=ge…&…le…&_include=Condition:subject&_sort=-onset-date` を strict で `searchAllPages`。
+  - 病名・ICD10 は「患者」タブの病名の条件の入力欄(`ConditionCodes`。ICD10 の 3 桁は細分類まで広げる)。選ばなければすべての病名。
+    100 件ずつ code= で引いて合わせる。
+  - 区分: 保険病名は category を持たない古い病名もあるので「problem-list-item でない」(`category:not`)で引く。プロブレムは
+    problem-list-item から既往歴(ローカルの past-history も併記している)を除く。既往歴はローカルの past-history。
+    すべてのときも看護問題は `category:not` で除く。開発データで 48 件 = 保険病名 8 + プロブレム 39 + 既往歴 1 を確かめた。
+  - 疑い: 除くは `verification-status:not` に provisional を足し、のみは `verification-status=provisional`。
+  - 日付は開始日(onsetDateTime)か登録日(recordedDate)。期間を入れると、その日付を持たない病名は当たらない。
+- **列**(`fhir/conditionExtractHelpers.ts`): 開始日・転帰日・転帰・区分(保険病名 / プロブレム / 既往歴)・プロブレム番号・疑い・登録日・
+  診療科(病名の order-department)、病名・病名管理番号・ICD10・レセ電算コード。
+- 診療科では絞れない(上流の Condition に department の検索が無い)。列には出すので内訳(§18)で数えられる。

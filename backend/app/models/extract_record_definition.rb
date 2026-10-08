@@ -6,7 +6,7 @@
 # 出力する患者の列。タブ固有の項目は TAB_FIELDS に足す。中身のコード(どの薬・どの検査か)は解釈しない。
 module ExtractRecordDefinition
   SCHEMA_VERSION = 1
-  TABS = %w[encounter template lab medication micro surgery perform adverse pathway].freeze
+  TABS = %w[encounter condition template lab medication micro surgery perform adverse pathway].freeze
   MAX_ITEMS = 50
 
   CODE_SHAPE = ExtractQuery::CODE_SHAPE
@@ -90,6 +90,15 @@ module ExtractRecordDefinition
       }
     },
     "pathway" => { fields: { "pathway_code" => :string } },
+    "condition" => {
+      fields: {
+        "codes" => { list: CODE_SHAPE, max: ExtractQuery::MAX_CODES },
+        "clinical_status" => { list: { enum: ExtractQuery::CLINICAL_STATUSES }, unique: true },
+        "category" => { enum: %w[billing problem past] },
+        "suspected" => { enum: %w[exclude only] },
+        "date_field" => { enum: ExtractQuery::DATE_FIELDS }
+      }
+    },
     "encounter" => {
       fields: {
         "kind" => { enum: %w[inpatient outpatient] },
