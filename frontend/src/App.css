@@ -1278,6 +1278,64 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   color: var(--text-h);
 }
 
+/* 短いラベルの横の「?」。乗せるかフォーカスすると説明を出す(HelpTip)。 */
+.help-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.help-tip__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+}
+
+.help-tip__icon:hover,
+.help-tip__icon:focus-visible {
+  color: var(--text-h);
+}
+
+.help-tip__text {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: max-content;
+  max-width: 320px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 1.5;
+  white-space: normal;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.1s;
+  pointer-events: none;
+}
+
+.help-tip:hover .help-tip__text,
+.help-tip__icon:focus-visible + .help-tip__text {
+  visibility: visible;
+  opacity: 1;
+}
+
 .modal__close {
   height: auto;
   border: none;
@@ -9095,6 +9153,14 @@ input.lot-number-cell__input.is-invalid {
   margin-bottom: 16px;
 }
 
+/* 内訳の表は数を見渡すものなので、行を詰める(基本の表は上下 6px)。 */
+.master-search__table.extract-breakdown th,
+.master-search__table.extract-breakdown td {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  line-height: 1.4;
+}
+
 .extract-breakdown th.extract-breakdown__number,
 .extract-breakdown td.extract-breakdown__number {
   text-align: right;
@@ -9109,6 +9175,129 @@ input.lot-number-cell__input.is-invalid {
 .extract-breakdown th.extract-breakdown__number,
 .extract-breakdown td.extract-breakdown__number {
   white-space: nowrap;
+}
+
+/* 内訳の期間の推移(1 系列の棒)。色はテーマの accent、軸と目盛りは控えめにする。 */
+.extract-breakdown-chart {
+  margin: 4px 0 12px;
+  max-width: 720px;
+}
+
+.extract-breakdown-chart__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-h);
+  margin-bottom: 4px;
+}
+
+.extract-breakdown-chart__max {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.extract-breakdown-chart__plot {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 120px;
+  border-bottom: 1px solid var(--border);
+}
+
+.extract-breakdown-chart__slot {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 4px;
+  max-width: 32px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.extract-breakdown-chart__bar {
+  width: 100%;
+  min-height: 1px;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+  opacity: 0.75;
+}
+
+.extract-breakdown-chart__bar.is-hover {
+  opacity: 1;
+}
+
+.extract-breakdown-chart__tooltip {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.extract-breakdown-chart__axis {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.extract-breakdown-chart__tick {
+  flex: 1 1 0;
+  min-width: 4px;
+  max-width: 32px;
+  overflow: visible;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* 内訳のセルの数。押すと一覧をそのセルの記録に絞る。 */
+.extract-breakdown__drill {
+  height: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+/* 表の中のボタンの余白(.master-search__table button)を外し、数を文字と同じ高さにする(行を高くしない)。 */
+.master-search__table button.extract-breakdown__drill {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* 内訳から絞った一覧の帯。 */
+.extract-results__drill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 6px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font-size: 13px;
 }
 
 /* 件数の後ろに添える患者数。件数と見分けるよう小さく薄くする。 */

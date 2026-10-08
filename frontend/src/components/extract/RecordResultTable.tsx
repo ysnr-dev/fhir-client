@@ -6,6 +6,11 @@ import {
   type ExtractPatientRow,
   type PatientColumn,
 } from "../../fhir/extractQueryHelpers";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
+import { csvBlob } from "../../lib/csv";
+import { today } from "../../lib/dates";
+import { downloadBlob } from "../../lib/download";
+import { FolderRegisterButton } from "./FolderRegisterButton";
 import { RecordBreakdownView } from "./RecordBreakdownView";
 
 export interface RecordTableRow {
@@ -22,6 +27,9 @@ interface Props {
   patientColumns: PatientColumn[];
   rows: RecordTableRow[];
   emptyLabel: string;
+  /** 内訳の切り口。保存する条件に含めるときはタブが持って渡す(渡さなければここで持つ)。 */
+  breakdown?: BreakdownSettings;
+  onBreakdownChange?: (settings: BreakdownSettings) => void;
 }
 
 type View = "list" | "breakdown";
@@ -31,13 +39,26 @@ const VIEWS: { key: View; label: string }[] = [
   { key: "breakdown", label: "内訳" },
 ];
 
+/** 内訳のセルから絞った一覧。signature は絞ったときの結果の目印(実行し直したら外す)。 */
+interface Drill {
+  label: string;
+  indices: number[];
+  signature: string;
+}
+
 /**
- * 記録を表にするタブの結果。「一覧」(表)と「内訳」(月別・分類ごとの件数と患者数。docs/data-extract-design.md §18)を
- * 切り替える。内訳は表と同じ見出しとセルから数えるので、タブごとの知識を持たない。
+ * 記録を表にするタブの結果。「一覧」(表)と「内訳」(期間・分類ごとの件数と集計。docs/data-extract-design.md §18)を
+ * 切り替える。内訳は表と同じ見出しとセルから数えるので、タブごとの知識を持たない。内訳のセルを押すと、
+ * 一覧をそのセルの行に絞る(絞った行だけの CSV とフォルダ登録もできる)。内訳の切り口を残すため、
+ * 見ていない方も描いたまま隠す。
  */
 export function RecordResultTable(props: Props) {
   const { header, patientColumns, rows } = props;
   const [view, setView] = useState<View>("list");
+  const [drillState, setDrill] = useState<Drill | null>(null);
+  const [localBreakdown, setLocalBreakdown] = useState<BreakdownSettings>({});
+  const signature = `${rows.length}:${rows[0]?.key ?? ""}:${rows[rows.length - 1]?.key ?? ""}`;
+  const drill = drillState && drillState.signature === signature ? drillState : null;
   // 内訳に渡すセル(見出しと同じ並び)。
   const cells = useMemo(
     () =>
@@ -51,6 +72,7 @@ export function RecordResultTable(props: Props) {
     [rows, patientColumns],
   );
   const patientIds = useMemo(() => rows.map((row) => row.patient.patientId), [rows]);
+  const drilledRows = drill ? drill.indices.map((i) => rows[i]).filter(Boolean) : rows;
   return (
     <>
       <div className="inpatient-tabs" role="tablist" aria-label="結果の表示切替">
@@ -67,11 +89,45 @@ export function RecordResultTable(props: Props) {
           </button>
         ))}
       </div>
-      {view === "list" ? (
-        <ListTable {...props} />
-      ) : (
-        <RecordBreakdownView header={header} cells={cells} patientIds={patientIds} />
-      )}
+      <div hidden={view !== "list"}>
+        {drill && (
+          <div className="extract-results__drill">
+            <span>{`内訳「${drill.label}」の ${drilledRows.length} 件`}</span>
+            <FolderRegisterButton patientIds={drilledRows.map((row) => row.patient.patientId)} />
+            <button
+              type="button"
+              onClick={() =>
+                downloadBlob(
+                  csvBlob(
+                    header,
+                    drill.indices.map((i) => cells[i]).filter(Boolean),
+                  ),
+                  `extract_subset_${today()}.csv`,
+                )
+              }
+            >
+              CSV
+            </button>
+            <button type="button" onClick={() => setDrill(null)}>
+              絞り込みを外す
+            </button>
+          </div>
+        )}
+        <ListTable {...props} rows={drilledRows} />
+      </div>
+      <div hidden={view !== "breakdown"}>
+        <RecordBreakdownView
+          header={header}
+          cells={cells}
+          patientIds={patientIds}
+          settings={props.breakdown ?? localBreakdown}
+          onSettingsChange={props.onBreakdownChange ?? setLocalBreakdown}
+          onDrill={(indices, label) => {
+            setDrill({ indices, label, signature });
+            setView("list");
+          }}
+        />
+      </div>
     </>
   );
 }

@@ -1,4 +1,5 @@
 import type { ExtractOutput, ExtractPeriod } from "./extractQueryHelpers";
+import type { BreakdownSettings } from "./recordBreakdownHelpers";
 import type { ExtractQuery } from "../api/masterClient";
 
 // データ抽出の記録を表にするタブで保存する条件(docs/data-extract-design.md §17)。タブごとの入力欄の値を
@@ -26,6 +27,8 @@ export interface ExtractRecordDefinition {
   patient_query_code?: string;
   patient_folder_id?: number;
   output?: ExtractOutput;
+  /** 内訳の切り口(docs/data-extract-design.md §18)。 */
+  breakdown?: BreakdownSettings;
 }
 
 /** 保存した条件を、そのタブの条件の形で読む(形は backend が保存のときに確かめている)。 */

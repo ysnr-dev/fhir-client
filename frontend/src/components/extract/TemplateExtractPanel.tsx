@@ -25,6 +25,7 @@ import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
@@ -56,6 +57,7 @@ export function TemplateExtractPanel() {
   const [departmentId, setDepartmentId] = useState("");
   const [latestOnly, setLatestOnly] = useState(false);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
 
   // 版は url ごとにまとめて集めるので、選択肢には url ごとに最新の版だけを出す。
   const templates = useMemo(() => {
@@ -84,6 +86,7 @@ export function TemplateExtractPanel() {
     period,
     ...scopeDefinition(scope),
     output,
+    breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     template_url: templateUrl || undefined,
     latest_only: latestOnly || undefined,
     department_id: departmentId || undefined,
@@ -97,6 +100,7 @@ export function TemplateExtractPanel() {
     applyScopeDefinition(scope, saved);
     setLatestOnly(saved?.latest_only ?? false);
     setOutput(saved?.output);
+    setBreakdown(saved?.breakdown ?? {});
   }
 
   async function handleRun() {
@@ -203,6 +207,8 @@ export function TemplateExtractPanel() {
           <RecordResultTable
             header={templateExtractHeader(table.columns, output)}
             patientColumns={patientColumns}
+            breakdown={breakdown}
+            onBreakdownChange={setBreakdown}
             rows={rows.map((row) => ({
               key: row.responseId,
               patient: row,

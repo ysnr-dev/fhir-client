@@ -15,6 +15,7 @@ import {
 } from "../../fhir/extractQueryHelpers";
 import { medicationExtractCsv, medicationExtractHeader, medicationExtractRows } from "../../fhir/medicationExtractHelpers";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
@@ -53,6 +54,7 @@ export function MedicationExtractPanel() {
   const [period, setPeriod] = useState<ExtractPeriod>(DEFAULT_PERIOD);
   const [departmentId, setDepartmentId] = useState("");
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
 
   // 薬剤の入力欄は「患者」タブの条件の部品なので、条件 1 つの形で渡す。
   const drugLeaf: ExtractLeaf = { key: "drug", kind: "medication", codes, drug_classes: drugClasses };
@@ -87,6 +89,7 @@ export function MedicationExtractPanel() {
     period,
     ...scopeDefinition(scope),
     output,
+    breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     codes,
     drug_classes: drugClasses,
     order_type: orderType || undefined,
@@ -102,6 +105,7 @@ export function MedicationExtractPanel() {
     setDepartmentId(saved?.department_id ?? "");
     applyScopeDefinition(scope, saved);
     setOutput(saved?.output);
+    setBreakdown(saved?.breakdown ?? {});
   }
 
   function handleClear() {
@@ -208,6 +212,8 @@ export function MedicationExtractPanel() {
           <RecordResultTable
             header={medicationExtractHeader(output)}
             patientColumns={patientColumns}
+            breakdown={breakdown}
+            onBreakdownChange={setBreakdown}
             rows={rows.map((row) => ({ key: row.rowKey, patient: row, fixed: row.fixed, values: row.values }))}
             emptyLabel="該当する投薬はありません"
           />

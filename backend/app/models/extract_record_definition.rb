@@ -19,6 +19,21 @@ module ExtractRecordDefinition
     "patient_folder_id" => { integer: { min: 1 } },
     "output" => {
       fields: { "patient_columns" => { list: { enum: ExtractQuery::PATIENT_COLUMNS }, unique: true } }
+    },
+    # 内訳の切り口(§18)。列は見出しの名前で持つ(中身は解釈しない)。
+    "breakdown" => {
+      fields: {
+        "date" => :string,
+        "grain" => { enum: %w[year fiscal quarter month week day] },
+        "fill_empty" => :boolean,
+        "rows" => :string,
+        "columns" => :string,
+        "value" => :string,
+        "metric" => { enum: %w[sum mean median min max] },
+        "show_sub" => :boolean,
+        "ratio" => { enum: %w[row column] },
+        "split_multi" => :boolean
+      }
     }
   }.freeze
 

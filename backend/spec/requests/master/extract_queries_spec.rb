@@ -247,6 +247,16 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
     end
 
+    it "内訳の切り口を保存でき、知らない刻みは弾く" do
+      breakdown = { "date" => "入室日", "grain" => "fiscal", "fill_empty" => true, "rows" => "術式", "columns" => "period",
+                    "value" => "手術時間(分)", "metric" => "median", "show_sub" => false, "ratio" => "row", "split_multi" => true }
+      create_record("surgery", { "breakdown" => breakdown })
+      expect(response).to have_http_status(:created)
+      expect(body["definition"]["breakdown"]).to eq(breakdown)
+      create_record("surgery", { "breakdown" => { "grain" => "hour" } }, name: "刻み違い")
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
     it "保存した後はタブを変えない" do
       create_record("pathway", { "pathway_code" => "900001" })
       id = body["id"]

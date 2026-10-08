@@ -16,6 +16,7 @@ import {
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
@@ -65,6 +66,7 @@ export function ConditionExtractPanel() {
   const [dateField, setDateField] = useState<"onset" | "recorded">("onset");
   const [period, setPeriod] = useState<ExtractPeriod>(DEFAULT_PERIOD);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
   // 行の日付の見方は、実行したときのもの。
   const [ranDateField, setRanDateField] = useState<"onset" | "recorded">("onset");
 
@@ -83,6 +85,7 @@ export function ConditionExtractPanel() {
     period,
     ...scopeDefinition(scope),
     output,
+    breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     codes,
     clinical_status: clinicalStatus,
     category: category || undefined,
@@ -100,6 +103,7 @@ export function ConditionExtractPanel() {
     setPeriod(saved?.period ?? DEFAULT_PERIOD);
     applyScopeDefinition(scope, saved);
     setOutput(saved?.output);
+    setBreakdown(saved?.breakdown ?? {});
   }
 
   async function handleRun() {
@@ -226,6 +230,8 @@ export function ConditionExtractPanel() {
           <RecordResultTable
             header={conditionExtractHeader(output)}
             patientColumns={patientColumns}
+            breakdown={breakdown}
+            onBreakdownChange={setBreakdown}
             rows={rows.map((row) => ({ key: row.rowKey, patient: row, fixed: row.fixed, values: row.values }))}
             emptyLabel="該当する病名はありません"
           />

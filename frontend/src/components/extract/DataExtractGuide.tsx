@@ -274,9 +274,12 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
         <section>
           <h3>記録のタブの内訳</h3>
           <dl className="extract-guide__terms">
-            <Term name="内訳">結果の「内訳」で、日付の列で月別に、分類の列で値ごとに件数と患者数を数える(片方だけでもよい)</Term>
-            <Term name="年齢">分類に選ぶと 10 歳刻みにまとめる</Term>
-            <Term name="内訳CSV">月・分類・件数・患者数を 1 行ずつ出す</Term>
+            <Term name="期間">日付の列を選び、年・年度・四半期・月・週・日で刻む。「0 件の期間」で記録の無い期間も並べる</Term>
+            <Term name="行 / 列">期間か分類の列を置く(診療科 × 術式のようなクロス集計)。年齢は 10 歳刻み</Term>
+            <Term name="値">件数か、数値の列の合計・平均・中央値・最小・最大(平均在院日数など)。件数なら割合も出せる</Term>
+            <Term name="分割">麻酔方法・手技など、複数の値をつないだ列を値ごとに数える</Term>
+            <Term name="一覧へ">数を押すと、その記録だけの一覧になる(フォルダ登録・CSV もその記録だけ)</Term>
+            <Term name="内訳CSV">行・列・件数・患者数・集計値を 1 行ずつ出す。切り口は条件と一緒に保存される</Term>
           </dl>
         </section>
 

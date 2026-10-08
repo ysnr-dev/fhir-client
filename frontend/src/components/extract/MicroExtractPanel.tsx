@@ -15,6 +15,7 @@ import {
   type MicroSusceptibilityField,
 } from "../../fhir/microExtractHelpers";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
@@ -52,6 +53,7 @@ export function MicroExtractPanel() {
   const [firstIsolateOnly, setFirstIsolateOnly] = useState(false);
   const [susceptibility, setSusceptibility] = useState<MicroSusceptibilityField[]>(DEFAULT_SUSCEPTIBILITY);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
 
   const table = useMemo(
     () =>
@@ -84,6 +86,7 @@ export function MicroExtractPanel() {
     period,
     ...scopeDefinition(scope),
     output,
+    breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     include_no_isolate: includeNoIsolate || undefined,
     first_isolate_only: firstIsolateOnly || undefined,
     susceptibility,
@@ -97,6 +100,7 @@ export function MicroExtractPanel() {
     setFirstIsolateOnly(saved?.first_isolate_only ?? false);
     setSusceptibility(saved?.susceptibility ?? DEFAULT_SUSCEPTIBILITY);
     setOutput(saved?.output);
+    setBreakdown(saved?.breakdown ?? {});
   }
 
   function handleClear() {
@@ -190,6 +194,8 @@ export function MicroExtractPanel() {
           <RecordResultTable
             header={microExtractHeader(table.drugColumns, output)}
             patientColumns={patientColumns}
+            breakdown={breakdown}
+            onBreakdownChange={setBreakdown}
             rows={rows.map((row) => ({
               key: row.rowKey,
               patient: row,

@@ -35,6 +35,7 @@ import { CheckGroup, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
@@ -72,6 +73,7 @@ export function LabExtractPanel() {
   const [aggregates, setAggregates] = useState<LabExtractAggregate[]>(DEFAULT_AGGREGATES);
   const [interpretation, setInterpretation] = useState(false);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
   // 実行したときの項目。表は実行したときの項目で組む(項目を足しても読み直すまで列にしない)。
   const [ranItems, setRanItems] = useState<ChartItem[]>([]);
 
@@ -122,6 +124,7 @@ export function LabExtractPanel() {
     period,
     ...scopeDefinition(scope),
     output,
+    breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     items,
     mode,
     aggregates,
@@ -139,6 +142,7 @@ export function LabExtractPanel() {
     setAggregates(saved?.aggregates ?? DEFAULT_AGGREGATES);
     setInterpretation(saved?.interpretation ?? false);
     setOutput(saved?.output);
+    setBreakdown(saved?.breakdown ?? {});
   }
 
   function handleClear() {
@@ -279,6 +283,8 @@ export function LabExtractPanel() {
           <RecordResultTable
             header={header}
             patientColumns={patientColumns}
+            breakdown={breakdown}
+            onBreakdownChange={setBreakdown}
             rows={shownRows.map((row) => ({
               key: row.rowKey,
               patient: row,

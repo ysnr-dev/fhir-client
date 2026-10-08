@@ -17,6 +17,7 @@ import {
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
@@ -53,6 +54,7 @@ export function AdverseEventExtractPanel() {
   const [picking, setPicking] = useState(false);
   const [mode, setMode] = useState<AdverseEventRowMode>("event");
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
 
   const table = useMemo(
     () => (extract.result ? adverseEventExtractTable(extract.result.observations, extract.result.patients, mode) : null),
@@ -82,6 +84,7 @@ export function AdverseEventExtractPanel() {
     period,
     ...scopeDefinition(scope),
     output,
+    breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     treatment_type: treatmentType || undefined,
     terms,
     mode,
@@ -95,6 +98,7 @@ export function AdverseEventExtractPanel() {
     applyScopeDefinition(scope, saved);
     setMode(saved?.mode ?? "event");
     setOutput(saved?.output);
+    setBreakdown(saved?.breakdown ?? {});
   }
 
   function handleClear() {
@@ -220,6 +224,8 @@ export function AdverseEventExtractPanel() {
           <RecordResultTable
             header={adverseEventExtractHeader(table, output)}
             patientColumns={patientColumns}
+            breakdown={breakdown}
+            onBreakdownChange={setBreakdown}
             rows={rows.map(({ key, patient, cells }) => ({
               key,
               patient,

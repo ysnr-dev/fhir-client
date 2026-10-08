@@ -11,6 +11,7 @@ import {
 } from "../../fhir/extractQueryHelpers";
 import { surgeryExtractCsv, surgeryExtractHeader, surgeryExtractRows } from "../../fhir/surgeryExtractHelpers";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
@@ -52,6 +53,7 @@ export function SurgeryExtractPanel() {
   const [procedures, setProcedures] = useState<ProcedurePick[]>([]);
   const [picking, setPicking] = useState(false);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
 
   const rows = useMemo(
     () =>
@@ -87,6 +89,7 @@ export function SurgeryExtractPanel() {
     period,
     ...scopeDefinition(scope),
     output,
+    breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     procedures,
     department_id: departmentId || undefined,
   });
@@ -98,6 +101,7 @@ export function SurgeryExtractPanel() {
     setProcedures(saved?.procedures ?? []);
     applyScopeDefinition(scope, saved);
     setOutput(saved?.output);
+    setBreakdown(saved?.breakdown ?? {});
   }
 
   function handleClear() {
@@ -208,6 +212,8 @@ export function SurgeryExtractPanel() {
           <RecordResultTable
             header={surgeryExtractHeader(output)}
             patientColumns={patientColumns}
+            breakdown={breakdown}
+            onBreakdownChange={setBreakdown}
             rows={rows.map((row) => ({ key: row.rowKey, patient: row, fixed: row.fixed, values: row.values }))}
             emptyLabel="該当する手術はありません"
           />

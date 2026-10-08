@@ -10,6 +10,7 @@ import {
 } from "../../fhir/extractQueryHelpers";
 import { pathwayExtractCsv, pathwayExtractHeader, pathwayExtractRows } from "../../fhir/pathwayExtractHelpers";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
@@ -45,6 +46,7 @@ export function PathwayExtractPanel() {
   const [pathwayCode, setPathwayCode] = useState("");
   const [period, setPeriod] = useState<ExtractPeriod>(DEFAULT_PERIOD);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
 
   const rows = useMemo(
     () =>
@@ -82,6 +84,7 @@ export function PathwayExtractPanel() {
     period,
     ...scopeDefinition(scope),
     output,
+    breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     pathway_code: pathwayCode || undefined,
   });
 
@@ -91,6 +94,7 @@ export function PathwayExtractPanel() {
     setPeriod(saved?.period ?? DEFAULT_PERIOD);
     applyScopeDefinition(scope, saved);
     setOutput(saved?.output);
+    setBreakdown(saved?.breakdown ?? {});
   }
 
   function handleClear() {
@@ -178,6 +182,8 @@ export function PathwayExtractPanel() {
           <RecordResultTable
             header={pathwayExtractHeader(output)}
             patientColumns={patientColumns}
+            breakdown={breakdown}
+            onBreakdownChange={setBreakdown}
             rows={shownRows.map((row) => ({ key: row.rowKey, patient: row, fixed: row.fixed, values: row.values }))}
             emptyLabel={incomplete ? "" : "該当する適用はありません"}
           />

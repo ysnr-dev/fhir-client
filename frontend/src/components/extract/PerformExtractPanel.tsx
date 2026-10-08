@@ -16,6 +16,7 @@ import {
   performRowCells,
 } from "../../fhir/performExtractHelpers";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
@@ -51,6 +52,7 @@ export function PerformExtractPanel() {
   const [period, setPeriod] = useState<ExtractPeriod>(DEFAULT_PERIOD);
   const [departmentId, setDepartmentId] = useState("");
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
   // 表の見出しに出す種別は、実行したときの種別(選び直しても読み直すまで変えない)。
   const [ranKind, setRanKind] = useState(DEFAULT_KIND);
 
@@ -92,6 +94,7 @@ export function PerformExtractPanel() {
     period,
     ...scopeDefinition(scope),
     output,
+    breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     order_kind: kind,
     department_id: departmentId || undefined,
   });
@@ -103,6 +106,7 @@ export function PerformExtractPanel() {
     setDepartmentId(saved?.department_id ?? "");
     applyScopeDefinition(scope, saved);
     setOutput(saved?.output);
+    setBreakdown(saved?.breakdown ?? {});
   }
 
   function handleClear() {
@@ -202,6 +206,8 @@ export function PerformExtractPanel() {
           <RecordResultTable
             header={performExtractHeader(table.measureColumns, output)}
             patientColumns={patientColumns}
+            breakdown={breakdown}
+            onBreakdownChange={setBreakdown}
             rows={rows.map((row) => ({
               key: row.rowKey,
               patient: row,

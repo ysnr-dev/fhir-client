@@ -12,6 +12,7 @@ import {
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { locationDisplayName } from "../../fhir/locationHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
@@ -57,6 +58,7 @@ export function EncounterExtractPanel() {
   const [departmentId, setDepartmentId] = useState("");
   const [wardId, setWardId] = useState("");
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
+  const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
 
   const resultKind = extract.result?.kind ?? kind;
   const rows = useMemo(
@@ -82,6 +84,7 @@ export function EncounterExtractPanel() {
     period,
     ...scopeDefinition(scope),
     output,
+    breakdown: Object.keys(breakdown).length ? breakdown : undefined,
     kind,
     date_mode: inpatient ? dateMode : undefined,
     department_id: departmentId || undefined,
@@ -97,6 +100,7 @@ export function EncounterExtractPanel() {
     setWardId(saved?.ward_id ?? "");
     applyScopeDefinition(scope, saved);
     setOutput(saved?.output);
+    setBreakdown(saved?.breakdown ?? {});
   }
 
   async function handleRun() {
@@ -234,6 +238,8 @@ export function EncounterExtractPanel() {
           <RecordResultTable
             header={encounterExtractHeader(resultKind, output)}
             patientColumns={patientColumns}
+            breakdown={breakdown}
+            onBreakdownChange={setBreakdown}
             rows={rows.map((row) => ({ key: row.rowKey, patient: row, fixed: row.fixed, values: row.values }))}
             emptyLabel="該当する受診はありません"
           />
