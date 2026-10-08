@@ -1,9 +1,18 @@
 import { useState } from "react";
-import { useSelfDepartments, useUpdateEncounter, useWardGrid } from "../api/queries";
+import {
+  useBedWardIndex,
+  useDpcRecodingDueTasks,
+  useSelfDepartments,
+  useUpdateEncounter,
+  useWardGrid,
+} from "../api/queries";
 import { departmentDisplayName } from "../fhir/departmentHelpers";
+import { dpcTransferRecodingDueEntry } from "../fhir/dpcRecodingDueHelpers";
 import {
   buildTransferExecutedEncounter,
+  encounterBedId,
   encounterBedLabel,
+  encounterPatientId,
   validateTransferExecute,
   type TransferPlan,
 } from "../fhir/encounterHelpers";
@@ -17,6 +26,8 @@ import { Modal } from "./Modal";
 // 転科・転棟の実施。予定の内容を初期値にするが、床は実施時点で空いているものから
 // 選び直す(予定していた床が埋まっていることがある)。病棟は予定で決まっているので
 // 選ばせず、その病棟の病室・ベッドだけを出す。
+// 病棟が変わるときは、DPC の診断群分類を転棟時で決め直す督促を主治医あてに出す
+// (その入院に未対応の督促が既にあれば重ねない)。
 
 export function TransferExecuteModal({
   encounter,
@@ -44,6 +55,9 @@ export function TransferExecuteModal({
   const grid = useWardGrid(plan.wardId || undefined);
   const departments = useSelfDepartments();
   const execute = useUpdateEncounter();
+  const bedWardIndex = useBedWardIndex();
+  const { bedWards } = bedWardIndex;
+  const recodingDue = useDpcRecodingDueTasks(encounter.id);
 
   function handleSubmit() {
     const selection = resolveBedSelection([], grid, place, occupiedBedIds);
@@ -58,24 +72,35 @@ export function TransferExecuteModal({
     const bedLabel = selection.bed
       ? bedDisplayName(selection.bed, selection.roomName)
       : selection.bedName;
+    const transferred = buildTransferExecutedEncounter(
+      encounter,
+      {
+        bedId: selection.bedId,
+        bedLabel,
+        departmentId,
+        departmentName: department ? departmentDisplayName(department) : "",
+      },
+      date,
+    );
+    const fromWard = bedWards.get(encounterBedId(encounter) ?? "");
+    const patientId = encounterPatientId(encounter);
+    const recodingEntry =
+      fromWard && fromWard.wardId !== plan.wardId && patientId && !(recodingDue.data ?? []).length
+        ? dpcTransferRecodingDueEntry(transferred, patientId, {
+            date,
+            fromWard: fromWard.wardName,
+            toWard: plan.wardName,
+          })
+        : null;
     execute.mutate(
-      buildTransferExecutedEncounter(
-        encounter,
-        {
-          bedId: selection.bedId,
-          bedLabel,
-          departmentId,
-          departmentName: department ? departmentDisplayName(department) : "",
-        },
-        date,
-      ),
+      { encounter: transferred, extraEntries: recodingEntry ? [recodingEntry] : [] },
       { onSuccess: onClose },
     );
   }
 
   return (
     <Modal title="転科・転棟実施" onClose={onClose}>
-      <ErrorBanner error={grid.error ?? departments.error} />
+      <ErrorBanner error={grid.error ?? departments.error ?? bedWardIndex.error ?? recodingDue.error} />
       <ErrorBanner error={execute.error} />
       {validationError && (
         <div className="error-banner" role="alert">
@@ -124,7 +149,11 @@ export function TransferExecuteModal({
         </div>
 
         <div className="walk-in__actions">
-          <button type="button" onClick={handleSubmit} disabled={execute.isPending}>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={execute.isPending || bedWardIndex.isPending || recodingDue.isPending}
+          >
             {execute.isPending ? "登録中..." : "転科・転棟実施"}
           </button>
           <button type="button" onClick={onClose} disabled={execute.isPending}>

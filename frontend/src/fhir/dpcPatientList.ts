@@ -1,4 +1,4 @@
-import { addDays, diffDays, localDay } from "../lib/dates";
+import { addDays, addMonths, diffDays, localDay } from "../lib/dates";
 import {
   currentDpcDecision,
   DPC_CODING_QUESTIONNAIRE,
@@ -34,6 +34,19 @@ export interface DpcPatientRow {
   overDays: number;
   /** 期間Ⅱの末日までの残り日数(過ぎていれば負)。 */
   daysLeft: number | null;
+  /**
+   * 月末の再判定がまだの入院中の入院。月末が近い(MONTH_END_NOTICE_DAYS 以内)のに、
+   * 基準日の月に「月末」の決定が無い。月末に発火する主体が無いので、通知にせず一覧の表示で知らせる。
+   */
+  monthlyDue: boolean;
+}
+
+/** 月末の再判定を促し始める、月末日までの日数(月末日を含めて 4 日間)。 */
+export const MONTH_END_NOTICE_DAYS = 3;
+
+/** 日付(YYYY-MM-DD)の月の末日。 */
+function monthEndOf(date: string): string {
+  return addDays(addMonths(`${date.slice(0, 7)}-01`, 1), -1);
 }
 
 export const DPC_FORM1_STATE_LABELS: Record<DpcForm1State, string> = {
@@ -75,9 +88,15 @@ export function buildDpcPatientRows({
     const form1 = records
       .filter((r) => r.questionnaire === DPC_FORM1_QUESTIONNAIRE)
       .sort((a, b) => (b.meta?.lastUpdated ?? "").localeCompare(a.meta?.lastUpdated ?? ""))[0];
-    const decision = currentDpcDecision(
-      records.filter((r) => r.questionnaire === DPC_CODING_QUESTIONNAIRE).map(parseDpcCodingResponse),
+    const decisions = records
+      .filter((r) => r.questionnaire === DPC_CODING_QUESTIONNAIRE)
+      .map(parseDpcCodingResponse);
+    const decision = currentDpcDecision(decisions);
+    const monthlyDone = decisions.some(
+      (d) => d.status === "completed" && d.timing === "monthly" && localDay(d.authored).slice(0, 7) === baseDate.slice(0, 7),
     );
+    const monthlyDue =
+      !dischargedOn && diffDays(baseDate, monthEndOf(baseDate)) <= MONTH_END_NOTICE_DAYS && !monthlyDone;
     const days2 = decision?.bundled ? (decision.days[1] ?? null) : null;
     const period2End = admittedOn && days2 ? addDays(admittedOn, days2 - 1) : "";
     return {
@@ -95,6 +114,7 @@ export function buildDpcPatientRows({
       period2End,
       overDays: days2 ? Math.max(0, stayDays - days2) : 0,
       daysLeft: days2 ? days2 - stayDays : null,
+      monthlyDue,
     };
   });
 }

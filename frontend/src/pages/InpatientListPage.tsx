@@ -1246,8 +1246,8 @@ function PlannedTableRow({
 }
 
 /**
- * DPC 列のセル。今の診断群分類(未決定ならそう出す)と期間Ⅱの末日。押すとカルテの
- * DPC(診断群分類)を開く。
+ * DPC 列のセル。今の診断群分類(未決定ならそう出す)と期間Ⅱの末日。月末が近いのに当月の
+ * 月末の決定が無ければ印を添える。押すとカルテの DPC(診断群分類)を開く。
  */
 function DpcCell({
   row,
@@ -1264,6 +1264,7 @@ function DpcCell({
       <Link to={to} state={returnLinkState}>
         {row.decision ? row.decision.dpcCode : <span className="dpc-patients__undecided">未決定</span>}
       </Link>
+      {row.monthlyDue && <span className="dpc-patients__monthly">月末判定</span>}
       {row.period2End && (
         <div className="inpatient__dpc-period">
           <DpcPeriod2 row={row} />

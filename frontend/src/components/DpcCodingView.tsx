@@ -5,6 +5,7 @@ import { useDpcCoding } from "../api/masterQueries";
 import {
   useCancelDpcCodingDecision,
   useDpcCodingDecisions,
+  useDpcRecodingDueTasks,
   useSaveDpcCodingDecision,
 } from "../api/queries";
 import {
@@ -22,6 +23,7 @@ import {
   type DpcTiming,
 } from "../fhir/dpcCodingRecord";
 import type { Dpc1Values } from "../fhir/dpcForm1/types";
+import { DPC_RECODING_CLOSING_TIMINGS } from "../fhir/dpcRecodingDueHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
 import { formatDateTime } from "../lib/dates";
@@ -81,7 +83,13 @@ interface DpcCodingViewProps {
 export function DpcCodingView({ patient, encounter, values, age, active }: DpcCodingViewProps) {
   const [overrides, setOverrides] = useState(EMPTY_DPC_OVERRIDES);
   const [manualCode, setManualCode] = useState("");
-  const [timing, setTiming] = useState<DpcTiming>(encounter.status === "finished" ? "discharge" : "admission");
+  // 時点は選ぶまで既定値を使う。退院済みなら退院時、転棟の再判定の督促が残っていれば転棟時。
+  const [chosenTiming, setTiming] = useState<DpcTiming | null>(null);
+  const recodingDue = useDpcRecodingDueTasks(encounter.id);
+  const recodingTasks = recodingDue.data ?? [];
+  const timing: DpcTiming =
+    chosenTiming ??
+    (encounter.status === "finished" ? "discharge" : recodingTasks.length ? "transfer" : "admission");
   const [note, setNote] = useState("");
 
   const inputs = useSettled(useMemo(() => dpcCodingInputsFromForm1(values, age), [values, age]));
@@ -101,21 +109,32 @@ export function DpcCodingView({ patient, encounter, values, age, active }: DpcCo
 
   function decide() {
     if (!result || !data?.edition || !encounter.id) return;
+    // 転棟時・退院時の決定で、残っている再判定の督促を閉じる(閉じる人は通知の対応者として残る)。
+    const closing =
+      DPC_RECODING_CLOSING_TIMINGS.includes(timing) && recodingTasks.length && practitioner && practitionerId
+        ? {
+            tasks: recodingTasks,
+            actor: { practitionerId, display: practitionerDisplayName(practitioner) },
+          }
+        : undefined;
     save.mutate(
-      buildDpcCodingResponse({
-        patient,
-        institutionNumber,
-        encounterId: encounter.id,
-        author: practitioner
-          ? { id: practitionerId ?? undefined, name: practitionerDisplayName(practitioner) }
-          : { name: user?.administrator ? "管理者" : (user?.login_id ?? "") },
-        row: result,
-        edition: data.edition,
-        timing,
-        icd10: inputs.icd10 ?? "",
-        branches: data.branches ?? [],
-        note,
-      }),
+      {
+        response: buildDpcCodingResponse({
+          patient,
+          institutionNumber,
+          encounterId: encounter.id,
+          author: practitioner
+            ? { id: practitionerId ?? undefined, name: practitionerDisplayName(practitioner) }
+            : { name: user?.administrator ? "管理者" : (user?.login_id ?? "") },
+          row: result,
+          edition: data.edition,
+          timing,
+          icd10: inputs.icd10 ?? "",
+          branches: data.branches ?? [],
+          note,
+        }),
+        closing,
+      },
       { onSuccess: () => setNote("") },
     );
   }
@@ -129,7 +148,7 @@ export function DpcCodingView({ patient, encounter, values, age, active }: DpcCo
 
   return (
     <div className="dpc-coding">
-      <ErrorBanner error={coding.error ?? decisions.error ?? save.error ?? cancel.error} />
+      <ErrorBanner error={coding.error ?? decisions.error ?? recodingDue.error ?? save.error ?? cancel.error} />
       {(data?.warnings ?? []).map((warning) => (
         <p key={warning} className="dpc-coding__warning">
           {warning}

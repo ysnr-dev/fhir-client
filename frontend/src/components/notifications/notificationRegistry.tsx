@@ -54,6 +54,12 @@ import {
   documentDueRowOf,
   type DocumentDueRow,
 } from "../../fhir/documentDueHelpers";
+import {
+  DPC_RECODING_DUE_NOTE,
+  DPC_RECODING_DUE_TASK_CODE,
+  dpcRecodingDueRowOf,
+  type DpcRecodingDueRow,
+} from "../../fhir/dpcRecodingDueHelpers";
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import {
   BROUGHT_MED_IDENTIFIED_NOTE,
@@ -76,6 +82,7 @@ import {
 } from "../../fhir/radiotherapyReviewHelpers";
 import { BroughtMedIdentifiedNotificationCells } from "./BroughtMedIdentifiedNotificationCells";
 import { DocumentDueNotificationCells } from "./DocumentDueNotificationCells";
+import { DpcRecodingDueNotificationCells } from "./DpcRecodingDueNotificationCells";
 import { RadiotherapyReviewDueNotificationCells } from "./RadiotherapyReviewDueNotificationCells";
 import { LabPanicNotificationCells } from "./LabPanicNotificationCells";
 import { OrderApprovalNotificationCells } from "./OrderApprovalNotificationCells";
@@ -262,6 +269,23 @@ const documentDueKind = defineNotificationKind<DocumentDueRow>({
   action: { label: "対応済", noteText: DOCUMENT_DUE_NOTE },
 });
 
+const dpcRecodingDueKind = defineNotificationKind<DpcRecodingDueRow>({
+  code: DPC_RECODING_DUE_TASK_CODE.code,
+  label: DPC_RECODING_DUE_TASK_CODE.display,
+  toRow: dpcRecodingDueRowOf,
+  Cells: DpcRecodingDueNotificationCells,
+  // カルテの右ペインをその入院の診断群分類で開く(一回限りの open パラメータ)。
+  karteLink: (row) => {
+    if (!row.patientId) return null;
+    if (!row.encounterId) return `/patients/${row.patientId}/karte`;
+    const params = new URLSearchParams();
+    params.set(KARTE_OPEN_PARAM, formatKarteOpen({ kind: "dpc-coding", encounterId: row.encounterId }));
+    return `/patients/${row.patientId}/karte?${params.toString()}`;
+  },
+  // 転棟時・退院時の決定を保存すれば自動で閉じる。ここからは手で閉じる。
+  action: { label: "対応済", noteText: DPC_RECODING_DUE_NOTE },
+});
+
 const radiotherapyReviewDueKind = defineNotificationKind<RadiotherapyReviewDueRow>({
   code: RADIOTHERAPY_REVIEW_DUE_TASK_CODE.code,
   label: RADIOTHERAPY_REVIEW_DUE_TASK_CODE.display,
@@ -356,6 +380,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   pathwayVarianceKind,
   orderApprovalKind,
   documentDueKind,
+  dpcRecodingDueKind,
   radiotherapyReviewDueKind,
   broughtMedIdentifiedKind,
   nursingSummaryReturnedKind,

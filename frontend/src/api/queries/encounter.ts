@@ -43,7 +43,8 @@ import { buildOralPerformDeleteEntries, type OralPerformDisplay } from "../../fh
 import { addDays } from "../../fhir/scheduleHelpers";
 import { createResource, postBundle, searchResource } from "../fhirClient";
 import { fetchYakkaCodes } from "../masterClient";
-import { hasNextPage, ORAL_LOOKBACK_DAYS, resourcesOfType, searchAllPages, setOrderPeriod } from "./core";
+import { hasNextPage, NOTIFICATION_TASK_KEY, ORAL_LOOKBACK_DAYS, resourcesOfType, searchAllPages, setOrderPeriod } from "./core";
+import { dpcRecodingDueCancelEntries } from "./dpcCoding";
 import { splitLocationMatches } from "./location";
 import { fetchNursingPerforms, nursingOrderParams, nursingOrderSetOf, nursingPerformParams } from "./nursing";
 
@@ -296,10 +297,17 @@ export function useDischargePatient() {
 export function useCancelAdmission() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (encounter: fhir4.Encounter) =>
-      postBundle(buildEncounterUpdateBundle(buildCancelledEncounter(encounter))),
+    // 誤登録の入院に出ていた DPC 再判定の督促も取り下げる。
+    mutationFn: async (encounter: fhir4.Encounter) =>
+      postBundle(
+        buildEncounterUpdateBundle(
+          buildCancelledEncounter(encounter),
+          encounter.id ? await dpcRecodingDueCancelEntries(encounter.id) : [],
+        ),
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Encounter"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }
@@ -325,6 +333,9 @@ export function useUpdateEncounter() {
       queryClient.invalidateQueries({ queryKey: ["Encounter"] });
       if (!("resourceType" in input) && input.extraEntries.length > 0) {
         queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+        if (input.extraEntries.some((entry) => entry.resource?.resourceType === "Task")) {
+          queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+        }
       }
     },
   });

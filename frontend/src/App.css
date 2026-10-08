@@ -23492,6 +23492,18 @@ body.page-home .app__main {
   font-weight: 600;
 }
 
+/* 月末の再判定がまだの入院(月末が近いのに当月の「月末」の決定が無い)。 */
+.dpc-patients__monthly {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--warning);
+  border-radius: 4px;
+  color: var(--warning);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* DPC 電子点数表の閲覧(pages/DpcTablesPage.tsx)。検索で当たった分類を選ぶボタンを並べる。 */
 .dpc-tables__classifications {
   display: flex;

@@ -30,6 +30,7 @@ export function DpcPatientListPage() {
   const [undecidedOnly, setUndecidedOnly] = useState(false);
   const [overOnly, setOverOnly] = useState(false);
   const [form1Open, setForm1Open] = useState(false);
+  const [monthlyOnly, setMonthlyOnly] = useState(false);
 
   const base = today();
   const inpatients = useInpatientEncounters(mode === "current" ? base : "");
@@ -69,18 +70,20 @@ export function DpcPatientListPage() {
       (!ward || row.wardName === ward) &&
       (!undecidedOnly || !row.decision) &&
       (!overOnly || row.overDays > 0) &&
-      (!form1Open || row.form1 === "none" || row.form1 === "in-progress"),
+      (!form1Open || row.form1 === "none" || row.form1 === "in-progress") &&
+      (!monthlyOnly || row.monthlyDue),
   );
 
   function exportCsv() {
     const header = [
       "患者番号", "氏名", "病棟", "診療科", "入院日", "退院日", "在院日数", "様式1",
-      "診断群分類", "名称", "時点", "期間Ⅱ末日", "超過日数",
+      "診断群分類", "名称", "時点", "期間Ⅱ末日", "超過日数", "月末判定",
     ];
     const body = shown.map((row) => [
       row.patientNumber, row.patientName, row.wardName, row.department, row.admittedOn, row.dischargedOn,
       row.stayDays, DPC_FORM1_STATE_LABELS[row.form1], row.decision?.dpcCode ?? "", row.decision?.name ?? "",
       row.decision ? dpcTimingLabel(row.decision.timing) : "", row.period2End, row.overDays || "",
+      row.monthlyDue ? "未" : "",
     ]);
     const suffix = mode === "current" ? base : month;
     downloadBlob(csvBlob(header, body), `dpc-patients-${suffix}.csv`);
@@ -139,6 +142,10 @@ export function DpcPatientListPage() {
           <input type="checkbox" checked={form1Open} onChange={(e) => setForm1Open(e.target.checked)} />
           様式1未確定
         </label>
+        <label className="master-search__checkbox dpc-patients__check">
+          <input type="checkbox" checked={monthlyOnly} onChange={(e) => setMonthlyOnly(e.target.checked)} />
+          月末未判定
+        </label>
       </div>
 
       <ErrorBanner error={source.error ?? records.error} />
@@ -187,6 +194,7 @@ export function DpcPatientListPage() {
                   ) : (
                     <span className="dpc-patients__undecided">未決定</span>
                   )}
+                  {row.monthlyDue && <span className="dpc-patients__monthly">月末判定</span>}
                 </td>
                 <td>
                   <DpcPeriod2 row={row} />
