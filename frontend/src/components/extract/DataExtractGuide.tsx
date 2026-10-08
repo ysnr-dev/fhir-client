@@ -243,6 +243,15 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
           </dl>
         </section>
 
+        <section>
+          <h3>結果の患者をフォルダに入れる</h3>
+          <dl className="extract-guide__terms">
+            <Term name="フォルダ登録">どのタブでも、結果の患者を患者フォルダにまとめて入れる。既存のフォルダか、その場で作るフォルダを選ぶ</Term>
+            <Term name="登録済み">すでにフォルダに入っている患者は飛ばす</Term>
+            <Term name="その後">入れたフォルダは各タブの「患者フォルダ」の絞り込みに使える</Term>
+          </dl>
+        </section>
+
         <aside className="extract-guide__note">
           <h3>気をつけること</h3>
           <ul>

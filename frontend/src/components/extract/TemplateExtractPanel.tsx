@@ -22,6 +22,7 @@ import { ErrorBanner } from "../ErrorBanner";
 import { TemplateSelect } from "../TemplateSelect";
 import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
+import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
@@ -138,6 +139,7 @@ export function TemplateExtractPanel() {
         {extract.running && <span className="order-select__muted">実行中</span>}
         {table && (
           <span className="data-extract__exports">
+            <FolderRegisterButton patientIds={rows.map((r) => r.patientId)} />
             <button
               type="button"
               disabled={rows.length === 0}

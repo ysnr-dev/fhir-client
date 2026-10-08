@@ -9056,6 +9056,13 @@ input.lot-number-cell__input.is-invalid {
   align-items: flex-end;
 }
 
+/* データ抽出の「フォルダ登録」の登録先(既存 / 新しいフォルダ)。入力欄の行の上に 1 行で置く。 */
+.folder-register__target {
+  display: flex;
+  gap: 16px;
+  margin: 12px 0 8px;
+}
+
 .data-extract__toolbar--fields > .extract-checks__item,
 .data-extract__toolbar--fields > .extract-checks {
   min-height: var(--control-height);

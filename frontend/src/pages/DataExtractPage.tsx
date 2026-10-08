@@ -14,6 +14,7 @@ import { DataExtractGuide } from "../components/extract/DataExtractGuide";
 import { ExtractConditionBuilder } from "../components/extract/ExtractConditionBuilder";
 import { ExtractQuerySelect } from "../components/extract/ExtractQuerySelect";
 import { ExtractResults } from "../components/extract/ExtractResults";
+import { FolderRegisterButton } from "../components/extract/FolderRegisterButton";
 import { LabExtractPanel } from "../components/extract/LabExtractPanel";
 import { MedicationExtractPanel } from "../components/extract/MedicationExtractPanel";
 import { MicroExtractPanel } from "../components/extract/MicroExtractPanel";
@@ -305,6 +306,7 @@ function PatientExtractTab() {
             {detail.exporting && (
               <span className="order-select__muted">{`明細を読込中(検索 ${detail.requests} 回)`}</span>
             )}
+            <FolderRegisterButton patientIds={extract.result.rows.map((r) => r.patientId)} />
             <button
               type="button"
               onClick={() =>

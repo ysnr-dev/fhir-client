@@ -17,6 +17,7 @@ import { ErrorBanner } from "../ErrorBanner";
 import { MedicalProcedureSearchModal } from "../MedicalProcedureSearchModal";
 import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
+import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordResultTable } from "./RecordResultTable";
@@ -155,6 +156,7 @@ export function SurgeryExtractPanel() {
         {extract.running && <span className="order-select__muted">実行中</span>}
         {rows && (
           <span className="data-extract__exports">
+            <FolderRegisterButton patientIds={rows.map((r) => r.patientId)} />
             <button
               type="button"
               disabled={rows.length === 0}
