@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_09_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -446,6 +446,118 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_000000) do
     t.index ["search_name"], name: "idx_master_diseases_search_name_trgm", opclass: :gin_trgm_ops, using: :gin
   end
 
+  create_table "master_dpc_ccpms", force: :cascade do |t|
+    t.string "edition", null: false
+    t.string "mdc6", null: false
+    t.string "dpc_code", null: false
+    t.string "ccpm_code", null: false
+    t.string "change_category"
+    t.string "valid_from"
+    t.string "valid_to"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition", "dpc_code"], name: "index_master_dpc_ccpms_on_edition_and_dpc_code"
+  end
+
+  create_table "master_dpc_classifications", force: :cascade do |t|
+    t.string "edition", null: false
+    t.string "code", null: false
+    t.string "level", null: false
+    t.string "name", null: false
+    t.string "change_category"
+    t.string "valid_from"
+    t.string "valid_to"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition", "code"], name: "index_master_dpc_classifications_on_edition_and_code"
+  end
+
+  create_table "master_dpc_comorbidities", force: :cascade do |t|
+    t.string "edition", null: false
+    t.string "mdc6", null: false
+    t.string "code_value", null: false
+    t.string "flag", null: false
+    t.string "icd10", null: false
+    t.string "match_type", null: false
+    t.string "icd_pattern", null: false
+    t.string "icd_name"
+    t.string "change_category"
+    t.string "valid_from"
+    t.string "valid_to"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition", "mdc6"], name: "index_master_dpc_comorbidities_on_edition_and_mdc6"
+  end
+
+  create_table "master_dpc_conditions", force: :cascade do |t|
+    t.string "edition", null: false
+    t.string "mdc6", null: false
+    t.string "sheet", null: false
+    t.string "condition_kind"
+    t.string "condition_name"
+    t.string "code_value"
+    t.string "flag"
+    t.string "category"
+    t.string "category_name"
+    t.jsonb "ranges", default: [], null: false
+    t.jsonb "options", default: [], null: false
+    t.string "change_category"
+    t.string "valid_from"
+    t.string "valid_to"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition", "mdc6"], name: "index_master_dpc_conditions_on_edition_and_mdc6"
+  end
+
+  create_table "master_dpc_conversions", force: :cascade do |t|
+    t.string "edition", null: false
+    t.integer "serial"
+    t.string "dpc_code", null: false
+    t.string "mdc6", null: false
+    t.boolean "bundled", null: false
+    t.jsonb "branch_values", default: {}, null: false
+    t.string "change_category"
+    t.string "valid_from"
+    t.string "valid_to"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition", "mdc6"], name: "index_master_dpc_conversions_on_edition_and_mdc6"
+  end
+
+  create_table "master_dpc_dummy_codes", force: :cascade do |t|
+    t.string "edition", null: false
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition", "code"], name: "index_master_dpc_dummy_codes_on_edition_and_code"
+  end
+
+  create_table "master_dpc_editions", force: :cascade do |t|
+    t.string "edition", null: false
+    t.string "source_filename"
+    t.jsonb "counts", default: {}, null: false
+    t.datetime "imported_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition"], name: "index_master_dpc_editions_on_edition", unique: true
+  end
+
+  create_table "master_dpc_fee_for_service_codes", force: :cascade do |t|
+    t.string "edition", null: false
+    t.string "kind", null: false
+    t.string "category"
+    t.string "code"
+    t.text "name"
+    t.string "change_category"
+    t.string "valid_from"
+    t.string "valid_to"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition", "kind"], name: "index_master_dpc_fee_for_service_codes_on_edition_and_kind"
+  end
+
   create_table "master_dpc_icd_codes", force: :cascade do |t|
     t.string "mdc6", null: false
     t.string "icd10", null: false
@@ -456,8 +568,67 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_000000) do
     t.string "valid_to"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "edition"
+    t.string "change_category"
+    t.index ["edition", "icd10"], name: "index_master_dpc_icd_codes_on_edition_and_icd10"
     t.index ["icd10"], name: "index_master_dpc_icd_codes_on_icd10"
     t.index ["mdc6"], name: "index_master_dpc_icd_codes_on_mdc6"
+  end
+
+  create_table "master_dpc_points", force: :cascade do |t|
+    t.string "edition", null: false
+    t.integer "serial"
+    t.string "dpc_code", null: false
+    t.string "disease_name"
+    t.string "surgery_name"
+    t.string "proc1_name"
+    t.string "proc2_name"
+    t.string "comorbidity_name"
+    t.string "severity_name"
+    t.integer "days1"
+    t.integer "days2"
+    t.integer "days3"
+    t.integer "points1"
+    t.integer "points2"
+    t.integer "points3"
+    t.string "change_category"
+    t.string "valid_from"
+    t.string "valid_to"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition", "dpc_code"], name: "index_master_dpc_points_on_edition_and_dpc_code"
+  end
+
+  create_table "master_dpc_procedures", force: :cascade do |t|
+    t.string "edition", null: false
+    t.string "mdc6", null: false
+    t.integer "kind", null: false
+    t.string "flag", null: false
+    t.string "code_value", null: false
+    t.string "surgery_condition"
+    t.jsonb "codes", default: [], null: false
+    t.jsonb "names", default: [], null: false
+    t.string "change_category"
+    t.string "valid_from"
+    t.string "valid_to"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition", "mdc6", "kind"], name: "index_master_dpc_procedures_on_edition_and_mdc6_and_kind"
+  end
+
+  create_table "master_dpc_surgeries", force: :cascade do |t|
+    t.string "edition", null: false
+    t.string "mdc6", null: false
+    t.string "flag", null: false
+    t.string "code_value", null: false
+    t.jsonb "codes", default: [], null: false
+    t.jsonb "names", default: [], null: false
+    t.string "change_category"
+    t.string "valid_from"
+    t.string "valid_to"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["edition", "mdc6"], name: "index_master_dpc_surgeries_on_edition_and_mdc6"
   end
 
   create_table "master_drug_dose_rules", force: :cascade do |t|

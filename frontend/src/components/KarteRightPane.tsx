@@ -4,7 +4,7 @@ import { isOrderKind, ORDER_KINDS, type OrderKind } from "../fhir/orderKinds";
 import { AppointmentCreatePanel, AppointmentReschedulePanel } from "./AppointmentPanels";
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
 import { DischargeSummaryCreatePanel, DischargeSummaryEditPanel } from "./DischargeSummaryPanels";
-import { DpcForm1CreatePanel, DpcForm1EditPanel } from "./DpcForm1Panels";
+import { DpcForm1CreatePanel, DpcForm1EditPanel, type DpcPaneTab } from "./DpcForm1Panels";
 import { DocumentCreatePanel } from "./DocumentCreatePanel";
 import { InjectionCreatePanel, InjectionEditPanel } from "./InjectionPanels";
 import { LabOrderCreatePanel, LabOrderEditPanel } from "./LabOrderPanels";
@@ -92,8 +92,8 @@ export type KartePaneState =
   | { kind: "nursing-summary-create"; encounterId?: string }
   | { kind: "nursing-summary-edit"; noteId: string }
   // DPC 様式1。encounterId は対象の入院の初期値(提出ファイルの一覧から)。
-  | { kind: "dpc-form1-create"; encounterId?: string }
-  | { kind: "dpc-form1-edit"; responseId: string }
+  | { kind: "dpc-form1-create"; encounterId?: string; tab?: DpcPaneTab }
+  | { kind: "dpc-form1-edit"; responseId: string; tab?: DpcPaneTab }
   // 文書テンプレート(Word / Excel)から文書を作る。作った文書は「ファイル」タブに入る。
   | { kind: "document-create" }
   | { kind: "vital-create"; problem?: ProblemRef }
@@ -261,8 +261,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "summary-edit": "退院時サマリー編集",
   "nursing-summary-create": "看護サマリー登録",
   "nursing-summary-edit": "看護サマリー",
-  "dpc-form1-create": "DPC様式1登録",
-  "dpc-form1-edit": "DPC様式1編集",
+  "dpc-form1-create": "DPC登録",
+  "dpc-form1-edit": "DPC編集",
   "document-create": "文書作成",
   "vital-create": "バイタル登録",
   "vital-edit": "バイタル編集",
@@ -605,7 +605,7 @@ export function KarteRightPane({
           退院時サマリー
         </button>
         <button type="button" onClick={() => onStateChange({ kind: "dpc-form1-create" })}>
-          DPC様式1
+          DPC
         </button>
         <button type="button" onClick={() => onStateChange({ kind: "document-create" })}>
           文書作成
@@ -767,13 +767,19 @@ function PaneContent({
         <DpcForm1CreatePanel
           patientId={patientId}
           defaultEncounterId={state.encounterId}
+          tab={state.tab}
           onSaved={onSaved}
           onStateChange={onStateChange}
         />
       );
     case "dpc-form1-edit":
       return (
-        <DpcForm1EditPanel patientId={patientId} responseId={state.responseId} onSaved={onSaved} />
+        <DpcForm1EditPanel
+          patientId={patientId}
+          responseId={state.responseId}
+          tab={state.tab}
+          onSaved={onSaved}
+        />
       );
     case "document-create":
       return <DocumentCreatePanel patientId={patientId} onSaved={onSaved} />;

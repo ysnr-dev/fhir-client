@@ -42,6 +42,7 @@ export const KARTE_OPEN_PARAM = "open";
 export type KarteOpenTarget =
   | { kind: "discharge-summary"; encounterId: string }
   | { kind: "dpc-form1"; encounterId: string }
+  | { kind: "dpc-coding"; encounterId: string }
   | { kind: "radiotherapy-review"; srId: string }
   | { kind: "nursing-summary"; compositionId: string };
 
@@ -62,7 +63,9 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   const kind = value.slice(0, separator);
   const id = value.slice(separator + 1);
   if (!id) return null;
-  if (kind === "discharge-summary" || kind === "dpc-form1") return { kind, encounterId: id };
+  if (kind === "discharge-summary" || kind === "dpc-form1" || kind === "dpc-coding") {
+    return { kind, encounterId: id };
+  }
   if (kind === "radiotherapy-review") return { kind, srId: id };
   if (kind === "nursing-summary") return { kind, compositionId: id };
   return null;

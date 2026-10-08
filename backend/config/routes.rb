@@ -368,11 +368,15 @@ Rails.application.routes.draw do
     resources :postal_codes, only: %i[index] do
       collection { post :import }
     end
-    # DPC 電子点数表の ICD-10 → 診断群分類上6桁の対応表。様式1 の必須判定で引くだけ
-    # なので検索専用(取込で全件洗い替え)。
-    resources :dpc_icd_codes, only: %i[index] do
+    # DPC 電子点数表。取込は全シートを 1 ファイルから版ごとに入れ替える(dpc_tables)。
+    # ICD-10 → 診断群分類上6桁の対応表は様式1 の必須判定で引く。
+    resources :dpc_tables, only: %i[index] do
       collection { post :import }
     end
+    resources :dpc_icd_codes, only: %i[index]
+    # 診断群分類(14 桁)の判定(保存しない)と、分類・点数の閲覧。
+    post "dpc/coding", to: "dpc_codings#create"
+    get "dpc/classifications", to: "dpc_classifications#index"
     # シェーマ(診療記録に描き込む台紙画像)。カテゴリは parent_id の隣接リストで
     # 任意の深さの階層を持つ。
     resources :schema_categories, only: %i[index show create update destroy]

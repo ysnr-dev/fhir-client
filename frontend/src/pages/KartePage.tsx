@@ -357,6 +357,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         ? { kind: "summary-create", encounterId: openTarget.encounterId }
         : openTarget.kind === "dpc-form1"
           ? { kind: "dpc-form1-create", encounterId: openTarget.encounterId }
+          : openTarget.kind === "dpc-coding"
+            ? { kind: "dpc-form1-create", encounterId: openTarget.encounterId, tab: "coding" }
           : openTarget.kind === "nursing-summary"
             ? { kind: "nursing-summary-edit", noteId: openTarget.compositionId }
             : { kind: "radiotherapy-review", srId: openTarget.srId },

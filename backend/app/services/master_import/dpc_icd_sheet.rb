@@ -1,6 +1,6 @@
 module MasterImport
-  # 厚生労働省の診断群分類(DPC)電子点数表(Excel)から、ICD-10 → 診断群分類上6桁の
-  # 対応表(「４）ＩＣＤ」シート)を master_dpc_icd_codes へ全件洗い替えで取り込む。
+  # DPC 電子点数表の「４）ＩＣＤ」シート(ICD-10 → 診断群分類上6桁の対応表)を行にする。
+  # 取込は DpcTableImporter が全シートまとめて行う。
   #
   # シートはヘッダー2行(2行目は有効期間の「開始日 / 終了日」)に続いて
   # [MDCコード / 分類コード / ICD名称 / ICDコード / 変更区分 / 有効期間 開始日 / 終了日 / 更新日]
@@ -12,16 +12,13 @@ module MasterImport
   #
   # 列の位置はヘッダーの見出しから決める。読めない表記の ICD コードがあれば、
   # 誤った対応を入れないよう取込全体を止める。
-  class DpcIcdCodeImporter
-    Result = Struct.new(:imported_count, keyword_init: true)
-
-    BATCH_SIZE = 1000
-
+  module DpcIcdSheet
     HEADERS = {
       mdc: "MDCコード",
       classification: "分類コード",
       icd_name: "ICD名称",
       icd_code: "ICDコード",
+      change_category: "変更区分",
       valid_from: "有効期間"
     }.freeze
 
@@ -29,44 +26,22 @@ module MasterImport
     PREFIX_PATTERN = /\A([A-Z]\d{2,3})\$\z/
     FALLBACK_PATTERN = /\A([A-Z])!+\z/
 
-    def self.call(file)
-      new(file).call
-    end
-
-    def initialize(file)
-      @file = file
-    end
-
-    def call
-      rows = ExcelSource.open(file) { |workbook| build_rows(icd_sheet(workbook)) }
-      raise ImportError, "ICD コードが 1 件も読み取れませんでした" if rows.empty?
-
-      ActiveRecord::Base.transaction do
-        Master::DpcIcdCode.delete_all
-        rows.each_slice(BATCH_SIZE) { |slice| Master::DpcIcdCode.insert_all!(slice) }
-      end
-
-      Result.new(imported_count: rows.size)
-    end
-
-    private
-
-    attr_reader :file
+    module_function
 
     # シート名は「４）ＩＣＤ」。全角・半角のゆれを吸収して探す。
-    def icd_sheet(workbook)
+    def sheet(workbook)
       name = workbook.sheets.find { |sheet_name| ExcelSource.normalize_label(sheet_name).upcase.end_with?(")ICD") }
       raise ImportError, "「４）ＩＣＤ」のシートが見つかりません" if name.nil?
 
       workbook.sheet(name)
     end
 
-    def build_rows(sheet)
+    def rows(workbook)
+      sheet = sheet(workbook)
       header_row = ExcelSource.find_header_row(sheet, [HEADERS[:icd_code]])
       raise ImportError, "ヘッダー行(ICDコード)が見つかりません" if header_row.nil?
 
       columns = header_columns(sheet, header_row)
-      now = Time.current
 
       ((header_row + 1)..sheet.last_row.to_i).filter_map do |row|
         mdc = ExcelSource.cell_string(sheet, row, columns[:mdc])
@@ -76,7 +51,7 @@ module MasterImport
         classification = ExcelSource.cell_string(sheet, row, columns[:classification])
         # 分類コードは 4 桁で、末尾が "x" のもの("021x")もある。
         unless /\A(\d{1,4}|\d{3}x)\z/.match?(classification.to_s)
-          raise ImportError, "row #{row}: 分類コード「#{classification}」が読み取れません"
+          raise ImportError, "ICD row #{row}: 分類コード「#{classification}」が読み取れません"
         end
 
         icd_pattern = normalize_icd_pattern(ExcelSource.cell_string(sheet, row, columns[:icd_code]))
@@ -89,11 +64,10 @@ module MasterImport
           match_type: match_type,
           icd_pattern: icd_pattern,
           icd_name: ExcelSource.cell_string(sheet, row, columns[:icd_name]),
+          change_category: ExcelSource.cell_string(sheet, row, columns[:change_category]),
           valid_from: ExcelSource.cell_string(sheet, row, columns[:valid_from]),
           # 終了日は「有効期間」の見出しの右隣の列。
-          valid_to: ExcelSource.cell_string(sheet, row, columns[:valid_from] + 1),
-          created_at: now,
-          updated_at: now
+          valid_to: ExcelSource.cell_string(sheet, row, columns[:valid_from] + 1)
         }
       end
     end
@@ -104,7 +78,7 @@ module MasterImport
       end
 
       HEADERS.transform_values do |label|
-        labels[label] || raise(ImportError, "ヘッダーに「#{label}」の列がありません")
+        labels[label] || raise(ImportError, "ICD のヘッダーに「#{label}」の列がありません")
       end
     end
 
@@ -113,11 +87,14 @@ module MasterImport
       text.to_s.unicode_normalize(:nfkc).upcase.gsub(/[[:space:].]/, "")
     end
 
-    def parse_icd(icd_pattern, row)
+    def parse_icd(icd_pattern, row, allow_fallback: true)
       case icd_pattern
       when EXACT_PATTERN then [icd_pattern, Master::DpcIcdCode::EXACT]
       when PREFIX_PATTERN then [::Regexp.last_match(1), Master::DpcIcdCode::PREFIX]
-      when FALLBACK_PATTERN then [::Regexp.last_match(1), Master::DpcIcdCode::FALLBACK]
+      when FALLBACK_PATTERN
+        raise ImportError, "row #{row}: ICD コード「#{icd_pattern}」の表記を解釈できません" unless allow_fallback
+
+        [::Regexp.last_match(1), Master::DpcIcdCode::FALLBACK]
       else raise ImportError, "row #{row}: ICD コード「#{icd_pattern}」の表記を解釈できません"
       end
     end

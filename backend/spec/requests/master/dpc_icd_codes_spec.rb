@@ -1,28 +1,6 @@
 require "rails_helper"
 
 RSpec.describe "Master::DpcIcdCodes", type: :request do
-  describe "POST /master/dpc_icd_codes/import" do
-    it "アップロードした配布ファイルを取り込む" do
-      post "/master/dpc_icd_codes/import", params: { file: fixture_file_upload("dpc_icd_codes_sample.xlsx") }
-
-      expect(response).to have_http_status(:ok)
-      expect(JSON.parse(response.body)["imported"]).to eq(11)
-      expect(Master::DpcIcdCode.count).to eq(11)
-    end
-
-    it "ファイルが無ければ 422" do
-      post "/master/dpc_icd_codes/import", params: {}
-
-      expect(response).to have_http_status(:unprocessable_content)
-    end
-
-    it "ICD のシートが無ければ 422" do
-      post "/master/dpc_icd_codes/import", params: { file: fixture_file_upload("ctcae_terms_sample.xlsx") }
-
-      expect(response).to have_http_status(:unprocessable_content)
-    end
-  end
-
   describe "GET /master/dpc_icd_codes" do
     before do
       create_code("010010", "C700", "exact", "C700", "髄膜の悪性新生物＜腫瘍＞，脳髄膜")
@@ -110,6 +88,33 @@ RSpec.describe "Master::DpcIcdCodes", type: :request do
 
     it "診断群分類上6桁で絞れる" do
       expect(body_for(mdc6: "050130")["items"].map { |i| i["icd_pattern"] }).to eq(["I50$"])
+    end
+  end
+
+  describe "GET /master/dpc_icd_codes(版)" do
+    before do
+      Master::DpcEdition.create!(edition: "20240601", imported_at: Time.current)
+      Master::DpcEdition.create!(edition: "20260601", imported_at: Time.current)
+      Master::DpcIcdCode.create!(edition: "20240601", mdc6: "050130", icd10: "I50", match_type: "prefix",
+                                 icd_pattern: "I50$", valid_from: "20240601", valid_to: "99999999")
+      Master::DpcIcdCode.create!(edition: "20260601", mdc6: "050131", icd10: "I50", match_type: "prefix",
+                                 icd_pattern: "I50$", valid_from: "20260601", valid_to: "99999999")
+    end
+
+    def mdc6_on(on)
+      get "/master/dpc_icd_codes", params: { icd10: "I500", on: on }.compact
+      JSON.parse(response.body)["items"].map { |i| i["mdc6"] }
+    end
+
+    it "基準日(on)の版で引く" do
+      expect(mdc6_on("2026-05-31")).to eq(["050130"])
+      expect(mdc6_on("2026-06-01")).to eq(["050131"])
+    end
+
+    it "基準日を省けば今日の版" do
+      travel_to Time.zone.parse("2026-10-08 12:00") do
+        expect(mdc6_on(nil)).to eq(["050131"])
+      end
     end
   end
 end

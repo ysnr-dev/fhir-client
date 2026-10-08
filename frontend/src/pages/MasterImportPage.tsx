@@ -170,9 +170,9 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".csv",
   },
   {
-    type: "dpc_icd_codes",
-    label: "DPC ICD対応表（診断群分類 電子点数表）",
-    formatHint: "厚生労働省 診断群分類（DPC）電子点数表 .xlsx（「４）ＩＣＤ」シートを読む）",
+    type: "dpc_tables",
+    label: "DPC 電子点数表",
+    formatHint: "厚生労働省 診断群分類（DPC）電子点数表 .xlsx（全シートを読み、版ごとに入れ替える）",
     accept: ".xlsx",
   },
   {

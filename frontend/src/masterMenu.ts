@@ -21,6 +21,11 @@ export const MASTER_MENU: MasterMenuGroup[] = [
       { label: "診療記録タイトル", to: "/clinical-note-titles" },
     ],
   },
+  // DPC 電子点数表(診断群分類の判定・点数)。配布ファイルを取り込んで閲覧するだけ。
+  {
+    label: "DPC",
+    items: [{ label: "DPC 電子点数表", to: "/dpc-tables" }],
+  },
   // 他院。診療情報提供書の送付先候補として登録する。
   {
     label: "連携先",

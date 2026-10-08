@@ -77,6 +77,8 @@ interface DpcForm1FormProps {
   submitting: boolean;
   submitError?: unknown;
   validationErrors: string[];
+  /** 入力中の値(保存前)。診断群分類の判定に渡す。 */
+  onValuesChange?: (values: Dpc1Values) => void;
 }
 
 export function DpcForm1Form({
@@ -91,8 +93,10 @@ export function DpcForm1Form({
   submitting,
   submitError,
   validationErrors,
+  onValuesChange,
 }: DpcForm1FormProps) {
   const [values, setValues] = useState<Dpc1Values>(initialValues);
+  useEffect(() => onValuesChange?.(values), [values, onValuesChange]);
   const [pick, setPick] = useState<PickTarget | null>(null);
   const [adding, setAdding] = useState("");
 

@@ -46,6 +46,7 @@ export * from "./pathway";
 export * from "./files";
 export * from "./radiotherapy";
 export * from "./dpcForm1";
+export * from "./dpcCoding";
 export * from "./countersign";
 export * from "./lotManagement";
 export * from "./extractQuery";

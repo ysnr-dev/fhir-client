@@ -140,6 +140,13 @@ class FacilitySettings < ApplicationRecord
   # 列の中身(LOINC・MEDIS のコード、単位)は frontend が持ち、ここはどれを出すかだけを決める。
   BULK_VITAL_ITEMS = %w[blood_pressure temperature pulse spo2 respiration weight meal].freeze
   DEFAULT_BULK_VITAL_ENTRY = { "items" => BULK_VITAL_ITEMS }.freeze
+  # DPC の医療機関別係数(基礎係数・機能評価係数Ⅰ・Ⅱ・救急補正係数などを合わせた値)。年度の途中でも
+  # 変わるので { 適用開始日(YYYY-MM-DD) => 係数 } で持ち、診断群分類の推定包括額
+  # (点数 × 係数 × 10 円)に使う。
+  DEFAULT_DPC_COEFFICIENTS = {}.freeze
+  DPC_COEFFICIENT = { pattern: /\A\d\.\d{1,4}\z/, label: "係数(1.2345 の形)" }.freeze
+  DATE_KEY_PATTERN = /\A\d{4}-\d{2}-\d{2}\z/
+
   QUESTIONNAIRE_URL = { pattern: %r{\Ahttps?://[^\s|]+\z}, label: "テンプレートの url" }.freeze
 
   # 医事会計へ送るレセプト電算コードのうち、施設基準や届出で決まる「1 施設 1 値」のもの
@@ -259,6 +266,14 @@ class FacilitySettings < ApplicationRecord
     "bulk_vital_entry" => {
       default: DEFAULT_BULK_VITAL_ENTRY,
       shape: { fields: { "items" => { list: { enum: BULK_VITAL_ITEMS }, min: 1, unique: true } } }
+    },
+    "dpc_coefficients" => {
+      default: DEFAULT_DPC_COEFFICIENTS,
+      shape: { map: DPC_COEFFICIENT, keys: :any },
+      check: lambda { |value|
+        bad = value.is_a?(Hash) ? value.keys.reject { |key| key.to_s.match?(DATE_KEY_PATTERN) } : []
+        bad.map { |key| "dpc_coefficients の適用開始日「#{key}」は YYYY-MM-DD で指定してください" }
+      }
     }
   }.freeze
 

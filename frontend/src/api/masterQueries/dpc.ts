@@ -1,5 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
-import { fetchDpcIcdCodes } from "../masterClient";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  fetchDpcClassifications,
+  fetchDpcEditions,
+  fetchDpcIcdCodes,
+  postDpcCoding,
+  type DpcCodingInputs,
+  type DpcCodingOverrides,
+} from "../masterClient";
 
 // サーバーと同じ表記(半角大文字・小数点なし)にそろえる。返る icd10 がこの表記なので、
 // 呼び出し側もこの表記で結果を引く。
@@ -29,5 +36,37 @@ export function useDpcMdc6(icd10s: string[]) {
     },
     staleTime: Infinity,
     enabled: codes.length > 0,
+  });
+}
+
+/**
+ * 入院 1 件の診断群分類の判定。様式1 の値・上書きが変わるたびに引き直す(呼び出し側で
+ * 入力を間引く)。引き直している間は前の結果を出したままにする。
+ */
+export function useDpcCoding(
+  encounterId: string | undefined,
+  inputs: DpcCodingInputs,
+  overrides: DpcCodingOverrides,
+  active = true,
+) {
+  return useQuery({
+    queryKey: ["master", "dpc_coding", encounterId, inputs, overrides],
+    queryFn: () => postDpcCoding({ encounter_id: encounterId ?? "", inputs, overrides }),
+    enabled: Boolean(encounterId) && active,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+}
+
+export function useDpcEditions() {
+  return useQuery({ queryKey: ["master", "dpc_tables"], queryFn: fetchDpcEditions });
+}
+
+export function useDpcClassifications(params: { q?: string; mdc6?: string; on?: string }) {
+  return useQuery({
+    queryKey: ["master", "dpc_classifications", params],
+    queryFn: () => fetchDpcClassifications(params),
+    enabled: Boolean(params.q || params.mdc6),
+    placeholderData: keepPreviousData,
   });
 }

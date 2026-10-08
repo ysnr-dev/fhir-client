@@ -155,6 +155,8 @@ import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 import { HomePage } from "./pages/HomePage";
 import { BulletinPage } from "./pages/BulletinPage";
 import { DpcForm1ExportPage } from "./pages/DpcForm1ExportPage";
+import { DpcPatientListPage } from "./pages/DpcPatientListPage";
+import { DpcTablesPage } from "./pages/DpcTablesPage";
 
 // 患者配下の未定義パスをその患者のカルテへ寄せる。
 function KarteRedirect() {
@@ -338,6 +340,9 @@ function App() {
           <NavLink to="/bulletin">掲示板</NavLink>
           {/* 院外へ提出するデータ(DPC 調査など)と、患者を条件で抜き出す二次利用のデータをまとめる。 */}
           <HoverMenu label="データ">
+            <Link to="/dpc-patients" className="row-menu__item">
+              DPC患者
+            </Link>
             <Link to="/dpc-form1-export" className="row-menu__item">
               DPC様式1
             </Link>
@@ -460,6 +465,7 @@ function App() {
           <Route path="/inpatients" element={<InpatientListPage />} />
           {/* DPC 様式1 の提出ファイル(FF1)の出力。 */}
           <Route path="/dpc-form1-export" element={<DpcForm1ExportPage />} />
+          <Route path="/dpc-patients" element={<DpcPatientListPage />} />
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
           <Route path="/lab-worklist" element={<LabWorklistPage />} />
           <Route path="/lab-arrivals" element={<LabArrivalPage />} />
@@ -505,6 +511,7 @@ function App() {
           <Route path="/surgeries/:orderId/anesthesia-chart" element={<AnesthesiaChartPage />} />
           <Route path="/masters" element={<MasterMenuPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
+          <Route path="/dpc-tables" element={<DpcTablesPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/medicine-attributes" element={<MedicineAttributePage />} />
           <Route path="/formularies" element={<FormularyPage />} />

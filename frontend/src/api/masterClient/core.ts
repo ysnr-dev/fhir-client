@@ -27,13 +27,13 @@ export type MasterType =
   | "nursing_units"
   | "postal_codes"
   | "ctcae_terms"
-  | "dpc_icd_codes";
+  | "dpc_tables";
 
 export interface MasterImportResult {
   imported: number;
   /** 取り込めなかった行数。配布ファイルの欠番・桁不足・重複を数えるマスタだけが返す。 */
   skipped?: number;
-  /** JJ1017 部品コード: 取り込んだ要素ごとの件数。 */
+  /** JJ1017 部品コード・DPC 電子点数表: 取り込んだ要素(シート)ごとの件数。 */
   elements?: Record<string, number>;
   /** JJ1017 頻用コード: 取り込んだ区分ごとの件数。 */
   categories?: Record<string, number>;

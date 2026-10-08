@@ -23280,6 +23280,187 @@ body.page-home .app__main {
   gap: 8px;
 }
 
+/* DPC の診断群分類(components/DpcCodingView.tsx)。 */
+.dpc-coding {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.dpc-coding h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.dpc-coding__warning {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--warning);
+  border-radius: 4px;
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.dpc-coding__code {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.dpc-coding__bundled {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.dpc-coding__undetermined,
+.dpc-coding__over {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.dpc-coding__periods {
+  width: auto;
+  margin: 6px 0;
+}
+
+.dpc-coding__evidence {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.dpc-coding__note {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.dpc-coding__branches select {
+  max-width: 260px;
+}
+
+.dpc-coding__actions {
+  white-space: nowrap;
+}
+
+.dpc-coding__actions button + button {
+  margin-left: 4px;
+}
+
+/* 未確定の分岐は人が決めるところなので目立たせる。 */
+.dpc-coding__row--open td {
+  background: var(--accent-bg);
+}
+
+/* 除外した候補・判定と合わない分類・取り消した決定は薄くする。 */
+.dpc-coding__row--muted td {
+  opacity: 0.5;
+}
+
+.dpc-coding__row--current td {
+  background: var(--accent-bg);
+  font-weight: 600;
+}
+
+.dpc-coding__simulation .dpc-coding__code {
+  font-size: 13px;
+}
+
+.dpc-coding__manual label,
+.dpc-coding__decide label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dpc-coding th {
+  white-space: nowrap;
+}
+
+.dpc-coding__manual,
+.dpc-coding__decide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.dpc-coding__manual input {
+  width: 100px;
+}
+
+.dpc-coding__decide-note {
+  flex: 1;
+}
+
+.dpc-coding__decide-note input {
+  width: 100%;
+}
+
+.dpc-coding__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: var(--mono);
+}
+
+.dpc-coding__chip button {
+  height: auto;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+}
+
+/* DPC 患者一覧(pages/DpcPatientListPage.tsx)。 */
+.master-search__form--row label.dpc-patients__check {
+  flex: none;
+}
+
+/* 日付・日数の列は折り返さない(診断群分類の名称の列だけ折り返す)。 */
+.dpc-patients th,
+.dpc-patients td {
+  white-space: nowrap;
+}
+
+.dpc-patients .dpc-coding__note {
+  white-space: normal;
+}
+
+.dpc-patients__undecided,
+.dpc-patients__near {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.dpc-patients__over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* DPC 電子点数表の閲覧(pages/DpcTablesPage.tsx)。検索で当たった分類を選ぶボタンを並べる。 */
+.dpc-tables__classifications {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+
+.dpc-tables__classifications .is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* 提出ファイル画面の退院月。検索フォームの欄は行の幅まで伸びるが、年月だけなので伸ばさない。 */
 .master-search__form--row .dpc-form1-export__month {
   flex: none;

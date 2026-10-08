@@ -285,10 +285,27 @@ export function FacilitySettingsPage() {
     });
   }
 
+  // DPC の医療機関別係数。適用開始日ごとの行で編集し、保存では { 開始日: 係数 } にする。
+  const [coefficientDraft, setCoefficientDraft] = useState<{ from: string; value: string }[] | undefined>(
+    undefined,
+  );
+  const coefficients =
+    coefficientDraft ??
+    Object.entries(settings.data?.dpc_coefficients ?? {})
+      .map(([from, value]) => ({ from, value }))
+      .sort((a, b) => a.from.localeCompare(b.from));
+  const coefficientsValid =
+    coefficients.every((c) => /^\d{4}-\d{2}-\d{2}$/.test(c.from) && /^\d\.\d{1,4}$/.test(c.value)) &&
+    new Set(coefficients.map((c) => c.from)).size === coefficients.length;
+
+  function updateCoefficient(index: number, patch: Partial<{ from: string; value: string }>) {
+    setCoefficientDraft(coefficients.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  }
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
-    if (!reviewValid || !receiptCodesOk) return;
+    if (!reviewValid || !receiptCodesOk || !coefficientsValid) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
@@ -303,6 +320,7 @@ export function FacilitySettingsPage() {
       receipt_codes: receiptCodes,
       nursing_profile: nursingProfile,
       bulk_vital_entry: bulkVitalEntry,
+      dpc_coefficients: Object.fromEntries(coefficients.map((c) => [c.from, c.value])),
     });
   }
 
@@ -876,6 +894,52 @@ export function FacilitySettingsPage() {
                 </button>
               </span>
             </label>
+          </div>
+        </details>
+
+        {/* DPC の医療機関別係数。基礎係数・機能評価係数Ⅰ・Ⅱ・救急補正係数などを合わせた値で、
+            診断群分類の推定包括額(点数 × 係数 × 10 円)に使う。年度の途中でも変わるので
+            適用開始日ごとに持つ。 */}
+        <details className="facility-settings__schedule">
+          <summary>DPC の医療機関別係数</summary>
+          <div className="facility-settings__schedule-body">
+            <ul className="facility-settings__balance-list">
+              {coefficients.map((c, index) => (
+                <li key={index}>
+                  <input
+                    type="date"
+                    value={c.from}
+                    onChange={(e) => updateCoefficient(index, { from: e.target.value })}
+                    aria-label="適用開始日"
+                  />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={c.value}
+                    onChange={(e) => updateCoefficient(index, { value: e.target.value.trim() })}
+                    aria-label="係数"
+                    aria-invalid={!/^\d\.\d{1,4}$/.test(c.value)}
+                    className="facility-settings__code"
+                  />
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title="係数を削除"
+                    aria-label="係数を削除"
+                    onClick={() => setCoefficientDraft(coefficients.filter((_, i) => i !== index))}
+                  >
+                    <TrashIcon />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="rp-card__compact-button"
+              onClick={() => setCoefficientDraft([...coefficients, { from: "", value: "" }])}
+            >
+              追加
+            </button>
           </div>
         </details>
 

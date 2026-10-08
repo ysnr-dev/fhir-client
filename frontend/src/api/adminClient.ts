@@ -66,6 +66,8 @@ export interface FacilitySettings {
   nursing_profile: NursingProfileSettings;
   /** 経過表の一括入力に出す列(並べた順)。 */
   bulk_vital_entry: BulkVitalEntrySettings;
+  /** DPC の医療機関別係数(適用開始日 YYYY-MM-DD → 係数)。 */
+  dpc_coefficients: Record<string, string>;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -82,6 +84,7 @@ export type FacilitySettingsPayload = Partial<{
   receipt_codes: ReceiptCodeSettings;
   nursing_profile: NursingProfileSettings;
   bulk_vital_entry: BulkVitalEntrySettings;
+  dpc_coefficients: Record<string, string>;
 }>;
 
 export interface ConnectionTestResult {
