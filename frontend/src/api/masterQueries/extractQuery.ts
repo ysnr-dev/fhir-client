@@ -8,13 +8,20 @@ import {
   type ExtractQueryPayload,
   updateExtractQuery,
 } from "../masterClient";
+import type { ExtractTab } from "../../fhir/extractRecordQuery";
 
 const EXTRACT_QUERIES_KEY = ["master", "extract_queries"];
 
-export function useExtractQueries(departmentId: string | undefined, practitionerId: string | undefined, enabled = true) {
+/** タブ(既定は「患者」)の条件の一覧。 */
+export function useExtractQueries(
+  departmentId: string | undefined,
+  practitionerId: string | undefined,
+  enabled = true,
+  tab: ExtractTab = "patient",
+) {
   return useQuery({
-    queryKey: [...EXTRACT_QUERIES_KEY, "list", { departmentId: departmentId ?? "", practitionerId: practitionerId ?? "" }],
-    queryFn: () => fetchExtractQueries({ department_id: departmentId, practitioner_id: practitionerId }),
+    queryKey: [...EXTRACT_QUERIES_KEY, "list", { departmentId: departmentId ?? "", practitionerId: practitionerId ?? "", tab }],
+    queryFn: () => fetchExtractQueries({ department_id: departmentId, practitioner_id: practitionerId, tab }),
     enabled,
   });
 }

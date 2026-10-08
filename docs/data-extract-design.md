@@ -379,3 +379,28 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
 - 新しいフォルダは作ってから入れる(`createPatientFolder` → `addPatientFolderMembers`)。患者は backend の上限に合わせて
   500 人ずつ送る。すでに入っている患者は backend が飛ばし、「N 人を登録しました(M 人は登録済み)」を出す。
 - 登録してもモーダルは閉じない。作ったフォルダは「既存のフォルダ」の選択に切り替わる(続けて別の持ち主にも入れられる)。
+
+## 17. 記録タブの条件の保存
+
+記録を表にするタブ(§8〜§15)でも、入力した条件を「患者」タブと同じく院内共通 / 診療科 / 自分ごとに名前を付けて保存する。
+月次の統計のように同じ条件を繰り返す使い方のため。
+
+- **保存先**: 「患者」タブと同じ `extract_queries` に、どのタブの条件かを表す `tab` 列(`patient` / `template` / `lab` /
+  `medication` / `micro` / `surgery` / `perform` / `adverse` / `pathway`。既存は `patient`。migration
+  `20261009000000_add_tab_to_extract_queries.rb`)を足した。名前の重なりは持ち主 × タブごとに見る。タブは作るときだけ受け取り、
+  保存した後は変えない(`attr_readonly`)。一覧は `?tab=` で絞る(画面はいつもタブを指定し、「患者」タブと患者の絞り込みの選択肢は
+  `patient` だけを読む)。
+- **形**: 記録タブの条件は AND / OR の木を持たず、タブごとの入力欄の値をそのまま持つ(backend の `ExtractRecordDefinition`)。
+  - 共通: `schema_version`・`period`・`patient_query_code`(「患者」タブに保存した条件の code。環境をまたいでも同じ条件を指す)・
+    `patient_folder_id`・`output.patient_columns`。
+  - タブ固有: テンプレート(`template_url` 必須・`latest_only`・診療科)、検査結果(`items` 必須。ChartItem と同じ形・`mode`・
+    `aggregates`・`interpretation`・診療科)、投薬(`codes`・`drug_classes`・`order_type`・依頼科)、細菌検査
+    (`include_no_isolate`・`first_isolate_only`・`susceptibility`)、手術(`procedures`・依頼科)、部門実施(`order_kind` 必須)、
+    有害事象(`treatment_type`・`terms`・`mode`)、パス(`pathway_code`)。知らない項目は弾く。
+- **画面**: 各タブの上の「条件」の帯(`components/extract/RecordQueryBar.tsx`)。保存・別名保存・削除と「未保存」の印は「患者」タブと同じ。
+  名前と持ち主を入れるモーダルは「患者」タブと共通(`SaveQueryModal`)。各タブは「今の入力 → 保存する形」(空の値は落とす。
+  `compactDefinition`)と「保存した形 → 入力欄」(`applyDefinition`。null なら初期値。「クリア」もこれ)を持つ。
+  「未保存」はキーの並びに左右されない比較(`stableJson`)で、保存した値と今の入力を比べる。
+- **患者の絞り込み**: 患者の条件は code で持つ(`useExtractPatientScope` の `queryCode`)。保存した条件を読み込んだ時点で一覧が
+  読めていなくても、読めたら選ばれる。
+- 推移(実行のたびの件数の記録)は記録タブではまだ残さない。

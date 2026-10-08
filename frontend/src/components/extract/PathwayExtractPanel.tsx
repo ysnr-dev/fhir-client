@@ -9,7 +9,8 @@ import {
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
 import { pathwayExtractCsv, pathwayExtractHeader, pathwayExtractRows } from "../../fhir/pathwayExtractHelpers";
-import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
@@ -18,9 +19,15 @@ import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
+
+/** 保存する条件(docs/data-extract-design.md §17)。 */
+interface PathwayCriteria extends ExtractRecordDefinition {
+  pathway_code?: string;
+}
 
 /**
  * クリニカルパスの適用の抽出(docs/data-extract-design.md §14)。適用 1 件を 1 行にし、日数・終了区分と
@@ -70,12 +77,24 @@ export function PathwayExtractPanel() {
     });
   }
 
+  const definition = compactDefinition<PathwayCriteria>({
+    schema_version: 1,
+    period,
+    ...scopeDefinition(scope),
+    output,
+    pathway_code: pathwayCode || undefined,
+  });
+
+  /** 保存した条件を入力欄に戻す(null なら初期値)。 */
+  function applyDefinition(saved: PathwayCriteria | null) {
+    setPathwayCode(saved?.pathway_code ?? "");
+    setPeriod(saved?.period ?? DEFAULT_PERIOD);
+    applyScopeDefinition(scope, saved);
+    setOutput(saved?.output);
+  }
+
   function handleClear() {
-    setPathwayCode("");
-    setPeriod(DEFAULT_PERIOD);
-    scope.setQueryId(null);
-    scope.setFolderId(null);
-    setOutput(undefined);
+    applyDefinition(null);
   }
 
   function handleCancel() {
@@ -85,6 +104,7 @@ export function PathwayExtractPanel() {
 
   return (
     <>
+      <RecordQueryBar tab="pathway" current={definition} onLoad={applyDefinition} />
       <div className="data-extract__toolbar data-extract__toolbar--fields">
         <label className="extract-field">
           パス

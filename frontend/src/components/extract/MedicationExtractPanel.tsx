@@ -14,7 +14,8 @@ import {
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
 import { medicationExtractCsv, medicationExtractHeader, medicationExtractRows } from "../../fhir/medicationExtractHelpers";
-import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
@@ -23,9 +24,18 @@ import { MedicationCodes, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
+
+/** 保存する条件(docs/data-extract-design.md §17)。 */
+interface MedicationCriteria extends ExtractRecordDefinition {
+  codes?: ExtractCode[];
+  drug_classes?: ExtractDrugClass[];
+  order_type?: ExtractOrderType;
+  department_id?: string;
+}
 
 /**
  * 投薬の抽出(docs/data-extract-design.md §15)。処方・注射のオーダーの薬剤 1 件を 1 行にした表と CSV にする。
@@ -72,15 +82,30 @@ export function MedicationExtractPanel() {
     });
   }
 
+  const definition = compactDefinition<MedicationCriteria>({
+    schema_version: 1,
+    period,
+    ...scopeDefinition(scope),
+    output,
+    codes,
+    drug_classes: drugClasses,
+    order_type: orderType || undefined,
+    department_id: departmentId || undefined,
+  });
+
+  /** 保存した条件を入力欄に戻す(null なら初期値)。 */
+  function applyDefinition(saved: MedicationCriteria | null) {
+    setCodes(saved?.codes ?? []);
+    setDrugClasses(saved?.drug_classes ?? []);
+    setOrderType(saved?.order_type ?? "");
+    setPeriod(saved?.period ?? DEFAULT_PERIOD);
+    setDepartmentId(saved?.department_id ?? "");
+    applyScopeDefinition(scope, saved);
+    setOutput(saved?.output);
+  }
+
   function handleClear() {
-    setCodes([]);
-    setDrugClasses([]);
-    setOrderType("");
-    setPeriod(DEFAULT_PERIOD);
-    setDepartmentId("");
-    scope.setQueryId(null);
-    scope.setFolderId(null);
-    setOutput(undefined);
+    applyDefinition(null);
   }
 
   function handleCancel() {
@@ -90,6 +115,7 @@ export function MedicationExtractPanel() {
 
   return (
     <>
+      <RecordQueryBar tab="medication" current={definition} onLoad={applyDefinition} />
       <MedicationCodes
         leaf={drugLeaf}
         patch={(next) => {

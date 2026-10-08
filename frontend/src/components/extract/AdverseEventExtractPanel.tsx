@@ -16,7 +16,8 @@ import {
   type ExtractOutput,
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
-import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { CtcaeTermSearchModal } from "../CtcaeTermSearchModal";
@@ -26,9 +27,17 @@ import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
+
+/** 保存する条件(docs/data-extract-design.md §17)。 */
+interface AdverseEventCriteria extends ExtractRecordDefinition {
+  treatment_type?: TreatmentType;
+  terms?: string[];
+  mode?: AdverseEventRowMode;
+}
 
 /**
  * 有害事象の抽出(docs/data-extract-design.md §12)。有害事象の記録を 1 件ごと、または患者・治療ごと
@@ -68,14 +77,28 @@ export function AdverseEventExtractPanel() {
     });
   }
 
+  const definition = compactDefinition<AdverseEventCriteria>({
+    schema_version: 1,
+    period,
+    ...scopeDefinition(scope),
+    output,
+    treatment_type: treatmentType || undefined,
+    terms,
+    mode,
+  });
+
+  /** 保存した条件を入力欄に戻す(null なら初期値)。 */
+  function applyDefinition(saved: AdverseEventCriteria | null) {
+    setPeriod(saved?.period ?? DEFAULT_PERIOD);
+    setTreatmentType(saved?.treatment_type ?? "");
+    setTerms(saved?.terms ?? []);
+    applyScopeDefinition(scope, saved);
+    setMode(saved?.mode ?? "event");
+    setOutput(saved?.output);
+  }
+
   function handleClear() {
-    setPeriod(DEFAULT_PERIOD);
-    setTreatmentType("");
-    setTerms([]);
-    scope.setQueryId(null);
-    scope.setFolderId(null);
-    setMode("event");
-    setOutput(undefined);
+    applyDefinition(null);
   }
 
   function handleCancel() {
@@ -85,6 +108,7 @@ export function AdverseEventExtractPanel() {
 
   return (
     <>
+      <RecordQueryBar tab="adverse" current={definition} onLoad={applyDefinition} />
       <div className="data-extract__toolbar">
         <button type="button" className="rp-card__compact-button" onClick={() => setPicking(true)}>
           用語

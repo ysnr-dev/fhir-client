@@ -185,6 +185,75 @@ RSpec.describe "Master::ExtractQueries", type: :request do
     end
   end
 
+  describe "記録を表にするタブの条件" do
+    let(:lab_item) do
+      { "key" => "lab:160010010", "source" => "lab", "name" => "HbA1c", "unit" => "%",
+        "codings" => [{ "system" => "http://fhir-client.local/CodeSystem/lab-result-item", "code" => "160010010" }] }
+    end
+
+    def create_record(tab, criteria, name: "記録")
+      post "/master/extract_queries",
+           params: { scope: "facility", name: name, tab: tab,
+                     definition: { "schema_version" => 1, "period" => { "mode" => "relative", "days" => 365 } }.merge(criteria) },
+           as: :json
+    end
+
+    it "タブごとの入力欄の値を保存して返し、tab で一覧を絞れる" do
+      create_record("lab", { "items" => [lab_item], "mode" => "patient", "aggregates" => %w[latest max], "interpretation" => true,
+                             "patient_query_code" => "abc", "patient_folder_id" => 3 })
+      expect(response).to have_http_status(:created)
+      expect(body["tab"]).to eq("lab")
+      expect(body["definition"]["items"].first["name"]).to eq("HbA1c")
+      create_query(valid_root)
+
+      get "/master/extract_queries", params: { tab: "lab" }
+      expect(body["items"].map { |q| q["tab"] }).to eq(["lab"])
+      get "/master/extract_queries", params: { tab: "patient" }
+      expect(body["items"].map { |q| q["tab"] }).to eq(["patient"])
+    end
+
+    it "タブごとの形で検証する" do
+      create_record("lab", { "items" => [] })
+      expect(errors_text).to include("items")
+      create_record("perform", { "order_kind" => "surgery" })
+      expect(response).to have_http_status(:unprocessable_content)
+      create_record("template", { "latest_only" => true })
+      expect(errors_text).to include("template_url")
+      create_record("micro", { "root" => valid_root })
+      expect(response).to have_http_status(:unprocessable_content)
+      create_record("unknown", {})
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "どのタブも保存でき、名前の重なりはタブごとに見る" do
+      criteria = {
+        "template" => { "template_url" => "http://example.org/q", "latest_only" => true },
+        "lab" => { "items" => [lab_item] },
+        "medication" => { "drug_classes" => [{ "code" => "61" }], "order_type" => "injection" },
+        "micro" => { "include_no_isolate" => true, "first_isolate_only" => true, "susceptibility" => %w[sir mic] },
+        "surgery" => { "procedures" => [{ "code" => "150254110", "name" => "腹腔鏡下胆嚢摘出術" }], "department_id" => "d1" },
+        "perform" => { "order_kind" => "rad" },
+        "adverse" => { "treatment_type" => "chemo-regimen", "terms" => ["好中球数減少"], "mode" => "treatment" },
+        "pathway" => { "pathway_code" => "900001" }
+      }
+      criteria.each do |tab, value|
+        create_record(tab, value, name: "同じ名前")
+        expect(response).to have_http_status(:created), "#{tab}: #{response.body}"
+      end
+      create_record("lab", { "items" => [lab_item] }, name: "同じ名前")
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "保存した後はタブを変えない" do
+      create_record("pathway", { "pathway_code" => "900001" })
+      id = body["id"]
+      patch "/master/extract_queries/#{id}", params: { tab: "lab", name: "改名" }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(body["tab"]).to eq("pathway")
+      expect(body["name"]).to eq("改名")
+    end
+  end
+
   describe "GET /master/extract_queries" do
     before do
       ExtractQuery.create!(scope: "facility", name: "共通", definition: definition(valid_root))

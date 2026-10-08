@@ -244,6 +244,15 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>記録のタブの条件の保存</h3>
+          <dl className="extract-guide__terms">
+            <Term name="条件">テンプレート・検査結果などのタブでも、入力した条件を名前を付けて保存し、次から選んで呼び出す</Term>
+            <Term name="保存 / 別名保存">今の条件を上書き / 院内共通・診療科・自分の条件として新しく保存</Term>
+            <Term name="保存するもの">期間・患者・患者フォルダ・出力項目と、そのタブの入力欄(検査項目・薬剤・術式など)</Term>
+          </dl>
+        </section>
+
+        <section>
           <h3>結果の患者をフォルダに入れる</h3>
           <dl className="extract-guide__terms">
             <Term name="フォルダ登録">どのタブでも、結果の患者を患者フォルダにまとめて入れる。既存のフォルダか、その場で作るフォルダを選ぶ</Term>

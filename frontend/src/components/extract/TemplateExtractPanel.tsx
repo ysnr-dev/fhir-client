@@ -24,9 +24,20 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
+
+const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
+
+/** 保存する条件(docs/data-extract-design.md §17)。 */
+interface TemplateCriteria extends ExtractRecordDefinition {
+  template_url?: string;
+  latest_only?: boolean;
+  department_id?: string;
+}
 
 /**
  * テンプレートの抽出(docs/data-extract-design.md §8)。1 つのテンプレートの回答を表と CSV にする。
@@ -41,7 +52,7 @@ export function TemplateExtractPanel() {
   const extract = useTemplateExtract();
 
   const [templateUrl, setTemplateUrl] = useState("");
-  const [period, setPeriod] = useState<ExtractPeriod>({ mode: "relative", days: 365 });
+  const [period, setPeriod] = useState<ExtractPeriod>(DEFAULT_PERIOD);
   const [departmentId, setDepartmentId] = useState("");
   const [latestOnly, setLatestOnly] = useState(false);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
@@ -68,6 +79,26 @@ export function TemplateExtractPanel() {
   const patientColumns = patientColumnsOf(output);
   const running = scope.running || extract.running;
 
+  const definition = compactDefinition<TemplateCriteria>({
+    schema_version: 1,
+    period,
+    ...scopeDefinition(scope),
+    output,
+    template_url: templateUrl || undefined,
+    latest_only: latestOnly || undefined,
+    department_id: departmentId || undefined,
+  });
+
+  /** 保存した条件を入力欄に戻す(null なら初期値)。 */
+  function applyDefinition(saved: TemplateCriteria | null) {
+    setTemplateUrl(saved?.template_url ?? "");
+    setPeriod(saved?.period ?? DEFAULT_PERIOD);
+    setDepartmentId(saved?.department_id ?? "");
+    applyScopeDefinition(scope, saved);
+    setLatestOnly(saved?.latest_only ?? false);
+    setOutput(saved?.output);
+  }
+
   async function handleRun() {
     if (!selected?.url) return;
     const url = selected.url;
@@ -92,6 +123,7 @@ export function TemplateExtractPanel() {
 
   return (
     <>
+      <RecordQueryBar tab="template" current={definition} onLoad={applyDefinition} />
       <div className="data-extract__toolbar data-extract__toolbar--fields">
         <TemplateSelect
           questionnaires={templates}

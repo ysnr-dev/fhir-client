@@ -22,8 +22,12 @@
 # 否定(not)は AND グループの直下で、否定でない兄弟が 1 つ以上あるときだけ(兄弟の積集合から
 # 差を取るため。OR の下や否定だけの AND は全患者の集合が要る)。
 # codes の中身(どのコード体系のどのコードか)は解釈しない(ChartDefinition と同じ考え)。
+#
+# tab は条件を保存したタブ。「患者」タブ(patient)は上の形で、記録を表にするタブ(テンプレート・検査結果など)は
+# タブごとの入力欄の値を持つ(ExtractRecordDefinition)。
 class ExtractQuery < ApplicationRecord
   SCOPES = ChartDefinition::SCOPES
+  PATIENT_TAB = "patient"
 
   SCHEMA_VERSION = 1
   MAX_DEPTH = 3
@@ -256,11 +260,17 @@ class ExtractQuery < ApplicationRecord
 
   validates :code, presence: true, uniqueness: true
   validates :scope, inclusion: { in: SCOPES }
-  validates :name, presence: true, uniqueness: { scope: %i[scope owner_id] }
+  validates :tab, inclusion: { in: -> (_) { [PATIENT_TAB, *ExtractRecordDefinition::TABS] } }
+  validates :name, presence: true, uniqueness: { scope: %i[scope owner_id tab] }
   validate :owner_must_match_scope
   validate :definition_shape
 
   scope :ordered, -> { order(Arel.sql("display_order NULLS LAST"), :id) }
+
+  # 条件を別のタブへ移すと形が合わなくなるので、保存した後はタブを変えさせない。
+  attr_readonly :tab
+
+  def patient_tab? = tab == PATIENT_TAB
 
   # 画面が同時に見る 3 つの持ち主(ChartDefinition.roots_for と同じ)。
   def self.roots_for(department_id:, practitioner_id:)
@@ -271,11 +281,17 @@ class ExtractQuery < ApplicationRecord
   end
 
   def definition_with_defaults
+    return ExtractRecordDefinition.with_defaults(tab, definition) if ExtractRecordDefinition::TABS.include?(tab)
+
     stored = definition.is_a?(Hash) ? definition : {}
     DEFAULT_DEFINITION.merge(stored.slice(*DEFINITION_SHAPE[:fields].keys))
   end
 
   private
+
+  def shape_for_tab?
+    patient_tab? || ExtractRecordDefinition::TABS.include?(tab)
+  end
 
   def assign_code
     self.code = SecureRandom.uuid if code.blank?
@@ -292,7 +308,12 @@ class ExtractQuery < ApplicationRecord
   def definition_shape
     return if definition.blank?
 
-    JsonShape.errors(DEFINITION_SHAPE, definition).each do |message|
+    # 知らないタブは tab の検証で弾く。
+    return unless shape_for_tab?
+
+    shape = patient_tab? ? DEFINITION_SHAPE : ExtractRecordDefinition.shape(tab)
+
+    JsonShape.errors(shape, definition).each do |message|
       errors.add(:definition, message.start_with?("は") ? message : "の #{message}")
     end
   end

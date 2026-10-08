@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { ExtractQuery } from "../api/masterClient";
 import {
@@ -22,9 +22,9 @@ import { PathwayExtractPanel } from "../components/extract/PathwayExtractPanel";
 import { PerformExtractPanel } from "../components/extract/PerformExtractPanel";
 import { SurgeryExtractPanel } from "../components/extract/SurgeryExtractPanel";
 import { PatientColumnsField } from "../components/extract/PatientColumnsField";
+import { SaveQueryModal } from "../components/extract/SaveQueryModal";
 import { TemplateExtractPanel } from "../components/extract/TemplateExtractPanel";
 import { TrashIcon } from "../components/icons/TrashIcon";
-import { Modal } from "../components/Modal";
 import {
   collectLeaves,
   emptyExtractQuery,
@@ -34,7 +34,7 @@ import {
   validateExtractQuery,
   type ExtractQueryBody,
 } from "../fhir/extractQueryHelpers";
-import { useDefinitionOwners, type DefinitionOwnerOption } from "../hooks/useDefinitionOwners";
+import { definitionOwnerOf, useDefinitionOwners } from "../hooks/useDefinitionOwners";
 import { today } from "../lib/dates";
 import { downloadBlob } from "../lib/download";
 
@@ -143,7 +143,7 @@ function PatientExtractTab() {
 
   const selected = queries.find((q) => q.id === selectedId) ?? null;
   const dirty = JSON.stringify(body) !== savedJson;
-  const canEditSelected = selected ? ownerOf(owners, selected)?.canEdit === true : false;
+  const canEditSelected = selected ? definitionOwnerOf(owners, selected)?.canEdit === true : false;
 
   function load(query: ExtractQuery | null) {
     const next = query ? query.definition : emptyExtractQuery();
@@ -352,7 +352,7 @@ function PatientExtractTab() {
       )}
 
       {saving && (
-        <SaveModal
+        <SaveQueryModal
           owners={owners}
           initialName={selected ? `${selected.name}のコピー` : ""}
           pending={mutations.create.isPending}
@@ -380,63 +380,5 @@ function PatientExtractTab() {
         />
       )}
     </>
-  );
-}
-
-function ownerOf(owners: DefinitionOwnerOption[], query: ExtractQuery): DefinitionOwnerOption | undefined {
-  return owners.find((o) => o.scope === query.scope && (o.scope === "facility" || o.ownerId === query.owner_id));
-}
-
-function SaveModal({
-  owners,
-  initialName,
-  pending,
-  error,
-  onClose,
-  onSave,
-}: {
-  owners: DefinitionOwnerOption[];
-  initialName: string;
-  pending: boolean;
-  error: unknown;
-  onClose: () => void;
-  onSave: (name: string, owner: DefinitionOwnerOption) => void;
-}) {
-  const editable = owners.filter((o) => o.canEdit);
-  const [name, setName] = useState(initialName);
-  const [scope, setScope] = useState(editable.find((o) => o.scope === "practitioner")?.scope ?? editable[0]?.scope);
-  const owner = editable.find((o) => o.scope === scope);
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim() || !owner) return;
-    onSave(name.trim(), owner);
-  }
-
-  return (
-    <Modal title="条件を保存" onClose={onClose}>
-      <form className="data-extract__save" onSubmit={handleSubmit}>
-        <ErrorBanner error={error} />
-        <label className="extract-field">
-          名前
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        </label>
-        <label className="extract-field">
-          保存先
-          <select value={scope ?? ""} onChange={(e) => setScope(e.target.value as DefinitionOwnerOption["scope"])}>
-            {editable.map((o) => (
-              <option key={o.scope} value={o.scope}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="lab-order-item__actions">
-          <button type="submit" disabled={pending || !name.trim() || !owner}>
-            {pending ? "保存中..." : "保存"}
-          </button>
-        </div>
-      </form>
-    </Modal>
   );
 }

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -154,8 +154,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_130000) do
     t.boolean "active", default: true, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "tab", default: "patient", null: false
     t.index ["code"], name: "index_extract_queries_on_code", unique: true
     t.index ["scope", "owner_id"], name: "index_extract_queries_on_scope_and_owner_id"
+    t.index ["tab"], name: "index_extract_queries_on_tab"
   end
 
   create_table "extract_query_runs", force: :cascade do |t|

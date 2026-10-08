@@ -14,7 +14,8 @@ import {
   microExtractTable,
   type MicroSusceptibilityField,
 } from "../../fhir/microExtractHelpers";
-import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
@@ -23,10 +24,18 @@ import { CheckGroup, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 const DEFAULT_SUSCEPTIBILITY: MicroSusceptibilityField[] = ["sir"];
+
+/** 保存する条件(docs/data-extract-design.md §17)。 */
+interface MicroCriteria extends ExtractRecordDefinition {
+  include_no_isolate?: boolean;
+  first_isolate_only?: boolean;
+  susceptibility?: MicroSusceptibilityField[];
+}
 /** 折り返さない固定列の数(採取日〜培養)。塗抹の所見から後ろは長いので折り返す。 */
 const FIXED_COLUMNS = 6;
 
@@ -70,14 +79,28 @@ export function MicroExtractPanel() {
     void extract.run({ from: range?.from ?? "", to: range?.to ?? "", patientIds });
   }
 
+  const definition = compactDefinition<MicroCriteria>({
+    schema_version: 1,
+    period,
+    ...scopeDefinition(scope),
+    output,
+    include_no_isolate: includeNoIsolate || undefined,
+    first_isolate_only: firstIsolateOnly || undefined,
+    susceptibility,
+  });
+
+  /** 保存した条件を入力欄に戻す(null なら初期値)。 */
+  function applyDefinition(saved: MicroCriteria | null) {
+    setPeriod(saved?.period ?? DEFAULT_PERIOD);
+    applyScopeDefinition(scope, saved);
+    setIncludeNoIsolate(saved?.include_no_isolate ?? false);
+    setFirstIsolateOnly(saved?.first_isolate_only ?? false);
+    setSusceptibility(saved?.susceptibility ?? DEFAULT_SUSCEPTIBILITY);
+    setOutput(saved?.output);
+  }
+
   function handleClear() {
-    setPeriod(DEFAULT_PERIOD);
-    scope.setQueryId(null);
-    scope.setFolderId(null);
-    setIncludeNoIsolate(false);
-    setFirstIsolateOnly(false);
-    setSusceptibility(DEFAULT_SUSCEPTIBILITY);
-    setOutput(undefined);
+    applyDefinition(null);
   }
 
   function handleCancel() {
@@ -87,6 +110,7 @@ export function MicroExtractPanel() {
 
   return (
     <>
+      <RecordQueryBar tab="micro" current={definition} onLoad={applyDefinition} />
       <div className="data-extract__toolbar data-extract__toolbar--fields">
         <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
         <PatientScopeFields scope={scope} />

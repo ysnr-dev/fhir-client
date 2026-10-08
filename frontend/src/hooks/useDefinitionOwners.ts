@@ -70,3 +70,11 @@ export function useDefinitionOwners(personalLabel: string) {
     practitionerName,
   };
 }
+
+/** 保存済みの定義の持ち主の選択肢(書けるかどうかを見るのに使う)。 */
+export function definitionOwnerOf(
+  owners: DefinitionOwnerOption[],
+  record: { scope: OrderSetScope; owner_id: string | null },
+): DefinitionOwnerOption | undefined {
+  return owners.find((o) => o.scope === record.scope && (o.scope === "facility" || o.ownerId === record.owner_id));
+}

@@ -34,13 +34,24 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { CheckGroup, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { VitalItemSelectModal } from "./VitalItemSelectModal";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 const DEFAULT_AGGREGATES: LabExtractAggregate[] = ["latest"];
+
+/** 保存する条件(docs/data-extract-design.md §17)。 */
+interface LabCriteria extends ExtractRecordDefinition {
+  items?: ChartItem[];
+  mode?: LabExtractRowMode;
+  aggregates?: LabExtractAggregate[];
+  interpretation?: boolean;
+  department_id?: string;
+}
 
 /**
  * 検査結果の抽出(docs/data-extract-design.md §9)。選んだ検査・バイタルの項目を列にして、
@@ -106,16 +117,32 @@ export function LabExtractPanel() {
     });
   }
 
+  const definition = compactDefinition<LabCriteria>({
+    schema_version: 1,
+    period,
+    ...scopeDefinition(scope),
+    output,
+    items,
+    mode,
+    aggregates,
+    interpretation: interpretation || undefined,
+    department_id: departmentId || undefined,
+  });
+
+  /** 保存した条件を入力欄に戻す(null なら初期値)。 */
+  function applyDefinition(saved: LabCriteria | null) {
+    setItems(saved?.items ?? []);
+    setPeriod(saved?.period ?? DEFAULT_PERIOD);
+    setDepartmentId(saved?.department_id ?? "");
+    applyScopeDefinition(scope, saved);
+    setMode(saved?.mode ?? "time");
+    setAggregates(saved?.aggregates ?? DEFAULT_AGGREGATES);
+    setInterpretation(saved?.interpretation ?? false);
+    setOutput(saved?.output);
+  }
+
   function handleClear() {
-    setItems([]);
-    setPeriod(DEFAULT_PERIOD);
-    setDepartmentId("");
-    scope.setQueryId(null);
-    scope.setFolderId(null);
-    setMode("time");
-    setAggregates(DEFAULT_AGGREGATES);
-    setInterpretation(false);
-    setOutput(undefined);
+    applyDefinition(null);
   }
 
   function handleCancel() {
@@ -125,6 +152,7 @@ export function LabExtractPanel() {
 
   return (
     <>
+      <RecordQueryBar tab="lab" current={definition} onLoad={applyDefinition} />
       <div className="data-extract__toolbar">
         <button type="button" className="rp-card__compact-button" onClick={() => setPicking("lab")}>
           検査項目

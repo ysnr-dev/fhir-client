@@ -15,7 +15,8 @@ import {
   performExtractTable,
   performRowCells,
 } from "../../fhir/performExtractHelpers";
-import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
@@ -24,10 +25,17 @@ import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 const DEFAULT_KIND = PERFORM_EXTRACT_KINDS[0].code;
+
+/** 保存する条件(docs/data-extract-design.md §17)。 */
+interface PerformCriteria extends ExtractRecordDefinition {
+  order_kind?: string;
+  department_id?: string;
+}
 
 /**
  * 部門オーダーの実施記録の抽出(docs/data-extract-design.md §13)。種別を 1 つ選び、実施 1 件を 1 行にした
@@ -79,13 +87,26 @@ export function PerformExtractPanel() {
     });
   }
 
+  const definition = compactDefinition<PerformCriteria>({
+    schema_version: 1,
+    period,
+    ...scopeDefinition(scope),
+    output,
+    order_kind: kind,
+    department_id: departmentId || undefined,
+  });
+
+  /** 保存した条件を入力欄に戻す(null なら初期値)。 */
+  function applyDefinition(saved: PerformCriteria | null) {
+    setKind(saved?.order_kind ?? DEFAULT_KIND);
+    setPeriod(saved?.period ?? DEFAULT_PERIOD);
+    setDepartmentId(saved?.department_id ?? "");
+    applyScopeDefinition(scope, saved);
+    setOutput(saved?.output);
+  }
+
   function handleClear() {
-    setKind(DEFAULT_KIND);
-    setPeriod(DEFAULT_PERIOD);
-    setDepartmentId("");
-    scope.setQueryId(null);
-    scope.setFolderId(null);
-    setOutput(undefined);
+    applyDefinition(null);
   }
 
   function handleCancel() {
@@ -95,6 +116,7 @@ export function PerformExtractPanel() {
 
   return (
     <>
+      <RecordQueryBar tab="perform" current={definition} onLoad={applyDefinition} />
       <div className="data-extract__toolbar data-extract__toolbar--fields">
         <label className="extract-field">
           種別

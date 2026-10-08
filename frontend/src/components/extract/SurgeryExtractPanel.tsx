@@ -10,7 +10,8 @@ import {
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
 import { surgeryExtractCsv, surgeryExtractHeader, surgeryExtractRows } from "../../fhir/surgeryExtractHelpers";
-import { useExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
@@ -20,6 +21,7 @@ import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
@@ -27,6 +29,12 @@ const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 interface ProcedurePick {
   code: string;
   name: string;
+}
+
+/** 保存する条件(docs/data-extract-design.md §17)。 */
+interface SurgeryCriteria extends ExtractRecordDefinition {
+  procedures?: ProcedurePick[];
+  department_id?: string;
 }
 
 /**
@@ -74,13 +82,26 @@ export function SurgeryExtractPanel() {
     });
   }
 
+  const definition = compactDefinition<SurgeryCriteria>({
+    schema_version: 1,
+    period,
+    ...scopeDefinition(scope),
+    output,
+    procedures,
+    department_id: departmentId || undefined,
+  });
+
+  /** 保存した条件を入力欄に戻す(null なら初期値)。 */
+  function applyDefinition(saved: SurgeryCriteria | null) {
+    setPeriod(saved?.period ?? DEFAULT_PERIOD);
+    setDepartmentId(saved?.department_id ?? "");
+    setProcedures(saved?.procedures ?? []);
+    applyScopeDefinition(scope, saved);
+    setOutput(saved?.output);
+  }
+
   function handleClear() {
-    setPeriod(DEFAULT_PERIOD);
-    setDepartmentId("");
-    setProcedures([]);
-    scope.setQueryId(null);
-    scope.setFolderId(null);
-    setOutput(undefined);
+    applyDefinition(null);
   }
 
   function handleCancel() {
@@ -90,6 +111,7 @@ export function SurgeryExtractPanel() {
 
   return (
     <>
+      <RecordQueryBar tab="surgery" current={definition} onLoad={applyDefinition} />
       <div className="data-extract__toolbar">
         <button type="button" className="rp-card__compact-button" onClick={() => setPicking(true)}>
           術式

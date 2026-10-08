@@ -21,7 +21,10 @@ export function useExtractPatientScope() {
   const folderList = usePatientFolders(owners.departmentId, owners.practitionerId);
   const folders = useMemo(() => folderList.data?.items ?? [], [folderList.data]);
   const patientExtract = useExtractRun();
-  const [queryId, setQueryId] = useState<number | null>(null);
+  // 選んだ「患者」タブの条件は code で持つ(保存した記録タブの条件から、一覧が読める前でも指せるように)。
+  const [queryCode, setQueryCode] = useState<string | null>(null);
+  const queryId = queries.find((q) => q.code === queryCode)?.id ?? null;
+  const setQueryId = (id: number | null) => setQueryCode(queries.find((q) => q.id === id)?.code ?? null);
   const [folderId, setFolderId] = useState<number | null>(null);
   const [folderError, setFolderError] = useState<unknown>(null);
   const [summary, setSummary] = useState<ScopeSummary>({ query: null, folder: null });
@@ -31,7 +34,7 @@ export function useExtractPatientScope() {
    * 患者の条件は実行のたびに抽出し直す。
    */
   async function resolve(): Promise<string[] | undefined | null> {
-    const query = queries.find((q) => q.id === queryId) ?? null;
+    const query = queries.find((q) => q.code === queryCode) ?? null;
     const folder = folders.find((f) => f.id === folderId) ?? null;
     const next: ScopeSummary = { query: null, folder: null };
     setSummary(next);
@@ -64,6 +67,8 @@ export function useExtractPatientScope() {
     folders,
     queryId,
     setQueryId,
+    queryCode,
+    setQueryCode,
     folderId,
     setFolderId,
     resolve,
@@ -77,3 +82,23 @@ export function useExtractPatientScope() {
 }
 
 export type ExtractPatientScope = ReturnType<typeof useExtractPatientScope>;
+
+/** 保存する条件のうち、患者の絞り込みの部分(docs/data-extract-design.md §17)。 */
+export function scopeDefinition(scope: ExtractPatientScope): {
+  patient_query_code?: string;
+  patient_folder_id?: number;
+} {
+  return {
+    patient_query_code: scope.queryCode ?? undefined,
+    patient_folder_id: scope.folderId ?? undefined,
+  };
+}
+
+/** 保存した条件の患者の絞り込みを戻す(null なら外す)。 */
+export function applyScopeDefinition(
+  scope: ExtractPatientScope,
+  definition: { patient_query_code?: string; patient_folder_id?: number } | null,
+) {
+  scope.setQueryCode(definition?.patient_query_code ?? null);
+  scope.setFolderId(definition?.patient_folder_id ?? null);
+}
