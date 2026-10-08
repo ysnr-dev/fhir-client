@@ -15,6 +15,7 @@ import { ExtractConditionBuilder } from "../components/extract/ExtractConditionB
 import { ExtractQuerySelect } from "../components/extract/ExtractQuerySelect";
 import { ExtractResults } from "../components/extract/ExtractResults";
 import { LabExtractPanel } from "../components/extract/LabExtractPanel";
+import { MedicationExtractPanel } from "../components/extract/MedicationExtractPanel";
 import { MicroExtractPanel } from "../components/extract/MicroExtractPanel";
 import { PathwayExtractPanel } from "../components/extract/PathwayExtractPanel";
 import { PerformExtractPanel } from "../components/extract/PerformExtractPanel";
@@ -39,18 +40,19 @@ import { downloadBlob } from "../lib/download";
 // データ抽出(docs/data-extract-design.md)。「患者」タブは病名・検査結果・処方/注射・入院・外来・
 // 患者属性の条件を AND / OR で組み、該当する患者を一覧・内訳・CSV にする。条件は持ち主(院内共通 /
 // 診療科 / 自分)ごとに保存できる。「テンプレート」タブは 1 つのテンプレートの回答を、「検査結果」タブは
-// 選んだ検査・バイタルの結果を、「細菌検査」タブは分離菌と薬剤感受性を、「手術」タブは手術の実施記録を、
+// 選んだ検査・バイタルの結果を、「投薬」タブは処方・注射のオーダーの薬剤を、「細菌検査」タブは分離菌と薬剤感受性を、「手術」タブは手術の実施記録を、
 // 「部門実施」タブは放射線・内視鏡などの実施記録を、「有害事象」タブは CTCAE Grade の記録を、
 // 「パス」タブはクリニカルパスの適用と評価(バリアンス)を表にする
 // (いずれも保存した患者の条件や患者フォルダの患者に絞れる)。
 // 抽出は上流 FHIR をその場で引く。
 
-type Tab = "patient" | "template" | "lab" | "micro" | "surgery" | "perform" | "adverse" | "pathway";
+type Tab = "patient" | "template" | "lab" | "medication" | "micro" | "surgery" | "perform" | "adverse" | "pathway";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "patient", label: "患者" },
   { key: "template", label: "テンプレート" },
   { key: "lab", label: "検査結果" },
+  { key: "medication", label: "投薬" },
   { key: "micro", label: "細菌検査" },
   { key: "surgery", label: "手術" },
   { key: "perform", label: "部門実施" },
@@ -106,6 +108,7 @@ export function DataExtractPage() {
       {tab === "patient" && <PatientExtractTab />}
       {tab === "template" && <TemplateExtractPanel />}
       {tab === "lab" && <LabExtractPanel />}
+      {tab === "medication" && <MedicationExtractPanel />}
       {tab === "micro" && <MicroExtractPanel />}
       {tab === "surgery" && <SurgeryExtractPanel />}
       {tab === "perform" && <PerformExtractPanel />}

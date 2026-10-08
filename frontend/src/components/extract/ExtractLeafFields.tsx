@@ -326,7 +326,7 @@ function ObservationCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) 
   );
 }
 
-function MedicationCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
+export function MedicationCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
   const [picking, setPicking] = useState(false);
   const [classCode, setClassCode] = useState("");
   const types = useMedicineTypeOptions(true);

@@ -183,6 +183,16 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>投薬の抽出</h3>
+          <dl className="extract-guide__terms">
+            <Term name="表">処方・注射のオーダーの薬剤 1 件が 1 行。用量・用法・日数・処方区分・依頼科の列つき</Term>
+            <Term name="薬剤 / 薬効分類">「患者」タブの処方・注射の条件と同じように選ぶ。選ばなければ期間内のすべての薬剤</Term>
+            <Term name="区分">処方だけ・注射だけに絞る</Term>
+            <Term name="期間">オーダー日で絞る</Term>
+          </dl>
+        </section>
+
+        <section>
           <h3>細菌検査の抽出</h3>
           <dl className="extract-guide__terms">
             <Term name="表">分離菌 1 株が 1 行、抗菌薬が列。材料・培養・塗抹などの検体の列と、菌名・菌量・菌数・起炎性の列つき</Term>

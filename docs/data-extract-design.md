@@ -345,3 +345,23 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
   診療科(入院の serviceProvider)、評価(達成状態を記録したアウトカムの数)・達成・バリアンス(未達成)・未評価、パス・パスコード、
   バリアンスの内容(評価日 + アウトカム名。評価日の順)・中止理由・総合評価(適用の Goal の note。`pathwayCloseValuesOf`)。
 - 並びは適用日の新しい順。画面は先頭 500 件、CSV はすべて。フェーズごと・病日ごとの内訳は出さない(パスシートで見る)。
+
+## 15. 投薬の抽出
+
+「投薬」タブ(`?tab=medication`、`components/extract/MedicationExtractPanel.tsx`)は、処方・注射のオーダーの薬剤
+(MedicationRequest。オーダーヘッダの ServiceRequest にぶら下がる 1 薬剤 1 件)を「薬剤 1 件 = 1 行」の表と CSV にする。
+設定は保存しない。実施(注射の実施・与薬の MedicationAdministration)は出さない。
+
+- **取得**(`api/queries/medicationExtract.ts`): `MedicationRequest?authoredon=ge…&authoredon=le…&status:not=entered-in-error,cancelled
+  [&code=<薬剤,…>][&based-on.category=order-type|<prescription|injection>][&based-on.department=Organization/x]
+  &_include=MedicationRequest:based-on&_include=MedicationRequest:subject&_sort=-authoredon` を strict で `searchAllPages`。
+  - 薬剤・薬効分類は「患者」タブの処方・注射の条件の入力欄(`MedicationCodes`)をそのまま使う。薬効分類は実行のたびに医薬品マスタで
+    医薬品コードに展開し(`fetchMedicineCodesByClass`)、薬剤と合わせて 100 件ずつ code= で引いて合わせる。薬剤も薬効分類も
+    選ばなければ期間内のすべての薬剤。薬効分類に当たる薬が無ければ何も引かない。
+  - 区分と依頼科は MedicationRequest に検索が無いので、ヘッダへのチェーンで引く。
+  - 期間はオーダー日(authoredOn。登録日時)。開始日(ヘッダの occurrence)は列に出す。
+- **列**(`fhir/medicationExtractHelpers.ts`): オーダー日・開始日・区分(ヘッダの order-type)・処方区分(定期・臨時・院外など)・入外・
+  依頼科・依頼者・状態・RP(RP 番号-RP 内の順)、薬剤・薬剤コード(レセ電 / 一般名処方コード)・YJ コード・一般名処方・用量
+  (不均等投与はその表示)・用法(処方は用法マスタの名称、注射は手技・経路・速度の要約)・日数・回数・補足(補足用法・用法コメント)・
+  コメント。用法・用量の読み方は処方の表示と同じ `groupByRp`。
+- 並びはオーダー日の新しい順 → 患者番号 → オーダー・RP の順。画面は先頭 500 件、CSV はすべて。
