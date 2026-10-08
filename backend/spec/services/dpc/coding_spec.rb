@@ -51,6 +51,20 @@ RSpec.describe Dpc::Coding do
     expect(result[:result][:period_ends].first).to match(/\A2026-09-/)
   end
 
+  it "手術の実施記録の薬剤(手術中の使用)は化学療法・薬剤の分岐に数えない" do
+    Master::Medicine.create!(medicine_code: "620000101", name: "オキサリプラチン点滴静注液", unit_name: "瓶",
+                             dosage_form: "4", basic_name: "オキサリプラチン", yakka_code: "4291410A1020")
+    store.add(procedure_hub(order_type: "surgery", code: "150254110", date: "2026-09-02"),
+              administration(code: "620000101", dose: 1, id: "ma-surgery"))
+    in_surgery = code({ icd10: "C182" })
+    expect(in_surgery[:candidates].map { |c| c[:code] }).not_to include("0005", "0156")
+
+    store.add(procedure_hub(order_type: "injection", code: nil, id: "proc-2", date: "2026-09-03"),
+              administration(code: "620000101", dose: 1, hub: "proc-2", id: "ma-injection"))
+    injected = code({ icd10: "C182" })
+    expect(injected[:candidates].map { |c| c[:code] }).to include("0005", "0156")
+  end
+
   it "在院日数ぶん期間ごとの点数を足し、期間Ⅲを超えた日は数えない" do
     result = code({ icd10: "C182" })
     row = result[:result]

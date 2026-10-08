@@ -9,11 +9,12 @@ module Dpc
   # 当たる 14 桁をすべて候補として返す。値がそろえば必ず 1 つに決まる(同じ MDC6 で 2 行に
   # 同時に当たる組は無いことを令和8年度版で確かめた)。
   #
-  # 手術・処置等の優先:
-  #   手術       実施したコードがそろう行のうち手術フラグが最小(01 が最優先)。
-  #              定義に無い K コード(手術料 K000〜K915)だけなら 97、無ければ 99。
-  #   処置等1・2 そろう行のうち処置フラグが最大。無ければ 0。
-  # この 2 つは配布資料に明記が無く、フラグの並びと点数表の分類の並びからの読みで、要確認。
+  # 手術・処置等・定義副傷病の優先:
+  #   当たる値が複数あれば、ツリー図で下にある値をとる(留意事項通知 第2の1(5))。ツリー図の並びは
+  #   手術が 99 → 97 → 値の大きい順 → 01、処置等1・2・定義副傷病が値の小さい順なので、
+  #   手術は対応コードが最小(97 は個別の値より後回し)、処置等1・2・定義副傷病は最大をとる。
+  #   手術フラグ・処置フラグは定義テーブルの行の番号で、この並びとは一致しない。
+  #   定義に無い K コードだけなら 97、無ければ 99。
   class Grouper
     Branch = Struct.new(:key, :label, :value, :auto_value, :status, :options, :evidence, keyword_init: true)
     # status: suggested(候補。人の確定待ち) / accepted(確定) / rejected(除外) / derived(実施記録から導いた)
@@ -21,7 +22,11 @@ module Dpc
 
     SURGERY_NONE = "99".freeze
     SURGERY_OTHER = "97".freeze
-    LAST_SURGERY_SECTION = 915 # 第10部 第1節 手術料(K000〜K915)。輸血料・手術医療機器等加算は含めない。
+    # 手術あり・なしに数える K コード: 第10部 手術(K000〜K939)。手術等管理料(第13款 K914〜K917)と
+    # 輸血管理料(K920-2)だけを除く(留意事項通知 第2の3(8)、疑義解釈 問3-2-4)。輸血は数える。
+    SURGERY_CODE = /\AK(\d{3})/
+    SURGERY_SECTION_RANGE = (0..939)
+    NOT_SURGERY_CODE = /\AK(91[4-7]|920-2)/
 
     def initialize(tables:, input:)
       @tables = tables
@@ -206,12 +211,12 @@ module Dpc
       [row&.code_value, [form1_evidence("#{rows.first.condition_name} #{row&.category_name || value}")]]
     end
 
-    # 手術: 実施したコードがそろう行のうちフラグが最小。
+    # 手術: 実施したコードがそろう行のうち、ツリー図で最も下にある対応コード。
     def resolve_surgery
       codes = effective_codes
       rows = tables.surgeries(mdc6).reject { |row| [SURGERY_NONE, SURGERY_OTHER].include?(row.flag) }
       hit = rows.select { |row| row.codes.all? { |code| codes.include?(code) } }
-                .min_by { |row| row.flag.to_i }
+                .min_by { |row| surgery_tree_order(row.code_value) }
       return [hit.code_value, evidence_for(hit.codes)] if hit
 
       others = surgery_codes(codes)
@@ -222,24 +227,35 @@ module Dpc
 
     def surgery_codes(codes)
       codes.select do |code|
-        section = code[/\AK(\d{3})/, 1]
-        section && section.to_i <= LAST_SURGERY_SECTION
+        section = code[SURGERY_CODE, 1]
+        section && SURGERY_SECTION_RANGE.cover?(section.to_i) && !code.match?(NOT_SURGERY_CODE)
       end
     end
 
-    # 処置等1・2: そろう行(処置等1 は手術との組み合わせ条件も)のうちフラグが最大。
+    # ツリー図で下にあるほど小さい。01 が最も下で、97 は個別の値より上。
+    def surgery_tree_order(value)
+      value == SURGERY_OTHER ? 98 : value.to_i
+    end
+
+    # 処置等・定義副傷病の値はツリー図で下にあるほど大きい(0〜9 の後に A〜E)。
+    def tree_order(value)
+      value.to_s.match?(/\A\d+\z/) ? value.to_i : 100 + value.to_s.ord
+    end
+
+    # 処置等1・2: そろう行(処置等1 は手術との組み合わせ条件も)のうち、ツリー図で最も下にある対応コード。
     def resolve_procedure(kind)
       codes = effective_codes
       hit = tables.procedures(mdc6, kind).select do |row|
         row.codes.all? { |code| codes.include?(code) } &&
           (row.surgery_condition.blank? || codes.include?(row.surgery_condition))
-      end.max_by { |row| row.flag.to_i }
+      end.max_by { |row| tree_order(row.code_value) }
       return ["0", []] if hit.nil?
 
       [hit.code_value, evidence_for(hit.codes + [hit.surgery_condition].compact)]
     end
 
     # 定義副傷病: フラグ 1 は手術の有無を問わず、2 は手術なし、3 は手術ありのときだけ。
+    # 当たる病名が複数あれば、ツリー図で最も下にある値。
     def resolve_comorbidity
       surgery, = resolve_surgery
       surgery = input.overrides.branches["surgery"].presence || surgery
@@ -252,7 +268,7 @@ module Dpc
       end
       return ["0", []] if hits.empty?
 
-      [hits.first.last.code_value,
+      [hits.map { |_, row| row.code_value }.max_by { |value| tree_order(value) },
        hits.map { |icd, row| { source: "form1", code: icd, name: row.icd_name, note: "併存症・続発症" } }]
     end
 

@@ -8,6 +8,8 @@ module Dpc
   #
   # 手術の実施記録は入院(Encounter)を参照していないので、患者 + 入院期間の日付で引く。
   # 麻酔チャートの薬剤は算定と同じく数えない(全身麻酔は手術の実施記録の麻酔の手技で分かる)。
+  # 手術の実施記録の薬剤は手術中の使用で、化学療法にも薬剤名の分岐にも数えない
+  # (留意事項通知 第2の3(5)①、疑義解釈 問3-3-6・3-3-7)。手術の手技は数える。
   class PerformedItems
     Collected = Struct.new(:items, :radiotherapy, :rehab, :truncated, keyword_init: true)
 
@@ -19,6 +21,7 @@ module Dpc
     CENTRAL_VENOUS_METHOD = "31".freeze
     CENTRAL_VENOUS_CODE = "G005".freeze
     EXCLUDED_ORDER_TYPES = %w[anesthesia-chart].freeze
+    DRUG_EXCLUDED_ORDER_TYPES = %w[surgery].freeze
     LIMIT = 2000
 
     def initialize(store:)
@@ -39,7 +42,9 @@ module Dpc
       @by_id = procedures.index_by { |p| p["id"] }
 
       kept = procedures.select { |p| p["status"] == "completed" && !excluded?(p) }
-      given = administrations.select { |a| a["status"] == "completed" && !excluded?(a) }
+      given = administrations.select do |a|
+        a["status"] == "completed" && !excluded?(a) && !excluded?(a, DRUG_EXCLUDED_ORDER_TYPES)
+      end
       types = kept.filter_map { |p| order_type(root(p)) }
 
       Collected.new(
@@ -120,9 +125,9 @@ module Dpc
       Integrations::ReceiptComputer::Coding.code_in_list(procedure["category"], ORDER_TYPE)
     end
 
-    def excluded?(resource)
+    def excluded?(resource, order_types = EXCLUDED_ORDER_TYPES)
       hub = root(resource)
-      hub["resourceType"] == "Procedure" && EXCLUDED_ORDER_TYPES.include?(order_type(hub))
+      hub["resourceType"] == "Procedure" && order_types.include?(order_type(hub))
     end
 
     def performed_at(procedure)

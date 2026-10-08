@@ -50,7 +50,7 @@ RSpec.describe Dpc::Grouper do
   end
 
   describe "手術" do
-    it "実施した手術のうち手術フラグが最小(最優先)の行の対応コードをとる" do
+    it "実施した手術のうちツリー図で最も下にある対応コード(01 が最優先)をとる" do
       result = group(icd10: "C182", items: [item("K7211"), item("K719-3")])
 
       expect(branch(result, "surgery")[:value]).to eq("01")
@@ -58,9 +58,20 @@ RSpec.describe Dpc::Grouper do
       expect(result[:dpc_codes]).to eq(["060035xx0100xx"])
     end
 
-    it "定義に無い手術(手術料の K コード)だけなら 97、輸血(K920)だけなら手術なし" do
+    it "手術フラグではなく対応コードで選ぶ" do
+      # 010060: 脳血管内手術 K1781 は手術フラグ 01・対応コード 02、内頸動脈の血栓内膜摘出術 K6092 は
+      # 手術フラグ 03・対応コード 01。ツリー図では 01 が下にある。
+      result = group(icd10: "I633", items: [item("K1781"), item("K6092")])
+
+      expect(branch(result, "surgery")[:value]).to eq("01")
+      expect(branch(result, "surgery")[:evidence].map { |e| e[:code] }).to eq(["K6092"])
+    end
+
+    it "定義に無い手術だけなら 97。輸血は手術に数え、手術等管理料・輸血管理料だけなら手術なし" do
       expect(branch(group(icd10: "C182", items: [item("K0001")]), "surgery")[:value]).to eq("97")
-      expect(branch(group(icd10: "C182", items: [item("K920")]), "surgery")[:value]).to eq("99")
+      expect(branch(group(icd10: "C182", items: [item("K9202ｲ")]), "surgery")[:value]).to eq("97")
+      expect(branch(group(icd10: "C182", items: [item("K920-21")]), "surgery")[:value]).to eq("99")
+      expect(branch(group(icd10: "C182", items: [item("K9161")]), "surgery")[:value]).to eq("99")
     end
 
     it "包括の対象外になる手術を実施していれば知らせる" do
@@ -91,7 +102,7 @@ RSpec.describe Dpc::Grouper do
       expect(branch(rejected, "proc2")[:value]).to eq("0")
     end
 
-    it "処置等2 は該当する行のうち処置フラグが最大の行をとる" do
+    it "処置等2 は該当する行のうちツリー図で最も下にある対応コードをとる" do
       result = group(icd10: "C182", items: [drug("オキサリプラチン"), drug("ベバシズマブ", yj: "4291413A1020")])
 
       expect(branch(result, "proc2")[:value]).to eq("5")
