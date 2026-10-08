@@ -31,7 +31,7 @@ const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Pro
 export const SESSION_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/medication-guidance-session-type";
 
 /** 患者の理解度。Procedure に標準の置き場所が無いのでローカル拡張にする。 */
-const UNDERSTANDING_EXT_URL = "http://fhir-client.local/StructureDefinition/medication-guidance-understanding";
+export const UNDERSTANDING_EXT_URL = "http://fhir-client.local/StructureDefinition/medication-guidance-understanding";
 export const UNDERSTANDING_SYSTEM = "http://fhir-client.local/CodeSystem/medication-guidance-understanding";
 
 /** 指導記録テンプレートの回答への参照。平文は note に入れてある。 */

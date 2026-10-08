@@ -304,3 +304,25 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
     用語ごとの最大 Grade の列(用語は記録の多い順)。欠けた記録では件数・最大 Grade が嘘になるので、読み切れなかった
     (truncated)ときは表を出さない。
 - Grade での絞り込みは無い(上流は valueInteger を索引しない)。「患者・治療ごと」の最大 Grade の列か CSV で見る。
+
+## 13. 部門オーダーの実施記録の抽出
+
+「部門実施」タブ(`?tab=perform`、`components/extract/PerformExtractPanel.tsx`)は、部門オーダーの種別を 1 つ選び、
+実施記録を「実施 1 件 = 1 行」の表と CSV にする。設定は保存しない。種別は実施記録(Procedure)を書く部門オーダーのうち、
+手術(「手術」タブ)と放射線治療(照射ごとの記録と治療終了サマリーを category で分けられない。§2)を除いたもの
+(放射線・生理・内視鏡・処置・輸血・リハビリ・栄養指導・服薬指導。`PERFORM_EXTRACT_KINDS`)。
+
+- **取得**(`api/queries/performExtract.ts`): `Procedure?category=order-type|<種別>&part-of:missing=true&status:not=entered-in-error
+  &date=ge…&date=le…[&based-on.department=Organization/x]&_include=Procedure:based-on&_revinclude=Procedure:part-of
+  &_revinclude=MedicationAdministration:part-of&_revinclude=Observation:part-of&_revinclude:iterate=ServiceRequest:based-on
+  &_include=Procedure:subject&_sort=-date` を strict で `searchAllPages`(200 件 × 25 ページ)。ハブ・子の手技・薬剤・測定値・
+  オーダーヘッダ・ヘッダの明細(依頼項目)を 1 本の検索で受け取る。患者の絞り込みは §8 と同じ。
+- **列**(`fhir/performExtractHelpers.ts`): 部門ごとの組み立て関数は使わず、実施記録の共通の形から読む。
+  - 実施日時・終了(performedPeriod.end)・状態・依頼日(ヘッダの occurrence)・依頼科・入外(ヘッダの prescription-setting)。
+  - 依頼項目(ヘッダを basedOn で指す明細の code。構成項目の 2 段目は出さない)・実施者・手技(ハブと子の code)・手技コード・
+    薬剤(名称・量・経路・ロット番号)・材料(usedCode と `*-material-quantity` 拡張の数量)・コメント(note)。
+  - 測定値: 実施にぶら下がる Observation を code ごとに列にする(放射線の CTDIvol・DLP、輸血の副作用など)。単位が 1 つなら見出しに添える。
+  - 部門ごとの値: ハブの拡張のうち `PERFORM_EXTENSION_COLUMNS`(リハビリの実施単位数・栄養指導の指導時間・服薬指導の理解度)。
+    値のある行があるときだけ列にする。種別を足して拡張が増えたらこの表に 1 行足す。
+- 栄養指導・服薬指導の記録の本文はテンプレートの回答なので、このタブには出さない(「テンプレート」タブで出す)。
+- 並びは実施日時の新しい順。画面は先頭 500 件、CSV はすべて。

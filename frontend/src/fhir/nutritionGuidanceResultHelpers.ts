@@ -42,7 +42,7 @@ export const GUIDANCE_SESSION_TYPE_SYSTEM =
  * 実施時間(分)。Procedure に所要時間を持つ標準要素が無いのでローカル拡張にする。
  * 算定要件が時間で決まるので、リハビリの「単位数」に相当する位置づけ。
  */
-const PERFORMED_MINUTES_EXT_URL =
+export const PERFORMED_MINUTES_EXT_URL =
   "http://fhir-client.local/StructureDefinition/nutrition-guidance-performed-minutes";
 
 /**

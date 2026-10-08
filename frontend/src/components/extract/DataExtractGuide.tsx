@@ -205,6 +205,16 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>部門実施の抽出</h3>
+          <dl className="extract-guide__terms">
+            <Term name="種別">放射線・生理・内視鏡・処置・輸血・リハビリ・栄養指導・服薬指導から 1 つ選ぶ</Term>
+            <Term name="表">実施 1 件が 1 行。依頼項目・実施者・手技・薬剤・材料と、被曝線量などの測定値や実施単位数の列つき</Term>
+            <Term name="期間">実施日で絞る</Term>
+            <Term name="依頼科">オーダーを出した診療科で絞る</Term>
+          </dl>
+        </section>
+
+        <section>
           <h3>有害事象の抽出</h3>
           <dl className="extract-guide__terms">
             <Term name="期間">発現日で絞る</Term>

@@ -44,7 +44,7 @@ const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Pro
  * (オーダー側の「1 回あたりの単位数」は ServiceRequest.quantityQuantity)。
  * 算定は実際に行った単位数で決まるので、予定と別に実績を持つ。
  */
-const PERFORMED_UNITS_EXT_URL =
+export const PERFORMED_UNITS_EXT_URL =
   "http://fhir-client.local/StructureDefinition/rehab-performed-units";
 
 // ---- 実施入力フォームの値 ----
