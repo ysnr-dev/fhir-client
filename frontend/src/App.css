@@ -725,7 +725,9 @@ button:disabled {
 .master-search__table input,
 .bulk-vital select,
 .bulk-vital input,
-.supervisor-groups select {
+.supervisor-groups select,
+.dpc-coding select,
+.dpc-coding input {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
@@ -23280,6 +23282,11 @@ body.page-home .app__main {
   gap: 8px;
 }
 
+/* 施設設定の区画の中で、区画の直下に置く「追加」のような補助ボタンは幅いっぱいに伸ばさない。 */
+.facility-settings__schedule-body > .rp-card__compact-button {
+  align-self: flex-start;
+}
+
 /* DPC の診断群分類(components/DpcCodingView.tsx)。 */
 .dpc-coding {
   display: flex;
@@ -23331,6 +23338,10 @@ body.page-home .app__main {
   margin: 6px 0;
 }
 
+.dpc-coding__branches td:first-child {
+  white-space: nowrap;
+}
+
 .dpc-coding__evidence {
   font-size: 12px;
   color: var(--text);
@@ -23341,8 +23352,10 @@ body.page-home .app__main {
   color: var(--text);
 }
 
+/* 表の中の select は表の文字に合わせる(共通の入力欄は 15px)。 */
 .dpc-coding__branches select {
   max-width: 260px;
+  font-size: 13px;
 }
 
 .dpc-coding__actions {
@@ -23370,6 +23383,17 @@ body.page-home .app__main {
 
 .dpc-coding__simulation .dpc-coding__code {
   font-size: 13px;
+}
+
+/* 分類の表は手術名の列だけ折り返し、短い列(処置・日数・点数)は 1 行に保つ。 */
+.dpc-coding__simulation th,
+.dpc-coding__simulation td {
+  white-space: nowrap;
+}
+
+.dpc-coding__simulation td:nth-child(2),
+.dpc-coding__simulation td:nth-child(5) {
+  white-space: normal;
 }
 
 .dpc-coding__manual label,

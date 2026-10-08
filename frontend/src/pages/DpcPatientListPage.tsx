@@ -208,7 +208,7 @@ export function DpcPatientListPage() {
                 </td>
               </tr>
             ))}
-            {!records.isPending && shown.length === 0 && (
+            {!records.isFetching && shown.length === 0 && (
               <tr>
                 <td colSpan={mode === "discharged" ? 11 : 10} className="patient-table__empty">
                   該当する入院はありません。
