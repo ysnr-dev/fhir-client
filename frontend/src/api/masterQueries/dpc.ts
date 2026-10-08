@@ -3,7 +3,10 @@ import {
   fetchDpcClassifications,
   fetchDpcEditions,
   fetchDpcIcdCodes,
+  fetchDpcStem7Codes,
+  normalizeDpcKCode,
   postDpcCoding,
+  type DpcStem7Code,
   type DpcCodingInputs,
   type DpcCodingOverrides,
 } from "../masterClient";
@@ -15,6 +18,25 @@ export function normalizeDpcIcd10(icd10: string): string {
     .normalize("NFKC")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "");
+}
+
+/**
+ * 点数表コード → 手術基幹コード(STEM7)の候補(配布ファイルの順)。キーは normalizeDpcKCode で
+ * そろえた点数表コードで、対応表に無いコードはキーごと出ない。
+ */
+export function useDpcStem7Codes(kCodes: string[]) {
+  const codes = [...new Set(kCodes.map(normalizeDpcKCode).filter(Boolean))].sort();
+
+  return useQuery({
+    queryKey: ["master", "dpc_stem7_codes", codes],
+    queryFn: async () => {
+      const byCode: Record<string, DpcStem7Code[]> = {};
+      for (const item of await fetchDpcStem7Codes(codes)) (byCode[item.k_code] ??= []).push(item);
+      return byCode;
+    },
+    staleTime: Infinity,
+    enabled: codes.length > 0,
+  });
 }
 
 /**

@@ -374,6 +374,10 @@ Rails.application.routes.draw do
       collection { post :import }
     end
     resources :dpc_icd_codes, only: %i[index]
+    # K コード → 手術基幹コード(STEM7)。様式1 の手術情報の候補(取込で全件洗い替え)。
+    resources :dpc_stem7_codes, only: %i[index] do
+      collection { post :import }
+    end
     # 診断群分類(14 桁)の判定(保存しない)と、分類・点数の閲覧。
     post "dpc/coding", to: "dpc_codings#create"
     get "dpc/classifications", to: "dpc_classifications#index"

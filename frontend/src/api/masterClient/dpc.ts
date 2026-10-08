@@ -26,6 +26,55 @@ export async function fetchDpcIcdCodes(icd10s: string[]): Promise<DpcIcdCode[]> 
   return ((await res.json()) as MasterSearchResult<DpcIcdCode>).items;
 }
 
+// ---- 手術基幹コード(STEM7) ----
+
+/** K コード → 外保連手術試案の手術基幹コード(STEM7)の対応表の 1 行。 */
+export interface DpcStem7Code {
+  id: number;
+  /** 様式1 の点数表コードの書き方(K0821ｲ、K082-21)。 */
+  k_code: string;
+  /** 配布ファイルの表記(K082 1 ｲ)。 */
+  k_code_source: string;
+  surgery_name: string | null;
+  /** 空白を詰めた 7 桁。 */
+  stem7: string;
+  /** 同じ K コードに複数の STEM7 があるときの使い分け。 */
+  note: string | null;
+}
+
+// 細目の全角カナ → 半角カナ(様式1・診療行為マスタの書き方)。
+const SUBITEM_KANA: Record<string, string> = {
+  イ: "ｲ", ロ: "ﾛ", ハ: "ﾊ", ニ: "ﾆ", ホ: "ﾎ", ヘ: "ﾍ", ト: "ﾄ", チ: "ﾁ", リ: "ﾘ", ヌ: "ﾇ",
+};
+
+/**
+ * 点数表コードを対応表の書き方(空白なし・英数字と括弧は半角・細目は半角カナ)にそろえる。
+ * backend の Master::DpcStem7Code.normalize_k_code と同じ。
+ */
+export function normalizeDpcKCode(code: string): string {
+  return code
+    .replace(/[０-９Ａ-Ｚａ-ｚ（）－]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/\s/g, "")
+    .replace(/[イロハニホヘトチリヌ]/g, (c) => SUBITEM_KANA[c])
+    .toUpperCase();
+}
+
+/** 点数表コード(複数)の STEM7 の候補。対応表に無いコードは結果に出ない。 */
+export async function fetchDpcStem7Codes(kCodes: string[]): Promise<DpcStem7Code[]> {
+  const codes = [...new Set(kCodes.map(normalizeDpcKCode).filter(Boolean))];
+  if (codes.length === 0) return [];
+  const search = new URLSearchParams({ k_code: codes.join(","), per: "100" });
+  const res = await masterFetch(`/master/dpc_stem7_codes?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return ((await res.json()) as MasterSearchResult<DpcStem7Code>).items;
+}
+
+/** 候補が 1 つ(STEM7 が 1 種類)のときだけ、その STEM7。 */
+export function singleDpcStem7(candidates: DpcStem7Code[]): string {
+  const stems = [...new Set(candidates.map((c) => c.stem7))];
+  return stems.length === 1 ? stems[0] : "";
+}
+
 // ---- 診断群分類(14 桁)の判定と、電子点数表の閲覧 ----
 
 /** 判定に渡す様式1 の値(fhir/dpcCodingHelpers.ts の dpcCodingInputsFromForm1 が作る)。 */

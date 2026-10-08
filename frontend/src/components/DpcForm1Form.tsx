@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useDpcMdc6 } from "../api/masterQueries";
+import { useDpcMdc6, useDpcStem7Codes } from "../api/masterQueries";
 import { useKarteConditions } from "../api/queries";
-import type { Disease, MedicalProcedure } from "../api/masterClient";
+import {
+  fetchDpcStem7Codes,
+  normalizeDpcKCode,
+  singleDpcStem7,
+  type Disease,
+  type DpcStem7Code,
+  type MedicalProcedure,
+} from "../api/masterClient";
 import { DISEASE_SUFFIX_OPTIONS } from "../fhir/dpcForm1/records/clinical";
 import { icdMatches } from "../fhir/dpcForm1/rules";
 import {
@@ -47,8 +54,13 @@ import { TrashIcon } from "./icons/TrashIcon";
 // DPC 様式1 の入力フォーム(登録・編集共用)。画面は定義表(fhir/dpcForm1)から作る。
 // 必須のレコードは最初から出し、条件を満たさないレコードは「項目を追加」で開く。
 // 病名と手術だけは、登録病名・病名マスタ・診療行為マスタから選ぶボタンを足す。
+// 手術基幹コード(STEM7)は、点数表コードの対応表に候補があれば選択式にする。
 
 const SECTIONS = Object.keys(DPC1_SECTION_LABELS) as Dpc1Section[];
+
+const SURGERY_RECORD = "A007010";
+const SURGERY_K_CODE: Dpc1PayloadNo = 2;
+const SURGERY_STEM7: Dpc1PayloadNo = 3;
 
 // composite でまだ選んでいない部品の桁を埋める文字。選択肢に無い値なので、
 // 確定時の検証で「すべての項目を選択してください」になる。
@@ -108,6 +120,9 @@ export function DpcForm1Form({
 
   const conditions = useKarteConditions(patientId);
   const mdc6 = useDpcMdc6(dpc1DiagnosisIcds(values));
+  const stem7 = useDpcStem7Codes(
+    (values.records[SURGERY_RECORD] ?? []).map((row) => row.p[SURGERY_K_CODE] ?? ""),
+  );
   const ctx = useMemo(
     () => buildDpc1Context({ values, age, mdc6ByIcd: mdc6.data ?? {} }),
     [values, age, mdc6.data],
@@ -171,11 +186,27 @@ export function DpcForm1Form({
     if (pick) {
       const def = defs.find((d) => d.code === pick.code);
       const current = def ? rowsOf(def)[pick.index] : undefined;
-      replaceRow(pick.code, pick.index, {
-        p: { ...current?.p, 2: procedure.k_code ?? "", 9: procedure.name ?? "" },
-      });
+      const kCode = procedure.k_code ?? "";
+      // 手術基幹コードは点数表コードで決まるので、術式を選び直したら空にして引き直す。
+      const p = { ...current?.p, 2: kCode, 9: procedure.name ?? "" };
+      delete p[SURGERY_STEM7];
+      replaceRow(pick.code, pick.index, { p });
+      if (kCode) void fillSingleStem7(pick.code, pick.index, kCode);
     }
     setPick(null);
+  }
+
+  /** 対応表の候補が 1 つなら、その行の手術基幹コードに入れる(点数表コードが変わっていなければ)。 */
+  async function fillSingleStem7(code: string, index: number, kCode: string) {
+    const single = singleDpcStem7(await fetchDpcStem7Codes([kCode]).catch(() => []));
+    if (!single) return;
+    setValues((v) => {
+      const rows = v.records[code];
+      const row = rows?.[index];
+      if (!row || row.p[SURGERY_K_CODE] !== kCode || row.p[SURGERY_STEM7]) return v;
+      const next = rows.map((r, i) => (i === index ? { ...r, p: { ...r.p, [SURGERY_STEM7]: single } } : r));
+      return { ...v, records: { ...v.records, [code]: next } };
+    });
   }
 
   /** 主傷病と同じ病名を、入院契機・医療資源の欄にも入れる。 */
@@ -215,7 +246,7 @@ export function DpcForm1Form({
     <>
       <form className="patient-form dpc-form1" onSubmit={handleSubmit}>
         <ErrorBanner error={submitError} />
-        <ErrorBanner error={conditions.error ?? mdc6.error} />
+        <ErrorBanner error={conditions.error ?? mdc6.error ?? stem7.error} />
         {validationErrors.length > 0 && (
           <div className="error-banner" role="alert" ref={errorRef}>
             {validationErrors.map((message) => (
@@ -312,7 +343,7 @@ export function DpcForm1Form({
                           .map((field) => (
                             <FieldInput
                               key={field.payload}
-                              field={fieldFor(def, field, row)}
+                              field={fieldFor(def, field, row, stem7.data ?? {})}
                               required={dpc1FieldRequired(def, field, ctx, index)}
                               value={row.p[field.payload] ?? ""}
                               onChange={(value) => setPayload(def, index, field.payload, value)}
@@ -436,9 +467,23 @@ function RemoveButton({ label, onClick }: { label: string; onClick: () => void }
 
 /**
  * 画面に出すときの欄の定義。病名付加コードは、その行の ICD-10 で使える区分が決まるので、
- * 選択式に差し替える。
+ * 選択式に差し替える。手術基幹コードは、その行の点数表コードの候補があれば選択式にする
+ * (使い分けは注意点に書かれている)。
  */
-function fieldFor(def: Dpc1RecordDef, field: Dpc1FieldDef, row: Dpc1Row): Dpc1FieldDef {
+function fieldFor(
+  def: Dpc1RecordDef,
+  field: Dpc1FieldDef,
+  row: Dpc1Row,
+  stem7ByKCode: Record<string, DpcStem7Code[]>,
+): Dpc1FieldDef {
+  if (def.code === SURGERY_RECORD && field.payload === SURGERY_STEM7) {
+    const candidates = stem7ByKCode[normalizeDpcKCode(row.p[SURGERY_K_CODE] ?? "")] ?? [];
+    if (!candidates.length) return field;
+    const options = candidates
+      .filter((c, i) => candidates.findIndex((other) => other.stem7 === c.stem7) === i)
+      .map((c) => ({ code: c.stem7, label: c.note ?? "" }));
+    return { ...field, kind: "select", options };
+  }
   if (def.code !== "A006030" || field.payload !== 3) return field;
   const icd = row.p[2] ?? "";
   const options = DISEASE_SUFFIX_OPTIONS.find((entry) => icdMatches(icd, entry.patterns))?.options;

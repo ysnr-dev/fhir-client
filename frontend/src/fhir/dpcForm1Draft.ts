@@ -30,6 +30,8 @@ export interface DpcSurgerySource {
   name: string;
   /** 点数表コード(K0821 など)。診療行為マスタで引けなければ空。 */
   kCode: string;
+  /** 手術基幹コード(STEM7)。対応表で 1 つに決まるときだけ入り、候補が複数・無しなら空。 */
+  stem7: string;
   /** 申込に入れた麻酔方法(手術オーダーのコード)。 */
   anesthesiaMethods: string[];
   /** 申込の術式に入れた左右(R / L / B)。指定が無ければ空。 */
@@ -196,6 +198,7 @@ function surgeryRow(surgery: DpcSurgerySource): Dpc1Row {
     p: {
       1: toDpcDate(surgery.date),
       2: surgery.kCode,
+      3: surgery.stem7,
       5: SURGERY_SIDE[surgery.laterality] ?? "",
       6: anesthesiaCode(surgery.anesthesiaMethods),
       9: surgery.name,

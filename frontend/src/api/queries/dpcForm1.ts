@@ -22,7 +22,12 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { searchMedicalProcedures } from "../masterClient";
+import {
+  fetchDpcStem7Codes,
+  normalizeDpcKCode,
+  searchMedicalProcedures,
+  singleDpcStem7,
+} from "../masterClient";
 import { resourcesOfType } from "./core";
 
 // ---- DPC 様式1 ----
@@ -101,6 +106,9 @@ async function fetchSurgeries(
     ? await searchMedicalProcedures({ procedure_code: codes.join(","), per: 100 })
     : { items: [] };
   const kCodes = new Map(master.items.map((item) => [item.procedure_code, item.k_code ?? ""]));
+  const stem7Candidates = await fetchDpcStem7Codes([...kCodes.values()]);
+  const stem7Of = (kCode: string) =>
+    singleDpcStem7(stem7Candidates.filter((c) => c.k_code === normalizeDpcKCode(kCode)));
 
   // 左右は申込の術式(明細)が持つ。申込ごとに、同じ診療行為コードの明細から引く。
   const itemParams = new URLSearchParams();
@@ -135,6 +143,7 @@ async function fetchSurgeries(
         date: (procedure.performedPeriod?.start ?? procedure.performedDateTime ?? "").slice(0, 10),
         name: procedure.code?.text ?? procedure.code?.coding?.[0]?.display ?? "",
         kCode: kCodes.get(code) ?? "",
+        stem7: stem7Of(kCodes.get(code) ?? ""),
         known: kCodes.has(code),
         // 主たる手術(ハブ)を先に並べる。
         hub: !procedure.partOf?.length,

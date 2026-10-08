@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_09_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -614,6 +614,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_100000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["edition", "mdc6", "kind"], name: "index_master_dpc_procedures_on_edition_and_mdc6_and_kind"
+  end
+
+  create_table "master_dpc_stem7_codes", force: :cascade do |t|
+    t.string "k_code", null: false
+    t.string "k_code_source", null: false
+    t.string "surgery_name"
+    t.string "stem7", null: false
+    t.string "note"
+    t.integer "display_order", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["k_code"], name: "index_master_dpc_stem7_codes_on_k_code"
   end
 
   create_table "master_dpc_surgeries", force: :cascade do |t|
