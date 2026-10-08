@@ -224,6 +224,15 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
           </dl>
         </section>
 
+        <section>
+          <h3>パスの抽出</h3>
+          <dl className="extract-guide__terms">
+            <Term name="表">パスの適用 1 件が 1 行。日数(予定・実際・差)、入院、終了区分、評価の件数とバリアンスの内容の列つき</Term>
+            <Term name="期間">期間中に適用していたパスを出す</Term>
+            <Term name="パス">選んだパスの適用だけを出す</Term>
+          </dl>
+        </section>
+
         <aside className="extract-guide__note">
           <h3>気をつけること</h3>
           <ul>

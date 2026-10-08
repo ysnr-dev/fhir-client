@@ -40,6 +40,14 @@ export function useApplicablePathways(name: string) {
   });
 }
 
+/** 状態を問わないパス定義(データ抽出の絞り込みの選択肢。古い版や廃止したパスの適用も探せるように)。 */
+export function usePathwayOptions() {
+  return useQuery({
+    queryKey: [...PATHWAYS_KEY, "options"],
+    queryFn: () => searchPathways({ per: 100 }),
+  });
+}
+
 export function usePathwayMutations() {
   const queryClient = useQueryClient();
   const invalidate = () => {

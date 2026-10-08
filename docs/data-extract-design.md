@@ -177,7 +177,7 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
   実施は項目で絞れない(実施の code はレセ電の手技で、項目マスタのコードではない)。
 - 今後の候補:
   - 上流の変更が要らないもの: 有害事象(CTCAE・Grade)、アレルギー、注意フラグ・感染症(Flag)、救急受診
-    (`Encounter?class=EMER`)、クリニカルパスの適用とバリアンス(CarePlan / Task)。
+    (`Encounter?class=EMER`)。
   - 上流の変更が要るもの: 血圧(component の値の検索)、ICD10 の前方一致(C-24)、「最新値が〜」の条件(C-15 の `$lastn`)。
   - 出力: テンプレートの回答値での絞り込み(テンプレートタブの中で手元で絞る)。
   - 細菌検査: 材料・菌での絞り込み(上流の DiagnosticReport に材料・菌の検索が要る)、診療科での絞り込み(DiagnosticReport の
@@ -326,3 +326,22 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
     値のある行があるときだけ列にする。種別を足して拡張が増えたらこの表に 1 行足す。
 - 栄養指導・服薬指導の記録の本文はテンプレートの回答なので、このタブには出さない(「テンプレート」タブで出す)。
 - 並びは実施日時の新しい順。画面は先頭 500 件、CSV はすべて。
+
+## 14. クリニカルパスの適用の抽出
+
+「パス」タブ(`?tab=pathway`、`components/extract/PathwayExtractPanel.tsx`)は、クリニカルパスの適用
+(`docs/clinical-pathway-design.md` §7。CarePlan の木の根)を「適用 1 件 = 1 行」の表と CSV にする。設定は保存しない。
+
+- **取得**(`api/queries/pathwayExtract.ts`):
+  1. 適用: `CarePlan?category=care-plan-type|clinical-pathway&part-of:missing=true&status:not=entered-in-error&date=ge…&date=le…
+     [&instantiates-uri=<パス定義の URI>]&_include=CarePlan:encounter&_include=CarePlan:subject&_sort=-date`。期間は適用の
+     period(開始〜終了)との重なりで、期間中に適用していたものが当たる。パスは定義マスタ(状態を問わない。`usePathwayOptions`)から選ぶ。
+  2. 評価と終了: 当たった適用の患者ぶんの `Goal?identifier=apply-goal-id|,outcome-goal-id|`(system だけの指定をカンマで OR)を
+     subject= に 100 人ずつ。アウトカムの Goal の識別子は「適用の識別子.病日.OAT ユニット」なので、前半で適用に結ぶ。
+     適用の Goal(終了・中止)は識別子が適用と同じ値。
+  - どちらかが読み切れなかった(truncated)ときは、評価の件数が嘘になるので表を出さない。
+- **列**(`fhir/pathwayExtractHelpers.ts`): 適用日・終了日・状態(進行中 / 終了 / 中止)・終了区分・予定日数(`EPathCarePlanScheduledDays`)・
+  実日数(適用日から終了日まで、進行中は今日まで。両端を含む)・予定との差(実日数 − 予定日数。終了・中止のみ)・入院日・退院日・
+  診療科(入院の serviceProvider)、評価(達成状態を記録したアウトカムの数)・達成・バリアンス(未達成)・未評価、パス・パスコード、
+  バリアンスの内容(評価日 + アウトカム名。評価日の順)・中止理由・総合評価(適用の Goal の note。`pathwayCloseValuesOf`)。
+- 並びは適用日の新しい順。画面は先頭 500 件、CSV はすべて。フェーズごと・病日ごとの内訳は出さない(パスシートで見る)。
