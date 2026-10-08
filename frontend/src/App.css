@@ -9105,6 +9105,24 @@ input.lot-number-cell__input.is-invalid {
   font-weight: 600;
 }
 
+/* 記録タブの内訳。数のセルは折り返さず、分類の値(薬剤名など)の見出しは長ければ折り返す。 */
+.extract-breakdown th.extract-breakdown__number,
+.extract-breakdown td.extract-breakdown__number {
+  white-space: nowrap;
+}
+
+/* 件数の後ろに添える患者数。件数と見分けるよう小さく薄くする。 */
+.extract-breakdown__patients {
+  margin-left: 2px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.extract-breakdown td.extract-breakdown__label {
+  min-width: 8em;
+  max-width: 28em;
+}
+
 .extract-history__chart {
   max-width: 720px;
   margin-bottom: 12px;

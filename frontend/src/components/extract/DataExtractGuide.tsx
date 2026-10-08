@@ -253,6 +253,15 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>記録のタブの内訳</h3>
+          <dl className="extract-guide__terms">
+            <Term name="内訳">結果の「内訳」で、日付の列で月別に、分類の列で値ごとに件数と患者数を数える(片方だけでもよい)</Term>
+            <Term name="年齢">分類に選ぶと 10 歳刻みにまとめる</Term>
+            <Term name="内訳CSV">月・分類・件数・患者数を 1 行ずつ出す</Term>
+          </dl>
+        </section>
+
+        <section>
           <h3>結果の患者をフォルダに入れる</h3>
           <dl className="extract-guide__terms">
             <Term name="フォルダ登録">どのタブでも、結果の患者を患者フォルダにまとめて入れる。既存のフォルダか、その場で作るフォルダを選ぶ</Term>
