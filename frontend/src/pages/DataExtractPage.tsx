@@ -11,6 +11,7 @@ import { useExtractDetailExport, useExtractRun } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { AdverseEventExtractPanel } from "../components/extract/AdverseEventExtractPanel";
 import { DataExtractGuide } from "../components/extract/DataExtractGuide";
+import { EncounterExtractPanel } from "../components/extract/EncounterExtractPanel";
 import { ExtractConditionBuilder } from "../components/extract/ExtractConditionBuilder";
 import { ExtractQuerySelect } from "../components/extract/ExtractQuerySelect";
 import { ExtractResults } from "../components/extract/ExtractResults";
@@ -40,17 +41,28 @@ import { downloadBlob } from "../lib/download";
 
 // データ抽出(docs/data-extract-design.md)。「患者」タブは病名・検査結果・処方/注射・入院・外来・
 // 患者属性の条件を AND / OR で組み、該当する患者を一覧・内訳・CSV にする。条件は持ち主(院内共通 /
-// 診療科 / 自分)ごとに保存できる。「テンプレート」タブは 1 つのテンプレートの回答を、「検査結果」タブは
-// 選んだ検査・バイタルの結果を、「投薬」タブは処方・注射のオーダーの薬剤を、「細菌検査」タブは分離菌と薬剤感受性を、「手術」タブは手術の実施記録を、
-// 「部門実施」タブは放射線・内視鏡などの実施記録を、「有害事象」タブは CTCAE Grade の記録を、
-// 「パス」タブはクリニカルパスの適用と評価(バリアンス)を表にする
-// (いずれも保存した患者の条件や患者フォルダの患者に絞れる)。
+// 診療科 / 自分)ごとに保存できる。ほかのタブは記録 1 件を 1 行にした表にする: 「入院・外来」は入院・外来受診、
+// 「テンプレート」は 1 つのテンプレートの回答、「検査結果」は検査・バイタルの結果、「投薬」は処方・注射の薬剤、
+// 「細菌検査」は分離菌と薬剤感受性、「手術」は手術の実施記録、「部門実施」は放射線・内視鏡などの実施記録、
+// 「有害事象」は CTCAE Grade の記録、「パス」はクリニカルパスの適用と評価(バリアンス)。
+// いずれも保存した患者の条件や患者フォルダの患者に絞れる。
 // 抽出は上流 FHIR をその場で引く。
 
-type Tab = "patient" | "template" | "lab" | "medication" | "micro" | "surgery" | "perform" | "adverse" | "pathway";
+type Tab =
+  | "patient"
+  | "encounter"
+  | "template"
+  | "lab"
+  | "medication"
+  | "micro"
+  | "surgery"
+  | "perform"
+  | "adverse"
+  | "pathway";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "patient", label: "患者" },
+  { key: "encounter", label: "入院・外来" },
   { key: "template", label: "テンプレート" },
   { key: "lab", label: "検査結果" },
   { key: "medication", label: "投薬" },
@@ -107,6 +119,7 @@ export function DataExtractPage() {
         ))}
       </div>
       {tab === "patient" && <PatientExtractTab />}
+      {tab === "encounter" && <EncounterExtractPanel />}
       {tab === "template" && <TemplateExtractPanel />}
       {tab === "lab" && <LabExtractPanel />}
       {tab === "medication" && <MedicationExtractPanel />}

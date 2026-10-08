@@ -12,7 +12,8 @@ export type ExtractRecordTab =
   | "surgery"
   | "perform"
   | "adverse"
-  | "pathway";
+  | "pathway"
+  | "encounter";
 
 export type ExtractTab = "patient" | ExtractRecordTab;
 

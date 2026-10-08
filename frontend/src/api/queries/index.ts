@@ -57,3 +57,4 @@ export * from "./adverseEventExtract";
 export * from "./performExtract";
 export * from "./pathwayExtract";
 export * from "./medicationExtract";
+export * from "./encounterExtract";

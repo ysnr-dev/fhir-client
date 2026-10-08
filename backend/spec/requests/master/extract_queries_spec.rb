@@ -234,7 +234,8 @@ RSpec.describe "Master::ExtractQueries", type: :request do
         "surgery" => { "procedures" => [{ "code" => "150254110", "name" => "腹腔鏡下胆嚢摘出術" }], "department_id" => "d1" },
         "perform" => { "order_kind" => "rad" },
         "adverse" => { "treatment_type" => "chemo-regimen", "terms" => ["好中球数減少"], "mode" => "treatment" },
-        "pathway" => { "pathway_code" => "900001" }
+        "pathway" => { "pathway_code" => "900001" },
+        "encounter" => { "kind" => "inpatient", "date_mode" => "discharged", "department_id" => "d1", "ward_id" => "w1" }
       }
       criteria.each do |tab, value|
         create_record(tab, value, name: "同じ名前")

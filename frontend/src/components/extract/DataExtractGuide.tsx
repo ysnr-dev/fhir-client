@@ -158,6 +158,15 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>入院・外来の抽出</h3>
+          <dl className="extract-guide__terms">
+            <Term name="区分">入院か外来を選ぶ。入院 1 件・外来受診 1 件が 1 行</Term>
+            <Term name="入院">在院日数・病棟・病室・主治医・入院経路・退院先などの列つき。見方(入院していた / 入院した / 退院した)と病棟で絞れる</Term>
+            <Term name="外来">受付の診療科・初再診・診察時間・担当医・診察室の列つき</Term>
+          </dl>
+        </section>
+
+        <section>
           <h3>テンプレートの抽出</h3>
           <dl className="extract-guide__terms">
             <Term name="対象">「テンプレート」タブで選んだテンプレートの回答。版が違っても同じテンプレートならまとめて出す</Term>
