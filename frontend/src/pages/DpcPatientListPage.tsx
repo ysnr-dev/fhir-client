@@ -6,14 +6,11 @@ import {
   useDpcRecordsForEncounters,
   useInpatientEncounters,
 } from "../api/queries";
+import { DpcPeriod2 } from "../components/DpcPeriod2";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { dpcTimingLabel } from "../fhir/dpcCodingRecord";
-import {
-  buildDpcPatientRows,
-  DPC_FORM1_STATE_LABELS,
-  type DpcPatientRow,
-} from "../fhir/dpcPatientList";
+import { buildDpcPatientRows, DPC_FORM1_STATE_LABELS } from "../fhir/dpcPatientList";
 import { ADMISSION_STATUS } from "../fhir/encounterHelpers";
 import { KARTE_OPEN_PARAM, formatKarteOpen } from "../karteUrl";
 import { csvBlob } from "../lib/csv";
@@ -25,9 +22,6 @@ import { downloadBlob } from "../lib/download";
 // 行からカルテの DPC(診断群分類)を開く。
 
 type Mode = "current" | "discharged";
-
-/** 期間Ⅱの末日がこの日数以内なら「間近」。 */
-const NEAR_DAYS = 2;
 
 export function DpcPatientListPage() {
   const [mode, setMode] = useState<Mode>("current");
@@ -195,7 +189,7 @@ export function DpcPatientListPage() {
                   )}
                 </td>
                 <td>
-                  <Period2 row={row} />
+                  <DpcPeriod2 row={row} />
                 </td>
                 <td className="patient-table__actions">
                   <Link
@@ -220,17 +214,4 @@ export function DpcPatientListPage() {
       )}
     </div>
   );
-}
-
-function Period2({ row }: { row: DpcPatientRow }) {
-  if (!row.period2End) return <>-</>;
-  if (row.overDays > 0) {
-    return (
-      <span className="dpc-patients__over">
-        {row.period2End}(+{row.overDays}日)
-      </span>
-    );
-  }
-  const near = row.daysLeft !== null && row.daysLeft <= NEAR_DAYS && !row.dischargedOn;
-  return <span className={near ? "dpc-patients__near" : undefined}>{row.period2End}</span>;
 }

@@ -13829,6 +13829,26 @@ select.rad-route-select {
   margin-bottom: 4px;
 }
 
+/* 入院患者一覧の表示項目変更。項目は少ないので幅を絞る。 */
+.inpatient-columns-modal {
+  width: min(320px, 90vw);
+}
+
+.inpatient-columns-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 入院患者一覧の DPC 列。分類コードの下に期間Ⅱの末日を小さく添える。 */
+.inpatient__dpc {
+  white-space: nowrap;
+}
+
+.inpatient__dpc-period {
+  font-size: 12px;
+}
+
 .inpatient__plan-tag {
   display: inline-block;
   margin-right: 6px;

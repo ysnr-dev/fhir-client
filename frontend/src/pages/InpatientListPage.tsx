@@ -8,6 +8,7 @@ import {
   useWardGrid,
   useNursingPendingCounts,
   useActivePathwaysByPatient,
+  useDpcRecordsForEncounters,
   useWardOptions,
   type PathwayApplicationSummary,
 } from "../api/queries";
@@ -17,6 +18,7 @@ import { BedTransferModal } from "../components/BedTransferModal";
 import { DischargeModal } from "../components/DischargeModal";
 import { DischargePlanModal } from "../components/DischargePlanModal";
 import { DateStepper } from "../components/DateStepper";
+import { DpcPeriod2 } from "../components/DpcPeriod2";
 import { ErrorBanner } from "../components/ErrorBanner";
 import {
   DischargePlanTable,
@@ -28,6 +30,10 @@ import {
   type LeaveRow,
   type TransferPlanRow,
 } from "../components/InpatientPlanTables";
+import {
+  InpatientColumnsModal,
+  type InpatientOptionalColumns,
+} from "../components/InpatientColumnsModal";
 import { LeaveModal } from "../components/LeaveModal";
 import {
   PatientKana,
@@ -64,10 +70,12 @@ import {
   plannedRoomName,
   plannedWardId,
 } from "../fhir/encounterHelpers";
+import { buildDpcPatientRows, type DpcPatientRow } from "../fhir/dpcPatientList";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { bedDisplayName, bedNumber, bedShortLabel } from "../fhir/wardHelpers";
-import { KARTE_TAB_PARAM } from "../karteUrl";
+import { useStoredToggle } from "../hooks/useStoredToggle";
+import { formatKarteOpen, KARTE_OPEN_PARAM, KARTE_TAB_PARAM } from "../karteUrl";
 import { useReturnLinkState } from "../returnTo";
 import { dateTimeLabel, today } from "../lib/dates";
 
@@ -168,6 +176,10 @@ interface Filters {
 }
 
 const emptyFilters: Filters = { departmentId: "", practitionerId: "", nurseId: "" };
+
+// 表示項目変更で隠した列(端末ごとに覚える)。
+const HIDE_PATHWAY_COLUMN_KEY = "inpatient-list.hide-pathway-column";
+const HIDE_DPC_COLUMN_KEY = "inpatient-list.hide-dpc-column";
 
 /** 参照 id と表示名の組。診療科・主治医の絞り込みの選択肢に使う。 */
 interface FilterOption {
@@ -272,6 +284,15 @@ export function InpatientListPage() {
   const [dischargeTarget, setDischargeTarget] = useState<InpatientRow | null>(null);
   const [rowAction, setRowAction] = useState<RowAction | null>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [columnsModalOpen, setColumnsModalOpen] = useState(false);
+  // 表示を切り替えられる列。既定は表示で、隠したことを端末ごとに覚える。
+  const [pathwayHidden, setPathwayHidden] = useStoredToggle(HIDE_PATHWAY_COLUMN_KEY);
+  const [dpcHidden, setDpcHidden] = useStoredToggle(HIDE_DPC_COLUMN_KEY);
+  const columns: InpatientOptionalColumns = { pathway: !pathwayHidden, dpc: !dpcHidden };
+  function setColumnShown(key: keyof InpatientOptionalColumns, shown: boolean) {
+    if (key === "pathway") setPathwayHidden(!shown);
+    else setDpcHidden(!shown);
+  }
   const [executeTarget, setExecuteTarget] = useState<PlannedRow | null>(null);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
 
@@ -360,7 +381,34 @@ export function InpatientListPage() {
       }),
     );
   }, [tab, grid.rooms, grid.bedsByRoom, byBed]);
-  const activePathways = useActivePathwaysByPatient(wardPatientIds);
+  const activePathways = useActivePathwaysByPatient(columns.pathway ? wardPatientIds : []);
+
+  // DPC 列(入院患者タブだけ)。病棟の床にいる入院の、今の診断群分類と期間Ⅱの末日。
+  const wardEncounters = useMemo(() => {
+    if (tab !== "current") return [];
+    return grid.rooms.flatMap((room) =>
+      (grid.bedsByRoom.get(room.id ?? "") ?? []).flatMap((bed) => {
+        const encounter = bed.id ? byBed?.get(bed.id) : undefined;
+        return encounter?.id ? [encounter] : [];
+      }),
+    );
+  }, [tab, grid.rooms, grid.bedsByRoom, byBed]);
+  const dpcRecords = useDpcRecordsForEncounters(
+    columns.dpc ? wardEncounters.map((encounter) => encounter.id as string) : [],
+  );
+  const dpcByEncounter = useMemo(
+    () =>
+      new Map(
+        buildDpcPatientRows({
+          encounters: columns.dpc ? wardEncounters : [],
+          patientsById: patientsById ?? new Map(),
+          responses: dpcRecords.data?.responses ?? [],
+          wardNameOf: () => "",
+          baseDate: date,
+        }).map((row) => [row.encounterId, row]),
+      ),
+    [columns.dpc, wardEncounters, patientsById, dpcRecords.data, date],
+  );
 
   // 入院予定は選んだ病棟のぶんだけ、予定日順(取得時に整列済み。日付未定が先頭)で
   // 出す。予定日で絞ると日付未定は外れる(その日に来る予定ではないので)。
@@ -671,7 +719,8 @@ export function InpatientListPage() {
                   <th>主治医</th>
                   <th>担当看護師</th>
                   <th>入院日</th>
-                  <th>パス</th>
+                  {columns.pathway && <th>パス</th>}
+                  {columns.dpc && <th>DPC</th>}
                   <th>特記事項</th>
                   <th className="sticky-table__fix-actions"></th>
                 </tr>
@@ -696,6 +745,8 @@ export function InpatientListPage() {
                       nursingPending.countByPatientId.get(row.patient?.id ?? "") ?? 0
                     }
                     pathways={activePathways.data?.get(row.patient?.id ?? "") ?? []}
+                    dpc={row.encounter?.id ? dpcByEncounter.get(row.encounter.id) : undefined}
+                    columns={columns}
                   />
                 ))}
               </tbody>
@@ -852,6 +903,9 @@ export function InpatientListPage() {
               <Link className="row-menu__item" to={`/inpatients/bulk-vitals?ward=${wardId}`}>
                 経過表一括入力
               </Link>
+              <button type="button" className="row-menu__item" onClick={() => setColumnsModalOpen(true)}>
+                表示項目変更
+              </button>
             </RowMenu>
           </span>
         )}
@@ -862,7 +916,7 @@ export function InpatientListPage() {
       />
       <ErrorBanner error={cancelAdmission.error ?? updateEncounter.error} />
       <ErrorBanner error={nursingPending.error} />
-      <ErrorBanner error={activePathways.error} />
+      <ErrorBanner error={activePathways.error ?? dpcRecords.error} />
 
       {(tab === "planned" ? planned.data?.truncated : inpatients.data?.truncated) && (
         <p className="error-banner__line error-banner__line--error" role="status">
@@ -892,6 +946,13 @@ export function InpatientListPage() {
         renderTable()
       )}
 
+      {columnsModalOpen && (
+        <InpatientColumnsModal
+          columns={columns}
+          onChange={setColumnShown}
+          onClose={() => setColumnsModalOpen(false)}
+        />
+      )}
       {selectedRow?.patient?.id && (
         <PatientProfileDrawer
           patientId={selectedRow.patient.id}
@@ -1010,6 +1071,8 @@ function InpatientTableRow({
   onAdmit,
   pendingNursingCount,
   pathways,
+  dpc,
+  columns,
   ...actions
 }: {
   row: InpatientRow;
@@ -1022,6 +1085,9 @@ function InpatientTableRow({
   pendingNursingCount: number;
   /** 進行中のパスの適用(無ければ空)。 */
   pathways: PathwayApplicationSummary[];
+  /** 今の診断群分類と期間Ⅱ(DPC 列を出さないとき・読み込み前は undefined)。 */
+  dpc?: DpcPatientRow;
+  columns: InpatientOptionalColumns;
 } & InpatientMenuActions) {
   const returnLinkState = useReturnLinkState();
   const { room, bed, roomRowSpan, encounter, patient } = row;
@@ -1050,13 +1116,20 @@ function InpatientTableRow({
           <td>{encounterAttendingName(encounter)}</td>
           <td>{encounterNurseNames(encounter).join("、") || "-"}</td>
           <td>{encounterAdmissionDate(encounter)}</td>
-          <td>
-            {pathways.length > 0 && patientId ? (
-              <PathwayNameLinks patientId={patientId} applications={pathways} returnLinkState={returnLinkState} />
-            ) : (
-              "-"
-            )}
-          </td>
+          {columns.pathway && (
+            <td>
+              {pathways.length > 0 && patientId ? (
+                <PathwayNameLinks patientId={patientId} applications={pathways} returnLinkState={returnLinkState} />
+              ) : (
+                "-"
+              )}
+            </td>
+          )}
+          {columns.dpc && (
+            <td className="inpatient__dpc">
+              {dpc && patientId ? <DpcCell row={dpc} returnLinkState={returnLinkState} /> : "-"}
+            </td>
+          )}
           <td className="inpatient__note">
             {/* 未指示受けは「掲示」ではなく要対応なので、予定タグ(枠線)と見た目を
                 分けて先頭に置く。押すとその患者のカルテの指示簿タブが開く。 */}
@@ -1101,7 +1174,7 @@ function InpatientTableRow({
           <td className="sticky-table__fix-3">
             <span className="inpatient__empty-bed">空床</span>
           </td>
-          <td colSpan={8}></td>
+          <td colSpan={7 + Number(columns.pathway) + Number(columns.dpc)}></td>
           <td className="patient-table__actions sticky-table__fix-actions">
             <RowMenu label={`${locationDisplayName(room)} ${bedLabel} の操作`} escapesClipping>
               <button type="button" className="row-menu__item" onClick={onAdmit}>
@@ -1169,6 +1242,34 @@ function PlannedTableRow({
         </RowMenu>
       </td>
     </tr>
+  );
+}
+
+/**
+ * DPC 列のセル。今の診断群分類(未決定ならそう出す)と期間Ⅱの末日。押すとカルテの
+ * DPC(診断群分類)を開く。
+ */
+function DpcCell({
+  row,
+  returnLinkState,
+}: {
+  row: DpcPatientRow;
+  returnLinkState: ReturnType<typeof useReturnLinkState>;
+}) {
+  const to = `/patients/${row.patientId}/karte?${KARTE_OPEN_PARAM}=${encodeURIComponent(
+    formatKarteOpen({ kind: "dpc-coding", encounterId: row.encounterId }),
+  )}`;
+  return (
+    <>
+      <Link to={to} state={returnLinkState}>
+        {row.decision ? row.decision.dpcCode : <span className="dpc-patients__undecided">未決定</span>}
+      </Link>
+      {row.period2End && (
+        <div className="inpatient__dpc-period">
+          <DpcPeriod2 row={row} />
+        </div>
+      )}
+    </>
   );
 }
 
