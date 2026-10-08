@@ -204,6 +204,16 @@ export function DataExtractGuide({ onClose }: { onClose: () => void }) {
           </dl>
         </section>
 
+        <section>
+          <h3>有害事象の抽出</h3>
+          <dl className="extract-guide__terms">
+            <Term name="期間">発現日で絞る</Term>
+            <Term name="用語">CTCAE の用語を選ぶと、その用語の記録だけを出す(複数選ぶとどれか)</Term>
+            <Term name="治療">化学療法・放射線治療のどちらの有害事象かで絞る</Term>
+            <Term name="行">1 件ごと / 患者・治療ごと(件数・最大 Grade と、用語ごとの最大 Grade の列)</Term>
+          </dl>
+        </section>
+
         <aside className="extract-guide__note">
           <h3>気をつけること</h3>
           <ul>

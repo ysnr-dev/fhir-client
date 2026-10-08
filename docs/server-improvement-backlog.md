@@ -16,6 +16,9 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   2026-10-06（データ抽出の実装で、Observation の `value-quantity`(数値の比較、検索型 `:quantity`)を同日実装。
   既存の測定値を backfill する migration `20261007000001_add_value_quantity_to_observations.rb` 付き。
   同時に C-23〜C-25 を追加。`docs/data-extract-design.md`）。
+  2026-10-08（データ抽出の有害事象の実装で、Observation の `date` を `effectivePeriod.start` でも索引するよう同日実装。
+  期間で持つ有害事象(発現日〜回復日)を発現日で検索できるようにした。既存の記録を backfill する migration
+  `20261008000001_backfill_observation_effective_period_start.rb` 付き）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、

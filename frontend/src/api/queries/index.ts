@@ -53,3 +53,4 @@ export * from "./templateExtract";
 export * from "./labExtract";
 export * from "./microExtract";
 export * from "./surgeryExtract";
+export * from "./adverseEventExtract";

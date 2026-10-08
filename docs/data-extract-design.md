@@ -180,7 +180,6 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
     (`Encounter?class=EMER`)、クリニカルパスの適用とバリアンス(CarePlan / Task)。
   - 上流の変更が要るもの: 血圧(component の値の検索)、ICD10 の前方一致(C-24)、「最新値が〜」の条件(C-15 の `$lastn`)。
   - 出力: テンプレートの回答値での絞り込み(テンプレートタブの中で手元で絞る)。
-  - 記録を表にするタブの追加: 有害事象。
   - 細菌検査: 材料・菌での絞り込み(上流の DiagnosticReport に材料・菌の検索が要る)、診療科での絞り込み(DiagnosticReport の
     department 検索が要る)、アンチバイオグラム(菌 × 抗菌薬の感性率)の集計表。
 
@@ -281,3 +280,27 @@ Observation に `value-quantity`(数値の比較。prefix eq ne ge le gt lt、�
   麻酔方法・麻酔管理(申込)、執刀医〜臨床工学技士(実施記録の performer の役割ごと)、出血量・尿量・輸血量(mL)、
   創分類・カウント・合併症・転帰。時刻が欠けていれば所要時間は空。
 - 並びは入室の新しい順。画面は先頭 500 件、CSV はすべて。薬剤・材料は列にしない(件数が手術ごとに違い、表に収まらない)。
+
+## 12. 有害事象の抽出
+
+「有害事象」タブ(`?tab=adverse`、`components/extract/AdverseEventExtractPanel.tsx`)は、有害事象(CTCAE Grade)の記録
+(`fhir/adverseEventHelpers.ts`。Observation、category=adverse-event、valueInteger=Grade、effectivePeriod=発現日〜回復日、
+basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存しない。
+
+- **取得**(`api/queries/adverseEventExtract.ts`): `Observation?category=adverse-event&date=ge…&date=le…
+  &status:not=entered-in-error,cancelled[&based-on.category=order-type|<chemo-regimen|radiotherapy>][&code:exact=<用語,…>]
+  &_include=Observation:subject&_sort=-date` を strict で `searchAllPages`。患者の絞り込みは §8 と同じ。
+  - 期間は発現日。上流の Observation の `date` は `effectiveDateTime` に加えて `effectivePeriod.start` も索引する
+    (2026-10-08。既存の記録は migration `20261008000001` で backfill)。**本番は fhir-server を先にデプロイする**
+    (旧版だと有害事象が `date` に載らず、0 件になる)。
+  - 治療の種別は原因の治療のヘッダの order-type をチェーンで引く。`basedOn` を持たない古い化学療法の記録
+    (`regimen-order` 拡張だけを持つ)は種別を選ぶと当たらない。
+  - 用語は CTCAE 用語マスタ(`CtcaeTermSearchModal`)から選び、code.text の完全一致(`code:exact`)で引く。
+    記録の用語は自由記述なので、マスタの和名と違う書き方の記録は当たらない。
+- **行**(`fhir/adverseEventExtractHelpers.ts`):
+  - 1 件ごと: 発現日・回復日(無ければ「継続中」)・持続日数(発現日から回復日まで、両端を含む)・治療の種別・治療・クール・用語・
+    Grade・記録者・メモ。発現日の新しい順。
+  - 患者・治療ごと: 患者 × 原因の治療(ヘッダ)で 1 行。治療の種別・治療・最初の発現日・件数・最大 Grade・Grade 3 以上の件数と、
+    用語ごとの最大 Grade の列(用語は記録の多い順)。欠けた記録では件数・最大 Grade が嘘になるので、読み切れなかった
+    (truncated)ときは表を出さない。
+- Grade での絞り込みは無い(上流は valueInteger を索引しない)。「患者・治療ごと」の最大 Grade の列か CSV で見る。
