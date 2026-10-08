@@ -73,6 +73,7 @@ const emergencyStateLabel = (suffix: string): string =>
 export const ADMISSION_TYPE_OPTIONS: Dpc1Option[] = [
   { code: "100", label: "予定入院" },
   { code: "101", label: "予定された再入院(悪性腫瘍患者に係る化学療法を実施)" },
+  { code: "102", label: "予定入院(短期滞在手術等基本料3の対象の検査・手術・放射線治療)" },
   { code: "200", label: "救急医療入院以外の予定外入院" },
   ...EMERGENCY_STATES.map(([suffix, label]) => ({
     code: `3${suffix}`,
@@ -84,6 +85,9 @@ export const ADMISSION_TYPE_OPTIONS: Dpc1Option[] = [
   })),
   { code: "320", label: "救急医療入院: その他の重症な状態" },
 ];
+
+/** 予定・救急医療入院の "102" は 2026 年度版で新設。それより前の定義表では選べない。 */
+export const SHORT_STAY_ADMISSION_TYPE = "102";
 
 export const HOME_CARE_OPTIONS: Dpc1Option[] = [
   { code: "0", label: "無" },
@@ -545,7 +549,7 @@ export const COMMON_RECORDS: Dpc1RecordDef[] = [
         payload: 5,
         label: "予定・救急医療入院",
         kind: "select",
-        options: ADMISSION_TYPE_OPTIONS,
+        options: ADMISSION_TYPE_OPTIONS.filter((option) => option.code !== SHORT_STAY_ADMISSION_TYPE),
         visible: admittedFromOutside,
       },
       {

@@ -146,7 +146,7 @@ export interface Dpc1Header {
   count: string;
   /** 統括診療情報番号。親様式1 は 0。 */
   summaryNo: string;
-  /** 定義表の年度(退院日の属する年度)。 */
+  /** 定義表の版の年度(退院日に適用される版。dpc1EditionYear)。 */
   fiscalYear: string;
 }
 

@@ -62,7 +62,7 @@ const aorticDissection = diagnosisIcdIn(
 const psychiatricDisease = or(resourceMdc6In("17", "01021"), psychiatricWard);
 
 // 敗血症(入院契機・医療資源・入院時併存症・入院後発症疾患のいずれかが 180010)。
-const sepsis = diagnosisMdc6In(
+export const sepsis = diagnosisMdc6In(
   [ADMISSION_DIAGNOSIS, RESOURCE_DIAGNOSIS, COMORBIDITY_DIAGNOSIS, COMPLICATION_DIAGNOSIS],
   "180010",
 );

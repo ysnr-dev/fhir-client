@@ -8,7 +8,7 @@ import type { Disease, Modifier } from "../api/masterClient";
 import { admissionRouteHasDetails, admissionRoutePayloads } from "./admissionRouteHelpers";
 import { HEIGHT_LOINC, WEIGHT_LOINC } from "./bodyMeasureHelpers";
 import { conditionDisplayName, isSuspected, parseConditionForm } from "./conditionHelpers";
-import { dpc1FiscalYear } from "./dpcForm1";
+import { dpc1EditionYear } from "./dpcForm1";
 import { DEPARTMENT_OPTIONS } from "./dpcForm1/records/common";
 import type { Dpc1Header, Dpc1PayloadNo, Dpc1Row, Dpc1Values } from "./dpcForm1/types";
 import { emptyDpc1Row, isEmptyDpc1Row } from "./dpcForm1Helpers";
@@ -111,7 +111,7 @@ export function dpc1HeaderOf(sources: DpcForm1Sources, today: string): Dpc1Heade
     admitDate: toDpcDate(encounter.period?.start),
     count: countNumber(encounter, admissions),
     summaryNo: "0",
-    fiscalYear: dpc1FiscalYear(encounter.period?.end?.slice(0, 10) ?? today),
+    fiscalYear: dpc1EditionYear(encounter.period?.end?.slice(0, 10) ?? today),
   };
 }
 

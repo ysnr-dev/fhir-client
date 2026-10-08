@@ -282,7 +282,7 @@ const ADL_PARTS: Dpc1Part[] = [
   },
 ];
 
-function adlField(label: string): Dpc1FieldDef {
+export function adlField(label: string): Dpc1FieldDef {
   return { payload: 2, label, kind: "composite", parts: ADL_PARTS };
 }
 

@@ -115,6 +115,24 @@ export const emergencyAdmission: Dpc1Rule = (ctx) => ctx.get("A000020", 5).start
 /** 予定・救急医療入院が挙げた値のどれか。 */
 export const admissionTypeIn = (...values: string[]): Dpc1Rule => payloadIn("A000020", 5, ...values);
 
+/** 予定・救急医療入院が、短期滞在手術等基本料3 の対象の検査・手術・放射線治療を目的とした予定入院(102)以外。 */
+export const notShortStayAdmission: Dpc1Rule = (ctx) => ctx.get("A000020", 5) !== "102";
+
+/**
+ * 様式1 対象期間(A000031 の開始日〜終了日)が days 日を超える。開始日と終了日を両方数える。
+ * 終了日が入っていなければ偽。
+ */
+export const formPeriodLongerThan =
+  (days: number): Dpc1Rule =>
+  (ctx) => {
+    const start = ctx.get("A000031", 1);
+    const end = ctx.get("A000031", 2);
+    if (!/^\d{8}$/.test(start) || !/^\d{8}$/.test(end)) return false;
+    const utc = (value: string) =>
+      Date.UTC(Number(value.slice(0, 4)), Number(value.slice(4, 6)) - 1, Number(value.slice(6, 8)));
+    return (utc(end) - utc(start)) / 86_400_000 + 1 > days;
+  };
+
 /** 死亡退院(退院時転帰が 6・7)。 */
 export const diedAtDischarge: Dpc1Rule = payloadIn("A000030", 3, "6", "7");
 
