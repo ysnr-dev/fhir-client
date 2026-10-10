@@ -195,6 +195,28 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (nursing_acuity)" do
+    it "基準の組を保存し、割合2を空にできる" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { nursing_acuity: { ratio1: %w[A2+B3 A3 C1], ratio2: [] } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["nursing_acuity"]).to eq(
+        "form" => "general-2026", "ratio1" => %w[A2+B3 A3 C1], "ratio2" => [],
+      )
+    end
+
+    it "組の書き方が違えば 422" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { nursing_acuity: { ratio1: ["A>=3"] } }, as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "PATCH /admin/facility_settings (admission_documents)" do
     it "テンプレートの url と日数を保存し、渡さなかった項目は既定値で返す" do
       without_admin_token do

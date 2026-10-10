@@ -906,6 +906,9 @@ export function InpatientListPage() {
               <Link className="row-menu__item" to={`/nursing-worksheet?ward=${wardId}&date=${date}`}>
                 ワークシート
               </Link>
+              <Link className="row-menu__item" to={`/nursing-acuity?ward=${wardId}&date=${date}`}>
+                看護必要度
+              </Link>
               <Link className="row-menu__item" to={`/nursing-assignments?ward=${wardId}&date=${date}`}>
                 業務分担
               </Link>

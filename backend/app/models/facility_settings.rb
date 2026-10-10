@@ -156,6 +156,19 @@ class FacilitySettings < ApplicationRecord
   # (施設がどのテンプレートを入院診療計画書に使うかは決め打てないので、既定は空)。
   # 退院時サマリーの期限は document_reminder の日数を使う(督促の通知と同じ値)。表示時の判定だけなので、
   # ここを変えれば過去の入院の判定にも効く。
+  # 重症度、医療・看護必要度(docs/nursing-acuity-design.md)。form は評価票の版(frontend の
+  # NURSING_ACUITY_FORMS のコード)、ratio1 / ratio2 は該当患者の基準で、項目の組の OR。
+  # 1 つの組は "A3"(A 得点 3 点以上)や "A2+B3"(A 2 点以上かつ B 3 点以上)の形。ratio2 を空にすると
+  # 割合2を出さない。既定は令和8年度改定(割合1 = A3点以上又はC1点以上、割合2 = A2点以上又はC1点以上)。
+  # 表示時の判定だけなので、変えれば過去の評価の集計にも効く。
+  NURSING_ACUITY_FORMS = %w[general-2026].freeze
+  ACUITY_TERM = { pattern: /\A[ABC]\d{1,2}(\+[ABC]\d{1,2}){0,2}\z/, label: "基準の組(A3、A2+B3 など)", strict: true }.freeze
+  DEFAULT_NURSING_ACUITY = {
+    "form" => "general-2026",
+    "ratio1" => %w[A3 C1],
+    "ratio2" => %w[A2 C1]
+  }.freeze
+
   DEFAULT_ADMISSION_DOCUMENTS = {
     "admission_plan_template" => "",
     "admission_plan_days" => 7,
@@ -279,6 +292,16 @@ class FacilitySettings < ApplicationRecord
     "bulk_vital_entry" => {
       default: DEFAULT_BULK_VITAL_ENTRY,
       shape: { fields: { "items" => { list: { enum: BULK_VITAL_ITEMS }, min: 1, unique: true } } }
+    },
+    "nursing_acuity" => {
+      default: DEFAULT_NURSING_ACUITY,
+      shape: {
+        fields: {
+          "form" => { enum: NURSING_ACUITY_FORMS },
+          "ratio1" => { list: ACUITY_TERM, min: 1, unique: true },
+          "ratio2" => { list: ACUITY_TERM, unique: true }
+        }
+      }
     },
     "admission_documents" => {
       default: DEFAULT_ADMISSION_DOCUMENTS,

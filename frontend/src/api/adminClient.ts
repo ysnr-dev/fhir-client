@@ -14,6 +14,7 @@ import type { WaterBalanceSettings } from "../fhir/flowsheetWaterBalanceHelpers"
 import type { MedicationScheduleSettings } from "../fhir/medicationScheduleHelpers";
 import type { DocumentReminderSettings } from "../fhir/documentDueHelpers";
 import type { AdmissionDocumentSettings } from "../fhir/admissionDocumentHelpers";
+import type { NursingAcuitySettings } from "../fhir/nursingAcuityHelpers";
 import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
 import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
 import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
@@ -71,6 +72,8 @@ export interface FacilitySettings {
   dpc_coefficients: Record<string, string>;
   /** 入退院文書の作成状況の対象と期限。 */
   admission_documents: AdmissionDocumentSettings;
+  /** 看護必要度の評価票の版と該当患者の基準。 */
+  nursing_acuity: NursingAcuitySettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -89,6 +92,7 @@ export type FacilitySettingsPayload = Partial<{
   bulk_vital_entry: BulkVitalEntrySettings;
   dpc_coefficients: Record<string, string>;
   admission_documents: AdmissionDocumentSettings;
+  nursing_acuity: NursingAcuitySettings;
 }>;
 
 export interface ConnectionTestResult {

@@ -62,3 +62,4 @@ export * from "./encounterExtract";
 export * from "./conditionExtract";
 export * from "./nursingWorksheet";
 export * from "./bedManagement";
+export * from "./nursingAcuity";

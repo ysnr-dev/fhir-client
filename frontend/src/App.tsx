@@ -96,6 +96,7 @@ import { NursingAssignmentPage } from "./pages/NursingAssignmentPage";
 import { BedSchedulePage } from "./pages/BedSchedulePage";
 import { BedStatusPage } from "./pages/BedStatusPage";
 import { AdmissionDocumentsPage } from "./pages/AdmissionDocumentsPage";
+import { NursingAcuityPage } from "./pages/NursingAcuityPage";
 import { NursingWorksheetPage } from "./pages/NursingWorksheetPage";
 import { BulkVitalEntryPage } from "./pages/BulkVitalEntryPage";
 import { NursingSummaryApprovalPage } from "./pages/NursingSummaryApprovalPage";
@@ -259,6 +260,9 @@ function App() {
             </Link>
             <Link to="/nursing-assignments" className="row-menu__item">
               業務分担
+            </Link>
+            <Link to="/nursing-acuity" className="row-menu__item">
+              看護必要度
             </Link>
             <Link to="/ward-map" className="row-menu__item">
               病棟マップ
@@ -540,6 +544,7 @@ function App() {
           <Route path="/bed-schedule" element={<BedSchedulePage />} />
           <Route path="/bed-status" element={<BedStatusPage />} />
           <Route path="/admission-documents" element={<AdmissionDocumentsPage />} />
+          <Route path="/nursing-acuity" element={<NursingAcuityPage />} />
           <Route path="/inpatients/bulk-vitals" element={<BulkVitalEntryPage />} />
           <Route path="/nursing-summary-approvals" element={<NursingSummaryApprovalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />

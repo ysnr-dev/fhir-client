@@ -40,6 +40,12 @@ import {
   type AdmissionDocumentSettings,
 } from "../fhir/admissionDocumentHelpers";
 import {
+  DEFAULT_NURSING_ACUITY,
+  NURSING_ACUITY_FORMS,
+  parseAcuityTerm,
+  type NursingAcuitySettings,
+} from "../fhir/nursingAcuityHelpers";
+import {
   CATEGORY_OPTIONS,
   DEFAULT_PRESCRIPTION_CATEGORY,
   SETTING_OPTIONS,
@@ -173,6 +179,25 @@ export function FacilitySettingsPage() {
   const admissionDocsValid = [admissionDocs.admission_plan_days, admissionDocs.nursing_summary_days].every(
     (days) => Number.isInteger(days) && days >= 0,
   );
+
+  // 看護必要度の評価票の版と該当患者の基準。基準は組("A3" "A2+B3")を空白区切りで入れる(組の OR)。
+  const [acuityDraft, setAcuityDraft] = useState<
+    { form: string; ratio1: string; ratio2: string } | undefined
+  >(undefined);
+  const savedAcuity = settings.data?.nursing_acuity ?? DEFAULT_NURSING_ACUITY;
+  const acuityText = acuityDraft ?? {
+    form: savedAcuity.form,
+    ratio1: savedAcuity.ratio1.join(" "),
+    ratio2: savedAcuity.ratio2.join(" "),
+  };
+  const acuityTerms = (text: string) => text.split(/[\s,、]+/).filter(Boolean);
+  const acuity: NursingAcuitySettings = {
+    form: acuityText.form,
+    ratio1: acuityTerms(acuityText.ratio1),
+    ratio2: acuityTerms(acuityText.ratio2),
+  };
+  const acuityValid =
+    acuity.ratio1.length > 0 && [...acuity.ratio1, ...acuity.ratio2].every((term) => parseAcuityTerm(term) !== null);
 
   // 放射線治療の治療中の診察(週次レビュー)の間隔。最後の診察からこの日数を超えたコースを
   // 部門一覧で強調する。
@@ -317,7 +342,7 @@ export function FacilitySettingsPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
-    if (!admissionDocsValid) return;
+    if (!admissionDocsValid || !acuityValid) return;
     if (!reviewValid || !receiptCodesOk || !coefficientsValid) return;
     update.mutate({
       self_organization_id: value,
@@ -335,6 +360,7 @@ export function FacilitySettingsPage() {
       bulk_vital_entry: bulkVitalEntry,
       dpc_coefficients: Object.fromEntries(coefficients.map((c) => [c.from, c.value])),
       admission_documents: admissionDocs,
+      nursing_acuity: acuity,
     });
   }
 
@@ -700,6 +726,42 @@ export function FacilitySettingsPage() {
                 />
                 <span className="facility-settings__unit">日以内(入院日から)</span>
               </span>
+            </label>
+          </div>
+        </details>
+
+        {/* 看護必要度。基準は表示時の判定だけなので、変えれば過去の評価の集計にも効く。 */}
+        <details className="facility-settings__schedule">
+          <summary>看護必要度</summary>
+          <div className="facility-settings__schedule-body">
+            <label>
+              評価票
+              <select
+                value={acuityText.form}
+                onChange={(e) => setAcuityDraft({ ...acuityText, form: e.target.value })}
+              >
+                {NURSING_ACUITY_FORMS.map((form) => (
+                  <option key={form.code} value={form.code}>
+                    {form.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              割合1の基準
+              <input
+                type="text"
+                value={acuityText.ratio1}
+                onChange={(e) => setAcuityDraft({ ...acuityText, ratio1: e.target.value })}
+              />
+            </label>
+            <label>
+              割合2の基準
+              <input
+                type="text"
+                value={acuityText.ratio2}
+                onChange={(e) => setAcuityDraft({ ...acuityText, ratio2: e.target.value })}
+              />
             </label>
           </div>
         </details>
@@ -1088,7 +1150,8 @@ export function FacilitySettingsPage() {
               !thresholdsValid ||
               !medicationValid ||
               !reminderValid ||
-              !admissionDocsValid
+              !admissionDocsValid ||
+              !acuityValid
             }
           >
             {update.isPending ? "保存中..." : "保存"}
