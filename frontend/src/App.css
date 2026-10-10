@@ -24992,10 +24992,6 @@ input.nursing-picker__search {
   white-space: nowrap;
 }
 
-.nursing-acuity-list__excluded {
-  color: var(--text);
-}
-
 .nursing-acuity-list__pending {
   color: var(--warning);
 }
@@ -25172,12 +25168,20 @@ input.nursing-picker__search {
   min-width: 0;
 }
 
+/* 氏名は 1 人ずつの評価を開くボタン。共通のボタンの枠・高さを外してリンクの見た目にする。 */
 .nursing-acuity-bulk__name {
+  display: block;
   min-width: 0;
+  height: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-h);
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 .nursing-acuity-bulk__status {

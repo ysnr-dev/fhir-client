@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   useAcuityObservations,
@@ -10,11 +10,8 @@ import {
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { NursingAcuityBulkGrid } from "../components/NursingAcuityBulkGrid";
-import { NursingAcuityModal } from "../components/NursingAcuityModal";
-import { PatientKana } from "../components/PatientRowCells";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { wardPatientsByDay } from "../fhir/bedScheduleHelpers";
-import { encounterStayDays } from "../fhir/encounterHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import {
   DEFAULT_NURSING_ACUITY,
@@ -27,14 +24,11 @@ import {
   parseAcuityObservation,
   type NursingAcuitySettings,
 } from "../fhir/nursingAcuityHelpers";
-import { displayName } from "../fhir/patientHelpers";
-import { useWardInpatients, type WardInpatient } from "../hooks/useWardInpatients";
+import { useWardInpatients } from "../hooks/useWardInpatients";
 import { addDays, addMonths, today } from "../lib/dates";
-import { useReturnLinkState } from "../returnTo";
 
-// 重症度、医療・看護必要度(docs/nursing-acuity-design.md)。「評価」タブは病棟の 1 日の患者を並べて
-// 1 人ずつ評価を入れる(「一括入力」で患者 × 項目のグリッドに切り替える)。「集計」タブは病棟 × 月の
-// 該当患者割合を日ごとに出す。
+// 重症度、医療・看護必要度(docs/nursing-acuity-design.md)。「評価」タブは病棟の 1 日の患者 × 評価項目の
+// グリッドで評価を入れる(氏名から 1 人ずつの評価を開ける)。「集計」タブは病棟 × 月の該当患者割合を日ごとに出す。
 //
 // 評価は患者 × 日の Observation 1 件。評価した日の病棟を order-ward 拡張に焼き付け、集計は
 // 「その日にその病棟で評価した患者」を数える(延べ患者数で割合を出す)。
@@ -44,8 +38,6 @@ type Tab = "entry" | "summary";
 export function NursingAcuityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: Tab = searchParams.get("tab") === "summary" ? "summary" : "entry";
-  // 評価タブの表示。一覧(1 人ずつモーダルで評価)か、一括入力のグリッドか。
-  const bulk = tab === "entry" && searchParams.get("view") === "bulk";
   const wardId = searchParams.get("ward") ?? "";
   const date = searchParams.get("date") || today();
   const facility = useFacilitySettings();
@@ -84,13 +76,6 @@ export function NursingAcuityPage() {
     <div className="page">
       <div className="page__header">
         <h1>看護必要度</h1>
-        {tab === "entry" && (
-          <div className="page__header-actions">
-            <button type="button" onClick={() => setParams({ view: bulk ? "" : "bulk" })}>
-              {bulk ? "一覧" : "一括入力"}
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="order-select__tabs" role="tablist">
@@ -106,7 +91,7 @@ export function NursingAcuityPage() {
             role="tab"
             aria-selected={tab === key}
             className={tab === key ? "order-select__tab is-active" : "order-select__tab"}
-            onClick={() => setParams({ tab: key === "entry" ? "" : key, view: "" })}
+            onClick={() => setParams({ tab: key === "entry" ? "" : key })}
           >
             {label}
           </button>
@@ -153,7 +138,6 @@ export function NursingAcuityPage() {
         <p className="patient-table__empty">病棟を選んでください。</p>
       ) : tab === "entry" ? (
         <EntryTab
-          bulk={bulk}
           date={date}
           ward={{ wardId, wardName: ward ? locationDisplayName(ward) : "" }}
           settings={settings}
@@ -172,12 +156,10 @@ export function NursingAcuityPage() {
 }
 
 function EntryTab({
-  bulk,
   date,
   ward,
   settings,
 }: {
-  bulk: boolean;
   date: string;
   ward: { wardId: string; wardName: string };
   settings: NursingAcuitySettings;
@@ -188,8 +170,6 @@ function EntryTab({
     addDays(date, -1),
     date,
   );
-  const returnLinkState = useReturnLinkState();
-  const [editing, setEditing] = useState<WardInpatient | null>(null);
 
   // 患者 id → その日・前日の評価。
   const byPatient = useMemo(() => {
@@ -204,22 +184,20 @@ function EntryTab({
     return map;
   }, [observations.data, date]);
 
+  // 保存済みの評価から数えた、その日の評価人数と該当割合(グリッドの入力途中の値は入れない)。
   let evaluated = 0;
   let met1 = 0;
   let met2 = 0;
-  const rows = inpatients.rows.map((row) => {
-    const own = byPatient.get(row.patientId);
-    const parsed = own?.today ? parseAcuityObservation(own.today) : null;
-    const scores = parsed && !parsed.values.excluded ? acuityScores(parsed.form, parsed.values) : null;
-    const r1 = scores ? meetsAcuityCriterion(scores, settings.ratio1) : null;
-    const r2 = scores ? meetsAcuityCriterion(scores, settings.ratio2) : null;
-    if (scores) {
-      evaluated += 1;
-      if (r1) met1 += 1;
-      if (r2) met2 += 1;
-    }
-    return { row, own, parsed, scores, r1, r2 };
-  });
+  for (const row of inpatients.rows) {
+    const today = byPatient.get(row.patientId)?.today;
+    if (!today) continue;
+    const parsed = parseAcuityObservation(today);
+    if (parsed.values.excluded) continue;
+    const scores = acuityScores(parsed.form, parsed.values);
+    evaluated += 1;
+    if (meetsAcuityCriterion(scores, settings.ratio1)) met1 += 1;
+    if (meetsAcuityCriterion(scores, settings.ratio2)) met2 += 1;
+  }
 
   return (
     <>
@@ -228,96 +206,19 @@ function EntryTab({
       <TruncatedNotice show={inpatients.truncated || observations.data?.truncated} />
       {inpatients.isLoading || observations.isLoading ? (
         <p>読み込み中...</p>
-      ) : bulk ? (
-        // 日付・病棟を変えたら入力途中の値を捨てて作り直す。
-        <NursingAcuityBulkGrid
-          key={`${ward.wardId}:${date}`}
-          rows={inpatients.rows}
-          byPatient={byPatient}
-          date={date}
-          ward={ward}
-          settings={settings}
-        />
       ) : (
         <>
-          <div className="lab-worklist-wrap sticky-table-wrap">
-            <table className="lab-worklist sticky-table nursing-acuity-list">
-              <thead>
-                <tr>
-                  <th className="lab-worklist__compact">病室</th>
-                  <th>患者</th>
-                  <th className="lab-worklist__compact">病日</th>
-                  <th className="nursing-acuity-list__num">A</th>
-                  <th className="nursing-acuity-list__num">B</th>
-                  <th className="nursing-acuity-list__num">C</th>
-                  <th className="lab-worklist__compact">割合1</th>
-                  {settings.ratio2.length > 0 && <th className="lab-worklist__compact">割合2</th>}
-                  <th className="lab-worklist__compact">評価者</th>
-                  <th className="lab-worklist__actions sticky-table__fix-actions"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ row, own, parsed, scores, r1, r2 }) => (
-                  <tr key={row.patientId}>
-                    <td className="lab-worklist__compact">{row.bedLabel.split(" ")[0]}</td>
-                    <td>
-                      {row.patient ? (
-                        <>
-                          <Link to={`/patients/${row.patientId}/karte`} state={returnLinkState}>
-                            {displayName(row.patient)}
-                          </Link>
-                          <PatientKana patient={row.patient} />
-                        </>
-                      ) : (
-                        row.patientId
-                      )}
-                    </td>
-                    <td className="lab-worklist__compact">{encounterStayDays(row.encounter, date) ?? "-"}</td>
-                    {parsed?.values.excluded ? (
-                      <td colSpan={3} className="nursing-acuity-list__excluded">
-                        対象外{parsed.values.excludedReason ? `(${parsed.values.excludedReason})` : ""}
-                      </td>
-                    ) : (
-                      <>
-                        <td className="nursing-acuity-list__num">{scores?.A ?? "-"}</td>
-                        <td className="nursing-acuity-list__num">{scores?.B ?? "-"}</td>
-                        <td className="nursing-acuity-list__num">{scores?.C ?? "-"}</td>
-                      </>
-                    )}
-                    <td className="lab-worklist__compact">
-                      <MetMark met={r1} />
-                    </td>
-                    {settings.ratio2.length > 0 && (
-                      <td className="lab-worklist__compact">
-                        <MetMark met={r2} />
-                      </td>
-                    )}
-                    <td className="lab-worklist__compact">
-                      {own?.today ? (
-                        own.today.performer?.[0]?.display ?? "-"
-                      ) : (
-                        <span className="nursing-acuity-list__pending">未評価</span>
-                      )}
-                    </td>
-                    <td className="lab-worklist__actions sticky-table__fix-actions">
-                      <button type="button" onClick={() => setEditing(row)}>
-                        {own?.today ? "修正" : "評価"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={10} className="master-search__empty">
-                      この日に病棟に居る患者はいません。
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          {/* 日付・病棟を変えたら入力途中の値を捨てて作り直す。 */}
+          <NursingAcuityBulkGrid
+            key={`${ward.wardId}:${date}`}
+            rows={inpatients.rows}
+            byPatient={byPatient}
+            date={date}
+            ward={ward}
+            settings={settings}
+          />
           <p className="order-select__muted lab-worklist__count">
-            評価 {evaluated} / {rows.length} 人
+            評価 {evaluated} / {inpatients.rows.length} 人
             {evaluated > 0 && (
               <>
                 {" "}/ 割合1 {percent(met1, evaluated)}
@@ -326,20 +227,6 @@ function EntryTab({
             )}
           </p>
         </>
-      )}
-
-      {editing && (
-        <NursingAcuityModal
-          patientId={editing.patientId}
-          patientName={editing.patient ? displayName(editing.patient) : editing.patientId}
-          encounter={editing.encounter}
-          date={date}
-          ward={ward}
-          settings={settings}
-          existing={byPatient.get(editing.patientId)?.today}
-          previous={byPatient.get(editing.patientId)?.previous}
-          onClose={() => setEditing(null)}
-        />
       )}
     </>
   );
@@ -478,11 +365,6 @@ function SummaryTab({
       )}
     </>
   );
-}
-
-function MetMark({ met }: { met: boolean | null }) {
-  if (met === null) return <span className="order-select__muted">-</span>;
-  return met ? <span className="nursing-acuity__met">該当</span> : <span className="order-select__muted">-</span>;
 }
 
 function percent(numerator: number, denominator: number): string {

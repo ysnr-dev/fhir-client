@@ -31,6 +31,8 @@ interface Props {
   existing?: fhir4.Observation;
   /** 前日の評価(B 項目の初期値と「前日複写」に使う)。 */
   previous?: fhir4.Observation;
+  /** 保存できたとき(閉じる前に呼ぶ)。一括入力のグリッドがその行の入力途中の値を捨てるのに使う。 */
+  onSaved?: () => void;
   onClose: () => void;
 }
 
@@ -77,6 +79,7 @@ function AcuityForm({
   previous,
   suggestions,
   hints,
+  onSaved,
   onClose,
 }: Props & { suggestions: AcuitySuggestion[]; hints: string[] }) {
   const save = useSaveAcuity();
@@ -118,7 +121,12 @@ function AcuityForm({
         : null,
       existing,
     });
-    save.mutate(observation, { onSuccess: onClose });
+    save.mutate(observation, {
+      onSuccess: () => {
+        onSaved?.();
+        onClose();
+      },
+    });
   }
 
   const groups: AcuityGroup[] = ["A", "B", "C"];

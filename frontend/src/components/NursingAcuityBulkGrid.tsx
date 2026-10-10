@@ -24,9 +24,10 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { referenceId } from "../fhir/shared";
 import type { WardInpatient } from "../hooks/useWardInpatients";
 import { ErrorBanner } from "./ErrorBanner";
+import { NursingAcuityModal } from "./NursingAcuityModal";
 import { TruncatedNotice } from "./TruncatedNotice";
 
-// 看護必要度の一括入力(docs/nursing-acuity-design.md §3)。行 = 病棟の患者、列 = 評価票の項目のグリッドで、
+// 看護必要度の評価(docs/nursing-acuity-design.md §3)。行 = 病棟の患者、列 = 評価票の項目のグリッドで、
 // A・C の項目(A6 は小項目ごと)はセルを押して「あり / なし」を切り替え、B の項目はセレクトで選ぶ
 // (介助の実施を掛ける項目は「状態・介助あり / なし」を 1 つのセレクトに並べる)。
 //
@@ -109,6 +110,19 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
   // (看護ワークシートと同じ)。
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const hoverClass = (key: string) => (key === hoverKey ? " is-col-hover" : "");
+  // 1 人ずつの評価(モーダル)を開いている患者。
+  const [openPatientId, setOpenPatientId] = useState<string | null>(null);
+  const openState = rowStates.find((state) => state.row.patientId === openPatientId) ?? null;
+
+  /** モーダルで保存した患者は、グリッドで入力途中だった値と登録の対象から外す(保存した値を読み直して出す)。 */
+  function discardRow(patientId: string) {
+    setDrafts((prev) => {
+      const next = new Map(prev);
+      next.delete(patientId);
+      return next;
+    });
+    toggleSelected(patientId, false);
+  }
 
   function valuesOf(state: RowState): AcuityValues {
     return drafts.get(state.row.patientId) ?? state.baseline;
@@ -273,17 +287,22 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
                     .join(" ")}
                 >
                   <th className="sticky-table__fix-1 nursing-acuity-bulk__patient" onMouseEnter={() => setHoverKey(null)}>
-                    <label className="nursing-acuity-bulk__select">
+                    <span className="nursing-acuity-bulk__select">
                       <input
                         type="checkbox"
                         checked={selected.has(patientId)}
                         onChange={(e) => toggleSelected(patientId, e.target.checked)}
                         aria-label={`${state.row.patient ? displayName(state.row.patient) : patientId} を登録の対象にする`}
                       />
-                      <span className="nursing-acuity-bulk__name">
+                      {/* 氏名を押すと 1 人ずつの評価(対象外の理由・手術の目安・前日複写など)を開く。 */}
+                      <button
+                        type="button"
+                        className="nursing-acuity-bulk__name"
+                        onClick={() => setOpenPatientId(patientId)}
+                      >
                         {state.row.patient ? displayName(state.row.patient) : patientId}
-                      </span>
-                    </label>
+                      </button>
+                    </span>
                     <span className="nursing-acuity-bulk__status">
                       {state.row.bedLabel.split(" ")[0]} ・ {dirty ? "変更あり" : state.existing ? "評価済" : "未評価"}
                     </span>
@@ -343,6 +362,21 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
           </tbody>
         </table>
       </div>
+
+      {openState && (
+        <NursingAcuityModal
+          patientId={openState.row.patientId}
+          patientName={openState.row.patient ? displayName(openState.row.patient) : openState.row.patientId}
+          encounter={openState.row.encounter}
+          date={date}
+          ward={ward}
+          settings={settings}
+          existing={openState.existing}
+          previous={byPatient.get(openState.row.patientId)?.previous}
+          onSaved={() => discardRow(openState.row.patientId)}
+          onClose={() => setOpenPatientId(null)}
+        />
+      )}
     </>
   );
 }
