@@ -727,7 +727,8 @@ button:disabled {
 .bulk-vital input,
 .supervisor-groups select,
 .dpc-coding select,
-.dpc-coding input {
+.dpc-coding input,
+.nursing-assignment select {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
@@ -16839,6 +16840,195 @@ button.meal-calendar__cell:hover {
   opacity: 0.6;
 }
 
+/* 看護ワークシート。行 = 患者、列 = 時のグリッド。患者の列は左に固定し、時の列は印が 1 つ
+   読める幅にそろえる(24 時間ぶん並べると横に送る)。 */
+.nursing-worksheet {
+  --sticky-fix-1-w: 13em;
+}
+
+.nursing-worksheet th,
+.nursing-worksheet td {
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 列見出しは時の数字だけなので、行の高さと余白を詰める(既定の一覧の見出しのままだと上が空く)。 */
+.nursing-worksheet thead th {
+  vertical-align: middle;
+  padding: 4px 8px;
+  line-height: 1.4;
+}
+
+.nursing-worksheet thead th.nursing-worksheet__slot {
+  text-align: center;
+}
+
+.nursing-worksheet__slot {
+  min-width: 7.5em;
+  max-width: 10em;
+  padding: 4px;
+  border-left: 1px solid var(--border);
+}
+
+/* 今の時。列には敷かず、見出しにだけ印を付ける。 */
+.nursing-worksheet thead th.nursing-worksheet__now {
+  color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* マウスの乗っている列と行。行の :hover(セルに敷く共通の色)に揃えて、列のセル・列の見出し・
+   行の見出し(患者の欄)にも同じ色を重ねる。行と列が交わるセルは 2 枚重ねで一段濃くなる。 */
+.nursing-worksheet .nursing-worksheet__hover,
+.nursing-worksheet tbody tr:hover > th {
+  background-image: linear-gradient(var(--accent-bg), var(--accent-bg));
+}
+
+.nursing-worksheet tbody tr:hover > td.nursing-worksheet__hover {
+  background-image:
+    linear-gradient(var(--accent-bg), var(--accent-bg)),
+    linear-gradient(var(--accent-bg), var(--accent-bg));
+}
+
+.nursing-worksheet__patient {
+  text-align: left;
+  font-weight: normal;
+  white-space: normal;
+}
+
+.nursing-worksheet__patient .nursing-worklist__room {
+  margin-right: 8px;
+}
+
+.nursing-worksheet__patient-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.nursing-worksheet__undone {
+  color: var(--accent);
+}
+
+/* 予定 1 件の印。区分の 1 文字・ちょうどでない分・内容を 1 行に収め、長い内容は省略する。 */
+.nursing-worksheet__mark {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 2px;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface-card);
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 1.4;
+  text-align: left;
+  min-height: 0;
+  height: auto;
+}
+
+button.nursing-worksheet__mark {
+  cursor: pointer;
+  border-color: var(--accent-border);
+}
+
+.nursing-worksheet__mark--done {
+  opacity: 0.55;
+}
+
+.nursing-worksheet__mark--late {
+  border-color: var(--lab-high);
+  color: var(--lab-high);
+}
+
+.nursing-worksheet__kind {
+  flex: none;
+  font-weight: bold;
+}
+
+.nursing-worksheet__minutes {
+  flex: none;
+  color: var(--text);
+}
+
+.nursing-worksheet__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 業務分担。勤務帯の列は看護師のセレクトが収まる幅にそろえ、見出しにケバブを添える。 */
+.nursing-assignment__shift {
+  width: 12em;
+  white-space: nowrap;
+}
+
+.nursing-assignment__shift select {
+  width: 100%;
+  min-width: 10em;
+}
+
+/* 行を詰める。患者数ぶん縦に並ぶので、セルの余白とセレクトの高さを一覧の既定より低くする。 */
+.nursing-assignment td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  vertical-align: middle;
+}
+
+.nursing-assignment select {
+  --control-height: 28px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  font-size: 14px;
+}
+
+/* 勤務帯の見出しに添えるケバブ。ラベルから少し離し、行のケバブより小さくする。 */
+.nursing-assignment__shift .row-menu {
+  margin-left: 12px;
+  vertical-align: middle;
+}
+
+.nursing-assignment__shift .row-menu__trigger {
+  --control-height: 22px;
+  padding: 0 6px;
+  font-size: 13px;
+}
+
+/* 保存前に変えた枠。共通の入力欄の枠色より強く当てる。 */
+.nursing-assignment select.nursing-assignment__changed {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.nursing-assignment__counts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.nursing-assignment__counts > div {
+  display: flex;
+  gap: 12px;
+}
+
+.nursing-assignment__counts dt {
+  flex: 0 0 3em;
+  color: var(--text-h);
+}
+
+.nursing-assignment__counts dd {
+  margin: 0;
+}
+
 /* 食事摂取量の入力(MealIntakeModal)。0〜10 割を横に並べたボタンで選ぶ。 */
 .meal-intake {
   display: flex;
@@ -23016,6 +23206,13 @@ body.page-home .app__main {
 .home__ward-count {
   font-weight: normal;
   color: var(--text-muted, var(--text));
+}
+
+/* 病棟見出しの右端に置く看護ワークシートへのリンク(自分の受け持ちで開く)。 */
+.home__ward-link {
+  margin-left: auto;
+  font-weight: normal;
+  font-size: 13px;
 }
 
 .home__empty {

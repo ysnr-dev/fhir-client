@@ -40,6 +40,27 @@ export const DEFAULT_NURSING_SCHEDULE: NursingScheduleSettings = {
   interval_start: "06:00",
 };
 
+/**
+ * 勤務帯。施設設定には持たず、三交代の区切りで固定する(日勤 8:30〜、準夜 16:30〜、深夜 0:30〜)。
+ * 時刻の無い予定(適宜・時刻未指定の注射)はどの勤務帯にも入れる。
+ */
+export type ShiftCode = "day" | "evening" | "night";
+
+export const SHIFT_OPTIONS: { code: ShiftCode; display: string }[] = [
+  { code: "day", display: "日勤" },
+  { code: "evening", display: "準夜" },
+  { code: "night", display: "深夜" },
+];
+
+export function shiftOf(time: string): ShiftCode | null {
+  const [h, m] = time.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  const minutes = h * 60 + m;
+  if (minutes >= 8 * 60 + 30 && minutes < 16 * 60 + 30) return "day";
+  if (minutes >= 16 * 60 + 30 || minutes < 30) return "evening";
+  return "night";
+}
+
 export type NursingScheduleValues =
   | { kind: "daily"; timesPerDay: number; times: string[] }
   | { kind: "interval"; hours: number; start: string }

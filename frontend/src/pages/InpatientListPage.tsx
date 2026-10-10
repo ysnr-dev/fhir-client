@@ -894,6 +894,12 @@ export function InpatientListPage() {
         {tab === "current" && wardId && (
           <span className="inpatient-tabs__menu">
             <RowMenu label="病棟の関連画面">
+              <Link className="row-menu__item" to={`/nursing-worksheet?ward=${wardId}&date=${date}`}>
+                ワークシート
+              </Link>
+              <Link className="row-menu__item" to={`/nursing-assignments?ward=${wardId}&date=${date}`}>
+                業務分担
+              </Link>
               <Link className="row-menu__item" to={`/insulin-worklist?ward=${wardId}&date=${date}`}>
                 血糖インスリン
               </Link>

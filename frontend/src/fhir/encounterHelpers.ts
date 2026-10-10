@@ -259,7 +259,7 @@ export function encounterAttendingId(encounter: fhir4.Encounter): string | undef
 }
 
 // participant の中から担当看護師(複数可)を拾う。
-function nurseParticipants(encounter: fhir4.Encounter): fhir4.EncounterParticipant[] {
+export function nurseParticipants(encounter: fhir4.Encounter): fhir4.EncounterParticipant[] {
   return (encounter.participant ?? []).filter((p) =>
     p.type?.some((t) =>
       t.coding?.some(

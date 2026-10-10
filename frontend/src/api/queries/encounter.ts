@@ -563,7 +563,7 @@ export type OrdersWithPerforms = FlowsheetInjectionData & {
   truncated: boolean;
 };
 
-async function fetchOrdersWithPerforms(params: URLSearchParams): Promise<OrdersWithPerforms> {
+export async function fetchOrdersWithPerforms(params: URLSearchParams): Promise<OrdersWithPerforms> {
   params.append("_revinclude", "MedicationRequest:based-on");
   params.append("_revinclude", "Task:focus");
   params.append("_revinclude", "Procedure:based-on");

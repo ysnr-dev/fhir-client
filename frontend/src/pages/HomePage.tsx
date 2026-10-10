@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
 import type { BulletinPost, PatientCaution } from "../api/masterClient";
-import { useBulletinPosts, usePatientCautions } from "../api/masterQueries";
+import { useBulletinPosts, useMyNursingAssignments, usePatientCautions } from "../api/masterQueries";
 import {
   useAllergiesForPatients,
   useBedWardIndex,
@@ -161,6 +161,15 @@ function HomeDashboard({ profile, practitionerId, polling }: DashboardProps) {
   const outpatients = useOutpatientList(showOutpatient ? date : "", { polling });
   const inpatients = useInpatientEncounters(showInpatient ? date : "");
   const bedWards = useBedWardIndex();
+  // 看護師はその日の業務分担で受け持つ患者も担当に数える。
+  const assignments = useMyNursingAssignments(
+    showInpatient && profile.inpatientBy === "nurse" ? practitionerId : null,
+    date,
+  );
+  const assignedPatientIds = useMemo(
+    () => new Set((assignments.data ?? []).map((a) => a.patient_id)),
+    [assignments.data],
+  );
 
   const outpatientRows = useMemo(
     () =>
@@ -179,9 +188,10 @@ function HomeDashboard({ profile, practitionerId, polling }: DashboardProps) {
             bedWards.bedWards,
             profile.inpatientBy,
             practitionerId,
+            assignedPatientIds,
           )
         : [],
-    [inpatients.data, bedWards.bedWards, profile.inpatientBy, practitionerId],
+    [inpatients.data, bedWards.bedWards, profile.inpatientBy, practitionerId, assignedPatientIds],
   );
 
   // 注意のピクトグラムは外来・入院の患者ぶんをまとめて 1 回ずつ引く。
@@ -234,7 +244,7 @@ function HomeDashboard({ profile, practitionerId, polling }: DashboardProps) {
           by={profile.inpatientBy ?? "attending"}
           groups={inpatientGroups}
           isPending={inpatients.isPending || bedWards.isPending}
-          error={inpatients.error ?? bedWards.error}
+          error={inpatients.error ?? bedWards.error ?? assignments.error}
           truncated={inpatients.data?.truncated}
           pictograms={pictograms}
         />
@@ -539,7 +549,7 @@ function InpatientCard({ date, by, groups, isPending, error, truncated, pictogra
   return (
     <section className="home__card">
       <div className="home__card-header">
-        <h2>{by === "attending" ? "担当入院患者(主治医)" : "担当入院患者(担当看護師)"}</h2>
+        <h2>{by === "attending" ? "担当入院患者(主治医)" : "担当入院患者(担当看護師・受け持ち)"}</h2>
         <Link to="/inpatients">入院患者一覧</Link>
       </div>
       <ErrorBanner error={error ?? pending.error} />
@@ -559,7 +569,7 @@ function InpatientCard({ date, by, groups, isPending, error, truncated, pictogra
           )}
           {groups.length === 0 && (
             <p className="home__empty">
-              {by === "attending" ? "主治医" : "担当看護師"}として登録された入院患者はいません。
+              {by === "attending" ? "主治医として登録された入院患者はいません。" : "担当看護師・受け持ちの入院患者はいません。"}
             </p>
           )}
           {groups.map((group) => (
@@ -571,6 +581,14 @@ function InpatientCard({ date, by, groups, isPending, error, truncated, pictogra
                   group.wardName
                 )}
                 <span className="home__ward-count">{group.rows.length} 名</span>
+                {by === "nurse" && group.wardId && (
+                  <Link
+                    className="home__ward-link"
+                    to={`/nursing-worksheet?ward=${group.wardId}&date=${date}&nurse=mine`}
+                  >
+                    ワークシート
+                  </Link>
+                )}
               </p>
               <div className="home__table-wrap">
                 <table className="home__table">

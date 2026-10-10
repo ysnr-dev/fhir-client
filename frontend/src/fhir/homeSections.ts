@@ -190,7 +190,8 @@ export interface HomeInpatientGroup {
 }
 
 /**
- * 在院中の入院を自分の担当(主治医 / 担当看護師)に絞り、病棟ごとにまとめる。
+ * 在院中の入院を自分の担当(主治医 / 担当看護師)に絞り、病棟ごとにまとめる。看護師は
+ * 入院の担当看護師に加えて、その日の業務分担で受け持つ患者(assignedPatientIds)も担当に数える。
  * 病棟名順、行はベッド表示名順。病棟が引けないベッドは末尾に「病棟不明」でまとめる。
  */
 export function homeInpatientGroups(
@@ -199,20 +200,22 @@ export function homeInpatientGroups(
   bedWards: Map<string, BedWard>,
   by: "attending" | "nurse",
   practitionerId: string,
+  assignedPatientIds: ReadonlySet<string> = new Set(),
 ): HomeInpatientGroup[] {
   const groups = new Map<string | null, HomeInpatientGroup>();
   for (const encounter of encounters) {
     if (encounter.status !== ADMISSION_STATUS) continue;
+    const patientId = encounterPatientId(encounter);
     const mine =
       by === "attending"
         ? encounterAttendingId(encounter) === practitionerId
-        : encounterNurseIds(encounter).includes(practitionerId);
+        : encounterNurseIds(encounter).includes(practitionerId) ||
+          Boolean(patientId && assignedPatientIds.has(patientId));
     if (!mine) continue;
     const bedId = encounterBedId(encounter);
     const ward = bedId ? bedWards.get(bedId) : undefined;
     const key = ward?.wardId ?? null;
     const group = groups.get(key) ?? { wardId: key, wardName: ward?.wardName ?? "病棟不明", rows: [] };
-    const patientId = encounterPatientId(encounter);
     group.rows.push({
       encounter,
       patient: patientId ? patientsById.get(patientId) : undefined,

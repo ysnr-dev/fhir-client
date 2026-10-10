@@ -92,6 +92,8 @@ import { PatientCautionPage } from "./pages/PatientCautionPage";
 import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
 import { InsulinScaleSetPage } from "./pages/InsulinScaleSetPage";
 import { InsulinWorklistPage } from "./pages/InsulinWorklistPage";
+import { NursingAssignmentPage } from "./pages/NursingAssignmentPage";
+import { NursingWorksheetPage } from "./pages/NursingWorksheetPage";
 import { BulkVitalEntryPage } from "./pages/BulkVitalEntryPage";
 import { NursingSummaryApprovalPage } from "./pages/NursingSummaryApprovalPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
@@ -230,6 +232,31 @@ function App() {
                 医師なので部門業務ではなくここに置く(docs/order-set-design.md §1)。 */}
             <Link to="/order-sets" className="row-menu__item">
               セット登録
+            </Link>
+          </HoverMenu>
+          {/* 看護業務は病棟の看護師の画面。入院患者一覧の病棟の導線(指示簿・病棟マップ・ケバブ)と
+              同じ並びで、どれも病棟を指定しなければ先頭の病棟で開く。 */}
+          <HoverMenu label="看護業務">
+            <Link to="/nursing-worklist" className="row-menu__item">
+              指示簿
+            </Link>
+            <Link to="/nursing-worksheet" className="row-menu__item">
+              ワークシート
+            </Link>
+            <Link to="/nursing-assignments" className="row-menu__item">
+              業務分担
+            </Link>
+            <Link to="/ward-map" className="row-menu__item">
+              病棟マップ
+            </Link>
+            <Link to="/insulin-worklist" className="row-menu__item">
+              血糖インスリン
+            </Link>
+            <Link to="/nursing-summary-approvals" className="row-menu__item">
+              看護サマリー承認
+            </Link>
+            <Link to="/inpatients/bulk-vitals" className="row-menu__item">
+              経過表一括入力
             </Link>
           </HoverMenu>
           {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテの
@@ -494,6 +521,8 @@ function App() {
           <Route path="/order-sets" element={<OrderSetPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/insulin-worklist" element={<InsulinWorklistPage />} />
+          <Route path="/nursing-worksheet" element={<NursingWorksheetPage />} />
+          <Route path="/nursing-assignments" element={<NursingAssignmentPage />} />
           <Route path="/inpatients/bulk-vitals" element={<BulkVitalEntryPage />} />
           <Route path="/nursing-summary-approvals" element={<NursingSummaryApprovalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />

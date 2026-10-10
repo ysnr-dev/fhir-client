@@ -1,9 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { buildPractitionerDeleteBundle } from "../../fhir/practitionerHelpers";
+import { buildPractitionerDeleteBundle, practitionerDisplayName } from "../../fhir/practitionerHelpers";
 import {
   baseRoleOf,
   DOCTOR_ROLE_CODES,
   isDoctorRoleCode,
+  NURSE_ROLE_CODES,
   parsePractitionerRole,
   practitionerIdOfRole,
 } from "../../fhir/practitionerRoleHelpers";
@@ -265,4 +266,34 @@ export function usePractitionerOptions() {
   });
 
   return { ...query, practitioners: query.data ?? [] };
+}
+
+// 看護職(看護師・保健師・助産師)として所属する医療従事者。業務分担の選択肢に使う。
+// 職種は所属ロールだけが持つので、ロールを職種で引いて本体を _include で添えてもらう。
+export function useNurseOptions() {
+  const query = useQuery({
+    queryKey: ["PractitionerRole", "search", "nurse-options"],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("role", NURSE_ROLE_CODES.join(","));
+      params.set("_include", "PractitionerRole:practitioner");
+      const { bundles } = await searchAllPages<fhir4.PractitionerRole>("PractitionerRole", params, {
+        page: 500,
+        maxPages: 4,
+        complete: true,
+      });
+      const byId = new Map<string, fhir4.Practitioner>();
+      for (const bundle of bundles) {
+        for (const practitioner of resourcesOfType<fhir4.Practitioner>(bundle, "Practitioner")) {
+          if (practitioner.id && practitioner.active !== false) byId.set(practitioner.id, practitioner);
+        }
+      }
+      return [...byId.values()].sort((a, b) =>
+        practitionerDisplayName(a).localeCompare(practitionerDisplayName(b), "ja"),
+      );
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  return { ...query, nurses: query.data ?? [] };
 }

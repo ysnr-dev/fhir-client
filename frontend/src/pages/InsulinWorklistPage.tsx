@@ -18,18 +18,20 @@ import { TruncatedNotice } from "../components/TruncatedNotice";
 import { encounterBedLabel, encounterPatientId } from "../fhir/encounterHelpers";
 import {
   INSULIN_WORKLIST_KIND_OPTIONS,
-  SHIFT_OPTIONS,
   buildInsulinWorklist,
   insulinWorklistKindDisplay,
-  shiftOf,
   type InsulinWorklistItem,
   type InsulinWorklistKind,
-  type ShiftCode,
 } from "../fhir/insulinWorklistHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "../fhir/nursingOrderHelpers";
 import { NURSING_GLUCOSE_MANAGE_NO, type NursingPerformDisplay } from "../fhir/nursingPerformHelpers";
-import { DEFAULT_NURSING_SCHEDULE } from "../fhir/nursingScheduleHelpers";
+import {
+  DEFAULT_NURSING_SCHEDULE,
+  SHIFT_OPTIONS,
+  shiftOf,
+  type ShiftCode,
+} from "../fhir/nursingScheduleHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { nowDateTimeInput, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
@@ -145,7 +147,7 @@ export function InsulinWorklistPage() {
               void nursingPerforms.refetch();
             }}
           >
-            更新
+            最新表示
           </button>
           <Link className="button" to={`/nursing-worklist?ward=${wardId}&date=${date}`}>
             指示簿

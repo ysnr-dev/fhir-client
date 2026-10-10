@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_09_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_10_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -2601,6 +2601,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_120000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["ward_location_id"], name: "index_master_ward_maps_on_ward_location_id", unique: true
+  end
+
+  create_table "nursing_assignments", force: :cascade do |t|
+    t.string "ward_id", null: false
+    t.date "assigned_on", null: false
+    t.string "shift", null: false
+    t.string "patient_id", null: false
+    t.string "practitioner_id", null: false
+    t.string "practitioner_name"
+    t.string "assigned_by_id"
+    t.string "assigned_by_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["assigned_on", "shift", "patient_id"], name: "idx_on_assigned_on_shift_patient_id_9adba4e0f0", unique: true
+    t.index ["practitioner_id", "assigned_on"], name: "index_nursing_assignments_on_practitioner_id_and_assigned_on"
+    t.index ["ward_id", "assigned_on"], name: "index_nursing_assignments_on_ward_id_and_assigned_on"
   end
 
   create_table "order_set_entries", force: :cascade do |t|
