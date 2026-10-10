@@ -19,7 +19,6 @@ import {
   LAB_EXTRACT_AGGREGATES,
   LAB_EXTRACT_MAX_ITEMS,
   LAB_EXTRACT_ROW_MODES,
-  labExtractCsv,
   labExtractHeader,
   labExtractTable,
   labFixedCells,
@@ -37,9 +36,11 @@ import { PatientColumnsField } from "./PatientColumnsField";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
-import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
+import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
 import { VitalItemSelectModal } from "./VitalItemSelectModal";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
@@ -106,7 +107,7 @@ export function LabExtractPanel() {
 
   async function handleRun() {
     if (items.length === 0) return;
-    const patientIds = await scope.resolve();
+    const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
     const range = resolvePeriod(period, today());
     setRanItems(items);
@@ -153,6 +154,16 @@ export function LabExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
+
+  const tableRows: RecordTableRow[] = table
+    ? shownRows.map((row) => ({
+        key: row.rowKey,
+        patient: row,
+        fixed: labFixedCells(row, mode),
+        values: table.columns.map((column) => row.values.get(column.key) ?? ""),
+      }))
+    : [];
+  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -252,7 +263,7 @@ export function LabExtractPanel() {
             <button
               type="button"
               disabled={shownRows.length === 0}
-              onClick={() => downloadBlob(labExtractCsv(table.columns, shownRows, mode, output), `lab_${today()}.csv`)}
+              onClick={() => downloadBlob(recordTableCsv(header, patientColumns, tableRows, attributes.attributes), `lab_${today()}.csv`)}
             >
               CSV
             </button>
@@ -280,17 +291,14 @@ export function LabExtractPanel() {
           <TruncatedNotice show={shownRows.length > RECORD_DISPLAY_LIMIT}>
             {`先頭の ${RECORD_DISPLAY_LIMIT} 行を表示しています。すべては CSV に出ます。`}
           </TruncatedNotice>
+          <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
             header={header}
+            patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={shownRows.map((row) => ({
-              key: row.rowKey,
-              patient: row,
-              fixed: labFixedCells(row, mode),
-              values: table.columns.map((column) => row.values.get(column.key) ?? ""),
-            }))}
+            rows={tableRows}
             emptyLabel={incomplete ? "" : "該当する結果はありません"}
           />
         </section>

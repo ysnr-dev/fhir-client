@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useEncounterExtract, useSelfDepartments, useWardOptions, type EncounterExtractKind } from "../../api/queries";
 import { departmentCode, departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
-import { encounterExtractCsv, encounterExtractHeader, encounterExtractRows } from "../../fhir/encounterExtractHelpers";
+import { encounterExtractHeader, encounterExtractRows } from "../../fhir/encounterExtractHelpers";
 import {
   ADMISSION_DATE_MODES,
   RECORD_DISPLAY_LIMIT,
@@ -22,9 +22,11 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
+import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 30 };
 
@@ -109,7 +111,7 @@ export function EncounterExtractPanel() {
   }
 
   async function handleRun() {
-    const patientIds = await scope.resolve();
+    const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
     const range = resolvePeriod(period, today());
     const department = departmentOptions.find((d) => d.id === departmentId);
@@ -129,6 +131,15 @@ export function EncounterExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
+
+  const tableHeader = encounterExtractHeader(resultKind, output);
+  const tableRows: RecordTableRow[] = (rows ?? []).map((row) => ({
+    key: row.rowKey,
+    patient: row,
+    fixed: row.fixed,
+    values: row.values,
+  }));
+  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -218,7 +229,7 @@ export function EncounterExtractPanel() {
               type="button"
               disabled={rows.length === 0}
               onClick={() =>
-                downloadBlob(encounterExtractCsv(resultKind, rows, output), `${resultKind}_${today()}.csv`)
+                downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `${resultKind}_${today()}.csv`)
               }
             >
               CSV
@@ -242,12 +253,14 @@ export function EncounterExtractPanel() {
           <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
             {`先頭の ${RECORD_DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
           </TruncatedNotice>
+          <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={encounterExtractHeader(resultKind, output)}
+            header={tableHeader}
+            patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={rows.map((row) => ({ key: row.rowKey, patient: row, fixed: row.fixed, values: row.values }))}
+            rows={tableRows}
             emptyLabel="該当する受診はありません"
           />
         </section>

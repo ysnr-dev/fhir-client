@@ -1,7 +1,5 @@
-import { csvBlob } from "../lib/csv";
 import { localDay } from "../lib/dates";
 import {
-  patientCell,
   patientColumnLabel,
   patientColumnsOf,
   patientRowOf,
@@ -230,20 +228,3 @@ export function microExtractHeader(drugColumns: MicroDrugColumn[], output: Extra
   ];
 }
 
-export function microExtractCsv(
-  drugColumns: MicroDrugColumn[],
-  rows: MicroExtractRow[],
-  output: ExtractOutput | undefined,
-): Blob {
-  const patientColumns = patientColumnsOf(output);
-  return csvBlob(
-    microExtractHeader(drugColumns, output),
-    rows.map((row) => [
-      row.patientNumber,
-      row.name,
-      ...patientColumns.map((column) => patientCell(row, column)),
-      ...row.fixed,
-      ...drugColumns.map((column) => row.drugs.get(column.key) ?? ""),
-    ]),
-  );
-}

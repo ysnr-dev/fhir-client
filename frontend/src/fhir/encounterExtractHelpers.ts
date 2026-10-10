@@ -1,4 +1,3 @@
-import { csvBlob } from "../lib/csv";
 import { dateTimeLabel, diffDays, localDay } from "../lib/dates";
 import { admissionRouteDisplay, encounterAdmissionRoute } from "./admissionRouteHelpers";
 import {
@@ -27,7 +26,6 @@ import {
   encounterNurseNames,
 } from "./encounterHelpers";
 import {
-  patientCell,
   patientColumnLabel,
   patientColumnsOf,
   patientRowOf,
@@ -254,20 +252,3 @@ export function encounterExtractHeader(kind: EncounterKind, output: ExtractOutpu
   return ["患者番号", "氏名", ...patientColumnsOf(output).map(patientColumnLabel), ...HEADERS[kind]];
 }
 
-export function encounterExtractCsv(
-  kind: EncounterKind,
-  rows: EncounterExtractRow[],
-  output: ExtractOutput | undefined,
-): Blob {
-  const patientColumns = patientColumnsOf(output);
-  return csvBlob(
-    encounterExtractHeader(kind, output),
-    rows.map((row) => [
-      row.patientNumber,
-      row.name,
-      ...patientColumns.map((column) => patientCell(row, column)),
-      ...row.fixed,
-      ...row.values,
-    ]),
-  );
-}

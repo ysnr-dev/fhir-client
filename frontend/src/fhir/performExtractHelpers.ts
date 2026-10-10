@@ -1,7 +1,5 @@
-import { csvBlob } from "../lib/csv";
 import { dateTimeLabel } from "../lib/dates";
 import {
-  patientCell,
   patientColumnLabel,
   patientColumnsOf,
   patientRowOf,
@@ -227,20 +225,3 @@ export function performRowCells(row: PerformExtractRow, measureColumns: PerformM
   return [...row.values, ...measureColumns.map((c) => row.measures.get(c.key) ?? "")];
 }
 
-export function performExtractCsv(
-  measureColumns: PerformMeasureColumn[],
-  rows: PerformExtractRow[],
-  output: ExtractOutput | undefined,
-): Blob {
-  const patientColumns = patientColumnsOf(output);
-  return csvBlob(
-    performExtractHeader(measureColumns, output),
-    rows.map((row) => [
-      row.patientNumber,
-      row.name,
-      ...patientColumns.map((column) => patientCell(row, column)),
-      ...row.fixed,
-      ...performRowCells(row, measureColumns),
-    ]),
-  );
-}

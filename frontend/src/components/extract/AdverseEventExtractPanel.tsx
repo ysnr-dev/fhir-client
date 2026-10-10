@@ -4,7 +4,6 @@ import type { TreatmentType } from "../../fhir/adverseEventHelpers";
 import {
   ADVERSE_EVENT_ROW_MODES,
   TREATMENT_TYPE_OPTIONS,
-  adverseEventExtractCsv,
   adverseEventExtractHeader,
   adverseEventExtractTable,
   type AdverseEventRowMode,
@@ -27,9 +26,11 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
+import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 
@@ -67,7 +68,7 @@ export function AdverseEventExtractPanel() {
   const running = scope.running || extract.running;
 
   async function handleRun() {
-    const patientIds = await scope.resolve();
+    const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
     const range = resolvePeriod(period, today());
     void extract.run({
@@ -109,6 +110,17 @@ export function AdverseEventExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
+
+  const tableHeader = table ? adverseEventExtractHeader(table, output) : [];
+  const tableRows: RecordTableRow[] = table
+    ? rows.map(({ key, patient, cells }) => ({
+        key,
+        patient,
+        fixed: cells.slice(0, table.fixedCount),
+        values: cells.slice(table.fixedCount),
+      }))
+    : [];
+  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -194,7 +206,7 @@ export function AdverseEventExtractPanel() {
               type="button"
               disabled={rows.length === 0}
               onClick={() =>
-                downloadBlob(adverseEventExtractCsv({ ...table, rows }, output), `adverse_event_${today()}.csv`)
+                downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `adverse_event_${today()}.csv`)
               }
             >
               CSV
@@ -221,17 +233,14 @@ export function AdverseEventExtractPanel() {
           <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
             {`先頭の ${RECORD_DISPLAY_LIMIT} 行を表示しています。すべては CSV に出ます。`}
           </TruncatedNotice>
+          <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={adverseEventExtractHeader(table, output)}
+            header={tableHeader}
+            patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={rows.map(({ key, patient, cells }) => ({
-              key,
-              patient,
-              fixed: cells.slice(0, table.fixedCount),
-              values: cells.slice(table.fixedCount),
-            }))}
+            rows={tableRows}
             emptyLabel={incomplete ? "" : "該当する有害事象はありません"}
           />
         </section>

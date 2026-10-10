@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   BREAKDOWN_MAX_CATEGORIES,
   BREAKDOWN_MAX_COLUMN_CATEGORIES,
@@ -6,6 +6,7 @@ import {
   METRICS,
   TIME_GRAINS,
   breakdownColumns,
+  normalizeBins,
   recordBreakdown,
   recordBreakdownCsv,
   type BreakdownAxis,
@@ -71,6 +72,21 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
   const metric: Metric = settings.metric ?? "mean";
   const showSub = settings.show_sub ?? true;
   const splitMulti = settings.split_multi ?? false;
+  // 区切りは見出しの名前で持ち、今の結果の数値の列に当てる。
+  const bins = useMemo(() => {
+    const map = new Map<number, number[]>();
+    for (const column of numberColumns) {
+      const cuts = normalizeBins(settings.bins?.[column.label] ?? []);
+      if (cuts.length > 0) map.set(column.index, cuts);
+    }
+    return map;
+  }, [numberColumns, settings.bins]);
+  const numberLabels = new Set(numberColumns.map((c) => c.label));
+  const setBins = (label: string, cuts: number[]) => {
+    const { [label]: _removed, ...rest } = settings.bins ?? {};
+    const next = cuts.length > 0 ? { ...rest, [label]: cuts } : rest;
+    update({ bins: Object.keys(next).length > 0 ? next : undefined });
+  };
 
   const breakdown = useMemo(
     () =>
@@ -83,8 +99,23 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
         valueIndex,
         metric,
         splitMulti,
+        bins,
       }),
-    [header, cells, patientIds, dateIndex, grain, fillEmpty, rowKey, columnKey, categoryColumns, valueIndex, metric, splitMulti],
+    [
+      header,
+      cells,
+      patientIds,
+      dateIndex,
+      grain,
+      fillEmpty,
+      rowKey,
+      columnKey,
+      categoryColumns,
+      valueIndex,
+      metric,
+      splitMulti,
+      bins,
+    ],
   );
   const hasColumns = breakdown.columnLabels.length > 0;
   const withValue = breakdown.valueLabel !== null;
@@ -182,6 +213,13 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
             ))}
           </select>
         </label>
+        {numberLabels.has(rowKey) && (
+          <BinsInput
+            key={`row-${rowKey}`}
+            cuts={settings.bins?.[rowKey] ?? []}
+            onChange={(cuts) => setBins(rowKey, cuts)}
+          />
+        )}
         <label className="extract-checks__item">
           列
           <select aria-label="列の軸" value={columnKey} onChange={(e) => update({ columns: e.target.value })}>
@@ -196,6 +234,13 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
               ))}
           </select>
         </label>
+        {numberLabels.has(columnKey) && (
+          <BinsInput
+            key={`column-${columnKey}`}
+            cuts={settings.bins?.[columnKey] ?? []}
+            onChange={(cuts) => setBins(columnKey, cuts)}
+          />
+        )}
         <select
           aria-label="集計する値"
           value={valueIndex === null ? "" : (settings.value ?? "")}
@@ -260,7 +305,7 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
           内訳CSV
         </button>
       </div>
-      <RecordBreakdownChart breakdown={breakdown} periodOnRows={rowKey === "period"} />
+      <RecordBreakdownChart breakdown={breakdown} periodOnRows={rowKey === "period"} ratio={ratio} />
       <div className="extract-results__table-wrap">
         <table className="master-search__table extract-breakdown">
           <thead>
@@ -362,5 +407,36 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
         <p className="order-select__muted">{`${breakdown.truncatedAxes.join("・")}は件数の多い順に(行は ${BREAKDOWN_MAX_CATEGORIES} 個、列は ${BREAKDOWN_MAX_COLUMN_CATEGORIES} 個まで)出し、残りは「その他」にまとめています。`}</p>
       )}
     </div>
+  );
+}
+
+/** 数値の列の区切り(「7,8」→ 7未満・7以上8未満・8以上)。入力の途中では反映せず、離れたときに確定する。 */
+function BinsInput({ cuts, onChange }: { cuts: number[]; onChange: (cuts: number[]) => void }) {
+  const [text, setText] = useState(cuts.join(","));
+  const commit = () => {
+    const next = normalizeBins(
+      text
+        .split(/[,、\s]+/)
+        .filter(Boolean)
+        .map(Number),
+    );
+    setText(next.join(","));
+    onChange(next);
+  };
+  return (
+    <label className="extract-checks__item">
+      区切り
+      <input
+        type="text"
+        className="extract-breakdown__bins"
+        inputMode="decimal"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+        }}
+      />
+    </label>
   );
 }

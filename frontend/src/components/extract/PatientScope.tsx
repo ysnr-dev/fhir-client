@@ -1,10 +1,18 @@
+import { useState } from "react";
+import { ATTENDING_MODES, type AttendingMode } from "../../fhir/extractRecordQuery";
 import type { ExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import type { RecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
+import { ErrorBanner } from "../ErrorBanner";
+import { TruncatedNotice } from "../TruncatedNotice";
 import { ExtractQuerySelect } from "./ExtractQuerySelect";
 import { PatientFolderSelect } from "./PatientFolderSelect";
+import { StrataEditorModal } from "./StrataEditorModal";
 
-// 記録を表にするタブの患者の絞り込みの入力欄と、実行したときの該当人数(hooks/useExtractPatientScope)。
+// 記録を表にするタブの患者の絞り込み・群分け・担当医の入力欄と、実行したときの該当人数
+// (hooks/useExtractPatientScope、docs/data-extract-design.md §8・§21)。
 
 export function PatientScopeFields({ scope }: { scope: ExtractPatientScope }) {
+  const [editingStrata, setEditingStrata] = useState(false);
   return (
     <>
       <label className="extract-field">
@@ -25,16 +33,54 @@ export function PatientScopeFields({ scope }: { scope: ExtractPatientScope }) {
           onChange={(next) => scope.setFolderId(next?.id ?? null)}
         />
       </label>
+      <button type="button" className="rp-card__compact-button" onClick={() => setEditingStrata(true)}>
+        {scope.strata.length > 0 ? `群分け(${scope.strata.length})` : "群分け"}
+      </button>
+      {scope.strata.length > 0 && (
+        <label className="extract-checks__item">
+          <input
+            type="checkbox"
+            checked={scope.strataOnly}
+            onChange={(e) => scope.setStrataOnly(e.target.checked)}
+          />
+          群外を除く
+        </label>
+      )}
+      <label className="extract-field">
+        担当医
+        <select
+          value={scope.attending}
+          onChange={(e) => scope.setAttending(e.target.value as AttendingMode | "")}
+        >
+          <option value="">なし</option>
+          {ATTENDING_MODES.map((mode) => (
+            <option key={mode.value} value={mode.value}>
+              {mode.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {editingStrata && (
+        <StrataEditorModal
+          strata={scope.strata}
+          queries={scope.queries}
+          onChange={scope.setStrata}
+          onClose={() => setEditingStrata(false)}
+        />
+      )}
     </>
   );
 }
 
 export function PatientScopeSummary({ scope }: { scope: ExtractPatientScope }) {
-  const { query, folder } = scope.summary;
+  const { query, folder, strata } = scope.summary;
   return (
     <>
       {query && <span className="order-select__muted">{`「${query.name}」に該当 ${query.count} 人`}</span>}
       {folder && <span className="order-select__muted">{`フォルダ「${folder.name}」に ${folder.count} 人`}</span>}
+      {strata.map((s) => (
+        <span key={s.name} className="order-select__muted">{`群「${s.name}」${s.count} 人`}</span>
+      ))}
     </>
   );
 }
@@ -42,4 +88,17 @@ export function PatientScopeSummary({ scope }: { scope: ExtractPatientScope }) {
 export function PatientScopeProgress({ scope }: { scope: ExtractPatientScope }) {
   if (!scope.running) return null;
   return <span className="order-select__muted">{`患者を抽出中(検索 ${scope.requests} 回)`}</span>;
+}
+
+/** 担当医を読んでいる間の表示と、読み切れなかった・読めなかったときの注記。 */
+export function PatientAttributesStatus({ attributes }: { attributes: RecordPatientAttributes }) {
+  return (
+    <>
+      {attributes.running && <span className="order-select__muted">担当医を読込中</span>}
+      <TruncatedNotice show={attributes.truncated}>
+        受診・処方が多く読み切れなかったため、担当医は読めた記録から決めています。期間か患者を絞ってください。
+      </TruncatedNotice>
+      <ErrorBanner error={attributes.error} />
+    </>
+  );
 }

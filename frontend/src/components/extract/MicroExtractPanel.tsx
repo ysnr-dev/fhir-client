@@ -9,7 +9,6 @@ import {
 } from "../../fhir/extractQueryHelpers";
 import {
   MICRO_SUSCEPTIBILITY_FIELDS,
-  microExtractCsv,
   microExtractHeader,
   microExtractTable,
   type MicroSusceptibilityField,
@@ -24,9 +23,11 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { CheckGroup, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
+import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 const DEFAULT_SUSCEPTIBILITY: MicroSusceptibilityField[] = ["sir"];
@@ -75,7 +76,7 @@ export function MicroExtractPanel() {
   const running = scope.running || extract.running;
 
   async function handleRun() {
-    const patientIds = await scope.resolve();
+    const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
     const range = resolvePeriod(period, today());
     void extract.run({ from: range?.from ?? "", to: range?.to ?? "", patientIds });
@@ -111,6 +112,20 @@ export function MicroExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
+
+  const tableHeader = table ? microExtractHeader(table.drugColumns, output) : [];
+  const tableRows: RecordTableRow[] = table
+    ? rows.map((row) => ({
+        key: row.rowKey,
+        patient: row,
+        fixed: row.fixed.slice(0, FIXED_COLUMNS),
+        values: [
+          ...row.fixed.slice(FIXED_COLUMNS),
+          ...table.drugColumns.map((column) => row.drugs.get(column.key) ?? ""),
+        ],
+      }))
+    : [];
+  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -165,7 +180,7 @@ export function MicroExtractPanel() {
             <button
               type="button"
               disabled={rows.length === 0}
-              onClick={() => downloadBlob(microExtractCsv(table.drugColumns, rows, output), `micro_${today()}.csv`)}
+              onClick={() => downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `micro_${today()}.csv`)}
             >
               CSV
             </button>
@@ -191,20 +206,14 @@ export function MicroExtractPanel() {
           <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
             {`先頭の ${RECORD_DISPLAY_LIMIT} 行を表示しています。すべては CSV に出ます。`}
           </TruncatedNotice>
+          <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={microExtractHeader(table.drugColumns, output)}
+            header={tableHeader}
+            patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={rows.map((row) => ({
-              key: row.rowKey,
-              patient: row,
-              fixed: row.fixed.slice(0, FIXED_COLUMNS),
-              values: [
-                ...row.fixed.slice(FIXED_COLUMNS),
-                ...table.drugColumns.map((column) => row.drugs.get(column.key) ?? ""),
-              ],
-            }))}
+            rows={tableRows}
             emptyLabel={incomplete ? "" : "該当する結果はありません"}
           />
         </section>

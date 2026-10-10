@@ -1,4 +1,5 @@
 import { csvBlob } from "../lib/csv";
+import { ATTENDING_COLUMN, STRATUM_COLUMN } from "./recordTableHelpers";
 
 // 記録を表にするタブの内訳(docs/data-extract-design.md §18)。結果の表(見出しと行のセル)だけから、
 // 行と列の軸に期間(年・年度・四半期・月・週・日)か分類の列を置き、件数・患者数と数値の列の集計を出す。
@@ -23,6 +24,9 @@ const PATIENT_LABELS = new Set(["患者番号", "氏名", "カナ", "患者ID", 
 /** 数字だけでも量ではない列(コード・番号)。名前で見分けて分類として扱う。 */
 const CODE_LABEL = /(コード|番号|ID|^RP$|^版$)/;
 
+/** 患者ごとの属性の列(群・担当医。§21)。値が数字や日付に見えても分類として扱う。 */
+const CATEGORY_LABELS = new Set([STRATUM_COLUMN, ATTENDING_COLUMN]);
+
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}/;
 const NUMBER_PATTERN = /^-?\d+(\.\d+)?$/;
 
@@ -35,7 +39,7 @@ const KIND_RATIO = 0.8;
  */
 export function columnKindOf(label: string, values: string[]): ColumnKind {
   if (PATIENT_LABELS.has(label)) return "patient";
-  if (CODE_LABEL.test(label)) return "category";
+  if (CODE_LABEL.test(label) || CATEGORY_LABELS.has(label)) return "category";
   const filled = values.filter(Boolean);
   if (filled.length === 0) return "category";
   if (filled.filter((v) => DATE_PATTERN.test(v)).length / filled.length >= KIND_RATIO) return "date";
@@ -229,6 +233,8 @@ export interface BreakdownSettings {
   /** 割合を出す(行の中の構成比か、列の中の構成比)。 */
   ratio?: BreakdownRatio;
   split_multi?: boolean;
+  /** 数値の列を軸にしたときの区切り(見出しの名前 → 区切りの値)。 */
+  bins?: Record<string, number[]>;
 }
 
 export type BreakdownRatio = "row" | "column";
@@ -238,9 +244,34 @@ export type BreakdownRatio = "row" | "column";
 /** 列の軸に置く分類の値の数(横に広がりすぎないように行より少なくする)。 */
 export const BREAKDOWN_MAX_COLUMN_CATEGORIES = 12;
 
-/** 分類の値。年齢は 10 歳刻みにまとめる(1 歳ごとでは表にならない)。 */
-function categoryOf(label: string, value: string): string {
+/** 区切りの値を昇順・重なりなしにそろえる。 */
+export function normalizeBins(cuts: number[]): number[] {
+  return [...new Set(cuts.filter((c) => Number.isFinite(c)))].sort((a, b) => a - b);
+}
+
+/** 区切りの何番目の区間か(cuts[0] 未満が 0)。数値でなければ null。 */
+function binIndex(value: string, cuts: number[]): number | null {
+  const trimmed = value.trim();
+  if (!NUMBER_PATTERN.test(trimmed)) return null;
+  const n = Number(trimmed);
+  const index = cuts.findIndex((cut) => n < cut);
+  return index === -1 ? cuts.length : index;
+}
+
+/** 区間の名前(「7未満」「7以上8未満」「8以上」)。 */
+function binName(index: number, cuts: number[]): string {
+  if (index === 0) return `${cuts[0]}未満`;
+  if (index === cuts.length) return `${cuts[cuts.length - 1]}以上`;
+  return `${cuts[index - 1]}以上${cuts[index]}未満`;
+}
+
+/** 分類の値。区切りがあれば区間にまとめ、年齢は 10 歳刻みにまとめる(1 歳ごとでは表にならない)。 */
+function categoryOf(label: string, value: string, cuts?: number[]): string {
   if (!value) return EMPTY;
+  if (cuts && cuts.length > 0) {
+    const index = binIndex(value, cuts);
+    return index === null ? value : binName(index, cuts);
+  }
   if (label === "年齢") {
     const age = Number(value);
     return Number.isFinite(age) ? `${Math.floor(age / 10) * 10}代` : value;
@@ -266,6 +297,8 @@ export interface BreakdownOptions {
   metric: Metric;
   /** 分類の値に「、」が入っていれば分けて数える(1 件が複数の値に数えられる)。 */
   splitMulti: boolean;
+  /** 数値の列の区切り(列の位置 → 昇順の区切りの値)。 */
+  bins?: Map<number, number[]>;
 }
 
 /** 複数の値をつないだセルの区切り(麻酔方法・担当看護師・用語など)。 */
@@ -361,24 +394,37 @@ function resolveAxis(
     };
   }
   const label = header[axis.index] ?? "";
+  const cuts = options.bins?.get(axis.index);
   const rawOf = (row: string[]): string[] => {
     const cell = row[axis.index] ?? "";
-    if (!options.splitMulti || !cell.includes(MULTI_SEPARATOR)) return [categoryOf(label, cell)];
+    if (!options.splitMulti || !cell.includes(MULTI_SEPARATOR)) return [categoryOf(label, cell, cuts)];
     const parts = cell.split(MULTI_SEPARATOR).map((part) => part.trim()).filter(Boolean);
-    return [...new Set(parts.map((part) => categoryOf(label, part)))];
+    return [...new Set(parts.map((part) => categoryOf(label, part, cuts)))];
   };
   const counts = new Map<string, number>();
   for (const row of rows) {
     for (const value of rawOf(row)) counts.set(value, (counts.get(value) ?? 0) + 1);
   }
-  const byAge = label === "年齢";
+  // 区切りと年齢は値の順(区間の順・年齢の順)、ほかは件数の多い順。
+  const binned = Boolean(cuts && cuts.length > 0);
+  const binOrder = binned
+    ? new Map(Array.from({ length: cuts!.length + 1 }, (_, i) => [binName(i, cuts!), i]))
+    : null;
+  const byAge = !binned && label === "年齢";
   const ranked = [...counts]
     .sort((a, b) =>
-      byAge
-        ? (parseInt(a[0], 10) || 999) - (parseInt(b[0], 10) || 999)
-        : b[1] - a[1] || a[0].localeCompare(b[0], "ja"),
+      binOrder
+        ? (binOrder.get(a[0]) ?? 999) - (binOrder.get(b[0]) ?? 999) || a[0].localeCompare(b[0], "ja")
+        : byAge
+          ? (parseInt(a[0], 10) || 999) - (parseInt(b[0], 10) || 999)
+          : b[1] - a[1] || a[0].localeCompare(b[0], "ja"),
     )
     .map(([value]) => value);
+  // 区切りは 0 件の区間も並べる(区間がそろわないと行どうしを比べにくい)。
+  if (binOrder) {
+    for (const name of binOrder.keys()) if (!counts.has(name)) ranked.push(name);
+    ranked.sort((a, b) => (binOrder.get(a) ?? 999) - (binOrder.get(b) ?? 999));
+  }
   const kept = new Set(ranked.slice(0, limit));
   const truncated = ranked.length > kept.size;
   const keys = [...ranked.slice(0, limit), ...(truncated ? [OTHER] : [])];

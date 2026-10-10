@@ -1,8 +1,6 @@
-import { csvBlob } from "../lib/csv";
 import { diffDays } from "../lib/dates";
 import { parseAdverseEvent, type AdverseEventRecord, type TreatmentType } from "./adverseEventHelpers";
 import {
-  patientCell,
   patientColumnLabel,
   patientColumnsOf,
   patientRowOf,
@@ -130,15 +128,3 @@ export function adverseEventExtractHeader(table: AdverseEventExtractTable, outpu
   return ["患者番号", "氏名", ...patientColumnsOf(output).map(patientColumnLabel), ...table.header];
 }
 
-export function adverseEventExtractCsv(table: AdverseEventExtractTable, output: ExtractOutput | undefined): Blob {
-  const patientColumns = patientColumnsOf(output);
-  return csvBlob(
-    adverseEventExtractHeader(table, output),
-    table.rows.map(({ patient, cells }) => [
-      patient.patientNumber,
-      patient.name,
-      ...patientColumns.map((column) => patientCell(patient, column)),
-      ...cells,
-    ]),
-  );
-}

@@ -1,4 +1,5 @@
 import type { ExtractOutput, ExtractPeriod } from "./extractQueryHelpers";
+import type { ExtractKind, ExtractLeaf } from "./extractQueryModel";
 import type { BreakdownSettings } from "./recordBreakdownHelpers";
 import type { ExtractQuery } from "../api/masterClient";
 
@@ -29,7 +30,33 @@ export interface ExtractRecordDefinition {
   output?: ExtractOutput;
   /** 内訳の切り口(docs/data-extract-design.md §18)。 */
   breakdown?: BreakdownSettings;
+  /** 群分け(§21)。 */
+  strata?: ExtractStratum[];
+  /** 群に入らない患者を除く。 */
+  strata_only?: boolean;
+  /** 担当医の列の決め方(§21)。 */
+  attending?: AttendingMode;
 }
+
+/**
+ * 群 1 つ(docs/data-extract-design.md §21)。条件 1 件(kind あり。「患者」タブの条件と同じ形)か、
+ * 「患者」タブに保存した条件(query_code)のどちらか。label が群の名前。
+ */
+export type ExtractStratum = Omit<ExtractLeaf, "kind" | "not" | "relation" | "output_fields"> & {
+  kind?: Exclude<ExtractKind, "patient">;
+  query_code?: string;
+};
+
+export const MAX_STRATA = 8;
+
+/** 担当医の決め方。期間内の記録から患者ごとに最も多い医師を 1 人とる。 */
+export type AttendingMode = "outpatient" | "inpatient" | "prescriber";
+
+export const ATTENDING_MODES: { value: AttendingMode; label: string }[] = [
+  { value: "outpatient", label: "外来の担当医" },
+  { value: "inpatient", label: "入院の主治医" },
+  { value: "prescriber", label: "処方の依頼医" },
+];
 
 /** 保存した条件を、そのタブの条件の形で読む(形は backend が保存のときに確かめている)。 */
 export function recordDefinitionOf<T extends ExtractRecordDefinition>(query: ExtractQuery): T {

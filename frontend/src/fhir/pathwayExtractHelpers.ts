@@ -1,7 +1,5 @@
-import { csvBlob } from "../lib/csv";
 import { diffDays, localDay } from "../lib/dates";
 import {
-  patientCell,
   patientColumnLabel,
   patientColumnsOf,
   patientRowOf,
@@ -149,16 +147,3 @@ export function pathwayExtractHeader(output: ExtractOutput | undefined): string[
   ];
 }
 
-export function pathwayExtractCsv(rows: PathwayExtractRow[], output: ExtractOutput | undefined): Blob {
-  const patientColumns = patientColumnsOf(output);
-  return csvBlob(
-    pathwayExtractHeader(output),
-    rows.map((row) => [
-      row.patientNumber,
-      row.name,
-      ...patientColumns.map((column) => patientCell(row, column)),
-      ...row.fixed,
-      ...row.values,
-    ]),
-  );
-}

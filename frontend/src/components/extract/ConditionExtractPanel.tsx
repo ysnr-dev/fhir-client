@@ -4,7 +4,7 @@ import {
   type ConditionExtractCategory,
   type ConditionExtractSuspected,
 } from "../../api/queries";
-import { conditionExtractCsv, conditionExtractHeader, conditionExtractRows } from "../../fhir/conditionExtractHelpers";
+import { conditionExtractHeader, conditionExtractRows } from "../../fhir/conditionExtractHelpers";
 import {
   CLINICAL_STATUS_OPTIONS,
   RECORD_DISPLAY_LIMIT,
@@ -25,9 +25,11 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { CheckGroup, ConditionCodes, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
+import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 
@@ -107,7 +109,7 @@ export function ConditionExtractPanel() {
   }
 
   async function handleRun() {
-    const patientIds = await scope.resolve();
+    const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
     const range = resolvePeriod(period, today());
     setRanDateField(dateField);
@@ -127,6 +129,15 @@ export function ConditionExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
+
+  const tableHeader = conditionExtractHeader(output);
+  const tableRows: RecordTableRow[] = (rows ?? []).map((row) => ({
+    key: row.rowKey,
+    patient: row,
+    fixed: row.fixed,
+    values: row.values,
+  }));
+  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -204,7 +215,7 @@ export function ConditionExtractPanel() {
             <button
               type="button"
               disabled={rows.length === 0}
-              onClick={() => downloadBlob(conditionExtractCsv(rows, output), `condition_${today()}.csv`)}
+              onClick={() => downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `condition_${today()}.csv`)}
             >
               CSV
             </button>
@@ -227,12 +238,14 @@ export function ConditionExtractPanel() {
           <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
             {`先頭の ${RECORD_DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
           </TruncatedNotice>
+          <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={conditionExtractHeader(output)}
+            header={tableHeader}
+            patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={rows.map((row) => ({ key: row.rowKey, patient: row, fixed: row.fixed, values: row.values }))}
+            rows={tableRows}
             emptyLabel="該当する病名はありません"
           />
         </section>

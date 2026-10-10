@@ -8,7 +8,7 @@ import {
   type ExtractOutput,
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
-import { pathwayExtractCsv, pathwayExtractHeader, pathwayExtractRows } from "../../fhir/pathwayExtractHelpers";
+import { pathwayExtractHeader, pathwayExtractRows } from "../../fhir/pathwayExtractHelpers";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
@@ -19,9 +19,11 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
+import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 
@@ -68,7 +70,7 @@ export function PathwayExtractPanel() {
   const running = scope.running || extract.running;
 
   async function handleRun() {
-    const patientIds = await scope.resolve();
+    const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
     const range = resolvePeriod(period, today());
     void extract.run({
@@ -105,6 +107,15 @@ export function PathwayExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
+
+  const tableHeader = pathwayExtractHeader(output);
+  const tableRows: RecordTableRow[] = shownRows.map((row) => ({
+    key: row.rowKey,
+    patient: row,
+    fixed: row.fixed,
+    values: row.values,
+  }));
+  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -156,7 +167,7 @@ export function PathwayExtractPanel() {
             <button
               type="button"
               disabled={shownRows.length === 0}
-              onClick={() => downloadBlob(pathwayExtractCsv(shownRows, output), `pathway_${today()}.csv`)}
+              onClick={() => downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `pathway_${today()}.csv`)}
             >
               CSV
             </button>
@@ -179,12 +190,14 @@ export function PathwayExtractPanel() {
           <TruncatedNotice show={shownRows.length > RECORD_DISPLAY_LIMIT}>
             {`先頭の ${RECORD_DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
           </TruncatedNotice>
+          <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={pathwayExtractHeader(output)}
+            header={tableHeader}
+            patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={shownRows.map((row) => ({ key: row.rowKey, patient: row, fixed: row.fixed, values: row.values }))}
+            rows={tableRows}
             emptyLabel={incomplete ? "" : "該当する適用はありません"}
           />
         </section>

@@ -9,7 +9,7 @@ import {
   type ExtractOutput,
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
-import { surgeryExtractCsv, surgeryExtractHeader, surgeryExtractRows } from "../../fhir/surgeryExtractHelpers";
+import { surgeryExtractHeader, surgeryExtractRows } from "../../fhir/surgeryExtractHelpers";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
@@ -21,9 +21,11 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
+import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 
@@ -72,7 +74,7 @@ export function SurgeryExtractPanel() {
   const running = scope.running || extract.running;
 
   async function handleRun() {
-    const patientIds = await scope.resolve();
+    const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
     const range = resolvePeriod(period, today());
     void extract.run({
@@ -112,6 +114,15 @@ export function SurgeryExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
+
+  const tableHeader = surgeryExtractHeader(output);
+  const tableRows: RecordTableRow[] = (rows ?? []).map((row) => ({
+    key: row.rowKey,
+    patient: row,
+    fixed: row.fixed,
+    values: row.values,
+  }));
+  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -186,7 +197,7 @@ export function SurgeryExtractPanel() {
             <button
               type="button"
               disabled={rows.length === 0}
-              onClick={() => downloadBlob(surgeryExtractCsv(rows, output), `surgery_${today()}.csv`)}
+              onClick={() => downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `surgery_${today()}.csv`)}
             >
               CSV
             </button>
@@ -209,12 +220,14 @@ export function SurgeryExtractPanel() {
           <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
             {`先頭の ${RECORD_DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
           </TruncatedNotice>
+          <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={surgeryExtractHeader(output)}
+            header={tableHeader}
+            patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={rows.map((row) => ({ key: row.rowKey, patient: row, fixed: row.fixed, values: row.values }))}
+            rows={tableRows}
             emptyLabel="該当する手術はありません"
           />
         </section>

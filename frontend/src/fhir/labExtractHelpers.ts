@@ -1,4 +1,3 @@
-import { csvBlob } from "../lib/csv";
 import { dateTimeLabel } from "../lib/dates";
 import {
   isChoiceItem,
@@ -7,7 +6,6 @@ import {
   type ChartItem,
 } from "./chartDefinitionHelpers";
 import {
-  patientCell,
   patientColumnLabel,
   patientColumnsOf,
   patientRowOf,
@@ -29,16 +27,20 @@ export const LAB_EXTRACT_ROW_MODES: { value: LabExtractRowMode; label: string }[
   { value: "patient", label: "患者ごと" },
 ];
 
-export type LabExtractAggregate = "first" | "latest" | "max" | "min" | "mean" | "count";
+export type LabExtractAggregate = "first" | "latest" | "delta" | "max" | "min" | "mean" | "count";
 
 export const LAB_EXTRACT_AGGREGATES: { value: LabExtractAggregate; label: string }[] = [
   { value: "first", label: "最初" },
   { value: "latest", label: "最新" },
+  { value: "delta", label: "変化" },
   { value: "max", label: "最大" },
   { value: "min", label: "最小" },
   { value: "mean", label: "平均" },
   { value: "count", label: "件数" },
 ];
+
+/** H/L の列を添えない集計(1 つの結果を指さないもの)。 */
+const UNFLAGGED_AGGREGATES = new Set<LabExtractAggregate>(["mean", "count", "delta"]);
 
 /** 選べる項目の上限。 */
 export const LAB_EXTRACT_MAX_ITEMS = 50;
@@ -238,7 +240,7 @@ export function labExtractTable(
         if (aggregate === "first" || aggregate === "latest") {
           columns.push({ key: `${spec.key}|${aggregate}|at`, header: `${spec.name} ${label}の日時` });
         }
-        if (options.interpretation && hasFlag(spec) && aggregate !== "mean" && aggregate !== "count") {
+        if (options.interpretation && hasFlag(spec) && !UNFLAGGED_AGGREGATES.has(aggregate)) {
           columns.push({ key: `${spec.key}|${aggregate}|flag`, header: `${spec.name} ${label}のH/L` });
         }
       }
@@ -264,6 +266,14 @@ export function labExtractTable(
           }
           if (aggregate === "mean") {
             if (numeric.length) row.values.set(key, roundMean(numeric.map((p) => p.number!)));
+            continue;
+          }
+          if (aggregate === "delta") {
+            // 最初と最新が両方数値のときだけ(1 回しか測っていなければ出さない)。
+            const [first, latest] = [sorted[0], sorted[sorted.length - 1]];
+            if (sorted.length > 1 && first.number !== undefined && latest.number !== undefined) {
+              row.values.set(key, roundMean([latest.number - first.number]));
+            }
             continue;
           }
           const point = picks[aggregate];
@@ -336,21 +346,3 @@ export function labExtractHeader(
   ];
 }
 
-export function labExtractCsv(
-  columns: LabExtractColumn[],
-  rows: LabExtractRow[],
-  mode: LabExtractRowMode,
-  output: ExtractOutput | undefined,
-): Blob {
-  const patientColumns = patientColumnsOf(output);
-  return csvBlob(
-    labExtractHeader(columns, mode, output),
-    rows.map((row) => [
-      row.patientNumber,
-      row.name,
-      ...patientColumns.map((column) => patientCell(row, column)),
-      ...labFixedCells(row, mode),
-      ...columns.map((column) => row.values.get(column.key) ?? ""),
-    ]),
-  );
-}

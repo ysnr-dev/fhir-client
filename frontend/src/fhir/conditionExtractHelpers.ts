@@ -1,4 +1,3 @@
-import { csvBlob } from "../lib/csv";
 import { localDay } from "../lib/dates";
 import {
   CATEGORY_LABELS,
@@ -9,7 +8,6 @@ import {
 } from "./conditionHelpers";
 import {
   CLINICAL_STATUS_OPTIONS,
-  patientCell,
   patientColumnLabel,
   patientColumnsOf,
   patientRowOf,
@@ -92,16 +90,3 @@ export function conditionExtractHeader(output: ExtractOutput | undefined): strin
   ];
 }
 
-export function conditionExtractCsv(rows: ConditionExtractRow[], output: ExtractOutput | undefined): Blob {
-  const patientColumns = patientColumnsOf(output);
-  return csvBlob(
-    conditionExtractHeader(output),
-    rows.map((row) => [
-      row.patientNumber,
-      row.name,
-      ...patientColumns.map((column) => patientCell(row, column)),
-      ...row.fixed,
-      ...row.values,
-    ]),
-  );
-}

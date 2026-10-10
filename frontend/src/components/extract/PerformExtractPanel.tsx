@@ -10,7 +10,6 @@ import {
 } from "../../fhir/extractQueryHelpers";
 import {
   PERFORM_EXTRACT_KINDS,
-  performExtractCsv,
   performExtractHeader,
   performExtractTable,
   performRowCells,
@@ -25,9 +24,11 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
+import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 const DEFAULT_KIND = PERFORM_EXTRACT_KINDS[0].code;
@@ -76,7 +77,7 @@ export function PerformExtractPanel() {
   const ranLabel = PERFORM_EXTRACT_KINDS.find((k) => k.code === ranKind)?.label ?? "";
 
   async function handleRun() {
-    const patientIds = await scope.resolve();
+    const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
     const range = resolvePeriod(period, today());
     setRanKind(kind);
@@ -117,6 +118,17 @@ export function PerformExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
+
+  const tableHeader = table ? performExtractHeader(table.measureColumns, output) : [];
+  const tableRows: RecordTableRow[] = table
+    ? rows.map((row) => ({
+        key: row.rowKey,
+        patient: row,
+        fixed: row.fixed,
+        values: performRowCells(row, table.measureColumns),
+      }))
+    : [];
+  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -179,7 +191,7 @@ export function PerformExtractPanel() {
               type="button"
               disabled={rows.length === 0}
               onClick={() =>
-                downloadBlob(performExtractCsv(table.measureColumns, rows, output), `perform_${ranKind}_${today()}.csv`)
+                downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `perform_${ranKind}_${today()}.csv`)
               }
             >
               CSV
@@ -203,17 +215,14 @@ export function PerformExtractPanel() {
           <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
             {`先頭の ${RECORD_DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
           </TruncatedNotice>
+          <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={performExtractHeader(table.measureColumns, output)}
+            header={tableHeader}
+            patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={rows.map((row) => ({
-              key: row.rowKey,
-              patient: row,
-              fixed: row.fixed,
-              values: performRowCells(row, table.measureColumns),
-            }))}
+            rows={tableRows}
             emptyLabel="該当する実施はありません"
           />
         </section>

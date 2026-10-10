@@ -269,6 +269,43 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
     end
 
+    it "群分け・群外を除く・担当医を保存でき、群の形を確かめる" do
+      strata = [
+        { "key" => "su", "label" => "SU薬", "kind" => "medication", "drug_classes" => [{ "code" => "3961" }] },
+        { "key" => "a1c", "kind" => "observation", "codes" => lab_item["codings"], "value" => { "op" => "ge", "value" => 8 } },
+        { "key" => "saved", "label" => "保存した条件", "query_code" => "abc" }
+      ]
+      create_record("lab", { "items" => [lab_item], "strata" => strata, "strata_only" => true, "attending" => "outpatient" })
+      expect(response).to have_http_status(:created), response.body
+      expect(body["definition"]["strata"]).to eq(strata)
+      expect(body["definition"]["attending"]).to eq("outpatient")
+
+      create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "p", "kind" => "patient", "gender" => ["male"] }] },
+                    name: "患者属性")
+      expect(errors_text).to include("患者属性")
+      create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "x", "kind" => "condition", "query_code" => "abc" }] },
+                    name: "両方")
+      expect(errors_text).to include("どちらか")
+      create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "m", "kind" => "medication" }] }, name: "薬なし")
+      expect(errors_text).to include("codes")
+      create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "n", "label" => "名前だけ" }] }, name: "種類なし")
+      expect(errors_text).to include("kind")
+      nine = (1..9).map { |i| { "key" => "s#{i}", "query_code" => "q#{i}" } }
+      create_record("lab", { "items" => [lab_item], "strata" => nine }, name: "9 群")
+      expect(errors_text).to include("8 件まで")
+      create_record("lab", { "items" => [lab_item], "attending" => "nurse" }, name: "担当医違い")
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "内訳の区切りと検査結果の変化を保存できる" do
+      breakdown = { "rows" => "担当医", "columns" => "HbA1c(%) 最新", "bins" => { "HbA1c(%) 最新" => [7, 8] }, "ratio" => "row" }
+      create_record("lab", { "items" => [lab_item], "mode" => "patient", "aggregates" => %w[latest delta], "breakdown" => breakdown })
+      expect(response).to have_http_status(:created), response.body
+      expect(body["definition"]["breakdown"]["bins"]).to eq({ "HbA1c(%) 最新" => [7, 8] })
+      create_record("lab", { "items" => [lab_item], "breakdown" => { "bins" => { "年齢" => ["七十"] } } }, name: "区切り違い")
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
     it "保存した後はタブを変えない" do
       create_record("pathway", { "pathway_code" => "900001" })
       id = body["id"]
@@ -325,6 +362,27 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       second = ExtractQueryPresets.load!(path)
       expect(first.created).to eq(JSON.parse(File.read(path)).size)
       expect(second.created).to eq(0)
+    end
+
+    it "記録タブの条件はタブ付きで入り、「患者」タブの条件を名前から code に置き換える" do
+      ExtractQueryPresets.load!(Rails.root.join("db/seed_data/extract_query_presets.json"))
+      patient = ExtractQuery.find_by!(scope: "facility", tab: "patient", name: "HbA1c 8.0以上(180日)")
+      trend = ExtractQuery.find_by!(scope: "facility", tab: "lab", name: "HbA1c 8以上 薬効群別の推移")
+      expect(trend.definition["patient_query_code"]).to eq(patient.code)
+      expect(trend.definition).not_to have_key("patient_query_name")
+      expect(trend.definition["strata"].size).to eq(3)
+      physician = ExtractQuery.find_by!(scope: "facility", tab: "lab", name: "医師別 HbA1c コントロール")
+      expect(physician.definition["attending"]).to eq("outpatient")
+    end
+
+    it "「患者」タブの条件が見つからなければ患者の絞り込みを外して入れる" do
+      presets = [{ "name" => "絞り込み先なし", "tab" => "lab",
+                   "definition" => { "schema_version" => 1, "patient_query_name" => "存在しない条件",
+                                     "items" => [{ "key" => "k", "source" => "lab", "name" => "HbA1c",
+                                                   "codings" => [{ "system" => "s", "code" => "c" }] }] } }]
+      ExtractQueryPresets.new(presets).load!
+      definition = ExtractQuery.find_by!(tab: "lab", name: "絞り込み先なし").definition
+      expect(definition.keys).not_to include("patient_query_name", "patient_query_code")
     end
   end
 end

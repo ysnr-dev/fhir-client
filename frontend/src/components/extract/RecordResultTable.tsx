@@ -1,32 +1,28 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  RECORD_DISPLAY_LIMIT,
-  patientCell,
-  type ExtractPatientRow,
-  type PatientColumn,
-} from "../../fhir/extractQueryHelpers";
+import { RECORD_DISPLAY_LIMIT, patientCell, type PatientColumn } from "../../fhir/extractQueryHelpers";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
-import { csvBlob } from "../../lib/csv";
+import {
+  recordTableCells,
+  recordTableCsv,
+  recordTableHeader,
+  type PatientAttribute,
+  type RecordTableRow,
+} from "../../fhir/recordTableHelpers";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { RecordBreakdownView } from "./RecordBreakdownView";
 
-export interface RecordTableRow {
-  key: string;
-  patient: ExtractPatientRow;
-  /** 固定列(折り返さない)の値。 */
-  fixed: string[];
-  /** 項目の列の値(長ければ折り返す)。 */
-  values: string[];
-}
+export type { RecordTableRow } from "../../fhir/recordTableHelpers";
 
 interface Props {
   header: string[];
   patientColumns: PatientColumn[];
   rows: RecordTableRow[];
   emptyLabel: string;
+  /** 患者の列の直後に並べる患者ごとの属性(群・担当医。docs/data-extract-design.md §21)。 */
+  patientAttributes?: PatientAttribute[];
   /** 内訳の切り口。保存する条件に含めるときはタブが持って渡す(渡さなければここで持つ)。 */
   breakdown?: BreakdownSettings;
   onBreakdownChange?: (settings: BreakdownSettings) => void;
@@ -54,6 +50,11 @@ interface Drill {
  */
 export function RecordResultTable(props: Props) {
   const { header, patientColumns, rows } = props;
+  const attributes = useMemo(() => props.patientAttributes ?? [], [props.patientAttributes]);
+  const fullHeader = useMemo(
+    () => recordTableHeader(header, patientColumns, attributes),
+    [header, patientColumns, attributes],
+  );
   const [view, setView] = useState<View>("list");
   const [drillState, setDrill] = useState<Drill | null>(null);
   const [localBreakdown, setLocalBreakdown] = useState<BreakdownSettings>({});
@@ -61,15 +62,8 @@ export function RecordResultTable(props: Props) {
   const drill = drillState && drillState.signature === signature ? drillState : null;
   // 内訳に渡すセル(見出しと同じ並び)。
   const cells = useMemo(
-    () =>
-      rows.map(({ patient, fixed, values }) => [
-        patient.patientNumber,
-        patient.name,
-        ...patientColumns.map((column) => String(patientCell(patient, column) ?? "")),
-        ...fixed,
-        ...values,
-      ]),
-    [rows, patientColumns],
+    () => recordTableCells(rows, patientColumns, attributes),
+    [rows, patientColumns, attributes],
   );
   const patientIds = useMemo(() => rows.map((row) => row.patient.patientId), [rows]);
   const drilledRows = drill ? drill.indices.map((i) => rows[i]).filter(Boolean) : rows;
@@ -97,13 +91,7 @@ export function RecordResultTable(props: Props) {
             <button
               type="button"
               onClick={() =>
-                downloadBlob(
-                  csvBlob(
-                    header,
-                    drill.indices.map((i) => cells[i]).filter(Boolean),
-                  ),
-                  `extract_subset_${today()}.csv`,
-                )
+                downloadBlob(recordTableCsv(header, patientColumns, drilledRows, attributes), `extract_subset_${today()}.csv`)
               }
             >
               CSV
@@ -113,11 +101,11 @@ export function RecordResultTable(props: Props) {
             </button>
           </div>
         )}
-        <ListTable {...props} rows={drilledRows} />
+        <ListTable {...props} header={fullHeader} attributes={attributes} rows={drilledRows} />
       </div>
       <div hidden={view !== "breakdown"}>
         <RecordBreakdownView
-          header={header}
+          header={fullHeader}
           cells={cells}
           patientIds={patientIds}
           settings={props.breakdown ?? localBreakdown}
@@ -132,8 +120,14 @@ export function RecordResultTable(props: Props) {
   );
 }
 
-/** 患者番号・氏名(カルテへのリンク)・患者の列・固定列・項目の列の順に並べ、先頭 RECORD_DISPLAY_LIMIT 行だけを出す。 */
-function ListTable({ header, patientColumns, rows, emptyLabel }: Props) {
+/** 患者番号・氏名(カルテへのリンク)・患者の列・属性・固定列・項目の列の順に並べ、先頭 RECORD_DISPLAY_LIMIT 行だけを出す。 */
+function ListTable({
+  header,
+  patientColumns,
+  rows,
+  emptyLabel,
+  attributes,
+}: Props & { attributes: PatientAttribute[] }) {
   return (
     <div className="extract-results__table-wrap">
       <table className="master-search__table extract-results__table template-extract__table">
@@ -154,6 +148,11 @@ function ListTable({ header, patientColumns, rows, emptyLabel }: Props) {
               {patientColumns.map((column) => (
                 <td key={column} className={column === "address" ? undefined : "extract-results__nowrap"}>
                   {patientCell(patient, column)}
+                </td>
+              ))}
+              {attributes.map((attribute) => (
+                <td key={`attribute-${attribute.label}`} className="extract-results__nowrap">
+                  {attribute.valueOf(patient.patientId)}
                 </td>
               ))}
               {fixed.map((cell, index) => (

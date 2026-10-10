@@ -505,5 +505,125 @@
         ]
       }
     }
+  },
+  {
+    "name": "HbA1c 8以上 薬効群別の推移",
+    "tab": "lab",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 730
+      },
+      "patient_query_name": "HbA1c 8.0以上(180日)",
+      "items": [
+        {
+          "key": "lab:160010010",
+          "source": "lab",
+          "name": "HbA1c",
+          "unit": "%",
+          "codings": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+              "code": "160010010",
+              "display": "HbA1c"
+            }
+          ]
+        }
+      ],
+      "mode": "day",
+      "aggregates": [
+        "latest"
+      ],
+      "strata": [
+        {
+          "key": "su",
+          "label": "SU薬",
+          "kind": "medication",
+          "drug_classes": [
+            {
+              "code": "3961",
+              "name": "スルフォニル尿素系製剤"
+            }
+          ]
+        },
+        {
+          "key": "bg",
+          "label": "ビグアナイド",
+          "kind": "medication",
+          "drug_classes": [
+            {
+              "code": "3962",
+              "name": "ビグアナイド系製剤"
+            }
+          ]
+        },
+        {
+          "key": "other",
+          "label": "その他の糖尿病薬",
+          "kind": "medication",
+          "drug_classes": [
+            {
+              "code": "3969",
+              "name": "その他の糖尿病用剤"
+            }
+          ]
+        }
+      ],
+      "strata_only": true,
+      "breakdown": {
+        "date": "日付",
+        "grain": "month",
+        "rows": "period",
+        "columns": "群",
+        "value": "HbA1c(%)",
+        "metric": "mean",
+        "split_multi": true
+      }
+    }
+  },
+  {
+    "name": "医師別 HbA1c コントロール",
+    "tab": "lab",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 365
+      },
+      "items": [
+        {
+          "key": "lab:160010010",
+          "source": "lab",
+          "name": "HbA1c",
+          "unit": "%",
+          "codings": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+              "code": "160010010",
+              "display": "HbA1c"
+            }
+          ]
+        }
+      ],
+      "mode": "patient",
+      "aggregates": [
+        "latest",
+        "delta"
+      ],
+      "attending": "outpatient",
+      "breakdown": {
+        "date": "",
+        "rows": "担当医",
+        "columns": "HbA1c(%) 最新",
+        "bins": {
+          "HbA1c(%) 最新": [
+            7,
+            8
+          ]
+        },
+        "ratio": "row"
+      }
+    }
   }
 ]

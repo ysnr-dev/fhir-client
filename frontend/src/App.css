@@ -9266,6 +9266,27 @@ input.lot-number-cell__input.is-invalid {
   color: var(--text);
 }
 
+/* 列に分けた内訳の推移(列の値ごとの折れ線)。色は .patient-chart__s1〜s8 の --chart-series。 */
+.extract-breakdown-chart--series {
+  max-width: 880px;
+}
+
+.extract-breakdown-chart__legend {
+  margin: 0 0 4px;
+}
+
+.extract-breakdown-chart__series-tooltip {
+  transform: translate(-50%, 0);
+  align-items: flex-start;
+  z-index: 2;
+  font-size: 12px;
+}
+
+.extract-breakdown-chart__series-tooltip .patient-chart__swatch {
+  width: 12px;
+  height: 12px;
+}
+
 /* 内訳のセルの数。押すと一覧をそのセルの記録に絞る。 */
 .extract-breakdown__drill {
   height: auto;
@@ -9328,7 +9349,8 @@ input.lot-number-cell__input.is-invalid {
   margin-bottom: 8px;
 }
 
-.extract-breakdown__controls select {
+.extract-breakdown__controls select,
+.extract-breakdown__bins {
   font: inherit;
   font-size: 14px;
   padding: 4px 6px;
@@ -9336,6 +9358,10 @@ input.lot-number-cell__input.is-invalid {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-h);
+}
+
+.extract-breakdown__bins {
+  width: 8em;
 }
 
 /* 検査オーダー関連マスタ ------------------------------------------------- */

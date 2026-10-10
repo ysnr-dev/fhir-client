@@ -210,6 +210,11 @@ async function fetchPatients(
   );
 }
 
+export interface ExtractRunOptions {
+  /** 該当した患者の id と条件ごとの記録だけが要るとき(群分け)。患者の中身を読まない。 */
+  skipPatients?: boolean;
+}
+
 export interface ExtractRunState {
   running: boolean;
   progress: Record<string, LeafProgress>;
@@ -227,7 +232,11 @@ export function useExtractRun() {
   const abortRef = useRef<AbortController | null>(null);
 
   const run = useCallback(
-    async (body: ExtractQueryBody, labelOf: (leaf: ExtractLeaf) => string): Promise<ExtractResult | null> => {
+    async (
+      body: ExtractQueryBody,
+      labelOf: (leaf: ExtractLeaf) => string,
+      options: ExtractRunOptions = {},
+    ): Promise<ExtractResult | null> => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -302,7 +311,8 @@ export function useExtractRun() {
           throw new ExtractLimitError(`該当者が ${EXTRACT_MAX_PATIENTS} 人を超えました。条件を絞ってください。`);
         }
         const patients = new Map<string, fhir4.Patient>();
-        await fetchPatients([...ids], context, patients);
+        // 患者属性を手元で当てる条件が無ければ、患者の中身が要らない呼び出し(群分け)では読まない。
+        if (!options.skipPatients || filterKeys.size > 0) await fetchPatients([...ids], context, patients);
         if (filterKeys.size > 0) {
           const day = today();
           for (const leaf of leaves.filter((l) => filterKeys.has(l.key))) {
