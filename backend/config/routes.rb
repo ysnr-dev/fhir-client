@@ -378,6 +378,10 @@ Rails.application.routes.draw do
     resources :dpc_stem7_codes, only: %i[index] do
       collection { post :import }
     end
+    # 看護必要度の A・C 項目に当たるレセプト電算処理システム用コード(別紙7 別表1)と A3 の除外薬剤(別表2)。
+    resources :nursing_acuity_codes, only: %i[index] do
+      collection { post :import }
+    end
     # 診断群分類(14 桁)の判定(保存しない)と、分類・点数の閲覧。
     post "dpc/coding", to: "dpc_codings#create"
     get "dpc/classifications", to: "dpc_classifications#index"

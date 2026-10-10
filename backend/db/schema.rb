@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_10_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_10_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1618,6 +1618,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_10_000000) do
     t.index ["code_16"], name: "index_master_nursing_acts_on_code_16"
     t.index ["level1_code", "level2_code", "level3_code"], name: "index_master_nursing_acts_on_levels"
     t.index ["manage_no"], name: "index_master_nursing_acts_on_manage_no", unique: true
+  end
+
+  create_table "master_nursing_acuity_codes", force: :cascade do |t|
+    t.string "kind", null: false
+    t.string "item_code", null: false
+    t.string "item_label"
+    t.string "code", null: false
+    t.string "name"
+    t.boolean "form_i_only", default: false, null: false
+    t.integer "days"
+    t.integer "display_order", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["kind", "code"], name: "index_master_nursing_acuity_codes_on_kind_and_code"
   end
 
   create_table "master_nursing_observation_results", force: :cascade do |t|

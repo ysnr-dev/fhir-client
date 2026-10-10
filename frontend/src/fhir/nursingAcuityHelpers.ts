@@ -5,7 +5,9 @@ import { wardExtension, wardOf } from "./orderHeader";
 import { isRadiotherapyFraction } from "./radiotherapyResultHelpers";
 import { isSurgeryProcedure } from "./surgeryResultHelpers";
 import { isTransfusionProcedure } from "./transfusionResultHelpers";
-import { referenceId } from "./shared";
+import { categoryCoding, referenceId } from "./shared";
+import { rpActiveDays } from "./medicationScheduleHelpers";
+import { groupByRp, SETTING_SYSTEM } from "./prescriptionHelpers";
 
 // 重症度、医療・看護必要度(docs/nursing-acuity-design.md)。
 //
@@ -488,48 +490,144 @@ function done(procedure: fhir4.Procedure): boolean {
   return procedure.status === "completed" || procedure.status === "in-progress";
 }
 
+function administered(ma: fhir4.MedicationAdministration): boolean {
+  return ma.status === "completed" || ma.status === "in-progress";
+}
+
+function administeredDay(ma: fhir4.MedicationAdministration): string {
+  return (ma.effectivePeriod?.start ?? ma.effectiveDateTime ?? "").slice(0, 10);
+}
+
+const RECEIPT_CODE = /^\d{9}$/;
+
+/** coding のうちレセプト電算処理システム用コード(9 桁)のもの。 */
+function receiptCodings(concept: fhir4.CodeableConcept | undefined): fhir4.Coding[] {
+  return (concept?.coding ?? []).filter((coding) => RECEIPT_CODE.test(coding.code ?? ""));
+}
+
+/** 実施記録・処方に出てくるレセプト電算コード(別表1・別表2 に問い合わせる対象)。 */
+export function acuityRecordCodes(args: {
+  procedures: fhir4.Procedure[];
+  administrations: fhir4.MedicationAdministration[];
+  prescriptionItems: fhir4.MedicationRequest[];
+}): string[] {
+  const codes = new Set<string>();
+  for (const procedure of args.procedures) receiptCodings(procedure.code).forEach((c) => codes.add(c.code as string));
+  for (const ma of args.administrations) receiptCodings(ma.medicationCodeableConcept).forEach((c) => codes.add(c.code as string));
+  for (const mr of args.prescriptionItems) receiptCodings(mr.medicationCodeableConcept).forEach((c) => codes.add(c.code as string));
+  return [...codes];
+}
+
+/** 評価日の前後で見つかったレセプト電算コード 1 件(どの日に・何という名前で)。 */
+interface CodeOccurrence {
+  code: string;
+  name: string;
+  day: string;
+}
+
+function shortDay(day: string): string {
+  return day.slice(5).replace("-", "/");
+}
+
 /**
- * 実施記録から、その日に「あり」と推せる項目。看護師が確かめて直す前提の初期値で、判定そのものではない
- * (A3 の除外薬剤、A6 の対象薬剤、C の術式の区分は評価の手引きと別表で確かめる)。
- *   A3: その日に施用した注射薬が 3 種類以上(薬剤コードで数える)
- *   A5: 輸血の実施記録   A6⑤: 放射線治療の照射記録   A7: 救急車で搬送された入院の入院日と翌日
- * 手術は C の区分を決められないので、日数の目安(術後何日目か)を hints に並べる。
+ * 実施記録のレセプト電算コードを別表1 と突き合わせて、その日に「あり」と推せる項目(docs/nursing-acuity-design.md §7)。
+ * 評価票の注記どおり、A・C 項目は評価日に実施したコード(C は手術等の当日から項目の日数のあいだ)で決める。
+ * 看護師が確かめて直す前提の初期値で、根拠(コードの名称と日)を添える。
+ *   - 実施記録(Procedure)の診療行為コード、施用(MedicationAdministration)と処方(その日に有効な RP)の医薬品コード
+ *   - A3 は施用した注射薬のうち別表2 の薬剤を除いた種類数が 3 以上
+ *   - A7 は必要度Ⅰでは「救急搬送後の入院」なので、別表1 の A7(必要度Ⅱの「緊急に入院を必要とする状態」)は使わず、
+ *     救急車で搬送された入院の入院日と翌日を推す
+ *   - 別表1 のコードで拾えないときの補い: 輸血の実施記録 → A5、放射線治療の照射記録 → A6⑤
+ * 手術は C の区分を確かめられるよう、術後何日かを hints に並べる。
  */
 export function acuitySuggestions(args: {
   date: string;
   encounter: fhir4.Encounter | undefined;
   procedures: fhir4.Procedure[];
   administrations: fhir4.MedicationAdministration[];
+  prescriptions?: fhir4.ServiceRequest[];
+  prescriptionItems?: fhir4.MedicationRequest[];
+  acuityCodes?: { kind: string; item_code: string; code: string; name: string | null; days: number | null }[];
 }): { suggestions: AcuitySuggestion[]; hints: string[] } {
   const { date, encounter, procedures, administrations } = args;
-  const suggestions: AcuitySuggestion[] = [];
-  const today = procedures.filter((p) => done(p) && performedDay(p) === date);
+  const acuityCodes = args.acuityCodes ?? [];
+  const reasons = new Map<string, string[]>();
+  const add = (item: string, reason: string) => reasons.set(item, [...(reasons.get(item) ?? []), reason]);
 
-  const injectionHubIds = new Set(today.filter(isInjectionProcedure).map((p) => p.id));
-  const drugs = new Set<string>();
-  for (const ma of administrations) {
-    if (ma.status === "not-done" || ma.status === "entered-in-error") continue;
-    if (!injectionHubIds.has(referenceId(ma.partOf?.[0]?.reference))) continue;
-    const coding = ma.medicationCodeableConcept?.coding?.[0];
-    const key = coding?.code ?? ma.medicationCodeableConcept?.text;
-    if (key) drugs.add(key);
+  // 評価日までに見つかったコード(実施記録・施用は実施した日、処方はその日に有効な RP の薬剤)。
+  const occurrences: CodeOccurrence[] = [];
+  const doneProcedures = procedures.filter(done);
+  for (const procedure of doneProcedures) {
+    for (const coding of receiptCodings(procedure.code)) {
+      occurrences.push({ code: coding.code as string, name: coding.display ?? "", day: performedDay(procedure) });
+    }
   }
-  if (drugs.size >= 3) suggestions.push({ code: "A3", reason: `注射薬 ${drugs.size} 種類を施用` });
-  if (today.some(isTransfusionProcedure)) suggestions.push({ code: "A5", reason: "輸血を実施" });
-  if (today.some(isRadiotherapyFraction)) suggestions.push({ code: "A6-5", reason: "放射線治療を照射" });
+  const injectionHubIds = new Set(doneProcedures.filter(isInjectionProcedure).map((p) => p.id));
+  const injectionCodesToday = new Set<string>();
+  for (const ma of administrations) {
+    if (!administered(ma)) continue;
+    const day = administeredDay(ma);
+    for (const coding of receiptCodings(ma.medicationCodeableConcept)) {
+      occurrences.push({ code: coding.code as string, name: coding.display ?? ma.medicationCodeableConcept?.text ?? "", day });
+      if (day === date && injectionHubIds.has(referenceId(ma.partOf?.[0]?.reference))) {
+        injectionCodesToday.add(coding.code as string);
+      }
+    }
+  }
+  const itemsByOrder = new Map<string, fhir4.MedicationRequest[]>();
+  for (const mr of args.prescriptionItems ?? []) {
+    const orderId = referenceId(mr.basedOn?.[0]?.reference);
+    if (orderId) itemsByOrder.set(orderId, [...(itemsByOrder.get(orderId) ?? []), mr]);
+  }
+  for (const order of args.prescriptions ?? []) {
+    if (categoryCoding(order, SETTING_SYSTEM)?.code !== "inpatient") continue;
+    const start = (order.occurrenceDateTime ?? "").slice(0, 10);
+    for (const rp of groupByRp(itemsByOrder.get(order.id ?? "") ?? [])) {
+      if (!rpActiveDays(start, rp).includes(date)) continue;
+      for (const medicine of rp.medicines) {
+        if (RECEIPT_CODE.test(medicine.code)) occurrences.push({ code: medicine.code, name: medicine.name, day: date });
+      }
+    }
+  }
+
+  // 別表1 と突き合わせる。C は当日を含めて項目の日数のあいだ。
+  const itemRows = acuityCodes.filter((row) => row.kind === "item" && row.item_code !== "A7");
+  for (const row of itemRows) {
+    const isC = row.item_code.startsWith("C");
+    const from = isC ? addDays(date, -((row.days ?? 1) - 1)) : date;
+    for (const occurrence of occurrences) {
+      if (occurrence.code !== row.code || occurrence.day < from || occurrence.day > date) continue;
+      const name = row.name || occurrence.name || row.code;
+      add(row.item_code, isC ? `${name}(${shortDay(occurrence.day)})` : name);
+    }
+  }
+
+  // A3: 施用した注射薬のうち、別表2 の薬剤を除いた種類数。
+  const excluded = new Set(acuityCodes.filter((row) => row.kind === "a3_exclusion").map((row) => row.code));
+  const counted = [...injectionCodesToday].filter((code) => !excluded.has(code));
+  if (counted.length >= 3) add("A3", `注射薬 ${counted.length} 種類(別表2 を除く)`);
+
+  const today = doneProcedures.filter((p) => performedDay(p) === date);
+  if (!reasons.has("A5") && today.some(isTransfusionProcedure)) add("A5", "輸血を実施");
+  if (!reasons.has("A6-5") && today.some(isRadiotherapyFraction)) add("A6-5", "放射線治療を照射");
 
   const admission = encounter?.period?.start?.slice(0, 10);
   if (encounter && admission && encounterAdmissionRoute(encounter).ambulance && date >= admission && date <= addDays(admission, 1)) {
-    suggestions.push({ code: "A7", reason: "救急車で搬送された入院" });
+    add("A7", "救急車で搬送された入院");
   }
 
-  const hints = procedures
-    .filter((p) => done(p) && isSurgeryProcedure(p) && performedDay(p) && performedDay(p) <= date)
+  const suggestions = [...reasons.entries()].map(([code, list]) => {
+    const unique = [...new Set(list)];
+    return { code, reason: unique.length > 1 ? `${unique[0]} ほか${unique.length - 1}件` : unique[0] };
+  });
+
+  const hints = doneProcedures
+    .filter((p) => isSurgeryProcedure(p) && performedDay(p) && performedDay(p) <= date)
     .map((p) => {
       const day = performedDay(p);
       const name = p.code?.text ?? p.code?.coding?.[0]?.display ?? "手術";
       const after = diffDays(day, date);
-      return `手術 ${day.slice(5).replace("-", "/")} ${name}(${after === 0 ? "当日" : `術後${after}日`})`;
+      return `手術 ${shortDay(day)} ${name}(${after === 0 ? "当日" : `術後${after}日`})`;
     });
   return { suggestions, hints };
 }

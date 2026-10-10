@@ -37,3 +37,4 @@ export * from "./medicineAttribute";
 export * from "./extractQuery";
 export * from "./patientFolder";
 export * from "./nursingAssignment";
+export * from "./nursingAcuity";

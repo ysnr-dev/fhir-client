@@ -183,6 +183,13 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".xlsx",
   },
   {
+    type: "nursing_acuity_codes",
+    label: "看護必要度 コード一覧（別表1・別表2）",
+    formatHint:
+      "厚生労働省 別紙7 別表1（A・C項目のコード一覧）・別表2（A3の除外薬剤） .xlsx（ファイルごとに全件を入れ替える）",
+    accept: ".xlsx",
+  },
+  {
     type: "nursing_units",
     label: "看護観察 単位テーブル",
     formatHint: "看護観察編 unit-ver.*.txt（Shift_JIS、ヘッダあり・2列）",

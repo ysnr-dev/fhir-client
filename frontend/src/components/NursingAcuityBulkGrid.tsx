@@ -81,8 +81,9 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
 
   // 患者ごとの初期値。評価済みはその値、未評価は前日の B と記録から推した A。
   const rowStates = useMemo<RowState[]>(() => {
-    const procedures = records.data?.procedures ?? [];
-    const administrations = records.data?.administrations ?? [];
+    // 実施記録・処方は病棟の患者ぶんまとめて引いているので、患者ごとに分けて渡す。
+    const ofPatient = <T extends { subject?: fhir4.Reference }>(list: T[] | undefined, patientId: string) =>
+      (list ?? []).filter((resource) => referenceId(resource.subject?.reference) === patientId);
     return rows.map((row) => {
       const own = byPatient.get(row.patientId);
       if (own?.today) {
@@ -92,8 +93,11 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
       const { suggestions } = acuitySuggestions({
         date,
         encounter: row.encounter,
-        procedures: procedures.filter((p) => referenceId(p.subject?.reference) === row.patientId),
-        administrations,
+        procedures: ofPatient(records.data?.procedures, row.patientId),
+        administrations: ofPatient(records.data?.administrations, row.patientId),
+        prescriptions: ofPatient(records.data?.prescriptions, row.patientId),
+        prescriptionItems: ofPatient(records.data?.prescriptionItems, row.patientId),
+        acuityCodes: records.data?.acuityCodes ?? [],
       });
       return {
         row,

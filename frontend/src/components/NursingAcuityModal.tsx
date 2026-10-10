@@ -62,6 +62,9 @@ export function NursingAcuityModal(props: Props) {
             encounter: props.encounter,
             procedures: records.data?.procedures ?? [],
             administrations: records.data?.administrations ?? [],
+            prescriptions: records.data?.prescriptions ?? [],
+            prescriptionItems: records.data?.prescriptionItems ?? [],
+            acuityCodes: records.data?.acuityCodes ?? [],
           })}
         />
       )}

@@ -28,7 +28,8 @@ export type MasterType =
   | "postal_codes"
   | "ctcae_terms"
   | "dpc_tables"
-  | "dpc_stem7_codes";
+  | "dpc_stem7_codes"
+  | "nursing_acuity_codes";
 
 export interface MasterImportResult {
   imported: number;
