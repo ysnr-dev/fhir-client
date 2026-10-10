@@ -11,6 +11,7 @@ import {
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { PressureUlcerHistoryModal } from "../components/PressureUlcerHistoryModal";
 import { QuestionnaireResponseCreatePanel } from "../components/QuestionnaireResponsePanels";
 import { TeamRequestCreatePanel } from "../components/TeamRequestPanels";
 import { TruncatedNotice } from "../components/TruncatedNotice";
@@ -23,6 +24,7 @@ import {
   firstEvaluationsByWound,
   latestEvaluationsByWound,
   pressureUlcerMonthStats,
+  woundEvaluations,
   woundOpenOn,
 } from "../fhir/pressureUlcerHelpers";
 import { useWardInpatients } from "../hooks/useWardInpatients";
@@ -166,7 +168,9 @@ function PatientsTab({ date, wardId, templateUrl, teamId }: { date: string; ward
   }, [responses.data, inpatients.rows, date]);
 
   // 開いているモーダル(評価 / チーム依頼)と対象の患者。
-  const [dialog, setDialog] = useState<{ kind: "evaluate" | "team-request"; patientId: string; name: string } | null>(null);
+  const [dialog, setDialog] = useState<
+    { kind: "evaluate" | "team-request" | "history"; patientId: string; name: string; woundKey?: string; site?: string } | null
+  >(null);
 
   return (
     <>
@@ -227,6 +231,20 @@ function PatientsTab({ date, wardId, templateUrl, teamId }: { date: string; ward
                         type="button"
                         onClick={() =>
                           setDialog({
+                            kind: "history",
+                            patientId: evaluation.patientId,
+                            name: row?.patient ? displayName(row.patient) : evaluation.patientId,
+                            woundKey: key,
+                            site: evaluation.siteLabel,
+                          })
+                        }
+                      >
+                        経過
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDialog({
                             kind: "evaluate",
                             patientId: evaluation.patientId,
                             name: row?.patient ? displayName(row.patient) : evaluation.patientId,
@@ -277,6 +295,13 @@ function PatientsTab({ date, wardId, templateUrl, teamId }: { date: string; ward
             onSaved={() => setDialog(null)}
           />
         </Modal>
+      )}
+      {dialog?.kind === "history" && dialog.woundKey && (
+        <PressureUlcerHistoryModal
+          title={`褥瘡の経過 - ${dialog.name}(${dialog.site || "部位なし"})`}
+          evaluations={woundEvaluations(responses.data?.responses ?? [], dialog.woundKey)}
+          onClose={() => setDialog(null)}
+        />
       )}
       {dialog?.kind === "team-request" && teamId && (
         <Modal title={`チーム依頼 - ${dialog.name}`} onClose={() => setDialog(null)} className="modal--wide">

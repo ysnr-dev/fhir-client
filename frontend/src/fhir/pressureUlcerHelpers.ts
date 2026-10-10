@@ -38,6 +38,19 @@ export const DESIGNR_LINK_IDS = {
   severity: "designr_severity",
 } as const;
 
+/** DESIGN-R の 7 項目(経過の表の行の順)。 */
+export const DESIGNR_ITEMS = [
+  { key: "depth", linkId: DESIGNR_LINK_IDS.depth, label: "深さ" },
+  { key: "exudate", linkId: DESIGNR_LINK_IDS.exudate, label: "滲出液" },
+  { key: "size", linkId: DESIGNR_LINK_IDS.size, label: "大きさ" },
+  { key: "inflammation", linkId: DESIGNR_LINK_IDS.inflammation, label: "炎症・感染" },
+  { key: "granulation", linkId: DESIGNR_LINK_IDS.granulation, label: "肉芽組織" },
+  { key: "necrotic", linkId: DESIGNR_LINK_IDS.necrotic, label: "壊死組織" },
+  { key: "pocket", linkId: DESIGNR_LINK_IDS.pocket, label: "ポケット" },
+] as const;
+
+export type DesignrItemKey = (typeof DESIGNR_ITEMS)[number]["key"];
+
 /** 1 回の評価(回答 1 件)を読んだもの。 */
 export interface PressureUlcerEvaluation {
   responseId: string;
@@ -52,8 +65,14 @@ export interface PressureUlcerEvaluation {
   state: "open" | "healed" | "";
   healedDate: string;
   depth: string;
+  /** DESIGN-R の 7 項目の記号(d2・E6 など。未記入は空)。 */
+  codes: Record<DesignrItemKey, string>;
   total: number | null;
   severity: string;
+  /** 所見・処置。 */
+  note: string;
+  /** 記入日時(同じ日の評価の並びに使う)。 */
+  authoredAt: string;
 }
 
 function answerOf(items: fhir4.QuestionnaireResponseItem[] | undefined, linkId: string): fhir4.QuestionnaireResponseItemAnswer | undefined {
@@ -96,9 +115,25 @@ export function parsePressureUlcerResponse(response: fhir4.QuestionnaireResponse
     state: state === "healed" ? "healed" : state === "open" ? "open" : "",
     healedDate: stringOf(items, "pu_healed_date"),
     depth: codeOf(items, DESIGNR_LINK_IDS.depth),
+    codes: Object.fromEntries(DESIGNR_ITEMS.map((item) => [item.key, codeOf(items, item.linkId)])) as Record<DesignrItemKey, string>,
     total: typeof total === "number" ? total : null,
     severity: stringOf(items, DESIGNR_LINK_IDS.severity),
+    note: stringOf(items, "designr_note"),
+    authoredAt: response.authored ?? "",
   };
+}
+
+/** DESIGN-R の記号が重い側(大文字)か。経過の表で強調する。 */
+export function isSevereDesignrCode(code: string): boolean {
+  return /^[A-Z]/.test(code);
+}
+
+/** 創(woundKeyOf)の評価をすべて、記入日時の古い順に。 */
+export function woundEvaluations(responses: fhir4.QuestionnaireResponse[], woundKey: string): PressureUlcerEvaluation[] {
+  return responses
+    .map(parsePressureUlcerResponse)
+    .filter((evaluation) => evaluation.patientId && woundKeyOf(evaluation) === woundKey)
+    .sort((a, b) => a.authoredAt.localeCompare(b.authoredAt));
 }
 
 /** d2 以上(真皮までの損傷より深い)か。DTI 疑い・判定不能は含めない。 */

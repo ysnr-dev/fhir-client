@@ -17330,6 +17330,48 @@ button.nursing-worksheet__mark {
 
 /* 一覧の依頼目的は 1 行に丸める。全文は行の「表示」で見る(title 属性にも入れて
    あるので、マウスを載せれば途中までは読める)。 */
+/* 褥瘡 1 創の DESIGN-R の経過。評価日を列、項目を行にし、重い側の記号(大文字)を赤くする。 */
+.pressure-ulcer-history__chart {
+  margin-bottom: 12px;
+}
+
+.pressure-ulcer-history {
+  width: auto;
+}
+
+.pressure-ulcer-history .pressure-ulcer-history__label {
+  text-align: left;
+  white-space: nowrap;
+  font-weight: normal;
+}
+
+.pressure-ulcer-history__cell {
+  min-width: 4.5em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pressure-ulcer-history__severe {
+  color: var(--danger);
+  font-weight: bold;
+}
+
+.pressure-ulcer-history__total td {
+  font-weight: bold;
+}
+
+.pressure-ulcer-history__author {
+  font-size: 12px;
+}
+
+.pressure-ulcer-history__note {
+  min-width: 8em;
+  max-width: 16em;
+  font-size: 12px;
+  white-space: pre-wrap;
+  vertical-align: top;
+}
+
 /* チーム依頼一覧。次回回診日が来ている行の日付を強調する。 */
 .team-worklist__due {
   color: var(--danger);
