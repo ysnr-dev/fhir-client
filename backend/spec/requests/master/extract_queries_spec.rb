@@ -33,6 +33,18 @@ RSpec.describe "Master::ExtractQueries", type: :request do
 
   def errors_text = body["errors"].to_s
 
+  describe "GET /master/extract_queries (team)" do
+    it "チームの条件(スクリーニング)を team_id で引き、院内共通と並べて返す" do
+      create_query(valid_root, scope: "team", owner_id: "team-1", name: "NST スクリーニング")
+      expect(response).to have_http_status(:created), response.body
+      create_query(valid_root, scope: "team", owner_id: "team-2", name: "ICT スクリーニング")
+      create_query(valid_root, name: "共通")
+
+      get "/master/extract_queries", params: { team_id: "team-1" }
+      expect(body["items"].map { |i| i["name"] }).to contain_exactly("NST スクリーニング", "共通")
+    end
+  end
+
   describe "POST /master/extract_queries" do
     it "入れ子の条件を保存して返す" do
       create_query(valid_root)

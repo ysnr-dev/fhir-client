@@ -1,0 +1,760 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01",
+  "version": "1.0.0",
+  "name": "PU_DESIGNR_01",
+  "title": "褥瘡 DESIGN-R評価",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "褥瘡の創 1 つにつき 1 回答で、評価のたびに新しい回答を書く(前回値複写が使える)。DESIGN-R 2020 の 7 項目(選択肢のコードは記号そのもの)と合計(深さを含めない 0〜66 点)・重症度(大文字の項目が 1 つでもあれば重症)を持ち、回答から Observation を生成する。褥瘡管理(/pressure-ulcer)の保有患者と発生率は、部位・発生区分・発生日・状態から数える。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "3f0c9a52-7d61-4b8e-9a2c-5e1b7c4d8f02",
+        "display": "褥瘡"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "name": "designrTotal",
+        "language": "text/fhirpath",
+        "expression": "descendants().where(linkId = 'designr_e' or linkId = 'designr_s' or linkId = 'designr_i' or linkId = 'designr_g' or linkId = 'designr_n' or linkId = 'designr_p').answer.value.select(code.replaceMatches('[^0-9]', '').toInteger()).sum()"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "name": "designrSevere",
+        "language": "text/fhirpath",
+        "expression": "descendants().where(linkId.startsWith('designr_')).answer.value.select(code).where($this.matches('^[A-Z]')).exists()"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract",
+      "valueBoolean": true
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observation-extract-category",
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+            "code": "survey"
+          }
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp_wound",
+      "type": "group",
+      "text": "創",
+      "item": [
+        {
+          "linkId": "pu_site",
+          "type": "choice",
+          "text": "部位",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "sacrum",
+                "display": "仙骨部"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "coccyx",
+                "display": "尾骨部"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ischium",
+                "display": "坐骨部"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "trochanter",
+                "display": "大転子部"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "heel",
+                "display": "踵部"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "other",
+                "display": "その他"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-SITE",
+              "display": "褥瘡の部位"
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp_site_other",
+              "type": "group",
+              "text": "部位(その他)",
+              "enableWhen": [
+                {
+                  "question": "pu_site",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "other"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "pu_site_other",
+                  "type": "string",
+                  "text": "部位の名称"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "pu_onset_kind",
+          "type": "choice",
+          "text": "発生区分",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "brought",
+                "display": "持込(入院時に保有)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "acquired",
+                "display": "院内発生"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-ONSET-KIND",
+              "display": "褥瘡の発生区分"
+            }
+          ]
+        },
+        {
+          "linkId": "pu_onset_date",
+          "type": "date",
+          "text": "発生日"
+        },
+        {
+          "linkId": "pu_state",
+          "type": "choice",
+          "text": "状態",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "open",
+                "display": "継続"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "healed",
+                "display": "治癒"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-STATE",
+              "display": "褥瘡の状態"
+            }
+          ]
+        },
+        {
+          "linkId": "pu_healed_date",
+          "type": "date",
+          "text": "治癒日"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_designr",
+      "type": "group",
+      "text": "DESIGN-R 2020",
+      "item": [
+        {
+          "linkId": "designr_d",
+          "type": "choice",
+          "text": "深さ(Depth)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "d0",
+                "display": "d0 皮膚損傷・発赤なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "d1",
+                "display": "d1 持続する発赤"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "d2",
+                "display": "d2 真皮までの損傷"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "D3",
+                "display": "D3 皮下組織までの損傷"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "D4",
+                "display": "D4 皮下組織を超える損傷"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "D5",
+                "display": "D5 関節腔・体腔に至る損傷"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "DDTI",
+                "display": "DDTI 深部損傷褥瘡(DTI)疑い"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "DU",
+                "display": "DU 深さ判定が不能"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-DESIGNR-DEPTH",
+              "display": "DESIGN-R 深さ"
+            }
+          ]
+        },
+        {
+          "linkId": "designr_e",
+          "type": "choice",
+          "text": "滲出液(Exudate)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "e0",
+                "display": "e0 なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "e1",
+                "display": "e1 少量(毎日の交換を要しない)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "e3",
+                "display": "e3 中等量(1日1回の交換)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "E6",
+                "display": "E6 多量(1日2回以上の交換)"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-DESIGNR-EXUDATE",
+              "display": "DESIGN-R 滲出液"
+            }
+          ]
+        },
+        {
+          "linkId": "designr_s",
+          "type": "choice",
+          "text": "大きさ(Size)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "s0",
+                "display": "s0 皮膚損傷なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "s3",
+                "display": "s3 4未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "s6",
+                "display": "s6 4以上16未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "s8",
+                "display": "s8 16以上36未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "s9",
+                "display": "s9 36以上64未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "s12",
+                "display": "s12 64以上100未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "S15",
+                "display": "S15 100以上"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-DESIGNR-SIZE",
+              "display": "DESIGN-R 大きさ"
+            }
+          ]
+        },
+        {
+          "linkId": "designr_i",
+          "type": "choice",
+          "text": "炎症・感染(Inflammation/Infection)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "i0",
+                "display": "i0 局所の炎症徴候なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "i1",
+                "display": "i1 局所の炎症徴候あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "I3C",
+                "display": "I3C 臨界的定着疑い"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "I3",
+                "display": "I3 局所の明らかな感染徴候あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "I9",
+                "display": "I9 全身的影響あり"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-DESIGNR-INFLAMMATION",
+              "display": "DESIGN-R 炎症・感染"
+            }
+          ]
+        },
+        {
+          "linkId": "designr_g",
+          "type": "choice",
+          "text": "肉芽組織(Granulation)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "g0",
+                "display": "g0 創が治癒した場合・浅い・DTI疑い"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "g1",
+                "display": "g1 良性肉芽が90%以上"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "g3",
+                "display": "g3 良性肉芽が50%以上90%未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "G4",
+                "display": "G4 良性肉芽が10%以上50%未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "G5",
+                "display": "G5 良性肉芽が10%未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "G6",
+                "display": "G6 良性肉芽が全く形成されていない"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-DESIGNR-GRANULATION",
+              "display": "DESIGN-R 肉芽組織"
+            }
+          ]
+        },
+        {
+          "linkId": "designr_n",
+          "type": "choice",
+          "text": "壊死組織(Necrotic tissue)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "n0",
+                "display": "n0 なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N3",
+                "display": "N3 柔らかい壊死組織あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N6",
+                "display": "N6 硬く厚い密着した壊死組織あり"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-DESIGNR-NECROTIC",
+              "display": "DESIGN-R 壊死組織"
+            }
+          ]
+        },
+        {
+          "linkId": "designr_p",
+          "type": "choice",
+          "text": "ポケット(Pocket)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "p0",
+                "display": "p0 なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "P6",
+                "display": "P6 4未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "P9",
+                "display": "P9 4以上16未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "P12",
+                "display": "P12 16以上36未満"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "P24",
+                "display": "P24 36以上"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-DESIGNR-POCKET",
+              "display": "DESIGN-R ポケット"
+            }
+          ]
+        },
+        {
+          "linkId": "designr_total",
+          "type": "integer",
+          "text": "合計(深さを除く)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "点",
+                "display": "点"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%designrTotal"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-DESIGNR-TOTAL",
+              "display": "DESIGN-R 合計"
+            }
+          ]
+        },
+        {
+          "linkId": "designr_severity",
+          "type": "string",
+          "text": "重症度",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "iif(%designrSevere, '重症', '軽症')"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NURS-PU-DESIGNR-SEVERITY",
+              "display": "DESIGN-R 重症度"
+            }
+          ]
+        },
+        {
+          "linkId": "designr_note",
+          "type": "text",
+          "text": "所見・処置"
+        }
+      ]
+    }
+  ]
+}

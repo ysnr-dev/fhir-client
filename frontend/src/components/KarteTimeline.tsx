@@ -43,6 +43,7 @@ import {
   summarizeInjectionServiceRequest,
 } from "../fhir/injectionHelpers";
 import { consultReply } from "../fhir/consultOrderHelpers";
+import { teamRequestLastRound } from "../fhir/teamRequestHelpers";
 import { summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
 import {
   canCancelInjection,
@@ -583,6 +584,18 @@ const KarteCard = memo(function KarteCard({
                 }
               >
                 回答表示
+              </button>
+            )}
+            {/* チーム依頼の回診記録は診療記録なので、最後の記録を診療記録として開く。 */}
+            {item.kind === "team-request" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={!teamRequestLastRound(item.serviceRequest).roundId}
+                title={teamRequestLastRound(item.serviceRequest).roundId ? undefined : "このチーム依頼にはまだ回診記録がありません"}
+                onClick={() => onOpenDetail({ kind: "note", id: teamRequestLastRound(item.serviceRequest).roundId })}
+              >
+                回診記録表示
               </button>
             )}
             {/* 依頼と治療処方の行き来(docs/radiotherapy-order-design.md §2.5)。参照は治療処方の

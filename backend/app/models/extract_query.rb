@@ -272,11 +272,12 @@ class ExtractQuery < ApplicationRecord
 
   def patient_tab? = tab == PATIENT_TAB
 
-  # 画面が同時に見る 3 つの持ち主(ChartDefinition.roots_for と同じ)。
-  def self.roots_for(department_id:, practitioner_id:)
+  # 画面が同時に見る持ち主(ChartDefinition.roots_for と同じ)。チームの条件はスクリーニング一覧。
+  def self.roots_for(department_id:, practitioner_id:, team_ids: [])
     rel = where(scope: "facility")
     rel = rel.or(where(scope: "department", owner_id: department_id)) if department_id.present?
     rel = rel.or(where(scope: "practitioner", owner_id: practitioner_id)) if practitioner_id.present?
+    rel = rel.or(where(scope: "team", owner_id: team_ids)) if team_ids.present?
     rel
   end
 

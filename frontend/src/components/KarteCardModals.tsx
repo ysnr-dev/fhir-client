@@ -16,6 +16,7 @@ import {
   useEndoscopyPerformDetail,
   useMealOrderDetail,
   useConsultOrderDetail,
+  useTeamRequestDetail,
   useRadiotherapyOrderDetail,
   useRadiotherapyCourseReviews,
   useTreatmentAdverseEvents,
@@ -80,6 +81,8 @@ import { TransfusionOrderDetailPanel } from "./TransfusionOrderDetailPanel";
 import { RehabOrderDetailPanel } from "./RehabOrderDetailPanel";
 import { NutritionGuidanceOrderDetailPanel } from "./NutritionGuidanceOrderDetailPanel";
 import { ConsultOrderDetailPanel } from "./ConsultOrderDetailPanel";
+import { TeamRequestDetailPanel } from "./TeamRequestDetailPanel";
+import { teamRequestTasksByOrderId } from "../fhir/teamRequestTaskHelpers";
 import { RadiotherapyOrderDetailPanel } from "./RadiotherapyOrderDetailPanel";
 import { useRadiotherapyOrderInitialValues } from "../hooks/useRadiotherapyOrderInitialValues";
 import { rehabPerformsByOrderId } from "../fhir/rehabResultHelpers";
@@ -131,6 +134,7 @@ const ORDER_DETAILS: Record<OrderKind, ComponentType<OrderDetailProps>> = {
   "nutrition-guidance-order": NutritionGuidanceOrderDetail,
   "medication-guidance-order": MedicationGuidanceOrderDetail,
   "consult-order": ConsultOrderDetail,
+  "team-request": TeamRequestDetail,
 };
 
 function OrderDetail({ kind, ...props }: OrderDetailProps & { kind: OrderKind }) {
@@ -916,6 +920,7 @@ const ORDER_JSONS: Record<OrderKind, ComponentType<{ srId: string }>> = {
   "nutrition-guidance-order": NutritionGuidanceOrderJson,
   "medication-guidance-order": MedicationGuidanceOrderJson,
   "consult-order": ConsultOrderJson,
+  "team-request": TeamRequestJson,
 };
 
 function OrderJson({ kind, srId }: { kind: OrderKind; srId: string }) {
@@ -1212,6 +1217,48 @@ function RadiotherapyOrderDetail({
 
 function RadiotherapyOrderJson({ srId }: { srId: string }) {
   const detail = useRadiotherapyOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+    </>
+  );
+}
+
+// チーム依頼も明細を持たないヘッダ 1 件。進捗は同じ検索に _revinclude で届く。
+function TeamRequestDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useTeamRequestDetail(srId);
+  const serviceRequest = serviceRequestsOf(detail.data?.data).find((request) => request.id === srId);
+  const task = teamRequestTasksByOrderId(resourcesOfType<fhir4.Task>(detail.data?.data, "Task")).get(srId);
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定されたチーム依頼は別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <TeamRequestDetailPanel serviceRequest={serviceRequest} task={task} problemsById={problemsById} />
+      ) : (
+        !detail.error && <NotFound label="チーム依頼" />
+      )}
+    </>
+  );
+}
+
+function TeamRequestJson({ srId }: { srId: string }) {
+  const detail = useTeamRequestDetail(srId);
 
   return (
     <>

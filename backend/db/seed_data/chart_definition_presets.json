@@ -1,148 +1,695 @@
 [
   {
     "name": "糖尿病",
-    "axis": { "unit": "month", "columns": 24 },
+    "axis": {
+      "unit": "month",
+      "columns": 24
+    },
     "items": [
-      { "lab": "160010010" },
-      { "lab": "160019410" },
-      { "lab": "160019210" },
-      { "vital": "29463-7" }
+      {
+        "lab": "160010010"
+      },
+      {
+        "lab": "160019410"
+      },
+      {
+        "lab": "160019210"
+      },
+      {
+        "vital": "29463-7"
+      }
     ],
     "drugs": [
-      { "name": "メトホルミン", "yj7": "3962002" },
-      { "name": "プレドニゾロン", "yj7": "2456001" }
+      {
+        "name": "メトホルミン",
+        "yj7": "3962002"
+      },
+      {
+        "name": "プレドニゾロン",
+        "yj7": "2456001"
+      }
     ],
-    "events": ["condition", "encounter"],
+    "events": [
+      "condition",
+      "encounter"
+    ],
     "overlay": false
   },
   {
     "name": "慢性腎臓病",
-    "axis": { "unit": "month", "columns": 36 },
+    "axis": {
+      "unit": "month",
+      "columns": 36
+    },
     "items": [
-      { "lab": "160019210" },
-      { "lab": "160019010" },
-      { "lab": "160021410" },
-      { "lab": "160004810-01" },
-      { "lab": "160008010-03" },
-      { "vital": "85354-9" }
+      {
+        "lab": "160019210"
+      },
+      {
+        "lab": "160019010"
+      },
+      {
+        "lab": "160021410"
+      },
+      {
+        "lab": "160004810-01"
+      },
+      {
+        "lab": "160008010-03"
+      },
+      {
+        "vital": "85354-9"
+      }
     ],
     "drugs": [],
-    "events": ["condition", "encounter", "exam"],
+    "events": [
+      "condition",
+      "encounter",
+      "exam"
+    ],
     "overlay": false
   },
   {
     "name": "心不全",
-    "axis": { "unit": "month", "columns": 12 },
+    "axis": {
+      "unit": "month",
+      "columns": 12
+    },
     "items": [
-      { "vital": "29463-7" },
-      { "vital": "85354-9" },
-      { "lab": "160162350" },
-      { "lab": "160181250" },
-      { "lab": "160019210" },
-      { "lab": "160021410" },
-      { "lab": "160021110-01" }
+      {
+        "vital": "29463-7"
+      },
+      {
+        "vital": "85354-9"
+      },
+      {
+        "lab": "160162350"
+      },
+      {
+        "lab": "160181250"
+      },
+      {
+        "lab": "160019210"
+      },
+      {
+        "lab": "160021410"
+      },
+      {
+        "lab": "160021110-01"
+      }
     ],
     "drugs": [
-      { "name": "フロセミド", "yj7": "2139005" },
-      { "name": "スピロノラクトン", "yj7": "2133001" },
-      { "name": "トルバプタン", "yj7": "2139011" }
+      {
+        "name": "フロセミド",
+        "yj7": "2139005"
+      },
+      {
+        "name": "スピロノラクトン",
+        "yj7": "2133001"
+      },
+      {
+        "name": "トルバプタン",
+        "yj7": "2139011"
+      }
     ],
-    "events": ["condition", "encounter"],
+    "events": [
+      "condition",
+      "encounter"
+    ],
     "overlay": false
   },
   {
     "name": "関節リウマチ",
-    "axis": { "unit": "month", "columns": 24 },
+    "axis": {
+      "unit": "month",
+      "columns": 24
+    },
     "items": [
-      { "lab": "160054710" },
-      { "lab": "160007610" },
-      { "lab": "160173150" },
-      { "lab": "160008010-01" },
-      { "lab": "160008010-03" }
+      {
+        "lab": "160054710"
+      },
+      {
+        "lab": "160007610"
+      },
+      {
+        "lab": "160173150"
+      },
+      {
+        "lab": "160008010-01"
+      },
+      {
+        "lab": "160008010-03"
+      }
     ],
     "drugs": [
-      { "name": "メトトレキサート", "yj7": "3999016" },
-      { "name": "プレドニゾロン", "yj7": "2456001" }
+      {
+        "name": "メトトレキサート",
+        "yj7": "3999016"
+      },
+      {
+        "name": "プレドニゾロン",
+        "yj7": "2456001"
+      }
     ],
-    "events": ["condition", "encounter", "injection"],
+    "events": [
+      "condition",
+      "encounter",
+      "injection"
+    ],
     "overlay": false
   },
   {
     "name": "甲状腺",
-    "axis": { "unit": "month", "columns": 24 },
+    "axis": {
+      "unit": "month",
+      "columns": 24
+    },
     "items": [
-      { "lab": "160031710" },
-      { "lab": "160033310" }
+      {
+        "lab": "160031710"
+      },
+      {
+        "lab": "160033310"
+      }
     ],
     "drugs": [
-      { "name": "レボチロキシン", "yj7": "2431004" },
-      { "name": "チアマゾール", "yj7": "2432001" }
+      {
+        "name": "レボチロキシン",
+        "yj7": "2431004"
+      },
+      {
+        "name": "チアマゾール",
+        "yj7": "2432001"
+      }
     ],
-    "events": ["condition", "surgery"],
+    "events": [
+      "condition",
+      "surgery"
+    ],
     "overlay": false
   },
   {
     "name": "ワルファリン",
-    "axis": { "unit": "month", "columns": 6 },
+    "axis": {
+      "unit": "month",
+      "columns": 6
+    },
     "items": [
-      { "lab": "160012010-03" },
-      { "lab": "160008010-03" }
+      {
+        "lab": "160012010-03"
+      },
+      {
+        "lab": "160008010-03"
+      }
     ],
     "drugs": [
-      { "name": "ワルファリン", "yj7": "3332001" }
+      {
+        "name": "ワルファリン",
+        "yj7": "3332001"
+      }
     ],
-    "events": ["condition", "encounter", "surgery"],
+    "events": [
+      "condition",
+      "encounter",
+      "surgery"
+    ],
     "overlay": false
   },
   {
     "name": "がん化学療法",
-    "axis": { "unit": "month", "columns": 12 },
+    "axis": {
+      "unit": "month",
+      "columns": 12
+    },
     "items": [
-      { "lab": "160008010-01" },
-      { "lab": "160008010-03" },
-      { "lab": "160008010-05" },
-      { "lab": "160022510" },
-      { "lab": "160022610" },
-      { "lab": "160019210" },
-      { "lab": "160036510" },
-      { "lab": "160037210" }
+      {
+        "lab": "160008010-01"
+      },
+      {
+        "lab": "160008010-03"
+      },
+      {
+        "lab": "160008010-05"
+      },
+      {
+        "lab": "160022510"
+      },
+      {
+        "lab": "160022610"
+      },
+      {
+        "lab": "160019210"
+      },
+      {
+        "lab": "160036510"
+      },
+      {
+        "lab": "160037210"
+      }
     ],
     "drugs": [],
-    "events": ["condition", "surgery", "chemo", "radiotherapy", "exam"],
+    "events": [
+      "condition",
+      "surgery",
+      "chemo",
+      "radiotherapy",
+      "exam"
+    ],
     "overlay": false
   },
   {
     "name": "歯周病×糖尿病",
-    "axis": { "unit": "month", "columns": 24 },
+    "axis": {
+      "unit": "month",
+      "columns": 24
+    },
     "items": [
-      { "lab": "160010010" },
-      { "lab": "160019410" },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/perio-summary-01", "link_id": "bop_rate", "code": "DENT-BOP-RATE", "display": "プロービング時の出血(BOP)率", "name": "BOP率", "unit": "%" } },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/perio-summary-01", "link_id": "pd4_sites", "code": "DENT-PD4-SITES", "display": "歯周ポケット4mm以上の部位数", "name": "PD 4mm以上の部位数", "unit": "部位" } },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/perio-summary-01", "link_id": "pisa", "code": "DENT-PISA", "display": "歯周炎症表面積(PISA)", "name": "PISA", "unit": "mm²" } },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/perio-summary-01", "link_id": "pcr", "code": "DENT-PCR", "display": "プラークコントロールレコード(O'Leary)", "name": "PCR", "unit": "%" } },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/perio-summary-01", "link_id": "stage", "code": "DENT-PERIO-STAGE", "display": "歯周炎のステージ", "name": "歯周炎のステージ", "options": [{ "code": "01", "display": "I" }, { "code": "02", "display": "II" }, { "code": "03", "display": "III" }, { "code": "04", "display": "IV" }] } }
+      {
+        "lab": "160010010"
+      },
+      {
+        "lab": "160019410"
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/perio-summary-01",
+          "link_id": "bop_rate",
+          "code": "DENT-BOP-RATE",
+          "display": "プロービング時の出血(BOP)率",
+          "name": "BOP率",
+          "unit": "%"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/perio-summary-01",
+          "link_id": "pd4_sites",
+          "code": "DENT-PD4-SITES",
+          "display": "歯周ポケット4mm以上の部位数",
+          "name": "PD 4mm以上の部位数",
+          "unit": "部位"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/perio-summary-01",
+          "link_id": "pisa",
+          "code": "DENT-PISA",
+          "display": "歯周炎症表面積(PISA)",
+          "name": "PISA",
+          "unit": "mm²"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/perio-summary-01",
+          "link_id": "pcr",
+          "code": "DENT-PCR",
+          "display": "プラークコントロールレコード(O'Leary)",
+          "name": "PCR",
+          "unit": "%"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/perio-summary-01",
+          "link_id": "stage",
+          "code": "DENT-PERIO-STAGE",
+          "display": "歯周炎のステージ",
+          "name": "歯周炎のステージ",
+          "options": [
+            {
+              "code": "01",
+              "display": "I"
+            },
+            {
+              "code": "02",
+              "display": "II"
+            },
+            {
+              "code": "03",
+              "display": "III"
+            },
+            {
+              "code": "04",
+              "display": "IV"
+            }
+          ]
+        }
+      }
     ],
     "drugs": [],
-    "events": ["condition"],
+    "events": [
+      "condition"
+    ],
     "overlay": false
   },
   {
     "name": "口腔機能",
-    "axis": { "unit": "month", "columns": 24 },
+    "axis": {
+      "unit": "month",
+      "columns": 24
+    },
     "items": [
-      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "hypo_count", "code": "DENT-ORAL-HYPO-COUNT", "display": "口腔機能低下症の該当項目数", "name": "該当項目数", "unit": "項目" } },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "tongue_pressure", "code": "DENT-TONGUE-PRESSURE", "display": "最大舌圧", "name": "最大舌圧", "unit": "kPa" } },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "odk_ta", "code": "DENT-ODK-TA", "display": "オーラルディアドコキネシス /ta/", "name": "ODK /ta/", "unit": "回/秒" } },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "eat10", "code": "DENT-EAT10", "display": "嚥下スクリーニング質問紙(EAT-10)", "name": "EAT-10", "unit": "点" } },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "mucosal_moisture", "code": "DENT-MUCOSAL-MOISTURE", "display": "口腔粘膜湿潤度(口腔水分計)", "name": "口腔粘膜湿潤度" } },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "mouth_opening", "code": "DENT-MOUTH-OPENING", "display": "最大開口量(切歯間距離)", "name": "最大開口量", "unit": "mm" } },
-      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "stimulated_saliva", "code": "DENT-GUM-TEST", "display": "刺激時唾液量(ガムテスト)", "name": "刺激時唾液量(ガムテスト)", "unit": "mL/10分" } },
-      { "vital": "29463-7" },
-      { "lab": "160018910" }
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/oral-function-01",
+          "link_id": "hypo_count",
+          "code": "DENT-ORAL-HYPO-COUNT",
+          "display": "口腔機能低下症の該当項目数",
+          "name": "該当項目数",
+          "unit": "項目"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/oral-function-01",
+          "link_id": "tongue_pressure",
+          "code": "DENT-TONGUE-PRESSURE",
+          "display": "最大舌圧",
+          "name": "最大舌圧",
+          "unit": "kPa"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/oral-function-01",
+          "link_id": "odk_ta",
+          "code": "DENT-ODK-TA",
+          "display": "オーラルディアドコキネシス /ta/",
+          "name": "ODK /ta/",
+          "unit": "回/秒"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/oral-function-01",
+          "link_id": "eat10",
+          "code": "DENT-EAT10",
+          "display": "嚥下スクリーニング質問紙(EAT-10)",
+          "name": "EAT-10",
+          "unit": "点"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/oral-function-01",
+          "link_id": "mucosal_moisture",
+          "code": "DENT-MUCOSAL-MOISTURE",
+          "display": "口腔粘膜湿潤度(口腔水分計)",
+          "name": "口腔粘膜湿潤度"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/oral-function-01",
+          "link_id": "mouth_opening",
+          "code": "DENT-MOUTH-OPENING",
+          "display": "最大開口量(切歯間距離)",
+          "name": "最大開口量",
+          "unit": "mm"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/oral-function-01",
+          "link_id": "stimulated_saliva",
+          "code": "DENT-GUM-TEST",
+          "display": "刺激時唾液量(ガムテスト)",
+          "name": "刺激時唾液量(ガムテスト)",
+          "unit": "mL/10分"
+        }
+      },
+      {
+        "vital": "29463-7"
+      },
+      {
+        "lab": "160018910"
+      }
     ],
     "drugs": [],
-    "events": ["condition", "radiotherapy", "adverse"],
+    "events": [
+      "condition",
+      "radiotherapy",
+      "adverse"
+    ],
+    "overlay": false
+  },
+  {
+    "name": "褥瘡(DESIGN-R)",
+    "axis": {
+      "unit": "day",
+      "columns": 60
+    },
+    "items": [
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01",
+          "link_id": "designr_total",
+          "code": "NURS-PU-DESIGNR-TOTAL",
+          "display": "DESIGN-R 合計",
+          "name": "DESIGN-R 合計",
+          "unit": "点"
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01",
+          "link_id": "designr_d",
+          "code": "NURS-PU-DESIGNR-DEPTH",
+          "display": "DESIGN-R 深さ",
+          "name": "深さ",
+          "options": [
+            {
+              "code": "d0",
+              "display": "d0"
+            },
+            {
+              "code": "d1",
+              "display": "d1"
+            },
+            {
+              "code": "d2",
+              "display": "d2"
+            },
+            {
+              "code": "D3",
+              "display": "D3"
+            },
+            {
+              "code": "D4",
+              "display": "D4"
+            },
+            {
+              "code": "D5",
+              "display": "D5"
+            },
+            {
+              "code": "DDTI",
+              "display": "DDTI"
+            },
+            {
+              "code": "DU",
+              "display": "DU"
+            }
+          ]
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01",
+          "link_id": "designr_e",
+          "code": "NURS-PU-DESIGNR-EXUDATE",
+          "display": "DESIGN-R 滲出液",
+          "name": "滲出液",
+          "options": [
+            {
+              "code": "e0",
+              "display": "e0"
+            },
+            {
+              "code": "e1",
+              "display": "e1"
+            },
+            {
+              "code": "e3",
+              "display": "e3"
+            },
+            {
+              "code": "E6",
+              "display": "E6"
+            }
+          ]
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01",
+          "link_id": "designr_s",
+          "code": "NURS-PU-DESIGNR-SIZE",
+          "display": "DESIGN-R 大きさ",
+          "name": "大きさ",
+          "options": [
+            {
+              "code": "s0",
+              "display": "s0"
+            },
+            {
+              "code": "s3",
+              "display": "s3"
+            },
+            {
+              "code": "s6",
+              "display": "s6"
+            },
+            {
+              "code": "s8",
+              "display": "s8"
+            },
+            {
+              "code": "s9",
+              "display": "s9"
+            },
+            {
+              "code": "s12",
+              "display": "s12"
+            },
+            {
+              "code": "S15",
+              "display": "S15"
+            }
+          ]
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01",
+          "link_id": "designr_i",
+          "code": "NURS-PU-DESIGNR-INFLAMMATION",
+          "display": "DESIGN-R 炎症・感染",
+          "name": "炎症・感染",
+          "options": [
+            {
+              "code": "i0",
+              "display": "i0"
+            },
+            {
+              "code": "i1",
+              "display": "i1"
+            },
+            {
+              "code": "I3C",
+              "display": "I3C"
+            },
+            {
+              "code": "I3",
+              "display": "I3"
+            },
+            {
+              "code": "I9",
+              "display": "I9"
+            }
+          ]
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01",
+          "link_id": "designr_g",
+          "code": "NURS-PU-DESIGNR-GRANULATION",
+          "display": "DESIGN-R 肉芽組織",
+          "name": "肉芽組織",
+          "options": [
+            {
+              "code": "g0",
+              "display": "g0"
+            },
+            {
+              "code": "g1",
+              "display": "g1"
+            },
+            {
+              "code": "g3",
+              "display": "g3"
+            },
+            {
+              "code": "G4",
+              "display": "G4"
+            },
+            {
+              "code": "G5",
+              "display": "G5"
+            },
+            {
+              "code": "G6",
+              "display": "G6"
+            }
+          ]
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01",
+          "link_id": "designr_n",
+          "code": "NURS-PU-DESIGNR-NECROTIC",
+          "display": "DESIGN-R 壊死組織",
+          "name": "壊死組織",
+          "options": [
+            {
+              "code": "n0",
+              "display": "n0"
+            },
+            {
+              "code": "N3",
+              "display": "N3"
+            },
+            {
+              "code": "N6",
+              "display": "N6"
+            }
+          ]
+        }
+      },
+      {
+        "template": {
+          "url": "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01",
+          "link_id": "designr_p",
+          "code": "NURS-PU-DESIGNR-POCKET",
+          "display": "DESIGN-R ポケット",
+          "name": "ポケット",
+          "options": [
+            {
+              "code": "p0",
+              "display": "p0"
+            },
+            {
+              "code": "P6",
+              "display": "P6"
+            },
+            {
+              "code": "P9",
+              "display": "P9"
+            },
+            {
+              "code": "P12",
+              "display": "P12"
+            },
+            {
+              "code": "P24",
+              "display": "P24"
+            }
+          ]
+        }
+      },
+      {
+        "vital": "29463-7"
+      }
+    ],
+    "drugs": [],
+    "events": [
+      "condition",
+      "surgery"
+    ],
     "overlay": false
   }
 ]

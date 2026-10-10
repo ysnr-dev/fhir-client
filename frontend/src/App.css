@@ -17330,6 +17330,37 @@ button.nursing-worksheet__mark {
 
 /* 一覧の依頼目的は 1 行に丸める。全文は行の「表示」で見る(title 属性にも入れて
    あるので、マウスを載せれば途中までは読める)。 */
+/* チーム依頼一覧。次回回診日が来ている行の日付を強調する。 */
+.team-worklist__due {
+  color: var(--danger);
+  font-weight: bold;
+}
+
+/* 回診記録モーダルの過去の記録の一覧と次回回診日。 */
+.team-round__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.team-round__list li {
+  display: flex;
+  gap: 12px;
+}
+
+.team-round__date {
+  white-space: nowrap;
+  color: var(--text-h);
+}
+
+.team-round__next {
+  margin: 8px 0;
+}
+
 .consult-worklist__purpose {
   max-width: 24em;
   overflow: hidden;

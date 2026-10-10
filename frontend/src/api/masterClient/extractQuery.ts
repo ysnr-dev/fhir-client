@@ -39,12 +39,15 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 export async function fetchExtractQueries(params: {
   department_id?: string;
   practitioner_id?: string;
+  /** 自分が構成員のチーム(CareTeam.id)。スクリーニングの条件を一緒に引く。 */
+  team_ids?: string[];
   tab?: ExtractTab;
 }): Promise<{ total: number; items: ExtractQuery[] }> {
   const search = new URLSearchParams();
   if (params.tab) search.set("tab", params.tab);
   if (params.department_id) search.set("department_id", params.department_id);
   if (params.practitioner_id) search.set("practitioner_id", params.practitioner_id);
+  if (params.team_ids?.length) search.set("team_id", params.team_ids.join(","));
   const res = await masterFetch(`${PATH}?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as { total: number; items: ExtractQuery[] };

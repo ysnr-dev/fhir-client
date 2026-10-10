@@ -92,6 +92,34 @@ export const NURSING_NOTE_CATEGORY_SEARCH = `${CLINICAL_NOTE_CATEGORY_SYSTEM}|nu
  * タイムラインのバッジと詳細の承認欄はこの印と attester だけで状態を読む(通知 Task を引き直さない)。
  * 書いた時点の区分なので、後から研修を終えてもこの記録は承認が要る記録のまま(docs/countersign-design.md)。
  */
+/**
+ * チームの回診記録(チーム依頼への介入記録。docs/care-team-design.md §3)。経過記録(11506-3)のまま
+ * category で見分け、event.detail で依頼を指す。
+ */
+export const TEAM_ROUND_CATEGORY: fhir4.CodeableConcept = {
+  coding: [{ system: CLINICAL_NOTE_CATEGORY_SYSTEM, code: "team-round", display: "チーム回診記録" }],
+};
+export const TEAM_ROUND_CATEGORY_SEARCH = `${CLINICAL_NOTE_CATEGORY_SYSTEM}|team-round`;
+
+export function isTeamRoundNote(composition: fhir4.Composition | undefined): boolean {
+  return Boolean(
+    composition?.category?.some((c) =>
+      c.coding?.some((coding) => coding.system === CLINICAL_NOTE_CATEGORY_SYSTEM && coding.code === "team-round"),
+    ),
+  );
+}
+
+/** 回診記録が指すチーム依頼(ServiceRequest)の id。回診記録でなければ空。 */
+export function compositionTeamRequestId(composition: fhir4.Composition): string {
+  if (!isTeamRoundNote(composition)) return "";
+  return (
+    composition.event
+      ?.flatMap((e) => e.detail ?? [])
+      .map((d) => d.reference?.match(/^ServiceRequest\/(.+)$/)?.[1] ?? "")
+      .find(Boolean) ?? ""
+  );
+}
+
 export const COUNTERSIGN_CATEGORY: fhir4.CodeableConcept = {
   coding: [{ system: CLINICAL_NOTE_CATEGORY_SYSTEM, code: "countersign", display: "カウンターサイン対象" }],
 };
@@ -121,6 +149,15 @@ const CONSULT_NOTE_EVENT_SYSTEM = "http://fhir-client.local/CodeSystem/consult-n
  * 出来事)がその位置づけに当たる標準の場所なので、ローカル拡張を作らずここを使う
  * (docs/consult-order-design.md §2.3)。
  */
+function teamRoundEvent(serviceRequestId: string): fhir4.CompositionEvent[] {
+  return [
+    {
+      code: [{ coding: [{ system: CONSULT_NOTE_EVENT_SYSTEM, code: "round", display: "チーム依頼の回診" }] }],
+      detail: [{ reference: `ServiceRequest/${serviceRequestId}` }],
+    },
+  ];
+}
+
 function consultNoteEvent(serviceRequestId: string): fhir4.CompositionEvent[] {
   return [
     {
@@ -538,6 +575,11 @@ export function buildClinicalNote(
      */
     consultOrderId?: string;
     /**
+     * チーム依頼の回診記録として書くときの、依頼の ServiceRequest id。経過記録のまま
+     * category と event が付く(docs/care-team-design.md §3)。
+     */
+    teamRequestId?: string;
+    /**
      * 記録した診療科(他科依頼の回答なら回答した科)。オーダーの依頼科・検査結果の
      * 実施科と同じローカル拡張に入れる(参照を引き直さずに一覧・カードで出せるように)。
      */
@@ -548,7 +590,7 @@ export function buildClinicalNote(
     countersign?: boolean;
   },
 ): ClinicalNoteSave {
-  const { patientId, practitioner, existing, consultOrderId, department, nursing, countersign } = options;
+  const { patientId, practitioner, existing, consultOrderId, teamRequestId, department, nursing, countersign } = options;
   const entries: fhir4.BundleEntry[] = [];
   // 保存後も参照され続ける保存済み QR の id。既存 Composition が参照していたものとの
   // 差分で「参照が外れた QR」を求め、同じ transaction で削除する(孤児を残さない)。
@@ -598,7 +640,11 @@ export function buildClinicalNote(
   // 他科依頼の回答は種別と event が違う。編集(existing あり)では呼び出し側が
   // consultOrderId を渡さないので、保存済みの値をそのまま引き継ぐ
   // (回答を編集し直しても依頼との紐付きが外れないように)。
-  const event = consultOrderId ? consultNoteEvent(consultOrderId) : existing?.event;
+  const event = consultOrderId
+    ? consultNoteEvent(consultOrderId)
+    : teamRequestId
+      ? teamRoundEvent(teamRequestId)
+      : existing?.event;
   const type = consultOrderId ? CONSULT_NOTE_TYPE : (existing?.type ?? PROGRESS_NOTE_TYPE);
 
   const composition: fhir4.Composition = {
@@ -616,7 +662,11 @@ export function buildClinicalNote(
   if (event?.length) composition.event = event;
   const category = existing
     ? existing.category
-    : [...(nursing ? [NURSING_NOTE_CATEGORY] : []), ...(countersign ? [COUNTERSIGN_CATEGORY] : [])];
+    : [
+        ...(nursing ? [NURSING_NOTE_CATEGORY] : []),
+        ...(countersign ? [COUNTERSIGN_CATEGORY] : []),
+        ...(teamRequestId ? [TEAM_ROUND_CATEGORY] : []),
+      ];
   if (category?.length) composition.category = category;
 
   // 診療科も同じく、新規は渡されたもの・編集は保存済みのものを引き継ぐ。

@@ -18,10 +18,15 @@ export function useExtractQueries(
   practitionerId: string | undefined,
   enabled = true,
   tab: ExtractTab = "patient",
+  teamIds: string[] = [],
 ) {
   return useQuery({
-    queryKey: [...EXTRACT_QUERIES_KEY, "list", { departmentId: departmentId ?? "", practitionerId: practitionerId ?? "", tab }],
-    queryFn: () => fetchExtractQueries({ department_id: departmentId, practitioner_id: practitionerId, tab }),
+    queryKey: [
+      ...EXTRACT_QUERIES_KEY,
+      "list",
+      { departmentId: departmentId ?? "", practitionerId: practitionerId ?? "", tab, teamIds: teamIds.join(",") },
+    ],
+    queryFn: () => fetchExtractQueries({ department_id: departmentId, practitioner_id: practitionerId, tab, team_ids: teamIds }),
     enabled,
   });
 }

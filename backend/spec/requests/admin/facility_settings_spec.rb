@@ -297,6 +297,24 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (pressure_ulcer)" do
+    it "DESIGN-R のテンプレートの url を保存し、版付きは 422" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { pressure_ulcer: { template: "http://fhir-client.local/Questionnaire/pu-designr-local" } }, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["pressure_ulcer"]).to eq(
+        "template" => "http://fhir-client.local/Questionnaire/pu-designr-local",
+      )
+
+      without_admin_token do
+        patch "/admin/facility_settings", params: { pressure_ulcer: { template: "http://x/Questionnaire/a|1.0.0" } }, as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "PATCH /admin/facility_settings (document_reminder)" do
     it "stores the days and returns the merged defaults" do
       without_admin_token do

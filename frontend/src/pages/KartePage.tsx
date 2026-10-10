@@ -366,6 +366,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             ? { kind: "nursing-summary-create", encounterId: openTarget.encounterId }
           : openTarget.kind === "admission-plan"
             ? { kind: "admission-plan-create", encounterId: openTarget.encounterId }
+          : openTarget.kind === "team-request"
+            ? { kind: "team-request-create", teamId: openTarget.teamId }
+          : openTarget.kind === "questionnaire"
+            ? { kind: "qr-create", templateCanonical: openTarget.url }
             : { kind: "radiotherapy-review", srId: openTarget.srId },
     );
     updateParams((params) => params.delete(KARTE_OPEN_PARAM));
@@ -822,6 +826,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
                 current.kind === "nutrition-guidance-order-edit" ||
                 current.kind === "medication-guidance-order-edit" ||
                 current.kind === "consult-order-edit" ||
+                current.kind === "team-request-edit" ||
                 current.kind === "nursing-order-edit"
               ? current.srId
               : current.kind === "qr-edit"

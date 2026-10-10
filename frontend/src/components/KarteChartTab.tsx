@@ -98,8 +98,9 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     departmentId,
     practitionerId,
     practitionerName,
+    teamIds,
   } = useDefinitionOwners("自分のチャート");
-  const list = useChartDefinitions(departmentId, practitionerId, ownersReady);
+  const list = useChartDefinitions(departmentId, practitionerId, ownersReady, teamIds);
   // この患者で最初に開くチャート(ピン留め)。患者につき 1 つで、利用者の間で共有する。
   const pin = usePatientChartPin(patientId);
   const pinMutation = usePatientChartPinMutation(patientId);

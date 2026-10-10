@@ -29,8 +29,8 @@ interface Props<T extends ExtractRecordDefinition> {
  */
 export function RecordQueryBar<T extends ExtractRecordDefinition>({ tab, current, onLoad }: Props<T>) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { owners, ready, departmentId, practitionerId } = useDefinitionOwners("自分の条件");
-  const list = useExtractQueries(departmentId, practitionerId, ready, tab);
+  const { owners, ready, departmentId, practitionerId, teamIds } = useDefinitionOwners("自分の条件");
+  const list = useExtractQueries(departmentId, practitionerId, ready, tab, teamIds);
   const queries = useMemo(() => list.data?.items ?? [], [list.data]);
   const mutations = useExtractQueryMutations();
 

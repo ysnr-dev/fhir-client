@@ -140,8 +140,8 @@ export function DataExtractPage() {
 /** 条件に当てはまる患者の抽出。 */
 function PatientExtractTab() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { owners, ready, departmentId, practitionerId, practitionerName } = useDefinitionOwners("自分の条件");
-  const list = useExtractQueries(departmentId, practitionerId, ready);
+  const { owners, ready, departmentId, practitionerId, practitionerName, teamIds } = useDefinitionOwners("自分の条件");
+  const list = useExtractQueries(departmentId, practitionerId, ready, "patient", teamIds);
   const mutations = useExtractQueryMutations();
   const queries = useMemo(() => list.data?.items ?? [], [list.data]);
 
@@ -365,6 +365,7 @@ function PatientExtractTab() {
           leaves={outputLeaves}
           output={body.output}
           history={selected && !dirty ? (runs.data ?? []) : undefined}
+          teamId={selected?.scope === "team" ? (selected.owner_id ?? undefined) : undefined}
         />
       )}
 

@@ -200,6 +200,12 @@ class FacilitySettings < ApplicationRecord
     "emergency_years" => {}
   }.freeze
 
+  # 褥瘡管理(docs/care-team-design.md §6)。template は DESIGN-R 評価のテンプレートの url(版を問わない)。
+  # 褥瘡管理の保有患者・発生率はこのテンプレートの回答から数える。既定は同梱の PU_DESIGNR_01。
+  DEFAULT_PRESSURE_ULCER = {
+    "template" => "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01"
+  }.freeze
+
   DEFAULT_ADMISSION_DOCUMENTS = {
     "admission_plan_template" => "",
     "admission_plan_days" => 7,
@@ -359,6 +365,10 @@ class FacilitySettings < ApplicationRecord
           "nursing_summary_days" => DAYS
         }
       }
+    },
+    "pressure_ulcer" => {
+      default: DEFAULT_PRESSURE_ULCER,
+      shape: { fields: { "template" => QUESTIONNAIRE_URL } }
     },
     "dpc_coefficients" => {
       default: DEFAULT_DPC_COEFFICIENTS,

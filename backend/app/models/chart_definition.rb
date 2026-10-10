@@ -30,7 +30,8 @@
 # 突き合わせは画面が行う(指す先が無くなっていれば画面が落とす)。
 # 設計は docs/patient-chart-design.md。
 class ChartDefinition < ApplicationRecord
-  SCOPES = %w[facility department practitioner].freeze
+  # team はチーム医療のチーム(上流の CareTeam の id。docs/care-team-design.md §5)。
+  SCOPES = %w[facility department practitioner team].freeze
 
   SCHEMA_VERSION = 1
   AXIS_UNITS = %w[day month year].freeze
@@ -137,12 +138,13 @@ class ChartDefinition < ApplicationRecord
 
   scope :ordered, -> { order(Arel.sql("display_order NULLS LAST"), :id) }
 
-  # 画面が同時に見る 3 つの持ち主(院内共通 + 指定した診療科 + 指定した医師)。
+  # 画面が同時に見る持ち主(院内共通 + 指定した診療科 + 指定した医師 + 自分のチーム)。
   # 引数が空の持ち主は含めない(OrderSet.roots_for と同じ)。
-  def self.roots_for(department_id:, practitioner_id:)
+  def self.roots_for(department_id:, practitioner_id:, team_ids: [])
     rel = where(scope: "facility")
     rel = rel.or(where(scope: "department", owner_id: department_id)) if department_id.present?
     rel = rel.or(where(scope: "practitioner", owner_id: practitioner_id)) if practitioner_id.present?
+    rel = rel.or(where(scope: "team", owner_id: team_ids)) if team_ids.present?
     rel
   end
 

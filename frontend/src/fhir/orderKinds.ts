@@ -1,5 +1,6 @@
 import type { ProblemRef } from "./conditionHelpers";
 import { isConsultServiceRequest, consultOrderProblem, CONSULT_ORDER_TYPE } from "./consultOrderHelpers";
+import { isTeamRequestServiceRequest, teamRequestProblem, TEAM_REQUEST_ORDER_TYPE } from "./teamRequestHelpers";
 import { isEndoscopyServiceRequest, endoscopyOrderProblem, ENDOSCOPY_ORDER_TYPE } from "./endoscopyOrderHelpers";
 import { isLabServiceRequest, labOrderProblem, LAB_ORDER_TYPE } from "./labOrderHelpers";
 import { isMealServiceRequest, mealOrderProblem, MEAL_ORDER_TYPE } from "./mealOrderHelpers";
@@ -37,6 +38,7 @@ export const ORDER_KINDS = [
   "nutrition-guidance-order",
   "medication-guidance-order",
   "consult-order",
+  "team-request",
 ] as const;
 
 export type OrderKind = (typeof ORDER_KINDS)[number];
@@ -68,6 +70,7 @@ export const ORDER_KIND_CORE: Record<OrderKind, OrderKindCore> = {
   "nutrition-guidance-order": { label: "栄養指導", orderType: NUTRITION_GUIDANCE_ORDER_TYPE, matches: isNutritionGuidanceServiceRequest, problem: nutritionGuidanceOrderProblem },
   "medication-guidance-order": { label: "服薬指導", orderType: MEDICATION_GUIDANCE_ORDER_TYPE, matches: isMedicationGuidanceServiceRequest, problem: medicationGuidanceOrderProblem },
   "consult-order": { label: "他科依頼", orderType: CONSULT_ORDER_TYPE, matches: isConsultServiceRequest, problem: consultOrderProblem },
+  "team-request": { label: "チーム依頼", orderType: TEAM_REQUEST_ORDER_TYPE, matches: isTeamRequestServiceRequest, problem: teamRequestProblem },
 };
 
 export const ORDER_KIND_LABELS = Object.fromEntries(

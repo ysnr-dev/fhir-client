@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { ExtractQueryRun } from "../../api/masterClient";
-import type { ExtractResult } from "../../api/queries";
+import { useTeamActiveRequestPatientIds, type ExtractResult } from "../../api/queries";
+import { formatKarteOpen, KARTE_OPEN_PARAM } from "../../karteUrl";
 import { dateTimeLabel, localDay } from "../../lib/dates";
 import { LabTimelineChart, type LabTimelineSeries } from "../LabTimelineChart";
 import {
@@ -30,12 +31,18 @@ export function ExtractResults({
   leaves,
   output,
   history,
+  teamId,
 }: {
   result: ExtractResult;
   /** 出力項目を今の条件で反映した条件(実行し直さなくても出す列が変わる)。 */
   leaves: ExtractLeaf[];
   output: ExtractOutput | undefined;
   history?: ExtractQueryRun[];
+  /**
+   * 条件の持ち主がチームのとき(スクリーニング)、そのチームの id。一覧に「介入」の列
+   * (介入中の印と、カルテをチーム依頼の登録で開くリンク)を足す(docs/care-team-design.md §5)。
+   */
+  teamId?: string;
 }) {
   const [tab, setTab] = useState<Tab>("list");
   const tabs: { key: Tab; label: string }[] = [
@@ -61,7 +68,7 @@ export function ExtractResults({
         ))}
         <span className="extract-results__count">{`該当 ${result.rows.length} 人`}</span>
       </div>
-      {current === "list" && <ResultTable result={result} leaves={leaves} output={output} />}
+      {current === "list" && <ResultTable result={result} leaves={leaves} output={output} teamId={teamId} />}
       {current === "breakdown" && <BreakdownTable result={result} />}
       {current === "history" && history && <HistoryTable runs={history} leaves={result.leaves} />}
     </section>
@@ -72,12 +79,15 @@ function ResultTable({
   result,
   leaves,
   output,
+  teamId,
 }: {
   result: ExtractResult;
   leaves: ExtractLeaf[];
   output: ExtractOutput | undefined;
+  teamId?: string;
 }) {
   const columns: ExtractLeaf[] = resultColumns(leaves);
+  const activePatients = useTeamActiveRequestPatientIds(teamId);
   const patientColumns = patientColumnsOf(output);
   return (
     <div className="extract-results__table-wrap">
@@ -92,6 +102,7 @@ function ResultTable({
             {columns.map((leaf) => (
               <th key={leaf.key}>{leafLabel(leaf)}</th>
             ))}
+            {teamId && <th>介入</th>}
           </tr>
         </thead>
         <tbody>
@@ -109,11 +120,24 @@ function ResultTable({
               {columns.map((leaf) => (
                 <td key={leaf.key}>{leafCellText(row.hits[leaf.key], leafOutputFieldsOf(leaf))}</td>
               ))}
+              {teamId && (
+                <td className="extract-results__nowrap">
+                  {activePatients.data?.has(row.patientId) ? (
+                    <span className="micro-result__badge micro-result__badge--muted">介入中</span>
+                  ) : (
+                    <Link
+                      to={`/patients/${row.patientId}/karte?${KARTE_OPEN_PARAM}=${encodeURIComponent(formatKarteOpen({ kind: "team-request", teamId }))}`}
+                    >
+                      チーム依頼
+                    </Link>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
           {result.rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length + patientColumns.length + 2} className="master-search__empty">
+              <td colSpan={columns.length + patientColumns.length + 2 + (teamId ? 1 : 0)} className="master-search__empty">
                 該当する患者はいません
               </td>
             </tr>

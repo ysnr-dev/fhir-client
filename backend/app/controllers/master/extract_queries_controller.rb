@@ -9,6 +9,7 @@ module Master
       records = ExtractQuery.roots_for(
         department_id: params[:department_id].presence,
         practitioner_id: params[:practitioner_id].presence,
+        team_ids: team_ids_param,
       ).ordered
       records = records.where(tab: params[:tab]) if params[:tab].present?
       render json: { total: records.size, items: records.map { |r| detail(r) } }

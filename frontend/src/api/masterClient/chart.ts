@@ -39,10 +39,12 @@ const CHART_DEFINITIONS_PATH = "/master/chart_definitions";
 export async function fetchChartDefinitions(params: {
   department_id?: string;
   practitioner_id?: string;
+  team_ids?: string[];
 }): Promise<{ total: number; items: ChartDefinition[] }> {
   const search = new URLSearchParams();
   if (params.department_id) search.set("department_id", params.department_id);
   if (params.practitioner_id) search.set("practitioner_id", params.practitioner_id);
+  if (params.team_ids?.length) search.set("team_id", params.team_ids.join(","));
   const res = await masterFetch(`${CHART_DEFINITIONS_PATH}?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as { total: number; items: ChartDefinition[] };

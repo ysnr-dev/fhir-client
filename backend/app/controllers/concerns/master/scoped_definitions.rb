@@ -14,12 +14,13 @@ module Master
       before_action :authorize_practitioner_scope!, only: %i[update destroy]
     end
 
-    # 院内共通 + 指定した診療科 + 指定した医師の定義を全件返す。件数が少ない前提で
-    # ページングせず、definition も含める(画面は一覧を引いたらそのまま使える)。
+    # 院内共通 + 指定した診療科 + 指定した医師 + 指定したチーム(カンマ区切り)の定義を全件返す。
+    # 件数が少ない前提でページングせず、definition も含める(画面は一覧を引いたらそのまま使える)。
     def index
       records = model_class.roots_for(
         department_id: params[:department_id].presence,
         practitioner_id: params[:practitioner_id].presence,
+        team_ids: team_ids_param,
       ).ordered
       render json: { total: records.size, items: records.map { |r| detail(r) } }
     end
@@ -51,6 +52,10 @@ module Master
     end
 
     private
+
+    def team_ids_param
+      params[:team_id].to_s.split(",").map(&:strip).compact_blank
+    end
 
     # BaseController の permit(column_names) は jsonb のネストを黙って落とすので、
     # definition だけは丸ごと受け取る(形の検証はモデルが担う)。

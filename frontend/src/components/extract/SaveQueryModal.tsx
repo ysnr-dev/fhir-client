@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { DefinitionOwnerOption } from "../../hooks/useDefinitionOwners";
+import { definitionOwnerKey, type DefinitionOwnerOption } from "../../hooks/useDefinitionOwners";
 import { ErrorBanner } from "../ErrorBanner";
 import { Modal } from "../Modal";
 
@@ -21,8 +21,11 @@ export function SaveQueryModal({
 }) {
   const editable = owners.filter((o) => o.canEdit);
   const [name, setName] = useState(initialName);
-  const [scope, setScope] = useState(editable.find((o) => o.scope === "practitioner")?.scope ?? editable[0]?.scope);
-  const owner = editable.find((o) => o.scope === scope);
+  const [ownerKey, setOwnerKey] = useState(() => {
+    const first = editable.find((o) => o.scope === "practitioner") ?? editable[0];
+    return first ? definitionOwnerKey(first) : "";
+  });
+  const owner = editable.find((o) => definitionOwnerKey(o) === ownerKey);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -40,9 +43,9 @@ export function SaveQueryModal({
         </label>
         <label className="extract-field">
           保存先
-          <select value={scope ?? ""} onChange={(e) => setScope(e.target.value as DefinitionOwnerOption["scope"])}>
+          <select value={ownerKey} onChange={(e) => setOwnerKey(e.target.value)}>
             {editable.map((o) => (
-              <option key={o.scope} value={o.scope}>
+              <option key={definitionOwnerKey(o)} value={definitionOwnerKey(o)}>
                 {o.label}
               </option>
             ))}

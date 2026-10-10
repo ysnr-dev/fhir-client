@@ -2,7 +2,7 @@ import type { ExtractQuery } from "../../api/masterClient";
 
 const SCOPE_LABELS: Record<string, string> = { facility: "院内共通", department: "診療科", practitioner: "自分" };
 
-/** 保存した患者の条件の選択(持ち主ごとにまとめる)。 */
+/** 保存した患者の条件の選択(持ち主ごとにまとめる。チームの条件はスクリーニングとしてチームごと)。 */
 export function ExtractQuerySelect({
   queries,
   value,
@@ -25,6 +25,18 @@ export function ExtractQuerySelect({
         if (items.length === 0) return null;
         return (
           <optgroup key={scope} label={SCOPE_LABELS[scope]}>
+            {items.map((q) => (
+              <option key={q.id} value={q.id}>
+                {q.name}
+              </option>
+            ))}
+          </optgroup>
+        );
+      })}
+      {[...new Set(queries.filter((q) => q.scope === "team").map((q) => q.owner_id ?? ""))].map((teamId) => {
+        const items = queries.filter((q) => q.scope === "team" && (q.owner_id ?? "") === teamId);
+        return (
+          <optgroup key={`team:${teamId}`} label={`スクリーニング: ${items[0]?.owner_name ?? teamId}`}>
             {items.map((q) => (
               <option key={q.id} value={q.id}>
                 {q.name}

@@ -16,7 +16,7 @@ interface ScopeSummary {
 
 export function useExtractPatientScope() {
   const owners = useDefinitionOwners("自分の条件");
-  const queryList = useExtractQueries(owners.departmentId, owners.practitionerId, owners.ready);
+  const queryList = useExtractQueries(owners.departmentId, owners.practitionerId, owners.ready, "patient", owners.teamIds);
   const queries = useMemo(() => queryList.data?.items ?? [], [queryList.data]);
   const folderList = usePatientFolders(owners.departmentId, owners.practitionerId);
   const folders = useMemo(() => folderList.data?.items ?? [], [folderList.data]);

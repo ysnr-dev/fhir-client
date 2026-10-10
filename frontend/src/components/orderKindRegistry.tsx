@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import {
   useDeleteConsultOrder,
+  useDeleteTeamRequest,
   useDeleteEndoscopyOrder,
   useDeleteLabOrder,
   useDeleteMealOrder,
@@ -18,6 +19,8 @@ import {
 } from "../api/queries";
 import { summarizeConsultOrder } from "../fhir/consultOrderHelpers";
 import { consultTaskStatusDisplay } from "../fhir/consultTaskHelpers";
+import { summarizeTeamRequest } from "../fhir/teamRequestHelpers";
+import { teamRequestTaskStatusDisplay } from "../fhir/teamRequestTaskHelpers";
 import { endoscopyOrderTime, summarizeEndoscopyOrder } from "../fhir/endoscopyOrderHelpers";
 import { endoscopyTaskStatusDisplay } from "../fhir/endoscopyTaskHelpers";
 import type { KarteOrderItem } from "../fhir/karteTimeline";
@@ -46,6 +49,7 @@ import { summarizeTreatmentOrder, treatmentOrderTime } from "../fhir/treatmentOr
 import { treatmentTaskStatusDisplay } from "../fhir/treatmentTaskHelpers";
 import { clockTime } from "../lib/dates";
 import { ConsultOrderCardBody } from "./karteCardBodies/ConsultOrderCardBody";
+import { TeamRequestCardBody } from "./karteCardBodies/TeamRequestCardBody";
 import { EndoscopyOrderCardBody } from "./karteCardBodies/EndoscopyOrderCardBody";
 import { LabOrderCardBody } from "./karteCardBodies/LabOrderCardBody";
 import { MealOrderCardBody } from "./karteCardBodies/MealOrderCardBody";
@@ -321,6 +325,20 @@ export const ORDER_KIND_DEFS: { [K in OrderKind]: OrderKindDef<K> } = {
     doable: true,
     Body: ({ item }) => <ConsultOrderCardBody serviceRequest={item.serviceRequest} />,
   },
+  "team-request": {
+    // 「どのチームへ出したか」が見出し。至急のときだけ緊急度も並べる。
+    title: (item) => {
+      const summary = summarizeTeamRequest(item.serviceRequest);
+      return joinParts(summary.settingDisplay, summary.teamName, summary.urgent && "至急");
+    },
+    metaLead: (item) => {
+      const summary = summarizeTeamRequest(item.serviceRequest);
+      return [summary.lastRoundDate && `最終回診 ${summary.lastRoundDate}`, summary.nextRoundDate && `次回 ${summary.nextRoundDate}`];
+    },
+    status: (item) => ({ code: item.status, label: teamRequestTaskStatusDisplay(item.status) }),
+    doable: true,
+    Body: ({ item }) => <TeamRequestCardBody serviceRequest={item.serviceRequest} />,
+  },
 };
 
 /**
@@ -353,5 +371,6 @@ export function useOrderKindDeletes() {
     "nutrition-guidance-order": useDeleteNutritionGuidanceOrder(),
     "medication-guidance-order": useDeleteMedicationGuidanceOrder(),
     "consult-order": useDeleteConsultOrder(),
+    "team-request": useDeleteTeamRequest(),
   } satisfies Record<OrderKind, unknown>;
 }

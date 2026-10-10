@@ -47,7 +47,11 @@ export type KarteOpenTarget =
   | { kind: "radiotherapy-review"; srId: string }
   | { kind: "nursing-summary"; compositionId: string }
   | { kind: "nursing-summary-create"; encounterId: string }
-  | { kind: "admission-plan"; encounterId: string };
+  | { kind: "admission-plan"; encounterId: string }
+  // チーム依頼の登録を、宛先のチームを選択済みで開く(スクリーニング一覧・褥瘡管理から)。
+  | { kind: "team-request"; teamId: string }
+  // テンプレート回答の登録を、テンプレートを選択済みで開く(褥瘡管理の DESIGN-R 評価から)。
+  | { kind: "questionnaire"; url: string };
 
 export function formatKarteOpen(target: KarteOpenTarget): string {
   const id =
@@ -55,7 +59,11 @@ export function formatKarteOpen(target: KarteOpenTarget): string {
       ? target.srId
       : target.kind === "nursing-summary"
         ? target.compositionId
-        : target.encounterId;
+        : target.kind === "team-request"
+          ? target.teamId
+          : target.kind === "questionnaire"
+            ? target.url
+            : target.encounterId;
   return `${target.kind}:${id}`;
 }
 
@@ -77,6 +85,8 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   }
   if (kind === "radiotherapy-review") return { kind, srId: id };
   if (kind === "nursing-summary") return { kind, compositionId: id };
+  if (kind === "team-request") return { kind, teamId: id };
+  if (kind === "questionnaire") return { kind, url: id };
   return null;
 }
 

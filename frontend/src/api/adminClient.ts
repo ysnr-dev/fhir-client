@@ -14,6 +14,7 @@ import type { WaterBalanceSettings } from "../fhir/flowsheetWaterBalanceHelpers"
 import type { MedicationScheduleSettings } from "../fhir/medicationScheduleHelpers";
 import type { DocumentReminderSettings } from "../fhir/documentDueHelpers";
 import type { AdmissionDocumentSettings } from "../fhir/admissionDocumentHelpers";
+import type { PressureUlcerSettings } from "../fhir/pressureUlcerHelpers";
 import type { NursingAcuitySettings } from "../fhir/nursingAcuityHelpers";
 import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
 import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
@@ -74,6 +75,8 @@ export interface FacilitySettings {
   admission_documents: AdmissionDocumentSettings;
   /** 看護必要度の評価票の版と該当患者の基準。 */
   nursing_acuity: NursingAcuitySettings;
+  /** 褥瘡管理(DESIGN-R 評価のテンプレート)。 */
+  pressure_ulcer: PressureUlcerSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -93,6 +96,7 @@ export type FacilitySettingsPayload = Partial<{
   dpc_coefficients: Record<string, string>;
   admission_documents: AdmissionDocumentSettings;
   nursing_acuity: NursingAcuitySettings;
+  pressure_ulcer: PressureUlcerSettings;
 }>;
 
 export interface ConnectionTestResult {

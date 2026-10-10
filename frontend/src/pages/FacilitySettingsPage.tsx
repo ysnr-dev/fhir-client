@@ -50,6 +50,7 @@ import {
   type NursingAcuitySettings,
 } from "../fhir/nursingAcuityHelpers";
 import { ACUITY_CATEGORY_OPTIONS, unitRoomOptions } from "../fhir/nursingAcuityUnitHelpers";
+import { DEFAULT_PRESSURE_ULCER, type PressureUlcerSettings } from "../fhir/pressureUlcerHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import {
   CATEGORY_OPTIONS,
@@ -203,6 +204,12 @@ export function FacilitySettingsPage() {
   const admissionDocsValid = [admissionDocs.admission_plan_days, admissionDocs.nursing_summary_days].every(
     (days) => Number.isInteger(days) && days >= 0,
   );
+
+  // 褥瘡管理の DESIGN-R 評価のテンプレート(url。版を問わない)。
+  const [pressureUlcerDraft, setPressureUlcerDraft] = useState<PressureUlcerSettings | undefined>(undefined);
+  const savedPressureUlcer = settings.data?.pressure_ulcer ?? DEFAULT_PRESSURE_ULCER;
+  const pressureUlcer = pressureUlcerDraft ?? savedPressureUlcer;
+  const pressureUlcerValid = /^https?:\/\/[^\s|]+$/.test(pressureUlcer.template);
 
   // 看護必要度の評価票の版と該当患者の基準。基準は組("A3" "A2+B3" "#A2")を空白区切りで入れる(組の OR)。
   const [acuityDraft, setAcuityDraft] = useState<
@@ -447,7 +454,7 @@ export function FacilitySettingsPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
-    if (!admissionDocsValid || !acuityValid) return;
+    if (!admissionDocsValid || !acuityValid || !pressureUlcerValid) return;
     if (!reviewValid || !receiptCodesOk || !coefficientsValid) return;
     update.mutate({
       self_organization_id: value,
@@ -466,6 +473,7 @@ export function FacilitySettingsPage() {
       dpc_coefficients: Object.fromEntries(coefficients.map((c) => [c.from, c.value])),
       admission_documents: admissionDocs,
       nursing_acuity: acuity,
+      pressure_ulcer: pressureUlcer,
     });
   }
 
@@ -1057,6 +1065,26 @@ export function FacilitySettingsPage() {
           </div>
         </details>
 
+        {/* 褥瘡管理。保有患者・発生率はこのテンプレートの回答から数える(url は版を問わない)。 */}
+        <details className="facility-settings__schedule">
+          <summary>褥瘡管理</summary>
+          <div className="facility-settings__schedule-body">
+            <label>
+              DESIGN-R 評価のテンプレート
+              <select
+                value={pressureUlcer.template}
+                onChange={(e) => setPressureUlcerDraft({ ...pressureUlcer, template: e.target.value })}
+              >
+                {[...new Set([pressureUlcer.template, ...templateOptions.questionnaires.map((q) => q.url ?? "").filter(Boolean)])].map((url) => (
+                  <option key={url} value={url}>
+                    {templateOptions.questionnaires.find((q) => q.url === url)?.title ?? url}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </details>
+
         {/* 放射線治療の治療中の診察。既定の 7 日は外来放射線照射診療料(B001-2-8。7 日間に
             1 回、算定日に放射線治療医の診察)に合わせた値で、入院の患者や施設の運用に合わせて
             変えられるようにしてある。テンプレートは記入欄の初期値(選び直しは妨げない)。 */}
@@ -1442,7 +1470,8 @@ export function FacilitySettingsPage() {
               !medicationValid ||
               !reminderValid ||
               !admissionDocsValid ||
-              !acuityValid
+              !acuityValid ||
+              !pressureUlcerValid
             }
           >
             {update.isPending ? "保存中..." : "保存"}

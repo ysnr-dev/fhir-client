@@ -41,6 +41,7 @@ import {
   MedicationGuidanceOrderEditPanel,
 } from "./MedicationGuidanceOrderPanels";
 import { ConsultOrderCreatePanel, ConsultOrderEditPanel } from "./ConsultOrderPanels";
+import { TeamRequestCreatePanel, TeamRequestEditPanel } from "./TeamRequestPanels";
 import {
   QuestionnaireResponseCreatePanel,
   QuestionnaireResponseEditPanel,
@@ -66,6 +67,8 @@ interface OrderCreateState {
   sourceSrId?: string;
   problem?: ProblemRef;
   startDate?: string;
+  /** チーム依頼の宛先を選択済みで開く(スクリーニング一覧・褥瘡管理からのリンク)。 */
+  teamId?: string;
 }
 
 interface OrderEditState {
@@ -127,7 +130,8 @@ export type KartePaneState =
   | { kind: "nursing-problem-edit"; carePlanId: string }
   // 看護プロファイル。入院 × 区画(テンプレートの url)で 1 件の回答を書く・直す。
   | { kind: "nursing-profile"; encounterId?: string; templateUrl?: string }
-  | { kind: "qr-create"; problem?: ProblemRef }
+  // templateCanonical を渡すとそのテンプレートを選択済みで開く(褥瘡管理の DESIGN-R 評価から)。
+  | { kind: "qr-create"; problem?: ProblemRef; templateCanonical?: string }
   // 入院診療計画書。施設設定のテンプレートで、その入院に紐付けて書き始める(入退院文書の作成状況から)。
   | { kind: "admission-plan-create"; encounterId: string }
   | { kind: "qr-edit"; qrId: string }
@@ -163,6 +167,7 @@ interface OrderCreatePanelProps {
   sourceSrId?: string;
   defaultProblem?: ProblemRef;
   startDate?: string;
+  teamId?: string;
   onSaved: () => void;
 }
 
@@ -243,6 +248,10 @@ const ORDER_PANES: Record<
     create: { title: "他科依頼登録", Panel: ConsultOrderCreatePanel },
     edit: { title: "他科依頼編集", Panel: ConsultOrderEditPanel },
   },
+  "team-request": {
+    create: { title: "チーム依頼登録", Panel: TeamRequestCreatePanel },
+    edit: { title: "チーム依頼編集", Panel: TeamRequestEditPanel },
+  },
 };
 
 const orderKindOfPane = (state: OrderCreateState | OrderEditState) =>
@@ -304,7 +313,7 @@ function paneKey(state: KartePaneState): string {
   // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
   // 食事は暦の別の日を押したときも開始日が変わるので、日付もキーに入れる。
   if (isOrderCreateState(state)) {
-    return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${state.startDate ?? ""}`;
+    return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${state.startDate ?? ""}:${state.teamId ?? ""}`;
   }
   switch (state.kind) {
     case "note-edit":
@@ -605,6 +614,13 @@ export function KarteRightPane({
         >
           他科依頼
         </button>
+        {/* チーム依頼(NST・ICT・褥瘡対策など)も人への依頼なので他科依頼の隣。 */}
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "team-request-create", problem: selectedProblem })}
+        >
+          チーム依頼
+        </button>
         {/* 退院時サマリーは入院の締めくくりに書く文書なので、一番下に置く。 */}
         <button type="button" onClick={() => onStateChange({ kind: "summary-create" })}>
           退院時サマリー
@@ -685,6 +701,7 @@ function PaneContent({
         sourceSrId={state.sourceSrId}
         defaultProblem={state.problem}
         startDate={state.startDate}
+        teamId={state.teamId}
         onSaved={onSaved}
       />
     );
@@ -874,6 +891,7 @@ function PaneContent({
         <QuestionnaireResponseCreatePanel
           patientId={patientId}
           defaultProblem={state.problem}
+          defaultQuestionnaireCanonical={state.templateCanonical}
           onSaved={onSaved}
         />
       );

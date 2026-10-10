@@ -20,15 +20,16 @@ export function useChartDefinitions(
   departmentId: string | undefined,
   practitionerId: string | undefined,
   enabled = true,
+  teamIds: string[] = [],
 ) {
   return useQuery({
     queryKey: [
       ...CHART_DEFINITIONS_KEY,
       "list",
-      { departmentId: departmentId ?? "", practitionerId: practitionerId ?? "" },
+      { departmentId: departmentId ?? "", practitionerId: practitionerId ?? "", teamIds: teamIds.join(",") },
     ],
     queryFn: () =>
-      fetchChartDefinitions({ department_id: departmentId, practitioner_id: practitionerId }),
+      fetchChartDefinitions({ department_id: departmentId, practitioner_id: practitionerId, team_ids: teamIds }),
     enabled,
   });
 }

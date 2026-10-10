@@ -5,7 +5,8 @@ import { buildError, masterFetch } from "./core";
 // フォルダとセットを parent_id の隣接リストで積む(シェーマカテゴリと同じ形)。
 // 持ち主(scope / owner_id)は 3 段階で、ツリーは持ち主ごとに独立している。
 // 設計は docs/order-set-design.md。
-export type OrderSetScope = "facility" | "department" | "practitioner";
+// team はチャート定義・データ抽出の条件だけが使う(チーム医療のチーム。オーダーセット・患者フォルダには無い)。
+export type OrderSetScope = "facility" | "department" | "practitioner" | "team";
 export type OrderSetKind = "folder" | "set";
 
 export interface OrderSet {

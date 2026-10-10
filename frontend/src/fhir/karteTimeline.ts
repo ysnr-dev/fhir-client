@@ -67,6 +67,8 @@ import {
   consultTasksByOrderId,
   type ConsultTaskStatus,
 } from "./consultTaskHelpers";
+import { isTeamRequestServiceRequest, teamRequestResponseIds } from "./teamRequestHelpers";
+import { teamRequestTaskStatus, teamRequestTasksByOrderId, type TeamRequestTaskStatus } from "./teamRequestTaskHelpers";
 import {
   injectionTaskStatus,
   injectionTasksByOrderId,
@@ -444,6 +446,13 @@ export type KarteTimelineItem = KarteItemBase &
          */
         radiotherapyOrderIds: string[];
       }
+    // チーム依頼。明細も実施記録も持たず、回診記録は診療記録(経過記録 + category)として別のカードになる。
+    | {
+        kind: "team-request";
+        serviceRequest: fhir4.ServiceRequest;
+        /** チームの対応状況。Task がまだ無い依頼は依頼済。 */
+        status: TeamRequestTaskStatus;
+      }
     // 放射線治療の治療処方。明細を持たないヘッダ 1 本に、照射記録(1 回の照射)が積み上がる。
     | {
         kind: "radiotherapy-order";
@@ -719,6 +728,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     ...surgeryOrderResponseIds(serviceRequests),
     ...pathoOrderResponseIds(serviceRequests),
     ...consultOrderResponseIds(serviceRequests),
+    ...teamRequestResponseIds(serviceRequests),
     ...nutritionGuidanceOrderResponseIds(serviceRequests),
   ]);
 
@@ -800,6 +810,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const medicationGuidancePerformByOrderId = medicationGuidancePerformsByOrderId(procedures);
   // 他科依頼は実施記録を持たない(返ってくるのは回答の診療記録)ので Task だけ。
   const consultTaskByOrderId = consultTasksByOrderId(tasks);
+  const teamRequestTaskByOrderId = teamRequestTasksByOrderId(tasks);
   // 放射線治療もリハビリと同じ形(Task と Procedure がまとめて届く)。
   const radiotherapyTaskByOrderId = radiotherapyTasksByOrderId(tasks);
   const radiotherapyFractionByOrderId = radiotherapyFractionsByOrderId(procedures);
@@ -1056,6 +1067,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         label: KARTE_KIND_LABELS["consult-order"],
         status: consultTaskStatus(consultTaskByOrderId.get(serviceRequest.id ?? "")),
         radiotherapyOrderIds: radiotherapyByConsultId.get(serviceRequest.id ?? "") ?? [],
+      };
+    }
+    if (isTeamRequestServiceRequest(serviceRequest)) {
+      return {
+        ...base,
+        kind: "team-request" as const,
+        label: KARTE_KIND_LABELS["team-request"],
+        status: teamRequestTaskStatus(teamRequestTaskByOrderId.get(serviceRequest.id ?? "")),
       };
     }
     if (isRadiotherapyServiceRequest(serviceRequest)) {

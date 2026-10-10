@@ -533,6 +533,24 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   年度の件数を 2 往復で取れる。
 - **影響範囲**: 看護必要度の集計・届出タブ(係数を算入する区分があるとき)。件数の上書きは施設設定で補える。
 
+### C-21. `Composition.event.detail` の検索(チーム依頼の回診記録)
+
+- **現状**: チーム依頼の回診記録(`docs/care-team-design.md` §3)は経過記録の Composition で、`event[0].detail` に
+  依頼の ServiceRequest を持つ。上流は `event` を索引していないので、依頼の回診記録の一覧は患者の回診記録
+  (`category=…|team-round`)を引いて手元で `event.detail` を見ている。他科依頼の回答も同じ事情で、依頼側に
+  ローカル拡張のキャッシュを持っている。
+- **望ましいサーバー機能**: `Composition?event-detail=ServiceRequest/{id}`(ローカル名でよい)と
+  `_revinclude=Composition:event-detail`。
+- **影響範囲**: 回診記録モーダルの一覧(患者 1 人ぶんなので件数は有限)。依頼側のキャッシュ拡張は表示のために残す。
+
+### C-22. `Patient?active:not=false` が strict で弾かれる
+
+- **現状**: データ抽出の患者属性の条件(年齢・性別)は `Patient?birthdate=…&active:not=false` を strict で引くが、
+  上流が `Unsupported search parameter 'active'` を返す(2026-10-10 に開発環境で確認。`active` は boolean の
+  検索パラメータとして定義されているので、`:not` 修飾子が boolean に効いていない)。
+- **望ましいサーバー機能**: boolean 型の検索パラメータに `:not` を許す(`active:not=false` = active が true か未設定)。
+- **影響範囲**: データ抽出の患者属性の条件(スクリーニングで年齢を条件にできない)。
+
 ## 長期（アーキテクチャ）
 
 ### L-1. マスタ群のターミノロジーサーバー化の検討

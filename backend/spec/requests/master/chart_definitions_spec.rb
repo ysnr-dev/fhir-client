@@ -47,12 +47,19 @@ RSpec.describe "Master::ChartDefinitions", type: :request do
       ChartDefinition.create!(scope: "department", owner_id: "dept-2", name: "外科", definition: definition)
       ChartDefinition.create!(scope: "practitioner", owner_id: "prac-1", name: "自分", definition: definition)
       ChartDefinition.create!(scope: "practitioner", owner_id: "prac-2", name: "他人", definition: definition)
+      ChartDefinition.create!(scope: "team", owner_id: "team-1", name: "NST", definition: definition)
+      ChartDefinition.create!(scope: "team", owner_id: "team-2", name: "ICT", definition: definition)
     end
 
     it "院内共通 + 指定した診療科 + 指定した医師だけを返す" do
       get "/master/chart_definitions", params: { department_id: "dept-1", practitioner_id: "prac-1" }
       expect(response).to have_http_status(:ok)
       expect(body["items"].map { |i| i["name"] }).to contain_exactly("共通", "内科", "自分")
+    end
+
+    it "チーム(カンマ区切り)の定義も返す" do
+      get "/master/chart_definitions", params: { team_id: "team-1,team-9" }
+      expect(body["items"].map { |i| i["name"] }).to contain_exactly("共通", "NST")
     end
 
     it "指定が無ければ院内共通だけになる" do

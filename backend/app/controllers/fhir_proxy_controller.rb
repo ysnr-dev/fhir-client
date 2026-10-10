@@ -33,12 +33,13 @@ class FhirProxyController < ApplicationController
   # ImagingStudy は取り込んだ DICOM のスタディ(docs/imaging-design.md)。実体は
   # backend の Active Storage にあり、書き込みも /imaging が行う。ここを通るのは
   # 「画像」タブの一覧・詳細の読み出し。
+  # CareTeam はチーム医療のチーム(NST・ICT など。docs/care-team-design.md)。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
     PractitionerRole Composition Task Procedure MedicationAdministration MedicationDispense
     MedicationStatement Location Schedule Slot Appointment Encounter Provenance Flag CarePlan Goal
-    DocumentReference ImagingStudy Coverage
+    DocumentReference ImagingStudy Coverage CareTeam
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

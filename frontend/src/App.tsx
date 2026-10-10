@@ -80,9 +80,11 @@ import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
 import { MedicationGuidanceWorklistPage } from "./pages/MedicationGuidanceWorklistPage";
 import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
+import { TeamWorklistPage } from "./pages/TeamWorklistPage";
 import { NotificationPage } from "./pages/NotificationPage";
 import { CountersignListPage } from "./pages/CountersignListPage";
 import { SupervisorGroupPage } from "./pages/SupervisorGroupPage";
+import { CareTeamPage } from "./pages/CareTeamPage";
 import { OrderSetPage } from "./pages/OrderSetPage";
 import { NotificationBell } from "./components/NotificationBell";
 import { NursingWorklistPage } from "./pages/NursingWorklistPage";
@@ -97,6 +99,7 @@ import { BedSchedulePage } from "./pages/BedSchedulePage";
 import { BedStatusPage } from "./pages/BedStatusPage";
 import { AdmissionDocumentsPage } from "./pages/AdmissionDocumentsPage";
 import { NursingAcuityPage } from "./pages/NursingAcuityPage";
+import { PressureUlcerPage } from "./pages/PressureUlcerPage";
 import { NursingWorksheetPage } from "./pages/NursingWorksheetPage";
 import { BulkVitalEntryPage } from "./pages/BulkVitalEntryPage";
 import { NursingSummaryApprovalPage } from "./pages/NursingSummaryApprovalPage";
@@ -230,6 +233,10 @@ function App() {
             <Link to="/consult-worklist" className="row-menu__item">
               他科依頼一覧
             </Link>
+            {/* チーム医療(NST・ICT・褥瘡対策など)への介入依頼。受けるのはチームの医師・看護師・薬剤師など。 */}
+            <Link to="/team-worklist" className="row-menu__item">
+              チーム依頼一覧
+            </Link>
             {/* 宛先の決まった通知(緊急異常値・オーダー承認…)の一覧。受け取るのは部門ではなく
                 医師なので診療業務に置く(readme「通知」)。件数はヘッダーのベルに出る。 */}
             <Link to="/notifications" className="row-menu__item">
@@ -263,6 +270,9 @@ function App() {
             </Link>
             <Link to="/nursing-acuity" className="row-menu__item">
               看護必要度
+            </Link>
+            <Link to="/pressure-ulcer" className="row-menu__item">
+              褥瘡管理
             </Link>
             <Link to="/ward-map" className="row-menu__item">
               病棟マップ
@@ -531,9 +541,11 @@ function App() {
           />
           <Route path="/medication-guidance-worklist" element={<MedicationGuidanceWorklistPage />} />
           <Route path="/consult-worklist" element={<ConsultWorklistPage />} />
+          <Route path="/team-worklist" element={<TeamWorklistPage />} />
           <Route path="/notifications" element={<NotificationPage />} />
           <Route path="/countersigns" element={<CountersignListPage />} />
           <Route path="/supervisor-groups" element={<SupervisorGroupPage />} />
+          <Route path="/care-teams" element={<CareTeamPage />} />
           {/* 掲示板(院内のお知らせ)。ホームのカードは今日掲載中だけ、ここは全件。 */}
           <Route path="/bulletin" element={<BulletinPage />} />
           <Route path="/order-sets" element={<OrderSetPage />} />
@@ -545,6 +557,7 @@ function App() {
           <Route path="/bed-status" element={<BedStatusPage />} />
           <Route path="/admission-documents" element={<AdmissionDocumentsPage />} />
           <Route path="/nursing-acuity" element={<NursingAcuityPage />} />
+          <Route path="/pressure-ulcer" element={<PressureUlcerPage />} />
           <Route path="/inpatients/bulk-vitals" element={<BulkVitalEntryPage />} />
           <Route path="/nursing-summary-approvals" element={<NursingSummaryApprovalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
