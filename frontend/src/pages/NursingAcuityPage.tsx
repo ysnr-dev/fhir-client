@@ -146,11 +146,6 @@ export function NursingAcuityPage() {
         <SummaryTab month={date.slice(0, 7)} wardId={wardId} settings={settings} />
       )}
 
-      {/* 該当患者の基準(施設設定)。表を読むときの補足なので表の下に置く。 */}
-      <p className="nursing-acuity__criteria">
-        割合1: {acuityCriterionLabel(settings.ratio1)}
-        {settings.ratio2.length > 0 && <> / 割合2: {acuityCriterionLabel(settings.ratio2)}</>}
-      </p>
     </div>
   );
 }
@@ -303,6 +298,8 @@ function SummaryTab({
     { present: 0, evaluated: 0, excluded: 0, met1: 0, met2: 0, missing: 0 },
   );
   const showRatio2 = settings.ratio2.length > 0;
+  const ratio1Title = `割合1: ${acuityCriterionLabel(settings.ratio1)}`;
+  const ratio2Title = `割合2: ${acuityCriterionLabel(settings.ratio2)}`;
 
   return (
     <>
@@ -322,10 +319,11 @@ function SummaryTab({
                 <th className="nursing-acuity-list__num">評価</th>
                 <th className="nursing-acuity-list__num">対象外</th>
                 <th className="nursing-acuity-list__num">未評価</th>
-                <th className="nursing-acuity-list__num">割合1 該当</th>
-                <th className="nursing-acuity-list__num">割合1</th>
-                {showRatio2 && <th className="nursing-acuity-list__num">割合2 該当</th>}
-                {showRatio2 && <th className="nursing-acuity-list__num">割合2</th>}
+                {/* 割合1・割合2は該当患者の基準(施設設定)を吹き出しに出す。 */}
+                <th className="nursing-acuity-list__num" title={ratio1Title}>割合1 該当</th>
+                <th className="nursing-acuity-list__num" title={ratio1Title}>割合1</th>
+                {showRatio2 && <th className="nursing-acuity-list__num" title={ratio2Title}>割合2 該当</th>}
+                {showRatio2 && <th className="nursing-acuity-list__num" title={ratio2Title}>割合2</th>}
               </tr>
             </thead>
             <tbody>

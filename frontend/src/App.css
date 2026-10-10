@@ -24979,12 +24979,6 @@ input.nursing-picker__search {
   color: var(--text);
 }
 
-.nursing-acuity__criteria {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: var(--text);
-}
-
 /* 看護必要度の一覧・集計。得点・件数の列は中央に揃え、隣の列と詰まって見えないよう幅を持たせる。 */
 .nursing-acuity-list .nursing-acuity-list__num {
   min-width: 4em;

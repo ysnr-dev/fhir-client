@@ -3,6 +3,7 @@ import { useCurrentPractitioner } from "../api/authQueries";
 import { useAcuityRecordsForPatients, useSaveAcuity } from "../api/queries";
 import {
   acuityColumns,
+  acuityCriterionLabel,
   acuityFormOf,
   acuityScores,
   acuityStateOptions,
@@ -255,7 +256,13 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
                 <span className="nursing-acuity-bulk__head-text">対象外</span>
               </th>
               {SCORE_COLUMNS.filter((c) => showRatio2 || c.key !== "r2").map((c) => (
-                <th key={c.key} rowSpan={2} className={`nursing-acuity-bulk__score-head${hoverClass(c.key)}`}>
+                <th
+                  key={c.key}
+                  rowSpan={2}
+                  className={`nursing-acuity-bulk__score-head${hoverClass(c.key)}`}
+                  // 割合1・割合2は該当患者の基準(施設設定)を吹き出しに出す。
+                  title={criterionTitle(c.key, settings)}
+                >
                   {c.label}
                 </th>
               ))}
@@ -379,6 +386,13 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
       )}
     </>
   );
+}
+
+/** 割合1・割合2の見出しの吹き出し(該当患者の基準)。それ以外の列は無し。 */
+function criterionTitle(key: string, settings: NursingAcuitySettings): string | undefined {
+  if (key === "r1") return `割合1: ${acuityCriterionLabel(settings.ratio1)}`;
+  if (key === "r2") return `割合2: ${acuityCriterionLabel(settings.ratio2)}`;
+  return undefined;
 }
 
 /** 項目の列見出し(縦書き。先頭に項目番号、A6 の小項目は丸数字)。 */
