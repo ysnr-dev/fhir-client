@@ -3,7 +3,7 @@ import { useCurrentPractitioner } from "../api/authQueries";
 import { useAcuityRecords, useSaveAcuity } from "../api/queries";
 import {
   acuityCriterionLabel,
-  acuityFormOf,
+  acuityGroupsOf,
   acuityScores,
   acuitySuggestions,
   buildAcuityObservation,
@@ -14,8 +14,9 @@ import {
   type AcuityItem,
   type AcuitySuggestion,
   type AcuityValues,
-  type NursingAcuitySettings,
+  type AcuityForm as AcuityFormType,
 } from "../fhir/nursingAcuityHelpers";
+import type { AcuityUnit } from "../fhir/nursingAcuityUnitHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
@@ -25,8 +26,8 @@ interface Props {
   patientName: string;
   encounter: fhir4.Encounter;
   date: string;
-  ward: { wardId: string; wardName: string } | null;
-  settings: NursingAcuitySettings;
+  /** 届出単位(評価票の版・基準・評価に焼く病棟 id)。 */
+  unit: AcuityUnit;
   /** その日の評価(あれば編集)。 */
   existing?: fhir4.Observation;
   /** 前日の評価(B 項目の初期値と「前日複写」に使う)。 */
@@ -46,9 +47,10 @@ const GROUP_LABELS: Record<AcuityGroup, string> = {
 //
 // 新しく書くときの初期値は、B は前日の評価(患者の状況は日ごとに大きく変わらないため)、A は
 // 実施記録から推した項目(acuitySuggestions)。どちらも看護師が確かめて直す前提で、推した項目には
-// 根拠を添える。評価票の版は既存の評価があればその版、無ければ施設設定の版。
+// 根拠を添える。評価票の版は既存の評価があればその版、無ければ届出単位の版。
 export function NursingAcuityModal(props: Props) {
   const records = useAcuityRecords(props.patientId, props.date);
+  const form = props.existing ? parseAcuityObservation(props.existing).form : props.unit.form;
   return (
     <Modal title={`看護必要度 - ${props.patientName}(${props.date})`} onClose={props.onClose} className="nursing-acuity-modal">
       <ErrorBanner error={records.error} />
@@ -57,7 +59,9 @@ export function NursingAcuityModal(props: Props) {
       ) : (
         <AcuityForm
           {...props}
+          form={form}
           {...acuitySuggestions({
+            form,
             date: props.date,
             encounter: props.encounter,
             procedures: records.data?.procedures ?? [],
@@ -76,27 +80,27 @@ function AcuityForm({
   patientId,
   encounter,
   date,
-  ward,
-  settings,
+  unit,
+  form,
   existing,
   previous,
   suggestions,
   hints,
   onSaved,
   onClose,
-}: Props & { suggestions: AcuitySuggestion[]; hints: string[] }) {
+}: Props & { form: AcuityFormType; suggestions: AcuitySuggestion[]; hints: string[] }) {
   const save = useSaveAcuity();
   const me = useCurrentPractitioner();
-  const form = existing ? parseAcuityObservation(existing).form : acuityFormOf(settings.form);
+  const criteria = unit.criteria;
 
   const [values, setValues] = useState<AcuityValues>(() =>
-    existing ? parseAcuityObservation(existing).values : initialAcuityValues(previous, suggestions),
+    existing ? parseAcuityObservation(existing).values : initialAcuityValues(form, previous, suggestions),
   );
 
   const scores = useMemo(() => acuityScores(form, values), [form, values]);
   const reasonByCode = new Map(suggestions.map((s) => [s.code, s.reason]));
-  const ratio1 = meetsAcuityCriterion(scores, settings.ratio1);
-  const ratio2 = meetsAcuityCriterion(scores, settings.ratio2);
+  const ratio1 = meetsAcuityCriterion(scores, criteria.ratio1, values.checks);
+  const ratio2 = meetsAcuityCriterion(scores, criteria.ratio2, values.checks);
 
   function toggle(code: string, on: boolean) {
     setValues((prev) => ({
@@ -118,7 +122,7 @@ function AcuityForm({
       patientId,
       encounterId: encounter.id ?? "",
       date,
-      ward,
+      ward: { wardId: unit.id, wardName: unit.name },
       performer: me.practitionerId && me.practitioner
         ? { id: me.practitionerId, name: practitionerDisplayName(me.practitioner) }
         : null,
@@ -132,21 +136,24 @@ function AcuityForm({
     });
   }
 
-  const groups: AcuityGroup[] = ["A", "B", "C"];
+  const groups: AcuityGroup[] = acuityGroupsOf(form);
   return (
     <form className="nursing-acuity" onSubmit={handleSubmit}>
       <ErrorBanner error={save.error} />
       <div className="nursing-acuity__summary">
-        <span>A {scores.A}点</span>
-        <span>B {scores.B}点</span>
-        <span>C {scores.C}点</span>
+        <span className="nursing-acuity__form">{form.shortLabel}</span>
+        {groups.map((group) => (
+          <span key={group}>
+            {group} {scores[group]}点
+          </span>
+        ))}
         {ratio1 !== null && (
-          <span className={ratio1 ? "nursing-acuity__met" : undefined} title={acuityCriterionLabel(settings.ratio1)}>
+          <span className={ratio1 ? "nursing-acuity__met" : undefined} title={acuityCriterionLabel(criteria.ratio1)}>
             割合1 {ratio1 ? "該当" : "非該当"}
           </span>
         )}
         {ratio2 !== null && (
-          <span className={ratio2 ? "nursing-acuity__met" : undefined} title={acuityCriterionLabel(settings.ratio2)}>
+          <span className={ratio2 ? "nursing-acuity__met" : undefined} title={acuityCriterionLabel(criteria.ratio2)}>
             割合2 {ratio2 ? "該当" : "非該当"}
           </span>
         )}

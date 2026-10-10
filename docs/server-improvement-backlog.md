@@ -521,6 +521,18 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   `Questionnaire?url=` で版を引き、版ごとの canonical をカンマで並べて回避している
   (`api/queries/bedManagement.ts` の `templateCanonicals`)。テンプレートの版を上げるたびに件数が増えるだけで壊れはしない。
 
+### C-20. 救急搬送の件数を年度で数える検索(Encounter の来院方法・`encounter-ambulance`・入院日)
+
+- **現状**: 看護必要度の救急患者応需係数(`docs/nursing-acuity-design.md` §9)は、年度(4 月〜翌 3 月)の
+  救急搬送受入件数(救急外来の Encounter のうち来院方法が救急車など)と救急搬送からの入院件数(入院 Encounter の
+  `encounter-ambulance` 拡張が立つもの)を数える。来院方法(`hospitalization.admitSource` の独自 system)と拡張は
+  索引されず、`date` は期間の重なりなので、年度に重なる Encounter を `_elements` で絞って全件読み、手元で
+  `period.start` と来院方法・拡張で絞っている(年度で数千件。`complete: true` で欠けを隠さない)。
+- **望ましいサーバー機能**: `Encounter?admit-source=<system>|ambulance`(R4 標準の `admit-source`)、
+  `encounter-ambulance` 拡張の検索パラメータ、入院日(`period.start`)だけで引く検索。あれば `_summary=count` で
+  年度の件数を 2 往復で取れる。
+- **影響範囲**: 看護必要度の集計・届出タブ(係数を算入する区分があるとき)。件数の上書きは施設設定で補える。
+
 ## 長期（アーキテクチャ）
 
 ### L-1. マスタ群のターミノロジーサーバー化の検討

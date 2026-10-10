@@ -24997,6 +24997,87 @@ input.nursing-picker__search {
   font-weight: bold;
 }
 
+/* 月の割合指数・基準値の行。基準値を下回る割合・指数は赤くする。 */
+.nursing-acuity-list__index th,
+.nursing-acuity-list__threshold th {
+  text-align: right;
+  font-weight: normal;
+}
+
+.nursing-acuity-list__index th .order-select__muted {
+  margin-left: 6px;
+  font-weight: normal;
+}
+
+.nursing-acuity-list__threshold td {
+  font-weight: normal;
+}
+
+.nursing-acuity-list__below {
+  color: var(--danger);
+}
+
+.nursing-acuity__unit-info {
+  align-self: end;
+  padding-bottom: 6px;
+  white-space: nowrap;
+}
+
+.nursing-acuity__form {
+  font-weight: normal;
+  color: var(--text);
+}
+
+/* 届出様式の欄(項目 → 値)。 */
+.nursing-acuity-report {
+  width: auto;
+  min-width: 40em;
+}
+
+.nursing-acuity-report__caption {
+  caption-side: top;
+  text-align: left;
+  padding: 4px 0;
+  font-weight: bold;
+  color: var(--text-h);
+}
+
+.nursing-acuity-report__label {
+  text-align: left;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.nursing-acuity-report__value {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 施設設定の看護必要度の届出単位・救急搬送の件数の行。 */
+.facility-settings__acuity-units select,
+.facility-settings__acuity-years select {
+  max-width: 14em;
+}
+
+.facility-settings__acuity-admissions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.facility-settings__acuity-admissions > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.facility-settings__balance-list button.rp-card__compact-button {
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  font-size: 13px;
+}
+
 /* 看護必要度の一括入力。行 = 患者、列 = 評価項目のグリッド。列見出しは縦書きで、A・C の列は
    2 文字ぶんの固定幅、B の列はセレクトが読める固定幅にする(項目が 30 列を超えるので横に送る)。 */
 .nursing-acuity-bulk__actions {

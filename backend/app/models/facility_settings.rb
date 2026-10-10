@@ -157,16 +157,47 @@ class FacilitySettings < ApplicationRecord
   # 退院時サマリーの期限は document_reminder の日数を使う(督促の通知と同じ値)。表示時の判定だけなので、
   # ここを変えれば過去の入院の判定にも効く。
   # 重症度、医療・看護必要度(docs/nursing-acuity-design.md)。form は評価票の版(frontend の
-  # NURSING_ACUITY_FORMS のコード)、ratio1 / ratio2 は該当患者の基準で、項目の組の OR。
-  # 1 つの組は "A3"(A 得点 3 点以上)や "A2+B3"(A 2 点以上かつ B 3 点以上)の形。ratio2 を空にすると
-  # 割合2を出さない。既定は令和8年度改定(割合1 = A3点以上又はC1点以上、割合2 = A2点以上又はC1点以上)。
-  # 表示時の判定だけなので、変えれば過去の評価の集計にも効く。
-  NURSING_ACUITY_FORMS = %w[general-2026].freeze
-  ACUITY_TERM = { pattern: /\A[ABC]\d{1,2}(\+[ABC]\d{1,2}){0,2}\z/, label: "基準の組(A3、A2+B3 など)", strict: true }.freeze
+  # NURSING_ACUITY_FORMS のコード)、ratio1 / ratio2 は一般病棟用の該当患者の基準で、項目の組の OR。
+  # 1 つの組は "A3"(A 得点 3 点以上)、"A2+B3"(A 2 点以上かつ B 3 点以上)、"#A2"(項目 A2 に該当)の形。
+  # ratio2 を空にすると割合2を出さない。既定は令和8年度改定(割合1 = A3点以上又はC1点以上、割合2 = A2点以上又はC1点以上)。
+  # units は届出単位(病棟か病室の Location id → 届出区分・評価方式・届出病床数・基準値(%))。配列にせず
+  # id をキーにするのは、JsonShape の list が要素を文字列にしてしまうため(§8)。
+  # emergency_years は救急患者応需係数の年度(4 月始まり)ごとの件数の上書き(§9)。
+  # どれも表示時の判定だけなので、変えれば過去の評価の集計にも効く。
+  NURSING_ACUITY_FORMS = %w[general-2026 icu-2026 hcu-2026].freeze
+  ACUITY_TERM_PART = /(?:#[AC]\d{1,2}(?:-\d{1,2})?|[ABC]\d{1,2})/
+  ACUITY_TERM = {
+    pattern: /\A#{ACUITY_TERM_PART}(\+#{ACUITY_TERM_PART}){0,2}\z/, label: "基準の組(A3、A2+B3、#A2 など)", strict: true
+  }.freeze
+  ACUITY_CATEGORIES = %w[
+    none acute-hospital-a acute-hospital-b acute-1 acute-2 acute-3 acute-4 acute-5 acute-6 regional-1
+    specific-7to1 specialty-7to1 er-1 er-2 icu-1 icu-2 icu-3 hcu-1 hcu-2 hcu-note5
+  ].freeze
+  COUNT = { integer: { min: 0, unit: "件" } }.freeze
+  ACUITY_UNIT_SHAPE = {
+    fields: {
+      "kind" => { enum: %w[ward room] },
+      "category" => { enum: ACUITY_CATEGORIES, blank: true },
+      "method" => { enum: %w[I II] },
+      "beds" => { integer: { min: 0, unit: "床" } },
+      "ratio1" => :number,
+      "ratio2" => :number
+    },
+    required: %w[kind method]
+  }.freeze
+  ACUITY_YEAR_SHAPE = {
+    fields: {
+      "transports" => COUNT,
+      "admissions" => { map: COUNT, keys: :any }
+    }
+  }.freeze
+  FISCAL_YEAR_PATTERN = /\A\d{4}\z/
   DEFAULT_NURSING_ACUITY = {
     "form" => "general-2026",
     "ratio1" => %w[A3 C1],
-    "ratio2" => %w[A2 C1]
+    "ratio2" => %w[A2 C1],
+    "units" => {},
+    "emergency_years" => {}
   }.freeze
 
   DEFAULT_ADMISSION_DOCUMENTS = {
@@ -299,8 +330,24 @@ class FacilitySettings < ApplicationRecord
         fields: {
           "form" => { enum: NURSING_ACUITY_FORMS },
           "ratio1" => { list: ACUITY_TERM, min: 1, unique: true },
-          "ratio2" => { list: ACUITY_TERM, unique: true }
+          "ratio2" => { list: ACUITY_TERM, unique: true },
+          "units" => { map: ACUITY_UNIT_SHAPE, keys: :any },
+          "emergency_years" => { map: ACUITY_YEAR_SHAPE, keys: :any }
         }
+      },
+      check: lambda { |value|
+        years = value.is_a?(Hash) && value["emergency_years"].is_a?(Hash) ? value["emergency_years"].keys : []
+        bad_years = years.reject { |key| key.to_s.match?(FISCAL_YEAR_PATTERN) }
+        units = value.is_a?(Hash) && value["units"].is_a?(Hash) ? value["units"] : {}
+        bad_percent = units.flat_map do |id, unit|
+          next [] unless unit.is_a?(Hash)
+
+          %w[ratio1 ratio2].filter_map do |key|
+            ratio = unit[key]
+            "units.#{id}.#{key} は 0〜100 で指定してください" if ratio.is_a?(Numeric) && (ratio.negative? || ratio > 100)
+          end
+        end
+        bad_years.map { |key| "emergency_years の年度「#{key}」は西暦 4 桁で指定してください" } + bad_percent
       }
     },
     "admission_documents" => {

@@ -1,9 +1,11 @@
 import { buildError, masterFetch } from "./core";
 
-// ---- 看護必要度のレセプト電算処理システム用コード(別紙7 別表1・別表2) ----
+// ---- 看護必要度のレセプト電算処理システム用コード(別紙7・17・18 の別表1・別表2) ----
 
 export interface NursingAcuityCode {
-  /** item = 別表1(項目に当たるコード)、a3_exclusion = 別表2(A3 の種類数から除く薬剤)。 */
+  /** 評価票の版。general = 別紙7(一般病棟用)、icu = 別紙17、hcu = 別紙18。 */
+  form: "general" | "icu" | "hcu";
+  /** item = 別表1(項目に当たるコード)、a3_exclusion = 別表2(注射薬剤の種類数から除く薬剤)。 */
   kind: "item" | "a3_exclusion";
   /** 評価票の項目コード(A1 / A6-1 / C21 など)。 */
   item_code: string;

@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useUpdateFacilitySettings } from "../api/adminQueries";
 import {
+  useBedWardIndex,
   useFacilitySettings,
   useOrganizationOptions,
   useQuestionnaireOptions,
   useSelfDepartments,
+  useWardOptions,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { organizationDisplayName } from "../fhir/organizationHelpers";
@@ -43,8 +45,12 @@ import {
   DEFAULT_NURSING_ACUITY,
   NURSING_ACUITY_FORMS,
   parseAcuityTerm,
+  type AcuityEmergencyYearSetting,
+  type AcuityUnitSetting,
   type NursingAcuitySettings,
 } from "../fhir/nursingAcuityHelpers";
+import { ACUITY_CATEGORY_OPTIONS, unitRoomOptions } from "../fhir/nursingAcuityUnitHelpers";
+import { locationDisplayName } from "../fhir/locationHelpers";
 import {
   CATEGORY_OPTIONS,
   DEFAULT_PRESCRIPTION_CATEGORY,
@@ -90,6 +96,24 @@ import { TrashIcon } from "../components/icons/TrashIcon";
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
 // 診療科・診察室・スタッフは自院のものしか登録しない。他院は診療情報提供書の
 // 宛先候補(連携先)として別に登録するため、その区別の基点になる設定。
+/** 届出単位の編集行(数値は文字列のまま持ち、保存で数に寄せる)。 */
+interface AcuityUnitRow {
+  id: string;
+  kind: "ward" | "room";
+  category: string;
+  method: "I" | "II";
+  beds: string;
+  ratio1: string;
+  ratio2: string;
+}
+
+/** 救急搬送の件数の年度の編集行。 */
+interface AcuityYearRow {
+  year: string;
+  transports: string;
+  admissions: { unitId: string; count: string }[];
+}
+
 export function FacilitySettingsPage() {
   const settings = useFacilitySettings();
   const { organizations, isLoading: loadingOrganizations } = useOrganizationOptions();
@@ -180,7 +204,7 @@ export function FacilitySettingsPage() {
     (days) => Number.isInteger(days) && days >= 0,
   );
 
-  // 看護必要度の評価票の版と該当患者の基準。基準は組("A3" "A2+B3")を空白区切りで入れる(組の OR)。
+  // 看護必要度の評価票の版と該当患者の基準。基準は組("A3" "A2+B3" "#A2")を空白区切りで入れる(組の OR)。
   const [acuityDraft, setAcuityDraft] = useState<
     { form: string; ratio1: string; ratio2: string } | undefined
   >(undefined);
@@ -191,13 +215,94 @@ export function FacilitySettingsPage() {
     ratio2: savedAcuity.ratio2.join(" "),
   };
   const acuityTerms = (text: string) => text.split(/[\s,、]+/).filter(Boolean);
+
+  // 届出単位(病棟・病室 → 届出区分・評価方式・届出病床数・基準値)。行で編集し、保存では { Location id: 設定 } にする。
+  // 数値の空欄はキーを省く(区分の既定を使う)。
+  const wardOptions = useWardOptions();
+  const bedWards = useBedWardIndex();
+  const unitRooms = unitRoomOptions(bedWards.bedWards);
+  const [unitsDraft, setUnitsDraft] = useState<AcuityUnitRow[] | undefined>(undefined);
+  const unitRows =
+    unitsDraft ??
+    Object.entries(savedAcuity.units).map(([id, unit]) => ({
+      id,
+      kind: unit.kind,
+      category: unit.category,
+      method: unit.method,
+      beds: unit.beds === undefined ? "" : String(unit.beds),
+      ratio1: unit.ratio1 === undefined ? "" : String(unit.ratio1),
+      ratio2: unit.ratio2 === undefined ? "" : String(unit.ratio2),
+    }));
+  const unitLocationOptions = [
+    ...wardOptions.wards.map((ward) => ({ id: ward.id ?? "", kind: "ward" as const, label: locationDisplayName(ward) })),
+    ...unitRooms.map((room) => ({ id: room.id, kind: "room" as const, label: `${room.wardName} / ${room.name}` })),
+  ];
+  const numberOrUndefined = (text: string) => (text.trim() === "" ? undefined : Number(text));
+  const unitsValid =
+    unitRows.every(
+      (row) =>
+        row.id &&
+        [row.beds, row.ratio1, row.ratio2].every((text) => text.trim() === "" || /^\d+(\.\d+)?$/.test(text.trim())),
+    ) && new Set(unitRows.map((row) => row.id)).size === unitRows.length;
+  function updateUnit(index: number, patch: Partial<AcuityUnitRow>) {
+    setUnitsDraft(unitRows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  // 救急患者応需係数の年度ごとの件数の上書き(記録から数えた値より優先)。
+  const [yearsDraft, setYearsDraft] = useState<AcuityYearRow[] | undefined>(undefined);
+  const yearRows =
+    yearsDraft ??
+    Object.entries(savedAcuity.emergency_years)
+      .map(([year, value]) => ({
+        year,
+        transports: value.transports === undefined ? "" : String(value.transports),
+        admissions: Object.entries(value.admissions ?? {}).map(([unitId, count]) => ({ unitId, count: String(count) })),
+      }))
+      .sort((a, b) => a.year.localeCompare(b.year));
+  const yearsValid =
+    yearRows.every(
+      (row) =>
+        /^\d{4}$/.test(row.year) &&
+        (row.transports.trim() === "" || /^\d+$/.test(row.transports.trim())) &&
+        row.admissions.every((a) => a.unitId && /^\d+$/.test(a.count.trim())),
+    ) && new Set(yearRows.map((row) => row.year)).size === yearRows.length;
+  function updateYear(index: number, patch: Partial<AcuityYearRow>) {
+    setYearsDraft(yearRows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
   const acuity: NursingAcuitySettings = {
     form: acuityText.form,
     ratio1: acuityTerms(acuityText.ratio1),
     ratio2: acuityTerms(acuityText.ratio2),
+    units: Object.fromEntries(
+      unitRows.map((row) => {
+        const unit: AcuityUnitSetting = { kind: row.kind, category: row.category, method: row.method };
+        const beds = numberOrUndefined(row.beds);
+        const ratio1 = numberOrUndefined(row.ratio1);
+        const ratio2 = numberOrUndefined(row.ratio2);
+        if (beds !== undefined) unit.beds = beds;
+        if (ratio1 !== undefined) unit.ratio1 = ratio1;
+        if (ratio2 !== undefined) unit.ratio2 = ratio2;
+        return [row.id, unit];
+      }),
+    ),
+    emergency_years: Object.fromEntries(
+      yearRows.map((row) => {
+        const year: AcuityEmergencyYearSetting = {};
+        const transports = numberOrUndefined(row.transports);
+        if (transports !== undefined) year.transports = transports;
+        if (row.admissions.length > 0) {
+          year.admissions = Object.fromEntries(row.admissions.map((a) => [a.unitId, Number(a.count)]));
+        }
+        return [row.year, year];
+      }),
+    ),
   };
   const acuityValid =
-    acuity.ratio1.length > 0 && [...acuity.ratio1, ...acuity.ratio2].every((term) => parseAcuityTerm(term) !== null);
+    acuity.ratio1.length > 0 &&
+    [...acuity.ratio1, ...acuity.ratio2].every((term) => parseAcuityTerm(term) !== null) &&
+    unitsValid &&
+    yearsValid;
 
   // 放射線治療の治療中の診察(週次レビュー)の間隔。最後の診察からこの日数を超えたコースを
   // 部門一覧で強調する。
@@ -730,7 +835,8 @@ export function FacilitySettingsPage() {
           </div>
         </details>
 
-        {/* 看護必要度。基準は表示時の判定だけなので、変えれば過去の評価の集計にも効く。 */}
+        {/* 看護必要度。基準・基準値は表示時の判定だけなので、変えれば過去の評価の集計にも効く。
+            評価票と割合1・割合2の基準は届出単位の設定が無い病棟(一般病棟用)に使う。 */}
         <details className="facility-settings__schedule">
           <summary>看護必要度</summary>
           <div className="facility-settings__schedule-body">
@@ -763,6 +869,191 @@ export function FacilitySettingsPage() {
                 onChange={(e) => setAcuityDraft({ ...acuityText, ratio2: e.target.value })}
               />
             </label>
+            <h3 className="facility-settings__subheading">届出単位</h3>
+            <ul className="facility-settings__balance-list facility-settings__acuity-units">
+              {unitRows.map((row, index) => (
+                <li key={index}>
+                  <select
+                    value={row.id}
+                    onChange={(e) => {
+                      const option = unitLocationOptions.find((o) => o.id === e.target.value);
+                      updateUnit(index, { id: e.target.value, kind: option?.kind ?? row.kind });
+                    }}
+                    aria-label="病棟・病室"
+                  >
+                    <option value="">選択してください</option>
+                    {unitLocationOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                    {row.id && !unitLocationOptions.some((o) => o.id === row.id) && (
+                      <option value={row.id}>(見つからない Location {row.id})</option>
+                    )}
+                  </select>
+                  <select
+                    value={row.category}
+                    onChange={(e) => updateUnit(index, { category: e.target.value })}
+                    aria-label="届出区分"
+                  >
+                    <option value="">区分を選択</option>
+                    {ACUITY_CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.code} value={option.code}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={row.method}
+                    onChange={(e) => updateUnit(index, { method: e.target.value as "I" | "II" })}
+                    aria-label="評価方式"
+                  >
+                    <option value="I">Ⅰ</option>
+                    <option value="II">Ⅱ</option>
+                  </select>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={row.beds}
+                    onChange={(e) => updateUnit(index, { beds: e.target.value })}
+                    aria-label="届出病床数"
+                    placeholder="病床数"
+                    className="facility-settings__code"
+                  />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={row.ratio1}
+                    onChange={(e) => updateUnit(index, { ratio1: e.target.value })}
+                    aria-label="割合1の基準値(%)"
+                    placeholder="基準値① %"
+                    className="facility-settings__code"
+                  />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={row.ratio2}
+                    onChange={(e) => updateUnit(index, { ratio2: e.target.value })}
+                    aria-label="割合2の基準値(%)"
+                    placeholder="基準値② %"
+                    className="facility-settings__code"
+                  />
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title="届出単位を削除"
+                    aria-label="届出単位を削除"
+                    onClick={() => setUnitsDraft(unitRows.filter((_, i) => i !== index))}
+                  >
+                    <TrashIcon />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="rp-card__compact-button"
+              onClick={() =>
+                setUnitsDraft([
+                  ...unitRows,
+                  { id: "", kind: "ward", category: "", method: "I", beds: "", ratio1: "", ratio2: "" },
+                ])
+              }
+            >
+              追加
+            </button>
+            <h3 className="facility-settings__subheading">救急搬送の件数(年度)</h3>
+            <ul className="facility-settings__balance-list facility-settings__acuity-years">
+              {yearRows.map((row, index) => (
+                <li key={index}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={row.year}
+                    onChange={(e) => updateYear(index, { year: e.target.value.trim() })}
+                    aria-label="年度"
+                    placeholder="年度"
+                    className="facility-settings__code"
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={row.transports}
+                    onChange={(e) => updateYear(index, { transports: e.target.value })}
+                    aria-label="救急搬送受入件数"
+                    placeholder="受入件数"
+                    className="facility-settings__code"
+                  />
+                  <span className="facility-settings__acuity-admissions">
+                    {row.admissions.map((a, aIndex) => (
+                      <span key={aIndex}>
+                        <select
+                          value={a.unitId}
+                          onChange={(e) =>
+                            updateYear(index, {
+                              admissions: row.admissions.map((x, i) => (i === aIndex ? { ...x, unitId: e.target.value } : x)),
+                            })
+                          }
+                          aria-label="届出単位"
+                        >
+                          <option value="">単位を選択</option>
+                          {unitLocationOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={a.count}
+                          onChange={(e) =>
+                            updateYear(index, {
+                              admissions: row.admissions.map((x, i) => (i === aIndex ? { ...x, count: e.target.value } : x)),
+                            })
+                          }
+                          aria-label="救急搬送からの入院件数"
+                          placeholder="入院件数"
+                          className="facility-settings__code"
+                        />
+                        <button
+                          type="button"
+                          className="rp-card__icon-button"
+                          title="入院件数を削除"
+                          aria-label="入院件数を削除"
+                          onClick={() => updateYear(index, { admissions: row.admissions.filter((_, i) => i !== aIndex) })}
+                        >
+                          <TrashIcon />
+                        </button>
+                      </span>
+                    ))}
+                    <button
+                      type="button"
+                      className="rp-card__compact-button"
+                      onClick={() => updateYear(index, { admissions: [...row.admissions, { unitId: "", count: "" }] })}
+                    >
+                      入院件数
+                    </button>
+                  </span>
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title="年度を削除"
+                    aria-label="年度を削除"
+                    onClick={() => setYearsDraft(yearRows.filter((_, i) => i !== index))}
+                  >
+                    <TrashIcon />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="rp-card__compact-button"
+              onClick={() => setYearsDraft([...yearRows, { year: "", transports: "", admissions: [] }])}
+            >
+              追加
+            </button>
           </div>
         </details>
 

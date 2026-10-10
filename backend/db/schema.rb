@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_10_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_10_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1631,6 +1631,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_10_120000) do
     t.integer "display_order", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "form", default: "general", null: false
+    t.index ["form", "kind", "code"], name: "index_master_nursing_acuity_codes_on_form_and_kind_and_code"
     t.index ["kind", "code"], name: "index_master_nursing_acuity_codes_on_kind_and_code"
   end
 

@@ -1,17 +1,24 @@
 module MasterImport
-  # 厚生労働省 通知「基本診療料の施設基準等及びその届出に関する手続きの取扱いについて」の
-  # 別紙7 別表1(一般病棟用の重症度、医療・看護必要度 A・C 項目に係るレセプト電算処理システム用コード一覧)と
-  # 別表2(「A3 注射薬剤3種類以上の管理」で薬剤の種類数の対象から除くもの)の Excel を、
-  # master_nursing_acuity_codes へ取り込む。どちらのファイルかは先頭シートの表題で見分け、
-  # その種類(kind)だけを全件洗い替えする。新旧対照・見え消しのシートは読まない(先頭シートだけ)。
+  # 厚生労働省 通知「基本診療料の施設基準等及びその届出に関する手続きの取扱いについて」の、
+  # 重症度、医療・看護必要度の A・C 項目に係るレセプト電算処理システム用コード一覧(別表1)と、
+  # 「注射薬剤3種類以上の管理」で薬剤の種類数の対象から除くもの(別表2)の Excel を、
+  # master_nursing_acuity_codes へ取り込む。評価票の版は 3 つ(別紙7 一般病棟用 / 別紙17 特定集中治療室用 /
+  # 別紙18 ハイケアユニット用)。どのファイルかは先頭シートの表題で見分け、その版・種類(form, kind)だけを
+  # 全件洗い替えする。新旧対照・見え消しのシートは読まない(先頭シートだけ)。
   #
-  # 別表1 の先頭シート: 3 行目が見出し、4 行目から A 列 区分(Ａ/Ｃ)、B 列 項目番号、C 列 項目名、
-  # D 列 コード、E 列 名称、F 列「※」(必要度Ⅰだけで用いる)。結合セルの続きは A〜C 列が空なので、
-  # 直前の行の値を引き継ぐ。A3 はコードではなく規則の行(「別紙７別表２の薬剤を除く、注射薬剤の種類数」)
-  # なので取り込まない(A3 は注射薬の種類数で判定する)。
-  # 別表2 の先頭シート: 2 行目が見出し、3 行目から A 列 コード、B 列 名称。
+  # 別表1 の先頭シート: 見出し行(「レセプト電算処理システム用コード」の列を持つ行)の次から、A 列 区分(Ａ/Ｃ)、
+  # B 列 項目番号、C 列 項目名、D 列 コード、E 列 名称、F 列「※」(一般病棟用だけ。必要度Ⅰだけで用いる)。
+  # 結合セルの続きは A〜C 列が空なので、直前の行の値を引き継ぐ。注射薬剤3種類以上の管理(一般 A3・HCU A4)は
+  # コードではなく規則の行(「別紙７別表２の薬剤を除く、注射薬剤の種類数」)なので取り込まない。
+  # 別表2 の先頭シート: 見出し行の次から A 列 コード、B 列 名称。
   class NursingAcuityCodeImporter
     CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫".chars.freeze
+    FORM_TITLES = {
+      "一般病棟用" => "general",
+      "特定集中治療室用" => "icu",
+      "ハイケアユニット用" => "hcu"
+    }.freeze
+    CODE_HEADER = "レセプト電算処理システム用コード".freeze
 
     Result = Struct.new(:imported_count, :skipped_count, keyword_init: true)
 
@@ -24,22 +31,25 @@ module MasterImport
     end
 
     def call
-      kind, rows, skipped = ExcelSource.open(file) do |workbook|
+      form, kind, rows, skipped = ExcelSource.open(file) do |workbook|
         sheet = workbook.sheet(0)
         title = ExcelSource.normalize_label(ExcelSource.cell_string(sheet, 1, 1))
-        if title.include?("別表1") && title.include?("一般病棟用")
-          ["item", *item_rows(sheet)]
-        elsif title.include?("別表2") && title.include?("一般病棟用")
-          ["a3_exclusion", *exclusion_rows(sheet)]
+        form = FORM_TITLES.find { |name, _| title.include?(name) }&.last
+        if form && title.include?("別表1")
+          [form, "item", *item_rows(sheet, form)]
+        elsif form && title.include?("別表2")
+          [form, "a3_exclusion", *exclusion_rows(sheet)]
         else
-          raise ImportError, "看護必要度の別紙7 別表1(コード一覧)か別表2(A3 の除外薬剤)の Excel を選んでください"
+          raise ImportError, "看護必要度の別表1(コード一覧)か別表2(注射薬剤の種類数から除く薬剤)の Excel(別紙7・17・18)を選んでください"
         end
       end
       raise ImportError, "コードが 1 件も読み取れませんでした" if rows.empty?
 
       ActiveRecord::Base.transaction do
-        Master::NursingAcuityCode.where(kind: kind).delete_all
-        Master::NursingAcuityCode.insert_all!(rows.map { |row| row.merge(kind: kind, created_at: now, updated_at: now) })
+        Master::NursingAcuityCode.where(form: form, kind: kind).delete_all
+        Master::NursingAcuityCode.insert_all!(
+          rows.map { |row| row.merge(form: form, kind: kind, created_at: now, updated_at: now) }
+        )
       end
 
       Result.new(imported_count: rows.size, skipped_count: skipped)
@@ -53,21 +63,28 @@ module MasterImport
       @now ||= Time.current
     end
 
-    def item_rows(sheet)
+    def first_data_row(sheet)
+      header = ExcelSource.find_header_row(sheet, [CODE_HEADER])
+      raise ImportError, "見出し行(#{CODE_HEADER})が見つかりません" if header.nil?
+
+      header + 1
+    end
+
+    def item_rows(sheet, form)
       rows = []
       skipped = 0
       group = number = label = nil
-      (4..sheet.last_row.to_i).each do |row|
+      (first_data_row(sheet)..sheet.last_row.to_i).each do |row|
         group = ExcelSource.cell_string(sheet, row, 1) || group
         number = ExcelSource.cell_string(sheet, row, 2) || number
         label = ExcelSource.cell_string(sheet, row, 3) || label
         code = ExcelSource.cell_string(sheet, row, 4)
         next if code.blank?
-
-        item_code = item_code_of(group, number, label)
-        # A3 は規則の行(コードの欄に「別紙７別表２の薬剤を除く、注射薬剤の種類数」)なので取り込まない。
-        next if item_code == "A3"
+        # 注射薬剤3種類以上の管理は規則の行(コードの欄に「…注射薬剤の種類数」)なので取り込まない。
+        next if code.include?("種類数")
         next skipped += 1 unless code.match?(/\A\d{9}\z/)
+
+        item_code = item_code_of(group, number, label, form)
         next skipped += 1 if item_code.nil?
 
         rows << {
@@ -86,7 +103,7 @@ module MasterImport
     def exclusion_rows(sheet)
       rows = []
       skipped = 0
-      (3..sheet.last_row.to_i).each do |row|
+      (first_data_row(sheet)..sheet.last_row.to_i).each do |row|
         code = ExcelSource.cell_string(sheet, row, 1)
         next if code.blank?
         next skipped += 1 unless code.match?(/\A\d{9}\z/)
@@ -103,13 +120,13 @@ module MasterImport
     end
 
     # "Ａ" + "6" + "専門的な治療・処置（① …）" → "A6-1"、"Ｃ" + "21" + "…（①経皮的血管内治療）" → "C21"。
-    # A6 だけは小項目ごとに点数が違うので小項目まで持つ(C21 の①〜③は点数が同じなので項目でまとめる)。
-    def item_code_of(group, number, label)
+    # 一般病棟用の A6 だけは小項目ごとに点数が違うので小項目まで持つ(C21 の①〜③は点数が同じなので項目でまとめる)。
+    def item_code_of(group, number, label, form)
       letter = group.to_s.unicode_normalize(:nfkc).strip
       digits = number.to_s.unicode_normalize(:nfkc).strip
       return nil unless %w[A C].include?(letter) && digits.match?(/\A\d+\z/)
 
-      if letter == "A" && digits == "6"
+      if form == "general" && letter == "A" && digits == "6"
         index = CIRCLED.index { |circled| label.to_s.include?(circled) }
         return index ? "A6-#{index + 1}" : nil
       end

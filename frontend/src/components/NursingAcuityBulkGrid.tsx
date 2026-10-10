@@ -4,7 +4,7 @@ import { useAcuityRecordsForPatients, useSaveAcuity } from "../api/queries";
 import {
   acuityColumns,
   acuityCriterionLabel,
-  acuityFormOf,
+  acuityGroupsOf,
   acuityScores,
   acuityStateOptions,
   acuityStateValue,
@@ -15,11 +15,12 @@ import {
   parseAcuityObservation,
   withAcuityState,
   type AcuityColumn,
+  type AcuityCriteria,
   type AcuityForm,
   type AcuityGroup,
   type AcuityValues,
-  type NursingAcuitySettings,
 } from "../fhir/nursingAcuityHelpers";
+import type { AcuityUnit } from "../fhir/nursingAcuityUnitHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { referenceId } from "../fhir/shared";
@@ -28,7 +29,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { NursingAcuityModal } from "./NursingAcuityModal";
 import { TruncatedNotice } from "./TruncatedNotice";
 
-// 看護必要度の評価(docs/nursing-acuity-design.md §3)。行 = 病棟の患者、列 = 評価票の項目のグリッドで、
+// 看護必要度の評価(docs/nursing-acuity-design.md §3)。行 = 届出単位(病棟・病室)の患者、列 = 評価票の項目のグリッドで、
 // A・C の項目(A6 は小項目ごと)はセルを押して「あり / なし」を切り替え、B の項目はセレクトで選ぶ
 // (介助の実施を掛ける項目は「状態・介助あり / なし」を 1 つのセレクトに並べる)。
 //
@@ -38,7 +39,7 @@ import { TruncatedNotice } from "./TruncatedNotice";
 
 const GROUP_LABELS: Record<AcuityGroup, string> = { A: "A", B: "B", C: "C" };
 
-/** 右端の得点の列。r1 / r2 は割合1・割合2の該当。 */
+/** 右端の得点の列。r1 / r2 は割合1・割合2の該当。版に無い区分(ICU・HCU 用の C)と使わない割合2は出さない。 */
 const SCORE_COLUMNS = [
   { key: "A", label: "A" },
   { key: "B", label: "B" },
@@ -47,13 +48,22 @@ const SCORE_COLUMNS = [
   { key: "r2", label: "割合2" },
 ] as const;
 
+function scoreColumns(form: AcuityForm, criteria: AcuityCriteria) {
+  const groups = acuityGroupsOf(form);
+  return SCORE_COLUMNS.filter((c) => {
+    if (c.key === "r1") return true;
+    if (c.key === "r2") return criteria.ratio2.length > 0;
+    return (groups as string[]).includes(c.key);
+  });
+}
+
 interface Props {
   rows: WardInpatient[];
   /** 患者 id → その日・前日の評価。 */
   byPatient: Map<string, { today?: fhir4.Observation; previous?: fhir4.Observation }>;
   date: string;
-  ward: { wardId: string; wardName: string };
-  settings: NursingAcuitySettings;
+  /** 届出単位(評価票の版・基準・評価に焼く病棟 id)。 */
+  unit: AcuityUnit;
 }
 
 interface RowState {
@@ -65,19 +75,22 @@ interface RowState {
   reasons: Map<string, string>;
 }
 
-export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }: Props) {
+export function NursingAcuityBulkGrid({ rows, byPatient, date, unit }: Props) {
   const records = useAcuityRecordsForPatients(
     rows.map((row) => row.patientId),
     date,
   );
   const save = useSaveAcuity();
   const me = useCurrentPractitioner();
-  const settingsForm = acuityFormOf(settings.form);
+  const settingsForm = unit.form;
+  const criteria = unit.criteria;
+  const ward = { wardId: unit.id, wardName: unit.name };
   const columns = useMemo(() => acuityColumns(settingsForm), [settingsForm]);
-  const groups = (["A", "B", "C"] as const).map((group) => ({
+  const groups = acuityGroupsOf(settingsForm).map((group) => ({
     group,
     span: columns.filter((column) => column.group === group).length,
   }));
+  const scores = scoreColumns(settingsForm, criteria);
 
   // 患者ごとの初期値。評価済みはその値、未評価は前日の B と記録から推した A。
   const rowStates = useMemo<RowState[]>(() => {
@@ -91,6 +104,7 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
         return { row, form: parsed.form, baseline: parsed.values, existing: own.today, reasons: new Map() };
       }
       const { suggestions } = acuitySuggestions({
+        form: settingsForm,
         date,
         encounter: row.encounter,
         procedures: ofPatient(records.data?.procedures, row.patientId),
@@ -102,7 +116,7 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
       return {
         row,
         form: settingsForm,
-        baseline: initialAcuityValues(own?.previous, suggestions),
+        baseline: initialAcuityValues(settingsForm, own?.previous, suggestions),
         reasons: new Map(suggestions.map((s) => [s.code, s.reason])),
       };
     });
@@ -177,7 +191,6 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
   }
 
   const allSelected = rowStates.length > 0 && rowStates.every((state) => selected.has(state.row.patientId));
-  const showRatio2 = settings.ratio2.length > 0;
 
   if (records.isLoading) return <p>読み込み中...</p>;
 
@@ -207,7 +220,7 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
               />
             ))}
             <col className="nursing-acuity-bulk__col-check" />
-            {SCORE_COLUMNS.filter((c) => showRatio2 || c.key !== "r2").map((c) => (
+            {scores.map((c) => (
               <col key={c.key} className="nursing-acuity-bulk__col-score" />
             ))}
           </colgroup>
@@ -232,7 +245,7 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
                 </th>
               ))}
               <th className="nursing-acuity-bulk__group" aria-hidden="true"></th>
-              <th colSpan={showRatio2 ? 5 : 4} className="nursing-acuity-bulk__group">
+              <th colSpan={scores.length} className="nursing-acuity-bulk__group">
                 得点
               </th>
             </tr>
@@ -259,13 +272,13 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
               <th rowSpan={2} className={`nursing-acuity-bulk__head${hoverClass("excluded")}`}>
                 <span className="nursing-acuity-bulk__head-text">対象外</span>
               </th>
-              {SCORE_COLUMNS.filter((c) => showRatio2 || c.key !== "r2").map((c) => (
+              {scores.map((c) => (
                 <th
                   key={c.key}
                   rowSpan={2}
                   className={`nursing-acuity-bulk__score-head${hoverClass(c.key)}`}
-                  // 割合1・割合2は該当患者の基準(施設設定)を吹き出しに出す。
-                  title={criterionTitle(c.key, settings)}
+                  // 割合1・割合2は該当患者の基準を吹き出しに出す。
+                  title={criterionTitle(c.key, criteria)}
                 >
                   {c.label}
                 </th>
@@ -282,9 +295,9 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
           <tbody>
             {rowStates.map((state) => {
               const values = valuesOf(state);
-              const scores = values.excluded ? null : acuityScores(state.form, values);
-              const r1 = scores ? meetsAcuityCriterion(scores, settings.ratio1) : null;
-              const r2 = scores ? meetsAcuityCriterion(scores, settings.ratio2) : null;
+              const rowScores = values.excluded ? null : acuityScores(state.form, values);
+              const r1 = rowScores ? meetsAcuityCriterion(rowScores, criteria.ratio1, values.checks) : null;
+              const r2 = rowScores ? meetsAcuityCriterion(rowScores, criteria.ratio2, values.checks) : null;
               const patientId = state.row.patientId;
               const dirty = drafts.has(patientId);
               return (
@@ -344,12 +357,12 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
                       {values.excluded ? "●" : ""}
                     </button>
                   </td>
-                  {SCORE_COLUMNS.filter((c) => showRatio2 || c.key !== "r2").map((c) => {
+                  {scores.map((c) => {
                     const met = c.key === "r1" ? r1 : c.key === "r2" ? r2 : null;
                     const value =
                       c.key === "r1" || c.key === "r2"
                         ? met ? <span className="nursing-acuity__met">該当</span> : "-"
-                        : (scores?.[c.key as AcuityGroup] ?? "-");
+                        : (rowScores?.[c.key as AcuityGroup] ?? "-");
                     return (
                       <td
                         key={c.key}
@@ -365,8 +378,8 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
             })}
             {rowStates.length === 0 && (
               <tr>
-                <td colSpan={columns.length + 7} className="master-search__empty">
-                  この日に病棟に居る患者はいません。
+                <td colSpan={columns.length + 2 + scores.length} className="master-search__empty">
+                  この日に居る患者はいません。
                 </td>
               </tr>
             )}
@@ -380,8 +393,7 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
           patientName={openState.row.patient ? displayName(openState.row.patient) : openState.row.patientId}
           encounter={openState.row.encounter}
           date={date}
-          ward={ward}
-          settings={settings}
+          unit={unit}
           existing={openState.existing}
           previous={byPatient.get(openState.row.patientId)?.previous}
           onSaved={() => discardRow(openState.row.patientId)}
@@ -393,9 +405,9 @@ export function NursingAcuityBulkGrid({ rows, byPatient, date, ward, settings }:
 }
 
 /** 割合1・割合2の見出しの吹き出し(該当患者の基準)。それ以外の列は無し。 */
-function criterionTitle(key: string, settings: NursingAcuitySettings): string | undefined {
-  if (key === "r1") return `割合1: ${acuityCriterionLabel(settings.ratio1)}`;
-  if (key === "r2") return `割合2: ${acuityCriterionLabel(settings.ratio2)}`;
+function criterionTitle(key: string, criteria: AcuityCriteria): string | undefined {
+  if (key === "r1") return `割合1: ${acuityCriterionLabel(criteria.ratio1)}`;
+  if (key === "r2") return `割合2: ${acuityCriterionLabel(criteria.ratio2)}`;
   return undefined;
 }
 

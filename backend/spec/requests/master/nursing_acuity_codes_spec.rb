@@ -1,7 +1,8 @@
 require "rails_helper"
 
-# fixture(nursing_acuity_b1_sample.xlsx / nursing_acuity_b2_sample.xlsx)は厚生労働省の配布ファイル
-# (令和8年度 別紙7 別表1・別表2)の先頭シートから数行を抜き出したもの。
+# fixture(nursing_acuity_b1_sample.xlsx / nursing_acuity_b2_sample.xlsx / nursing_acuity_icu_b1_sample.xlsx /
+# nursing_acuity_hcu_b1_sample.xlsx / nursing_acuity_hcu_b2_sample.xlsx)は厚生労働省の配布ファイル
+# (令和8年度 別紙7・17・18 の別表1・別表2)の先頭シートから数行を抜き出したもの。
 RSpec.describe "Master::NursingAcuityCodes", type: :request do
   def import(name)
     post "/master/nursing_acuity_codes/import", params: { file: fixture_file_upload(name) }
@@ -49,6 +50,27 @@ RSpec.describe "Master::NursingAcuityCodes", type: :request do
       expect(Master::NursingAcuityCode.where(code: "999999999")).to be_empty
     end
 
+    it "別紙17(ICU 用)・別紙18(HCU 用)は版を分けて取り込み、一般病棟用を取り込み直しても残る" do
+      import("nursing_acuity_icu_b1_sample.xlsx")
+      expect(JSON.parse(response.body)).to include("imported" => 7, "skipped" => 0)
+      import("nursing_acuity_hcu_b1_sample.xlsx")
+      # A4 の規則の行はコードではないので数えない。
+      expect(JSON.parse(response.body)).to include("imported" => 4, "skipped" => 0)
+      import("nursing_acuity_hcu_b2_sample.xlsx")
+      expect(JSON.parse(response.body)).to include("imported" => 2)
+      import("nursing_acuity_b1_sample.xlsx")
+
+      # ICU 用は A10 を小項目に分けず、区分の空いた結合セルの続き(A6)も項目に乗る。
+      expect(Master::NursingAcuityCode.where(form: "icu", kind: "item").order(:display_order).pluck(:item_code, :code)).to eq(
+        [%w[A1 140009010], %w[A1 140010210], %w[A2 160074010], %w[A3 130000210], %w[A6 620004744], %w[A10 140049610], %w[A10 150283010]]
+      )
+      expect(Master::NursingAcuityCode.where(form: "hcu", kind: "item").order(:display_order).pluck(:item_code, :code)).to eq(
+        [%w[A1 140000610], %w[A2 140009010], %w[A8 140005910], %w[A13 140049610]]
+      )
+      expect(Master::NursingAcuityCode.where(form: "hcu", kind: "a3_exclusion").pluck(:code)).to eq(%w[620000226 620000237])
+      expect(Master::NursingAcuityCode.where(form: "general", kind: "item").count).to eq(10)
+    end
+
     it "表題が違うファイルは取り込まない" do
       import("dpc_stem7_sample.xlsx")
 
@@ -63,19 +85,23 @@ RSpec.describe "Master::NursingAcuityCodes", type: :request do
       import("nursing_acuity_b2_sample.xlsx")
     end
 
-    it "コード(複数)に当たる行を両方の種類まとめて返す" do
+    it "コード(複数)に当たる行を版・種類を問わずまとめて返す" do
+      import("nursing_acuity_hcu_b1_sample.xlsx")
       get "/master/nursing_acuity_codes", params: { code: "140000610,620000237,000000000" }
 
       items = JSON.parse(response.body)["items"]
-      expect(items.map { |i| [i["kind"], i["item_code"], i["code"]] }).to contain_exactly(
-        %w[item A1 140000610], %w[a3_exclusion A3 620000237]
+      expect(items.map { |i| [i["form"], i["kind"], i["item_code"], i["code"]] }).to contain_exactly(
+        %w[general item A1 140000610], %w[general a3_exclusion A3 620000237], %w[hcu item A1 140000610]
       )
     end
 
-    it "コードを渡さなければ種類ごとの件数を返す" do
+    it "コードを渡さなければ版 × 種類ごとの件数を返す" do
       get "/master/nursing_acuity_codes"
 
-      expect(JSON.parse(response.body)["counts"]).to eq("item" => 10, "a3_exclusion" => 2)
+      expect(JSON.parse(response.body)["counts"]).to contain_exactly(
+        { "form" => "general", "kind" => "item", "count" => 10 },
+        { "form" => "general", "kind" => "a3_exclusion", "count" => 2 }
+      )
     end
   end
 end

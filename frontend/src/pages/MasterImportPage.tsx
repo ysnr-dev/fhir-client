@@ -186,7 +186,7 @@ const MASTER_OPTIONS: MasterOption[] = [
     type: "nursing_acuity_codes",
     label: "看護必要度 コード一覧（別表1・別表2）",
     formatHint:
-      "厚生労働省 別紙7 別表1（A・C項目のコード一覧）・別表2（A3の除外薬剤） .xlsx（ファイルごとに全件を入れ替える）",
+      "厚生労働省 別紙7（一般病棟用）・別紙17（ICU用）・別紙18（HCU用）の別表1（A・C項目のコード一覧）・別表2（注射薬剤の除外薬剤） .xlsx（ファイルごとに全件を入れ替える）",
     accept: ".xlsx",
   },
   {

@@ -1,5 +1,9 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { EMERGENCY_CANCELLED_STATUS, EMERGENCY_CLASS_CODE } from "../../fhir/emergencyEncounterHelpers";
+import { ADMISSION_CLASS_CODE, ADMISSION_STATUS, DISCHARGED_STATUS } from "../../fhir/encounterHelpers";
 import { acuityRecordCodes, NURSING_ACUITY_FORMS, NURSING_ACUITY_SYSTEM } from "../../fhir/nursingAcuityHelpers";
+import { fiscalYearRange } from "../../fhir/nursingAcuityCoefficientHelpers";
+import { monthRange } from "../../fhir/nursingAcuityReportHelpers";
 import { PRESCRIPTION_ORDER_TYPE } from "../../fhir/prescriptionHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { addDays } from "../../lib/dates";
@@ -19,29 +23,138 @@ function chunks<T>(items: T[], size: number): T[][] {
   return result;
 }
 
-/** 患者の期間 [from, to] の評価(どの版の評価票でも)。 */
+async function fetchAcuityObservations(ids: string[], from: string, to: string) {
+  const results = await Promise.all(
+    chunks(ids, PATIENT_CHUNK).map((chunk) => {
+      const params = new URLSearchParams();
+      params.set("code", NURSING_ACUITY_FORMS.map((form) => `${NURSING_ACUITY_SYSTEM}|${form.code}`).join(","));
+      params.set("patient", chunk.map((id) => `Patient/${id}`).join(","));
+      params.append("date", `ge${from}`);
+      params.append("date", `le${to}`);
+      return searchAllPages<fhir4.Observation>("Observation", params, { page: 500, maxPages: 4 });
+    }),
+  );
+  return {
+    observations: results.flatMap((result) => result.matches),
+    truncated: results.some((result) => result.truncated),
+  };
+}
+
+/** 患者の期間 [from, to] の評価(どの版の評価票でも)。期間は 1 か月を目安に(40 人 × 31 日が 4 ページに収まる幅)。 */
 export function useAcuityObservations(patientIds: string[], from: string, to: string) {
   const ids = [...new Set(patientIds.filter(Boolean))].sort();
   return useQuery({
     queryKey: [...ACUITY_KEY, ids.join(","), from, to],
-    queryFn: async () => {
-      const results = await Promise.all(
-        chunks(ids, PATIENT_CHUNK).map((chunk) => {
-          const params = new URLSearchParams();
-          params.set("code", NURSING_ACUITY_FORMS.map((form) => `${NURSING_ACUITY_SYSTEM}|${form.code}`).join(","));
-          params.set("patient", chunk.map((id) => `Patient/${id}`).join(","));
-          params.append("date", `ge${from}`);
-          params.append("date", `le${to}`);
-          return searchAllPages<fhir4.Observation>("Observation", params, { page: 500, maxPages: 4 });
-        }),
-      );
-      return {
-        observations: results.flatMap((result) => result.matches),
-        truncated: results.some((result) => result.truncated),
-      };
-    },
+    queryFn: () => fetchAcuityObservations(ids, from, to),
     enabled: ids.length > 0 && Boolean(from) && Boolean(to),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** 月ごとの入院と評価(届出様式の直近 3 月)。月ごとに 1 本ずつ読む(1 本の上限に収めるため)。 */
+export function useAcuityReportMonths(months: string[]) {
+  const encounterQueries = useQueries({
+    queries: months.map((month) => {
+      const { from, to } = monthRange(month);
+      return {
+        queryKey: ["Encounter", "range", from, to],
+        queryFn: () => fetchEncountersInRange(from, to),
+        placeholderData: keepPreviousData,
+      };
+    }),
+  });
+  const observationQueries = useQueries({
+    queries: months.map((month, index) => {
+      const { from, to } = monthRange(month);
+      const ids = [
+        ...new Set(
+          (encounterQueries[index].data?.encounters ?? [])
+            .map((encounter) => encounter.subject?.reference?.split("/").pop() ?? "")
+            .filter(Boolean),
+        ),
+      ].sort();
+      return {
+        queryKey: [...ACUITY_KEY, ids.join(","), from, to],
+        queryFn: () => fetchAcuityObservations(ids, from, to),
+        enabled: ids.length > 0,
+        placeholderData: keepPreviousData,
+      };
+    }),
+  });
+  return {
+    months: months.map((month, index) => ({
+      month,
+      encounters: encounterQueries[index].data,
+      observations: observationQueries[index].data,
+    })),
+    isLoading: encounterQueries.some((q) => q.isLoading) || observationQueries.some((q) => q.isLoading),
+    error: encounterQueries.find((q) => q.error)?.error ?? observationQueries.find((q) => q.error)?.error ?? null,
+    truncated: encounterQueries.some((q) => q.data?.truncated) || observationQueries.some((q) => q.data?.truncated),
+  };
+}
+
+async function fetchEncountersInRange(from: string, to: string) {
+  const params = new URLSearchParams();
+  params.set("status", `${ADMISSION_STATUS},${DISCHARGED_STATUS}`);
+  params.set("class", ADMISSION_CLASS_CODE);
+  params.append("date", `ge${from}`);
+  params.append("date", `le${to}`);
+  params.set("_include", "Encounter:subject");
+  const { matches, bundles, truncated } = await searchAllPages<fhir4.Encounter>("Encounter", params, {
+    page: 500,
+    maxPages: 4,
+  });
+  const patientsById = new Map<string, fhir4.Patient>();
+  for (const bundle of bundles) {
+    for (const patient of resourcesOfType<fhir4.Patient>(bundle, "Patient")) {
+      if (patient.id) patientsById.set(patient.id, patient);
+    }
+  }
+  return { encounters: matches, patientsById, truncated };
+}
+
+// ---- 救急患者応需係数(年度の件数) ----
+
+// 年度の件数は欠けると係数が狂うので complete(上限に達したら SearchLimitError)。
+const YEAR_PAGING = { page: 500, maxPages: 20, complete: true };
+
+/** 年度(4 月〜翌 3 月)の救急外来の来院(来院方法と来院日時だけ)。 */
+export function useEmergencyArrivalsInYear(fiscalYear: number | undefined) {
+  return useQuery({
+    queryKey: ["Encounter", "emergency-year", fiscalYear ?? 0],
+    queryFn: async () => {
+      const { from, to } = fiscalYearRange(fiscalYear ?? 0);
+      const params = new URLSearchParams();
+      params.set("class", EMERGENCY_CLASS_CODE);
+      params.set("status:not", EMERGENCY_CANCELLED_STATUS);
+      params.append("date", `ge${from}`);
+      params.append("date", `le${to}`);
+      params.set("_elements", "status,period,hospitalization");
+      const { matches } = await searchAllPages<fhir4.Encounter>("Encounter", params, YEAR_PAGING);
+      return matches;
+    },
+    enabled: fiscalYear !== undefined,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+/** 年度に始まった入院(入院経路と床の履歴だけ)。 */
+export function useAdmissionsInYear(fiscalYear: number | undefined) {
+  return useQuery({
+    queryKey: ["Encounter", "admission-year", fiscalYear ?? 0],
+    queryFn: async () => {
+      const { from, to } = fiscalYearRange(fiscalYear ?? 0);
+      const params = new URLSearchParams();
+      params.set("class", ADMISSION_CLASS_CODE);
+      params.set("status", `${ADMISSION_STATUS},${DISCHARGED_STATUS}`);
+      params.append("date", `ge${from}`);
+      params.append("date", `le${to}`);
+      params.set("_elements", "status,period,location,extension,hospitalization,subject");
+      const { matches } = await searchAllPages<fhir4.Encounter>("Encounter", params, YEAR_PAGING);
+      return matches;
+    },
+    enabled: fiscalYear !== undefined,
+    staleTime: 10 * 60 * 1000,
   });
 }
 

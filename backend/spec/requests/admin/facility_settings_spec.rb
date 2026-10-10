@@ -205,15 +205,59 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(JSON.parse(response.body)["nursing_acuity"]).to eq(
-        "form" => "general-2026", "ratio1" => %w[A2+B3 A3 C1], "ratio2" => [],
+        "form" => "general-2026", "ratio1" => %w[A2+B3 A3 C1], "ratio2" => [], "units" => {}, "emergency_years" => {},
       )
     end
 
-    it "組の書き方が違えば 422" do
+    it "項目に該当する組(#A2)を受け、書き方が違えば 422" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { nursing_acuity: { ratio1: %w[#A2+#A7 #A6-5 A1] } }, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["nursing_acuity"]["ratio1"]).to eq(%w[#A2+#A7 #A6-5 A1])
+
       without_admin_token do
         patch "/admin/facility_settings", params: { nursing_acuity: { ratio1: ["A>=3"] } }, as: :json
       end
       expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "届出単位と救急搬送の件数を保存し、数値の文字列は数に寄せる" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: {
+                nursing_acuity: {
+                  units: {
+                    "ward-1" => { kind: "ward", category: "acute-1", method: "II", beds: "40", ratio1: "27.5" },
+                    "room-icu" => { kind: "room", category: "icu-1", method: "I" }
+                  },
+                  emergency_years: { "2025" => { transports: "1200", admissions: { "ward-1" => "300" } } }
+                }
+              },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)["nursing_acuity"]
+      # 空欄のキーは返さない(区分の既定を使う)。
+      expect(body["units"]).to eq(
+        "ward-1" => { "kind" => "ward", "category" => "acute-1", "method" => "II", "beds" => 40, "ratio1" => 27.5 },
+        "room-icu" => { "kind" => "room", "category" => "icu-1", "method" => "I" }
+      )
+      expect(body["emergency_years"]).to eq("2025" => { "transports" => 1200, "admissions" => { "ward-1" => 300 } })
+    end
+
+    it "届出区分が無いもの・年度が 4 桁でないもの・基準値が 100 を超えるものは 422" do
+      [
+        { units: { "w" => { kind: "ward", category: "acute-9", method: "I" } } },
+        { emergency_years: { "R7" => { transports: 1 } } },
+        { units: { "w" => { kind: "ward", category: "acute-1", method: "I", ratio1: 120 } } }
+      ].each do |payload|
+        without_admin_token do
+          patch "/admin/facility_settings", params: { nursing_acuity: payload }, as: :json
+        end
+        expect(response).to have_http_status(:unprocessable_content), payload.inspect
+      end
     end
   end
 

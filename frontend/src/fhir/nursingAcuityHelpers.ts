@@ -12,13 +12,14 @@ import { groupByRp, SETTING_SYSTEM } from "./prescriptionHelpers";
 // 重症度、医療・看護必要度(docs/nursing-acuity-design.md)。
 //
 // 患者 × 日の評価を Observation 1 件に持つ(code = 評価票の版、component = 項目ごとの値)。
-// 評価票の項目・配点は版ごとに下の NURSING_ACUITY_FORMS に持ち、改定で変われば版を足す
-// (過去の評価は書いた版の定義で読む)。該当患者の基準(割合1・割合2)は施設設定。
+// 評価票の項目・配点は版ごとに下の NURSING_ACUITY_FORMS に持ち(一般病棟用・ICU 用・HCU 用)、改定で変われば
+// 版を足す(過去の評価は書いた版の定義で読む)。該当患者の基準(割合1・割合2)は版の既定を持ち、一般病棟用だけ
+// 施設設定で上書きする。
 //
-// 点数の数え方(評価票 別紙7):
+// 点数の数え方(評価票 別紙7・17・18):
 // - A: 「あり」の項目の点数の合計。6 専門的な治療・処置は、該当した小項目の点数のうち最も高いもの
 // - B: 患者の状態の点数 ×(介助の実施 = 1 / なし = 0)。寝返り・指示が通じる・危険行動は状態の点数のみ
-// - C: 「あり」の項目の点数の合計
+// - C: 「あり」の項目の点数の合計(一般病棟用だけ)
 
 export const NURSING_ACUITY_SYSTEM = "http://fhir-client.local/CodeSystem/nursing-acuity";
 export const NURSING_ACUITY_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/nursing-acuity-item";
@@ -47,6 +48,9 @@ export interface AcuityChoiceItem {
   options: { code: string; label: string; points: number }[];
 }
 
+/** B の項目の版をまたぐ共通キー(前日の評価を別の版へ引き継ぐときに項目を対応づける)。 */
+export type AcuityStateKey = "turn" | "transfer" | "oral" | "meal" | "dress" | "instruction" | "danger";
+
 /** 患者の状態(と介助の実施)で点数が付く項目(B)。 */
 export interface AcuityStateItem {
   kind: "state";
@@ -54,6 +58,7 @@ export interface AcuityStateItem {
   group: "B";
   number: number;
   label: string;
+  stateKey: AcuityStateKey;
   /** 状態の選択肢。points が点数。 */
   states: { label: string; points: number }[];
   /** 介助の実施を掛けるか。 */
@@ -62,10 +67,37 @@ export interface AcuityStateItem {
 
 export type AcuityItem = AcuityCheckItem | AcuityChoiceItem | AcuityStateItem;
 
+/** コード一覧(別表)の版。general = 別紙7、icu = 別紙17、hcu = 別紙18。 */
+export type AcuityCodeForm = "general" | "icu" | "hcu";
+
+/** 記録から初期値を推すときの、版ごとの項目の対応(acuitySuggestions)。 */
+export interface AcuityRules {
+  codeForm: AcuityCodeForm;
+  /** 注射薬の種類数(別表2 を除いて 3 種類以上)で推す項目。 */
+  injectionCountItem?: string;
+  /** 別表のコードで拾えないときに輸血の実施記録で補う項目。 */
+  transfusionItem?: string;
+  /** 放射線治療の照射記録で補う項目。 */
+  radiotherapyItem?: string;
+  /** 救急車で搬送された入院の入院日と翌日に推す項目。 */
+  ambulanceItem?: string;
+}
+
+/** 該当患者の基準(割合1・割合2)。組の OR(書き方は parseAcuityTerm)。 */
+export interface AcuityCriteria {
+  ratio1: string[];
+  ratio2: string[];
+}
+
 export interface AcuityForm {
   code: string;
   label: string;
+  /** 一覧の見出しなどに使う短い名前。 */
+  shortLabel: string;
   items: AcuityItem[];
+  /** 版の既定の基準。一般病棟用は施設設定で上書きする(acuityCriteria)。 */
+  criteria: AcuityCriteria;
+  rules: AcuityRules;
 }
 
 const check = (group: "A" | "C", number: number, label: string, points: number): AcuityCheckItem => ({
@@ -79,6 +111,7 @@ const check = (group: "A" | "C", number: number, label: string, points: number):
 
 const state = (
   number: number,
+  stateKey: AcuityStateKey,
   label: string,
   states: [string, number][],
   assist: boolean,
@@ -88,18 +121,42 @@ const state = (
   group: "B",
   number,
   label,
+  stateKey,
   states: states.map(([l, points]) => ({ label: l, points })),
   assist,
 });
 
+/** B 患者の状況等の 7 項目(どの版も同じ。番号だけ版で変わる)。 */
+const patientStateItems = (first: number): AcuityStateItem[] => [
+  state(first, "turn", "寝返り", [["できる", 0], ["何かにつかまればできる", 1], ["できない", 2]], false),
+  state(first + 1, "transfer", "移乗", [["自立", 0], ["一部介助", 1], ["全介助", 2]], true),
+  state(first + 2, "oral", "口腔清潔", [["自立", 0], ["要介助", 1]], true),
+  state(first + 3, "meal", "食事摂取", [["自立", 0], ["一部介助", 1], ["全介助", 2]], true),
+  state(first + 4, "dress", "衣服の着脱", [["自立", 0], ["一部介助", 1], ["全介助", 2]], true),
+  state(first + 5, "instruction", "診療・療養上の指示が通じる", [["はい", 0], ["いいえ", 1]], false),
+  state(first + 6, "danger", "危険行動", [["ない", 0], ["ある", 2]], false),
+];
+
 /**
- * 評価票の版。general-2026 は令和8年度改定の「一般病棟用の重症度、医療・看護必要度Ⅰに係る評価票」
- * (基本診療料の施設基準等の通知 別紙7)。項目名の括弧内の日数は評価の対象になる日数。
+ * 評価票の版(令和8年度改定、基本診療料の施設基準等の通知)。
+ *   general-2026: 一般病棟用の重症度、医療・看護必要度Ⅰに係る評価票(別紙7)。項目名の括弧内の日数は評価の対象になる日数
+ *   icu-2026: 特定集中治療室用の重症度、医療・看護必要度に係る評価票(別紙17)。基準は A 得点 2 点以上
+ *   hcu-2026: ハイケアユニット用の重症度、医療・看護必要度に係る評価票(別紙18)。A は各 1 点で、
+ *             基準①は 2・7〜13 のいずれかに該当、基準②は A のいずれかに該当(= A 1 点以上)
  */
 export const NURSING_ACUITY_FORMS: AcuityForm[] = [
   {
     code: "general-2026",
     label: "一般病棟用 重症度、医療・看護必要度Ⅰ(令和8年度)",
+    shortLabel: "一般病棟用",
+    criteria: { ratio1: ["A3", "C1"], ratio2: ["A2", "C1"] },
+    rules: {
+      codeForm: "general",
+      injectionCountItem: "A3",
+      transfusionItem: "A5",
+      radiotherapyItem: "A6-5",
+      ambulanceItem: "A7",
+    },
     items: [
       check("A", 1, "創傷処置(褥瘡の処置を除く)", 1),
       check("A", 2, "呼吸ケア(喀痰吸引のみの場合を除く)", 1),
@@ -127,13 +184,7 @@ export const NURSING_ACUITY_FORMS: AcuityForm[] = [
         ],
       },
       check("A", 7, "救急搬送後の入院(2日間)", 2),
-      state(8, "寝返り", [["できる", 0], ["何かにつかまればできる", 1], ["できない", 2]], false),
-      state(9, "移乗", [["自立", 0], ["一部介助", 1], ["全介助", 2]], true),
-      state(10, "口腔清潔", [["自立", 0], ["要介助", 1]], true),
-      state(11, "食事摂取", [["自立", 0], ["一部介助", 1], ["全介助", 2]], true),
-      state(12, "衣服の着脱", [["自立", 0], ["一部介助", 1], ["全介助", 2]], true),
-      state(13, "診療・療養上の指示が通じる", [["はい", 0], ["いいえ", 1]], false),
-      state(14, "危険行動", [["ない", 0], ["ある", 2]], false),
+      ...patientStateItems(8),
       check("C", 15, "開頭手術(11日間)", 1),
       check("C", 16, "開胸手術(9日間)", 1),
       check("C", 17, "開腹手術(6日間)", 1),
@@ -145,10 +196,66 @@ export const NURSING_ACUITY_FORMS: AcuityForm[] = [
       check("C", 23, "別に定める手術(5日間)", 1),
     ],
   },
+  {
+    code: "icu-2026",
+    label: "特定集中治療室用 重症度、医療・看護必要度(令和8年度)",
+    shortLabel: "ICU 用",
+    criteria: { ratio1: ["A2"], ratio2: [] },
+    rules: { codeForm: "icu", transfusionItem: "A6" },
+    items: [
+      check("A", 1, "蘇生術の施行", 2),
+      check("A", 2, "動脈圧測定(動脈ライン)", 2),
+      check("A", 3, "シリンジポンプの管理", 1),
+      check("A", 4, "中心静脈圧測定(中心静脈ライン)", 2),
+      check("A", 5, "人工呼吸器の管理", 2),
+      check("A", 6, "輸血や血液製剤の管理", 2),
+      check("A", 7, "肺動脈圧測定(スワンガンツカテーテル)", 2),
+      check("A", 8, "一時的ペーシング", 2),
+      check("A", 9, "抗不整脈剤の使用(注射剤のみ)", 2),
+      check("A", 10, "特殊な治療法等(CHDF、IABP、PCPS、補助人工心臓、ICP測定、ECMO、IMPELLA)", 2),
+      ...patientStateItems(11),
+    ],
+  },
+  {
+    code: "hcu-2026",
+    label: "ハイケアユニット用 重症度、医療・看護必要度(令和8年度)",
+    shortLabel: "HCU 用",
+    criteria: {
+      ratio1: ["#A2", "#A7", "#A8", "#A9", "#A10", "#A11", "#A12", "#A13"],
+      ratio2: ["A1"],
+    },
+    rules: { codeForm: "hcu", injectionCountItem: "A4", transfusionItem: "A9" },
+    items: [
+      check("A", 1, "創傷処置(褥瘡の処置を除く)", 1),
+      check("A", 2, "蘇生術の施行", 1),
+      check("A", 3, "呼吸ケア(喀痰吸引のみの場合及び人工呼吸器の装着の場合を除く)", 1),
+      check("A", 4, "注射薬剤3種類以上の管理(最大7日間)", 1),
+      check("A", 5, "動脈圧測定(動脈ライン)", 1),
+      check("A", 6, "シリンジポンプの管理", 1),
+      check("A", 7, "中心静脈圧測定(中心静脈ライン)", 1),
+      check("A", 8, "人工呼吸器の管理", 1),
+      check("A", 9, "輸血や血液製剤の管理", 1),
+      check("A", 10, "肺動脈圧測定(スワンガンツカテーテル)", 1),
+      check("A", 11, "一時的ペーシング", 1),
+      check("A", 12, "抗不整脈剤の使用(注射剤のみ)", 1),
+      check("A", 13, "特殊な治療法等(CHDF、IABP、PCPS、補助人工心臓、ICP測定、ECMO、IMPELLA)", 1),
+      ...patientStateItems(14),
+    ],
+  },
 ];
 
 export function acuityFormOf(code: string | undefined): AcuityForm {
   return NURSING_ACUITY_FORMS.find((form) => form.code === code) ?? NURSING_ACUITY_FORMS[0];
+}
+
+/** 版に項目のある区分(ICU・HCU 用に C は無い)。 */
+export function acuityGroupsOf(form: AcuityForm): AcuityGroup[] {
+  return (["A", "B", "C"] as const).filter((group) => form.items.some((item) => item.group === group));
+}
+
+/** 版に使う該当患者の基準。一般病棟用は施設設定(ratio1 / ratio2)、ICU・HCU 用は版の既定。 */
+export function acuityCriteria(form: AcuityForm, settings: NursingAcuitySettings): AcuityCriteria {
+  return form.rules.codeForm === "general" ? { ratio1: settings.ratio1, ratio2: settings.ratio2 } : form.criteria;
 }
 
 // ---- 一括入力のグリッド ----
@@ -256,16 +363,25 @@ export function withAcuityState(item: AcuityStateItem, values: AcuityValues, val
 }
 
 /**
- * 新しく評価するときの初期値。B は前日の評価(対象外なら空)、A は実施記録から推した項目。
- * 1 人ずつのモーダルと一括入力で同じにする。
+ * 新しく評価するときの初期値。B は前日の評価(対象外なら空。版が違えば項目の共通キーで対応づける)、
+ * A は実施記録から推した項目。1 人ずつのモーダルと一括入力で同じにする。
  */
-export function initialAcuityValues(previous: fhir4.Observation | undefined, suggestions: AcuitySuggestion[]): AcuityValues {
+export function initialAcuityValues(
+  form: AcuityForm,
+  previous: fhir4.Observation | undefined,
+  suggestions: AcuitySuggestion[],
+): AcuityValues {
   const initial = emptyAcuityValues();
   if (previous) {
-    const prev = parseAcuityObservation(previous).values;
-    if (!prev.excluded) {
-      initial.states = prev.states;
-      initial.assists = prev.assists;
+    const prev = parseAcuityObservation(previous);
+    if (!prev.values.excluded) {
+      for (const item of form.items) {
+        if (item.kind !== "state") continue;
+        const source = prev.form.items.find((i) => i.kind === "state" && i.stateKey === item.stateKey);
+        if (!source) continue;
+        if (prev.values.states[source.code] !== undefined) initial.states[item.code] = prev.values.states[source.code];
+        if (prev.values.assists[source.code] !== undefined) initial.assists[item.code] = prev.values.assists[source.code];
+      }
     }
   }
   initial.checks = suggestions.map((suggestion) => suggestion.code);
@@ -315,53 +431,107 @@ export function acuityScores(form: AcuityForm, values: AcuityValues): AcuityScor
 
 // ---- 該当患者の基準 ----
 
-/** 基準の組("A3" "A2+B3" など)。それぞれの得点以上をすべて満たせば該当。 */
-export type AcuityTerm = Partial<AcuityScores>;
+/**
+ * 基準の組。得点の条件("A3" = A 得点 3 点以上)と項目の条件("#A2" = 項目 A2 に該当。A6 の小項目は "#A6-5")を
+ * "+" でつないだもの("A2+B3"、"#A2+#A7")で、すべて満たせば該当。backend の ACUITY_TERM と同じ文法。
+ */
+export interface AcuityTerm {
+  scores: Partial<AcuityScores>;
+  items: string[];
+}
 
 export function parseAcuityTerm(term: string): AcuityTerm | null {
   const parts = term.split("+");
-  const result: AcuityTerm = {};
+  const result: AcuityTerm = { scores: {}, items: [] };
   for (const part of parts) {
-    const match = /^([ABC])(\d{1,2})$/.exec(part.trim());
-    if (!match) return null;
-    const group = match[1] as AcuityGroup;
-    if (result[group] !== undefined) return null;
-    result[group] = Number(match[2]);
+    const score = /^([ABC])(\d{1,2})$/.exec(part.trim());
+    if (score) {
+      const group = score[1] as AcuityGroup;
+      if (result.scores[group] !== undefined) return null;
+      result.scores[group] = Number(score[2]);
+      continue;
+    }
+    const item = /^#([AC]\d{1,2}(?:-\d{1,2})?)$/.exec(part.trim());
+    if (!item || result.items.includes(item[1])) return null;
+    result.items.push(item[1]);
   }
   return parts.length > 0 ? result : null;
 }
 
-/** 基準(組の OR)に該当するか。組が 1 つも無ければ判定しない(null)。 */
-export function meetsAcuityCriterion(scores: AcuityScores, terms: string[]): boolean | null {
-  const parsed = terms.map(parseAcuityTerm).filter((t): t is AcuityTerm => t !== null);
-  if (parsed.length === 0) return null;
-  return parsed.some((term) =>
-    (Object.entries(term) as [AcuityGroup, number][]).every(([group, min]) => scores[group] >= min),
+function meetsTerm(term: AcuityTerm, scores: AcuityScores, checks: string[]): boolean {
+  return (
+    (Object.entries(term.scores) as [AcuityGroup, number][]).every(([group, min]) => scores[group] >= min) &&
+    term.items.every((code) => checks.includes(code))
   );
 }
 
-/** 基準の表示("A3点以上 又は C1点以上")。 */
+/** 基準(組の OR)に該当するか。組が 1 つも無ければ判定しない(null)。checks は「あり」の項目のコード。 */
+export function meetsAcuityCriterion(scores: AcuityScores, terms: string[], checks: string[] = []): boolean | null {
+  const parsed = terms.map(parseAcuityTerm).filter((t): t is AcuityTerm => t !== null);
+  if (parsed.length === 0) return null;
+  return parsed.some((term) => meetsTerm(term, scores, checks));
+}
+
+/**
+ * 基準の表示("A3点以上 又は C1点以上"、"A2・A7・A8 のいずれかに該当")。項目だけの組が並ぶときは
+ * 1 つにまとめる。
+ */
 export function acuityCriterionLabel(terms: string[]): string {
-  return terms
-    .map(parseAcuityTerm)
-    .filter((t): t is AcuityTerm => t !== null)
-    .map((term) =>
-      (Object.entries(term) as [AcuityGroup, number][]).map(([g, min]) => `${g}${min}点以上`).join("かつ"),
-    )
-    .join(" 又は ");
+  const parsed = terms.map(parseAcuityTerm).filter((t): t is AcuityTerm => t !== null);
+  const singleItems = parsed.filter((t) => Object.keys(t.scores).length === 0 && t.items.length === 1);
+  const rest = parsed.filter((t) => !singleItems.includes(t));
+  const labels = rest.map((term) =>
+    [
+      ...(Object.entries(term.scores) as [AcuityGroup, number][]).map(([g, min]) => `${g}${min}点以上`),
+      ...term.items.map((code) => `${code}に該当`),
+    ].join("かつ"),
+  );
+  if (singleItems.length === 1) labels.push(`${singleItems[0].items[0]}に該当`);
+  if (singleItems.length > 1) labels.push(`${singleItems.map((t) => t.items[0]).join("・")} のいずれかに該当`);
+  return labels.join(" 又は ");
+}
+
+/** 届出単位 1 つの設定(施設設定 nursing_acuity.units の値。キーは病棟か病室の Location id)。 */
+export interface AcuityUnitSetting {
+  kind: "ward" | "room";
+  /** 届出区分(ACUITY_CATEGORY_OPTIONS のコード)。空は未設定。 */
+  category: string;
+  /** 評価方式(Ⅰ / Ⅱ)。基準値の表と届出様式の表示に使う。 */
+  method: "I" | "II";
+  /** 届出病床数。無ければ使えるベッドの数。 */
+  beds?: number;
+  /** 基準値(%)。無ければ区分の既定。 */
+  ratio1?: number;
+  ratio2?: number;
+}
+
+/** 年度(4 月〜翌 3 月)ごとの救急搬送の件数の上書き(応需係数。docs/nursing-acuity-design.md §9)。 */
+export interface AcuityEmergencyYearSetting {
+  /** (1) 救急搬送受入件数(病院全体)。 */
+  transports?: number;
+  /** (4) 届出単位ごとの救急搬送からの入院件数(単位の Location id → 件数)。 */
+  admissions?: Record<string, number>;
 }
 
 /** 施設設定 nursing_acuity(backend の DEFAULT_NURSING_ACUITY と同じ形)。 */
 export interface NursingAcuitySettings {
+  /** 届出単位の設定が無い病棟に使う評価票の版。 */
   form: string;
+  /** 一般病棟用の該当患者の基準(組の OR)。ICU・HCU 用は版の既定を使う。 */
   ratio1: string[];
   ratio2: string[];
+  /** 届出単位(病棟・病室の Location id → 設定)。 */
+  units: Record<string, AcuityUnitSetting>;
+  /** 年度 → 救急搬送の件数の上書き。 */
+  emergency_years: Record<string, AcuityEmergencyYearSetting>;
 }
 
 export const DEFAULT_NURSING_ACUITY: NursingAcuitySettings = {
   form: "general-2026",
   ratio1: ["A3", "C1"],
   ratio2: ["A2", "C1"],
+  units: {},
+  emergency_years: {},
 };
 
 // ---- Observation との変換 ----
@@ -422,7 +592,7 @@ export function buildAcuityObservation(args: {
       }
     }
   }
-  for (const group of ["A", "B", "C"] as const) {
+  for (const group of acuityGroupsOf(form)) {
     components.push(component(group, { valueInteger: scores[group] }));
   }
   observation.component = components;
@@ -530,27 +700,36 @@ function shortDay(day: string): string {
 }
 
 /**
- * 実施記録のレセプト電算コードを別表1 と突き合わせて、その日に「あり」と推せる項目(docs/nursing-acuity-design.md §7)。
- * 評価票の注記どおり、A・C 項目は評価日に実施したコード(C は手術等の当日から項目の日数のあいだ)で決める。
- * 看護師が確かめて直す前提の初期値で、根拠(コードの名称と日)を添える。
+ * 実施記録のレセプト電算コードを版のコード一覧(別紙7・17・18 の別表1)と突き合わせて、その日に「あり」と推せる項目
+ * (docs/nursing-acuity-design.md §7)。評価票の注記どおり、A・C 項目は評価日に実施したコード(C は手術等の当日から
+ * 項目の日数のあいだ)で決める。看護師が確かめて直す前提の初期値で、根拠(コードの名称と日)を添える。
  *   - 実施記録(Procedure)の診療行為コード、施用(MedicationAdministration)と処方(その日に有効な RP)の医薬品コード
- *   - A3 は施用した注射薬のうち別表2 の薬剤を除いた種類数が 3 以上
- *   - A7 は必要度Ⅰでは「救急搬送後の入院」なので、別表1 の A7(必要度Ⅱの「緊急に入院を必要とする状態」)は使わず、
- *     救急車で搬送された入院の入院日と翌日を推す
- *   - 別表1 のコードで拾えないときの補い: 輸血の実施記録 → A5、放射線治療の照射記録 → A6⑤
+ *   - 注射薬剤3種類以上の管理(一般 A3・HCU A4)は施用した注射薬のうち別表2 の薬剤を除いた種類数が 3 以上
+ *   - 一般の A7 は必要度Ⅰでは「救急搬送後の入院」なので、別表1 の A7(必要度Ⅱの「緊急に入院を必要とする状態」)は
+ *     使わず、救急車で搬送された入院の入院日と翌日を推す
+ *   - 別表1 のコードで拾えないときの補い: 輸血の実施記録 → 輸血や血液製剤の管理、放射線治療の照射記録 → 一般の A6⑤
  * 手術は C の区分を確かめられるよう、術後何日かを hints に並べる。
  */
 export function acuitySuggestions(args: {
+  form: AcuityForm;
   date: string;
   encounter: fhir4.Encounter | undefined;
   procedures: fhir4.Procedure[];
   administrations: fhir4.MedicationAdministration[];
   prescriptions?: fhir4.ServiceRequest[];
   prescriptionItems?: fhir4.MedicationRequest[];
-  acuityCodes?: { kind: string; item_code: string; code: string; name: string | null; days: number | null }[];
+  acuityCodes?: {
+    form: AcuityCodeForm;
+    kind: string;
+    item_code: string;
+    code: string;
+    name: string | null;
+    days: number | null;
+  }[];
 }): { suggestions: AcuitySuggestion[]; hints: string[] } {
-  const { date, encounter, procedures, administrations } = args;
-  const acuityCodes = args.acuityCodes ?? [];
+  const { form, date, encounter, procedures, administrations } = args;
+  const rules = form.rules;
+  const acuityCodes = (args.acuityCodes ?? []).filter((row) => row.form === rules.codeForm);
   const reasons = new Map<string, string[]>();
   const add = (item: string, reason: string) => reasons.set(item, [...(reasons.get(item) ?? []), reason]);
 
@@ -590,8 +769,8 @@ export function acuitySuggestions(args: {
     }
   }
 
-  // 別表1 と突き合わせる。C は当日を含めて項目の日数のあいだ。
-  const itemRows = acuityCodes.filter((row) => row.kind === "item" && row.item_code !== "A7");
+  // 別表1 と突き合わせる。C は当日を含めて項目の日数のあいだ。救急車搬送で推す項目のコードは使わない。
+  const itemRows = acuityCodes.filter((row) => row.kind === "item" && row.item_code !== rules.ambulanceItem);
   for (const row of itemRows) {
     const isC = row.item_code.startsWith("C");
     const from = isC ? addDays(date, -((row.days ?? 1) - 1)) : date;
@@ -602,18 +781,31 @@ export function acuitySuggestions(args: {
     }
   }
 
-  // A3: 施用した注射薬のうち、別表2 の薬剤を除いた種類数。
-  const excluded = new Set(acuityCodes.filter((row) => row.kind === "a3_exclusion").map((row) => row.code));
-  const counted = [...injectionCodesToday].filter((code) => !excluded.has(code));
-  if (counted.length >= 3) add("A3", `注射薬 ${counted.length} 種類(別表2 を除く)`);
+  // 注射薬剤3種類以上の管理: 施用した注射薬のうち、別表2 の薬剤を除いた種類数。
+  if (rules.injectionCountItem) {
+    const excluded = new Set(acuityCodes.filter((row) => row.kind === "a3_exclusion").map((row) => row.code));
+    const counted = [...injectionCodesToday].filter((code) => !excluded.has(code));
+    if (counted.length >= 3) add(rules.injectionCountItem, `注射薬 ${counted.length} 種類(別表2 を除く)`);
+  }
 
   const today = doneProcedures.filter((p) => performedDay(p) === date);
-  if (!reasons.has("A5") && today.some(isTransfusionProcedure)) add("A5", "輸血を実施");
-  if (!reasons.has("A6-5") && today.some(isRadiotherapyFraction)) add("A6-5", "放射線治療を照射");
+  if (rules.transfusionItem && !reasons.has(rules.transfusionItem) && today.some(isTransfusionProcedure)) {
+    add(rules.transfusionItem, "輸血を実施");
+  }
+  if (rules.radiotherapyItem && !reasons.has(rules.radiotherapyItem) && today.some(isRadiotherapyFraction)) {
+    add(rules.radiotherapyItem, "放射線治療を照射");
+  }
 
   const admission = encounter?.period?.start?.slice(0, 10);
-  if (encounter && admission && encounterAdmissionRoute(encounter).ambulance && date >= admission && date <= addDays(admission, 1)) {
-    add("A7", "救急車で搬送された入院");
+  if (
+    rules.ambulanceItem &&
+    encounter &&
+    admission &&
+    encounterAdmissionRoute(encounter).ambulance &&
+    date >= admission &&
+    date <= addDays(admission, 1)
+  ) {
+    add(rules.ambulanceItem, "救急車で搬送された入院");
   }
 
   const suggestions = [...reasons.entries()].map(([code, list]) => {
@@ -621,7 +813,7 @@ export function acuitySuggestions(args: {
     return { code, reason: unique.length > 1 ? `${unique[0]} ほか${unique.length - 1}件` : unique[0] };
   });
 
-  const hints = doneProcedures
+  const hints = (form.items.some((item) => item.group === "C") ? doneProcedures : [])
     .filter((p) => isSurgeryProcedure(p) && performedDay(p) && performedDay(p) <= date)
     .map((p) => {
       const day = performedDay(p);

@@ -445,7 +445,7 @@ const ORIGIN_ENCOUNTER_EXTENSION_URL =
 export const ADMIT_SOURCE_SYSTEM = "http://terminology.hl7.org/CodeSystem/admit-source";
 
 /** 救急車による搬送にあたる来院方法(現場からの要請で出たドクターカー・ヘリを含む)。 */
-const AMBULANCE_ARRIVAL_MODES: string[] = ["ambulance", "doctor-heli", "doctor-car"];
+export const AMBULANCE_ARRIVAL_MODES: string[] = ["ambulance", "doctor-heli", "doctor-car"];
 
 /**
  * 救急から入院するときの入院 Encounter に、入院経路と元の救急受診を添える。救急車などで

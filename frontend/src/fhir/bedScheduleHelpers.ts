@@ -396,22 +396,21 @@ export function wardBedStats(args: {
 }
 
 /**
- * 病棟に日ごとに居た患者(その日に病棟のベッドを使っていた患者。入院日・退院日・移動日を含む)。
- * 看護必要度の集計の「評価すべき患者」に使う。期間は [from, to](両端を含む)。
+ * ベッドの集合(病棟、または看護必要度の届出単位)に日ごとに居た患者(その日にそのベッドを使っていた患者。
+ * 入院日・退院日・移動日を含む)。看護必要度の集計の「評価すべき患者」に使う。期間は [from, to](両端を含む)。
  */
-export function wardPatientsByDay(args: {
+export function patientsByDayAtBeds(args: {
   encounters: fhir4.Encounter[];
-  bedPlaces: Map<string, { wardId: string }>;
-  wardId: string;
+  bedIds: Set<string>;
   from: string;
   to: string;
 }): Map<string, Set<string>> {
-  const { encounters, bedPlaces, wardId, from, to } = args;
+  const { encounters, bedIds, from, to } = args;
   const byDay = new Map<string, Set<string>>();
   for (let day = from; day <= to; day = addDays(day, 1)) byDay.set(day, new Set());
   for (const encounter of encounters) {
     for (const segment of encounterBedSegments(encounter)) {
-      if (bedPlaces.get(segment.bedId)?.wardId !== wardId) continue;
+      if (!bedIds.has(segment.bedId)) continue;
       const last = segment.until ?? to;
       for (let day = segment.start < from ? from : segment.start; day <= last && day <= to; day = addDays(day, 1)) {
         byDay.get(day)?.add(segment.patientId);
@@ -419,4 +418,17 @@ export function wardPatientsByDay(args: {
     }
   }
   return byDay;
+}
+
+/** 病棟に日ごとに居た患者(patientsByDayAtBeds を病棟のベッドで)。 */
+export function wardPatientsByDay(args: {
+  encounters: fhir4.Encounter[];
+  bedPlaces: Map<string, { wardId: string }>;
+  wardId: string;
+  from: string;
+  to: string;
+}): Map<string, Set<string>> {
+  const bedIds = new Set<string>();
+  for (const [bedId, place] of args.bedPlaces) if (place.wardId === args.wardId) bedIds.add(bedId);
+  return patientsByDayAtBeds({ encounters: args.encounters, bedIds, from: args.from, to: args.to });
 }
