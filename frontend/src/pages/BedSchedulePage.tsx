@@ -314,7 +314,8 @@ function BarView({
   const name = patient ? displayName(patient) : segment.patientId;
   const prefix = segment.plan === "admission" ? "入予 " : segment.plan === "transfer" ? "転予 " : "";
   const title = barTitle(segment, name);
-  const top = bar.lane * 24 + 2;
+  // 段の高さ 24px に 20px の帯を置く。行の高さは段数 × 24 + 4 なので、上下に 4px ずつ空く。
+  const top = bar.lane * 24 + 4;
   return (
     <>
       {bar.pieces.map((piece, index) => (

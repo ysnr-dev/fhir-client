@@ -24621,7 +24621,8 @@ input.nursing-picker__search {
   vertical-align: middle;
 }
 
-.bed-schedule__day {
+/* 一覧共通の見出し(.lab-worklist th は左寄せ)より強く当てる。 */
+.bed-schedule th.bed-schedule__day {
   text-align: center;
   font-size: 12px;
   line-height: 1.3;
@@ -24773,7 +24774,16 @@ input.nursing-picker__search {
   max-width: 100%;
 }
 
-/* 病床状況。数の列は右寄せ、見出しの区分(空床・本日…)は中央。 */
+/* 病床状況。数の列は右寄せ、見出しの区分(空床・本日…)は中央。合計の行の上の 2 重線がセルの間で
+   切れないよう、罫線は collapse で表に持たせる。2 段の見出しは下に揃える。 */
+.bed-status {
+  border-collapse: collapse;
+}
+
+.bed-status thead th {
+  vertical-align: bottom;
+}
+
 .bed-status th.bed-status__group {
   text-align: center;
   border-bottom: 1px solid var(--border);
@@ -24796,7 +24806,8 @@ input.nursing-picker__search {
 }
 
 .bed-status tfoot th,
-.bed-status tfoot td {
+.bed-status tfoot td,
+.bed-status tfoot th.bed-status__ward {
   font-weight: bold;
   border-top: 2px solid var(--border);
 }
