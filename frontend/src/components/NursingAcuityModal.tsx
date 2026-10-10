@@ -7,7 +7,7 @@ import {
   acuityScores,
   acuitySuggestions,
   buildAcuityObservation,
-  emptyAcuityValues,
+  initialAcuityValues,
   meetsAcuityCriterion,
   parseAcuityObservation,
   type AcuityGroup,
@@ -83,19 +83,9 @@ function AcuityForm({
   const me = useCurrentPractitioner();
   const form = existing ? parseAcuityObservation(existing).form : acuityFormOf(settings.form);
 
-  const [values, setValues] = useState<AcuityValues>(() => {
-    if (existing) return parseAcuityObservation(existing).values;
-    const initial = emptyAcuityValues();
-    if (previous) {
-      const prev = parseAcuityObservation(previous).values;
-      if (!prev.excluded) {
-        initial.states = prev.states;
-        initial.assists = prev.assists;
-      }
-    }
-    initial.checks = suggestions.map((s) => s.code);
-    return initial;
-  });
+  const [values, setValues] = useState<AcuityValues>(() =>
+    existing ? parseAcuityObservation(existing).values : initialAcuityValues(previous, suggestions),
+  );
 
   const scores = useMemo(() => acuityScores(form, values), [form, values]);
   const reasonByCode = new Map(suggestions.map((s) => [s.code, s.reason]));

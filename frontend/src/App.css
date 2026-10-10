@@ -24980,7 +24980,7 @@ input.nursing-picker__search {
 }
 
 .nursing-acuity__criteria {
-  margin: 0 0 8px;
+  margin: 8px 0 0;
   font-size: 12px;
   color: var(--text);
 }
@@ -25005,4 +25005,237 @@ input.nursing-picker__search {
 .nursing-acuity-list tfoot th,
 .nursing-acuity-list tfoot td {
   font-weight: bold;
+}
+
+/* 看護必要度の一括入力。行 = 患者、列 = 評価項目のグリッド。列見出しは縦書きで、A・C の列は
+   2 文字ぶんの固定幅、B の列はセレクトが読める固定幅にする(項目が 30 列を超えるので横に送る)。 */
+.nursing-acuity-bulk__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+/* 画面の幅いっぱいに広げる。列の幅は colgroup で渡し、余った幅はその比で割り振られる。 */
+.nursing-acuity-bulk {
+  --sticky-fix-1-w: 12em;
+  width: 100%;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.nursing-acuity-bulk__col-patient {
+  width: 12em;
+}
+
+.nursing-acuity-bulk__col-check {
+  width: 2.2em;
+}
+
+.nursing-acuity-bulk__col-state {
+  width: 6.5em;
+}
+
+.nursing-acuity-bulk__col-score {
+  width: 3.5em;
+}
+
+/* 罫線は見出しも本体も同じ線にする。地の色が付いた見出しでも沈まないよう、--border より一段濃い。 */
+.nursing-acuity-bulk th,
+.nursing-acuity-bulk td {
+  --nursing-acuity-bulk-line: color-mix(in srgb, var(--text) 30%, transparent);
+  border-bottom: 1px solid var(--nursing-acuity-bulk-line);
+  border-right: 1px solid var(--nursing-acuity-bulk-line);
+  padding: 2px;
+}
+
+/* 見出し行は地の色を本体のセルから少し変えて分ける(固定見出しの塗りの上書き)。
+   見出しは 3 段で、どの段も上端に貼り付くよう、2 段目・3 段目は上の段の高さぶん下げて固定する
+   (1 段目と、A6 の親の行は高さを決め打ちにする)。 */
+.nursing-acuity-bulk thead th {
+  background: var(--surface-card);
+  box-sizing: border-box;
+}
+
+.nursing-acuity-bulk thead tr:first-child th {
+  height: 26px;
+}
+
+.nursing-acuity-bulk thead tr:nth-child(2) th {
+  top: 26px;
+}
+
+.nursing-acuity-bulk thead tr:nth-child(3) th {
+  top: 52px;
+}
+
+.nursing-acuity-bulk th.nursing-acuity-bulk__parent {
+  height: 26px;
+  padding: 2px 6px;
+  text-align: center;
+  vertical-align: middle;
+  font-weight: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-h);
+}
+
+.nursing-acuity-bulk__head-number-inline {
+  margin-right: 6px;
+  color: var(--text);
+}
+
+/* マウスの乗っている列と行。行の :hover(セルに敷く共通の色)に揃えて、列のセル・列の見出し・
+   行の見出し(患者の欄)にも同じ色を重ねる。行と列が交わるセルは 2 枚重ねで一段濃くなる。 */
+.nursing-acuity-bulk .is-col-hover,
+.nursing-acuity-bulk tbody tr:hover > th {
+  background-image: linear-gradient(var(--accent-bg), var(--accent-bg));
+}
+
+.nursing-acuity-bulk tbody tr:hover > td.is-col-hover {
+  background-image:
+    linear-gradient(var(--accent-bg), var(--accent-bg)),
+    linear-gradient(var(--accent-bg), var(--accent-bg));
+}
+
+.nursing-acuity-bulk th.nursing-acuity-bulk__group {
+  text-align: center;
+  font-weight: bold;
+  color: var(--text-h);
+  padding: 4px;
+}
+
+.nursing-acuity-bulk th.nursing-acuity-bulk__head {
+  width: 2.2em;
+  min-width: 2.2em;
+  max-width: 2.2em;
+  height: 14em;
+  vertical-align: top;
+  font-weight: normal;
+  color: var(--text-h);
+}
+
+/* 縦書きの見出し。数字も含めて文字を立てて並べ、先頭の項目番号は 2 桁でも 1 文字分に収める(縦中横)。 */
+.nursing-acuity-bulk__head-text {
+  display: block;
+  margin: 0 auto;
+  max-height: 14em;
+  overflow: hidden;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.nursing-acuity-bulk__head-number {
+  margin-bottom: 0.3em;
+  color: var(--text);
+  text-combine-upright: all;
+}
+
+/* A6 の小項目は親の行の下なので、そのぶん低くして項目名の下端を他の列と揃える。 */
+.nursing-acuity-bulk th.nursing-acuity-bulk__head--sub {
+  height: calc(14em - 26px);
+}
+
+.nursing-acuity-bulk th.nursing-acuity-bulk__head--sub .nursing-acuity-bulk__head-text {
+  max-height: calc(14em - 26px);
+}
+
+.nursing-acuity-bulk th.nursing-acuity-bulk__head--state {
+  width: 6.5em;
+  min-width: 6.5em;
+  max-width: 6.5em;
+}
+
+.nursing-acuity-bulk th.nursing-acuity-bulk__score-head {
+  width: 3.5em;
+  white-space: nowrap;
+  text-align: center;
+  vertical-align: top;
+  font-weight: normal;
+  color: var(--text-h);
+}
+
+.nursing-acuity-bulk th.nursing-acuity-bulk__patient {
+  text-align: left;
+  font-weight: normal;
+  vertical-align: middle;
+  padding: 2px 6px;
+}
+
+.nursing-acuity-bulk__select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nursing-acuity-bulk__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-h);
+}
+
+.nursing-acuity-bulk__status {
+  display: block;
+  margin-left: 22px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.nursing-acuity-bulk__cell {
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* 「あり」を切り替えるセル。セルいっぱいの押しやすい面にし、「あり」は塗りの丸。 */
+.nursing-acuity-bulk__toggle {
+  width: 100%;
+  height: 26px;
+  padding: 0;
+  justify-content: center;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.nursing-acuity-bulk__toggle:hover:not(:disabled) {
+  background: var(--accent-bg);
+}
+
+/* 実施記録から推した「あり」(まだ確かめていない初期値)。 */
+.nursing-acuity-bulk__toggle.is-suggested {
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+
+.nursing-acuity-bulk__cell--state select {
+  width: 100%;
+  height: 26px;
+  padding: 0 2px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.nursing-acuity-bulk__score {
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* 未評価で、まだ触っていない行(初期値のまま)は薄くする。 */
+.nursing-acuity-bulk__row--initial td {
+  opacity: 0.7;
+}
+
+.nursing-acuity-bulk__row--excluded td {
+  opacity: 0.5;
 }

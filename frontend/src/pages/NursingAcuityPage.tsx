@@ -9,6 +9,7 @@ import {
 } from "../api/queries";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { NursingAcuityBulkGrid } from "../components/NursingAcuityBulkGrid";
 import { NursingAcuityModal } from "../components/NursingAcuityModal";
 import { PatientKana } from "../components/PatientRowCells";
 import { TruncatedNotice } from "../components/TruncatedNotice";
@@ -32,7 +33,8 @@ import { addDays, addMonths, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
 
 // 重症度、医療・看護必要度(docs/nursing-acuity-design.md)。「評価」タブは病棟の 1 日の患者を並べて
-// 1 人ずつ評価を入れ、「集計」タブは病棟 × 月の該当患者割合を日ごとに出す。
+// 1 人ずつ評価を入れる(「一括入力」で患者 × 項目のグリッドに切り替える)。「集計」タブは病棟 × 月の
+// 該当患者割合を日ごとに出す。
 //
 // 評価は患者 × 日の Observation 1 件。評価した日の病棟を order-ward 拡張に焼き付け、集計は
 // 「その日にその病棟で評価した患者」を数える(延べ患者数で割合を出す)。
@@ -42,6 +44,8 @@ type Tab = "entry" | "summary";
 export function NursingAcuityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: Tab = searchParams.get("tab") === "summary" ? "summary" : "entry";
+  // 評価タブの表示。一覧(1 人ずつモーダルで評価)か、一括入力のグリッドか。
+  const bulk = tab === "entry" && searchParams.get("view") === "bulk";
   const wardId = searchParams.get("ward") ?? "";
   const date = searchParams.get("date") || today();
   const facility = useFacilitySettings();
@@ -80,6 +84,13 @@ export function NursingAcuityPage() {
     <div className="page">
       <div className="page__header">
         <h1>看護必要度</h1>
+        {tab === "entry" && (
+          <div className="page__header-actions">
+            <button type="button" onClick={() => setParams({ view: bulk ? "" : "bulk" })}>
+              {bulk ? "一覧" : "一括入力"}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="order-select__tabs" role="tablist">
@@ -95,7 +106,7 @@ export function NursingAcuityPage() {
             role="tab"
             aria-selected={tab === key}
             className={tab === key ? "order-select__tab is-active" : "order-select__tab"}
-            onClick={() => setParams({ tab: key === "entry" ? "" : key })}
+            onClick={() => setParams({ tab: key === "entry" ? "" : key, view: "" })}
           >
             {label}
           </button>
@@ -134,10 +145,6 @@ export function NursingAcuityPage() {
           </select>
         </label>
       </form>
-      <p className="nursing-acuity__criteria">
-        割合1: {acuityCriterionLabel(settings.ratio1)}
-        {settings.ratio2.length > 0 && <> / 割合2: {acuityCriterionLabel(settings.ratio2)}</>}
-      </p>
 
       <ErrorBanner error={wardOptions.error} />
       <ErrorBanner error={facility.error} />
@@ -146,6 +153,7 @@ export function NursingAcuityPage() {
         <p className="patient-table__empty">病棟を選んでください。</p>
       ) : tab === "entry" ? (
         <EntryTab
+          bulk={bulk}
           date={date}
           ward={{ wardId, wardName: ward ? locationDisplayName(ward) : "" }}
           settings={settings}
@@ -153,15 +161,23 @@ export function NursingAcuityPage() {
       ) : (
         <SummaryTab month={date.slice(0, 7)} wardId={wardId} settings={settings} />
       )}
+
+      {/* 該当患者の基準(施設設定)。表を読むときの補足なので表の下に置く。 */}
+      <p className="nursing-acuity__criteria">
+        割合1: {acuityCriterionLabel(settings.ratio1)}
+        {settings.ratio2.length > 0 && <> / 割合2: {acuityCriterionLabel(settings.ratio2)}</>}
+      </p>
     </div>
   );
 }
 
 function EntryTab({
+  bulk,
   date,
   ward,
   settings,
 }: {
+  bulk: boolean;
   date: string;
   ward: { wardId: string; wardName: string };
   settings: NursingAcuitySettings;
@@ -212,6 +228,16 @@ function EntryTab({
       <TruncatedNotice show={inpatients.truncated || observations.data?.truncated} />
       {inpatients.isLoading || observations.isLoading ? (
         <p>読み込み中...</p>
+      ) : bulk ? (
+        // 日付・病棟を変えたら入力途中の値を捨てて作り直す。
+        <NursingAcuityBulkGrid
+          key={`${ward.wardId}:${date}`}
+          rows={inpatients.rows}
+          byPatient={byPatient}
+          date={date}
+          ward={ward}
+          settings={settings}
+        />
       ) : (
         <>
           <div className="lab-worklist-wrap sticky-table-wrap">

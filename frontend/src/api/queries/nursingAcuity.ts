@@ -75,29 +75,66 @@ export function useAcuityRecords(patientId: string | undefined, date: string) {
   });
 }
 
-/** 評価の登録・更新。既存(id あり)は版を添えて PUT する(postBundle が meta.versionId を If-Match にする)。 */
+function acuityEntry(observation: fhir4.Observation): fhir4.BundleEntry {
+  return observation.id
+    ? {
+        fullUrl: `Observation/${observation.id}`,
+        resource: observation,
+        request: { method: "PUT", url: `Observation/${observation.id}` },
+      }
+    : {
+        fullUrl: `urn:uuid:${crypto.randomUUID()}`,
+        resource: observation,
+        request: { method: "POST", url: "Observation" },
+      };
+}
+
+/**
+ * 評価の登録・更新(1 件でも、一括入力の複数件でも 1 つの transaction)。既存(id あり)は版を添えて
+ * PUT する(postBundle が meta.versionId を If-Match にする)。
+ */
 export function useSaveAcuity() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (observation: fhir4.Observation) =>
+    mutationFn: (observations: fhir4.Observation | fhir4.Observation[]) =>
       postBundle({
         resourceType: "Bundle",
         type: "transaction",
-        entry: [
-          observation.id
-            ? {
-                fullUrl: `Observation/${observation.id}`,
-                resource: observation,
-                request: { method: "PUT", url: `Observation/${observation.id}` },
-              }
-            : {
-                fullUrl: `urn:uuid:${crypto.randomUUID()}`,
-                resource: observation,
-                request: { method: "POST", url: "Observation" },
-              },
-        ],
+        entry: (Array.isArray(observations) ? observations : [observations]).map(acuityEntry),
       }),
     retry: false,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ACUITY_KEY }),
+  });
+}
+
+/** 一括入力の初期値に使う、病棟の患者ぶんの実施記録(useAcuityRecords を患者をまとめて引く形)。 */
+export function useAcuityRecordsForPatients(patientIds: string[], date: string) {
+  const ids = [...new Set(patientIds.filter(Boolean))].sort();
+  return useQuery({
+    queryKey: ["Procedure", "nursing-acuity-records-ward", ids.join(","), date],
+    queryFn: async () => {
+      const results = await Promise.all(
+        chunks(ids, PATIENT_CHUNK).map((chunk) => {
+          const params = new URLSearchParams();
+          params.set("patient", chunk.map((id) => `Patient/${id}`).join(","));
+          params.set(
+            "category",
+            ["injection", "transfusion", "radiotherapy", "surgery"].map((code) => `${ORDER_TYPE_SYSTEM}|${code}`).join(","),
+          );
+          params.append("date", `ge${addDays(date, -10)}`);
+          params.append("date", `le${date}`);
+          params.set("_revinclude", "MedicationAdministration:part-of");
+          return searchAllPages<fhir4.Procedure>("Procedure", params, { page: 500, maxPages: 4 });
+        }),
+      );
+      const procedures = results.flatMap((result) => result.matches);
+      const administrations = results.flatMap((result) =>
+        result.bundles.flatMap((bundle) =>
+          resourcesOfType<fhir4.MedicationAdministration>(bundle, "MedicationAdministration"),
+        ),
+      );
+      return { procedures, administrations, truncated: results.some((result) => result.truncated) };
+    },
+    enabled: ids.length > 0 && Boolean(date),
   });
 }

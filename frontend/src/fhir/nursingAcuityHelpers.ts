@@ -149,6 +149,127 @@ export function acuityFormOf(code: string | undefined): AcuityForm {
   return NURSING_ACUITY_FORMS.find((form) => form.code === code) ?? NURSING_ACUITY_FORMS[0];
 }
 
+// ---- 一括入力のグリッド ----
+
+/**
+ * 一括入力のグリッドの列。A・C の項目と A6 の小項目は「あり / なし」を押して切り替える列、
+ * B の項目はセレクトの列。number と header は縦書きの見出し(項目の番号と、括弧の補足を省いた短い名前)、
+ * title は省かない名前。
+ */
+export interface AcuityColumn {
+  key: string;
+  group: AcuityGroup;
+  /** 「1」、A6 の小項目は「①」。 */
+  number: string;
+  header: string;
+  /** A6 の小項目の列なら親の項目(見出しで小項目の列をまとめる 1 行に使う)。 */
+  parent?: { code: string; number: number; label: string };
+  title: string;
+  /** check = 「あり」を切り替える(code は項目か小項目のコード)、state = B のセレクト。 */
+  kind: "check" | "state";
+  code: string;
+  points?: number;
+  stateItem?: AcuityStateItem;
+}
+
+const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
+
+function shortLabel(label: string): string {
+  return label.replace(/[(（][^)）]*[)）]/g, "").trim();
+}
+
+export function acuityColumns(form: AcuityForm): AcuityColumn[] {
+  return form.items.flatMap((item): AcuityColumn[] => {
+    if (item.kind === "check") {
+      return [
+        {
+          key: item.code,
+          group: item.group,
+          number: String(item.number),
+          header: shortLabel(item.label),
+          title: `${item.group}${item.number} ${item.label}(${item.points}点)`,
+          kind: "check",
+          code: item.code,
+          points: item.points,
+        },
+      ];
+    }
+    if (item.kind === "choice") {
+      return item.options.map((option, index) => ({
+        key: option.code,
+        group: item.group,
+        number: CIRCLED[index],
+        header: shortLabel(option.label),
+        parent: { code: item.code, number: item.number, label: item.label },
+        title: `${item.group}${item.number} ${item.label} ${CIRCLED[index]}${option.label}(${option.points}点)`,
+        kind: "check",
+        code: option.code,
+        points: option.points,
+      }));
+    }
+    return [
+      {
+        key: item.code,
+        group: item.group,
+        number: String(item.number),
+        header: item.label,
+        title: `${item.group}${item.number} ${item.label}`,
+        kind: "state",
+        code: item.code,
+        stateItem: item,
+      },
+    ];
+  });
+}
+
+/**
+ * B の項目のセレクトの選択肢。介助の実施を掛ける項目は、0 点の状態(自立など)を除いて
+ * 「状態・介助あり / なし」に分ける(1 つのセレクトで状態と介助の実施を選べるように)。値は "状態の番号:介助(0/1)"。
+ */
+export function acuityStateOptions(item: AcuityStateItem): { value: string; label: string }[] {
+  return item.states.flatMap((state, index) => {
+    if (!item.assist || state.points === 0) return [{ value: `${index}:0`, label: state.label }];
+    return [
+      { value: `${index}:1`, label: `${state.label}・介助あり` },
+      { value: `${index}:0`, label: `${state.label}・介助なし` },
+    ];
+  });
+}
+
+/** B の項目の今の値(acuityStateOptions の値の形)。 */
+export function acuityStateValue(item: AcuityStateItem, values: AcuityValues): string {
+  const index = values.states[item.code] ?? 0;
+  const assist = item.assist && (item.states[index]?.points ?? 0) > 0 && Boolean(values.assists[item.code]);
+  return `${index}:${assist ? 1 : 0}`;
+}
+
+/** セレクトで選んだ値を入力値に戻す。 */
+export function withAcuityState(item: AcuityStateItem, values: AcuityValues, value: string): AcuityValues {
+  const [index, assist] = value.split(":").map(Number);
+  return {
+    ...values,
+    states: { ...values.states, [item.code]: index },
+    assists: { ...values.assists, [item.code]: assist === 1 },
+  };
+}
+
+/**
+ * 新しく評価するときの初期値。B は前日の評価(対象外なら空)、A は実施記録から推した項目。
+ * 1 人ずつのモーダルと一括入力で同じにする。
+ */
+export function initialAcuityValues(previous: fhir4.Observation | undefined, suggestions: AcuitySuggestion[]): AcuityValues {
+  const initial = emptyAcuityValues();
+  if (previous) {
+    const prev = parseAcuityObservation(previous).values;
+    if (!prev.excluded) {
+      initial.states = prev.states;
+      initial.assists = prev.assists;
+    }
+  }
+  initial.checks = suggestions.map((suggestion) => suggestion.code);
+  return initial;
+}
+
 // ---- 入力値 ----
 
 /** 1 日分の評価の入力値。checks は「あり」の項目(A・C の項目、A6 の小項目)のコード。 */
