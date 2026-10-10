@@ -575,7 +575,7 @@
         "date": "日付",
         "grain": "month",
         "rows": "period",
-        "columns": "群",
+        "columns": "比較群",
         "value": "HbA1c(%)",
         "metric": "mean",
         "split_multi": true

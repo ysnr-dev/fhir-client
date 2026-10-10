@@ -1,5 +1,5 @@
 class SeedExtractQueryLabPresets < ActiveRecord::Migration[8.0]
-  # データ抽出の検査結果タブの条件(院内共通)の初期投入。群分けの例「HbA1c 8以上 薬効群別の推移」と、
+  # データ抽出の検査結果タブの条件(院内共通)の初期投入。比較群の例「HbA1c 8以上 薬効群別の推移」と、
   # 担当医と区切りの例「医師別 HbA1c コントロール」。db:seed と同じ ExtractQueryPresets を呼び、
   # 同じタブに同じ名前の院内共通の条件があれば触らない。
   def up

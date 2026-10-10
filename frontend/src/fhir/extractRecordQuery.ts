@@ -30,17 +30,17 @@ export interface ExtractRecordDefinition {
   output?: ExtractOutput;
   /** 内訳の切り口(docs/data-extract-design.md §18)。 */
   breakdown?: BreakdownSettings;
-  /** 群分け(§21)。 */
+  /** 比較群(§21)。 */
   strata?: ExtractStratum[];
-  /** 群に入らない患者を除く。 */
+  /** 比較群に入らない患者を除く。 */
   strata_only?: boolean;
   /** 担当医の列の決め方(§21)。 */
   attending?: AttendingMode;
 }
 
 /**
- * 群 1 つ(docs/data-extract-design.md §21)。条件 1 件(kind あり。「患者」タブの条件と同じ形)か、
- * 「患者」タブに保存した条件(query_code)のどちらか。label が群の名前。
+ * 比較群 1 つ(docs/data-extract-design.md §21)。条件 1 件(kind あり。「患者」タブの条件と同じ形)か、
+ * 「患者」タブに保存した条件(query_code)のどちらか。label が比較群の名前。
  */
 export type ExtractStratum = Omit<ExtractLeaf, "kind" | "not" | "relation" | "output_fields"> & {
   kind?: Exclude<ExtractKind, "patient">;

@@ -2,7 +2,7 @@ import { csvBlob } from "../lib/csv";
 import { patientCell, type ExtractPatientRow, type PatientColumn } from "./extractQueryHelpers";
 
 // データ抽出の記録を表にするタブの結果の表(docs/data-extract-design.md §18・§21)。どのタブも
-// 患者番号・氏名・患者の列・患者ごとの属性(群・担当医)・固定列・項目の列の順に並べ、一覧・内訳・CSV で同じセルを使う。
+// 患者番号・氏名・患者の列・患者ごとの属性(比較群・担当医)・固定列・項目の列の順に並べ、一覧・内訳・CSV で同じセルを使う。
 
 export interface RecordTableRow {
   key: string;
@@ -13,14 +13,14 @@ export interface RecordTableRow {
   values: string[];
 }
 
-/** 患者ごとに 1 つの値を持つ列(群・担当医)。患者の列の直後に並べる。 */
+/** 患者ごとに 1 つの値を持つ列(比較群・担当医)。患者の列の直後に並べる。 */
 export interface PatientAttribute {
   label: string;
   valueOf: (patientId: string) => string;
 }
 
-/** 群分けの列の見出し。 */
-export const STRATUM_COLUMN = "群";
+/** 比較群の列の見出し。 */
+export const STRATUM_COLUMN = "比較群";
 /** 担当医の列の見出し。 */
 export const ATTENDING_COLUMN = "担当医";
 

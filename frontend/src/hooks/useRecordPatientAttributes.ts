@@ -9,8 +9,8 @@ import {
 } from "../fhir/recordTableHelpers";
 import type { ExtractPatientScope } from "./useExtractPatientScope";
 
-// データ抽出の記録タブの結果に足す患者ごとの属性の列(群・担当医。docs/data-extract-design.md §21)。
-// 群は実行したときの群分けから、担当医は結果の患者の外来受診・入院・処方を読んで決める。
+// データ抽出の記録タブの結果に足す患者ごとの属性の列(比較群・担当医。docs/data-extract-design.md §21)。
+// 比較群は実行したときの評価から、担当医は結果の患者の外来受診・入院・処方を読んで決める。
 
 interface AttendingState {
   /** 読んだ患者の組(結果が変わったら読み直す)。 */

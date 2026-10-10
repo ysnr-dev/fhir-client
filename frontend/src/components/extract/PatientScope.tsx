@@ -8,7 +8,7 @@ import { ExtractQuerySelect } from "./ExtractQuerySelect";
 import { PatientFolderSelect } from "./PatientFolderSelect";
 import { StrataEditorModal } from "./StrataEditorModal";
 
-// 記録を表にするタブの患者の絞り込み・群分け・担当医の入力欄と、実行したときの該当人数
+// 記録を表にするタブの患者の絞り込み・比較群・担当医の入力欄と、実行したときの該当人数
 // (hooks/useExtractPatientScope、docs/data-extract-design.md §8・§21)。
 
 export function PatientScopeFields({ scope }: { scope: ExtractPatientScope }) {
@@ -34,7 +34,7 @@ export function PatientScopeFields({ scope }: { scope: ExtractPatientScope }) {
         />
       </label>
       <button type="button" className="rp-card__compact-button" onClick={() => setEditingStrata(true)}>
-        {scope.strata.length > 0 ? `群分け(${scope.strata.length})` : "群分け"}
+        {scope.strata.length > 0 ? `比較群(${scope.strata.length})` : "比較群"}
       </button>
       {scope.strata.length > 0 && (
         <label className="extract-checks__item">
@@ -43,7 +43,7 @@ export function PatientScopeFields({ scope }: { scope: ExtractPatientScope }) {
             checked={scope.strataOnly}
             onChange={(e) => scope.setStrataOnly(e.target.checked)}
           />
-          群外を除く
+          比較群外を除く
         </label>
       )}
       <label className="extract-field">
@@ -79,7 +79,7 @@ export function PatientScopeSummary({ scope }: { scope: ExtractPatientScope }) {
       {query && <span className="order-select__muted">{`「${query.name}」に該当 ${query.count} 人`}</span>}
       {folder && <span className="order-select__muted">{`フォルダ「${folder.name}」に ${folder.count} 人`}</span>}
       {strata.map((s) => (
-        <span key={s.name} className="order-select__muted">{`群「${s.name}」${s.count} 人`}</span>
+        <span key={s.name} className="order-select__muted">{`比較群「${s.name}」${s.count} 人`}</span>
       ))}
     </>
   );

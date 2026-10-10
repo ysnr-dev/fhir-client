@@ -21,7 +21,7 @@ interface Props {
   patientColumns: PatientColumn[];
   rows: RecordTableRow[];
   emptyLabel: string;
-  /** 患者の列の直後に並べる患者ごとの属性(群・担当医。docs/data-extract-design.md §21)。 */
+  /** 患者の列の直後に並べる患者ごとの属性(比較群・担当医。docs/data-extract-design.md §21)。 */
   patientAttributes?: PatientAttribute[];
   /** 内訳の切り口。保存する条件に含めるときはタブが持って渡す(渡さなければここで持つ)。 */
   breakdown?: BreakdownSettings;

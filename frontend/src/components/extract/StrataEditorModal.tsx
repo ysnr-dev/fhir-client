@@ -8,7 +8,7 @@ import { Modal } from "../Modal";
 import { ExtractLeafFields } from "./ExtractLeafFields";
 import { ExtractQuerySelect } from "./ExtractQuerySelect";
 
-// 記録タブの群分けの入力(docs/data-extract-design.md §21)。群ごとに名前と、条件 1 件か「患者」タブに保存した条件。
+// 記録タブの比較群の入力(docs/data-extract-design.md §21)。比較群ごとに名前と、条件 1 件か「患者」タブに保存した条件。
 
 type StratumKind = Exclude<ExtractKind, "patient">;
 
@@ -39,7 +39,7 @@ export function StrataEditorModal({ strata, queries, onChange, onClose }: Props)
   const remove = (index: number) => onChange(strata.filter((_, i) => i !== index));
 
   return (
-    <Modal title="群分け" onClose={onClose} className="modal--wide">
+    <Modal title="比較群" onClose={onClose} className="modal--wide">
       <div className="extract-group__children">
         {strata.map((stratum, index) => (
           <div key={stratum.key} className="extract-leaf">
@@ -48,7 +48,7 @@ export function StrataEditorModal({ strata, queries, onChange, onClose }: Props)
                 {stratum.kind ? EXTRACT_KIND_LABELS[stratum.kind] : "保存した条件"}
               </span>
               <label className="extract-field extract-field--inline">
-                群の名前
+                比較群の名前
                 <input
                   type="text"
                   className="extract-field__label"
@@ -60,8 +60,8 @@ export function StrataEditorModal({ strata, queries, onChange, onClose }: Props)
               <button
                 type="button"
                 className="rp-card__icon-button extract-leaf__remove"
-                title="群を削除"
-                aria-label="群を削除"
+                title="比較群を削除"
+                aria-label="比較群を削除"
                 onClick={() => remove(index)}
               >
                 <TrashIcon />
@@ -92,14 +92,14 @@ export function StrataEditorModal({ strata, queries, onChange, onClose }: Props)
       {strata.length < MAX_STRATA && (
         <div className="data-extract__toolbar">
           <select
-            aria-label="群を追加"
+            aria-label="比較群を追加"
             value=""
             onChange={(e) => {
               const kind = e.target.value as StratumKind | typeof SAVED | "";
               if (kind) onChange([...strata, newStratum(kind)]);
             }}
           >
-            <option value="">＋群</option>
+            <option value="">＋比較群</option>
             {STRATUM_KINDS.map((kind) => (
               <option key={kind} value={kind}>
                 {EXTRACT_KIND_LABELS[kind]}

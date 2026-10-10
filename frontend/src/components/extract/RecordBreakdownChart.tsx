@@ -18,7 +18,7 @@ export const BREAKDOWN_CHART_MAX_SERIES = 8;
 
 /**
  * 内訳の期間の推移(docs/data-extract-design.md §18・§21)。行の軸が期間のとき、列に分けていなければ
- * 行ごとの件数か集計値を 1 系列の棒にし、列に分けていれば列の値ごとの折れ線にする(群ごとの推移の比較)。
+ * 行ごとの件数か集計値を 1 系列の棒にし、列に分けていれば列の値ごとの折れ線にする(比較群ごとの推移の比較)。
  * 数は下の表にもある(表が図の読み替え)。
  */
 export function RecordBreakdownChart({ breakdown, periodOnRows, ratio }: Props) {

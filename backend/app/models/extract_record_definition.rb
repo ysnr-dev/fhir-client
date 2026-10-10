@@ -3,7 +3,7 @@
 # AND / OR の木は持たず、タブごとの入力欄の値をそのまま持つ。どのタブの条件かは ExtractQuery#tab。
 #
 # どのタブにも共通するのは、期間・患者の絞り込み(「患者」タブに保存した条件の code と、患者フォルダ)・
-# 群分けと担当医・出力する患者の列。タブ固有の項目は TAB_FIELDS に足す。中身のコード(どの薬・どの検査か)は解釈しない。
+# 比較群と担当医・出力する患者の列。タブ固有の項目は TAB_FIELDS に足す。中身のコード(どの薬・どの検査か)は解釈しない。
 module ExtractRecordDefinition
   SCHEMA_VERSION = 1
   TABS = %w[encounter condition template lab medication micro surgery perform adverse pathway].freeze
@@ -12,8 +12,8 @@ module ExtractRecordDefinition
   CODE_SHAPE = ExtractQuery::CODE_SHAPE
   MAX_STRATA = 8
 
-  # 群分け(§21)の群 1 つ。「患者」タブの条件 1 件(kind。患者属性は置けない)か、「患者」タブに保存した
-  # 条件の code(query_code)のどちらか。label が群の名前。除外・時間関係・出力項目は持たない。
+  # 比較群(§21)の 1 つ。「患者」タブの条件 1 件(kind。患者属性は置けない)か、「患者」タブに保存した
+  # 条件の code(query_code)のどちらか。label が比較群の名前。除外・時間関係・出力項目は持たない。
   STRATUM_SHAPE = {
     fields: ExtractQuery::LEAF_FIELDS.except("not", "relation", "output_fields").merge("query_code" => :text),
     required: %w[key],
@@ -39,7 +39,7 @@ module ExtractRecordDefinition
     "output" => {
       fields: { "patient_columns" => { list: { enum: ExtractQuery::PATIENT_COLUMNS }, unique: true } }
     },
-    # 群分けと、群に入らない患者を除くか(§21)。
+    # 比較群と、比較群に入らない患者を除くか(§21)。
     "strata" => { list: STRATUM_SHAPE, max: MAX_STRATA, unique: "key" },
     "strata_only" => :boolean,
     # 担当医の列の決め方(外来の担当医・入院の主治医・処方の依頼医)。

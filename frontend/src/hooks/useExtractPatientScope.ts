@@ -14,9 +14,9 @@ import {
 import { today } from "../lib/dates";
 import { useDefinitionOwners } from "./useDefinitionOwners";
 
-// データ抽出の記録を表にするタブの患者の絞り込みと、患者ごとの属性(群・担当医)。
+// データ抽出の記録を表にするタブの患者の絞り込みと、患者ごとの属性(比較群・担当医)。
 // 絞り込みは「患者」タブに保存した条件と患者フォルダ(下位フォルダを含む)で、両方なら両方に入る患者
-// (docs/data-extract-design.md §8)。群分けと担当医は §21。
+// (docs/data-extract-design.md §8)。比較群と担当医は §21。
 
 interface ScopeSummary {
   query: { name: string; count: number } | null;
@@ -24,23 +24,23 @@ interface ScopeSummary {
   strata: { name: string; count: number }[];
 }
 
-/** 実行したときの群分けと担当医の決め方(結果の表の属性の列はこれで組む)。 */
+/** 実行したときの比較群と担当医の決め方(結果の表の属性の列はこれで組む)。 */
 export interface RanScope {
-  /** 患者 id → 入った群の名前(群の並び順)。群分けをしていなければ null。 */
+  /** 患者 id → 入った比較群の名前(比較群の並び順)。比較群を使っていなければ null。 */
   groupsOf: Map<string, string[]> | null;
   attending: AttendingMode | null;
   /** タブの期間(担当医を決める記録の期間)。 */
   range: ResolvedPeriod | null;
 }
 
-/** 群の名前。付けた名前、保存した条件の名前、条件の表示名の順。 */
+/** 比較群の名前。付けた名前、保存した条件の名前、条件の表示名の順。 */
 export function stratumName(stratum: ExtractStratum, queries: ExtractQuery[]): string {
   if (stratum.label?.trim()) return stratum.label.trim();
   if (stratum.query_code) return queries.find((q) => q.code === stratum.query_code)?.name ?? "保存した条件";
-  return stratum.kind ? leafLabel(stratum as ExtractLeaf) : "群";
+  return stratum.kind ? leafLabel(stratum as ExtractLeaf) : "比較群";
 }
 
-/** 条件型の群を「患者」タブの条件にする。期間を入れていなければタブの期間で数える。 */
+/** 条件型の比較群を「患者」タブの条件にする。期間を入れていなければタブの期間で数える。 */
 function stratumLeaf(stratum: ExtractStratum, period: ExtractPeriod | null | undefined, name: string): ExtractLeaf {
   const { query_code: _code, ...rest } = stratum;
   return { ...rest, kind: stratum.kind!, label: name, period: stratum.period ?? period ?? null };
@@ -65,10 +65,10 @@ export function useExtractPatientScope() {
   const [summary, setSummary] = useState<ScopeSummary>({ query: null, folder: null, strata: [] });
   const [ran, setRan] = useState<RanScope | null>(null);
 
-  /** 群ごとの患者。条件型の群はまとめて 1 回で抽出し、保存した条件の群は 1 つずつ抽出する。読めなければ null。 */
+  /** 比較群ごとの患者。条件型の比較群はまとめて 1 回で抽出し、保存した条件の比較群は 1 つずつ抽出する。読めなければ null。 */
   async function resolveStrata(period: ExtractPeriod | null | undefined): Promise<Set<string>[] | null> {
     const names = strata.map((s) => stratumName(s, queries));
-    const leaves = strata.flatMap((s, i) => (s.kind && !s.query_code ? [stratumLeaf(s, period, `群「${names[i]}」`)] : []));
+    const leaves = strata.flatMap((s, i) => (s.kind && !s.query_code ? [stratumLeaf(s, period, `比較群「${names[i]}」`)] : []));
     const members: (Set<string> | null)[] = strata.map(() => null);
     if (leaves.length > 0) {
       const body: ExtractQueryBody = { schema_version: 1, root: { op: "or", children: leaves } };
@@ -87,7 +87,7 @@ export function useExtractPatientScope() {
       if (!s.query_code) continue;
       const query = queries.find((q) => q.code === s.query_code);
       if (!query) {
-        setScopeError(new Error(`群「${names[i]}」: 保存した条件が見つかりません。`));
+        setScopeError(new Error(`比較群「${names[i]}」: 保存した条件が見つかりません。`));
         return null;
       }
       const result = await patientExtract.run(query.definition, leafLabel, { skipPatients: true });
@@ -98,8 +98,8 @@ export function useExtractPatientScope() {
   }
 
   /**
-   * 選んだ条件・フォルダ・群の患者。絞り込みが無ければ undefined(全患者)、読めなければ null。
-   * 患者の条件と群は実行のたびに抽出し直す。period はタブの期間(期間を入れていない群と担当医に使う)。
+   * 選んだ条件・フォルダ・比較群の患者。絞り込みが無ければ undefined(全患者)、読めなければ null。
+   * 患者の条件と比較群は実行のたびに抽出し直す。period はタブの期間(期間を入れていない比較群と担当医に使う)。
    */
   async function resolve(period?: ExtractPeriod | null): Promise<string[] | undefined | null> {
     const query = queries.find((q) => q.code === queryCode) ?? null;
@@ -135,7 +135,7 @@ export function useExtractPatientScope() {
         const name = stratumName(s, queries);
         for (const id of members[i]) groupsOf!.set(id, [...(groupsOf!.get(id) ?? []), name]);
       });
-      // 群の人数は、ほかの絞り込み(患者の条件・フォルダ)に入る患者で数える。
+      // 比較群の人数は、ほかの絞り込み(患者の条件・フォルダ)に入る患者で数える。
       const inScope = patientIds ? new Set(patientIds) : null;
       next.strata = strata.map((s, i) => ({
         name: stratumName(s, queries),

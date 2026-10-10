@@ -269,7 +269,7 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
     end
 
-    it "群分け・群外を除く・担当医を保存でき、群の形を確かめる" do
+    it "比較群・比較群外を除く・担当医を保存でき、比較群の形を確かめる" do
       strata = [
         { "key" => "su", "label" => "SU薬", "kind" => "medication", "drug_classes" => [{ "code" => "3961" }] },
         { "key" => "a1c", "kind" => "observation", "codes" => lab_item["codings"], "value" => { "op" => "ge", "value" => 8 } },
@@ -291,7 +291,7 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "n", "label" => "名前だけ" }] }, name: "種類なし")
       expect(errors_text).to include("kind")
       nine = (1..9).map { |i| { "key" => "s#{i}", "query_code" => "q#{i}" } }
-      create_record("lab", { "items" => [lab_item], "strata" => nine }, name: "9 群")
+      create_record("lab", { "items" => [lab_item], "strata" => nine }, name: "9 比較群")
       expect(errors_text).to include("8 件まで")
       create_record("lab", { "items" => [lab_item], "attending" => "nurse" }, name: "担当医違い")
       expect(response).to have_http_status(:unprocessable_content)
