@@ -148,6 +148,19 @@ class FacilitySettings < ApplicationRecord
   DATE_KEY_PATTERN = /\A\d{4}-\d{2}-\d{2}\z/
 
   QUESTIONNAIRE_URL = { pattern: %r{\Ahttps?://[^\s|]+\z}, label: "テンプレートの url" }.freeze
+  QUESTIONNAIRE_URL_OR_BLANK = { pattern: %r{\A(https?://[^\s|]+)?\z}, label: "テンプレートの url(空可)" }.freeze
+
+  # 入退院文書の作成状況(docs/bed-management-design.md §4)。入院診療計画書は入院日から
+  # admission_plan_days 日以内、看護サマリー(退院)は退院日から nursing_summary_days 日以内を期限にして、
+  # 一覧で未作成・期限超過を出す。入院診療計画書はテンプレートの url(版を問わない)で数え、空なら対象にしない
+  # (施設がどのテンプレートを入院診療計画書に使うかは決め打てないので、既定は空)。
+  # 退院時サマリーの期限は document_reminder の日数を使う(督促の通知と同じ値)。表示時の判定だけなので、
+  # ここを変えれば過去の入院の判定にも効く。
+  DEFAULT_ADMISSION_DOCUMENTS = {
+    "admission_plan_template" => "",
+    "admission_plan_days" => 7,
+    "nursing_summary_days" => 7
+  }.freeze
 
   # 医事会計へ送るレセプト電算コードのうち、施設基準や届出で決まる「1 施設 1 値」のもの
   # (docs/receipt-billing-design.md §5)。マスタを持たない種別(病理・リハビリ・栄養指導)の
@@ -266,6 +279,16 @@ class FacilitySettings < ApplicationRecord
     "bulk_vital_entry" => {
       default: DEFAULT_BULK_VITAL_ENTRY,
       shape: { fields: { "items" => { list: { enum: BULK_VITAL_ITEMS }, min: 1, unique: true } } }
+    },
+    "admission_documents" => {
+      default: DEFAULT_ADMISSION_DOCUMENTS,
+      shape: {
+        fields: {
+          "admission_plan_template" => QUESTIONNAIRE_URL_OR_BLANK,
+          "admission_plan_days" => DAYS,
+          "nursing_summary_days" => DAYS
+        }
+      }
     },
     "dpc_coefficients" => {
       default: DEFAULT_DPC_COEFFICIENTS,

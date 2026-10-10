@@ -93,6 +93,9 @@ import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
 import { InsulinScaleSetPage } from "./pages/InsulinScaleSetPage";
 import { InsulinWorklistPage } from "./pages/InsulinWorklistPage";
 import { NursingAssignmentPage } from "./pages/NursingAssignmentPage";
+import { BedSchedulePage } from "./pages/BedSchedulePage";
+import { BedStatusPage } from "./pages/BedStatusPage";
+import { AdmissionDocumentsPage } from "./pages/AdmissionDocumentsPage";
 import { NursingWorksheetPage } from "./pages/NursingWorksheetPage";
 import { BulkVitalEntryPage } from "./pages/BulkVitalEntryPage";
 import { NursingSummaryApprovalPage } from "./pages/NursingSummaryApprovalPage";
@@ -206,6 +209,13 @@ function App() {
             <Link to="/ward-map" className="row-menu__item">
               病棟マップ
             </Link>
+            {/* ベッドスケジュールはベッド × 日付の帯で入院・予定を見る画面、病床状況は病棟ごとの集計。 */}
+            <Link to="/bed-schedule" className="row-menu__item">
+              ベッドスケジュール
+            </Link>
+            <Link to="/bed-status" className="row-menu__item">
+              病床状況
+            </Link>
             {/* 患者フォルダは患者を任意の階層の分類に仕分けて見る画面。 */}
             <Link to="/patient-folders" className="row-menu__item">
               患者フォルダ
@@ -227,6 +237,10 @@ function App() {
             {/* 研修医・学生の記録とオーダーのカウンターサイン(指導医向け。docs/countersign-design.md)。 */}
             <Link to="/countersigns" className="row-menu__item">
               カルテ承認
+            </Link>
+            {/* 入院診療計画書・退院時サマリー・看護サマリーの作成状況と期限(docs/bed-management-design.md §4)。 */}
+            <Link to="/admission-documents" className="row-menu__item">
+              入退院文書
             </Link>
             {/* よく出すオーダーのひとまとめ(オーダーセット)の登録。出すのは診療科の
                 医師なので部門業務ではなくここに置く(docs/order-set-design.md §1)。 */}
@@ -523,6 +537,9 @@ function App() {
           <Route path="/insulin-worklist" element={<InsulinWorklistPage />} />
           <Route path="/nursing-worksheet" element={<NursingWorksheetPage />} />
           <Route path="/nursing-assignments" element={<NursingAssignmentPage />} />
+          <Route path="/bed-schedule" element={<BedSchedulePage />} />
+          <Route path="/bed-status" element={<BedStatusPage />} />
+          <Route path="/admission-documents" element={<AdmissionDocumentsPage />} />
           <Route path="/inpatients/bulk-vitals" element={<BulkVitalEntryPage />} />
           <Route path="/nursing-summary-approvals" element={<NursingSummaryApprovalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />

@@ -346,7 +346,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     });
   }, [detached, patientId]);
 
-  // 一覧・通知のリンクから右ペインのフォームを開く(退院時サマリー、DPC 様式1、放射線治療の週次レビュー)。
+  // 一覧・通知のリンクから右ペインのフォームを開く(退院時サマリー、DPC 様式1、放射線治療の週次レビュー、
+  // 入退院文書の作成状況からの看護サマリー・入院診療計画書)。
   // 一回限りの引数なので、読んだら URL から消す(フォームを URL に載せない方針)。
   const openValue = searchParams.get(KARTE_OPEN_PARAM);
   const openTarget = parseKarteOpen(openValue);
@@ -361,6 +362,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             ? { kind: "dpc-form1-create", encounterId: openTarget.encounterId, tab: "coding" }
           : openTarget.kind === "nursing-summary"
             ? { kind: "nursing-summary-edit", noteId: openTarget.compositionId }
+          : openTarget.kind === "nursing-summary-create"
+            ? { kind: "nursing-summary-create", encounterId: openTarget.encounterId }
+          : openTarget.kind === "admission-plan"
+            ? { kind: "admission-plan-create", encounterId: openTarget.encounterId }
             : { kind: "radiotherapy-review", srId: openTarget.srId },
     );
     updateParams((params) => params.delete(KARTE_OPEN_PARAM));

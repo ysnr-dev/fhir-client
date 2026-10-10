@@ -510,6 +510,17 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 - **影響範囲**: カルテのパスタブ（2 往復 → 1）と看護の実施記録。詳細は `refactoring-plan.md` 第 2 段。
 
 
+### C-10. canonical 検索で版を省いた url が版付きの値に当たらない
+
+- **現状**: `QuestionnaireResponse?questionnaire=<url>`(版なし)が、`questionnaire` に `<url>|1.0.0` を持つ回答に
+  当たらない(2026-10-10 に開発環境で確認。`<url>|1.0.0` で引くと当たる)。R4 の canonical 検索は、版を省いた値で
+  すべての版に当たる決まり(Search §3.1.1.5.6 "Canonical References")。
+- **望ましいサーバー機能**: canonical 型の検索パラメータで、版を省いた値は `url` 部分の一致にする
+  (`|` 以降を比較しない)。
+- **影響範囲**: 入退院文書の作成状況(施設設定の入院診療計画書のテンプレートは版を持たない url)。いまは
+  `Questionnaire?url=` で版を引き、版ごとの canonical をカンマで並べて回避している
+  (`api/queries/bedManagement.ts` の `templateCanonicals`)。テンプレートの版を上げるたびに件数が増えるだけで壊れはしない。
+
 ## 長期（アーキテクチャ）
 
 ### L-1. マスタ群のターミノロジーサーバー化の検討

@@ -13,6 +13,7 @@ import type { VitalThresholdSettings } from "../fhir/vitalHelpers";
 import type { WaterBalanceSettings } from "../fhir/flowsheetWaterBalanceHelpers";
 import type { MedicationScheduleSettings } from "../fhir/medicationScheduleHelpers";
 import type { DocumentReminderSettings } from "../fhir/documentDueHelpers";
+import type { AdmissionDocumentSettings } from "../fhir/admissionDocumentHelpers";
 import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
 import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
 import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
@@ -68,6 +69,8 @@ export interface FacilitySettings {
   bulk_vital_entry: BulkVitalEntrySettings;
   /** DPC の医療機関別係数(適用開始日 YYYY-MM-DD → 係数)。 */
   dpc_coefficients: Record<string, string>;
+  /** 入退院文書の作成状況の対象と期限。 */
+  admission_documents: AdmissionDocumentSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -85,6 +88,7 @@ export type FacilitySettingsPayload = Partial<{
   nursing_profile: NursingProfileSettings;
   bulk_vital_entry: BulkVitalEntrySettings;
   dpc_coefficients: Record<string, string>;
+  admission_documents: AdmissionDocumentSettings;
 }>;
 
 export interface ConnectionTestResult {

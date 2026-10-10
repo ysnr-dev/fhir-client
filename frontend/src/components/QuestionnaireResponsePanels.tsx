@@ -51,13 +51,13 @@ interface QuestionnaireResponseCreatePanelProps {
    * (`fhir/radiotherapyReviewHelpers.ts`)。
    */
   basedOn?: fhir4.Reference[];
-  /** 選択済みにしておくテンプレートの canonical。前回と同じ様式で書き始めるときに渡す。 */
+  /** 選択済みにしておくテンプレートの canonical(版を省いた url でもよい)。前回と同じ様式で書き始めるときに渡す。 */
   defaultQuestionnaireCanonical?: string;
   /**
    * 書くテンプレートが決まっている入口(看護プロファイルの区画)。テンプレートの選択欄を出さない。
    */
   fixedQuestionnaire?: fhir4.Questionnaire;
-  /** 回答が属する入院(看護プロファイル)。 */
+  /** 回答が属する入院(看護プロファイル・入院診療計画書)。 */
   encounterId?: string;
   /** 対象プロブレムの欄を出すか。患者の状態を書く入口(看護プロファイル)では出さない。 */
   showProblem?: boolean;
@@ -91,8 +91,9 @@ export function QuestionnaireResponseCreatePanel({
   // テンプレートの一覧は非同期なので、届いてから、まだ選んでいないときだけ入れる。
   useEffect(() => {
     if (!defaultQuestionnaireCanonical || questionnaireId) return;
+    // 版を問わない url で渡されたら、その url のテンプレートを選ぶ(施設設定の入院診療計画書)。
     const match = activeQuestionnaires.find(
-      (q) => questionnaireCanonical(q) === defaultQuestionnaireCanonical,
+      (q) => questionnaireCanonical(q) === defaultQuestionnaireCanonical || q.url === defaultQuestionnaireCanonical,
     );
     if (match?.id) setQuestionnaireId(match.id);
   }, [defaultQuestionnaireCanonical, activeQuestionnaires, questionnaireId]);

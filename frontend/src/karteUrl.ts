@@ -30,6 +30,7 @@ export const KARTE_PROBLEM_PARAM = "problem";
 export const KARTE_CARD_PARAM = "card";
 /**
  * 開いた直後に右ペインで始める登録("discharge-summary:<入院の Encounter id>")。
+ * admission-plan は施設設定の入院診療計画書のテンプレートで、その入院の回答を書き始める。
  * 通知や入院患者一覧・提出ファイルの一覧のリンクから登録を始めるための一回限りの引数で、KartePage が
  * 読んだら URL から消す(フォームを URL に載せない方針と両立させるため)。
  */
@@ -44,7 +45,9 @@ export type KarteOpenTarget =
   | { kind: "dpc-form1"; encounterId: string }
   | { kind: "dpc-coding"; encounterId: string }
   | { kind: "radiotherapy-review"; srId: string }
-  | { kind: "nursing-summary"; compositionId: string };
+  | { kind: "nursing-summary"; compositionId: string }
+  | { kind: "nursing-summary-create"; encounterId: string }
+  | { kind: "admission-plan"; encounterId: string };
 
 export function formatKarteOpen(target: KarteOpenTarget): string {
   const id =
@@ -63,7 +66,13 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   const kind = value.slice(0, separator);
   const id = value.slice(separator + 1);
   if (!id) return null;
-  if (kind === "discharge-summary" || kind === "dpc-form1" || kind === "dpc-coding") {
+  if (
+    kind === "discharge-summary" ||
+    kind === "dpc-form1" ||
+    kind === "dpc-coding" ||
+    kind === "nursing-summary-create" ||
+    kind === "admission-plan"
+  ) {
     return { kind, encounterId: id };
   }
   if (kind === "radiotherapy-review") return { kind, srId: id };

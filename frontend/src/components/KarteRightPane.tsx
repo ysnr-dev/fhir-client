@@ -1,4 +1,5 @@
 import { useState, type ComponentType, type ReactNode } from "react";
+import { useFacilitySettings } from "../api/queries";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { isOrderKind, ORDER_KINDS, type OrderKind } from "../fhir/orderKinds";
 import { AppointmentCreatePanel, AppointmentReschedulePanel } from "./AppointmentPanels";
@@ -127,6 +128,8 @@ export type KartePaneState =
   // 看護プロファイル。入院 × 区画(テンプレートの url)で 1 件の回答を書く・直す。
   | { kind: "nursing-profile"; encounterId?: string; templateUrl?: string }
   | { kind: "qr-create"; problem?: ProblemRef }
+  // 入院診療計画書。施設設定のテンプレートで、その入院に紐付けて書き始める(入退院文書の作成状況から)。
+  | { kind: "admission-plan-create"; encounterId: string }
   | { kind: "qr-edit"; qrId: string }
   // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
   // 日時変更は予約タブの一覧から開く。
@@ -276,6 +279,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "nursing-problem-edit": "看護計画編集",
   "nursing-profile": "看護プロファイル",
   "qr-create": "テンプレート登録",
+  "admission-plan-create": "入院診療計画書",
   "qr-edit": "テンプレート編集",
   "appointment-create": "予約登録",
   "appointment-reschedule": "予約の日時変更",
@@ -308,6 +312,7 @@ function paneKey(state: KartePaneState): string {
     case "nursing-summary-edit":
       return `${state.kind}:${state.noteId}`;
     case "nursing-summary-create":
+    case "admission-plan-create":
       return `${state.kind}:${state.encounterId ?? ""}`;
     case "summary-create":
     case "dpc-form1-create":
@@ -616,6 +621,27 @@ export function KarteRightPane({
 }
 
 // 登録ボタン列の中で、同じ領域のボタンを見出しのボタンの下に畳む。
+/** 入院診療計画書を書き始める。テンプレートは施設設定(入退院文書の作成状況と同じもの)。 */
+function AdmissionPlanCreatePanel({
+  patientId,
+  encounterId,
+  onSaved,
+}: {
+  patientId: string;
+  encounterId: string;
+  onSaved: () => void;
+}) {
+  const facility = useFacilitySettings();
+  return (
+    <QuestionnaireResponseCreatePanel
+      patientId={patientId}
+      defaultQuestionnaireCanonical={facility.data?.admission_documents?.admission_plan_template || undefined}
+      encounterId={encounterId}
+      onSaved={onSaved}
+    />
+  );
+}
+
 function PaneActionGroup({ label, children }: { label: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
@@ -841,6 +867,8 @@ function PaneContent({
           onSaved={onSaved}
         />
       );
+    case "admission-plan-create":
+      return <AdmissionPlanCreatePanel patientId={patientId} encounterId={state.encounterId} onSaved={onSaved} />;
     case "qr-create":
       return (
         <QuestionnaireResponseCreatePanel

@@ -36,6 +36,10 @@ import {
   type DocumentReminderSettings,
 } from "../fhir/documentDueHelpers";
 import {
+  DEFAULT_ADMISSION_DOCUMENTS,
+  type AdmissionDocumentSettings,
+} from "../fhir/admissionDocumentHelpers";
+import {
   CATEGORY_OPTIONS,
   DEFAULT_PRESCRIPTION_CATEGORY,
   SETTING_OPTIONS,
@@ -161,6 +165,14 @@ export function FacilitySettingsPage() {
   const reminder = reminderDraft ?? savedReminder;
   const reminderValid =
     Number.isInteger(reminder.discharge_summary_days) && reminder.discharge_summary_days >= 0;
+
+  // 入退院文書の作成状況の対象と期限。入院診療計画書はテンプレートの url(版を問わない)で数える。
+  const [admissionDocsDraft, setAdmissionDocsDraft] = useState<AdmissionDocumentSettings | undefined>(undefined);
+  const savedAdmissionDocs = settings.data?.admission_documents ?? DEFAULT_ADMISSION_DOCUMENTS;
+  const admissionDocs = admissionDocsDraft ?? savedAdmissionDocs;
+  const admissionDocsValid = [admissionDocs.admission_plan_days, admissionDocs.nursing_summary_days].every(
+    (days) => Number.isInteger(days) && days >= 0,
+  );
 
   // 放射線治療の治療中の診察(週次レビュー)の間隔。最後の診察からこの日数を超えたコースを
   // 部門一覧で強調する。
@@ -305,6 +317,7 @@ export function FacilitySettingsPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
+    if (!admissionDocsValid) return;
     if (!reviewValid || !receiptCodesOk || !coefficientsValid) return;
     update.mutate({
       self_organization_id: value,
@@ -321,6 +334,7 @@ export function FacilitySettingsPage() {
       nursing_profile: nursingProfile,
       bulk_vital_entry: bulkVitalEntry,
       dpc_coefficients: Object.fromEntries(coefficients.map((c) => [c.from, c.value])),
+      admission_documents: admissionDocs,
     });
   }
 
@@ -634,6 +648,57 @@ export function FacilitySettingsPage() {
                   aria-label="退院時サマリーの期限の日数"
                 />
                 <span className="facility-settings__unit">日以内(退院日から)</span>
+              </span>
+            </label>
+            {/* ここから下は入退院文書の作成状況(/admission-documents)の判定だけに使う(通知は作らない)。 */}
+            <label>
+              看護サマリーの期限
+              <span className="facility-settings__times">
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={admissionDocs.nursing_summary_days}
+                  onChange={(e) =>
+                    setAdmissionDocsDraft({ ...admissionDocs, nursing_summary_days: Number(e.target.value) })
+                  }
+                  aria-label="看護サマリーの期限の日数"
+                />
+                <span className="facility-settings__unit">日以内(退院日から)</span>
+              </span>
+            </label>
+            <label>
+              入院診療計画書のテンプレート
+              <select
+                value={admissionDocs.admission_plan_template}
+                onChange={(e) =>
+                  setAdmissionDocsDraft({ ...admissionDocs, admission_plan_template: e.target.value })
+                }
+              >
+                <option value="">（なし）</option>
+                {templateOptions.questionnaires
+                  .filter((q, index, list) => q.url && list.findIndex((other) => other.url === q.url) === index)
+                  .map((q) => (
+                    <option key={q.id} value={q.url}>
+                      {q.title ?? q.name ?? q.id}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              入院診療計画書の期限
+              <span className="facility-settings__times">
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={admissionDocs.admission_plan_days}
+                  onChange={(e) =>
+                    setAdmissionDocsDraft({ ...admissionDocs, admission_plan_days: Number(e.target.value) })
+                  }
+                  aria-label="入院診療計画書の期限の日数"
+                />
+                <span className="facility-settings__unit">日以内(入院日から)</span>
               </span>
             </label>
           </div>
@@ -1022,7 +1087,8 @@ export function FacilitySettingsPage() {
               !mealValid ||
               !thresholdsValid ||
               !medicationValid ||
-              !reminderValid
+              !reminderValid ||
+              !admissionDocsValid
             }
           >
             {update.isPending ? "保存中..." : "保存"}

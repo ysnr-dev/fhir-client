@@ -24599,3 +24599,232 @@ input.nursing-picker__search {
 .master-hub__empty {
   color: var(--text);
 }
+
+/* ベッドスケジュール(病床ガント)。ベッドの行の右に日付ぶんの 1 セルを置き、その中に帯を
+   絶対配置で並べる(列幅は等分なので、帯の位置は日付の番号 ÷ 日数で決まる)。 */
+.bed-schedule {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.bed-schedule__room-col {
+  width: 8em;
+}
+
+.bed-schedule__bed-col {
+  width: 5em;
+}
+
+.bed-schedule th,
+.bed-schedule td {
+  padding: 4px 6px;
+  vertical-align: middle;
+}
+
+.bed-schedule__day {
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.bed-schedule__weekday {
+  display: block;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.bed-schedule__day--sat .bed-schedule__weekday {
+  color: var(--lab-low);
+}
+
+.bed-schedule__day--sun .bed-schedule__weekday {
+  color: var(--lab-high);
+}
+
+/* 今日は見出しにだけ印を付ける(帯の上には縦線を 1 本引く)。 */
+.bed-schedule thead th.bed-schedule__day--today {
+  color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.bed-schedule__room {
+  text-align: left;
+  font-weight: normal;
+  vertical-align: top;
+  border-right: 1px solid var(--border);
+}
+
+.bed-schedule__room-class {
+  display: block;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.bed-schedule__bed {
+  white-space: nowrap;
+}
+
+.bed-schedule__unusable {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--warning);
+}
+
+.bed-schedule__row--unusable td {
+  opacity: 0.6;
+}
+
+.bed-schedule td.bed-schedule__cell {
+  padding: 0;
+}
+
+.bed-schedule__track {
+  position: relative;
+  min-height: 28px;
+  background-image: linear-gradient(to right, var(--border) 1px, transparent 1px);
+  background-size: calc(100% / var(--days)) 100%;
+}
+
+.bed-schedule__today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed var(--accent);
+}
+
+/* 帯。実績は塗り、続いている入院の今日より先は薄く、予定は点線の枠だけ。 */
+.bed-schedule__bar {
+  position: absolute;
+  box-sizing: border-box;
+  height: 20px;
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-h);
+  text-decoration: none;
+  border: 1px solid var(--accent-border);
+}
+
+.bed-schedule__bar--actual {
+  background: var(--accent-bg);
+  background-image: linear-gradient(var(--accent-bg), var(--accent-bg));
+}
+
+.bed-schedule__bar--future {
+  background: transparent;
+  background-image: linear-gradient(var(--accent-bg), var(--accent-bg));
+  border-style: solid dashed;
+  opacity: 0.75;
+}
+
+.bed-schedule__bar--planned {
+  background: transparent;
+  border-style: dashed;
+  color: var(--accent);
+}
+
+.bed-schedule__bar--start {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.bed-schedule__bar--end {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.bed-schedule__legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-end;
+  margin-left: auto;
+}
+
+.bed-schedule__legend .bed-schedule__bar,
+.bed-schedule__chip {
+  position: static;
+  display: inline-block;
+  border-radius: 4px;
+}
+
+/* ベッド未定の入院予定。日付の列に揃えて縦に積む。 */
+.bed-schedule__unassigned {
+  display: grid;
+  grid-template-columns: repeat(var(--days), minmax(0, 1fr));
+  min-height: 28px;
+  padding: 2px 0;
+}
+
+.bed-schedule__unassigned > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 1px;
+}
+
+.bed-schedule__chip {
+  max-width: 100%;
+}
+
+/* 病床状況。数の列は右寄せ、見出しの区分(空床・本日…)は中央。 */
+.bed-status th.bed-status__group {
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.bed-status .bed-status__num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bed-status th.bed-status__ward {
+  text-align: left;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.bed-status .bed-status__strong {
+  font-weight: bold;
+  color: var(--text-h);
+}
+
+.bed-status tfoot th,
+.bed-status tfoot td {
+  font-weight: bold;
+  border-top: 2px solid var(--border);
+}
+
+/* 入退院文書の作成状況。セルは状態の語と期限で、未作成は強調、期限超過は赤。 */
+.admission-documents__cell {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.3;
+  text-decoration: none;
+  color: var(--text-h);
+}
+
+.admission-documents__cell--done {
+  color: var(--text);
+}
+
+.admission-documents__cell--missing {
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.admission-documents__cell--overdue,
+.admission-documents__overdue {
+  color: var(--lab-high);
+}
+
+.admission-documents__due {
+  font-size: 11px;
+  font-weight: normal;
+}

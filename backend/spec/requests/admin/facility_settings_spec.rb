@@ -195,6 +195,42 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (admission_documents)" do
+    it "テンプレートの url と日数を保存し、渡さなかった項目は既定値で返す" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: {
+                admission_documents: {
+                  admission_plan_template: "http://fhir-client.local/Questionnaire/admission-plan-01",
+                  admission_plan_days: "5",
+                },
+              },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["admission_documents"]).to eq(
+        "admission_plan_template" => "http://fhir-client.local/Questionnaire/admission-plan-01",
+        "admission_plan_days" => 5,
+        "nursing_summary_days" => 7,
+      )
+    end
+
+    it "版付きの canonical(| を含む)と負の日数は 422" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { admission_documents: { admission_plan_template: "http://x/Questionnaire/a|1.0.0" } },
+              as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+
+      without_admin_token do
+        patch "/admin/facility_settings", params: { admission_documents: { nursing_summary_days: -1 } }, as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "PATCH /admin/facility_settings (document_reminder)" do
     it "stores the days and returns the merged defaults" do
       without_admin_token do

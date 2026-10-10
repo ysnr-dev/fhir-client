@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { locationDisplayName } from "../../fhir/locationHelpers";
-import { partOfId, PHYSICAL_TYPE_SYSTEM, ROOM_PHYSICAL_TYPE, WARD_PHYSICAL_TYPE, WARD_TYPE_CODE } from "../../fhir/wardHelpers";
+import { partOfId, PHYSICAL_TYPE_SYSTEM, ROOM_PHYSICAL_TYPE, roomClassCode, WARD_PHYSICAL_TYPE, WARD_TYPE_CODE } from "../../fhir/wardHelpers";
 import {
   ADMISSION_CLASS_CODE,
   ADMISSION_STATUS,
@@ -119,10 +119,16 @@ export async function fetchInpatients(date: string): Promise<InpatientResult> {
   return { byBed: latestEncounterByBed(encounters), patientsById, encounters, truncated };
 }
 
-/** ベッドが属する病棟。 */
+/** ベッドが属する病棟と病室。 */
 export interface BedWard {
   wardId: string;
   wardName: string;
+  roomId: string;
+  roomName: string;
+  /** 病室の区分(ROOM_CLASS_OPTIONS のコード)。 */
+  roomClass: string;
+  /** ベッドと病室がどちらも有効か。無効(休止・閉鎖)のベッドは使えない床として数える。 */
+  usable: boolean;
 }
 
 /**
@@ -165,19 +171,23 @@ async function fetchBedWardIndex(): Promise<Map<string, BedWard>> {
 
   // 病室は途中のページに散るので、全ページ読み終えてから突き合わせる。
   const wardById = new Map(wards.map((ward) => [ward.id ?? "", ward]));
-  const wardIdByRoom = new Map<string, string>();
-  for (const room of rooms) {
-    const wardId = partOfId(room);
-    if (room.id && wardId) wardIdByRoom.set(room.id, wardId);
-  }
+  const roomById = new Map(rooms.map((room) => [room.id ?? "", room]));
 
   const index = new Map<string, BedWard>();
   for (const bed of beds) {
     const roomId = partOfId(bed);
-    const wardId = roomId ? wardIdByRoom.get(roomId) : undefined;
+    const room = roomId ? roomById.get(roomId) : undefined;
+    const wardId = room ? partOfId(room) : undefined;
     const ward = wardId ? wardById.get(wardId) : undefined;
-    if (!bed.id || !ward?.id) continue;
-    index.set(bed.id, { wardId: ward.id, wardName: locationDisplayName(ward) });
+    if (!bed.id || !room?.id || !ward?.id) continue;
+    index.set(bed.id, {
+      wardId: ward.id,
+      wardName: locationDisplayName(ward),
+      roomId: room.id,
+      roomName: room.name ?? "",
+      roomClass: roomClassCode(room) ?? "",
+      usable: (bed.status ?? "active") === "active" && (room.status ?? "active") === "active",
+    });
   }
   return index;
 }
