@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useDpcMdc6, useDpcStem7Codes } from "../api/masterQueries";
 import { useKarteConditions } from "../api/queries";
 import {
@@ -501,7 +501,12 @@ function FieldInput({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const label = required ? `${field.label}(必須)` : field.label;
+  const label = (
+    <span className="qp-field__label">
+      {field.label}
+      {required && <span className="qp-field__required">必須</span>}
+    </span>
+  );
   const special = field.specials?.find((s) => s.code === value);
 
   if (field.kind === "composite") {
@@ -603,7 +608,7 @@ function CompositeInput({
   value,
   onChange,
 }: {
-  label: string;
+  label: ReactNode;
   field: Dpc1FieldDef;
   value: string;
   onChange: (value: string) => void;
