@@ -4,6 +4,7 @@ import type { ExtractQuery } from "../api/masterClient";
 import { useExtractQueries, useExtractQueryMutations } from "../api/masterQueries";
 import { useExtractDetailExport, useExtractRun } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { EXTRACT_TABS, type ExtractTab } from "../fhir/extractRecordQuery";
 import { AdverseEventExtractPanel } from "../components/extract/AdverseEventExtractPanel";
 import { ConditionExtractPanel } from "../components/extract/ConditionExtractPanel";
 import { DataExtractGuide, type GuideTopic } from "../components/extract/DataExtractGuide";
@@ -45,32 +46,8 @@ import { downloadBlob } from "../lib/download";
 // いずれも保存した患者の条件や患者フォルダの患者に絞れる。
 // 抽出は上流 FHIR をその場で引く。
 
-type Tab =
-  | "patient"
-  | "encounter"
-  | "condition"
-  | "template"
-  | "lab"
-  | "medication"
-  | "micro"
-  | "surgery"
-  | "perform"
-  | "adverse"
-  | "pathway";
-
-const TABS: { key: Tab; label: string }[] = [
-  { key: "patient", label: "患者" },
-  { key: "encounter", label: "入院・外来" },
-  { key: "condition", label: "病名" },
-  { key: "template", label: "テンプレート" },
-  { key: "lab", label: "検査結果" },
-  { key: "medication", label: "投薬" },
-  { key: "micro", label: "細菌検査" },
-  { key: "surgery", label: "手術" },
-  { key: "perform", label: "部門実施" },
-  { key: "adverse", label: "有害事象" },
-  { key: "pathway", label: "パス" },
-];
+type Tab = ExtractTab;
+const TABS = EXTRACT_TABS;
 
 function tabOf(value: string | null): Tab {
   return TABS.find((t) => t.key === value)?.key ?? "patient";

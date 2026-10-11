@@ -1,9 +1,8 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMedicationExtract, useSelfDepartments } from "../../api/queries";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
   EXTRACT_ORDER_TYPES,
-  RECORD_DISPLAY_LIMIT,
   patientColumnsOf,
   resolvePeriod,
   type ExtractCode,
@@ -13,33 +12,27 @@ import {
   type ExtractOutput,
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
-import { medicationExtractHeader, medicationExtractRows } from "../../fhir/medicationExtractHelpers";
-import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { compactDefinition, type MedicationExtractDefinition } from "../../fhir/extractRecordQuery";
+import { medicationRunner, recordCountLabel } from "../../fhir/extractTabRunners";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
-import { TruncatedNotice } from "../TruncatedNotice";
 import { MedicationCodes, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { ExtractFormRow } from "./ExtractFormRow";
 import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
+import { RecordResultNotices } from "./RecordResultNotices";
 import { RecordResultTable } from "./RecordResultTable";
-import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { recordTableCsv } from "../../fhir/recordTableHelpers";
+import { useExtractRunContext } from "../../hooks/useExtractRunContext";
 import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
+import { useRecordTable } from "../../hooks/useRecordTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
-
-/** 保存する条件(docs/data-extract-design.md §17)。 */
-interface MedicationCriteria extends ExtractRecordDefinition {
-  codes?: ExtractCode[];
-  drug_classes?: ExtractDrugClass[];
-  order_type?: ExtractOrderType;
-  department_id?: string;
-}
 
 /**
  * 投薬の抽出(docs/data-extract-design.md §15)。処方・注射のオーダーの薬剤 1 件を 1 行にした表と CSV にする。
@@ -49,6 +42,7 @@ export function MedicationExtractPanel() {
   const { departments } = useSelfDepartments();
   const departmentOptions = sortDepartmentsByCode(departments).filter((d) => d.id);
   const scope = useExtractPatientScope();
+  const context = useExtractRunContext();
   const extract = useMedicationExtract();
 
   const [codes, setCodes] = useState<ExtractCode[]>([]);
@@ -62,32 +56,17 @@ export function MedicationExtractPanel() {
   // 薬剤の入力欄は「患者」タブの条件の部品なので、条件 1 つの形で渡す。
   const drugLeaf: ExtractLeaf = { key: "drug", kind: "medication", codes, drug_classes: drugClasses };
 
-  const rows = useMemo(
-    () =>
-      extract.result
-        ? medicationExtractRows(extract.result.requests, extract.result.headers, extract.result.patients)
-        : null,
-    [extract.result],
-  );
   const patientColumns = patientColumnsOf(output);
   const running = scope.running || extract.running;
 
   async function handleRun() {
     const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
-    const range = resolvePeriod(period, today());
-    void extract.run({
-      codes,
-      drugClasses,
-      orderType: orderType || undefined,
-      from: range?.from ?? "",
-      to: range?.to ?? "",
-      departmentId: departmentId || undefined,
-      patientIds,
-    });
+    const criteria = medicationRunner.criteria(definition, { range: resolvePeriod(period, today()), patientIds }, context);
+    if (criteria) void extract.run(criteria);
   }
 
-  const definition = compactDefinition<MedicationCriteria>({
+  const definition = compactDefinition<MedicationExtractDefinition>({
     schema_version: 1,
     period,
     ...scopeDefinition(scope),
@@ -98,9 +77,11 @@ export function MedicationExtractPanel() {
     order_type: orderType || undefined,
     department_id: departmentId || undefined,
   });
+  const table = useRecordTable(medicationRunner, extract.result, definition, context);
+  const attributes = useRecordPatientAttributes(scope.ran, table?.rows);
 
   /** 保存した条件を入力欄に戻す(null なら初期値)。 */
-  function applyDefinition(saved: MedicationCriteria | null) {
+  function applyDefinition(saved: MedicationExtractDefinition | null) {
     setCodes(saved?.codes ?? []);
     setDrugClasses(saved?.drug_classes ?? []);
     setOrderType(saved?.order_type ?? "");
@@ -119,15 +100,6 @@ export function MedicationExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
-
-  const tableHeader = medicationExtractHeader(output);
-  const tableRows: RecordTableRow[] = (rows ?? []).map((row) => ({
-    key: row.rowKey,
-    patient: row,
-    fixed: row.fixed,
-    values: row.values,
-  }));
-  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -197,13 +169,13 @@ export function MedicationExtractPanel() {
         )}
         <PatientScopeProgress scope={scope} />
         {extract.running && <span className="order-select__muted">実行中</span>}
-        {rows && (
+        {table && (
           <span className="data-extract__exports">
-            <FolderRegisterButton patientIds={rows.map((r) => r.patientId)} />
+            <FolderRegisterButton patientIds={table.rows.map((r) => r.patient.patientId)} />
             <button
               type="button"
-              disabled={rows.length === 0}
-              onClick={() => downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `medication_${today()}.csv`)}
+              disabled={table.rows.length === 0}
+              onClick={() => downloadBlob(recordTableCsv(table.header, patientColumns, table.rows, attributes.attributes), `medication_${today()}.csv`)}
             >
               CSV
             </button>
@@ -212,29 +184,22 @@ export function MedicationExtractPanel() {
       </div>
 
       <ErrorBanner error={scope.error ?? extract.error} />
-      {rows && (
+      {table && (
         <section className="extract-results">
           <div className="extract-results__summary">
-            <span className="extract-results__count">
-              {`${rows.length} 件(${new Set(rows.map((r) => r.patientId)).size} 人)`}
-            </span>
+            <span className="extract-results__count">{recordCountLabel(table)}</span>
             <PatientScopeSummary scope={scope} />
           </div>
-          <TruncatedNotice show={extract.result?.truncated}>
-            オーダーが多いため、新しいものから一部だけを読みました。期間か薬剤を絞ってください。
-          </TruncatedNotice>
-          <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
-            {`先頭の ${RECORD_DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
-          </TruncatedNotice>
+          <RecordResultNotices runner={medicationRunner} truncated={extract.result?.truncated} table={table} />
           <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={tableHeader}
+            header={table.header}
             patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={tableRows}
-            emptyLabel="該当する投薬はありません"
+            rows={table.rows}
+            emptyLabel={table.incomplete ? "" : medicationRunner.emptyLabel}
           />
         </section>
       )}

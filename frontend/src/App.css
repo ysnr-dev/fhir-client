@@ -18096,7 +18096,7 @@ button.nursing-worksheet__mark {
 .regimen-editor__suffix {
   margin-left: 4px;
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -18302,7 +18302,7 @@ button.nursing-worksheet__mark {
 }
 
 .regimen-status--retired {
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 /* レジメン画面の入力欄は標準より一段低くする。表の中は 1 行が低いので、さらに詰める。 */
@@ -18526,7 +18526,7 @@ button.nursing-worksheet__mark {
   text-align: right;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
+  color: var(--text);
   padding-bottom: 6px;
 }
 
@@ -18537,7 +18537,7 @@ button.nursing-worksheet__mark {
   border-radius: 999px;
   font-size: 12px;
   line-height: 16px;
-  color: var(--text-muted);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -18599,7 +18599,7 @@ button.nursing-worksheet__mark {
   margin: 0 0 4px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .pathway-unit__block .lab-order-item__actions {
@@ -18728,7 +18728,7 @@ button.nursing-worksheet__mark {
   display: block;
   font-weight: normal;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -18838,7 +18838,7 @@ button.nursing-worksheet__mark {
 /* 雛形の行に出す病日と日付。種別の後ろ、タスク名の前。 */
 .pathway-apply__task-day {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -18956,7 +18956,7 @@ button.nursing-worksheet__mark {
   display: block;
   font-weight: normal;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .pathway-sheet__phase {
@@ -18991,7 +18991,7 @@ button.nursing-worksheet__mark {
 }
 
 .pathway-sheet__day--past {
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 /* 末尾の空列で幅の端数を吸収する(経過表と同じ)。 */
@@ -19070,7 +19070,7 @@ button.nursing-worksheet__mark {
 
 .pathway-sheet__outcome--pending,
 .pathway-sheet__planned {
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .pathway-sheet__task {
@@ -19085,7 +19085,7 @@ button.nursing-worksheet__mark {
 .pathway-sheet__unplanned {
   display: block;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 /* セルは丸ごと押せる(評価入力を右ペインに開く)。見た目は表のセルのまま。 */
@@ -19208,7 +19208,7 @@ button.nursing-worksheet__mark {
   margin-left: 6px;
   font-size: 11px;
   font-weight: normal;
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 /* 見出しの帯のメニュー(予定外を追加・日程の変更・終了・取り消し)。帯の行を増やさないよう右端の小さなケバブにする。 */
@@ -19559,7 +19559,7 @@ button.nursing-worksheet__mark {
 
 .pathway-evaluate__rows td.pathway-evaluate__proper {
   white-space: nowrap;
-  color: var(--text-muted);
+  color: var(--text);
   font-size: 12px;
 }
 
@@ -25563,4 +25563,155 @@ input.nursing-picker__search {
 
 .nursing-acuity-bulk__row--excluded td {
   opacity: 0.5;
+}
+
+/* ダッシュボード(docs/dashboard-design.md)。横 12 列・1 行 --dashboard-row のマス目にタイルを置く。 */
+
+.dashboard {
+  --dashboard-row: 56px;
+  --dashboard-gap: 12px;
+}
+
+.dashboard__grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: var(--dashboard-row);
+  gap: var(--dashboard-gap);
+  min-height: calc(var(--dashboard-row) * 4);
+}
+
+.dashboard__grid.is-editing {
+  background-image: linear-gradient(var(--border) 1px, transparent 1px);
+  background-size: 100% calc(var(--dashboard-row) + var(--dashboard-gap));
+  background-position: 0 calc(-1 * var(--dashboard-gap) / 2);
+  opacity: 0.98;
+}
+
+.dashboard__empty {
+  grid-column: 1 / -1;
+  align-self: start;
+  margin: 8px 0;
+}
+
+.dashboard-tile {
+  grid-column: calc(var(--tile-x) + 1) / span var(--tile-w);
+  grid-row: calc(var(--tile-y) + 1) / span var(--tile-h);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-card-shadow);
+  overflow: hidden;
+}
+
+.dashboard-tile.is-editing {
+  border-color: var(--accent-border);
+}
+
+.dashboard-tile__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-tile.is-editing .dashboard-tile__header {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.dashboard-tile__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dashboard-tile__title {
+  margin: 0;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-tile__meta,
+.dashboard-tile__ran-at {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.dashboard-tile__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.dashboard-tile__body {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 10px;
+  overflow: auto;
+}
+
+.dashboard-tile__body .extract-results__table-wrap {
+  overflow: visible;
+}
+
+.dashboard-tile__number {
+  margin: 4px 0;
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--text-h);
+  line-height: 1.2;
+}
+
+.dashboard-tile__unit {
+  margin-left: 6px;
+  font-size: 15px;
+  font-weight: normal;
+  color: var(--text);
+}
+
+.dashboard-tile__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 8px 0 8px 0;
+  background: linear-gradient(135deg, transparent 50%, var(--accent-border) 50%);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.dashboard-tile__resize:hover {
+  background: linear-gradient(135deg, transparent 50%, var(--accent) 50%);
+}
+
+/* 狭い画面では 1 列に積む。 */
+@media (max-width: 720px) {
+  .dashboard__grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+  }
+
+  .dashboard-tile {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    min-height: calc(var(--dashboard-row) * 2);
+    max-height: calc(var(--dashboard-row) * 8);
+  }
 }

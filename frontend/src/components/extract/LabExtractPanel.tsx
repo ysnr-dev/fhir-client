@@ -1,15 +1,9 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { LabResultItem } from "../../api/masterClient";
-import { useLabExtract, useSelfDepartments, useVitalThresholds } from "../../api/queries";
-import {
-  chartItemCodings,
-  hasChartItem,
-  labChartItem,
-  type ChartItem,
-} from "../../fhir/chartDefinitionHelpers";
+import { useLabExtract, useSelfDepartments } from "../../api/queries";
+import { hasChartItem, labChartItem, type ChartItem } from "../../fhir/chartDefinitionHelpers";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
-  RECORD_DISPLAY_LIMIT,
   patientColumnsOf,
   resolvePeriod,
   type ExtractOutput,
@@ -19,9 +13,6 @@ import {
   LAB_EXTRACT_AGGREGATES,
   LAB_EXTRACT_MAX_ITEMS,
   LAB_EXTRACT_ROW_MODES,
-  labExtractHeader,
-  labExtractTable,
-  labFixedCells,
   type LabExtractAggregate,
   type LabExtractRowMode,
 } from "../../fhir/labExtractHelpers";
@@ -29,32 +20,26 @@ import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
 import { LabResultItemSearchModal } from "../LabResultItemSearchModal";
-import { TruncatedNotice } from "../TruncatedNotice";
 import { CheckGroup, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { compactDefinition, type LabExtractDefinition } from "../../fhir/extractRecordQuery";
+import { labRunner, recordCountLabel } from "../../fhir/extractTabRunners";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { ExtractFormRow } from "./ExtractFormRow";
 import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
+import { RecordResultNotices } from "./RecordResultNotices";
 import { RecordResultTable } from "./RecordResultTable";
-import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { recordTableCsv } from "../../fhir/recordTableHelpers";
+import { useExtractRunContext } from "../../hooks/useExtractRunContext";
 import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
+import { useRecordTable } from "../../hooks/useRecordTable";
 import { VitalItemSelectModal } from "./VitalItemSelectModal";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 const DEFAULT_AGGREGATES: LabExtractAggregate[] = ["latest"];
-
-/** 保存する条件(docs/data-extract-design.md §17)。 */
-interface LabCriteria extends ExtractRecordDefinition {
-  items?: ChartItem[];
-  mode?: LabExtractRowMode;
-  aggregates?: LabExtractAggregate[];
-  interpretation?: boolean;
-  department_id?: string;
-}
 
 /**
  * 検査結果の抽出(docs/data-extract-design.md §9)。選んだ検査・バイタルの項目を列にして、
@@ -64,7 +49,7 @@ export function LabExtractPanel() {
   const { departments } = useSelfDepartments();
   const departmentOptions = sortDepartmentsByCode(departments).filter((d) => d.id);
   const scope = useExtractPatientScope();
-  const vitalThresholds = useVitalThresholds();
+  const context = useExtractRunContext();
   const extract = useLabExtract();
 
   const [items, setItems] = useState<ChartItem[]>([]);
@@ -76,8 +61,6 @@ export function LabExtractPanel() {
   const [interpretation, setInterpretation] = useState(false);
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
   const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
-  // 実行したときの項目。表は実行したときの項目で組む(項目を足しても読み直すまで列にしない)。
-  const [ranItems, setRanItems] = useState<ChartItem[]>([]);
 
   const addItems = (added: ChartItem[]) =>
     setItems((current) => {
@@ -86,42 +69,17 @@ export function LabExtractPanel() {
       return next.slice(0, LAB_EXTRACT_MAX_ITEMS);
     });
 
-  const table = useMemo(
-    () =>
-      extract.result
-        ? labExtractTable(ranItems, extract.result.observations, extract.result.patients, {
-            mode,
-            aggregates,
-            interpretation,
-            vitalThresholds,
-          })
-        : null,
-    [extract.result, ranItems, mode, aggregates, interpretation, vitalThresholds],
-  );
-  const rows = table?.rows ?? [];
-  // 患者ごとの集計(最初・件数など)は欠けた記録では嘘になるので、読み切れなかったら出さない。
-  const incomplete = mode === "patient" && Boolean(extract.result?.truncated);
-  const shownRows = incomplete ? [] : rows;
   const patientColumns = patientColumnsOf(output);
   const running = scope.running || extract.running;
-  const header = table ? labExtractHeader(table.columns, mode, output) : [];
 
   async function handleRun() {
-    if (items.length === 0) return;
     const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
-    const range = resolvePeriod(period, today());
-    setRanItems(items);
-    void extract.run({
-      codings: chartItemCodings(items),
-      from: range?.from ?? "",
-      to: range?.to ?? "",
-      departmentId: departmentId || undefined,
-      patientIds,
-    });
+    const criteria = labRunner.criteria(definition, { range: resolvePeriod(period, today()), patientIds }, context);
+    if (criteria) void extract.run(criteria);
   }
 
-  const definition = compactDefinition<LabCriteria>({
+  const definition = compactDefinition<LabExtractDefinition>({
     schema_version: 1,
     period,
     ...scopeDefinition(scope),
@@ -133,9 +91,11 @@ export function LabExtractPanel() {
     interpretation: interpretation || undefined,
     department_id: departmentId || undefined,
   });
+  const table = useRecordTable(labRunner, extract.result, definition, context);
+  const attributes = useRecordPatientAttributes(scope.ran, table?.rows);
 
   /** 保存した条件を入力欄に戻す(null なら初期値)。 */
-  function applyDefinition(saved: LabCriteria | null) {
+  function applyDefinition(saved: LabExtractDefinition | null) {
     setItems(saved?.items ?? []);
     setPeriod(saved?.period ?? DEFAULT_PERIOD);
     setDepartmentId(saved?.department_id ?? "");
@@ -155,16 +115,6 @@ export function LabExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
-
-  const tableRows: RecordTableRow[] = table
-    ? shownRows.map((row) => ({
-        key: row.rowKey,
-        patient: row,
-        fixed: labFixedCells(row, mode),
-        values: table.columns.map((column) => row.values.get(column.key) ?? ""),
-      }))
-    : [];
-  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -263,11 +213,11 @@ export function LabExtractPanel() {
         {extract.running && <span className="order-select__muted">実行中</span>}
         {table && (
           <span className="data-extract__exports">
-            <FolderRegisterButton patientIds={shownRows.map((r) => r.patientId)} />
+            <FolderRegisterButton patientIds={table.rows.map((r) => r.patient.patientId)} />
             <button
               type="button"
-              disabled={shownRows.length === 0}
-              onClick={() => downloadBlob(recordTableCsv(header, patientColumns, tableRows, attributes.attributes), `lab_${today()}.csv`)}
+              disabled={table.rows.length === 0}
+              onClick={() => downloadBlob(recordTableCsv(table.header, patientColumns, table.rows, attributes.attributes), `lab_${today()}.csv`)}
             >
               CSV
             </button>
@@ -279,31 +229,19 @@ export function LabExtractPanel() {
       {table && (
         <section className="extract-results">
           <div className="extract-results__summary">
-            <span className="extract-results__count">
-              {mode === "patient"
-                ? `${shownRows.length} 人`
-                : `${shownRows.length} 行(${new Set(shownRows.map((r) => r.patientId)).size} 人)`}
-            </span>
+            <span className="extract-results__count">{recordCountLabel(table)}</span>
             <PatientScopeSummary scope={scope} />
           </div>
-          <TruncatedNotice show={extract.result?.truncated && !incomplete}>
-            結果が多いため、新しいものから一部だけを読みました。期間を絞ってください。
-          </TruncatedNotice>
-          <TruncatedNotice show={incomplete}>
-            結果が多く読み切れなかったため、患者ごとの集計は出せません。期間か患者を絞ってください。
-          </TruncatedNotice>
-          <TruncatedNotice show={shownRows.length > RECORD_DISPLAY_LIMIT}>
-            {`先頭の ${RECORD_DISPLAY_LIMIT} 行を表示しています。すべては CSV に出ます。`}
-          </TruncatedNotice>
+          <RecordResultNotices runner={labRunner} truncated={extract.result?.truncated} table={table} />
           <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={header}
+            header={table.header}
             patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={tableRows}
-            emptyLabel={incomplete ? "" : "該当する結果はありません"}
+            rows={table.rows}
+            emptyLabel={table.incomplete ? "" : labRunner.emptyLabel}
           />
         </section>
       )}

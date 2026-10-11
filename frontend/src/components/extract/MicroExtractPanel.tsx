@@ -1,46 +1,35 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMicroExtract } from "../../api/queries";
 import {
-  RECORD_DISPLAY_LIMIT,
   patientColumnsOf,
   resolvePeriod,
   type ExtractOutput,
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
-import {
-  MICRO_SUSCEPTIBILITY_FIELDS,
-  microExtractHeader,
-  microExtractTable,
-  type MicroSusceptibilityField,
-} from "../../fhir/microExtractHelpers";
-import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { MICRO_SUSCEPTIBILITY_FIELDS, type MicroSusceptibilityField } from "../../fhir/microExtractHelpers";
+import { compactDefinition, type MicroExtractDefinition } from "../../fhir/extractRecordQuery";
+import { microRunner, recordCountLabel } from "../../fhir/extractTabRunners";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
-import { TruncatedNotice } from "../TruncatedNotice";
 import { CheckGroup, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { ExtractFormRow } from "./ExtractFormRow";
 import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
+import { RecordResultNotices } from "./RecordResultNotices";
 import { RecordResultTable } from "./RecordResultTable";
-import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { recordTableCsv } from "../../fhir/recordTableHelpers";
+import { useExtractRunContext } from "../../hooks/useExtractRunContext";
 import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
+import { useRecordTable } from "../../hooks/useRecordTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 const DEFAULT_SUSCEPTIBILITY: MicroSusceptibilityField[] = ["sir"];
 
-/** 保存する条件(docs/data-extract-design.md §17)。 */
-interface MicroCriteria extends ExtractRecordDefinition {
-  include_no_isolate?: boolean;
-  first_isolate_only?: boolean;
-  susceptibility?: MicroSusceptibilityField[];
-}
-/** 折り返さない固定列の数(採取日〜培養)。塗抹の所見から後ろは長いので折り返す。 */
-const FIXED_COLUMNS = 6;
 
 /**
  * 細菌検査の抽出(docs/data-extract-design.md §10)。細菌検査結果を分離菌 1 株 = 1 行、抗菌薬 = 列の
@@ -48,6 +37,7 @@ const FIXED_COLUMNS = 6;
  */
 export function MicroExtractPanel() {
   const scope = useExtractPatientScope();
+  const context = useExtractRunContext();
   const extract = useMicroExtract();
 
   const [period, setPeriod] = useState<ExtractPeriod>(DEFAULT_PERIOD);
@@ -57,33 +47,17 @@ export function MicroExtractPanel() {
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
   const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
 
-  const table = useMemo(
-    () =>
-      extract.result
-        ? microExtractTable(
-            extract.result.reports,
-            extract.result.observations,
-            extract.result.specimens,
-            extract.result.patients,
-            { includeNoIsolate, firstIsolateOnly, susceptibility },
-          )
-        : null,
-    [extract.result, includeNoIsolate, firstIsolateOnly, susceptibility],
-  );
-  // 「患者・菌ごとに初回」は欠けた結果だと初回を取り違えるので、読み切れなかったら出さない。
-  const incomplete = firstIsolateOnly && Boolean(extract.result?.truncated);
-  const rows = incomplete ? [] : (table?.rows ?? []);
   const patientColumns = patientColumnsOf(output);
   const running = scope.running || extract.running;
 
   async function handleRun() {
     const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
-    const range = resolvePeriod(period, today());
-    void extract.run({ from: range?.from ?? "", to: range?.to ?? "", patientIds });
+    const criteria = microRunner.criteria(definition, { range: resolvePeriod(period, today()), patientIds }, context);
+    if (criteria) void extract.run(criteria);
   }
 
-  const definition = compactDefinition<MicroCriteria>({
+  const definition = compactDefinition<MicroExtractDefinition>({
     schema_version: 1,
     period,
     ...scopeDefinition(scope),
@@ -93,9 +67,11 @@ export function MicroExtractPanel() {
     first_isolate_only: firstIsolateOnly || undefined,
     susceptibility,
   });
+  const table = useRecordTable(microRunner, extract.result, definition, context);
+  const attributes = useRecordPatientAttributes(scope.ran, table?.rows);
 
   /** 保存した条件を入力欄に戻す(null なら初期値)。 */
-  function applyDefinition(saved: MicroCriteria | null) {
+  function applyDefinition(saved: MicroExtractDefinition | null) {
     setPeriod(saved?.period ?? DEFAULT_PERIOD);
     applyScopeDefinition(scope, saved);
     setIncludeNoIsolate(saved?.include_no_isolate ?? false);
@@ -113,20 +89,6 @@ export function MicroExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
-
-  const tableHeader = table ? microExtractHeader(table.drugColumns, output) : [];
-  const tableRows: RecordTableRow[] = table
-    ? rows.map((row) => ({
-        key: row.rowKey,
-        patient: row,
-        fixed: row.fixed.slice(0, FIXED_COLUMNS),
-        values: [
-          ...row.fixed.slice(FIXED_COLUMNS),
-          ...table.drugColumns.map((column) => row.drugs.get(column.key) ?? ""),
-        ],
-      }))
-    : [];
-  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -181,11 +143,11 @@ export function MicroExtractPanel() {
         {extract.running && <span className="order-select__muted">実行中</span>}
         {table && (
           <span className="data-extract__exports">
-            <FolderRegisterButton patientIds={rows.map((r) => r.patientId)} />
+            <FolderRegisterButton patientIds={table.rows.map((r) => r.patient.patientId)} />
             <button
               type="button"
-              disabled={rows.length === 0}
-              onClick={() => downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `micro_${today()}.csv`)}
+              disabled={table.rows.length === 0}
+              onClick={() => downloadBlob(recordTableCsv(table.header, patientColumns, table.rows, attributes.attributes), `micro_${today()}.csv`)}
             >
               CSV
             </button>
@@ -197,29 +159,19 @@ export function MicroExtractPanel() {
       {table && (
         <section className="extract-results">
           <div className="extract-results__summary">
-            <span className="extract-results__count">
-              {`${rows.length} 行(${new Set(rows.map((r) => r.patientId)).size} 人)`}
-            </span>
+            <span className="extract-results__count">{recordCountLabel(table)}</span>
             <PatientScopeSummary scope={scope} />
           </div>
-          <TruncatedNotice show={extract.result?.truncated && !incomplete}>
-            結果が多いため、新しいものから一部だけを読みました。期間を絞ってください。
-          </TruncatedNotice>
-          <TruncatedNotice show={incomplete}>
-            結果が多く読み切れなかったため、患者・菌ごとの初回は出せません。期間か患者を絞ってください。
-          </TruncatedNotice>
-          <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
-            {`先頭の ${RECORD_DISPLAY_LIMIT} 行を表示しています。すべては CSV に出ます。`}
-          </TruncatedNotice>
+          <RecordResultNotices runner={microRunner} truncated={extract.result?.truncated} table={table} />
           <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={tableHeader}
+            header={table.header}
             patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={tableRows}
-            emptyLabel={incomplete ? "" : "該当する結果はありません"}
+            rows={table.rows}
+            emptyLabel={table.incomplete ? "" : microRunner.emptyLabel}
           />
         </section>
       )}

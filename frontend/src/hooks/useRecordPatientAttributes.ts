@@ -7,7 +7,8 @@ import {
   type PatientAttribute,
   type RecordTableRow,
 } from "../fhir/recordTableHelpers";
-import type { ExtractPatientScope } from "./useExtractPatientScope";
+import type { AttendingMode } from "../fhir/extractRecordQuery";
+import type { RanScope } from "./useExtractPatientScope";
 
 // データ抽出の記録タブの結果に足す患者ごとの属性の列(比較群・担当医。docs/data-extract-design.md §21)。
 // 比較群は実行したときの評価から、担当医は結果の患者の外来受診・入院・処方を読んで決める。
@@ -27,11 +28,29 @@ export interface RecordPatientAttributes {
   error: unknown;
 }
 
+/** 属性の列(比較群・担当医)。担当医の名前がまだ無ければ空欄にする。 */
+export function patientAttributesOf(
+  groupsOf: Map<string, string[]> | null,
+  mode: AttendingMode | null,
+  names: Map<string, string> | null,
+): PatientAttribute[] {
+  const list: PatientAttribute[] = [];
+  if (groupsOf) {
+    list.push({ label: STRATUM_COLUMN, valueOf: (id) => groupsOf.get(id)?.join("、") || EMPTY_ATTRIBUTE });
+  }
+  if (mode) {
+    list.push({ label: ATTENDING_COLUMN, valueOf: (id) => (names ? names.get(id) || EMPTY_ATTRIBUTE : "") });
+  }
+  return list;
+}
+
+const NO_ROWS: RecordTableRow[] = [];
+
 export function useRecordPatientAttributes(
-  scope: ExtractPatientScope,
-  rows: RecordTableRow[],
+  ran: RanScope | null,
+  tableRows: RecordTableRow[] | null | undefined,
 ): RecordPatientAttributes {
-  const ran = scope.ran;
+  const rows = tableRows ?? NO_ROWS;
   const patientIds = useMemo(() => [...new Set(rows.map((row) => row.patient.patientId))].sort(), [rows]);
   const mode = ran?.attending ?? null;
   const signature = mode
@@ -54,17 +73,7 @@ export function useRecordPatientAttributes(
 
   const current = attending && attending.signature === signature ? attending : null;
   const groupsOf = ran?.groupsOf ?? null;
-  const attributes = useMemo(() => {
-    const list: PatientAttribute[] = [];
-    if (groupsOf) {
-      list.push({ label: STRATUM_COLUMN, valueOf: (id) => groupsOf.get(id)?.join("、") || EMPTY_ATTRIBUTE });
-    }
-    if (mode) {
-      const names = current?.names;
-      list.push({ label: ATTENDING_COLUMN, valueOf: (id) => (names ? names.get(id) || EMPTY_ATTRIBUTE : "") });
-    }
-    return list;
-  }, [groupsOf, mode, current]);
+  const attributes = useMemo(() => patientAttributesOf(groupsOf, mode, current?.names ?? null), [groupsOf, mode, current]);
 
   return {
     attributes,

@@ -2,45 +2,34 @@ import { useMemo, useState } from "react";
 import { useQuestionnaireOptions, useSelfDepartments, useTemplateExtract } from "../../api/queries";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
-  RECORD_DISPLAY_LIMIT,
   patientColumnsOf,
   resolvePeriod,
   type ExtractOutput,
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
-import {
-  latestPerPatient,
-  sortVersionsDesc,
-  templateExtractHeader,
-  templateExtractTable,
-  templateFixedCells,
-} from "../../fhir/templateExtractHelpers";
+import { sortVersionsDesc } from "../../fhir/templateExtractHelpers";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
 import { TemplateSelect } from "../TemplateSelect";
-import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { compactDefinition, type TemplateExtractDefinition } from "../../fhir/extractRecordQuery";
+import { templateRunner, recordCountLabel } from "../../fhir/extractTabRunners";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { ExtractFormRow } from "./ExtractFormRow";
 import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
+import { RecordResultNotices } from "./RecordResultNotices";
 import { RecordResultTable } from "./RecordResultTable";
-import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { recordTableCsv } from "../../fhir/recordTableHelpers";
+import { useExtractRunContext } from "../../hooks/useExtractRunContext";
 import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
+import { useRecordTable } from "../../hooks/useRecordTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
-
-/** 保存する条件(docs/data-extract-design.md §17)。 */
-interface TemplateCriteria extends ExtractRecordDefinition {
-  template_url?: string;
-  latest_only?: boolean;
-  department_id?: string;
-}
 
 /**
  * テンプレートの抽出(docs/data-extract-design.md §8)。1 つのテンプレートの回答を表と CSV にする。
@@ -52,6 +41,7 @@ export function TemplateExtractPanel() {
   const { departments } = useSelfDepartments();
   const departmentOptions = sortDepartmentsByCode(departments).filter((d) => d.id);
   const scope = useExtractPatientScope();
+  const context = useExtractRunContext();
   const extract = useTemplateExtract();
 
   const [templateUrl, setTemplateUrl] = useState("");
@@ -72,18 +62,10 @@ export function TemplateExtractPanel() {
   }, [options.questionnaires]);
   const selected = templates.find((q) => q.url === templateUrl);
 
-  const table = useMemo(
-    () =>
-      extract.result
-        ? templateExtractTable(extract.result.questionnaires, extract.result.responses, extract.result.patients)
-        : null,
-    [extract.result],
-  );
-  const rows = useMemo(() => (table ? (latestOnly ? latestPerPatient(table.rows) : table.rows) : []), [table, latestOnly]);
   const patientColumns = patientColumnsOf(output);
   const running = scope.running || extract.running;
 
-  const definition = compactDefinition<TemplateCriteria>({
+  const definition = compactDefinition<TemplateExtractDefinition>({
     schema_version: 1,
     period,
     ...scopeDefinition(scope),
@@ -93,9 +75,11 @@ export function TemplateExtractPanel() {
     latest_only: latestOnly || undefined,
     department_id: departmentId || undefined,
   });
+  const table = useRecordTable(templateRunner, extract.result, definition, context);
+  const attributes = useRecordPatientAttributes(scope.ran, table?.rows);
 
   /** 保存した条件を入力欄に戻す(null なら初期値)。 */
-  function applyDefinition(saved: TemplateCriteria | null) {
+  function applyDefinition(saved: TemplateExtractDefinition | null) {
     setTemplateUrl(saved?.template_url ?? "");
     setPeriod(saved?.period ?? DEFAULT_PERIOD);
     setDepartmentId(saved?.department_id ?? "");
@@ -106,37 +90,16 @@ export function TemplateExtractPanel() {
   }
 
   async function handleRun() {
-    if (!selected?.url) return;
-    const url = selected.url;
     const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
-    const range = resolvePeriod(period, today());
-    void extract.run({
-      url,
-      from: range?.from ?? "",
-      to: range?.to ?? "",
-      departmentId: departmentId || undefined,
-      patientIds,
-    });
+    const criteria = templateRunner.criteria(definition, { range: resolvePeriod(period, today()), patientIds }, context);
+    if (criteria) void extract.run(criteria);
   }
 
   function handleCancel() {
     scope.cancel();
     extract.cancel();
   }
-
-  const title = selected?.title ?? selected?.name ?? "テンプレート";
-
-  const tableHeader = table ? templateExtractHeader(table.columns, output) : [];
-  const tableRows: RecordTableRow[] = table
-    ? rows.map((row) => ({
-        key: row.responseId,
-        patient: row,
-        fixed: templateFixedCells(row),
-        values: table.columns.map((column) => row.values.get(column.key) ?? ""),
-      }))
-    : [];
-  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -192,12 +155,12 @@ export function TemplateExtractPanel() {
         {extract.running && <span className="order-select__muted">実行中</span>}
         {table && (
           <span className="data-extract__exports">
-            <FolderRegisterButton patientIds={rows.map((r) => r.patientId)} />
+            <FolderRegisterButton patientIds={table.rows.map((r) => r.patient.patientId)} />
             <button
               type="button"
-              disabled={rows.length === 0}
+              disabled={table.rows.length === 0}
               onClick={() =>
-                downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `template_${title}_${today()}.csv`)
+                downloadBlob(recordTableCsv(table.header, patientColumns, table.rows, attributes.attributes), `template_${selected?.title ?? selected?.name ?? "テンプレート"}_${today()}.csv`)
               }
             >
               CSV
@@ -210,26 +173,19 @@ export function TemplateExtractPanel() {
       {table && (
         <section className="extract-results">
           <div className="extract-results__summary">
-            <span className="extract-results__count">
-              {latestOnly ? `${rows.length} 人` : `${rows.length} 件(${new Set(rows.map((r) => r.patientId)).size} 人)`}
-            </span>
+            <span className="extract-results__count">{recordCountLabel(table)}</span>
             <PatientScopeSummary scope={scope} />
           </div>
-          <TruncatedNotice show={extract.result?.truncated}>
-            回答が多いため、新しいものから一部だけを読みました。期間を絞ってください。
-          </TruncatedNotice>
-          <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
-            {`先頭の ${RECORD_DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
-          </TruncatedNotice>
+          <RecordResultNotices runner={templateRunner} truncated={extract.result?.truncated} table={table} />
           <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={tableHeader}
+            header={table.header}
             patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={tableRows}
-            emptyLabel="該当する回答はありません"
+            rows={table.rows}
+            emptyLabel={table.incomplete ? "" : templateRunner.emptyLabel}
           />
         </section>
       )}

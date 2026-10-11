@@ -10,12 +10,12 @@ import type { ExtractTab } from "../../fhir/extractRecordQuery";
 
 const EXTRACT_QUERIES_KEY = ["master", "extract_queries"];
 
-/** タブ(既定は「患者」)の条件の一覧。 */
+/** タブ(既定は「患者」。"all" ならすべてのタブ)の条件の一覧。 */
 export function useExtractQueries(
   departmentId: string | undefined,
   practitionerId: string | undefined,
   enabled = true,
-  tab: ExtractTab = "patient",
+  tab: ExtractTab | "all" = "patient",
   teamIds: string[] = [],
 ) {
   return useQuery({
@@ -24,7 +24,13 @@ export function useExtractQueries(
       "list",
       { departmentId: departmentId ?? "", practitionerId: practitionerId ?? "", tab, teamIds: teamIds.join(",") },
     ],
-    queryFn: () => fetchExtractQueries({ department_id: departmentId, practitioner_id: practitionerId, tab, team_ids: teamIds }),
+    queryFn: () =>
+      fetchExtractQueries({
+        department_id: departmentId,
+        practitioner_id: practitionerId,
+        tab: tab === "all" ? undefined : tab,
+        team_ids: teamIds,
+      }),
     enabled,
   });
 }

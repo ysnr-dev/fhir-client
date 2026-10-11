@@ -1,44 +1,35 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { usePerformExtract, useSelfDepartments } from "../../api/queries";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
-  RECORD_DISPLAY_LIMIT,
   patientColumnsOf,
   resolvePeriod,
   type ExtractOutput,
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
-import {
-  PERFORM_EXTRACT_KINDS,
-  performExtractHeader,
-  performExtractTable,
-  performRowCells,
-} from "../../fhir/performExtractHelpers";
-import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { PERFORM_EXTRACT_KINDS } from "../../fhir/performExtractHelpers";
+import { compactDefinition, type PerformExtractDefinition } from "../../fhir/extractRecordQuery";
+import { performRunner, recordCountLabel } from "../../fhir/extractTabRunners";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
-import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { ExtractFormRow } from "./ExtractFormRow";
 import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
+import { RecordResultNotices } from "./RecordResultNotices";
 import { RecordResultTable } from "./RecordResultTable";
-import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { recordTableCsv } from "../../fhir/recordTableHelpers";
+import { useExtractRunContext } from "../../hooks/useExtractRunContext";
 import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
+import { useRecordTable } from "../../hooks/useRecordTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
 const DEFAULT_KIND = PERFORM_EXTRACT_KINDS[0].code;
-
-/** 保存する条件(docs/data-extract-design.md §17)。 */
-interface PerformCriteria extends ExtractRecordDefinition {
-  order_kind?: string;
-  department_id?: string;
-}
 
 /**
  * 部門オーダーの実施記録の抽出(docs/data-extract-design.md §13)。種別を 1 つ選び、実施 1 件を 1 行にした
@@ -48,6 +39,7 @@ export function PerformExtractPanel() {
   const { departments } = useSelfDepartments();
   const departmentOptions = sortDepartmentsByCode(departments).filter((d) => d.id);
   const scope = useExtractPatientScope();
+  const context = useExtractRunContext();
   const extract = usePerformExtract();
 
   const [kind, setKind] = useState(DEFAULT_KIND);
@@ -55,43 +47,18 @@ export function PerformExtractPanel() {
   const [departmentId, setDepartmentId] = useState("");
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
   const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
-  // 表の見出しに出す種別は、実行したときの種別(選び直しても読み直すまで変えない)。
-  const [ranKind, setRanKind] = useState(DEFAULT_KIND);
 
-  const table = useMemo(
-    () =>
-      extract.result
-        ? performExtractTable(
-            extract.result.hubs,
-            extract.result.children,
-            extract.result.administrations,
-            extract.result.observations,
-            extract.result.serviceRequests,
-            extract.result.patients,
-          )
-        : null,
-    [extract.result],
-  );
-  const rows = table?.rows ?? [];
   const patientColumns = patientColumnsOf(output);
   const running = scope.running || extract.running;
-  const ranLabel = PERFORM_EXTRACT_KINDS.find((k) => k.code === ranKind)?.label ?? "";
 
   async function handleRun() {
     const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
-    const range = resolvePeriod(period, today());
-    setRanKind(kind);
-    void extract.run({
-      orderType: kind,
-      from: range?.from ?? "",
-      to: range?.to ?? "",
-      departmentId: departmentId || undefined,
-      patientIds,
-    });
+    const criteria = performRunner.criteria(definition, { range: resolvePeriod(period, today()), patientIds }, context);
+    if (criteria) void extract.run(criteria);
   }
 
-  const definition = compactDefinition<PerformCriteria>({
+  const definition = compactDefinition<PerformExtractDefinition>({
     schema_version: 1,
     period,
     ...scopeDefinition(scope),
@@ -100,9 +67,11 @@ export function PerformExtractPanel() {
     order_kind: kind,
     department_id: departmentId || undefined,
   });
+  const table = useRecordTable(performRunner, extract.result, definition, context);
+  const attributes = useRecordPatientAttributes(scope.ran, table?.rows);
 
   /** 保存した条件を入力欄に戻す(null なら初期値)。 */
-  function applyDefinition(saved: PerformCriteria | null) {
+  function applyDefinition(saved: PerformExtractDefinition | null) {
     setKind(saved?.order_kind ?? DEFAULT_KIND);
     setPeriod(saved?.period ?? DEFAULT_PERIOD);
     setDepartmentId(saved?.department_id ?? "");
@@ -119,17 +88,6 @@ export function PerformExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
-
-  const tableHeader = table ? performExtractHeader(table.measureColumns, output) : [];
-  const tableRows: RecordTableRow[] = table
-    ? rows.map((row) => ({
-        key: row.rowKey,
-        patient: row,
-        fixed: row.fixed,
-        values: performRowCells(row, table.measureColumns),
-      }))
-    : [];
-  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -191,12 +149,12 @@ export function PerformExtractPanel() {
         {extract.running && <span className="order-select__muted">実行中</span>}
         {table && (
           <span className="data-extract__exports">
-            <FolderRegisterButton patientIds={rows.map((r) => r.patientId)} />
+            <FolderRegisterButton patientIds={table.rows.map((r) => r.patient.patientId)} />
             <button
               type="button"
-              disabled={rows.length === 0}
+              disabled={table.rows.length === 0}
               onClick={() =>
-                downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `perform_${ranKind}_${today()}.csv`)
+                downloadBlob(recordTableCsv(table.header, patientColumns, table.rows, attributes.attributes), `perform_${extract.result?.orderType ?? kind}_${today()}.csv`)
               }
             >
               CSV
@@ -209,26 +167,19 @@ export function PerformExtractPanel() {
       {table && (
         <section className="extract-results">
           <div className="extract-results__summary">
-            <span className="extract-results__count">
-              {`${ranLabel} ${rows.length} 件(${new Set(rows.map((r) => r.patientId)).size} 人)`}
-            </span>
+            <span className="extract-results__count">{recordCountLabel(table)}</span>
             <PatientScopeSummary scope={scope} />
           </div>
-          <TruncatedNotice show={extract.result?.truncated}>
-            実施が多いため、新しいものから一部だけを読みました。期間を絞ってください。
-          </TruncatedNotice>
-          <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
-            {`先頭の ${RECORD_DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
-          </TruncatedNotice>
+          <RecordResultNotices runner={performRunner} truncated={extract.result?.truncated} table={table} />
           <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={tableHeader}
+            header={table.header}
             patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={tableRows}
-            emptyLabel="該当する実施はありません"
+            rows={table.rows}
+            emptyLabel={table.incomplete ? "" : performRunner.emptyLabel}
           />
         </section>
       )}

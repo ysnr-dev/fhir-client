@@ -3,8 +3,9 @@ import { definitionOwnerKey, type DefinitionOwnerOption } from "../../hooks/useD
 import { ErrorBanner } from "../ErrorBanner";
 import { Modal } from "../Modal";
 
-/** データ抽出の条件を名前と持ち主を付けて保存する(「患者」タブと記録を表にするタブで共通)。 */
+/** データ抽出の条件(とダッシュボード)を名前と持ち主を付けて保存する。 */
 export function SaveQueryModal({
+  title = "条件を保存",
   owners,
   initialName,
   pending,
@@ -12,6 +13,7 @@ export function SaveQueryModal({
   onClose,
   onSave,
 }: {
+  title?: string;
   owners: DefinitionOwnerOption[];
   initialName: string;
   pending: boolean;
@@ -34,7 +36,7 @@ export function SaveQueryModal({
   }
 
   return (
-    <Modal title="条件を保存" onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <form className="data-extract__save" onSubmit={handleSubmit}>
         <ErrorBanner error={error} />
         <label className="extract-field">

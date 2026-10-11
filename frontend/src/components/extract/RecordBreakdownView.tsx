@@ -32,6 +32,8 @@ interface Props {
   onSettingsChange: (settings: BreakdownSettings) => void;
   /** セルを押したとき、当たった行の位置とセルの名前を渡す(一覧をその行に絞る)。 */
   onDrill?: (indices: number[], label: string) => void;
+  /** false なら切り口の入力欄と CSV を出さず、保存した切り口のままグラフと表だけを出す(ダッシュボードのタイル)。 */
+  controls?: boolean;
 }
 
 /** 切り口の軸(見出しの名前か "period")を、今の結果の列に当てる。当たらなければ null。 */
@@ -49,7 +51,15 @@ function percent(part: number, whole: number): string {
  * 記録を表にするタブの内訳(docs/data-extract-design.md §18)。行と列の軸に期間(年〜日)か分類の列を置き、
  * 件数・患者数・割合か数値の列の集計(合計・平均など)を出す。セルを押すと一覧をその行に絞る。
  */
-export function RecordBreakdownView({ header, cells, patientIds, settings, onSettingsChange, onDrill }: Props) {
+export function RecordBreakdownView({
+  header,
+  cells,
+  patientIds,
+  settings,
+  onSettingsChange,
+  onDrill,
+  controls = true,
+}: Props) {
   const columns = useMemo(() => breakdownColumns(header, cells), [header, cells]);
   const dateColumns = columns.filter((c) => c.kind === "date");
   // 分類には数値の列も選べる(年齢・Grade・クールなど)。
@@ -201,6 +211,7 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
 
   return (
     <div className="extract-breakdown__leaf">
+      {controls && (
       <div className="extract-breakdown__controls">
         <span className="extract-breakdown__group" role="group" aria-label="行">
           <span className="extract-breakdown__group-label">行</span>
@@ -314,6 +325,7 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
           内訳CSV
         </button>
       </div>
+      )}
       <RecordBreakdownChart breakdown={breakdown} periodOnRows={rowKey === "period"} ratio={ratio} />
       <div className="extract-results__table-wrap">
         <table className="master-search__table extract-breakdown">

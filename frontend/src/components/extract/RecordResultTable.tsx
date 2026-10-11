@@ -113,7 +113,13 @@ export function RecordResultTable(props: Props) {
             </button>
           </div>
         )}
-        <ListTable {...props} header={fullHeader} attributes={attributes} rows={drilledRows} />
+        <RecordListTable
+          header={fullHeader}
+          patientColumns={patientColumns}
+          attributes={attributes}
+          rows={drilledRows}
+          emptyLabel={props.emptyLabel}
+        />
       </div>
       <div hidden={view !== "breakdown"}>
         <RecordBreakdownView
@@ -132,14 +138,17 @@ export function RecordResultTable(props: Props) {
   );
 }
 
-/** 患者番号・氏名(カルテへのリンク)・患者の列・属性・固定列・項目の列の順に並べ、先頭 RECORD_DISPLAY_LIMIT 行だけを出す。 */
-function ListTable({
+/**
+ * 患者番号・氏名(カルテへのリンク)・患者の列・属性・固定列・項目の列の順に並べ、先頭 RECORD_DISPLAY_LIMIT 行だけを出す。
+ * header は属性の列を差し込んだ後のもの(recordTableHeader)。ダッシュボードのタイルでも使う。
+ */
+export function RecordListTable({
   header,
   patientColumns,
   rows,
   emptyLabel,
   attributes,
-}: Props & { attributes: PatientAttribute[] }) {
+}: Pick<Props, "header" | "patientColumns" | "rows" | "emptyLabel"> & { attributes: PatientAttribute[] }) {
   return (
     <div className="extract-results__table-wrap">
       <table className="master-search__table extract-results__table template-extract__table">

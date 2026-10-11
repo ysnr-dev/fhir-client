@@ -35,5 +35,6 @@ export * from "./labImport";
 export * from "./supervisorGroup";
 export * from "./medicineAttribute";
 export * from "./extractQuery";
+export * from "./dashboard";
 export * from "./patientFolder";
 export * from "./nursingAssignment";

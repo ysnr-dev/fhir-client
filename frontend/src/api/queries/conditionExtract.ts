@@ -1,7 +1,6 @@
-import { useCallback, useRef, useState } from "react";
 import { NURSING_PROBLEM_CODE } from "../../fhir/conditionHelpers";
 import type { ExtractCode } from "../../fhir/extractQueryHelpers";
-import { fetchMissingPatients, searchExtractRecords, subjectIdOf } from "./extractRecords";
+import { fetchMissingPatients, searchExtractRecords, subjectIdOf, useRecordExtract } from "./extractRecords";
 
 // 病名の抽出(docs/data-extract-design.md §20)。病名(Condition。看護問題は除く)を開始日か登録日の期間で引く。
 // 病名・ICD10 を選んだら 100 件ずつ code= で引いて合わせる。区分(保険病名 / プロブレム / 既往歴)と疑いは上流が絞る。
@@ -31,15 +30,11 @@ export interface ConditionExtractResult {
   conditions: fhir4.Condition[];
   patients: Map<string, fhir4.Patient>;
   truncated: boolean;
+  /** 引いたときの日付の見方(表の日付の列はこれで組む)。 */
+  dateField: "onset" | "recorded";
 }
 
-interface ConditionExtractState {
-  running: boolean;
-  error: unknown;
-  result: ConditionExtractResult | null;
-}
 
-const IDLE: ConditionExtractState = { running: false, error: null, result: null };
 
 /**
  * 区分の絞り込み。保険病名は category を持たない古い病名もあるので「プロブレムでない」で引く。
@@ -58,60 +53,50 @@ function applyCategory(params: URLSearchParams, category: ConditionExtractCatego
   }
 }
 
+/** 病名の抽出を読む(docs/data-extract-design.md)。中止は signal で伝える。 */
+export async function fetchConditionExtract(
+  criteria: ConditionExtractCriteria,
+  signal: AbortSignal,
+): Promise<ConditionExtractResult> {
+  const base = new URLSearchParams();
+  if (criteria.clinicalStatus.length) base.set("clinical-status", criteria.clinicalStatus.join(","));
+  if (criteria.suspected === "only") {
+    base.set("verification-status", "provisional");
+  } else {
+    const excluded = ["entered-in-error", "refuted", ...(criteria.suspected === "exclude" ? ["provisional"] : [])];
+    base.set("verification-status:not", excluded.join(","));
+  }
+  applyCategory(base, criteria.category);
+  // 病名の開始日は onsetDateTime(この画面の病名登録は recordedDate を書かない)。登録日は他のシステムから来た病名のため。
+  const dateParam = criteria.dateField === "recorded" ? "recorded-date" : "onset-date";
+  if (criteria.from) base.append(dateParam, `ge${criteria.from}`);
+  if (criteria.to) base.append(dateParam, `le${criteria.to}`);
+  base.set("_sort", criteria.dateField === "recorded" ? "-recorded-date" : "-onset-date");
+
+  const tokens = [...new Set(criteria.codes.map((c) => `${c.system}|${c.code}`))];
+  const searches: URLSearchParams[] = [];
+  if (tokens.length === 0) searches.push(base);
+  for (let i = 0; i < tokens.length; i += CODE_CHUNK) {
+    const params = new URLSearchParams(base);
+    params.set("code", tokens.slice(i, i + CODE_CHUNK).join(","));
+    searches.push(params);
+  }
+
+  const conditions = new Map<string, fhir4.Condition>();
+  const patients = new Map<string, fhir4.Patient>();
+  let truncated = false;
+  for (const params of searches) {
+    const page = await searchExtractRecords<fhir4.Condition>("Condition", params, criteria.patientIds, signal);
+    for (const condition of page.matches) conditions.set(condition.id ?? `${conditions.size}`, condition);
+    for (const [id, patient] of page.patients) patients.set(id, patient);
+    truncated ||= page.truncated;
+  }
+  const matches = [...conditions.values()];
+  await fetchMissingPatients(matches.map(subjectIdOf), patients, signal);
+  return { conditions: matches, patients, truncated, dateField: criteria.dateField };
+}
+
 /** 病名の抽出の実行。条件を変えても自動では走らせない。 */
 export function useConditionExtract() {
-  const [state, setState] = useState<ConditionExtractState>(IDLE);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const run = useCallback(async (criteria: ConditionExtractCriteria) => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const signal = controller.signal;
-    setState({ running: true, error: null, result: null });
-    try {
-      const base = new URLSearchParams();
-      if (criteria.clinicalStatus.length) base.set("clinical-status", criteria.clinicalStatus.join(","));
-      if (criteria.suspected === "only") {
-        base.set("verification-status", "provisional");
-      } else {
-        const excluded = ["entered-in-error", "refuted", ...(criteria.suspected === "exclude" ? ["provisional"] : [])];
-        base.set("verification-status:not", excluded.join(","));
-      }
-      applyCategory(base, criteria.category);
-      // 病名の開始日は onsetDateTime(この画面の病名登録は recordedDate を書かない)。登録日は他のシステムから来た病名のため。
-      const dateParam = criteria.dateField === "recorded" ? "recorded-date" : "onset-date";
-      if (criteria.from) base.append(dateParam, `ge${criteria.from}`);
-      if (criteria.to) base.append(dateParam, `le${criteria.to}`);
-      base.set("_sort", criteria.dateField === "recorded" ? "-recorded-date" : "-onset-date");
-
-      const tokens = [...new Set(criteria.codes.map((c) => `${c.system}|${c.code}`))];
-      const searches: URLSearchParams[] = [];
-      if (tokens.length === 0) searches.push(base);
-      for (let i = 0; i < tokens.length; i += CODE_CHUNK) {
-        const params = new URLSearchParams(base);
-        params.set("code", tokens.slice(i, i + CODE_CHUNK).join(","));
-        searches.push(params);
-      }
-
-      const conditions = new Map<string, fhir4.Condition>();
-      const patients = new Map<string, fhir4.Patient>();
-      let truncated = false;
-      for (const params of searches) {
-        const page = await searchExtractRecords<fhir4.Condition>("Condition", params, criteria.patientIds, signal);
-        for (const condition of page.matches) conditions.set(condition.id ?? `${conditions.size}`, condition);
-        for (const [id, patient] of page.patients) patients.set(id, patient);
-        truncated ||= page.truncated;
-      }
-      const matches = [...conditions.values()];
-      await fetchMissingPatients(matches.map(subjectIdOf), patients, signal);
-      setState({ running: false, error: null, result: { conditions: matches, patients, truncated } });
-    } catch (error) {
-      setState({ running: false, error: signal.aborted ? null : error, result: null });
-    }
-  }, []);
-
-  const cancel = useCallback(() => abortRef.current?.abort(), []);
-
-  return { ...state, run, cancel };
+  return useRecordExtract(fetchConditionExtract);
 }

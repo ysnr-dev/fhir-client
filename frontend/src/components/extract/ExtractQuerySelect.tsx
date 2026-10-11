@@ -1,18 +1,30 @@
-import type { ExtractQuery } from "../../api/masterClient";
+import type { OrderSetScope } from "../../api/masterClient";
 
 const SCOPE_LABELS: Record<string, string> = { facility: "院内共通", department: "診療科", practitioner: "自分" };
 
-/** 保存した患者の条件の選択(持ち主ごとにまとめる。チームの条件はスクリーニングとしてチームごと)。 */
-export function ExtractQuerySelect({
+/** 持ち主ごとに保存する定義(データ抽出の条件・ダッシュボード)の、選択に要る項目。 */
+interface ScopedRecord {
+  id: number;
+  scope: OrderSetScope;
+  name: string;
+  owner_id: string | null;
+  owner_name: string | null;
+}
+
+/** 保存した条件の選択(持ち主ごとにまとめる。チームの条件はスクリーニングとしてチームごと)。 */
+export function ExtractQuerySelect<T extends ScopedRecord>({
   queries,
   value,
   emptyLabel,
+  teamLabel = "スクリーニング",
   onChange,
 }: {
-  queries: ExtractQuery[];
+  queries: T[];
   value: number | null;
   emptyLabel: string;
-  onChange: (query: ExtractQuery | null) => void;
+  /** チームの定義のグループ名の頭(ダッシュボードは「チーム」)。 */
+  teamLabel?: string;
+  onChange: (query: T | null) => void;
 }) {
   return (
     <select
@@ -36,7 +48,7 @@ export function ExtractQuerySelect({
       {[...new Set(queries.filter((q) => q.scope === "team").map((q) => q.owner_id ?? ""))].map((teamId) => {
         const items = queries.filter((q) => q.scope === "team" && (q.owner_id ?? "") === teamId);
         return (
-          <optgroup key={`team:${teamId}`} label={`スクリーニング: ${items[0]?.owner_name ?? teamId}`}>
+          <optgroup key={`team:${teamId}`} label={`${teamLabel}: ${items[0]?.owner_name ?? teamId}`}>
             {items.map((q) => (
               <option key={q.id} value={q.id}>
                 {q.name}

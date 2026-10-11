@@ -213,6 +213,8 @@ async function fetchPatients(
 export interface ExtractRunOptions {
   /** 該当した患者の id と条件ごとの記録だけが要るとき(比較群)。患者の中身を読まない。 */
   skipPatients?: boolean;
+  /** 失敗(中止を含む)を null ではなく例外で返す(ダッシュボードのように続けて何件も実行するとき)。 */
+  rethrow?: boolean;
 }
 
 export interface ExtractRunState {
@@ -337,6 +339,7 @@ export function useExtractRun() {
         return result;
       } catch (error) {
         publish(controller.signal.aborted ? { running: false } : { running: false, error });
+        if (options.rethrow) throw error;
         return null;
       }
     },

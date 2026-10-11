@@ -160,6 +160,7 @@ import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklist
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { LotManagementPage } from "./pages/LotManagementPage";
 import { DataExtractPage } from "./pages/DataExtractPage";
+import { DashboardPage } from "./pages/DashboardPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 import { HomePage } from "./pages/HomePage";
 import { BulletinPage } from "./pages/BulletinPage";
@@ -404,6 +405,9 @@ function App() {
             <Link to="/data-extract" className="row-menu__item">
               データ抽出
             </Link>
+            <Link to="/dashboards" className="row-menu__item">
+              ダッシュボード
+            </Link>
           </HoverMenu>
           <HoverMenu label="管理">
             {/* マスタメンテは項目が多くメニューに収まらないので、一覧のページ(/masters)へ送る。
@@ -566,6 +570,7 @@ function App() {
           <Route path="/injection-worklist" element={<InjectionWorklistPage />} />
           <Route path="/lot-management" element={<LotManagementPage />} />
           <Route path="/data-extract" element={<DataExtractPage />} />
+          <Route path="/dashboards" element={<DashboardPage />} />
           <Route path="/chemo-room-worklist" element={<ChemoRoomWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
           <Route path="/endoscopy-worklist" element={<EndoscopyWorklistPage />} />

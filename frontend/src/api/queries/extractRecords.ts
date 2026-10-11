@@ -1,3 +1,4 @@
+import { useCallback, useRef, useState } from "react";
 import { searchResource } from "../fhirClient";
 import { searchAllPages } from "./core";
 
@@ -94,4 +95,40 @@ export async function fetchMissingPatients(
       if (patient?.resourceType === "Patient" && patient.id) patients.set(patient.id, patient);
     }
   }
+}
+
+interface RecordExtractState<R> {
+  running: boolean;
+  error: unknown;
+  result: R | null;
+}
+
+/**
+ * 記録を表にするタブの実行の状態。読み込みの中身(fetcher)はタブごとで、実行は明示のボタンだけ
+ * (条件を変えても自動では走らせない)。中止は AbortSignal で伝える。
+ */
+export function useRecordExtract<C, R>(fetcher: (criteria: C, signal: AbortSignal) => Promise<R>) {
+  const [state, setState] = useState<RecordExtractState<R>>({ running: false, error: null, result: null });
+  const abortRef = useRef<AbortController | null>(null);
+
+  const run = useCallback(
+    async (criteria: C) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const signal = controller.signal;
+      setState({ running: true, error: null, result: null });
+      try {
+        const result = await fetcher(criteria, signal);
+        setState({ running: false, error: null, result });
+      } catch (error) {
+        setState({ running: false, error: signal.aborted ? null : error, result: null });
+      }
+    },
+    [fetcher],
+  );
+
+  const cancel = useCallback(() => abortRef.current?.abort(), []);
+
+  return { ...state, run, cancel };
 }

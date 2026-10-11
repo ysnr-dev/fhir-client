@@ -1,4 +1,3 @@
-import { useCallback, useRef, useState } from "react";
 import { SSMIX2_DEPARTMENT_CODE_SYSTEM } from "../../fhir/departmentCodes";
 import {
   ADMISSION_CLASS_CODE,
@@ -9,7 +8,7 @@ import type { AdmissionDateMode } from "../../fhir/extractQueryHelpers";
 import { EMERGENCY_CANCELLED_STATUS, EMERGENCY_CLASS_CODE } from "../../fhir/emergencyEncounterHelpers";
 import { OUTPATIENT_CLASS_CODE } from "../../fhir/outpatientEncounterHelpers";
 import { addDays } from "../../lib/dates";
-import { fetchMissingPatients, searchExtractRecords, subjectIdOf } from "./extractRecords";
+import { fetchMissingPatients, searchExtractRecords, subjectIdOf, useRecordExtract } from "./extractRecords";
 
 // 入院・外来の抽出(docs/data-extract-design.md §19)。入院(class=IMP)か外来受診(class=AMB)の Encounter を
 // 期間で引く。入院はベッド → 病室 → 病棟を _include(:iterate)で、外来は受付(Appointment)を _include で添える。
@@ -40,13 +39,7 @@ export interface EncounterExtractResult {
   truncated: boolean;
 }
 
-interface EncounterExtractState {
-  running: boolean;
-  error: unknown;
-  result: EncounterExtractResult | null;
-}
 
-const IDLE: EncounterExtractState = { running: false, error: null, result: null };
 
 function inpatientParams(criteria: EncounterExtractCriteria): URLSearchParams {
   const params = new URLSearchParams();
@@ -94,52 +87,39 @@ function emergencyParams(criteria: EncounterExtractCriteria): URLSearchParams {
   return params;
 }
 
+/** 入院・外来・救急の抽出を読む(docs/data-extract-design.md)。中止は signal で伝える。 */
+export async function fetchEncounterExtract(
+  criteria: EncounterExtractCriteria,
+  signal: AbortSignal,
+): Promise<EncounterExtractResult> {
+  const params =
+    criteria.kind === "inpatient"
+      ? inpatientParams(criteria)
+      : criteria.kind === "outpatient"
+        ? outpatientParams(criteria)
+        : emergencyParams(criteria);
+  params.set("_sort", "-date");
+  const page = await searchExtractRecords<fhir4.Encounter>("Encounter", params, criteria.patientIds, signal);
+  const locations = new Map<string, fhir4.Location>();
+  const appointments = new Map<string, fhir4.Appointment>();
+  for (const resource of page.included) {
+    if (!resource.id) continue;
+    if (resource.resourceType === "Location") locations.set(resource.id, resource as fhir4.Location);
+    if (resource.resourceType === "Appointment") appointments.set(resource.id, resource as fhir4.Appointment);
+  }
+  await fetchMissingPatients(page.matches.map(subjectIdOf), page.patients, signal);
+  return {
+    kind: criteria.kind,
+    encounters: page.matches,
+    locations,
+    appointments,
+    patients: page.patients,
+    truncated: page.truncated,
+
+  };
+}
+
 /** 入院・外来・救急の抽出の実行。条件を変えても自動では走らせない。 */
 export function useEncounterExtract() {
-  const [state, setState] = useState<EncounterExtractState>(IDLE);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const run = useCallback(async (criteria: EncounterExtractCriteria) => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const signal = controller.signal;
-    setState({ running: true, error: null, result: null });
-    try {
-      const params =
-        criteria.kind === "inpatient"
-          ? inpatientParams(criteria)
-          : criteria.kind === "outpatient"
-            ? outpatientParams(criteria)
-            : emergencyParams(criteria);
-      params.set("_sort", "-date");
-      const page = await searchExtractRecords<fhir4.Encounter>("Encounter", params, criteria.patientIds, signal);
-      const locations = new Map<string, fhir4.Location>();
-      const appointments = new Map<string, fhir4.Appointment>();
-      for (const resource of page.included) {
-        if (!resource.id) continue;
-        if (resource.resourceType === "Location") locations.set(resource.id, resource as fhir4.Location);
-        if (resource.resourceType === "Appointment") appointments.set(resource.id, resource as fhir4.Appointment);
-      }
-      await fetchMissingPatients(page.matches.map(subjectIdOf), page.patients, signal);
-      setState({
-        running: false,
-        error: null,
-        result: {
-          kind: criteria.kind,
-          encounters: page.matches,
-          locations,
-          appointments,
-          patients: page.patients,
-          truncated: page.truncated,
-        },
-      });
-    } catch (error) {
-      setState({ running: false, error: signal.aborted ? null : error, result: null });
-    }
-  }, []);
-
-  const cancel = useCallback(() => abortRef.current?.abort(), []);
-
-  return { ...state, run, cancel };
+  return useRecordExtract(fetchEncounterExtract);
 }

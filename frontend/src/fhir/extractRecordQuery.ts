@@ -1,7 +1,20 @@
-import type { ExtractOutput, ExtractPeriod } from "./extractQueryHelpers";
-import type { ExtractKind, ExtractLeaf } from "./extractQueryModel";
-import type { BreakdownSettings } from "./recordBreakdownHelpers";
 import type { ExtractQuery } from "../api/masterClient";
+import type { ConditionExtractCategory, ConditionExtractSuspected, EncounterExtractKind } from "../api/queries";
+import type { TreatmentType } from "./adverseEventHelpers";
+import type { AdverseEventRowMode } from "./adverseEventExtractHelpers";
+import type { ChartItem } from "./chartDefinitionHelpers";
+import type { ExtractOutput, ExtractPeriod } from "./extractQueryHelpers";
+import type {
+  AdmissionDateMode,
+  ExtractCode,
+  ExtractDrugClass,
+  ExtractKind,
+  ExtractLeaf,
+  ExtractOrderType,
+} from "./extractQueryModel";
+import type { LabExtractAggregate, LabExtractRowMode } from "./labExtractHelpers";
+import type { MicroSusceptibilityField } from "./microExtractHelpers";
+import type { BreakdownSettings } from "./recordBreakdownHelpers";
 
 // データ抽出の記録を表にするタブで保存する条件(docs/data-extract-design.md §17)。タブごとの入力欄の値を
 // そのまま持つ。形の検証は backend(ExtractRecordDefinition)。
@@ -20,6 +33,25 @@ export type ExtractRecordTab =
 
 export type ExtractTab = "patient" | ExtractRecordTab;
 
+/** データ抽出のタブ(画面の並び順)。 */
+export const EXTRACT_TABS: { key: ExtractTab; label: string }[] = [
+  { key: "patient", label: "患者" },
+  { key: "encounter", label: "入院・外来" },
+  { key: "condition", label: "病名" },
+  { key: "template", label: "テンプレート" },
+  { key: "lab", label: "検査結果" },
+  { key: "medication", label: "投薬" },
+  { key: "micro", label: "細菌検査" },
+  { key: "surgery", label: "手術" },
+  { key: "perform", label: "部門実施" },
+  { key: "adverse", label: "有害事象" },
+  { key: "pathway", label: "パス" },
+];
+
+export function extractTabLabel(tab: ExtractTab): string {
+  return EXTRACT_TABS.find((t) => t.key === tab)?.label ?? tab;
+}
+
 /** どの記録タブにも共通する項目。タブごとの条件はこれを広げる。 */
 export interface ExtractRecordDefinition {
   schema_version: 1;
@@ -36,6 +68,70 @@ export interface ExtractRecordDefinition {
   strata_only?: boolean;
   /** 担当医の列の決め方(§21)。 */
   attending?: AttendingMode;
+}
+
+// タブごとの条件(共通の項目 + そのタブの入力欄の値)。形の検証は backend の ExtractRecordDefinition::TAB_FIELDS。
+
+export interface EncounterExtractDefinition extends ExtractRecordDefinition {
+  kind?: EncounterExtractKind;
+  date_mode?: AdmissionDateMode;
+  department_id?: string;
+  ward_id?: string;
+}
+
+export interface ConditionExtractDefinition extends ExtractRecordDefinition {
+  codes?: ExtractCode[];
+  clinical_status?: string[];
+  category?: ConditionExtractCategory;
+  suspected?: ConditionExtractSuspected;
+  date_field?: "onset" | "recorded";
+}
+
+export interface TemplateExtractDefinition extends ExtractRecordDefinition {
+  template_url?: string;
+  latest_only?: boolean;
+  department_id?: string;
+}
+
+export interface LabExtractDefinition extends ExtractRecordDefinition {
+  items?: ChartItem[];
+  mode?: LabExtractRowMode;
+  aggregates?: LabExtractAggregate[];
+  interpretation?: boolean;
+  department_id?: string;
+}
+
+export interface MedicationExtractDefinition extends ExtractRecordDefinition {
+  codes?: ExtractCode[];
+  drug_classes?: ExtractDrugClass[];
+  order_type?: ExtractOrderType;
+  department_id?: string;
+}
+
+export interface MicroExtractDefinition extends ExtractRecordDefinition {
+  include_no_isolate?: boolean;
+  first_isolate_only?: boolean;
+  susceptibility?: MicroSusceptibilityField[];
+}
+
+export interface SurgeryExtractDefinition extends ExtractRecordDefinition {
+  procedures?: { code: string; name: string }[];
+  department_id?: string;
+}
+
+export interface PerformExtractDefinition extends ExtractRecordDefinition {
+  order_kind?: string;
+  department_id?: string;
+}
+
+export interface AdverseEventExtractDefinition extends ExtractRecordDefinition {
+  treatment_type?: TreatmentType;
+  terms?: string[];
+  mode?: AdverseEventRowMode;
+}
+
+export interface PathwayExtractDefinition extends ExtractRecordDefinition {
+  pathway_code?: string;
 }
 
 /**

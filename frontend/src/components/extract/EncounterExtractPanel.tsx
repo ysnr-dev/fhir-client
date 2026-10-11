@@ -1,33 +1,34 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useEncounterExtract, useSelfDepartments, useWardOptions, type EncounterExtractKind } from "../../api/queries";
-import { departmentCode, departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
-import { encounterExtractHeader, encounterExtractRows } from "../../fhir/encounterExtractHelpers";
+import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
   ADMISSION_DATE_MODES,
-  RECORD_DISPLAY_LIMIT,
   patientColumnsOf,
   resolvePeriod,
   type AdmissionDateMode,
   type ExtractOutput,
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
-import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { compactDefinition, type EncounterExtractDefinition } from "../../fhir/extractRecordQuery";
+import { encounterRunner, recordCountLabel } from "../../fhir/extractTabRunners";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { locationDisplayName } from "../../fhir/locationHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
-import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { ExtractFormRow } from "./ExtractFormRow";
 import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
+import { RecordResultNotices } from "./RecordResultNotices";
 import { RecordResultTable } from "./RecordResultTable";
-import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { recordTableCsv } from "../../fhir/recordTableHelpers";
+import { useExtractRunContext } from "../../hooks/useExtractRunContext";
 import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
+import { useRecordTable } from "../../hooks/useRecordTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 30 };
 
@@ -36,16 +37,6 @@ const KINDS: { value: EncounterExtractKind; label: string }[] = [
   { value: "outpatient", label: "外来" },
   { value: "emergency", label: "救急" },
 ];
-
-const KIND_LABELS: Record<EncounterExtractKind, string> = { inpatient: "入院", outpatient: "外来受診", emergency: "救急受診" };
-
-/** 保存する条件(docs/data-extract-design.md §17)。 */
-interface EncounterCriteria extends ExtractRecordDefinition {
-  kind?: EncounterExtractKind;
-  date_mode?: AdmissionDateMode;
-  department_id?: string;
-  ward_id?: string;
-}
 
 /**
  * 入院・外来の抽出(docs/data-extract-design.md §19)。入院 1 件・外来受診 1 件を 1 行にした表と CSV にする。
@@ -56,6 +47,7 @@ export function EncounterExtractPanel() {
   const departmentOptions = sortDepartmentsByCode(departments).filter((d) => d.id);
   const { wards } = useWardOptions();
   const scope = useExtractPatientScope();
+  const context = useExtractRunContext();
   const extract = useEncounterExtract();
 
   const [kind, setKind] = useState<EncounterExtractKind>("inpatient");
@@ -66,28 +58,13 @@ export function EncounterExtractPanel() {
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
   const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
 
-  const resultKind = extract.result?.kind ?? kind;
-  const rows = useMemo(
-    () =>
-      extract.result
-        ? encounterExtractRows(
-            extract.result.kind,
-            extract.result.encounters,
-            extract.result.locations,
-            extract.result.appointments,
-            extract.result.patients,
-            today(),
-          )
-        : null,
-    [extract.result],
-  );
   const patientColumns = patientColumnsOf(output);
   const running = scope.running || extract.running;
   const inpatient = kind === "inpatient";
   // 救急の受診は診療科を持たないので、診療科では絞らない。
   const byDepartment = kind !== "emergency";
 
-  const definition = compactDefinition<EncounterCriteria>({
+  const definition = compactDefinition<EncounterExtractDefinition>({
     schema_version: 1,
     period,
     ...scopeDefinition(scope),
@@ -98,9 +75,11 @@ export function EncounterExtractPanel() {
     department_id: byDepartment ? departmentId || undefined : undefined,
     ward_id: inpatient ? wardId || undefined : undefined,
   });
+  const table = useRecordTable(encounterRunner, extract.result, definition, context);
+  const attributes = useRecordPatientAttributes(scope.ran, table?.rows);
 
   /** 保存した条件を入力欄に戻す(null なら初期値)。 */
-  function applyDefinition(saved: EncounterCriteria | null) {
+  function applyDefinition(saved: EncounterExtractDefinition | null) {
     setKind(saved?.kind ?? "inpatient");
     setDateMode(saved?.date_mode ?? "overlap");
     setPeriod(saved?.period ?? DEFAULT_PERIOD);
@@ -114,33 +93,14 @@ export function EncounterExtractPanel() {
   async function handleRun() {
     const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
-    const range = resolvePeriod(period, today());
-    const department = departmentOptions.find((d) => d.id === departmentId);
-    void extract.run({
-      kind,
-      from: range?.from ?? "",
-      to: range?.to ?? "",
-      dateMode,
-      departmentId: inpatient ? departmentId || undefined : undefined,
-      departmentCode: kind === "outpatient" && department ? departmentCode(department) || undefined : undefined,
-      wardId: inpatient ? wardId || undefined : undefined,
-      patientIds,
-    });
+    const criteria = encounterRunner.criteria(definition, { range: resolvePeriod(period, today()), patientIds }, context);
+    if (criteria) void extract.run(criteria);
   }
 
   function handleCancel() {
     scope.cancel();
     extract.cancel();
   }
-
-  const tableHeader = encounterExtractHeader(resultKind, output);
-  const tableRows: RecordTableRow[] = (rows ?? []).map((row) => ({
-    key: row.rowKey,
-    patient: row,
-    fixed: row.fixed,
-    values: row.values,
-  }));
-  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -227,14 +187,14 @@ export function EncounterExtractPanel() {
         )}
         <PatientScopeProgress scope={scope} />
         {extract.running && <span className="order-select__muted">実行中</span>}
-        {rows && (
+        {table && (
           <span className="data-extract__exports">
-            <FolderRegisterButton patientIds={rows.map((r) => r.patientId)} />
+            <FolderRegisterButton patientIds={table.rows.map((r) => r.patient.patientId)} />
             <button
               type="button"
-              disabled={rows.length === 0}
+              disabled={table.rows.length === 0}
               onClick={() =>
-                downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `${resultKind}_${today()}.csv`)
+                downloadBlob(recordTableCsv(table.header, patientColumns, table.rows, attributes.attributes), `${extract.result?.kind ?? "encounter"}_${today()}.csv`)
               }
             >
               CSV
@@ -244,29 +204,22 @@ export function EncounterExtractPanel() {
       </div>
 
       <ErrorBanner error={scope.error ?? extract.error} />
-      {rows && (
+      {table && (
         <section className="extract-results">
           <div className="extract-results__summary">
-            <span className="extract-results__count">
-              {`${KIND_LABELS[resultKind]} ${rows.length} 件(${new Set(rows.map((r) => r.patientId)).size} 人)`}
-            </span>
+            <span className="extract-results__count">{recordCountLabel(table)}</span>
             <PatientScopeSummary scope={scope} />
           </div>
-          <TruncatedNotice show={extract.result?.truncated}>
-            件数が多いため、新しいものから一部だけを読みました。期間を絞ってください。
-          </TruncatedNotice>
-          <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
-            {`先頭の ${RECORD_DISPLAY_LIMIT} 件を表示しています。すべては CSV に出ます。`}
-          </TruncatedNotice>
+          <RecordResultNotices runner={encounterRunner} truncated={extract.result?.truncated} table={table} />
           <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={tableHeader}
+            header={table.header}
             patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={tableRows}
-            emptyLabel="該当する受診はありません"
+            rows={table.rows}
+            emptyLabel={table.incomplete ? "" : encounterRunner.emptyLabel}
           />
         </section>
       )}

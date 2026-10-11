@@ -64,7 +64,8 @@ export function ExtractResults({
   );
 }
 
-function ResultTable({
+/** 一覧(患者 1 行)。ダッシュボードのタイルでも使う。 */
+export function ResultTable({
   result,
   leaves,
   output,
@@ -137,7 +138,8 @@ function ResultTable({
   );
 }
 
-function BreakdownTable({ result }: { result: ExtractResult }) {
+/** 内訳(性別 × 年齢帯と条件ごとの人数)。ダッシュボードのタイルでも使う。 */
+export function BreakdownTable({ result }: { result: ExtractResult }) {
   const breakdown = extractBreakdown(result.rows);
   const columns = resultColumns(result.leaves);
   return (

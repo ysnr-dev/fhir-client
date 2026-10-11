@@ -413,7 +413,12 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
   「未保存」はキーの並びに左右されない比較(`stableJson`)で、保存した値と今の入力を比べる。
 - **患者の絞り込み**: 患者の条件は code で持つ(`useExtractPatientScope` の `queryCode`)。保存した条件を読み込んだ時点で一覧が
   読めていなくても、読めたら選ばれる。
-- 推移(実行のたびの件数の記録)は記録タブではまだ残さない。
+- **保存した条件だけからの実行**: タブごとに「条件 → 読み込みの条件」(`criteria`)と「読み込みの結果 → 表」(`table`)の組を
+  `fhir/extractTabRunners.ts` に 1 行ずつ並べ(`EXTRACT_TAB_RUNNERS`)、各タブのパネルとダッシュボード(docs/dashboard-design.md)が
+  同じ組で実行する。読み込み自体は `api/queries/*Extract.ts` の `fetch*Extract(criteria, signal)`(パネルの `use*Extract` は
+  これを `useRecordExtract` で包んだもの)。表の見せ方(出力項目・行の単位など)は今の条件から、読み込みに使った条件
+  (病名の日付の見方・検査の項目・実施の種別)は結果が持つ。患者の絞り込み・比較群・担当医は `resolvePatientScope`
+  (`hooks/useExtractPatientScope.ts`)が保存した形から解く。
 
 ## 18. 記録タブの内訳
 

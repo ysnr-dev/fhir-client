@@ -1,46 +1,39 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useAdverseEventExtract } from "../../api/queries";
 import type { TreatmentType } from "../../fhir/adverseEventHelpers";
 import {
   ADVERSE_EVENT_ROW_MODES,
   TREATMENT_TYPE_OPTIONS,
-  adverseEventExtractHeader,
-  adverseEventExtractTable,
   type AdverseEventRowMode,
 } from "../../fhir/adverseEventExtractHelpers";
 import {
-  RECORD_DISPLAY_LIMIT,
   patientColumnsOf,
   resolvePeriod,
   type ExtractOutput,
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
-import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
+import { compactDefinition, type AdverseEventExtractDefinition } from "../../fhir/extractRecordQuery";
+import { adverseEventRunner, recordCountLabel } from "../../fhir/extractTabRunners";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { CtcaeTermSearchModal } from "../CtcaeTermSearchModal";
 import { ErrorBanner } from "../ErrorBanner";
-import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
 import { ExtractFormRow } from "./ExtractFormRow";
 import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
+import { RecordResultNotices } from "./RecordResultNotices";
 import { RecordResultTable } from "./RecordResultTable";
-import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
+import { recordTableCsv } from "../../fhir/recordTableHelpers";
+import { useExtractRunContext } from "../../hooks/useExtractRunContext";
 import { useRecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
+import { useRecordTable } from "../../hooks/useRecordTable";
 
 const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
-
-/** 保存する条件(docs/data-extract-design.md §17)。 */
-interface AdverseEventCriteria extends ExtractRecordDefinition {
-  treatment_type?: TreatmentType;
-  terms?: string[];
-  mode?: AdverseEventRowMode;
-}
 
 /**
  * 有害事象の抽出(docs/data-extract-design.md §12)。有害事象の記録を 1 件ごと、または患者・治療ごと
@@ -48,6 +41,7 @@ interface AdverseEventCriteria extends ExtractRecordDefinition {
  */
 export function AdverseEventExtractPanel() {
   const scope = useExtractPatientScope();
+  const context = useExtractRunContext();
   const extract = useAdverseEventExtract();
 
   const [period, setPeriod] = useState<ExtractPeriod>(DEFAULT_PERIOD);
@@ -58,30 +52,17 @@ export function AdverseEventExtractPanel() {
   const [output, setOutput] = useState<ExtractOutput | undefined>(undefined);
   const [breakdown, setBreakdown] = useState<BreakdownSettings>({});
 
-  const table = useMemo(
-    () => (extract.result ? adverseEventExtractTable(extract.result.observations, extract.result.patients, mode) : null),
-    [extract.result, mode],
-  );
-  // 患者・治療ごとの件数・最大 Grade は欠けた記録では嘘になるので、読み切れなかったら出さない。
-  const incomplete = mode === "treatment" && Boolean(extract.result?.truncated);
-  const rows = incomplete ? [] : (table?.rows ?? []);
   const patientColumns = patientColumnsOf(output);
   const running = scope.running || extract.running;
 
   async function handleRun() {
     const patientIds = await scope.resolve(period);
     if (patientIds === null) return;
-    const range = resolvePeriod(period, today());
-    void extract.run({
-      from: range?.from ?? "",
-      to: range?.to ?? "",
-      treatmentType: treatmentType || undefined,
-      terms,
-      patientIds,
-    });
+    const criteria = adverseEventRunner.criteria(definition, { range: resolvePeriod(period, today()), patientIds }, context);
+    if (criteria) void extract.run(criteria);
   }
 
-  const definition = compactDefinition<AdverseEventCriteria>({
+  const definition = compactDefinition<AdverseEventExtractDefinition>({
     schema_version: 1,
     period,
     ...scopeDefinition(scope),
@@ -91,9 +72,11 @@ export function AdverseEventExtractPanel() {
     terms,
     mode,
   });
+  const table = useRecordTable(adverseEventRunner, extract.result, definition, context);
+  const attributes = useRecordPatientAttributes(scope.ran, table?.rows);
 
   /** 保存した条件を入力欄に戻す(null なら初期値)。 */
-  function applyDefinition(saved: AdverseEventCriteria | null) {
+  function applyDefinition(saved: AdverseEventExtractDefinition | null) {
     setPeriod(saved?.period ?? DEFAULT_PERIOD);
     setTreatmentType(saved?.treatment_type ?? "");
     setTerms(saved?.terms ?? []);
@@ -111,17 +94,6 @@ export function AdverseEventExtractPanel() {
     scope.cancel();
     extract.cancel();
   }
-
-  const tableHeader = table ? adverseEventExtractHeader(table, output) : [];
-  const tableRows: RecordTableRow[] = table
-    ? rows.map(({ key, patient, cells }) => ({
-        key,
-        patient,
-        fixed: cells.slice(0, table.fixedCount),
-        values: cells.slice(table.fixedCount),
-      }))
-    : [];
-  const attributes = useRecordPatientAttributes(scope, tableRows);
 
   return (
     <>
@@ -205,12 +177,12 @@ export function AdverseEventExtractPanel() {
         {extract.running && <span className="order-select__muted">実行中</span>}
         {table && (
           <span className="data-extract__exports">
-            <FolderRegisterButton patientIds={rows.map((r) => r.patient.patientId)} />
+            <FolderRegisterButton patientIds={table.rows.map((r) => r.patient.patientId)} />
             <button
               type="button"
-              disabled={rows.length === 0}
+              disabled={table.rows.length === 0}
               onClick={() =>
-                downloadBlob(recordTableCsv(tableHeader, patientColumns, tableRows, attributes.attributes), `adverse_event_${today()}.csv`)
+                downloadBlob(recordTableCsv(table.header, patientColumns, table.rows, attributes.attributes), `adverse_event_${today()}.csv`)
               }
             >
               CSV
@@ -223,29 +195,19 @@ export function AdverseEventExtractPanel() {
       {table && (
         <section className="extract-results">
           <div className="extract-results__summary">
-            <span className="extract-results__count">
-              {`${rows.length} ${mode === "event" ? "件" : "行"}(${new Set(rows.map((r) => r.patient.patientId)).size} 人)`}
-            </span>
+            <span className="extract-results__count">{recordCountLabel(table)}</span>
             <PatientScopeSummary scope={scope} />
           </div>
-          <TruncatedNotice show={extract.result?.truncated && !incomplete}>
-            記録が多いため、新しいものから一部だけを読みました。期間を絞ってください。
-          </TruncatedNotice>
-          <TruncatedNotice show={incomplete}>
-            記録が多く読み切れなかったため、患者・治療ごとの集計は出せません。期間か患者を絞ってください。
-          </TruncatedNotice>
-          <TruncatedNotice show={rows.length > RECORD_DISPLAY_LIMIT}>
-            {`先頭の ${RECORD_DISPLAY_LIMIT} 行を表示しています。すべては CSV に出ます。`}
-          </TruncatedNotice>
+          <RecordResultNotices runner={adverseEventRunner} truncated={extract.result?.truncated} table={table} />
           <PatientAttributesStatus attributes={attributes} />
           <RecordResultTable
-            header={tableHeader}
+            header={table.header}
             patientAttributes={attributes.attributes}
             patientColumns={patientColumns}
             breakdown={breakdown}
             onBreakdownChange={setBreakdown}
-            rows={tableRows}
-            emptyLabel={incomplete ? "" : "該当する有害事象はありません"}
+            rows={table.rows}
+            emptyLabel={table.incomplete ? "" : adverseEventRunner.emptyLabel}
           />
         </section>
       )}
