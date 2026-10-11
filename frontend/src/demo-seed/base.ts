@@ -40,7 +40,12 @@ import {
   type LabResultLineValues,
 } from "../fhir/labResultHelpers";
 import { buildPrescriptionBundle, CATEGORY_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
-import { buildAdmissionEncounter, buildDischargedEncounter } from "../fhir/encounterHelpers";
+import {
+  ADMISSION_CLASS_CODE,
+  ADMISSION_STATUS,
+  buildAdmissionEncounter,
+  buildDischargedEncounter,
+} from "../fhir/encounterHelpers";
 import {
   applyRadiotherapyProtocol,
   buildRadiotherapyOrderBundle,
@@ -550,6 +555,39 @@ export async function createStay(
     { departmentId: department.id, practitionerId: env.practitioner.id, nurseIds: [], admissionDate: `${admitted}T10:00`, note: "", route: emptyAdmissionRoute() },
   );
   const { data } = await createResource(buildDischargedEncounter(encounter, `${discharged}T10:00`));
+  return data.id ?? null;
+}
+
+/** 入院中の入院 1 件。いま空いているベッドに入れ、空きが無ければ作らない。 */
+export async function createCurrentStay(
+  env: SeedEnv,
+  patient: fhir4.Patient,
+  department: Named,
+  admitted: string,
+): Promise<string | null> {
+  const current = await searchAll<fhir4.Encounter>("Encounter", {
+    class: ADMISSION_CLASS_CODE,
+    status: ADMISSION_STATUS,
+    _elements: "location",
+  });
+  const occupied = new Set(
+    current.flatMap((encounter) =>
+      (encounter.location ?? [])
+        .filter((entry) => entry.status === "active")
+        .map((entry) => entry.location.reference?.split("/").pop() ?? ""),
+    ),
+  );
+  const bed = env.beds.find((b) => !occupied.has(b.id));
+  if (!bed) {
+    env.log("空いているベッドが無いので入院中の患者は作りません");
+    return null;
+  }
+  const encounter = buildAdmissionEncounter(
+    patient,
+    { bedId: bed.id, bedLabel: bed.name, departmentName: department.name, practitionerName: env.practitioner.name, nurses: [] },
+    { departmentId: department.id, practitionerId: env.practitioner.id, nurseIds: [], admissionDate: `${admitted}T10:00`, note: "", route: emptyAdmissionRoute() },
+  );
+  const { data } = await createResource(encounter);
   return data.id ?? null;
 }
 

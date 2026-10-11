@@ -3,6 +3,13 @@
 
 import { fetchRegimen, radiotherapyProtocolClient } from "../api/masterClient";
 import { DrugMaster, findDisease, findTemplate, LabMaster, loadEnv } from "./base";
+import {
+  findEndoscopyItem,
+  findRadItem,
+  findSurgeryItem,
+  REQUIREMENTS as acuteCareRequirements,
+  seedAcuteCareCohort,
+} from "./acuteCareCohort";
 import { REQUIREMENTS as ckdRequirements, seedCkd } from "./ckd";
 import { REQUIREMENTS as diabetesRequirements, seedDiabetes } from "./diabetes";
 import { REQUIREMENTS as diabetesCohortRequirements, seedDiabetesCohort } from "./diabetesCohort";
@@ -19,6 +26,7 @@ export const SCENARIOS = {
   periodontal: seedPeriodontal,
   headNeckRt: seedHeadNeckRadiotherapy,
   diabetesCohort: seedDiabetesCohort,
+  acuteCareCohort: seedAcuteCareCohort,
 } as const;
 
 export type ScenarioName = keyof typeof SCENARIOS;
@@ -42,7 +50,7 @@ export async function run(
 }
 
 /**
- * 書き込む前の確認。各シナリオが使うマスタ(検査項目・薬剤・用法・病名・レジメン・放射線治療の
+ * 書き込む前の確認。各シナリオが使うマスタ(検査項目・薬剤・用法・病名・レジメン・放射線・内視鏡・術式・放射線治療の
  * プロトコル)とテンプレートが揃っているかを見て、足りないものを返す。途中で止まって半端な患者が残らないように、
  * 本番へ流す前に `--check` で見る。
  */
@@ -56,6 +64,7 @@ export async function preflight(): Promise<string[]> {
     periodontalRequirements,
     headNeckRequirements,
     diabetesCohortRequirements,
+    acuteCareRequirements,
   ];
   const labs = new LabMaster();
   const labCodes = [...new Set(all.flatMap((r) => r.labs))];
@@ -99,6 +108,15 @@ export async function preflight(): Promise<string[]> {
   }
   for (const url of [...periodontalRequirements.templates, ...headNeckRequirements.templates]) {
     if (!(await findTemplate(url))) missing.push(`テンプレート ${url}(取り込むまでそのシナリオは飛ばされます)`);
+  }
+  for (const item of acuteCareRequirements.radItems) {
+    if (!(await findRadItem(item))) missing.push(`放射線検査項目「${item[1]}」`);
+  }
+  for (const item of acuteCareRequirements.endoscopyItems) {
+    if (!(await findEndoscopyItem(item))) missing.push(`内視鏡検査項目「${item[1]}」`);
+  }
+  for (const item of acuteCareRequirements.surgeryItems) {
+    if (!(await findSurgeryItem(item))) missing.push(`術式「${item[1]}」`);
   }
   return missing;
 }
