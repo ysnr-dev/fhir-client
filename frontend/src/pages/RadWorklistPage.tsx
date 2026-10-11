@@ -59,6 +59,9 @@ import {
 // 撮影日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
 // (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 
+/** 日付別と日付未定(実施予定日の無いオーダー)のタブ。手術一覧と同じ分け方。 */
+type Tab = "dated" | "undated";
+
 interface Filters {
   modalityCode: string;
   setting: string;
@@ -78,9 +81,10 @@ const emptyFilters: Filters = {
 export function RadWorklistPage() {
   // 撮影日は必須。未選択にはできないので当日から始める。
   const [date, setDate] = useState(today);
-  // 日付未定(実施予定日の無いオーダー)を並べる。日付を決めるのは依頼側の編集なので、
-  // ここでは見るだけで実施はできない。
-  const [undated, setUndated] = useState(false);
+  // 日付未定タブは実施予定日の無いオーダーを並べる。日付を決めるのは依頼側の編集なので、
+  // ここでは実施できない。
+  const [tab, setTab] = useState<Tab>("dated");
+  const undated = tab === "undated";
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   // 実施入力を開いている行。「実施」だけはステータス変更ではなくモーダルを開く。
   const [performing, setPerforming] = useState<RadWorklistRow | null>(null);
@@ -96,7 +100,11 @@ export function RadWorklistPage() {
     return () => document.body.classList.remove("page-wide");
   }, []);
 
-  const worklist = useRadWorklist(undated ? UNSCHEDULED_WORKLIST_DATE : date);
+  const datedList = useRadWorklist(date);
+  // 日付未定はタブを開いていなくても件数を出すので常に読む(件数は小さい)。
+  const undatedList = useRadWorklist(UNSCHEDULED_WORKLIST_DATE);
+  const worklist = undated ? undatedList : datedList;
+  const undatedCount = undatedList.data?.rows.length ?? 0;
   const catalog = useRadJj1017Catalog();
   const departments = useSelfDepartments();
   const updateStatus = useUpdateRadTaskStatus();
@@ -114,7 +122,7 @@ export function RadWorklistPage() {
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
   // (同じ患者が 1 日に複数のオーダーを持つこともある)。絞り込みで行が消えたら閉じる。
-  const drawer = useRowDrawer();
+  const drawer = useRowDrawer(tab);
   const selectedRow = rows.find((row) => row.order.id && row.order.id === drawer.selectedKey);
 
   // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。病棟名はオーダー登録時に
@@ -211,10 +219,31 @@ export function RadWorklistPage() {
         <h1>放射線検査一覧</h1>
       </div>
 
+      <div className="order-select__tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!undated}
+          className={!undated ? "order-select__tab is-active" : "order-select__tab"}
+          onClick={() => setTab("dated")}
+        >
+          撮影日別
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={undated}
+          className={undated ? "order-select__tab is-active" : "order-select__tab"}
+          onClick={() => setTab("undated")}
+        >
+          日付未定{undatedCount > 0 && ` (${undatedCount})`}
+        </button>
+      </div>
+
       <FilterForm
         date={date}
+        // 日付未定タブは日付で絞らないので日付欄を出さない。
         undated={undated}
-        onUndatedChange={setUndated}
         filters={filters}
         modalities={catalog.data?.modality ?? []}
         wards={wardOptions}
@@ -337,8 +366,8 @@ function matchesFilters(row: RadWorklistRow, filters: Filters): boolean {
 
 interface FilterFormProps {
   date: string;
+  /** 日付未定タブ(日付欄を出さない)。 */
   undated: boolean;
-  onUndatedChange: (undated: boolean) => void;
   filters: Filters;
   modalities: { code: string; name: string }[];
   wards: { id: string; name: string }[];
@@ -350,7 +379,6 @@ interface FilterFormProps {
 function FilterForm({
   date,
   undated,
-  onUndatedChange,
   filters,
   modalities,
   wards,
@@ -371,14 +399,6 @@ function FilterForm({
           <DateStepper value={date} onChange={onDateChange} />
         </label>
       )}
-      <label className="patient-search-form__check">
-        <input
-          type="checkbox"
-          checked={undated}
-          onChange={(e) => onUndatedChange(e.target.checked)}
-        />
-        日付未定
-      </label>
       <label>
         種別(モダリティ)
         <select
