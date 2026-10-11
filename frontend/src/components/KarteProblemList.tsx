@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   isActiveCondition,
   problemLabel,
@@ -13,20 +14,24 @@ import { RowMenu } from "./RowMenu";
 // (ケバブメニューで「関連する記録のみ表示」に切り替えると、そのプロブレムの
 // 経過だけを縦に読める)。
 // 登録・編集は「病名」タブ側で行う(区分ラジオでプロブレムを選ぶ)。
+// onSelect を渡さないと読むだけの帯になる(一覧の患者ドロワーなど、タイムラインの無い所)。
 
 interface KarteProblemListProps {
   problems: fhir4.Condition[];
-  selectedId: string | null;
-  onSelect: (conditionId: string | null) => void;
-  visible: boolean;
-  onToggleVisible: () => void;
+  selectedId?: string | null;
+  onSelect?: (conditionId: string | null) => void;
+  /** onToggleVisible を渡さないと開閉ボタンを出さず、常に表示する。 */
+  visible?: boolean;
+  onToggleVisible?: () => void;
   resolvedVisible: boolean;
   onToggleResolved: () => void;
   /** プロブレムを選んだときの見せ方(減光 or 絞り込み)。 */
-  mode: KarteProblemMode;
-  onChangeMode: (mode: KarteProblemMode) => void;
+  mode?: KarteProblemMode;
+  onChangeMode?: (mode: KarteProblemMode) => void;
   /** 実際に絞り込み表示中か。モードが filter でも未選択なら偽。 */
-  filterActive: boolean;
+  filterActive?: boolean;
+  /** チップを 1 行に収め、あふれる分は展開して見る。 */
+  singleLine?: boolean;
 }
 
 const MODE_ITEMS: { mode: KarteProblemMode; label: string }[] = [
@@ -72,18 +77,48 @@ function orderByHierarchy(problems: fhir4.Condition[]): fhir4.Condition[] {
 
 export function KarteProblemList({
   problems,
-  selectedId,
+  selectedId = null,
   onSelect,
-  visible,
+  visible = true,
   onToggleVisible,
   resolvedVisible,
   onToggleResolved,
-  mode,
+  mode = "dim",
   onChangeMode,
-  filterActive,
+  filterActive = false,
+  singleLine = false,
 }: KarteProblemListProps) {
+  const listRef = useRef<HTMLUListElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  // 1 行目の高さと、2 行目以降に回ったプロブレムの数。折りたたみ中も折り返しは
+  // 起きているので、各チップの位置で数える。
+  const [overflow, setOverflow] = useState({ rowHeight: 0, hidden: 0 });
+
+  // 描画のたびに同期で測る(ResizeObserver は自動化環境で発火しないことがあるので、
+  // 幅が変わったときの測り直しにだけ使う)。
+  useLayoutEffect(() => {
+    if (!singleLine) return;
+    const list = listRef.current;
+    if (!list) return;
+    function measure() {
+      const items = Array.from(list!.children) as HTMLElement[];
+      const first = items[0];
+      const rowHeight = first?.offsetHeight ?? 0;
+      const hidden = items.filter(
+        (item) => item.offsetTop > (first?.offsetTop ?? 0),
+      ).length;
+      setOverflow((prev) =>
+        prev.rowHeight === rowHeight && prev.hidden === hidden ? prev : { rowHeight, hidden },
+      );
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(list);
+    return () => observer.disconnect();
+  });
+
   const toggleLabel = visible ? "プロブレムリストを隠す" : "プロブレムリストを表示する";
-  const toggleButton = (
+  const toggleButton = onToggleVisible && (
     <button
       type="button"
       className="karte-problems__toggle"
@@ -98,7 +133,7 @@ export function KarteProblemList({
 
   // 表示の切り替えは帯の行を増やさないようケバブに畳む。リストを畳んでいるときも
   // 出しておく(絞り込み中に解除できなくならないように)。
-  const modeMenu = (
+  const modeMenu = onChangeMode && (
     <div className="karte-problems__menu">
       {/* チップの一覧がスクロール領域なので、メニューは領域の外へはみ出させる。 */}
       <RowMenu label="プロブレムの表示設定" escapesClipping>
@@ -149,6 +184,17 @@ export function KarteProblemList({
   // 絞り込み中はモードの設定にかかわらず、チップの選択も絞り込みの切り替えになる
   // (URL で開いた状態と操作の意味が食い違わないようにする)。
   const selectsFilter = filterActive || mode === "filter";
+  const resolvedToggle = (
+    <button
+      type="button"
+      className="karte-problems__resolved-toggle"
+      aria-pressed={resolvedVisible}
+      title={resolvedLabel}
+      onClick={onToggleResolved}
+    >
+      {resolvedLabel}
+    </button>
+  );
 
   return (
     <div className={className}>
@@ -157,7 +203,15 @@ export function KarteProblemList({
       {problems.length === 0 ? (
         <p className="karte-problems__empty">未登録</p>
       ) : (
-        <ul className="karte-problems__list">
+        <ul
+          ref={listRef}
+          className="karte-problems__list"
+          style={
+            singleLine && !expanded && overflow.rowHeight > 0
+              ? { maxHeight: overflow.rowHeight, overflow: "hidden" }
+              : undefined
+          }
+        >
           {shownProblems.map((problem) => {
             const summary = summarizeCondition(problem);
             const isActive = isActiveCondition(problem);
@@ -167,58 +221,70 @@ export function KarteProblemList({
             const successors = problemSucceededByIds(problem)
               .map((id) => numbersById.get(id))
               .filter(Boolean);
+            const chipClassName = [
+              "karte-problems__chip",
+              isSelected ? "karte-problems__chip--selected" : "",
+              isActive ? "" : "karte-problems__chip--inactive",
+              isChild ? "karte-problems__chip--child" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const chipContent = (
+              <>
+                {isChild && <span className="karte-problems__child-mark">└</span>}
+                {problemLabel(problem)}
+                {successors.length > 0 ? (
+                  <span className="karte-problems__outcome">→ {successors.join(", ")}</span>
+                ) : (
+                  !isActive &&
+                  summary.outcomeDisplay && (
+                    <span className="karte-problems__outcome">{summary.outcomeDisplay}</span>
+                  )
+                )}
+              </>
+            );
             return (
               <li key={summary.id}>
-                <button
-                  type="button"
-                  className={[
-                    "karte-problems__chip",
-                    isSelected ? "karte-problems__chip--selected" : "",
-                    isActive ? "" : "karte-problems__chip--inactive",
-                    isChild ? "karte-problems__chip--child" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  aria-pressed={isSelected}
-                  title={
-                    isSelected
-                      ? selectsFilter
-                        ? "絞り込みを解除"
-                        : "強調表示を解除"
-                      : selectsFilter
-                        ? `${summary.name} に紐付く診療情報だけを表示`
-                        : `${summary.name} に紐付く診療記録を強調表示`
-                  }
-                  onClick={() => onSelect(isSelected ? null : summary.id)}
-                >
-                  {isChild && <span className="karte-problems__child-mark">└</span>}
-                  {problemLabel(problem)}
-                  {successors.length > 0 ? (
-                    <span className="karte-problems__outcome">→ {successors.join(", ")}</span>
-                  ) : (
-                    !isActive &&
-                    summary.outcomeDisplay && (
-                      <span className="karte-problems__outcome">{summary.outcomeDisplay}</span>
-                    )
-                  )}
-                </button>
+                {onSelect ? (
+                  <button
+                    type="button"
+                    className={chipClassName}
+                    aria-pressed={isSelected}
+                    title={
+                      isSelected
+                        ? selectsFilter
+                          ? "絞り込みを解除"
+                          : "強調表示を解除"
+                        : selectsFilter
+                          ? `${summary.name} に紐付く診療情報だけを表示`
+                          : `${summary.name} に紐付く診療記録を強調表示`
+                    }
+                    onClick={() => onSelect(isSelected ? null : summary.id)}
+                  >
+                    {chipContent}
+                  </button>
+                ) : (
+                  <span className={`${chipClassName} karte-problems__chip--static`} title={summary.name}>
+                    {chipContent}
+                  </span>
+                )}
               </li>
             );
           })}
-          {resolvedCount > 0 && (
-            <li>
-              <button
-                type="button"
-                className="karte-problems__resolved-toggle"
-                aria-pressed={resolvedVisible}
-                title={resolvedLabel}
-                onClick={onToggleResolved}
-              >
-                {resolvedLabel}
-              </button>
-            </li>
-          )}
+          {resolvedCount > 0 && !singleLine && <li>{resolvedToggle}</li>}
         </ul>
+      )}
+      {/* 1 行表示では 2 行目に回って隠れないよう、一覧の外に置く。 */}
+      {resolvedCount > 0 && singleLine && resolvedToggle}
+      {singleLine && (expanded || overflow.hidden > 0) && (
+        <button
+          type="button"
+          className="karte-problems__resolved-toggle"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "折りたたむ" : `他 ${overflow.hidden} 件`}
+        </button>
       )}
       {modeMenu}
     </div>

@@ -922,6 +922,12 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   white-space: nowrap;
 }
 
+/* 中身(プロファイル)の上に、カルテと同じプロブレムの帯を置く。 */
+.patient-drawer > .karte-problems {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
 .patient-drawer__menu .row-menu__item--danger {
   border-color: color-mix(in srgb, var(--danger) 50%, transparent);
   color: var(--danger);
@@ -7064,6 +7070,12 @@ body.karte-wide {
 .karte-problems .karte-problems__chip:hover {
   border-color: var(--accent-border);
   color: var(--accent);
+}
+
+/* 読むだけの帯(患者ドロワー)のチップは押せないので、押せそうな反応をしない。 */
+.karte-problems .karte-problems__chip--static:hover {
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .karte-problems .karte-problems__chip--selected {

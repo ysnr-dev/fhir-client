@@ -1,6 +1,13 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useKarteConditions } from "../api/queries";
+import { splitConditions } from "../fhir/conditionHelpers";
 import { displayName } from "../fhir/patientHelpers";
+import {
+  readResolvedProblemsVisible,
+  storeResolvedProblemsVisible,
+} from "../karteLayout";
+import { KarteProblemList } from "./KarteProblemList";
 import { KarteProfileTab } from "./KarteProfileTab";
 import { useReturnLinkState } from "../returnTo";
 
@@ -26,8 +33,8 @@ const ESCAPE_OWNERS = ".modal-overlay, .row-menu__items, .patient-header__popove
 /**
  * 一覧の右から出す患者プロファイル。カルテを開かずに中身を確かめるためのもの。
  * 一覧を覆わない(背景を暗くしない)ので、開いたまま別の行を選べる。
- * 中身はカルテのプロファイルタブそのもので、注意の詳細などの表示対象は
- * URL に載せずこの中だけで持つ。
+ * 中身はカルテのプロブレムリスト(読むだけ)とプロファイルタブそのもので、
+ * 注意の詳細などの表示対象は URL に載せずこの中だけで持つ。
  */
 export function PatientProfileDrawer({
   patientId,
@@ -42,6 +49,12 @@ export function PatientProfileDrawer({
   const [viewState, setViewState] = useState({ patientId, view: "" });
   const view = viewState.patientId === patientId ? viewState.view : "";
   const returnLinkState = useReturnLinkState();
+  const { conditions } = useKarteConditions(patientId);
+  const problems = useMemo(() => splitConditions(conditions).problems, [conditions]);
+  // 解決済みの開閉はカルテの帯と同じ設定を使う(どちらで切り替えても揃う)。
+  const [resolvedProblemsVisible, setResolvedProblemsVisible] = useState(
+    readResolvedProblemsVisible,
+  );
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -71,6 +84,16 @@ export function PatientProfileDrawer({
         </div>
       </div>
       {actions && <div className="patient-drawer__menu">{actions}</div>}
+      <KarteProblemList
+        key={`problems:${patientId}`}
+        problems={problems}
+        singleLine
+        resolvedVisible={resolvedProblemsVisible}
+        onToggleResolved={() => {
+          setResolvedProblemsVisible(!resolvedProblemsVisible);
+          storeResolvedProblemsVisible(!resolvedProblemsVisible);
+        }}
+      />
       <KarteProfileTab
         key={patientId}
         patientId={patientId}
