@@ -46,7 +46,8 @@ module MasterImport
 
     # 13）出来高算定手術等コード は区分ごとに見出しが繰り返される。3 列目の見出しで種類を決める。
     FEE_FOR_SERVICE_KINDS = {
-      "手術コード名称" => "surgery", "検査名称" => "test", "対象患者" => "patient", "薬剤名称" => "drug"
+      "手術コード名称" => "surgery", "検査名称" => "test", "対象患者" => "patient", "薬剤名称" => "drug",
+      "ICD名称" => "icd"
     }.freeze
 
     def self.call(file)

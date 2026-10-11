@@ -32,7 +32,7 @@
 | ９）定義副傷病名 | `master_dpc_comorbidities` | 副傷病フラグ(1 共通 / 2 手術なし / 3 手術あり)と ICD |
 | 11）診断群分類点数表 | `master_dpc_points` | 入院日Ⅰ〜Ⅲ・点数(「-」と空欄は null) |
 | 12）変換テーブル | `master_dpc_conversions` | 分岐の値の組 → 14 桁・包括フラグ(分岐は jsonb) |
-| 13)出来高算定手術等コード | `master_dpc_fee_for_service_codes` | 手術・検査・患者・薬剤の区分ごと |
+| 13)出来高算定手術等コード | `master_dpc_fee_for_service_codes` | 手術・検査・患者・薬剤・ICD(令和6年度版のみ)の区分ごと |
 | 14）CCPM対応 | `master_dpc_ccpms` | 14 桁 → CCPM 支払分類 |
 | ダミーコード一覧 | `master_dpc_dummy_codes` | 化学療法・全身麻酔などの区分、薬剤の組 |
 

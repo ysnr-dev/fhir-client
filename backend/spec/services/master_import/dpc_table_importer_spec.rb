@@ -75,6 +75,15 @@ RSpec.describe MasterImport::DpcTableImporter do
     expect(Master::DpcFeeForServiceCode.distinct.pluck(:kind)).to contain_exactly("surgery", "test", "patient", "drug")
   end
 
+  # 令和6年度版は出来高算定手術等コードに ICD の区分がある(対象患者の区分は無い)。
+  it "令和6年度版の出来高算定手術等コードの ICD を取り込む" do
+    described_class.call(fixture_file_upload("dpc_tables_sample_r6.xlsx"))
+
+    expect(Master::DpcEdition.pluck(:edition)).to eq(["20240601"])
+    expect(Master::DpcFeeForServiceCode.distinct.pluck(:kind)).to contain_exactly("surgery", "test", "drug", "icd")
+    expect(Master::DpcFeeForServiceCode.where(kind: "icd").pluck(:category, :code)).to eq([%w[01 U071], %w[01 U072]])
+  end
+
   it "同じ版を取り込み直すとその版の行だけを入れ替え、別の版は残す" do
     described_class.call(file)
     Master::DpcPoint.create!(edition: "20240601", dpc_code: "060035xx99x4xx", points1: 1)
