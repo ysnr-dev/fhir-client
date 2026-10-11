@@ -11,6 +11,7 @@ import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import type { ProblemRef } from "./conditionHelpers";
 import { SSMIX2_DEPARTMENT_CODE_SYSTEM } from "./departmentCodes";
 import { displayName } from "./patientHelpers";
+import { transactionBundle } from "./shared";
 import {
   APPOINTMENT_TYPE_SYSTEM,
   DEFAULT_APPOINTMENT_TYPE,
@@ -807,4 +808,37 @@ export function groupSlotsByTime(slots: fhir4.Slot[]): SlotTimeGroup[] {
       free: group.filter((slot) => slot.status === "free").length,
       freeSlots: group.filter((slot) => slot.status === "free"),
     }));
+}
+
+/**
+ * 日付未定で出した検査オーダー(放射線・生理・内視鏡)に、部門一覧から予約を取る Bundle。
+ *
+ * 予約(Appointment と枠の busy 化)と、オーダーの実施予定日時(ヘッダと明細の
+ * occurrenceDateTime)を同じ transaction で書く。予約だけが立ってオーダーが日付未定のまま
+ * (カルテの「日付未定」に残る)にならないようにするため。日時は枠の開始で、オーダー画面で
+ * 予約したときと同じ値になる。
+ *
+ * ヘッダと明細は一覧で読んだものを書き換えて PUT するので、postBundle が版を If-Match に添える
+ * (読んだ後に依頼側が編集していれば 412 で止まる)。
+ */
+export function buildExamScheduleBundle(
+  order: fhir4.ServiceRequest,
+  itemRequests: fhir4.ServiceRequest[],
+  patient: fhir4.Patient,
+  selection: SlotSelection,
+): fhir4.Bundle {
+  const first = selection.slots[0];
+  const occurrenceDateTime = toFhirDateTime(`${slotDate(first)}T${slotTime(first)}`);
+  const dated = [order, ...itemRequests].map((request): fhir4.BundleEntry => {
+    const resource: fhir4.ServiceRequest = { ...request, occurrenceDateTime };
+    return {
+      fullUrl: `ServiceRequest/${request.id}`,
+      resource,
+      request: { method: "PUT", url: `ServiceRequest/${request.id}` },
+    };
+  });
+  return transactionBundle([
+    ...dated,
+    ...buildExamAppointmentEntries(patient, selection, `ServiceRequest/${order.id}`),
+  ]);
 }

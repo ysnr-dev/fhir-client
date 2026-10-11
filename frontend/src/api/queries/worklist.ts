@@ -1,9 +1,10 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { splitPerformBundle } from "../../fhir/radResultHelpers";
-import { isActiveAppointment } from "../../fhir/appointmentHelpers";
+import { buildExamScheduleBundle, isActiveAppointment, type SlotSelection } from "../../fhir/appointmentHelpers";
 import { postBundle, searchResource } from "../fhirClient";
-import { buildCancelEntriesOf } from "./appointment";
+import { buildCancelEntriesOf, invalidateAppointments } from "./appointment";
 import { hasNextPage, resourcesOfType, WORKLIST_PAGE } from "./core";
+import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 
 // 1 日のオーダーがこの件数を超えることは想定していない。超えた場合は読むのをやめ、
 // 画面に「一部のみ」と出す(黙って切り捨てると全件見えているように見えるため)。
@@ -270,4 +271,30 @@ export async function deleteOrderWithItems(srId: string, options: DeleteOrderOpt
       )
     : [];
   return postBundle(options.build({ srId, itemIds, itemRequests, requests, appointmentEntries }));
+}
+
+/**
+ * 日付未定の検査オーダー(放射線・生理・内視鏡)に部門一覧から予約を取る。予約とオーダーの
+ * 実施予定日時を 1 つの transaction で書く(`buildExamScheduleBundle`)。日付が入るので、
+ * カルテのカードは「日付未定」から予約日へ移り、一覧も日付別タブへ移る。
+ */
+export function useScheduleExamOrder() {
+  const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
+  return useMutation({
+    mutationFn: (args: {
+      order: fhir4.ServiceRequest;
+      itemRequests: fhir4.ServiceRequest[];
+      patient: fhir4.Patient;
+      selection: SlotSelection;
+    }) =>
+      postBundle(
+        withProvenance(buildExamScheduleBundle(args.order, args.itemRequests, args.patient, args.selection)),
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      invalidateAppointments(queryClient);
+      invalidateProvenance(queryClient);
+    },
+  });
 }

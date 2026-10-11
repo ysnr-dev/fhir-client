@@ -12,6 +12,7 @@ import { useReturnLinkState } from "../returnTo";
 import {
   useSelfDepartments,
   useRadWorklist,
+  useScheduleExamOrder,
   UNSCHEDULED_WORKLIST_DATE,
   useUpdateRadTaskStatus,
   type RadWorklistRow,
@@ -20,6 +21,7 @@ import type { RadItem } from "../api/masterClient";
 import { useRadItemsByCodes, useRadJj1017Catalog } from "../api/masterQueries";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { ExamBookingModal } from "../components/ExamBookingModal";
 import { RadPerformModal } from "../components/RadPerformModal";
 import { ExamReportEntryModal } from "../components/ExamReportEntryModal";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
@@ -88,6 +90,8 @@ export function RadWorklistPage() {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   // 実施入力を開いている行。「実施」だけはステータス変更ではなくモーダルを開く。
   const [performing, setPerforming] = useState<RadWorklistRow | null>(null);
+  // 予約を取っている日付未定の行。
+  const [booking, setBooking] = useState<RadWorklistRow | null>(null);
   // 読影レポートを開いているオーダー。保存後に一覧を読み直すので、行ではなく id で覚える。
   const [reporting, setReporting] = useState<{ orderId: string; patientId: string; title: string } | null>(
     null,
@@ -108,6 +112,7 @@ export function RadWorklistPage() {
   const catalog = useRadJj1017Catalog();
   const departments = useSelfDepartments();
   const updateStatus = useUpdateRadTaskStatus();
+  const scheduleOrder = useScheduleExamOrder();
 
   const rows = useMemo(
     () => (worklist.data?.rows ?? []).filter((row) => matchesFilters(row, filters)),
@@ -157,6 +162,13 @@ export function RadWorklistPage() {
     return map;
   }, [items.data]);
 
+  // 予約を取っている行の項目のうち、枠表を持つ最初の項目。
+  const bookingMaster = booking
+    ? radOrderItems(booking.order, booking.itemRequests)
+        .map((item) => masterByCode.get(item.code))
+        .find((master) => master?.appointment_schedule_id)
+    : undefined;
+
   // 実施入力をする項目が 1 つでもあれば実施入力を開く。
   //
   // セットは撮影そのものではなく依頼の束ね方なので、判定は構成項目だけで行う
@@ -185,6 +197,7 @@ export function RadWorklistPage() {
       onChangeStatus: (status) =>
         updateStatus.mutate({ order: row.order, task: row.task, status }),
       onPerform: () => handlePerform(row),
+      onBook: () => setBooking(row),
       onReport: () =>
         setReporting({
           orderId: row.order.id ?? "",
@@ -321,6 +334,31 @@ export function RadWorklistPage() {
           patient={selectedRow.patient}
           actions={drawerActionsFor(selectedRow)}
           onClose={drawer.close}
+        />
+      )}
+      {booking?.patient && (
+        <ExamBookingModal
+          title={`検査予約: ${displayName(booking.patient)}`}
+          // 枠表と所要時間は項目マスタから(オーダー画面で予約するときと同じ)。
+          defaultScheduleId={bookingMaster?.appointment_schedule_id ?? undefined}
+          requiredMinutes={bookingMaster?.duration_minutes ?? undefined}
+          pending={scheduleOrder.isPending}
+          error={scheduleOrder.error}
+          onBook={(selection) =>
+            scheduleOrder.mutate(
+              {
+                order: booking.order,
+                itemRequests: booking.itemRequests,
+                patient: booking.patient!,
+                selection,
+              },
+              { onSuccess: () => setBooking(null) },
+            )
+          }
+          onClose={() => {
+            scheduleOrder.reset();
+            setBooking(null);
+          }}
         />
       )}
       {performing && (
@@ -485,6 +523,8 @@ interface WorklistRowActions {
   onPerform: () => void;
   /** 読影レポートの入力を開く。 */
   onReport: () => void;
+  /** 日付未定のオーダーに予約を取る。 */
+  onBook: () => void;
 }
 
 /** ケバブに畳む操作(訂正・取りやめ)。 */
@@ -577,7 +617,7 @@ function WorklistRow({
  */
 function worklistRowButtons(
   row: RadWorklistRow,
-  { pending, onChangeStatus, onPerform, onReport }: WorklistRowActions,
+  { pending, onChangeStatus, onPerform, onReport, onBook }: WorklistRowActions,
 ): ReactElement[] {
   const status = radTaskStatus(row.task);
   const buttons = radTaskActions(status)
@@ -596,6 +636,14 @@ function worklistRowButtons(
     ));
   // 読影は撮影した後に書く。既に書いてあれば同じボタンから直す
   // (確定済みのレポートを直すと訂正報告になる)。
+  // 日付未定のオーダーは予約を取ると日付が決まる(オーダーの日付も同じ transaction で書く)。
+  if (!row.order.occurrenceDateTime && status !== "completed" && status !== "cancelled") {
+    buttons.push(
+      <button key="book" type="button" disabled={pending || !row.patient} onClick={onBook}>
+        予約
+      </button>,
+    );
+  }
   if (status === "completed") {
     buttons.push(
       <button key="report" type="button" disabled={!row.patient?.id} onClick={onReport}>
