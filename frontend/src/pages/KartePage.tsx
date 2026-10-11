@@ -1266,6 +1266,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             patientId={patientId}
             target={detailTarget}
             problemsById={problemsById}
+            onEditOrder={(kind, srId) => {
+              closeDetail();
+              setPane({ kind: kind === "injection" ? "injection-edit" : "prescription-edit", srId });
+            }}
             onClose={closeDetail}
           />
         )}

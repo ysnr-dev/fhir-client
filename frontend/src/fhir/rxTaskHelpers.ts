@@ -19,6 +19,7 @@ export const RX_TASK_CODE = { code: "rx-dispense", display: "調剤" };
  *
  * requested   … 依頼済(部門はまだ受け取っていない)
  * accepted    … 受付済(処方箋を発行した)
+ * on-hold     … 照会中(疑義照会の回答待ち・処方変更待ち。fhir/rxInquiryHelpers.ts)
  * in-progress … 調剤済(調剤結果を登録した)
  * completed   … 実施済(与薬・服薬の実施。作成する導線は別タスクで追加予定)
  * cancelled   … 中止
@@ -26,11 +27,18 @@ export const RX_TASK_CODE = { code: "rx-dispense", display: "調剤" };
  * 調剤済を completed ではなく in-progress にするのは、実施済を後から足すため。
  * FHIR Task の状態機械(requested→accepted→in-progress→completed)にもこの順で乗る。
  */
-export type RxTaskStatus = "requested" | "accepted" | "in-progress" | "completed" | "cancelled";
+export type RxTaskStatus =
+  | "requested"
+  | "accepted"
+  | "on-hold"
+  | "in-progress"
+  | "completed"
+  | "cancelled";
 
 export const RX_TASK_STATUS_OPTIONS: { code: RxTaskStatus; display: string }[] = [
   { code: "requested", display: "依頼済" },
   { code: "accepted", display: "受付済" },
+  { code: "on-hold", display: "照会中" },
   { code: "in-progress", display: "調剤済" },
   { code: "completed", display: "実施済" },
   { code: "cancelled", display: "中止" },
@@ -69,6 +77,9 @@ export function rxTaskActions(status: RxTaskStatus): RxTaskAction[] {
         { label: "取消", next: "requested", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];
+    case "on-hold":
+      // 照会の取下げは疑義照会の操作で行う(照会と進捗を一緒に戻すため)。
+      return [];
     case "in-progress":
       // 戻しても登録済みの調剤結果(MedicationDispense)は残る。結果登録後の取消と
       // 同じ扱いで、進捗だけを戻す(調剤結果の訂正・削除は別タスク)。

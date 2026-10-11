@@ -12,6 +12,7 @@ import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { rxTaskQueryNotes } from "../fhir/rxDispenseHelpers";
 import { rxTaskStatus, rxTaskStatusDisplay } from "../fhir/rxTaskHelpers";
 import { Modal } from "./Modal";
+import { OrderRxInquiryNotes } from "./RxInquiryHistory";
 
 // 処方一覧の「表示」で開くオーダー内容。カルテのカード(KarteTimeline の
 // 処方カード)と同じ組み方で、RP ごとに医薬品と用法を並べる。
@@ -100,16 +101,7 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
         {rps.length === 0 && <p className="karte-card__empty">処方内容がありません。</p>}
         {comment && <p className="karte-card__note">{comment}</p>}
 
-        {queryNotes.length > 0 && (
-          <div className="rx-dispense__notes">
-            <p className="rx-dispense__notes-label">疑義照会</p>
-            {queryNotes.map((note, index) => (
-              <p className="karte-card__note" key={index}>
-                {note}
-              </p>
-            ))}
-          </div>
-        )}
+        <OrderRxInquiryNotes orderId={order.id} legacyNotes={queryNotes} />
       </div>
     </Modal>
   );

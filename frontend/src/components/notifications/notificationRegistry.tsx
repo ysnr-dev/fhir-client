@@ -109,6 +109,19 @@ import {
 import { noteCountersignEntries } from "../../api/notificationActions";
 import { NoteCountersignNotificationCells } from "./NoteCountersignNotificationCells";
 import { NoteReturnedNotificationCells } from "./NoteReturnedNotificationCells";
+import {
+  RX_INQUIRY_ANSWERED_NOTE,
+  RX_INQUIRY_ANSWERED_TASK_CODE,
+  RX_INQUIRY_TASK_CODE,
+  rxInquiryAnsweredRowOf,
+  rxInquiryRowOf,
+  type RxInquiryAnsweredRow,
+  type RxInquiryRow,
+} from "../../fhir/rxInquiryHelpers";
+import {
+  RxInquiryAnsweredNotificationCells,
+  RxInquiryNotificationCells,
+} from "./RxInquiryNotificationCells";
 
 // 通知の種別ごとの振る舞いをまとめた対応表。通知そのものの形は notificationHelpers、
 // ここは「一覧でどう見せて、どう対応済みにするか」だけを持つ。
@@ -372,6 +385,37 @@ const noteReturnedKind = defineNotificationKind<NoteReturnedRow>({
     Boolean(practitionerId && row.task.owner?.reference === `Practitioner/${practitionerId}`),
 });
 
+/** 照会したオーダーを詳細モーダルで開いた状態のカルテ(回答もそこから)。 */
+function rxInquiryKarteLink(row: RxInquiryRow): string | null {
+  if (!row.patientId || !row.orderId) return null;
+  const params = new URLSearchParams();
+  params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind: row.orderKind, id: row.orderId }));
+  return `/patients/${row.patientId}/karte?${params.toString()}`;
+}
+
+const rxInquiryKind = defineNotificationKind<RxInquiryRow>({
+  code: RX_INQUIRY_TASK_CODE.code,
+  label: RX_INQUIRY_TASK_CODE.display,
+  toRow: rxInquiryRowOf,
+  Cells: RxInquiryNotificationCells,
+  karteLink: rxInquiryKarteLink,
+  // 回答は区分と回答文を書くので、一覧の一括対応には乗せない(カルテの詳細で回答すると閉じる)。
+  action: { label: "回答", noteText: "" },
+  canAct: () => false,
+});
+
+const rxInquiryAnsweredKind = defineNotificationKind<RxInquiryAnsweredRow>({
+  code: RX_INQUIRY_ANSWERED_TASK_CODE.code,
+  label: RX_INQUIRY_ANSWERED_TASK_CODE.display,
+  toRow: rxInquiryAnsweredRowOf,
+  Cells: RxInquiryAnsweredNotificationCells,
+  karteLink: rxInquiryKarteLink,
+  // 調剤登録・払出登録をすれば自動で閉じる。ここからは手で閉じる。
+  action: { label: "確認", noteText: RX_INQUIRY_ANSWERED_NOTE },
+  canAct: (row, practitionerId) =>
+    Boolean(practitionerId && row.task.owner?.reference === `Practitioner/${practitionerId}`),
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
@@ -386,6 +430,8 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   nursingSummaryReturnedKind,
   noteCountersignKind,
   noteReturnedKind,
+  rxInquiryKind,
+  rxInquiryAnsweredKind,
 ];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */

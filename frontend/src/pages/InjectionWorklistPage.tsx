@@ -13,6 +13,7 @@ import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { InjectionDispenseModal } from "../components/InjectionDispenseModal";
 import { InjectionOrderViewModal } from "../components/InjectionOrderViewModal";
+import { RxInquiryModal } from "../components/RxInquiryModal";
 import {
   PatientKana,
   PatientProfileCells,
@@ -23,6 +24,7 @@ import { RowMenu } from "../components/RowMenu";
 import {
   CATEGORY_OPTIONS,
   groupInjectionByRp,
+  injectionDayOf,
   injectionSeriesLabel,
 } from "../fhir/injectionHelpers";
 import {
@@ -34,6 +36,11 @@ import {
 } from "../fhir/injectionTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
+import {
+  latestRxInquiryAnswerLabel,
+  rxHoldReasonLabel,
+  rxHoldReasonOf,
+} from "../fhir/rxInquiryHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
 import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import { categoryCoding } from "../fhir/shared";
@@ -76,6 +83,8 @@ export function InjectionWorklistPage() {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [dispensingId, setDispensingId] = useState<string | null>(null);
+  // 疑義照会を開いているオーダー。
+  const [inquiringId, setInquiringId] = useState<string | null>(null);
 
   useEffect(() => {
     document.body.classList.add("page-wide");
@@ -93,6 +102,7 @@ export function InjectionWorklistPage() {
   const total = worklist.data?.rows.length ?? 0;
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
+  const inquiring = worklist.data?.rows.find((row) => row.order.id === inquiringId);
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
   // (同じ患者が同じ日に複数の注射を持つこともある)。絞り込みで行が消えたら閉じる。
@@ -169,6 +179,7 @@ export function InjectionWorklistPage() {
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onDispense={() => setDispensingId(row.order.id ?? null)}
+                    onInquire={() => setInquiringId(row.order.id ?? null)}
                     onChangeStatus={(status) => changeStatus(row, status)}
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                   />
@@ -199,6 +210,7 @@ export function InjectionWorklistPage() {
                 row={selectedRow}
                 onView={() => setViewingId(selectedRow.order.id ?? null)}
                 onDispense={() => setDispensingId(selectedRow.order.id ?? null)}
+                onInquire={() => setInquiringId(selectedRow.order.id ?? null)}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
               {hasMenuItems(selectedRow) && (
@@ -216,6 +228,14 @@ export function InjectionWorklistPage() {
       {viewing && <InjectionOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
       {dispensing && (
         <InjectionDispenseModal row={dispensing} onClose={() => setDispensingId(null)} />
+      )}
+      {inquiring && (
+        <RxInquiryModal
+          kind="injection"
+          order={inquiring.order}
+          orderLabel={injectionOrderLabel(inquiring)}
+          onClose={() => setInquiringId(null)}
+        />
       )}
     </div>
   );
@@ -360,6 +380,7 @@ function WorklistRow({
   pending,
   onView,
   onDispense,
+  onInquire,
   onChangeStatus,
   rowProps,
 }: {
@@ -367,6 +388,7 @@ function WorklistRow({
   pending: boolean;
   onView: () => void;
   onDispense: () => void;
+  onInquire: () => void;
   onChangeStatus: (status: InjectionTaskStatus) => void;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
@@ -383,10 +405,9 @@ function WorklistRow({
 
   // 注射内容の列。払い出す側が何を揃えるかが分かればよいので医薬品の名前だけを並べ、
   // 用法・用量は「表示」か「払出登録」で開く。
-  const medicineNames = groupInjectionByRp(row.medicationRequests)
-    .flatMap((rp) => rp.medicines.map((medicine) => medicine.name))
-    .filter(Boolean)
-    .join("・");
+  const medicineNames = injectionMedicineNames(row);
+  const holdReason = rxHoldReasonOf(row.task);
+  const answerLabel = latestRxInquiryAnswerLabel(row.inquiries);
 
   return (
     <tr {...rowProps}>
@@ -434,14 +455,21 @@ function WorklistRow({
       <td>{orderContextSummary(requester) || "-"}</td>
       <td className="lab-worklist__compact">
         <span className={`lab-worklist__status lab-worklist__status--${status}`}>
-          {injectionTaskStatusDisplay(status)}
+          {holdReason ? rxHoldReasonLabel(holdReason) : injectionTaskStatusDisplay(status)}
         </span>
+        {/* 疑義照会に回答があった注射は、払出の前に回答を読めるよう印を出す。 */}
+        {!holdReason && answerLabel && status === "accepted" && (
+          <span className="rx-inquiry__answer" title="疑義照会の回答">
+            {answerLabel}
+          </span>
+        )}
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
         <WorklistRowButtons
           row={row}
           onView={onView}
           onDispense={onDispense}
+          onInquire={onInquire}
           onChangeStatus={onChangeStatus}
         />
         {hasMenuItems(row) && (
@@ -454,16 +482,31 @@ function WorklistRow({
   );
 }
 
+/** 注射の医薬品名を並べたもの。一覧の注射内容の列と、疑義照会の通知に出すオーダーの要約に使う。 */
+function injectionMedicineNames(row: InjectionWorklistRow): string {
+  return groupInjectionByRp(row.medicationRequests)
+    .flatMap((rp) => rp.medicines.map((medicine) => medicine.name))
+    .filter(Boolean)
+    .join("・");
+}
+
+/** 疑義照会の通知に出すオーダーの要約(注射日と医薬品)。 */
+function injectionOrderLabel(row: InjectionWorklistRow): string {
+  return ["注射", injectionDayOf(row.order), injectionMedicineNames(row)].filter(Boolean).join(" ");
+}
+
 /** 行に直接並べるボタン。ドロワーにもケバブの項目より先に同じものを並べる。 */
 function WorklistRowButtons({
   row,
   onView,
   onDispense,
+  onInquire,
   onChangeStatus,
 }: {
   row: InjectionWorklistRow;
   onView: () => void;
   onDispense: () => void;
+  onInquire: () => void;
   onChangeStatus: (status: InjectionTaskStatus) => void;
 }) {
   const status = injectionTaskStatus(row.task);
@@ -487,6 +530,13 @@ function WorklistRowButtons({
       {status === "accepted" && (
         <button type="button" disabled={!row.patient?.id} onClick={onDispense}>
           払出登録
+        </button>
+      )}
+      {/* 払出の前に依頼医へ問い合わせる。照会中は回答があるまで払出登録を出さない
+          (照会の取下げもここから開く)。 */}
+      {(status === "requested" || status === "accepted" || status === "on-hold") && (
+        <button type="button" onClick={onInquire}>
+          疑義照会
         </button>
       )}
       <button type="button" onClick={onView}>

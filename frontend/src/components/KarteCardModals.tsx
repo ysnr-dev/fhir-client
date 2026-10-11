@@ -63,6 +63,7 @@ import { InjectionDetailPanel } from "./InjectionDetailPanel";
 import { isInjectionTask } from "../fhir/injectionTaskHelpers";
 import { LabOrderDetailPanel } from "./LabOrderDetailPanel";
 import { LabResultDetailPanel } from "./LabResultDetailPanel";
+import { RxInquirySection } from "./RxInquirySection";
 import { Modal } from "./Modal";
 import { MicroOrderDetailPanel } from "./MicroOrderDetailPanel";
 import { MicroResultDetailPanel } from "./MicroResultDetailPanel";
@@ -149,6 +150,7 @@ export function KarteDetailModal({
   target,
   problemsById,
   actions,
+  onEditOrder,
   onClose,
 }: {
   patientId: string;
@@ -156,6 +158,8 @@ export function KarteDetailModal({
   problemsById: Map<string, fhir4.Condition>;
   /** 詳細の下に並べる操作(編集・実施入力 など)。渡さなければ読むだけのモーダル。 */
   actions?: ReactNode;
+  /** 疑義照会に「処方を変更する」と回答した後に、そのオーダーの編集を開く。 */
+  onEditOrder?: (kind: "prescription" | "injection", srId: string) => void;
   onClose: () => void;
 }) {
   return (
@@ -163,9 +167,19 @@ export function KarteDetailModal({
       {target.kind === "note" ? (
         <NoteDetail patientId={patientId} noteId={target.id} />
       ) : target.kind === "prescription" ? (
-        <PrescriptionDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+        <PrescriptionDetail
+          patientId={patientId}
+          srId={target.id}
+          problemsById={problemsById}
+          onEditOrder={onEditOrder && (() => onEditOrder("prescription", target.id))}
+        />
       ) : target.kind === "injection" ? (
-        <InjectionDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+        <InjectionDetail
+          patientId={patientId}
+          srId={target.id}
+          problemsById={problemsById}
+          onEditOrder={onEditOrder && (() => onEditOrder("injection", target.id))}
+        />
       ) : isOrderKind(target.kind) ? (
         <OrderDetail kind={target.kind} patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
@@ -229,10 +243,12 @@ function PrescriptionDetail({
   patientId,
   srId,
   problemsById,
+  onEditOrder,
 }: {
   patientId: string;
   srId: string;
   problemsById: Map<string, fhir4.Condition>;
+  onEditOrder?: () => void;
 }) {
   const detail = usePrescriptionDetail(srId);
   const { serviceRequest, medicationRequests } = detail.data
@@ -248,11 +264,14 @@ function PrescriptionDetail({
       ) : mismatch ? (
         <p className="patient-table__empty">指定された処方は別の患者のものです。</p>
       ) : serviceRequest ? (
-        <PrescriptionDetailPanel
-          serviceRequest={serviceRequest}
-          medicationRequests={medicationRequests}
-          problemsById={problemsById}
-        />
+        <>
+          <PrescriptionDetailPanel
+            serviceRequest={serviceRequest}
+            medicationRequests={medicationRequests}
+            problemsById={problemsById}
+          />
+          <RxInquirySection kind="prescription" order={serviceRequest} onEditOrder={onEditOrder} />
+        </>
       ) : (
         !detail.error && <NotFound label="処方" />
       )}
@@ -265,10 +284,12 @@ function InjectionDetail({
   patientId,
   srId,
   problemsById,
+  onEditOrder,
 }: {
   patientId: string;
   srId: string;
   problemsById: Map<string, fhir4.Condition>;
+  onEditOrder?: () => void;
 }) {
   const detail = usePrescriptionDetail(srId);
   const { serviceRequest, medicationRequests, tasks } = detail.data
@@ -284,12 +305,15 @@ function InjectionDetail({
       ) : mismatch ? (
         <p className="patient-table__empty">指定された注射は別の患者のものです。</p>
       ) : serviceRequest ? (
-        <InjectionDetailPanel
-          serviceRequest={serviceRequest}
-          medicationRequests={medicationRequests}
-          task={tasks.find(isInjectionTask)}
-          problemsById={problemsById}
-        />
+        <>
+          <InjectionDetailPanel
+            serviceRequest={serviceRequest}
+            medicationRequests={medicationRequests}
+            task={tasks.find(isInjectionTask)}
+            problemsById={problemsById}
+          />
+          <RxInquirySection kind="injection" order={serviceRequest} onEditOrder={onEditOrder} />
+        </>
       ) : (
         !detail.error && <NotFound label="注射" />
       )}

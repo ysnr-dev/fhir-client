@@ -17,6 +17,7 @@ export const INJECTION_TASK_CODE = { code: "injection", display: "注射" };
  *
  * requested   … 依頼済(薬剤部はまだ受け取っていない)
  * accepted    … 受付済(薬剤部が受け取った)
+ * on-hold     … 照会中(疑義照会の回答待ち・処方変更待ち。fhir/rxInquiryHelpers.ts)
  * in-progress … 払出済(混注・払出が済んだ)
  * completed   … 実施済(施用した)
  * cancelled   … 中止
@@ -30,6 +31,7 @@ export const INJECTION_TASK_CODE = { code: "injection", display: "注射" };
 export type InjectionTaskStatus =
   | "requested"
   | "accepted"
+  | "on-hold"
   | "in-progress"
   | "completed"
   | "cancelled";
@@ -37,6 +39,7 @@ export type InjectionTaskStatus =
 export const INJECTION_TASK_STATUS_OPTIONS: { code: InjectionTaskStatus; display: string }[] = [
   { code: "requested", display: "依頼済" },
   { code: "accepted", display: "受付済" },
+  { code: "on-hold", display: "照会中" },
   { code: "in-progress", display: "払出済" },
   { code: "completed", display: "実施済" },
   { code: "cancelled", display: "中止" },
@@ -91,6 +94,9 @@ export function injectionTaskActions(status: InjectionTaskStatus): InjectionTask
         { label: "受付取消", next: "requested", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];
+    case "on-hold":
+      // 照会の取下げは疑義照会の操作で行う(照会と進捗を一緒に戻すため)。
+      return [];
     case "in-progress":
       // 戻しても登録済みの払出(MedicationDispense)は残る。進捗だけを戻す
       // (払出結果の訂正・削除は別タスク。処方の調剤と同じ扱い)。

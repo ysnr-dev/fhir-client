@@ -2,10 +2,11 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { Medicine } from "../api/masterClient";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useMedicineDoseFactors } from "../api/masterQueries";
-import { useRegisterInjectionDispense, type InjectionWorklistRow } from "../api/queries";
+import { useOrderInquiryTasks, useRegisterInjectionDispense, type InjectionWorklistRow } from "../api/queries";
 import {
   buildInjectionDispenseBundle,
   dispenseLinesFromOrder,
+  injectionTaskQueryNotes,
   type InjectionDispenseLine,
 } from "../fhir/injectionDispenseHelpers";
 import {
@@ -22,6 +23,7 @@ import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
+import { OrderRxInquiryNotes } from "./RxInquiryHistory";
 
 // 注射一覧の「払出登録」。受付済のオーダーを薬剤部が払い出し、その結果を登録する。
 //
@@ -74,7 +76,8 @@ function InjectionDispenseForm({
   const { practitionerId, practitioner } = useCurrentPractitioner();
 
   const [lines, setLines] = useState<InjectionDispenseLine[]>(initialLines);
-  const [query, setQuery] = useState("");
+  // 疑義照会の回答の通知(照会した薬剤師あて)。払出登録で閉じる。
+  const { answeredNotices } = useOrderInquiryTasks(order.id);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [changingIndex, setChangingIndex] = useState<number | null>(null);
 
@@ -115,7 +118,7 @@ function InjectionDispenseForm({
     const error = validate();
     setValidationError(error);
     if (error) return;
-    register.mutate(buildInjectionDispenseBundle(lines, order, row.task, query.trim(), performer), {
+    register.mutate(buildInjectionDispenseBundle(lines, order, row.task, answeredNotices, performer), {
       onSuccess: onClose,
     });
   }
@@ -217,17 +220,7 @@ function InjectionDispenseForm({
           </fieldset>
         ))}
 
-        <fieldset>
-          <legend>疑義照会</legend>
-          {/* 医師に問い合わせた内容と回答。オーダーを直さずに払出内容だけ変えた経緯を残す。 */}
-          <textarea
-            className="rx-dispense__query"
-            rows={3}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="依頼医師への問い合わせと回答があれば入力してください"
-          />
-        </fieldset>
+        <OrderRxInquiryNotes orderId={order.id} legacyNotes={injectionTaskQueryNotes(row.task)} />
 
         <div className="prescription-form__submit">
           <button type="submit" disabled={register.isPending}>

@@ -2,6 +2,7 @@ import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { toPackQuantity, type MedicineDoseConversionMap } from "./doseConversionHelpers";
 import { groupInjectionByRp } from "./injectionHelpers";
 import { buildInjectionTaskUpdate } from "./injectionTaskHelpers";
+import { closeRxInquiryNoticeEntries } from "./rxInquiryHelpers";
 import { insulinDoseRange } from "./insulinScaleHelpers";
 import {
   ORDER_IN_RP_SYSTEM,
@@ -96,13 +97,13 @@ export function dispenseLinesFromOrder(
 
 /**
  * 払出の transaction Bundle。薬剤ぶんの MedicationDispense と、払出済へ進めた
- * Task(疑義照会があれば note に追記)をまとめて書き込む。
+ * Task をまとめて書き込む。疑義照会の回答の通知(answeredNotices)は確認したものとして閉じる。
  */
 export function buildInjectionDispenseBundle(
   lines: InjectionDispenseLine[],
   order: fhir4.ServiceRequest,
   task: fhir4.Task | undefined,
-  query: string,
+  answeredNotices: fhir4.Task[],
   performer: InjectionDispensePerformer,
 ): fhir4.Bundle {
   const now = toFhirDateTime(toDateTimeInput(new Date()));
@@ -141,9 +142,6 @@ export function buildInjectionDispenseBundle(
 
   // 進捗を払出済へ。Task はステータスを最初に変えたときに作られるので、まだ無ければ作る。
   const taskResource = buildInjectionTaskUpdate(task, order, "in-progress");
-  if (query) {
-    taskResource.note = [...(taskResource.note ?? []), { text: query, time: now }];
-  }
   entries.push({
     resource: taskResource,
     request: task?.id
@@ -151,10 +149,19 @@ export function buildInjectionDispenseBundle(
       : { method: "POST", url: "Task" },
   });
 
+  if (performer.practitionerId) {
+    entries.push(
+      ...closeRxInquiryNoticeEntries(answeredNotices, {
+        practitionerId: performer.practitionerId,
+        display: performer.practitionerName,
+      }),
+    );
+  }
+
   return { resourceType: "Bundle", type: "transaction", entry: entries };
 }
 
-/** Task.note に記録した疑義照会。無ければ空。 */
+/** 照会の仕組みを入れる前に、払出登録で Task.note に書いた疑義照会。無ければ空。 */
 export function injectionTaskQueryNotes(task: fhir4.Task | undefined): string[] {
   return (task?.note ?? []).map((n) => n.text).filter(Boolean);
 }

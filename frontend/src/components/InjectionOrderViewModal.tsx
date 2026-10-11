@@ -6,6 +6,7 @@ import { injectionTaskQueryNotes } from "../fhir/injectionDispenseHelpers";
 import { injectionTaskStatus, injectionTaskStatusDisplay } from "../fhir/injectionTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { Modal } from "./Modal";
+import { OrderRxInquiryNotes } from "./RxInquiryHistory";
 
 // 注射一覧の「表示」で開くオーダー内容。カルテの詳細モーダルと同じ
 // InjectionDetailPanel を使い、部門の画面なので進捗と疑義照会(進捗の Task に残る)を添える。
@@ -42,16 +43,7 @@ export function InjectionOrderViewModal({
           task={row.task}
           regimenApplication={headers.data?.get(regimenSrId) ?? null}
         >
-          {queryNotes.length > 0 && (
-            <div className="rx-dispense__notes">
-              <p className="rx-dispense__notes-label">疑義照会</p>
-              {queryNotes.map((note, index) => (
-                <p className="karte-card__note" key={index}>
-                  {note}
-                </p>
-              ))}
-            </div>
-          )}
+          <OrderRxInquiryNotes orderId={order.id} legacyNotes={queryNotes} />
         </InjectionDetailPanel>
       </div>
     </Modal>

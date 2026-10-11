@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { useCreatePrescription, useInjectionSeriesLater, useUpdatePrescription } from "../api/queries";
+import {
+  useCreatePrescription,
+  useInjectionSeriesLater,
+  useOrderInquiryTasks,
+  useUpdatePrescription,
+} from "../api/queries";
 import { ErrorBanner } from "./ErrorBanner";
 import { InjectionForm } from "./InjectionForm";
 import type { ProblemRef } from "../fhir/conditionHelpers";
@@ -15,6 +20,7 @@ import {
 } from "../fhir/injectionHelpers";
 import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import { preserveRegimenStamp } from "../fhir/regimenOrderHelpers";
+import { progressBuilderOf, progressOf, rxOrderChangeReleaseEntries } from "../fhir/rxInquiryHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useInjectionInitialValues } from "../hooks/useInjectionInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
@@ -107,6 +113,8 @@ export function InjectionEditPanel({ patientId, srId, onSaved }: InjectionEditPa
     error,
   } = useInjectionInitialValues(srId, patientId);
   const later = useInjectionSeriesLater(patientMismatch ? undefined : sr);
+  // 疑義照会に「処方を変更する」と回答したオーダーは、編集の保存で処方変更待ちを解く。
+  const orderTasks = useOrderInquiryTasks(srId);
   const laterTargets = later.data ?? [];
 
   function handleSubmit(values: InjectionFormValues) {
@@ -132,7 +140,17 @@ export function InjectionEditPanel({ patientId, srId, onSaved }: InjectionEditPa
     // レジメンの日オーダーなら、フォームが持たないレジメンの印(拡張・requisition・投与量)を
     // 元のオーダーから写す。写さないと編集しただけで化学療法の暦から消える。
     updateInjection.mutate(
-      { ...bundle, entry: preserveRegimenStamp(bundle.entry ?? [], sr, mrs) },
+      {
+        ...bundle,
+        entry: [
+          ...preserveRegimenStamp(bundle.entry ?? [], sr, mrs),
+          ...rxOrderChangeReleaseEntries(
+            sr,
+            progressOf("injection", orderTasks.tasks),
+            progressBuilderOf("injection"),
+          ),
+        ],
+      },
       { onSuccess: onSaved },
     );
   }

@@ -5,6 +5,7 @@ import {
   useBroughtMedicationsByIds,
   useBroughtMedTasks,
   useCreatePrescription,
+  useOrderInquiryTasks,
   usePatientBroughtMedications,
   usePrescriptionCategoryDefaults,
   useUpdatePrescription,
@@ -28,6 +29,7 @@ import {
   type PrescriptionFormValues,
 } from "../fhir/prescriptionHelpers";
 import { preserveRegimenStamp } from "../fhir/regimenOrderHelpers";
+import { progressBuilderOf, progressOf, rxOrderChangeReleaseEntries } from "../fhir/rxInquiryHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { usePrescriptionInitialValues } from "../hooks/usePrescriptionInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
@@ -184,6 +186,8 @@ export function PrescriptionEditPanel({ patientId, srId, onSaved }: Prescription
     patientMismatch,
     error,
   } = usePrescriptionInitialValues(srId, patientId);
+  // 疑義照会に「処方を変更する」と回答したオーダーは、編集の保存で処方変更待ちを解く。
+  const orderTasks = useOrderInquiryTasks(srId);
 
   function handleSubmit(values: PrescriptionFormValues) {
     // 別患者の処方を更新すると subject が URL の患者に書き換わり、処方が付け替わってしまう。
@@ -195,7 +199,17 @@ export function PrescriptionEditPanel({ patientId, srId, onSaved }: Prescription
     // レジメンの内服の日オーダーなら、フォームが持たないレジメンの印を元のオーダーから写す
     // (注射の編集と同じ。写さないと化学療法の暦から消える)。
     updatePrescription.mutate(
-      { ...bundle, entry: preserveRegimenStamp(bundle.entry ?? [], sr, mrs) },
+      {
+        ...bundle,
+        entry: [
+          ...preserveRegimenStamp(bundle.entry ?? [], sr, mrs),
+          ...rxOrderChangeReleaseEntries(
+            sr,
+            progressOf("prescription", orderTasks.tasks),
+            progressBuilderOf("prescription"),
+          ),
+        ],
+      },
       { onSuccess: onSaved },
     );
   }

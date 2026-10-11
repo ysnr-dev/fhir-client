@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { rxInquiryTasksByOrderId } from "../../fhir/rxInquiryHelpers";
 import { isLabelSpecimen } from "../../fhir/labResultHelpers";
 import { injectionTasksByOrderId } from "../../fhir/injectionTaskHelpers";
 import { INJECTION_ORDER_TYPE, isInjectionServiceRequest } from "../../fhir/injectionHelpers";
@@ -37,6 +38,8 @@ export interface InjectionWorklistRow {
   patient?: fhir4.Patient;
   /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
   task?: fhir4.Task;
+  /** 疑義照会(fhir/rxInquiryHelpers.ts)。 */
+  inquiries: fhir4.Task[];
 }
 
 async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLike<InjectionWorklistRow>> {
@@ -65,6 +68,7 @@ async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLik
   );
 
   const taskByOrderId = injectionTasksByOrderId(tasks);
+  const inquiriesByOrderId = rxInquiryTasksByOrderId(tasks);
   const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
     for (const reference of mr.basedOn ?? []) {
@@ -81,6 +85,7 @@ async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLik
     medicationRequests: mrsByOrderId.get(order.id ?? "") ?? [],
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: taskByOrderId.get(order.id ?? ""),
+    inquiries: inquiriesByOrderId.get(order.id ?? "") ?? [],
   }));
   rows.sort(comparePatientNumber);
   return { rows, truncated };

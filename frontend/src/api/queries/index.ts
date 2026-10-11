@@ -15,6 +15,7 @@ export * from "./examReport";
 export * from "./lab";
 export * from "./prescription";
 export * from "./injection";
+export * from "./rxInquiry";
 export * from "./labResult";
 export * from "./notification";
 export * from "./micro";

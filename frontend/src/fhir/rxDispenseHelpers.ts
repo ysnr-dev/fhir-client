@@ -9,6 +9,7 @@ import {
   type PrescriptionFormValues,
   type RpValues,
 } from "./prescriptionHelpers";
+import { closeRxInquiryNoticeEntries } from "./rxInquiryHelpers";
 import { buildRxTaskUpdate } from "./rxTaskHelpers";
 
 // 調剤結果(MedicationDispense)の組み立て。処方一覧の「調剤登録」(RxDispenseModal)
@@ -19,8 +20,8 @@ import { buildRxTaskUpdate } from "./rxTaskHelpers";
 // PrescriptionFormValues(parsePrescriptionForm でオーダーから復元したもの)を使い、
 // 薬局での銘柄変更・用量変更をそのまま載せる。
 //
-// 疑義照会は薬剤ごとではなくオーダー全体への記録なので、明細の MedicationDispense
-// ではなく進捗の Task.note に持たせる(Task は部門の作業記録そのもののため)。
+// 疑義照会は処方医との往復なので通知(Task rx-inquiry、fhir/rxInquiryHelpers.ts)で持つ。
+// 進捗の Task.note は、その仕組みを入れる前に調剤登録で書いた照会の記録として読むだけ。
 
 /** 調剤者。未ログインや医療従事者と紐付かないアカウントでは空。 */
 export interface RxDispensePerformer {
@@ -88,14 +89,14 @@ function wasSubstituted(
 
 /**
  * 調剤結果の transaction Bundle。明細ぶんの MedicationDispense と、調剤済へ進めた
- * Task(疑義照会があれば note に追記)をまとめて書き込む。
+ * Task をまとめて書き込む。疑義照会の回答の通知(answeredNotices)は確認したものとして閉じる。
  */
 export function buildRxDispenseBundle(
   values: PrescriptionFormValues,
   order: fhir4.ServiceRequest,
   task: fhir4.Task | undefined,
   originalMedicationRequests: fhir4.MedicationRequest[],
-  query: string,
+  answeredNotices: fhir4.Task[],
   performer: RxDispensePerformer,
 ): fhir4.Bundle {
   const now = toFhirDateTime(toDateTimeInput(new Date()));
@@ -155,9 +156,6 @@ export function buildRxDispenseBundle(
 
   // 進捗を調剤済へ。Task はステータスを最初に変えたときに作られるので、まだ無ければ作る。
   const taskResource = buildRxTaskUpdate(task, order, "in-progress");
-  if (query) {
-    taskResource.note = [...(taskResource.note ?? []), { text: query, time: now }];
-  }
   entries.push({
     resource: taskResource,
     request: task?.id
@@ -165,10 +163,19 @@ export function buildRxDispenseBundle(
       : { method: "POST", url: "Task" },
   });
 
+  if (performer.practitionerId) {
+    entries.push(
+      ...closeRxInquiryNoticeEntries(answeredNotices, {
+        practitionerId: performer.practitionerId,
+        display: performer.practitionerName,
+      }),
+    );
+  }
+
   return { resourceType: "Bundle", type: "transaction", entry: entries };
 }
 
-/** Task.note に記録した疑義照会。無ければ空。 */
+/** 照会の仕組みを入れる前に、調剤登録で Task.note に書いた疑義照会。無ければ空。 */
 export function rxTaskQueryNotes(task: fhir4.Task | undefined): string[] {
   return (task?.note ?? []).map((n) => n.text).filter(Boolean);
 }

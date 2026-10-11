@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useMedicineDoseFactors } from "../api/masterQueries";
-import { useRegisterRxDispense, type RxWorklistRow } from "../api/queries";
+import { useOrderInquiryTasks, useRegisterRxDispense, type RxWorklistRow } from "../api/queries";
 import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
@@ -16,13 +16,14 @@ import {
   type PrescriptionFormValues,
   type RpValues,
 } from "../fhir/prescriptionHelpers";
-import { buildRxDispenseBundle, dispenseValuesFromOrder } from "../fhir/rxDispenseHelpers";
+import { buildRxDispenseBundle, dispenseValuesFromOrder, rxTaskQueryNotes } from "../fhir/rxDispenseHelpers";
 import { supplementLabel, unevenLabel } from "../fhir/supplementaryUsage";
 import { presetUsageFilters } from "../fhir/usageMapping";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
+import { OrderRxInquiryNotes } from "./RxInquiryHistory";
 import { UsageSearchModal } from "./UsageSearchModal";
 
 // 処方一覧の「調剤登録」。受付済(処方箋発行済み)のオーダーを薬剤部が調剤し、
@@ -34,7 +35,7 @@ import { UsageSearchModal } from "./UsageSearchModal";
 // - 処方共通(処方日・入外区分・処方区分・依頼科)は処方医が決めたものなので出すだけ
 // - RP の構成(RP の数・1 RP に入る薬剤の数)は変えない。追加・削除のボタンを出さない
 // - 医薬品・用量・用法・投与日数は変えられる(後発品への変更、疑義照会を受けた修正)
-// - 疑義照会は薬剤ごとではなくオーダー全体への記録なので、末尾にまとめて 1 欄置く
+// - 疑義照会の照会と回答(処方一覧の「疑義照会」で処方医とやり取りしたもの)を末尾に出す
 //
 // 登録すると明細ごとに MedicationDispense を作り、進捗を調剤済へ進める
 // (組み立ては rxDispenseHelpers)。
@@ -92,7 +93,8 @@ function RxDispenseForm({
   const { practitionerId, practitioner } = useCurrentPractitioner();
 
   const [values, setValues] = useState<PrescriptionFormValues>(initialValues);
-  const [query, setQuery] = useState("");
+  // 疑義照会の回答の通知(照会した薬剤師あて)。調剤登録で閉じる。
+  const { answeredNotices } = useOrderInquiryTasks(order.id);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
 
@@ -178,7 +180,7 @@ function RxDispenseForm({
     }
     setValidationError(null);
     register.mutate(
-      buildRxDispenseBundle(values, order, row.task, row.medicationRequests, query.trim(), performer),
+      buildRxDispenseBundle(values, order, row.task, row.medicationRequests, answeredNotices, performer),
       { onSuccess: onClose },
     );
   }
@@ -348,18 +350,7 @@ function RxDispenseForm({
           </fieldset>
         ))}
 
-        <fieldset>
-          <legend>疑義照会</legend>
-          {/* 処方医に問い合わせた内容と回答。オーダーを直さずに調剤内容だけ変えた
-              経緯がここに残るので、変更した理由はこの欄に書く。 */}
-          <textarea
-            className="rx-dispense__query"
-            rows={3}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="処方医への問い合わせと回答があれば入力してください"
-          />
-        </fieldset>
+        <OrderRxInquiryNotes orderId={order.id} legacyNotes={rxTaskQueryNotes(row.task)} />
 
         <div className="prescription-form__submit">
           <button type="submit" disabled={register.isPending}>

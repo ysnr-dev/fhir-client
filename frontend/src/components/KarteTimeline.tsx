@@ -338,7 +338,11 @@ const KarteCard = memo(function KarteCard({
   // 部門の進捗(依頼済・受付済・実施済・中止)。カードだけで分かるよう、メタ行の先頭に添える。
   const status =
     item.kind === "injection"
-      ? { code: item.status, label: injectionTaskStatusDisplay(item.status) }
+      ? {
+          code: item.status,
+          // 照会中(on-hold)は、回答待ちか処方の変更待ちかを出し分ける。
+          label: item.inquiryBadge || injectionTaskStatusDisplay(item.status),
+        }
       : isOrderItem(item)
         ? orderKindDefOf(item).status?.(item)
         : undefined;
@@ -392,6 +396,11 @@ const KarteCard = memo(function KarteCard({
           )}
           {item.kind === "note" && countersignBadgeOf(item.note) === "approved" && (
             <span className="micro-result__badge micro-result__badge--muted">承認済</span>
+          )}
+          {/* 疑義照会に回答するまで薬剤部は調剤を止めているので、処方医がカードで気づけるようにする
+              (注射は進捗をカードに出しているので、そこで出し分ける)。 */}
+          {item.kind === "prescription" && item.inquiryBadge && (
+            <span className="micro-result__badge">{item.inquiryBadge}</span>
           )}
           {/* 検体検査は中間報告と、確定後に直した訂正報告をカードで見分けられるようにする。 */}
           {item.kind === "lab-order" && item.reportStatus === "preliminary" && (

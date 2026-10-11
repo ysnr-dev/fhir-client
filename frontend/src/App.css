@@ -11241,13 +11241,6 @@ body.page-wide-md .app__main {
   border-color: var(--lab-low);
 }
 
-/* 調剤登録の疑義照会。処方医への問い合わせと回答を書くので、1 行では収まらない。
-   処方共通・RP と同じ幅に伸ばして、行を跨いでも読めるようにする。 */
-.rx-dispense__query {
-  flex: 1 1 100%;
-  resize: vertical;
-}
-
 /* 「表示」で開く処方内容に添える疑義照会。処方の中身と地続きに見えないよう、
    一段空けてから見出しを置く。 */
 .rx-dispense__notes {
@@ -11260,6 +11253,104 @@ body.page-wide-md .app__main {
   margin: 0 0 4px;
   font-size: 13px;
   color: var(--text);
+}
+
+/* 照会中(疑義照会の回答待ち・処方変更待ち)。調剤・払出を止めている状態なので目立たせる。 */
+.lab-worklist__status--on-hold,
+.karte-card__status--on-hold {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+/* 疑義照会の履歴(照会と回答)。照会ごとに区切り、本文は改行を保って出す。 */
+.rx-inquiry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rx-inquiry__item + .rx-inquiry__item {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.rx-inquiry__head {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.rx-inquiry__text {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-h);
+  white-space: pre-wrap;
+}
+
+.rx-inquiry__state,
+.rx-inquiry__answer {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.rx-inquiry__answer {
+  margin-right: 6px;
+}
+
+.rx-inquiry__state--open {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+/* 照会・回答のモーダル。項目を縦に積み、入力欄は幅いっぱいに伸ばす。 */
+.rx-inquiry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(520px, 80vw);
+}
+
+.rx-inquiry-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.rx-inquiry-form textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* 詳細モーダルの中では、上の区画(処方共通・RP)との間を区画同士と同じだけ空ける。 */
+.rx-inquiry-section {
+  margin-top: 16px;
+}
+
+.rx-inquiry-form__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.rx-inquiry-form .rx-inquiry-form__choice {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-h);
+}
+
+.rx-inquiry-form__actions {
+  display: flex;
+  gap: 8px;
 }
 
 /* 管(検体グループ)ごとの発行・到着バッジ。「表示」で開くオーダー内容

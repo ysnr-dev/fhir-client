@@ -1,3 +1,5 @@
+import { rxInquiryBadge, rxInquiryTasksByOrderId } from "./rxInquiryHelpers";
+import { rxTasksByOrderId } from "./rxTaskHelpers";
 import { epochOf, isDateOnly, localDay, WEEKDAY_LABELS, weekdayOf } from "../lib/dates";
 import {
   clinicalNoteProblem,
@@ -265,6 +267,8 @@ export type KarteTimelineItem = KarteItemBase &
         kind: "prescription";
         serviceRequest: fhir4.ServiceRequest;
         medicationRequests: fhir4.MedicationRequest[];
+        /** 疑義照会の状態(「疑義照会中」「処方変更待ち」)。無ければ空。 */
+        inquiryBadge: string;
       }
     | {
         kind: "injection";
@@ -282,6 +286,8 @@ export type KarteTimelineItem = KarteItemBase &
          * (実施せず の記録は Task を動かさないが、記録としては見せる)。
          */
         performs: InjectionPerformDisplay[];
+        /** 疑義照会の状態(「疑義照会中」「処方変更待ち」)。無ければ空。 */
+        inquiryBadge: string;
       }
     // 検体検査の明細(検査項目・パネルの構成項目)も ServiceRequest なので、
     // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
@@ -824,6 +830,11 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const radiotherapyFractionByOrderId = radiotherapyFractionsByOrderId(procedures);
   const radiotherapySummaryByOrderId = radiotherapyCourseSummariesByOrderId(procedures);
   const injectionTaskByOrderId = injectionTasksByOrderId(tasks);
+  // 処方・注射の疑義照会。照会の通知も進捗と同じくオーダーを焦点にするので一緒に届く。
+  const rxTaskByOrderId = rxTasksByOrderId(tasks);
+  const inquiriesByOrderId = rxInquiryTasksByOrderId(tasks);
+  const inquiryBadgeOf = (orderId: string, progress: fhir4.Task | undefined) =>
+    rxInquiryBadge(inquiriesByOrderId.get(orderId) ?? [], progress);
   // 注射の実施記録も同じ検索結果の Procedure + MedicationAdministration に混ざって届く。
   const injectionPerformByOrderId = injectionPerformsByOrderId(procedures, administrations);
 
@@ -1112,10 +1123,16 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         status: injectionTaskStatus(task),
         task,
         performs: injectionPerformByOrderId.get(serviceRequest.id ?? "") ?? [],
+        inquiryBadge: inquiryBadgeOf(serviceRequest.id ?? "", task),
       };
     }
     if (!isPrescriptionServiceRequest(serviceRequest)) return null;
-    return { ...withMedications, kind: "prescription" as const, label: KARTE_KIND_LABELS.prescription };
+    return {
+      ...withMedications,
+      kind: "prescription" as const,
+      label: KARTE_KIND_LABELS.prescription,
+      inquiryBadge: inquiryBadgeOf(serviceRequest.id ?? "", rxTaskByOrderId.get(serviceRequest.id ?? "")),
+    };
   }).filter((item): item is KarteTimelineItem => item !== null);
 
   const vitalEntries = groupVitalEntries(

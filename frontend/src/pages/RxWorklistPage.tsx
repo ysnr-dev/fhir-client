@@ -19,6 +19,7 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { RxDispenseModal } from "../components/RxDispenseModal";
+import { RxInquiryModal } from "../components/RxInquiryModal";
 import { RxOrderViewModal } from "../components/RxOrderViewModal";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
@@ -31,6 +32,11 @@ import {
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
+import {
+  latestRxInquiryAnswerLabel,
+  rxHoldReasonLabel,
+  rxHoldReasonOf,
+} from "../fhir/rxInquiryHelpers";
 import {
   RX_TASK_STATUS_OPTIONS,
   rxTaskActions,
@@ -87,6 +93,8 @@ export function RxWorklistPage() {
   const [viewingId, setViewingId] = useState<string | null>(null);
   // 調剤を入力しているオーダー。同じ理由で id で覚えておく。
   const [dispensingId, setDispensingId] = useState<string | null>(null);
+  // 疑義照会を開いているオーダー。
+  const [inquiringId, setInquiringId] = useState<string | null>(null);
 
   // 処方内容の列が長くなるので、この画面だけ幅を広げる(検体検査一覧と同じ)。
   useEffect(() => {
@@ -105,6 +113,7 @@ export function RxWorklistPage() {
   const total = worklist.data?.rows.length ?? 0;
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
+  const inquiring = worklist.data?.rows.find((row) => row.order.id === inquiringId);
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ。
   // 絞り込みで行が消えたら閉じる。
@@ -195,6 +204,7 @@ export function RxWorklistPage() {
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onDispense={() => setDispensingId(row.order.id ?? null)}
+                    onInquire={() => setInquiringId(row.order.id ?? null)}
                     onChangeStatus={(status) => changeStatus(row, status)}
                   />
                 ))}
@@ -225,6 +235,7 @@ export function RxWorklistPage() {
                 row={selectedRow}
                 onView={() => setViewingId(selectedRow.order.id ?? null)}
                 onDispense={() => setDispensingId(selectedRow.order.id ?? null)}
+                onInquire={() => setInquiringId(selectedRow.order.id ?? null)}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
               {hasRxMenuItems(selectedRow) && (
@@ -242,6 +253,14 @@ export function RxWorklistPage() {
       {viewing && <RxOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
       {dispensing && (
         <RxDispenseModal row={dispensing} onClose={() => setDispensingId(null)} />
+      )}
+      {inquiring && (
+        <RxInquiryModal
+          kind="prescription"
+          order={inquiring.order}
+          orderLabel={rxOrderLabel(inquiring)}
+          onClose={() => setInquiringId(null)}
+        />
       )}
     </div>
   );
@@ -383,6 +402,7 @@ function WorklistRow({
   rowProps,
   onView,
   onDispense,
+  onInquire,
   onChangeStatus,
 }: {
   row: RxWorklistRow;
@@ -391,6 +411,7 @@ function WorklistRow({
   rowProps: ComponentProps<"tr">;
   onView: () => void;
   onDispense: () => void;
+  onInquire: () => void;
   onChangeStatus: (status: RxTaskStatus) => void;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
@@ -403,10 +424,9 @@ function WorklistRow({
 
   // 処方内容の列。薬袋を作る側が何を揃えるかが分かればよいので、医薬品の名前だけを
   // 横に並べる。用法・用量まで要るときは「表示」か「調剤登録」で開く。
-  const medicineNames = groupByRp(row.medicationRequests)
-    .flatMap((rp) => rp.medicines.map((medicine) => medicine.name))
-    .filter(Boolean)
-    .join("・");
+  const medicineNames = rxMedicineNames(row);
+  const holdReason = rxHoldReasonOf(row.task);
+  const answerLabel = latestRxInquiryAnswerLabel(row.inquiries);
   // 化学療法(レジメン)から出た内服オーダーか。日オーダーの拡張で判る。
   const regimen = regimenOrderOf(order);
 
@@ -456,14 +476,25 @@ function WorklistRow({
       <td>{orderContextSummary(requester) || "-"}</td>
       <td className="lab-worklist__compact">
         <span className={`lab-worklist__status lab-worklist__status--${status}`}>
-          {brought && status === "requested" ? "持参(調剤なし)" : rxTaskStatusDisplay(status)}
+          {brought && status === "requested"
+            ? "持参(調剤なし)"
+            : holdReason
+              ? rxHoldReasonLabel(holdReason)
+              : rxTaskStatusDisplay(status)}
         </span>
+        {/* 疑義照会に回答があった処方は、調剤の前に回答を読めるよう印を出す。 */}
+        {!holdReason && answerLabel && status === "accepted" && (
+          <span className="rx-inquiry__answer" title="疑義照会の回答">
+            {answerLabel}
+          </span>
+        )}
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
         <RxRowButtons
           row={row}
           onView={onView}
           onDispense={onDispense}
+          onInquire={onInquire}
           onChangeStatus={onChangeStatus}
         />
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。
@@ -483,11 +514,13 @@ function RxRowButtons({
   row,
   onView,
   onDispense,
+  onInquire,
   onChangeStatus,
 }: {
   row: RxWorklistRow;
   onView: () => void;
   onDispense: () => void;
+  onInquire: () => void;
   onChangeStatus: (status: RxTaskStatus) => void;
 }) {
   const { order, patient } = row;
@@ -519,6 +552,13 @@ function RxRowButtons({
           調剤登録
         </button>
       )}
+      {/* 調剤の前に処方医へ問い合わせる。照会中は回答があるまで調剤登録を出さない
+          (照会の取下げもここから開く)。 */}
+      {(status === "requested" || status === "accepted" || status === "on-hold") && !brought && (
+        <button type="button" onClick={onInquire}>
+          疑義照会
+        </button>
+      )}
       {/* 一覧には医薬品名しか出さないので、用法・用量はここから開く。行によって
           数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。 */}
       <button type="button" onClick={onView}>
@@ -526,6 +566,19 @@ function RxRowButtons({
       </button>
     </>
   );
+}
+
+/** 処方の医薬品名を並べたもの。一覧の処方内容の列と、疑義照会の通知に出すオーダーの要約に使う。 */
+function rxMedicineNames(row: RxWorklistRow): string {
+  return groupByRp(row.medicationRequests)
+    .flatMap((rp) => rp.medicines.map((medicine) => medicine.name))
+    .filter(Boolean)
+    .join("・");
+}
+
+/** 疑義照会の通知に出すオーダーの要約(処方日と医薬品)。 */
+function rxOrderLabel(row: RxWorklistRow): string {
+  return ["処方", summarizeServiceRequest(row.order).date, rxMedicineNames(row)].filter(Boolean).join(" ");
 }
 
 // ケバブに並べる操作。行のケバブとドロワーで共有する。

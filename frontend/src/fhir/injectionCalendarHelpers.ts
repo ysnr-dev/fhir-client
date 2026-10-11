@@ -228,12 +228,21 @@ function performedSlot(time: string, hub: fhir4.Procedure, extra: boolean): Inje
  * 回かを持たないので、1 回目の記録を 1 回目の予定に当てる)。記録の無い回はオーダーの進捗。
  * 予定の回数より多い実施記録は、予定を超えた回として後ろに足す(中止した日でも記録は残す)。
  */
+/**
+ * カレンダーに出す進捗。照会中(疑義照会の回答待ち)は薬剤部が受け取った後の状態なので、
+ * 病棟から見た記号は受付済と同じにする。
+ */
+function calendarTaskStatus(task: fhir4.Task | undefined) {
+  const status = injectionTaskStatus(task);
+  return status === "on-hold" ? "accepted" : status;
+}
+
 function entrySlots(
   times: InjectionTimeValues[],
   task: fhir4.Task | undefined,
   hubs: fhir4.Procedure[],
 ): InjectionCalendarSlot[] {
-  const taskStatus = injectionTaskStatus(task);
+  const taskStatus = calendarTaskStatus(task);
   const starts = times.length > 0 ? times.map((time) => time.start) : [""];
   const scheduled = starts.map((time, index): InjectionCalendarSlot => {
     const hub = hubs[index];
@@ -249,7 +258,7 @@ function entryStatus(
   hubs: fhir4.Procedure[],
   scheduled: number,
 ): InjectionCalendarStatus {
-  const taskStatus = injectionTaskStatus(task);
+  const taskStatus = calendarTaskStatus(task);
   if (taskStatus === "cancelled") return "cancelled";
   const counted = hubs.filter((hub) => hub.status !== "not-done");
   if (taskStatus === "completed" || counted.length >= scheduled) {

@@ -279,6 +279,10 @@ export function useUpdatePrescription() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      // 疑義照会の処方変更待ちを編集と一緒に解くので、進捗を読む部門一覧と照会の履歴も読み直す。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "injection-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["Task", "search", "order-tasks"] });
       invalidateProvenance(queryClient);
     },
   });

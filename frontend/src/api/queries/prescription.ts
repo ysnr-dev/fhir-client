@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { rxInquiryTasksByOrderId } from "../../fhir/rxInquiryHelpers";
 import {
   buildPrescriptionDeleteBundle,
   isPrescriptionServiceRequest,
@@ -30,6 +31,8 @@ export interface RxWorklistRow {
   patient?: fhir4.Patient;
   /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
   task?: fhir4.Task;
+  /** 疑義照会(fhir/rxInquiryHelpers.ts)。 */
+  inquiries: fhir4.Task[];
 }
 
 export interface RxWorklistResult {
@@ -65,6 +68,7 @@ export async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
   );
 
   const rxTaskByOrderId = rxTasksByOrderId(tasks);
+  const inquiriesByOrderId = rxInquiryTasksByOrderId(tasks);
   const medicationRequestsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
     for (const reference of mr.basedOn ?? []) {
@@ -81,6 +85,7 @@ export async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
     medicationRequests: medicationRequestsByOrderId.get(order.id ?? "") ?? [],
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: rxTaskByOrderId.get(order.id ?? ""),
+    inquiries: inquiriesByOrderId.get(order.id ?? "") ?? [],
   }));
 
   // 処方オーダーは時刻を持たない(処方日だけ)ので、患者番号順に並べる(検体検査と同じ)。

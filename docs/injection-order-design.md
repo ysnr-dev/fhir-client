@@ -226,14 +226,16 @@ ServiceRequest(1 日分) ← focus ── Task(進捗)
 |---|---|
 | 依頼済 | 「注射箋発行」→ PDF を開くと同時に受付済(発行が受付を兼ねる。処方箋と同じ) |
 | 受付済 | 「払出登録」→ 払出済(`InjectionDispenseModal`) |
+| 照会中 | (疑義照会の回答待ち・処方変更待ち。「払出登録」は出さない) |
 | 払出済 | (カルテの実施入力で実施済へ) |
+| 依頼済・受付済・照会中 | 「疑義照会」→ 照会の送信・取下げ(readme「疑義照会」) |
 | ケバブ | 注射箋再発行 / 注射ラベル発行 / 受付取消 / 払出取消 / 中止 / 中止を取消 |
 
 ### 払出(MedicationDispense)
 
 `fhir/injectionDispenseHelpers.ts`。処方の調剤(`rxDispenseHelpers`)と同じ考え方:
 薬剤(`MedicationRequest`)1 件につき `MedicationDispense` 1 件、`authorizingPrescription` で
-紐付け、銘柄を変えたら `substitution.wasSubstituted`、疑義照会は `Task.note`、
+紐付け、銘柄を変えたら `substitution.wasSubstituted`、疑義照会は処方と共通の通知(`rx-inquiry`。readme「疑義照会」)、
 払出済の Task と 1 transaction。
 
 処方と違うのは**数量の意味**。注射は 1 日 1 オーダーで RP の開始時刻の数だけ施用があるので、
