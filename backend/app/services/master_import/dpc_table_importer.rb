@@ -146,15 +146,14 @@ module MasterImport
 
     # --- シートと列 ---
 
-    # Roo の sheet は既定のシートを切り替えてブック自身を返すので、シート名は別に覚えておく
-    # (エラーの文言に使う)。
+    # シートは値だけを読み出して使う(ExcelSource::SheetValues)。シート名はエラーの文言に使う。
     def sheet(key)
       prefix = SHEETS.fetch(key)
       name = @workbook.sheets.find { |sheet_name| ExcelSource.normalize_label(sheet_name).start_with?(prefix) }
       raise ImportError, "「#{prefix}」のシートが見つかりません" if name.nil?
 
       @sheet_name = name.strip
-      sheet = @workbook.sheet(name)
+      sheet = ExcelSource::SheetValues.new(@workbook, name)
       # 表が B 列から始まるシートがある(11）診断群分類点数表)。列の位置は表の左端からの番号で扱う。
       @column_offset = sheet.first_column.to_i - 1
       sheet

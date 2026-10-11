@@ -28,6 +28,47 @@ module MasterImport
       end
     end
 
+    # シートのセルの値だけを読み出す。sheet.cell はシート全体のセルを Cell オブジェクトのまま
+    # ブックに抱えるので、行数・列数の多いシートはメモリを大きく使う。.xlsx は XML を
+    # 流し読みして値だけを残し、読み終えたら手放せるようにする。
+    # cell / first_column / last_row / last_column は Roo のシートと同じ意味で使える。
+    class SheetValues
+      attr_reader :first_column, :last_row, :last_column
+
+      def initialize(workbook, name)
+        @values = {}
+        if workbook.respond_to?(:each_row_streaming)
+          workbook.each_row_streaming(sheet: name) do |cells|
+            cells.each { |cell| store(cell.coordinate.row, cell.coordinate.column, cell) }
+          end
+        else
+          sheet = workbook.sheet(name)
+          (sheet.first_row.to_i..sheet.last_row.to_i).each do |row|
+            (sheet.first_column.to_i..sheet.last_column.to_i).each do |column|
+              store(row, column, sheet.cell(row, column))
+            end
+          end
+        end
+      end
+
+      def cell(row, column)
+        @values[row]&.[](column)
+      end
+
+      private
+
+      # Roo と同じく、空のセル(値なし・空文字)は範囲に数えない。
+      def store(row, column, cell)
+        value = cell.respond_to?(:value) ? (cell.presence && cell.value) : cell
+        return if value.nil? || value == ""
+
+        (@values[row] ||= {})[column] = value
+        @first_column = [@first_column, column].compact.min
+        @last_row = [@last_row, row].compact.max
+        @last_column = [@last_column, column].compact.max
+      end
+    end
+
     # セルの値を文字列にする。Roo は数値セルを Float で返すため、整数のものは
     # 小数点以下を落とす(整理番号の "1.0" → "1"、コード値の "100.0" → "100")。
     def cell_string(sheet, row, column)

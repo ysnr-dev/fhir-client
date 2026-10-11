@@ -33,7 +33,7 @@ module MasterImport
       name = workbook.sheets.find { |sheet_name| ExcelSource.normalize_label(sheet_name).upcase.end_with?(")ICD") }
       raise ImportError, "「４）ＩＣＤ」のシートが見つかりません" if name.nil?
 
-      workbook.sheet(name)
+      ExcelSource::SheetValues.new(workbook, name)
     end
 
     def rows(workbook)
