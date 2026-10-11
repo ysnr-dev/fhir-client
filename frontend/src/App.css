@@ -11325,9 +11325,18 @@ body.page-wide-md .app__main {
   color: var(--text);
 }
 
+/* 入力欄の見た目は伝票フォーム(.prescription-form)と同じにする(フォームの外なので素の見た目になる)。 */
 .rx-inquiry-form textarea {
+  box-sizing: border-box;
   width: 100%;
   resize: vertical;
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
 }
 
 /* 詳細モーダルの中では、上の区画(処方共通・RP)との間を区画同士と同じだけ空ける。 */
