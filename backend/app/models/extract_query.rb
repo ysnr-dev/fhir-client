@@ -257,8 +257,10 @@ class ExtractQuery < ApplicationRecord
 
   validates :code, presence: true, uniqueness: true
   validates :scope, inclusion: { in: SCOPES }
-  validates :tab, inclusion: { in: -> (_) { [PATIENT_TAB, *ExtractRecordDefinition::TABS] } }
-  validates :name, presence: true, uniqueness: { scope: %i[scope owner_id tab] }
+  validates :tab, inclusion: { in: -> (_) { [PATIENT_TAB, *ExtractRecordDefinition::TABS] } }, if: :tab_column?
+  validates :name, presence: true
+  validates :name, uniqueness: { scope: %i[scope owner_id tab] }, if: :tab_column?
+  validates :name, uniqueness: { scope: %i[scope owner_id] }, unless: :tab_column?
   validate :owner_must_match_scope
   validate :definition_shape
 
@@ -267,7 +269,13 @@ class ExtractQuery < ApplicationRecord
   # 条件を別のタブへ移すと形が合わなくなるので、保存した後はタブを変えさせない。
   attr_readonly :tab
 
-  def patient_tab? = tab == PATIENT_TAB
+  # tab の列を足す migration より前の、初期値を投入する migration からも使われる。列が無ければ
+  # すべて「患者」タブの条件として扱う。
+  def self.tab_column? = column_names.include?("tab")
+
+  def tab_column? = self.class.tab_column?
+
+  def patient_tab? = !tab_column? || tab == PATIENT_TAB
 
   # 画面が同時に見る持ち主(ChartDefinition.roots_for と同じ)。チームの条件はスクリーニング一覧。
   def self.roots_for(department_id:, practitioner_id:, team_ids: [])
@@ -279,7 +287,7 @@ class ExtractQuery < ApplicationRecord
   end
 
   def definition_with_defaults
-    return ExtractRecordDefinition.with_defaults(tab, definition) if ExtractRecordDefinition::TABS.include?(tab)
+    return ExtractRecordDefinition.with_defaults(tab, definition) if !patient_tab? && ExtractRecordDefinition::TABS.include?(tab)
 
     stored = definition.is_a?(Hash) ? definition : {}
     DEFAULT_DEFINITION.merge(stored.slice(*DEFINITION_SHAPE[:fields].keys))
