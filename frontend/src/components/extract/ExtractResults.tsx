@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { ExtractQueryRun } from "../../api/masterClient";
 import { useTeamActiveRequestPatientIds, type ExtractResult } from "../../api/queries";
 import { formatKarteOpen, KARTE_OPEN_PARAM } from "../../karteUrl";
-import { dateTimeLabel, localDay } from "../../lib/dates";
-import { LabTimelineChart, type LabTimelineSeries } from "../LabTimelineChart";
 import {
   extractBreakdown,
   leafCellText,
@@ -20,24 +17,19 @@ import {
   type ExtractLeaf,
 } from "../../fhir/extractQueryHelpers";
 
-type Tab = "list" | "breakdown" | "history";
+type Tab = "list" | "breakdown";
 
-/**
- * 抽出の結果。一覧(患者 1 行)・内訳・推移(保存した条件を直さずに実行した記録。保存していない
- * 条件や直した条件では出さない)。
- */
+/** 抽出の結果。一覧(患者 1 行)と内訳。 */
 export function ExtractResults({
   result,
   leaves,
   output,
-  history,
   teamId,
 }: {
   result: ExtractResult;
   /** 出力項目を今の条件で反映した条件(実行し直さなくても出す列が変わる)。 */
   leaves: ExtractLeaf[];
   output: ExtractOutput | undefined;
-  history?: ExtractQueryRun[];
   /**
    * 条件の持ち主がチームのとき(スクリーニング)、そのチームの id。一覧に「介入」の列
    * (介入中の印と、カルテをチーム依頼の登録で開くリンク)を足す(docs/care-team-design.md §5)。
@@ -48,9 +40,7 @@ export function ExtractResults({
   const tabs: { key: Tab; label: string }[] = [
     { key: "list", label: "一覧" },
     { key: "breakdown", label: "内訳" },
-    ...(history ? [{ key: "history" as const, label: "推移" }] : []),
   ];
-  const current = tab === "history" && !history ? "list" : tab;
   return (
     <section className="extract-results">
       <div className="inpatient-tabs" role="tablist" aria-label="結果の表示切替">
@@ -59,8 +49,8 @@ export function ExtractResults({
             key={item.key}
             type="button"
             role="tab"
-            aria-selected={current === item.key}
-            className={`inpatient-tabs__tab${current === item.key ? " is-active" : ""}`}
+            aria-selected={tab === item.key}
+            className={`inpatient-tabs__tab${tab === item.key ? " is-active" : ""}`}
             onClick={() => setTab(item.key)}
           >
             {item.label}
@@ -68,9 +58,8 @@ export function ExtractResults({
         ))}
         <span className="extract-results__count">{`該当 ${result.rows.length} 人`}</span>
       </div>
-      {current === "list" && <ResultTable result={result} leaves={leaves} output={output} teamId={teamId} />}
-      {current === "breakdown" && <BreakdownTable result={result} />}
-      {current === "history" && history && <HistoryTable runs={history} leaves={result.leaves} />}
+      {tab === "list" && <ResultTable result={result} leaves={leaves} output={output} teamId={teamId} />}
+      {tab === "breakdown" && <BreakdownTable result={result} />}
     </section>
   );
 }
@@ -285,82 +274,6 @@ function LeafBreakdownTable({ result, columns }: { result: ExtractResult; column
               <td>計</td>
               <td className="extract-breakdown__number">{total}</td>
               <td className="extract-breakdown__number">{totalPatients}</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/**
- * 推移のグラフ。1 日に何度実行しても点が重ならないよう、日ごとに最後の実行を 1 点にする(表には
- * すべての実行を出す)。該当人数と、一覧の列になる条件ごとの人数を、条件ごとのパネルで縦に並べる。
- */
-function historySeries(runs: ExtractQueryRun[], leaves: ExtractLeaf[]): LabTimelineSeries[] {
-  const latestByDay = new Map<string, ExtractQueryRun>();
-  for (const run of [...runs].sort((a, b) => a.ran_at.localeCompare(b.ran_at))) {
-    latestByDay.set(localDay(run.ran_at), run);
-  }
-  const days = [...latestByDay.keys()].sort();
-  const series: LabTimelineSeries[] = [
-    {
-      key: "total",
-      name: "該当",
-      unit: "人",
-      integer: true,
-      points: days.map((day) => ({ date: day, value: latestByDay.get(day)!.patient_count })),
-    },
-  ];
-  for (const leaf of resultColumns(leaves)) {
-    const points = days
-      .filter((day) => latestByDay.get(day)!.leaf_counts[leaf.key] != null)
-      .map((day) => ({ date: day, value: latestByDay.get(day)!.leaf_counts[leaf.key] }));
-    if (points.length) series.push({ key: leaf.key, name: leafLabel(leaf), unit: "人", integer: true, points });
-  }
-  return series;
-}
-
-/** 実行の記録(新しい順)。条件ごとの人数は今の条件の並びで出す(後から足した条件は前の記録では空)。 */
-function HistoryTable({ runs, leaves }: { runs: ExtractQueryRun[]; leaves: ExtractLeaf[] }) {
-  return (
-    <div className="extract-results__table-wrap">
-      {runs.length > 0 && (
-        <div className="extract-history__chart">
-          <LabTimelineChart series={historySeries(runs, leaves)} />
-        </div>
-      )}
-      <table className="master-search__table extract-breakdown extract-history">
-        <thead>
-          <tr>
-            <th>実行日時</th>
-            <th className="extract-breakdown__number">該当</th>
-            {leaves.map((leaf) => (
-              <th key={leaf.key} className="extract-breakdown__number">
-                {leafLabel(leaf)}
-              </th>
-            ))}
-            <th>実行者</th>
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map((run) => (
-            <tr key={run.id}>
-              <td className="extract-results__nowrap">{dateTimeLabel(run.ran_at)}</td>
-              <td className="extract-breakdown__number">{run.patient_count}</td>
-              {leaves.map((leaf) => (
-                <td key={leaf.key} className="extract-breakdown__number">
-                  {run.leaf_counts[leaf.key] ?? ""}
-                </td>
-              ))}
-              <td className="extract-results__nowrap">{run.ran_by_name ?? ""}</td>
-            </tr>
-          ))}
-          {runs.length === 0 && (
-            <tr>
-              <td colSpan={leaves.length + 3} className="master-search__empty">
-                記録はありません
-              </td>
             </tr>
           )}
         </tbody>

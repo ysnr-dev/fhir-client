@@ -330,31 +330,6 @@ RSpec.describe "Master::ExtractQueries", type: :request do
     end
   end
 
-  describe "実行の記録" do
-    let!(:query) { ExtractQuery.create!(scope: "facility", name: "共通", definition: definition(valid_root)) }
-
-    it "人数と条件ごとの人数を残し、新しい順に返す。条件を消すと一緒に消える" do
-      post "/master/extract_queries/#{query.id}/runs",
-           params: { patient_count: 3, leaf_counts: { c1: 4, c2: 1 }, ran_by_name: "医師 一郎" }, as: :json
-      expect(response).to have_http_status(:created)
-      travel 1.minute do
-        post "/master/extract_queries/#{query.id}/runs", params: { patient_count: 5, leaf_counts: { c1: 6 } }, as: :json
-      end
-
-      get "/master/extract_queries/#{query.id}/runs"
-      expect(body["items"].map { |r| r["patient_count"] }).to eq([5, 3])
-      expect(body["items"].last["leaf_counts"]).to eq("c1" => 4, "c2" => 1)
-
-      delete "/master/extract_queries/#{query.id}"
-      expect(ExtractQueryRun.count).to eq(0)
-    end
-
-    it "人数は 0 以上の整数" do
-      post "/master/extract_queries/#{query.id}/runs", params: { patient_count: -1, leaf_counts: { c1: "x" } }, as: :json
-      expect(response).to have_http_status(:unprocessable_content)
-    end
-  end
-
   describe "プリセット" do
     it "同梱の条件はどれも形の検証を通り、2 度流しても増えない" do
       path = Rails.root.join("db/seed_data/extract_query_presets.json")

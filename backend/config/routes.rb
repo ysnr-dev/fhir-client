@@ -410,9 +410,7 @@ Rails.application.routes.draw do
     # チャート定義(どの項目を並べ、どのイベントを重ねるか)。患者を持たない雛形なので
     # オーダーセットと同じくここに置く(docs/patient-chart-design.md)。
     resources :chart_definitions, only: %i[index show create update destroy]
-    resources :extract_queries, only: %i[index show create update destroy] do
-      resources :runs, only: %i[index create], controller: "extract_query_runs"
-    end
+    resources :extract_queries, only: %i[index show create update destroy]
     # 患者ごとに最初に開くチャート(ピン留め)。患者につき 1 つ、利用者の間で共有する。
     resources :patient_chart_pins, only: %i[show update destroy], param: :patient_id
     # 患者フォルダ(患者を任意の階層の分類に仕分ける。docs/patient-folder-design.md)。

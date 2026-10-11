@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createExtractQuery,
-  createExtractQueryRun,
-  fetchExtractQueryRuns,
   deleteExtractQuery,
   fetchExtractQueries,
   type ExtractQueryPayload,
@@ -52,30 +50,4 @@ export function useExtractQueryMutations() {
       onSuccess: invalidate,
     }),
   };
-}
-
-const runsKey = (queryId: number | null) => [...EXTRACT_QUERIES_KEY, "runs", queryId ?? 0];
-
-/** 保存した条件の実行の記録(新しい順)。 */
-export function useExtractQueryRuns(queryId: number | null) {
-  return useQuery({
-    queryKey: runsKey(queryId),
-    queryFn: () => fetchExtractQueryRuns(queryId!),
-    enabled: queryId != null,
-  });
-}
-
-export function useRecordExtractRun() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      queryId,
-      payload,
-    }: {
-      queryId: number;
-      payload: Parameters<typeof createExtractQueryRun>[1];
-    }) => createExtractQueryRun(queryId, payload),
-    retry: false,
-    onSuccess: (_run, { queryId }) => queryClient.invalidateQueries({ queryKey: runsKey(queryId) }),
-  });
 }

@@ -71,7 +71,7 @@ function TopicBody({ topic }: { topic: GuideTopic }) {
                 <strong>実行する</strong>条件ごとに当てはまった人数が条件の見出しに出ます。
               </li>
               <li>
-                <strong>結果を見る</strong>一覧・内訳・推移を切り替え、CSV / 明細CSV で書き出します。
+                <strong>結果を見る</strong>一覧・内訳を切り替え、CSV / 明細CSV で書き出します。
               </li>
               <li>
                 <strong>保存する</strong>同じ条件をいつでも呼び出せます。
@@ -332,7 +332,6 @@ function TopicBody({ topic }: { topic: GuideTopic }) {
             <dl className="extract-guide__terms">
               <Term name="一覧">患者ごとの件数・最初と最後の日付・最新の値。氏名からカルテを開ける</Term>
               <Term name="内訳">性別 × 年齢階級の人数。条件を選んで月別・診療科別の件数も</Term>
-              <Term name="推移">保存した条件を変えずに実行するたびに人数を記録し、グラフと表で並べる</Term>
               <Term name="出力項目">出す患者の列(カナ・住所 など)と条件ごとの列を選ぶ。実行し直さなくても反映</Term>
               <Term name="CSV">一覧と同じ列を患者 1 行で</Term>
               <Term name="明細CSV">当てはまった記録を 1 件 1 行で(検査の値・判定、薬の用量・日数 など)</Term>

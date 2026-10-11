@@ -1,12 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { ExtractQuery } from "../api/masterClient";
-import {
-  useExtractQueries,
-  useExtractQueryMutations,
-  useExtractQueryRuns,
-  useRecordExtractRun,
-} from "../api/masterQueries";
+import { useExtractQueries, useExtractQueryMutations } from "../api/masterQueries";
 import { useExtractDetailExport, useExtractRun } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { AdverseEventExtractPanel } from "../components/extract/AdverseEventExtractPanel";
@@ -141,7 +136,7 @@ export function DataExtractPage() {
 /** 条件に当てはまる患者の抽出。 */
 function PatientExtractTab() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { owners, ready, departmentId, practitionerId, practitionerName, teamIds } = useDefinitionOwners("自分の条件");
+  const { owners, ready, departmentId, practitionerId, teamIds } = useDefinitionOwners("自分の条件");
   const list = useExtractQueries(departmentId, practitionerId, ready, "patient", teamIds);
   const mutations = useExtractQueryMutations();
   const queries = useMemo(() => list.data?.items ?? [], [list.data]);
@@ -152,11 +147,6 @@ function PatientExtractTab() {
   const [saving, setSaving] = useState(false);
   const [validation, setValidation] = useState<string[]>([]);
   const extract = useExtractRun();
-  const runs = useExtractQueryRuns(selectedId);
-  const recordRun = useRecordExtractRun();
-  // 保存した条件を直さずに実行したときだけ、結果の人数を定点観測の記録に残す(直した条件の
-  // 人数は保存した条件の推移ではないため)。
-  const recordForRef = useRef<number | null>(null);
   const detail = useExtractDetailExport();
 
   const selected = queries.find((q) => q.id === selectedId) ?? null;
@@ -191,28 +181,8 @@ function PatientExtractTab() {
     const errors = validateExtractQuery(body);
     setValidation(errors);
     if (errors.length > 0) return;
-    recordForRef.current = selected && !dirty ? selected.id : null;
     void extract.run(body, leafLabel);
   }
-
-  const ranAt = extract.result?.ranAt;
-  useEffect(() => {
-    const queryId = recordForRef.current;
-    const result = extract.result;
-    if (!queryId || !result) return;
-    recordForRef.current = null;
-    recordRun.mutate({
-      queryId,
-      payload: {
-        patient_count: result.rows.length,
-        leaf_counts: Object.fromEntries(result.leaves.map((leaf) => [leaf.key, result.hits.get(leaf.key)?.size ?? 0])),
-        ran_by_id: practitionerId,
-        ran_by_name: practitionerName || undefined,
-      },
-    });
-    // 結果が出た(ranAt が変わった)ときにだけ記録する。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ranAt]);
 
   async function handleOverwrite() {
     if (!selected) return;
@@ -238,7 +208,7 @@ function PatientExtractTab() {
   }, [body.root, extract.result]);
 
   const mutationError =
-    mutations.create.error ?? mutations.update.error ?? mutations.remove.error ?? recordRun.error ?? runs.error;
+    mutations.create.error ?? mutations.update.error ?? mutations.remove.error;
 
   return (
     <>
@@ -369,7 +339,6 @@ function PatientExtractTab() {
           result={extract.result}
           leaves={outputLeaves}
           output={body.output}
-          history={selected && !dirty ? (runs.data ?? []) : undefined}
           teamId={selected?.scope === "team" ? (selected.owner_id ?? undefined) : undefined}
         />
       )}

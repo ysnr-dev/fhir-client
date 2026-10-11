@@ -253,9 +253,6 @@ class ExtractQuery < ApplicationRecord
     Array(node["children"]).flat_map { |child| collect_leaves(child) }
   end
 
-  # 実行の記録(定点観測の推移)。条件を消したら一緒に消す。
-  has_many :extract_query_runs, dependent: :delete_all
-
   before_validation :assign_code
 
   validates :code, presence: true, uniqueness: true
