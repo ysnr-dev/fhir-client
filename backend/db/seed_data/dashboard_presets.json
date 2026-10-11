@@ -1,0 +1,38 @@
+[
+  {
+    "name": "糖尿病外来",
+    "tiles": [
+      { "query_name": "2型糖尿病(治療中)", "view": "count", "x": 0, "y": 0, "w": 3, "h": 2 },
+      { "query_name": "糖尿病の受診中断(180日以上)", "view": "count", "title": "受診中断(180日以上)", "x": 3, "y": 0, "w": 3, "h": 2 },
+      { "query_name": "HbA1c 8.0以上が1年に3回以上", "view": "count", "title": "HbA1c 8.0以上が年3回以上", "x": 6, "y": 0, "w": 3, "h": 2 },
+      { "query_name": "2型糖尿病でHbA1c未測定(90日)", "view": "count", "title": "HbA1c未測定(90日)", "x": 9, "y": 0, "w": 3, "h": 2 },
+      { "query_name": "SU薬の処方中に低血糖(血糖70未満)", "view": "count", "title": "SU薬で低血糖", "x": 0, "y": 2, "w": 3, "h": 2 },
+      { "query_name": "尿アルブミン30以上で腎症の病名なし", "view": "count", "title": "腎症の病名なし", "x": 3, "y": 2, "w": 3, "h": 2 },
+      { "query_name": "メトホルミン処方中にクレアチニン1.3以上", "view": "count", "title": "メトホルミンでCre 1.3以上", "x": 6, "y": 2, "w": 3, "h": 2 },
+      { "query_name": "75歳以上の2型糖尿病", "view": "count", "x": 9, "y": 2, "w": 3, "h": 2 },
+      { "query_tab": "lab", "query_name": "HbA1c 7.0未満の達成率(四半期)", "view": "breakdown", "x": 0, "y": 4, "w": 6, "h": 5 },
+      { "query_tab": "lab", "query_name": "医師別 HbA1c コントロール", "view": "breakdown", "x": 6, "y": 4, "w": 6, "h": 5 },
+      { "query_tab": "encounter", "query_name": "糖尿病外来の受診数(医師別・月別)", "view": "breakdown", "x": 0, "y": 9, "w": 6, "h": 5 },
+      { "query_tab": "lab", "query_name": "医師別 腎症の進み具合(尿A/C比)", "view": "breakdown", "x": 6, "y": 9, "w": 6, "h": 5 },
+      { "query_tab": "medication", "query_name": "糖尿病薬の処方(薬剤別)", "view": "breakdown", "x": 0, "y": 14, "w": 6, "h": 5 },
+      { "query_tab": "condition", "query_name": "糖尿病合併症の病名", "view": "breakdown", "x": 6, "y": 14, "w": 6, "h": 5 },
+      { "query_name": "糖尿病の受診中断(180日以上)", "view": "list", "x": 0, "y": 19, "w": 12, "h": 6 }
+    ]
+  },
+  {
+    "name": "入退院・部門オーダー",
+    "tiles": [
+      { "query_name": "直近30日の入院", "view": "count", "x": 0, "y": 0, "w": 3, "h": 2 },
+      { "query_name": "直近30日の退院", "view": "count", "x": 3, "y": 0, "w": 3, "h": 2 },
+      { "query_name": "退院後30日以内の再入院", "view": "count", "x": 6, "y": 0, "w": 3, "h": 2 },
+      { "query_name": "手術後30日以内の再入院", "view": "count", "x": 9, "y": 0, "w": 3, "h": 2 },
+      { "query_name": "抗菌薬の注射が30日に2回以上", "view": "count", "x": 0, "y": 2, "w": 4, "h": 2 },
+      { "query_name": "直近30日の放射線検査の実施", "view": "count", "x": 4, "y": 2, "w": 4, "h": 2 },
+      { "query_name": "内視鏡の依頼があり実施のない患者(90日)", "view": "count", "title": "内視鏡の未実施(90日)", "x": 8, "y": 2, "w": 4, "h": 2 },
+      { "query_name": "直近30日の入院", "view": "list", "x": 0, "y": 4, "w": 12, "h": 6 },
+      { "query_name": "抗菌薬の注射が30日に2回以上", "view": "list", "x": 0, "y": 10, "w": 6, "h": 6 },
+      { "query_name": "退院後30日以内の再入院", "view": "list", "x": 6, "y": 10, "w": 6, "h": 6 },
+      { "query_name": "内視鏡の依頼があり実施のない患者(90日)", "view": "list", "x": 0, "y": 16, "w": 12, "h": 5 }
+    ]
+  }
+]

@@ -1607,6 +1607,17 @@ else
   puts "extract_queries presets: #{extract_presets_json} not found, skipped"
 end
 
+# ダッシュボードの見本(院内共通)。db/seed_data/dashboard_presets.json の条件の名前を上の条件の code に置き換えて入れる
+# (DashboardPresets)。同じ名前の院内共通のダッシュボードがあれば上書きしない。
+dashboard_presets_json = Rails.root.join("db/seed_data/dashboard_presets.json")
+if File.exist?(dashboard_presets_json)
+  result = DashboardPresets.load!(dashboard_presets_json)
+  puts "dashboards presets: created #{result.created} (kept #{result.kept})"
+  puts "dashboards presets: missing #{result.missing.join(", ")}" if result.missing.any?
+else
+  puts "dashboards presets: #{dashboard_presets_json} not found, skipped"
+end
+
 # 看護計画の用語(看護診断・看護成果・看護介入)と標準看護計画のサンプル(db/seed_data/nursing_care/sample.json)。
 # NANDA-I・NIC・NOC はライセンス物なので同梱しない。ここに入れるのは開発とデモのための自作の用語で、
 # コードは L で始めて配布データの番号と混ざらないようにしてある(docs/nursing-care-plan-design.md)。

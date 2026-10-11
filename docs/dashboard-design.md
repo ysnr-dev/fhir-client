@@ -63,6 +63,12 @@ backend の DB に持つ(上流 FHIR には置かない)。
 - `query_code` の存在は検証しない(条件を消したタイルは画面で「条件が見つかりません」と出す)。
 - 形の検証は `JsonShape`(`Dashboard::DEFINITION_SHAPE`)。
 
+### 見本(`db/seed_data/dashboard_presets.json`)
+
+院内共通の見本は JSON で持ち、`DashboardPresets` が migration(`20261011180000_seed_dashboard_presets.rb`)と db:seed から入れる。
+タイルは条件を code ではなく院内共通の条件のタブ(`query_tab`、省略は「患者」)と名前(`query_name`)で書き、投入のときに
+`query_code` に置き換える(code は環境ごとに違う)。見つからない条件のタイルは置かない。同じ名前の院内共通のダッシュボードがあれば触らない。
+
 ## 4. 画面(`pages/DashboardPage.tsx`)
 
 ### 表示
@@ -101,6 +107,6 @@ backend の DB に持つ(上流 FHIR には置かない)。
 
 | 区分 | ファイル |
 |---|---|
-| backend | `db/migrate/20261011130000_create_dashboards.rb`、`app/models/dashboard.rb`、`app/controllers/master/dashboards_controller.rb`、`spec/requests/master/dashboards_spec.rb` |
+| backend | `db/migrate/20261011130000_create_dashboards.rb`、`app/models/dashboard.rb`、`app/services/dashboard_presets.rb`、`db/seed_data/dashboard_presets.json`、`app/controllers/master/dashboards_controller.rb`、`spec/requests/master/dashboards_spec.rb` |
 | frontend | `pages/DashboardPage.tsx`、`components/dashboard/DashboardTile.tsx`・`AddTileModal.tsx`、`fhir/dashboardLayout.ts`、`hooks/useDashboardRun.ts`、`App.tsx`(「データ」メニューと route) |
 | データ抽出と共有 | `fhir/extractTabRunners.ts`、`hooks/useExtractPatientScope.ts`(`resolvePatientScope`)、`hooks/useRecordPatientAttributes.ts`(`patientAttributesOf`)、`components/extract/ExtractResults.tsx`(`BreakdownTable`・`ResultTable`)、`RecordResultTable.tsx`(`RecordListTable`)、`RecordBreakdownView.tsx`(`controls`)、`RecordResultNotices.tsx` |
