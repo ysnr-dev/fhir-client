@@ -62,6 +62,10 @@ import {
   type ChartItem,
 } from "../fhir/chartDefinitionHelpers";
 import { buildVitalObservations, emptyVitalFormValues } from "../fhir/vitalHelpers";
+import { buildWalkInAppointment } from "../fhir/appointmentHelpers";
+import { departmentCode } from "../fhir/departmentHelpers";
+import { buildFinishedOutpatientEncounter, buildOutpatientEncounter } from "../fhir/outpatientEncounterHelpers";
+import { isDoctorRoleCode } from "../fhir/practitionerRoleHelpers";
 
 const PHYSICAL_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/location-physical-type";
 
@@ -72,9 +76,16 @@ export interface Named {
   name: string;
 }
 
+export interface Department extends Named {
+  /** SS-MIX2 統一診療科コード。院内独自の科は空。 */
+  code: string;
+}
+
 export interface SeedEnv {
   practitioner: Named;
-  departments: Named[];
+  /** 医師。先頭はログイン中の医療従事者で、ほかの医師は名前の順。 */
+  doctors: Named[];
+  departments: Department[];
   beds: Named[];
   locations: Named[];
   /** 名(given)の後ろに足す語。試しに流すときに本番の患者と名前がぶつからないようにする。 */
@@ -103,15 +114,38 @@ export async function loadEnv(log: (message: string) => void, nameSuffix = ""): 
   if (!practitionerId) throw new Error("ログインユーザーに医療従事者が紐付いていません");
   const [practitioner] = await searchAll<fhir4.Practitioner>("Practitioner", { _id: practitionerId });
   const organizations = await searchAll<fhir4.Organization>("Organization", {});
+  const roleBundle = await searchResource<fhir4.PractitionerRole | fhir4.Practitioner>(
+    "PractitionerRole",
+    new URLSearchParams({ role: "doctor,dentist", _include: "PractitionerRole:practitioner", _count: "500" }),
+  );
+  const resources = (roleBundle.data.entry ?? []).map((entry) => entry.resource);
+  const roles = resources.filter((r): r is fhir4.PractitionerRole => r?.resourceType === "PractitionerRole");
+  const people = new Map(
+    resources
+      .filter((r): r is fhir4.Practitioner => r?.resourceType === "Practitioner")
+      .map((p) => [p.id ?? "", nameOf(p)]),
+  );
+  // 上流は未対応の検索条件を黙って無視することがあるので、医師の役割はここでも確かめる。
+  const doctorIds = new Set(
+    roles
+      .filter((role) => role.code?.some((c) => c.coding?.some((coding) => isDoctorRoleCode(coding.code))))
+      .map((role) => role.practitioner?.reference?.split("/").pop() ?? ""),
+  );
+  const otherDoctors = [...doctorIds]
+    .filter((id) => id && id !== practitionerId && people.get(id))
+    .map((id) => ({ id, name: people.get(id) ?? "" }))
+    .sort((a, b) => a.name.localeCompare(b.name, "ja"));
   const locations = await searchAll<fhir4.Location>("Location", {});
   const beds = locations.filter((location) =>
     location.physicalType?.coding?.some(
       (coding) => coding.system === PHYSICAL_TYPE_SYSTEM && coding.code === BED_PHYSICAL_TYPE.code,
     ),
   );
+  const self = { id: practitionerId, name: practitioner ? nameOf(practitioner) : "" };
   return {
-    practitioner: { id: practitionerId, name: practitioner ? nameOf(practitioner) : "" },
-    departments: organizations.map((o) => ({ id: o.id ?? "", name: nameOf(o) })),
+    practitioner: self,
+    doctors: [self, ...otherDoctors],
+    departments: organizations.map((o) => ({ id: o.id ?? "", name: nameOf(o), code: departmentCode(o) })),
     beds: beds.map((b) => ({ id: b.id ?? "", name: nameOf(b) })),
     locations: locations.map((l) => ({ id: l.id ?? "", name: nameOf(l) })),
     nameSuffix,
@@ -120,7 +154,7 @@ export async function loadEnv(log: (message: string) => void, nameSuffix = ""): 
 }
 
 /** 名前に語を含む最初の診療科。無ければ最初の候補語、それも無ければ一覧の先頭。 */
-export function departmentOf(env: SeedEnv, ...words: string[]): Named {
+export function departmentOf(env: SeedEnv, ...words: string[]): Department {
   for (const word of words) {
     const found = env.departments.find((d) => d.name === word) ?? env.departments.find((d) => d.name.includes(word));
     if (found) return found;
@@ -130,12 +164,12 @@ export function departmentOf(env: SeedEnv, ...words: string[]): Named {
   return fallback;
 }
 
-export function requesterOf(env: SeedEnv, department: Named): OrderContext {
+export function requesterOf(env: SeedEnv, department: Named, doctor: Named = env.practitioner): OrderContext {
   return {
     departmentId: department.id,
     departmentName: department.name,
-    practitionerId: env.practitioner.id,
-    practitionerName: env.practitioner.name,
+    practitionerId: doctor.id,
+    practitionerName: doctor.name,
   };
 }
 
@@ -383,6 +417,44 @@ export function vitalEntries(
     request: { method: "POST", url: "Observation" },
     resource,
   }));
+}
+
+// ---- 外来受診 ----
+
+/**
+ * 診察の済んだ外来受診 1 回(当日受付の予約 + 診察の Encounter)。外来一覧で受付・診察開始・終了まで
+ * 進めたときと同じ形にし、予約は終了(fulfilled)、診察は担当医(ATND)つきで閉じる。
+ */
+export function outpatientVisitEntries(
+  patient: fhir4.Patient,
+  department: Department,
+  doctor: Named,
+  date: string,
+  first: boolean,
+): fhir4.BundleEntry[] {
+  const appointmentUrl = `urn:uuid:${crypto.randomUUID()}`;
+  const appointment: fhir4.Appointment = {
+    ...buildWalkInAppointment(
+      patient,
+      {
+        departmentCode: department.code,
+        departmentName: department.name,
+        practitionerId: doctor.id,
+        practitionerName: doctor.name,
+        locationId: "",
+        locationName: "",
+        visitKind: first ? "first" : "revisit",
+      },
+      new Date(at(date, "09:00")),
+    ),
+    status: "fulfilled",
+  };
+  const started = buildOutpatientEncounter(appointment, patient, at(date, "09:40"));
+  const encounter = buildFinishedOutpatientEncounter({ ...started, appointment: [{ reference: appointmentUrl }] }, at(date, "09:55"));
+  return [
+    { fullUrl: appointmentUrl, resource: appointment, request: { method: "POST", url: "Appointment" } },
+    { fullUrl: `urn:uuid:${crypto.randomUUID()}`, resource: encounter, request: { method: "POST", url: "Encounter" } },
+  ];
 }
 
 // ---- 処方 ----

@@ -5,6 +5,7 @@ import { fetchRegimen, radiotherapyProtocolClient } from "../api/masterClient";
 import { DrugMaster, findDisease, findTemplate, LabMaster, loadEnv } from "./base";
 import { REQUIREMENTS as ckdRequirements, seedCkd } from "./ckd";
 import { REQUIREMENTS as diabetesRequirements, seedDiabetes } from "./diabetes";
+import { REQUIREMENTS as diabetesCohortRequirements, seedDiabetesCohort } from "./diabetesCohort";
 import { REQUIREMENTS as headNeckRequirements, seedHeadNeckRadiotherapy } from "./headNeckRadiotherapy";
 import { REQUIREMENTS as heartFailureRequirements, seedHeartFailure } from "./heartFailure";
 import { REQUIREMENTS as periodontalRequirements, seedPeriodontal } from "./periodontal";
@@ -17,6 +18,7 @@ export const SCENARIOS = {
   ckd: seedCkd,
   periodontal: seedPeriodontal,
   headNeckRt: seedHeadNeckRadiotherapy,
+  diabetesCohort: seedDiabetesCohort,
 } as const;
 
 export type ScenarioName = keyof typeof SCENARIOS;
@@ -53,6 +55,7 @@ export async function preflight(): Promise<string[]> {
     ckdRequirements,
     periodontalRequirements,
     headNeckRequirements,
+    diabetesCohortRequirements,
   ];
   const labs = new LabMaster();
   const labCodes = [...new Set(all.flatMap((r) => r.labs))];

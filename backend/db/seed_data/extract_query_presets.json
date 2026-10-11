@@ -507,6 +507,503 @@
     }
   },
   {
+    "name": "2型糖尿病(治療中)",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "dm",
+            "kind": "condition",
+            "label": "2型糖尿病",
+            "codes": [
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E11",
+                "display": "2型糖尿病"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E110",
+                "display": "2型糖尿病(E110)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E111",
+                "display": "2型糖尿病(E111)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E112",
+                "display": "2型糖尿病(E112)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E113",
+                "display": "2型糖尿病(E113)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E114",
+                "display": "2型糖尿病(E114)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E115",
+                "display": "2型糖尿病(E115)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E116",
+                "display": "2型糖尿病(E116)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E117",
+                "display": "2型糖尿病(E117)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E118",
+                "display": "2型糖尿病(E118)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E119",
+                "display": "2型糖尿病(E119)"
+              }
+            ],
+            "clinical_status": [
+              "active"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "糖尿病の受診中断(180日以上)",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "dm",
+            "kind": "condition",
+            "label": "2型糖尿病",
+            "codes": [
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E11",
+                "display": "2型糖尿病"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E110",
+                "display": "2型糖尿病(E110)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E111",
+                "display": "2型糖尿病(E111)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E112",
+                "display": "2型糖尿病(E112)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E113",
+                "display": "2型糖尿病(E113)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E114",
+                "display": "2型糖尿病(E114)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E115",
+                "display": "2型糖尿病(E115)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E116",
+                "display": "2型糖尿病(E116)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E117",
+                "display": "2型糖尿病(E117)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E118",
+                "display": "2型糖尿病(E118)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E119",
+                "display": "2型糖尿病(E119)"
+              }
+            ],
+            "clinical_status": [
+              "active"
+            ]
+          },
+          {
+            "key": "visit",
+            "kind": "outpatient",
+            "label": "外来受診(直近2年)",
+            "period": {
+              "mode": "relative",
+              "days": 730
+            }
+          },
+          {
+            "key": "recent",
+            "kind": "outpatient",
+            "label": "外来受診(直近180日)",
+            "not": true,
+            "period": {
+              "mode": "relative",
+              "days": 180
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "HbA1c 8.0以上が1年に3回以上",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "a1c",
+            "kind": "observation",
+            "label": "HbA1c 8.0以上(直近1年・3回以上)",
+            "codes": [
+              {
+                "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+                "code": "160010010",
+                "display": "HbA1c"
+              }
+            ],
+            "period": {
+              "mode": "relative",
+              "days": 365
+            },
+            "value": {
+              "op": "ge",
+              "value": 8
+            },
+            "min_count": 3
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "SU薬の処方中に低血糖(血糖70未満)",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "su",
+            "kind": "medication",
+            "label": "SU薬(直近1年)",
+            "order_type": "prescription",
+            "drug_classes": [
+              {
+                "code": "3961",
+                "name": "スルフォニル尿素系製剤"
+              }
+            ],
+            "period": {
+              "mode": "relative",
+              "days": 365
+            }
+          },
+          {
+            "key": "hypo",
+            "kind": "observation",
+            "label": "血糖 70未満(直近1年)",
+            "codes": [
+              {
+                "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+                "code": "160019410",
+                "display": "血糖"
+              }
+            ],
+            "period": {
+              "mode": "relative",
+              "days": 365
+            },
+            "value": {
+              "op": "lt",
+              "value": 70
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "尿アルブミン30以上で腎症の病名なし",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "dm",
+            "kind": "condition",
+            "label": "2型糖尿病",
+            "codes": [
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E11",
+                "display": "2型糖尿病"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E110",
+                "display": "2型糖尿病(E110)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E111",
+                "display": "2型糖尿病(E111)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E112",
+                "display": "2型糖尿病(E112)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E113",
+                "display": "2型糖尿病(E113)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E114",
+                "display": "2型糖尿病(E114)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E115",
+                "display": "2型糖尿病(E115)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E116",
+                "display": "2型糖尿病(E116)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E117",
+                "display": "2型糖尿病(E117)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E118",
+                "display": "2型糖尿病(E118)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E119",
+                "display": "2型糖尿病(E119)"
+              }
+            ],
+            "clinical_status": [
+              "active"
+            ]
+          },
+          {
+            "key": "uac",
+            "kind": "observation",
+            "label": "尿A/C比 30以上(直近1年)",
+            "codes": [
+              {
+                "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+                "code": "160004810-01",
+                "display": "尿A/C比"
+              }
+            ],
+            "period": {
+              "mode": "relative",
+              "days": 365
+            },
+            "value": {
+              "op": "ge",
+              "value": 30
+            }
+          },
+          {
+            "key": "neph",
+            "kind": "condition",
+            "label": "糖尿病性腎症",
+            "not": true,
+            "codes": [
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E112",
+                "display": "2型糖尿病性腎症"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E142",
+                "display": "糖尿病性腎症"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "メトホルミン処方中にクレアチニン1.3以上",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "bg",
+            "kind": "medication",
+            "label": "ビグアナイド(直近180日)",
+            "order_type": "prescription",
+            "drug_classes": [
+              {
+                "code": "3962",
+                "name": "ビグアナイド系製剤"
+              }
+            ],
+            "period": {
+              "mode": "relative",
+              "days": 180
+            }
+          },
+          {
+            "key": "cre",
+            "kind": "observation",
+            "label": "Cre 1.3以上(直近180日)",
+            "codes": [
+              {
+                "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+                "code": "160019210",
+                "display": "Cre"
+              }
+            ],
+            "period": {
+              "mode": "relative",
+              "days": 180
+            },
+            "value": {
+              "op": "ge",
+              "value": 1.3
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "2型糖尿病の入院(2年)",
+    "definition": {
+      "schema_version": 1,
+      "root": {
+        "op": "and",
+        "children": [
+          {
+            "key": "dm",
+            "kind": "condition",
+            "label": "2型糖尿病",
+            "codes": [
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E11",
+                "display": "2型糖尿病"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E110",
+                "display": "2型糖尿病(E110)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E111",
+                "display": "2型糖尿病(E111)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E112",
+                "display": "2型糖尿病(E112)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E113",
+                "display": "2型糖尿病(E113)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E114",
+                "display": "2型糖尿病(E114)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E115",
+                "display": "2型糖尿病(E115)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E116",
+                "display": "2型糖尿病(E116)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E117",
+                "display": "2型糖尿病(E117)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E118",
+                "display": "2型糖尿病(E118)"
+              },
+              {
+                "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+                "code": "E119",
+                "display": "2型糖尿病(E119)"
+              }
+            ],
+            "clinical_status": [
+              "active"
+            ]
+          },
+          {
+            "key": "adm",
+            "kind": "admission",
+            "label": "入院(直近2年)",
+            "date_mode": "admitted",
+            "period": {
+              "mode": "relative",
+              "days": 730
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
     "name": "HbA1c 8以上 薬効群別の推移",
     "tab": "lab",
     "definition": {
@@ -623,6 +1120,234 @@
           ]
         },
         "ratio": "row"
+      }
+    }
+  },
+  {
+    "name": "HbA1c 7.0未満の達成率(四半期)",
+    "tab": "lab",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 730
+      },
+      "patient_query_name": "2型糖尿病(治療中)",
+      "items": [
+        {
+          "key": "lab:160010010",
+          "source": "lab",
+          "name": "HbA1c",
+          "unit": "%",
+          "codings": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+              "code": "160010010",
+              "display": "HbA1c"
+            }
+          ]
+        }
+      ],
+      "mode": "day",
+      "aggregates": [
+        "latest"
+      ],
+      "breakdown": {
+        "date": "日付",
+        "grain": "quarter",
+        "rows": "period",
+        "columns": "HbA1c(%)",
+        "bins": {
+          "HbA1c(%)": [
+            7,
+            8
+          ]
+        },
+        "ratio": "row"
+      }
+    }
+  },
+  {
+    "name": "医師別 腎症の進み具合(尿A/C比)",
+    "tab": "lab",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 365
+      },
+      "patient_query_name": "2型糖尿病(治療中)",
+      "items": [
+        {
+          "key": "lab:160004810-01",
+          "source": "lab",
+          "name": "尿中アルブミン/クレアチニン比(A/C比)",
+          "unit": "mg/g･Cr",
+          "codings": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+              "code": "160004810-01",
+              "display": "尿中アルブミン/クレアチニン比(A/C比)"
+            }
+          ]
+        },
+        {
+          "key": "lab:160019210",
+          "source": "lab",
+          "name": "クレアチニン(Cre)",
+          "unit": "mg/dL",
+          "codings": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+              "code": "160019210",
+              "display": "クレアチニン(Cre)"
+            }
+          ]
+        }
+      ],
+      "mode": "patient",
+      "aggregates": [
+        "first",
+        "latest",
+        "delta"
+      ],
+      "attending": "outpatient",
+      "breakdown": {
+        "date": "",
+        "rows": "担当医",
+        "columns": "尿中アルブミン/クレアチニン比(A/C比)(mg/g･Cr) 最新",
+        "bins": {
+          "尿中アルブミン/クレアチニン比(A/C比)(mg/g･Cr) 最新": [
+            30,
+            300
+          ]
+        },
+        "show_sub": true
+      }
+    }
+  },
+  {
+    "name": "糖尿病薬の処方(薬剤別)",
+    "tab": "medication",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 365
+      },
+      "drug_classes": [
+        {
+          "code": "3961",
+          "name": "スルフォニル尿素系製剤"
+        },
+        {
+          "code": "3962",
+          "name": "ビグアナイド系製剤"
+        },
+        {
+          "code": "3969",
+          "name": "その他の糖尿病用剤"
+        }
+      ],
+      "order_type": "prescription",
+      "breakdown": {
+        "date": "",
+        "rows": "薬剤",
+        "columns": "",
+        "show_sub": true
+      }
+    }
+  },
+  {
+    "name": "糖尿病合併症の病名",
+    "tab": "condition",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 1825
+      },
+      "codes": [
+        {
+          "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+          "code": "E112",
+          "display": "2型糖尿病・腎合併症"
+        },
+        {
+          "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+          "code": "E113",
+          "display": "2型糖尿病・眼合併症"
+        },
+        {
+          "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+          "code": "E114",
+          "display": "2型糖尿病・神経学的合併症"
+        },
+        {
+          "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+          "code": "E142",
+          "display": "糖尿病・腎合併症"
+        },
+        {
+          "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+          "code": "E143",
+          "display": "糖尿病・眼合併症"
+        },
+        {
+          "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+          "code": "E144",
+          "display": "糖尿病・神経学的合併症"
+        }
+      ],
+      "suspected": "exclude",
+      "breakdown": {
+        "date": "",
+        "rows": "病名",
+        "columns": "転帰",
+        "show_sub": true
+      },
+      "date_field": "onset"
+    }
+  },
+  {
+    "name": "糖尿病外来の受診数(医師別・月別)",
+    "tab": "encounter",
+    "definition": {
+      "schema_version": 1,
+      "kind": "outpatient",
+      "period": {
+        "mode": "relative",
+        "days": 365
+      },
+      "patient_query_name": "2型糖尿病(治療中)",
+      "breakdown": {
+        "date": "受診日",
+        "grain": "month",
+        "rows": "period",
+        "columns": "担当医",
+        "show_sub": true
+      }
+    }
+  },
+  {
+    "name": "2型糖尿病の入院(在院日数)",
+    "tab": "encounter",
+    "definition": {
+      "schema_version": 1,
+      "kind": "inpatient",
+      "date_mode": "admitted",
+      "period": {
+        "mode": "relative",
+        "days": 730
+      },
+      "patient_query_name": "2型糖尿病(治療中)",
+      "breakdown": {
+        "date": "入院日",
+        "grain": "quarter",
+        "rows": "period",
+        "columns": "",
+        "value": "在院日数",
+        "metric": "mean"
       }
     }
   }

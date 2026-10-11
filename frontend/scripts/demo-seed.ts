@@ -33,7 +33,14 @@ function installFetch(base: string): void {
     const url = typeof input === "string" && input.startsWith("/") ? `${base}${input}` : input;
     const headers = new Headers(init.headers);
     if (cookies.size) headers.set("Cookie", [...cookies].map(([k, v]) => `${k}=${v}`).join("; "));
-    const response = await realFetch(url, { ...init, headers });
+    let response = await realFetch(url, { ...init, headers });
+    // 上流のレート制限(1 トークン 300 件/分)に当たったら、言われた秒数だけ待ってやり直す。
+    for (let attempt = 0; response.status === 429 && attempt < 5; attempt += 1) {
+      const wait = Number(response.headers.get("retry-after")) || 20;
+      console.log(`レート制限のため ${wait} 秒待ちます`);
+      await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+      response = await realFetch(url, { ...init, headers });
+    }
     for (const cookie of response.headers.getSetCookie()) {
       const [pair] = cookie.split(";");
       const at = pair.indexOf("=");
