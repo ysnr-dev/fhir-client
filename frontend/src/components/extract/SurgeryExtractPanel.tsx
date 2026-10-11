@@ -21,7 +21,8 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { ExtractFormRow } from "./ExtractFormRow";
+import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
@@ -127,50 +128,53 @@ export function SurgeryExtractPanel() {
   return (
     <>
       <RecordQueryBar tab="surgery" current={definition} onLoad={applyDefinition} />
-      <div className="data-extract__toolbar">
-        <button type="button" className="rp-card__compact-button" onClick={() => setPicking(true)}>
-          術式
-        </button>
-        {procedures.length > 0 && (
-          <span className="extract-chips">
-            {procedures.map((procedure) => (
-              <span key={procedure.code} className="extract-chip">
-                {procedure.name || procedure.code}
-                <button
-                  type="button"
-                  className="extract-chip__remove"
-                  aria-label={`${procedure.name || procedure.code} を外す`}
-                  onClick={() => setProcedures((current) => current.filter((p) => p.code !== procedure.code))}
-                >
-                  ×
-                </button>
+      <div className="extract-form">
+        <ExtractFormRow label="記録">
+          <div className="extract-form-row__line">
+            <button type="button" className="rp-card__compact-button" onClick={() => setPicking(true)}>
+              術式
+            </button>
+            {procedures.length > 0 && (
+              <span className="extract-chips">
+                {procedures.map((procedure) => (
+                  <span key={procedure.code} className="extract-chip">
+                    {procedure.name || procedure.code}
+                    <button
+                      type="button"
+                      className="extract-chip__remove"
+                      aria-label={`${procedure.name || procedure.code} を外す`}
+                      onClick={() => setProcedures((current) => current.filter((p) => p.code !== procedure.code))}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
               </span>
-            ))}
-          </span>
-        )}
+            )}
+          </div>
+          <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
+          <label className="extract-field">
+            依頼科
+            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+              <option value="">すべて</option>
+              {departmentOptions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {departmentDisplayName(d)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </ExtractFormRow>
+        <PatientScopeRow scope={scope} />
+        <CompareRow scope={scope} />
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <PatientColumnsField
+            value={patientColumns}
+            selected={Boolean(output?.patient_columns?.length)}
+            onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
+          />
+        </ExtractFormRow>
       </div>
-
-      <div className="data-extract__toolbar data-extract__toolbar--fields">
-        <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        <label className="extract-field">
-          依頼科
-          <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">すべて</option>
-            {departmentOptions.map((d) => (
-              <option key={d.id} value={d.id}>
-                {departmentDisplayName(d)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <PatientScopeFields scope={scope} />
-      </div>
-
-      <PatientColumnsField
-        value={patientColumns}
-        selected={Boolean(output?.patient_columns?.length)}
-        onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
-      />
 
       <ErrorBanner error={scope.listError} />
 

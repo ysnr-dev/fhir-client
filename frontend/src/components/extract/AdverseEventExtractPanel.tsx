@@ -26,7 +26,8 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { ExtractFormRow } from "./ExtractFormRow";
+import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
@@ -125,60 +126,63 @@ export function AdverseEventExtractPanel() {
   return (
     <>
       <RecordQueryBar tab="adverse" current={definition} onLoad={applyDefinition} />
-      <div className="data-extract__toolbar">
-        <button type="button" className="rp-card__compact-button" onClick={() => setPicking(true)}>
-          用語
-        </button>
-        {terms.length > 0 && (
-          <span className="extract-chips">
-            {terms.map((term) => (
-              <span key={term} className="extract-chip">
-                {term}
-                <button
-                  type="button"
-                  className="extract-chip__remove"
-                  aria-label={`${term} を外す`}
-                  onClick={() => setTerms((current) => current.filter((t) => t !== term))}
-                >
-                  ×
-                </button>
+      <div className="extract-form">
+        <ExtractFormRow label="記録">
+          <div className="extract-form-row__line">
+            <button type="button" className="rp-card__compact-button" onClick={() => setPicking(true)}>
+              用語
+            </button>
+            {terms.length > 0 && (
+              <span className="extract-chips">
+                {terms.map((term) => (
+                  <span key={term} className="extract-chip">
+                    {term}
+                    <button
+                      type="button"
+                      className="extract-chip__remove"
+                      aria-label={`${term} を外す`}
+                      onClick={() => setTerms((current) => current.filter((t) => t !== term))}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
               </span>
-            ))}
-          </span>
-        )}
+            )}
+          </div>
+          <label className="extract-field">
+            治療
+            <select value={treatmentType} onChange={(e) => setTreatmentType(e.target.value as TreatmentType | "")}>
+              <option value="">すべて</option>
+              {TREATMENT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
+        </ExtractFormRow>
+        <PatientScopeRow scope={scope} />
+        <CompareRow scope={scope} />
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <label className="extract-field">
+            行
+            <select value={mode} onChange={(e) => setMode(e.target.value as AdverseEventRowMode)}>
+              {ADVERSE_EVENT_ROW_MODES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <PatientColumnsField
+            value={patientColumns}
+            selected={Boolean(output?.patient_columns?.length)}
+            onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
+          />
+        </ExtractFormRow>
       </div>
-
-      <div className="data-extract__toolbar data-extract__toolbar--fields">
-        <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        <label className="extract-field">
-          治療
-          <select value={treatmentType} onChange={(e) => setTreatmentType(e.target.value as TreatmentType | "")}>
-            <option value="">すべて</option>
-            {TREATMENT_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <PatientScopeFields scope={scope} />
-        <label className="extract-field">
-          行
-          <select value={mode} onChange={(e) => setMode(e.target.value as AdverseEventRowMode)}>
-            {ADVERSE_EVENT_ROW_MODES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <PatientColumnsField
-        value={patientColumns}
-        selected={Boolean(output?.patient_columns?.length)}
-        onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
-      />
 
       <ErrorBanner error={scope.listError} />
 

@@ -23,7 +23,8 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { CheckGroup, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { ExtractFormRow } from "./ExtractFormRow";
+import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
@@ -130,30 +131,34 @@ export function MicroExtractPanel() {
   return (
     <>
       <RecordQueryBar tab="micro" current={definition} onLoad={applyDefinition} />
-      <div className="data-extract__toolbar data-extract__toolbar--fields">
-        <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        <PatientScopeFields scope={scope} />
-        <label className="extract-checks__item">
-          <input type="checkbox" checked={includeNoIsolate} onChange={(e) => setIncludeNoIsolate(e.target.checked)} />
-          分離菌なしの検体
-        </label>
-        <label className="extract-checks__item">
-          <input type="checkbox" checked={firstIsolateOnly} onChange={(e) => setFirstIsolateOnly(e.target.checked)} />
-          患者・菌ごとに初回
-        </label>
-        <CheckGroup
-          label="感受性"
-          options={MICRO_SUSCEPTIBILITY_FIELDS}
-          values={susceptibility}
-          onChange={(next) => next.length > 0 && setSusceptibility(next as MicroSusceptibilityField[])}
-        />
+      <div className="extract-form">
+        <ExtractFormRow label="記録">
+          <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
+        </ExtractFormRow>
+        <PatientScopeRow scope={scope} />
+        <CompareRow scope={scope} />
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <label className="extract-checks__item">
+            <input type="checkbox" checked={includeNoIsolate} onChange={(e) => setIncludeNoIsolate(e.target.checked)} />
+            分離菌なしの検体
+          </label>
+          <label className="extract-checks__item">
+            <input type="checkbox" checked={firstIsolateOnly} onChange={(e) => setFirstIsolateOnly(e.target.checked)} />
+            患者・菌ごとに初回
+          </label>
+          <CheckGroup
+            label="感受性"
+            options={MICRO_SUSCEPTIBILITY_FIELDS}
+            values={susceptibility}
+            onChange={(next) => next.length > 0 && setSusceptibility(next as MicroSusceptibilityField[])}
+          />
+          <PatientColumnsField
+            value={patientColumns}
+            selected={Boolean(output?.patient_columns?.length)}
+            onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
+          />
+        </ExtractFormRow>
       </div>
-
-      <PatientColumnsField
-        value={patientColumns}
-        selected={Boolean(output?.patient_columns?.length)}
-        onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
-      />
 
       <ErrorBanner error={scope.listError} />
 

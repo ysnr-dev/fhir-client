@@ -14,7 +14,7 @@ export function PatientColumnsField({
   onChange: (columns: PatientColumn[]) => void;
 }) {
   return (
-    <div className="data-extract__output" role="group" aria-label="出力する患者の項目">
+    <span className="extract-checks" role="group" aria-label="出力する患者の項目">
       <span className="extract-checks__label">出力項目</span>
       {PATIENT_COLUMNS.map((column) => (
         <label key={column.value} className="extract-checks__item">
@@ -35,6 +35,6 @@ export function PatientColumnsField({
           既定
         </button>
       )}
-    </div>
+    </span>
   );
 }

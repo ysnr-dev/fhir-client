@@ -1,22 +1,23 @@
 import { useState } from "react";
 import { ATTENDING_MODES, type AttendingMode } from "../../fhir/extractRecordQuery";
-import type { ExtractPatientScope } from "../../hooks/useExtractPatientScope";
+import { stratumName, type ExtractPatientScope } from "../../hooks/useExtractPatientScope";
 import type { RecordPatientAttributes } from "../../hooks/useRecordPatientAttributes";
 import { ErrorBanner } from "../ErrorBanner";
 import { TruncatedNotice } from "../TruncatedNotice";
+import { DataExtractGuide } from "./DataExtractGuide";
+import { ExtractFormRow } from "./ExtractFormRow";
 import { ExtractQuerySelect } from "./ExtractQuerySelect";
 import { PatientFolderSelect } from "./PatientFolderSelect";
 import { StrataEditorModal } from "./StrataEditorModal";
 
-// 記録を表にするタブの患者の絞り込み・比較群・担当医の入力欄と、実行したときの該当人数
+// 記録を表にするタブの「患者」の行(患者の条件・患者フォルダ)と「比較」の行(比較群・担当医)、実行したときの該当人数
 // (hooks/useExtractPatientScope、docs/data-extract-design.md §8・§21)。
 
-export function PatientScopeFields({ scope }: { scope: ExtractPatientScope }) {
-  const [editingStrata, setEditingStrata] = useState(false);
+export function PatientScopeRow({ scope }: { scope: ExtractPatientScope }) {
   return (
-    <>
+    <ExtractFormRow label="患者" help="患者の条件と患者フォルダの両方を選ぶと、両方に入る患者の記録に絞ります。">
       <label className="extract-field">
-        患者
+        患者の条件
         <ExtractQuerySelect
           queries={scope.queries}
           value={scope.queryId}
@@ -33,9 +34,29 @@ export function PatientScopeFields({ scope }: { scope: ExtractPatientScope }) {
           onChange={(next) => scope.setFolderId(next?.id ?? null)}
         />
       </label>
-      <button type="button" className="rp-card__compact-button" onClick={() => setEditingStrata(true)}>
-        {scope.strata.length > 0 ? `比較群(${scope.strata.length})` : "比較群"}
-      </button>
+    </ExtractFormRow>
+  );
+}
+
+export function CompareRow({ scope }: { scope: ExtractPatientScope }) {
+  const [editingStrata, setEditingStrata] = useState(false);
+  const [guide, setGuide] = useState(false);
+  return (
+    <ExtractFormRow label="比較" onGuide={() => setGuide(true)}>
+      <span className="extract-checks">
+        <button type="button" className="rp-card__compact-button" onClick={() => setEditingStrata(true)}>
+          比較群
+        </button>
+        {scope.strata.length > 0 && (
+          <span className="extract-chips">
+            {scope.strata.map((stratum) => (
+              <span key={stratum.key} className="extract-chip">
+                {stratumName(stratum, scope.queries)}
+              </span>
+            ))}
+          </span>
+        )}
+      </span>
       {scope.strata.length > 0 && (
         <label className="extract-checks__item">
           <input
@@ -68,7 +89,8 @@ export function PatientScopeFields({ scope }: { scope: ExtractPatientScope }) {
           onClose={() => setEditingStrata(false)}
         />
       )}
-    </>
+      {guide && <DataExtractGuide topic="compare" onClose={() => setGuide(false)} />}
+    </ExtractFormRow>
   );
 }
 

@@ -25,7 +25,8 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { CheckGroup, ConditionCodes, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { ExtractFormRow } from "./ExtractFormRow";
+import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
@@ -142,53 +143,58 @@ export function ConditionExtractPanel() {
   return (
     <>
       <RecordQueryBar tab="condition" current={definition} onLoad={applyDefinition} />
-      <ConditionCodes leaf={codeLeaf} patch={(next) => next.codes && setCodes(next.codes)} />
-
-      <div className="data-extract__toolbar data-extract__toolbar--fields">
-        <label className="extract-field">
-          区分
-          <select value={category} onChange={(e) => setCategory(e.target.value as ConditionExtractCategory | "")}>
-            <option value="">すべて</option>
-            {CATEGORIES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="extract-field">
-          疑い
-          <select value={suspected} onChange={(e) => setSuspected(e.target.value as ConditionExtractSuspected | "")}>
-            <option value="">含める</option>
-            {SUSPECTED.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="extract-field">
-          日付
-          <select value={dateField} onChange={(e) => setDateField(e.target.value as "onset" | "recorded")}>
-            <option value="onset">開始日</option>
-            <option value="recorded">登録日</option>
-          </select>
-        </label>
-        <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        <PatientScopeFields scope={scope} />
-        <CheckGroup
-          label="転帰"
-          options={CLINICAL_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-          values={clinicalStatus}
-          onChange={setClinicalStatus}
-        />
+      <div className="extract-form">
+        <ExtractFormRow label="記録">
+          <div className="extract-form-row__line">
+            <ConditionCodes leaf={codeLeaf} patch={(next) => next.codes && setCodes(next.codes)} />
+          </div>
+          <label className="extract-field">
+            区分
+            <select value={category} onChange={(e) => setCategory(e.target.value as ConditionExtractCategory | "")}>
+              <option value="">すべて</option>
+              {CATEGORIES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="extract-field">
+            疑い
+            <select value={suspected} onChange={(e) => setSuspected(e.target.value as ConditionExtractSuspected | "")}>
+              <option value="">含める</option>
+              {SUSPECTED.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="extract-field">
+            日付
+            <select value={dateField} onChange={(e) => setDateField(e.target.value as "onset" | "recorded")}>
+              <option value="onset">開始日</option>
+              <option value="recorded">登録日</option>
+            </select>
+          </label>
+          <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
+          <CheckGroup
+            label="転帰"
+            options={CLINICAL_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            values={clinicalStatus}
+            onChange={setClinicalStatus}
+          />
+        </ExtractFormRow>
+        <PatientScopeRow scope={scope} />
+        <CompareRow scope={scope} />
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <PatientColumnsField
+            value={patientColumns}
+            selected={Boolean(output?.patient_columns?.length)}
+            onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
+          />
+        </ExtractFormRow>
       </div>
-
-      <PatientColumnsField
-        value={patientColumns}
-        selected={Boolean(output?.patient_columns?.length)}
-        onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
-      />
 
       <ErrorBanner error={scope.listError} />
 

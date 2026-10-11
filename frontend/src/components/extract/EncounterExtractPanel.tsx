@@ -22,7 +22,8 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { ExtractFormRow } from "./ExtractFormRow";
+import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
@@ -144,64 +145,68 @@ export function EncounterExtractPanel() {
   return (
     <>
       <RecordQueryBar tab="encounter" current={definition} onLoad={applyDefinition} />
-      <div className="data-extract__toolbar data-extract__toolbar--fields">
-        <label className="extract-field">
-          区分
-          <select value={kind} onChange={(e) => setKind(e.target.value as EncounterExtractKind)}>
-            {KINDS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {inpatient && (
+      <div className="extract-form">
+        <ExtractFormRow label="記録">
           <label className="extract-field">
-            見方
-            <select value={dateMode} onChange={(e) => setDateMode(e.target.value as AdmissionDateMode)}>
-              {ADMISSION_DATE_MODES.map((mode) => (
-                <option key={mode.value} value={mode.value}>
-                  {mode.label}
+            区分
+            <select value={kind} onChange={(e) => setKind(e.target.value as EncounterExtractKind)}>
+              {KINDS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
           </label>
-        )}
-        <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        {byDepartment && (
-          <label className="extract-field">
-            診療科
-            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-              <option value="">すべて</option>
-              {departmentOptions.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {departmentDisplayName(d)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {inpatient && (
-          <label className="extract-field">
-            病棟
-            <select value={wardId} onChange={(e) => setWardId(e.target.value)}>
-              <option value="">すべて</option>
-              {wards.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {locationDisplayName(w)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <PatientScopeFields scope={scope} />
+          {inpatient && (
+            <label className="extract-field">
+              見方
+              <select value={dateMode} onChange={(e) => setDateMode(e.target.value as AdmissionDateMode)}>
+                {ADMISSION_DATE_MODES.map((mode) => (
+                  <option key={mode.value} value={mode.value}>
+                    {mode.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
+          {byDepartment && (
+            <label className="extract-field">
+              診療科
+              <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+                <option value="">すべて</option>
+                {departmentOptions.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {departmentDisplayName(d)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {inpatient && (
+            <label className="extract-field">
+              病棟
+              <select value={wardId} onChange={(e) => setWardId(e.target.value)}>
+                <option value="">すべて</option>
+                {wards.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {locationDisplayName(w)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </ExtractFormRow>
+        <PatientScopeRow scope={scope} />
+        <CompareRow scope={scope} />
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <PatientColumnsField
+            value={patientColumns}
+            selected={Boolean(output?.patient_columns?.length)}
+            onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
+          />
+        </ExtractFormRow>
       </div>
-
-      <PatientColumnsField
-        value={patientColumns}
-        selected={Boolean(output?.patient_columns?.length)}
-        onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
-      />
 
       <ErrorBanner error={scope.listError} />
 

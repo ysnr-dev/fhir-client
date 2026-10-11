@@ -11,6 +11,7 @@ import {
 } from "../../fhir/recordTableHelpers";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
+import { DataExtractGuide } from "./DataExtractGuide";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { RecordBreakdownView } from "./RecordBreakdownView";
 
@@ -56,6 +57,7 @@ export function RecordResultTable(props: Props) {
     [header, patientColumns, attributes],
   );
   const [view, setView] = useState<View>("list");
+  const [guide, setGuide] = useState(false);
   const [drillState, setDrill] = useState<Drill | null>(null);
   const [localBreakdown, setLocalBreakdown] = useState<BreakdownSettings>({});
   const signature = `${rows.length}:${rows[0]?.key ?? ""}:${rows[rows.length - 1]?.key ?? ""}`;
@@ -82,7 +84,17 @@ export function RecordResultTable(props: Props) {
             {item.label}
           </button>
         ))}
+        <button
+          type="button"
+          className="modal__help data-extract__tab-help"
+          aria-label="内訳の使い方"
+          title="内訳の使い方"
+          onClick={() => setGuide(true)}
+        >
+          ?
+        </button>
       </div>
+      {guide && <DataExtractGuide topic="breakdown" onClose={() => setGuide(false)} />}
       <div hidden={view !== "list"}>
         {drill && (
           <div className="extract-results__drill">

@@ -36,7 +36,8 @@ import { PatientColumnsField } from "./PatientColumnsField";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
-import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { ExtractFormRow } from "./ExtractFormRow";
+import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
@@ -168,75 +169,78 @@ export function LabExtractPanel() {
   return (
     <>
       <RecordQueryBar tab="lab" current={definition} onLoad={applyDefinition} />
-      <div className="data-extract__toolbar">
-        <button type="button" className="rp-card__compact-button" onClick={() => setPicking("lab")}>
-          検査項目
-        </button>
-        <button type="button" className="rp-card__compact-button" onClick={() => setPicking("vital")}>
-          バイタル
-        </button>
-        {items.length > 0 && (
-          <span className="extract-chips">
-            {items.map((item) => (
-              <span key={item.key} className="extract-chip">
-                {item.name}
-                <button
-                  type="button"
-                  className="extract-chip__remove"
-                  aria-label={`${item.name} を外す`}
-                  onClick={() => setItems((current) => current.filter((i) => i.key !== item.key))}
-                >
-                  ×
-                </button>
+      <div className="extract-form">
+        <ExtractFormRow label="記録">
+          <div className="extract-form-row__line">
+            <button type="button" className="rp-card__compact-button" onClick={() => setPicking("lab")}>
+              検査項目
+            </button>
+            <button type="button" className="rp-card__compact-button" onClick={() => setPicking("vital")}>
+              バイタル
+            </button>
+            {items.length > 0 && (
+              <span className="extract-chips">
+                {items.map((item) => (
+                  <span key={item.key} className="extract-chip">
+                    {item.name}
+                    <button
+                      type="button"
+                      className="extract-chip__remove"
+                      aria-label={`${item.name} を外す`}
+                      onClick={() => setItems((current) => current.filter((i) => i.key !== item.key))}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
               </span>
-            ))}
-          </span>
-        )}
-      </div>
-
-      <div className="data-extract__toolbar data-extract__toolbar--fields">
-        <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        <label className="extract-field">
-          診療科
-          <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">すべて</option>
-            {departmentOptions.map((d) => (
-              <option key={d.id} value={d.id}>
-                {departmentDisplayName(d)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <PatientScopeFields scope={scope} />
-        <label className="extract-field">
-          行
-          <select value={mode} onChange={(e) => setMode(e.target.value as LabExtractRowMode)}>
-            {LAB_EXTRACT_ROW_MODES.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {mode === "patient" && (
-          <CheckGroup
-            label="集計"
-            options={LAB_EXTRACT_AGGREGATES}
-            values={aggregates}
-            onChange={(next) => next.length > 0 && setAggregates(next as LabExtractAggregate[])}
+            )}
+          </div>
+          <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
+          <label className="extract-field">
+            診療科
+            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+              <option value="">すべて</option>
+              {departmentOptions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {departmentDisplayName(d)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </ExtractFormRow>
+        <PatientScopeRow scope={scope} />
+        <CompareRow scope={scope} />
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <label className="extract-field">
+            行
+            <select value={mode} onChange={(e) => setMode(e.target.value as LabExtractRowMode)}>
+              {LAB_EXTRACT_ROW_MODES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {mode === "patient" && (
+            <CheckGroup
+              label="集計"
+              options={LAB_EXTRACT_AGGREGATES}
+              values={aggregates}
+              onChange={(next) => next.length > 0 && setAggregates(next as LabExtractAggregate[])}
+            />
+          )}
+          <label className="extract-checks__item">
+            <input type="checkbox" checked={interpretation} onChange={(e) => setInterpretation(e.target.checked)} />
+            H/L
+          </label>
+          <PatientColumnsField
+            value={patientColumns}
+            selected={Boolean(output?.patient_columns?.length)}
+            onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
           />
-        )}
-        <label className="extract-checks__item">
-          <input type="checkbox" checked={interpretation} onChange={(e) => setInterpretation(e.target.checked)} />
-          H/L
-        </label>
+        </ExtractFormRow>
       </div>
-
-      <PatientColumnsField
-        value={patientColumns}
-        selected={Boolean(output?.patient_columns?.length)}
-        onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
-      />
 
       <ErrorBanner error={scope.listError} />
 

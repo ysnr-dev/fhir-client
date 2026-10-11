@@ -11,9 +11,10 @@ import { useExtractDetailExport, useExtractRun } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { AdverseEventExtractPanel } from "../components/extract/AdverseEventExtractPanel";
 import { ConditionExtractPanel } from "../components/extract/ConditionExtractPanel";
-import { DataExtractGuide } from "../components/extract/DataExtractGuide";
+import { DataExtractGuide, type GuideTopic } from "../components/extract/DataExtractGuide";
 import { EncounterExtractPanel } from "../components/extract/EncounterExtractPanel";
 import { ExtractConditionBuilder } from "../components/extract/ExtractConditionBuilder";
+import { ExtractFormRow } from "../components/extract/ExtractFormRow";
 import { ExtractQuerySelect } from "../components/extract/ExtractQuerySelect";
 import { ExtractResults } from "../components/extract/ExtractResults";
 import { FolderRegisterButton } from "../components/extract/FolderRegisterButton";
@@ -82,7 +83,7 @@ function tabOf(value: string | null): Tab {
 
 export function DataExtractPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [guideOpen, setGuideOpen] = useState(false);
+  const [guide, setGuide] = useState<GuideTopic | null>(null);
   const tab = tabOf(searchParams.get("tab"));
 
   // 結果の表は列が多いので、本文の幅制限を外して全画面にする。
@@ -99,7 +100,7 @@ export function DataExtractPage() {
           <button
             type="button"
             className="modal__help"
-            onClick={() => setGuideOpen(true)}
+            onClick={() => setGuide("flow")}
             aria-label="データ抽出の使い方"
             title="データ抽出の使い方"
           >
@@ -132,7 +133,7 @@ export function DataExtractPage() {
       {tab === "perform" && <PerformExtractPanel />}
       {tab === "adverse" && <AdverseEventExtractPanel />}
       {tab === "pathway" && <PathwayExtractPanel />}
-      {guideOpen && <DataExtractGuide onClose={() => setGuideOpen(false)} />}
+      {guide && <DataExtractGuide topic={guide} onClose={() => setGuide(null)} />}
     </div>
   );
 }
@@ -243,7 +244,7 @@ function PatientExtractTab() {
     <>
       <div className="data-extract__toolbar">
         <label className="extract-field extract-field--inline">
-          条件
+          保存した条件
           <ExtractQuerySelect
             queries={queries}
             value={selectedId}
@@ -284,13 +285,17 @@ function PatientExtractTab() {
         progress={extract.progress}
       />
 
-      <PatientColumnsField
-        value={patientColumnsOf(body.output)}
-        selected={Boolean(body.output?.patient_columns?.length)}
-        onChange={(patient_columns) =>
-          setBody({ ...body, output: patient_columns.length ? { ...body.output, patient_columns } : undefined })
-        }
-      />
+      <div className="extract-form">
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <PatientColumnsField
+            value={patientColumnsOf(body.output)}
+            selected={Boolean(body.output?.patient_columns?.length)}
+            onChange={(patient_columns) =>
+              setBody({ ...body, output: patient_columns.length ? { ...body.output, patient_columns } : undefined })
+            }
+          />
+        </ExtractFormRow>
+      </div>
 
       {validation.length > 0 && (
         <div className="error-banner" role="alert">

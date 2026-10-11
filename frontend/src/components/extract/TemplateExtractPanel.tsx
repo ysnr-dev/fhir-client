@@ -26,7 +26,8 @@ import { PatientColumnsField } from "./PatientColumnsField";
 import { compactDefinition, type ExtractRecordDefinition } from "../../fhir/extractRecordQuery";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
 import { applyScopeDefinition, scopeDefinition, useExtractPatientScope } from "../../hooks/useExtractPatientScope";
-import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { ExtractFormRow } from "./ExtractFormRow";
+import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
@@ -140,36 +141,40 @@ export function TemplateExtractPanel() {
   return (
     <>
       <RecordQueryBar tab="template" current={definition} onLoad={applyDefinition} />
-      <div className="data-extract__toolbar data-extract__toolbar--fields">
-        <TemplateSelect
-          questionnaires={templates}
-          value={selected?.id ?? ""}
-          onChange={(id) => setTemplateUrl(templates.find((q) => q.id === id)?.url ?? "")}
-        />
-        <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        <label className="extract-field">
-          診療科
-          <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">すべて</option>
-            {departmentOptions.map((d) => (
-              <option key={d.id} value={d.id}>
-                {departmentDisplayName(d)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <PatientScopeFields scope={scope} />
-        <label className="extract-checks__item">
-          <input type="checkbox" checked={latestOnly} onChange={(e) => setLatestOnly(e.target.checked)} />
-          患者ごとに最新
-        </label>
+      <div className="extract-form">
+        <ExtractFormRow label="記録">
+          <TemplateSelect
+            questionnaires={templates}
+            value={selected?.id ?? ""}
+            onChange={(id) => setTemplateUrl(templates.find((q) => q.id === id)?.url ?? "")}
+          />
+          <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
+          <label className="extract-field">
+            診療科
+            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+              <option value="">すべて</option>
+              {departmentOptions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {departmentDisplayName(d)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </ExtractFormRow>
+        <PatientScopeRow scope={scope} />
+        <CompareRow scope={scope} />
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <label className="extract-checks__item">
+            <input type="checkbox" checked={latestOnly} onChange={(e) => setLatestOnly(e.target.checked)} />
+            患者ごとに最新
+          </label>
+          <PatientColumnsField
+            value={patientColumns}
+            selected={Boolean(output?.patient_columns?.length)}
+            onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
+          />
+        </ExtractFormRow>
       </div>
-
-      <PatientColumnsField
-        value={patientColumns}
-        selected={Boolean(output?.patient_columns?.length)}
-        onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
-      />
 
       <ErrorBanner error={options.error ?? scope.listError} />
 

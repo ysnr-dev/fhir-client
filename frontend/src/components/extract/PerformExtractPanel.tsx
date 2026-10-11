@@ -24,7 +24,8 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { ExtractFormRow } from "./ExtractFormRow";
+import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
@@ -133,37 +134,41 @@ export function PerformExtractPanel() {
   return (
     <>
       <RecordQueryBar tab="perform" current={definition} onLoad={applyDefinition} />
-      <div className="data-extract__toolbar data-extract__toolbar--fields">
-        <label className="extract-field">
-          種別
-          <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            {PERFORM_EXTRACT_KINDS.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        <label className="extract-field">
-          依頼科
-          <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">すべて</option>
-            {departmentOptions.map((d) => (
-              <option key={d.id} value={d.id}>
-                {departmentDisplayName(d)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <PatientScopeFields scope={scope} />
+      <div className="extract-form">
+        <ExtractFormRow label="記録">
+          <label className="extract-field">
+            種別
+            <select value={kind} onChange={(e) => setKind(e.target.value)}>
+              {PERFORM_EXTRACT_KINDS.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
+          <label className="extract-field">
+            依頼科
+            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+              <option value="">すべて</option>
+              {departmentOptions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {departmentDisplayName(d)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </ExtractFormRow>
+        <PatientScopeRow scope={scope} />
+        <CompareRow scope={scope} />
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <PatientColumnsField
+            value={patientColumns}
+            selected={Boolean(output?.patient_columns?.length)}
+            onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
+          />
+        </ExtractFormRow>
       </div>
-
-      <PatientColumnsField
-        value={patientColumns}
-        selected={Boolean(output?.patient_columns?.length)}
-        onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
-      />
 
       <ErrorBanner error={scope.listError} />
 

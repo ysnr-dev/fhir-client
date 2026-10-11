@@ -75,7 +75,7 @@ export function RecordQueryBar<T extends ExtractRecordDefinition>({ tab, current
     <>
       <div className="data-extract__toolbar">
         <label className="extract-field extract-field--inline">
-          条件
+          保存した条件
           <ExtractQuerySelect
             queries={queries}
             value={selectedId}

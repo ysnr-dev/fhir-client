@@ -19,7 +19,8 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { ExtractFormRow } from "./ExtractFormRow";
+import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
@@ -120,27 +121,31 @@ export function PathwayExtractPanel() {
   return (
     <>
       <RecordQueryBar tab="pathway" current={definition} onLoad={applyDefinition} />
-      <div className="data-extract__toolbar data-extract__toolbar--fields">
-        <label className="extract-field">
-          パス
-          <select value={pathwayCode} onChange={(e) => setPathwayCode(e.target.value)}>
-            <option value="">すべて</option>
-            {pathways.map((pathway) => (
-              <option key={pathway.id} value={pathway.pathway_code}>
-                {pathway.version ? `${pathway.name}(${pathway.version})` : pathway.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        <PatientScopeFields scope={scope} />
+      <div className="extract-form">
+        <ExtractFormRow label="記録">
+          <label className="extract-field">
+            パス
+            <select value={pathwayCode} onChange={(e) => setPathwayCode(e.target.value)}>
+              <option value="">すべて</option>
+              {pathways.map((pathway) => (
+                <option key={pathway.id} value={pathway.pathway_code}>
+                  {pathway.version ? `${pathway.name}(${pathway.version})` : pathway.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
+        </ExtractFormRow>
+        <PatientScopeRow scope={scope} />
+        <CompareRow scope={scope} />
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <PatientColumnsField
+            value={patientColumns}
+            selected={Boolean(output?.patient_columns?.length)}
+            onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
+          />
+        </ExtractFormRow>
       </div>
-
-      <PatientColumnsField
-        value={patientColumns}
-        selected={Boolean(output?.patient_columns?.length)}
-        onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
-      />
 
       <ErrorBanner error={scope.listError ?? pathwayList.error} />
 

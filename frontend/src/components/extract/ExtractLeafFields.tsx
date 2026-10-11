@@ -45,6 +45,7 @@ import { SURGERY_ORDER_ITEM_SYSTEM } from "../../fhir/surgeryOrderHelpers";
 import { TREATMENT_ORDER_ITEM_SYSTEM } from "../../fhir/treatmentOrderHelpers";
 import { VITAL_MEASURES } from "../../fhir/vitalHelpers";
 import { DiseaseSearchModal } from "../DiseaseSearchModal";
+import { HelpTip } from "../HelpTip";
 import { EndoscopyItemSearchModal } from "../EndoscopyItemSearchModal";
 import { LabOrderItemSearchModal } from "../LabOrderItemSearchModal";
 import { LabResultItemSearchModal } from "../LabResultItemSearchModal";
@@ -141,9 +142,13 @@ const KIND_FIELDS: Record<ExtractKind, ComponentType<FieldsProps>> = {
 /** 期間内に何件以上あれば該当とするか(既定 1)。 */
 function MinCountField({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
   return (
-    <label className="extract-field">
-      件数(以上)
+    <div className="extract-field">
+      <span className="extract-field__name">
+        件数(以上)
+        <HelpTip text="期間内にこの件数以上の記録がある患者だけを該当にします。" />
+      </span>
       <input
+        aria-label="件数(以上)"
         type="number"
         min={1}
         max={999}
@@ -155,7 +160,7 @@ function MinCountField({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
           patch({ min_count: count === null || count <= 1 ? undefined : Math.floor(count) });
         }}
       />
-    </label>
+    </div>
   );
 }
 

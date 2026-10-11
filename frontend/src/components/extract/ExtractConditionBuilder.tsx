@@ -18,7 +18,10 @@ import {
   type ExtractNode,
   type LeafOutputField,
 } from "../../fhir/extractQueryHelpers";
+import { useState } from "react";
+import { HelpTip } from "../HelpTip";
 import { TrashIcon } from "../icons/TrashIcon";
+import { DataExtractGuide } from "./DataExtractGuide";
 import { ExtractLeafFields } from "./ExtractLeafFields";
 
 interface Props {
@@ -29,7 +32,13 @@ interface Props {
 
 /** 条件の組み立て。グループ(AND / OR)の中に条件とグループを入れ子で並べる。 */
 export function ExtractConditionBuilder({ root, onChange, progress }: Props) {
-  return <GroupEditor group={root} depth={1} onChange={onChange} progress={progress} />;
+  const [guide, setGuide] = useState(false);
+  return (
+    <>
+      <GroupEditor group={root} depth={1} onChange={onChange} onGuide={() => setGuide(true)} progress={progress} />
+      {guide && <DataExtractGuide topic="conditions" onClose={() => setGuide(false)} />}
+    </>
+  );
 }
 
 function GroupEditor({
@@ -37,12 +46,15 @@ function GroupEditor({
   depth,
   onChange,
   onRemove,
+  onGuide,
   progress,
 }: {
   group: ExtractGroup;
   depth: number;
   onChange: (group: ExtractGroup) => void;
   onRemove?: () => void;
+  /** ルートのグループだけ、見出しの右端に「条件の組み方」の使い方を開く「?」を置く。 */
+  onGuide?: () => void;
   progress: Record<string, LeafProgress>;
 }) {
   const replaceChild = (index: number, child: ExtractNode | null) => {
@@ -104,6 +116,17 @@ function GroupEditor({
             onClick={onRemove}
           >
             <TrashIcon />
+          </button>
+        )}
+        {onGuide && (
+          <button
+            type="button"
+            className="modal__help extract-group__guide"
+            aria-label="条件の組み方"
+            title="条件の組み方"
+            onClick={onGuide}
+          >
+            ?
           </button>
         )}
       </div>
@@ -180,15 +203,18 @@ function LeafEditor({
             onChange={(e) => onChange({ ...leaf, label: e.target.value })}
           />
         </label>
-        <label className="extract-checks__item">
-          <input
-            type="checkbox"
-            checked={Boolean(leaf.not)}
-            disabled={!negatable && !leaf.not}
-            onChange={(e) => onChange({ ...leaf, not: e.target.checked })}
-          />
-          除外
-        </label>
+        <span className="extract-checks__item">
+          <label className="extract-checks__item">
+            <input
+              type="checkbox"
+              checked={Boolean(leaf.not)}
+              disabled={!negatable && !leaf.not}
+              onChange={(e) => onChange({ ...leaf, not: e.target.checked })}
+            />
+            除外
+          </label>
+          <HelpTip text="AND の中で、この条件に当てはまる患者を外します。AND の中にほかの除外でない条件があるときだけ付けられます。" />
+        </span>
         <LeafStatus progress={progress} />
         <button
           type="button"
@@ -201,10 +227,12 @@ function LeafEditor({
         </button>
       </div>
       <ExtractLeafFields leaf={leaf} onChange={onChange} />
-      {leaf.kind !== "patient" && (anchors.length > 0 || leaf.relation) && (
-        <RelationFields leaf={leaf} anchors={anchors} onChange={onChange} />
+      {leaf.kind !== "patient" && (
+        <div className="extract-leaf__row">
+          {(anchors.length > 0 || leaf.relation) && <RelationFields leaf={leaf} anchors={anchors} onChange={onChange} />}
+          {!leaf.not && <OutputFields leaf={leaf} onChange={onChange} />}
+        </div>
       )}
-      {leaf.kind !== "patient" && !leaf.not && <OutputFields leaf={leaf} onChange={onChange} />}
     </div>
   );
 }
@@ -220,22 +248,20 @@ function OutputFields({ leaf, onChange }: { leaf: ExtractLeaf; onChange: (leaf: 
     onChange({ ...leaf, output_fields: next.length === LEAF_OUTPUT_FIELDS.length ? undefined : next });
   };
   return (
-    <div className="extract-leaf__row">
-      <span className="extract-checks" role="group" aria-label="出力する項目">
-        <span className="extract-checks__label">出力</span>
-        {LEAF_OUTPUT_FIELDS.map((field) => (
-          <label key={field.value} className="extract-checks__item">
-            <input
-              type="checkbox"
-              checked={fields.includes(field.value)}
-              disabled={fields.length === 1 && fields.includes(field.value)}
-              onChange={(e) => toggle(field.value, e.target.checked)}
-            />
-            {field.label}
-          </label>
-        ))}
-      </span>
-    </div>
+    <span className="extract-checks extract-leaf__output" role="group" aria-label="出力する項目">
+      <span className="extract-checks__label">出力</span>
+      {LEAF_OUTPUT_FIELDS.map((field) => (
+        <label key={field.value} className="extract-checks__item">
+          <input
+            type="checkbox"
+            checked={fields.includes(field.value)}
+            disabled={fields.length === 1 && fields.includes(field.value)}
+            onChange={(e) => toggle(field.value, e.target.checked)}
+          />
+          {field.label}
+        </label>
+      ))}
+    </span>
   );
 }
 
@@ -258,10 +284,14 @@ function RelationFields({
   const anchor = anchors.find((a) => a.key === relation?.key);
   const hasEnd = anchor ? Boolean(extractKindDef(anchor.kind).hasEndDay?.(anchor)) : false;
   return (
-    <div className="extract-leaf__row">
-      <label className="extract-field">
-        基準の条件
+    <>
+      <div className="extract-field">
+        <span className="extract-field__name">
+          基準の条件
+          <HelpTip text="同じグループの別の条件の記録の日から、から〜まで(日)の範囲にある記録だけを数えます。マイナスは前の日です。" />
+        </span>
         <select
+          aria-label="基準の条件"
           value={relation?.key ?? ""}
           onChange={(e) =>
             onChange({
@@ -279,7 +309,7 @@ function RelationFields({
             </option>
           ))}
         </select>
-      </label>
+      </div>
       {relation && (
         <>
           {hasEnd && (
@@ -325,7 +355,7 @@ function RelationFields({
           </label>
         </>
       )}
-    </div>
+    </>
   );
 }
 

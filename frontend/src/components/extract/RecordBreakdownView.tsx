@@ -57,12 +57,14 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
   const numberColumns = columns.filter((c) => c.kind === "number");
   const update = (patch: BreakdownSettings) => onSettingsChange({ ...settings, ...patch });
 
-  // 既定は最初の日付の列で、行に月、列は分けない、件数。
-  const dateLabel = settings.date ?? dateColumns[0]?.label ?? "";
+  // 既定は最初の日付の列で、行に月、列は分けない、件数。日付の列は行か列で「期間」を選んだときだけ選ぶ。
+  const periodAvailable = dateColumns.length > 0;
+  const dateLabel = dateColumns.some((c) => c.label === settings.date) ? settings.date! : (dateColumns[0]?.label ?? "");
   const dateIndex = dateColumns.find((c) => c.label === dateLabel)?.index ?? null;
   const grain: TimeGrain = settings.grain ?? "month";
   const fillEmpty = settings.fill_empty ?? true;
-  const rowValue = settings.rows ?? (dateIndex !== null ? "period" : "");
+  // date: "" は日付の列を使わない切り口として保存したもの。行の既定を「計のみ」にする。
+  const rowValue = settings.rows ?? (periodAvailable && settings.date !== "" ? "period" : "");
   const rowAxis = axisOf(rowValue, dateIndex, categoryColumns);
   const rowKey = rowAxis ? rowValue : "";
   const columnValue = settings.columns ?? "";
@@ -171,60 +173,56 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
   const listWidth = 2 + (showSub && !withValue ? 1 : 0) + (ratio ? 1 : 0) + (withValue ? 1 : 0);
   const total = breakdown.total.records;
 
-  return (
-    <div className="extract-breakdown__leaf">
-      <div className="extract-breakdown__controls">
-        <select aria-label="期間にする列" value={dateLabel} onChange={(e) => update({ date: e.target.value })}>
-          <option value="">期間なし</option>
+  /** 行か列で「期間」を選んだとき、その軸の横に出す日付の列・刻み・0 件の期間。 */
+  const periodFields = (
+    <>
+      {dateColumns.length > 1 && (
+        <select aria-label="日付の列" value={dateLabel} onChange={(e) => update({ date: e.target.value })}>
           {dateColumns.map((c) => (
             <option key={c.index} value={c.label}>
               {c.label}
             </option>
           ))}
         </select>
-        {dateIndex !== null && (
-          <>
-            <select
-              aria-label="期間の刻み"
-              value={grain}
-              onChange={(e) => update({ grain: e.target.value as TimeGrain })}
-            >
-              {TIME_GRAINS.map((g) => (
-                <option key={g.value} value={g.value}>
-                  {`${g.label}ごと`}
-                </option>
-              ))}
-            </select>
-            <label className="extract-checks__item">
-              <input type="checkbox" checked={fillEmpty} onChange={(e) => update({ fill_empty: e.target.checked })} />
-              0 件の期間
-            </label>
-          </>
-        )}
-        <label className="extract-checks__item">
-          行
+      )}
+      <select aria-label="期間の刻み" value={grain} onChange={(e) => update({ grain: e.target.value as TimeGrain })}>
+        {TIME_GRAINS.map((g) => (
+          <option key={g.value} value={g.value}>
+            {`${g.label}ごと`}
+          </option>
+        ))}
+      </select>
+      <label className="extract-checks__item">
+        <input type="checkbox" checked={fillEmpty} onChange={(e) => update({ fill_empty: e.target.checked })} />
+        0 件の期間
+      </label>
+    </>
+  );
+
+  return (
+    <div className="extract-breakdown__leaf">
+      <div className="extract-breakdown__controls">
+        <span className="extract-breakdown__group" role="group" aria-label="行">
+          <span className="extract-breakdown__group-label">行</span>
           <select aria-label="行の軸" value={rowKey} onChange={(e) => update({ rows: e.target.value })}>
             <option value="">計のみ</option>
-            {dateIndex !== null && <option value="period">期間</option>}
+            {periodAvailable && <option value="period">期間</option>}
             {categoryColumns.map((c) => (
               <option key={c.index} value={c.label}>
                 {c.label}
               </option>
             ))}
           </select>
-        </label>
-        {numberLabels.has(rowKey) && (
-          <BinsInput
-            key={`row-${rowKey}`}
-            cuts={settings.bins?.[rowKey] ?? []}
-            onChange={(cuts) => setBins(rowKey, cuts)}
-          />
-        )}
-        <label className="extract-checks__item">
-          列
+          {rowKey === "period" && periodFields}
+          {numberLabels.has(rowKey) && (
+            <BinsInput key={`row-${rowKey}`} cuts={settings.bins?.[rowKey] ?? []} onChange={(cuts) => setBins(rowKey, cuts)} />
+          )}
+        </span>
+        <span className="extract-breakdown__group" role="group" aria-label="列">
+          <span className="extract-breakdown__group-label">列</span>
           <select aria-label="列の軸" value={columnKey} onChange={(e) => update({ columns: e.target.value })}>
             <option value="">分けない</option>
-            {dateIndex !== null && rowKey !== "period" && <option value="period">期間</option>}
+            {periodAvailable && rowKey !== "period" && <option value="period">期間</option>}
             {categoryColumns
               .filter((c) => c.label !== rowKey)
               .map((c) => (
@@ -233,71 +231,82 @@ export function RecordBreakdownView({ header, cells, patientIds, settings, onSet
                 </option>
               ))}
           </select>
-        </label>
-        {numberLabels.has(columnKey) && (
-          <BinsInput
-            key={`column-${columnKey}`}
-            cuts={settings.bins?.[columnKey] ?? []}
-            onChange={(cuts) => setBins(columnKey, cuts)}
-          />
-        )}
-        <select
-          aria-label="集計する値"
-          value={valueIndex === null ? "" : (settings.value ?? "")}
-          onChange={(e) => update({ value: e.target.value || undefined })}
-        >
-          <option value="">件数</option>
-          {numberColumns.map((c) => (
-            <option key={c.index} value={c.label}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-        {withValue ? (
-          <select aria-label="集計の方法" value={metric} onChange={(e) => update({ metric: e.target.value as Metric })}>
-            {METRICS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
+          {columnKey === "period" && periodFields}
+          {numberLabels.has(columnKey) && (
+            <BinsInput
+              key={`column-${columnKey}`}
+              cuts={settings.bins?.[columnKey] ?? []}
+              onChange={(cuts) => setBins(columnKey, cuts)}
+            />
+          )}
+        </span>
+        <span className="extract-breakdown__group" role="group" aria-label="値">
+          <span className="extract-breakdown__group-label">値</span>
+          <select
+            aria-label="集計する値"
+            value={valueIndex === null ? "" : (settings.value ?? "")}
+            onChange={(e) => update({ value: e.target.value || undefined })}
+          >
+            <option value="">件数</option>
+            {numberColumns.map((c) => (
+              <option key={c.index} value={c.label}>
+                {c.label}
               </option>
             ))}
           </select>
-        ) : (
-          <select
-            aria-label="割合"
-            value={ratio ?? ""}
-            onChange={(e) => update({ ratio: (e.target.value || undefined) as BreakdownRatio | undefined })}
-          >
-            <option value="">数</option>
-            <option value="row">{hasColumns ? "行の中の割合" : "割合"}</option>
-            {hasColumns && <option value="column">列の中の割合</option>}
-          </select>
-        )}
-        <span className="extract-checks__item">
-          <label className="extract-checks__item">
-            <input type="checkbox" checked={showSub} onChange={(e) => update({ show_sub: e.target.checked })} />
-            {subLabel}
-          </label>
-          <HelpTip
-            text={
-              withValue || ratio
-                ? "各セルの値の後ろに、計算に使った記録の件数を小さく添えます。"
-                : "各セルの件数の後ろに、その記録の患者数を小さく添えます。同じ患者は 1 人と数えるため、計は各セルの和になりません。"
-            }
-          />
+          {withValue ? (
+            <select aria-label="集計の方法" value={metric} onChange={(e) => update({ metric: e.target.value as Metric })}>
+              {METRICS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <>
+              <select
+                aria-label="割合"
+                value={ratio ?? ""}
+                onChange={(e) => update({ ratio: (e.target.value || undefined) as BreakdownRatio | undefined })}
+              >
+                <option value="">数</option>
+                <option value="row">{hasColumns ? "行の中の割合" : "割合"}</option>
+                {hasColumns && <option value="column">列の中の割合</option>}
+              </select>
+              <HelpTip text="割合は件数の構成比です。行の中の割合は各行の計を 100%、列の中の割合は各列の計を 100% にします。" />
+            </>
+          )}
         </span>
-        <span className="extract-checks__item">
-          <label className="extract-checks__item">
-            <input type="checkbox" checked={splitMulti} onChange={(e) => update({ split_multi: e.target.checked })} />
-            分割
-          </label>
-          <HelpTip text="「、」でつないだ複数の値(麻酔方法・手技・担当看護師など)を、値ごとに分けて数えます。1 件が複数の値に数えられるため、各行・各列の和は計と一致しません。" />
+        <span className="extract-breakdown__group" role="group" aria-label="表示">
+          <span className="extract-breakdown__group-label">表示</span>
+          <span className="extract-checks__item">
+            <label className="extract-checks__item">
+              <input type="checkbox" checked={showSub} onChange={(e) => update({ show_sub: e.target.checked })} />
+              {subLabel}
+            </label>
+            <HelpTip
+              text={
+                withValue || ratio
+                  ? "各セルの値の後ろに、計算に使った記録の件数を小さく添えます。"
+                  : "各セルの件数の後ろに、その記録の患者数を小さく添えます。同じ患者は 1 人と数えるため、計は各セルの和になりません。"
+              }
+            />
+          </span>
+          <span className="extract-checks__item">
+            <label className="extract-checks__item">
+              <input type="checkbox" checked={splitMulti} onChange={(e) => update({ split_multi: e.target.checked })} />
+              分割
+            </label>
+            <HelpTip text="「、」でつないだ複数の値(麻酔方法・手技・担当看護師など)を、値ごとに分けて数えます。1 件が複数の値に数えられるため、各行・各列の和は計と一致しません。" />
+          </span>
         </span>
         <button
           type="button"
+          className="extract-breakdown__csv"
           disabled={cells.length === 0}
           onClick={() =>
             downloadBlob(
-              recordBreakdownCsv(breakdown, showSub || withValue, fillEmpty && dateIndex !== null),
+              recordBreakdownCsv(breakdown, showSub || withValue, fillEmpty && (rowKey === "period" || columnKey === "period")),
               `breakdown_${today()}.csv`,
             )
           }
@@ -424,19 +433,22 @@ function BinsInput({ cuts, onChange }: { cuts: number[]; onChange: (cuts: number
     onChange(next);
   };
   return (
-    <label className="extract-checks__item">
-      区切り
-      <input
-        type="text"
-        className="extract-breakdown__bins"
-        inputMode="decimal"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit();
-        }}
-      />
-    </label>
+    <span className="extract-checks__item">
+      <label className="extract-checks__item">
+        区切り
+        <input
+          type="text"
+          className="extract-breakdown__bins"
+          inputMode="decimal"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+          }}
+        />
+      </label>
+      <HelpTip text="「7,8」と入れると 7未満・7以上8未満・8以上に分けます。" />
+    </span>
   );
 }

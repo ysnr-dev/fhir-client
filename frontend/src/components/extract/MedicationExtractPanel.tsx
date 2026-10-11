@@ -24,7 +24,8 @@ import { TruncatedNotice } from "../TruncatedNotice";
 import { MedicationCodes, PeriodFields } from "./ExtractLeafFields";
 import { FolderRegisterButton } from "./FolderRegisterButton";
 import { PatientColumnsField } from "./PatientColumnsField";
-import { PatientAttributesStatus, PatientScopeFields, PatientScopeProgress, PatientScopeSummary } from "./PatientScope";
+import { ExtractFormRow } from "./ExtractFormRow";
+import { CompareRow, PatientAttributesStatus, PatientScopeProgress, PatientScopeRow, PatientScopeSummary } from "./PatientScope";
 import { RecordQueryBar } from "./RecordQueryBar";
 import { RecordResultTable } from "./RecordResultTable";
 import { recordTableCsv, type RecordTableRow } from "../../fhir/recordTableHelpers";
@@ -131,46 +132,51 @@ export function MedicationExtractPanel() {
   return (
     <>
       <RecordQueryBar tab="medication" current={definition} onLoad={applyDefinition} />
-      <MedicationCodes
-        leaf={drugLeaf}
-        patch={(next) => {
-          if (next.codes) setCodes(next.codes);
-          if (next.drug_classes) setDrugClasses(next.drug_classes);
-        }}
-      />
-
-      <div className="data-extract__toolbar data-extract__toolbar--fields">
-        <label className="extract-field">
-          区分
-          <select value={orderType} onChange={(e) => setOrderType(e.target.value as ExtractOrderType | "")}>
-            <option value="">処方・注射</option>
-            {EXTRACT_ORDER_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
-        <label className="extract-field">
-          依頼科
-          <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">すべて</option>
-            {departmentOptions.map((d) => (
-              <option key={d.id} value={d.id}>
-                {departmentDisplayName(d)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <PatientScopeFields scope={scope} />
+      <div className="extract-form">
+        <ExtractFormRow label="記録">
+          <div className="extract-form-row__line">
+            <MedicationCodes
+              leaf={drugLeaf}
+              patch={(next) => {
+                if (next.codes) setCodes(next.codes);
+                if (next.drug_classes) setDrugClasses(next.drug_classes);
+              }}
+            />
+          </div>
+          <label className="extract-field">
+            区分
+            <select value={orderType} onChange={(e) => setOrderType(e.target.value as ExtractOrderType | "")}>
+              <option value="">処方・注射</option>
+              {EXTRACT_ORDER_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <PeriodFields period={period} onChange={(next) => next && setPeriod(next)} />
+          <label className="extract-field">
+            依頼科
+            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+              <option value="">すべて</option>
+              {departmentOptions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {departmentDisplayName(d)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </ExtractFormRow>
+        <PatientScopeRow scope={scope} />
+        <CompareRow scope={scope} />
+        <ExtractFormRow label="表" help="実行し直さなくても結果に反映します。">
+          <PatientColumnsField
+            value={patientColumns}
+            selected={Boolean(output?.patient_columns?.length)}
+            onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
+          />
+        </ExtractFormRow>
       </div>
-
-      <PatientColumnsField
-        value={patientColumns}
-        selected={Boolean(output?.patient_columns?.length)}
-        onChange={(patient_columns) => setOutput(patient_columns.length ? { patient_columns } : undefined)}
-      />
 
       <ErrorBanner error={scope.listError} />
 

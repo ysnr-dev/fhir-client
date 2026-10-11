@@ -1333,6 +1333,11 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   pointer-events: none;
 }
 
+.help-tip--start .help-tip__text {
+  left: 0;
+  transform: none;
+}
+
 .help-tip:hover .help-tip__text,
 .help-tip__icon:focus-visible + .help-tip__text {
   visibility: visible;
@@ -8671,7 +8676,57 @@ input.lot-number-cell__input.is-invalid {
   gap: 10px;
 }
 
-/* データ抽出の使い方(DataExtractGuide)。拾い読みできるよう、番号つきの流れ・表・用語の 2 列・例のカードで組む。 */
+/* データ抽出の使い方(DataExtractGuide)。左に話題の一覧、右に本文。本文は番号つきの流れ・表・用語の 2 列・例のカードで組む。 */
+.extract-guide__layout {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-height: 420px;
+}
+
+/* モーダル自体がスクロール領域なので、その上端に追従させる。 */
+.extract-guide__nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+}
+
+.extract-guide__nav .extract-guide__nav-item {
+  height: auto;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: normal;
+  text-align: left;
+}
+
+.extract-guide__nav .extract-guide__nav-item:hover,
+.extract-guide__nav .extract-guide__nav-item.is-active {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+@media (max-width: 720px) {
+  .extract-guide__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .extract-guide__nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
 .extract-guide {
   display: flex;
   flex-direction: column;
@@ -8857,14 +8912,6 @@ input.lot-number-cell__input.is-invalid {
 .extract-guide__note ul {
   margin: 0;
   padding-left: 1.2em;
-}
-
-.data-extract__output {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
 }
 
 .data-extract__dirty {
@@ -9112,9 +9159,94 @@ input.lot-number-cell__input.is-invalid {
   margin-bottom: 12px;
 }
 
-/* 見出しつきの入力欄と並べるチェックは、見出しではなく入力欄の行に揃える。 */
-.data-extract__toolbar--fields {
+/* データ抽出の入力フォーム(ExtractFormRow)。左に役割の見出し語、右に欄を折り返して並べる。 */
+.extract-form {
+  margin-bottom: 4px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.extract-form-row {
+  display: grid;
+  grid-template-columns: 4.5em minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: start;
+  padding: 8px 0;
+}
+
+.extract-form-row + .extract-form-row {
+  border-top: 1px solid var(--border);
+}
+
+.extract-form-row__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.extract-form-row__fields {
+  display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+/* 見出しつきの入力欄と並べるチェックは、見出しではなく入力欄の行に揃える。 */
+.extract-form-row__fields > .extract-checks__item,
+.extract-form-row__fields > .extract-checks {
+  min-height: var(--control-height);
+}
+
+.extract-form-row__fields > .extract-checks {
+  flex-wrap: wrap;
+}
+
+/* 項目の選択(ボタン + チップ)は 1 行を占め、後ろの期間・診療科の位置を動かさない。 */
+.extract-form-row__line {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.extract-form-row__line > .extract-leaf__row {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .extract-form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 欄の見出しに HelpTip を添えるとき、見出しの文字と「?」を 1 行に並べる。 */
+.extract-field__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 条件の下段で、出力の選択は右に寄せる(基準の条件と同じ行)。 */
+.extract-leaf__output {
+  margin-left: auto;
+  min-height: var(--control-height);
+}
+
+/* 条件木のルートの見出しの右端に置く「条件の組み方」の「?」。 */
+.extract-group__guide {
+  margin-left: auto;
+}
+
+/* 結果の切替タブの右に置く「内訳」の「?」。 */
+.data-extract__tab-help {
+  align-self: center;
+  margin: 0 0 4px 6px;
 }
 
 /* データ抽出の「フォルダ登録」の登録先(既存 / 新しいフォルダ)。入力欄の行の上に 1 行で置く。 */
@@ -9124,10 +9256,6 @@ input.lot-number-cell__input.is-invalid {
   margin: 12px 0 8px;
 }
 
-.data-extract__toolbar--fields > .extract-checks__item,
-.data-extract__toolbar--fields > .extract-checks {
-  min-height: var(--control-height);
-}
 
 .data-extract .template-select {
   width: 32em;
@@ -9347,6 +9475,30 @@ input.lot-number-cell__input.is-invalid {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+/* 内訳の切り口のまとまり(行 / 列 / 値 / 表示)。見出し語の後ろに欄を並べ、まとまりの間を空ける。 */
+.extract-breakdown__group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+}
+
+.extract-breakdown__group:last-of-type {
+  border-right: none;
+}
+
+.extract-breakdown__group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.extract-breakdown__csv {
+  margin-left: auto;
 }
 
 .extract-breakdown__controls select,
