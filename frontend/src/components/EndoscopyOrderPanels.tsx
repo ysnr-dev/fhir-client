@@ -6,7 +6,7 @@ import {
   useOrderAppointment,
   useUpdateEndoscopyOrder,
 } from "../api/queries";
-import type { SlotSelection } from "../fhir/appointmentHelpers";
+import { buildExamAppointmentEntries, type SlotSelection } from "../fhir/appointmentHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import {
@@ -134,6 +134,8 @@ export function EndoscopyOrderEditPanel({ patientId, srId, onSaved }: EndoscopyO
   // 予約日時の変更もこの画面から行うので、オーダーに紐づく検査予約を読んでおく
   // (予約タブからは変えない。オーダーの実施日時と必ず一緒に動かすため)。
   const booking = useOrderAppointment(srId);
+  // 日付未定で出したオーダーに予約を取るときは、予約(Appointment)を新しく作る。
+  const { data: patientResult } = usePatient(patientId);
 
   function handleSubmit(
     values: EndoscopyOrderFormValues,
@@ -146,19 +148,28 @@ export function EndoscopyOrderEditPanel({ patientId, srId, onSaved }: EndoscopyO
     // 編集は 1 オーダーへの書き戻しなので、予約も選択もそのオーダーの 1 件だけ。
     const selection = bookings ? Object.values(bookings)[0] : undefined;
     const appointment = booking.appointment;
+    const bundle = buildEndoscopyOrderUpdateBundle(
+      values,
+      patientId,
+      serviceRequest,
+      itemIds,
+      responseIds,
+      orderRequester(serviceRequest),
+    );
+    // 予約がまだ無いオーダー(日付未定で出したもの)に枠を選んだときは、予約を同じ transaction で作る。
+    const patient = patientResult?.data;
+    if (selection && !appointment && patient) {
+      bundle.entry = [
+        ...(bundle.entry ?? []),
+        ...buildExamAppointmentEntries(patient, selection, `ServiceRequest/${serviceRequest.id}`),
+      ];
+    }
 
     // 依頼科・依頼医師は登録時のものを引き継ぐ(処方・注射・検体検査の編集と同じ)。
     // 外したオーダー項目・参照が外れたテンプレート回答は、元の id との差分で DELETE される。
     updateEndoscopyOrder.mutate(
       {
-        bundle: buildEndoscopyOrderUpdateBundle(
-          values,
-          patientId,
-          serviceRequest,
-          itemIds,
-          responseIds,
-          orderRequester(serviceRequest),
-        ),
+        bundle,
         booking: selection && appointment ? { appointment, slots: selection.slots } : null,
       },
       { onSuccess: onSaved },

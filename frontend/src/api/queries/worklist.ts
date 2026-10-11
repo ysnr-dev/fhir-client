@@ -16,6 +16,12 @@ const WORKLIST_MAX_PAGES = 2;
  * 全種別で occurrence が開始日、authoredOn が登録日時(fhir/shared.ts 冒頭)。
  * 例外は処方一覧だけで、交付日(登録日)で引く(理由は api/queries/prescription.ts の「処方一覧」の節)。
  */
+/**
+ * 日付の代わりに渡すと、実施予定日の無いオーダー(日付未定)を引く。放射線・生理・内視鏡の
+ * 一覧の「日付未定」で使う。
+ */
+export const UNSCHEDULED_WORKLIST_DATE = "unscheduled";
+
 export function worklistParams(
   category: string,
   date: string,
@@ -26,7 +32,8 @@ export function worklistParams(
   params.set("category", category);
   // occurrenceDateTime は撮影時刻まで持つことがあるが、上流が日付をローカル
   // タイムゾーンで解釈するので、そのまま渡せば「その日の撮影」になる。
-  params.set(dateParam, date);
+  if (date === UNSCHEDULED_WORKLIST_DATE) params.set(`${dateParam}:missing`, "true");
+  else params.set(dateParam, date);
   // 明細はオーダーそのものではないので、ヒットさせるのはヘッダだけにする。
   params.set("based-on:missing", "true");
   params.set("_count", String(WORKLIST_PAGE));

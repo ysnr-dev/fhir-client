@@ -1,0 +1,1245 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/rad-mri-01",
+  "version": "1.0.0",
+  "name": "RAD_MRI_01",
+  "title": "MRI検査 安全確認・特別指示",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "放射線オーダー(MRI)の「特別指示」に貼るテンプレート。MRI は強い磁場の中に入る検査なので、体内金属・植込み機器・刺青・閉所恐怖・妊娠の可能性を撮影前に確認する欄を先頭に置く。撮影項目そのもの(部位・シーケンスの種別)は項目マスタの JJ1017 コードが持つ。記入しなかった項目は特別指示の文面に出ない。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "25675b10-0ef3-4425-83c4-c1f8c3015cca",
+        "display": "検査"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-safety",
+      "type": "group",
+      "text": "MRI 安全確認",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "撮影室に入れてよいかの判断材料。カルテの注意区分「体内金属・ペースメーカー」はオーダー画面に自動で出るが、機種や MRI 対応の可否は依頼医がここで確かめて書く。"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "sf-pacemaker",
+          "type": "choice",
+          "text": "ペースメーカー・ICD",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "条件付き MRI 対応の機種は、撮影前後の設定変更と立会いの手配が要る。非対応・不明なら撮影できない(依頼前に確認する)。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "conditional",
+                "display": "あり(条件付き MRI 対応)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unsafe",
+                "display": "あり(MRI 非対応)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "不明"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp-pacemaker",
+              "type": "group",
+              "text": "条件付き MRI 対応",
+              "enableWhen": [
+                {
+                  "question": "sf-pacemaker",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "conditional"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "pm-model",
+                  "type": "string",
+                  "text": "機種・カード番号"
+                },
+                {
+                  "linkId": "pm-arrange",
+                  "type": "string",
+                  "text": "設定変更・立会いの手配",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "循環器科・臨床工学技士への連絡状況を書く。"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "sf-implant",
+          "type": "choice",
+          "text": "体内金属・植込み機器",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "不明"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp-implant",
+              "type": "group",
+              "text": "体内金属・植込み機器",
+              "enableWhen": [
+                {
+                  "question": "sf-implant",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "im-kind",
+                  "type": "choice",
+                  "text": "種類",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "check-box"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "clip",
+                        "display": "脳動脈瘤クリップ"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "cochlear",
+                        "display": "人工内耳"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "neuro",
+                        "display": "神経刺激装置"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "valve",
+                        "display": "人工弁"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "stent",
+                        "display": "ステント・コイル"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "joint",
+                        "display": "人工関節・骨接合材"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "pump",
+                        "display": "インスリンポンプ・持続血糖測定器"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "dental",
+                        "display": "歯科金属・インプラント"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "other",
+                        "display": "その他"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "im-detail",
+                  "type": "string",
+                  "text": "部位・製品名・植込み時期"
+                },
+                {
+                  "linkId": "im-mri",
+                  "type": "choice",
+                  "text": "MRI 対応の確認",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "radio-button"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "未確認のまま依頼しない。確認できない場合は撮影部門に相談する。"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "safe",
+                        "display": "対応を確認済(添付文書・カード)"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "conditional",
+                        "display": "条件付きで可(条件を確認済)"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "unconfirmed",
+                        "display": "未確認"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "sf-fragment",
+          "type": "choice",
+          "text": "金属片(眼窩内など)の可能性",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "金属加工の職歴・外傷歴で疑う。疑いがあれば X 線で確認してから撮る。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "不明"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sf-tattoo",
+          "type": "choice",
+          "text": "刺青・アートメイク",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "発熱・熱傷の恐れ。部位を申し送りに書く。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sf-patch",
+          "type": "choice",
+          "text": "貼付剤",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "ニトログリセリン・フェンタニルなど金属を含む貼付剤は熱傷の恐れがあるので外す。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "remove",
+                "display": "あり(検査前に除去)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sf-claustrophobia",
+          "type": "choice",
+          "text": "閉所恐怖",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "ありなら鎮静の要否と付き添いを下の欄で指示する。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "不明"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sf-pregnancy",
+          "type": "choice",
+          "text": "妊娠の可能性",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "不明"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "na",
+                "display": "対象外"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-scope",
+      "type": "group",
+      "text": "撮影範囲・撮影条件",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "撮影項目(JJ1017)で決まっている範囲・シーケンスをなぞる必要はない。この依頼に限った指定だけを書く。"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "scope-range",
+          "type": "string",
+          "text": "撮影範囲"
+        },
+        {
+          "linkId": "scope-sequence",
+          "type": "string",
+          "text": "追加のシーケンス・撮影条件",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "拡散強調・脂肪抑制・MRCP など、項目で表していない追加の撮像。"
+            }
+          ]
+        },
+        {
+          "linkId": "scope-field",
+          "type": "choice",
+          "text": "磁場強度",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "植込み機器の条件が 1.5T のみ、などのときに指定する。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "any",
+                "display": "指定なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1.5t",
+                "display": "1.5T"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3t",
+                "display": "3T"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "contrast",
+      "type": "choice",
+      "text": "造影",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                "code": "radio-button"
+              }
+            ]
+          }
+        },
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+          "valueCode": "horizontal"
+        },
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "「造影あり」を選ぶと造影の指示欄と安全確認欄が開く。"
+        }
+      ],
+      "answerOption": [
+        {
+          "valueCoding": {
+            "code": "none",
+            "display": "造影なし(単純のみ)"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "yes",
+            "display": "造影あり"
+          }
+        }
+      ],
+      "item": [
+        {
+          "linkId": "grp-contrast",
+          "type": "group",
+          "text": "造影の指示",
+          "enableWhen": [
+            {
+              "question": "contrast",
+              "operator": "=",
+              "answerCoding": {
+                "code": "yes"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "cm-agent",
+              "type": "string",
+              "text": "造影剤",
+              "extension": [
+                {
+                  "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                  "valueMarkdown": "ガドリニウム製剤・肝特異性造影剤などの銘柄。"
+                }
+              ]
+            },
+            {
+              "linkId": "cm-volume",
+              "type": "decimal",
+              "text": "投与量",
+              "extension": [
+                {
+                  "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+                  "valueDecimal": 0
+                },
+                {
+                  "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+                  "valueDecimal": 100
+                },
+                {
+                  "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+                  "valueInteger": 1
+                },
+                {
+                  "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+                  "valueCoding": {
+                    "system": "http://unitsofmeasure.org",
+                    "code": "mL",
+                    "display": "mL"
+                  }
+                }
+              ]
+            },
+            {
+              "linkId": "cm-timing",
+              "type": "string",
+              "text": "撮影のタイミング",
+              "extension": [
+                {
+                  "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                  "valueMarkdown": "ダイナミック撮影の相、肝細胞相の撮影時刻など。"
+                }
+              ]
+            },
+            {
+              "linkId": "grp-cm-safety",
+              "type": "group",
+              "text": "造影剤の安全確認",
+              "extension": [
+                {
+                  "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                  "valueMarkdown": "造影剤アレルギー・eGFR・投与中のビグアナイド系はオーダー画面に自動で出る。ここには自動で拾えないもの(他院での副作用歴・同意)を書く。"
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "cm-allergy",
+                  "type": "choice",
+                  "text": "ガドリニウム造影剤の副作用歴",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "radio-button"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "none",
+                        "display": "なし"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "yes",
+                        "display": "あり(要注意)"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "unknown",
+                        "display": "不明"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "cm-dialysis",
+                  "type": "choice",
+                  "text": "透析",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "radio-button"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "腎性全身性線維症(NSF)の危険があるため、透析患者への投与は原則避ける。"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "none",
+                        "display": "なし"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "hd",
+                        "display": "血液透析"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "pd",
+                        "display": "腹膜透析"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "cm-consent",
+                  "type": "choice",
+                  "text": "造影剤使用の同意",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "radio-button"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "done",
+                        "display": "取得済"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "before",
+                        "display": "検査前に取得"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-prep",
+      "type": "group",
+      "text": "前処置・患者準備",
+      "item": [
+        {
+          "linkId": "prep-fasting",
+          "type": "choice",
+          "text": "食事",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "free",
+                "display": "制限なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "fasting",
+                "display": "絶食"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp-fasting",
+              "type": "group",
+              "text": "絶食",
+              "enableWhen": [
+                {
+                  "question": "prep-fasting",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "fasting"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "prep-fasting-hours",
+                  "type": "integer",
+                  "text": "絶食の開始(検査の何時間前から)",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+                      "valueInteger": 0
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+                      "valueInteger": 24
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+                      "valueCoding": {
+                        "system": "http://unitsofmeasure.org",
+                        "code": "h",
+                        "display": "時間前"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "prep-medication",
+          "type": "string",
+          "text": "休薬・当日内服の指示"
+        },
+        {
+          "linkId": "prep-line",
+          "type": "choice",
+          "text": "ルート確保",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "不要"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "placed",
+                "display": "留置済み"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ward",
+                "display": "病棟で確保"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "outpatient",
+                "display": "外来で確保"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "rad",
+                "display": "放射線科で確保"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-status",
+      "type": "group",
+      "text": "患者状態・搬送",
+      "item": [
+        {
+          "linkId": "st-transport",
+          "type": "choice",
+          "text": "搬送方法",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "撮影室には MRI 対応の車椅子・ストレッチャーに乗せ替える。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "walk",
+                "display": "歩行"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "wheelchair",
+                "display": "車椅子"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "stretcher",
+                "display": "ストレッチャー"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "bed",
+                "display": "ベッド"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "st-sedation",
+          "type": "choice",
+          "text": "鎮静",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "不要"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "needed",
+                "display": "必要(依頼医が対応)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "consult",
+                "display": "要相談"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "st-communication",
+          "type": "choice",
+          "text": "意思疎通・体位保持",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "ok",
+                "display": "可"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "partial",
+                "display": "一部介助が必要"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ng",
+                "display": "不可"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "st-escort",
+          "type": "choice",
+          "text": "付き添い",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "nurse",
+                "display": "看護師"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "doctor",
+                "display": "医師(立会い)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "family",
+                "display": "家族"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "st-devices",
+          "type": "string",
+          "text": "持ち込む機器(酸素・点滴ポンプ・モニタなど)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "撮影室に持ち込めない機器は MRI 対応品への付け替えが要る。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-report",
+      "type": "group",
+      "text": "読影・報告",
+      "item": [
+        {
+          "linkId": "rp-reading",
+          "type": "choice",
+          "text": "読影",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "normal",
+                "display": "通常"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "urgent",
+                "display": "至急読影"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "撮影のみ(読影不要)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "rp-due",
+          "type": "date",
+          "text": "報告の希望日"
+        },
+        {
+          "linkId": "rp-compare",
+          "type": "string",
+          "text": "比較したい過去検査"
+        }
+      ]
+    },
+    {
+      "linkId": "note",
+      "type": "text",
+      "text": "その他の申し送り",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "上の欄に収まらない指示。テンプレートから記載すると特別指示欄を直接書けなくなるため、自由文はここに書く。"
+        }
+      ]
+    }
+  ]
+}

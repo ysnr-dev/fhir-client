@@ -13,6 +13,7 @@ import {
   searchMedicineUsages,
   searchUnmappedMedicines,
   updateMedicineDoseConversion,
+  type Medicine,
 } from "../masterClient";
 
 export interface MedicineUsageFilters {
@@ -209,6 +210,28 @@ export function useYakkaCodes(medicineCodes: string[]) {
     queryFn: () => fetchYakkaCodes(codes),
     staleTime: Infinity,
     enabled: codes.length > 0,
+  });
+}
+
+/**
+ * 造影剤区分を持つ医薬品(造影剤と補助剤)の全件。放射線オーダーの造影剤アレルギーの照合に使う。
+ * 200 件ほどなのでページを辿って読み切る。
+ */
+export function useContrastMedicines(enabled: boolean) {
+  return useQuery({
+    queryKey: ["master", "medicines", "contrast-all"],
+    queryFn: async () => {
+      const per = 100;
+      const items: Medicine[] = [];
+      for (let page = 1; ; page++) {
+        const result = await searchMedicines({ contrast_medium: true, page, per });
+        items.push(...result.items);
+        if (items.length >= result.total || result.items.length < per) break;
+      }
+      return items;
+    },
+    staleTime: Infinity,
+    enabled,
   });
 }
 

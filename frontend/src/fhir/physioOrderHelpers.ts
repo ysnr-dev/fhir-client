@@ -135,6 +135,8 @@ export interface PhysioOrderItemLine {
   date: string;
   time: string;
   priority: PhysioOrderPriority;
+  /** 単独オーダー枠の日付未定。まとめ枠のぶんは PhysioOrderFormValues.undated。 */
+  undated: boolean;
 }
 
 export interface PhysioOrderFormValues {
@@ -151,6 +153,11 @@ export interface PhysioOrderFormValues {
    * 空なら実施日だけのオーダー(時間帯は部門側に任せる)。
    */
   startTime: string;
+  /**
+   * 日付未定。実施予定日を決めずに出すオーダーで、occurrence を持たない(カルテでは
+   * 「日付未定」に並ぶ)。至急・事後では使わない。まとめ枠のぶん(単独枠は行が持つ)。
+   */
+  undated: boolean;
   // 対象プロブレム(POMR)。null なら特定の問題に紐付かない検査。
   problem: ProblemRef | null;
   items: PhysioOrderItemLine[];
@@ -165,6 +172,7 @@ export function emptyPhysioOrderForm(
     priority: "routine",
     startDate: today(),
     startTime: "",
+    undated: false,
     problem,
     items: [],
   };
@@ -225,7 +233,7 @@ function buildItemRequest(
   sequence: number,
   patientId: string,
   authoredOn: string,
-  occurrenceDateTime: string,
+  occurrenceDateTime: string | undefined,
   parentReference: string,
   // テンプレート記入内容(QuestionnaireResponse)への参照。Bundle 内で解決するため
   // 呼び出し側が組み立てて渡す(新規は urn:uuid、既存は QuestionnaireResponse/{id})。
@@ -332,6 +340,7 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): Ph
     date: "",
     time: "",
     priority: "routine",
+    undated: false,
   };
 }
 
@@ -343,7 +352,7 @@ function buildItemEntries(
   items: PhysioOrderItemLine[],
   patientId: string,
   authoredOn: string,
-  occurrenceDateTime: string,
+  occurrenceDateTime: string | undefined,
   headerReference: string,
   originalItemIds: string[],
   originalResponseIds: string[],
@@ -462,7 +471,8 @@ function parseItemRequests(
  * オフセットを付ける)。登録日時(authoredOn)とは別物で、こちらがカルテのカードの位置と
  * 部門一覧の日付軸になる。
  */
-function physioOrderOccurrence(values: PhysioOrderFormValues): string {
+function physioOrderOccurrence(values: PhysioOrderFormValues): string | undefined {
+  if (values.undated) return undefined;
   return values.startTime
     ? toFhirDateTime(`${values.startDate}T${values.startTime}`)
     : values.startDate;
@@ -473,7 +483,7 @@ function buildPhysioOrderServiceRequest(
   patientId: string,
   requester: OrderContext,
   authoredOn: string,
-  occurrenceDateTime: string,
+  occurrenceDateTime: string | undefined,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -616,6 +626,7 @@ export function splitPhysioOrderValues(values: PhysioOrderFormValues): PhysioOrd
           ...values,
           items: lines,
           priority: item.priority,
+          undated: item.undated,
           startDate: item.date || values.startDate,
           startTime: item.date ? item.time : values.startTime,
         },
@@ -754,6 +765,7 @@ export function buildDoPhysioOrderForm(
     setting,
     startDate: today(),
     startTime: "",
+    undated: false,
     items: values.items.map((item) => ({
       ...item,
       id: "",
@@ -763,6 +775,7 @@ export function buildDoPhysioOrderForm(
       // 至急区分は DO 元の伝票の値を引き継ぐ(同じ検査を同じ扱いで出し直すため)。
       date: today(),
       time: "",
+      undated: false,
       priority: values.priority,
     })),
   };
@@ -832,6 +845,7 @@ export function parsePhysioOrderForm(
     priority: (sr.priority === "urgent" || sr.priority === RETRO_PRIORITY
       ? sr.priority
       : "routine") as PhysioOrderPriority,
+    undated: !sr.occurrenceDateTime,
     startDate: orderDay(sr) || today(),
     startTime: physioOrderTime(sr),
     problem: physioOrderProblem(sr),

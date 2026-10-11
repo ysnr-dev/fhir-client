@@ -53,6 +53,7 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
+import { InfectionNotice } from "./InfectionNotice";
 import { ProblemSelect } from "./ProblemSelect";
 import { EndoscopyPerformInputModal } from "./EndoscopyPerformModal";
 import { TemplateSchemaImages } from "./SchemaImageGallery";
@@ -235,6 +236,7 @@ export function EndoscopyOrderForm({
       date: today(),
       time: "",
       priority: "routine",
+      undated: false,
     }),
     [catalogResult],
   );
@@ -391,10 +393,11 @@ export function EndoscopyOrderForm({
     setValues((v) => ({
       ...v,
       startDate: date,
+      undated: false,
       items: v.items.map((line) =>
         line.parentCode || line.groupable || requiresBooking(line.code)
           ? line
-          : { ...line, date },
+          : { ...line, date, undated: false },
       ),
     })),
   );
@@ -403,8 +406,10 @@ export function EndoscopyOrderForm({
   // 至急・事後(予約なしのオーダー)なら可。判定はオーダー単位。
   const canPerformNow = useCallback(
     (split: EndoscopyOrderSplit) =>
-      split.values.priority !== "routine" ||
-      !topLevelItems(split.values.items).some((line) => requiresBooking(line.code)),
+      // 即実施は当日の実施記録を作るので、日付未定のオーダーではできない。
+      !(split.values.priority === "routine" && split.values.undated) &&
+      (split.values.priority !== "routine" ||
+        !topLevelItems(split.values.items).some((line) => requiresBooking(line.code))),
     [requiresBooking],
   );
 
@@ -450,21 +455,29 @@ export function EndoscopyOrderForm({
     // 至急のオーダーは当日実施に倒す(予約も取らない)。至急区分はオーダー枠ごとの
     // 入力なので、まとめ枠と単独枠をそれぞれ見る。
     const startDate = values.priority === "urgent" ? today() : values.startDate;
+    // 日付未定は通常のオーダーだけ(至急は当日、事後は実施済みの日が決まっている)。
+    const undated = values.priority === "routine" && values.undated;
     items = items.map((line) =>
       !line.parentCode && !line.groupable && line.priority === "urgent"
-        ? { ...line, date: today() }
-        : line,
+        ? { ...line, date: today(), undated: false }
+        : line.priority !== "routine"
+          ? { ...line, undated: false }
+          : line,
     );
 
     // セットの内容としての入力では日付・予約を持たない(適用時に入れる)。
-    if (!setMode && values.priority !== "urgent" && groups.some((line) => line.groupable) && !startDate) {
+    if (!setMode && values.priority !== "urgent" && groups.some((line) => line.groupable) && !undated && !startDate) {
       setValidationError("実施日を入力してください。");
       return;
     }
     if (!editing && !setMode) {
-      const soloGroups = groups.filter((line) => !line.groupable);
+      const soloGroups = items.filter((line) => !line.parentCode && !line.groupable);
       const withoutDate = soloGroups.find(
-        (line) => line.priority !== "urgent" && !booksSlot(line.priority, line.code) && !line.date,
+        (line) =>
+          line.priority !== "urgent" &&
+          !line.undated &&
+          !booksSlot(line.priority, line.code) &&
+          !line.date,
       );
       if (withoutDate) {
         setValidationError(`「${withoutDate.name}」の実施日を入力してください。`);
@@ -472,7 +485,7 @@ export function EndoscopyOrderForm({
       }
       // 予約必須の枠は予約が実施日時そのもの。選ばずには登録させない(至急・事後を除く)。
       const unbooked = soloGroups.find(
-        (line) => booksSlot(line.priority, line.code) && !bookings[line.code],
+        (line) => booksSlot(line.priority, line.code) && !line.undated && !bookings[line.code],
       );
       if (unbooked) {
         setValidationError(`「${unbooked.name}」の予約を取得してください。`);
@@ -517,6 +530,7 @@ export function EndoscopyOrderForm({
     onSubmit(
       {
         ...values,
+        undated,
         startDate,
         items,
         problem: refreshProblemDisplay(values.problem, problemOptions),
@@ -567,13 +581,17 @@ export function EndoscopyOrderForm({
     setBookings((current) => ({ ...current, [bookingTarget]: pendingBooking }));
     // 編集は 1 オーダーへの書き戻しで、ヘッダの実施日時が予約の枠と同期している値。
     // 選び直した枠に合わせてここで書き換える(新規登録では登録時に枠から写す)。
+    // 枠を選んだら日付は決まるので、日付未定は外す。
     if (editing) {
       const slot = pendingBooking.slots[0];
       setValues((current) => ({
         ...current,
+        undated: false,
         startDate: slotDate(slot),
         startTime: slotTime(slot),
       }));
+    } else {
+      updateItem(bookingTarget, { undated: false });
     }
     setBookingTarget(null);
     setPendingBooking(null);
@@ -619,6 +637,7 @@ export function EndoscopyOrderForm({
         )}
         <ErrorBanner error={submitError} />
         <ErrorBanner error={layouts.error ?? setMembers.error ?? catalog.error} />
+        {!setMode && <InfectionNotice patientId={patientId} />}
 
         <fieldset>
           <legend>検査共通</legend>
@@ -737,6 +756,12 @@ export function EndoscopyOrderForm({
                   time={values.startTime}
                   urgent={values.priority === "urgent"}
                   maxDate={values.priority === RETRO_PRIORITY ? today() : undefined}
+                  undated={values.priority === "routine" && values.undated}
+                  onChangeUndated={
+                    values.priority === "routine"
+                      ? (undated) => update("undated", undated)
+                      : undefined
+                  }
                   onChangeDate={(date) => update("startDate", date)}
                   onChangeTime={(time) => update("startTime", time)}
                 />
@@ -764,6 +789,13 @@ export function EndoscopyOrderForm({
             const booking = bookings[code];
             const urgent = entry.item.priority === "urgent";
             const retro = entry.item.priority === RETRO_PRIORITY;
+            // 日付未定は通常のオーダーだけ。編集はヘッダ 1 件への書き戻しなので values 側。
+            const canUndate = entry.item.priority === "routine";
+            const undated = canUndate && (editing ? values.undated : entry.item.undated);
+            const changeUndated = canUndate
+              ? (next: boolean) =>
+                  editing ? update("undated", next) : updateItem(code, { undated: next })
+              : undefined;
 
             return (
               <OrderFrame
@@ -793,7 +825,7 @@ export function EndoscopyOrderForm({
                 }
                 schedule={
                   reserved ? (
-                    editing ? (
+                    editing && hasBooking ? (
                       // 編集では、予約日時もここから変える(予約タブからは変えない。
                       // オーダーの実施日時と予約を必ず一緒に動かすため)。日時は予約と
                       // 同期しているヘッダの値で、枠を選び直すとその枠の日時になる。
@@ -801,13 +833,9 @@ export function EndoscopyOrderForm({
                         <span className="rad-order-frame__booked">
                           実施日時 {values.startDate} {values.startTime}
                         </span>
-                        {hasBooking ? (
-                          <button type="button" onClick={() => openBooking(code)}>
-                            予約日時変更
-                          </button>
-                        ) : (
-                          <span className="rad-order-frame__note">(予約が見つかりません)</span>
-                        )}
+                        <button type="button" onClick={() => openBooking(code)}>
+                          予約日時変更
+                        </button>
                       </span>
                     ) : booking ? (
                       <span className="rad-order-frame__booking">
@@ -820,9 +848,21 @@ export function EndoscopyOrderForm({
                         </button>
                       </span>
                     ) : (
-                      <button type="button" onClick={() => openBooking(code)}>
-                        予約
-                      </button>
+                      // 予約が無い(新規、または日付未定で出したオーダーの編集)。枠を取るか、
+                      // 日付未定のまま出す。
+                      <span className="rad-order-frame__booking">
+                        {editing && !undated && (
+                          <span className="rad-order-frame__booked">
+                            {values.startDate} {values.startTime}
+                          </span>
+                        )}
+                        <button type="button" onClick={() => openBooking(code)}>
+                          予約
+                        </button>
+                        {changeUndated && (
+                          <UndatedCheckbox checked={undated} onChange={changeUndated} />
+                        )}
+                      </span>
                     )
                   ) : (
                     <FrameDateTime
@@ -830,6 +870,8 @@ export function EndoscopyOrderForm({
                       time={editing ? values.startTime : entry.item.time}
                       urgent={urgent}
                       maxDate={retro ? today() : undefined}
+                      undated={undated}
+                      onChangeUndated={changeUndated}
                       onChangeDate={(date) =>
                         editing ? update("startDate", date) : updateItem(code, { date })
                       }
@@ -1047,7 +1089,11 @@ function OrderFrame({
             即実施
           </label>
           {!canPerform && (
-            <span className="order-select__muted">予約する検査は即実施にできません</span>
+            <span className="order-select__muted">
+              {split.values.priority === "routine" && split.values.undated
+                ? "日付未定の検査は即実施にできません"
+                : "予約する検査は即実施にできません"}
+            </span>
           )}
           {performChecked &&
             (perform.needsInput(split) ? (
@@ -1081,6 +1127,8 @@ function FrameDateTime({
   time,
   urgent,
   maxDate,
+  undated = false,
+  onChangeUndated,
   onChangeDate,
   onChangeTime,
 }: {
@@ -1089,6 +1137,9 @@ function FrameDateTime({
   urgent?: boolean;
   /** 選べる最終日。事後のオーダーで当日までに絞るのに使う。 */
   maxDate?: string;
+  undated?: boolean;
+  /** 日付未定の切替。日付未定にできない枠(至急・事後)では渡さない。 */
+  onChangeUndated?: (undated: boolean) => void;
   onChangeDate: (date: string) => void;
   onChangeTime: (time: string) => void;
 }) {
@@ -1100,16 +1151,38 @@ function FrameDateTime({
           type="date"
           value={date}
           max={maxDate}
-          disabled={urgent}
+          disabled={urgent || undated}
           onChange={(e) => onChangeDate(e.target.value)}
         />
       </label>
       <label>
         実施時刻
-        <input type="time" value={time} onChange={(e) => onChangeTime(e.target.value)} />
+        <input
+          type="time"
+          value={time}
+          disabled={undated}
+          onChange={(e) => onChangeTime(e.target.value)}
+        />
       </label>
+      {onChangeUndated && <UndatedCheckbox checked={undated} onChange={onChangeUndated} />}
       {urgent && <span className="rad-order-frame__note">当日実施</span>}
     </span>
+  );
+}
+
+/** 日付未定のチェック。日付欄の横に置く。 */
+function UndatedCheckbox({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="rad-order-frame__undated">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      日付未定
+    </label>
   );
 }
 

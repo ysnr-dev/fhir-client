@@ -33,6 +33,7 @@ import { departmentOf, ORDER_TYPE_SYSTEM } from "./orderHeader";
 import { isPrescriptionServiceRequest, prescriptionProblem } from "./prescriptionHelpers";
 import { categoryCoding } from "./shared";
 import {
+  RAD_ORDER_TYPE,
   isRadServiceRequest,
   radOrderItemRequests,
   radOrderResponseIds,
@@ -40,6 +41,7 @@ import {
 import { radPerformsByOrderId, type RadPerformDisplay } from "./radResultHelpers";
 import { radTaskStatus, radTasksByOrderId, type RadTaskStatus } from "./radTaskHelpers";
 import {
+  PHYSIO_ORDER_TYPE,
   isPhysioServiceRequest,
   physioOrderItemRequests,
   physioOrderResponseIds,
@@ -149,6 +151,7 @@ import {
 } from "./surgeryTaskHelpers";
 import { surgeryPerformsByOrderId, type SurgeryPerformDisplay } from "./surgeryResultHelpers";
 import {
+  ENDOSCOPY_ORDER_TYPE,
   isEndoscopyServiceRequest,
   endoscopyOrderItemRequests,
   endoscopyOrderResponseIds,
@@ -565,7 +568,12 @@ export const KARTE_UNSCHEDULED_DAY = "unscheduled";
  * 後者とみなして登録日(authoredOn)の日に出し、「日付未定」には落とさない。
  * 他の種別で未定を許したくなったら、フォームの必須検証を外してここに足す。
  */
-const UNSCHEDULABLE_ORDER_TYPES = new Set<string>([SURGERY_ORDER_TYPE.code]);
+const UNSCHEDULABLE_ORDER_TYPES = new Set<string>([
+  SURGERY_ORDER_TYPE.code,
+  RAD_ORDER_TYPE.code,
+  PHYSIO_ORDER_TYPE.code,
+  ENDOSCOPY_ORDER_TYPE.code,
+]);
 
 /** 診療日の降順比較。日付未定は常に先頭。localeCompare の照合順に依存させない。 */
 export function compareKarteDaysDesc(a: string, b: string): number {

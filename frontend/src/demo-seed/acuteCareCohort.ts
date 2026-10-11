@@ -212,6 +212,7 @@ async function radExam(c: Context, problem: ProblemRef, item: Item, date: string
         date,
         time: "",
         priority: "routine" as const,
+        undated: false,
       },
     ],
   };
@@ -260,6 +261,7 @@ async function endoscopy(c: Context, problem: ProblemRef, item: Item, date: stri
         date,
         time: "",
         priority: "routine" as const,
+        undated: false,
       },
     ],
   };

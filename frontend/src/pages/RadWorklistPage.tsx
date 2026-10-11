@@ -12,6 +12,7 @@ import { useReturnLinkState } from "../returnTo";
 import {
   useSelfDepartments,
   useRadWorklist,
+  UNSCHEDULED_WORKLIST_DATE,
   useUpdateRadTaskStatus,
   type RadWorklistRow,
 } from "../api/queries";
@@ -23,6 +24,8 @@ import { RadPerformModal } from "../components/RadPerformModal";
 import { ExamReportEntryModal } from "../components/ExamReportEntryModal";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
+import { RowPictograms } from "../components/PatientListRowParts";
+import { useRowPictogramSources } from "../hooks/useRowPictogramSources";
 import {
   PatientKana,
   PatientProfileCells,
@@ -75,6 +78,9 @@ const emptyFilters: Filters = {
 export function RadWorklistPage() {
   // 撮影日は必須。未選択にはできないので当日から始める。
   const [date, setDate] = useState(today);
+  // 日付未定(実施予定日の無いオーダー)を並べる。日付を決めるのは依頼側の編集なので、
+  // ここでは見るだけで実施はできない。
+  const [undated, setUndated] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   // 実施入力を開いている行。「実施」だけはステータス変更ではなくモーダルを開く。
   const [performing, setPerforming] = useState<RadWorklistRow | null>(null);
@@ -90,7 +96,7 @@ export function RadWorklistPage() {
     return () => document.body.classList.remove("page-wide");
   }, []);
 
-  const worklist = useRadWorklist(date);
+  const worklist = useRadWorklist(undated ? UNSCHEDULED_WORKLIST_DATE : date);
   const catalog = useRadJj1017Catalog();
   const departments = useSelfDepartments();
   const updateStatus = useUpdateRadTaskStatus();
@@ -100,6 +106,11 @@ export function RadWorklistPage() {
     [worklist.data, filters],
   );
   const total = worklist.data?.rows.length ?? 0;
+  const patientIds = useMemo(
+    () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [rows],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
   // (同じ患者が 1 日に複数のオーダーを持つこともある)。絞り込みで行が消えたら閉じる。
@@ -202,6 +213,8 @@ export function RadWorklistPage() {
 
       <FilterForm
         date={date}
+        undated={undated}
+        onUndatedChange={setUndated}
         filters={filters}
         modalities={catalog.data?.modality ?? []}
         wards={wardOptions}
@@ -247,6 +260,7 @@ export function RadWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
+                    pictograms={pictograms}
                     rowProps={drawer.rowProps(
                       row.patient?.id && row.order.id,
                       summarizeRadOrder(row.order).urgent ? "rad-worklist__row--urgent" : undefined,
@@ -258,7 +272,9 @@ export function RadWorklistPage() {
                   <tr>
                     <td colSpan={12} className="master-search__empty">
                       {total === 0
-                        ? "この撮影日の放射線検査オーダーはありません"
+                        ? undated
+                          ? "日付未定の放射線検査オーダーはありません"
+                          : "この撮影日の放射線検査オーダーはありません"
                         : "絞り込みに該当する検査がありません"}
                     </td>
                   </tr>
@@ -321,6 +337,8 @@ function matchesFilters(row: RadWorklistRow, filters: Filters): boolean {
 
 interface FilterFormProps {
   date: string;
+  undated: boolean;
+  onUndatedChange: (undated: boolean) => void;
   filters: Filters;
   modalities: { code: string; name: string }[];
   wards: { id: string; name: string }[];
@@ -331,6 +349,8 @@ interface FilterFormProps {
 
 function FilterForm({
   date,
+  undated,
+  onUndatedChange,
   filters,
   modalities,
   wards,
@@ -345,9 +365,19 @@ function FilterForm({
 
   return (
     <form className="patient-search-form" onSubmit={handleSubmit}>
-      <label>
-        撮影日
-        <DateStepper value={date} onChange={onDateChange} />
+      {!undated && (
+        <label>
+          撮影日
+          <DateStepper value={date} onChange={onDateChange} />
+        </label>
+      )}
+      <label className="patient-search-form__check">
+        <input
+          type="checkbox"
+          checked={undated}
+          onChange={(e) => onUndatedChange(e.target.checked)}
+        />
+        日付未定
       </label>
       <label>
         種別(モダリティ)
@@ -445,9 +475,12 @@ function secondaryActionsOf(row: RadWorklistRow) {
 function WorklistRow({
   row,
   rowProps,
+  pictograms,
   ...rowActions
 }: {
   row: RadWorklistRow;
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: ReturnType<typeof useRowPictogramSources>;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
 } & WorklistRowActions) {
@@ -470,6 +503,7 @@ function WorklistRow({
                 カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
             <Link to={`/patients/${patient.id}/karte`} state={returnLinkState}>{displayName(patient)}</Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"
@@ -528,6 +562,8 @@ function worklistRowButtons(
   const status = radTaskStatus(row.task);
   const buttons = radTaskActions(status)
     .filter((action) => !action.secondary)
+    // 日付未定のオーダーは実施日が決まっていないので、実施はできない(受付・中止はできる)。
+    .filter((action) => !(action.opensPerformInput && !row.order.occurrenceDateTime))
     .map((action) => (
       <button
         key={action.next}

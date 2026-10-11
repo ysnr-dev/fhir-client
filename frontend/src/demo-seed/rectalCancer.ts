@@ -178,6 +178,7 @@ async function endoscopy(env: SeedEnv, patientId: string, requester: OrderContex
         date,
         time: "",
         priority: "routine" as const,
+        undated: false,
       },
     ],
   };
@@ -235,6 +236,7 @@ async function contrastCt(env: SeedEnv, patientId: string, requester: OrderConte
         date,
         time: "",
         priority: "routine" as const,
+        undated: false,
       },
     ],
   };

@@ -12,6 +12,7 @@ import { useReturnLinkState } from "../returnTo";
 import {
   useSelfDepartments,
   usePhysioWorklist,
+  UNSCHEDULED_WORKLIST_DATE,
   useUpdatePhysioTaskStatus,
   type PhysioWorklistRow,
 } from "../api/queries";
@@ -24,6 +25,8 @@ import { renderExamTypeOptions } from "../components/physioItemOptions";
 import { ExamReportEntryModal } from "../components/ExamReportEntryModal";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
+import { RowPictograms } from "../components/PatientListRowParts";
+import { useRowPictogramSources } from "../hooks/useRowPictogramSources";
 import {
   PatientKana,
   PatientProfileCells,
@@ -78,6 +81,9 @@ const REPORT_CONFIG = EXAM_REPORT_CONFIGS.physio;
 export function PhysioWorklistPage() {
   // 実施日は必須。未選択にはできないので当日から始める。
   const [date, setDate] = useState(today);
+  // 日付未定(実施予定日の無いオーダー)を並べる。日付を決めるのは依頼側の編集なので、
+  // ここでは見るだけで実施はできない。
+  const [undated, setUndated] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   // 実施入力を開いている行。「実施」だけはステータス変更ではなくモーダルを開く。
   const [performing, setPerforming] = useState<PhysioWorklistRow | null>(null);
@@ -93,7 +99,7 @@ export function PhysioWorklistPage() {
     return () => document.body.classList.remove("page-wide");
   }, []);
 
-  const worklist = usePhysioWorklist(date);
+  const worklist = usePhysioWorklist(undated ? UNSCHEDULED_WORKLIST_DATE : date);
   const examTypes = usePhysioExamTypeOptions();
   const departments = useSelfDepartments();
   const updateStatus = useUpdatePhysioTaskStatus();
@@ -103,6 +109,11 @@ export function PhysioWorklistPage() {
     [worklist.data, filters],
   );
   const total = worklist.data?.rows.length ?? 0;
+  const patientIds = useMemo(
+    () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [rows],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
   // (同じ患者が 1 日に複数のオーダーを持つこともある)。絞り込みで行が消えたら閉じる。
@@ -205,6 +216,8 @@ export function PhysioWorklistPage() {
 
       <FilterForm
         date={date}
+        undated={undated}
+        onUndatedChange={setUndated}
         filters={filters}
         examTypes={examTypes.data?.items ?? []}
         wards={wardOptions}
@@ -250,6 +263,7 @@ export function PhysioWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
+                    pictograms={pictograms}
                     rowProps={drawer.rowProps(
                       row.patient?.id && row.order.id,
                       summarizePhysioOrder(row.order).urgent ? "rad-worklist__row--urgent" : undefined,
@@ -261,7 +275,9 @@ export function PhysioWorklistPage() {
                   <tr>
                     <td colSpan={12} className="master-search__empty">
                       {total === 0
-                        ? "この実施日の生理検査オーダーはありません"
+                        ? undated
+                          ? "日付未定の生理検査オーダーはありません"
+                          : "この実施日の生理検査オーダーはありません"
                         : "絞り込みに該当する検査がありません"}
                     </td>
                   </tr>
@@ -324,6 +340,8 @@ function matchesFilters(row: PhysioWorklistRow, filters: Filters): boolean {
 
 interface FilterFormProps {
   date: string;
+  undated: boolean;
+  onUndatedChange: (undated: boolean) => void;
   filters: Filters;
   examTypes: PhysioExamType[];
   wards: { id: string; name: string }[];
@@ -334,6 +352,8 @@ interface FilterFormProps {
 
 function FilterForm({
   date,
+  undated,
+  onUndatedChange,
   filters,
   examTypes,
   wards,
@@ -348,9 +368,19 @@ function FilterForm({
 
   return (
     <form className="patient-search-form" onSubmit={handleSubmit}>
-      <label>
-        実施日
-        <DateStepper value={date} onChange={onDateChange} />
+      {!undated && (
+        <label>
+          実施日
+          <DateStepper value={date} onChange={onDateChange} />
+        </label>
+      )}
+      <label className="patient-search-form__check">
+        <input
+          type="checkbox"
+          checked={undated}
+          onChange={(e) => onUndatedChange(e.target.checked)}
+        />
+        日付未定
       </label>
       <label>
         検査種別
@@ -444,9 +474,12 @@ function secondaryActionsOf(row: PhysioWorklistRow) {
 function WorklistRow({
   row,
   rowProps,
+  pictograms,
   ...rowActions
 }: {
   row: PhysioWorklistRow;
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: ReturnType<typeof useRowPictogramSources>;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
 } & WorklistRowActions) {
@@ -469,6 +502,7 @@ function WorklistRow({
                 カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
             <Link to={`/patients/${patient.id}/karte`} state={returnLinkState}>{displayName(patient)}</Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"
@@ -527,6 +561,8 @@ function worklistRowButtons(
   const status = physioTaskStatus(row.task);
   const buttons = physioTaskActions(status)
     .filter((action) => !action.secondary)
+    // 日付未定のオーダーは実施日が決まっていないので、実施はできない(受付・中止はできる)。
+    .filter((action) => !(action.opensPerformInput && !row.order.occurrenceDateTime))
     .map((action) => (
       <button
         key={action.next}
