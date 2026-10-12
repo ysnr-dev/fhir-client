@@ -160,6 +160,58 @@ export function defaultPrescriptionCategory(
   return CATEGORY_OPTIONS[setting].some((o) => o.code === code) ? code : "";
 }
 
+/**
+ * 後発品への変更不可(処方箋 様式第2号の「変更不可(医療上必要)」「患者希望」の列)。
+ * JP Core の変更可否コードは「1 後発品変更不可」で、どちらの理由かは substitution.reason で区別する。
+ */
+export type SubstitutionBlock = "medical-necessity" | "patient-request";
+
+export const SUBSTITUTION_PROHIBITED_SYSTEM =
+  "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationSubstitutionProhibittedCategory";
+export const SUBSTITUTION_BLOCK_REASON_SYSTEM =
+  "http://fhir-client.local/CodeSystem/substitution-not-allowed-reason";
+
+export const SUBSTITUTION_BLOCK_OPTIONS: { code: SubstitutionBlock; display: string; mark: string }[] = [
+  { code: "medical-necessity", display: "医療上必要", mark: "変更不可" },
+  { code: "patient-request", display: "患者希望", mark: "患者希望" },
+];
+
+/**
+ * 後発品変更不可を付けられる行か。銘柄を指定した外来処方だけ(一般名処方は銘柄を指定しないので
+ * 付ける意味が無く、入院は院内の採用薬で調剤するので処方箋の欄が無い)。
+ */
+export function canBlockSubstitution(
+  setting: PrescriptionSetting | string,
+  medicine: Medicine | null | undefined,
+): boolean {
+  return setting === "outpatient" && Boolean(medicine) && !medicine?.generic;
+}
+
+export function substitutionBlockMark(block: SubstitutionBlock): string {
+  return SUBSTITUTION_BLOCK_OPTIONS.find((o) => o.code === block)?.mark ?? "";
+}
+
+function buildSubstitution(block: SubstitutionBlock): fhir4.MedicationRequest["substitution"] {
+  const reason = SUBSTITUTION_BLOCK_OPTIONS.find((o) => o.code === block);
+  return {
+    allowedCodeableConcept: {
+      coding: [{ system: SUBSTITUTION_PROHIBITED_SYSTEM, code: "1", display: "後発品変更不可" }],
+    },
+    reason: { coding: [{ system: SUBSTITUTION_BLOCK_REASON_SYSTEM, code: block, display: reason?.display }] },
+  };
+}
+
+/** 明細の後発品変更不可。変更可(substitution 無し・コード 0)なら null。 */
+export function substitutionBlockOf(mr: fhir4.MedicationRequest): SubstitutionBlock | null {
+  const allowed = codingBySystem(
+    mr.substitution?.allowedCodeableConcept?.coding,
+    SUBSTITUTION_PROHIBITED_SYSTEM,
+  )?.code;
+  if (!allowed || allowed === "0") return null;
+  const reason = codingBySystem(mr.substitution?.reason?.coding, SUBSTITUTION_BLOCK_REASON_SYSTEM)?.code;
+  return reason === "patient-request" ? "patient-request" : "medical-necessity";
+}
+
 export interface MedicineLineValues {
   id?: string;
   medicine: Medicine | null;
@@ -167,6 +219,8 @@ export interface MedicineLineValues {
   comment: string;
   /** 薬剤コメントの入力欄を出しているか(フォーム内だけの値)。 */
   showComment?: boolean;
+  /** 後発品変更不可。null・未設定なら変更可。 */
+  substitutionBlock?: SubstitutionBlock | null;
   /** 不均等投与の量(服用タイミング順)。null・未設定なら不均等でない。 */
   unevenDoses?: string[] | null;
   /** 持参薬から起こした行の元の持参薬(MedicationStatement.id)。 */
@@ -324,6 +378,7 @@ export function buildDosage(
 function buildMedicationRequest(
   rp: RpValues,
   medLine: MedicineLineValues,
+  setting: PrescriptionSetting,
   startDate: string,
   rpNumber: number,
   orderInRp: number,
@@ -368,6 +423,10 @@ function buildMedicationRequest(
 
   if (medLine.comment) {
     resource.note = [{ text: medLine.comment }];
+  }
+
+  if (medLine.substitutionBlock && canBlockSubstitution(setting, medLine.medicine)) {
+    resource.substitution = buildSubstitution(medLine.substitutionBlock);
   }
 
   // 持参薬から起こした行は元の持参薬を指す。R4 の basedOn は MedicationStatement を
@@ -422,6 +481,7 @@ function buildPrescriptionTransactionBundle(
       const resource = buildMedicationRequest(
         rp,
         medLine,
+        values.setting,
         values.startDate,
         rpNumber,
         orderInRp,
@@ -677,6 +737,8 @@ export interface MedicineLineDisplay {
   dose?: number;
   unit?: string;
   comment?: string;
+  /** 後発品変更不可。変更可なら undefined。 */
+  substitutionBlock?: SubstitutionBlock;
   /** 不均等投与の表示(「朝 3.5錠・夕 1錠」)。 */
   unevenLabel?: string;
   /** インスリンのスケール(注射のみ)。dose はスケールの基本量で、スケールのみなら空。 */
@@ -740,6 +802,7 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
       dose: dosage?.doseAndRate?.[0]?.doseQuantity?.value,
       unit: dosage?.doseAndRate?.[0]?.doseQuantity?.unit,
       comment: mr.note?.[0]?.text,
+      substitutionBlock: substitutionBlockOf(mr) ?? undefined,
       unevenLabel:
         unevenLabel(
           unevenDosesOf(dosage),
@@ -862,6 +925,7 @@ export function parsePrescriptionForm(
       dose: doseValue != null ? String(doseValue) : "",
       comment: mr.note?.[0]?.text ?? "",
       showComment: Boolean(mr.note?.[0]?.text),
+      substitutionBlock: substitutionBlockOf(mr),
       unevenDoses: unevenDosesOf(dosage),
       ...(broughtMedicationIdOf(mr) ? { broughtMedicationId: broughtMedicationIdOf(mr) } : {}),
     });

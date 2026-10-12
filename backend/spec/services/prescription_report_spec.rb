@@ -41,7 +41,7 @@ RSpec.describe PrescriptionReport do
 
   def medication_request(id, rp:, index:, name:, code: "610000001", generic: false, dose: 3, unit: "錠",
                          days: nil, count: nil, usage: "１日３回朝昼夕食後　服用", comment: nil,
-                         supplements: [])
+                         supplements: [], substitution: nil)
     system = generic ? described_class::GENERAL_ORDER_CODE_SYSTEM : described_class::MEDICINE_CODE_SYSTEM
     dosage = {
       "timing" => {
@@ -69,6 +69,7 @@ RSpec.describe PrescriptionReport do
     }
     resource["dispenseRequest"] = { "expectedSupplyDuration" => { "value" => days, "unit" => "日" } } if days
     resource["dosageInstruction"] = [dosage]
+    resource["substitution"] = substitution if substitution
     resource
   end
 
@@ -205,6 +206,38 @@ RSpec.describe PrescriptionReport do
     expect(rp.usage_comment).to eq("食後すぐ")
     expect(rp.supplement).to eq("毎月1日・4日・8日・11日・15日・18日・22日・25日・29日")
     expect(rp.medicines.map(&:uneven)).to eq(["朝 3.5錠・夕 2.5錠", ""])
+  end
+
+  it "reads 後発品変更不可 and its reason (医療上必要 / 患者希望)" do
+    blocked = lambda do |reason|
+      substitution = {
+        "allowedCodeableConcept" => { "coding" => [{ "system" => described_class::SUBSTITUTION_PROHIBITED_SYSTEM,
+                                                     "code" => "1" }] }
+      }
+      if reason
+        substitution["reason"] = { "coding" => [{ "system" => described_class::SUBSTITUTION_BLOCK_REASON_SYSTEM,
+                                                  "code" => reason }] }
+      end
+      substitution
+    end
+    allowed = { "allowedCodeableConcept" => { "coding" => [{ "system" => described_class::SUBSTITUTION_PROHIBITED_SYSTEM,
+                                                             "code" => "0" }] } }
+    stub_batch([
+      medication_request("m1", rp: 1, index: 1, name: "A錠", days: 7, substitution: blocked.call("medical-necessity")),
+      medication_request("m2", rp: 1, index: 2, name: "B錠", days: 7, substitution: blocked.call("patient-request")),
+      medication_request("m3", rp: 1, index: 3, name: "C錠", days: 7, substitution: blocked.call(nil)),
+      medication_request("m4", rp: 1, index: 4, name: "D錠", days: 7, substitution: allowed),
+      medication_request("m5", rp: 1, index: 5, name: "E錠", days: 7)
+    ])
+    captured = capture_renderer
+
+    described_class.new("o1", gateway: gateway).generate
+
+    # 理由の無い変更不可は医療上必要として刷る(患者希望は理由があるときだけ)。
+    expect(captured.call[:rps].first.medicines.map(&:substitution_block)).to eq(
+      [described_class::MEDICAL_NECESSITY, described_class::PATIENT_REQUEST, described_class::MEDICAL_NECESSITY,
+       nil, nil]
+    )
   end
 
   it "continues with a nil organization when the institution search returns none" do

@@ -12,6 +12,18 @@ module Reports
   # ThinReports 任せにすると 1 ページに入る行数が読めなくなるので、折り返しは
   # ここで済ませて(wrap)、枠の行数(lines_per_page)との対応を決定的にする。
   class PrescriptionRenderer
+    # 後発品変更不可の欄。様式第2号は薬品の行の左に「変更不可」「患者希望」の列を持ち、
+    # 該当する薬品の 1 行目に「レ」を刷る。列の無いレイアウト(院内)は薬品名の後ろに書く。
+    SUBSTITUTION_COLUMNS = {
+      PrescriptionReport::MEDICAL_NECESSITY => "rx_no_change",
+      PrescriptionReport::PATIENT_REQUEST => "rx_patient_wish"
+    }.freeze
+    SUBSTITUTION_LABELS = {
+      PrescriptionReport::MEDICAL_NECESSITY => "【変更不可】",
+      PrescriptionReport::PATIENT_REQUEST => "【患者希望】"
+    }.freeze
+    SUBSTITUTION_CHECK = "レ".freeze
+
     # layout_path: 同梱の .tlf のパス
     # order/patient/organization: パース済み FHIR リソース(Hash。organization は自院、nil 可)
     # rps: PrescriptionReport::RpGroup の配列
@@ -28,16 +40,24 @@ module Reports
 
     def render
       text_ids, _image_ids, all_ids = layout_item_ids
-      pages = rp_lines.flat_map { |line| wrap(line) }.each_slice(@lines_per_page).to_a
+      columns = SUBSTITUTION_COLUMNS.values.all? { |id| text_ids.include?(id) }
+      # 行は [文字列, 後発品変更不可] の組。折り返した継続行には印を付けない。
+      rows = rp_lines(columns:).flat_map do |line, block|
+        wrap(line).each_with_index.map { |chunk, i| [chunk, i.zero? ? block : nil] }
+      end
+      pages = rows.each_slice(@lines_per_page).to_a
       pages = [[]] if pages.empty?
 
       report = Thinreports::Report.new(layout: @layout_path.to_s)
       pages.each_with_index do |lines, index|
         report.start_new_page do |page|
           values = page_values.merge(
-            "rx_content" => lines.join("\n"),
+            "rx_content" => lines.map(&:first).join("\n"),
             "page_no" => "#{index + 1} / #{pages.size}"
           )
+          SUBSTITUTION_COLUMNS.each do |block, id|
+            values[id] = lines.map { |_, b| b == block ? SUBSTITUTION_CHECK : "" }.join("\n")
+          end
           values.each { |id, value| page.item(id).value(value) if text_ids.include?(id) }
           if all_ids.include?("continued")
             index < pages.size - 1 ? page.item("continued").show : page.item("continued").hide
@@ -52,14 +72,17 @@ module Reports
     # RP 1 件を「Rp 見出し → 薬品 → 用法」の順の行にする。カルテの紹介状に流し込む
     # 処方文字列(frontend の populateContext.ts formatPrescriptions)と同じ並び。
     # 画面と紙で処方の読み方が変わらないよう、変えるときは両方を揃えること。
-    def rp_lines
+    # 後発品変更不可は、列のあるレイアウトでは薬品の行に添える印、無いレイアウトでは行の末尾に書く。
+    def rp_lines(columns:)
       @rps.flat_map do |rp|
-        lines = ["Rp#{rp.rp_number}"]
+        lines = [["Rp#{rp.rp_number}", nil]]
         rp.medicines.each do |medicine|
           dose = medicine.dose.present? ? " #{medicine.dose}#{medicine.unit}" : ""
           uneven = medicine.uneven.present? ? "（#{medicine.uneven}）" : ""
           comment = medicine.comment.present? ? "（#{medicine.comment}）" : ""
-          lines << "　#{medicine.name}#{dose}#{uneven}#{comment}"
+          block = medicine.substitution_block
+          label = !columns && block ? SUBSTITUTION_LABELS[block] : ""
+          lines << ["　#{medicine.name}#{dose}#{uneven}#{comment}#{label}", columns ? block : nil]
         end
         amount =
           if rp.dose_days.present?
@@ -71,7 +94,7 @@ module Reports
           end
         usage = [rp.usage_name, rp.supplement, amount].compact_blank.join(" ")
         usage_comment = rp.usage_comment.present? ? "（#{rp.usage_comment}）" : ""
-        lines << "　用法: #{usage}#{usage_comment}" if usage.present? || usage_comment.present?
+        lines << ["　用法: #{usage}#{usage_comment}", nil] if usage.present? || usage_comment.present?
         lines
       end
     end

@@ -49,9 +49,10 @@ RSpec.describe Reports::PrescriptionRenderer do
     PrescriptionReport::RpGroup.new(
       rp_number: number, usage_name: usage, supplement: supplement, dose_days: days, dose_count: count,
       usage_comment: comment,
-      medicines: medicines.each_with_index.map do |(name, dose, unit, uneven), index|
+      medicines: medicines.each_with_index.map do |(name, dose, unit, uneven, block), index|
         PrescriptionReport::MedicineLine.new(
-          order_in_rp: index + 1, name: name, dose: dose, unit: unit, comment: nil, uneven: uneven
+          order_in_rp: index + 1, name: name, dose: dose, unit: unit, comment: nil, uneven: uneven,
+          substitution_block: block
         )
       end
     )
@@ -142,6 +143,38 @@ RSpec.describe Reports::PrescriptionRenderer do
     text = page_texts(pdf).flatten.join.gsub(/[[:space:]]/, "")
     expect(text).to include("１日２回朝夕食後毎週月・木曜日7日分")
     expect(text).to include("（朝4錠・夕2錠）")
+  end
+
+  context "with 後発品変更不可" do
+    let(:blocked_rps) do
+      [rp(1, medicines: [["ムコスタ錠１００ｍｇ", 3, "錠", nil, PrescriptionReport::MEDICAL_NECESSITY],
+                         ["ガスター錠１０ｍｇ", 2, "錠"],
+                         ["ノルバスク錠５ｍｇ", 1, "錠", nil, PrescriptionReport::PATIENT_REQUEST]])]
+    end
+
+    # 「レ」は処方欄と同じ行送りの列に刷るので、薬品の行と同じ高さ(y)に並ぶ。
+    # pdf-inspector の positions は描画した行ごと(strings は書体ごとに割れるので対応しない)。
+    it "checks the 変更不可 and 患者希望 columns on the medicine lines (external)" do
+      text = PDF::Inspector::Text.analyze(render(:external, blocked_rps))
+      # 処方欄(x = 87)の行。上から Rp 見出し・薬品 3 行・用法。
+      rx_ys = text.positions.select { |x, _| x == 87.0 }.map(&:last).sort.reverse
+      in_rx = ->(y) { y.between?(rx_ys.last - 1, rx_ys.first + 1) }
+      no_change = text.positions.select { |x, y| x > 31 && x < 57 && in_rx.call(y) }
+      patient_wish = text.positions.select { |x, y| x > 57 && x < 83 && in_rx.call(y) }
+
+      expect(no_change.map(&:last)).to contain_exactly(be_within(0.5).of(rx_ys[1]))
+      expect(patient_wish.map(&:last)).to contain_exactly(be_within(0.5).of(rx_ys[3]))
+      expect(text.strings.count("レ")).to eq(2)
+      expect(text.strings.join).not_to include("【変更不可】")
+    end
+
+    it "writes the marks after the medicine name on the internal layout (no columns)" do
+      text = page_texts(render(:internal, blocked_rps)).flatten.join.gsub(/[[:space:]]/, "")
+
+      expect(text).to include("ムコスタ錠１００ｍｇ3錠【変更不可】")
+      expect(text).to include("ノルバスク錠５ｍｇ1錠【患者希望】")
+      expect(text).not_to include("ガスター錠１０ｍｇ2錠【")
+    end
   end
 
   it "renders with blank institution fields when the organization is unknown" do

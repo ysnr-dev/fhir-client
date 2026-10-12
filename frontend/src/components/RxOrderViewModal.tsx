@@ -6,6 +6,7 @@ import {
   groupByRp,
   hasDoseDays,
   prescriptionComment,
+  substitutionBlockMark,
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
@@ -68,6 +69,11 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
                   {medicine.dose != null && (
                     <span className="karte-rp__medicine-dose">
                       {`${medicine.dose}${medicine.unit ?? ""}`}
+                    </span>
+                  )}
+                  {medicine.substitutionBlock && (
+                    <span className="karte-rp__comment">
+                      {`（${substitutionBlockMark(medicine.substitutionBlock)}）`}
                     </span>
                   )}
                   {medicine.unevenLabel && (

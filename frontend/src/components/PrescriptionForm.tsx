@@ -4,6 +4,7 @@ import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   BROUGHT_CATEGORY,
+  canBlockSubstitution,
   CATEGORY_OPTIONS,
   defaultPrescriptionCategory,
   emptyMedicineLine,
@@ -12,10 +13,12 @@ import {
   hasDoseDays,
   prescriptionLineDose,
   SETTING_OPTIONS,
+  SUBSTITUTION_BLOCK_OPTIONS,
   type MedicineLineValues,
   type PrescriptionFormValues,
   type PrescriptionSetting,
   type RpValues,
+  type SubstitutionBlock,
 } from "../fhir/prescriptionHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import {
@@ -434,6 +437,10 @@ export function PrescriptionForm({
                 const showComment = Boolean(med.showComment || med.comment);
                 const canComment = !showComment;
                 const canUneven = !med.unevenDoses && unevenLabels !== null;
+                // 入外区分や医薬品を選び直して付けられなくなった行では出さない(保存時にも落とす)。
+                const substitutable = canBlockSubstitution(values.setting, med.medicine);
+                const showSubstitution = substitutable && Boolean(med.substitutionBlock);
+                const canSubstitution = substitutable && !med.substitutionBlock;
                 return (
                   <tr key={medIndex}>
                     <td>
@@ -455,6 +462,31 @@ export function PrescriptionForm({
                         )}
                       </div>
                       <MedicineWarnings warnings={warnings[rpIndex]?.[medIndex]} />
+                      {showSubstitution && (
+                        <div className="rp-card__comment-field rp-card__comment-field--inline">
+                          <label>
+                            後発品変更不可
+                            <select
+                              value={med.substitutionBlock ?? ""}
+                              onChange={(e) =>
+                                updateMedicine(rpIndex, medIndex, {
+                                  substitutionBlock: e.target.value as SubstitutionBlock,
+                                })
+                              }
+                            >
+                              {SUBSTITUTION_BLOCK_OPTIONS.map((o) => (
+                                <option key={o.code} value={o.code}>
+                                  {o.display}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          {removeButton(
+                            () => updateMedicine(rpIndex, medIndex, { substitutionBlock: null }),
+                            "後発品変更不可を削除",
+                          )}
+                        </div>
+                      )}
                       {med.unevenDoses && unevenLabels && (
                         <UnevenDoseEditor
                           labels={unevenLabels}
@@ -497,7 +529,7 @@ export function PrescriptionForm({
                     <td className="rp-card__medicine-unit">{med.medicine?.unit_name ?? "-"}</td>
                     <td>
                       <div className="rp-card__row-actions">
-                        {(canComment || canUneven) && (
+                        {(canComment || canUneven || canSubstitution) && (
                           <RowMenu label="この医薬品の操作" escapesClipping>
                             {canComment && (
                               <button
@@ -519,6 +551,19 @@ export function PrescriptionForm({
                                 }
                               >
                                 不均等投与
+                              </button>
+                            )}
+                            {canSubstitution && (
+                              <button
+                                type="button"
+                                className="row-menu__item"
+                                onClick={() =>
+                                  updateMedicine(rpIndex, medIndex, {
+                                    substitutionBlock: SUBSTITUTION_BLOCK_OPTIONS[0].code,
+                                  })
+                                }
+                              >
+                                後発品変更不可
                               </button>
                             )}
                           </RowMenu>

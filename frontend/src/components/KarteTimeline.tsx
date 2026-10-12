@@ -50,6 +50,7 @@ import {
   groupByRp,
   hasDoseDays,
   prescriptionComment,
+  substitutionBlockMark,
 } from "../fhir/prescriptionHelpers";
 import {
   questionnaireResponseDocumentText,
@@ -957,6 +958,11 @@ export function KarteCardBody({ item }: { item: KarteTimelineItem }) {
                   {medicine.dose != null && (
                     <span className="karte-rp__medicine-dose">
                       {`${medicine.dose}${medicine.unit ?? ""}`}
+                    </span>
+                  )}
+                  {medicine.substitutionBlock && (
+                    <span className="karte-rp__comment">
+                      {`（${substitutionBlockMark(medicine.substitutionBlock)}）`}
                     </span>
                   )}
                   {medicine.unevenLabel && (

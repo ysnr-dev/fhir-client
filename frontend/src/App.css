@@ -1775,8 +1775,13 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   --control-height: 28px;
 }
 
-.prescription-form .rp-card__comment-field input {
+.prescription-form .rp-card__comment-field input,
+.prescription-form .rp-card__comment-field select {
   font-size: 14px;
+}
+
+.prescription-form .rp-card__comment-field select {
+  padding: 4px 6px;
 }
 
 /* 薬剤名の下に出す薬剤コメント・不均等。医薬品セルの中なので上に少し間を空ける。 */
@@ -20821,6 +20826,12 @@ button.chemo-calendar__cell[draggable="true"] {
 .medicine-caution.formulary-mark {
   border-color: var(--accent-border);
   color: var(--accent);
+}
+
+/* 後発品変更不可(処方箋の「変更不可」「患者希望」)。 */
+.medicine-caution.substitution-mark {
+  border-color: var(--warning);
+  color: var(--warning);
 }
 
 .medicine-warning {

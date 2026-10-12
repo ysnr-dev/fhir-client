@@ -22,6 +22,7 @@ import { presetUsageFilters } from "../fhir/usageMapping";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
+import { SubstitutionBlockMark } from "./MedicineWarnings";
 import { Modal } from "./Modal";
 import { OrderRxInquiryNotes } from "./RxInquiryHistory";
 import { UsageSearchModal } from "./UsageSearchModal";
@@ -255,14 +256,20 @@ function RxDispenseForm({
                   <tr key={medIndex}>
                     <td>
                       <div className="rp-card__medicine-cell">
+                        {/* 後発品変更不可(医療上必要・患者希望)は処方どおりの銘柄で調剤する。 */}
                         <button
                           type="button"
+                          disabled={Boolean(med.substitutionBlock)}
+                          title={med.substitutionBlock ? "後発品変更不可" : undefined}
                           onClick={() => setModal({ kind: "medicine", rpIndex, medIndex })}
                         >
                           変更
                         </button>
                         {med.medicine ? (
-                          <span className="rp-card__medicine-name">{med.medicine.name}</span>
+                          <span className="rp-card__medicine-name">
+                            {med.medicine.name}
+                            <SubstitutionBlockMark block={med.substitutionBlock} />
+                          </span>
                         ) : (
                           <span className="rp-card__usage-value--empty">未選択</span>
                         )}

@@ -53,13 +53,23 @@ class PrescriptionReport
   # JAMI 補足用法コード(8 桁)。I/W/D/C は RP 単位の投与スケジュール、V は薬剤ごとの不均等投与。
   SUPPLEMENTARY_USAGE_SYSTEM = "urn:oid:1.2.392.200250.2.2.20.22".freeze
   ORDER_DEPARTMENT_EXT_URL = "http://fhir-client.local/StructureDefinition/order-department".freeze
+  # 後発品変更不可(frontend の prescriptionHelpers.ts と同じ定義)。変更可否は JP Core のコード
+  # (0 = 変更可)、医療上必要か患者希望かは reason のローカルコードで区別する。
+  SUBSTITUTION_PROHIBITED_SYSTEM =
+    "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationSubstitutionProhibittedCategory".freeze
+  SUBSTITUTION_BLOCK_REASON_SYSTEM =
+    "http://fhir-client.local/CodeSystem/substitution-not-allowed-reason".freeze
+  MEDICAL_NECESSITY = "medical-necessity".freeze
+  PATIENT_REQUEST = "patient-request".freeze
 
   # RP 1 つぶん。同じ RP 番号の明細(MedicationRequest)をまとめたもの。
   RpGroup = Struct.new(
     :rp_number, :usage_name, :supplement, :dose_days, :dose_count, :usage_comment, :medicines,
     keyword_init: true
   )
-  MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :comment, :uneven, keyword_init: true)
+  # substitution_block: 後発品変更不可(MEDICAL_NECESSITY / PATIENT_REQUEST)。変更可なら nil。
+  MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :comment, :uneven, :substitution_block,
+                            keyword_init: true)
 
   def initialize(order_id, gateway: FhirGateway.new)
     @order_id = order_id
@@ -177,13 +187,24 @@ class PrescriptionReport
         unit: dosage.dig("doseAndRate", 0, "doseQuantity", "unit").to_s,
         comment: mr.dig("note", 0, "text").to_s,
         uneven: supplementary_displays(dosage).select { |code, _| code.start_with?("V") }
-                                              .sort_by(&:first).map(&:last).join("・")
+                                              .sort_by(&:first).map(&:last).join("・"),
+        substitution_block: substitution_block(mr)
       )
     end
 
     groups.values.sort_by(&:rp_number).each do |group|
       group.medicines.sort_by!(&:order_in_rp)
     end
+  end
+
+  def substitution_block(medication_request)
+    substitution = medication_request["substitution"] || {}
+    allowed = coding_by_system(substitution.dig("allowedCodeableConcept", "coding"),
+                               SUBSTITUTION_PROHIBITED_SYSTEM)&.dig("code")
+    return nil if allowed.blank? || allowed == "0"
+
+    reason = coding_by_system(substitution.dig("reason", "coding"), SUBSTITUTION_BLOCK_REASON_SYSTEM)&.dig("code")
+    reason == PATIENT_REQUEST ? PATIENT_REQUEST : MEDICAL_NECESSITY
   end
 
   # 用法コメントは coding を持たない additionalInstruction(補足用法は coding を持つ)。

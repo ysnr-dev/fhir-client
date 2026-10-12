@@ -14,6 +14,7 @@ import {
   useYakkaCodes,
 } from "../api/masterQueries";
 import { summarizeBodyMeasures, summarizeRenal } from "../fhir/bodyMeasureHelpers";
+import { substitutionBlockMark, type SubstitutionBlock } from "../fhir/prescriptionHelpers";
 import { broughtActiveMedications, summarizeBroughtMedication } from "../fhir/broughtMedicationHelpers";
 import {
   buildDrugCheckWarnings,
@@ -174,6 +175,12 @@ export function MedicineCautionMarks({ medicine }: { medicine: Medicine | null }
 export function FormularyMark({ medicine }: { medicine: Pick<Medicine, "formulary_rank"> | null }) {
   if (!medicine?.formulary_rank) return null;
   return <span className="medicine-caution formulary-mark">第{medicine.formulary_rank}選択</span>;
+}
+
+/** 後発品変更不可の印(処方箋の「変更不可」「患者希望」)。変更可なら何も出さない。 */
+export function SubstitutionBlockMark({ block }: { block: SubstitutionBlock | null | undefined }) {
+  if (!block) return null;
+  return <span className="medicine-caution substitution-mark">{substitutionBlockMark(block)}</span>;
 }
 
 /** 1 つの薬剤行に出すアレルギー・重複投与の警告。 */

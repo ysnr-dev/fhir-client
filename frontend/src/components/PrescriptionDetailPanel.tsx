@@ -10,6 +10,7 @@ import {
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
+import { SubstitutionBlockMark } from "./MedicineWarnings";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 処方の内容表示。処方内容ページとカルテ画面の詳細モーダルの双方から使う。
@@ -97,6 +98,7 @@ export function PrescriptionDetailPanel({
                 <tr key={med.orderInRp}>
                   <td>
                     {med.name}
+                    <SubstitutionBlockMark block={med.substitutionBlock} />
                     {med.unevenLabel && (
                       <div className="prescription-detail__uneven">{`不均等: ${med.unevenLabel}`}</div>
                     )}

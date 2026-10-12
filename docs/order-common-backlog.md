@@ -351,8 +351,8 @@ Provenance
 
 `docs/prescription-report-design.md` §2 の「枠はあるが常に空欄」がそのまま残っている。
 
-- 後発品の**変更不可・患者希望**(`MedicationRequest.substitution.allowedBoolean` + 理由)。
-  調剤側(`RxDispenseModal`)で変更不可なら銘柄変更を止めるところまで対になる。
+- ~~後発品の**変更不可・患者希望**~~ — **対応済み(2026-10-12)**。`substitution.allowedCodeableConcept`(JP Core の
+  変更可否コード 1)+ `reason`(医療上必要 / 患者希望)。処方箋の列に「レ」、調剤登録で銘柄変更を止める。
 - **リフィル・分割調剤**(`dispenseRequest.numberOfRepeatsAllowed` / `validityPeriod`)。
 - **一包化・粉砕**などの調剤指示(RP 単位。JP Core の調剤指示拡張)。
 - **時刻指定用法(`Z`)の時刻入力**。入れると経過表の与薬予定が展開できるようになる
