@@ -8,6 +8,7 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
+  dispenseInstructionLabel,
   hasDoseDays,
   parsePrescriptionForm,
   prescriptionComment,
@@ -354,6 +355,9 @@ function RxDispenseForm({
               <p className="karte-card__note">{`補足用法: ${supplementLabel(rp.supplement)}`}</p>
             )}
             {rp.usageComment && <p className="karte-card__note">{rp.usageComment}</p>}
+            {rp.dispenseInstructions && rp.dispenseInstructions.length > 0 && (
+              <p className="karte-card__note">{`調剤指示: ${dispenseInstructionLabel(rp.dispenseInstructions)}`}</p>
+            )}
           </fieldset>
         ))}
 

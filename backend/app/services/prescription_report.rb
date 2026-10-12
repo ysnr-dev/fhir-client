@@ -59,12 +59,18 @@ class PrescriptionReport
     "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationSubstitutionProhibittedCategory".freeze
   SUBSTITUTION_BLOCK_REASON_SYSTEM =
     "http://fhir-client.local/CodeSystem/substitution-not-allowed-reason".freeze
+  # 調剤指示(JP Core instructionForDispense 拡張、JAMI 調剤方法コード)。表示は選択肢の並び順。
+  DISPENSE_INSTRUCTION_EXT_URL =
+    "http://jpfhir.jp/fhir/core/Extension/StructureDefinition/JP_MedicationRequest_DispenseRequest_InstructionForDispense".freeze
+  DISPENSE_INSTRUCTION_SYSTEM = "http://jami.jp/CodeSystem/DrugDispensePreparationMethod".freeze
+  DISPENSE_INSTRUCTION_LABELS = { "OP" => "一包化", "C" => "粉砕", "SP" => "別包化", "MX" => "混合" }.freeze
   MEDICAL_NECESSITY = "medical-necessity".freeze
   PATIENT_REQUEST = "patient-request".freeze
 
   # RP 1 つぶん。同じ RP 番号の明細(MedicationRequest)をまとめたもの。
   RpGroup = Struct.new(
-    :rp_number, :usage_name, :supplement, :dose_days, :dose_count, :usage_comment, :medicines,
+    :rp_number, :usage_name, :supplement, :dose_days, :dose_count, :usage_comment, :dispense_instruction,
+    :medicines,
     keyword_init: true
   )
   # substitution_block: 後発品変更不可(MEDICAL_NECESSITY / PATIENT_REQUEST)。変更可なら nil。
@@ -177,6 +183,7 @@ class PrescriptionReport
         supplement: supplement_label(dosage),
         dose_count: dosage.dig("timing", "repeat", "count"),
         usage_comment: usage_comment(dosage),
+        dispense_instruction: dispense_instruction(mr),
         medicines: []
       )
       group.medicines << MedicineLine.new(
@@ -195,6 +202,16 @@ class PrescriptionReport
     groups.values.sort_by(&:rp_number).each do |group|
       group.medicines.sort_by!(&:order_in_rp)
     end
+  end
+
+  # 「一包化・粉砕」のような表示。RP 内の明細は同じ値を持つので、最初の明細から取る。
+  def dispense_instruction(medication_request)
+    codes = Array(medication_request.dig("dispenseRequest", "extension")).filter_map do |ext|
+      next unless ext["url"] == DISPENSE_INSTRUCTION_EXT_URL
+
+      coding_by_system(ext.dig("valueCodeableConcept", "coding"), DISPENSE_INSTRUCTION_SYSTEM)&.dig("code")
+    end
+    DISPENSE_INSTRUCTION_LABELS.select { |code, _| codes.include?(code) }.values.join("・")
   end
 
   def substitution_block(medication_request)

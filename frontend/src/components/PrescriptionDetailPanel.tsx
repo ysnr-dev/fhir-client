@@ -147,6 +147,12 @@ export function PrescriptionDetailPanel({
             )}
             <dt>用法コメント</dt>
             <dd>{rp.usageComment || "-"}</dd>
+            {rp.dispenseInstructionLabel && (
+              <>
+                <dt>調剤指示</dt>
+                <dd>{rp.dispenseInstructionLabel}</dd>
+              </>
+            )}
           </dl>
         </fieldset>
       ))}

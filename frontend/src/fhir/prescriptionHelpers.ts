@@ -229,6 +229,48 @@ export interface MedicineLineValues {
   insulinScale?: InsulinScaleValues | null;
 }
 
+/**
+ * 調剤指示(一包化・粉砕など)。RP 単位で選び、RP 内の明細すべての dispenseRequest に JP Core の
+ * instructionForDispense 拡張(薬剤単位の定義なので、RP の全明細に同じ値を書く)で持つ。
+ * コードは JAMI の調剤方法コード(電子処方箋と同じ)。
+ */
+export type DispenseInstruction = "OP" | "C" | "SP" | "MX";
+
+export const DISPENSE_INSTRUCTION_EXT_URL =
+  "http://jpfhir.jp/fhir/core/Extension/StructureDefinition/JP_MedicationRequest_DispenseRequest_InstructionForDispense";
+export const DISPENSE_INSTRUCTION_SYSTEM = "http://jami.jp/CodeSystem/DrugDispensePreparationMethod";
+
+export const DISPENSE_INSTRUCTION_OPTIONS: { code: DispenseInstruction; display: string }[] = [
+  { code: "OP", display: "一包化" },
+  { code: "C", display: "粉砕" },
+  { code: "SP", display: "別包化" },
+  { code: "MX", display: "混合" },
+];
+
+/** 明細の調剤指示(選択肢の並び順)。無ければ空。 */
+export function dispenseInstructionsOf(mr: fhir4.MedicationRequest): DispenseInstruction[] {
+  const codes = new Set(
+    (mr.dispenseRequest?.extension ?? [])
+      .filter((ext) => ext.url === DISPENSE_INSTRUCTION_EXT_URL)
+      .map((ext) => codingBySystem(ext.valueCodeableConcept?.coding, DISPENSE_INSTRUCTION_SYSTEM)?.code),
+  );
+  return DISPENSE_INSTRUCTION_OPTIONS.filter((o) => codes.has(o.code)).map((o) => o.code);
+}
+
+/** 調剤指示の表示(「一包化・粉砕」)。 */
+export function dispenseInstructionLabel(codes: DispenseInstruction[] | null | undefined): string {
+  return DISPENSE_INSTRUCTION_OPTIONS.filter((o) => codes?.includes(o.code))
+    .map((o) => o.display)
+    .join("・");
+}
+
+function dispenseInstructionExtensions(codes: DispenseInstruction[]): fhir4.Extension[] {
+  return DISPENSE_INSTRUCTION_OPTIONS.filter((o) => codes.includes(o.code)).map((o) => ({
+    url: DISPENSE_INSTRUCTION_EXT_URL,
+    valueCodeableConcept: { coding: [{ system: DISPENSE_INSTRUCTION_SYSTEM, code: o.code, display: o.display }] },
+  }));
+}
+
 export interface RpValues {
   usage: MedicineUsage | null;
   doseDays: string;
@@ -238,6 +280,8 @@ export interface RpValues {
   showUsageComment?: boolean;
   /** 補足用法(日数間隔・曜日・日付・期間内回数)。 */
   supplement?: SupplementaryUsage | null;
+  /** 調剤指示。null・未設定なら入力欄を出していない(空配列は欄だけ出ている)。 */
+  dispenseInstructions?: DispenseInstruction[] | null;
   medicines: MedicineLineValues[];
 }
 
@@ -418,6 +462,13 @@ function buildMedicationRequest(
         system: UNITS_OF_MEASURE_SYSTEM,
         code: "d",
       },
+    };
+  }
+
+  if (rp.dispenseInstructions?.length) {
+    resource.dispenseRequest = {
+      ...resource.dispenseRequest,
+      extension: dispenseInstructionExtensions(rp.dispenseInstructions),
     };
   }
 
@@ -755,6 +806,8 @@ export interface RpDisplay {
   usageComment?: string;
   /** 補足用法の表示(「毎週月・木曜日」)。 */
   supplementLabel?: string;
+  /** 調剤指示の表示(「一包化・粉砕」)。 */
+  dispenseInstructionLabel?: string;
   medicines: MedicineLineDisplay[];
 }
 
@@ -783,6 +836,7 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
         doseCount: dosage?.timing?.repeat?.count,
         usageComment: usageCommentOf(dosage),
         supplementLabel: supplementLabel(supplementOf(dosage)) || undefined,
+        dispenseInstructionLabel: dispenseInstructionLabel(dispenseInstructionsOf(mr)) || undefined,
         medicines: [],
       };
       groups.set(rpNumber, group);
@@ -912,6 +966,7 @@ export function parsePrescriptionForm(
         doseCount: dosage?.timing?.repeat?.count != null ? String(dosage.timing.repeat.count) : "",
         usageComment: usageCommentOf(dosage) ?? "",
         supplement: supplementOf(dosage),
+        dispenseInstructions: dispenseInstructionsOf(mr).length ? dispenseInstructionsOf(mr) : null,
         medicines: [],
         medicinesByOrder: new Map(),
       };
@@ -940,6 +995,7 @@ export function parsePrescriptionForm(
       usageComment: group.usageComment,
       showUsageComment: Boolean(group.usageComment),
       supplement: group.supplement,
+      dispenseInstructions: group.dispenseInstructions,
       medicines: Array.from(group.medicinesByOrder.entries())
         .sort(([a], [b]) => a - b)
         .map(([, medLine]) => medLine),

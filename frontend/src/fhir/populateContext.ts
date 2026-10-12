@@ -577,6 +577,7 @@ export function formatPrescriptions(prescriptionDetail: fhir4.Bundle | undefined
     const usage = [rp.usageName, rp.supplementLabel, amount].filter(Boolean).join(" ");
     const usageComment = rp.usageComment ? `（${rp.usageComment}）` : "";
     if (usage || usageComment) lines.push(`　用法: ${usage}${usageComment}`);
+    if (rp.dispenseInstructionLabel) lines.push(`　調剤指示: ${rp.dispenseInstructionLabel}`);
   }
   return lines.join("\n");
 }

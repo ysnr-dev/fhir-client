@@ -41,7 +41,7 @@ RSpec.describe PrescriptionReport do
 
   def medication_request(id, rp:, index:, name:, code: "610000001", generic: false, dose: 3, unit: "錠",
                          days: nil, count: nil, usage: "１日３回朝昼夕食後　服用", comment: nil,
-                         supplements: [], substitution: nil)
+                         supplements: [], substitution: nil, dispense_instructions: [])
     system = generic ? described_class::GENERAL_ORDER_CODE_SYSTEM : described_class::MEDICINE_CODE_SYSTEM
     dosage = {
       "timing" => {
@@ -70,6 +70,14 @@ RSpec.describe PrescriptionReport do
     resource["dispenseRequest"] = { "expectedSupplyDuration" => { "value" => days, "unit" => "日" } } if days
     resource["dosageInstruction"] = [dosage]
     resource["substitution"] = substitution if substitution
+    if dispense_instructions.any?
+      resource["dispenseRequest"] ||= {}
+      resource["dispenseRequest"]["extension"] = dispense_instructions.map do |code|
+        { "url" => described_class::DISPENSE_INSTRUCTION_EXT_URL,
+          "valueCodeableConcept" => { "coding" => [{ "system" => described_class::DISPENSE_INSTRUCTION_SYSTEM,
+                                                     "code" => code }] } }
+      end
+    end
     resource
   end
 
@@ -206,6 +214,18 @@ RSpec.describe PrescriptionReport do
     expect(rp.usage_comment).to eq("食後すぐ")
     expect(rp.supplement).to eq("毎月1日・4日・8日・11日・15日・18日・22日・25日・29日")
     expect(rp.medicines.map(&:uneven)).to eq(["朝 3.5錠・夕 2.5錠", ""])
+  end
+
+  it "reads the dispense instruction in the option order" do
+    stub_batch([
+      medication_request("m1", rp: 1, index: 1, name: "A錠", days: 7, dispense_instructions: %w[C OP]),
+      medication_request("m2", rp: 2, index: 1, name: "B錠", days: 7)
+    ])
+    captured = capture_renderer
+
+    described_class.new("o1", gateway: gateway).generate
+
+    expect(captured.call[:rps].map(&:dispense_instruction)).to eq(["一包化・粉砕", ""])
   end
 
   it "reads 後発品変更不可 and its reason (医療上必要 / 患者希望)" do

@@ -45,10 +45,10 @@ RSpec.describe Reports::PrescriptionRenderer do
   end
 
   def rp(number, medicines:, usage: "１日３回朝昼夕食後　服用", days: 7, count: nil, comment: nil,
-         supplement: nil)
+         supplement: nil, dispense_instruction: nil)
     PrescriptionReport::RpGroup.new(
       rp_number: number, usage_name: usage, supplement: supplement, dose_days: days, dose_count: count,
-      usage_comment: comment,
+      usage_comment: comment, dispense_instruction: dispense_instruction,
       medicines: medicines.each_with_index.map do |(name, dose, unit, uneven, block), index|
         PrescriptionReport::MedicineLine.new(
           order_in_rp: index + 1, name: name, dose: dose, unit: unit, comment: nil, uneven: uneven,
@@ -143,6 +143,15 @@ RSpec.describe Reports::PrescriptionRenderer do
     text = page_texts(pdf).flatten.join.gsub(/[[:space:]]/, "")
     expect(text).to include("１日２回朝夕食後毎週月・木曜日7日分")
     expect(text).to include("（朝4錠・夕2錠）")
+  end
+
+  it "prints the dispense instruction on its own line after the usage" do
+    %i[external internal].each do |key|
+      pdf = render(key, [rp(1, medicines: [["ムコスタ錠１００ｍｇ", 3, "錠"]], dispense_instruction: "一包化・粉砕")])
+
+      text = page_texts(pdf).flatten.join.gsub(/[[:space:]]/, "")
+      expect(text).to include("7日分調剤指示:一包化・粉砕")
+    end
   end
 
   context "with 後発品変更不可" do

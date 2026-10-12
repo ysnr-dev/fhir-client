@@ -1986,7 +1986,8 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   color: var(--text);
 }
 
-.rp-card__supplement-kind input[type="radio"] {
+.rp-card__supplement-kind input[type="radio"],
+.rp-card__supplement-kind input[type="checkbox"] {
   width: auto;
   margin: 0;
 }

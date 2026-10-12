@@ -102,6 +102,12 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
                 )}
               </span>
             </div>
+            {rp.dispenseInstructionLabel && (
+              <div className="karte-rp__detail">
+                <span className="karte-rp__detail-label">調剤指示:</span>
+                <span className="karte-rp__usage">{rp.dispenseInstructionLabel}</span>
+              </div>
+            )}
           </div>
         ))}
         {rps.length === 0 && <p className="karte-card__empty">処方内容がありません。</p>}

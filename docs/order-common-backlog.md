@@ -354,7 +354,8 @@ Provenance
 - ~~後発品の**変更不可・患者希望**~~ — **対応済み(2026-10-12)**。`substitution.allowedCodeableConcept`(JP Core の
   変更可否コード 1)+ `reason`(医療上必要 / 患者希望)。処方箋の列に「レ」、調剤登録で銘柄変更を止める。
 - **リフィル・分割調剤**(`dispenseRequest.numberOfRepeatsAllowed` / `validityPeriod`)。
-- **一包化・粉砕**などの調剤指示(RP 単位。JP Core の調剤指示拡張)。
+- ~~**一包化・粉砕**などの調剤指示~~ — **対応済み(2026-10-12)**。RP 単位で選び、明細の `dispenseRequest` に
+  JP Core の `instructionForDispense` 拡張(JAMI 調剤方法コード)。処方箋は用法の次の行に刷る。
 - **時刻指定用法(`Z`)の時刻入力**。入れると経過表の与薬予定が展開できるようになる
   (`docs/prescription-order-design.md` §5 と対)。
 - **`priority`**(緊急・至急)。処方と注射だけ `shared.ts` の `PRIORITY_OPTIONS` を使っていない。

@@ -990,6 +990,10 @@ NST・ICT・褥瘡対策・緩和ケアなどのチームへの介入依頼。�
   `components/MedicineWarnings.tsx` を共用します。同一成分は YJ コードの上 7 桁で見るため、
   同じ成分でも薬効分類が違えば(アスピリンとバイアスピリン)重複になりません。
   継続・中止の判断が済んでいない持参薬も重複の相手に数えます(「同一成分を服用中(持参薬)」)。
+- **調剤指示**: RP の用法のメニュー「調剤指示」で、一包化・粉砕・別包化・混合を選べます(複数可。持参の処方には
+  出ません)。RP 内の明細すべての `dispenseRequest.extension` に JP Core の `instructionForDispense` 拡張を
+  コードごとに書きます(コードは JAMI の調剤方法コード `http://jami.jp/CodeSystem/DrugDispensePreparationMethod`)。
+  カード・詳細・調剤登録の用法の下と、処方箋の用法の次の行に「調剤指示: 一包化・粉砕」と出ます。
 - **後発品変更不可**: 外来の銘柄処方は、薬剤行のメニュー「後発品変更不可」で「医療上必要」か「患者希望」を
   付けられます(一般名処方と入院処方には出ません)。`MedicationRequest.substitution` に JP Core の変更可否コード
   「1 後発品変更不可」を入れ、理由をローカルコード(`.../substitution-not-allowed-reason`)で区別します。

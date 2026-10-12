@@ -69,7 +69,7 @@ module Reports
 
     private
 
-    # RP 1 件を「Rp 見出し → 薬品 → 用法」の順の行にする。カルテの紹介状に流し込む
+    # RP 1 件を「Rp 見出し → 薬品 → 用法 → 調剤指示」の順の行にする。カルテの紹介状に流し込む
     # 処方文字列(frontend の populateContext.ts formatPrescriptions)と同じ並び。
     # 画面と紙で処方の読み方が変わらないよう、変えるときは両方を揃えること。
     # 後発品変更不可は、列のあるレイアウトでは薬品の行に添える印、無いレイアウトでは行の末尾に書く。
@@ -95,6 +95,7 @@ module Reports
         usage = [rp.usage_name, rp.supplement, amount].compact_blank.join(" ")
         usage_comment = rp.usage_comment.present? ? "（#{rp.usage_comment}）" : ""
         lines << ["　用法: #{usage}#{usage_comment}", nil] if usage.present? || usage_comment.present?
+        lines << ["　調剤指示: #{rp.dispense_instruction}", nil] if rp.dispense_instruction.present?
         lines
       end
     end

@@ -63,7 +63,7 @@ token 検索の `system|` 形式と同じ扱い)。検索が空振りしても�
 ## 4. 処方欄の組み方
 
 - RP 明細は 1 個の text-block(`rx_content`)に整形済みの行を流し込む。行の並びは
-  「Rp 見出し → 薬品 → 用法」で、カルテの紹介状に流し込む処方文字列
+  「Rp 見出し → 薬品 → 用法 → 調剤指示」で、カルテの紹介状に流し込む処方文字列
   (frontend populateContext.ts の formatPrescriptions)と同じ。変えるときは両方を揃える。
 - 折り返しは ThinReports 任せにせず、レンダラが桁数(半角換算、全角 = 2)で事前に折る。
   枠に入る行数(`lines_per_page`)との対応を決定的にするため。あふれた行は同じ
@@ -86,6 +86,9 @@ token 検索の `system|` 形式と同じ扱い)。検索が空振りしても�
 | 備考 | ServiceRequest.note(処方箋コメント) |
 
 薬品名は一般名処方コード(【般】〜)を優先し、無ければレセ電コードの display。
+
+調剤指示(一包化・粉砕・別包化・混合)は明細の `dispenseRequest` の `instructionForDispense` 拡張で、RP の
+用法の次に「調剤指示: 一包化・粉砕」の行を足す(院外・院内とも)。
 
 後発品変更不可は `MedicationRequest.substitution`(変更可否コード 1 + 理由「医療上必要」/「患者希望」)。
 院外様式では「変更不可」「患者希望」列の text-block(`rx_no_change` / `rx_patient_wish`)に、処方欄と

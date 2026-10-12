@@ -7,6 +7,7 @@ import {
   canBlockSubstitution,
   CATEGORY_OPTIONS,
   defaultPrescriptionCategory,
+  DISPENSE_INSTRUCTION_OPTIONS,
   emptyMedicineLine,
   emptyPrescriptionForm,
   emptyRp,
@@ -16,6 +17,7 @@ import {
   SUBSTITUTION_BLOCK_OPTIONS,
   type MedicineLineValues,
   type PrescriptionFormValues,
+  type DispenseInstruction,
   type PrescriptionSetting,
   type RpValues,
   type SubstitutionBlock,
@@ -196,6 +198,15 @@ export function PrescriptionForm({
 
   function removeRp(rpIndex: number) {
     setValues((v) => ({ ...v, rps: v.rps.filter((_, i) => i !== rpIndex) }));
+  }
+
+  function toggleDispenseInstruction(rpIndex: number, code: DispenseInstruction) {
+    const current = values.rps[rpIndex].dispenseInstructions ?? [];
+    updateRp(rpIndex, {
+      dispenseInstructions: current.includes(code)
+        ? current.filter((c) => c !== code)
+        : [...current, code],
+    });
   }
 
   function updateUnevenDoses(rpIndex: number, medIndex: number, unevenDoses: string[]) {
@@ -631,7 +642,8 @@ export function PrescriptionForm({
               )}
               {rp.usage &&
                 ((!rp.supplement && !isAsNeededUsage(rp.usage.usage_code)) ||
-                  !(rp.showUsageComment || rp.usageComment)) && (
+                  !(rp.showUsageComment || rp.usageComment) ||
+                  (!rp.dispenseInstructions && !brought)) && (
                 <RowMenu label="用法の操作" escapesClipping>
                   {!rp.supplement && !isAsNeededUsage(rp.usage.usage_code) && (
                     <button
@@ -649,6 +661,16 @@ export function PrescriptionForm({
                       onClick={() => updateRp(rpIndex, { showUsageComment: true })}
                     >
                       用法コメント
+                    </button>
+                  )}
+                  {/* 持参の処方は調剤しないので出さない。 */}
+                  {!rp.dispenseInstructions && !brought && (
+                    <button
+                      type="button"
+                      className="row-menu__item"
+                      onClick={() => updateRp(rpIndex, { dispenseInstructions: [] })}
+                    >
+                      調剤指示
                     </button>
                   )}
                 </RowMenu>
@@ -680,6 +702,30 @@ export function PrescriptionForm({
                 () => updateRp(rpIndex, { usageComment: "", showUsageComment: false }),
                 "用法コメントを削除",
               )}
+            </div>
+          )}
+
+          {rp.dispenseInstructions && !brought && (
+            <div className="rp-card__supplement">
+              <div className="rp-card__supplement-head">
+                <span className="rp-card__usage-label">調剤指示</span>
+                <div className="rp-card__supplement-kinds">
+                  {DISPENSE_INSTRUCTION_OPTIONS.map((option) => (
+                    <label key={option.code} className="rp-card__supplement-kind">
+                      <input
+                        type="checkbox"
+                        checked={rp.dispenseInstructions?.includes(option.code) ?? false}
+                        onChange={() => toggleDispenseInstruction(rpIndex, option.code)}
+                      />
+                      {option.display}
+                    </label>
+                  ))}
+                </div>
+                {removeButton(
+                  () => updateRp(rpIndex, { dispenseInstructions: null }),
+                  "調剤指示を削除",
+                )}
+              </div>
             </div>
           )}
 

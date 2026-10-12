@@ -991,6 +991,12 @@ export function KarteCardBody({ item }: { item: KarteTimelineItem }) {
                 )}
               </span>
             </div>
+            {rp.dispenseInstructionLabel && (
+              <div className="karte-rp__detail">
+                <span className="karte-rp__detail-label">調剤指示:</span>
+                <span className="karte-rp__usage">{rp.dispenseInstructionLabel}</span>
+              </div>
+            )}
           </div>
         ))}
         {comment && <p className="karte-card__note">{comment}</p>}
