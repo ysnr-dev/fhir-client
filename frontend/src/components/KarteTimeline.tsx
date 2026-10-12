@@ -833,7 +833,7 @@ const KarteCard = memo(function KarteCard({
         ) : (
           <KarteCardHistoryModal
             item={item}
-            renderBody={(version) => <KarteCardBody item={version} />}
+            renderBody={(version) => <KarteCardVersionView item={version} problemsById={problemsById} />}
             onClose={() => setHistoryOpen(false)}
           />
         ))}
@@ -1181,6 +1181,36 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
         </ul>
       )}
       <SchemaImageGallery refs={schemas} />
+    </>
+  );
+}
+
+// 変更履歴で見せる 1 版ぶんのカード。カードの見出し(表題・診療日・依頼科・依頼医・プロブレム・
+// パス)も版ごとに変わりうるので、本文の前に文字で並べる(差分でも行として比べられるように)。
+// 進捗はオーダーの版ではない(部門の Task が持つ)ので出さない。
+function KarteCardVersionView({
+  item,
+  problemsById,
+}: {
+  item: KarteTimelineItem;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const problem = itemProblem(item);
+  const current = problem ? problemsById.get(problem.conditionId) : undefined;
+  const pathway = itemPathway(item);
+  return (
+    <>
+      <div className="karte-card-version__head">
+        <div className="karte-card-version__title">
+          {[karteDayLabel(item.day), cardTitle(item)].filter(Boolean).join(" ")}
+        </div>
+        {cardMeta(item) && <div>{cardMeta(item)}</div>}
+        {problem && (
+          <div>{`プロブレム: ${current ? problemLabel(current) : problem.display || "不明"}`}</div>
+        )}
+        {pathway && <div>{`パス: ${pathway.name || pathway.code}`}</div>}
+      </div>
+      <KarteCardBody item={item} />
     </>
   );
 }

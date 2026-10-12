@@ -7568,6 +7568,106 @@ body.karte-wide {
   overflow-y: auto;
 }
 
+/* 変更履歴の 1 版ぶんのカードの見出し(表題・診療日・依頼元など)。 */
+.karte-card-version__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.karte-card-version__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+/* 版の内容の上に置く切り替え(差分)と、比べている版。 */
+.note-history__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.note-history__toolbar button {
+  font-size: 13px;
+  padding: 5px 10px;
+}
+
+.note-history__toolbar button[aria-pressed="true"] {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.note-history__compare {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 差分を取るために版を描く場所。文字を読むだけなので画面の外に置く(display: none だと
+   innerText が改行を返さない)。 */
+.version-diff__sources {
+  position: absolute;
+  left: -100000px;
+  top: 0;
+  width: 600px;
+}
+
+.version-diff {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.version-diff__row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-h);
+}
+
+.version-diff__row--removed {
+  background: var(--diff-removed-bg);
+}
+
+.version-diff__row--removed .version-diff__text {
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+}
+
+.version-diff__row--added {
+  background: var(--diff-added-bg);
+}
+
+.version-diff__mark {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.version-diff__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.version-diff__changed {
+  color: inherit;
+  border-radius: 2px;
+}
+
+.version-diff__row--removed .version-diff__changed {
+  background: var(--diff-removed-strong);
+}
+
+.version-diff__row--added .version-diff__changed {
+  background: var(--diff-added-strong);
+}
+
 .karte-timeline {
   flex: 1;
   min-height: 0;

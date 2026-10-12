@@ -28,6 +28,11 @@
   --warning: #b7791f;
   /* 取り返しのつかない操作や、見落とすと危ない警告の色。 */
   --danger: #c0392b;
+  /* 変更履歴の差分。行の地(消えた行・増えた行)と、行の中で変わった文字の地。 */
+  --diff-removed-bg: rgba(192, 57, 43, 0.1);
+  --diff-removed-strong: rgba(192, 57, 43, 0.3);
+  --diff-added-bg: rgba(46, 139, 87, 0.12);
+  --diff-added-strong: rgba(46, 139, 87, 0.35);
   /* JTAS の色分け(1 蘇生=青 / 2 緊急=赤 / 3 準緊急=黄 / 4 低緊急=緑 / 5 非緊急=白)。
      地の色と、その上に載せる文字の色の組で持つ。 */
   --jtas-1: #1f5fbf;
@@ -103,6 +108,10 @@
   --lab-low: #3987e5;
   --warning: #e0a33a;
   --danger: #ef5b4f;
+  --diff-removed-bg: rgba(239, 91, 79, 0.14);
+  --diff-removed-strong: rgba(239, 91, 79, 0.38);
+  --diff-added-bg: rgba(63, 167, 108, 0.16);
+  --diff-added-strong: rgba(63, 167, 108, 0.42);
   --jtas-1: #3b7de0;
   --jtas-1-text: #ffffff;
   --jtas-2: #e5484d;

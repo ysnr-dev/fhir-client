@@ -4,9 +4,11 @@ import type { HistoryCardItem } from "../fhir/karteCardHistory";
 import { dateTimeLabel } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
+import { VersionHistoryBody } from "./VersionHistoryBody";
 
 // 診療記録以外のカルテカードの変更履歴。編集ごとに組み直したカードを版として並べ、
 // 選んだ版の中身をカードの本文と同じ描き方で出す(描き方はタイムラインから受け取る)。
+// 1 つ前の版との差分にも切り替えられる。
 
 interface KarteCardHistoryModalProps {
   item: HistoryCardItem;
@@ -19,6 +21,7 @@ export function KarteCardHistoryModal({ item, renderBody, onClose }: KarteCardHi
   const [selectedNo, setSelectedNo] = useState<number | null>(null);
   // 既定は最新版。読み込み前は versions が空なので選択は描画時に解決する。
   const selected = versions.find((v) => v.versionNo === selectedNo) ?? versions[0];
+  const previous = selected && versions[versions.indexOf(selected) + 1];
 
   return (
     <Modal title="変更履歴" onClose={onClose} className="modal--wide">
@@ -49,7 +52,14 @@ export function KarteCardHistoryModal({ item, renderBody, onClose }: KarteCardHi
               );
             })}
           </ul>
-          <div className="note-history__body">{selected && renderBody(selected.item)}</div>
+          {selected && (
+            <VersionHistoryBody
+              versionNo={selected.versionNo}
+              previousVersionNo={previous?.versionNo}
+              current={renderBody(selected.item)}
+              previous={previous && renderBody(previous.item)}
+            />
+          )}
         </div>
       )}
     </Modal>

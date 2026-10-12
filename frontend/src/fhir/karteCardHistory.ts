@@ -1,4 +1,5 @@
-import type { KarteTimelineItem } from "./karteTimeline";
+import { localDay } from "../lib/dates";
+import { orderCardDay, type KarteTimelineItem } from "./karteTimeline";
 import { labOrderItemRequests } from "./labOrderHelpers";
 import { withEvaluationObservation } from "./pathwayKarteHelpers";
 import { VITAL_ENTRY_SYSTEM, groupVitalEntries } from "./vitalHelpers";
@@ -11,6 +12,7 @@ import { VITAL_ENTRY_SYSTEM, groupVitalEntries } from "./vitalHelpers";
 //
 // 版はオーダー内容の版で、実施記録・照射記録は含めない(別のリソースで、オーダーの
 // 編集とは別に積み上がるため)。進捗やレポートの有無は現在の値のまま出す。
+// 診療日(day)は版の値で付け直す(日付の変更も版の違いとして見えるように)。
 //
 // 診療記録は ClinicalNoteHistoryModal が別に扱う(承認・署名など版ごとの見どころが違う)。
 
@@ -121,7 +123,9 @@ function rebuildItem(
 ): HistoryCardItem | null {
   if (item.kind === "vital") {
     const entry = groupVitalEntries(liveResources<fhir4.Observation>(state, "Observation"))[0];
-    return entry ? { ...item, entry } : null;
+    return entry
+      ? { ...item, entry, day: localDay(entry.effectiveDateTime), dateTime: entry.effectiveDateTime }
+      : null;
   }
 
   const main = karteCardHistoryPlan(item).main;
@@ -129,14 +133,20 @@ function rebuildItem(
   if (!resource) return null;
 
   if (item.kind === "qr") {
-    return { ...item, response: resource as fhir4.QuestionnaireResponse };
+    const response = resource as fhir4.QuestionnaireResponse;
+    return { ...item, response, day: localDay(response.authored), dateTime: response.authored ?? "" };
   }
   if (item.kind === "pathway-evaluation") {
     return { ...item, evaluation: withEvaluationObservation(item.evaluation, resource as fhir4.Observation) };
   }
 
   const serviceRequest = resource as fhir4.ServiceRequest;
-  let rebuilt: HistoryCardItem = { ...item, serviceRequest };
+  let rebuilt: HistoryCardItem = {
+    ...item,
+    serviceRequest,
+    day: orderCardDay(serviceRequest),
+    dateTime: serviceRequest.authoredOn ?? "",
+  };
   if ("medicationRequests" in rebuilt) {
     rebuilt = { ...rebuilt, medicationRequests: liveResources<fhir4.MedicationRequest>(state, "MedicationRequest") };
   }
