@@ -8225,7 +8225,7 @@ body.karte-wide {
    診療日パネル(160px)より詰めて内容表示に幅を回す。 */
 .karte-lab {
   display: grid;
-  grid-template-columns: 100px minmax(0, 1fr);
+  grid-template-columns: 108px minmax(0, 1fr);
   gap: 12px;
   overflow-y: visible;
 }
