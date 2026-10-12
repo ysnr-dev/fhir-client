@@ -700,7 +700,7 @@ CarePlan(観察項目).goal → Goal  identifier assessment-goal-id = 観察項�
 
 実装は `fhir/pathwayVarianceHelpers.ts`(通知の組み立て)、`hooks/usePathwayVarianceNotice.ts`(宛先と既存の通知)、
 `buildPathwayEvaluationBundle`(評価の transaction に積む)、`components/notifications/notificationRegistry.tsx`(一覧の種別)。
-通知の器は他の通知と同じ Task(readme の「通知(Task)」)。
+通知の器は他の通知と同じ Task(`features/notifications.md`「通知(Task)」)。
 
 ```
 Task  code = task-code|pathway-variance、priority = urgent(注意)、status requested / completed / cancelled

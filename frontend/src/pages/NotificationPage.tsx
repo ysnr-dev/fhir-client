@@ -151,7 +151,7 @@ export function NotificationPage() {
             自分あてのみ
           </label>
           {/* ヘッダーのベルの件数を自動で追いかけるかどうか。上流は検索のたびに監査ログを
-              1 行書くので、常に見張りたい端末でだけ入れる(readme「通知(Task)」)。 */}
+              1 行書くので、常に見張りたい端末でだけ入れる(`docs/features/notifications.md`「通知(Task)」)。 */}
           <label className="notification__filter" title="ヘッダーの通知件数を 1 分ごとに読み直します">
             <input
               type="checkbox"

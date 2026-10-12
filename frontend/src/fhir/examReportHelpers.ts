@@ -624,7 +624,7 @@ export function examReportBundleTooLarge(bundle: fhir4.Bundle): boolean {
 
 /**
  * レポートの削除。所見とテンプレート回答も消す。画像の Binary は消さない
- * (上流の旧版が参照しているため。readme「シェーマ画像」)。
+ * (上流の旧版が参照しているため。`docs/features/templates.md`「シェーマ画像」)。
  */
 export function buildExamReportDeleteEntries(
   config: ExamReportConfig,

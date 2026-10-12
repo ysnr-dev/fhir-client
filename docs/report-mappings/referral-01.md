@@ -49,7 +49,7 @@ QuestionnaireResponse に残るため PDF にもそのまま出る）。
   (`ref_from_*`)。
 - **医療機関(Organization)の選択で一括入力**: 紹介先・紹介元の各グループ見出しに
   出る「医療機関選択」ボタンから、登録済みの医療機関を選んで流し込める
-  (readme「医療機関（Organization）> テンプレートへの一括入力」参照)。対応は
+  (`../features/facility.md`「医療機関（Organization）> テンプレートへの一括入力」参照)。対応は
   `ref_to_name`・`ref_from_name` → 名称、`ref_from_address` → 郵便番号+所在地、
   `ref_from_phone` → 電話番号、`ref_from_fax` → ＦＡＸ。診療科(`*_dept`)は
   Organization に対応する要素が無いため手入力のまま。

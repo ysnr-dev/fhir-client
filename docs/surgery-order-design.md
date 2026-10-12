@@ -32,7 +32,7 @@
   手術部が手術一覧の「日程未定」タブから日程・手術室を入れて確定する(§5.2)。
   日程を入れて申し込むこともでき、その場合は予定日別タブでそのまま受付する。
 - **authoredOn は登録日時、予定日時は `occurrence`**。手術は申込から実施まで日が空くのが
-  普通なので当初から分けていた(2026-09-01 に全種別をこの形に統一。readme「オーダーの日付」)。
+  普通なので当初から分けていた(2026-09-01 に全種別をこの形に統一。`features/orders-common.md`「オーダーの日付」)。
   ［事実］上流の occurrence 検索は `occurrenceDateTime` だけを抽出する
   (`extraction_definitions/service_request.rb`。Period は索引されない)ため、
   `occurrencePeriod`(入室〜退室)ではなく **`occurrenceDateTime`(入室予定) +
@@ -256,7 +256,7 @@ master_surgery_categories -- 術式の種別(分類)。parent_code の自己参�
 「日付未定」が出る(存在するときだけ)。
 
 これは手術専用の仕掛けではなく、**種別非依存の土台**として `fhir/karteTimeline.ts` に置いた。
-詳細は readme の「日付未定オーダー」を参照。
+詳細は `features/orders-common.md`「日付未定オーダー」を参照。
 
 ### 5.4 共通基盤に足したもの
 

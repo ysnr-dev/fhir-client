@@ -1,7 +1,7 @@
 # 注射オーダーの設計
 
 医師が患者に出す注射(点滴・静注・皮下注など)のオーダー。FHIR 上の持ち方の全体は
-`readme.md`「注射オーダー機能」に書いてあるので、ここでは **連日オーダー(期間展開)** を
+`features/medication.md`「注射オーダー機能」に書いてあるので、ここでは **連日オーダー(期間展開)** を
 中心に、設計判断とその理由を残す。
 
 ## 1. リソースの単位 = 1 施行日 1 オーダー
@@ -45,12 +45,12 @@ B の弱点(修正・削除が 1 本ずつ)は、展開した SR を `requisitio
 
 ```
 ServiceRequest(1 日分)
-  authoredOn         = オーダー登録日時(全日で同じ値。全種別共通の意味、readme「オーダーの日付」)
+  authoredOn         = オーダー登録日時(全日で同じ値。全種別共通の意味、`features/orders-common.md`「オーダーの日付」)
   occurrenceDateTime = その日の注射日(日付のみ)
   requisition  = injection-series|<uuid>       ← 同時に展開した全日で同じ値
   extension[injection-series-start]    = valueDate 開始日
   extension[injection-series-schedule] = valueTiming 実施パターン(毎日のときは付けない)
-  (category・orderDetail・MedicationRequest の持ち方は readme のとおり)
+  (category・orderDetail・MedicationRequest の持ち方は `features/medication.md` のとおり)
 ```
 
 - `http://fhir-client.local/Identifier/injection-series`(requisition の system)
@@ -228,14 +228,14 @@ ServiceRequest(1 日分) ← focus ── Task(進捗)
 | 受付済 | 「払出登録」→ 払出済(`InjectionDispenseModal`) |
 | 照会中 | (疑義照会の回答待ち・処方変更待ち。「払出登録」は出さない) |
 | 払出済 | (カルテの実施入力で実施済へ) |
-| 依頼済・受付済・照会中 | 「疑義照会」→ 照会の送信・取下げ(readme「疑義照会」) |
+| 依頼済・受付済・照会中 | 「疑義照会」→ 照会の送信・取下げ(`features/medication.md`「疑義照会」) |
 | ケバブ | 注射箋再発行 / 注射ラベル発行 / 受付取消 / 払出取消 / 中止 / 中止を取消 |
 
 ### 払出(MedicationDispense)
 
 `fhir/injectionDispenseHelpers.ts`。処方の調剤(`rxDispenseHelpers`)と同じ考え方:
 薬剤(`MedicationRequest`)1 件につき `MedicationDispense` 1 件、`authorizingPrescription` で
-紐付け、銘柄を変えたら `substitution.wasSubstituted`、疑義照会は処方と共通の通知(`rx-inquiry`。readme「疑義照会」)、
+紐付け、銘柄を変えたら `substitution.wasSubstituted`、疑義照会は処方と共通の通知(`rx-inquiry`。`features/medication.md`「疑義照会」)、
 払出済の Task と 1 transaction。
 
 処方と違うのは**数量の意味**。注射は 1 日 1 オーダーで RP の開始時刻の数だけ施用があるので、

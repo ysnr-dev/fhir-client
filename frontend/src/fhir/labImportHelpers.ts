@@ -88,7 +88,7 @@ function collectedDateOf(rows: LabResultImportRow[]): string {
  * 報告区分。OBR-25 が P(事前的に確認された結果)なら中間報告、F / C なら最終報告。
  * OBR-25 が無ければ OBX-11 が全部 P のときだけ中間報告にする。
  * 訂正(C)を最終報告として送ると、確定済みのレポートへの保存で
- * nextLabReportStatus が corrected に進める(readme「報告区分」)。
+ * nextLabReportStatus が corrected に進める(`docs/features/lab.md`「報告区分」)。
  */
 export function importReportStatusOf(rows: LabResultImportRow[]): "preliminary" | "final" {
   const orderStatus = rows.find((row) => row.report_status)?.report_status?.toUpperCase();
@@ -113,7 +113,7 @@ const FILE_FLAGS: Record<string, LabInterpretation> = {
 
 /**
  * 登録する判定。施設の基準値が正本で、Observation.referenceRange に焼き付くのも
- * そちらのため(readme「基準値と H/L の自動判定」)。基準値を持たない項目に限り
+ * そちらのため(`docs/features/lab.md`「基準値と H/L の自動判定」)。基準値を持たない項目に限り
  * ファイルの異常フラグを使う。
  */
 export function importInterpretationOf(

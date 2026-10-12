@@ -148,7 +148,7 @@ OUL は 1 つの検体に複数の OBR が続くので、SPM は次の SPM ま�
 
 **［事実］** ファイルの OBX-3 は取込元ごとに違う。JLAC10 の 17 桁で来ることが多いが、装置固有の
 コードや施設で決めたコードも来る。施設側の結果項目は `master_lab_result_items.result_item_code`
-(施設コード)が本体で、JLAC11 / JLAC10 は属性(readme「検体検査の結果項目マスタ」)。
+(施設コード)が本体で、JLAC11 / JLAC10 は属性(`features/lab.md`「検体検査の結果項目マスタ」)。
 
 **［事実］** OBX-3 の体系名(第 3 成分 / 第 6 成分)が `JC10` / `JLAC10` なら JLAC10、
 `JC11` / `JLAC11` なら JLAC11。**体系名を付けない装置がある**ので、空で 17 桁の英数字なら
@@ -321,14 +321,14 @@ index: `[lab_result_import_id, group_no, sequence]`、`[lab_result_import_id, st
 - **H/L は施設の基準値で付け直す**。結果項目に基準値があれば `matchReferenceRange` +
   `judgeInterpretation` で判定し(パニック値なら HH / LL)、基準値が無ければファイルの OBX-8 を
   写す(`>` → H、`<` → L。N / A / AA は判定なし)。施設の基準値が正本で、
-  `Observation.referenceRange` に焼き付くのもそちらのため(readme「基準値と H/L の自動判定」)。
+  `Observation.referenceRange` に焼き付くのもそちらのため(`features/lab.md`「基準値と H/L の自動判定」)。
   ファイルの基準範囲(OBX-7)は参考として画面に出すだけで保存しない。
 - **登録**は候補ごとのボタンと全件一括の 2 つ。候補の行が全部 `ready` か `skipped` になっていて、
   患者が決まっていることが条件。
   - そのオーダーに結果がまだ無ければ新規登録(`useCreateLabResult`)。
   - 既にあれば既存レポートを読み込んで項目を差し替え・追加し、更新(`useUpdateLabResult`)。
     確定済みのレポートを更新すると保存時に**訂正報告**(`corrected`)になり、確認の通知も
-    未確認に戻る(readme「報告区分」「検査結果の確認」)。
+    未確認に戻る(`features/lab.md`「報告区分」「検査結果の確認」)。
   - 報告区分はファイルの OBR-25 から、`P` → 中間報告、`F` / `C` → 最終報告。
     OBR-25 が無ければ OBX-11 が全部 `P` のときだけ中間報告にする。
   - パニック値の通知の宛先は紐付けたオーダーの依頼医(手入力と同じ)。

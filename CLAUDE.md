@@ -2,7 +2,7 @@
 
 電子カルテ(FHIR R4 クライアント)。上流 FHIR サーバー(別リポジトリ `../fhir-server`)への中継と、
 国内マスタ・帳票などの独自データを持つ Rails backend、React frontend の 2 層構成。
-仕様の正典は `readme.md`(機能ごとの節)と `docs/*-design.md`。着手前に該当節を読むこと。
+仕様の正典は `docs/features/*.md`(機能ごとの説明。索引は `readme.md`)と `docs/*-design.md`。着手前に該当節を読むこと。
 
 ## 構成
 
@@ -21,7 +21,7 @@ frontend/  Vite + React 19 + TypeScript (port 5173)
   src/fhir/*Helpers.ts                      FHIR リソースの組み立て・解釈(純粋関数)
   src/components/, src/pages/, src/hooks/   画面
   src/demo-seed/                            デモ患者投入ツール(docs/demo-seed.md)
-docs/      設計書(*-design.md)、バックログ(*-backlog.md)、server-improvement-backlog.md(上流への要望)
+docs/      機能ごとの説明(features/*.md)、開発環境(development.md)、設計書(*-design.md)、バックログ(*-backlog.md)、server-improvement-backlog.md(上流への要望)
 ```
 
 - 型は `@types/fhir` の `fhir4` 名前空間を使う。FHIR JSON はフロントで直接組み立てる。
@@ -39,7 +39,7 @@ docs/      設計書(*-design.md)、バックログ(*-backlog.md)、server-impro
   - frontend の依存追加はコンテナ内で `npm install` してから restart
   - ホスト側の編集が HMR に反映されない／古い変換結果が返るときはコンテナ内でファイルを `touch`。Vite が落ちていたら `docker compose up -d frontend`
 - seed やマスタ取込はコンテナ内で実行する(ホストから実行すると別 DB に入る)。
-- 任意 profile: `agent`(院内エージェント `../fhir-client-agent`)、`orca`(日レセ `../weborca-dev`)。readme「任意の profile」参照。
+- 任意 profile: `agent`(院内エージェント `../fhir-client-agent`)、`orca`(日レセ `../weborca-dev`)。`docs/development.md`「任意の profile」参照。
 
 ## 検証コマンド
 
@@ -106,7 +106,8 @@ docker compose exec frontend node scripts/import-cycles.cjs src/api/queries
 
 - **ユーザーの指示があるまで git commit しない。**
 - コミットメッセージは日本語で `feat:` / `fix:` / `change:` / `style:` / `refactor:` / `chore:` / `docs:` / `remove:` 接頭辞。
-- 機能を足したり振る舞いを変えたら `readme.md` の該当節(必要なら `docs/*-design.md`)も更新する。
+- 機能を足したり振る舞いを変えたら `docs/features/*.md` の該当節(必要なら `docs/*-design.md`)も更新する。
+  `readme.md` は概要と索引だけに保ち、詳細を書き足さない。新しいドキュメントを足したら索引に 1 行加える。
 - 開発環境のデータは確認なしで自由に修正・投入して検証してよい。ただし日付範囲での一括削除はしない(上流は `_history` から PUT で戻せる)。
 - 上流サーバーの変更が必要な場合は `../fhir-server` 側で行い、rspec はそのコンテナ内で実行する。本番デプロイは fhir-server を client より先に。
 - 実装ガイド(`../fhir-ig`)はビルドが重いので、明示指示があるときだけ触る。

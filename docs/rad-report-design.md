@@ -161,7 +161,7 @@ extension[rad-report-image]                                    0..*(並び順 = 
   上下の並べ替えを付ける。病理(並べ替え無し、表示は種別ごとにまとめ直す)とはここが違う。
 - **Binary の扱いは既存と同じ**。［事実］本体と同じ transaction に積み、`fullUrl` の `urn:uuid` で参照する
   (`imageBinaryEntry`)。外した画像・描き直しで参照が外れた Binary は削除しない
-  (上流の旧版が参照しているため。readme「シェーマ画像」)。
+  (上流の旧版が参照しているため。`features/templates.md`「シェーマ画像」)。
 
 ### 3.2 サイズ(上流の本文上限への対応)
 
@@ -351,7 +351,7 @@ extension[rad-report-image]                                    0..*(並び順 = 
 
 ### 6.1 依頼医の既読(結果確認)
 
-［事実］既読の仕組み(readme「検査結果の確認(既読)」)は検体検査・細菌・病理で動いており、
+［事実］既読の仕組み(`features/lab.md`「検査結果の確認(既読)」)は検体検査・細菌・病理で動いており、
 `fhir/resultReviewHelpers.ts` の `ReviewReportKind` に「読影レポートを入れるときにここへ足す」と
 書いてある。
 
@@ -509,7 +509,7 @@ extension[rad-report-image]                                    0..*(並び順 = 
 | カルテ | `fhir/karteTimeline.ts` / `components/KarteTimeline.tsx` / `components/KarteCardModals.tsx` / `karteUrl.ts` | `reportId` / `reportStatus`、バッジ、メニュー、`rad-result`、削除の判定 |
 | 既読・通知 | `fhir/resultReviewHelpers.ts` / `components/notifications/notificationRegistry.tsx` | `rad` の追加、リンクの分岐、重要所見の種別 |
 | マスタ | migration + `db/schema.rb` / `api/masterClient.ts` / `pages/RadItemPage.tsx` | `report_findings_template_canonical`(permit は列名から自動) |
-| 文書 | readme / `docs/rad-backlog.md` | 「検査結果の確認」から放射線対象外の記述を外す、通知の表、読影レポートの節 |
+| 文書 | `features/lab.md` / `docs/rad-backlog.md` | 「検査結果の確認」から放射線対象外の記述を外す、通知の表、読影レポートの節 |
 
 雛形にする既存実装:
 

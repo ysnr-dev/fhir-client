@@ -24,7 +24,7 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
   ServiceRequest の `based-on` 検索と `_revinclude`〔2026-08-09〕、オーダー日付の統一に伴う
   `occurrenceDateTime` の backfill migration `20260901000001`〔2026-09-01、client 側は
-  readme「オーダーの日付」〕）については両リポジトリのコミット履歴を参照。
+  `features/orders-common.md`「オーダーの日付」〕）については両リポジトリのコミット履歴を参照。
 - **2026-08-23 に優先度 A（5 件）・B（operation 系）・C-1（日付／期間検索）・C-2
   （`_sort` と `AllergyIntolerance.onset`）をサーバー・クライアント両側とも実装済み**
   （下記の「対応済み」節を参照）。**C-7（Provenance）も 2026-09-01 に実装済み**。残るは C-3・C-4 と長期のみ（C-5・C-9 は上流実装済み）。
@@ -264,7 +264,7 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   索引していない）を追加。あわせて **`_sort` は値を持たない行を方向によらず末尾に置く**
   （`NULLS LAST`）ようにした — Postgres の既定は DESC が NULLS FIRST で、「新しい順」に
   日付未設定のものが先頭に来てしまうため。並び順の保証（Appointment / Encounter の
-  `date`、`_history` の新しい版が先）は回帰 spec で固定。`_sort` の規則は README に記載。
+  `date`、`_history` の新しい版が先）は回帰 spec で固定。`_sort` の規則は fhir-server の docs/setup.md に記載。
 - **クライアント**: 「上流の `_sort` を信用せず画面側で並べ直す」防御を 3 箇所から撤去した
   （カルテの予約タブ、入院予定の一覧、診療記録の版履歴）。
 

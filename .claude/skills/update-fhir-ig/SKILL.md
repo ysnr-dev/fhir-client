@@ -106,7 +106,7 @@ IG をその形に合わせる前にユーザーに報告する。直すなら f
 「QA に残るエラー」を基準にする。
 
 ビルドはバックグラウンドで実行する(Bash の `run_in_background`、制限時間は 40 分ほど)。終わると通知が来るので、
-その間に待ちで止まらず、本文の読み直しや fhir-client 側の `readme.md` の確認を進める。
+その間に待ちで止まらず、本文の読み直しや fhir-client 側の `docs/features/*.md` の確認を進める。
 
 ```bash
 cd ../fhir-ig && ./_docker.sh > <scratchpad>/ig-build.log 2>&1

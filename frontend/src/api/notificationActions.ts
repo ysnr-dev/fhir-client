@@ -61,7 +61,7 @@ async function fetchProvenances(provenanceIds: string[]): Promise<fhir4.Provenan
  * (自分あては対応済み、研修医の活動で他の指導医あてに並んでいたものは取り下げ)。
  *
  * 通知が見つからない来歴も承認は通す。通知を持たない時期の承認待ちが残っていても
- * 詳細モーダルから承認できるようにするため(readme「代行入力の記録と承認」)。
+ * 詳細モーダルから承認できるようにするため(`docs/features/orders-common.md`「代行入力の記録と承認」)。
  */
 export async function approvalTransactionEntries(
   provenanceIds: string[],

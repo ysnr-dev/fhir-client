@@ -24,7 +24,7 @@ import { isHeaderEntry } from "./provenanceHelpers";
 //
 // ［決定］子孫は partOf に**祖先すべて**を並べる(ePath の identifier が祖先を連結するのと
 // 同じ考え方)。こうすると適用を指す 1 回の検索(`part-of=CarePlan/{適用の id}`)で木全体が
-// 引け、根だけは `part-of:missing=true` で引ける(上流の実装は fhir-server の README 参照)。
+// 引け、根だけは `part-of:missing=true` で引ける(上流の実装は fhir-server の docs/api-examples.md「CarePlan / Goal の例」参照)。
 //
 // ［決定］参照は **Procedure → 観察項目の一方向だけ**にする。ePath は観察項目側にも
 // activity.outcomeReference でタスクを持たせるが、同じ transaction の中で相互参照に

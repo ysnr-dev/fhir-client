@@ -1,7 +1,7 @@
 # 処方オーダーの設計(与薬の実施を中心に)
 
 処方オーダーそのもの(ServiceRequest + RP ごとの MedicationRequest、RP の組み立て、
-用法・投与日数の入力)は `readme.md` の「処方オーダー機能」に書いてある。このドキュメントは
+用法・投与日数の入力)は `features/medication.md` の「処方オーダー機能」に書いてある。このドキュメントは
 **後から足した「内服の与薬実施」**の設計を残す。経過表側の見え方は
 `docs/flowsheet-design.md` §9。
 

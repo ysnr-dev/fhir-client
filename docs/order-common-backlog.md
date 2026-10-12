@@ -11,7 +11,7 @@
 > `occurrenceDateTime` = オーダー開始日(全種別必須、未定可は手術のみ)。処方は「投与開始日」欄を新設、
 > 他科依頼は希望日必須、細菌検査は検査日必須。カルテの本流は `occurrence` 軸でページング、処方一覧だけ
 > 交付日(`authoredon`)で引く。既存データは上流 migration `20260901000001` で補完。
-> 現行のルールは readme「オーダーの日付(登録日時と開始日)」と `fhir/shared.ts` 冒頭。以下は検討の記録。
+> 現行のルールは `features/orders-common.md`「オーダーの日付(登録日時と開始日)」と `fhir/shared.ts` 冒頭。以下は検討の記録。
 
 ### 1.1 現状
 
@@ -110,7 +110,7 @@ ServiceRequest
 > 常に残す。承認(§2.5)は同じ Provenance に `verifier` と `signature` を足す PUT で、承認待ち一覧は
 > `signature-type:missing=true` で引いていた(2026-09-11 に通知 Task へ移行、§2.5)。実装は
 > `fhir/provenanceHelpers.ts` / `fhir/orderApprovalTaskHelpers.ts` / `components/OrderDetailRows.tsx` /
-> `pages/NotificationPage.tsx`、ルールは readme「代行入力の記録と承認」。
+> `pages/NotificationPage.tsx`、ルールは `features/orders-common.md`「代行入力の記録と承認」。
 > **残り**: 部門一覧・タイムラインの未承認バッジ(必要になったら)、上流 AuditEvent のエンドユーザー記録(別課題)。
 
 ### 2.1 現状
@@ -191,7 +191,7 @@ Provenance
    `target` / `patient` / `agent` / `recorded` / `agent-type` / `signature-type` の検索、
    `_revinclude=Provenance:target`、`_has:Provenance:target:agent-type=verifier`、署名(`signature[]`)の
    検証まで揃っている。fhir-client backend のプロキシ許可リストにも追加済み。
-   詳細は fhir-server の README「Provenance の例(代行入力・承認)」。
+   詳細は fhir-server の docs/api-examples.md「Provenance の例(代行入力・承認)」。
 2. **1 活動 = 1 件なので件数が増える**。Provenance は create / update という活動の記録で、
    編集のたびに 1 件増えるのが本来の姿(`target` もバージョン付き参照
    `ServiceRequest/123/_history/2` にするのが正しい)。注射の連日オーダーは 1 回の登録なら
@@ -243,7 +243,7 @@ Provenance
   時点で、一覧に `_revinclude=Provenance:target` を足すか Task を足すかを決める。
 - **2026-09-11 に Task を併用に変えた**(統合通知)。緊急異常値の通知が先に Task で実装され、読影の重要所見や
   文書作成の督促も控えていたので、「宛先を決めて相手に何かしてもらう」お知らせを 1 つの器にまとめた
-  (readme「通知(Task)」)。真正性の正本は引き続き Provenance で、`order-approval` の Task は
+  (`features/notifications.md`「通知(Task)」)。真正性の正本は引き続き Provenance で、`order-approval` の Task は
   **宛先(`owner`)と未対応・対応済み(`status`)だけ**を持つ。編集後の再承認は、編集のたびに新しい
   Provenance と Task が 1 組できるので二重管理にならない。承認は署名の PUT と Task を completed に
   する PUT を 1 transaction で送る(`api/notificationActions.ts`)。Task が無い承認待ち(導入前のぶん)でも

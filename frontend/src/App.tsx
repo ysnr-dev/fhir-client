@@ -243,7 +243,7 @@ function App() {
               チーム依頼一覧
             </Link>
             {/* 宛先の決まった通知(緊急異常値・オーダー承認…)の一覧。受け取るのは部門ではなく
-                医師なので診療業務に置く(readme「通知」)。件数はヘッダーのベルに出る。 */}
+                医師なので診療業務に置く(`docs/features/notifications.md`)。件数はヘッダーのベルに出る。 */}
             <Link to="/notifications" className="row-menu__item">
               通知
             </Link>

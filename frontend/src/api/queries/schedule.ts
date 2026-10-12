@@ -117,7 +117,7 @@ export function useDeleteSchedule() {
 }
 
 // 枠表にぶら下がる Slot。R4 は Slot.end に検索パラメータを定めていないので、
-// 期間は start を 2 回並べた AND で表す(上流 README の「空き枠を探す」と同じ形)。
+// 期間は start を 2 回並べた AND で表す(上流 fhir-server の docs/api-examples.md の「空き枠を探す」と同じ形)。
 // 1 週間でも 15 分枠なら数百件になるため、次ページが尽きるまで読み切る。
 async function fetchScheduleSlots(
   scheduleId: string,

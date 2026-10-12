@@ -59,7 +59,7 @@
 - `frontend/src/fhir/karteTimeline.ts` の放射線カードは `reportId` を持たない
   (「検査結果(ImagingStudy)との紐付けは未実装」)。`components/KarteTimeline.tsx` の
   「検査結果表示」は検体検査・細菌検査・病理の 3 種別だけに出る。
-- readme の「検査結果の確認(既読)」も「放射線は読影レポートがまだ無く、実施記録だけなので対象外」と断る。
+- `features/lab.md`「検査結果の確認(既読)」も「放射線は読影レポートがまだ無く、実施記録だけなので対象外」と断る。
 
 ［導出］**上流とプロキシの追加は要らない**。`DiagnosticReport` は
 `FhirProxyController::ALLOWED_RESOURCE_TYPES` に既にあり、上流の `based-on` 検索も検体検査で

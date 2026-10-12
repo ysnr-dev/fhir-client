@@ -60,7 +60,7 @@
 | `note-returned` カルテ差戻し | `Composition` | 記録した研修医 | 確定し直すと completed(通知からも手で閉じられる) |
 | `order-approval` オーダー承認 | `Provenance` | 研修医の活動は指導医ごとに 1 件 | 同上 |
 
-- 1 通知 = 1 宛先の作法(readme「通知(Task)」)を守り、グループの Task は作らない。こうすると既存の
+- 1 通知 = 1 宛先の作法(`features/notifications.md`「通知(Task)」)を守り、グループの Task は作らない。こうすると既存の
   「自分あて」の絞り込みと `canAct`(宛先 = 自分)がそのまま使える。
 - 新規の記録の承認待ちは、記録の POST と同じ transaction で `focus` を `urn:uuid` で指す
   (`saveClinicalNote` → `saveWithImages` → `resourceWithImagesBundle` に `fullUrl` を通した)。
