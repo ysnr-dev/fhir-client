@@ -30,7 +30,6 @@ import {
 import {
   encounterAdmissionDate,
   encounterAttendingName,
-  encounterBedLabel,
   encounterDepartmentName,
   encounterNurseNames,
 } from "../fhir/encounterHelpers";
@@ -594,7 +593,7 @@ function InpatientCard({ date, by, groups, isPending, error, truncated, pictogra
                 <table className="home__table">
                   <thead>
                     <tr>
-                      <th>病室・ベッド</th>
+                      <th>病室</th>
                       <th>患者番号</th>
                       <th>患者氏名</th>
                       <th>診療科</th>
@@ -610,7 +609,7 @@ function InpatientCard({ date, by, groups, isPending, error, truncated, pictogra
                         : 0;
                       return (
                         <tr key={row.encounter.id}>
-                          <td className="home__cell-compact">{encounterBedLabel(row.encounter)}</td>
+                          <td className="home__cell-compact">{row.roomName}</td>
                           <td className="home__cell-compact">
                             {row.patient ? patientNumberOf(row.patient) : ""}
                           </td>

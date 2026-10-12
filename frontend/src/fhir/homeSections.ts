@@ -180,6 +180,8 @@ export interface HomeInpatientRow {
   encounter: fhir4.Encounter;
   patient?: fhir4.Patient;
   patientId?: string;
+  /** 病室名。ベッドから病室が引けないときは "-"。 */
+  roomName: string;
 }
 
 export interface HomeInpatientGroup {
@@ -220,6 +222,7 @@ export function homeInpatientGroups(
       encounter,
       patient: patientId ? patientsById.get(patientId) : undefined,
       patientId,
+      roomName: ward?.roomName || "-",
     });
     groups.set(key, group);
   }
