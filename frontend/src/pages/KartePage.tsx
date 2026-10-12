@@ -699,13 +699,18 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
 
   // 本日のカルテのペインを出していないときは、カルテを本日の位置で開く。タイムラインは
   // 新しい日が上(日付未定・先の予定・本日・過去の順)なので、先の予定があると本日が下に
-  // 隠れる。本日の項目が無ければ、本日より前で最も新しい日にする。患者ごとに 1 回だけで、
-  // 先読み(日付未定・先の予定)と最初のページが揃ってから合わせる(後から上に日が足されて
-  // ずれないように)。開いた位置なので、飛んだときの強調はしない。
+  // 隠れる。本日の項目が無ければ、本日より前で最も新しい日にする。患者ごと、および
+  // タブ表示で他のタブからカルテタブに切り替えるたびに 1 回だけで、先読み(日付未定・
+  // 先の予定)と最初のページが揃ってから合わせる(後から上に日が足されてずれないように)。
+  // 開いた位置なので、飛んだときの強調はしない。
   const initialScrollPatient = useRef<string | null>(null);
   const timelineReady =
     !notes.isPending && !prescriptions.isPending && !responses.isPending && !vitals.isPending && !pendingOrders.isPending;
   useLayoutEffect(() => {
+    if (mode === "tabs" && tab !== "karte") {
+      initialScrollPatient.current = null;
+      return;
+    }
     if (!patientId || initialScrollPatient.current === patientId || !timelineReady) return;
     const container = timelineRef.current;
     if (!container) return;
@@ -715,7 +720,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     const element = target && container.querySelector(`[${KARTE_TARGET_ATTR}="${target.day}"]`);
     if (!element) return;
     container.scrollTop += element.getBoundingClientRect().top - container.getBoundingClientRect().top;
-  }, [patientId, timelineReady, todayVisible, filteredGroups, todayDay]);
+  }, [mode, tab, patientId, timelineReady, todayVisible, filteredGroups, todayDay]);
 
   // 診療日ペインは全日付を出すので、まだ読み込んでいない日も選べる。その場合は
   // 該当の日が表示範囲に入るまで自動で読み進めてから飛ぶ。scroll はクリック
