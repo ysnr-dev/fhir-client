@@ -1543,6 +1543,50 @@ else
   puts "master_pathways: no db/seed_data/pathways/*.json, skipped"
 end
 
+# 院内共通のオーダーセットのサンプル(db/seed_data/order_sets.json、フォルダとセットの木)。
+# values はオーダー登録フォームの入力値そのもので、薬剤・用法・病名などのマスタ行を丸ごと写している
+# (クリニカルパスのオーダー雛形と同じ持ち方。docs/order-set-design.md §2)。
+# **開発とデモのためのサンプル**で、同じ code のノードは上書きしない。同じ階層に同名のフォルダが
+# あればその中へ入れ、同名のセットは入れない。
+order_sets_json = Rails.root.join("db/seed_data/order_sets.json")
+if File.exist?(order_sets_json)
+  loaded = 0
+  skipped = 0
+  seed_order_set_nodes = lambda do |nodes, parent_id|
+    nodes.each_with_index do |node, index|
+      existing = OrderSet.find_by(code: node["code"]) ||
+                 OrderSet.find_by(scope: "facility", parent_id: parent_id, kind: node["kind"], name: node["name"])
+      if node["kind"] == "folder"
+        folder = existing || OrderSet.create!(
+          code: node["code"], kind: "folder", scope: "facility", parent_id: parent_id,
+          name: node["name"], display_order: index + 1
+        )
+        seed_order_set_nodes.call(Array(node["children"]), folder.id)
+      elsif existing
+        skipped += 1
+      else
+        ActiveRecord::Base.transaction do
+          set = OrderSet.create!(
+            code: node["code"], kind: "set", scope: "facility", parent_id: parent_id,
+            name: node["name"], display_order: index + 1
+          )
+          Array(node["entries"]).each_with_index do |entry, entry_index|
+            set.entries.create!(
+              order_type: entry["order_type"], label: entry["label"], values: entry["values"],
+              schema_version: entry["schema_version"] || 1, display_order: entry_index + 1
+            )
+          end
+        end
+        loaded += 1
+      end
+    end
+  end
+  seed_order_set_nodes.call(JSON.parse(File.read(order_sets_json)), nil)
+  puts "order_sets: seeded #{loaded} sets (kept #{skipped})"
+else
+  puts "order_sets: #{order_sets_json} not found, skipped"
+end
+
 # 放射線治療の施設固有マスタ(docs/radiotherapy-order-design.md §3)。モダリティ・照射技法・
 # 休止/中止理由は CSV、治療プロトコル(定型処方)は標的と Phase が入れ子なので JSON。
 # 標準コードとの対応(reference_*)は mCODE の値セット(SNOMED CT)を参考に付けたもので、
