@@ -15,6 +15,7 @@ import {
 import { AdmissionExecuteModal } from "../components/AdmissionExecuteModal";
 import { AdmissionModal } from "../components/AdmissionModal";
 import { BedTransferModal } from "../components/BedTransferModal";
+import { CareStaffModal } from "../components/CareStaffModal";
 import { DischargeModal } from "../components/DischargeModal";
 import { DischargePlanModal } from "../components/DischargePlanModal";
 import { DateStepper } from "../components/DateStepper";
@@ -165,7 +166,7 @@ interface PlannedRow {
 
 /** 入院中の行のケバブから開くモーダル。 */
 interface RowAction {
-  kind: "bedTransfer" | "leave" | "transferPlan" | "dischargePlan";
+  kind: "bedTransfer" | "careStaff" | "leave" | "transferPlan" | "dischargePlan";
   row: InpatientRow;
 }
 
@@ -1031,6 +1032,14 @@ export function InpatientListPage() {
         />
       )}
 
+      {rowAction?.row.encounter && rowAction.kind === "careStaff" && (
+        <CareStaffModal
+          encounter={rowAction.row.encounter}
+          patient={rowAction.row.patient}
+          onClose={() => setRowAction(null)}
+        />
+      )}
+
       {rowAction?.row.encounter && rowAction.kind === "leave" && (
         <LeaveModal
           encounter={rowAction.row.encounter}
@@ -1307,6 +1316,13 @@ function InpatientMenuItems({
         onClick={() => onRowAction("bedTransfer")}
       >
         転室・転床
+      </button>
+      <button
+        type="button"
+        className="row-menu__item"
+        onClick={() => onRowAction("careStaff")}
+      >
+        担当者変更
       </button>
       <button
         type="button"

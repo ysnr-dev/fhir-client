@@ -268,14 +268,14 @@ export function usePractitionerOptions() {
   return { ...query, practitioners: query.data ?? [] };
 }
 
-// 看護職(看護師・保健師・助産師)として所属する医療従事者。業務分担の選択肢に使う。
-// 職種は所属ロールだけが持つので、ロールを職種で引いて本体を _include で添えてもらう。
-export function useNurseOptions() {
-  const query = useQuery({
-    queryKey: ["PractitionerRole", "search", "nurse-options"],
+// 指定した職種として所属する有効な医療従事者(氏名順)。職種は所属ロールだけが持つので、
+// ロールを職種で引いて本体を _include で添えてもらう。
+function useRolePractitionerOptions(key: string, roleCodes: readonly string[]) {
+  return useQuery({
+    queryKey: ["PractitionerRole", "search", key],
     queryFn: async () => {
       const params = new URLSearchParams();
-      params.set("role", NURSE_ROLE_CODES.join(","));
+      params.set("role", roleCodes.join(","));
       params.set("_include", "PractitionerRole:practitioner");
       const { bundles } = await searchAllPages<fhir4.PractitionerRole>("PractitionerRole", params, {
         page: 500,
@@ -294,6 +294,16 @@ export function useNurseOptions() {
     },
     staleTime: 5 * 60_000,
   });
+}
 
+// 看護職(看護師・保健師・助産師)。業務分担・担当看護師の選択肢に使う。
+export function useNurseOptions() {
+  const query = useRolePractitionerOptions("nurse-options", NURSE_ROLE_CODES);
   return { ...query, nurses: query.data ?? [] };
+}
+
+// 医師・歯科医師。主治医の選択肢に使う。
+export function useDoctorOptions() {
+  const query = useRolePractitionerOptions("doctor-options", DOCTOR_ROLE_CODES);
+  return { ...query, doctors: query.data ?? [] };
 }

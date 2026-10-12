@@ -180,6 +180,44 @@ function applyAdmissionDetails(
 }
 
 /**
+ * 主治医と担当看護師を差し替えた入院を返す(担当者変更)。それ以外の participant は
+ * そのまま後ろに残す。
+ */
+export function buildCareStaffEncounter(
+  encounter: fhir4.Encounter,
+  staff: {
+    attending: { id: string; name: string } | null;
+    nurses: { id: string; name: string }[];
+  },
+): fhir4.Encounter {
+  const nurseSet = new Set(nurseParticipants(encounter));
+  const attending = attendingParticipant(encounter);
+  const others = (encounter.participant ?? []).filter((p) => p !== attending && !nurseSet.has(p));
+  const participants: fhir4.EncounterParticipant[] = [];
+  if (staff.attending) {
+    participants.push(
+      buildParticipant(
+        { system: PARTICIPATION_TYPE_SYSTEM, code: ATTENDING_PARTICIPANT_CODE, display: "attender" },
+        staff.attending.id,
+        staff.attending.name,
+      ),
+    );
+  }
+  for (const nurse of staff.nurses) {
+    participants.push(
+      buildParticipant(
+        { system: PARTICIPANT_ROLE_SYSTEM, code: NURSE_PARTICIPANT_CODE, display: "担当看護師" },
+        nurse.id,
+        nurse.name,
+      ),
+    );
+  }
+  const next: fhir4.Encounter = { ...encounter, participant: [...participants, ...others] };
+  if (next.participant?.length === 0) delete next.participant;
+  return next;
+}
+
+/**
  * url が一致する拡張を next で置き換えた extension 配列を返す(next が null なら
  * 取り除くだけ)。外出泊のように同じ url を複数持つものには使わない。
  */
