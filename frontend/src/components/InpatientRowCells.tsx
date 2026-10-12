@@ -5,7 +5,9 @@ import {
   encounterNurseNames,
 } from "../fhir/encounterHelpers";
 import { displayName } from "../fhir/patientHelpers";
+import type { RowPictogramSources } from "../hooks/useRowPictogramSources";
 import { useReturnLinkState } from "../returnTo";
+import { RowPictograms } from "./PatientListRowParts";
 import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "./PatientRowCells";
 
 // 入院患者一覧のどのタブでも同じ並び・同じ見た目で出す部分。
@@ -34,6 +36,7 @@ export function InpatientBodyCells({
   encounter,
   patient,
   departmentName,
+  pictograms,
 }: {
   roomName: string;
   bedName: string;
@@ -42,6 +45,7 @@ export function InpatientBodyCells({
   patient?: fhir4.Patient;
   /** 診療科の表示の差し替え。転科・転棟タブは移動先の科を出す。 */
   departmentName?: string;
+  pictograms: RowPictogramSources;
 }) {
   return (
     <>
@@ -53,6 +57,7 @@ export function InpatientBodyCells({
             {/* カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
             {displayName(patient)}
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           (encounter.subject?.display ?? "-")

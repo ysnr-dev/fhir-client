@@ -1,24 +1,17 @@
-import type { PatientCaution } from "../api/masterClient";
-import type { useInfectionsForPatients } from "../api/queries";
 import {
   OUTPATIENT_ORDER_STAGE_LABELS,
   type OutpatientOrderSummary,
 } from "../fhir/outpatientOrderProgressHelpers";
+import type { RowPictogramSources } from "../hooks/useRowPictogramSources";
 import {
   AllergyPictogramBadges,
   CautionPictogramBadges,
   InfectionPictogramBadge,
 } from "./PatientPictograms";
 
-// 外来・救急の患者一覧で共用する、行の中の部品。
+// 外来・救急・入院の患者一覧で共用する、行の中の部品。
 
-type RowPictogramsProps = {
-  patientId: string;
-  flags: Map<string, fhir4.Flag[]>;
-  allergies: Map<string, fhir4.AllergyIntolerance[]>;
-  infections: ReturnType<typeof useInfectionsForPatients>["byPatient"];
-  cautionsByCode: Map<string, PatientCaution>;
-};
+type RowPictogramsProps = { patientId: string } & RowPictogramSources;
 
 /**
  * 氏名の後ろに並べる注意のピクトグラム(カルテの患者帯・病棟マップと同じもの)。

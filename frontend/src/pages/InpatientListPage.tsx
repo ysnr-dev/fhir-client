@@ -42,6 +42,7 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { PathwayNameLinks } from "../components/PathwayNameLinks";
+import { RowPictograms } from "../components/PatientListRowParts";
 import { PlannedAdmissionModal } from "../components/PlannedAdmissionModal";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
@@ -75,6 +76,10 @@ import { buildDpcPatientRows, type DpcPatientRow } from "../fhir/dpcPatientList"
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { bedDisplayName, bedNumber, bedShortLabel } from "../fhir/wardHelpers";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 import { useStoredToggle } from "../hooks/useStoredToggle";
 import { formatKarteOpen, KARTE_OPEN_PARAM, KARTE_TAB_PARAM } from "../karteUrl";
 import { useReturnLinkState } from "../returnTo";
@@ -532,6 +537,28 @@ export function InpatientListPage() {
     return rows.sort((a, b) => a.roomName.localeCompare(b.roomName, "ja"));
   }, [inpatients.data, dischargedDate, filtering, filters, bedPlaceById, patientsById]);
 
+  // 氏名の後ろの注意のピクトグラム。表示中のタブの患者ぶんだけまとめて引く
+  // (入院患者タブは絞り込みで検索し直さないよう、病棟の床にいる患者全員)。
+  const pictogramPatientIds = useMemo(() => {
+    const ids = (rows: { patient?: fhir4.Patient }[]) =>
+      rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : []));
+    switch (tab) {
+      case "current":
+        return wardPatientIds;
+      case "planned":
+        return ids(plannedRows);
+      case "transfer":
+        return ids(transferRows);
+      case "leave":
+        return ids(leaveRows);
+      case "discharge":
+        return ids(dischargeRows);
+      case "discharged":
+        return ids(dischargedRows);
+    }
+  }, [tab, wardPatientIds, plannedRows, transferRows, leaveRows, dischargeRows, dischargedRows]);
+  const pictograms = useRowPictogramSources(pictogramPatientIds);
+
   // 選択肢は表示中のタブの Encounter から作る。病棟を切り替えても選択が
   // 消えないよう、表示中の病棟ではなく全病棟ぶんを見る。
   const optionSource = useMemo(
@@ -664,6 +691,7 @@ export function InpatientListPage() {
                       key={row.encounter.id}
                       row={row}
                       rowProps={drawer.rowProps(row.patient?.id && row.encounter.id)}
+                      pictograms={pictograms}
                       {...plannedActions(row)}
                     />
                   ))}
@@ -681,14 +709,17 @@ export function InpatientListPage() {
           rows={transferRows}
           filtering={tabFiltering}
           occupiedBedIds={occupiedBedIds}
+          pictograms={pictograms}
         />
       );
     }
     if (tab === "leave") {
-      return <LeaveTable rows={leaveRows} filtering={tabFiltering} />;
+      return <LeaveTable rows={leaveRows} filtering={tabFiltering} pictograms={pictograms} />;
     }
     if (tab === "discharge") {
-      return <DischargePlanTable rows={dischargeRows} filtering={tabFiltering} />;
+      return (
+        <DischargePlanTable rows={dischargeRows} filtering={tabFiltering} pictograms={pictograms} />
+      );
     }
     if (tab === "discharged") {
       return (
@@ -696,6 +727,7 @@ export function InpatientListPage() {
           rows={dischargedRows}
           filtering={filtering}
           occupiedBedIds={occupiedBedIds}
+          pictograms={pictograms}
         />
       );
     }
@@ -748,6 +780,7 @@ export function InpatientListPage() {
                     pathways={activePathways.data?.get(row.patient?.id ?? "") ?? []}
                     dpc={row.encounter?.id ? dpcByEncounter.get(row.encounter.id) : undefined}
                     columns={columns}
+                    pictograms={pictograms}
                   />
                 ))}
               </tbody>
@@ -1100,6 +1133,7 @@ function InpatientTableRow({
   pathways,
   dpc,
   columns,
+  pictograms,
   ...actions
 }: {
   row: InpatientRow;
@@ -1115,6 +1149,7 @@ function InpatientTableRow({
   /** 今の診断群分類と期間Ⅱ(DPC 列を出さないとき・読み込み前は undefined)。 */
   dpc?: DpcPatientRow;
   columns: InpatientOptionalColumns;
+  pictograms: RowPictogramSources;
 } & InpatientMenuActions) {
   const returnLinkState = useReturnLinkState();
   const { room, bed, roomRowSpan, encounter, patient } = row;
@@ -1137,6 +1172,7 @@ function InpatientTableRow({
             {/* カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
             {displayName(patient)}
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </td>
           <PatientProfileCells patient={patient} />
           <td>{encounterDepartmentName(encounter)}</td>
@@ -1224,11 +1260,13 @@ interface PlannedMenuActions {
 function PlannedTableRow({
   row,
   rowProps,
+  pictograms,
   ...actions
 }: {
   row: PlannedRow;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
+  pictograms: RowPictogramSources;
 } & PlannedMenuActions) {
   const returnLinkState = useReturnLinkState();
   const { encounter, patient } = row;
@@ -1243,6 +1281,7 @@ function PlannedTableRow({
           <>
             {displayName(patient)}
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           (encounter.subject?.display ?? "-")

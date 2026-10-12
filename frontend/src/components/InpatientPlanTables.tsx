@@ -19,6 +19,7 @@ import {
 } from "../fhir/mealEncounterSync";
 import { displayName } from "../fhir/patientHelpers";
 import { useMealSyncContextLoader } from "../hooks/useMealSyncContext";
+import type { RowPictogramSources } from "../hooks/useRowPictogramSources";
 import { KARTE_OPEN_PARAM, formatKarteOpen } from "../karteUrl";
 import { dateTimeLabel } from "../lib/dates";
 import { DischargeModal } from "./DischargeModal";
@@ -84,9 +85,11 @@ export function TransferPlanTable({
   rows,
   filtering,
   occupiedBedIds,
+  pictograms,
 }: {
   rows: TransferPlanRow[];
   filtering: boolean;
+  pictograms: RowPictogramSources;
   /** いま入院中の患者が居るベッドの id。実施のとき空床のみ選ばせるのに使う。 */
   occupiedBedIds: Set<string>;
 }) {
@@ -167,6 +170,7 @@ export function TransferPlanTable({
                   bedName={row.plan.bedName || "-"}
                   encounter={row.encounter}
                   patient={row.patient}
+                  pictograms={pictograms}
                   departmentName={row.plan.departmentName}
                 />
                 <td>{row.plan.date}</td>
@@ -222,7 +226,15 @@ function leaveRowKey(row: LeaveRow): string {
   return `${row.encounter.id}-${row.leave.id || row.leave.start}`;
 }
 
-export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: boolean }) {
+export function LeaveTable({
+  rows,
+  filtering,
+  pictograms,
+}: {
+  rows: LeaveRow[];
+  filtering: boolean;
+  pictograms: RowPictogramSources;
+}) {
   const [returnTarget, setReturnTarget] = useState<LeaveRow | null>(null);
   const cancelLeave = useUpdateEncounter();
   const loadMealSync = useMealSyncContextLoader();
@@ -310,6 +322,7 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
                   bedName={row.bedName}
                   encounter={row.encounter}
                   patient={row.patient}
+                  pictograms={pictograms}
                 />
                 <td>{dateTimeLabel(row.leave.start)}</td>
                 <td>{row.leave.end ? dateTimeLabel(row.leave.end) : "未定"}</td>
@@ -362,9 +375,11 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
 export function DischargePlanTable({
   rows,
   filtering,
+  pictograms,
 }: {
   rows: DischargePlanRow[];
   filtering: boolean;
+  pictograms: RowPictogramSources;
 }) {
   const [dischargeTarget, setDischargeTarget] = useState<DischargePlanRow | null>(null);
   const cancelPlan = useUpdateEncounter();
@@ -452,6 +467,7 @@ export function DischargePlanTable({
                   bedName={row.bedName}
                   encounter={row.encounter}
                   patient={row.patient}
+                  pictograms={pictograms}
                 />
                 <td>{dateTimeLabel(row.plan.at)}</td>
                 <td className="inpatient__note">{row.plan.reason || "-"}</td>
@@ -506,9 +522,11 @@ export function DischargedTable({
   rows,
   filtering,
   occupiedBedIds,
+  pictograms,
 }: {
   rows: DischargedRow[];
   filtering: boolean;
+  pictograms: RowPictogramSources;
   /** いま入院中の患者が居るベッドの id。取消の前に床の重なりを知らせるのに使う。 */
   occupiedBedIds: Set<string>;
 }) {
@@ -596,6 +614,7 @@ export function DischargedTable({
                   bedName={row.bedName}
                   encounter={row.encounter}
                   patient={row.patient}
+                  pictograms={pictograms}
                 />
                 <td>{dateTimeLabel(row.encounter.period?.start)}</td>
                 <td>{dateTimeLabel(row.encounter.period?.end)}</td>
