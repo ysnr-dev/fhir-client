@@ -6,13 +6,12 @@ import { Modal } from "./Modal";
 interface Props {
   /** 未実施の検査オーダー(「検体検査: 血算」など)。 */
   pendingOrders: string[];
-  submitting?: boolean;
   onPause: () => void;
   onFinish: () => void;
   onCancel: () => void;
 }
 
-export function ExamFinishChoiceModal({ pendingOrders, submitting, onPause, onFinish, onCancel }: Props) {
+export function ExamFinishChoiceModal({ pendingOrders, onPause, onFinish, onCancel }: Props) {
   return (
     <Modal title="未実施の検査があります" onClose={onCancel} className="modal--exam-finish-choice">
       <ul className="exam-finish-choice__list">
@@ -20,14 +19,14 @@ export function ExamFinishChoiceModal({ pendingOrders, submitting, onPause, onFi
           <li key={label}>{label}</li>
         ))}
       </ul>
-      <div className="lab-order-item__actions">
-        <button type="button" onClick={onPause} disabled={submitting}>
+      <div className="exam-finish-choice__actions">
+        <button type="button" onClick={onPause}>
           一時終了
         </button>
-        <button type="button" onClick={onFinish} disabled={submitting}>
+        <button type="button" onClick={onFinish}>
           診察終了
         </button>
-        <button type="button" onClick={onCancel} disabled={submitting}>
+        <button type="button" onClick={onCancel}>
           戻る
         </button>
       </div>

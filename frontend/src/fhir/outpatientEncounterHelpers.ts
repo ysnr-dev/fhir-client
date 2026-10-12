@@ -17,8 +17,9 @@
 // 前の段階なので流用できない)。R4 は fulfilled の定義が "may have resulted in an
 // encounter" で、診察そのものは Encounter が表す前提になっているため、診察開始で
 // Encounter を建てる。当日の検査を受けに診察室を離れるときは一時終了(onleave)にし、
-// 戻ってきたら診察再開で診察中に戻す。予約はどちらも受付済のまま。診察終了では Encounter を finished にすると同時に予約を
-// fulfilled にする — 片方だけ書かれた状態を作らないよう必ず同じ transaction で書く。
+// 戻ってきたら診察再開で診察中に戻す(予約はどちらも受付済のまま)。診察終了では
+// Encounter を finished にすると同時に予約を fulfilled にする — 片方だけ書かれた状態を
+// 作らないよう必ず同じ transaction で書く。
 //
 // 入院の Encounter(encounterHelpers.ts)とはリソース型が同じなだけで別物。
 // 一覧の検索も class(AMB / IMP)で分かれている。
@@ -222,11 +223,6 @@ export function buildResumedOutpatientEncounter(
   resumedAt: string,
 ): fhir4.Encounter {
   return withStatusChange(encounter, EXAM_IN_PROGRESS_STATUS, resumedAt);
-}
-
-/** 一時終了した日時。一時終了していなければ undefined。 */
-export function examPausedAt(encounter: fhir4.Encounter | undefined): string | undefined {
-  return isExamPaused(encounter) ? currentStatusSince(encounter as fhir4.Encounter) : undefined;
 }
 
 /**

@@ -196,7 +196,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     examInProgress ? localDay(examEncounter?.period?.start) : "",
     patientId ? [patientId] : [],
   );
-  // 選択を出すときの未実施の検査オーダー。null なら選択を出していない。
+  /** 一時終了かどうかの選択に出す未実施の検査オーダー。null なら選択を出していない。 */
   const [pendingExamOrders, setPendingExamOrders] = useState<string[] | null>(null);
   // 診察中でなく今日の受付済の予約があれば、ヘッダから診察を始められるようにする。
   const checkedInAppointment = usePatientCheckedInAppointment(
@@ -1356,7 +1356,6 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         {pendingExamOrders && (
           <ExamFinishChoiceModal
             pendingOrders={pendingExamOrders}
-            submitting={updateExam.isPending}
             onPause={() => {
               setPendingExamOrders(null);
               pauseExam();

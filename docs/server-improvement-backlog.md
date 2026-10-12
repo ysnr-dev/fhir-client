@@ -374,7 +374,10 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   も効く。migration・再索引は不要。`spec/requests/encounters_spec.rb` に 3 件追加。
 - **クライアント**: `reception_importer.rb` の `encounter_started?` が `Encounter?appointment=Appointment/{id}&_count=1`
   の存在確認になった。**上流を先にデプロイする**（旧版だと lenient で条件が黙殺され、全件が返って
-  「診察開始済み」に倒れ、予約を取り消せなくなる）。
+  「診察開始済み」に倒れ、予約を取り消せなくなる）。2026-10-12 に外来一覧(`fetchOutpatientList`)も
+  予約の検索に `_revinclude=Encounter:appointment` を添えて診察を同時に読む形にし、その日の Encounter を
+  日付で別読みする検索をやめた。カルテの見出し(`fetchPatientOutpatientExam`)も `_include=Encounter:appointment`
+  で予約を同時に読む。
 
 ## 優先度 C: 個別の検索パラメータ・仕様適合（残り）
 

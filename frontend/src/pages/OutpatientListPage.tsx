@@ -290,22 +290,19 @@ export function OutpatientListPage() {
     if (value) setParams({ [DATE_PARAM]: value });
   }
 
+  // 診察を始めた・再開したら次にやることはカルテを書くことなので、そのまま開く。
+  // 患者が辿れないときだけ一覧に留まる(開き先が決まらないため)。
+  function openKarte(row: OutpatientRow) {
+    const patientId = row.patient?.id ?? appointmentActorId(row.appointment, "Patient");
+    if (patientId) navigate(`/patients/${patientId}/karte`, { state: returnLinkState });
+  }
+
   // 診察開始・診察終了は受付ボタンと同じく 1 クリック(現在時刻をそのまま記録する)。
   // 巻き戻しになる取消だけ確認を挟む。
   function handleStartExam(row: OutpatientRow) {
-    const patientId = row.patient?.id ?? appointmentActorId(row.appointment, "Patient");
-    startExam.mutate(
-      buildOutpatientEncounter(row.appointment, row.patient, nowFhirDateTime()),
-      {
-        // 診察を始めたら次にやることはカルテを書くことなので、そのまま開く。
-        // 患者が辿れないときだけ一覧に留まる(開き先が決まらないため)。
-        onSuccess: () => {
-          if (patientId) {
-            navigate(`/patients/${patientId}/karte`, { state: returnLinkState });
-          }
-        },
-      },
-    );
+    startExam.mutate(buildOutpatientEncounter(row.appointment, row.patient, nowFhirDateTime()), {
+      onSuccess: () => openKarte(row),
+    });
   }
 
   function handleFinishExam(row: OutpatientRow) {
@@ -317,19 +314,11 @@ export function OutpatientListPage() {
     });
   }
 
-  // 診察開始と同じく、再開したらそのままカルテを開く。
   function handleResumeExam(row: OutpatientRow) {
     if (!row.encounter) return;
-    const patientId = row.patient?.id ?? appointmentActorId(row.appointment, "Patient");
     updateExam.mutate(
       { encounter: buildResumedOutpatientEncounter(row.encounter, nowFhirDateTime()) },
-      {
-        onSuccess: () => {
-          if (patientId) {
-            navigate(`/patients/${patientId}/karte`, { state: returnLinkState });
-          }
-        },
-      },
+      { onSuccess: () => openKarte(row) },
     );
   }
 
