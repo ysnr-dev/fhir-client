@@ -47,6 +47,45 @@ function refId(reference: string | undefined): string {
   return reference?.split("/").pop() ?? "";
 }
 
+type EvaluationContent = Pick<
+  PathwayEvaluationCard,
+  "observation" | "achievement" | "achievementLabel" | "soap" | "freeText" | "comment" | "performerName" | "recordedAt"
+>;
+
+/** 評価の Observation そのものから読める部分(判定・記載・記録者)。 */
+function evaluationContent(observation: fhir4.Observation): EvaluationContent {
+  const soap: PathwayEvaluationCard["soap"] = [];
+  let freeText = "";
+  for (const component of observation.component ?? []) {
+    const code = component.code?.coding?.find((c) => c.system === EVALUATION_ITEM_SYSTEM)?.code;
+    const text = component.valueString?.trim() ?? "";
+    if (!text) continue;
+    if (code === "S" || code === "O" || code === "A" || code === "P") soap.push({ code, text });
+    if (code === FREE_TEXT_CODE) freeText = text;
+  }
+  const achievement = (observation.valueCodeableConcept?.coding?.find((c) => c.system === ACHIEVEMENT_SYSTEM)?.code ??
+    "") as Achievement | "";
+  const order = { S: 0, O: 1, A: 2, P: 3 };
+  return {
+    observation,
+    achievement,
+    achievementLabel: achievementLabel(achievement),
+    soap: soap.sort((a, b) => order[a.code] - order[b.code]),
+    freeText,
+    comment: observation.note?.[0]?.text?.trim() ?? "",
+    performerName: observation.performer?.[0]?.display ?? "",
+    recordedAt: observation.effectiveDateTime ?? "",
+  };
+}
+
+/** カードの評価を別の版の Observation に差し替える(病日・ユニットなどの位置はそのまま)。 */
+export function withEvaluationObservation(
+  card: PathwayEvaluationCard,
+  observation: fhir4.Observation,
+): PathwayEvaluationCard {
+  return { ...card, ...evaluationContent(observation) };
+}
+
 /**
  * 評価の Observation(判定)と、その OAT ユニット・祖先(病日・適用)の CarePlan からカードを組む。
  * ［決定］記載の無い評価(達成状態だけ)は出さない。達成状態の推移はパスタブで読むもので、カルテに
@@ -59,17 +98,8 @@ export function buildPathwayEvaluationCards(
   const byId = new Map(carePlans.filter((cp) => cp.id).map((cp) => [cp.id as string, cp]));
   const cards: PathwayEvaluationCard[] = [];
   for (const observation of observations) {
-    const soap: PathwayEvaluationCard["soap"] = [];
-    let freeText = "";
-    for (const component of observation.component ?? []) {
-      const code = component.code?.coding?.find((c) => c.system === EVALUATION_ITEM_SYSTEM)?.code;
-      const text = component.valueString?.trim() ?? "";
-      if (!text) continue;
-      if (code === "S" || code === "O" || code === "A" || code === "P") soap.push({ code, text });
-      if (code === FREE_TEXT_CODE) freeText = text;
-    }
-    const comment = observation.note?.[0]?.text?.trim() ?? "";
-    if (soap.length === 0 && !freeText && !comment) continue;
+    const content = evaluationContent(observation);
+    if (content.soap.length === 0 && !content.freeText && !content.comment) continue;
 
     const unit = byId.get(refId(observation.basedOn?.[0]?.reference));
     if (!unit || levelOf(unit) !== "oat-unit") continue;
@@ -80,11 +110,8 @@ export function buildPathwayEvaluationCards(
     const elapsedDays = event.extension?.find((e) => e.url === PATHWAY_EXT.eventElapsedDays)?.valueInteger ?? 0;
     const pathStep = event.extension?.find((e) => e.url === PATHWAY_EXT.pathStep)?.valueInteger ?? 1;
     const pathStepName = event.extension?.find((e) => e.url === PATHWAY_EXT.pathStepName)?.valueString ?? "";
-    const achievement = (observation.valueCodeableConcept?.coding?.find((c) => c.system === ACHIEVEMENT_SYSTEM)?.code ??
-      "") as Achievement | "";
-    const order = { S: 0, O: 1, A: 2, P: 3 };
     cards.push({
-      observation,
+      ...content,
       applyId: apply.id ?? "",
       pathwayCode: pathwayCodeOf(apply),
       pathwayTitle: apply.title ?? "",
@@ -92,13 +119,6 @@ export function buildPathwayEvaluationCards(
       eventLabel: `病日 ${elapsedDays} ${eventDayStepLabel(elapsedDays, event.title, pathStep, pathStepName)}`,
       eventDate: event.period?.start ?? "",
       unitName: unit.title ?? observation.code?.text ?? "",
-      achievement,
-      achievementLabel: achievementLabel(achievement),
-      soap: soap.sort((a, b) => order[a.code] - order[b.code]),
-      freeText,
-      comment,
-      performerName: observation.performer?.[0]?.display ?? "",
-      recordedAt: observation.effectiveDateTime ?? "",
     });
   }
   return cards;

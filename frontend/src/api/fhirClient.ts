@@ -106,6 +106,18 @@ export function readHistory<T extends fhir4.Resource>(
 }
 
 /**
+ * 型レベルの版履歴。上流の /<型>/_history に検索パラメータを付けると、合致するリソース
+ * (削除済みを含む)の全版に絞られる(`based-on=ServiceRequest/X` でオーダー明細の履歴)。
+ * 削除の版は resource を持たず、request.method が DELETE になる。
+ */
+export function readTypeHistory(
+  resourceType: string,
+  params: URLSearchParams,
+): Promise<FhirResult<fhir4.Bundle>> {
+  return fhirFetch(`${BASE}/${resourceType}/_history?${params.toString()}`).then((r) => handle(r));
+}
+
+/**
  * Bundle(transaction / batch)を送る。PUT エントリのリソースが読んだ時点の版(meta.versionId)を
  * 持っていれば ifMatch に添えるので、検索・read で得たリソースを書き換えて送る更新は、ここを
  * 通すだけで楽観ロックが効く(版違いは 412)。

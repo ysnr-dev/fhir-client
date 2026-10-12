@@ -70,6 +70,7 @@ import { vitalDisplayRows, vitalEntryDepartment } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { AnesthesiaChartModal } from "./AnesthesiaChartModal";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
+import { KarteCardHistoryModal } from "./KarteCardHistoryModal";
 import { cycleDayLabel, regimenOrderLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { InjectionCancelModal } from "./InjectionCancelModal";
 import { InjectionPerformModal } from "./InjectionPerformModal";
@@ -691,16 +692,14 @@ const KarteCard = memo(function KarteCard({
                 実施入力
               </button>
             )}
-            {/* 診療記録は修正のたびに版が残るので、いつ誰が直したかを辿れるようにする。 */}
-            {item.kind === "note" && (
-              <button
-                type="button"
-                className="row-menu__item"
-                onClick={() => setHistoryOpen(true)}
-              >
-                変更履歴
-              </button>
-            )}
+            {/* どのカードも修正のたびに版が残るので、いつ何が直されたかを辿れるようにする。 */}
+            <button
+              type="button"
+              className="row-menu__item"
+              onClick={() => setHistoryOpen(true)}
+            >
+              変更履歴
+            </button>
             {/* 注射の中止。注射は薬剤部・病棟が動く前に「明日からやめる」形で止まる
                 ことが多いので、部門画面(注射ワークリストは別タスク)を待たずカルテから
                 押せるようにする。実施済(施用した)注射は中止できない。 */}
@@ -828,9 +827,16 @@ const KarteCard = memo(function KarteCard({
           }}
         />
       )}
-      {historyOpen && item.kind === "note" && (
-        <ClinicalNoteHistoryModal noteId={item.id} onClose={() => setHistoryOpen(false)} />
-      )}
+      {historyOpen &&
+        (item.kind === "note" ? (
+          <ClinicalNoteHistoryModal noteId={item.id} onClose={() => setHistoryOpen(false)} />
+        ) : (
+          <KarteCardHistoryModal
+            item={item}
+            renderBody={(version) => <KarteCardBody item={version} />}
+            onClose={() => setHistoryOpen(false)}
+          />
+        ))}
       {chartOpen && item.kind === "surgery-order" && (
         <AnesthesiaChartModal orderId={item.id} onClose={() => setChartOpen(false)} />
       )}
