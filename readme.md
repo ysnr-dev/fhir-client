@@ -274,6 +274,9 @@ CSRF はチャート定義と同じ `/master` の基底)。
   表示・登録・編集・削除がタブ内で完結します。テーブル(`components/*Table.tsx`)は `onView` / `onEdit` を
   受け取り、ページ遷移せずタブ内で表示を切り替えます。内容表示は `components/*DetailPanel.tsx`、
   検査結果タブにはさらに「時系列表示」(`components/LabResultTimelinePanel.tsx`)も置いてあります。
+  時系列表示は項目にチェックを入れて「グラフ表示」でモーダルにグラフを出します。操作行右端のアイコンで
+  表とグラフを上下に分割でき、分割中はチェックした項目のグラフを下側にそのまま出します(分割の有無と
+  高さはブラウザに保存)。
 - **カルテタブ**: 診療記録(`Composition`)・処方(`ServiceRequest` + `MedicationRequest`)・単独登録の
   テンプレート回答(`QuestionnaireResponse`)を診療日ごとにまとめた時系列表示です。診療日の見出しには
   曜日を添えます(`2026-09-01 (火)`)。診療記録のセクションから

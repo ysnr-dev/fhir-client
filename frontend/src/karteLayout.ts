@@ -31,6 +31,8 @@ const SCOPE_FILTER_STORAGE_KEY = "fhir-client.karte.scopeFilter";
 const TODAY_PANE_STORAGE_KEY = "fhir-client.karte.todayPaneVisible";
 const TODAY_RATIO_STORAGE_KEY = "fhir-client.karte.todayPaneRatio";
 const FILE_VIEW_MODE_STORAGE_KEY = "fhir-client.karte.fileViewMode";
+const LAB_TIMELINE_SPLIT_STORAGE_KEY = "fhir-client.karte.labTimelineSplit";
+const LAB_TIMELINE_TOP_RATIO_STORAGE_KEY = "fhir-client.karte.labTimelineTopRatio";
 
 // 上下どちらのペインも潰れないように、上ペインが占める比率を制限する。
 const MIN_TOP_RATIO = 0.2;
@@ -268,5 +270,39 @@ export function storeFileViewMode(mode: KarteFileViewMode) {
     localStorage.setItem(FILE_VIEW_MODE_STORAGE_KEY, mode);
   } catch {
     // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+// 検体検査時系列を上下に分割する(上に表、下にチェックした項目のグラフ)かどうかと、上側の比率。
+export function readLabTimelineSplit(): boolean {
+  try {
+    return localStorage.getItem(LAB_TIMELINE_SPLIT_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function storeLabTimelineSplit(split: boolean) {
+  try {
+    localStorage.setItem(LAB_TIMELINE_SPLIT_STORAGE_KEY, split ? "1" : "0");
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+export function readLabTimelineTopRatio(): number {
+  try {
+    const value = localStorage.getItem(LAB_TIMELINE_TOP_RATIO_STORAGE_KEY);
+    return value ? clampTopRatio(Number(value)) : DEFAULT_TOP_RATIO;
+  } catch {
+    return DEFAULT_TOP_RATIO;
+  }
+}
+
+export function storeLabTimelineTopRatio(ratio: number) {
+  try {
+    localStorage.setItem(LAB_TIMELINE_TOP_RATIO_STORAGE_KEY, String(clampTopRatio(ratio)));
+  } catch {
+    // 保存できなくてもその場の表示は変える。
   }
 }

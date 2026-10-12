@@ -1008,7 +1008,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     if (key === "lab-timeline") {
       return (
         <div className="karte-tabpanel">
-          <LabResultTimelinePanel patientId={patientId} />
+          <LabResultTimelinePanel patientId={patientId} splittable />
         </div>
       );
     }

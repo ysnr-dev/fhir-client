@@ -3867,6 +3867,41 @@ fieldset.rp-card {
   vertical-align: bottom;
 }
 
+/* 表とグラフの上下分割の切り替え。操作行の右端に寄せる。 */
+.lab-timeline__split-toggle {
+  margin-left: auto;
+  margin-bottom: 0;
+}
+
+/* 上下分割: 上に操作行と表、下にチェックした項目のグラフ。各ペインの中でスクロールする。
+   上ペインの高さは flex-basis(%)をインラインで指定して伸縮させない。 */
+.lab-timeline--split {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.lab-timeline__split-top {
+  flex-grow: 0;
+  flex-shrink: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lab-timeline__split-top .lab-timeline__table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin-bottom: 0;
+}
+
+.lab-timeline__split-bottom {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* ---- 検査結果グラフ(時系列表示のモーダル) ---- */
 
 .lab-chart-list {
