@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLabResultItemsByJlac11Codes } from "../api/masterQueries";
 import { useLabResultTimeline } from "../api/queries";
+import { HeightStepButtons, OverlayToggle, ValuesToggle } from "./ChartModeToggles";
 import { ErrorBanner } from "./ErrorBanner";
 import { KarteSplitter } from "./KarteSplitter";
 import { TruncatedNotice } from "./TruncatedNotice";
@@ -17,9 +18,13 @@ import {
 } from "../fhir/labResultHelpers";
 import { flowsheetDayLabel } from "../fhir/vitalHelpers";
 import {
+  LAB_TIMELINE_HEIGHT_SCALES,
+  clampLabTimelineHeightStep,
   clampTopRatio,
+  readLabTimelineChartView,
   readLabTimelineSplit,
   readLabTimelineTopRatio,
+  storeLabTimelineChartView,
   storeLabTimelineSplit,
   storeLabTimelineTopRatio,
 } from "../karteLayout";
@@ -49,6 +54,7 @@ export function LabResultTimelinePanel({
   const [chartOpen, setChartOpen] = useState(false);
   const [splitPref, setSplitPref] = useState(readLabTimelineSplit);
   const [topRatio, setTopRatio] = useState(readLabTimelineTopRatio);
+  const [chartView, setChartView] = useState(readLabTimelineChartView);
   const tableWrapRef = useRef<HTMLDivElement>(null);
   const splitRef = useRef<HTMLDivElement>(null);
   const split = splittable && splitPref;
@@ -75,11 +81,12 @@ export function LabResultTimelinePanel({
   const hasMarkedValues = useMemo(() => rows.some((row) => row.statuses.size > 0), [rows]);
 
   // 日付の列は古い順に並ぶため、開いた時点では右端(最新)が見えるようにする。
-  // 分割を切り替えると表を組み直すので、そのときも右端に戻す。
+  // 読み込みが終わったときと、分割を切り替えたときも表を組み直すので右端に戻す。
+  const loading = isLoading || legacyItems.isLoading;
   useLayoutEffect(() => {
     const wrap = tableWrapRef.current;
     if (wrap) wrap.scrollLeft = wrap.scrollWidth;
-  }, [timeline.dates, rows, split]);
+  }, [timeline.dates, rows, split, loading]);
 
   function handleDateCountChange(raw: number) {
     if (!Number.isFinite(raw)) return;
@@ -92,6 +99,23 @@ export function LabResultTimelinePanel({
     storeLabTimelineSplit(next);
     // 分割中はグラフを下に出すので、開いていたモーダルは閉じる。
     if (next) setChartOpen(false);
+  }
+
+  function changeHeightStep(step: number) {
+    setChartView((previous) => {
+      const next = { ...previous, heightStep: clampLabTimelineHeightStep(step) };
+      storeLabTimelineChartView(next);
+      return next;
+    });
+  }
+
+  function toggleChartView(key: "overlay" | "values") {
+    // 直前の状態から作る(続けて押したときに取りこぼさない)。保存は同じ値を書くだけなので updater 内でよい。
+    setChartView((previous) => {
+      const next = { ...previous, [key]: !previous[key] };
+      storeLabTimelineChartView(next);
+      return next;
+    });
   }
 
   function toggleChecked(key: string) {
@@ -116,7 +140,7 @@ export function LabResultTimelinePanel({
         // timeline.dates は古い順なので、グラフの X 軸もそのまま古い順になる。
         points: timeline.dates.flatMap((date) => {
           const value = row.numbers.get(date);
-          return value != null ? [{ date, value }] : [];
+          return value != null ? [{ date, value, flag: row.interpretations.get(date) }] : [];
         }),
       }));
   }, [timeline, rows, checkedKeys]);
@@ -131,7 +155,7 @@ export function LabResultTimelinePanel({
   );
 
   const body =
-    isLoading || legacyItems.isLoading ? (
+    loading ? (
       <p>読み込み中...</p>
     ) : (
       <>
@@ -214,6 +238,33 @@ export function LabResultTimelinePanel({
       </>
     );
 
+  // グラフはモーダルと分割の下側のどちらにも出すので、切り替えと一緒に組んでおく。
+  const chart = (
+    <>
+      <div className="lab-chart-toolbar">
+        <OverlayToggle
+          overlay={chartView.overlay}
+          onToggle={() => toggleChartView("overlay")}
+        />
+        <ValuesToggle
+          values={chartView.values}
+          onToggle={() => toggleChartView("values")}
+        />
+        <HeightStepButtons
+          step={chartView.heightStep}
+          maxStep={LAB_TIMELINE_HEIGHT_SCALES.length - 1}
+          onChange={changeHeightStep}
+        />
+      </div>
+      <LabTimelineChart
+        series={chartSeries}
+        overlay={chartView.overlay}
+        values={chartView.values}
+        heightScale={LAB_TIMELINE_HEIGHT_SCALES[chartView.heightStep]}
+      />
+    </>
+  );
+
   if (split) {
     return (
       <div className="lab-timeline--split" ref={splitRef}>
@@ -231,7 +282,7 @@ export function LabResultTimelinePanel({
         />
         <div className="lab-timeline__split-bottom">
           {chartSeries.length > 0 ? (
-            <LabTimelineChart series={chartSeries} />
+            chart
           ) : (
             <p className="patient-table__empty">グラフ表示する項目が選択されていません</p>
           )}
@@ -247,7 +298,7 @@ export function LabResultTimelinePanel({
 
       {chartOpen && (
         <Modal title="検査結果グラフ" onClose={() => setChartOpen(false)} className="modal--wide">
-          <LabTimelineChart series={chartSeries} />
+          {chart}
         </Modal>
       )}
     </>

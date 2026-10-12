@@ -3904,6 +3904,23 @@ fieldset.rp-card {
 
 /* ---- 検査結果グラフ(時系列表示のモーダル) ---- */
 
+/* 検体検査時系列のグラフの点の上の数値と軸の目盛り。マルチチャートより一段小さくする。 */
+.lab-timeline-chart .lab-chart__value {
+  font-size: 9px;
+}
+
+.lab-timeline-chart .lab-chart__tick {
+  font-size: 10px;
+}
+
+/* グラフの見え方の切り替え(重ねる / 数値)。グラフの上に右寄せで置く。 */
+.lab-chart-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
 .lab-chart-list {
   display: flex;
   flex-direction: column;
@@ -3934,7 +3951,8 @@ fieldset.rp-card {
   color: var(--text);
 }
 
-.lab-chart svg {
+/* グラフ本体だけを幅いっぱいにする(凡例・ツールチップの小さな記号は素の大きさのまま)。 */
+.lab-chart > svg {
   display: block;
   width: 100%;
   height: auto;

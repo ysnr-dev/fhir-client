@@ -33,6 +33,7 @@ const TODAY_RATIO_STORAGE_KEY = "fhir-client.karte.todayPaneRatio";
 const FILE_VIEW_MODE_STORAGE_KEY = "fhir-client.karte.fileViewMode";
 const LAB_TIMELINE_SPLIT_STORAGE_KEY = "fhir-client.karte.labTimelineSplit";
 const LAB_TIMELINE_TOP_RATIO_STORAGE_KEY = "fhir-client.karte.labTimelineTopRatio";
+const LAB_TIMELINE_CHART_STORAGE_KEY = "fhir-client.karte.labTimelineChart";
 
 // 上下どちらのペインも潰れないように、上ペインが占める比率を制限する。
 const MIN_TOP_RATIO = 0.2;
@@ -304,5 +305,44 @@ export function storeLabTimelineTopRatio(ratio: number) {
     localStorage.setItem(LAB_TIMELINE_TOP_RATIO_STORAGE_KEY, String(clampTopRatio(ratio)));
   } catch {
     // 保存できなくてもその場の表示は変える。
+  }
+}
+
+// 検体検査時系列のグラフの1グラフあたりの高さの倍率。標準(1)を真ん中に置く。
+export const LAB_TIMELINE_HEIGHT_SCALES = [0.5, 0.75, 1, 1.5, 2] as const;
+const DEFAULT_LAB_TIMELINE_HEIGHT_STEP = 2;
+
+// 検体検査時系列のグラフの見え方。overlay: 1 つのグラフに重ねる / values: 点の上に数値を出す /
+// heightStep: LAB_TIMELINE_HEIGHT_SCALES の添字。
+export interface LabTimelineChartView {
+  overlay: boolean;
+  values: boolean;
+  heightStep: number;
+}
+
+export function clampLabTimelineHeightStep(step: number): number {
+  if (!Number.isInteger(step)) return DEFAULT_LAB_TIMELINE_HEIGHT_STEP;
+  return Math.min(LAB_TIMELINE_HEIGHT_SCALES.length - 1, Math.max(0, step));
+}
+
+export function readLabTimelineChartView(): LabTimelineChartView {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(LAB_TIMELINE_CHART_STORAGE_KEY) ?? "{}");
+    const view = (parsed ?? {}) as Partial<Record<keyof LabTimelineChartView, unknown>>;
+    return {
+      overlay: view.overlay === true,
+      values: view.values === true,
+      heightStep: clampLabTimelineHeightStep(Number(view.heightStep)),
+    };
+  } catch {
+    return { overlay: false, values: false, heightStep: DEFAULT_LAB_TIMELINE_HEIGHT_STEP };
+  }
+}
+
+export function storeLabTimelineChartView(view: LabTimelineChartView) {
+  try {
+    localStorage.setItem(LAB_TIMELINE_CHART_STORAGE_KEY, JSON.stringify(view));
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
   }
 }
