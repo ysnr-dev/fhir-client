@@ -1,5 +1,5 @@
 import { localDay } from "../lib/dates";
-import { orderCardDay, type KarteTimelineItem } from "./karteTimeline";
+import { karteItemKey, orderCardDay, type KarteTimelineItem } from "./karteTimeline";
 import { labOrderItemRequests } from "./labOrderHelpers";
 import { withEvaluationObservation } from "./pathwayKarteHelpers";
 import { VITAL_ENTRY_SYSTEM, groupVitalEntries } from "./vitalHelpers";
@@ -159,4 +159,49 @@ function rebuildItem(
   if ("performs" in rebuilt) rebuilt = { ...rebuilt, performs: [] };
   if ("fractions" in rebuilt) rebuilt = { ...rebuilt, fractions: [] };
   return rebuilt;
+}
+
+/**
+ * まとめて引いた版を、カードごとに振り分ける(カルテ印刷で複数のカードの履歴を一度に引くため)。
+ * 本体は id、バイタルは identifier で、明細は版の basedOn を辿って持ち主のカードを決める
+ * (ヘッダ → 明細 → 構成項目の 2 段まで)。削除の版は中身を持たないので、同じリソースの
+ * 別の版で決まった持ち主に付ける。
+ */
+export function groupCardVersions(
+  items: HistoryCardItem[],
+  versions: ResourceVersion[],
+): Map<string, ResourceVersion[]> {
+  const ownerOf = new Map<string, string>();
+  const ownerOfIdentifier = new Map<string, string>();
+  for (const item of items) {
+    const plan = karteCardHistoryPlan(item);
+    const key = karteItemKey(item);
+    if (plan.main) ownerOf.set(`${plan.main.resourceType}/${plan.main.id}`, key);
+    if (plan.identifier) ownerOfIdentifier.set(plan.identifier, key);
+  }
+
+  for (const version of versions) {
+    if (ownerOf.has(version.reference)) continue;
+    const identifiers = (version.resource as fhir4.Observation | null)?.identifier ?? [];
+    const owner = identifiers
+      .map((identifier) => ownerOfIdentifier.get(`${identifier.system}|${identifier.value}`))
+      .find(Boolean);
+    if (owner) ownerOf.set(version.reference, owner);
+  }
+  for (let depth = 0; depth < 2; depth += 1) {
+    for (const version of versions) {
+      if (ownerOf.has(version.reference)) continue;
+      const basedOn = (version.resource as fhir4.ServiceRequest | fhir4.MedicationRequest | null)?.basedOn ?? [];
+      const owner = basedOn.map((ref) => ownerOf.get(ref.reference ?? "")).find(Boolean);
+      if (owner) ownerOf.set(version.reference, owner);
+    }
+  }
+
+  const result = new Map<string, ResourceVersion[]>();
+  for (const version of versions) {
+    const owner = ownerOf.get(version.reference);
+    if (!owner) continue;
+    result.set(owner, [...(result.get(owner) ?? []), version]);
+  }
+  return result;
 }

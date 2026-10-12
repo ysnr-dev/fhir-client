@@ -1471,3 +1471,15 @@ export function referencesProblem(
   return Boolean(id && conditionIds.has(id));
 }
 
+
+// ---- カルテ印刷(2 号用紙)の段 ----
+
+/** 2 号用紙の段。左「既往症・原因・主要症状・経過等」、右「処方・手術・処置等」。 */
+export type KartePrintColumn = "record" | "order";
+
+const KARTE_RECORD_KINDS = new Set<KarteItemKind>(["note", "vital", "qr", "pathway-evaluation"]);
+
+/** 記録(診療記録・テンプレート・バイタル・パス評価)は左段、処方・注射・部門オーダーは右段。 */
+export function kartePrintColumn(item: Pick<KarteTimelineItem, "kind">): KartePrintColumn {
+  return KARTE_RECORD_KINDS.has(item.kind) ? "record" : "order";
+}

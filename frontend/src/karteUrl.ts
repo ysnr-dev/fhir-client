@@ -141,6 +141,8 @@ export const KARTE_TABS = [
   // 取り込んだ DICOM(他院の CD など)。スタディ → シリーズ → 画像の階層を持ち、専用の
   // ビューアで開くので、ファイルとは別のタブにする。
   { key: "imaging", label: "DICOM" },
+  // 期間を指定してカルテ 2 号用紙を印刷する。印刷用のページは別タブ(pages/KartePrintPage)。
+  { key: "karte-print", label: "カルテ印刷" },
 ] as const;
 
 export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
@@ -158,12 +160,21 @@ export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly Kar
     keys: ["lab", "lab-timeline", "micro", "patho", "rad-report", "physio-report", "endoscopy-report"],
   },
   { label: "看護", keys: ["nursing-profile", "nursing", "nursing-care-plan"] },
-  { label: "その他", keys: ["imaging"] },
+  { label: "その他", keys: ["imaging", "karte-print"] },
 ];
 
 /** そのタブを畳んでいるグループ。畳んでいなければ undefined。 */
 export function findKarteTabGroup(key: string) {
   return KARTE_TAB_GROUPS.find((group) => (group.keys as readonly string[]).includes(key));
+}
+
+/** カルテ印刷の別タブ(pages/KartePrintPage)。期間と履歴の有無を URL で渡す。 */
+export const KARTE_PRINT_PATH = "/karte-print";
+
+export function kartePrintUrl(patientId: string, from: string, to: string, history: boolean): string {
+  const params = new URLSearchParams({ from, to });
+  if (history) params.set("history", "1");
+  return `${KARTE_PRINT_PATH}/${patientId}?${params.toString()}`;
 }
 
 /** 上下分割モードで下ペインに出せるタブ(カルテは常に上ペインなので除く)。 */

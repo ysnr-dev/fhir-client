@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { diffText } from "../lib/textDiff";
+import { diffText, type DiffRow } from "../lib/textDiff";
 
 // 変更履歴の差分表示。版の中身は種類ごとに描き方が違う(診療記録の本文、処方の RP、
 // テンプレートの平文…)ので、比べる 2 つの版をいつもの描き方で画面外に描き、
@@ -12,6 +12,10 @@ import { diffText } from "../lib/textDiff";
 interface VersionDiffViewProps {
   before: ReactNode;
   after: ReactNode;
+  /** 版を選び直したら最初の変更まで送る(印刷では送らない)。 */
+  autoScroll?: boolean;
+  /** 指定すると、変わった行の前後この行数だけを残し、間の変わらない行は「…」に畳む。 */
+  context?: number;
 }
 
 function useRenderedText() {
@@ -29,7 +33,7 @@ function useRenderedText() {
   return { ref, text };
 }
 
-export function VersionDiffView({ before, after }: VersionDiffViewProps) {
+export function VersionDiffView({ before, after, autoScroll = true, context }: VersionDiffViewProps) {
   const beforeSource = useRenderedText();
   const afterSource = useRenderedText();
   const rows = useMemo(
@@ -38,11 +42,12 @@ export function VersionDiffView({ before, after }: VersionDiffViewProps) {
   );
   const firstChangeRef = useRef<HTMLDivElement>(null);
   const firstChange = rows.findIndex((row) => row.kind !== "same");
+  const visible = useMemo(() => visibleRows(rows, context), [rows, context]);
 
   // 版を選び直したら、最初の変更が見える位置まで送る。
   useEffect(() => {
-    firstChangeRef.current?.scrollIntoView({ block: "nearest" });
-  }, [rows, firstChange]);
+    if (autoScroll) firstChangeRef.current?.scrollIntoView({ block: "nearest" });
+  }, [rows, firstChange, autoScroll]);
 
   return (
     <>
@@ -54,32 +59,54 @@ export function VersionDiffView({ before, after }: VersionDiffViewProps) {
         <p className="patient-table__empty">表示上の差分はありません。</p>
       ) : (
         <div className="version-diff">
-          {rows.map((row, index) => (
-            <div
-              key={index}
-              ref={index === firstChange ? firstChangeRef : undefined}
-              className={`version-diff__row version-diff__row--${row.kind}`}
-            >
-              <span className="version-diff__mark" aria-label={MARK_LABELS[row.kind]}>
-                {MARKS[row.kind]}
-              </span>
-              <span className="version-diff__text">
-                {row.segments.map((segment, segmentIndex) =>
-                  segment.changed ? (
-                    <mark key={segmentIndex} className="version-diff__changed">
-                      {segment.text}
-                    </mark>
-                  ) : (
-                    <span key={segmentIndex}>{segment.text}</span>
-                  ),
-                )}
-              </span>
-            </div>
-          ))}
+          {rows.map((row, index) =>
+            !visible[index] ? (
+              visible[index - 1] !== false && (
+                <div key={index} className="version-diff__row version-diff__row--gap">
+                  <span className="version-diff__mark" />
+                  <span className="version-diff__text">…</span>
+                </div>
+              )
+            ) : (
+              <div
+                key={index}
+                ref={index === firstChange ? firstChangeRef : undefined}
+                className={`version-diff__row version-diff__row--${row.kind}`}
+              >
+                <span className="version-diff__mark" aria-label={MARK_LABELS[row.kind]}>
+                  {MARKS[row.kind]}
+                </span>
+                <span className="version-diff__text">
+                  {row.segments.map((segment, segmentIndex) =>
+                    segment.changed ? (
+                      <mark key={segmentIndex} className="version-diff__changed">
+                        {segment.text}
+                      </mark>
+                    ) : (
+                      <span key={segmentIndex}>{segment.text}</span>
+                    ),
+                  )}
+                </span>
+              </div>
+            ),
+          )}
         </div>
       )}
     </>
   );
+}
+
+// 行ごとに出すかどうか。context が無ければすべて出す。
+function visibleRows(rows: DiffRow[], context: number | undefined): boolean[] {
+  if (context === undefined) return rows.map(() => true);
+  const visible = rows.map(() => false);
+  rows.forEach((row, index) => {
+    if (row.kind === "same") return;
+    for (let near = Math.max(0, index - context); near <= Math.min(rows.length - 1, index + context); near += 1) {
+      visible[near] = true;
+    }
+  });
+  return visible;
 }
 
 const MARKS = { same: "", removed: "−", added: "+" } as const;

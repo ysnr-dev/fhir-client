@@ -116,6 +116,8 @@ import { PatientListPage } from "./pages/PatientListPage";
 import { KartePage } from "./pages/KartePage";
 import { KartePanePage } from "./pages/KartePanePage";
 import { KARTE_PANE_PATH, useKartePaneHost } from "./kartePaneChannel";
+import { KartePrintPage } from "./pages/KartePrintPage";
+import { KARTE_PRINT_PATH } from "./karteUrl";
 import { isMasterPath } from "./masterMenu";
 import { DepartmentCreatePage } from "./pages/DepartmentCreatePage";
 import { DepartmentEditPage } from "./pages/DepartmentEditPage";
@@ -179,15 +181,17 @@ function App() {
   // アプリのヘッダー(ナビ)を出さず縦幅をカルテに回す。
   const { pathname } = useLocation();
   const detachedPane = pathname.startsWith(KARTE_PANE_PATH);
+  // カルテ印刷も別タブで、印刷する紙面だけを出す。
+  const printPage = pathname.startsWith(KARTE_PRINT_PATH);
   // メインタブは、別タブから見た「生きているか」「いま誰のカルテか」の応答口になる。
-  useKartePaneHost(!detachedPane);
+  useKartePaneHost(!detachedPane && !printPage);
 
   return (
     // アプリ全体をログインゲートで包む(ADMIN_TOKEN 未設定なら素通し)。
     // ログイン中の医療従事者(Practitioner)は useCurrentPractitioner で参照できる。
     <AuthGate>
-      <div className={`app${detachedPane ? " app--pane" : ""}`}>
-      {!detachedPane && (
+      <div className={`app${detachedPane ? " app--pane" : ""}${printPage ? " app--print" : ""}`}>
+      {!detachedPane && !printPage && (
       <header className="app__header">
         <Link to="/" className="app__title">
           FHIR Client
@@ -459,6 +463,7 @@ function App() {
               患者を持たない形でも開ける(メインでカルテを閉じている間)。 */}
           <Route path="/karte-pane" element={<KartePanePage />} />
           <Route path="/karte-pane/:patientId" element={<KartePanePage />} />
+          <Route path={`${KARTE_PRINT_PATH}/:patientId`} element={<KartePrintPage />} />
           {/* 患者配下のその他の URL(/patients/:id/prescriptions など)は空白画面にせず、
               その患者のカルテへ寄せる。 */}
           <Route path="/patients/:patientId/*" element={<KarteRedirect />} />

@@ -121,6 +121,65 @@ function emptySearch<T extends fhir4.Resource>(): FhirResult<fhir4.Bundle<T>> {
   return { data: { resourceType: "Bundle", type: "searchset", total: 0, entry: [] }, etag: null };
 }
 
+/** 診療記録の検索の基本条件(タイムライン・診療日ペイン・カルテ印刷で共通)。 */
+export function karteNoteParams(patientId: string | undefined): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("subject", `Patient/${patientId}`);
+  params.set("type", KARTE_NOTE_TYPE_SEARCH);
+  return params;
+}
+
+/** カルテに出すオーダーの検索の基本条件。看護指示を除いたヘッダだけ(明細は includes で添える)。 */
+export function karteOrderParams(patientId: string | undefined): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("patient", `Patient/${patientId}`);
+  params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
+  // 検体検査・放射線検査は明細も ServiceRequest なので、オーダーのヘッダだけを
+  // 対象にする(明細がカードとして紛れ込まず、ページ数も項目数に左右されない)。
+  params.set("based-on:missing", "true");
+  return params;
+}
+
+/** オーダーのカードの描画に要るものを、ヘッダと同じレスポンスで添えてもらう。 */
+export function appendKarteOrderIncludes(params: URLSearchParams): void {
+  // カルテは薬剤名・検査項目名まで表示するので、処方明細と検体検査・放射線検査の
+  // 明細(構成項目まで 2 段)も同じレスポンスで受け取る。
+  params.append("_revinclude", "MedicationRequest:based-on");
+  // 検体検査のカードから「検査結果表示」を出せるかの判定に、そのオーダーを
+  // 元にした検査結果も添えてもらう。
+  params.append("_revinclude", "DiagnosticReport:based-on");
+  // 検体検査・放射線検査カードの進捗(依頼済・受付済・実施済・中止)と、
+  // 放射線検査の実施記録。進捗の Task は部門で code が違うだけなので 1 つで足りる。
+  params.append("_revinclude", "Task:focus");
+  params.append("_revinclude", "Procedure:based-on");
+  params.append("_revinclude:iterate", "ServiceRequest:based-on");
+  // 実施記録にぶら下がる造影剤・被曝線量。Procedure は上の _revinclude で
+  // 入ってくるので、その子を :iterate で 1 段先まで展開してもらう。
+  params.append("_revinclude:iterate", "MedicationAdministration:part-of");
+  params.append("_revinclude:iterate", "Observation:part-of");
+}
+
+/** カルテに出すテンプレート回答の検索の基本条件。 */
+export function karteResponseParams(patientId: string | undefined): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("patient", `Patient/${patientId}`);
+  // 入院に結び付いた回答(DPC 様式1・看護プロファイル)は入院単位の書類で、カルテの記載
+  // ではないので出さない。
+  params.set("encounter:missing", "true");
+  return params;
+}
+
+// バイタルは 1 回の測定が項目ごとの Observation に分かれるので、identifier で束ねて
+// 1 枚のカードにする(groupVitalEntries)。テンプレート回答から抽出した Observation は
+// 回答のカードとして既に出るため、derived-from を持つものは除く。
+export function karteVitalParams(patientId: string | undefined): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("patient", `Patient/${patientId}`);
+  params.set("category", "vital-signs");
+  params.set("derived-from:missing", "true");
+  return params;
+}
+
 export function useKarteClinicalNotesInfinite(
   patientId: string | undefined,
   problemIds: KarteProblemFilter,
@@ -129,9 +188,7 @@ export function useKarteClinicalNotesInfinite(
   return useInfiniteQuery({
     queryKey: ["Composition", "search", "karte", patientId, problemQueryKey(problemIds), scopeQueryKey(scope)],
     queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams();
-      params.set("subject", `Patient/${patientId}`);
-      params.set("type", KARTE_NOTE_TYPE_SEARCH);
+      const params = karteNoteParams(patientId);
       // 対象プロブレムは問題リストセクション(LOINC 11450-4)の section.entry に持つので、
       // R4 標準の entry で引ける(参照検索のカンマは OR)。
       if (problemIds?.length) params.set("entry", problemSearchValue(problemIds));
@@ -167,8 +224,7 @@ export function useKartePrescriptionsInfinite(
   return useInfiniteQuery({
     queryKey: ["ServiceRequest", "search", "karte", patientId, problemQueryKey(problemIds), scopeQueryKey(scope), todayDay],
     queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams();
-      params.set("patient", `Patient/${patientId}`);
+      const params = karteOrderParams(patientId);
       // オーダーの対象プロブレムは reasonReference(R4 標準)。明細も親から
       // 引き継いだ理由を持つが、下の based-on:missing でヘッダだけに絞られる。
       if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
@@ -179,26 +235,7 @@ export function useKartePrescriptionsInfinite(
       // 今日以前の開始日。上流は日付だけの値をローカル日で解釈するので、le{今日} で
       // 「今日の終わりまで」になる。先読み側の gt{今日} と合わせて過不足なく分割される。
       params.set("occurrence", `le${todayDay}`);
-      params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
-      // 検体検査・放射線検査は明細も ServiceRequest なので、オーダーのヘッダだけを
-      // 1 ページの対象にする(明細がカードとして紛れ込まず、ページ数も項目数に
-      // 左右されない)。
-      params.set("based-on:missing", "true");
-      // カルテは薬剤名・検査項目名まで表示するので、処方明細と検体検査・放射線検査の
-      // 明細(構成項目まで 2 段)も同じレスポンスで受け取る。
-      params.append("_revinclude", "MedicationRequest:based-on");
-      // 検体検査のカードから「検査結果表示」を出せるかの判定に、そのオーダーを
-      // 元にした検査結果も添えてもらう。
-      params.append("_revinclude", "DiagnosticReport:based-on");
-      // 検体検査・放射線検査カードの進捗(依頼済・受付済・実施済・中止)と、
-      // 放射線検査の実施記録。進捗の Task は部門で code が違うだけなので 1 つで足りる。
-      params.append("_revinclude", "Task:focus");
-      params.append("_revinclude", "Procedure:based-on");
-      params.append("_revinclude:iterate", "ServiceRequest:based-on");
-      // 実施記録にぶら下がる造影剤・被曝線量。Procedure は上の _revinclude で
-      // 入ってくるので、その子を :iterate で 1 段先まで展開してもらう。
-      params.append("_revinclude:iterate", "MedicationAdministration:part-of");
-      params.append("_revinclude:iterate", "Observation:part-of");
+      appendKarteOrderIncludes(params);
       return searchResource<fhir4.Resource>("ServiceRequest", params);
     },
     initialPageParam: 0,
@@ -226,21 +263,11 @@ export function useKartePendingOrders(
 
   /** 絞り込みに該当が無いと分かっているときは null(検索しない)。 */
   function baseParams(): URLSearchParams | null {
-    const params = new URLSearchParams();
-    params.set("patient", `Patient/${patientId}`);
+    const params = karteOrderParams(patientId);
     if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
     if (!setScope(params, scope, "order")) return null;
-    // カードになるのはヘッダだけ(明細は下の :iterate で添えてもらう)。
-    params.set("based-on:missing", "true");
-    params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
     params.set("_include", "ServiceRequest:subject");
-    params.append("_revinclude", "MedicationRequest:based-on");
-    params.append("_revinclude", "DiagnosticReport:based-on");
-    params.append("_revinclude", "Task:focus");
-    params.append("_revinclude", "Procedure:based-on");
-    params.append("_revinclude:iterate", "ServiceRequest:based-on");
-    params.append("_revinclude:iterate", "MedicationAdministration:part-of");
-    params.append("_revinclude:iterate", "Observation:part-of");
+    appendKarteOrderIncludes(params);
     return params;
   }
 
@@ -300,14 +327,10 @@ export function useKarteQuestionnaireResponsesInfinite(
   return useInfiniteQuery({
     queryKey: ["QuestionnaireResponse", "search", "karte", patientId, problemQueryKey(problemIds), scopeQueryKey(scope)],
     queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams();
-      params.set("patient", `Patient/${patientId}`);
+      const params = karteResponseParams(patientId);
       // 診療記録と同じローカル拡張による絞り込み。
       if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
       if (!setScope(params, scope, "response")) return emptySearch<fhir4.Resource>();
-      // 入院に結び付いた回答(DPC 様式1・看護プロファイル)は入院単位の書類で、カルテの記載
-      // ではないので出さない。
-      params.set("encounter:missing", "true");
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-authored");
@@ -320,9 +343,6 @@ export function useKarteQuestionnaireResponsesInfinite(
   });
 }
 
-// バイタルは 1 回の測定が項目ごとの Observation に分かれるので、identifier で束ねて
-// 1 枚のカードにする(groupVitalEntries)。テンプレート回答から抽出した Observation は
-// 回答のカードとして既に出るため、derived-from を持つものは除く。
 export function useKarteVitalsInfinite(
   patientId: string | undefined,
   problemIds: KarteProblemFilter,
@@ -331,10 +351,7 @@ export function useKarteVitalsInfinite(
   return useInfiniteQuery({
     queryKey: ["Observation", "search", "karte-vital", patientId, problemQueryKey(problemIds), scopeQueryKey(scope)],
     queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams();
-      params.set("patient", `Patient/${patientId}`);
-      params.set("category", "vital-signs");
-      params.set("derived-from:missing", "true");
+      const params = karteVitalParams(patientId);
       if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
       if (!setScope(params, scope, "vital")) return emptySearch<fhir4.Observation>();
       params.set("_count", String(KARTE_PAGE));
@@ -415,9 +432,7 @@ export function useKarteDayIndex(
   const notes = useQuery({
     queryKey: ["Composition", "search", "karte-days", patientId, problemKey, scopeKey],
     queryFn: () => {
-      const params = new URLSearchParams();
-      params.set("subject", `Patient/${patientId}`);
-      params.set("type", KARTE_NOTE_TYPE_SEARCH);
+      const params = karteNoteParams(patientId);
       if (problemIds?.length) params.set("entry", problemSearchValue(problemIds));
       if (!setScope(params, scope, "note")) return [];
       return fetchKarteDays("Composition", params, "date");
@@ -435,12 +450,9 @@ export function useKarteDayIndex(
   const orders = useQuery({
     queryKey: ["ServiceRequest", "search", "karte-days-occurrence", patientId, problemKey, scopeKey],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set("patient", `Patient/${patientId}`);
+      const params = karteOrderParams(patientId);
       if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
       if (!setScope(params, scope, "order")) return [];
-      params.set("based-on:missing", "true");
-      params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
       // fetchDistinctDates は渡した params に集計用の値を足すので、引き直し用に写しを渡す。
       const { dates, hasUndated } = await fetchDistinctDates(
         "ServiceRequest",
@@ -463,11 +475,9 @@ export function useKarteDayIndex(
   const responses = useQuery({
     queryKey: ["QuestionnaireResponse", "search", "karte-days", patientId, problemKey, scopeKey],
     queryFn: () => {
-      const params = new URLSearchParams();
-      params.set("patient", `Patient/${patientId}`);
+      const params = karteResponseParams(patientId);
       if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
       if (!setScope(params, scope, "response")) return [];
-      params.set("encounter:missing", "true");
       return fetchKarteDays("QuestionnaireResponse", params, "authored");
     },
     enabled,
@@ -476,10 +486,7 @@ export function useKarteDayIndex(
   const vitals = useQuery({
     queryKey: ["Observation", "search", "karte-days", patientId, problemKey, scopeKey],
     queryFn: () => {
-      const params = new URLSearchParams();
-      params.set("patient", `Patient/${patientId}`);
-      params.set("category", "vital-signs");
-      params.set("derived-from:missing", "true");
+      const params = karteVitalParams(patientId);
       if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
       if (!setScope(params, scope, "vital")) return [];
       return fetchKarteDays("Observation", params, "date");

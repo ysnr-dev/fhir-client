@@ -743,7 +743,8 @@ button:disabled {
 .supervisor-groups select,
 .dpc-coding select,
 .dpc-coding input,
-.nursing-assignment select {
+.nursing-assignment select,
+.karte-print-form input[type="date"] {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
@@ -25961,5 +25962,216 @@ input.nursing-picker__search {
     grid-row: auto;
     min-height: calc(var(--dashboard-row) * 2);
     max-height: calc(var(--dashboard-row) * 8);
+  }
+}
+
+/* ---- カルテ印刷 ---- */
+
+/* 期間と履歴の指定。 */
+.karte-print-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.karte-print-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.karte-print-form .karte-print-form__check {
+  flex-direction: row;
+  align-items: center;
+  height: var(--control-height);
+}
+
+/* 印刷用の別タブ。画面でも A4 の幅で紙面を見せる(余白 12mm を除いた 186mm)。 */
+.app--print .app__main {
+  max-width: none;
+  padding: 16px;
+  background: var(--bg);
+}
+
+.karte-print {
+  max-width: 186mm;
+  margin: 0 auto;
+  color: var(--text-h);
+}
+
+.karte-print__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.karte-print__sheet {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: var(--paper);
+  font-size: 11pt;
+  line-height: 1.5;
+}
+
+.karte-print__sheet th,
+.karte-print__sheet td {
+  border: 1px solid var(--text-h);
+  padding: 4px 6px;
+  vertical-align: top;
+  text-align: left;
+  color: var(--text-h);
+}
+
+.karte-print__sheet .karte-print__header {
+  border: none;
+  padding: 0 0 4px;
+  font-weight: normal;
+}
+
+.karte-print__header-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  font-size: 9pt;
+}
+
+.karte-print__header-row > :first-child {
+  font-size: 11pt;
+  font-weight: 600;
+}
+
+.karte-print__sheet .karte-print__column-title {
+  font-size: 9pt;
+  font-weight: normal;
+  text-align: center;
+}
+
+.karte-print__day td {
+  font-weight: 600;
+  background: var(--surface-stripe);
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+  break-after: avoid;
+}
+
+.karte-print__empty {
+  text-align: center;
+}
+
+.karte-print__card {
+  break-inside: avoid;
+  overflow-wrap: anywhere;
+}
+
+.karte-print__card + .karte-print__card {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+.karte-print__card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin-bottom: 2px;
+}
+
+.karte-print__kind {
+  font-size: 8pt;
+  padding: 0 4px;
+  border: 1px solid var(--text-h);
+}
+
+.karte-print__title {
+  font-weight: 600;
+}
+
+.karte-print__meta {
+  font-size: 8pt;
+}
+
+/* 紙の段は画面のカードより狭いので、用法名などの折らない指定も段の幅で折り返す。 */
+.karte-print .karte-rp__usage > span {
+  white-space: normal;
+}
+
+/* 本文中の画像・シェーマは段の幅に収める。 */
+.karte-print img {
+  max-width: 100%;
+  height: auto;
+}
+
+.karte-print__history {
+  margin-top: 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  font-size: 9pt;
+}
+
+.karte-print__history-title {
+  font-weight: 600;
+}
+
+.karte-print__history-step + .karte-print__history-step {
+  margin-top: 4px;
+}
+
+.karte-print__history .version-diff {
+  font-size: 9pt;
+  line-height: 1.4;
+}
+
+.karte-print__history .version-diff__row {
+  color: var(--text-h);
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+/* 白黒で印刷しても分かるよう、増えた行には下線を、変わった文字には太字を足す
+   (消えた行は .version-diff__row--removed の取消線)。 */
+.karte-print__history .version-diff__row--added .version-diff__text {
+  text-decoration: underline;
+}
+
+.karte-print__history .version-diff__changed {
+  font-weight: 700;
+}
+
+/* 差分を取るために画面外へ描く版が、紙面の高さを伸ばして白紙のページを作らないようにする。 */
+.karte-print .version-diff__sources {
+  height: 0;
+  overflow: hidden;
+}
+
+@page {
+  size: A4;
+  margin: 12mm;
+
+  @bottom-center {
+    content: counter(page) " / " counter(pages);
+    font-size: 9pt;
+  }
+}
+
+@media print {
+  .app--print .app__main {
+    padding: 0;
+    background: var(--paper);
+  }
+
+  .karte-print {
+    max-width: none;
+  }
+
+  .karte-print__toolbar {
+    display: none;
   }
 }

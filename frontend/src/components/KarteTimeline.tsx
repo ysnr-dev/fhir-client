@@ -12,13 +12,11 @@ import {
   noteBodySections,
   sectionResponseId,
   sectionTitle,
-  statusLabel,
   stripSchemaImageNotes,
 } from "../fhir/clinicalNoteHelpers";
 import { countersignBadgeOf } from "../fhir/countersignHelpers";
 import { problemLabel, type ProblemRef } from "../fhir/conditionHelpers";
 import {
-  KARTE_KIND_LABELS,
   karteItemKindLabel,
   karteDayHeadingLabel,
   karteDayLabel,
@@ -33,14 +31,11 @@ import {
 import { karteLinkLabel, type KarteLink } from "../fhir/karteLinkHelpers";
 import type { KarteDetailTarget } from "../karteUrl";
 import { copyKarteLink } from "../lib/copyKarteLink";
-import { clockTime } from "../lib/dates";
 import {
   groupInjectionByRp,
   injectionComment,
-  injectionSeriesLabel,
   injectionTimesLabel,
   injectionUsageSummary,
-  summarizeInjectionServiceRequest,
 } from "../fhir/injectionHelpers";
 import { consultReply } from "../fhir/consultOrderHelpers";
 import { teamRequestLastRound } from "../fhir/teamRequestHelpers";
@@ -48,30 +43,27 @@ import { summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
 import {
   canCancelInjection,
   canRestoreInjection,
-  injectionTaskStatusDisplay,
 } from "../fhir/injectionTaskHelpers";
 import { TransfusionPerformModal } from "./TransfusionPerformModal";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
-import { departmentOf, orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
   groupByRp,
   hasDoseDays,
   prescriptionComment,
-  summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 import {
   questionnaireResponseDocumentText,
   questionnaireResponsePlainText,
   schemaAnnotatedLines,
   schemaImageRefs,
-  summarizeQuestionnaireResponse,
 } from "../fhir/questionnaireResponseHelpers";
-import { vitalDisplayRows, vitalEntryDepartment } from "../fhir/vitalHelpers";
+import { vitalDisplayRows } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { AnesthesiaChartModal } from "./AnesthesiaChartModal";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
+import { cardMeta, cardStatus, cardTitle } from "./karteCardLabels";
 import { KarteCardHistoryModal } from "./KarteCardHistoryModal";
-import { cycleDayLabel, regimenOrderLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
+import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { InjectionCancelModal } from "./InjectionCancelModal";
 import { InjectionPerformModal } from "./InjectionPerformModal";
 import { ExamReportEntryModal } from "./ExamReportEntryModal";
@@ -337,16 +329,7 @@ const KarteCard = memo(function KarteCard({
       : null;
 
   // 部門の進捗(依頼済・受付済・実施済・中止)。カードだけで分かるよう、メタ行の先頭に添える。
-  const status =
-    item.kind === "injection"
-      ? {
-          code: item.status,
-          // 照会中(on-hold)は、回答待ちか処方の変更待ちかを出し分ける。
-          label: item.inquiryBadge || injectionTaskStatusDisplay(item.status),
-        }
-      : isOrderItem(item)
-        ? orderKindDefOf(item).status?.(item)
-        : undefined;
+  const status = cardStatus(item);
 
   // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
   // 他の種別では canonical を渡さないので照会自体が走らない。
@@ -911,89 +894,7 @@ function karteLinkOfItem(
   };
 }
 
-function cardTitle(item: KarteTimelineItem): string {
-  if (item.kind === "note") return item.note.title ?? "";
-  // パス評価はどのアウトカムの評価かが見出し(パス名・病日は本文の先頭に出す)。
-  if (item.kind === "pathway-evaluation") return item.evaluation.unitName;
-  // バイタルは種別バッジだけで内容が分かるので、タイトルは持たない。
-  if (item.kind === "vital") return "";
-  if (item.kind === "prescription") {
-    const summary = summarizeServiceRequest(item.serviceRequest);
-    return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
-  }
-  // 注射も処方と同じく区分をタイトルにする(用法種別は本文の用法行に出る)。
-  if (item.kind === "injection") {
-    const summary = summarizeInjectionServiceRequest(item.serviceRequest);
-    return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
-  }
-  if (isOrderItem(item)) return orderKindDefOf(item).title(item);
-  return item.label;
-}
-
-function cardMeta(item: KarteTimelineItem): string {
-  const time = clockTime(item.dateTime);
-  // 記録系のカードも、オーダーの「依頼科 | 依頼医師」と同じ並びで診療科・記入者を出す。
-  if (item.kind === "note") {
-    return [
-      time,
-      statusLabel(item.note.status),
-      departmentOf(item.note).departmentName,
-      item.note.author?.[0]?.display,
-    ]
-      .filter(Boolean)
-      .join(" | ");
-  }
-  if (item.kind === "qr") {
-    const summary = summarizeQuestionnaireResponse(item.response);
-    return [time, summary.statusLabel, departmentOf(item.response).departmentName, summary.authorName]
-      .filter(Boolean)
-      .join(" | ");
-  }
-  // バイタルは測定時刻と診療科(誰が測ったかは Observation に持たせていない)。
-  if (item.kind === "vital") {
-    return [time, vitalEntryDepartment(item.entry).departmentName].filter(Boolean).join(" | ");
-  }
-  if (item.kind === "pathway-evaluation") {
-    return [
-      time,
-      item.evaluation.achievementLabel,
-      departmentOf(item.evaluation.observation).departmentName,
-      item.evaluation.performerName,
-    ]
-      .filter(Boolean)
-      .join(" | ");
-  }
-  const requesterSummary = orderContextSummary(orderRequester(item.serviceRequest));
-  if (isOrderItem(item)) {
-    return [...(orderKindDefOf(item).metaLead?.(item) ?? []), requesterSummary].filter(Boolean).join(" | ");
-  }
-  // 連日オーダーの注射は「何日目」かを添える(単日のオーダーでは出ない)。レジメンから
-  // 出た注射・処方は「レジメン名 C1 Day8」を添え、種別バッジが「化学療法」になるぶん
-  // どちらのオーダーかもここに出す。
-  if (item.kind === "injection") {
-    const regimen = regimenOrderLabel(item.serviceRequest);
-    return [
-      regimen,
-      regimen ? KARTE_KIND_LABELS[item.kind] : "",
-      injectionSeriesLabel(item.serviceRequest),
-      requesterSummary,
-    ]
-      .filter(Boolean)
-      .join(" | ");
-  }
-  if (item.kind === "prescription") {
-    const regimen = regimenOrderLabel(item.serviceRequest);
-    return [regimen, regimen ? KARTE_KIND_LABELS[item.kind] : "", requesterSummary]
-      .filter(Boolean)
-      .join(" | ");
-  }
-  // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。登録日時
-  // (authoredOn)はカードには出さない(カードの日はオーダー開始日で、いつ登録したかは
-  // 詳細の「登録日時」で見る)。
-  return requesterSummary;
-}
-
-function KarteCardBody({ item }: { item: KarteTimelineItem }) {
+export function KarteCardBody({ item }: { item: KarteTimelineItem }) {
   if (item.kind === "vital") {
     const rows = vitalDisplayRows(item.entry);
     if (rows.length === 0) return <p className="karte-card__empty">測定値がありません。</p>;
@@ -1188,7 +1089,7 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 // 変更履歴で見せる 1 版ぶんのカード。カードの見出し(表題・診療日・依頼科・依頼医・プロブレム・
 // パス)も版ごとに変わりうるので、本文の前に文字で並べる(差分でも行として比べられるように)。
 // 進捗はオーダーの版ではない(部門の Task が持つ)ので出さない。
-function KarteCardVersionView({
+export function KarteCardVersionView({
   item,
   problemsById,
 }: {

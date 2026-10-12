@@ -68,3 +68,4 @@ export * from "./careTeam";
 export * from "./teamRequest";
 export * from "./pressureUlcer";
 export * from "./karteCardHistory";
+export * from "./kartePrint";

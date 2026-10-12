@@ -38,6 +38,7 @@ import { KarteBroughtMedicationTab } from "../components/KarteBroughtMedicationT
 import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
 import { KarteFileTab } from "../components/KarteFileTab";
 import { KarteImagingTab } from "../components/KarteImagingTab";
+import { KartePrintTab } from "../components/KartePrintTab";
 import { KarteMealTab } from "../components/KarteMealTab";
 import { KarteChemoTab } from "../components/KarteChemoTab";
 import { KarteInjectionTab } from "../components/KarteInjectionTab";
@@ -1116,6 +1117,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     // 取り込んだファイル。登録・編集・削除はタブ内で完結する(右ペインは使わない)。
     if (key === "file") return <KarteFileTab {...props} />;
     if (key === "imaging") return <KarteImagingTab {...props} />;
+    if (key === "karte-print") return <KartePrintTab patientId={patientId} />;
     return <KarteLabResultTab {...props} />;
   }
 

@@ -15,7 +15,7 @@ const HISTORY_MAX_PAGES = 10;
 
 // 検索条件で絞った型レベル履歴を全ページ読む。版が欠けるとカードを組み直せないので、
 // 上限に達したら投げる。
-async function readAllTypeHistory(resourceType: string, params: URLSearchParams): Promise<ResourceVersion[]> {
+export async function readAllTypeHistory(resourceType: string, params: URLSearchParams): Promise<ResourceVersion[]> {
   const versions: ResourceVersion[] = [];
   for (let page = 0; page < HISTORY_MAX_PAGES; page += 1) {
     const pageParams = new URLSearchParams(params);
