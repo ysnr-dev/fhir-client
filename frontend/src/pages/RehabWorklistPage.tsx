@@ -20,6 +20,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { RowPictograms } from "../components/PatientListRowParts";
 import { RehabBookModal } from "../components/RehabBookModal";
 import { RehabOrderDetailPanel } from "../components/RehabOrderDetailPanel";
 import { RehabPerformModal } from "../components/RehabPerformModal";
@@ -41,6 +42,10 @@ import {
   rehabTaskStatusDisplay,
   type RehabTaskStatus,
 } from "../fhir/rehabTaskHelpers";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 
 // リハビリ一覧(部門ワークリスト)。
 //
@@ -121,6 +126,13 @@ export function RehabWorklistPage() {
       (a.appointment.start ?? "").localeCompare(b.appointment.start ?? ""),
     );
   }, [rows, date]);
+
+  // 予約ビューの行は依頼ビューの行を展開したものなので、患者はどちらも rows から取る。
+  const patientIds = useMemo(
+    () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [rows],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   // 行を押すと右に患者プロファイルを出す。依頼ビューはオーダー、予約ビューは予約で
   // 選ぶ(同じオーダーがその日 2 枠持つこともある)。ビューごとに選択を分け、
@@ -319,6 +331,7 @@ export function RehabWorklistPage() {
                   <OrderRow
                     key={row.order.id}
                     row={row}
+                    pictograms={pictograms}
                     date={date}
                     pending={updateStatus.isPending}
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
@@ -365,6 +378,7 @@ export function RehabWorklistPage() {
                   <AppointmentRow
                     key={appointment.id}
                     row={row}
+                    pictograms={pictograms}
                     appointment={appointment}
                     rowProps={drawer.rowProps(row.patient?.id && appointment.id)}
                     onView={() => setViewingId(row.order.id ?? null)}
@@ -622,6 +636,7 @@ function todaySummary(row: RehabWorklistRow): string {
 
 function OrderRow({
   row,
+  pictograms,
   date,
   pending,
   rowProps,
@@ -631,6 +646,8 @@ function OrderRow({
   onChangeStatus,
 }: {
   row: RehabWorklistRow;
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: RowPictogramSources;
   date: string;
   pending: boolean;
   /** 行を押してドロワーを開くための className と onClick。 */
@@ -661,6 +678,7 @@ function OrderRow({
               {displayName(patient)}
             </Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"
@@ -826,6 +844,7 @@ function AppointmentMenuItems({ pending, onReschedule, onCancel }: AppointmentMe
 
 function AppointmentRow({
   row,
+  pictograms,
   appointment,
   rowProps,
   onView,
@@ -833,6 +852,8 @@ function AppointmentRow({
   ...menuActions
 }: {
   row: RehabWorklistRow;
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: RowPictogramSources;
   appointment: fhir4.Appointment;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
@@ -855,6 +876,7 @@ function AppointmentRow({
               {displayName(patient)}
             </Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"

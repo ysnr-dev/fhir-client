@@ -27,6 +27,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { RowPictograms } from "../components/PatientListRowParts";
 import {
   groupBySpecimen,
   labOrderItems,
@@ -43,6 +44,10 @@ import {
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
 import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 
 // 検体検査一覧(部門ワークリスト)。検査日を決めて、その日に検体を採る検査を並べる。
 // 作りは放射線検査一覧(RadWorklistPage)に合わせてある。
@@ -102,6 +107,12 @@ export function LabWorklistPage() {
   const total = worklist.data?.rows.length ?? 0;
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const entering = worklist.data?.rows.find((row) => row.order.id === enteringId);
+
+  const patientIds = useMemo(
+    () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [rows],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
   // (同じ患者が 1 日に複数のオーダーを持つこともある)。絞り込みで行が消えたら閉じる。
@@ -221,6 +232,7 @@ export function LabWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
+                    pictograms={pictograms}
                     rowProps={drawer.rowProps(
                       row.patient?.id && row.order.id,
                       summarizeLabOrder(row.order).urgent ? "lab-worklist__row--urgent" : undefined,
@@ -417,9 +429,12 @@ function secondaryActionsOf(row: LabWorklistRow) {
 
 function WorklistRow({
   row,
+  pictograms,
   rowProps,
   ...rowActions
 }: {
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: RowPictogramSources;
   row: LabWorklistRow;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
@@ -442,6 +457,7 @@ function WorklistRow({
                 カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
             <Link to={`/patients/${patient.id}/karte`} state={returnLinkState}>{displayName(patient)}</Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"

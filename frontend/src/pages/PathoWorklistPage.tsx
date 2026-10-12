@@ -24,6 +24,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { RowPictograms } from "../components/PatientListRowParts";
 import {
   EXAM_CATEGORY_OPTIONS,
   pathoOrderSpecimens,
@@ -42,6 +43,10 @@ import { reportStatusDisplay } from "../fhir/pathoResultHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
 import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 
 // 病理検査一覧(部門ワークリスト)。採取(予定)日を決めて、その日に検体を採る検査を
 // 並べる。作りは検体検査一覧(LabWorklistPage)に合わせてある。
@@ -99,6 +104,12 @@ export function PathoWorklistPage() {
   const total = worklist.data?.rows.length ?? 0;
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const entering = worklist.data?.rows.find((row) => row.order.id === enteringId);
+
+  const patientIds = useMemo(
+    () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [rows],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
   // (同じ患者が同じ日に複数の検査を持つこともある)。絞り込みで行が消えたら閉じる。
@@ -181,6 +192,7 @@ export function PathoWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
+                    pictograms={pictograms}
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onEnterReport={() => setEnteringId(row.order.id ?? null)}
@@ -377,12 +389,15 @@ function urgentRowClass(row: PathoWorklistRow): string | undefined {
 
 function WorklistRow({
   row,
+  pictograms,
   pending,
   onView,
   onEnterReport,
   onChangeStatus,
   rowProps,
 }: {
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: RowPictogramSources;
   row: PathoWorklistRow;
   pending: boolean;
   onView: () => void;
@@ -411,6 +426,7 @@ function WorklistRow({
               {displayName(patient)}
             </Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"

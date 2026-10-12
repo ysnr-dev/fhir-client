@@ -20,6 +20,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { RowPictograms } from "../components/PatientListRowParts";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
 import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
@@ -38,6 +39,10 @@ import {
   type TreatmentTaskAction,
   type TreatmentTaskStatus,
 } from "../fhir/treatmentTaskHelpers";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 
 // 処置一覧(部門ワークリスト)。実施日を決めて、その日に行う処置を並べる。
 //
@@ -144,6 +149,12 @@ export function TreatmentWorklistPage() {
   // マスタが読めるまでは実施入力の有無が決まらないので押させない。
   const pending = updateStatus.isPending || items.isLoading;
 
+  const patientIds = useMemo(
+    () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [rows],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
+
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
   // (同じ患者が同じ日に複数の処置を持つこともある)。絞り込みで行が消えたら閉じる。
   const drawer = useRowDrawer();
@@ -207,6 +218,7 @@ export function TreatmentWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
+                    pictograms={pictograms}
                     pending={pending}
                     onChangeStatus={(status) => changeStatus(row, status)}
                     onPerform={() => handlePerform(row)}
@@ -381,11 +393,14 @@ function secondaryActionsOf(row: TreatmentWorklistRow) {
 
 function WorklistRow({
   row,
+  pictograms,
   pending,
   onChangeStatus,
   onPerform,
   rowProps,
 }: {
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: RowPictogramSources;
   row: TreatmentWorklistRow;
   pending: boolean;
   onChangeStatus: (status: TreatmentTaskStatus) => void;
@@ -414,6 +429,7 @@ function WorklistRow({
                 カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
             <Link to={`/patients/${patient.id}/karte`} state={returnLinkState}>{displayName(patient)}</Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"

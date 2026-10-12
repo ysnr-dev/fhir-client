@@ -19,6 +19,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { RowPictograms } from "../components/PatientListRowParts";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import {
@@ -45,6 +46,10 @@ import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader
 import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import { categoryCoding } from "../fhir/shared";
 import { SETTING_SYSTEM } from "../fhir/prescriptionHelpers";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 
 // 注射一覧(部門ワークリスト)。注射日を決めて、その日に払い出す注射を並べる。
 // 作りは処方一覧(RxWorklistPage)に合わせてある。
@@ -103,6 +108,12 @@ export function InjectionWorklistPage() {
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
   const inquiring = worklist.data?.rows.find((row) => row.order.id === inquiringId);
+
+  const patientIds = useMemo(
+    () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [rows],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
   // (同じ患者が同じ日に複数の注射を持つこともある)。絞り込みで行が消えたら閉じる。
@@ -176,6 +187,7 @@ export function InjectionWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
+                    pictograms={pictograms}
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onDispense={() => setDispensingId(row.order.id ?? null)}
@@ -377,6 +389,7 @@ function hasMenuItems(row: InjectionWorklistRow): boolean {
 
 function WorklistRow({
   row,
+  pictograms,
   pending,
   onView,
   onDispense,
@@ -384,6 +397,8 @@ function WorklistRow({
   onChangeStatus,
   rowProps,
 }: {
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: RowPictogramSources;
   row: InjectionWorklistRow;
   pending: boolean;
   onView: () => void;
@@ -419,6 +434,7 @@ function WorklistRow({
               {displayName(patient)}
             </Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"

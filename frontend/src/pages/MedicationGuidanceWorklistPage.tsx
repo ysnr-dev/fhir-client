@@ -18,6 +18,7 @@ import { Modal } from "../components/Modal";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "../components/PatientRowCells";
+import { RowPictograms } from "../components/PatientListRowParts";
 import { MedicationGuidanceOrderDetailPanel } from "../components/MedicationGuidanceOrderDetailPanel";
 import { MedicationGuidancePerformModal } from "../components/MedicationGuidancePerformModal";
 import { displayName } from "../fhir/patientHelpers";
@@ -33,6 +34,10 @@ import {
   medicationGuidanceTaskStatusDisplay,
   type MedicationGuidanceTaskStatus,
 } from "../fhir/medicationGuidanceTaskHelpers";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 
 // 服薬指導一覧(薬剤部の部門ワークリスト。docs/medication-guidance-order-design.md)。
 //
@@ -81,6 +86,12 @@ export function MedicationGuidanceWorklistPage() {
     () => allRows.filter((row) => matchesFilters(row, filters, practitionerId)),
     [allRows, filters, practitionerId],
   );
+
+  const patientIds = useMemo(
+    () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [rows],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   const drawer = useRowDrawer("orders");
   const selectedRow = rows.find((row) => row.patient?.id && row.order.id === drawer.selectedKey);
@@ -173,6 +184,7 @@ export function MedicationGuidanceWorklistPage() {
                   <OrderRow
                     key={row.order.id}
                     row={row}
+                    pictograms={pictograms}
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                     {...rowHandlers(row)}
                   />
@@ -395,9 +407,10 @@ interface RowHandlers {
 
 function OrderRow({
   row,
+  pictograms,
   rowProps,
   ...handlers
-}: { row: MedicationGuidanceWorklistRow; rowProps: ComponentProps<"tr"> } & RowHandlers) {
+}: { pictograms: RowPictogramSources; row: MedicationGuidanceWorklistRow; rowProps: ComponentProps<"tr"> } & RowHandlers) {
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
   const summary = summarizeMedicationGuidanceOrder(order);
@@ -415,6 +428,7 @@ function OrderRow({
               {displayName(patient)}
             </Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"

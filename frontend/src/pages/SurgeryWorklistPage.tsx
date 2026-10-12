@@ -21,6 +21,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { RowPictograms } from "../components/PatientListRowParts";
 import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
@@ -39,6 +40,10 @@ import {
   surgeryTaskStatusDisplay,
   type SurgeryTaskStatus,
 } from "../fhir/surgeryTaskHelpers";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 
 // 手術一覧(手術部のワークリスト)。予定手術日を決めて、その日の手術を並べる。
 //
@@ -107,6 +112,12 @@ export function SurgeryWorklistPage() {
   );
   const total = source?.rows.length ?? 0;
   const unscheduledCount = unscheduled.data?.rows.length ?? 0;
+
+  const patientIds = useMemo(
+    () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [rows],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ。
   // タブごとに選び直し、絞り込みで行が消えたら閉じる。
@@ -223,6 +234,7 @@ export function SurgeryWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
+                    pictograms={pictograms}
                     tab={tab}
                     pending={pending}
                     onChangeStatus={(status) => changeStatus(row, status)}
@@ -478,6 +490,7 @@ function hasMenuItems(row: SurgeryWorklistRow, tab: Tab): boolean {
 
 function WorklistRow({
   row,
+  pictograms,
   tab,
   pending,
   onChangeStatus,
@@ -486,6 +499,8 @@ function WorklistRow({
   onAdmit,
   rowProps,
 }: {
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: RowPictogramSources;
   row: SurgeryWorklistRow;
   tab: Tab;
   pending: boolean;
@@ -534,6 +549,7 @@ function WorklistRow({
               {displayName(patient)}
             </Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"

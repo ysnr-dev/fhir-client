@@ -15,6 +15,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { RowPictograms } from "../components/PatientListRowParts";
 import { RowMenu } from "../components/RowMenu";
 import {
   broughtStateOf,
@@ -33,6 +34,10 @@ import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { addDays, dateTimeLabel, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 
 // 薬剤部の持参薬鑑別一覧(docs/brought-medication-design.md §5.2)。
 // 閉じていない鑑別依頼を 1 入院 1 行で並べ、鑑別開始 → 鑑別 → 鑑別完了と進める。
@@ -56,6 +61,11 @@ export function BroughtMedicationWorklistPage() {
       : null;
 
   const items = worklist.data ?? [];
+  const patientIds = useMemo(
+    () => (worklist.data ?? []).flatMap((item) => (item.patient?.id ? [item.patient.id] : [])),
+    [worklist.data],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   // 行を押すと右に患者プロファイルを出す。行は鑑別依頼ごとなので依頼で選ぶ。
   // 鑑別済を隠して行が消えたら閉じる。
@@ -154,6 +164,7 @@ export function BroughtMedicationWorklistPage() {
                 <WorklistRow
                   key={item.task.id}
                   item={item}
+                  pictograms={pictograms}
                   rowProps={drawer.rowProps(item.patient?.id && item.task.id)}
                   {...actionsFor(item)}
                 />
@@ -207,10 +218,13 @@ interface WorklistRowActions {
 
 function WorklistRow({
   item,
+  pictograms,
   rowProps,
   ...actions
 }: {
   item: BroughtMedWorklistItem;
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: RowPictogramSources;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
 } & WorklistRowActions) {
@@ -237,6 +251,7 @@ function WorklistRow({
               {displayName(patient)}
             </Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"

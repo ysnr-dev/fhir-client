@@ -18,6 +18,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { RowPictograms } from "../components/PatientListRowParts";
 import { RxDispenseModal } from "../components/RxDispenseModal";
 import { RxInquiryModal } from "../components/RxInquiryModal";
 import { RxOrderViewModal } from "../components/RxOrderViewModal";
@@ -44,6 +45,10 @@ import {
   rxTaskStatusDisplay,
   type RxTaskStatus,
 } from "../fhir/rxTaskHelpers";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 
 // 処方一覧(部門ワークリスト)。処方日を決めて、その日に調剤する処方を並べる。
 // 作りは検体検査一覧(LabWorklistPage)に合わせてある。
@@ -114,6 +119,12 @@ export function RxWorklistPage() {
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
   const inquiring = worklist.data?.rows.find((row) => row.order.id === inquiringId);
+
+  const patientIds = useMemo(
+    () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [rows],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ。
   // 絞り込みで行が消えたら閉じる。
@@ -200,6 +211,7 @@ export function RxWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
+                    pictograms={pictograms}
                     pending={updateStatus.isPending}
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                     onView={() => setViewingId(row.order.id ?? null)}
@@ -398,6 +410,7 @@ function FilterForm({
 
 function WorklistRow({
   row,
+  pictograms,
   pending,
   rowProps,
   onView,
@@ -405,6 +418,8 @@ function WorklistRow({
   onInquire,
   onChangeStatus,
 }: {
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: RowPictogramSources;
   row: RxWorklistRow;
   pending: boolean;
   /** 行を押してドロワーを開くための className と onClick。 */
@@ -440,6 +455,7 @@ function WorklistRow({
                 カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
             <Link to={`/patients/${patient.id}/karte`} state={returnLinkState}>{displayName(patient)}</Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"

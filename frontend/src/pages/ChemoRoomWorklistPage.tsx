@@ -1,10 +1,11 @@
-import { useEffect, useState, type ComponentProps } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { Link } from "react-router-dom";
 import { useChemoRoomList, type ChemoRoomRow } from "../api/queries";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "../components/PatientRowCells";
+import { RowPictograms } from "../components/PatientListRowParts";
 import { appointmentTimeLabel } from "../fhir/appointmentHelpers";
 import { groupInjectionByRp } from "../fhir/injectionHelpers";
 import { injectionTaskStatus, injectionTaskStatusDisplay } from "../fhir/injectionTaskHelpers";
@@ -12,6 +13,10 @@ import { displayName } from "../fhir/patientHelpers";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
+import {
+  useRowPictogramSources,
+  type RowPictogramSources,
+} from "../hooks/useRowPictogramSources";
 
 // 部門業務の「外来化学療法室」。その日に化学療法室を予約している患者を時間順に並べる
 // (docs/chemo-regimen-design.md §7.6 E-7)。
@@ -31,6 +36,12 @@ export function ChemoRoomWorklistPage() {
 
   const list = useChemoRoomList(date);
   const rows = list.data ?? [];
+
+  const patientIds = useMemo(
+    () => (list.data ?? []).flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    [list.data],
+  );
+  const pictograms = useRowPictogramSources(patientIds);
 
   // 行を押すと右に患者プロファイルを出す。行は予約ごとなので予約で選ぶ。
   // 日付を替えて行が消えたら閉じる。
@@ -67,6 +78,7 @@ export function ChemoRoomWorklistPage() {
                   <ChemoRoomTableRow
                     key={row.appointment.id}
                     row={row}
+                    pictograms={pictograms}
                     rowProps={drawer.rowProps(row.patient?.id && row.appointment.id)}
                   />
                 ))}
@@ -108,8 +120,11 @@ function DateForm({ date, onChange }: { date: string; onChange: (date: string) =
 
 function ChemoRoomTableRow({
   row,
+  pictograms,
   rowProps,
 }: {
+  /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
+  pictograms: RowPictogramSources;
   row: ChemoRoomRow;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
@@ -135,6 +150,7 @@ function ChemoRoomTableRow({
               {displayName(patient)}
             </Link>
             <PatientKana patient={patient} />
+            <RowPictograms patientId={patient.id ?? ""} {...pictograms} />
           </>
         ) : (
           "-"
