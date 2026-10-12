@@ -20,6 +20,7 @@ import {
   useKartePathwayEvaluations,
   usePatient,
   usePatientCheckedInAppointment,
+  useOutpatientOrders,
   usePatientOutpatientExam,
   useStartOutpatientExam,
   useUpdateOutpatientExam,
@@ -33,6 +34,7 @@ import { useOrderContext } from "../hooks/useOrderContext";
 import { displayJapaneseName } from "../fhir/humanName";
 import { isDischargeSummary, isNursingSummary } from "../fhir/clinicalNoteHelpers";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
+import { ExamFinishChoiceModal } from "../components/ExamFinishChoiceModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
@@ -115,9 +117,17 @@ import {
 import { appointmentDepartmentCode } from "../fhir/appointmentHelpers";
 import { receptionCoverageSetKey } from "../fhir/coverageHelpers";
 import { encounterAttendingId } from "../fhir/encounterHelpers";
-import { buildFinishedOutpatientEncounter, buildOutpatientEncounter } from "../fhir/outpatientEncounterHelpers";
+import {
+  buildFinishedOutpatientEncounter,
+  buildOutpatientEncounter,
+  buildPausedOutpatientEncounter,
+  buildResumedOutpatientEncounter,
+  isExamInProgress,
+  isExamPaused,
+} from "../fhir/outpatientEncounterHelpers";
+import { pendingExamOrderLabels } from "../fhir/outpatientOrderProgressHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import { isDateOnly, nowFhirDateTime, today } from "../lib/dates";
+import { isDateOnly, localDay, nowFhirDateTime, today } from "../lib/dates";
 import { useKarteReturnTo } from "../returnTo";
 import {
   clampLeftWidthRatio,
@@ -175,10 +185,19 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const returnTo = useKarteReturnTo();
   const navigate = useNavigate();
 
-  // 外来で診察中なら、ヘッダから診察を終えられるようにする。診察中でなければ
-  // (入院患者や、外来受付を経ずに開いたカルテ)null が返り、ボタンは出ない。
+  // 外来で診察中なら、ヘッダから診察を終えられるようにする(一時終了なら再開できる)。
+  // 診察中でなければ(入院患者や、外来受付を経ずに開いたカルテ)null が返り、ボタンは出ない。
   const outpatientExam = usePatientOutpatientExam(patientId);
-  const finishExam = useUpdateOutpatientExam();
+  const examEncounter = outpatientExam.data?.encounter;
+  const examInProgress = isExamInProgress(examEncounter);
+  const updateExam = useUpdateOutpatientExam();
+  // 診察日の当日オーダー。未実施の検査があれば診察終了のときに一時終了かどうかを選ばせる。
+  const examOrders = useOutpatientOrders(
+    examInProgress ? localDay(examEncounter?.period?.start) : "",
+    patientId ? [patientId] : [],
+  );
+  // 選択を出すときの未実施の検査オーダー。null なら選択を出していない。
+  const [pendingExamOrders, setPendingExamOrders] = useState<string[] | null>(null);
   // 診察中でなく今日の受付済の予約があれば、ヘッダから診察を始められるようにする。
   const checkedInAppointment = usePatientCheckedInAppointment(
     patientId,
@@ -219,11 +238,22 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     startExam.mutate(buildOutpatientEncounter(appointment, patient.data?.data, nowFhirDateTime()));
   }
 
-  function handleFinishExam() {
+  async function handleFinishExam() {
+    // 診察中に出したオーダーはこのキャッシュを無効化しないので、押した時点で読み直す。
+    const { data } = await examOrders.refetch();
+    const pending = pendingExamOrderLabels((patientId && data?.get(patientId)) || []);
+    if (pending.length > 0) {
+      setPendingExamOrders(pending);
+      return;
+    }
+    if (!window.confirm("診察を終了します。よろしいですか?")) return;
+    finishExamNow();
+  }
+
+  function finishExamNow() {
     const exam = outpatientExam.data;
     if (!exam) return;
-    if (!window.confirm("診察を終了します。よろしいですか?")) return;
-    finishExam.mutate(
+    updateExam.mutate(
       {
         encounter: buildFinishedOutpatientEncounter(exam.encounter, nowFhirDateTime()),
         appointment: exam.appointment,
@@ -241,6 +271,20 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         },
       },
     );
+  }
+
+  // 検査を受けに診察室を離れる。次の患者を診るので外来患者一覧へ戻る。
+  function pauseExam() {
+    if (!examEncounter) return;
+    updateExam.mutate(
+      { encounter: buildPausedOutpatientEncounter(examEncounter, nowFhirDateTime()) },
+      { onSuccess: leaveKarte },
+    );
+  }
+
+  function handleResumeExam() {
+    if (!examEncounter) return;
+    updateExam.mutate({ encounter: buildResumedOutpatientEncounter(examEncounter, nowFhirDateTime()) });
   }
 
   const tab = parseKarteTab(searchParams.get(KARTE_TAB_PARAM));
@@ -1211,9 +1255,18 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         {/* 見出しは置かず、患者情報と戻るボタンを 1 行にまとめて縦幅を左右のペインに回す。 */}
         <div className="karte-page__header">
           <PatientHeader patientId={patientId} />
-          {!detached && outpatientExam.data && (
-            <button type="button" disabled={finishExam.isPending} onClick={handleFinishExam}>
+          {!detached && examInProgress && (
+            <button
+              type="button"
+              disabled={updateExam.isPending || examOrders.isFetching}
+              onClick={handleFinishExam}
+            >
               診察終了
+            </button>
+          )}
+          {!detached && isExamPaused(examEncounter) && (
+            <button type="button" disabled={updateExam.isPending} onClick={handleResumeExam}>
+              診察再開
             </button>
           )}
           {!detached && !outpatientExam.data && checkedInAppointment.data && (
@@ -1227,7 +1280,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             </Link>
           )}
         </div>
-        <ErrorBanner error={finishExam.error ?? startExam.error} />
+        <ErrorBanner error={updateExam.error ?? startExam.error} />
 
         {/* 左右の幅はカスタムプロパティで渡す。狭い画面では CSS 側で縦積みに切り替える
             ため、grid-template-columns 自体はインラインで上書きしない。 */}
@@ -1298,6 +1351,21 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
               setPane({ kind: kind === "injection" ? "injection-edit" : "prescription-edit", srId });
             }}
             onClose={closeDetail}
+          />
+        )}
+        {pendingExamOrders && (
+          <ExamFinishChoiceModal
+            pendingOrders={pendingExamOrders}
+            submitting={updateExam.isPending}
+            onPause={() => {
+              setPendingExamOrders(null);
+              pauseExam();
+            }}
+            onFinish={() => {
+              setPendingExamOrders(null);
+              finishExamNow();
+            }}
+            onCancel={() => setPendingExamOrders(null)}
           />
         )}
         {/* 診察終了の直後だけ出す。閉じたら(送っても送らなくても)外来患者一覧へ。 */}

@@ -68,11 +68,13 @@ import {
   OUTPATIENT_STATUS_OPTIONS,
   buildExamFinishCancelledEncounter,
   buildExamStartCancelledEncounter,
+  buildResumedOutpatientEncounter,
   buildFinishedOutpatientEncounter,
   buildOutpatientEncounter,
   canStartExam,
   isExamFinished,
   isExamInProgress,
+  isExamPaused,
   outpatientStatusCode,
   outpatientStatusCounts,
   outpatientStatusLabel,
@@ -315,6 +317,22 @@ export function OutpatientListPage() {
     });
   }
 
+  // 診察開始と同じく、再開したらそのままカルテを開く。
+  function handleResumeExam(row: OutpatientRow) {
+    if (!row.encounter) return;
+    const patientId = row.patient?.id ?? appointmentActorId(row.appointment, "Patient");
+    updateExam.mutate(
+      { encounter: buildResumedOutpatientEncounter(row.encounter, nowFhirDateTime()) },
+      {
+        onSuccess: () => {
+          if (patientId) {
+            navigate(`/patients/${patientId}/karte`, { state: returnLinkState });
+          }
+        },
+      },
+    );
+  }
+
   function handleCancelExamStart(row: OutpatientRow) {
     if (!row.encounter) return;
     if (!window.confirm("診察開始を取り消して受付済に戻します。よろしいですか?")) return;
@@ -341,6 +359,7 @@ export function OutpatientListPage() {
       onChangeStatus: (status) => updateStatus.mutate({ appointment: row.appointment, status }),
       onStartExam: () => handleStartExam(row),
       onFinishExam: () => handleFinishExam(row),
+      onResumeExam: () => handleResumeExam(row),
       onCancelExamStart: () => handleCancelExamStart(row),
       onCancelExamFinish: () => handleCancelExamFinish(row),
       onSendBilling: receiptStatus.data?.enabled ? () => openBillingSend(row) : undefined,
@@ -674,6 +693,8 @@ interface OutpatientRowActions {
   onChangeStatus: (status: fhir4.Appointment["status"]) => void;
   onStartExam: () => void;
   onFinishExam: () => void;
+  /** 一時終了から診察中に戻す。 */
+  onResumeExam: () => void;
   onCancelExamStart: () => void;
   onCancelExamFinish: () => void;
   /** レセコン連携が無効なら undefined。メニューに項目ごと出さない。 */
@@ -777,6 +798,7 @@ function OutpatientRowButtons({
   onChangeStatus,
   onStartExam,
   onFinishExam,
+  onResumeExam,
   onSendBilling,
 }: {
   row: OutpatientRow;
@@ -789,7 +811,7 @@ function OutpatientRowButtons({
 
   return (
     <>
-      {/* 受付 → 診察開始 → 診察終了 と、同じ位置でボタンが入れ替わる。 */}
+      {/* 受付 → 診察開始 → 診察終了 と、同じ位置でボタンが入れ替わる。一時終了の間は診察再開。 */}
       {canCheckInAppointment(appointment) && (
         <button type="button" disabled={pending} onClick={() => onChangeStatus("checked-in")}>
           受付
@@ -803,6 +825,11 @@ function OutpatientRowButtons({
       {inExam && (
         <button type="button" disabled={pending} onClick={onFinishExam}>
           診察終了
+        </button>
+      )}
+      {isExamPaused(encounter) && (
+        <button type="button" disabled={pending} onClick={onResumeExam}>
+          診察再開
         </button>
       )}
       {/* 診察が終わったら次にやることは会計送信なので、同じ位置に出す。 */}
@@ -828,7 +855,7 @@ function OutpatientMenuItems({
   onEditReception,
 }: { row: OutpatientRow } & OutpatientRowActions) {
   const { appointment, encounter } = row;
-  const inExam = isExamInProgress(encounter);
+  const examStarted = isExamInProgress(encounter) || isExamPaused(encounter);
   const examFinished = isExamFinished(encounter);
   // 受付の取消・予約の取消は、診察が始まる前に限る(始まってからの巻き戻しは
   // 診察開始の取消が先)。
@@ -878,7 +905,7 @@ function OutpatientMenuItems({
           未来院取消
         </button>
       )}
-      {inExam && (
+      {examStarted && (
         <button
           type="button"
           className="row-menu__item"

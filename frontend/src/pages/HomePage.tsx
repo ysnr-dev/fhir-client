@@ -41,6 +41,7 @@ import {
 } from "../fhir/homeSections";
 import { NOTIFICATION_SEVERITY_LABEL, notificationSeverityOf } from "../fhir/notificationHelpers";
 import {
+  EXAM_PAUSED_CODE,
   IN_EXAM_STATUS,
   outpatientStatusCode,
   outpatientStatusCounts,
@@ -70,7 +71,13 @@ const NOTIFICATION_ROWS = 5;
 const OUTPATIENT_ROWS = 8;
 
 /** 診察待ちとして並べる状態。診療済・未来院は落とす。 */
-const WAITING_STATUSES: readonly string[] = ["booked", "arrived", "checked-in", IN_EXAM_STATUS];
+const WAITING_STATUSES: readonly string[] = [
+  "booked",
+  "arrived",
+  "checked-in",
+  IN_EXAM_STATUS,
+  EXAM_PAUSED_CODE,
+];
 
 export function HomePage() {
   const { user, practitionerId, practitioner, sessionLoading } = useCurrentPractitioner();

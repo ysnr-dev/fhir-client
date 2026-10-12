@@ -15,6 +15,7 @@ import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { appointmentActorId, isExamAppointment, withCheckedInAt } from "../../fhir/appointmentHelpers";
 import {
   EXAM_IN_PROGRESS_STATUS,
+  EXAM_PAUSED_STATUS,
   latestExamByAppointment,
   OUTPATIENT_CLASS_CODE,
   outpatientEncounterAppointmentId,
@@ -289,7 +290,8 @@ export function useStartOutpatientExam() {
 /**
  * 診察を書き換える。診察終了(Encounter を finished + 予約を fulfilled)・
  * 診察終了の取消(in-progress + checked-in)・診察開始の取消(entered-in-error、
- * 予約は据え置き)をこれ 1 本で賄う。
+ * 予約は据え置き)・一時終了と診察再開(onleave ⇄ in-progress、予約は据え置き)を
+ * これ 1 本で賄う。
  *
  * 予約も動かすときは appointment を渡す。診察だけが進んで予約が受付済のまま、
  * といった食い違いを作らないよう 1 本の transaction で書く。
@@ -361,7 +363,7 @@ export function useUpdateOutpatientReception() {
   });
 }
 
-/** カルテのヘッダに「診察終了」を出すのに要るもの。 */
+/** カルテのヘッダに「診察終了」「診察再開」を出すのに要るもの。 */
 export interface OutpatientExam {
   encounter: fhir4.Encounter;
   /** 診察のもとになった予約。診察終了で fulfilled に書き換えるので現物が要る。 */
@@ -371,7 +373,7 @@ export interface OutpatientExam {
 async function fetchPatientOutpatientExam(patientId: string): Promise<OutpatientExam | null> {
   const params = new URLSearchParams();
   params.set("subject", `Patient/${patientId}`);
-  params.set("status", EXAM_IN_PROGRESS_STATUS);
+  params.set("status", `${EXAM_IN_PROGRESS_STATUS},${EXAM_PAUSED_STATUS}`);
   params.set("class", OUTPATIENT_CLASS_CODE);
   params.set("_count", "10");
 
@@ -396,7 +398,7 @@ async function fetchPatientOutpatientExam(patientId: string): Promise<Outpatient
   return { encounter, appointment };
 }
 
-/** その患者がいま診察中ならその診察。診察中でなければ null。 */
+/** その患者がいま診察中(一時終了を含む)ならその診察。診察中でなければ null。 */
 export function usePatientOutpatientExam(patientId: string | undefined) {
   return useQuery({
     queryKey: ["Encounter", "patient-outpatient-exam", patientId],

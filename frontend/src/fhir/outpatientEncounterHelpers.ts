@@ -2,7 +2,7 @@
 //
 // 「その予約の診察がいま行われているか、終わったか」を Encounter 1 件で表す。
 //
-//   status      : "in-progress"(診察中) / "finished"(診察終了)
+//   status      : "in-progress"(診察中) / "onleave"(一時終了) / "finished"(診察終了)
 //   class       : v3-ActCode の AMB(外来)。※ 入院と同じく R4 の Encounter.class は
 //                 CodeableConcept ではなく Coding 単体なので入れ子にしない
 //   subject     : 患者
@@ -10,12 +10,14 @@
 //   period      : start=診察開始日時、end=診察終了日時
 //   participant : 担当医(種別 ATND)。予約に担当医があるときだけ
 //   location[0] : 診察室の Location。予約に診察室があるときだけ
+//   statusHistory : 一時終了をはさんだときの、過ぎた診察中・一時終了の期間
 //
 // 受付までは予約(Appointment.status)だけで足りるが、「診察中」に当たる status が
 // R4 の Appointment に無い(arrived は *来院して待っている* 状態で checked-in より
 // 前の段階なので流用できない)。R4 は fulfilled の定義が "may have resulted in an
 // encounter" で、診察そのものは Encounter が表す前提になっているため、診察開始で
-// Encounter を建てる。診察終了では Encounter を finished にすると同時に予約を
+// Encounter を建てる。当日の検査を受けに診察室を離れるときは一時終了(onleave)にし、
+// 戻ってきたら診察再開で診察中に戻す。予約はどちらも受付済のまま。診察終了では Encounter を finished にすると同時に予約を
 // fulfilled にする — 片方だけ書かれた状態を作らないよう必ず同じ transaction で書く。
 //
 // 入院の Encounter(encounterHelpers.ts)とはリソース型が同じなだけで別物。
@@ -39,6 +41,8 @@ import { referenceId } from "./shared";
 export const OUTPATIENT_CLASS_CODE = "AMB";
 /** 診察中の Encounter.status。 */
 export const EXAM_IN_PROGRESS_STATUS = "in-progress";
+/** 一時終了(検査などで診察室を離れている)の Encounter.status。 */
+export const EXAM_PAUSED_STATUS = "onleave";
 /** 診察が終わった Encounter.status。 */
 export const EXAM_FINISHED_STATUS = "finished";
 /** 診察開始を取り消した(誤登録)Encounter.status。 */
@@ -182,6 +186,49 @@ export function buildFinishedOutpatientEncounter(
   };
 }
 
+/** いまの status になった日時。過ぎた期間の終わり(無ければ診察開始)。 */
+function currentStatusSince(encounter: fhir4.Encounter): string | undefined {
+  const ends = (encounter.statusHistory ?? []).map((entry) => entry.period.end ?? "");
+  return ends.reduce((latest, end) => (end > latest ? end : latest), "") || encounter.period?.start;
+}
+
+/** いまの status の期間を statusHistory に積み、status を切り替える。 */
+function withStatusChange(
+  encounter: fhir4.Encounter,
+  status: fhir4.Encounter["status"],
+  changedAt: string,
+): fhir4.Encounter {
+  return {
+    ...encounter,
+    status,
+    statusHistory: [
+      ...(encounter.statusHistory ?? []),
+      { status: encounter.status, period: { start: currentStatusSince(encounter), end: changedAt } },
+    ],
+  };
+}
+
+/** 一時終了。当日の検査を受けに診察室を離れる。予約は受付済のままなので呼び出し側は触らない。 */
+export function buildPausedOutpatientEncounter(
+  encounter: fhir4.Encounter,
+  pausedAt: string,
+): fhir4.Encounter {
+  return withStatusChange(encounter, EXAM_PAUSED_STATUS, pausedAt);
+}
+
+/** 診察再開。一時終了から診察中に戻す。 */
+export function buildResumedOutpatientEncounter(
+  encounter: fhir4.Encounter,
+  resumedAt: string,
+): fhir4.Encounter {
+  return withStatusChange(encounter, EXAM_IN_PROGRESS_STATUS, resumedAt);
+}
+
+/** 一時終了した日時。一時終了していなければ undefined。 */
+export function examPausedAt(encounter: fhir4.Encounter | undefined): string | undefined {
+  return isExamPaused(encounter) ? currentStatusSince(encounter as fhir4.Encounter) : undefined;
+}
+
 /**
  * 診察開始の取り消し。誤って開始を押したときのための操作なので、診察した記録は
  * 残さず誤登録にする。予約は受付済(checked-in)のままなので呼び出し側は触らない。
@@ -213,6 +260,10 @@ export function outpatientEncounterAppointmentId(
 
 export function isExamInProgress(encounter: fhir4.Encounter | undefined): boolean {
   return encounter?.status === EXAM_IN_PROGRESS_STATUS;
+}
+
+export function isExamPaused(encounter: fhir4.Encounter | undefined): boolean {
+  return encounter?.status === EXAM_PAUSED_STATUS;
 }
 
 export function isExamFinished(encounter: fhir4.Encounter | undefined): boolean {
@@ -249,21 +300,29 @@ function isNewer(a: fhir4.Encounter, b: fhir4.Encounter): boolean {
 
 // ---- 外来一覧の状態(予約 + 診察) ----
 //
-// 「診察中」に当たる値が Appointment.status に無いので、予約の status と診察が
-// 進行中かどうかを 1 つの状態にまとめる。状態列の表示・色分けと絞り込みが同じコードを
-// 見るように、擬似コードを 1 つだけ足して扱いを揃える。診察中でも予約は受付済
+// 「診察中」「一時終了」に当たる値が Appointment.status に無いので、予約の status と
+// 診察の status を 1 つの状態にまとめる。状態列の表示・色分けと絞り込みが同じコードを
+// 見るように、擬似コードを足して扱いを揃える。診察中・一時終了でも予約は受付済
 // (checked-in)のままである点に注意。
 
 /** 診察中を表す擬似コード。Appointment.status には無い。 */
 export const IN_EXAM_STATUS = "in-exam";
 export const IN_EXAM_LABEL = "診察中";
+/** 一時終了を表す擬似コード。 */
+export const EXAM_PAUSED_CODE = "exam-paused";
+export const EXAM_PAUSED_LABEL = "一時終了";
 
-/** 外来一覧の状態コード。診察が進行中なら IN_EXAM_STATUS、それ以外は予約の status。 */
+/**
+ * 外来一覧の状態コード。診察が進行中なら IN_EXAM_STATUS、一時終了なら EXAM_PAUSED_CODE、
+ * それ以外は予約の status。
+ */
 export function outpatientStatusCode(
   appointment: fhir4.Appointment,
   encounter: fhir4.Encounter | undefined,
 ): string {
-  return isExamInProgress(encounter) ? IN_EXAM_STATUS : appointment.status;
+  if (isExamInProgress(encounter)) return IN_EXAM_STATUS;
+  if (isExamPaused(encounter)) return EXAM_PAUSED_CODE;
+  return appointment.status;
 }
 
 /** 外来一覧の状態ラベル。 */
@@ -272,7 +331,9 @@ export function outpatientStatusLabel(
   encounter: fhir4.Encounter | undefined,
 ): string {
   const code = outpatientStatusCode(appointment, encounter);
-  return code === IN_EXAM_STATUS ? IN_EXAM_LABEL : appointmentStatusLabel(code);
+  if (code === IN_EXAM_STATUS) return IN_EXAM_LABEL;
+  if (code === EXAM_PAUSED_CODE) return EXAM_PAUSED_LABEL;
+  return appointmentStatusLabel(code);
 }
 
 /** 診察を始められる予約(受付済で、まだ診察が始まっていないもの)。 */
@@ -285,7 +346,7 @@ export function canStartExam(
 
 /**
  * 外来一覧の状態の選択肢。取消・誤登録は一覧に出さないので選択肢にも出さない。
- * 「診察中」は Appointment.status に無い状態なので、受付済と診療済の間に差し込む。
+ * 「診察中」「一時終了」は Appointment.status に無い状態なので、受付済と診療済の間に差し込む。
  */
 export const OUTPATIENT_STATUS_OPTIONS: { code: string; label: string }[] =
   APPOINTMENT_STATUS_OPTIONS.filter(
@@ -295,6 +356,7 @@ export const OUTPATIENT_STATUS_OPTIONS: { code: string; label: string }[] =
       ? [
           { code: option.code, label: option.label },
           { code: IN_EXAM_STATUS, label: IN_EXAM_LABEL },
+          { code: EXAM_PAUSED_CODE, label: EXAM_PAUSED_LABEL },
         ]
       : [{ code: option.code, label: option.label }],
   );

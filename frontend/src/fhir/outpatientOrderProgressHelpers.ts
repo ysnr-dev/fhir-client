@@ -72,6 +72,25 @@ export interface OutpatientOrderSummary {
   stage: OutpatientOrderStage;
   /** 一件ずつの内訳(印の title に並べる)。 */
   details: string[];
+  /** まだ実施していないオーダーの名称(依頼・受付の段階のもの)。 */
+  pendingNames: string[];
+}
+
+/** 診察終了のときに、未実施なら一時終了を選ばせる検査の種別。 */
+const EXAM_KINDS: readonly OutpatientOrderKind[] = [
+  "lab-order",
+  "micro-order",
+  "patho-order",
+  "rad-order",
+  "physio-order",
+  "endoscopy-order",
+];
+
+/** 未実施の検査オーダー(種別名: 名称)。検査の種別だけを見る。 */
+export function pendingExamOrderLabels(summaries: OutpatientOrderSummary[]): string[] {
+  return summaries
+    .filter((summary) => EXAM_KINDS.includes(summary.kind))
+    .flatMap((summary) => summary.pendingNames.map((name) => `${summary.kindLabel}: ${name}`));
 }
 
 function isOutpatientKind(kind: string | null): kind is OutpatientOrderKind {
@@ -141,9 +160,11 @@ export function outpatientOrderSummaries(
 
     const kinds = byPatient.get(patientId) ?? new Map<OutpatientOrderKind, OutpatientOrderSummary>();
     byPatient.set(patientId, kinds);
+    const pending = stage === "requested" || stage === "accepted";
     const existing = kinds.get(kind);
     if (existing) {
       existing.details.push(detail);
+      if (pending) existing.pendingNames.push(name);
       if (STAGE_ORDER.indexOf(stage) < STAGE_ORDER.indexOf(existing.stage)) existing.stage = stage;
     } else {
       kinds.set(kind, {
@@ -152,6 +173,7 @@ export function outpatientOrderSummaries(
         kindLabel: KARTE_KIND_LABELS[kind],
         stage,
         details: [detail],
+        pendingNames: pending ? [name] : [],
       });
     }
   }
