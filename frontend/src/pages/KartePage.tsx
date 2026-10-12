@@ -19,7 +19,9 @@ import {
   useKarteVitalsInfinite,
   useKartePathwayEvaluations,
   usePatient,
+  usePatientCheckedInAppointment,
   usePatientOutpatientExam,
+  useStartOutpatientExam,
   useUpdateOutpatientExam,
   type KarteProblemFilter,
   type KarteScope,
@@ -113,7 +115,7 @@ import {
 import { appointmentDepartmentCode } from "../fhir/appointmentHelpers";
 import { receptionCoverageSetKey } from "../fhir/coverageHelpers";
 import { encounterAttendingId } from "../fhir/encounterHelpers";
-import { buildFinishedOutpatientEncounter } from "../fhir/outpatientEncounterHelpers";
+import { buildFinishedOutpatientEncounter, buildOutpatientEncounter } from "../fhir/outpatientEncounterHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { isDateOnly, nowFhirDateTime, today } from "../lib/dates";
 import { useKarteReturnTo } from "../returnTo";
@@ -177,6 +179,12 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   // (入院患者や、外来受付を経ずに開いたカルテ)null が返り、ボタンは出ない。
   const outpatientExam = usePatientOutpatientExam(patientId);
   const finishExam = useUpdateOutpatientExam();
+  // 診察中でなく今日の受付済の予約があれば、ヘッダから診察を始められるようにする。
+  const checkedInAppointment = usePatientCheckedInAppointment(
+    patientId,
+    outpatientExam.isSuccess && !outpatientExam.data,
+  );
+  const startExam = useStartOutpatientExam();
   const patient = usePatient(patientId);
   // 会計送信はレセコン連携が有効なときだけ。無効なら診察終了でそのまま一覧へ戻る。
   const receiptStatus = useReceiptStatus();
@@ -202,6 +210,13 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
       practitionerId: encounterAttendingId(exam.encounter),
       coverageSetKey: receptionCoverageSetKey(exam.appointment) || undefined,
     };
+  }
+
+  // 外来一覧の診察開始と同じく 1 クリックで現在時刻を記録する。
+  function handleStartExam() {
+    const appointment = checkedInAppointment.data;
+    if (!appointment) return;
+    startExam.mutate(buildOutpatientEncounter(appointment, patient.data?.data, nowFhirDateTime()));
   }
 
   function handleFinishExam() {
@@ -1201,13 +1216,18 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
               診察終了
             </button>
           )}
+          {!detached && !outpatientExam.data && checkedInAppointment.data && (
+            <button type="button" disabled={startExam.isPending} onClick={handleStartExam}>
+              診察開始
+            </button>
+          )}
           {!detached && (
             <Link to={returnTo} className="button">
               ← 戻る
             </Link>
           )}
         </div>
-        <ErrorBanner error={finishExam.error} />
+        <ErrorBanner error={finishExam.error ?? startExam.error} />
 
         {/* 左右の幅はカスタムプロパティで渡す。狭い画面では CSS 側で縦積みに切り替える
             ため、grid-template-columns 自体はインラインで上書きしない。 */}

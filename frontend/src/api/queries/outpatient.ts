@@ -1,5 +1,5 @@
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { nowFhirDateTime } from "../../lib/dates";
+import { nowFhirDateTime, today } from "../../lib/dates";
 import { buildEncounterUpdateBundle } from "../../fhir/encounterHelpers";
 import { orderDay, referenceId } from "../../fhir/shared";
 import { buildInjectionTaskUpdate, injectionTasksByOrderId, type InjectionTaskStatus } from "../../fhir/injectionTaskHelpers";
@@ -402,6 +402,34 @@ export function usePatientOutpatientExam(patientId: string | undefined) {
     queryKey: ["Encounter", "patient-outpatient-exam", patientId],
     queryFn: () => fetchPatientOutpatientExam(patientId as string),
     enabled: Boolean(patientId),
+  });
+}
+
+async function fetchPatientCheckedInAppointment(patientId: string): Promise<fhir4.Appointment | null> {
+  const params = new URLSearchParams();
+  params.set("patient", `Patient/${patientId}`);
+  params.set("date", today());
+  params.set("status", "checked-in");
+  params.set("_count", "10");
+
+  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
+  // 外来一覧と同じく、検査予約は部門が受け付けるので診察の対象にしない。
+  const appointments = resourcesOfType<fhir4.Appointment>(bundle, "Appointment").filter(
+    (appointment) => !isExamAppointment(appointment),
+  );
+  appointments.sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""));
+  return appointments[0] ?? null;
+}
+
+/**
+ * その患者の今日の受付済(診察前)の予約。カルテのヘッダに「診察開始」を出すのに使う。
+ * 複数あれば開始時刻の早いもの。
+ */
+export function usePatientCheckedInAppointment(patientId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["Appointment", "patient-checked-in", patientId],
+    queryFn: () => fetchPatientCheckedInAppointment(patientId as string),
+    enabled: Boolean(patientId) && enabled,
   });
 }
 
