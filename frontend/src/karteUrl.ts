@@ -158,6 +158,7 @@ export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly Kar
     keys: ["lab", "lab-timeline", "micro", "patho", "rad-report", "physio-report", "endoscopy-report"],
   },
   { label: "看護", keys: ["nursing-profile", "nursing", "nursing-care-plan"] },
+  { label: "その他", keys: ["imaging"] },
 ];
 
 /** そのタブを畳んでいるグループ。畳んでいなければ undefined。 */
