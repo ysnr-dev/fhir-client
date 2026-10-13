@@ -15845,6 +15845,68 @@ td.surgery-calendar__cell--drop-target {
   white-space: nowrap;
 }
 
+/* パターン食の選択。パターンごとにブロック 1 つ(全体がボタン)で、段階を縦に並べる。 */
+.meal-pattern-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.meal-pattern-picker__item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  height: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--text-h);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.meal-pattern-picker__item:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.meal-pattern-picker__name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.meal-pattern-picker__steps {
+  display: grid;
+  grid-template-columns: 2em 1fr auto;
+  column-gap: 8px;
+  row-gap: 4px;
+  font-size: 13px;
+}
+
+/* グリッドの 1 行分。display: contents で 3 つの子をそのまま列に落とす。 */
+.meal-pattern-picker__step {
+  display: contents;
+}
+
+.meal-pattern-picker__index {
+  color: var(--text);
+  text-align: right;
+}
+
+.meal-pattern-picker__reason {
+  margin-left: 6px;
+  color: var(--text);
+}
+
+.meal-pattern-picker__meals {
+  white-space: nowrap;
+  color: var(--text);
+}
+
 /* 食種の表(マスタ一覧・食種選択)。数値列は右寄せ、適応は 1 行に省略。 */
 .meal-diet-table__num {
   text-align: right;
