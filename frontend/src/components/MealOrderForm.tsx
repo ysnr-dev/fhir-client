@@ -215,6 +215,8 @@ export function MealOrderForm({
   }
 
   function handleDietSelect(diet: MealDiet) {
+    // パターン食を選んでいたところで食種を選び直したら、単発の登録に戻る。
+    setPattern(null);
     setValues((prev) => ({
       ...prev,
       diet: { code: diet.item_code, name: diet.name },
@@ -387,9 +389,6 @@ export function MealOrderForm({
               <strong>{pattern.name}</strong>
               <button type="button" onClick={() => setPickingTab("pattern")}>
                 変更
-              </button>
-              <button type="button" onClick={() => setPattern(null)}>
-                解除
               </button>
             </div>
             <MealPatternStepsTable
