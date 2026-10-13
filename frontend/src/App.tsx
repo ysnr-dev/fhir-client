@@ -52,6 +52,7 @@ import { SurgeryCategoryPage } from "./pages/SurgeryCategoryPage";
 import { MealDietPage } from "./pages/MealDietPage";
 import { MealItemPage } from "./pages/MealItemPage";
 import { MealCategoryPage } from "./pages/MealCategoryPage";
+import { MealPatternPage } from "./pages/MealPatternPage";
 import { TransfusionProductPage } from "./pages/TransfusionProductPage";
 import { NursingActPage } from "./pages/NursingActPage";
 import { NursingStandardPlanPage } from "./pages/NursingStandardPlanPage";
@@ -622,6 +623,7 @@ function App() {
           <Route path="/meal-diets" element={<MealDietPage />} />
           <Route path="/meal-items" element={<MealItemPage />} />
           <Route path="/meal-categories" element={<MealCategoryPage />} />
+          <Route path="/meal-patterns" element={<MealPatternPage />} />
           <Route path="/transfusion-products" element={<TransfusionProductPage />} />
           <Route path="/nursing-acts" element={<NursingActPage />} />
           <Route path="/nursing-observations" element={<NursingObservationPage />} />

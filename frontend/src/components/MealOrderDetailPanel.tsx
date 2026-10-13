@@ -29,6 +29,13 @@ export function MealOrderDetailPanel({
           <dt>種別</dt>
           {/* 開始 / 変更 / 再開 / 外泊食止め。登録の文脈から自動で決まる。 */}
           <dd>{summary.kindLabel}</dd>
+          {/* パターン食から展開した段階だけ「術後食上げ 2/5」を出す。 */}
+          {summary.patternLabel && (
+            <>
+              <dt>パターン</dt>
+              <dd>{summary.patternLabel}</dd>
+            </>
+          )}
           <dt>食種</dt>
           <dd>{summary.dietName || "-"}</dd>
           <dt>主食</dt>

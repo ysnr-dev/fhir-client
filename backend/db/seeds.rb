@@ -1255,6 +1255,36 @@ else
   puts "master_meal_items: #{meal_items_csv} not found, skipped"
 end
 
+# パターン食。db/seed_data/meal_patterns.json(1 要素 = 1 パターン、段階は食事オーダーの
+# フォーム値の部分集合 + 食数)から投入する。術後食上げと検査前の食事の 2 件で、段階に
+# 入れている食種・主食は上の seed のコード。pattern_code の P00001 は英字混じりなので
+# 画面の自動採番(数字だけの最大 + 1)とぶつからない(docs/meal-order-design.md §3.5)。
+# 既存行は上書きしない(施設で直した内容を消さない)。
+meal_patterns_json = Rails.root.join("db/seed_data/meal_patterns.json")
+if File.exist?(meal_patterns_json)
+  loaded = 0
+  skipped = 0
+  JSON.parse(File.read(meal_patterns_json)).each do |row|
+    if Master::MealPattern.exists?(pattern_code: row["pattern_code"])
+      skipped += 1
+      next
+    end
+
+    Master::MealPattern.create!(
+      pattern_code: row["pattern_code"],
+      name: row["name"],
+      name_kana: row["name_kana"],
+      steps: row["steps"],
+      display_order: row["display_order"],
+      note: row["note"]
+    )
+    loaded += 1
+  end
+  puts "master_meal_patterns: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_meal_patterns: #{meal_patterns_json} not found, skipped"
+end
+
 # 経過表の水分出納(In/Out)に数える看護観察。db/seed_data/water_balance_items.csv
 # （ヘッダー有り, side,manage_no,name）から施設設定(facility_settings.water_balance)に
 # 入れる。値は MEDIS の観察名称管理番号で、name は読むための列(投入では使わない)。

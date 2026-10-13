@@ -15813,6 +15813,38 @@ td.surgery-calendar__cell--drop-target {
   white-space: pre-wrap;
 }
 
+/* ---- パターン食の段階の表(docs/meal-order-design.md §2.11・§3.5) ---- */
+
+/* フォームの fieldset は横並びなので、表は行いっぱいに広げる。 */
+.meal-pattern-steps__wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-basis: 100%;
+}
+
+.meal-pattern-steps__index {
+  width: 3em;
+  text-align: center;
+}
+
+.prescription-form .meal-pattern-steps__meals {
+  width: 64px;
+  padding: 4px 6px;
+  font-size: 14px;
+}
+
+.meal-pattern-steps__span {
+  white-space: nowrap;
+}
+
+.meal-pattern-steps__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
 /* 食種の表(マスタ一覧・食種選択)。数値列は右寄せ、適応は 1 行に省略。 */
 .meal-diet-table__num {
   text-align: right;

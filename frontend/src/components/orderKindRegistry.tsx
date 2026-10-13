@@ -226,7 +226,10 @@ export const ORDER_KIND_DEFS: { [K in OrderKind]: OrderKindDef<K> } = {
     // 食事は入外区分が常に入院なので見出しに出さず、いつからいつまでかを出す。
     title: (item) => {
       const summary = summarizeMealOrder(item.serviceRequest);
-      return `${summary.startLabel}〜${summary.continuing ? " 継続中" : ` ${summary.endLabel}`}`;
+      return joinParts(
+        summary.patternLabel,
+        `${summary.startLabel}〜${summary.continuing ? " 継続中" : ` ${summary.endLabel}`}`,
+      );
     },
     doable: false,
     Body: ({ item }) => <MealOrderCardBody serviceRequest={item.serviceRequest} />,

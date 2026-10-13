@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { MealDiet } from "../api/masterClient";
-import { useMealCategoryOptions, useMealDietOptions, useMealItemOptions } from "../api/masterQueries";
+import type { MealDiet, MealPattern } from "../api/masterClient";
+import {
+  useMealCategoryOptions,
+  useMealDietOptions,
+  useMealItemOptions,
+  useMealPatterns,
+} from "../api/masterQueries";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
+import {
+  mealPatternStepsOf,
+  planMealPattern,
+  validateMealPatternSteps,
+  type MealPatternSubmission,
+} from "../fhir/mealPatternHelpers";
 import {
   MEAL_FASTING_REASON_OPTIONS,
   MEAL_SKIPPED,
@@ -25,6 +36,8 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { MealDietPickerModal } from "./MealDietPickerModal";
+import { MealPatternPickerModal } from "./MealPatternPickerModal";
+import { MealPatternStepsTable } from "./MealPatternStepsTable";
 import {
   DEFAULT_MEAL_NUTRITION_FORM,
   MEAL_NUTRIENT_COLUMNS,
@@ -49,8 +62,15 @@ interface MealOrderFormProps {
   /**
    * 送信。closingIds は同時に終了させる継続中オーダーの id、resumeIds はこの
    * オーダーの終了後に元の食事へ戻す(再開オーダーを作る)オーダーの id。
+   * pattern はパターン食を選んで登録するときの段階(values の開始・コメント・プロブレムと
+   * 組み合わせて段階ごとのオーダーに展開する。allowPattern のときだけ)。
    */
-  onSubmit: (values: MealOrderFormValues, closingIds: string[], resumeIds: string[]) => void;
+  onSubmit: (
+    values: MealOrderFormValues,
+    closingIds: string[],
+    resumeIds: string[],
+    pattern?: MealPatternSubmission,
+  ) => void;
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
@@ -60,6 +80,10 @@ interface MealOrderFormProps {
   setMode?: boolean;
   /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
   hideSubmit?: boolean;
+  /** 期間(開始・終了)を出さない(パターン食の段階の編集。期間は段階に持たせない)。 */
+  hidePeriod?: boolean;
+  /** パターン食を選べるようにする(カルテからの新規登録だけ。セット・パスの雛形では出さない)。 */
+  allowPattern?: boolean;
 }
 
 /**
@@ -115,9 +139,15 @@ export function MealOrderForm({
   bulkStartDate,
   setMode = false,
   hideSubmit = false,
+  hidePeriod = false,
+  allowPattern = false,
 }: MealOrderFormProps) {
   const [values, setValues] = useState<MealOrderFormValues>(initialValues);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  // 選んだパターン食と、この患者向けに直した段階。選ぶと食種・主食の欄が段階の表に変わる。
+  const [pattern, setPattern] = useState<MealPatternSubmission | null>(null);
+  const [pickingPattern, setPickingPattern] = useState(false);
+  const patterns = useMealPatterns(allowPattern);
   // 食事変更で終了させるオーダー。既定は全て終了(食事は同時に 1 本が原則)。
   const [closingIds, setClosingIds] = useState<string[]>([]);
   // このオーダーの終了後に元の食事へ戻すオーダー。既定は戻す(外泊中の食止めのように
@@ -253,7 +283,7 @@ export function MealOrderForm({
       return "塩分制限は 0 以上の数値で入れてください。";
     }
     if (!setMode && !startDate) return "開始日を入れてください。";
-    if (startDate && values.endDate) {
+    if (!hidePeriod && startDate && values.endDate) {
       const beforeStart =
         values.endDate < startDate ||
         (values.endDate === startDate &&
@@ -278,26 +308,61 @@ export function MealOrderForm({
     };
   }
 
+  /** パターン食のときの検証。段階の規則はマスタの編集と同じ。 */
+  function validatePattern(): string {
+    if (!pattern) return "";
+    const error = validateMealPatternSteps(pattern.steps);
+    if (error) return error;
+    if (!values.startDate) return "開始日を入れてください。";
+    return "";
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validate(values.startDate);
+    const error = pattern ? validatePattern() : validate(values.startDate);
     setValidationError(error);
     if (error) return;
 
     // 終了させないオーダーは戻す対象にもならない(チェックも出ていない)。
-    onSubmit(submitValues(), closingIds, resumeIds.filter((id) => closingIds.includes(id)));
+    onSubmit(
+      submitValues(),
+      closingIds,
+      resumeIds.filter((id) => closingIds.includes(id)),
+      pattern ?? undefined,
+    );
+  }
+
+  function handlePatternSelect(selected: MealPattern) {
+    setPattern({
+      code: selected.pattern_code,
+      name: selected.name,
+      steps: mealPatternStepsOf(selected),
+    });
+    setPickingPattern(false);
   }
 
   // 欠食理由を出すか。食止めの食種か、1 食でも欠食があるときだけ(食事が出るだけの
   // オーダーには付かない項目なので、欄ごと出さない)。
   const needsFastingReason = mealOrderHasFasting(values);
 
+  // パターン食の段階ごとの期間。開始日から食数で刻む。
+  const spans = pattern ? planMealPattern(pattern.steps, values.startDate, values.startTiming) : null;
+  const lastSpan = spans?.[spans.length - 1];
+  // このオーダー(パターンなら最後の段階)の終了。継続なら null。
+  const endPoint: { date: string; timing: MealTiming } | null = pattern
+    ? lastSpan?.endDate
+      ? { date: lastSpan.endDate, timing: lastSpan.endTiming }
+      : null
+    : values.endDate
+      ? { date: values.endDate, timing: values.endTiming }
+      : null;
+
   // 前の食事をいつまでにするか。チェックの説明にそのまま出す。
   const closePoint = previousMealPoint(values.startDate, values.startTiming);
   const closeLabel = `${closePoint.date} ${mealTimingDisplay(closePoint.timing)}まで`;
   // このオーダーが終わったあと、元の食事に戻す点(終了の次の食事)。終了を決めて
   // いなければ戻す先が無いので、チェックごと出さない。
-  const resumePoint = values.endDate ? nextMealPoint(values.endDate, values.endTiming) : null;
+  const resumePoint = endPoint ? nextMealPoint(endPoint.date, endPoint.timing) : null;
   const resumeLabel = resumePoint
     ? `${resumePoint.date} ${mealTimingDisplay(resumePoint.timing)}から`
     : "";
@@ -314,215 +379,262 @@ export function MealOrderForm({
         error={diets.error ?? staples.error ?? sideDishForms.error ?? mealCategories.error}
       />
 
-      <fieldset>
-        <legend>食事内容</legend>
-        {/* 食種。表で選び、選んだ食種を名称 + 主成分量 + 適応で見せる。 */}
-        <div className="meal-diet-field">
-          <span className="meal-diet-field__label">食種</span>
-          <div className="meal-diet-field__body">
+      {/* パターン食を選んだら、食種・主食の欄の代わりに段階の表を出す(段階ごとの食事内容は
+          マスタで決めてあり、ここでは食数と段階の削除だけ直せる)。 */}
+      {pattern && spans && (
+        <fieldset>
+          <legend>パターン食</legend>
+          <div className="meal-pattern-steps__wrap">
             <div className="meal-diet-field__name">
-              {values.diet ? (
-                <>
-                  <strong>{values.diet.name}</strong>
-                  {/* マスタから消えた食種でも、保存済みの選択を失わせない。 */}
-                  {dietItems.length > 0 && !selectedDiet && (
-                    <span className="dose-conversion__badge">無効</span>
-                  )}
-                </>
-              ) : (
-                <span className="meal-diet-field__placeholder">選択してください</span>
-              )}
-              <button type="button" onClick={() => setPickingDiet(true)}>
-                {values.diet ? "変更" : "食種選択"}
+              <strong>{pattern.name}</strong>
+              <button type="button" onClick={() => setPattern(null)}>
+                解除
               </button>
             </div>
-            {/* 主成分量(1 日あたりの標準値)と適応。食種の性質なのでマスタから引く
-                (オーダーには写さない)。値の無い食種では帯ごと出さない。 */}
-            {selectedDiet && mealDietHasNutrients(selectedDiet) && (
-              <div className="meal-diet-field__nutrients">
-                <span>
-                  {MEAL_NUTRIENT_COLUMNS.map((c) => (
-                    <span key={c.key} className="meal-diet-field__nutrient">
-                      {c.label} {formatMealNutrient(selectedDiet[c.key]) || "—"}
-                      {formatMealNutrient(selectedDiet[c.key]) && c.unit}
+            <MealPatternStepsTable
+              steps={pattern.steps}
+              spans={spans}
+              onChange={(steps) => setPattern({ ...pattern, steps })}
+            />
+          </div>
+          {!setMode && (
+            <label>
+              対象プロブレム
+              <ProblemSelect
+                value={values.problem}
+                options={problemOptions}
+                onChange={(problem) => update("problem", problem)}
+              />
+            </label>
+          )}
+        </fieldset>
+      )}
+
+      {!pattern && (
+        <>
+          <fieldset>
+            <legend>食事内容</legend>
+            {/* 食種。表で選び、選んだ食種を名称 + 主成分量 + 適応で見せる。 */}
+            <div className="meal-diet-field">
+              <span className="meal-diet-field__label">食種</span>
+              <div className="meal-diet-field__body">
+                <div className="meal-diet-field__name">
+                  {values.diet ? (
+                    <>
+                      <strong>{values.diet.name}</strong>
+                      {/* マスタから消えた食種でも、保存済みの選択を失わせない。 */}
+                      {dietItems.length > 0 && !selectedDiet && (
+                        <span className="dose-conversion__badge">無効</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="meal-diet-field__placeholder">選択してください</span>
+                  )}
+                  <button type="button" onClick={() => setPickingDiet(true)}>
+                    {values.diet ? "変更" : "食種選択"}
+                  </button>
+                  {allowPattern && (
+                    <button type="button" onClick={() => setPickingPattern(true)}>
+                      パターン
+                    </button>
+                  )}
+                </div>
+                {/* 主成分量(1 日あたりの標準値)と適応。食種の性質なのでマスタから引く
+                    (オーダーには写さない)。値の無い食種では帯ごと出さない。 */}
+                {selectedDiet && mealDietHasNutrients(selectedDiet) && (
+                  <div className="meal-diet-field__nutrients">
+                    <span>
+                      {MEAL_NUTRIENT_COLUMNS.map((c) => (
+                        <span key={c.key} className="meal-diet-field__nutrient">
+                          {c.label} {formatMealNutrient(selectedDiet[c.key]) || "—"}
+                          {formatMealNutrient(selectedDiet[c.key]) && c.unit}
+                        </span>
+                      ))}
                     </span>
-                  ))}
-                </span>
-                {selectedDiet.indication && (
-                  <span className="meal-diet-field__indication">
-                    適応: {selectedDiet.indication}
-                  </span>
+                    {selectedDiet.indication && (
+                      <span className="meal-diet-field__indication">
+                        適応: {selectedDiet.indication}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-        {/* 副食形態(きざみ・ミキサー など)。主食と違い朝昼夕で変えることが無いので
-            セレクト 1 つで全食に効く。食止めでは食事が出ないので無効にする。
-            経管・経口食と調乳食は副食を持たないので欄ごと出さない(参考仕様 §1 の分類)。 */}
-        {isOralDiet && (
-          <label>
-            副食形態
-            <select
-              value={values.sideDishForm?.code ?? ""}
-              onChange={(e) => handleSideDishFormChange(e.target.value)}
-              disabled={values.dietIsFasting}
-            >
-              <option value="">(指定なし)</option>
-              {sideDishFormItems.map((item) => (
-                <option key={item.item_code} value={item.item_code}>
-                  {item.name}
-                </option>
-              ))}
-              {/* マスタから消えた副食形態でも、保存済みの選択を失わせない。 */}
-              {values.sideDishForm &&
-                !sideDishFormItems.some((i) => i.item_code === values.sideDishForm?.code) && (
-                  <option value={values.sideDishForm.code}>
-                    {values.sideDishForm.name} (無効)
-                  </option>
-                )}
-            </select>
-          </label>
-        )}
-        {/* 塩分制限(g/日)。食種名に含意されないことがあるので独立した欄で持つ。
-            参考仕様は経管・経口食(§3)にも挙げているので出し、調乳食(§4)では出さない。 */}
-        {nutritionForm !== "infant_formula" && (
-          <label>
-            塩分制限(g/日)
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={values.saltLimit}
-              onChange={(e) => update("saltLimit", e.target.value)}
-              disabled={values.dietIsFasting}
-              placeholder="制限なしなら空欄"
-            />
-          </label>
-        )}
-        {/* 欠食理由。給食部門のはい膳表に出す前提の項目で、なぜ食事を出さないかを
-            食種・主食とは別に持つ(参考仕様の欠食理由)。外出泊による食止めは
-            入退院側の連動が「外泊」を自動で入れるので、ここで選ぶのは手で出す
-            食止め・欠食のとき。 */}
-        {needsFastingReason && (
-          <label>
-            欠食理由
-            <select
-              value={values.fastingReason}
-              onChange={(e) => update("fastingReason", e.target.value as MealFastingReason)}
-            >
-              <option value="">(入力せず)</option>
-              {MEAL_FASTING_REASON_OPTIONS.map((reason) => (
-                <option key={reason.code} value={reason.code}>
-                  {reason.display}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {!setMode && (
-          <label>
-            対象プロブレム
-            <ProblemSelect
-              value={values.problem}
-              options={problemOptions}
-              onChange={(problem) => update("problem", problem)}
-            />
-          </label>
-        )}
-      </fieldset>
-
-      {/* 主食は朝・昼・夕で変わることがある(米飯 → 全粥、昼だけ検査で欠食 など)ので
-          常に 3 食ぶん並べる。SS-MIX2 の ODS-2(サービス時間帯)ごとの指定にあたる。
-          食止めの食種は 1 日を通して食事が出ないため、まとめて無効にする。
-
-          経管・経口食と調乳食は主食を持たない(参考仕様 §1 の分類)。欄は残して
-          「欠食」だけ選べるようにする —— その食事を出さない指示はどの給与形態でもあるため。 */}
-      <fieldset>
-        <legend>{isOralDiet ? "主食" : "食事"}</legend>
-        {MEAL_TIMING_OPTIONS.map((timing) => {
-          const choice = values.staples[timing.code];
-          const missing =
-            choice && choice !== MEAL_SKIPPED && !stapleItems.some((i) => i.item_code === choice.code)
-              ? choice
-              : null;
-          return (
-            <label key={timing.code}>
-              {timing.display}
-              <select
-                value={stapleValue(choice)}
-                onChange={(e) => handleStapleChange(timing.code, e.target.value)}
-                disabled={values.dietIsFasting}
-              >
-                <option value="">(指定なし)</option>
-                {isOralDiet &&
-                  stapleItems.map((item) => (
+            </div>
+            {/* 副食形態(きざみ・ミキサー など)。主食と違い朝昼夕で変えることが無いので
+                セレクト 1 つで全食に効く。食止めでは食事が出ないので無効にする。
+                経管・経口食と調乳食は副食を持たないので欄ごと出さない(参考仕様 §1 の分類)。 */}
+            {isOralDiet && (
+              <label>
+                副食形態
+                <select
+                  value={values.sideDishForm?.code ?? ""}
+                  onChange={(e) => handleSideDishFormChange(e.target.value)}
+                  disabled={values.dietIsFasting}
+                >
+                  <option value="">(指定なし)</option>
+                  {sideDishFormItems.map((item) => (
                     <option key={item.item_code} value={item.item_code}>
                       {item.name}
                     </option>
                   ))}
-                {/* マスタから消えた主食でも、保存済みの選択を失わせない。 */}
-                {missing && (
-                  <option value={missing.code}>{missing.name} (無効)</option>
-                )}
-                {/* 欠食は主食ではなく「その食事は出さない」指示。並びを分けたいので末尾。 */}
-                <option value={MEAL_SKIPPED}>欠食</option>
-              </select>
-            </label>
-          );
-        })}
-      </fieldset>
+                  {/* マスタから消えた副食形態でも、保存済みの選択を失わせない。 */}
+                  {values.sideDishForm &&
+                    !sideDishFormItems.some((i) => i.item_code === values.sideDishForm?.code) && (
+                      <option value={values.sideDishForm.code}>
+                        {values.sideDishForm.name} (無効)
+                      </option>
+                    )}
+                </select>
+              </label>
+            )}
+            {/* 塩分制限(g/日)。食種名に含意されないことがあるので独立した欄で持つ。
+                参考仕様は経管・経口食(§3)にも挙げているので出し、調乳食(§4)では出さない。 */}
+            {nutritionForm !== "infant_formula" && (
+              <label>
+                塩分制限(g/日)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={values.saltLimit}
+                  onChange={(e) => update("saltLimit", e.target.value)}
+                  disabled={values.dietIsFasting}
+                  placeholder="制限なしなら空欄"
+                />
+              </label>
+            )}
+            {/* 欠食理由。給食部門のはい膳表に出す前提の項目で、なぜ食事を出さないかを
+                食種・主食とは別に持つ(参考仕様の欠食理由)。外出泊による食止めは
+                入退院側の連動が「外泊」を自動で入れるので、ここで選ぶのは手で出す
+                食止め・欠食のとき。 */}
+            {needsFastingReason && (
+              <label>
+                欠食理由
+                <select
+                  value={values.fastingReason}
+                  onChange={(e) => update("fastingReason", e.target.value as MealFastingReason)}
+                >
+                  <option value="">(入力せず)</option>
+                  {MEAL_FASTING_REASON_OPTIONS.map((reason) => (
+                    <option key={reason.code} value={reason.code}>
+                      {reason.display}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {!setMode && (
+              <label>
+                対象プロブレム
+                <ProblemSelect
+                  value={values.problem}
+                  options={problemOptions}
+                  onChange={(problem) => update("problem", problem)}
+                />
+              </label>
+            )}
+          </fieldset>
+
+          {/* 主食は朝・昼・夕で変わることがある(米飯 → 全粥、昼だけ検査で欠食 など)ので
+              常に 3 食ぶん並べる。SS-MIX2 の ODS-2(サービス時間帯)ごとの指定にあたる。
+              食止めの食種は 1 日を通して食事が出ないため、まとめて無効にする。
+
+              経管・経口食と調乳食は主食を持たない(参考仕様 §1 の分類)。欄は残して
+              「欠食」だけ選べるようにする —— その食事を出さない指示はどの給与形態でもあるため。 */}
+          <fieldset>
+            <legend>{isOralDiet ? "主食" : "食事"}</legend>
+            {MEAL_TIMING_OPTIONS.map((timing) => {
+              const choice = values.staples[timing.code];
+              const missing =
+                choice && choice !== MEAL_SKIPPED && !stapleItems.some((i) => i.item_code === choice.code)
+                  ? choice
+                  : null;
+              return (
+                <label key={timing.code}>
+                  {timing.display}
+                  <select
+                    value={stapleValue(choice)}
+                    onChange={(e) => handleStapleChange(timing.code, e.target.value)}
+                    disabled={values.dietIsFasting}
+                  >
+                    <option value="">(指定なし)</option>
+                    {isOralDiet &&
+                      stapleItems.map((item) => (
+                        <option key={item.item_code} value={item.item_code}>
+                          {item.name}
+                        </option>
+                      ))}
+                    {/* マスタから消えた主食でも、保存済みの選択を失わせない。 */}
+                    {missing && (
+                      <option value={missing.code}>{missing.name} (無効)</option>
+                    )}
+                    {/* 欠食は主食ではなく「その食事は出さない」指示。並びを分けたいので末尾。 */}
+                    <option value={MEAL_SKIPPED}>欠食</option>
+                  </select>
+                </label>
+              );
+            })}
+          </fieldset>
+        </>
+      )}
 
       {/* 食事は「何日の何食から」始まって「何日の何食まで」続く。終了を入れなければ
-          継続で、次の食事オーダーを出したときに終わる。 */}
-      <fieldset>
-        <legend>期間</legend>
-        <label>
-          開始日
-          <input
-            type="date"
-            value={values.startDate}
-            onChange={(e) => update("startDate", e.target.value)}
-            required
-          />
-        </label>
-        <label>
-          開始
-          <select
-            value={values.startTiming}
-            onChange={(e) => update("startTiming", e.target.value as MealTiming)}
-          >
-            {MEAL_TIMING_OPTIONS.map((t) => (
-              <option key={t.code} value={t.code}>
-                {t.display}食から
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          終了日
-          <input
-            type="date"
-            value={values.endDate}
-            onChange={(e) => update("endDate", e.target.value)}
-            placeholder="空欄なら継続"
-          />
-        </label>
-        <label>
-          終了
-          <select
-            value={values.endTiming}
-            onChange={(e) => update("endTiming", e.target.value as MealTiming)}
-            disabled={!values.endDate}
-          >
-            {MEAL_TIMING_OPTIONS.map((t) => (
-              <option key={t.code} value={t.code}>
-                {t.display}食まで
-              </option>
-            ))}
-          </select>
-        </label>
-      </fieldset>
+          継続で、次の食事オーダーを出したときに終わる。パターン食では終了は段階の食数で
+          決まるので、開始だけ入れる。 */}
+      {!hidePeriod && (
+        <fieldset>
+          <legend>期間</legend>
+          <label>
+            開始日
+            <input
+              type="date"
+              value={values.startDate}
+              onChange={(e) => update("startDate", e.target.value)}
+              required
+            />
+          </label>
+          <label>
+            開始
+            <select
+              value={values.startTiming}
+              onChange={(e) => update("startTiming", e.target.value as MealTiming)}
+            >
+              {MEAL_TIMING_OPTIONS.map((t) => (
+                <option key={t.code} value={t.code}>
+                  {t.display}食から
+                </option>
+              ))}
+            </select>
+          </label>
+          {!pattern && (
+            <>
+              <label>
+                終了日
+                <input
+                  type="date"
+                  value={values.endDate}
+                  onChange={(e) => update("endDate", e.target.value)}
+                  placeholder="空欄なら継続"
+                />
+              </label>
+              <label>
+                終了
+                <select
+                  value={values.endTiming}
+                  onChange={(e) => update("endTiming", e.target.value as MealTiming)}
+                  disabled={!values.endDate}
+                >
+                  {MEAL_TIMING_OPTIONS.map((t) => (
+                    <option key={t.code} value={t.code}>
+                      {t.display}食まで
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+        </fieldset>
+      )}
 
       {/* 食事変更。新しい食事を出すと同時に、いま出ている食事を直前の食事で
           終える(2 本が並んで出続けるのを防ぐ)。 */}
@@ -536,7 +648,7 @@ export function MealOrderForm({
             // 終了を決めたオーダー(外泊中の食止め など)は、終わったあとに元の食事へ
             // 戻さないと食事が無い日が続いてしまう。戻す余地があるときだけ出す。
             const canResume =
-              closing && mealOrderResumable(sr, values.endDate, values.endTiming);
+              closing && endPoint !== null && mealOrderResumable(sr, endPoint.date, endPoint.timing);
             return (
               <div key={id} className="meal-active-order-group">
                 <label className="meal-active-order">
@@ -593,6 +705,15 @@ export function MealOrderForm({
             {submitting ? "保存中..." : submitLabel}
           </button>
         </div>
+      )}
+
+      {pickingPattern && (
+        <MealPatternPickerModal
+          patterns={patterns.data?.items ?? []}
+          error={patterns.error}
+          onSelect={handlePatternSelect}
+          onClose={() => setPickingPattern(false)}
+        />
       )}
 
       {pickingDiet && (

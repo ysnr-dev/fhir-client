@@ -91,6 +91,7 @@ ServiceRequest (category: order-type|meal)
 | `StructureDefinition/meal-fasting-reason` | 欠食理由(`valueCode`)。無ければ「入力せず」(§2.9) | 対応なし(参考仕様 §5 から) |
 | `StructureDefinition/meal-salt-limit` | 塩分制限(`valueQuantity`、UCUM の `g`)(§2.10) | 対応なし(参考仕様 §2 から) |
 | `StructureDefinition/meal-order-end` | 終了日時(`valueDateTime`)。無ければ継続中 | TQ1-8 |
+| `StructureDefinition/meal-pattern` | パターン食から展開したオーダーのパターン(`code` / `name`)と段階(`step` / `count`)。表示のためだけ(§2.11) | 対応なし |
 
 再利用: `CodeSystem/prescription-setting`、依頼科(`order-department`)・病棟(`order-ward`)の
 拡張、`reasonReference`(対象プロブレム)。**`CodeSystem/task-code` は作っていない**(進捗が無い)。
@@ -205,11 +206,13 @@ FHIR 上でもはっきり別物になる。
 
 ［実装］継続中の判定は 2 段構え。上流には終了拡張を絞る術が無いので、
 `category=order-type|meal & status=active` で候補を引き、**その日に出ているか**を
-クライアント側で評価する(`useActiveMealOrders` → `isMealOrderRunningOn`)。
+クライアント側で評価していたが、上流に `order-period` 検索(開始と終了の拡張を期間として索引)が
+入ってからは `useActiveMealOrders` が「新しい食事の開始日に出ているオーダー」を上流で絞る。
 判定は終了だけでなく**開始日も見る**。暦の空いている日(まだ食事が始まる前の日)から
 登録できるようにしたので、開始日だけで絞ると「まだ始まっていないオーダー」を終了候補に
 出してしまい、開始より前の終了を立ててしまうため。月の絞り込み(§5.1)は逆に
-「その月にかかるか」を見たいので、終了だけを見る `mealOrderEndsOnOrAfter` を使う。
+「その月にかかるか」を見たいので、月初〜月末の期間で引く。暦の 1 マスの担当は
+`mealOrderAt` / `mealDayEntries` が決める。
 
 ［実装］編集パネルにも暦から開いたときだけ同じチェックが出る(§5.1)。
 
@@ -435,12 +438,51 @@ S(補助食)で、**副食をどう調理するか(きざみ・ミキサー)を�
 
 ---
 
+### 2.11 パターン食(段階的に変わる食事の一括登録)
+
+実装日: 2026-10-13。
+
+［事実］術後の食上げ(流動食 → 三分粥 → 五分粥 → 全粥 → 常食)や検査前の食事(低残渣食 →
+食止め → 元の食事)は、数日かけて段階的に変わる 1 つの指示だが、食事オーダーは
+「開始した食事から次の指示まで」の 1 区間しか表せない(§2.2)。暦から 1 段階ずつ登録する
+しかなかった。
+
+［提案］**施設のパターン(§3.5)を選ぶと、段階ごとの食事オーダーを 1 つの transaction で
+まとめて立てる**。FHIR の形は変えない:
+
+- 段階 1 つ = 食事オーダー 1 本。開始・終了は §2.2 と同じ `occurrenceDateTime` と `meal-order-end`
+- 段階の長さは**食数**(朝昼夕の数)で持つ。段階 i の開始 = 前の段階の終了の次の食事
+  (`nextMealPoint`)、終了 = 開始から (食数 − 1) 回進めた食事(`planMealPattern`)。
+  開始が昼や夕でも食数どおりにずれていく(「術後 1 日目は 3 食」を日付ではなく食数で数える)
+- **最後の段階だけ食数を空にでき**、そのときは終了を持たない(次の指示まで継続)。途中で空だと
+  次の段階の開始が決まらないので、マスタでもオーダー画面でも弾く(`validateMealPatternSteps`)
+- いま出ている食事の終了(§2.6)は**最初の段階の開始の直前**、再開オーダー(§2.7)は
+  **最後の段階に終了があるときだけ**、その次の食事から。単発の登録と同じ規則を段階の両端に当てる
+- 種別(`meal-order-link`)は単発と同じ。段階 1 は「変更 / 開始」、段階 2 以降は `change`
+  (source は持たない。transaction 内の `urn:uuid:` を拡張の参照に入れても上流が書き換える
+  保証が無いため)
+- コメントと対象プロブレムは全段階に共通。段階にコメントがあれば改行で続ける
+
+［提案］展開後は**段階ごとに独立した食事オーダー**で、パターンに束ねて扱う操作は無い
+(段階 1 つを暦から直す・消すのは単発と同じ)。ただし「どのパターンの何段階目か」が読めないと
+暦もカードも意味が分からないので、ローカル拡張 `meal-pattern`(`code` / `name` / `step` /
+`count`)を焼き付け、暦のバッジ・カードの見出し・詳細に「術後食上げ 2/5」と出す。
+名称を写すのはマスタが消えても表示できるようにするため。編集(`buildMealOrderUpdateBundle`)と
+連動の書き換え(`buildMealOrderRewriteEntry`)は拡張を引き継ぎ、再開オーダーと DO には写さない
+(別の指示なので)。
+
+［実装］展開は `fhir/mealPatternHelpers.ts`(`buildMealPatternBundle`)。`mealOrderHelpers` から
+import する一方向で、拡張の読み書き(`mealPattern` / `mealPatternLabel`)は `mealOrderHelpers` 側。
+
+---
+
 ## 3. マスタ
 
 ```text
 master_meal_diets      -- 食種(食止めを含む)。種別・食止め・主成分量・適応を持つ
 master_meal_items      -- 主食(kind=staple)・副食形態(kind=side_dish_form)。1 テーブル
 master_meal_categories -- 食種の種別(一般食・特別食 など)。1 段の分類
+master_meal_patterns   -- パターン食(§3.5)。名称 + jsonb の段階
 ```
 
 ［提案］**食種は独立したテーブル、主食・副食形態は 1 テーブル**。当初(2026-08-28)は
@@ -684,6 +726,32 @@ CodeSystem の URI で区別済みのため)。ところが食止め(`is_fasting
 
 ---
 
+### 3.5 パターン食マスタ
+
+実装日: 2026-10-13(§2.11)。
+
+［提案］`master_meal_patterns` は **親 1 行 + jsonb の段階(`steps`)**。スケールセット
+(`master_insulin_scale_sets`)と同じ形で、段階が食種・主食・副食形態・塩分制限・欠食理由・食数の
+入れ子なので子テーブルより jsonb が素直。段階 1 要素はオーダー登録フォームの値
+(`MealOrderFormValues`)から期間と対象プロブレムを除いたもの + `meals`(食数。null は継続)で、
+**オーダーセットの `values` と同じく backend は中身を解釈せず形だけ見る**(`Master::MealPattern`
+が知らないキーを落とし、1 段階以上 / 食種あり / 食数は 1 以上の整数、空は最後だけ、を検証)。
+`record_params` は入れ子の JSON なので列名 permit を使わず、`steps` を `to_unsafe_h` で受ける
+(`OrderSetsController` と同じ)。
+
+- 列: `pattern_code`(一意。食種と同じ「数字だけの最大 + 1 を 6 桁ゼロ詰め」の自動採番)/ `name` /
+  `name_kana` / `steps` / `display_order` / `note` / `search_*`
+- 画面(`/meal-patterns`)は一覧 + 編集モーダル。段階の編集は**食事オーダーのフォーム(`MealOrderForm`)を
+  `setMode` + `hidePeriod` で再利用**し、食数だけフォームの外に置く。食種選択・給与形態の正規化・
+  主食・副食形態がそのまま使える。編集モーダルの本体は `<form>` にしない(段階モーダルの中に
+  `MealOrderForm` の `<form>` があり、`Modal` は非ポータルなので入れ子になるため)
+- seed(`db/seed_data/meal_patterns.json`): `P00001 術後食上げ`(流動食 3 食 → 三分粥 3 食 →
+  五分粥 3 食 → 全粥 3 食 → 一般食1800kcal 継続)と `P00002 大腸検査食`(低残渣食 3 食 →
+  食止め 1 食、欠食理由 = 検査絶食。最後に食数があるので再開オーダーの例になる)。
+  `P` 付きのコードは自動採番の計算から外れる(`NPO` と同じ)
+
+---
+
 ## 4. 上流 fhir-server の追加
 
 **不要**。使うのは `subject` / `category` / `status` / `_id` / `_sort=-authoredon` だけで、
@@ -708,6 +776,7 @@ model・テーブル・search_definition・extraction まで要る。ServiceRequ
 | 食種マスタ | `/meal-diets` | `MealItemPage` に種別・食止め・主成分量・適応を足したもの(§3.3) |
 | 食事オーダー項目マスタ(主食・副食形態) | `/meal-items` | `TreatmentItemPage`(セット・データセット・レセ電算・予約を削除) |
 | 食種 種別 | `/meal-categories` | `PhysioExamTypePage`(略称の欄だけ落とした同じ作り) |
+| パターン食 | `/meal-patterns` | `InsulinScaleSetPage`(一覧 + 編集モーダル)。段階の編集は `MealOrderForm` を再利用(§3.5) |
 | オーダー入力 | カルテ右ペイン「食事」 | 新規(`MealOrderForm`。伝票レイアウトが無いので 1 枚のフォーム) |
 | 食事カレンダー | カルテ左ペイン「食事」タブ | 新規(`KarteMealTab`) |
 
@@ -766,6 +835,9 @@ model・テーブル・search_definition・extraction まで要る。ServiceRequ
 
 オーダーフォームの構成: 食種(必須)・対象プロブレム / 主食(朝・昼・夕、任意。欠食もここ) /
 開始日・開始タイミング・終了日・終了タイミング / いま出ている食事(§2.6)/ コメント。
+カルテからの新規登録(`allowPattern`)では食種の横に「パターン」ボタンがあり、パターン食(§2.11)を
+選ぶと食種・主食の欄が段階の表(食数と期間、削除)に変わり、終了の欄は消える(最後の段階の食数で決まる)。
+「解除」で単発の登録に戻る。セット・パスの雛形(`setMode`)と編集ではこのボタンを出さない。
 
 ［実装］主食は**常に朝・昼・夕の 3 行**を出す。「共通で 1 つ」と「食事ごと」を切り替える
 UI にはしていない(切り替えの状態を持たずに済み、行が固定なので読み間違えない)。
@@ -784,13 +856,13 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
 
 | 層 | 追加物 |
 |---|---|
-| migration | `20260828200000_create_master_meal_items`、`20260831140000_create_master_meal_diets`(§3・§6.5) |
-| seed | `db/seed_data/meal_categories.csv`(4)/ `meal_diets.csv`(34)/ `meal_items.csv`(21)と `db/seeds.rb` の投入(§3.4) |
-| モデル | `Master::MealDiet` / `Master::MealItem` |
+| migration | `20260828200000_create_master_meal_items`、`20260831140000_create_master_meal_diets`(§3・§6.5)、`20261013100000_create_master_meal_patterns`(§3.5) |
+| seed | `db/seed_data/meal_categories.csv`(4)/ `meal_diets.csv`(34)/ `meal_items.csv`(21)/ `meal_patterns.json`(2)と `db/seeds.rb` の投入(§3.4・§3.5) |
+| モデル | `Master::MealDiet` / `Master::MealItem` / `Master::MealPattern` |
 | API | `master/meal_diets`(index の category_code / active / name、`per` 上限 500、自動採番)/ `master/meal_items`(index の kind / active / name、自動採番) |
-| spec | `spec/requests/master/meal_diets_spec.rb`(14 examples)/ `meal_items_spec.rb`(12 examples) |
-| FHIR 変換 | `fhir/mealOrderHelpers.ts` 1 本のみ(Task・実施記録のヘルパーは無い) |
-| 画面 | `pages/MealDietPage.tsx` / `pages/MealItemPage.tsx` / `components/MealDietPickerModal.tsx` / `components/MealOrderForm.tsx` / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` |
+| spec | `spec/requests/master/meal_diets_spec.rb`(14 examples)/ `meal_items_spec.rb`(12 examples)/ `meal_patterns_spec.rb`(5 examples) |
+| FHIR 変換 | `fhir/mealOrderHelpers.ts`(Task・実施記録のヘルパーは無い)、パターン食の展開は `fhir/mealPatternHelpers.ts`(§2.11) |
+| 画面 | `pages/MealDietPage.tsx` / `pages/MealItemPage.tsx` / `pages/MealPatternPage.tsx` / `components/MealDietPickerModal.tsx` / `MealPatternPickerModal.tsx` / `MealPatternStepsTable.tsx` / `MealPatternStepModal.tsx` / `components/MealOrderForm.tsx` / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` |
 | 連動 | `fhir/mealEncounterSync.ts` / `hooks/useMealSyncContext.ts` / `components/MealSyncSummary.tsx`、`DischargeModal` / `DischargePlanModal` / `LeaveModal` / `LeaveReturnModal` / `InpatientPlanTables` の各操作 |
 | 施設設定 | 施設設定の `meal_schedule`(`facility_settings.settings` jsonb の中、`FacilitySettingsPage` の「食事の提供時刻」) |
 | queries | `useMealOrderDetail` / `useActiveMealOrders` / `useMealOrderMonth` / `useUpdateMealOrder` / `useDeleteMealOrder`、`OCCURRENCE_ORDER_TYPES` に `meal` を追加 |
@@ -1027,3 +1099,8 @@ FHIR は無変更。主成分量はオーダーに写していない(§3.3)。
    作るなら、§2.8 と同じ形(`mealEncounterSync` にあたる純関数 + `MealSyncSummary`)に
    乗せられ、理由コードもそこで自動で入る。参考仕様が挙げる「スケジュール食を選んだときは
    欠食理由が自動で入る」も、スケジュール食(§7 の別項ではなく未着手機能)を作るときに同じ形になる
+11. **パターン食(§2.11)の残り**: オーダーセット・クリニカルパスの雛形にパターンを持たせるのは
+   未対応(どちらも単発のフォーム値を保存する作り。持たせるなら雛形の `values` に段階を足し、適用時に
+   `buildMealPatternBundle` を通す)。オーダー画面では段階の食数と削除だけ直せ、食種・主食を直すときは
+   マスタを直すか単発で登録する。展開後は独立したオーダーなので、パターン単位で取り消す操作は無い
+   (暦から 1 件ずつ)。段階の並べ替えはマスタ画面に無い(消して足す)。

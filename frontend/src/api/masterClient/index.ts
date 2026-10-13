@@ -23,6 +23,7 @@ export * from "./wardMap";
 export * from "./patho";
 export * from "./clinicalNoteTitle";
 export * from "./insulinScaleSet";
+export * from "./mealPattern";
 export * from "./nursingCare";
 export * from "./bulletin";
 export * from "./nursing";

@@ -250,6 +250,8 @@ Rails.application.routes.draw do
     resources :meal_items, only: %i[index show create update destroy]
     # 食種の種別(一般食・特別食 など)。主食には付けない 1 段の分類。
     resources :meal_categories, only: %i[index show create update destroy]
+    # パターン食(術後の食上げ など、段階的に変わる食事の雛形。段階は jsonb)。
+    resources :meal_patterns, only: %i[index show create update destroy]
     # 輸血製剤マスタ。食事と同じ単純編集型で、配布マスタの取込は持たない
     # (日赤の製品に配布形式の標準マスタが無いため。docs/transfusion-order-design.md §3)。
     resources :transfusion_products, only: %i[index show create update destroy]

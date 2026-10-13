@@ -1,0 +1,106 @@
+[
+  {
+    "pattern_code": "P00001",
+    "name": "術後食上げ",
+    "name_kana": "ジュツゴショクアゲ",
+    "display_order": 10,
+    "note": "流動食から 3 食ずつ上げて一般食に戻す例。段階・食数は施設の運用に合わせて直す",
+    "steps": [
+      {
+        "meals": 3,
+        "diet": { "code": "A00131", "name": "流動食600kcal" },
+        "dietIsFasting": false,
+        "staples": { "breakfast": null, "lunch": null, "dinner": null },
+        "sideDishForm": null,
+        "saltLimit": "",
+        "fastingReason": "",
+        "comment": ""
+      },
+      {
+        "meals": 3,
+        "diet": { "code": "A00125", "name": "三分粥食800kcal" },
+        "dietIsFasting": false,
+        "staples": {
+          "breakfast": { "code": "105AN", "name": "三分粥" },
+          "lunch": { "code": "105AN", "name": "三分粥" },
+          "dinner": { "code": "105AN", "name": "三分粥" }
+        },
+        "sideDishForm": null,
+        "saltLimit": "",
+        "fastingReason": "",
+        "comment": ""
+      },
+      {
+        "meals": 3,
+        "diet": { "code": "A00123", "name": "五分粥食1000kcal" },
+        "dietIsFasting": false,
+        "staples": {
+          "breakfast": { "code": "105AM", "name": "五分粥" },
+          "lunch": { "code": "105AM", "name": "五分粥" },
+          "dinner": { "code": "105AM", "name": "五分粥" }
+        },
+        "sideDishForm": null,
+        "saltLimit": "",
+        "fastingReason": "",
+        "comment": ""
+      },
+      {
+        "meals": 3,
+        "diet": { "code": "A00111", "name": "全粥食1400kcal" },
+        "dietIsFasting": false,
+        "staples": {
+          "breakfast": { "code": "105AK", "name": "全粥" },
+          "lunch": { "code": "105AK", "name": "全粥" },
+          "dinner": { "code": "105AK", "name": "全粥" }
+        },
+        "sideDishForm": null,
+        "saltLimit": "",
+        "fastingReason": "",
+        "comment": ""
+      },
+      {
+        "meals": null,
+        "diet": { "code": "A00103", "name": "一般食1800kcal" },
+        "dietIsFasting": false,
+        "staples": {
+          "breakfast": { "code": "105AB", "name": "米飯150g" },
+          "lunch": { "code": "105AB", "name": "米飯150g" },
+          "dinner": { "code": "105AB", "name": "米飯150g" }
+        },
+        "sideDishForm": null,
+        "saltLimit": "",
+        "fastingReason": "",
+        "comment": ""
+      }
+    ]
+  },
+  {
+    "pattern_code": "P00002",
+    "name": "大腸検査食",
+    "name_kana": "ダイチョウケンサショク",
+    "display_order": 20,
+    "note": "検査前日は低残渣食、当日朝は食止め。最後に食数があるので、終わると元の食事に戻る",
+    "steps": [
+      {
+        "meals": 3,
+        "diet": { "code": "A00243", "name": "低残渣食1400kcal" },
+        "dietIsFasting": false,
+        "staples": { "breakfast": null, "lunch": null, "dinner": null },
+        "sideDishForm": null,
+        "saltLimit": "",
+        "fastingReason": "",
+        "comment": ""
+      },
+      {
+        "meals": 1,
+        "diet": { "code": "NPO", "name": "食止め" },
+        "dietIsFasting": true,
+        "staples": { "breakfast": null, "lunch": null, "dinner": null },
+        "sideDishForm": null,
+        "saltLimit": "",
+        "fastingReason": "exam",
+        "comment": ""
+      }
+    ]
+  }
+]

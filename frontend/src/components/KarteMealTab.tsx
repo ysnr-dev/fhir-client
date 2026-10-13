@@ -10,6 +10,7 @@ import {
   mealOrderEnd,
   mealOrderEndReasonLabel,
   mealOrderKindLabel,
+  mealPatternLabel,
   mealOrderLink,
   mealSideDishForm,
   mealStapleSummary,
@@ -280,7 +281,8 @@ function MealEntryBlock({ entry, date }: { entry: MealDayEntry; date: string }) 
     <div className={`meal-calendar__entry${startsToday ? " meal-calendar__entry--changed" : ""}`}>
       {startsToday && (
         <span className={`meal-calendar__changed-badge meal-calendar__changed-badge--${kind}`}>
-          {mealOrderKindLabel(order)}
+          {/* パターン食から展開した段階は、種別の代わりにパターン名と段階を出す。 */}
+          {mealPatternLabel(order) || mealOrderKindLabel(order)}
         </span>
       )}
       {dischargeStop && (

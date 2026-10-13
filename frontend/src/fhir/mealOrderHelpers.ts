@@ -120,7 +120,23 @@ const MEAL_ORDER_LINK_EXT_URL = "http://fhir-client.local/StructureDefinition/me
 const MEAL_ORDER_END_REASON_EXT_URL =
   "http://fhir-client.local/StructureDefinition/meal-order-end-reason";
 
+/**
+ * パターン食(術後の食上げ など)から展開したオーダーであることと、その段階。
+ *   code   パターン食マスタのコード
+ *   name   パターン名(マスタが消えても表示できるよう写す)
+ *   step   段階(1 始まり)/ count 段階数
+ * 展開後は段階ごとに独立した食事オーダーなので、表示のためだけに持つ(§2.11)。
+ */
+const MEAL_PATTERN_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-pattern";
+
 export type MealOrderKind = "start" | "change" | "resume" | "leave-fasting";
+
+export interface MealPatternRef {
+  code: string;
+  name: string;
+  step: number;
+  count: number;
+}
 
 export interface MealOrderLink {
   kind: MealOrderKind;
@@ -439,6 +455,8 @@ export interface MealOrderBuildOptions {
   link?: MealOrderLink;
   /** 終了の理由。連動で終了を決めたオーダーに付ける。 */
   endCause?: MealOrderEndCause;
+  /** パターン食から展開したオーダーの、パターンと段階。更新では元の値を引き継ぐ。 */
+  pattern?: MealPatternRef;
 }
 
 function buildMealOrderServiceRequest(
@@ -447,7 +465,7 @@ function buildMealOrderServiceRequest(
   requester: OrderAttribution,
   options: MealOrderBuildOptions = {},
 ): fhir4.ServiceRequest {
-  const { serviceRequestId, authoredOn, encounterId, link, endCause } = options;
+  const { serviceRequestId, authoredOn, encounterId, link, endCause, pattern } = options;
   const resource: fhir4.ServiceRequest = {
     resourceType: "ServiceRequest",
     status: "active",
@@ -544,6 +562,7 @@ function buildMealOrderServiceRequest(
     if (endCause) extensions.push(endCauseExtension(endCause));
   }
   if (link) extensions.push(linkExtension(link));
+  if (pattern) extensions.push(patternExtension(pattern));
   // 依頼科・病棟は applyOrderContext がこの配列に足す。
   if (extensions.length > 0) resource.extension = extensions;
 
@@ -579,6 +598,39 @@ function endCauseExtension(cause: MealOrderEndCause): fhir4.Extension {
   if (cause.leaveId) children.push({ url: "leave", valueString: cause.leaveId });
   if (cause.previousEnd) children.push({ url: "previousEnd", valueDateTime: cause.previousEnd });
   return { url: MEAL_ORDER_END_REASON_EXT_URL, extension: children };
+}
+
+function patternExtension(pattern: MealPatternRef): fhir4.Extension {
+  return {
+    url: MEAL_PATTERN_EXT_URL,
+    extension: [
+      { url: "code", valueCode: pattern.code },
+      { url: "name", valueString: pattern.name },
+      { url: "step", valueInteger: pattern.step },
+      { url: "count", valueInteger: pattern.count },
+    ],
+  };
+}
+
+/** パターン食から展開したオーダーのパターンと段階。パターン由来でなければ undefined。 */
+export function mealPattern(sr: fhir4.ServiceRequest): MealPatternRef | undefined {
+  const found = sr.extension?.find((e) => e.url === MEAL_PATTERN_EXT_URL);
+  const code = found?.extension?.find((c) => c.url === "code")?.valueCode;
+  const step = found?.extension?.find((c) => c.url === "step")?.valueInteger;
+  const count = found?.extension?.find((c) => c.url === "count")?.valueInteger;
+  if (!code || step === undefined || count === undefined) return undefined;
+  return {
+    code,
+    name: found?.extension?.find((c) => c.url === "name")?.valueString ?? "",
+    step,
+    count,
+  };
+}
+
+/** 「術後食上げ 2/5」。パターン由来でなければ空文字。 */
+export function mealPatternLabel(sr: fhir4.ServiceRequest): string {
+  const pattern = mealPattern(sr);
+  return pattern ? `${pattern.name} ${pattern.step}/${pattern.count}` : "";
 }
 
 export function mealOrderLink(sr: fhir4.ServiceRequest): MealOrderLink | undefined {
@@ -782,6 +834,7 @@ export function buildMealOrderRewriteEntry(
       encounterId: mealOrderEncounterId(sr),
       link: mealOrderLink(sr),
       endCause: mealOrderEndCause(sr),
+      pattern: mealPattern(sr),
     },
   );
   return { resource, request: { method: "PUT", url: `ServiceRequest/${sr.id}` } };
@@ -858,6 +911,7 @@ export function buildMealOrderUpdateBundle(
           encounterId: mealOrderEncounterId(original),
           link: mealOrderLink(original),
           endCause: endUnchanged ? cause : undefined,
+          pattern: mealPattern(original),
         }),
         request: { method: "PUT", url: `ServiceRequest/${original.id}` },
       },
@@ -908,6 +962,8 @@ export interface MealOrderSummary {
   endLabel: string;
   /** 種別(開始 / 変更 / 再開 / 外泊食止め)。 */
   kindLabel: string;
+  /** 「術後食上げ 2/5」。パターン食から展開したオーダーだけ。それ以外は空。 */
+  patternLabel: string;
   /** 終了を決めていないオーダーか。 */
   continuing: boolean;
   comment: string;
@@ -1003,6 +1059,7 @@ export function summarizeMealOrder(sr: fhir4.ServiceRequest): MealOrderSummary {
     startLabel: mealPointLabel(sr.occurrenceDateTime ?? ""),
     endLabel: end ? `${mealPointLabel(end)}まで${reason ? `(${reason})` : ""}` : "",
     kindLabel: mealOrderKindLabel(sr),
+    patternLabel: mealPatternLabel(sr),
     continuing: !end,
     comment: orderComment(sr),
   };

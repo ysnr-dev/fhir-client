@@ -159,6 +159,8 @@ export const MASTER_MENU: MasterMenuGroup[] = [
       { label: "主食・副食形態", to: "/meal-items" },
       // 食種の分類(一般食・特別食 など)。主食には付けない。
       { label: "食種種別", to: "/meal-categories" },
+      // 段階的に変わる食事の雛形(術後食上げ など)。選ぶと段階ごとのオーダーがまとめて立つ。
+      { label: "パターン食", to: "/meal-patterns" },
     ],
   },
   // 輸血。食事と同じく製剤マスタ 1 本だけ(セット・レイアウト・データセットは持たない)。

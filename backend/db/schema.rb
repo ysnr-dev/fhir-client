@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_11_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_13_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1155,6 +1155,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_11_180000) do
     t.datetime "updated_at", null: false
     t.index ["item_code"], name: "index_master_meal_items_on_item_code", unique: true
     t.index ["kind"], name: "index_master_meal_items_on_kind"
+  end
+
+  create_table "master_meal_patterns", force: :cascade do |t|
+    t.string "pattern_code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.jsonb "steps", default: [], null: false
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["pattern_code"], name: "index_master_meal_patterns_on_pattern_code", unique: true
   end
 
   create_table "master_medical_materials", force: :cascade do |t|

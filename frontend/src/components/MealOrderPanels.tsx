@@ -18,6 +18,7 @@ import {
   parseMealOrderForm,
   type MealOrderFormValues,
 } from "../fhir/mealOrderHelpers";
+import { buildMealPatternBundle, type MealPatternSubmission } from "../fhir/mealPatternHelpers";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
@@ -68,25 +69,35 @@ export function MealOrderCreatePanel({
 
   const waiting = (sourceSrId && !source.ready) || !admission.ready || active.isPending;
 
-  function handleSubmit(values: MealOrderFormValues, closingIds: string[], resumeIds: string[]) {
+  function handleSubmit(
+    values: MealOrderFormValues,
+    closingIds: string[],
+    resumeIds: string[],
+    pattern?: MealPatternSubmission,
+  ) {
     const closing = (active.data ?? []).filter((sr) => closingIds.includes(sr.id ?? ""));
     // 終了を決めたオーダーの後に元の食事へ戻すもの(外泊中の食止め など)。
     const resuming = (active.data ?? []).filter((sr) => resumeIds.includes(sr.id ?? ""));
     // 入院病棟を焼き付ける(給食部門の一覧が入院を引き直さずに病棟で束ねられる)。
     const attribution = withOrderWard(requester, "inpatient", admission);
+    const encounterId = patientAdmission.data?.encounter.id;
 
-    // 種別(開始 / 変更)は buildMealOrderBundle が「終了させる食事があるか」で決める。
-    createMealOrder.mutate(
-      buildMealOrderBundle(
-        values,
-        patientId,
-        attribution,
-        closing,
-        resuming,
-        patientAdmission.data?.encounter.id,
-      ),
-      { onSuccess: onSaved },
-    );
+    // 種別(開始 / 変更)は bundle の組み立てが「終了させる食事があるか」で決める。
+    // パターン食は段階ごとのオーダーに展開し、終了・再開は最初と最後の段階に掛かる。
+    const bundle = pattern
+      ? buildMealPatternBundle(
+          pattern,
+          values.startDate,
+          values.startTiming,
+          { comment: values.comment, problem: values.problem },
+          patientId,
+          attribution,
+          closing,
+          resuming,
+          encounterId,
+        )
+      : buildMealOrderBundle(values, patientId, attribution, closing, resuming, encounterId);
+    createMealOrder.mutate(bundle, { onSuccess: onSaved });
   }
 
   return (
@@ -107,6 +118,7 @@ export function MealOrderCreatePanel({
           onSubmit={handleSubmit}
           submitting={createMealOrder.isPending}
           submitError={createMealOrder.error}
+          allowPattern
         />
       )}
     </>
