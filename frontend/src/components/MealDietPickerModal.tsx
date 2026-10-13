@@ -1,9 +1,12 @@
 import { Fragment, useMemo, useState } from "react";
-import type { MealCategory, MealDiet } from "../api/masterClient";
+import type { MealCategory, MealDiet, MealPattern } from "../api/masterClient";
 import { toKatakana } from "../lib/kana";
 import { ErrorBanner } from "./ErrorBanner";
 import { MEAL_NUTRIENT_COLUMNS, formatMealNutrient } from "./mealItemOptions";
+import { MealPatternPickerList } from "./MealPatternPickerList";
 import { Modal } from "./Modal";
+
+export type MealPickerTab = "diet" | "pattern";
 
 interface Props {
   /** 有効期間内の全食種(useMealDietOptions)。呼び出し元が既に持っているので受け取る。 */
@@ -14,6 +17,17 @@ interface Props {
   selectedCode?: string | null;
   onSelect: (diet: MealDiet) => void;
   onClose: () => void;
+  /**
+   * パターン食(docs/meal-order-design.md §2.11)。渡したときだけ「食種選択 / パターン食」の
+   * タブが出る(カルテからの新規登録)。セット・パスの雛形と編集では渡さない。
+   */
+  patterns?: {
+    items: MealPattern[];
+    error?: unknown;
+    onSelect: (pattern: MealPattern) => void;
+  };
+  /** 開いたときに出すタブ。既定は食種。 */
+  initialTab?: MealPickerTab;
 }
 
 interface DietGroup {
@@ -44,7 +58,10 @@ export function MealDietPickerModal({
   selectedCode,
   onSelect,
   onClose,
+  patterns,
+  initialTab = "diet",
 }: Props) {
+  const [tab, setTab] = useState<MealPickerTab>(patterns ? initialTab : "diet");
   const [query, setQuery] = useState("");
   // 種別の絞り込み。"" は全て、"fasting" は食止めだけ、"other" は未分類。
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -78,90 +95,122 @@ export function MealDietPickerModal({
 
   return (
     <Modal title="食種選択" onClose={onClose} className="modal--lab-order-item">
-      <div className="patient-search-form">
-        <label>
-          名称・カナ
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="絞り込み"
-            autoFocus
-          />
-        </label>
-        <label>
-          種別
-          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-            <option value="">すべて</option>
-            {categories.map((c) => (
-              <option key={c.category_code} value={c.category_code}>
-                {c.name}
-              </option>
-            ))}
-            <option value="other">その他</option>
-            <option value="fasting">食止め</option>
-          </select>
-        </label>
-      </div>
+      {/* 食種とパターン食の切替。パターン食を渡されたときだけタブを出す。 */}
+      {patterns && (
+        <div className="order-select__tabs" role="tablist">
+          {(
+            [
+              { key: "diet", label: "食種選択" },
+              { key: "pattern", label: "パターン食" },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
+              className={tab === t.key ? "order-select__tab is-active" : "order-select__tab"}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      <ErrorBanner error={error} />
+      {patterns && tab === "pattern" ? (
+        <>
+          <ErrorBanner error={patterns.error} />
+          <MealPatternPickerList patterns={patterns.items} onSelect={patterns.onSelect} />
+        </>
+      ) : (
+        <>
+          <div className="patient-search-form">
+            <label>
+              名称・カナ
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="絞り込み"
+                autoFocus
+              />
+            </label>
+            <label>
+              種別
+              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                <option value="">すべて</option>
+                {categories.map((c) => (
+                  <option key={c.category_code} value={c.category_code}>
+                    {c.name}
+                  </option>
+                ))}
+                <option value="other">その他</option>
+                <option value="fasting">食止め</option>
+              </select>
+            </label>
+          </div>
 
-      <div className="master-search__table-wrap meal-diet-picker__table-wrap">
-        <table className="master-search__table meal-diet-table">
-          <thead>
-            <tr>
-              <th>コード</th>
-              <th>名称</th>
-              {MEAL_NUTRIENT_COLUMNS.map((c) => (
-                <th key={c.key} className="meal-diet-table__num">
-                  {c.label}
-                  <small>({c.unit})</small>
-                </th>
-              ))}
-              <th>適応・備考</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((group) => (
-              <Fragment key={group.key}>
-                {/* 種別の見出し行(セレクトの optgroup にあたる)。 */}
-                <tr className="meal-diet-picker__group">
-                  <th colSpan={columnCount}>{group.label}</th>
+          <ErrorBanner error={error} />
+
+          <div className="master-search__table-wrap meal-diet-picker__table-wrap">
+            <table className="master-search__table meal-diet-table">
+              <thead>
+                <tr>
+                  <th>コード</th>
+                  <th>名称</th>
+                  {MEAL_NUTRIENT_COLUMNS.map((c) => (
+                    <th key={c.key} className="meal-diet-table__num">
+                      {c.label}
+                      <small>({c.unit})</small>
+                    </th>
+                  ))}
+                  <th>適応・備考</th>
                 </tr>
-                {group.diets.map((diet) => (
-                  <tr
-                    key={diet.id}
-                    className={
-                      diet.item_code === selectedCode
-                        ? "master-search__row meal-diet-picker__row--selected"
-                        : "master-search__row"
-                    }
-                    onClick={() => onSelect(diet)}
-                  >
-                    <td>{diet.item_code}</td>
-                    <td>{diet.name}</td>
-                    {MEAL_NUTRIENT_COLUMNS.map((c) => (
-                      <td key={c.key} className="meal-diet-table__num">
-                        {formatMealNutrient(diet[c.key]) || "—"}
-                      </td>
+              </thead>
+              <tbody>
+                {groups.map((group) => (
+                  <Fragment key={group.key}>
+                    {/* 種別の見出し行(セレクトの optgroup にあたる)。 */}
+                    <tr className="meal-diet-picker__group">
+                      <th colSpan={columnCount}>{group.label}</th>
+                    </tr>
+                    {group.diets.map((diet) => (
+                      <tr
+                        key={diet.id}
+                        className={
+                          diet.item_code === selectedCode
+                            ? "master-search__row meal-diet-picker__row--selected"
+                            : "master-search__row"
+                        }
+                        onClick={() => onSelect(diet)}
+                      >
+                        <td>{diet.item_code}</td>
+                        <td>{diet.name}</td>
+                        {MEAL_NUTRIENT_COLUMNS.map((c) => (
+                          <td key={c.key} className="meal-diet-table__num">
+                            {formatMealNutrient(diet[c.key]) || "—"}
+                          </td>
+                        ))}
+                        <td className="meal-diet-table__indication" title={diet.indication ?? undefined}>
+                          {diet.indication}
+                        </td>
+                      </tr>
                     ))}
-                    <td className="meal-diet-table__indication" title={diet.indication ?? undefined}>
-                      {diet.indication}
+                  </Fragment>
+                ))}
+                {groups.length === 0 && (
+                  <tr>
+                    <td colSpan={columnCount} className="master-search__empty">
+                      該当する食種がありません
                     </td>
                   </tr>
-                ))}
-              </Fragment>
-            ))}
-            {groups.length === 0 && (
-              <tr>
-                <td colSpan={columnCount} className="master-search__empty">
-                  該当する食種がありません
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

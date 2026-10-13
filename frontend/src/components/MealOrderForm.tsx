@@ -35,8 +35,7 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
-import { MealDietPickerModal } from "./MealDietPickerModal";
-import { MealPatternPickerModal } from "./MealPatternPickerModal";
+import { MealDietPickerModal, type MealPickerTab } from "./MealDietPickerModal";
 import { MealPatternStepsTable } from "./MealPatternStepsTable";
 import {
   DEFAULT_MEAL_NUTRITION_FORM,
@@ -146,7 +145,6 @@ export function MealOrderForm({
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
   // 選んだパターン食と、この患者向けに直した段階。選ぶと食種・主食の欄が段階の表に変わる。
   const [pattern, setPattern] = useState<MealPatternSubmission | null>(null);
-  const [pickingPattern, setPickingPattern] = useState(false);
   const patterns = useMealPatterns(allowPattern);
   // 食事変更で終了させるオーダー。既定は全て終了(食事は同時に 1 本が原則)。
   const [closingIds, setClosingIds] = useState<string[]>([]);
@@ -160,8 +158,8 @@ export function MealOrderForm({
   const staples = useMealItemOptions("staple");
   // 副食形態(きざみ・ミキサー など)。主食と違い朝昼夕の軸が無いのでセレクト 1 つ。
   const sideDishForms = useMealItemOptions("side_dish_form");
-  // 食種選択の表を開いているか。
-  const [pickingDiet, setPickingDiet] = useState(false);
+  // 食種選択の表を開いているか(開いたときに出すタブ。null は閉じている)。
+  const [pickingTab, setPickingTab] = useState<MealPickerTab | null>(null);
 
   const dietItems = useMemo(() => diets.data?.items ?? [], [diets.data]);
   // 食種の種別(一般食・特別食 など)。食種選択の表の見出しと給与形態の判定に使う。
@@ -224,7 +222,7 @@ export function MealOrderForm({
       // 食止めは 1 日を通して食事が出ないので、食事の中身の指定も持たない。
       ...(diet.is_fasting ? clearedMealContent() : null),
     }));
-    setPickingDiet(false);
+    setPickingTab(null);
   }
 
   function handleSideDishFormChange(code: string) {
@@ -338,7 +336,7 @@ export function MealOrderForm({
       name: selected.name,
       steps: mealPatternStepsOf(selected),
     });
-    setPickingPattern(false);
+    setPickingTab(null);
   }
 
   // 欠食理由を出すか。食止めの食種か、1 食でも欠食があるときだけ(食事が出るだけの
@@ -387,6 +385,9 @@ export function MealOrderForm({
           <div className="meal-pattern-steps__wrap">
             <div className="meal-diet-field__name">
               <strong>{pattern.name}</strong>
+              <button type="button" onClick={() => setPickingTab("pattern")}>
+                変更
+              </button>
               <button type="button" onClick={() => setPattern(null)}>
                 解除
               </button>
@@ -430,14 +431,9 @@ export function MealOrderForm({
                   ) : (
                     <span className="meal-diet-field__placeholder">選択してください</span>
                   )}
-                  <button type="button" onClick={() => setPickingDiet(true)}>
+                  <button type="button" onClick={() => setPickingTab("diet")}>
                     {values.diet ? "変更" : "食種選択"}
                   </button>
-                  {allowPattern && (
-                    <button type="button" onClick={() => setPickingPattern(true)}>
-                      パターン
-                    </button>
-                  )}
                 </div>
                 {/* 主成分量(1 日あたりの標準値)と適応。食種の性質なのでマスタから引く
                     (オーダーには写さない)。値の無い食種では帯ごと出さない。 */}
@@ -707,23 +703,25 @@ export function MealOrderForm({
         </div>
       )}
 
-      {pickingPattern && (
-        <MealPatternPickerModal
-          patterns={patterns.data?.items ?? []}
-          error={patterns.error}
-          onSelect={handlePatternSelect}
-          onClose={() => setPickingPattern(false)}
-        />
-      )}
-
-      {pickingDiet && (
+      {pickingTab && (
         <MealDietPickerModal
           diets={dietItems}
           categories={mealCategories.data?.items ?? []}
           error={diets.error}
           selectedCode={values.diet?.code}
           onSelect={handleDietSelect}
-          onClose={() => setPickingDiet(false)}
+          onClose={() => setPickingTab(null)}
+          initialTab={pickingTab}
+          // パターン食のタブはカルテからの新規登録だけ(セット・パスの雛形と編集では出さない)。
+          patterns={
+            allowPattern
+              ? {
+                  items: patterns.data?.items ?? [],
+                  error: patterns.error,
+                  onSelect: handlePatternSelect,
+                }
+              : undefined
+          }
         />
       )}
     </form>

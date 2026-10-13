@@ -835,9 +835,10 @@ model・テーブル・search_definition・extraction まで要る。ServiceRequ
 
 オーダーフォームの構成: 食種(必須)・対象プロブレム / 主食(朝・昼・夕、任意。欠食もここ) /
 開始日・開始タイミング・終了日・終了タイミング / いま出ている食事(§2.6)/ コメント。
-カルテからの新規登録(`allowPattern`)では食種の横に「パターン」ボタンがあり、パターン食(§2.11)を
-選ぶと食種・主食の欄が段階の表(食数と期間、削除)に変わり、終了の欄は消える(最後の段階の食数で決まる)。
-「解除」で単発の登録に戻る。セット・パスの雛形(`setMode`)と編集ではこのボタンを出さない。
+カルテからの新規登録(`allowPattern`)では食種選択のモーダルに「食種選択 / パターン食」のタブがあり、
+パターン食(§2.11)を選ぶと食種・主食の欄が段階の表(食数と期間、削除)に変わり、終了の欄は消える
+(最後の段階の食数で決まる)。段階の表の「変更」はパターン食のタブで開き直し、「解除」で単発の登録に戻る。
+セット・パスの雛形(`setMode`)と編集ではタブを出さない。
 
 ［実装］主食は**常に朝・昼・夕の 3 行**を出す。「共通で 1 つ」と「食事ごと」を切り替える
 UI にはしていない(切り替えの状態を持たずに済み、行が固定なので読み間違えない)。
@@ -862,7 +863,7 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
 | API | `master/meal_diets`(index の category_code / active / name、`per` 上限 500、自動採番)/ `master/meal_items`(index の kind / active / name、自動採番) |
 | spec | `spec/requests/master/meal_diets_spec.rb`(14 examples)/ `meal_items_spec.rb`(12 examples)/ `meal_patterns_spec.rb`(5 examples) |
 | FHIR 変換 | `fhir/mealOrderHelpers.ts`(Task・実施記録のヘルパーは無い)、パターン食の展開は `fhir/mealPatternHelpers.ts`(§2.11) |
-| 画面 | `pages/MealDietPage.tsx` / `pages/MealItemPage.tsx` / `pages/MealPatternPage.tsx` / `components/MealDietPickerModal.tsx` / `MealPatternPickerModal.tsx` / `MealPatternStepsTable.tsx` / `MealPatternStepModal.tsx` / `components/MealOrderForm.tsx` / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` |
+| 画面 | `pages/MealDietPage.tsx` / `pages/MealItemPage.tsx` / `pages/MealPatternPage.tsx` / `components/MealDietPickerModal.tsx`(パターン食のタブ)/ `MealPatternPickerList.tsx` / `MealPatternStepsTable.tsx` / `MealPatternStepModal.tsx` / `components/MealOrderForm.tsx` / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` |
 | 連動 | `fhir/mealEncounterSync.ts` / `hooks/useMealSyncContext.ts` / `components/MealSyncSummary.tsx`、`DischargeModal` / `DischargePlanModal` / `LeaveModal` / `LeaveReturnModal` / `InpatientPlanTables` の各操作 |
 | 施設設定 | 施設設定の `meal_schedule`(`facility_settings.settings` jsonb の中、`FacilitySettingsPage` の「食事の提供時刻」) |
 | queries | `useMealOrderDetail` / `useActiveMealOrders` / `useMealOrderMonth` / `useUpdateMealOrder` / `useDeleteMealOrder`、`OCCURRENCE_ORDER_TYPES` に `meal` を追加 |
