@@ -15790,7 +15790,7 @@ td.surgery-calendar__cell--drop-target {
 .meal-diet-field__name {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .meal-diet-field__placeholder {

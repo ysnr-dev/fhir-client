@@ -386,10 +386,11 @@ export function MealOrderForm({
           <legend>パターン食</legend>
           <div className="meal-pattern-steps__wrap">
             <div className="meal-diet-field__name">
-              <strong>{pattern.name}</strong>
+              {/* 単発の食種と同じ並び。選び直しはパターン食のタブで開く(食種のタブに移れば単発に戻る)。 */}
               <button type="button" onClick={() => setPickingTab("pattern")}>
-                変更
+                食種選択
               </button>
+              <strong>{pattern.name}</strong>
             </div>
             <MealPatternStepsTable
               steps={pattern.steps}
@@ -414,12 +415,14 @@ export function MealOrderForm({
         <>
           <fieldset>
             <legend>食事内容</legend>
-            {/* 食種。表で選び、選んだ食種を名称 + 主成分量 + 適応で見せる。 */}
+            {/* 食種。表で選び、選んだ食種をボタンの右に名称 + 主成分量 + 適応で見せる。 */}
             <div className="meal-diet-field">
-              <span className="meal-diet-field__label">食種</span>
               <div className="meal-diet-field__body">
                 <div className="meal-diet-field__name">
-                  {values.diet ? (
+                  <button type="button" onClick={() => setPickingTab("diet")}>
+                    食種選択
+                  </button>
+                  {values.diet && (
                     <>
                       <strong>{values.diet.name}</strong>
                       {/* マスタから消えた食種でも、保存済みの選択を失わせない。 */}
@@ -427,12 +430,7 @@ export function MealOrderForm({
                         <span className="dose-conversion__badge">無効</span>
                       )}
                     </>
-                  ) : (
-                    <span className="meal-diet-field__placeholder">選択してください</span>
                   )}
-                  <button type="button" onClick={() => setPickingTab("diet")}>
-                    {values.diet ? "変更" : "食種選択"}
-                  </button>
                 </div>
                 {/* 主成分量(1 日あたりの標準値)と適応。食種の性質なのでマスタから引く
                     (オーダーには写さない)。値の無い食種では帯ごと出さない。 */}
