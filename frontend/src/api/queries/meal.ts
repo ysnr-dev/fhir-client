@@ -4,11 +4,26 @@ import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { DEFAULT_PRESCRIPTION_CATEGORY } from "../../fhir/prescriptionHelpers";
 import { DEFAULT_MEDICATION_SCHEDULE } from "../../fhir/medicationScheduleHelpers";
-import { DEFAULT_MEAL_SCHEDULE, isMealServiceRequest, MEAL_ORDER_TYPE } from "../../fhir/mealOrderHelpers";
+import {
+  DEFAULT_MEAL_SCHEDULE,
+  isMealServiceRequest,
+  MEAL_ORDER_TYPE,
+  mealOrderServesOnOrAfter,
+} from "../../fhir/mealOrderHelpers";
+import { isActiveFoodAllergy, mealAllergyRefOf } from "../../fhir/mealAllergyHelpers";
+import {
+  cancelMealAllergyCheckEntries,
+  completeMealAllergyCheckEntries,
+  MEAL_ALLERGY_CHECK_TASK_CODE,
+  mealAllergyCheckEntries,
+} from "../../fhir/mealAllergyTaskHelpers";
+import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
+import { today } from "../../lib/dates";
 import { deleteResource, postBundle, searchResource } from "../fhirClient";
-import { setOrderPeriod } from "./core";
+import { NOTIFICATION_TASK_KEY, resourcesOfType, setOrderPeriod } from "./core";
+import { useCreatePrescription } from "./labResult";
 import { useFacilitySettings } from "./organization";
-import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
+import { invalidateProvenance, useOrderEnterer, useWithOrderProvenance } from "./provenance";
 
 // ---- 食事オーダー ----
 //
@@ -144,17 +159,109 @@ export function useMealOrderMonth(patientId: string | undefined, monthStart: str
   });
 }
 
+/**
+ * 食事オーダーの登録・更新に渡すもの。orderIds は保存するオーダーと、食事変更で終了させる
+ * オーダーの id。allergyIds は新しいオーダーに写した食物アレルギーの id。この 2 つで、
+ * 「そのオーダーにそのアレルギーが反映されていない」通知を同じ transaction で閉じる。
+ */
+export interface MealOrderSave {
+  bundle: fhir4.Bundle;
+  patientId: string;
+  orderIds: string[];
+  allergyIds: string[];
+}
+
+/** その患者の未対応の「食事のアレルギー確認」の通知。 */
+export async function fetchOpenMealAllergyChecks(patientId: string): Promise<fhir4.Task[]> {
+  const params = new URLSearchParams();
+  params.set("code", `${TASK_CODE_SYSTEM}|${MEAL_ALLERGY_CHECK_TASK_CODE.code}`);
+  params.set("subject", `Patient/${patientId}`);
+  params.set("status", "requested");
+  params.set("_count", "50");
+  const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
+  return resourcesOfType<fhir4.Task>(bundle, "Task");
+}
+
+/**
+ * 保存の Bundle に、反映が済んだアレルギー確認の通知を閉じる entry を足す。
+ * 写したアレルギーが無ければ通知を引かない(読み直しを増やさない)。
+ */
+function useWithMealAllergyCheckCompletion(): (save: MealOrderSave) => Promise<fhir4.Bundle> {
+  const enterer = useOrderEnterer();
+  return async (save) => {
+    if (!enterer || save.allergyIds.length === 0 || save.orderIds.length === 0) return save.bundle;
+    const tasks = await fetchOpenMealAllergyChecks(save.patientId);
+    const entries = completeMealAllergyCheckEntries(tasks, enterer, save);
+    if (entries.length === 0) return save.bundle;
+    return { ...save.bundle, entry: [...(save.bundle.entry ?? []), ...entries] };
+  };
+}
+
+/** 食事オーダーの登録。他のオーダーと同じ道(来歴付き)に、アレルギー確認の通知の自動完了を足す。 */
+export function useCreateMealOrder() {
+  const queryClient = useQueryClient();
+  const create = useCreatePrescription();
+  const withCompletion = useWithMealAllergyCheckCompletion();
+  return useMutation({
+    mutationFn: async (save: MealOrderSave) => create.mutateAsync(await withCompletion(save)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+    },
+  });
+}
+
 export function useUpdateMealOrder() {
   const queryClient = useQueryClient();
   const withProvenance = useWithOrderProvenance();
+  const withCompletion = useWithMealAllergyCheckCompletion();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
+    mutationFn: async (save: MealOrderSave) => postBundle(withProvenance(await withCompletion(save))),
     onSuccess: () => {
       // 開始日が動くとカードの載る日も変わるので、まとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
       invalidateProvenance(queryClient);
     },
   });
+}
+
+/**
+ * アレルギーの保存の Bundle に足す、食事オーダーあての通知の entry。
+ *
+ * - 有効な食物アレルギーなら、今日以降も食事を出す進行中のオーダーのうち、このアレルギーを
+ *   写していないものへ「食事のアレルギー確認」を作る(同じ組み合わせの未対応があれば作らない)
+ * - 有効でなくなった(解消・否定)なら、このアレルギーの未対応の通知を取り下げる
+ *
+ * allergyReference は保存済みなら `AllergyIntolerance/{id}`、新規なら Bundle 内の urn:uuid。
+ */
+export async function mealAllergyCheckEntriesFor(
+  allergy: fhir4.AllergyIntolerance,
+  allergyReference: string,
+  patientId: string,
+  requester?: { practitionerId: string; display: string },
+): Promise<fhir4.BundleEntry[]> {
+  const food = allergy.category?.includes("food");
+  if (!food) return [];
+  if (!isActiveFoodAllergy(allergy)) {
+    if (!allergy.id) return [];
+    return cancelMealAllergyCheckEntries(await fetchOpenMealAllergyChecks(patientId), allergy.id);
+  }
+  const [orders, tasks] = await Promise.all([
+    fetchPatientMealOrders(patientId),
+    fetchOpenMealAllergyChecks(patientId),
+  ]);
+  const day = today();
+  return mealAllergyCheckEntries(
+    {
+      allergyReference,
+      allergyName: mealAllergyRefOf(allergy).name,
+      high: allergy.criticality === "high",
+      patientId,
+      requester,
+    },
+    orders.filter((sr) => mealOrderServesOnOrAfter(sr, day)),
+    tasks,
+  );
 }
 
 /**

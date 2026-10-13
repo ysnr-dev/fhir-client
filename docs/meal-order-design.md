@@ -476,6 +476,74 @@ import する一方向で、拡張の読み書き(`mealPattern` / `mealPatternLa
 
 ---
 
+### 2.12 食物アレルギーの写しと照合
+
+実装日: 2026-10-14。
+
+［事実］SS-MIX2 の OMD^O03 は **AL1(患者アレルギー情報)セグメント**を持ち、給食オーダメッセージに
+患者のアレルギーを載せて給食部門へ渡す。これまでの食事オーダーには対応する席が無く、
+「卵アレルギーあり。除去食で対応。」とコメント(`note`)に手で書くしかなかった。アレルギーが
+後から登録されても、出ている食事オーダーには何も起きない。
+
+［事実］食物アレルギーは `AllergyIntolerance`(JP Core、J-FAGY の食品コード)で、`category = food`、
+`clinicalStatus = active`、`verificationStatus ≠ refuted` のものが「いま給食部門に伝えるべき」もの。
+食種マスタ(§3)は「卵を使うか」のような中身を持たない。
+
+［提案］**オーダーを出した時点の有効な食物アレルギーを `ServiceRequest.supportingInfo` に
+AllergyIntolerance の参照(+ 名称)で写す**(AL1 相当)。
+
+```jsonc
+"supportingInfo": [
+  { "reference": "AllergyIntolerance/f22382e1-…", "display": "鶏卵" }
+]
+```
+
+- **常に全件**。チェックで選ばせない(伝えない理由が無い)。登録・編集の保存で、その時点の
+  有効なものに入れ直す(編集で開いたときの写しは引き継がない)。食止めにも写す(害が無く、
+  照合の例外を作らない)
+- 名称を写すのは、給食部門の一覧・暦がアレルギーを引き直さずに出せるようにするため。
+  照合は id で行う。アレルゲン名を後から変えても写しは追随しない(AL1 と同じ扱い)
+- 雛形(オーダーセット・パスのタスク・パターン食の段階)は患者を持たないので写しを持たず
+  (`sanitize` で落とす)、適用時にその患者の有効なものを入れる(`BuildBundleArgs.foodAllergies`。
+  セット適用・パス適用・予定外ユニットの 3 経路が `useActiveAllergies` から渡す)
+- 再開オーダー(§2.7)は、画面からの登録ではその時点の有効なもの、連動(§2.8)では元のオーダーの
+  写しを引き継ぐ。外泊食止めは止める元のオーダーの写しを引き継ぐ(`buildFastingEntry`)。
+  連動の書き換え(`buildMealOrderRewriteEntry`)はフォーム値を組み直すので写しも引き継がれる
+
+［提案］**照合 = 「有効なアレルギーのうちオーダーに写っていないもの(未反映)」と「写っているが
+有効でなくなったもの(解消済み)」**(`mealAllergyMismatch`、`fhir/mealAllergyHelpers.ts`)。
+食種・コメントの文との突き合わせはしない(食種マスタにアレルゲンを持たせるのは §7-12)。
+
+| 画面 | 見せ方 |
+|---|---|
+| オーダー画面(`MealOrderForm`) | 「食物アレルギー」の一覧(名称・重篤化リスク・症状)。編集では開いたオーダーとの食い違いに「未反映」「解消済み」の印。新規登録は保存で必ず全件を写すので印は出さない |
+| 食事タブ(`MealAllergyNotice`) | 暦の上に注意帯。今日の朝以降も食事を出す進行中のオーダー(`mealOrderServesOnOrAfter`)の食い違いを、同じアレルギーの組ごとに 1 行(「〜 ほか N 件」)。無ければ出さない |
+| 詳細モーダル・カード | 「食物アレルギー」の行(写しの名称)。写しが無ければ出さない |
+
+［提案］**アレルギーの登録・更新は、進行中の食事オーダーあての通知(Task `meal-allergy-check`、
+`fhir/mealAllergyTaskHelpers.ts`)を同じ transaction で作る・取り下げる**(通知は Task に統一)。
+
+- 作る条件: 保存するアレルギーが有効な食物アレルギーで、今日の朝以降も食事を出す進行中の
+  オーダー(`fetchPatientMealOrders` → `mealOrderServesOnOrAfter`)にその写しが無い。
+  **オーダー 1 件 × アレルギー 1 件につき 1 通知**(焦点 = ServiceRequest、宛先 = オーダーの依頼医、
+  発生させた人 = ログイン中の医療従事者)。重篤化リスクが高ければアラート、それ以外は注意
+- 重複防止: 保存前にその患者の未対応の同種別の通知を 1 回引き、同じ焦点 × 同じアレルギーがあれば作らない
+- 新規登録のアレルギーは id が無いので、Bundle 内の `fullUrl`(urn:uuid)で `Task.input` に参照し、
+  上流が採番済みの id に解決する(`bundle_processor.rb` の `resolve_references` は resource 全体を
+  再帰する。検証済み)
+- 自動で閉じる: 食事オーダーの登録・編集(`useCreateMealOrder` / `useUpdateMealOrder`、
+  `MealOrderSave`)で、焦点が「保存したオーダー」または「食事変更で終了させたオーダー」で、
+  そのアレルギーが新しいオーダーに写ったものを `completed` にする。写すアレルギーが無ければ通知を引かない
+- 取り下げ: アレルギーが有効でなくなった(解消・非活動・否定)更新と削除で、そのアレルギーの
+  未対応の通知を `cancelled` にする。再び有効にすれば、写しの無いオーダーへ作り直す
+- 通知の要らない保存は従来どおり単体の POST / PUT / DELETE(読みも増えない)。アレルギーの保存で
+  増える読みは、有効な食物アレルギーのときだけ食事オーダー 1 本 + Task 1 本
+- 通知一覧の種別「食事のアレルギー確認」。カルテのリンクは食事タブ、操作は「確認」(手で閉じる)
+
+［実装］ファイルは §6。
+
+---
+
 ## 3. マスタ
 
 ```text
@@ -862,11 +930,11 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
 | モデル | `Master::MealDiet` / `Master::MealItem` / `Master::MealPattern` |
 | API | `master/meal_diets`(index の category_code / active / name、`per` 上限 500、自動採番)/ `master/meal_items`(index の kind / active / name、自動採番) |
 | spec | `spec/requests/master/meal_diets_spec.rb`(14 examples)/ `meal_items_spec.rb`(12 examples)/ `meal_patterns_spec.rb`(5 examples) |
-| FHIR 変換 | `fhir/mealOrderHelpers.ts`(Task・実施記録のヘルパーは無い)、パターン食の展開は `fhir/mealPatternHelpers.ts`(§2.11) |
-| 画面 | `pages/MealDietPage.tsx` / `pages/MealItemPage.tsx` / `pages/MealPatternPage.tsx` / `components/MealDietPickerModal.tsx`(パターン食のタブ)/ `MealPatternPickerList.tsx` / `MealPatternStepsTable.tsx` / `MealPatternStepModal.tsx` / `components/MealOrderForm.tsx` / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` |
+| FHIR 変換 | `fhir/mealOrderHelpers.ts`(実施記録のヘルパーは無い)、パターン食の展開は `fhir/mealPatternHelpers.ts`(§2.11)、食物アレルギーの照合は `fhir/mealAllergyHelpers.ts`、その通知は `fhir/mealAllergyTaskHelpers.ts`(§2.12) |
+| 画面 | `pages/MealDietPage.tsx` / `pages/MealItemPage.tsx` / `pages/MealPatternPage.tsx` / `components/MealDietPickerModal.tsx`(パターン食のタブ)/ `MealPatternPickerList.tsx` / `MealPatternStepsTable.tsx` / `MealPatternStepModal.tsx` / `components/MealOrderForm.tsx` / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` / `MealAllergyList.tsx` / `MealAllergyNotice.tsx` / `notifications/MealAllergyCheckNotificationCells.tsx`(§2.12) |
 | 連動 | `fhir/mealEncounterSync.ts` / `hooks/useMealSyncContext.ts` / `components/MealSyncSummary.tsx`、`DischargeModal` / `DischargePlanModal` / `LeaveModal` / `LeaveReturnModal` / `InpatientPlanTables` の各操作 |
 | 施設設定 | 施設設定の `meal_schedule`(`facility_settings.settings` jsonb の中、`FacilitySettingsPage` の「食事の提供時刻」) |
-| queries | `useMealOrderDetail` / `useActiveMealOrders` / `useMealOrderMonth` / `useUpdateMealOrder` / `useDeleteMealOrder`、`OCCURRENCE_ORDER_TYPES` に `meal` を追加 |
+| queries | `useMealOrderDetail` / `useActiveMealOrders` / `useMealOrderMonth` / `useCreateMealOrder` / `useUpdateMealOrder` / `useDeleteMealOrder`、`OCCURRENCE_ORDER_TYPES` に `meal` を追加。アレルギー側は `useCreateAllergy` / `useUpdateAllergy` / `useDeleteAllergy`(`dischargeSummary.ts`)が `mealAllergyCheckEntriesFor` / `fetchOpenMealAllergyChecks`(`meal.ts`)で通知を同梱(§2.12) |
 | カルテ | `KARTE_TABS` に「食事」タブ、`karteTimeline` に `meal-order` 種別、`KarteRightPane` の起動ボタンとパネル、`KarteTimeline` のカード本体・タイトル・削除、`KarteCardModals` の詳細/JSON、`KarteCategoryList` / `karteUrl` / `KartePage` の分岐 |
 
 ### 6.1 検証したこと
@@ -1042,10 +1110,27 @@ FHIR は無変更。主成分量はオーダーに写していない(§3.3)。
 
 ---
 
+### 6.6 食物アレルギーの写しと照合(§2.12)の追加 — 2026-10-14
+
+Docker 環境、テスト太郎(患者番号 2、`ichiro` でログイン)で確認した:
+
+1. アレルギータブで食品「鶏卵」(重篤化リスク 高)を登録 → POST /fhir が Bundle(AllergyIntolerance + Task × 9)になり、
+   今日以降も食事を出す進行中のオーダー 9 件ぶんの通知(`priority = stat`、宛先はそれぞれのオーダーの依頼医)が立つ。
+   `Task.input` の参照は urn:uuid から採番済みの `AllergyIntolerance/{id}` に解決されている
+2. 食事タブの上に「食物アレルギー「鶏卵」が食事オーダー(… ほか 7 件)に反映されていません」の注意帯
+3. 今日のマスから編集 → 「食物アレルギー」に「鶏卵 重篤化リスク 高 [未反映]」。更新で `supportingInfo` が入り、
+   そのオーダーの通知が `completed`(note に文言、executionPeriod)
+4. 10/22 のマスから食事変更 → 新オーダーに写しが入り、終了させたオーダーの通知が `completed`
+5. アレルギーを「解消済み」に更新 → 未対応の通知 7 件が `cancelled`、食事タブに「写してある「鶏卵」は有効な
+   アレルギーではなくなっています」。再び「活動性」に更新 → 写しの無いオーダーへ通知を作り直す
+6. 通知一覧に種別「食事のアレルギー確認」の行(対象日 = オーダーの開始日、内容にアレルゲンとオーダー)
+
 ## 7. 申し送り
 
 1. **給食部門の画面**: ワークリスト(その日の患者ごとの食事一覧)と食数集計は未実装。
    作るときの要点:
+   - 食物アレルギーは**オーダーの `supportingInfo`(§2.12)を読む**。`summarizeMealOrder(sr).allergyLabel`
+     がそのまま行に出せる(アレルギーを引き直さない)
    - 継続オーダーは**日付一致では引けない**。`category=order-type|meal & status=active &
      occurrence=le{当日}` で候補を絞り、終了拡張をクライアント側で評価する 2 段構えになる
      (`isMealOrderActiveOn` がそのまま使える)
@@ -1105,3 +1190,8 @@ FHIR は無変更。主成分量はオーダーに写していない(§3.3)。
    `buildMealPatternBundle` を通す)。オーダー画面では段階の食数と削除だけ直せ、食種・主食を直すときは
    マスタを直すか単発で登録する。展開後は独立したオーダーなので、パターン単位で取り消す操作は無い
    (暦から 1 件ずつ)。段階の並べ替えはマスタ画面に無い(消して足す)。
+12. **食物アレルギー(§2.12)の残り**: 食種そのものとの照合(調乳食 × 牛乳、経管栄養剤 × 乳蛋白 など)は
+   していない。要るなら食種マスタに「含むアレルゲン(J-FAGY コード)」の列を足し、`MealOrderForm` で
+   選んだ食種と `activeFoodAllergies` を突き合わせて警告する(`RadSafetyNotice` と同じ見せ方)。
+   除去の具体(「卵抜き」「代替食」)は引き続きコメント(`note`)に書く。アレルギー保存の通知は
+   `fetchPatientMealOrders`(50 件・新しい順)の範囲で対象を探すので、§7-5 と同じ前提に乗る。

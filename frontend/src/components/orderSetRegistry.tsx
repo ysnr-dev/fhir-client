@@ -81,6 +81,7 @@ import {
   buildDoMealOrderForm,
   buildMealOrderBundle,
   emptyMealOrderForm,
+  type MealAllergyRef,
   type MealOrderFormValues,
 } from "../fhir/mealOrderHelpers";
 import {
@@ -203,6 +204,8 @@ export interface BuildBundleArgs {
    * 同じ適用に病名が複数あっても順に連番になる。
    */
   allocateProblemNumber: () => number;
+  /** 適用先患者の有効な食物アレルギー。食事オーダーに写す(docs/meal-order-design.md §2.12)。 */
+  foodAllergies?: MealAllergyRef[];
 }
 
 /** 「患者に同じものが既にあるので登録しない」の判定に渡す材料。 */
@@ -689,9 +692,9 @@ const mealOrder = defineOrderSetType<MealOrderFormValues, [string[], string[]]>(
     endTiming: values.endTiming,
   }),
   settingOf: () => "inpatient",
-  buildBundle: (values, _extra, { patientId, requester, defaultSetting, encounterId }) => ({
+  buildBundle: (values, _extra, { patientId, requester, defaultSetting, encounterId, foodAllergies }) => ({
     bundle: buildMealOrderBundle(
-      values,
+      { ...values, allergies: foodAllergies ?? [] },
       patientId,
       withOrderWard(requester, "inpatient", defaultSetting),
       [],

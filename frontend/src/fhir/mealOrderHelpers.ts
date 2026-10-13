@@ -31,6 +31,7 @@ import { SETTING_OPTIONS, SETTING_SYSTEM } from "./prescriptionHelpers";
 //   ODS-4 テキスト指示              → ServiceRequest.note
 //   TQ1-7 開始日時 YYYYMMDDHH       → occurrenceDateTime (HH = 08/12/18)
 //   TQ1-8 終了日時 YYYYMMDDHH       → extension[meal-order-end]
+//   AL1 患者アレルギー情報          → ServiceRequest.supportingInfo(AllergyIntolerance 参照)
 //
 // 嗜好品(ODS-1 = P)・補助食(ODS-1 = S)は扱わない。
 //
@@ -312,6 +313,16 @@ export interface MealItemRef {
 }
 
 /**
+ * オーダーに写した食物アレルギー 1 件(`supportingInfo` の AllergyIntolerance 参照)。
+ * 名称を写すのは、給食部門の一覧・暦がアレルギーを引き直さずに出せるようにするため。
+ * 照合(fhir/mealAllergyHelpers.ts)は id で行う。
+ */
+export interface MealAllergyRef {
+  id: string;
+  name: string;
+}
+
+/**
  * 欠食(その食事は出さない)。主食セレクトの選択肢として扱うので、主食の項目コードと
  * 衝突しない値にしてある。
  */
@@ -394,6 +405,11 @@ export interface MealOrderFormValues {
   endTiming: MealTiming;
   comment: string;
   problem: ProblemRef | null;
+  /**
+   * オーダーに写す食物アレルギー(SS-MIX2 OMD^O03 の AL1 にあたる)。登録・編集の保存時に
+   * 画面がその時点の有効な食物アレルギーで入れ直す。雛形(セット・パス)では空。
+   */
+  allergies: MealAllergyRef[];
 }
 
 export function emptyMealOrderForm(): MealOrderFormValues {
@@ -410,6 +426,7 @@ export function emptyMealOrderForm(): MealOrderFormValues {
     endTiming: DEFAULT_MEAL_END_TIMING,
     comment: "",
     problem: null,
+    allergies: [],
   };
 }
 
@@ -567,6 +584,15 @@ function buildMealOrderServiceRequest(
   if (extensions.length > 0) resource.extension = extensions;
 
   if (values.comment) resource.note = [{ text: values.comment }];
+
+  // 食物アレルギー(SS-MIX2 の AL1 にあたる)。給食部門がこのオーダーだけを読んで除去の
+  // 対応を取れるよう、オーダーを出した時点の有効な食物アレルギーを参照で持つ。
+  if (values.allergies.length > 0) {
+    resource.supportingInfo = values.allergies.map((allergy) => ({
+      reference: `AllergyIntolerance/${allergy.id}`,
+      display: allergy.name,
+    }));
+  }
 
   if (values.problem) {
     resource.reasonReference = [
@@ -776,9 +802,17 @@ export function buildMealOrderResumeEntry(
   startTiming: MealTiming,
   patientId: string,
   requester: OrderAttribution,
-  options: { encounterId?: string; leaveId?: string; endDate?: string; endTiming?: MealTiming } = {},
+  options: {
+    encounterId?: string;
+    leaveId?: string;
+    endDate?: string;
+    endTiming?: MealTiming;
+    /** 写す食物アレルギー。画面からの登録はその時点の有効なもの、連動は元のオーダーのもの(省略)。 */
+    allergies?: MealAllergyRef[];
+  } = {},
 ): fhir4.BundleEntry {
   const values: MealOrderFormValues = { ...parseMealOrderForm(sr), startDate, startTiming };
+  if (options.allergies) values.allergies = options.allergies;
   if (options.endDate !== undefined) {
     values.endDate = options.endDate;
     values.endTiming = options.endTiming ?? DEFAULT_MEAL_END_TIMING;
@@ -881,6 +915,7 @@ export function buildMealOrderBundle(
           .map((sr) =>
             buildMealOrderResumeEntry(sr, resume.date, resume.timing, patientId, requester, {
               encounterId,
+              allergies: values.allergies,
             }),
           )
       : []),
@@ -931,6 +966,8 @@ export function buildDoMealOrderForm(values: MealOrderFormValues): MealOrderForm
     startTiming: DEFAULT_MEAL_TIMING,
     endDate: "",
     endTiming: DEFAULT_MEAL_END_TIMING,
+    // アレルギーは写し元のものではなく、保存時点の有効なものを入れ直す。
+    allergies: [],
   };
 }
 
@@ -967,6 +1004,8 @@ export interface MealOrderSummary {
   /** 終了を決めていないオーダーか。 */
   continuing: boolean;
   comment: string;
+  /** オーダーに写した食物アレルギーの名称「鶏卵、牛乳」。無ければ空。 */
+  allergyLabel: string;
 }
 
 /** 「8/28 朝」。タイミングが 08/12/18 でないデータは時刻をそのまま出す。 */
@@ -1062,6 +1101,10 @@ export function summarizeMealOrder(sr: fhir4.ServiceRequest): MealOrderSummary {
     patternLabel: mealPatternLabel(sr),
     continuing: !end,
     comment: orderComment(sr),
+    allergyLabel: mealOrderAllergies(sr)
+      .map((allergy) => allergy.name)
+      .filter(Boolean)
+      .join("、"),
   };
 }
 
@@ -1243,5 +1286,25 @@ export function parseMealOrderForm(sr: fhir4.ServiceRequest): MealOrderFormValue
     endTiming: parseMealTiming(end) ?? DEFAULT_MEAL_END_TIMING,
     comment: orderComment(sr),
     problem: mealOrderProblem(sr),
+    allergies: mealOrderAllergies(sr),
   };
+}
+
+/** オーダーに写してある食物アレルギー(supportingInfo の AllergyIntolerance 参照)。 */
+export function mealOrderAllergies(sr: fhir4.ServiceRequest): MealAllergyRef[] {
+  const refs: MealAllergyRef[] = [];
+  for (const info of sr.supportingInfo ?? []) {
+    const id = info.reference?.match(/^AllergyIntolerance\/(.+)$/)?.[1];
+    if (id) refs.push({ id, name: info.display ?? "" });
+  }
+  return refs;
+}
+
+/**
+ * その日の朝以降にまだ食事を出すオーダーか(終了が無いか、終了がその日の朝以降)。
+ * 「進行中の食事オーダーに未反映のアレルギー」を探すときの対象の絞り込みに使う。
+ */
+export function mealOrderServesOnOrAfter(sr: fhir4.ServiceRequest, date: string): boolean {
+  const end = mealOrderEnd(sr);
+  return !end || mealPointKeyOf(end) >= mealPointKey(date, "breakfast");
 }

@@ -13,10 +13,13 @@ interface AllergyTableProps {
 export function AllergyTable({ allergies, onView, onEdit }: AllergyTableProps) {
   const deleteAllergy = useDeleteAllergy();
 
-  function handleDelete(allergyId: string | undefined, name: string) {
-    if (!allergyId) return;
+  function handleDelete(allergy: fhir4.AllergyIntolerance, name: string) {
+    if (!allergy.id) return;
     if (!window.confirm(`アレルギー「${name}」を削除します。よろしいですか?`)) return;
-    deleteAllergy.mutate(allergyId);
+    deleteAllergy.mutate({
+      id: allergy.id,
+      patientId: allergy.patient?.reference?.split("/").pop() ?? "",
+    });
   }
 
   if (allergies.length === 0) {
@@ -64,7 +67,7 @@ export function AllergyTable({ allergies, onView, onEdit }: AllergyTableProps) {
                     <button
                       type="button"
                       className="row-menu__item row-menu__item--danger"
-                      onClick={() => handleDelete(summary.id, summary.name)}
+                      onClick={() => handleDelete(allergy, summary.name)}
                       disabled={deleteAllergy.isPending}
                     >
                       削除

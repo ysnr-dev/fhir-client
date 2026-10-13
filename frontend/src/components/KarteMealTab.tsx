@@ -18,6 +18,7 @@ import {
 } from "../fhir/mealOrderHelpers";
 import { toDateInput, today, WEEKDAY_LABELS } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
+import { MealAllergyNotice } from "./MealAllergyNotice";
 
 // カルテ画面の「食事」タブ。1 か月ぶんの食事を暦の形で並べる。
 //
@@ -118,6 +119,7 @@ export function KarteMealTab({ patientId, onEdit, onCreate }: KarteMealTabProps)
       </div>
 
       <ErrorBanner error={orders.error ?? events.error} />
+      <MealAllergyNotice patientId={patientId} />
 
       {orders.isLoading ? (
         <p>読み込み中...</p>

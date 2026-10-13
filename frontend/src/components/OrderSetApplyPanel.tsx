@@ -2,8 +2,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import type { OrderSetDetail, OrderSetScope } from "../api/masterClient";
 import { useOrderSet, useOrderSets } from "../api/masterQueries";
-import { useCreatePrescription, useKarteConditions, usePatient } from "../api/queries";
+import { useActiveAllergies, useCreatePrescription, useKarteConditions, usePatient } from "../api/queries";
 import { nextProblemNumber, splitConditions, type ProblemRef } from "../fhir/conditionHelpers";
+import { mealAllergyRefsOf } from "../fhir/mealAllergyHelpers";
 import {
   isOrderSetOrderType,
   mergeTransactionBundles,
@@ -223,6 +224,8 @@ function OrderSetApplyForms({
   const requester = useOrderContext();
   const create = useCreatePrescription();
   const queryClient = useQueryClient();
+  // 食事オーダーに写す食物アレルギー(セットの雛形は患者のものを持たない)。
+  const { allergies } = useActiveAllergies(patientId);
   const stack = useStackedOrderForms<number>();
   const [error, setError] = useState<string | null>(null);
   // セット全体の適用日。変えると各フォームの開始日に入る(予約する項目は動かない)。
@@ -325,6 +328,7 @@ function OrderSetApplyForms({
         patient,
         encounterId: defaultSetting.encounterId || undefined,
         allocateProblemNumber,
+        foodAllergies: mealAllergyRefsOf(allergies),
       });
     });
     // 全種別を 1 つの transaction にまとめ、ヘッダにどのセットから出したかの印を焼く。

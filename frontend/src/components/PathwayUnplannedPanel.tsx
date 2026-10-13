@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import {
+  useActiveAllergies,
   useAddUnplannedUnit,
   useKarteConditions,
   usePathwayApplicationTree,
   usePatient,
 } from "../api/queries";
+import { mealAllergyRefsOf } from "../fhir/mealAllergyHelpers";
 import {
   mergeTransactionBundles,
   type OrderSetOrderType,
@@ -94,6 +96,8 @@ function UnplannedForm({
   const tree = usePathwayApplicationTree(applyId);
   const { conditions } = useKarteConditions(patientId);
   const requester = useOrderContext();
+  // 食事オーダーに写す食物アレルギー(パスの雛形は患者のものを持たない)。
+  const { allergies } = useActiveAllergies(patientId);
   const add = useAddUnplannedUnit();
   const stack = useStackedOrderForms<number>();
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -207,6 +211,7 @@ function UnplannedForm({
         encounterId: application.encounterId || defaultSetting.encounterId || undefined,
         // パスのタスクは病名を伴わない(プロブレム番号は使わない)。
         allocateProblemNumber: () => 0,
+        foodAllergies: mealAllergyRefsOf(allergies),
       });
       orderBundles.push(built.bundle);
       invalidate.push(...built.invalidate);

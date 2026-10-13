@@ -33,8 +33,8 @@ export function MealOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.Se
           ))}
         </ul>
       )}
-      {/* 副食形態・塩分制限は指定のあるオーダーだけ。主食の下に 1 行ずつ足す。 */}
-      {(summary.sideDishFormName || summary.saltLimitLabel) && (
+      {/* 副食形態・塩分制限・食物アレルギーは指定のあるオーダーだけ。主食の下に 1 行ずつ足す。 */}
+      {(summary.sideDishFormName || summary.saltLimitLabel || summary.allergyLabel) && (
         <ul className="karte-rp__medicines">
           {summary.sideDishFormName && (
             <li>
@@ -44,6 +44,11 @@ export function MealOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.Se
           {summary.saltLimitLabel && (
             <li>
               <span className="karte-rp__medicine-name">塩分制限: {summary.saltLimitLabel}</span>
+            </li>
+          )}
+          {summary.allergyLabel && (
+            <li>
+              <span className="karte-rp__medicine-name">アレルギー: {summary.allergyLabel}</span>
             </li>
           )}
         </ul>

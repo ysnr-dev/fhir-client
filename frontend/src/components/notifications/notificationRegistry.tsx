@@ -122,6 +122,13 @@ import {
   RxInquiryAnsweredNotificationCells,
   RxInquiryNotificationCells,
 } from "./RxInquiryNotificationCells";
+import {
+  MEAL_ALLERGY_CHECK_NOTE,
+  MEAL_ALLERGY_CHECK_TASK_CODE,
+  mealAllergyCheckRowOf,
+  type MealAllergyCheckRow,
+} from "../../fhir/mealAllergyTaskHelpers";
+import { MealAllergyCheckNotificationCells } from "./MealAllergyCheckNotificationCells";
 
 // 通知の種別ごとの振る舞いをまとめた対応表。通知そのものの形は notificationHelpers、
 // ここは「一覧でどう見せて、どう対応済みにするか」だけを持つ。
@@ -416,6 +423,22 @@ const rxInquiryAnsweredKind = defineNotificationKind<RxInquiryAnsweredRow>({
     Boolean(practitionerId && row.task.owner?.reference === `Practitioner/${practitionerId}`),
 });
 
+const mealAllergyCheckKind = defineNotificationKind<MealAllergyCheckRow>({
+  code: MEAL_ALLERGY_CHECK_TASK_CODE.code,
+  label: MEAL_ALLERGY_CHECK_TASK_CODE.display,
+  toRow: mealAllergyCheckRowOf,
+  Cells: MealAllergyCheckNotificationCells,
+  // カルテの食事タブで食事オーダーを直す(登録し直してアレルギーが写れば自動で閉じる)。
+  karteLink: (row) => {
+    if (!row.patientId) return null;
+    const params = new URLSearchParams();
+    params.set(KARTE_TAB_PARAM, "meal");
+    return `/patients/${row.patientId}/karte?${params.toString()}`;
+  },
+  // 食事オーダーの登録・編集で反映すれば自動で閉じる。ここからは手で閉じる。
+  action: { label: "確認", noteText: MEAL_ALLERGY_CHECK_NOTE },
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
@@ -432,6 +455,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   noteReturnedKind,
   rxInquiryKind,
   rxInquiryAnsweredKind,
+  mealAllergyCheckKind,
 ];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */

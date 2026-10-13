@@ -531,6 +531,57 @@
   color: var(--danger);
 }
 
+/* 食事オーダーの食物アレルギー一覧(docs/meal-order-design.md §2.12)。表示だけで入力は無い。 */
+.meal-allergy-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-basis: 100%;
+  font-size: 13px;
+}
+
+.meal-allergy-list__empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.meal-allergy-list__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.meal-allergy-list__row--stale {
+  color: var(--text);
+}
+
+.meal-allergy-list__name {
+  font-weight: 600;
+}
+
+.meal-allergy-list__criticality--high {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.meal-allergy-list__badge {
+  font-size: 11px;
+  border: 1px solid var(--warning);
+  border-radius: 3px;
+  padding: 0 4px;
+  color: var(--warning);
+}
+
+.meal-allergy-list__badge--stale {
+  border-color: var(--border);
+  color: var(--text);
+}
+
 /* 感染症の陽性。標準予防策に加える判断に直結するので目立たせる。 */
 .infection__result--positive {
   color: var(--danger);

@@ -19,6 +19,7 @@
 | `nursing-summary-returned` 看護サマリー差戻し | お知らせ | 看護サマリー(`Composition`) | サマリーの作成者 | 対応済(確定し直すと自動) |
 | `rx-inquiry` 疑義照会 | 注意 | 処方・注射のオーダー(`ServiceRequest`) | オーダーの依頼医 | 回答(カルテの詳細から。一覧からは閉じられない) |
 | `rx-inquiry-answered` 疑義照会回答 | お知らせ | 処方・注射のオーダー(`ServiceRequest`) | 照会した薬剤師 | 確認(調剤登録・払出登録で自動) |
+| `meal-allergy-check` 食事のアレルギー確認 | アラート(重篤化リスク 高)/ 注意 | 食事オーダー(`ServiceRequest`) | オーダーの依頼医 | 確認(食事オーダーの登録・編集でアレルギーが写れば自動。アレルギーの解消・削除で取り下げ) |
 
 - 器を `Task` にしたのは、宛先(`owner`)・未対応と対応済み(`status`)・対象(`focus`)・患者(`for`)・
   期限(`restriction.period`)・優先度を標準のフィールドで持てるからです。`Communication` は上流が未対応で、

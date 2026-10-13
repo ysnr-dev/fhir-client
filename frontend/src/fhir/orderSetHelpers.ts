@@ -299,7 +299,14 @@ export function sanitizeValuesForSet(orderType: OrderSetOrderType, values: unkno
     }
     case "meal-order": {
       const v = values as MealOrderFormValues;
-      return { ...v, problem: null, startDate: "", endDate: "" } satisfies MealOrderFormValues;
+      return {
+        ...v,
+        problem: null,
+        startDate: "",
+        endDate: "",
+        // 食物アレルギーは患者のもの。適用時にその患者の有効なものを入れる。
+        allergies: [],
+      } satisfies MealOrderFormValues;
     }
     case "transfusion-order": {
       const v = values as TransfusionOrderFormValues;

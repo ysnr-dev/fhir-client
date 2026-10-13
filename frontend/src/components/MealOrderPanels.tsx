@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import {
   useActiveMealOrders,
-  useCreatePrescription,
+  useCreateMealOrder,
   useMealOrderDetail,
   usePatientAdmission,
   useUpdateMealOrder,
@@ -48,7 +48,7 @@ export function MealOrderCreatePanel({
   defaultProblem,
   onSaved,
 }: MealOrderCreatePanelProps) {
-  const createMealOrder = useCreatePrescription();
+  const createMealOrder = useCreateMealOrder();
   const source = useMealOrderInitialValues(sourceSrId, patientId);
   // 食事は入院患者にだけ出すオーダー。入院病棟もここから取ってオーダーに焼き付け、
   // 入院(Encounter)そのものも結び付ける(退院・外出泊の連動が突き合わせる)。
@@ -89,7 +89,7 @@ export function MealOrderCreatePanel({
           pattern,
           values.startDate,
           values.startTiming,
-          { comment: values.comment, problem: values.problem },
+          { comment: values.comment, problem: values.problem, allergies: values.allergies },
           patientId,
           attribution,
           closing,
@@ -97,7 +97,16 @@ export function MealOrderCreatePanel({
           encounterId,
         )
       : buildMealOrderBundle(values, patientId, attribution, closing, resuming, encounterId);
-    createMealOrder.mutate(bundle, { onSuccess: onSaved });
+    createMealOrder.mutate(
+      {
+        bundle,
+        patientId,
+        // 終了させるオーダーあての「アレルギー未反映」の通知は、新しいオーダーに写れば閉じる。
+        orderIds: closing.map((sr) => sr.id ?? "").filter(Boolean),
+        allergyIds: values.allergies.map((allergy) => allergy.id),
+      },
+      { onSuccess: onSaved },
+    );
   }
 
   return (
@@ -148,12 +157,17 @@ export function MealOrderEditPanel({ patientId, srId, onSaved }: MealOrderEditPa
 
     // 依頼科・依頼医師・病棟・種別・入院との結びつきは登録時のものを引き継ぐ。
     updateMealOrder.mutate(
-      buildMealOrderUpdateBundle(
-        values,
+      {
+        bundle: buildMealOrderUpdateBundle(
+          values,
+          patientId,
+          serviceRequest,
+          orderRequester(serviceRequest),
+        ),
         patientId,
-        serviceRequest,
-        orderRequester(serviceRequest),
-      ),
+        orderIds: [srId],
+        allergyIds: values.allergies.map((allergy) => allergy.id),
+      },
       { onSuccess: onSaved },
     );
   }
@@ -174,6 +188,7 @@ export function MealOrderEditPanel({ patientId, srId, onSaved }: MealOrderEditPa
             submitting={updateMealOrder.isPending}
             submitError={updateMealOrder.error}
             submitLabel="更新"
+            editing
           />
         )
       )}

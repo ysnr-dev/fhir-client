@@ -9,6 +9,7 @@ import {
   isSameEndCauseFamily,
   lastMealAtOrBefore,
   mealOrderEnd,
+  mealOrderAllergies,
   mealOrderEncounterId,
   mealOrderEndCause,
   mealOrderLink,
@@ -174,7 +175,9 @@ export function buildLeaveStartEntries(ctx: MealSyncContext, leave: LeaveValues)
     buildMealOrderCloseEntry(sr, stop.date, stop.timing, cause),
   );
   if (preview.fasting && ctx.fastingDiet) {
-    entries.push(buildFastingEntry(ctx, leave, preview.fasting.start, preview.fasting.end));
+    entries.push(
+      buildFastingEntry(ctx, leave, preview.fasting.start, preview.fasting.end, preview.stopping),
+    );
   }
   if (preview.resume) {
     for (const sr of preview.stopping) {
@@ -249,13 +252,17 @@ function buildFastingEntry(
   leave: LeaveValues,
   start: MealPoint,
   end: MealPoint | undefined,
+  /** 止める食事。食物アレルギーの写しはここから引き継ぐ(食止めでも未反映の扱いにしない)。 */
+  stopping: fhir4.ServiceRequest[],
 ): fhir4.BundleEntry {
   const diet = ctx.fastingDiet as MealItemRef;
+  const allergies = stopping.flatMap(mealOrderAllergies);
   return buildMealOrderCreateEntry(
     {
       ...emptyMealOrderForm(),
       diet,
       dietIsFasting: true,
+      allergies: allergies.filter((ref, i) => allergies.findIndex((r) => r.id === ref.id) === i),
       // 欠食理由は連動が決める(外出泊で出す食止めなので手で選ばせるところが無い)。
       fastingReason: "leave",
       startDate: start.date,

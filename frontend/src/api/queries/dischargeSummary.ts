@@ -25,8 +25,11 @@ import {
 } from "../fhirClient";
 import { hasRelation, NOTIFICATION_TASK_KEY, resourcesOfType } from "./core";
 import { fetchWardNameByBed } from "./encounter";
+import { fetchOpenMealAllergyChecks, mealAllergyCheckEntriesFor } from "./meal";
 import { KARTE_CONDITION_COUNT, saveClinicalNote, staleObservationEntries } from "./micro";
 import { useOrderEnterer } from "./provenance";
+import { cancelMealAllergyCheckEntries } from "../../fhir/mealAllergyTaskHelpers";
+import { transactionBundle } from "../../fhir/shared";
 
 // ---- 退院時サマリー ----
 
@@ -324,24 +327,70 @@ export function useAllergy(id: string | undefined) {
   });
 }
 
+// 食物アレルギーの登録・更新・削除は、進行中の食事オーダーあての通知(食事のアレルギー確認)を
+// 同じ transaction で作る・取り下げる(docs/meal-order-design.md §2.12)。通知の要らない保存は
+// 単体の POST / PUT / DELETE のまま。
+
+function allergyPatientId(allergy: fhir4.AllergyIntolerance): string {
+  return allergy.patient?.reference?.split("/").pop() ?? "";
+}
+
 export function useCreateAllergy() {
   const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
   return useMutation({
-    mutationFn: (allergy: fhir4.AllergyIntolerance) => createResource(allergy),
+    mutationFn: async (allergy: fhir4.AllergyIntolerance) => {
+      const fullUrl = `urn:uuid:${crypto.randomUUID()}`;
+      const tasks = await mealAllergyCheckEntriesFor(
+        allergy,
+        fullUrl,
+        allergyPatientId(allergy),
+        enterer ?? undefined,
+      );
+      if (tasks.length === 0) return createResource(allergy);
+      return postBundle(
+        transactionBundle([
+          { fullUrl, resource: allergy, request: { method: "POST", url: "AllergyIntolerance" } },
+          ...tasks,
+        ]),
+      );
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["AllergyIntolerance", "search"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }
 
 export function useUpdateAllergy() {
   const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
   return useMutation({
-    mutationFn: ({ allergy, etag }: { allergy: fhir4.AllergyIntolerance; etag: string }) =>
-      updateResource(allergy, etag),
-    onSuccess: (result: FhirResult<fhir4.AllergyIntolerance>) => {
+    mutationFn: async ({ allergy, etag }: { allergy: fhir4.AllergyIntolerance; etag: string }) => {
+      const tasks = await mealAllergyCheckEntriesFor(
+        allergy,
+        `AllergyIntolerance/${allergy.id}`,
+        allergyPatientId(allergy),
+        enterer ?? undefined,
+      );
+      if (tasks.length === 0) return updateResource(allergy, etag);
+      await postBundle(
+        transactionBundle([
+          {
+            resource: allergy,
+            request: { method: "PUT", url: `AllergyIntolerance/${allergy.id}`, ifMatch: etag },
+          },
+          ...tasks,
+        ]),
+      );
+      return allergy.id ?? "";
+    },
+    onSuccess: (result: FhirResult<fhir4.AllergyIntolerance> | string, { allergy }) => {
       queryClient.invalidateQueries({ queryKey: ["AllergyIntolerance", "search"] });
-      queryClient.invalidateQueries({ queryKey: ["AllergyIntolerance", result.data.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["AllergyIntolerance", typeof result === "string" ? result : result.data.id ?? allergy.id],
+      });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }
@@ -349,9 +398,22 @@ export function useUpdateAllergy() {
 export function useDeleteAllergy() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteResource("AllergyIntolerance", id),
+    mutationFn: async ({ id, patientId }: { id: string; patientId: string }) => {
+      // 消すアレルギーあての未対応の通知は、確認の要らない事象になったので取り下げる。
+      const cancels = patientId
+        ? cancelMealAllergyCheckEntries(await fetchOpenMealAllergyChecks(patientId), id)
+        : [];
+      if (cancels.length === 0) return deleteResource("AllergyIntolerance", id);
+      return postBundle(
+        transactionBundle([
+          { request: { method: "DELETE", url: `AllergyIntolerance/${id}` } },
+          ...cancels,
+        ]),
+      );
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["AllergyIntolerance", "search"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }

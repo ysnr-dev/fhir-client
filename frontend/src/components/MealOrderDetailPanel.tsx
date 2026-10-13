@@ -67,6 +67,9 @@ export function MealOrderDetailPanel({
           <dd>{`${summary.startLabel}〜${summary.continuing ? " 継続中" : ` ${summary.endLabel}`}`}</dd>
           <dt>コメント</dt>
           <dd>{summary.comment || "-"}</dd>
+          {/* オーダーに写した食物アレルギー(給食部門への伝達事項)。 */}
+          <dt>食物アレルギー</dt>
+          <dd>{summary.allergyLabel || "-"}</dd>
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
           <dt>依頼科 | 依頼医師</dt>

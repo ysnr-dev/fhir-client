@@ -15,6 +15,7 @@ import {
   nextMealPoint,
   previousMealPoint,
   uniformStaple,
+  type MealAllergyRef,
   type MealFastingReason,
   type MealItemRef,
   type MealOrderFormValues,
@@ -35,10 +36,10 @@ import { transactionBundle } from "./shared";
 // 展開後は段階ごとに独立した食事オーダーで、パターンと段階は表示のための拡張
 // (meal-pattern)に焼き付くだけ。
 
-/** 段階の食事内容。フォーム値から期間と対象プロブレムを除いたもの(全段階で共通にする)。 */
+/** 段階の食事内容。フォーム値から期間・対象プロブレム・食物アレルギーを除いたもの(全段階で共通にする)。 */
 export type MealPatternStepValues = Omit<
   MealOrderFormValues,
-  "startDate" | "startTiming" | "endDate" | "endTiming" | "problem"
+  "startDate" | "startTiming" | "endDate" | "endTiming" | "problem" | "allergies"
 >;
 
 export interface MealPatternStep {
@@ -119,6 +120,7 @@ export function formValuesOfStep(values: MealPatternStepValues): MealOrderFormVa
     endDate: "",
     endTiming: DEFAULT_MEAL_END_TIMING,
     problem: null,
+    allergies: [],
   };
 }
 
@@ -219,13 +221,13 @@ function joinComments(...parts: string[]): string {
 /**
  * パターン食の登録。段階ごとの POST を、食事変更の終了(closing)と、最後の段階が期限付きの
  * ときの再開(resuming)と一緒に 1 つの transaction にまとめる(buildMealOrderBundle と同じ並び)。
- * コメントと対象プロブレムは全段階に共通で、段階のコメントがあれば続けて書く。
+ * コメント・対象プロブレム・食物アレルギーは全段階に共通で、段階のコメントがあれば続けて書く。
  */
 export function buildMealPatternBundle(
   pattern: MealPatternSubmission,
   startDate: string,
   startTiming: MealTiming,
-  shared: { comment: string; problem: ProblemRef | null },
+  shared: { comment: string; problem: ProblemRef | null; allergies: MealAllergyRef[] },
   patientId: string,
   requester: OrderAttribution,
   closing: fhir4.ServiceRequest[] = [],
@@ -251,6 +253,7 @@ export function buildMealPatternBundle(
         ...span.step.values,
         comment: joinComments(span.step.values.comment, shared.comment),
         problem: shared.problem,
+        allergies: shared.allergies,
         startDate: span.startDate,
         startTiming: span.startTiming,
         endDate: span.endDate,
@@ -270,6 +273,7 @@ export function buildMealPatternBundle(
           .map((sr) =>
             buildMealOrderResumeEntry(sr, resume.date, resume.timing, patientId, requester, {
               encounterId,
+              allergies: shared.allergies,
             }),
           )
       : []),

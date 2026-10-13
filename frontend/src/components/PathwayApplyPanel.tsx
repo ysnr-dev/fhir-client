@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Pathway, PathwayDetail, PathwayEvent, PathwayPhaseBranch } from "../api/masterClient";
 import { useApplicablePathways, usePathway } from "../api/masterQueries";
 import {
+  useActiveAllergies,
   useApplyPathway,
   useKarteConditions,
   usePathwayApplicationTree,
@@ -10,6 +11,7 @@ import {
   usePatientAdmission,
   usePatientPlannedAdmissions,
 } from "../api/queries";
+import { mealAllergyRefsOf } from "../fhir/mealAllergyHelpers";
 import { conditionManagementNumber, isActiveCondition, summarizeCondition } from "../fhir/conditionHelpers";
 import { encounterAdmissionDate, plannedAdmissionDate } from "../fhir/encounterHelpers";
 import {
@@ -258,6 +260,8 @@ function PathwayApplyForm({
   const { conditions } = useKarteConditions(patientId);
   const institutionNumber = useSelfInstitutionNumber();
   const requester = useOrderContext();
+  // 食事オーダーに写す食物アレルギー(パスの雛形は患者のものを持たない)。
+  const { allergies } = useActiveAllergies(patientId);
   const apply = useApplyPathway();
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
 
@@ -458,6 +462,7 @@ function PathwayApplyForm({
         encounterId: encounterId || defaultSetting.encounterId || undefined,
         // パスのタスクは病名を伴わない(プロブレム番号は使わない)。
         allocateProblemNumber: () => 0,
+        foodAllergies: mealAllergyRefsOf(allergies),
       });
       orderBundles.push(built.bundle);
       invalidate.push(...built.invalidate);

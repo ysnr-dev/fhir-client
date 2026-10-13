@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { MealDiet, MealPattern } from "../api/masterClient";
+import { useActiveAllergies } from "../api/queries";
+import { mealAllergyMismatch, mealAllergyRefsOf } from "../fhir/mealAllergyHelpers";
 import {
   useMealCategoryOptions,
   useMealDietOptions,
@@ -35,6 +37,7 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { MealAllergyList } from "./MealAllergyList";
 import { MealDietPickerModal, type MealPickerTab } from "./MealDietPickerModal";
 import { MealPatternStepsTable } from "./MealPatternStepsTable";
 import {
@@ -83,6 +86,8 @@ interface MealOrderFormProps {
   hidePeriod?: boolean;
   /** パターン食を選べるようにする(カルテからの新規登録だけ。セット・パスの雛形では出さない)。 */
   allowPattern?: boolean;
+  /** 保存済みオーダーの編集。食物アレルギーの一覧に、開いたオーダーとの食い違い(未反映・解消済み)を出す。 */
+  editing?: boolean;
 }
 
 /**
@@ -140,6 +145,7 @@ export function MealOrderForm({
   hideSubmit = false,
   hidePeriod = false,
   allowPattern = false,
+  editing = false,
 }: MealOrderFormProps) {
   const [values, setValues] = useState<MealOrderFormValues>(initialValues);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -153,6 +159,16 @@ export function MealOrderForm({
   const [resumeIds, setResumeIds] = useState<string[]>([]);
 
   const problemOptions = useProblemOptions(patientId);
+  // 患者の有効なアレルギー。食物のものをオーダーに写す(雛形では患者が無いので引かない)。
+  const patientAllergies = useActiveAllergies(setMode ? undefined : patientId || undefined);
+  // 新規登録は保存で必ず全件を写すので、食い違いを出すのは編集のときだけ。
+  const allergyMismatch = useMemo(
+    () =>
+      editing
+        ? mealAllergyMismatch(values.allergies, patientAllergies.allergies)
+        : { missing: [], stale: [] },
+    [editing, values.allergies, patientAllergies.allergies],
+  );
   useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, startDate: date })));
   const diets = useMealDietOptions();
   const staples = useMealItemOptions("staple");
@@ -305,6 +321,10 @@ export function MealOrderForm({
       // あるが、食種を食止めに変える前に入れた値がここに残っているため)。
       ...(values.dietIsFasting ? clearedMealContent() : null),
       problem: refreshProblemDisplay(values.problem, problemOptions),
+      // 写す食物アレルギーは保存時点の有効なもの(編集で開いたときの写しは引き継がない)。
+      // 雛形(セット・パターンの段階)は患者を持たないので値のまま。
+      allergies:
+        !setMode && patientId ? mealAllergyRefsOf(patientAllergies.allergies) : values.allergies,
     };
   }
 
@@ -378,6 +398,7 @@ export function MealOrderForm({
       <ErrorBanner
         error={diets.error ?? staples.error ?? sideDishForms.error ?? mealCategories.error}
       />
+      <ErrorBanner error={patientAllergies.error} />
 
       {/* パターン食を選んだら、食種・主食の欄の代わりに段階の表を出す(段階ごとの食事内容は
           マスタで決めてあり、ここでは食数と段階の削除だけ直せる)。 */}
@@ -675,6 +696,14 @@ export function MealOrderForm({
               </div>
             );
           })}
+        </fieldset>
+      )}
+
+      {/* 食物アレルギー。オーダーに写して給食部門へ伝える(SS-MIX2 の AL1 相当)。 */}
+      {!setMode && patientId && (
+        <fieldset>
+          <legend>食物アレルギー</legend>
+          <MealAllergyList allergies={patientAllergies.allergies} mismatch={allergyMismatch} />
         </fieldset>
       )}
 
