@@ -11140,9 +11140,9 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
    ために作った仕組みを、外来患者一覧や部門業務のワークリストでも使えるように
    まとめたもの。
    使い方: 表を囲む div に .sticky-table-wrap、表に .sticky-table を付け、固定
-   したいセルに左から順に .sticky-table__fix-1 〜 -4 を、右端の操作列に
-   .sticky-table__fix-actions を付ける(-4 まで使うかは表しだい)。左の列の幅は
-   表ごとに違うので、--sticky-fix-1-w 〜 --sticky-fix-4-w を表の側で決める。 */
+   したいセルに左から順に .sticky-table__fix-1 〜 -5 を、右端の操作列に
+   .sticky-table__fix-actions を付ける(-5 まで使うかは表しだい)。左の列の幅は
+   表ごとに違うので、--sticky-fix-1-w 〜 --sticky-fix-5-w を表の側で決める。 */
 
 /* 行が多いと縦にも送る。ページごと送ると列見出しまで流れてしまうので、表の中だけで
    送れるよう高さを画面に収める(見出しの sticky はこのラップを基準に貼り付くため、
@@ -11174,6 +11174,7 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
 .sticky-table__fix-2,
 .sticky-table__fix-3,
 .sticky-table__fix-4,
+.sticky-table__fix-5,
 .sticky-table__fix-actions {
   position: sticky;
   z-index: 1;
@@ -11185,6 +11186,7 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
 .sticky-table thead .sticky-table__fix-2,
 .sticky-table thead .sticky-table__fix-3,
 .sticky-table thead .sticky-table__fix-4,
+.sticky-table thead .sticky-table__fix-5,
 .sticky-table thead .sticky-table__fix-actions {
   z-index: 3;
 }
@@ -11197,7 +11199,8 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
 .sticky-table__fix-1,
 .sticky-table__fix-2,
 .sticky-table__fix-3,
-.sticky-table__fix-4 {
+.sticky-table__fix-4,
+.sticky-table__fix-5 {
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -11229,6 +11232,15 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
   width: var(--sticky-fix-4-w);
   min-width: var(--sticky-fix-4-w);
   max-width: var(--sticky-fix-4-w);
+}
+
+.sticky-table__fix-5 {
+  left: calc(
+    var(--sticky-fix-1-w) + var(--sticky-fix-2-w) + var(--sticky-fix-3-w) + var(--sticky-fix-4-w)
+  );
+  width: var(--sticky-fix-5-w);
+  min-width: var(--sticky-fix-5-w);
+  max-width: var(--sticky-fix-5-w);
 }
 
 /* 操作列は幅を決めない(right 基準なので手前の列の幅に依らない)。ケバブの
@@ -11720,15 +11732,16 @@ body.page-wide-md .app__main {
 
 /* 表の作りは放射線検査一覧と同じ。幅は page-wide で確保し、画面が狭いときは
    ページ全体ではなく表の中だけを横にスクロールさせる(.sticky-table-wrap)。
-   固定列は 時刻・患者番号・患者氏名で、仕組みは .sticky-table を参照。 */
+   固定列は 時刻・待ち時間・患者番号・患者氏名で、仕組みは .sticky-table を参照。 */
 .outpatient {
   width: 100%;
   margin-bottom: 8px;
-  /* 予約時間 / 受付時間 / 患者番号 / 患者氏名。 */
+  /* 予約時間 / 受付時間 / 待ち時間 / 患者番号 / 患者氏名。 */
   --sticky-fix-1-w: 92px;
   --sticky-fix-2-w: 92px;
-  --sticky-fix-3-w: 104px;
-  --sticky-fix-4-w: 240px;
+  --sticky-fix-3-w: 92px;
+  --sticky-fix-4-w: 104px;
+  --sticky-fix-5-w: 240px;
 }
 
 .outpatient th,
@@ -11820,13 +11833,6 @@ body.page-wide-md .app__main {
 
 .outpatient__summary-item strong {
   font-variant-numeric: tabular-nums;
-}
-
-/* 受付からの待ち時間。受付時刻の後ろに小さく添える。 */
-.outpatient__wait {
-  margin-left: 4px;
-  font-size: 11px;
-  color: var(--text-muted, var(--text));
 }
 
 /* 氏名の列は固定幅。あふれたら氏名・カナの側を省略し、ピクトグラムは縮めない。 */

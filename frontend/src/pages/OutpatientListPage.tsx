@@ -428,13 +428,14 @@ export function OutpatientListPage() {
             <table className="outpatient sticky-table">
               <thead>
                 <tr>
-                  {/* 横に送っても「いつ・誰の予約か」は残す(左 4 列を固定する)。
+                  {/* 横に送っても「いつ・誰の予約か」は残す(左 5 列を固定する)。
                       予約時間(枠の時刻)と受付時間(実際に来て受付した時刻)は
                       別物なので列を分ける。 */}
                   <th className="outpatient__time sticky-table__fix-1">予約時間</th>
                   <th className="outpatient__time sticky-table__fix-2">受付時間</th>
-                  <th className="sticky-table__fix-3">患者番号</th>
-                  <th className="sticky-table__fix-4">患者氏名</th>
+                  <th className="outpatient__time sticky-table__fix-3">待ち時間</th>
+                  <th className="sticky-table__fix-4">患者番号</th>
+                  <th className="sticky-table__fix-5">患者氏名</th>
                   <PatientProfileHeadCells />
                   <th>初再診</th>
                   <th className="outpatient__schedule">予約枠</th>
@@ -475,7 +476,7 @@ export function OutpatientListPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={14} className="master-search__empty">
+                    <td colSpan={15} className="master-search__empty">
                       {total === 0
                         ? "この診察日の予約はありません"
                         : "絞り込みに該当する予約がありません"}
@@ -726,14 +727,12 @@ function OutpatientTableRow({
       </td>
       <td className="outpatient__time sticky-table__fix-2">
         {appointmentCheckedInTimeLabel(appointment)}
-        {waitingMinutes !== undefined && (
-          <span className="outpatient__wait" title={`受付から ${waitingMinutes} 分`}>
-            {waitingMinutes}分
-          </span>
-        )}
       </td>
-      <td className="sticky-table__fix-3">{patient?.identifier?.[0]?.value ?? "-"}</td>
-      <td className="sticky-table__fix-4">
+      <td className="outpatient__time sticky-table__fix-3">
+        {waitingMinutes !== undefined ? `${waitingMinutes}分` : "-"}
+      </td>
+      <td className="sticky-table__fix-4">{patient?.identifier?.[0]?.value ?? "-"}</td>
+      <td className="sticky-table__fix-5">
         {/* カナは列を分けず、氏名の後ろに小さめの括弧書きで添える(入院患者一覧と同じ)。
             列は固定幅なので、あふれたら氏名・カナの側を省略してピクトグラムは必ず残す。 */}
         <span className="outpatient__name-cell">
