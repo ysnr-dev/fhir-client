@@ -15925,6 +15925,74 @@ td.surgery-calendar__cell--drop-target {
   font-weight: 600;
 }
 
+/* ---- 給食部門の食事一覧・食数集計(docs/meal-order-design.md §5.2) ---- */
+
+.meal-worklist__meal {
+  min-width: 9em;
+}
+
+.meal-worklist__meal--none {
+  color: var(--text);
+}
+
+/* その食事から内容が変わった欄。暦の「変更」と同じく左の帯で示す。 */
+.meal-worklist__meal--changed {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.meal-worklist__staple {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.meal-worklist__skipped {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.meal-worklist__badge {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.meal-worklist__allergy {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.meal-worklist__comment {
+  white-space: pre-wrap;
+  font-size: 13px;
+}
+
+.meal-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.meal-count__table {
+  width: auto;
+  min-width: 360px;
+}
+
+.meal-count__num {
+  text-align: right;
+  width: 4em;
+}
+
+.meal-count__table tfoot th,
+.meal-count__table tfoot td {
+  border-top: 1px solid var(--border);
+}
+
 /* ---- パターン食の段階の表(docs/meal-order-design.md §2.11・§3.5) ---- */
 
 /* フォームの fieldset は横並びなので、表は行いっぱいに広げる。 */

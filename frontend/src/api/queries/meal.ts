@@ -20,7 +20,7 @@ import {
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import { today } from "../../lib/dates";
 import { deleteResource, postBundle, searchResource } from "../fhirClient";
-import { NOTIFICATION_TASK_KEY, resourcesOfType, setOrderPeriod } from "./core";
+import { NOTIFICATION_TASK_KEY, resourcesOfType, searchAllPages, setOrderPeriod } from "./core";
 import { useCreatePrescription } from "./labResult";
 import { useFacilitySettings } from "./organization";
 import { invalidateProvenance, useOrderEnterer, useWithOrderProvenance } from "./provenance";
@@ -156,6 +156,31 @@ export function useMealOrderMonth(patientId: string | undefined, monthStart: str
       return serviceRequestsOf(bundle).filter(isMealServiceRequest);
     },
     enabled: Boolean(patientId) && Boolean(monthStart) && Boolean(monthEnd),
+  });
+}
+
+/**
+ * その日に掛かっている全患者の食事オーダー(給食部門の食事一覧・食数集計)。
+ * 終了は上流の order-period が終了拡張まで見て絞るので、その日に出す食事のオーダーだけが返る。
+ * 食数の合計に使うので、上限で欠けたら投げる(complete)。
+ */
+export function useMealOrdersOn(date: string) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "meal-day", date],
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams();
+      params.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
+      params.set("status", "active");
+      setOrderPeriod(params, date, date);
+      const { matches } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+        page: 500,
+        maxPages: 4,
+        complete: true,
+        signal,
+      });
+      return matches.filter(isMealServiceRequest);
+    },
+    enabled: Boolean(date),
   });
 }
 

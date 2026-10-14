@@ -79,6 +79,7 @@ import { RadiotherapyProtocolPage } from "./pages/RadiotherapyProtocolPage";
 import { RadiotherapyWorklistPage } from "./pages/RadiotherapyWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
+import { MealWorklistPage } from "./pages/MealWorklistPage";
 import { MedicationGuidanceWorklistPage } from "./pages/MedicationGuidanceWorklistPage";
 import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
 import { TeamWorklistPage } from "./pages/TeamWorklistPage";
@@ -362,6 +363,10 @@ function App() {
               <Link to="/nutrition-guidance-worklist" className="row-menu__item">
                 栄養指導一覧
               </Link>
+              {/* 給食はオーダーを 1 件ずつ処理せず、その日の食事を患者別に並べて食数を数える。 */}
+              <Link to="/meal-worklist" className="row-menu__item">
+                食事一覧
+              </Link>
             </SubMenu>
             <SubMenu label="薬剤部門">
               <Link to="/rx-worklist" className="row-menu__item">
@@ -539,6 +544,7 @@ function App() {
           <Route path="/patho-worklist" element={<PathoWorklistPage />} />
           <Route path="/transfusion-worklist" element={<TransfusionWorklistPage />} />
           <Route path="/rehab-worklist" element={<RehabWorklistPage />} />
+          <Route path="/meal-worklist" element={<MealWorklistPage />} />
           <Route path="/radiotherapy-worklist" element={<RadiotherapyWorklistPage />} />
           <Route path="/radiotherapy-protocols" element={<RadiotherapyProtocolPage />} />
           <Route path="/radiotherapy-modalities" element={<RadiotherapyModalityPage />} />
