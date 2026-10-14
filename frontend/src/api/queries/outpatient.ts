@@ -28,6 +28,7 @@ import { createResource, postBundle, searchResource } from "../fhirClient";
 import { invalidateAppointments, orderAppointmentCancelEntries } from "./appointment";
 import { hasNextPage, makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
 import { makePerformDetailHook, taskBundleEntry } from "./worklist";
+import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
 // ---- 外来一覧(受付ワークリスト) ----
 //
@@ -568,7 +569,7 @@ export function useCancelInjectionPerforms() {
 export const deleteInjectionSeriesRequest = async (srIds: string[]) => {
   const bundle = buildInjectionSeriesDeleteBundle(srIds);
   const cancels = await orderAppointmentCancelEntries(srIds);
-  return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...cancels] });
+  return postOrderDeleteBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...cancels] });
 };
 
 export function useDeleteInjectionSeries() {
@@ -579,6 +580,7 @@ export function useDeleteInjectionSeries() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
       invalidateAppointments(queryClient);
+      invalidateOrderDependents(queryClient);
     },
   });
 }

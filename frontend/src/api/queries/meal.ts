@@ -19,11 +19,12 @@ import {
 } from "../../fhir/mealAllergyTaskHelpers";
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import { today } from "../../lib/dates";
-import { deleteResource, postBundle, searchResource } from "../fhirClient";
+import { postBundle, searchResource } from "../fhirClient";
 import { NOTIFICATION_TASK_KEY, resourcesOfType, searchAllPages, setOrderPeriod } from "./core";
 import { useCreatePrescription } from "./labResult";
 import { useFacilitySettings } from "./organization";
 import { invalidateProvenance, useOrderEnterer, useWithOrderProvenance } from "./provenance";
+import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
 // ---- 食事オーダー ----
 //
@@ -290,10 +291,15 @@ export async function mealAllergyCheckEntriesFor(
 }
 
 /**
- * useDeleteMealOrder の本体(読み直しの指示を伴わない)。明細も予約も持たないので、ヘッダ 1 件を
- * 消すだけ。パスの取り消しがまとめて消すときにも使う。
+ * useDeleteMealOrder の本体(読み直しの指示を伴わない)。明細も予約も持たないので、ヘッダ 1 件と
+ * それを指す Task を消す。パスの取り消しがまとめて消すときにも使う。
  */
-export const deleteMealOrderRequest = (srId: string) => deleteResource("ServiceRequest", srId);
+export const deleteMealOrderRequest = (srId: string) =>
+  postOrderDeleteBundle({
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [{ request: { method: "DELETE", url: `ServiceRequest/${srId}` } }],
+  });
 
 export function useDeleteMealOrder() {
   const queryClient = useQueryClient();
@@ -302,6 +308,7 @@ export function useDeleteMealOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

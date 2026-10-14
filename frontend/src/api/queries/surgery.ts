@@ -32,6 +32,7 @@ import {
   taskBundleEntry,
   worklistParams,
 } from "./worklist";
+import { invalidateOrderDependents } from "./orderDelete";
 
 // ---- 手術オーダー ----
 //
@@ -418,6 +419,7 @@ export function useDeleteSurgeryOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

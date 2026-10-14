@@ -9,8 +9,9 @@ import { INJECTION_ORDER_TYPE } from "../../fhir/injectionHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { rxTasksByOrderId } from "../../fhir/rxTaskHelpers";
 import { resourcesOfType } from "../../fhir/shared";
-import { postBundle, searchResource } from "../fhirClient";
+import { searchResource } from "../fhirClient";
 import { comparePatientNumber, fetchWorklistBundles, worklistParams } from "./worklist";
+import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
 // ---- 処方一覧(部門ワークリスト) ----
 //
@@ -95,7 +96,8 @@ export async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
 }
 
 /** useDeletePrescription の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
-export const deletePrescriptionRequest = (srId: string) => postBundle(buildPrescriptionDeleteBundle(srId));
+export const deletePrescriptionRequest = (srId: string) =>
+  postOrderDeleteBundle(buildPrescriptionDeleteBundle(srId));
 
 export function useDeletePrescription() {
   const queryClient = useQueryClient();
@@ -103,6 +105,7 @@ export function useDeletePrescription() {
     mutationFn: deletePrescriptionRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

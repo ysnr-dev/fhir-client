@@ -69,6 +69,19 @@
 - 上流の `AuditEvent` は依然 OAuth クライアントしか記録せず、エンドユーザーは Provenance でしか追えません
   (認証回りの変更になるので別課題)。
 
+## オーダーの削除
+
+全種別の削除(カルテのカード・部門一覧・パスの取り消し・レジメンのクール取消)は、各種別が組んだ削除の
+transaction を `api/queries/orderDelete.ts` の `postOrderDeleteBundle` に通して送ります。Bundle が消す
+`ServiceRequest`(ヘッダ・明細)を指すものをその場で引き直し、次のように扱います。
+
+- **一緒に消す**: 進捗・通知の `Task`(`focus` か `basedOn` がオーダー。承認待ち・疑義照会・食物アレルギーの
+  通知を含む)と、薬剤明細を指す調剤・払出の記録(`MedicationDispense`)。
+- **削除させない**: 実施記録(`Procedure` / `MedicationAdministration`)か結果(`DiagnosticReport` /
+  `Observation`)が付いたオーダー。「実施記録があるため削除できません」と出すので、実施を取り消すか
+  結果を削除してから消します。中止で残す運用はそのまま使えます。
+- 残すもの: ラベル発行済みの `Specimen`(発行・到着の記録)と来歴の `Provenance`。
+
 ## 研修医のカウンターサイン
 
 研修医・学生が書いた診療記録とオーダーを、指導医が後から承認(カウンターサイン)・差戻し・コメントします

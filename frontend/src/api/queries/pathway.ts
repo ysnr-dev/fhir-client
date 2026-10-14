@@ -44,6 +44,7 @@ import { deleteRehabOrderRequest } from "./rehab";
 import { deleteSurgeryOrderRequest } from "./surgery";
 import { deleteTransfusionOrderRequest } from "./transfusion";
 import { deleteTreatmentOrderRequest } from "./treatment";
+import { postOrderDeleteBundle } from "./orderDelete";
 
 // ---- クリニカルパスの適用(docs/clinical-pathway-design.md §7) ----
 
@@ -280,7 +281,7 @@ function deleteNursingOrderRequest(order: fhir4.ServiceRequest, tasks: fhir4.Tas
     .filter((t) => t.focus?.reference === reference || t.basedOn?.some((b) => b.reference === reference))
     .map((t) => t.id)
     .filter((id): id is string => Boolean(id));
-  return postBundle({
+  return postOrderDeleteBundle({
     resourceType: "Bundle",
     type: "transaction",
     entry: [

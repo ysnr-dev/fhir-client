@@ -32,6 +32,7 @@ import {
   performCancelEntries,
   worklistParams,
 } from "./worklist";
+import { invalidateOrderDependents } from "./orderDelete";
 
 // ---- 内視鏡オーダー ----
 //
@@ -234,6 +235,7 @@ export function useDeleteEndoscopyOrder() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["Appointment"] });
       queryClient.invalidateQueries({ queryKey: ["Slot"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

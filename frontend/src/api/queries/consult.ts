@@ -19,6 +19,7 @@ import { WORKLIST_PAGE } from "./core";
 import { staleObservationEntries } from "./micro";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import { fetchWorklistBundles, taskBundleEntry } from "./worklist";
+import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
 // ---- 他科依頼(コンサルテーション) ----
 //
@@ -77,7 +78,7 @@ export const deleteConsultOrderRequest = async (srId: string) => {
       "回答済の他科依頼は削除できません。先に他科依頼一覧で回答を取り消してください。",
     );
   }
-  return postBundle(buildConsultOrderDeleteBundle(order));
+  return postOrderDeleteBundle(buildConsultOrderDeleteBundle(order));
 };
 
 export function useDeleteConsultOrder() {
@@ -90,6 +91,7 @@ export function useDeleteConsultOrder() {
       // 依頼目的のテンプレート記入内容も道連れで消えている。
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       invalidateConsult(queryClient);
+      invalidateOrderDependents(queryClient);
     },
   });
 }

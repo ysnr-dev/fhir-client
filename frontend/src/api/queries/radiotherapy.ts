@@ -54,6 +54,7 @@ import {
 import { useFacilitySettings } from "./organization";
 import { invalidateProvenance, useOrderEnterer, useWithOrderProvenance } from "./provenance";
 import { fetchWorklistBundles, taskBundleEntry } from "./worklist";
+import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
 // ---- 放射線治療(治療処方) ----
 //
@@ -179,14 +180,17 @@ export const deleteRadiotherapyOrderRequest = async (srId: string) => {
       "受付後の放射線治療は削除できません。放射線治療一覧で中止するか、受付を取り消してください。",
     );
   }
-  return postBundle(buildRadiotherapyOrderDeleteBundle(srId));
+  return postOrderDeleteBundle(buildRadiotherapyOrderDeleteBundle(srId));
 };
 
 export function useDeleteRadiotherapyOrder() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deleteRadiotherapyOrderRequest,
-    onSuccess: () => invalidateRadiotherapy(queryClient),
+    onSuccess: () => {
+      invalidateRadiotherapy(queryClient);
+      invalidateOrderDependents(queryClient);
+    },
   });
 }
 

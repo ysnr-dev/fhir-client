@@ -25,6 +25,7 @@ import { useLabResultDetail } from "./labResult";
 import { withResultReviewTask } from "./notification";
 import { fetchDerivedObservationRefs } from "./patientProfile";
 import { deleteOrderWithItems } from "./worklist";
+import { invalidateOrderDependents } from "./orderDelete";
 
 // ---- 細菌検査結果 ----
 
@@ -368,6 +369,7 @@ export function useDeleteMicroOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

@@ -30,6 +30,7 @@ import {
 } from "./core";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import { comparePatientNumber, fetchWorklistBundles, taskBundleEntry } from "./worklist";
+import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
 // ---- 栄養指導オーダー ----
 //
@@ -93,7 +94,7 @@ export const deleteNutritionGuidanceOrderRequest = async (srId: string) => {
     readResource<fhir4.ServiceRequest>("ServiceRequest", srId),
     fetchOrderAppointmentCancelEntries(srId),
   ]);
-  return postBundle({
+  return postOrderDeleteBundle({
     resourceType: "Bundle",
     type: "transaction",
     entry: [
@@ -116,6 +117,7 @@ export function useDeleteNutritionGuidanceOrder() {
       // 指導目的のテンプレート記入内容も道連れで消えている。
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       invalidateAppointments(queryClient);
+      invalidateOrderDependents(queryClient);
     },
   });
 }

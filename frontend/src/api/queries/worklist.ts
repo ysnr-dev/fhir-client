@@ -5,6 +5,7 @@ import { postBundle, searchResource } from "../fhirClient";
 import { buildCancelEntriesOf, invalidateAppointments } from "./appointment";
 import { hasNextPage, resourcesOfType, WORKLIST_PAGE } from "./core";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
+import { postOrderDeleteBundle } from "./orderDelete";
 
 // 1 日のオーダーがこの件数を超えることは想定していない。超えた場合は読むのをやめ、
 // 画面に「一部のみ」と出す(黙って切り捨てると全件見えているように見えるため)。
@@ -270,7 +271,7 @@ export async function deleteOrderWithItems(srId: string, options: DeleteOrderOpt
         resourcesOfType<fhir4.Appointment>(bundle, "Appointment").filter(isActiveAppointment),
       )
     : [];
-  return postBundle(options.build({ srId, itemIds, itemRequests, requests, appointmentEntries }));
+  return postOrderDeleteBundle(options.build({ srId, itemIds, itemRequests, requests, appointmentEntries }));
 }
 
 /**

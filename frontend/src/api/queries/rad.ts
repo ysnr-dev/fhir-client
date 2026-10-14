@@ -24,6 +24,7 @@ import {
   performCancelEntries,
   worklistParams,
 } from "./worklist";
+import { invalidateOrderDependents } from "./orderDelete";
 
 // ---- 放射線検査一覧(部門ワークリスト) ----
 //
@@ -234,6 +235,7 @@ export function useDeleteRadOrder() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["Appointment"] });
       queryClient.invalidateQueries({ queryKey: ["Slot"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

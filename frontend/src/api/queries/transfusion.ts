@@ -25,6 +25,7 @@ import {
   performCancelEntries,
   worklistParams,
 } from "./worklist";
+import { invalidateOrderDependents } from "./orderDelete";
 
 // ---- 輸血オーダー ----
 
@@ -46,6 +47,7 @@ export function useDeleteTransfusionOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

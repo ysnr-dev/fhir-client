@@ -11,6 +11,7 @@ import {
   regimenDayTaskEntry,
 } from "./regimen";
 import { resourcesOfType } from "./core";
+import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
 // ---- 有害事象(CTCAE Grade。§7.6 C-3) ----
 
@@ -116,7 +117,7 @@ export function useDeleteRegimenCycle() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (targets: RegimenDayOrder[]) =>
-      postBundle({
+      postOrderDeleteBundle({
         resourceType: "Bundle",
         type: "transaction",
         entry: [
@@ -137,7 +138,10 @@ export function useDeleteRegimenCycle() {
           ...(await chemoAppointmentCancelEntries(targets)),
         ],
       }),
-    onSuccess: () => invalidateRegimen(queryClient),
+    onSuccess: () => {
+      invalidateRegimen(queryClient);
+      invalidateOrderDependents(queryClient);
+    },
   });
 }
 

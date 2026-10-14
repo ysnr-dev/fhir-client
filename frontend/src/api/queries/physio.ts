@@ -27,6 +27,7 @@ import {
   performCancelEntries,
   worklistParams,
 } from "./worklist";
+import { invalidateOrderDependents } from "./orderDelete";
 
 // ---- 生理検査オーダー ----
 //
@@ -225,6 +226,7 @@ export function useDeletePhysioOrder() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["Appointment"] });
       queryClient.invalidateQueries({ queryKey: ["Slot"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

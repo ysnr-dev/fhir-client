@@ -10,6 +10,7 @@ import {
   makeUpdateTaskStatusHook,
   worklistParams,
 } from "./worklist";
+import { invalidateOrderDependents } from "./orderDelete";
 
 // ---- 検体検査一覧(部門ワークリスト) ----
 //
@@ -135,6 +136,7 @@ export function useDeleteLabOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

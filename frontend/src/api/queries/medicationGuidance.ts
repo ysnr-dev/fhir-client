@@ -27,6 +27,7 @@ import {
 } from "./core";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import { comparePatientNumber, fetchWorklistBundles, taskBundleEntry } from "./worklist";
+import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
 // ---- 服薬指導オーダー(docs/medication-guidance-order-design.md) ----
 //
@@ -79,7 +80,7 @@ export function useUpdateMedicationGuidanceOrder() {
  * useDeleteMedicationGuidanceOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。
  */
 export const deleteMedicationGuidanceOrderRequest = (srId: string) =>
-  postBundle({
+  postOrderDeleteBundle({
     resourceType: "Bundle",
     type: "transaction",
     entry: [{ request: { method: "DELETE", url: `ServiceRequest/${srId}` } }],
@@ -92,6 +93,7 @@ export function useDeleteMedicationGuidanceOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

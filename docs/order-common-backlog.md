@@ -394,3 +394,15 @@ Provenance
 - カルテのカードから**中止**と**処方箋 PDF**ができない(どちらも処方一覧だけ)。カードに
   進捗バッジも出ない(`KarteTimeline.tsx` の status 表示に `prescription` が無い)。
 - 医薬品・用法マスタの**参照画面**が無い(取込だけ。`/master-import`)。
+
+---
+
+## 5. オーダー削除で Task と実施記録が孤児になる — **対応済み(2026-10-15)**
+
+> 削除の transaction を共通の `postOrderDeleteBundle`(`api/queries/orderDelete.ts`)に通すようにした。
+> オーダーを指す Task(進捗・通知)と MedicationDispense は同じ transaction で消し、実施記録・結果の付いた
+> オーダーは削除を止める(実施の取消・結果の削除が先)。画面の説明は `docs/features/orders-common.md`
+> 「オーダーの削除」。
+>
+> **残り**: 削除で `Provenance` の target が消える件(§2 残っている課題)。食事の入退院同期
+> (`fhir/mealEncounterSync.ts`)が消すオーダーはこの経路を通らない。

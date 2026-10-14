@@ -21,6 +21,7 @@ import { WORKLIST_PAGE, resourcesOfType } from "./core";
 import { staleObservationEntries } from "./micro";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import { fetchWorklistBundles, taskBundleEntry } from "./worklist";
+import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
 // ---- チーム依頼(docs/care-team-design.md §2〜§4) ----
 //
@@ -62,14 +63,14 @@ export const deleteTeamRequestRequest = async (srId: string) => {
   const order = resourcesOfType<fhir4.ServiceRequest>(data, "ServiceRequest").find((sr) => sr.id === srId);
   if (!order) {
     const { data: read } = await readResource<fhir4.ServiceRequest>("ServiceRequest", srId);
-    return postBundle(buildTeamRequestDeleteBundle(read));
+    return postOrderDeleteBundle(buildTeamRequestDeleteBundle(read));
   }
   const task = teamRequestTasksByOrderId(resourcesOfType<fhir4.Task>(data, "Task")).get(srId);
   const status = teamRequestTaskStatus(task);
   if (status === "accepted" || status === "completed") {
     throw new Error("受付済・終了したチーム依頼は削除できません。先にチーム依頼一覧で受付を取り消してください。");
   }
-  return postBundle(buildTeamRequestDeleteBundle(order));
+  return postOrderDeleteBundle(buildTeamRequestDeleteBundle(order));
 };
 
 export function useDeleteTeamRequest() {
@@ -81,6 +82,7 @@ export function useDeleteTeamRequest() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       invalidateTeamRequest(queryClient);
+      invalidateOrderDependents(queryClient);
     },
   });
 }

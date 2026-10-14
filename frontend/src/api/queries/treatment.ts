@@ -29,6 +29,7 @@ import {
   performCancelEntries,
   worklistParams,
 } from "./worklist";
+import { invalidateOrderDependents } from "./orderDelete";
 
 // ---- 処置オーダー ----
 //
@@ -203,6 +204,7 @@ export function useDeleteTreatmentOrder() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["Appointment"] });
       queryClient.invalidateQueries({ queryKey: ["Slot"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }

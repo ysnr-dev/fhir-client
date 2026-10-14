@@ -17,6 +17,7 @@ import {
 } from "./core";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import { comparePatientNumber, fetchWorklistBundles, taskBundleEntry } from "./worklist";
+import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
 // ---- リハビリオーダー ----
 //
@@ -78,7 +79,7 @@ export function useUpdateRehabOrder() {
  */
 export const deleteRehabOrderRequest = async (srId: string) => {
   const appointmentEntries = await fetchOrderAppointmentCancelEntries(srId);
-  return postBundle({
+  return postOrderDeleteBundle({
     resourceType: "Bundle",
     type: "transaction",
     entry: [
@@ -96,6 +97,7 @@ export function useDeleteRehabOrder() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
       invalidateAppointments(queryClient);
+      invalidateOrderDependents(queryClient);
     },
   });
 }

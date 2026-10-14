@@ -29,6 +29,7 @@ import {
   makeUpdateTaskStatusHook,
   worklistParams,
 } from "./worklist";
+import { invalidateOrderDependents } from "./orderDelete";
 
 // ---- 病理検査オーダー ----
 
@@ -58,6 +59,7 @@ export function useDeletePathoOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateOrderDependents(queryClient);
     },
   });
 }
