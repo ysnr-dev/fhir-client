@@ -14396,6 +14396,10 @@ select.rad-route-select {
   gap: 8px;
 }
 
+.inpatient td.inpatient__days {
+  text-align: right;
+}
+
 /* 入院患者一覧の DPC 列。分類コードの下に期間Ⅱの末日を小さく添える。 */
 .inpatient__dpc {
   white-space: nowrap;

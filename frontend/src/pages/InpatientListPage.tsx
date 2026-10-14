@@ -83,7 +83,7 @@ import {
 import { useStoredToggle } from "../hooks/useStoredToggle";
 import { formatKarteOpen, KARTE_OPEN_PARAM, KARTE_TAB_PARAM } from "../karteUrl";
 import { useReturnLinkState } from "../returnTo";
-import { dateTimeLabel, today } from "../lib/dates";
+import { dateTimeLabel, diffDays, today } from "../lib/dates";
 
 // 入院患者一覧。「入院患者」と「入院予定」の 2 つのタブを持つ。
 //
@@ -752,6 +752,7 @@ export function InpatientListPage() {
                   <th>主治医</th>
                   <th>担当看護師</th>
                   <th>入院日</th>
+                  <th>入院日数</th>
                   {columns.pathway && <th>パス</th>}
                   {columns.dpc && <th>DPC</th>}
                   <th>特記事項</th>
@@ -1157,6 +1158,9 @@ function InpatientTableRow({
   const bedLabel = bedNumber(bed) ?? bed.name ?? "-";
   const note = encounter ? encounterNote(encounter) : "";
   const planTags = encounter ? planTagLabels(encounter, date) : [];
+  const admission = encounter ? encounterAdmissionDate(encounter) : "-";
+  // 入院日を 1 日目として、表示している日まで数える(病棟マップと同じ数え方)。
+  const days = admission !== "-" && date >= admission ? diffDays(admission, date) + 1 : undefined;
 
   return (
     <tr {...rowProps}>
@@ -1178,7 +1182,8 @@ function InpatientTableRow({
           <td>{encounterDepartmentName(encounter)}</td>
           <td>{encounterAttendingName(encounter)}</td>
           <td>{encounterNurseNames(encounter).join("、") || "-"}</td>
-          <td>{encounterAdmissionDate(encounter)}</td>
+          <td>{admission}</td>
+          <td className="inpatient__days">{days ?? "-"}</td>
           {columns.pathway && (
             <td>
               {pathways.length > 0 && patientId ? (
@@ -1237,7 +1242,7 @@ function InpatientTableRow({
           <td className="sticky-table__fix-3">
             <span className="inpatient__empty-bed">空床</span>
           </td>
-          <td colSpan={7 + Number(columns.pathway) + Number(columns.dpc)}></td>
+          <td colSpan={8 + Number(columns.pathway) + Number(columns.dpc)}></td>
           <td className="patient-table__actions sticky-table__fix-actions">
             <RowMenu label={`${locationDisplayName(room)} ${bedLabel} の操作`} escapesClipping>
               <button type="button" className="row-menu__item" onClick={onAdmit}>

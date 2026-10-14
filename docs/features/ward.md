@@ -116,6 +116,7 @@ code   : general（一般室） / private（個室） / special（特別室）
 | 主治医 | `participant` の種別 `ATND`（v3-ParticipationType の attender） |
 | 担当看護師（複数可） | `participant` の種別 `nurse`（ローカル CodeSystem `http://fhir-client.local/CodeSystem/encounter-participant-role`。看護師を表すコードが ParticipationType に無いため） |
 | 入院日 | `period.start`（時刻を持たない日付のみ） |
+| 入院日数 | 保存しない。`period.start` から表示している日までを、入院日を 1 日目として数える（病棟マップの「入院 N 日目」と同じ） |
 | 特記事項 | ローカル拡張 `http://fhir-client.local/StructureDefinition/encounter-note`（`valueString`） |
 
 - **`Encounter.class` は Coding 単体**です（R4 では CodeableConcept ではない）。
