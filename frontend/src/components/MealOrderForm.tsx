@@ -33,12 +33,15 @@ import {
   type MealStapleChoice,
   type MealTiming,
 } from "../fhir/mealOrderHelpers";
+import { compareToMealTarget, mealTargetRangeOf } from "../fhir/mealNutritionTarget";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
+import { useMealNutritionTarget } from "../hooks/useMealNutritionTarget";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { MealAllergyList } from "./MealAllergyList";
 import { MealDietPickerModal, type MealPickerTab } from "./MealDietPickerModal";
+import { MealTargetBadge } from "./MealNutritionTargetLine";
 import { MealPatternStepsTable } from "./MealPatternStepsTable";
 import {
   DEFAULT_MEAL_NUTRITION_FORM,
@@ -169,6 +172,8 @@ export function MealOrderForm({
         : { missing: [], stale: [] },
     [editing, values.allergies, patientAllergies.allergies],
   );
+  // 身長・体重と栄養量の目安。食種選択の表に出し、選んだ食種の成分帯の印にも使う(雛形では患者が無いので引かない)。
+  const nutrition = useMealNutritionTarget(setMode ? undefined : patientId || undefined);
   useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, startDate: date })));
   const diets = useMealDietOptions();
   const staples = useMealItemOptions("staple");
@@ -458,12 +463,20 @@ export function MealOrderForm({
                 {selectedDiet && mealDietHasNutrients(selectedDiet) && (
                   <div className="meal-diet-field__nutrients">
                     <span>
-                      {MEAL_NUTRIENT_COLUMNS.map((c) => (
-                        <span key={c.key} className="meal-diet-field__nutrient">
-                          {c.label} {formatMealNutrient(selectedDiet[c.key]) || "—"}
-                          {formatMealNutrient(selectedDiet[c.key]) && c.unit}
-                        </span>
-                      ))}
+                      {MEAL_NUTRIENT_COLUMNS.map((c) => {
+                        const range = mealTargetRangeOf(c.key, nutrition.target);
+                        return (
+                          <span key={c.key} className="meal-diet-field__nutrient">
+                            {c.label} {formatMealNutrient(selectedDiet[c.key]) || "—"}
+                            {formatMealNutrient(selectedDiet[c.key]) && c.unit}
+                            {range && (
+                              <MealTargetBadge
+                                comparison={compareToMealTarget(selectedDiet[c.key], range)}
+                              />
+                            )}
+                          </span>
+                        );
+                      })}
                     </span>
                     {selectedDiet.indication && (
                       <span className="meal-diet-field__indication">
@@ -735,6 +748,7 @@ export function MealOrderForm({
           categories={mealCategories.data?.items ?? []}
           error={diets.error}
           selectedCode={values.diet?.code}
+          nutrition={nutrition.enabled ? nutrition : undefined}
           onSelect={handleDietSelect}
           onClose={() => setPickingTab(null)}
           initialTab={pickingTab}

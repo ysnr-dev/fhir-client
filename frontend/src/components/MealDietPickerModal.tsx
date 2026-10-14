@@ -1,8 +1,15 @@
 import { Fragment, useMemo, useState } from "react";
 import type { MealCategory, MealDiet, MealPattern } from "../api/masterClient";
 import { toKatakana } from "../lib/kana";
+import type { BodyMeasureSummary } from "../fhir/bodyMeasureHelpers";
+import {
+  compareToMealTarget,
+  mealTargetRangeOf,
+  type MealNutritionTarget,
+} from "../fhir/mealNutritionTarget";
 import { ErrorBanner } from "./ErrorBanner";
 import { MEAL_NUTRIENT_COLUMNS, formatMealNutrient } from "./mealItemOptions";
+import { MealNutritionTargetLine } from "./MealNutritionTargetLine";
 import { MealPatternPickerList } from "./MealPatternPickerList";
 import { Modal } from "./Modal";
 
@@ -28,6 +35,8 @@ interface Props {
   };
   /** 開いたときに出すタブ。既定は食種。 */
   initialTab?: MealPickerTab;
+  /** 患者の身長・体重と栄養量の目安。渡したときは表の上に出し、目安に収まる熱量・蛋白質を強調する。 */
+  nutrition?: { body: BodyMeasureSummary; target: MealNutritionTarget | null };
 }
 
 interface DietGroup {
@@ -60,6 +69,7 @@ export function MealDietPickerModal({
   onClose,
   patterns,
   initialTab = "diet",
+  nutrition,
 }: Props) {
   const [tab, setTab] = useState<MealPickerTab>(patterns ? initialTab : "diet");
   const [query, setQuery] = useState("");
@@ -152,6 +162,7 @@ export function MealDietPickerModal({
           </div>
 
           <ErrorBanner error={error} />
+          {nutrition && <MealNutritionTargetLine body={nutrition.body} target={nutrition.target} />}
 
           <div className="master-search__table-wrap meal-diet-picker__table-wrap">
             <table className="master-search__table meal-diet-table">
@@ -187,11 +198,25 @@ export function MealDietPickerModal({
                       >
                         <td>{diet.item_code}</td>
                         <td>{diet.name}</td>
-                        {MEAL_NUTRIENT_COLUMNS.map((c) => (
-                          <td key={c.key} className="meal-diet-table__num">
-                            {formatMealNutrient(diet[c.key]) || "—"}
-                          </td>
-                        ))}
+                        {MEAL_NUTRIENT_COLUMNS.map((c) => {
+                          const range = mealTargetRangeOf(c.key, nutrition?.target ?? null);
+                          const inTarget =
+                            range !== null &&
+                            Boolean(diet[c.key]) &&
+                            compareToMealTarget(diet[c.key], range) === null;
+                          return (
+                            <td
+                              key={c.key}
+                              className={
+                                inTarget
+                                  ? "meal-diet-table__num meal-diet-table__num--in-target"
+                                  : "meal-diet-table__num"
+                              }
+                            >
+                              {formatMealNutrient(diet[c.key]) || "—"}
+                            </td>
+                          );
+                        })}
                         <td className="meal-diet-table__indication" title={diet.indication ?? undefined}>
                           {diet.indication}
                         </td>

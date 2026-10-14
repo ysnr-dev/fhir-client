@@ -15864,6 +15864,67 @@ td.surgery-calendar__cell--drop-target {
   white-space: pre-wrap;
 }
 
+/* 患者の身長・体重と栄養量の目安(docs/meal-order-design.md §3.6)。参考表示なので
+   注意の橙ではなくアクセントの淡い面に置く。 */
+.meal-nutrition-target {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0;
+  padding: 6px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  background: var(--accent-bg);
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.meal-nutrition-target__icon {
+  display: flex;
+  padding-top: 1px;
+  color: var(--accent);
+}
+
+.meal-nutrition-target__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meal-nutrition-target__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  margin: 0;
+}
+
+.meal-nutrition-target__item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.meal-nutrition-target__item dt {
+  color: var(--text);
+}
+
+.meal-nutrition-target__item dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.meal-nutrition-target__item small {
+  margin-left: 2px;
+  font-weight: normal;
+  color: var(--text);
+}
+
+/* 食種選択の表で、患者の目安に収まる熱量・蛋白質。 */
+.meal-diet-table td.meal-diet-table__num--in-target {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* ---- パターン食の段階の表(docs/meal-order-design.md §2.11・§3.5) ---- */
 
 /* フォームの fieldset は横並びなので、表は行いっぱいに広げる。 */
