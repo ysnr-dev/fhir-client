@@ -400,7 +400,7 @@ export function KarteRightPane({
       <div className="karte-right__body">
         {state.kind === "empty" ? (
           <p className="karte-right__placeholder">
-            右上のボタンから新規登録、またはカルテの「編集」から編集を開始してください。
+            右のボタンから新規登録、またはカードのメニューの「編集」から編集を開始してください。
           </p>
         ) : (
           <>
