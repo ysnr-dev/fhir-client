@@ -24,6 +24,8 @@
   /* 検査結果の H/L 判定色。H(高値): 赤 / L(低値): 青(グラフの系列色と揃える)。 */
   --lab-high: #d32f2f;
   --lab-low: #2a78d6;
+  /* H の色で塗った地の上の文字。 */
+  --lab-high-text: #ffffff;
   /* 「急ぎではないが放置してよくない」ことを表す色。赤(--lab-high)より一段弱い。 */
   --warning: #b7791f;
   /* 取り返しのつかない操作や、見落とすと危ない警告の色。 */
@@ -108,6 +110,7 @@
   --surface-stripe: rgba(0, 0, 0, 0.16);
   --lab-high: #ef5350;
   --lab-low: #3987e5;
+  --lab-high-text: #ffffff;
   --warning: #e0a33a;
   --danger: #ef5b4f;
   --diff-removed-bg: rgba(239, 91, 79, 0.14);

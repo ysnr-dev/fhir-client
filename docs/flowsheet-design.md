@@ -96,8 +96,9 @@ Observation?patient=…&category=vital-signs,{order-type}|nursing
 
 ## 2. 行 = 測定項目
 
-- 入力欄と同じ順(血圧 → 体温 → … → 体重 → BMI)を先頭に置き、それ以外のコードは
-  登場順で後ろに並べる(`buildVitalFlowsheet`)。
+- NEWS2 → 入力欄と同じ順(血圧 → 意識(JCS) → 体温 → … → 体重 → BMI)を先頭に置き、それ以外のコードは
+  登場順で後ろに並べる(`buildVitalFlowsheet`)。NEWS2 の行は区分で色を付ける(高は反転、中は赤字。
+  `Observation.interpretation` の `early-warning-band` を読む。`docs/early-warning-design.md`)。
 - 対象は `category=vital-signs` の Observation すべてで、**テンプレート回答から抽出した値も
   含める**(タイムラインと違い、値を時系列で読む画面なのでどの経路で作られたかは問わない)。
 - 看護指示の観察結果(`category = order-type|nursing`)も同じ表に載せる。真のバイタル

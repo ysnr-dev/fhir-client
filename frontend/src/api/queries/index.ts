@@ -24,6 +24,7 @@ export * from "./broughtMedication";
 export * from "./patientProfile";
 export * from "./populate";
 export * from "./karte";
+export * from "./earlyWarning";
 export * from "./chart";
 export * from "./physio";
 export * from "./endoscopy";

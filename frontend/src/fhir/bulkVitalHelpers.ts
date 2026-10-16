@@ -6,12 +6,17 @@ import {
   type MealIntakeSlot,
 } from "./flowsheetMealHelpers";
 import { mealOrderDietRef, type MealTiming } from "./mealOrderHelpers";
+import { earlyWarningEntries, type EarlyWarningContext } from "./earlyWarningTaskHelpers";
+import type { EarlyWarningSettings } from "./earlyWarningHelpers";
 import {
   buildVitalObservations,
   DIASTOLIC,
   emptyVitalFormValues,
+  JCS_MEASURE,
   SYSTOLIC,
   VITAL_MEASURES,
+  vitalPostEntry,
+  withFullUrls,
   type VitalMeasureKey,
 } from "./vitalHelpers";
 
@@ -28,7 +33,9 @@ export const BULK_VITAL_ITEMS = [
   "temperature",
   "pulse",
   "spo2",
+  "oxygen_flow",
   "respiration",
+  "jcs",
   "weight",
   "meal",
 ] as const;
@@ -39,13 +46,25 @@ export interface BulkVitalEntrySettings {
   items: BulkVitalItem[];
 }
 
-export const DEFAULT_BULK_VITAL_ENTRY: BulkVitalEntrySettings = { items: [...BULK_VITAL_ITEMS] };
+/** 施設設定の既定の列(backend の FacilitySettings::DEFAULT_BULK_VITAL_ENTRY と同じ)。 */
+export const DEFAULT_BULK_VITAL_ENTRY: BulkVitalEntrySettings = {
+  items: ["blood_pressure", "temperature", "pulse", "spo2", "respiration", "weight", "meal"],
+};
 
-/** 1 つの値だけを入れるバイタルの列(血圧と食事は 2 つの欄を持つので別扱い)。 */
-type SingleVitalItem = Extract<BulkVitalItem, VitalMeasureKey>;
+/** 1 つの数値だけを入れるバイタルの列と、その測定項目(入力の欄の名前も同じ)。 */
+const SINGLE_ITEM_MEASURE = {
+  temperature: "temperature",
+  pulse: "pulse",
+  spo2: "spo2",
+  oxygen_flow: "oxygenFlow",
+  respiration: "respiration",
+  weight: "weight",
+} as const satisfies Partial<Record<BulkVitalItem, VitalMeasureKey>>;
+
+type SingleVitalItem = keyof typeof SINGLE_ITEM_MEASURE;
 
 function vitalMeasureOf(item: SingleVitalItem) {
-  const measure = VITAL_MEASURES.find((m) => m.key === item);
+  const measure = VITAL_MEASURES.find((m) => m.key === SINGLE_ITEM_MEASURE[item]);
   if (!measure) throw new Error(`unknown vital measure: ${item}`);
   return measure;
 }
@@ -55,19 +74,21 @@ export const BULK_VITAL_ITEM_LABELS: Record<BulkVitalItem, string> = {
   temperature: vitalMeasureOf("temperature").label,
   pulse: vitalMeasureOf("pulse").label,
   spo2: vitalMeasureOf("spo2").label,
+  oxygen_flow: vitalMeasureOf("oxygen_flow").label,
   respiration: vitalMeasureOf("respiration").label,
+  jcs: JCS_MEASURE.label,
   weight: vitalMeasureOf("weight").label,
   meal: "食事摂取量",
 };
 
 export function isSingleVitalItem(item: BulkVitalItem): item is SingleVitalItem {
-  return item !== "blood_pressure" && item !== "meal";
+  return item in SINGLE_ITEM_MEASURE;
 }
 
-/** 単一値の列の入力欄の単位・刻み・しきい値の LOINC。 */
+/** 単一値の列の入力の欄・単位・刻み・しきい値の LOINC。 */
 export function singleVitalColumn(item: SingleVitalItem) {
   const measure = vitalMeasureOf(item);
-  return { code: measure.code, unit: measure.unit, step: measure.step };
+  return { field: SINGLE_ITEM_MEASURE[item], code: measure.code, unit: measure.unit, step: measure.step };
 }
 
 export const SYSTOLIC_CODE = SYSTOLIC.code;
@@ -80,7 +101,10 @@ export interface BulkVitalInput {
   temperature: string;
   pulse: string;
   spo2: string;
+  oxygenFlow: string;
   respiration: string;
+  /** JCS の値(JCS_OPTIONS の value)。 */
+  jcs: string;
   weight: string;
   staple: string;
   side: string;
@@ -94,9 +118,14 @@ const VITAL_FIELDS = [
   "temperature",
   "pulse",
   "spo2",
+  "oxygenFlow",
   "respiration",
+  "jcs",
   "weight",
 ] as const satisfies readonly BulkVitalField[];
+
+/** 数値で入れる欄(JCS は選択肢なので検査しない)。 */
+const NUMBER_FIELDS = VITAL_FIELDS.filter((field) => field !== "jcs");
 
 /** その時間帯の食事の枠と、記録済みの値(項目ごと)。食事の無い患者には作らない。 */
 export interface BulkMealCell {
@@ -197,7 +226,7 @@ export function bulkVitalRowError(input: BulkVitalInput): string | null {
   const diastolic = input.diastolic.trim();
   // 片方だけの血圧は「そのときの血圧」として読めない(1 人ずつの入力と同じ決まり)。
   if ((systolic === "") !== (diastolic === "")) return "血圧は収縮期と拡張期の両方を入力してください";
-  const invalid = VITAL_FIELDS.find((field) => {
+  const invalid = NUMBER_FIELDS.find((field) => {
     const raw = input[field].trim();
     return raw !== "" && !Number.isFinite(Number(raw));
   });
@@ -206,7 +235,8 @@ export function bulkVitalRowError(input: BulkVitalInput): string | null {
 
 export interface BulkVitalRow {
   patientId: string;
-  encounter?: fhir4.Reference;
+  /** 測定時の入院。NEWS2 の通知の宛先(主治医)もここから取る。 */
+  encounter?: fhir4.Encounter;
   input: BulkVitalInput;
   meal?: BulkMealCell;
   fallbackHeightCm?: number;
@@ -221,6 +251,13 @@ export function buildBulkVitalBundle(args: {
   measuredAt: string;
   rows: BulkVitalRow[];
   performer: { id: string; name: string } | null;
+  /** 早期警告スコア。施設設定で無効なら渡さない。 */
+  earlyWarning?: {
+    settings: EarlyWarningSettings;
+    spo2Scale2PatientIds: Set<string>;
+    /** 入院 id → 未対応の早期警告。 */
+    tasksByEncounter: Map<string, fhir4.Task>;
+  };
 }): fhir4.Bundle {
   const performerRef = args.performer
     ? {
@@ -231,6 +268,7 @@ export function buildBulkVitalBundle(args: {
   const entry: fhir4.BundleEntry[] = [];
 
   for (const row of args.rows) {
+    const encounterRef = row.encounter?.id ? { reference: `Encounter/${row.encounter.id}` } : undefined;
     if (hasVitalValue(row.input)) {
       const values = { ...emptyVitalFormValues(), measuredAt: args.measuredAt };
       for (const field of VITAL_FIELDS) values[field] = row.input[field];
@@ -239,16 +277,21 @@ export function buildBulkVitalBundle(args: {
         patientId: row.patientId,
         entryId: crypto.randomUUID(),
         problem: null,
-        encounter: row.encounter,
+        encounter: encounterRef,
         performer: performerRef,
         fallbackHeightCm: row.fallbackHeightCm,
       });
-      entry.push(
-        ...observations.map((resource) => ({
-          resource,
-          request: { method: "POST" as const, url: "Observation" },
-        })),
-      );
+      const posts = withFullUrls(observations);
+      entry.push(...posts.map(vitalPostEntry));
+      if (args.earlyWarning) {
+        const context: EarlyWarningContext = {
+          settings: args.earlyWarning.settings,
+          encounter: row.encounter,
+          spo2Scale2: args.earlyWarning.spo2Scale2PatientIds.has(row.patientId),
+          existingTask: row.encounter?.id ? args.earlyWarning.tasksByEncounter.get(row.encounter.id) : undefined,
+        };
+        entry.push(...earlyWarningEntries({ posts, values, patientId: row.patientId, context, requester: performerRef }));
+      }
     }
 
     if (row.meal && mealChanged(row.input, row.meal)) {
@@ -260,7 +303,7 @@ export function buildBulkVitalBundle(args: {
           side: row.meal.existing.side?.observationId,
         },
         subject: { reference: `Patient/${row.patientId}` },
-        encounter: row.encounter,
+        encounter: encounterRef,
         performer: args.performer,
       });
       entry.push(...(meal.entry ?? []));

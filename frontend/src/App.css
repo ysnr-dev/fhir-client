@@ -390,6 +390,15 @@
 }
 
 /* 化学療法中。禁忌ではなく「いま何をしている患者か」の情報なので、赤とは分けた色にする。 */
+/* 早期警告。中は注意色、高は危険色。 */
+.patient-header__caution--ews-medium {
+  color: var(--warning);
+}
+
+.patient-header__caution--ews-high {
+  color: var(--danger);
+}
+
 .patient-header__caution--chemo {
   color: #7e57c2;
 }
@@ -2720,6 +2729,11 @@ fieldset.rp-card {
 }
 
 .notification__approval-context {
+  font-size: 12px;
+}
+
+.notification__detail {
+  margin-left: 8px;
   font-size: 12px;
 }
 
@@ -12518,7 +12532,8 @@ select.rad-route-select {
   color: var(--text);
 }
 
-.vital-form__row input {
+.vital-form__row input,
+.vital-form__row select {
   font: inherit;
   font-size: 15px;
   width: 100%;
@@ -12538,6 +12553,93 @@ select.rad-route-select {
 .vital-form__unit {
   font-size: 12px;
   color: var(--text);
+}
+
+.vital-form__row select {
+  text-align: left;
+}
+
+/* NEWS2 の単位の後ろに計算式の「?」を置く。ラベルの文字と紛れないよう離し、色も変える。 */
+.vital-form__unit--with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vital-form .vital-form__help {
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.vital-form .vital-form__help:hover {
+  color: var(--text-h);
+}
+
+/* 早期警告スコアの計算式(EarlyWarningFormulaModal)。 */
+.ews-formula__table-wrap {
+  overflow-x: auto;
+  margin-bottom: 8px;
+}
+
+.ews-formula__table {
+  border-collapse: collapse;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.ews-formula__table th,
+.ews-formula__table td {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  text-align: center;
+  white-space: pre;
+}
+
+.ews-formula__table tbody th {
+  text-align: left;
+  font-weight: normal;
+}
+
+.ews-formula__points--3 {
+  color: var(--lab-high);
+}
+
+.ews-formula__points--2 {
+  color: var(--warning);
+}
+
+.ews-formula__table--bands td {
+  text-align: left;
+}
+
+.ews-formula__table--bands th {
+  min-width: 4em;
+  font-weight: 700;
+}
+
+.ews-formula__band--high {
+  background: var(--lab-high);
+  color: var(--lab-high-text);
+}
+
+.ews-formula__band--medium,
+.ews-formula__band--low-medium {
+  color: var(--lab-high);
+}
+
+/* NEWS2 の区分。中は赤字、高は赤字の太字。 */
+.vital-form__row--ews-medium .vital-form__derived-value,
+.vital-form__row--ews-medium .vital-form__unit {
+  color: var(--lab-high);
+}
+
+.vital-form__row--ews-high .vital-form__derived-value,
+.vital-form__row--ews-high .vital-form__unit {
+  color: var(--lab-high);
+  font-weight: 700;
 }
 
 /* BMI は入力欄を持たないので、値の位置を入力欄の右端に合わせる。 */
@@ -14440,6 +14542,29 @@ select.rad-route-select {
 }
 
 /* 入院患者一覧の DPC 列。分類コードの下に期間Ⅱの末日を小さく添える。 */
+/* NEWS2 の最新値。中は赤字、高は赤地に白字(経過表のパニック値と同じ強さ)、低〜中は太字。 */
+.inpatient__ews {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.inpatient__ews-score--low-medium {
+  font-weight: 700;
+}
+
+.inpatient__ews-score--medium {
+  color: var(--lab-high);
+  font-weight: 700;
+}
+
+.inpatient__ews-score--high {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--lab-high);
+  color: var(--lab-high-text);
+  font-weight: 700;
+}
+
 .inpatient__dpc {
   white-space: nowrap;
 }

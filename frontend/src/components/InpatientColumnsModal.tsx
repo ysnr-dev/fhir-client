@@ -4,11 +4,13 @@ import { Modal } from "./Modal";
 export interface InpatientOptionalColumns {
   pathway: boolean;
   dpc: boolean;
+  ews: boolean;
 }
 
 const COLUMN_LABELS: Record<keyof InpatientOptionalColumns, string> = {
   pathway: "パス",
   dpc: "DPC",
+  ews: "NEWS2",
 };
 
 /** 入院患者一覧の表示項目変更。チェックを切り替えるとその場で表に反映する。 */

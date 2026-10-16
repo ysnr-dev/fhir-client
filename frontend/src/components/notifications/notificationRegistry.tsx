@@ -1,4 +1,6 @@
 import type { ComponentType } from "react";
+import { EWS_ALERT_NOTE, EWS_ALERT_TASK_CODE, ewsAlertRowOf, type EwsAlertRow } from "../../fhir/earlyWarningTaskHelpers";
+import { EarlyWarningNotificationCells } from "./EarlyWarningNotificationCells";
 import {
   approvalTransactionEntries,
   urgentConfirmationEntries,
@@ -439,6 +441,22 @@ const mealAllergyCheckKind = defineNotificationKind<MealAllergyCheckRow>({
   action: { label: "確認", noteText: MEAL_ALLERGY_CHECK_NOTE },
 });
 
+const ewsAlertKind = defineNotificationKind<EwsAlertRow>({
+  code: EWS_ALERT_TASK_CODE.code,
+  label: EWS_ALERT_TASK_CODE.display,
+  toRow: ewsAlertRowOf,
+  Cells: EarlyWarningNotificationCells,
+  // カルテの経過表タブで測定の推移を見る。
+  karteLink: (row) => {
+    if (!row.patientId) return null;
+    const params = new URLSearchParams();
+    params.set(KARTE_TAB_PARAM, "flowsheet");
+    return `/patients/${row.patientId}/karte?${params.toString()}`;
+  },
+  // 再測定で区分が下がれば自動で取り下げる。ここからは手で閉じる。
+  action: { label: "確認", noteText: EWS_ALERT_NOTE },
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
@@ -456,6 +474,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   rxInquiryKind,
   rxInquiryAnsweredKind,
   mealAllergyCheckKind,
+  ewsAlertKind,
 ];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */

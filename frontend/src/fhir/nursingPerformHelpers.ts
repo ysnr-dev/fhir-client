@@ -64,6 +64,7 @@ function measureEntry(key: (typeof VITAL_MEASURES)[number]["key"]): LoincMapEntr
 
 const NURSING_LOINC_MAP: Record<string, LoincMapEntry> = {
   "31000001": measureEntry("spo2"), // 経皮的動脈血酸素飽和度(SpO2)
+  "31006122": measureEntry("oxygenFlow"), // 酸素流量
   "31001368": measureEntry("temperature"), // 体温
   "31001390": measureEntry("pulse"), // 脈拍数
   "31001369": measureEntry("respiration"), // 呼吸数

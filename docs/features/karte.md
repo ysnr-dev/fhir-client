@@ -142,8 +142,13 @@
     `buildKarteTimeline` の**後**で行います(`filterKarteGroupsByCard` / `filterKarteGroupsByScope`)。安全カットオフと
     次ページの要否は読み込み済みの全データで決まるので、件数が減ってもページングは
     壊れません。
-- **バイタル**: 右ペインの「バイタル」から体温・血圧・脈拍・SpO2・呼吸数・身長・体重を 1 画面で
+- **バイタル**: 右ペインの「バイタル」から体温・血圧・意識(JCS)・脈拍・SpO2・酸素流量・呼吸数・身長・体重を 1 画面で
   入力します(`components/VitalForm.tsx`、組み立ては `fhir/vitalHelpers.ts`)。
+  - 意識(JCS)は選択肢で、LOINC に JCS が無いので MEDIS 看護観察 31001657 とローカルの項目コードを併記します。
+    酸素流量は LOINC 3151-8(L/分、0 は室内気)。
+  - **早期警告スコア**(施設設定で有効なとき): 入力中に NEWS2 と qSOFA をフォームの下に出し、保存では
+    同じ transaction に NEWS2 の Observation と、入院中で区分が下限以上なら主治医あての通知(`ews-alert`)を
+    積みます。カードからの削除は NEWS2 も消し、未対応の通知を取り下げます(`docs/early-warning-design.md`)。
   - **1 項目 = 1 Observation**(category `vital-signs`、コードは LOINC、単位は UCUM)。ただし
     **血圧だけは 85354-9 の Observation 1 件に収縮期(8480-6)と拡張期(8462-4)を component として
     入れます**。別々の Observation にすると「そのときの血圧」として組にして読めないためで、

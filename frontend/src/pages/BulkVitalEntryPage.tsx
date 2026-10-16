@@ -4,7 +4,9 @@ import { useCurrentPractitioner } from "../api/authQueries";
 import { useFastingDietCodes } from "../api/masterQueries";
 import {
   useBulkVitalContext,
+  useEarlyWarningSettings,
   useFacilitySettings,
+  useFlagsForPatients,
   useInpatientEncounters,
   useSaveBulkVitals,
   useVitalThresholds,
@@ -34,14 +36,16 @@ import {
   type BulkVitalItem,
   type BulkVitalRow,
 } from "../fhir/bulkVitalHelpers";
+import { SPO2_SCALE2_CAUTION_CODE } from "../fhir/earlyWarningHelpers";
 import { encounterPatientId } from "../fhir/encounterHelpers";
+import { cautionCoding } from "../fhir/flagHelpers";
 import { MEAL_INTAKE_ROWS, MEAL_INTAKE_STEPS, mealIntakeSlotLabel } from "../fhir/flowsheetMealHelpers";
 import { interpretationClass } from "../fhir/labResultHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { MEAL_TIMING_OPTIONS, type MealTiming } from "../fhir/mealOrderHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
-import { vitalInterpretationOf, type VitalThresholdSettings } from "../fhir/vitalHelpers";
+import { JCS_OPTIONS, vitalInterpretationOf, type VitalThresholdSettings } from "../fhir/vitalHelpers";
 import { nowDateTimeInput } from "../lib/dates";
 
 // 経過表一括入力。病棟の入院中の患者を病室順に 1 行ずつ並べ、同じ測定日時でバイタル・体重・
@@ -55,7 +59,9 @@ const EMPTY_INPUT: BulkVitalInput = {
   temperature: "",
   pulse: "",
   spo2: "",
+  oxygenFlow: "",
   respiration: "",
+  jcs: "",
   weight: "",
   staple: "",
   side: "",
@@ -130,6 +136,8 @@ export function BulkVitalEntryPage() {
 
   const patientIds = useMemo(() => rows.map((row) => row.patientId), [rows]);
   const context = useBulkVitalContext(patientIds, date);
+  const earlyWarning = useEarlyWarningSettings();
+  const flags = useFlagsForPatients(earlyWarning.enabled ? patientIds : []);
   const mealEnabled = items.includes("meal");
   const dietCodes = mealDietCodes(context.data?.mealOrders ?? []);
   const fasting = useFastingDietCodes(dietCodes);
@@ -197,25 +205,38 @@ export function BulkVitalEntryPage() {
     if (!measuredAt || dirtyRows.length === 0 || hasError || !mealReady) return;
     const bundleRows: BulkVitalRow[] = dirtyRows.map((row) => ({
       patientId: row.patientId,
-      encounter: { reference: `Encounter/${row.encounter.id}` },
+      encounter: row.encounter,
       input: inputOf(row.patientId),
       meal: mealCells.get(row.patientId),
       fallbackHeightCm: heights.get(row.patientId),
     }));
-    const bundle = buildBulkVitalBundle({
-      measuredAt,
-      rows: bundleRows,
-      performer: practitionerId
-        ? { id: practitionerId, name: practitioner ? practitionerDisplayName(practitioner) : "" }
-        : null,
-    });
-    if ((bundle.entry ?? []).length === 0) return;
-    save.mutate(bundle, {
-      onSuccess: () => {
-        setSavedCount(bundleRows.length);
-        setEdits(new Map());
+    const spo2Scale2PatientIds = new Set(
+      [...flags.byPatient]
+        .filter(([, list]) => list.some((flag) => cautionCoding(flag)?.code === SPO2_SCALE2_CAUTION_CODE))
+        .map(([patientId]) => patientId),
+    );
+    save.mutate(
+      {
+        encounterIds: earlyWarning.enabled ? bundleRows.map((row) => row.encounter?.id ?? "").filter(Boolean) : [],
+        build: (tasksByEncounter) =>
+          buildBulkVitalBundle({
+            measuredAt,
+            rows: bundleRows,
+            performer: practitionerId
+              ? { id: practitionerId, name: practitioner ? practitionerDisplayName(practitioner) : "" }
+              : null,
+            earlyWarning: earlyWarning.enabled
+              ? { settings: earlyWarning, spo2Scale2PatientIds, tasksByEncounter }
+              : undefined,
+          }),
       },
-    });
+      {
+        onSuccess: () => {
+          setSavedCount(bundleRows.length);
+          setEdits(new Map());
+        },
+      },
+    );
   }
 
   const loading = grid.isLoading || inpatients.isLoading;
@@ -355,7 +376,12 @@ export function BulkVitalEntryPage() {
               type="button"
               onClick={handleSave}
               disabled={
-                !measuredAt || dirtyRows.length === 0 || hasError || !mealReady || save.isPending
+                !measuredAt ||
+                dirtyRows.length === 0 ||
+                hasError ||
+                !mealReady ||
+                (earlyWarning.enabled && flags.isPending) ||
+                save.isPending
               }
             >
               {save.isPending ? "登録中..." : `登録(${dirtyRows.length} 人)`}
@@ -411,6 +437,24 @@ function ItemInputs({
     );
   }
 
+  if (item === "jcs") {
+    return (
+      <select
+        value={input.jcs}
+        className="bulk-vital__input"
+        onChange={(e) => onChange("jcs", e.target.value)}
+        aria-label={`${label} の${BULK_VITAL_ITEM_LABELS.jcs}`}
+      >
+        <option value=""></option>
+        {JCS_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
   if (item === "meal") {
     // 食事オーダーの無い食事・食止め・欠食には記録する枠が無い。
     if (!mealReady) return <span className="bulk-vital__none">…</span>;
@@ -441,11 +485,11 @@ function ItemInputs({
   const column = singleVitalColumn(item);
   return (
     <NumberInput
-      value={input[item]}
+      value={input[column.field]}
       step={column.step}
-      className={flagClass(column.code, input[item], thresholds)}
+      className={flagClass(column.code, input[column.field], thresholds)}
       label={`${label} の${BULK_VITAL_ITEM_LABELS[item]}`}
-      onChange={(value) => onChange(item, value)}
+      onChange={(value) => onChange(column.field, value)}
     />
   );
 }

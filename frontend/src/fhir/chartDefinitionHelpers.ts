@@ -14,6 +14,8 @@ import {
   DIASTOLIC,
   SYSTOLIC,
   VITAL_MEASURES,
+  EARLY_WARNING_SCORE_SYSTEM,
+  NEWS2_CODE,
   vitalInterpretationOf,
 } from "./vitalHelpers";
 import type { VitalThresholdSettings } from "./vitalHelpers";
@@ -551,6 +553,14 @@ export function vitalChartItems(): ChartItem[] {
     name: "BMI",
     unit: BMI.unit,
     codings: [{ system: LOINC_SYSTEM, code: BMI.code, display: BMI.display }],
+  });
+  // 早期警告スコア。測定セットに同梱した NEWS2(valueInteger)を読む。
+  items.push({
+    key: `vital:${NEWS2_CODE}`,
+    source: "vital",
+    name: "NEWS2",
+    unit: "点",
+    codings: [{ system: EARLY_WARNING_SCORE_SYSTEM, code: NEWS2_CODE, display: "NEWS2" }],
   });
   return items;
 }

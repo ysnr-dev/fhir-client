@@ -431,10 +431,19 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
   end
 
   describe "PATCH /admin/facility_settings (bulk_vital_entry)" do
-    it "returns every column by default" do
+    it "returns the default columns" do
       get "/facility_settings"
 
-      expect(JSON.parse(response.body)["bulk_vital_entry"]).to eq("items" => FacilitySettings::BULK_VITAL_ITEMS)
+      expect(JSON.parse(response.body)["bulk_vital_entry"]).to eq(FacilitySettings::DEFAULT_BULK_VITAL_ENTRY)
+    end
+
+    it "accepts the oxygen flow and JCS columns" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { bulk_vital_entry: { items: %w[jcs oxygen_flow] } }, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["bulk_vital_entry"]).to eq("items" => %w[jcs oxygen_flow])
     end
 
     it "stores the columns in the given order" do
@@ -460,6 +469,39 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
         expect(response).to have_http_status(:unprocessable_content)
 
         patch "/admin/facility_settings", params: { bulk_vital_entry: { items: %w[pulse pulse] } }, as: :json
+        expect(response).to have_http_status(:unprocessable_content)
+      end
+    end
+  end
+
+  describe "PATCH /admin/facility_settings (early_warning)" do
+    it "is disabled by default" do
+      get "/facility_settings"
+
+      expect(JSON.parse(response.body)["early_warning"]).to eq(
+        "enabled" => false, "notify_band" => "medium", "show_qsofa" => true
+      )
+    end
+
+    it "stores the settings" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { early_warning: { enabled: true, notify_band: "high", show_qsofa: false } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["early_warning"]).to eq(
+        "enabled" => true, "notify_band" => "high", "show_qsofa" => false
+      )
+    end
+
+    it "rejects an unknown band and a string for a boolean" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { early_warning: { notify_band: "low" } }, as: :json
+        expect(response).to have_http_status(:unprocessable_content)
+
+        patch "/admin/facility_settings", params: { early_warning: { enabled: "true" } }, as: :json
         expect(response).to have_http_status(:unprocessable_content)
       end
     end

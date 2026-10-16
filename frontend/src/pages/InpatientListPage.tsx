@@ -8,6 +8,7 @@ import {
   useWardGrid,
   useNursingPendingCounts,
   useActivePathwaysByPatient,
+  useLatestEarlyWarningByPatient,
   useDpcRecordsForEncounters,
   useWardOptions,
   type PathwayApplicationSummary,
@@ -73,6 +74,7 @@ import {
   plannedWardId,
 } from "../fhir/encounterHelpers";
 import { buildDpcPatientRows, type DpcPatientRow } from "../fhir/dpcPatientList";
+import { earlyWarningText, type EarlyWarningSummary } from "../fhir/earlyWarningHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { bedDisplayName, bedNumber, bedShortLabel } from "../fhir/wardHelpers";
@@ -186,6 +188,8 @@ const emptyFilters: Filters = { departmentId: "", practitionerId: "", nurseId: "
 // 表示項目変更で隠した列(端末ごとに覚える)。
 const HIDE_PATHWAY_COLUMN_KEY = "inpatient-list.hide-pathway-column";
 const HIDE_DPC_COLUMN_KEY = "inpatient-list.hide-dpc-column";
+// NEWS2 列は既定で隠し、出したことを覚える(早期警告スコアを使わない施設では空の列になるため)。
+const SHOW_EWS_COLUMN_KEY = "inpatient-list.show-ews-column";
 
 /** 参照 id と表示名の組。診療科・主治医の絞り込みの選択肢に使う。 */
 interface FilterOption {
@@ -291,13 +295,19 @@ export function InpatientListPage() {
   const [rowAction, setRowAction] = useState<RowAction | null>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [columnsModalOpen, setColumnsModalOpen] = useState(false);
-  // 表示を切り替えられる列。既定は表示で、隠したことを端末ごとに覚える。
+  // 表示を切り替えられる列。パス・DPC は既定で表示して隠したことを、NEWS2 は既定で隠して出したことを
+  // 端末ごとに覚える。
   const [pathwayHidden, setPathwayHidden] = useStoredToggle(HIDE_PATHWAY_COLUMN_KEY);
   const [dpcHidden, setDpcHidden] = useStoredToggle(HIDE_DPC_COLUMN_KEY);
-  const columns: InpatientOptionalColumns = { pathway: !pathwayHidden, dpc: !dpcHidden };
+  const [ewsShown, setEwsShown] = useStoredToggle(SHOW_EWS_COLUMN_KEY);
+  const columns: InpatientOptionalColumns = { pathway: !pathwayHidden, dpc: !dpcHidden, ews: ewsShown };
+  const columnSetters: Record<keyof InpatientOptionalColumns, (shown: boolean) => void> = {
+    pathway: (shown) => setPathwayHidden(!shown),
+    dpc: (shown) => setDpcHidden(!shown),
+    ews: (shown) => setEwsShown(shown),
+  };
   function setColumnShown(key: keyof InpatientOptionalColumns, shown: boolean) {
-    if (key === "pathway") setPathwayHidden(!shown);
-    else setDpcHidden(!shown);
+    columnSetters[key](shown);
   }
   const [executeTarget, setExecuteTarget] = useState<PlannedRow | null>(null);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
@@ -388,6 +398,7 @@ export function InpatientListPage() {
     );
   }, [tab, grid.rooms, grid.bedsByRoom, byBed]);
   const activePathways = useActivePathwaysByPatient(columns.pathway ? wardPatientIds : []);
+  const latestEarlyWarnings = useLatestEarlyWarningByPatient(columns.ews ? wardPatientIds : []);
 
   // DPC 列(入院患者タブだけ)。病棟の床にいる入院の、今の診断群分類と期間Ⅱの末日。
   const wardEncounters = useMemo(() => {
@@ -755,6 +766,7 @@ export function InpatientListPage() {
                   <th>入院日数</th>
                   {columns.pathway && <th>パス</th>}
                   {columns.dpc && <th>DPC</th>}
+                  {columns.ews && <th>NEWS2</th>}
                   <th>特記事項</th>
                   <th className="sticky-table__fix-actions"></th>
                 </tr>
@@ -780,6 +792,7 @@ export function InpatientListPage() {
                     }
                     pathways={activePathways.data?.get(row.patient?.id ?? "") ?? []}
                     dpc={row.encounter?.id ? dpcByEncounter.get(row.encounter.id) : undefined}
+                    earlyWarning={latestEarlyWarnings.data?.get(row.patient?.id ?? "")}
                     columns={columns}
                     pictograms={pictograms}
                   />
@@ -1133,6 +1146,7 @@ function InpatientTableRow({
   pendingNursingCount,
   pathways,
   dpc,
+  earlyWarning,
   columns,
   pictograms,
   ...actions
@@ -1149,6 +1163,8 @@ function InpatientTableRow({
   pathways: PathwayApplicationSummary[];
   /** 今の診断群分類と期間Ⅱ(DPC 列を出さないとき・読み込み前は undefined)。 */
   dpc?: DpcPatientRow;
+  /** 直近 3 日の最新の NEWS2(NEWS2 列を出さないとき・測定が無いときは undefined)。 */
+  earlyWarning?: EarlyWarningSummary;
   columns: InpatientOptionalColumns;
   pictograms: RowPictogramSources;
 } & InpatientMenuActions) {
@@ -1198,6 +1214,21 @@ function InpatientTableRow({
               {dpc && patientId ? <DpcCell row={dpc} returnLinkState={returnLinkState} /> : "-"}
             </td>
           )}
+          {columns.ews && (
+            <td className="inpatient__ews">
+              {earlyWarning ? (
+                <span
+                  className={`inpatient__ews-score inpatient__ews-score--${earlyWarning.band}`}
+                  title={`${earlyWarningText(earlyWarning)} ${dateTimeLabel(earlyWarning.at)}`}
+                >
+                  {earlyWarning.total}
+                  {earlyWarning.missing.length > 0 ? "*" : ""}
+                </span>
+              ) : (
+                "-"
+              )}
+            </td>
+          )}
           <td className="inpatient__note">
             {/* 未指示受けは「掲示」ではなく要対応なので、予定タグ(枠線)と見た目を
                 分けて先頭に置く。押すとその患者のカルテの指示簿タブが開く。 */}
@@ -1242,7 +1273,7 @@ function InpatientTableRow({
           <td className="sticky-table__fix-3">
             <span className="inpatient__empty-bed">空床</span>
           </td>
-          <td colSpan={8 + Number(columns.pathway) + Number(columns.dpc)}></td>
+          <td colSpan={8 + Number(columns.pathway) + Number(columns.dpc) + Number(columns.ews)}></td>
           <td className="patient-table__actions sticky-table__fix-actions">
             <RowMenu label={`${locationDisplayName(room)} ${bedLabel} の操作`} escapesClipping>
               <button type="button" className="row-menu__item" onClick={onAdmit}>

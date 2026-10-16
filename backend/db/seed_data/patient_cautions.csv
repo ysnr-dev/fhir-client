@@ -14,3 +14,4 @@ no-transfusion,輸血拒否,advance-directive,no-transfusion,120
 unpaid,未収金,administrative,unpaid,130
 privacy,要配慮(個人情報制限),administrative,privacy,140
 alert,その他の注意,administrative,alert,150
+spo2-scale2,SpO2 スケール2(高CO2血症リスク),clinical,,160

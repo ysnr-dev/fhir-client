@@ -7,7 +7,18 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { groupVitalEntries, VITAL_ENTRY_SYSTEM, vitalDeleteBundle, vitalSaveBundle } from "../../fhir/vitalHelpers";
+import {
+  groupVitalEntries,
+  isEarlyWarningObservation,
+  VITAL_ENTRY_SYSTEM,
+  vitalDeleteBundle,
+  vitalSaveBundle,
+  withFullUrls,
+} from "../../fhir/vitalHelpers";
+import type { EarlyWarningFormFields } from "../../fhir/earlyWarningHelpers";
+import { earlyWarningEntries, type EarlyWarningContext } from "../../fhir/earlyWarningTaskHelpers";
+import { buildCancelledNotificationTask, notificationTaskEntry } from "../../fhir/notificationHelpers";
+import { fetchOpenEwsAlertTasks, fetchOpenEwsAlertTasksByFocus } from "./earlyWarning";
 import { KARTE_NOTE_TYPE_SEARCH } from "../../fhir/clinicalNoteHelpers";
 import { compareKarteDaysDesc, orderCardDay } from "../../fhir/karteTimeline";
 import { PATHWAY_MARKER_CODE, PATHWAY_MARKER_SYSTEM } from "../../fhir/pathwayApplyHelpers";
@@ -17,7 +28,7 @@ import { today } from "../../lib/dates";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { NURSING_ORDER_TYPE } from "../../fhir/nursingOrderHelpers";
 import { type FhirResult, postBundle, searchResource } from "../fhirClient";
-import { fetchDistinctDates, hasRelation, type PagedItems, resourcesOfType, searchAllPages } from "./core";
+import { fetchDistinctDates, hasRelation, NOTIFICATION_TASK_KEY, type PagedItems, resourcesOfType, searchAllPages } from "./core";
 
 // ---- カルテ画面のタイムライン ----
 //
@@ -579,24 +590,75 @@ export function useVitalFlowsheet(
   return { ...query, data: query.data?.items, truncated: query.data?.truncated ?? false };
 }
 
+/** NEWS2 の算出と通知に要る、測定の外側の情報(施設設定で無効なら渡さなくてよい)。 */
+export interface VitalEarlyWarningArgs {
+  values: EarlyWarningFormFields;
+  patientId: string;
+  context: Omit<EarlyWarningContext, "existingTask">;
+}
+
 export function useSaveVitalEntry() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       observations,
       existingObservationIds,
+      earlyWarning,
     }: {
       observations: fhir4.Observation[];
       existingObservationIds?: string[];
-    }) => postBundle(vitalSaveBundle(observations, existingObservationIds)),
-    onSuccess: () => invalidateVitals(queryClient),
+      earlyWarning?: VitalEarlyWarningArgs;
+    }) => {
+      const posts = withFullUrls(observations);
+      let extra: fhir4.BundleEntry[] = [];
+      if (earlyWarning?.context.settings.enabled) {
+        const encounterId = earlyWarning.context.encounter?.id;
+        const existingTask = encounterId ? (await fetchOpenEwsAlertTasks([encounterId])).get(encounterId) : undefined;
+        extra = earlyWarningEntries({
+          posts,
+          values: earlyWarning.values,
+          patientId: earlyWarning.patientId,
+          context: { ...earlyWarning.context, existingTask },
+        });
+      }
+      return postBundle(vitalSaveBundle(posts, existingObservationIds, extra));
+    },
+    onSuccess: () => {
+      invalidateVitals(queryClient);
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+    },
   });
 }
 
+/**
+ * 測定 1 回ぶんを消す。カードの Observation(派生を除いた検索)では NEWS2 が漏れるので、
+ * identifier で引き直して全部消し、消える NEWS2 を指す未対応の早期警告は取り下げる。
+ */
 export function useDeleteVitalEntry() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (observationIds: string[]) => postBundle(vitalDeleteBundle(observationIds)),
-    onSuccess: () => invalidateVitals(queryClient),
+    mutationFn: async (entryId: string) => {
+      const params = new URLSearchParams();
+      params.set("identifier", `${VITAL_ENTRY_SYSTEM}|${entryId}`);
+      params.set("_count", "50");
+      const { data } = await searchResource<fhir4.Observation>("Observation", params);
+      const observations = resourcesOfType<fhir4.Observation>(data, "Observation");
+      const ids = observations.map((observation) => observation.id ?? "").filter(Boolean);
+      const news2Ids = observations
+        .filter(isEarlyWarningObservation)
+        .map((observation) => observation.id ?? "")
+        .filter(Boolean);
+      const tasks = await fetchOpenEwsAlertTasksByFocus(news2Ids);
+      const bundle = vitalDeleteBundle(ids);
+      bundle.entry = [
+        ...(bundle.entry ?? []),
+        ...tasks.map((task) => notificationTaskEntry(buildCancelledNotificationTask(task), task.id)),
+      ];
+      return postBundle(bundle);
+    },
+    onSuccess: () => {
+      invalidateVitals(queryClient);
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+    },
   });
 }

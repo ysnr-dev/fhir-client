@@ -11,8 +11,17 @@ import {
   usePatientAdmission,
   usePatientEmergency,
   useRegimenApplications,
+  useEarlyWarningSettings,
+  useLatestEarlyWarning,
 } from "../api/queries";
 import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
+import { dateTimeLabel } from "../lib/dates";
+import {
+  bandAtLeast,
+  earlyWarningText,
+  news2ItemsText,
+  news2MissingText,
+} from "../fhir/earlyWarningHelpers";
 import { bloodTypeLabel } from "../fhir/transfusionOrderHelpers";
 import {
   emergencyBedName,
@@ -125,7 +134,7 @@ interface PictogramProps {
 }
 
 /**
- * 1 人ぶんのピクトグラム(注意・アレルギー・感染症・化学療法)を取得して並べる。
+ * 1 人ぶんのピクトグラム(注意・アレルギー・感染症・化学療法・早期警告)を取得して並べる。
  * 患者帯と一覧の患者ドロワーで使う。
  */
 export function PatientPictogramStrip(props: PictogramProps) {
@@ -135,6 +144,7 @@ export function PatientPictogramStrip(props: PictogramProps) {
       <AllergyPictograms {...props} />
       <InfectionPictogram {...props} />
       <ChemotherapyPictogram {...props} />
+      <EarlyWarningPictogram {...props} />
     </>
   );
 }
@@ -243,6 +253,42 @@ function ChemotherapyPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal
         </ul>
         <Link className="patient-header__popover-link" to={`/patients/${patientId}/karte?tab=chemo`}>
           化学療法タブを開く
+        </Link>
+      </PictogramPopover>
+    </span>
+  );
+}
+
+/**
+ * 早期警告(直近 3 日の最新の NEWS2 が中以上)。悪化の兆しは経過表を開かなくても分かっている必要があるので
+ * 帯に置く。中身(点数・項目別の点・測定日時)は吹き出しで読む。
+ */
+function EarlyWarningPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }: PictogramProps) {
+  const settings = useEarlyWarningSettings();
+  const latest = useLatestEarlyWarning(patientId, settings.enabled);
+  const score = latest.data;
+  if (!patientId || !settings.enabled || !score || !bandAtLeast(score.band, "medium")) return null;
+
+  const items = news2ItemsText(score.items);
+  const missing = news2MissingText(score.missing);
+  return (
+    <span className="patient-header__item patient-header__cautions">
+      <PictogramPopover
+        label={`早期警告: ${earlyWarningText(score)}`}
+        className={`patient-header__caution--ews-${score.band}`}
+        icon={<CautionPictogram pictogram="early-warning" size={size} />}
+        portal={portal}
+      >
+        <ul className="patient-header__popover-list">
+          <li>
+            <span className="patient-header__popover-name">{earlyWarningText(score)}</span>
+            <span className="patient-header__popover-text">
+              {[dateTimeLabel(score.at), items, missing ? `欠測: ${missing}` : ""].filter(Boolean).join(" / ")}
+            </span>
+          </li>
+        </ul>
+        <Link className="patient-header__popover-link" to={`/patients/${patientId}/karte?tab=flowsheet`}>
+          経過表タブを開く
         </Link>
       </PictogramPopover>
     </span>

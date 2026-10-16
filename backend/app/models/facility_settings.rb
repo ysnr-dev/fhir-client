@@ -138,8 +138,12 @@ class FacilitySettings < ApplicationRecord
 
   # 経過表一括入力(病棟の複数患者にまとめて入れる画面)に出す列。並べた順が列の順。
   # 列の中身(LOINC・MEDIS のコード、単位)は frontend が持ち、ここはどれを出すかだけを決める。
-  BULK_VITAL_ITEMS = %w[blood_pressure temperature pulse spo2 respiration weight meal].freeze
-  DEFAULT_BULK_VITAL_ENTRY = { "items" => BULK_VITAL_ITEMS }.freeze
+  BULK_VITAL_ITEMS = %w[blood_pressure temperature pulse spo2 oxygen_flow respiration jcs weight meal].freeze
+  DEFAULT_BULK_VITAL_ENTRY = { "items" => %w[blood_pressure temperature pulse spo2 respiration weight meal] }.freeze
+  # 早期警告スコア(NEWS2)。enabled で算出と通知を始める。notify_band は主治医に通知する区分の下限、
+  # show_qsofa は入力フォームに qSOFA を併記するか(docs/early-warning-design.md)。
+  EARLY_WARNING_NOTIFY_BANDS = %w[low-medium medium high].freeze
+  DEFAULT_EARLY_WARNING = { "enabled" => false, "notify_band" => "medium", "show_qsofa" => true }.freeze
   # DPC の医療機関別係数(基礎係数・機能評価係数Ⅰ・Ⅱ・救急補正係数などを合わせた値)。年度の途中でも
   # 変わるので { 適用開始日(YYYY-MM-DD) => 係数 } で持ち、診断群分類の推定包括額
   # (点数 × 係数 × 10 円)に使う。
@@ -369,6 +373,16 @@ class FacilitySettings < ApplicationRecord
     "pressure_ulcer" => {
       default: DEFAULT_PRESSURE_ULCER,
       shape: { fields: { "template" => QUESTIONNAIRE_URL } }
+    },
+    "early_warning" => {
+      default: DEFAULT_EARLY_WARNING,
+      shape: {
+        fields: {
+          "enabled" => :boolean,
+          "notify_band" => { enum: EARLY_WARNING_NOTIFY_BANDS },
+          "show_qsofa" => :boolean
+        }
+      }
     },
     "dpc_coefficients" => {
       default: DEFAULT_DPC_COEFFICIENTS,

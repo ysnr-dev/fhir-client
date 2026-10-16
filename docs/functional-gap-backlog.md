@@ -319,7 +319,7 @@
 
 ### 4.2 臨床判断支援
 
-- **早期警告スコア(NEWS2 / qSOFA)と RRS の呼び出し** — **設計済み(2026-10-16、`docs/early-warning-design.md`)**
+- **早期警告スコア(NEWS2 / qSOFA)と RRS の呼び出し** — **実装済み(2026-10-16、`docs/early-warning-design.md`。RRS の呼び出し先・看護観察の JCS からの算出は残り)**
 - **抗菌薬適正使用支援(AST)** — **設計済み(2026-10-16、`docs/antimicrobial-stewardship-design.md`)**
 - **周術期の休薬管理(抗血栓薬)**(拡張、高): 手術・内視鏡・生検のオーダー時に処方・持参薬から抗血栓薬を検知し、休薬・再開を記録、
   手術一覧と術前テンプレートに休薬状況。注意区分「抗凝固薬内服」はあるが照合は無い。［当たり］`medicationSafetyHelpers` の器に

@@ -44,6 +44,7 @@ import { addDays } from "../../fhir/scheduleHelpers";
 import { createResource, postBundle, searchResource } from "../fhirClient";
 import { fetchYakkaCodes } from "../masterClient";
 import { hasNextPage, NOTIFICATION_TASK_KEY, ORAL_LOOKBACK_DAYS, resourcesOfType, searchAllPages, setOrderPeriod } from "./core";
+import { fetchOpenEwsAlertTasks } from "./earlyWarning";
 import { dpcRecodingDueCancelEntries } from "./dpcCoding";
 import { splitLocationMatches } from "./location";
 import { fetchNursingPerforms, nursingOrderParams, nursingOrderSetOf, nursingPerformParams } from "./nursing";
@@ -962,8 +963,24 @@ export function useBulkVitalContext(patientIds: string[], date: string) {
 export function useSaveBulkVitals() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    /**
+     * `encounterIds` を渡すと、その入院の未対応の早期警告を引いてから `build` に渡す
+     * (NEWS2 の通知を出し直す・取り下げるため)。
+     */
+    mutationFn: async ({
+      build,
+      encounterIds = [],
+    }: {
+      build: (tasksByEncounter: Map<string, fhir4.Task>) => fhir4.Bundle;
+      encounterIds?: string[];
+    }) => {
+      const tasks = encounterIds.length > 0 ? await fetchOpenEwsAlertTasks(encounterIds) : new Map();
+      const bundle = build(tasks);
+      if ((bundle.entry ?? []).length === 0) return null;
+      return postBundle(bundle);
+    },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
       queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search", "flowsheet-meal"] });
     },

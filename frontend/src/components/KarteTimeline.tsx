@@ -255,10 +255,7 @@ function useKarteItemDelete(onDeleted: (item: KarteTimelineItem) => void) {
         break;
       // バイタルは 1 回の測定が項目ごとの Observation に分かれるのでまとめて消す。
       case "vital":
-        m.vital.mutate(
-          item.entry.observations.map((observation) => observation.id ?? "").filter(Boolean),
-          options,
-        );
+        m.vital.mutate(item.entry.entryId, options);
         break;
       // 注射は専用の確認モーダル(InjectionDeleteModal)が消す。
       case "injection":

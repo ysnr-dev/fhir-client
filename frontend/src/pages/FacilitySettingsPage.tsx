@@ -93,6 +93,12 @@ import {
   type BulkVitalItem,
 } from "../fhir/bulkVitalHelpers";
 import { TrashIcon } from "../components/icons/TrashIcon";
+import {
+  DEFAULT_EARLY_WARNING,
+  EARLY_WARNING_BAND_LABEL,
+  EARLY_WARNING_NOTIFY_BANDS,
+  type EarlyWarningSettings,
+} from "../fhir/earlyWarningHelpers";
 
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
 // 診療科・診察室・スタッフは自院のものしか登録しない。他院は診療情報提供書の
@@ -319,6 +325,10 @@ export function FacilitySettingsPage() {
   const reviewValid =
     Number.isInteger(radiotherapyReview.interval_days) && radiotherapyReview.interval_days >= 1;
 
+  // 早期警告スコア(NEWS2)。有効にするとバイタルの保存で算出し、区分が下限以上なら主治医に通知する。
+  const [earlyWarningDraft, setEarlyWarningDraft] = useState<EarlyWarningSettings | undefined>(undefined);
+  const earlyWarning = earlyWarningDraft ?? settings.data?.early_warning ?? DEFAULT_EARLY_WARNING;
+
   // 医事会計へ送るレセプト電算コードのうち施設基準で決まるもの。空欄は「送らない」。
   const [receiptCodesDraft, setReceiptCodesDraft] = useState<ReceiptCodeSettings | undefined>(
     undefined,
@@ -474,6 +484,7 @@ export function FacilitySettingsPage() {
       admission_documents: admissionDocs,
       nursing_acuity: acuity,
       pressure_ulcer: pressureUlcer,
+      early_warning: earlyWarning,
     });
   }
 
@@ -1120,6 +1131,48 @@ export function FacilitySettingsPage() {
                   </option>
                 ))}
               </select>
+            </label>
+          </div>
+        </details>
+
+        {/* 早期警告スコア。算出するのは入院・外来を問わず右ペインと一括入力のバイタル、通知は入院中の
+            患者の主治医あて(docs/early-warning-design.md)。 */}
+        <details className="facility-settings__schedule">
+          <summary>早期警告スコア(NEWS2)</summary>
+          <div className="facility-settings__schedule-body">
+            <label className="connection-settings-form__checkbox">
+              <input
+                type="checkbox"
+                checked={earlyWarning.enabled}
+                onChange={(e) => setEarlyWarningDraft({ ...earlyWarning, enabled: e.target.checked })}
+              />
+              算出と通知を行う
+            </label>
+            <label>
+              主治医に通知する区分
+              <select
+                value={earlyWarning.notify_band}
+                onChange={(e) =>
+                  setEarlyWarningDraft({
+                    ...earlyWarning,
+                    notify_band: e.target.value as EarlyWarningSettings["notify_band"],
+                  })
+                }
+              >
+                {EARLY_WARNING_NOTIFY_BANDS.map((band) => (
+                  <option key={band} value={band}>
+                    {EARLY_WARNING_BAND_LABEL[band]}以上
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="connection-settings-form__checkbox">
+              <input
+                type="checkbox"
+                checked={earlyWarning.show_qsofa}
+                onChange={(e) => setEarlyWarningDraft({ ...earlyWarning, show_qsofa: e.target.checked })}
+              />
+              qSOFA を併記する
             </label>
           </div>
         </details>

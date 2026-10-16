@@ -57,7 +57,7 @@ export function buildBloodPressureComponents(
 /** 血圧以外の測定項目。入力欄の並びもこの順。 */
 export interface VitalMeasure {
   /** フォームの値のキー。 */
-  key: "temperature" | "pulse" | "spo2" | "respiration" | "height" | "weight";
+  key: "temperature" | "pulse" | "spo2" | "oxygenFlow" | "respiration" | "height" | "weight";
   label: string;
   code: string;
   display: string;
@@ -90,6 +90,15 @@ export const VITAL_MEASURES: VitalMeasure[] = [
     step: "1",
   },
   {
+    key: "oxygenFlow",
+    label: "酸素流量",
+    code: "3151-8",
+    display: "Inhaled oxygen flow rate",
+    unit: "L/分",
+    ucum: "L/min",
+    step: "0.5",
+  },
+  {
     key: "respiration",
     label: "呼吸数",
     code: "9279-1",
@@ -115,6 +124,49 @@ export const CAPILLARY_GLUCOSE = {
   step: "1",
 } as const;
 
+/**
+ * 意識レベル(JCS)。LOINC に JCS は無いので、看護観察 MEDIS 31001657「意識評価(JCS)」と
+ * ローカルの項目コードを併記する(MEDIS を持つので看護指示の観察と経過表の同じ行に合流する)。
+ * 値は選択肢なので `VITAL_MEASURES`(数値の項目)とは別に持つ。
+ */
+export const JCS_MEASURE = {
+  medisCode: "31001657",
+  code: "jcs",
+  label: "意識(JCS)",
+} as const;
+
+/** 項目コードを持たない測定(JCS)の項目コード。 */
+export const VITAL_MEASURE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/vital-measure";
+
+/** JCS の値。 */
+export const JCS_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/jcs";
+
+/** JCS の選択肢(値 → 表示)。 */
+export const JCS_OPTIONS: { value: string; label: string }[] = [
+  { value: "0", label: "0" },
+  { value: "1", label: "I-1" },
+  { value: "2", label: "I-2" },
+  { value: "3", label: "I-3" },
+  { value: "10", label: "II-10" },
+  { value: "20", label: "II-20" },
+  { value: "30", label: "II-30" },
+  { value: "100", label: "III-100" },
+  { value: "200", label: "III-200" },
+  { value: "300", label: "III-300" },
+];
+
+export function jcsLabel(value: string): string {
+  return JCS_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+/**
+ * 早期警告スコア(NEWS2)。測定セットから算出して同じ identifier の Observation として残す
+ * (earlyWarningHelpers)。経過表の行と区分の色はここで扱う。
+ */
+export const EARLY_WARNING_SCORE_SYSTEM = "http://fhir-client.local/CodeSystem/early-warning-score";
+export const NEWS2_CODE = "news2";
+export const EARLY_WARNING_BAND_SYSTEM = "http://fhir-client.local/CodeSystem/early-warning-band";
+
 /** 身長と体重から求める BMI。入力欄は持たず、両方が入っているときだけ作る。 */
 export const BMI = {
   code: "39156-5",
@@ -133,9 +185,12 @@ export interface VitalFormValues {
   temperature: string;
   pulse: string;
   spo2: string;
+  oxygenFlow: string;
   respiration: string;
   height: string;
   weight: string;
+  /** JCS の値(JCS_OPTIONS の value)。空は未入力。 */
+  jcs: string;
 }
 
 export function emptyVitalFormValues(): VitalFormValues {
@@ -146,9 +201,11 @@ export function emptyVitalFormValues(): VitalFormValues {
     temperature: "",
     pulse: "",
     spo2: "",
+    oxygenFlow: "",
     respiration: "",
     height: "",
     weight: "",
+    jcs: "",
   };
 }
 
@@ -175,6 +232,7 @@ export function vitalBmi(values: VitalFormValues, fallbackHeightCm?: number): nu
 /** 1 件でも値が入っているか(何も入れずに登録させないための判定)。 */
 export function hasAnyVitalValue(values: VitalFormValues): boolean {
   if (numberOf(values.systolic) !== null || numberOf(values.diastolic) !== null) return true;
+  if (values.jcs) return true;
   return VITAL_MEASURES.some((measure) => numberOf(values[measure.key]) !== null);
 }
 
@@ -270,6 +328,8 @@ export function buildVitalObservations(args: BuildVitalObservationsArgs): fhir4.
     });
   }
 
+  if (values.jcs) observations.push({ ...base, ...jcsObservationParts(values.jcs) });
+
   // BMI は入力値そのものではないが、同じ測定の身長・体重から一意に決まるので
   // 一緒に残す(経過表で身長・体重と並べて追えるようにするため)。体重だけの測定は、
   // 渡された最新の身長で求める。
@@ -285,14 +345,55 @@ export function buildVitalObservations(args: BuildVitalObservationsArgs): fhir4.
   return observations;
 }
 
+/** JCS の Observation の code と値。 */
+export function jcsObservationParts(value: string): Pick<fhir4.Observation, "code" | "valueCodeableConcept"> {
+  return {
+    code: {
+      coding: [
+        { system: NURSING_OBSERVATION_CODE_SYSTEM, code: JCS_MEASURE.medisCode, display: "意識評価(JCS)" },
+        { system: VITAL_MEASURE_CODE_SYSTEM, code: JCS_MEASURE.code, display: "JCS" },
+      ],
+      text: JCS_MEASURE.label,
+    },
+    valueCodeableConcept: {
+      coding: [{ system: JCS_CODE_SYSTEM, code: value, display: jcsLabel(value) }],
+      text: jcsLabel(value),
+    },
+  };
+}
+
+/** JCS の Observation か。手入力(ローカルの項目コード)と看護観察(MEDIS)のどちらでもよい。 */
+export function isJcsObservation(observation: fhir4.Observation): boolean {
+  return Boolean(
+    observation.code?.coding?.some(
+      (c) =>
+        (c.system === VITAL_MEASURE_CODE_SYSTEM && c.code === JCS_MEASURE.code) ||
+        (c.system === NURSING_OBSERVATION_CODE_SYSTEM && c.code === JCS_MEASURE.medisCode),
+    ),
+  );
+}
+
+/** 手入力の JCS の値(JCS_OPTIONS の value)。 */
+export function jcsValueOf(observation: fhir4.Observation): string {
+  return observation.valueCodeableConcept?.coding?.find((c) => c.system === JCS_CODE_SYSTEM)?.code ?? "";
+}
+
+/** 測定セットの中の NEWS2 か(測定の値ではない派生の Observation)。 */
+export function isEarlyWarningObservation(observation: fhir4.Observation): boolean {
+  return Boolean(
+    observation.code?.coding?.some((c) => c.system === EARLY_WARNING_SCORE_SYSTEM && c.code === NEWS2_CODE),
+  );
+}
+
 /**
  * 保存用の transaction。編集では「前回の測定を全部消して作り直す」方式にしている。
  * 項目ごとに Observation を対応付けて差分更新することもできるが、入力欄を空にした
  * 項目の削除や血圧の追加で対応が崩れるため、作り直しの方が破綻しない。
  */
 export function vitalSaveBundle(
-  observations: fhir4.Observation[],
+  observations: VitalPostEntry[],
   existingObservationIds: string[] = [],
+  extra: fhir4.BundleEntry[] = [],
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",
@@ -301,12 +402,27 @@ export function vitalSaveBundle(
       ...existingObservationIds.map((id) => ({
         request: { method: "DELETE" as const, url: `Observation/${id}` },
       })),
-      ...observations.map((observation) => ({
-        resource: observation,
-        request: { method: "POST" as const, url: "Observation" },
-      })),
+      ...observations.map(vitalPostEntry),
+      ...extra,
     ],
   };
+}
+
+/**
+ * POST する測定と、同じ transaction の中から指すための仮 id(urn:uuid)。
+ * NEWS2 の derivedFrom・通知の focus が同じ transaction の Observation を指すのに使う。
+ */
+export interface VitalPostEntry {
+  fullUrl: string;
+  resource: fhir4.Observation;
+}
+
+export function withFullUrls(observations: fhir4.Observation[]): VitalPostEntry[] {
+  return observations.map((resource) => ({ fullUrl: `urn:uuid:${crypto.randomUUID()}`, resource }));
+}
+
+export function vitalPostEntry(entry: VitalPostEntry): fhir4.BundleEntry {
+  return { fullUrl: entry.fullUrl, resource: entry.resource, request: { method: "POST", url: "Observation" } };
 }
 
 export function vitalDeleteBundle(observationIds: string[]): fhir4.Bundle {
@@ -378,6 +494,8 @@ export function vitalEntryDepartment(entry: VitalEntry): DepartmentRef {
 }
 
 function observationCode(observation: fhir4.Observation): string {
+  if (isJcsObservation(observation)) return JCS_MEASURE.code;
+  if (isEarlyWarningObservation(observation)) return NEWS2_CODE;
   return observation.code?.coding?.find((coding) => coding.system === LOINC)?.code ?? "";
 }
 
@@ -410,11 +528,17 @@ export function vitalDisplayRows(entry: VitalEntry): VitalDisplayRow[] {
     }
   }
 
+  const jcs = byCode.get(JCS_MEASURE.code);
+  if (jcs) rows.push({ label: JCS_MEASURE.label, value: jcsLabel(jcsValueOf(jcs)) });
+
   for (const measure of VITAL_MEASURES) {
     const observation = byCode.get(measure.code);
     const value = quantityText(observation?.valueQuantity);
     if (value) rows.push({ label: measure.label, value });
   }
+
+  const news2 = byCode.get(NEWS2_CODE);
+  if (news2?.valueInteger !== undefined) rows.push({ label: "NEWS2", value: `${news2.valueInteger}点` });
 
   const bmi = byCode.get(BMI.code);
   const bmiValue = bmi?.valueQuantity?.value;
@@ -468,8 +592,11 @@ export const BLOOD_PRESSURE_SERIES = [
 // 書かず、施設設定のしきい値(backend の FacilitySettings::DEFAULT_VITAL_THRESHOLDS と
 // 同じ既定値)で表示時に判定する。しきい値を変えれば過去の測定にもそのまま効く。
 
-/** 異常値の判定。H: 上限以上 / L: 下限以下 / "": 正常または判定対象外。 */
-export type VitalInterpretation = "H" | "L" | "";
+/**
+ * 異常値の判定。H: 上限以上 / L: 下限以下 / "": 正常または判定対象外。
+ * HH は早期警告スコアの「高」だけが使う(しきい値の判定からは出ない)。
+ */
+export type VitalInterpretation = "HH" | "H" | "L" | "";
 
 /** 1 項目のしきい値。片方だけでもよく、無い側は判定しない。 */
 export interface VitalThresholdBounds {
@@ -522,14 +649,18 @@ export function vitalInterpretationOf(
 
 /** 経過表の行の並び。入力欄と同じ順を先頭に置き、それ以外は登場順で後ろへ。 */
 const FLOWSHEET_ORDER = [
+  NEWS2_CODE,
   BLOOD_PRESSURE.code,
+  JCS_MEASURE.medisCode,
   ...VITAL_MEASURES.map((measure) => measure.code),
   BMI.code,
   CAPILLARY_GLUCOSE.code,
 ];
 
 const FLOWSHEET_LABELS = new Map<string, string>([
+  [NEWS2_CODE, "NEWS2"],
   [BLOOD_PRESSURE.code, "血圧"],
+  [JCS_MEASURE.medisCode, JCS_MEASURE.label],
   ...VITAL_MEASURES.map((measure) => [measure.code, measure.label] as [string, string]),
   [BMI.code, "BMI"],
   [CAPILLARY_GLUCOSE.code, CAPILLARY_GLUCOSE.label],
@@ -639,7 +770,9 @@ export function buildVitalFlowsheet(
     row.values.set(at, cell.value);
     if (cell.number !== undefined) {
       row.numbers.set(at, cell.number);
-      const mark = vitalInterpretationOf(key, cell.number, thresholds);
+      const mark = isEarlyWarningObservation(observation)
+        ? earlyWarningMark(observation)
+        : vitalInterpretationOf(key, cell.number, thresholds);
       if (mark) row.interpretations.set(at, mark);
     }
   }
@@ -657,6 +790,16 @@ export function buildVitalFlowsheet(
   return { columns, rows: ordered, entryIds };
 }
 
+/** NEWS2 の区分を経過表の色に写す。高は反転、中は赤字、それより下は付けない。 */
+function earlyWarningMark(observation: fhir4.Observation): VitalInterpretation {
+  const band = observation.interpretation
+    ?.flatMap((concept) => concept.coding ?? [])
+    .find((coding) => coding.system === EARLY_WARNING_BAND_SYSTEM)?.code;
+  if (band === "high") return "HH";
+  if (band === "medium") return "H";
+  return "";
+}
+
 /**
  * 経過表の 1 マスにする値。数値(グラフにも使う)/ 文字列 / 列挙(便量「少量」)/
  * 2 値の component(創の縦×横 → "12.5/8")。どれも無ければ null(行を作らない)。
@@ -667,6 +810,9 @@ function flowsheetCell(
   const quantity = observation.valueQuantity;
   if (quantity?.value !== undefined) {
     return { value: String(quantity.value), unit: quantity.unit ?? "", number: quantity.value };
+  }
+  if (observation.valueInteger !== undefined) {
+    return { value: String(observation.valueInteger), unit: "", number: observation.valueInteger };
   }
   if (observation.valueString) return { value: observation.valueString, unit: "" };
   const concept = observation.valueCodeableConcept;
@@ -738,6 +884,10 @@ export function parseVitalEntry(entry: VitalEntry): VitalFormValues {
         if (componentCode === SYSTOLIC.code) values.systolic = String(value);
         if (componentCode === DIASTOLIC.code) values.diastolic = String(value);
       }
+      continue;
+    }
+    if (code === JCS_MEASURE.code) {
+      values.jcs = jcsValueOf(observation);
       continue;
     }
     const measure = VITAL_MEASURES.find((m) => m.code === code);

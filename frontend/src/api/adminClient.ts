@@ -22,6 +22,7 @@ import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
 import type { NursingProfileSettings } from "../fhir/nursingProfileHelpers";
 import type { BulkVitalEntrySettings } from "../fhir/bulkVitalHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
+import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
 
 export interface ConnectionSettings {
   base_url: string | null;
@@ -77,6 +78,8 @@ export interface FacilitySettings {
   nursing_acuity: NursingAcuitySettings;
   /** 褥瘡管理(DESIGN-R 評価のテンプレート)。 */
   pressure_ulcer: PressureUlcerSettings;
+  /** 早期警告スコア(NEWS2)の算出と通知。 */
+  early_warning: EarlyWarningSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -97,6 +100,7 @@ export type FacilitySettingsPayload = Partial<{
   admission_documents: AdmissionDocumentSettings;
   nursing_acuity: NursingAcuitySettings;
   pressure_ulcer: PressureUlcerSettings;
+  early_warning: EarlyWarningSettings;
 }>;
 
 export interface ConnectionTestResult {
