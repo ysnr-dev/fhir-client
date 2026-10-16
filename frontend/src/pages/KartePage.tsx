@@ -19,9 +19,8 @@ import {
   useKarteVitalsInfinite,
   useKartePathwayEvaluations,
   usePatient,
-  usePatientCheckedInAppointment,
   useOutpatientOrders,
-  usePatientOutpatientExam,
+  usePatientTodayOutpatient,
   useStartOutpatientExam,
   useUpdateOutpatientExam,
   type KarteProblemFilter,
@@ -185,10 +184,13 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const returnTo = useKarteReturnTo();
   const navigate = useNavigate();
 
-  // 外来で診察中なら、ヘッダから診察を終えられるようにする(一時終了なら再開できる)。
-  // 診察中でなければ(入院患者や、外来受付を経ずに開いたカルテ)null が返り、ボタンは出ない。
-  const outpatientExam = usePatientOutpatientExam(patientId);
-  const examEncounter = outpatientExam.data?.encounter;
+  // 今日の外来で診察中なら、ヘッダから診察を終えられるようにする(一時終了なら再開できる)。
+  // 診察前の受付済の予約があれば診察を始められるようにする。どちらも無ければ
+  // (入院患者や、外来受付を経ずに開いたカルテ)ボタンは出ない。
+  const todayOutpatient = usePatientTodayOutpatient(patientId);
+  const outpatientExam = todayOutpatient.data?.exam ?? null;
+  const checkedInAppointment = todayOutpatient.data?.checkedInAppointment ?? null;
+  const examEncounter = outpatientExam?.encounter;
   const examInProgress = isExamInProgress(examEncounter);
   const updateExam = useUpdateOutpatientExam();
   // 診察日の当日オーダー。未実施の検査があれば診察終了のときに一時終了かどうかを選ばせる。
@@ -198,11 +200,6 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   );
   /** 一時終了かどうかの選択に出す未実施の検査オーダー。null なら選択を出していない。 */
   const [pendingExamOrders, setPendingExamOrders] = useState<string[] | null>(null);
-  // 診察中でなく今日の受付済の予約があれば、ヘッダから診察を始められるようにする。
-  const checkedInAppointment = usePatientCheckedInAppointment(
-    patientId,
-    outpatientExam.isSuccess && !outpatientExam.data,
-  );
   const startExam = useStartOutpatientExam();
   const patient = usePatient(patientId);
   // 会計送信はレセコン連携が有効なときだけ。無効なら診察終了でそのまま一覧へ戻る。
@@ -233,9 +230,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
 
   // 外来一覧の診察開始と同じく 1 クリックで現在時刻を記録する。
   function handleStartExam() {
-    const appointment = checkedInAppointment.data;
-    if (!appointment) return;
-    startExam.mutate(buildOutpatientEncounter(appointment, patient.data?.data, nowFhirDateTime()));
+    if (!checkedInAppointment) return;
+    startExam.mutate(buildOutpatientEncounter(checkedInAppointment, patient.data?.data, nowFhirDateTime()));
   }
 
   async function handleFinishExam() {
@@ -251,7 +247,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   }
 
   function finishExamNow() {
-    const exam = outpatientExam.data;
+    const exam = outpatientExam;
     if (!exam) return;
     updateExam.mutate(
       {
@@ -1271,7 +1267,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
               診察再開
             </button>
           )}
-          {!detached && !outpatientExam.data && checkedInAppointment.data && (
+          {!detached && checkedInAppointment && (
             <button type="button" disabled={startExam.isPending} onClick={handleStartExam}>
               診察開始
             </button>

@@ -18,7 +18,6 @@ import {
   EXAM_PAUSED_STATUS,
   latestExamByAppointment,
   OUTPATIENT_CLASS_CODE,
-  outpatientEncounterAppointmentId,
 } from "../../fhir/outpatientEncounterHelpers";
 import {
   outpatientOrderSummaries,
@@ -345,66 +344,53 @@ export interface OutpatientExam {
   appointment?: fhir4.Appointment;
 }
 
-async function fetchPatientOutpatientExam(patientId: string): Promise<OutpatientExam | null> {
-  const params = new URLSearchParams();
-  params.set("subject", `Patient/${patientId}`);
-  params.set("status", `${EXAM_IN_PROGRESS_STATUS},${EXAM_PAUSED_STATUS}`);
-  params.set("class", OUTPATIENT_CLASS_CODE);
-  params.set("_count", "10");
-  params.set("_include", "Encounter:appointment");
-
-  const { data: bundle } = await searchResource<fhir4.Resource>("Encounter", params);
-  const encounters = resourcesOfType<fhir4.Encounter>(bundle, "Encounter");
-  // 同じ患者の診察が 2 件並ぶことは無い想定だが、あれば開始が新しい方を採る
-  // (データがおかしくてもカルテの見出しが壊れないように)。
-  const encounter = encounters.reduce<fhir4.Encounter | undefined>(
-    (latest, current) =>
-      !latest || (current.period?.start ?? "") > (latest.period?.start ?? "") ? current : latest,
-    undefined,
-  );
-  if (!encounter) return null;
-
-  const appointmentId = outpatientEncounterAppointmentId(encounter);
-  const appointment = resourcesOfType<fhir4.Appointment>(bundle, "Appointment").find(
-    (candidate) => candidate.id === appointmentId,
-  );
-  return { encounter, appointment };
+/** その患者の今日の外来。診察中(一時終了を含む)の診察か、診察前の受付済の予約のどちらか。 */
+export interface PatientTodayOutpatient {
+  exam: OutpatientExam | null;
+  checkedInAppointment: fhir4.Appointment | null;
 }
 
-/** その患者がいま診察中(一時終了を含む)ならその診察。診察中でなければ null。 */
-export function usePatientOutpatientExam(patientId: string | undefined) {
-  return useQuery({
-    queryKey: ["Encounter", "patient-outpatient-exam", patientId],
-    queryFn: () => fetchPatientOutpatientExam(patientId as string),
-    enabled: Boolean(patientId),
-  });
-}
-
-async function fetchPatientCheckedInAppointment(patientId: string): Promise<fhir4.Appointment | null> {
+async function fetchPatientTodayOutpatient(patientId: string): Promise<PatientTodayOutpatient> {
   const params = new URLSearchParams();
   params.set("patient", `Patient/${patientId}`);
   params.set("date", today());
+  // 診察中・一時終了の間も予約は受付済のまま。
   params.set("status", "checked-in");
   params.set("_count", "10");
+  params.set("_revinclude", "Encounter:appointment");
 
-  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
+  const { data: bundle } = await searchResource<fhir4.Resource>("Appointment", params);
   // 外来一覧と同じく、検査予約は部門が受け付けるので診察の対象にしない。
   const appointments = resourcesOfType<fhir4.Appointment>(bundle, "Appointment").filter(
     (appointment) => !isExamAppointment(appointment),
   );
   appointments.sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""));
-  return appointments[0] ?? null;
+  const examByAppointment = latestExamByAppointment(
+    resourcesOfType<fhir4.Encounter>(bundle, "Encounter").filter(
+      (encounter) => encounter.class?.code === OUTPATIENT_CLASS_CODE,
+    ),
+  );
+
+  for (const appointment of appointments) {
+    const encounter = appointment.id ? examByAppointment.get(appointment.id) : undefined;
+    if (encounter?.status === EXAM_IN_PROGRESS_STATUS || encounter?.status === EXAM_PAUSED_STATUS) {
+      return { exam: { encounter, appointment }, checkedInAppointment: null };
+    }
+  }
+  const checkedInAppointment =
+    appointments.find((appointment) => !appointment.id || !examByAppointment.has(appointment.id)) ?? null;
+  return { exam: null, checkedInAppointment };
 }
 
 /**
- * その患者の今日の受付済(診察前)の予約。カルテのヘッダに「診察開始」を出すのに使う。
- * 複数あれば開始時刻の早いもの。
+ * その患者の今日の外来受診。外来一覧と同じく今日の予約から見るので、過去の日に
+ * 閉じ忘れた診察はカルテの見出しに出ない。複数あれば診察中のもの、無ければ開始時刻の早い予約。
  */
-export function usePatientCheckedInAppointment(patientId: string | undefined, enabled = true) {
+export function usePatientTodayOutpatient(patientId: string | undefined) {
   return useQuery({
-    queryKey: ["Appointment", "patient-checked-in", patientId],
-    queryFn: () => fetchPatientCheckedInAppointment(patientId as string),
-    enabled: Boolean(patientId) && enabled,
+    queryKey: ["Appointment", "patient-today-outpatient", patientId],
+    queryFn: () => fetchPatientTodayOutpatient(patientId as string),
+    enabled: Boolean(patientId),
   });
 }
 
