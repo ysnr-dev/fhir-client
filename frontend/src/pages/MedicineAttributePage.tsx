@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useMedicineAttributeMutations, useMedicineAttributes } from "../api/masterQueries";
-import type { Medicine, MedicineAttribute, MedicineAttributeDefinition } from "../api/masterClient";
+import type {
+  Medicine,
+  MedicineAttribute,
+  MedicineAttributeDefinition,
+  MedicineAttributeQuantity,
+  MedicineAttributeValue,
+} from "../api/masterClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { TrashIcon } from "../components/icons/TrashIcon";
@@ -33,8 +39,8 @@ export function MedicineAttributePage() {
     }
   }
 
-  function handleToggle(item: MedicineAttribute, definition: MedicineAttributeDefinition, checked: boolean) {
-    save(item, { ...item.settings, [definition.key]: checked }, item.note);
+  function handleChange(item: MedicineAttribute, definition: MedicineAttributeDefinition, value: MedicineAttributeValue) {
+    save(item, { ...item.settings, [definition.key]: value }, item.note);
   }
 
   async function handleNoteSave(item: MedicineAttribute) {
@@ -117,22 +123,15 @@ export function MedicineAttributePage() {
                 <td className="medicine-attribute__code">{item.medicine_code}</td>
                 {definitions.map((definition) => (
                   <td key={definition.key} className="medicine-attribute__flag">
-                    {definition.type === "boolean" && (
-                      <label
-                        className="medicine-attribute__value"
-                        title={item.settings[definition.key] == null ? "既定の値" : undefined}
-                      >
-                        <input
-                          type="checkbox"
-                          aria-label={definition.label}
-                          checked={Boolean(item.effective[definition.key])}
-                          disabled={busy}
-                          onChange={(e) => handleToggle(item, definition, e.target.checked)}
-                        />
-                        {item.registered && item.settings[definition.key] == null && (
-                          <span className="medicine-attribute__default">既定</span>
-                        )}
-                      </label>
+                    {item.applicable?.[definition.key] === false ? (
+                      <span className="medicine-attribute__na">-</span>
+                    ) : (
+                      <AttributeInput
+                        item={item}
+                        definition={definition}
+                        disabled={busy}
+                        onChange={(value) => handleChange(item, definition, value)}
+                      />
                     )}
                   </td>
                 ))}
@@ -190,4 +189,128 @@ function matchesKeyword(item: MedicineAttribute, keyword: string): boolean {
   const word = keyword.trim();
   if (!word) return true;
   return (item.medicine_name ?? "").includes(word) || item.medicine_code.includes(word);
+}
+
+/** 項目 1 つの入力。boolean はチェック、enum はセレクト、quantity は数値と単位。 */
+function AttributeInput({
+  item,
+  definition,
+  disabled,
+  onChange,
+}: {
+  item: MedicineAttribute;
+  definition: MedicineAttributeDefinition;
+  disabled: boolean;
+  onChange: (value: MedicineAttributeValue) => void;
+}) {
+  const isDefault = item.registered && item.settings[definition.key] == null;
+  const effective = item.effective[definition.key];
+
+  if (definition.type === "boolean") {
+    return (
+      <label className="medicine-attribute__value" title={item.settings[definition.key] == null ? "既定の値" : undefined}>
+        <input
+          type="checkbox"
+          aria-label={definition.label}
+          checked={Boolean(effective)}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        {isDefault && <span className="medicine-attribute__default">既定</span>}
+      </label>
+    );
+  }
+
+  if (definition.type === "enum") {
+    return (
+      <select
+        className="medicine-attribute__select"
+        aria-label={definition.label}
+        value={typeof effective === "string" ? effective : ""}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {(definition.options ?? []).map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <QuantityInput
+      key={JSON.stringify(effective)}
+      label={definition.label}
+      units={definition.units ?? []}
+      value={isQuantity(effective) ? effective : null}
+      disabled={disabled}
+      onChange={onChange}
+    />
+  );
+}
+
+function isQuantity(value: MedicineAttributeValue): value is MedicineAttributeQuantity {
+  return typeof value === "object" && value !== null && "value" in value;
+}
+
+/** 数値と単位。欄を離れたときに保存し、数値を空にすると未設定に戻す。 */
+function QuantityInput({
+  label,
+  units,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  units: string[];
+  value: MedicineAttributeQuantity | null;
+  disabled: boolean;
+  onChange: (value: MedicineAttributeQuantity | null) => void;
+}) {
+  const [amount, setAmount] = useState(value ? String(value.value) : "");
+  const [unit, setUnit] = useState(value?.unit ?? units[0] ?? "");
+
+  function commit(nextAmount: string, nextUnit: string) {
+    const trimmed = nextAmount.trim();
+    if (!trimmed) {
+      if (value) onChange(null);
+      return;
+    }
+    const number = Number(trimmed);
+    if (!Number.isFinite(number) || number <= 0) return;
+    if (value && value.value === number && value.unit === nextUnit) return;
+    onChange({ value: number, unit: nextUnit });
+  }
+
+  return (
+    <span className="medicine-attribute__quantity">
+      <input
+        type="number"
+        min={0}
+        step="any"
+        aria-label={label}
+        value={amount}
+        disabled={disabled}
+        onChange={(e) => setAmount(e.target.value)}
+        onBlur={() => commit(amount, unit)}
+      />
+      <select
+        aria-label={`${label}の単位`}
+        value={unit}
+        disabled={disabled}
+        onChange={(e) => {
+          setUnit(e.target.value);
+          commit(amount, e.target.value);
+        }}
+      >
+        {units.map((u) => (
+          <option key={u} value={u}>
+            {u}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
 }

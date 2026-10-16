@@ -61,7 +61,9 @@ module Master
     def record_params
       permitted = params.permit(:medicine_code, :note)
       # settings は項目の表にあるキーだけを受け取る(未知のキーは JsonShape が弾けるよう、そのまま渡す)。
-      permitted[:settings] = params[:settings].to_unsafe_h if params[:settings].respond_to?(:to_unsafe_h)
+      if params[:settings].respond_to?(:to_unsafe_h)
+        permitted[:settings] = JsonShape.coerce(Master::MedicineAttribute::SHAPE, params[:settings].to_unsafe_h)
+      end
       permitted
     end
 
@@ -73,6 +75,7 @@ module Master
         medicine_unit_name: medicine&.unit_name,
         settings: record.settings,
         effective: Master::MedicineAttribute.effective(record, medicine),
+        applicable: Master::MedicineAttribute.applicable(medicine),
         note: record.note,
         registered: true
       }
@@ -89,6 +92,7 @@ module Master
           medicine_unit_name: medicine.unit_name,
           settings: {},
           effective: Master::MedicineAttribute.effective(nil, medicine),
+          applicable: Master::MedicineAttribute.applicable(medicine),
           note: nil,
           registered: false
         }

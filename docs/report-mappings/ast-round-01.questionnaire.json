@@ -1,0 +1,169 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/ast-round-01",
+  "version": "1.0.0",
+  "name": "AST_ROUND_01",
+  "title": "AST 回診記録",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "抗菌薬適正使用支援チーム(AST)の回診・介入の記録。チーム医療の回診記録の既定テンプレートに設定して使う(docs/antimicrobial-stewardship-design.md)。",
+  "item": [
+    {
+      "linkId": "grp-status",
+      "type": "group",
+      "text": "状況",
+      "item": [
+        {
+          "linkId": "antimicrobials",
+          "type": "text",
+          "text": "使用中の抗菌薬・投与量"
+        },
+        {
+          "linkId": "renal",
+          "type": "string",
+          "text": "腎機能"
+        },
+        {
+          "linkId": "cultures",
+          "type": "text",
+          "text": "培養・感受性の結果"
+        },
+        {
+          "linkId": "assessment",
+          "type": "text",
+          "text": "評価"
+        }
+      ]
+    },
+    {
+      "linkId": "grp-proposal",
+      "type": "group",
+      "text": "提案",
+      "item": [
+        {
+          "linkId": "proposal",
+          "type": "choice",
+          "text": "提案",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "continue",
+                "display": "継続"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "de-escalation",
+                "display": "de-escalation"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "change",
+                "display": "変更"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "stop",
+                "display": "中止"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "dose",
+                "display": "投与量の調整"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "test",
+                "display": "追加の検査"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "tdm",
+                "display": "TDM"
+              }
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "proposal-detail",
+          "type": "text",
+          "text": "提案の内容"
+        },
+        {
+          "linkId": "accepted",
+          "type": "choice",
+          "text": "主治医の受け入れ",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "accepted",
+                "display": "受け入れ"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "partially",
+                "display": "一部受け入れ"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "declined",
+                "display": "受け入れず"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "pending",
+                "display": "未確認"
+              }
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "next-date",
+          "type": "date",
+          "text": "次回介入の予定日"
+        }
+      ]
+    }
+  ]
+}

@@ -10,7 +10,12 @@ RSpec.describe "Master::MedicineAttributes", type: :request do
                              dosage_form: "4", biological_product_flag: "1")
     Master::Medicine.create!(medicine_code: "620000003", name: "生理食塩液", unit_name: "瓶",
                              dosage_form: "4", biological_product_flag: "0")
+    Master::Medicine.create!(medicine_code: "620000004", name: "メロペネム点滴静注用０．５ｇ", unit_name: "瓶",
+                             dosage_form: "4", biological_product_flag: "0", yakka_code: "6139400F1024")
   end
+
+  # 抗菌薬の項目の既定(行が無い・設定していない薬)。
+  let(:no_antimicrobial) { { "antimicrobial_category" => "none", "ddd" => nil } }
 
   describe "GET /master/medicine_attributes/lookup" do
     it "行が無ければ医薬品マスタの生物学的製剤の印を既定にし、行の値があればそれを使う" do
@@ -20,10 +25,10 @@ RSpec.describe "Master::MedicineAttributes", type: :request do
       get "/master/medicine_attributes/lookup", params: { medicine_code: "620000001,620000002,620000003,999" }
 
       expect(body).to eq(
-        "620000001" => { "lot_required" => true },
-        "620000002" => { "lot_required" => true },
-        "620000003" => { "lot_required" => false },
-        "999" => { "lot_required" => false }
+        "620000001" => { "lot_required" => true }.merge(no_antimicrobial),
+        "620000002" => { "lot_required" => true }.merge(no_antimicrobial),
+        "620000003" => { "lot_required" => false }.merge(no_antimicrobial),
+        "999" => { "lot_required" => false }.merge(no_antimicrobial)
       )
     end
 
@@ -32,7 +37,7 @@ RSpec.describe "Master::MedicineAttributes", type: :request do
 
       get "/master/medicine_attributes/lookup", params: { medicine_code: "620000002" }
 
-      expect(body).to eq("620000002" => { "lot_required" => false })
+      expect(body).to eq("620000002" => { "lot_required" => false }.merge(no_antimicrobial))
     end
   end
 
@@ -42,7 +47,11 @@ RSpec.describe "Master::MedicineAttributes", type: :request do
 
       get "/master/medicine_attributes", params: { default: "true" }
 
-      expect(body["definitions"]).to eq([{ "key" => "lot_required", "label" => "ロット管理", "type" => "boolean" }])
+      expect(body["definitions"].map { |d| d.values_at("key", "type") }).to eq([
+        %w[lot_required boolean], %w[antimicrobial_category enum], %w[ddd quantity]
+      ])
+      expect(body["definitions"][1]["options"].map { |o| o["value"] }).to eq(%w[none notify approve])
+      expect(body["definitions"][2]["units"]).to eq(%w[g mg MU])
       expect(body["items"].map { |i| i.values_at("medicine_code", "medicine_name", "registered") }).to eq([
         ["620000001", "献血アルブミン２５％静注", true],
         ["620000002", "ビームゲン注０．５ｍＬ", false],
@@ -74,7 +83,35 @@ RSpec.describe "Master::MedicineAttributes", type: :request do
 
       expect(response).to have_http_status(:created)
       expect(body["settings"]).to eq({})
-      expect(body["effective"]).to eq("lot_required" => true)
+      expect(body["effective"]).to eq({ "lot_required" => true }.merge(no_antimicrobial))
+    end
+
+    it "抗菌薬には特定抗菌薬の区分と DDD を保存でき、数値は文字列でも受け取る" do
+      post "/master/medicine_attributes",
+           params: { medicine_code: "620000004",
+                     settings: { antimicrobial_category: "approve", ddd: { value: "3", unit: "g" } } },
+           as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(body["effective"]).to include("antimicrobial_category" => "approve", "ddd" => { "value" => 3.0, "unit" => "g" })
+      expect(body["applicable"]).to eq("lot_required" => true, "antimicrobial_category" => true, "ddd" => true)
+    end
+
+    it "抗菌薬でない薬に特定抗菌薬の区分を保存すると 422" do
+      post "/master/medicine_attributes", params: { medicine_code: "620000003", settings: { antimicrobial_category: "notify" } },
+                                          as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "区分の値と DDD の単位は表の値だけ" do
+      post "/master/medicine_attributes", params: { medicine_code: "620000004", settings: { antimicrobial_category: "yes" } },
+                                          as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+
+      post "/master/medicine_attributes", params: { medicine_code: "620000004", settings: { ddd: { value: 2, unit: "mL" } } },
+                                          as: :json
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 end

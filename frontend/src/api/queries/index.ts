@@ -25,6 +25,7 @@ export * from "./patientProfile";
 export * from "./populate";
 export * from "./karte";
 export * from "./earlyWarning";
+export * from "./antimicrobial";
 export * from "./chart";
 export * from "./physio";
 export * from "./endoscopy";

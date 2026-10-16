@@ -61,6 +61,8 @@ interface QuestionnaireResponseCreatePanelProps {
   encounterId?: string;
   /** 対象プロブレムの欄を出すか。患者の状態を書く入口(看護プロファイル)では出さない。 */
   showProblem?: boolean;
+  /** 回答と同じ transaction に足す entry(特定抗菌薬の届出書で通知を閉じるなど)。回答の参照を受け取って作る。 */
+  extraEntries?: (responseReference: string) => fhir4.BundleEntry[];
   onSaved: () => void;
 }
 
@@ -68,6 +70,7 @@ export function QuestionnaireResponseCreatePanel({
   patientId,
   defaultProblem,
   basedOn,
+  extraEntries,
   defaultQuestionnaireCanonical,
   fixedQuestionnaire,
   encounterId,
@@ -198,6 +201,7 @@ export function QuestionnaireResponseCreatePanel({
           encounterId,
         }),
         imageEntries,
+        extraEntries,
       },
       { onSuccess: onSaved },
     );

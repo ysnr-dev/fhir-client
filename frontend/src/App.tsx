@@ -96,6 +96,7 @@ import { PatientCautionPage } from "./pages/PatientCautionPage";
 import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
 import { InsulinScaleSetPage } from "./pages/InsulinScaleSetPage";
 import { InsulinWorklistPage } from "./pages/InsulinWorklistPage";
+import { AstWorklistPage } from "./pages/AstWorklistPage";
 import { NursingAssignmentPage } from "./pages/NursingAssignmentPage";
 import { BedSchedulePage } from "./pages/BedSchedulePage";
 import { BedStatusPage } from "./pages/BedStatusPage";
@@ -385,6 +386,9 @@ function App() {
               <Link to="/lot-management" className="row-menu__item">
                 ロット管理
               </Link>
+              <Link to="/ast-worklist" className="row-menu__item">
+                抗菌薬適正使用
+              </Link>
             </SubMenu>
             <SubMenu label="処置">
               <Link to="/treatment-worklist" className="row-menu__item">
@@ -567,6 +571,7 @@ function App() {
           <Route path="/order-sets" element={<OrderSetPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/insulin-worklist" element={<InsulinWorklistPage />} />
+          <Route path="/ast-worklist" element={<AstWorklistPage />} />
           <Route path="/nursing-worksheet" element={<NursingWorksheetPage />} />
           <Route path="/nursing-assignments" element={<NursingAssignmentPage />} />
           <Route path="/bed-schedule" element={<BedSchedulePage />} />

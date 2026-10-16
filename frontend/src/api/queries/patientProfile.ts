@@ -34,7 +34,7 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { hasRelation, resourcesOfType, saveWithImages } from "./core";
+import { hasRelation, NOTIFICATION_TASK_KEY, resourcesOfType, saveWithImages } from "./core";
 
 // ---- 診療上の注意(Flag) ----
 
@@ -835,20 +835,30 @@ export async function fetchDerivedObservationRefs(responseIds: string[]): Promis
 // transaction で書く。生成しないテンプレートは単体リソースの保存経路のまま
 // (無駄に Bundle にしない)。ただし抽出を後から無効にしたテンプレートでは、前回
 // 生成した Observation を消すために Bundle 経路へ回る。
+//
+// extraEntries(届出の通知を閉じる Task など)を渡すと、回答と同じ transaction で書く(必ず Bundle 経路)。
 async function saveResponse(
   questionnaire: fhir4.Questionnaire,
   response: fhir4.QuestionnaireResponse,
   imageEntries?: fhir4.BundleEntry[],
   etag?: string,
+  extraEntries?: (responseReference: string) => fhir4.BundleEntry[],
 ): Promise<FhirResult<fhir4.QuestionnaireResponse>> {
   const extracts = observationExtractEnabled(questionnaire);
   const existingObservationRefs = response.id ? await fetchDerivedObservationRefs([response.id]) : [];
   if (!extracts && !existingObservationRefs.length) {
-    return saveWithImages(response, imageEntries, etag);
+    if (!extraEntries) return saveWithImages(response, imageEntries, etag);
+    const responseUrl = response.id ? `QuestionnaireResponse/${response.id}` : `urn:uuid:${crypto.randomUUID()}`;
+    return saveWithImages(
+      response,
+      [...(imageEntries ?? []), ...extraEntries(responseUrl)],
+      etag,
+      response.id ? undefined : responseUrl,
+    );
   }
 
   const { data: bundle } = await postBundle(
-    responseSaveBundle({ questionnaire, response, imageEntries, etag, existingObservationRefs }),
+    responseSaveBundle({ questionnaire, response, imageEntries, etag, existingObservationRefs, extraEntries }),
   );
   const saved = resourceFromBundleResponse<fhir4.QuestionnaireResponse>(bundle);
   if (!saved.resource) throw new Error("保存結果を取得できませんでした。");
@@ -862,14 +872,21 @@ export function useCreateQuestionnaireResponse() {
       questionnaire,
       response,
       imageEntries,
+      extraEntries,
     }: {
       questionnaire: fhir4.Questionnaire;
       response: fhir4.QuestionnaireResponse;
       imageEntries?: fhir4.BundleEntry[];
-    }) => saveResponse(questionnaire, response, imageEntries),
-    onSuccess: () => {
+      /** 同じ transaction に足す entry(回答の参照を受け取って作る)。 */
+      extraEntries?: (responseReference: string) => fhir4.BundleEntry[];
+    }) => saveResponse(questionnaire, response, imageEntries, undefined, extraEntries),
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+      if (variables.extraEntries) {
+        queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+        queryClient.invalidateQueries({ queryKey: ["Task", "search"] });
+      }
     },
   });
 }

@@ -35,6 +35,7 @@ import {
   searchAllPages,
 } from "./core";
 import { fetchLabelSpecimens } from "./injection";
+import { withAntimicrobialNotifications } from "./antimicrobial";
 import { fetchReportTasks } from "./notification";
 import { invalidateProvenance, useOrderEnterer, useWithOrderProvenance } from "./provenance";
 import { useCountersignContext } from "./countersign";
@@ -208,13 +209,15 @@ export function useCreatePrescription() {
   const queryClient = useQueryClient();
   const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
+    // 特定抗菌薬を含む処方・注射なら、依頼医あての届出の通知も同じ transaction で作る。
+    mutationFn: async (bundle: fhir4.Bundle) => postBundle(withProvenance(await withAntimicrobialNotifications(bundle))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       invalidateProvenance(queryClient);
       // 持参薬の継続は、持参薬の更新と鑑別済の通知を処方と同じ transaction で書く。
       queryClient.invalidateQueries({ queryKey: ["MedicationStatement"] });
       queryClient.invalidateQueries({ queryKey: ["Task", "search"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }
@@ -275,10 +278,11 @@ export function useUpdatePrescription() {
   const queryClient = useQueryClient();
   const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
+    mutationFn: async (bundle: fhir4.Bundle) => postBundle(withProvenance(await withAntimicrobialNotifications(bundle))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
       // 疑義照会の処方変更待ちを編集と一緒に解くので、進捗を読む部門一覧と照会の履歴も読み直す。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "injection-worklist"] });

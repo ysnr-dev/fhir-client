@@ -23,6 +23,7 @@ export type HomeWorklistKey =
   | "injection"
   | "broughtMed"
   | "medicationGuidance"
+  | "antimicrobial"
   | "rehab"
   | "nutritionGuidance";
 
@@ -55,6 +56,7 @@ export const HOME_WORKLISTS: Record<HomeWorklistKey, HomeWorklistDef> = {
     path: "/medication-guidance-worklist",
     roleCodes: ["pharmacist"],
   },
+  antimicrobial: { label: "特定抗菌薬の届出", path: "/ast-worklist?tab=notify", roleCodes: ["pharmacist"] },
   rehab: { label: "リハビリ", path: "/rehab-worklist", roleCodes: REHAB_ROLE_CODES },
   nutritionGuidance: {
     label: "栄養指導",

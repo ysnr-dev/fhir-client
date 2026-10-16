@@ -3,13 +3,23 @@ import { buildError, masterFetch } from "./core";
 // 薬剤付加情報(施設独自の薬剤の設定)。docs/lot-number-design.md
 // 項目は backend の Master::MedicineAttribute::ATTRIBUTES が正典で、画面は definitions から列を組む。
 
-export type MedicineAttributeValue = boolean | null;
+/** 数量の値(DDD など)。 */
+export interface MedicineAttributeQuantity {
+  value: number;
+  unit: string;
+}
+
+export type MedicineAttributeValue = boolean | string | MedicineAttributeQuantity | null;
 
 export interface MedicineAttributeDefinition {
   key: string;
   label: string;
-  /** JsonShape の葉の型。いまは boolean だけ。 */
-  type: string;
+  /** 画面の入力の種類。 */
+  type: "boolean" | "enum" | "quantity";
+  /** enum の選択肢。 */
+  options?: { value: string; label: string }[];
+  /** quantity の単位。 */
+  units?: string[];
 }
 
 export interface MedicineAttribute {
@@ -22,6 +32,8 @@ export interface MedicineAttribute {
   settings: Record<string, MedicineAttributeValue>;
   /** 既定を含む実効値。 */
   effective: Record<string, MedicineAttributeValue>;
+  /** 項目ごとに、その薬に設定できるか(特定抗菌薬・DDD は抗菌薬だけ)。 */
+  applicable: Record<string, boolean>;
   note: string | null;
   registered: boolean;
 }
@@ -37,9 +49,14 @@ export interface MedicineAttributePayload {
   note?: string | null;
 }
 
-/** 実施入力が参照する項目の実効値。 */
+/** 特定抗菌薬の区分。none は特定抗菌薬ではない。 */
+export type AntimicrobialCategory = "none" | "notify" | "approve";
+
+/** オーダー・実施入力が参照する項目の実効値。 */
 export interface MedicineAttributeFlags {
   lot_required: boolean;
+  antimicrobial_category: AntimicrobialCategory;
+  ddd: MedicineAttributeQuantity | null;
 }
 
 const PATH = "/master/medicine_attributes";

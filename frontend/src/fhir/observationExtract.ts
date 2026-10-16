@@ -296,6 +296,11 @@ export interface ResponseSaveBundleArgs {
    * 上流の `Observation?derived-from=` で引いたものを渡す(呼び出し側が取得する)。
    */
   existingObservationRefs?: string[];
+  /**
+   * 同じ transaction に足す entry(届出の通知を閉じる Task など)。回答の参照(新規は urn:uuid)を受け取って作る。
+   * 回答は末尾に置くので、これらは回答の前に並ぶ。
+   */
+  extraEntries?: (responseReference: string) => fhir4.BundleEntry[];
 }
 
 /**
@@ -309,7 +314,7 @@ export interface ResponseSaveBundleArgs {
  * 回答は常に最後の entry に置く(resourceFromBundleResponse が末尾を本体として読む)。
  */
 export function responseSaveBundle(args: ResponseSaveBundleArgs): fhir4.Bundle {
-  const { questionnaire, response, imageEntries = [], etag, existingObservationRefs = [] } = args;
+  const { questionnaire, response, imageEntries = [], etag, existingObservationRefs = [], extraEntries } = args;
 
   // 新規保存では回答の id がまだ無いので、transaction 内の仮 URL で相互参照する
   // (サーバーが実 ID へ書き換える)。
@@ -341,6 +346,7 @@ export function responseSaveBundle(args: ResponseSaveBundleArgs): fhir4.Bundle {
       ...imageEntries,
       ...deleteEntries,
       ...observationEntries,
+      ...(extraEntries?.(responseUrl) ?? []),
       {
         ...(response.id ? {} : { fullUrl: responseUrl }),
         resource: response,

@@ -3,6 +3,8 @@ import {
   useActiveAllergies,
   useActiveBroughtMedications,
   useActiveMedications,
+  useAntimicrobialCourses,
+  useAntimicrobialMedicineCodes,
   useBodyMeasures,
   usePatient,
   useRecentLabResults,
@@ -10,9 +12,11 @@ import {
 import {
   useDrugDoseRules,
   useDrugInteractions,
+  useMedicineAttributeLookup,
   useMedicineDoseFactors,
   useYakkaCodes,
 } from "../api/masterQueries";
+import { buildAntimicrobialWarnings } from "../fhir/antimicrobialHelpers";
 import { summarizeBodyMeasures, summarizeRenal } from "../fhir/bodyMeasureHelpers";
 import { substitutionBlockMark, type SubstitutionBlock } from "../fhir/prescriptionHelpers";
 import { broughtActiveMedications, summarizeBroughtMedication } from "../fhir/broughtMedicationHelpers";
@@ -80,6 +84,13 @@ export function useMedicationWarnings(args: {
       : [],
   );
 
+  // 抗菌薬(特定抗菌薬の区分と長期投与)。患者が決まらない画面では出さない。
+  const antimicrobialCodes = useAntimicrobialMedicineCodes(enabled);
+  const { courses } = useAntimicrobialCourses(enabled ? patientId : undefined, startDate);
+  const attributes = useMedicineAttributeLookup(
+    enabled ? rps.flatMap((rp) => rp.medicines.flatMap((m) => (m.medicine ? [m.medicine.medicine_code] : []))) : [],
+  );
+
   const active = useMemo(
     () => [...medications, ...broughtActiveMedications(broughtStatements, yakkaCodes)],
     [medications, broughtStatements, yakkaCodes],
@@ -98,8 +109,15 @@ export function useMedicationWarnings(args: {
       excludeOrderId,
       excludeBroughtIds,
     });
-    return base.map((rp, i) => rp.map((line, j) => [...line, ...(checks[i]?.[j] ?? [])]));
+    const antimicrobial = buildAntimicrobialWarnings({ rps, startDate, courses, attributes, antimicrobialCodes });
+    return base.map((rp, i) =>
+      rp.map((line, j) => [...line, ...(checks[i]?.[j] ?? []), ...(antimicrobial[i]?.[j] ?? [])]),
+    );
   }, [
+    startDate,
+    courses,
+    attributes,
+    antimicrobialCodes,
     rps,
     allergies,
     active,

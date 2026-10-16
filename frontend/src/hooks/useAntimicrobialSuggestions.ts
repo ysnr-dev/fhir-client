@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchMedicinesByCodes } from "../api/masterClient";
 import { fetchRecentMedicationRequests } from "../api/queries";
+import { isAntimicrobialYakko } from "../fhir/antimicrobialHelpers";
 import { MEDICINE_CODE_SYSTEM, codingBySystem } from "../fhir/prescriptionHelpers";
 
 // 細菌検査オーダーの前投与抗菌薬「処方から取り込み」の候補。
@@ -13,8 +14,6 @@ import { MEDICINE_CODE_SYSTEM, codingBySystem } from "../fhir/prescriptionHelper
 // 登録されるため判定できない)。直近のオーダーから新しい順に出す割り切り
 // (docs/micro-order-design.md §7.2)。
 
-// 抗菌薬とみなす薬効分類(4桁)の先頭一致。
-const ANTIMICROBIAL_YAKKO_PREFIXES = ["61", "622", "624"];
 // 遡る処方・注射オーダーの数。1 オーダーに複数薬剤が入るので候補としては十分。
 const RECENT_ORDER_COUNT = 20;
 
@@ -53,9 +52,7 @@ async function fetchSuggestions(patientId: string): Promise<AntimicrobialSuggest
   const medicines = await fetchMedicinesByCodes(codes);
   const antimicrobialCodes = new Set(
     medicines.items
-      .filter((medicine) =>
-        ANTIMICROBIAL_YAKKO_PREFIXES.some((prefix) => medicine.yakko_code?.startsWith(prefix)),
-      )
+      .filter((medicine) => isAntimicrobialYakko(medicine.yakko_code))
       .map((medicine) => medicine.medicine_code),
   );
 

@@ -41,6 +41,11 @@ import {
   transfusionTaskStatus,
 } from "../fhir/transfusionTaskHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { useOpenAntimicrobialNotifications } from "../api/queries";
+import {
+  ANTIMICROBIAL_NOTIFICATION_STATE_LABEL,
+  antimicrobialNotificationState,
+} from "../fhir/antimicrobialNotificationHelpers";
 
 // ホームの「自部門のワークリスト件数」。部門ごとに一覧の hook をそのまま呼び、Task の
 // 状態を数える(一覧ページと同じキャッシュに乗るので、カードから一覧へ移っても読み直さない)。
@@ -298,6 +303,23 @@ function MedicationGuidanceCard({ date }: DateProps) {
   );
 }
 
+/** 未対応の特定抗菌薬の届出(届出未提出・許可待ち)。日付に依らず院内全体。 */
+function AntimicrobialCard() {
+  const query = useOpenAntimicrobialNotifications();
+  return (
+    <WorklistCounts
+      kind="antimicrobial"
+      isPending={query.isPending}
+      error={query.error}
+      statuses={query.data?.tasks.map((task) => antimicrobialNotificationState(task))}
+      options={Object.entries(ANTIMICROBIAL_NOTIFICATION_STATE_LABEL)
+        .filter(([code]) => code !== "completed")
+        .map(([code, display]) => ({ code, display }))}
+      truncated={query.data?.truncated}
+    />
+  );
+}
+
 const WORKLIST_CARDS: Record<HomeWorklistKey, ComponentType<DateProps>> = {
   lab: LabCard,
   physio: PhysioCard,
@@ -309,6 +331,7 @@ const WORKLIST_CARDS: Record<HomeWorklistKey, ComponentType<DateProps>> = {
   injection: InjectionCard,
   broughtMed: BroughtMedCard,
   medicationGuidance: MedicationGuidanceCard,
+  antimicrobial: AntimicrobialCard,
   rehab: RehabCard,
   nutritionGuidance: NutritionGuidanceCard,
 };

@@ -1,7 +1,7 @@
 # 抗菌薬適正使用支援(AST)
 
 `docs/functional-gap-backlog.md` §4 の「臨床判断支援」(2026-10-16 の追加候補)。
-**状態: 設計のみ(2026-10-16)。実装は未着手。**
+**状態: 実装済(2026-10-16)。** 残課題は §4。
 特定抗菌薬(カルバペネム・抗 MRSA 薬など)の使用開始の検知と届出、長期投与の警告、血液培養陽性患者の一覧、
 AST チームの介入、AUD / DOT の集計。抗菌薬適正使用支援加算の体制要件に対応する。
 
@@ -34,78 +34,102 @@ AST チームの介入、AUD / DOT の集計。抗菌薬適正使用支援加算
 
 ## 1. 第 1 段: マスタと警告
 
-- **［設計］** `Master::MedicineAttribute::ATTRIBUTES` に 2 項目を足す(薬剤付加情報の画面に列が増える)。
-  - `antimicrobial_category`: `none` / `notify`(届出制)/ `approve`(許可制)。既定は `none`。
-    薬効分類が 61 / 622 / 624 以外の薬ではこの列を編集不可にする(`definitions` に `applicable` の条件を 1 つ足す)。
-  - `ddd`: `{ value: number, unit: "g" | "mg" | "MU" }`。AUD の分母に使う。既定は空(未設定の薬は AUD の対象外として件数に出す)。
-- **［設計］** `fhir/antimicrobialHelpers.ts`(純関数)に `isAntimicrobial(yakkoCode)` を置き、`useAntimicrobialSuggestions` と
-  抽出の定数をここへ寄せる(挙動は変えない)。
-- **［設計］** `buildAntimicrobialWarnings(rps, active, attributes)` を同じ `[RP][薬剤]` の形で返し、`MedicationWarningKind` に
-  `antimicrobial` を足して `useMedicationWarnings` で合流させる。警告は 3 種。
-  - 「特定抗菌薬(届出制)」「特定抗菌薬(許可制)」: 選んだ薬の `antimicrobial_category` が none 以外。`high` は approve のとき。
-  - 「投与 7 日以上」「投与 14 日以上」: 同じ成分(`ingredientKey`)の投与開始日からの日数。
-    `ActiveMedication` に `startDate`(注射は `injection-series-start`、処方は `authoredOn`)を足して渡す。
-- 採らなかった案: `drug_checks`(施設の薬剤チェックマスタ)に種別を足す。薬ごとの区分なので薬剤付加情報のほうが置き場所として自然で、
-  ロット管理と同じ画面で設定できる。
+- **［設計］** `Master::MedicineAttribute::ATTRIBUTES`(`backend/app/models/master/medicine_attribute.rb`)に 2 項目を足した。
+  項目は `type`(boolean / enum / quantity)と、その薬に設定できるかの `applicable` を持つ。
+  - `antimicrobial_category`(特定抗菌薬): `none` / `notify`(届出制)/ `approve`(許可制)。既定 `none`。
+  - `ddd`: `{ value, unit: g | mg | MU }`。既定は未設定。
+  - どちらも抗菌薬(薬価基準コードの上 4 桁が 61・622・624)だけに設定でき、それ以外の薬に保存すると 422。
+    API の行に `applicable`、`definitions` に `type`・`options`・`units` を返す。数値は文字列でも受ける(`JsonShape.coerce`)。
+  - 画面(`/medicine-attributes`)は enum をセレクト、quantity を数値 + 単位で出し、設定できない薬は「-」。
+- **［設計］** 抗菌薬の判定は `fhir/antimicrobialHelpers.ts` の `isAntimicrobialMedicine`。YJ コード・薬効分類の上 4 桁で決め、
+  どちらも無い行(編集・DO で開いた行、保存済みのオーダー)は抗菌薬の医薬品コードの集合
+  (`/master/medicines/codes?yakko_prefix=61,622,624`、`useAntimicrobialMedicineCodes`)で引く。
+  細菌検査オーダーの「処方から取り込み」の判定も同じ関数(`isAntimicrobialYakko`)に寄せた。
+- **［設計］** 警告(`buildAntimicrobialWarnings`)は `MedicationWarningKind` の `antimicrobial` で、`useMedicationWarnings` が
+  3 本目として合流させる。**出るのは処方・注射のフォーム**(`useMedicationWarnings` を使う 2 画面)で、レジメン・オーダーセットの
+  内容入力(患者が決まらない画面)では出さない。
+  - 「特定抗菌薬(届出制)」は注意、「特定抗菌薬(許可制)」は強い警告。
+  - 「投与 N 日目」: 同じ成分の連続投与が開始日に続いていて 7 日目以上(14 日目以上は強い警告)。
+- **［設計］** 連続投与は `useAntimicrobialCourses`(`api/queries/antimicrobial.ts`)が集める。`useActiveMedications` は処方だけで
+  開始日も持たないので使わず、注射(直近 30 日、施行日 1 日ずつ)と処方(直近 92 日、RP の開始〜終了)を別に引き、
+  中止(注射・処方の Task が cancelled)を除いて、患者 × 成分ごとに「前の投与の終了日の翌日までに次が始まれば続き」でつなぐ
+  (`antimicrobialCourses`)。成分は `ingredientKey`、取れなければ医薬品コード。
 
 ## 2. 第 2 段: 届出の通知・AST チーム・一覧
 
-### 2.1 届出の通知
+### 2.1 届出の通知 `antimicrobial-notification`
 
-- **［設計］** 種別 `antimicrobial-notification`(特定抗菌薬の届出、注意)。特定抗菌薬を含む注射・処方のオーダー登録 transaction で、
-  依頼医あてに 1 件作る(`focus` = ServiceRequest、`input` に薬剤名・区分・開始日)。
-- **［設計］** 届出書はテンプレート `AST_NOTIFY_01`(Questionnaire。感染症名・推定起因菌・培養提出の有無・投与予定期間・
-  血中濃度測定の予定)。右ペインの「テンプレート」から `basedOn` = オーダーで保存すると、同じ transaction で Task を対応済みにする
-  (`document-due` が文書の確定で自動完了するのと同じ作り)。許可制は Task の `action` を「承認」にし、AST チームの医師が押す。
-- **［事実］** 1 通知 = 1 宛先。チームあての通知は無いので、チームへの連絡は一覧(2.3)で行う。
+- **［設計］** オーダーの登録・編集(`useCreatePrescription` / `useUpdatePrescription`。処方・注射・オーダーセット・レジメンが通る)の
+  `mutationFn` で、Bundle の処方・注射の薬剤を薬剤付加情報で引き(`withAntimicrobialNotifications`)、特定抗菌薬があれば
+  依頼医あての通知を同じ transaction に積む(`fhir/antimicrobialNotificationHelpers.ts`)。薬剤が無い Bundle は何も引かない。
+  - **連日の注射は束(requisition)で 1 件**(ユーザー決定)。初日のオーダーを `focus`、束の全オーダーを `basedOn` にし、
+    `input` に区分・薬剤・種別(処方 / 注射)・開始日・束を持つ。処方は 1 オーダー 1 件。強度は注意。
+  - 患者のこれまでの通知(状態を問わない、`Task?code=…&subject=Patient/…`)に同じ束・同じオーダーのものがあれば作らない。
+    別の束で同じ薬を出し直した場合は新しく作る。
+  - オーダー削除は既存の `postOrderDeleteBundle` が focus・basedOn の Task を消す。
+- **［設計］** 届出書 `AST_NOTIFY_01`(`docs/report-mappings/ast-notify-01.questionnaire.json`)は `/ast-worklist` の「届出」タブから
+  オーダーに `basedOn` で結んで書く。テンプレート回答の保存(`saveResponse`)に `extraEntries` を通し、同じ transaction で:
+  届出制は通知を完了(note「届出書を提出しました。」)、許可制は通知の `input` に届出書の参照を足して「許可待ち」にする。
+  許可は AST チームの構成員だけが一覧の「許可」で行い、完了(note「特定抗菌薬の使用を許可しました。」)。
+  通知一覧からは閉じない(`canAct: () => false`)。通知の「カルテ」は `/ast-worklist?tab=notify` を開く。
+- **［事実］** 上流の Task は `subject` のカンマ OR を受け付ける(2026-10-16 に strict で確認)。
 
 ### 2.2 AST チーム
 
-- **［設計］** `care-team-kind` に `ast` を足す(`fhir/careTeamHelpers.ts`、マスタ画面の選択肢)。介入は既存の「チーム依頼」、
-  回診記録は既定テンプレート(`care-team-round-template`)に `AST_ROUND_01`(抗菌薬・投与量・腎機能・培養・提案・de-escalation の可否)。
-  スクリーニングはチームの保存条件に「特定抗菌薬の注射が直近 14 日にある患者」を 1 件 seed する。
+- **［設計］** `care-team-kind` に `ast`(抗菌薬適正使用(AST))を足した。介入は既存のチーム依頼、回診記録は既定テンプレートに
+  `AST_ROUND_01`(`docs/report-mappings/ast-round-01.questionnaire.json`)を設定して使う。
+- スクリーニング(チームの保存条件)の seed は作っていない。保存条件は「特定抗菌薬」で絞れず、チームの id が環境ごとに違うため。
 
-### 2.3 一覧 `/ast-worklist`
+### 2.3 一覧 `/ast-worklist`(`pages/AstWorklistPage.tsx`)
 
-- **［設計］** `pages/AstWorklistPage.tsx`。取得は `InsulinWorklistPage`(病棟 × 日の注射から薬剤で絞る)、タブ・フィルタ・行の導線は
-  `TeamWorklistPage` に合わせる。メニューは「部門業務」、ホーム(`fhir/homeSections.ts`)に医師・薬剤師向けのセクション。
-- タブ:
+メニューは部門業務 > 薬剤部門 >「抗菌薬適正使用」。薬剤師のホームに「特定抗菌薬の届出」のカード(届出未提出・許可待ちの件数)。
 
 | タブ | 内容 | 取得 |
 |---|---|---|
-| 使用中 | 特定抗菌薬を投与中の患者(薬剤・開始日・日数・届出の有無・介入の有無) | `ServiceRequest?category=order-type\|injection&status=active&occurrence=ge{today-30}` + `_include` MR、画面側で区分で絞る。内服は `MedicationRequest?status=active&authoredon=ge{today-30}` |
-| 長期投与 | 同じ成分が 7 日以上 / 14 日以上(抗菌薬全体) | 同上。開始日は series の開始日、処方は authoredOn |
-| 血液培養陽性 | 直近 14 日に報告された血液培養の陽性(菌名・報告日・投与中の抗菌薬・介入の有無) | `DiagnosticReport?category=MB&date=ge{today-14}&_include=DiagnosticReport:result,specimen,subject`、画面側で材料の系統 = 血液・穿刺液 かつ 培養 positive |
-| 届出未提出 | `antimicrobial-notification` が未対応のオーダー | `Task?code=antimicrobial-notification&status=requested&_include=Task:subject` |
+| 使用中 | 入院中で特定抗菌薬を投与している患者(薬剤・区分・開始日・日数・届出の状態・血中濃度・AST の介入) | `useHospitalAntimicrobialCourses`: 注射(`occurrence` 直近 30 日、`fetchOrdersWithPerforms`)+ 処方(同期間)を院内全体で引き、患者 × 成分の連続投与のうち今日か昨日まで続くもの。入院中かは `useInpatientEncounters`(今日) |
+| 長期投与 | 入院中で、抗菌薬(区分を問わない)を 7 日以上続けている患者 | 同上 |
+| 血液培養 | 採取日が直近 14 日の血液培養(材料 401 静脈血・402 動脈血)の陽性(培養陽性か分離菌あり)。入院中の患者だけ | `DiagnosticReport?category=MB&date=ge…&_include=result,specimen` → `parseMicroResultForm`。系統「血液・穿刺液」は髄液・胸水を含むのでコードで判定 |
+| 届出 | 未対応の届出の通知(届出未提出・許可待ち)。届出書・許可 | `Task?code=antimicrobial-notification&status=requested&_include=Task:subject` |
+| 集計 | §3 | |
 
-  全件は `searchAllPages`、上限で欠けたら `TruncatedNotice`。行から「チーム依頼」「カルテ」「届出書(テンプレート)」。
-  介入の有無は `ServiceRequest?category=team-request&performer=CareTeam/{ast}` を 1 本引いて患者で突き合わせる。
-- **［要確認］** `MedicationRequest?code=` は使えるが、特定抗菌薬のコードが数十件になるとカンマ OR の URL 長が問題になりうる。
-  第 2 段は `status` + 期間で引いて画面側で絞り、件数が問題になれば上流に「薬効分類での検索」を要望する(`server-improvement-backlog.md`)。
+- 行の「チーム依頼」は区分 ast のチーム(有効なものの先頭)を選んだ状態で開く。介入中(`useTeamActiveRequestPatientIds`)の患者には出さない。
+- 注射の取得は `fetchOrdersWithPerforms` の上限(2000 オーダー)があり、欠けたら `TruncatedNotice`。
 
 ## 3. 第 3 段: 集計(AUD / DOT)と TDM
 
-- **［事実］** AUD = 投与量の合計 ÷ DDD ÷ 在院患者日数 × 1000、DOT = 投与日数(患者 × 薬剤 × 日の重複を除く)÷ 在院患者日数 × 1000。
-  分母の在院患者日数は月の範囲で切り詰めた入院日数の合計。
-- **［設計］** `/ast-worklist` に「集計」タブ。病棟(全体 / 各病棟)× 月で、薬剤(または系統)ごとに DOT・AUD・投与患者数を表にし CSV に出す。
-  分子は MedicationAdministration(status completed、`effectivePeriod.start` の月)から、分母は `Encounter?class=IMP&date=…` の period を
-  月で切り詰めて数える(褥瘡の発生率と同じ画面側の集計)。DDD 未設定の薬は AUD を空欄にし、注記に数を出す。
-- **［設計］** TDM は結果項目マスタに血中濃度(バンコマイシン・テイコプラニン・アミノグリコシドの LOINC)があるときだけ、
-  「使用中」の行に直近の濃度と測定日を添える。投与設計の計算(AUC)は対象外。
-- 採らなかった案: データ抽出の内訳に「表をまたぐ割り算」を足す。汎用化すると抽出の設計(1 表の中で閉じる)を崩す。
-  AUD / DOT は定型なので専用画面のほうが短い。
+- **［事実］** 注射の実施記録(MedicationAdministration)は `effectivePeriod` で書いており、上流の `effective-time` は
+  `effectiveDateTime` だけを索引するので期間で引けない。ハブの Procedure(`performedPeriod`、上流の `date` に索引)なら引ける。
+- **［設計］** 「集計」タブで月と病棟(全体 / 各病棟)を選ぶ。薬剤(成分)ごとに投与患者数・投与日数・DOT・DDD 数・AUD・換算できない投与、
+  合計行、CSV(`lib/csv.ts`)。
+  - 分子: `Procedure?category=order-type|injection&part-of:missing=true&date=…&_revinclude=MedicationAdministration:part-of`
+    (`useAntimicrobialAdministrations`)の MA(completed / stopped)のうち抗菌薬。投与日は `effectivePeriod.start` の日。
+  - DOT = 患者 × 成分 × 投与日の重複を除いた数 ÷ 在院患者延日数 × 1000。
+  - AUD = 投与量を DDD の単位に換算(`convertDose` と医薬品の換算行、MU は「万単位」の 100 倍で換算)して DDD で割った合計 ÷ 在院患者延日数 × 1000。
+    DDD 未設定・換算できない投与は「換算できない投与」に件数を出し、AUD に含めない。
+  - 在院患者延日数: `useEncountersInRange` + `patientsByDayAtBeds` で、対象病棟(全体は全病棟)に日ごとに居た患者数を月の範囲
+    (今月は今日まで)で足す(入院日・退院日を含む)。投与もその日・その患者が対象病棟に居たときだけ数える。
+  - 純関数は `fhir/antimicrobialUsageHelpers.ts`(`summarizeAntimicrobialUsage`)。内服抗菌薬は数えない(注射のみ)。
+- **［設計］** TDM: 結果項目マスタで LOINC が血中濃度(4092-3 バンコマイシン トラフ など `TDM_LOINC_CODES`)の項目があるときだけ、
+  「使用中」「長期投与」に直近 30 日の最新値の列を出す。**開発・seed の結果項目マスタには該当が無く、列は出ない。**
 
 ## 4. 対象外・残課題
 
 - JANIS 抗菌薬マスタ(感受性の薬剤)と医薬品コードの対応表。感受性結果と投与中の薬を突き合わせて「耐性の薬を投与中」を出すのに要る。
 - 感染症の届出(発生届)、ICT のサーベイランス(JANIS 提出データは細菌検査側)。
-- 内服抗菌薬の投与日数を与薬記録から数える(第 3 段の DOT は注射のみ)。
+- 内服抗菌薬の投与日数を与薬記録から数える(集計の DOT は注射のみ)。
 - 腎機能に応じた用量の提案は薬剤チェックマスタ(`docs/drug-check-master-design.md`)の用量規則で扱う。
+- 同じ薬を別の束で出し直したときの届出の重複(いまは束ごとに 1 件)。
+- AST チームのスクリーニング条件の seed、許可制の薬の「許可前の払出を止める」運用。
 
-## 5. 検証(実装時)
+## 5. 検証(2026-10-16、Docker 環境)
 
-- 第 1 段: 薬剤付加情報でメロペネムを `approve` にし、注射オーダーで警告が出ること。腎臓太郎・テスト次郎の連日注射(09-29〜10-12)で
-  「14 日以上」が出ること。`useAntimicrobialSuggestions` の候補が変わらないこと。
-- 第 2 段: 届出の Task が依頼医に届き、`AST_NOTIFY_01` の保存で消えること。一覧の 4 タブ。血液培養陽性は細菌検査結果の
-  検証データ(E. coli 2 回・MRSA 中間)で確認。
-- 第 3 段: 開発環境の 1 か月分で DOT と在院患者日数を手計算と突き合わせる。
+- backend: `spec/requests/master/medicine_attributes_spec.rb`(区分・DDD の保存、文字列の数値、非抗菌薬への設定 422、表に無い値 422、lookup の既定)。
+- 開発環境に、セフトリアキソン点滴用 1g バッグ NP(620002955)= 届出制・DDD 2 g、セファゾリン 1g バッグ(621757001)= DDD 3 g、
+  バンコマイシン点滴静注用 0.5g「NIG」(621897403)= 許可制・DDD 2 g を設定。CareTeam「抗菌薬適正使用支援チーム」(区分 ast、
+  リーダー 児玉 義憲、回診記録 AST_ROUND_01)を作成し、`AST_NOTIFY_01`・`AST_ROUND_01` を登録した。
+- テスト太郎にバンコマイシンを 10/08〜10/20(13 日分)で登録 → フォームに「特定抗菌薬(許可制)」、通知は 1 件(basedOn 13 件)。
+  今日の日付でもう一度選ぶと「投与 9 日目」。一覧の使用中・長期投与に 9 日目・届出未提出で出た。届出書の保存で「許可待ち」、
+  「許可」で完了(届出書の参照と note 付き)。セフトリアキソン(届出制)1 日分は届出書の保存だけで完了。
+- 血液培養タブ: テスト太郎の 09-20 静脈血 E. coli は 14 日より前なので 0 件。遡る日数を一時的に 40 日にすると出た(入院中でない患者の静脈血は除外)。
+- 集計(2026/10・全体): セフトリアキソン 7 日・7 g で DDD 数 3.50、在院患者延日数 160 で DOT 43.75・AUD 21.88(手計算と一致)。
+- 検証で作ったオーダー・通知・届出書・来歴は削除した。薬剤付加情報・CareTeam・テンプレートは残してある。

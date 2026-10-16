@@ -8842,6 +8842,55 @@ body.karte-wide {
   color: var(--text);
 }
 
+/* 特定抗菌薬の区分と DDD。master-search__table の select / input の既定の大きさを詰める。 */
+.medicine-attribute__table select.medicine-attribute__select {
+  font-size: 14px;
+  padding: 2px 6px;
+}
+
+.medicine-attribute__quantity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.medicine-attribute__table .medicine-attribute__quantity input {
+  width: 72px;
+  font-size: 14px;
+  padding: 2px 6px;
+  text-align: right;
+}
+
+.medicine-attribute__table .medicine-attribute__quantity select {
+  font-size: 14px;
+  padding: 2px 6px;
+}
+
+.medicine-attribute__na {
+  color: var(--text);
+}
+
+/* 抗菌薬適正使用の一覧(pages/AstWorklistPage.tsx)。日数は 7 日目から赤字、14 日目から太字の赤。 */
+.ast-worklist__days--warn {
+  color: var(--lab-high);
+}
+
+.ast-worklist__days--alert {
+  color: var(--lab-high);
+  font-weight: 700;
+}
+
+.ast-summary .ast-summary__number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ast-summary tfoot th,
+.ast-summary tfoot td {
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+}
+
 /* 実施入力の薬の行のロット番号(docs/lot-number-design.md)。 */
 .lot-number-cell {
   display: flex;
@@ -11421,7 +11470,8 @@ body.page-wide-md .app__main {
 .rad-worklist__actions > button + button,
 .lab-worklist__actions > button + button,
 /* ラベル発行はリンク(.button)なので、その右に並ぶ「表示」にも同じ間隔を空ける。 */
-.lab-worklist__actions > .button + button {
+.lab-worklist__actions > .button + button,
+.lab-worklist__actions > button + .button {
   margin-left: 4px;
 }
 

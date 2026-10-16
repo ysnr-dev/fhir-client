@@ -1,0 +1,208 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/ast-notify-01",
+  "version": "1.0.0",
+  "name": "AST_NOTIFY_01",
+  "title": "特定抗菌薬 届出書",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "特定抗菌薬(届出制・許可制)を使うときの届出書。処方・注射のオーダーに basedOn で結んで保存すると、依頼医あての届出の通知が閉じる(許可制は AST の許可待ちになる。docs/antimicrobial-stewardship-design.md)。",
+  "item": [
+    {
+      "linkId": "grp-infection",
+      "type": "group",
+      "text": "感染症",
+      "item": [
+        {
+          "linkId": "diagnosis",
+          "type": "string",
+          "text": "感染症名(推定を含む)"
+        },
+        {
+          "linkId": "site",
+          "type": "choice",
+          "text": "感染臓器",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "respiratory",
+                "display": "呼吸器"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "urinary",
+                "display": "尿路"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "intra-abdominal",
+                "display": "腹腔内"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "skin",
+                "display": "皮膚・軟部組織"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "bloodstream",
+                "display": "血流"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "cns",
+                "display": "中枢神経"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "bone-joint",
+                "display": "骨・関節"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "febrile-neutropenia",
+                "display": "発熱性好中球減少症"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "other",
+                "display": "その他"
+              }
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "organism",
+          "type": "string",
+          "text": "起因菌(推定・判明)"
+        },
+        {
+          "linkId": "culture",
+          "type": "choice",
+          "text": "培養の提出",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "submitted",
+                "display": "提出済"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "planned",
+                "display": "提出予定"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "not-submitted",
+                "display": "未提出"
+              }
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-plan",
+      "type": "group",
+      "text": "使用計画",
+      "item": [
+        {
+          "linkId": "reason",
+          "type": "text",
+          "text": "選択理由"
+        },
+        {
+          "linkId": "planned-days",
+          "type": "integer",
+          "text": "投与予定日数"
+        },
+        {
+          "linkId": "tdm",
+          "type": "choice",
+          "text": "血中濃度測定(TDM)",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "planned",
+                "display": "予定あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "not-planned",
+                "display": "予定なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "not-applicable",
+                "display": "対象外"
+              }
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "note",
+          "type": "text",
+          "text": "備考"
+        }
+      ]
+    }
+  ]
+}

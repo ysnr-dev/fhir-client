@@ -128,7 +128,7 @@ export interface ActiveMedication {
 }
 
 /** `interaction` と `dose` は施設マスタによるチェック(`drugCheckHelpers.ts`)。 */
-export type MedicationWarningKind = "allergy" | "duplicate" | "interaction" | "dose";
+export type MedicationWarningKind = "allergy" | "duplicate" | "interaction" | "dose" | "antimicrobial";
 
 export interface MedicationWarning {
   kind: MedicationWarningKind;

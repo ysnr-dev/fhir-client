@@ -2,6 +2,12 @@ import type { ComponentType } from "react";
 import { EWS_ALERT_NOTE, EWS_ALERT_TASK_CODE, ewsAlertRowOf, type EwsAlertRow } from "../../fhir/earlyWarningTaskHelpers";
 import { EarlyWarningNotificationCells } from "./EarlyWarningNotificationCells";
 import {
+  ANTIMICROBIAL_NOTIFICATION_TASK_CODE,
+  antimicrobialNotificationRowOf,
+  type AntimicrobialNotificationRow,
+} from "../../fhir/antimicrobialNotificationHelpers";
+import { AntimicrobialNotificationCells } from "./AntimicrobialNotificationCells";
+import {
   approvalTransactionEntries,
   urgentConfirmationEntries,
 } from "../../api/notificationActions";
@@ -457,6 +463,18 @@ const ewsAlertKind = defineNotificationKind<EwsAlertRow>({
   action: { label: "確認", noteText: EWS_ALERT_NOTE },
 });
 
+const antimicrobialNotificationKind = defineNotificationKind<AntimicrobialNotificationRow>({
+  code: ANTIMICROBIAL_NOTIFICATION_TASK_CODE.code,
+  label: ANTIMICROBIAL_NOTIFICATION_TASK_CODE.display,
+  toRow: antimicrobialNotificationRowOf,
+  Cells: AntimicrobialNotificationCells,
+  // 届出書の記入と許可は抗菌薬適正使用の一覧の「届出」タブで行う。
+  karteLink: () => "/ast-worklist?tab=notify",
+  // 届出書の保存(届出制)・AST の許可(許可制)で閉じる。一覧からは閉じない。
+  action: { label: "届出", noteText: "" },
+  canAct: () => false,
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
@@ -475,6 +493,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   rxInquiryAnsweredKind,
   mealAllergyCheckKind,
   ewsAlertKind,
+  antimicrobialNotificationKind,
 ];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */

@@ -11,6 +11,7 @@ export const CARE_TEAM_ROUND_TEMPLATE_EXT_URL = "http://fhir-client.local/Struct
 export const CARE_TEAM_KIND_OPTIONS = [
   { code: "nst", label: "栄養サポート(NST)" },
   { code: "ict", label: "感染対策(ICT)" },
+  { code: "ast", label: "抗菌薬適正使用(AST)" },
   { code: "pressure-ulcer", label: "褥瘡対策" },
   { code: "palliative", label: "緩和ケア" },
   { code: "dementia", label: "認知症ケア" },
