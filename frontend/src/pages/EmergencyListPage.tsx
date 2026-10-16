@@ -278,8 +278,9 @@ export function EmergencyListPage() {
                 <tr>
                   <th className="emergency__jtas sticky-table__fix-1">JTAS</th>
                   <th className="outpatient__time sticky-table__fix-2">来院</th>
-                  <th className="sticky-table__fix-3">患者番号</th>
-                  <th className="sticky-table__fix-4">患者氏名</th>
+                  <th className="outpatient__time sticky-table__fix-3">経過</th>
+                  <th className="sticky-table__fix-4">患者番号</th>
+                  <th className="sticky-table__fix-5">患者氏名</th>
                   <PatientProfileHeadCells />
                   <th>来院方法</th>
                   <th className="emergency__complaint-cell">主訴</th>
@@ -318,7 +319,7 @@ export function EmergencyListPage() {
                 })}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={14} className="master-search__empty">
+                    <td colSpan={15} className="master-search__empty">
                       {allRows.length === 0
                         ? "救急の患者はいません"
                         : "絞り込みに該当する患者がいません"}
@@ -525,17 +526,15 @@ function EmergencyTableRow({
       </td>
       <td className="outpatient__time sticky-table__fix-2">
         {arrivalTimeLabel(encounter.period?.start)}
-        {elapsed && (
-          <span
-            className="outpatient__wait"
-            title={examStartedAt ? `診察開始 ${dateTimeLabel(examStartedAt)}` : undefined}
-          >
-            {elapsed}
-          </span>
-        )}
       </td>
-      <td className="sticky-table__fix-3">{patient?.identifier?.[0]?.value ?? "-"}</td>
-      <td className="sticky-table__fix-4">
+      <td
+        className="outpatient__time sticky-table__fix-3"
+        title={examStartedAt ? `診察開始 ${dateTimeLabel(examStartedAt)}` : undefined}
+      >
+        {elapsed || "-"}
+      </td>
+      <td className="sticky-table__fix-4">{patient?.identifier?.[0]?.value ?? "-"}</td>
+      <td className="sticky-table__fix-5">
         <span className="outpatient__name-cell">
           {provisional && <span className="emergency__provisional">仮</span>}
           <span className="outpatient__name">
