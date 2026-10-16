@@ -9,6 +9,7 @@ import {
 } from "../karteLayout";
 import { KarteProblemList } from "./KarteProblemList";
 import { KarteProfileTab } from "./KarteProfileTab";
+import { PatientPictogramStrip } from "./PatientHeader";
 import { useReturnLinkState } from "../returnTo";
 
 interface PatientProfileDrawerProps {
@@ -69,10 +70,16 @@ export function PatientProfileDrawer({
   return (
     <aside className="patient-drawer" aria-label="患者プロファイル">
       <div className="patient-drawer__header">
-        <h2>
-          <span className="patient-drawer__number">{patient?.identifier?.[0]?.value}</span>
-          {(patient && displayName(patient)) || fallbackName || patientId}
-        </h2>
+        <div className="patient-drawer__title">
+          <h2>
+            <span className="patient-drawer__number">{patient?.identifier?.[0]?.value}</span>
+            {(patient && displayName(patient)) || fallbackName || patientId}
+          </h2>
+          {/* ドロワーは中身ごとスクロールするので、吹き出しは body 直下に出す。 */}
+          <span className="patient-drawer__pictograms">
+            <PatientPictogramStrip patientId={patientId} portal />
+          </span>
+        </div>
         <div className="patient-drawer__actions">
           {headerActions}
           <Link className="button" to={`/patients/${patientId}/karte`} state={returnLinkState}>

@@ -943,6 +943,20 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   color: var(--text-h);
 }
 
+.patient-drawer__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  min-width: 0;
+}
+
+.patient-drawer__pictograms {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .patient-drawer__number {
   margin-right: 8px;
   font-size: 14px;

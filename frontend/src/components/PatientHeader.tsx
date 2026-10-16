@@ -112,11 +112,30 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
       )}
       {emergency.data && <EmergencyStay encounter={emergency.data} />}
       <Pathways patientId={patientId} />
-      <CautionPictograms patientId={patientId} />
-      <AllergyPictograms patientId={patientId} />
-      <InfectionPictogram patientId={patientId} />
-      <ChemotherapyPictogram patientId={patientId} />
+      <PatientPictogramStrip patientId={patientId} />
     </div>
+  );
+}
+
+interface PictogramProps {
+  patientId: string | undefined;
+  size?: number;
+  /** true なら吹き出しを body 直下に出す(PictogramPopover を参照)。 */
+  portal?: boolean;
+}
+
+/**
+ * 1 人ぶんのピクトグラム(注意・アレルギー・感染症・化学療法)を取得して並べる。
+ * 患者帯と一覧の患者ドロワーで使う。
+ */
+export function PatientPictogramStrip(props: PictogramProps) {
+  return (
+    <>
+      <CautionPictograms {...props} />
+      <AllergyPictograms {...props} />
+      <InfectionPictogram {...props} />
+      <ChemotherapyPictogram {...props} />
+    </>
   );
 }
 
@@ -124,7 +143,7 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
  * 有効な注意のピクトグラム。取得だけここで行い、描画は PatientPictograms に任せる
  * (病棟マップと同じ見た目にするため)。
  */
-function CautionPictograms({ patientId }: { patientId: string | undefined }) {
+function CautionPictograms({ patientId, size, portal }: PictogramProps) {
   const { flags } = useActiveFlags(patientId);
   const cautions = usePatientCautions();
 
@@ -133,7 +152,15 @@ function CautionPictograms({ patientId }: { patientId: string | undefined }) {
   const cautionsByCode = new Map<string, PatientCaution>(
     (cautions.data?.items ?? []).map((c) => [c.code, c]),
   );
-  return <CautionPictogramBadges flags={flags} cautionsByCode={cautionsByCode} patientId={patientId} />;
+  return (
+    <CautionPictogramBadges
+      flags={flags}
+      cautionsByCode={cautionsByCode}
+      patientId={patientId}
+      size={size}
+      portal={portal}
+    />
+  );
 }
 
 /**
@@ -156,7 +183,7 @@ function Pathways({ patientId }: { patientId: string | undefined }) {
 }
 
 /** 陽性の感染症のピクトグラム(手入力 + 検査由来)。 */
-function InfectionPictogram({ patientId }: { patientId: string | undefined }) {
+function InfectionPictogram({ patientId, size, portal }: PictogramProps) {
   const manual = useManualInfections(patientId);
   const lab = useLabInfectionResults(patientId, HAS_LAB_MAPPED_TYPES);
 
@@ -166,6 +193,8 @@ function InfectionPictogram({ patientId }: { patientId: string | undefined }) {
     <InfectionPictogramBadge
       rows={summarizeInfections(manual.observations, lab.observations)}
       patientId={patientId}
+      size={size}
+      portal={portal}
     />
   );
 }
@@ -177,7 +206,7 @@ function InfectionPictogram({ patientId }: { patientId: string | undefined }) {
  * 分かっている必要があるので帯に置く。中身(レジメン名・クール・状態)は吹き出しで読む。
  * 完了・中止した適用は出さない(いまの状態ではないため。治療歴は化学療法タブで読む)。
  */
-function ChemotherapyPictogram({ patientId }: { patientId: string | undefined }) {
+function ChemotherapyPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }: PictogramProps) {
   const applications = useRegimenApplications(patientId);
 
   if (!patientId) return null;
@@ -194,8 +223,9 @@ function ChemotherapyPictogram({ patientId }: { patientId: string | undefined })
       <PictogramPopover
         label={label}
         className="patient-header__caution--chemo"
-        icon={<CautionPictogram pictogram="chemotherapy" size={HEADER_PICTOGRAM_SIZE} />}
+        icon={<CautionPictogram pictogram="chemotherapy" size={size} />}
         count={running.length}
+        portal={portal}
       >
         <ul className="patient-header__popover-list">
           {running.map((application) => (
@@ -220,12 +250,14 @@ function ChemotherapyPictogram({ patientId }: { patientId: string | undefined })
 }
 
 /** 活動中のアレルギーのピクトグラム。 */
-function AllergyPictograms({ patientId }: { patientId: string | undefined }) {
+function AllergyPictograms({ patientId, size, portal }: PictogramProps) {
   const { allergies } = useActiveAllergies(patientId);
 
   if (!patientId || allergies.length === 0) return null;
 
-  return <AllergyPictogramBadges allergies={allergies} patientId={patientId} />;
+  return (
+    <AllergyPictogramBadges allergies={allergies} patientId={patientId} size={size} portal={portal} />
+  );
 }
 
 /**
