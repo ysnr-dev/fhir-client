@@ -135,6 +135,9 @@ class FacilitySettings < ApplicationRecord
   # 値はテンプレート(Questionnaire)の url。版を持たせないのは、テンプレートの版を上げても区画の
   # 設定を直さずに済ませるため(新しく書く回答は有効な版を使い、書いた回答は書いた版で読む)。
   DEFAULT_NURSING_PROFILE = { "templates" => [] }.freeze
+  # Web 問診(docs/web-intake-design.md)。questionnaires は既定の質問票(canonical)、by_department は
+  # 診療科(SS-MIX2 のコード)ごとの質問票、expires_hours は予約の無いリンクの有効時間。
+  DEFAULT_INTAKE = { "questionnaires" => [], "by_department" => {}, "expires_hours" => 24 }.freeze
 
   # 経過表一括入力(病棟の複数患者にまとめて入れる画面)に出す列。並べた順が列の順。
   # 列の中身(LOINC・MEDIS のコード、単位)は frontend が持ち、ここはどれを出すかだけを決める。
@@ -329,6 +332,16 @@ class FacilitySettings < ApplicationRecord
     "nursing_profile" => {
       default: DEFAULT_NURSING_PROFILE,
       shape: { fields: { "templates" => { list: QUESTIONNAIRE_URL, unique: true } } }
+    },
+    "intake" => {
+      default: DEFAULT_INTAKE,
+      shape: {
+        fields: {
+          "questionnaires" => { list: QUESTIONNAIRE_URL, unique: true },
+          "by_department" => { map: { list: QUESTIONNAIRE_URL, unique: true }, keys: :any },
+          "expires_hours" => { integer: { min: 1, unit: "時間" } }
+        }
+      }
     },
     "bulk_vital_entry" => {
       default: DEFAULT_BULK_VITAL_ENTRY,

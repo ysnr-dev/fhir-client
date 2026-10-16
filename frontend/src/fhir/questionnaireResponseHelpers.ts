@@ -128,6 +128,10 @@ export interface BuildQuestionnaireResponseArgs {
   encounterId?: string;
   // 更新時は id と identifier(報告単位ID)を引き継ぐ。
   existing?: fhir4.QuestionnaireResponse;
+  /** 回答の日時。省くと今(Web 問診の取込は患者が答えた日時を渡す)。 */
+  authored?: string;
+  /** 回答の出どころなど、付け足す拡張。 */
+  extension?: fhir4.Extension[];
 }
 
 // identifier は IG の記法「保険医療機関番号^患者ID^報告単位ID」で組み立てる。
@@ -161,7 +165,7 @@ export function buildQuestionnaireResponse(
     questionnaire: questionnaireCanonical(questionnaire),
     status: meta.status,
     subject: { reference: `Patient/${patient.id}` },
-    authored: nowFhirDateTime(),
+    authored: args.authored ?? nowFhirDateTime(),
     author: { reference: `#${CONTAINED_PRACTITIONER_ID}` },
   };
 
@@ -172,7 +176,7 @@ export function buildQuestionnaireResponse(
   const target = basedOn ?? existing?.basedOn;
   if (target?.length) response.basedOn = target;
   if (items.length) response.item = items;
-  const extension: fhir4.Extension[] = [];
+  const extension: fhir4.Extension[] = [...(args.extension ?? [])];
   if (problem) {
     extension.push({
       url: QR_PROBLEM_EXT_URL,

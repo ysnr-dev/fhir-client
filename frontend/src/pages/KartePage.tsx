@@ -430,6 +430,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             ? { kind: "team-request-create", teamId: openTarget.teamId }
           : openTarget.kind === "questionnaire"
             ? { kind: "qr-create", templateCanonical: openTarget.url }
+          : openTarget.kind === "intake"
+            ? { kind: "intake-review", responseId: openTarget.responseId }
             : { kind: "radiotherapy-review", srId: openTarget.srId },
     );
     updateParams((params) => params.delete(KARTE_OPEN_PARAM));

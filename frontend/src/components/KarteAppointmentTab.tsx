@@ -4,6 +4,10 @@ import {
 } from "../fhir/appointmentHelpers";
 import { AppointmentTable } from "./AppointmentTable";
 import { ErrorBanner } from "./ErrorBanner";
+import { useState } from "react";
+import { usePatient } from "../api/queries";
+import { displayName } from "../fhir/patientHelpers";
+import { IntakeQrModal } from "./IntakeQrModal";
 
 // カルテ画面の「予約」タブ。その患者の予約を一覧し、取消を行う。
 //
@@ -20,6 +24,8 @@ interface KarteAppointmentTabProps {
 export function KarteAppointmentTab({ patientId, onReschedule }: KarteAppointmentTabProps) {
   const { appointments, isLoading, error } = useAppointmentSearch(patientId);
   const cancel = useCancelAppointment();
+  const { data: patientResult } = usePatient(patientId);
+  const [intakeTarget, setIntakeTarget] = useState<fhir4.Appointment | null>(null);
 
   function handleCancel(appointment: fhir4.Appointment) {
     if (
@@ -49,6 +55,14 @@ export function KarteAppointmentTab({ patientId, onReschedule }: KarteAppointmen
           onReschedule={onReschedule}
           onCancel={handleCancel}
           busy={cancel.isPending}
+          onIntakeQr={setIntakeTarget}
+        />
+      )}
+      {intakeTarget && (
+        <IntakeQrModal
+          appointmentId={intakeTarget.id}
+          patientName={patientResult?.data ? displayName(patientResult.data) : ""}
+          onClose={() => setIntakeTarget(null)}
         />
       )}
     </div>

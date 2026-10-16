@@ -52,6 +52,7 @@ import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
 import { PathwayApplyPanel, PathwayPhasePanel } from "./PathwayApplyPanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
 import { RegimenCycleLoader, RegimenDayPanel, RegimenHeaderPanel } from "./RegimenPanels";
+import { IntakeReviewPanel } from "./IntakeReviewPanel";
 import { RadiotherapyAdverseEventPanel } from "./RadiotherapyAdverseEventPanel";
 import { RadiotherapyReviewPanel } from "./RadiotherapyReviewPanel";
 import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
@@ -135,6 +136,8 @@ export type KartePaneState =
   // 入院診療計画書。施設設定のテンプレートで、その入院に紐付けて書き始める(入退院文書の作成状況から)。
   | { kind: "admission-plan-create"; encounterId: string }
   | { kind: "qr-edit"; qrId: string }
+  // Web 問診の回答の取込(患者帯のピクトグラム・?open=intake から)。
+  | { kind: "intake-review"; responseId: number }
   // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
   // 日時変更は予約タブの一覧から開く。
   | { kind: "appointment-create"; problem?: ProblemRef }
@@ -290,6 +293,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "qr-create": "テンプレート登録",
   "admission-plan-create": "入院診療計画書",
   "qr-edit": "テンプレート編集",
+  "intake-review": "問診取込",
   "appointment-create": "予約登録",
   "appointment-reschedule": "予約の日時変更",
   "planned-admission-create": "入院予定登録",
@@ -326,6 +330,8 @@ function paneKey(state: KartePaneState): string {
     case "summary-create":
     case "dpc-form1-create":
       return `${state.kind}:${state.encounterId ?? ""}`;
+    case "intake-review":
+      return `${state.kind}:${state.responseId}`;
     case "dpc-form1-edit":
       return `${state.kind}:${state.responseId}`;
     case "prescription-edit":
@@ -899,6 +905,8 @@ function PaneContent({
       return (
         <QuestionnaireResponseEditPanel patientId={patientId} qrId={state.qrId} onSaved={onSaved} />
       );
+    case "intake-review":
+      return <IntakeReviewPanel patientId={patientId} responseId={state.responseId} onSaved={onSaved} />;
     case "appointment-create":
       return (
         <AppointmentCreatePanel

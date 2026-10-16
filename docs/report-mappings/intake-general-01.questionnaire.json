@@ -1,0 +1,392 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/intake-general-01",
+  "version": "1.0.0",
+  "name": "INTAKE_01",
+  "title": "問診票(一般)",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "患者が自分の端末で答える Web 問診の例(docs/web-intake-design.md)。最上位のグループ 1 つが 1 ページになる。初期値の変数・シェーマ・医療機関や医療従事者の選択は使わない。",
+  "item": [
+    {
+      "linkId": "grp-chief",
+      "type": "group",
+      "text": "今日の受診について",
+      "item": [
+        {
+          "linkId": "chief",
+          "type": "text",
+          "text": "どのような症状で受診されましたか",
+          "required": true
+        },
+        {
+          "linkId": "onset",
+          "type": "choice",
+          "text": "症状はいつからですか",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "today",
+                "display": "今日"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "days",
+                "display": "2〜3 日前"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "week",
+                "display": "1 週間くらい前"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "month",
+                "display": "1 か月以上前"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "long",
+                "display": "もっと前から"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "trend",
+          "type": "choice",
+          "text": "症状の変化",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "worse",
+                "display": "悪くなっている"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "same",
+                "display": "変わらない"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "better",
+                "display": "よくなってきた"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-history",
+      "type": "group",
+      "text": "これまでの病気と薬",
+      "item": [
+        {
+          "linkId": "history-any",
+          "type": "choice",
+          "text": "治療中・過去に治療した病気はありますか",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "ある"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "ない"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "history-any-detail",
+              "type": "group",
+              "text": "",
+              "enableWhen": [
+                {
+                  "question": "history-any",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "history",
+                  "type": "text",
+                  "text": "病名と時期"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "medication-any",
+          "type": "choice",
+          "text": "飲んでいる薬はありますか",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "ある"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "ない"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "medication-any-detail",
+              "type": "group",
+              "text": "",
+              "enableWhen": [
+                {
+                  "question": "medication-any",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "medication",
+                  "type": "text",
+                  "text": "薬の名前(お薬手帳があればその内容)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "allergy-any",
+          "type": "choice",
+          "text": "薬や食べ物のアレルギーはありますか",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "ある"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "ない"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "わからない"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "allergy-any-detail",
+              "type": "group",
+              "text": "",
+              "enableWhen": [
+                {
+                  "question": "allergy-any",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "allergy",
+                  "type": "string",
+                  "text": "アレルギーの内容"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-other",
+      "type": "group",
+      "text": "その他",
+      "item": [
+        {
+          "linkId": "pregnancy",
+          "type": "choice",
+          "text": "妊娠の可能性・授乳中",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "pregnant",
+                "display": "妊娠中・可能性あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "nursing",
+                "display": "授乳中"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "いいえ"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "na",
+                "display": "該当しない"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "smoking",
+          "type": "choice",
+          "text": "喫煙",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "current",
+                "display": "吸う"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "past",
+                "display": "以前吸っていた"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "never",
+                "display": "吸わない"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "note",
+          "type": "text",
+          "text": "医師に伝えたいこと"
+        }
+      ]
+    }
+  ]
+}

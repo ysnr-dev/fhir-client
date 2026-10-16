@@ -51,7 +51,9 @@ export type KarteOpenTarget =
   // チーム依頼の登録を、宛先のチームを選択済みで開く(スクリーニング一覧・褥瘡管理から)。
   | { kind: "team-request"; teamId: string }
   // テンプレート回答の登録を、テンプレートを選択済みで開く(褥瘡管理の DESIGN-R 評価から)。
-  | { kind: "questionnaire"; url: string };
+  | { kind: "questionnaire"; url: string }
+  // Web 問診の回答の取込(患者帯のピクトグラムから)。
+  | { kind: "intake"; responseId: number };
 
 export function formatKarteOpen(target: KarteOpenTarget): string {
   const id =
@@ -63,7 +65,9 @@ export function formatKarteOpen(target: KarteOpenTarget): string {
           ? target.teamId
           : target.kind === "questionnaire"
             ? target.url
-            : target.encounterId;
+            : target.kind === "intake"
+              ? String(target.responseId)
+              : target.encounterId;
   return `${target.kind}:${id}`;
 }
 
@@ -87,6 +91,7 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   if (kind === "nursing-summary") return { kind, compositionId: id };
   if (kind === "team-request") return { kind, teamId: id };
   if (kind === "questionnaire") return { kind, url: id };
+  if (kind === "intake" && /^\d+$/.test(id)) return { kind, responseId: Number(id) };
   return null;
 }
 
@@ -170,6 +175,9 @@ export function findKarteTabGroup(key: string) {
 
 /** カルテ印刷の別タブ(pages/KartePrintPage)。期間と履歴の有無を URL で渡す。 */
 export const KARTE_PRINT_PATH = "/karte-print";
+
+/** Web 問診の患者画面。末尾にリンクのトークンが付く(/q/<token>)。 */
+export const INTAKE_PATH = "/q/";
 
 export function kartePrintUrl(patientId: string, from: string, to: string, history: boolean): string {
   const params = new URLSearchParams({ from, to });

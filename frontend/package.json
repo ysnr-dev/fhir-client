@@ -20,6 +20,7 @@
     "@tiptap/pm": "^3.29.2",
     "@tiptap/react": "^3.29.2",
     "@tiptap/starter-kit": "^3.29.2",
+    "@types/qrcode": "^1.5.6",
     "dicom-parser": "^1.8.21",
     "dompurify": "^3.4.12",
     "events": "^3.3.0",
@@ -27,6 +28,7 @@
     "fflate": "^0.8.3",
     "fhirpath": "^5.0.0",
     "highlight.js": "^11.11.1",
+    "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1"

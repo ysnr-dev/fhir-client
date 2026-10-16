@@ -25,7 +25,7 @@ docs/      機能ごとの説明(features/*.md)、開発環境(development.md)�
 ```
 
 - 型は `@types/fhir` の `fhir4` 名前空間を使う。FHIR JSON はフロントで直接組み立てる。
-- dev では Vite proxy が `/fhir` `/master/` `/admin` `/auth` `/reports` `/imaging` `/integrations/` などを backend へ転送する。
+- dev では Vite proxy が `/fhir` `/master/` `/admin` `/auth` `/reports` `/imaging` `/integrations/` `/intake/` などを backend へ転送する。
   backend に新しいトップレベルパスを足したら `frontend/vite.config.ts` と本番の `render.yaml` の rewrite の両方に追加する。
 
 ## 開発環境(Docker Compose)

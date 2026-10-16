@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import fhirpath from "fhirpath";
 // value[x] を "value" で参照できるようにする R4 のモデル情報。
 import fhirpathR4Model from "fhirpath/fhir-context/r4";
@@ -454,6 +454,13 @@ interface QuestionnaireResponseFormProps {
   showToc?: boolean;
   // テンプレート名・版の見出しを出すか。呼び出し側でテンプレートを選ばせていて名前が見えているなら省く。
   showHeader?: boolean;
+  // 指定すると最上位の項目をその番号のものだけ描く(Web 問診の 1 グループ 1 ページ)。回答の状態は
+  // ページをまたいで 1 つなので、グループをまたぐ enableWhen・計算式もそのまま効く。
+  pageIndex?: number;
+  // 医療機関・医療従事者の選択ボタンを出さない(患者が答える画面。選択は /fhir を叩くため)。
+  hidePickers?: boolean;
+  // form 要素への参照。ページ送りの前に reportValidity() を呼ぶのに使う。
+  formRef?: Ref<HTMLFormElement>;
 }
 
 export function QuestionnaireResponseForm({
@@ -468,6 +475,9 @@ export function QuestionnaireResponseForm({
   children,
   showToc = false,
   showHeader = true,
+  pageIndex,
+  hidePickers = false,
+  formRef,
 }: QuestionnaireResponseFormProps) {
   const [initialState] = useState(() =>
     buildInitialState(questionnaire, initialResponse, expressionContext, loginAutofill),
@@ -880,7 +890,7 @@ export function QuestionnaireResponseForm({
   // 医療機関・医療従事者の項目を持つグループの枠内に出す選択ボタン。
   // 読み取り専用(回答の内容表示)では出さない。
   function renderPickers(item: fhir4.QuestionnaireItem, childPrefix: string) {
-    if (readOnly) return null;
+    if (readOnly || hidePickers) return null;
     const organizationTargets = organizationFieldTargets(item, childPrefix);
     const practitionerTargets = practitionerFieldTargets(item, childPrefix);
     if (organizationTargets.length === 0 && practitionerTargets.length === 0) return null;
@@ -1021,12 +1031,14 @@ export function QuestionnaireResponseForm({
   );
 
   // 読み取り専用は fieldset disabled でフォーム部品への入力をまとめて止める。
+  const visibleItems =
+    pageIndex === undefined ? questionnaire.item : (questionnaire.item ?? []).slice(pageIndex, pageIndex + 1);
   const body = readOnly ? (
     <fieldset className="qp-readonly" disabled>
-      {renderItems(questionnaire.item, "")}
+      {renderItems(visibleItems, "")}
     </fieldset>
   ) : (
-    renderItems(questionnaire.item, "")
+    renderItems(visibleItems, "")
   );
 
   // 検索モーダルは項目ツリーの外側に1つだけ置く。グループごとに描画すると
@@ -1081,7 +1093,7 @@ export function QuestionnaireResponseForm({
   }
 
   return withToc(
-    <form className="qp" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
+    <form className="qp" onSubmit={handleSubmit} onKeyDown={handleKeyDown} ref={formRef}>
       {header}
       {children}
       {body}

@@ -42,7 +42,7 @@ cd ../fhir-client && docker compose up --build    # db(5434) / backend(3001) / f
 |---|---|
 | [development.md](docs/development.md) | 起動方法(Docker Compose・任意の profile・ローカル)、テスト、動作確認の記録 |
 | [features/home.md](docs/features/home.md) | ホーム(トップページ)、掲示板 |
-| [features/karte.md](docs/features/karte.md) | カルテ画面(タブ・時系列・左ペイン・右ペイン)、退院時サマリー、ファイル取込 |
+| [features/karte.md](docs/features/karte.md) | カルテ画面(タブ・時系列・左ペイン・右ペイン)、退院時サマリー、Web 問診の取込、ファイル取込 |
 | [features/orders-common.md](docs/features/orders-common.md) | オーダーの日付、代行入力と承認、カウンターサイン、日付未定オーダー、オーダーセット、レジメン・クリニカルパスのマスタ |
 | [features/medication.md](docs/features/medication.md) | 処方、疑義照会、持参薬、服薬指導、薬剤付加情報、ロット番号、注射 |
 | [features/lab.md](docs/features/lab.md) | 検体検査の結果項目マスタ、パニック値、既読、基準値と H/L、報告区分、結果取込、読影・所見レポート |

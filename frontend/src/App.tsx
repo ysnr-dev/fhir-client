@@ -120,7 +120,8 @@ import { KartePage } from "./pages/KartePage";
 import { KartePanePage } from "./pages/KartePanePage";
 import { KARTE_PANE_PATH, useKartePaneHost } from "./kartePaneChannel";
 import { KartePrintPage } from "./pages/KartePrintPage";
-import { KARTE_PRINT_PATH } from "./karteUrl";
+import { INTAKE_PATH, KARTE_PRINT_PATH } from "./karteUrl";
+import { IntakePage } from "./pages/IntakePage";
 import { isMasterPath } from "./masterMenu";
 import { DepartmentCreatePage } from "./pages/DepartmentCreatePage";
 import { DepartmentEditPage } from "./pages/DepartmentEditPage";
@@ -186,8 +187,12 @@ function App() {
   const detachedPane = pathname.startsWith(KARTE_PANE_PATH);
   // カルテ印刷も別タブで、印刷する紙面だけを出す。
   const printPage = pathname.startsWith(KARTE_PRINT_PATH);
+  // Web 問診の患者画面。ログインの外(AuthGate の外)で、トークンだけで開く。
+  const intakeToken = pathname.startsWith(INTAKE_PATH) ? pathname.slice(INTAKE_PATH.length).split("/")[0] : "";
   // メインタブは、別タブから見た「生きているか」「いま誰のカルテか」の応答口になる。
-  useKartePaneHost(!detachedPane && !printPage);
+  useKartePaneHost(!detachedPane && !printPage && !intakeToken);
+
+  if (intakeToken) return <IntakePage token={decodeURIComponent(intakeToken)} />;
 
   return (
     // アプリ全体をログインゲートで包む(ADMIN_TOKEN 未設定なら素通し)。

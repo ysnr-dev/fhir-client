@@ -133,6 +133,10 @@ services:
       - type: rewrite
         source: /imaging/*
         destination: https://ysnr-fhir-client-api.onrender.com/imaging/*
+      # Web 問診(職員用・患者用の API)。患者画面 /q/* は SPA 側。
+      - type: rewrite
+        source: /intake/*
+        destination: https://ysnr-fhir-client-api.onrender.com/intake/*
       # SPA フォールバック(react-router の直リンク対応)
       - type: rewrite
         source: /*

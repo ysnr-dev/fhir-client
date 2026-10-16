@@ -6,5 +6,7 @@
 Rails.application.config.filter_parameters += [
   :passw, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn,
   # DICOM 取込(/imaging/instances)。meta は取込元の患者名・ID を含む。
-  :meta, :file
+  :meta, :file,
+  # Web 問診の生年月日の照合(/intake/public/verify)。
+  :birth_date
 ]

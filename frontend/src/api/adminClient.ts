@@ -23,6 +23,7 @@ import type { NursingProfileSettings } from "../fhir/nursingProfileHelpers";
 import type { BulkVitalEntrySettings } from "../fhir/bulkVitalHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
+import type { IntakeSettings } from "../fhir/intakeHelpers";
 
 export interface ConnectionSettings {
   base_url: string | null;
@@ -80,6 +81,8 @@ export interface FacilitySettings {
   pressure_ulcer: PressureUlcerSettings;
   /** 早期警告スコア(NEWS2)の算出と通知。 */
   early_warning: EarlyWarningSettings;
+  /** Web 問診(既定の質問票・診療科ごとの質問票・有効時間)。 */
+  intake: IntakeSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -101,6 +104,7 @@ export type FacilitySettingsPayload = Partial<{
   nursing_acuity: NursingAcuitySettings;
   pressure_ulcer: PressureUlcerSettings;
   early_warning: EarlyWarningSettings;
+  intake: IntakeSettings;
 }>;
 
 export interface ConnectionTestResult {

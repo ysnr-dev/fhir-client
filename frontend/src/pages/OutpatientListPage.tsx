@@ -34,6 +34,9 @@ import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
 import { useReceiptStatus, useSettledReceptions } from "../api/receiptQueries";
+import { useIntakeLinks } from "../api/intakeQueries";
+import type { IntakeLinkStatus } from "../api/intakeClient";
+import { IntakeQrModal } from "../components/IntakeQrModal";
 import { patientNumberOf } from "../fhir/patientHelpers";
 import { receptionCoverageSetKey } from "../fhir/coverageHelpers";
 import {
@@ -144,6 +147,8 @@ export function OutpatientListPage() {
   const [newPatientOpen, setNewPatientOpen] = useState(false);
   // 受付内容(診療科・担当医・診察室)を変える行。
   const [receptionTarget, setReceptionTarget] = useState<OutpatientRow | null>(null);
+  // Web 問診の QR を出す予約。
+  const [intakeTarget, setIntakeTarget] = useState<OutpatientRow | null>(null);
 
   // 列が多く、既定の幅では患者名や予約枠まで折り返すので、この画面だけ幅を広げる
   // (放射線検査一覧と同じやり方)。
@@ -172,6 +177,12 @@ export function OutpatientListPage() {
     [settledReceptions.data],
   );
   const [billingTarget, setBillingTarget] = useState<BillingSendTarget | null>(null);
+  // その日の予約の Web 問診の状態(未発行 / 発行済 / 回答済 / 取込済)。
+  const intakeLinks = useIntakeLinks((list.data?.rows ?? []).map((row) => row.appointment.id ?? ""));
+  const intakeStatusByAppointment = useMemo(
+    () => new Map((intakeLinks.data ?? []).map((item) => [item.appointment_fhir_id, item.status])),
+    [intakeLinks.data],
+  );
 
   // 日付・絞り込みの一部だけ変えるときも他を残す。
   function setParams(next: Record<string, string>, replace = false) {
@@ -354,6 +365,7 @@ export function OutpatientListPage() {
       onSendBilling: receiptStatus.data?.enabled ? () => openBillingSend(row) : undefined,
       onCancel: () => handleCancel(row.appointment),
       onEditReception: () => setReceptionTarget(row),
+      onIntakeQr: () => setIntakeTarget(row),
     };
   }
 
@@ -444,6 +456,7 @@ export function OutpatientListPage() {
                   <th>診察室</th>
                   <th>状態</th>
                   <th title={ORDER_LEGEND}>当日オーダー</th>
+                  <th>問診</th>
                   <th className="outpatient__actions sticky-table__fix-actions"></th>
                 </tr>
               </thead>
@@ -471,12 +484,13 @@ export function OutpatientListPage() {
                       ) ?? []
                     }
                     rowProps={drawer.rowProps(row.appointment.id)}
+                    intakeStatus={intakeStatusByAppointment.get(row.appointment.id ?? "")}
                     {...actionsFor(row)}
                   />
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={15} className="master-search__empty">
+                    <td colSpan={16} className="master-search__empty">
                       {total === 0
                         ? "この診察日の予約はありません"
                         : "絞り込みに該当する予約がありません"}
@@ -518,6 +532,17 @@ export function OutpatientListPage() {
             </>
           }
           onClose={drawer.close}
+        />
+      )}
+      {intakeTarget && (
+        <IntakeQrModal
+          appointmentId={intakeTarget.appointment.id}
+          patientName={
+            intakeTarget.patient
+              ? displayName(intakeTarget.patient)
+              : appointmentActorDisplay(intakeTarget.appointment, "Patient")
+          }
+          onClose={() => setIntakeTarget(null)}
         />
       )}
       {receptionTarget && (
@@ -676,6 +701,13 @@ function normalizePatientNumber(number: string | undefined): string {
   return /^\d+$/.test(text) ? text.replace(/^0+(?=\d)/, "") : text;
 }
 
+const INTAKE_STATUS_LABEL: Record<IntakeLinkStatus, string> = {
+  issued: "発行済",
+  answered: "回答済",
+  imported: "取込済",
+  expired: "期限切れ",
+};
+
 interface OutpatientRowActions {
   pending: boolean;
   /** 未来院にできる日か(診察日が今日以前)。先の日付の予約はまだ来ないだけなので付けない。 */
@@ -691,6 +723,8 @@ interface OutpatientRowActions {
   onSendBilling?: () => void;
   onCancel: () => void;
   onEditReception: () => void;
+  /** Web 問診の QR を出す。 */
+  onIntakeQr: () => void;
 }
 
 function OutpatientTableRow({
@@ -700,11 +734,14 @@ function OutpatientTableRow({
   pictograms,
   orders,
   rowProps,
+  intakeStatus,
   ...actions
 }: {
   row: OutpatientRow;
   /** レセコンで会計が済んでいる。 */
   settled: boolean;
+  /** Web 問診の状態。リンクを発行していなければ undefined。 */
+  intakeStatus?: IntakeLinkStatus;
   /** 受付からの待ち時間(分)。待っていない行・当日でない一覧は undefined。 */
   waitingMinutes?: number;
   pictograms: ReactNode;
@@ -759,6 +796,9 @@ function OutpatientTableRow({
       </td>
       <td className="outpatient__orders-cell">
         <OrderSummaryChips orders={orders} />
+      </td>
+      <td className={intakeStatus === "answered" ? "outpatient__intake--answered" : undefined}>
+        {intakeStatus ? INTAKE_STATUS_LABEL[intakeStatus] : "-"}
       </td>
       <td className="outpatient__actions sticky-table__fix-actions">
         <OutpatientRowButtons row={row} {...actions} />
@@ -841,6 +881,7 @@ function OutpatientMenuItems({
   onSendBilling,
   onCancel,
   onEditReception,
+  onIntakeQr,
 }: { row: OutpatientRow } & OutpatientRowActions) {
   const { appointment, encounter } = row;
   const examStarted = isExamInProgress(encounter) || isExamPaused(encounter);
@@ -860,6 +901,10 @@ function OutpatientMenuItems({
         onClick={onEditReception}
       >
         編集
+      </button>
+      {/* 患者が自分の端末で答える問診の QR。発行し直すと前のリンクは無効になる。 */}
+      <button type="button" className="row-menu__item" disabled={pending} onClick={onIntakeQr}>
+        問診 QR
       </button>
       {checkedIn && (
         <button

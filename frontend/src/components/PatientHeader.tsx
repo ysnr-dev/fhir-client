@@ -40,6 +40,8 @@ import {
   genderLabel,
 } from "../fhir/patientHelpers";
 import { CautionPictogram } from "./icons/cautionPictograms";
+import { useIntakeResponses } from "../api/intakeQueries";
+import { formatKarteOpen, KARTE_OPEN_PARAM } from "../karteUrl";
 import {
   AllergyPictogramBadges,
   CautionPictogramBadges,
@@ -145,6 +147,7 @@ export function PatientPictogramStrip(props: PictogramProps) {
       <InfectionPictogram {...props} />
       <ChemotherapyPictogram {...props} />
       <EarlyWarningPictogram {...props} />
+      <IntakePictogram {...props} />
     </>
   );
 }
@@ -290,6 +293,40 @@ function EarlyWarningPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal
         <Link className="patient-header__popover-link" to={`/patients/${patientId}/karte?tab=flowsheet`}>
           経過表タブを開く
         </Link>
+      </PictogramPopover>
+    </span>
+  );
+}
+
+/**
+ * 取込待ちの Web 問診。患者が答えた回答は職員が取り込むまでカルテに無いので、診察の前に気付けるよう帯に置く。
+ * 吹き出しの回答を押すと右ペインの取込が開く。
+ */
+function IntakePictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }: PictogramProps) {
+  const responses = useIntakeResponses(patientId);
+  const pending = responses.data ?? [];
+  if (!patientId || pending.length === 0) return null;
+  return (
+    <span className="patient-header__item patient-header__cautions">
+      <PictogramPopover
+        label={`取込待ちの問診 ${pending.length} 件`}
+        className="patient-header__caution--intake"
+        icon={<CautionPictogram pictogram="intake" size={size} />}
+        count={pending.length}
+        portal={portal}
+      >
+        <ul className="patient-header__popover-list">
+          {pending.map((item) => (
+            <li key={item.id}>
+              <Link
+                className="patient-header__popover-link"
+                to={`/patients/${patientId}/karte?${KARTE_OPEN_PARAM}=${encodeURIComponent(formatKarteOpen({ kind: "intake", responseId: item.id }))}`}
+              >
+                問診を取り込む({dateTimeLabel(item.submitted_at)})
+              </Link>
+            </li>
+          ))}
+        </ul>
       </PictogramPopover>
     </span>
   );

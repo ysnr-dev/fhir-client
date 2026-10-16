@@ -86,6 +86,18 @@ Rails.application.routes.draw do
     end
   end
 
+  # Web 問診(docs/web-intake-design.md)。職員用はログイン、患者用はリンクのトークン(ヘッダ)で認証する。
+  scope "intake", module: "intake" do
+    post "links", to: "staff#create_link"
+    get "links", to: "staff#links"
+    get "responses", to: "staff#responses"
+    get "responses/:id", to: "staff#show_response"
+    patch "responses/:id", to: "staff#update_response"
+    get "public", to: "public#show"
+    post "public/verify", to: "public#verify"
+    post "public/responses", to: "public#create_response"
+  end
+
   # 「自院」がどの Organization かの参照(ログイン済みユーザー全員が読む)。
   # 変更は管理者だけなので /admin/facility_settings 側。
   resource :facility_settings, only: :show

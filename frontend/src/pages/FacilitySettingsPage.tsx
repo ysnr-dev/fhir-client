@@ -79,7 +79,8 @@ import {
   type ReceiptCodeSettings,
   type RehabColumnKey,
 } from "../fhir/receiptCodeSettingsHelpers";
-import { departmentDisplayName, sortDepartmentsByCode } from "../fhir/departmentHelpers";
+import { departmentCode, departmentDisplayName, sortDepartmentsByCode } from "../fhir/departmentHelpers";
+import { EMPTY_INTAKE_SETTINGS, type IntakeSettings } from "../fhir/intakeHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 import { CommentCandidates } from "../components/CommentCandidates";
@@ -327,6 +328,18 @@ export function FacilitySettingsPage() {
 
   // 早期警告スコア(NEWS2)。有効にするとバイタルの保存で算出し、区分が下限以上なら主治医に通知する。
   const [earlyWarningDraft, setEarlyWarningDraft] = useState<EarlyWarningSettings | undefined>(undefined);
+
+  // Web 問診。既定の質問票(並べた順に答えてもらう)と、診療科ごとの質問票、予約の無いリンクの有効時間。
+  const [intakeDraft, setIntakeDraft] = useState<IntakeSettings | undefined>(undefined);
+  const intake = intakeDraft ?? settings.data?.intake ?? EMPTY_INTAKE_SETTINGS;
+  const [intakeAdding, setIntakeAdding] = useState("");
+  const intakeValid = Number.isInteger(intake.expires_hours) && intake.expires_hours >= 1;
+  function updateIntakeDepartment(code: string, url: string) {
+    const next = { ...intake.by_department };
+    if (url) next[code] = [url];
+    else delete next[code];
+    setIntakeDraft({ ...intake, by_department: next });
+  }
   const earlyWarning = earlyWarningDraft ?? settings.data?.early_warning ?? DEFAULT_EARLY_WARNING;
 
   // 医事会計へ送るレセプト電算コードのうち施設基準で決まるもの。空欄は「送らない」。
@@ -465,7 +478,7 @@ export function FacilitySettingsPage() {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
     if (!admissionDocsValid || !acuityValid || !pressureUlcerValid) return;
-    if (!reviewValid || !receiptCodesOk || !coefficientsValid) return;
+    if (!reviewValid || !receiptCodesOk || !coefficientsValid || !intakeValid) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
@@ -485,6 +498,7 @@ export function FacilitySettingsPage() {
       nursing_acuity: acuity,
       pressure_ulcer: pressureUlcer,
       early_warning: earlyWarning,
+      intake,
     });
   }
 
@@ -1137,6 +1151,102 @@ export function FacilitySettingsPage() {
 
         {/* 早期警告スコア。算出するのは入院・外来を問わず右ペインと一括入力のバイタル、通知は入院中の
             患者の主治医あて(docs/early-warning-design.md)。 */}
+        <details className="facility-settings__schedule">
+          <summary>Web 問診</summary>
+          <div className="facility-settings__schedule-body">
+            <ul className="facility-settings__balance-list facility-settings__profile-list">
+              {intake.questionnaires.map((url, index) => (
+                <li key={url}>
+                  <span>{profileTitle(url)}</span>
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title="上へ"
+                    aria-label={`${profileTitle(url)} を上へ`}
+                    disabled={index === 0}
+                    onClick={() => {
+                      const next = [...intake.questionnaires];
+                      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                      setIntakeDraft({ ...intake, questionnaires: next });
+                    }}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title={`${profileTitle(url)} を削除`}
+                    aria-label={`${profileTitle(url)} を削除`}
+                    onClick={() =>
+                      setIntakeDraft({ ...intake, questionnaires: intake.questionnaires.filter((u) => u !== url) })
+                    }
+                  >
+                    <TrashIcon />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <label>
+              質問票の追加
+              <span className="facility-settings__times">
+                <select value={intakeAdding} onChange={(e) => setIntakeAdding(e.target.value)}>
+                  <option value="">（選択）</option>
+                  {profileCandidates
+                    .filter((q) => !intake.questionnaires.includes(q.url as string))
+                    .map((q) => (
+                      <option key={q.url} value={q.url}>
+                        {q.title ?? q.name ?? q.url}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="rp-card__compact-button"
+                  disabled={!intakeAdding}
+                  onClick={() => {
+                    setIntakeDraft({ ...intake, questionnaires: [...intake.questionnaires, intakeAdding] });
+                    setIntakeAdding("");
+                  }}
+                >
+                  追加
+                </button>
+              </span>
+            </label>
+            {sortDepartmentsByCode(departments.departments)
+              .filter((department) => Boolean(departmentCode(department)))
+              .map((department) => {
+                const code = departmentCode(department);
+                return (
+                  <label key={code}>
+                    {departmentDisplayName(department)}の質問票
+                    <select value={intake.by_department[code]?.[0] ?? ""} onChange={(e) => updateIntakeDepartment(code, e.target.value)}>
+                      <option value="">（既定）</option>
+                      {profileCandidates.map((q) => (
+                        <option key={q.url} value={q.url}>
+                          {q.title ?? q.name ?? q.url}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })}
+            <label>
+              予約の無いリンクの有効時間
+              <span className="facility-settings__times">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={intake.expires_hours}
+                  onChange={(e) => setIntakeDraft({ ...intake, expires_hours: Number(e.target.value) })}
+                  aria-label="Web 問診のリンクの有効時間"
+                />
+                <span className="facility-settings__unit">時間</span>
+              </span>
+            </label>
+          </div>
+        </details>
+
         <details className="facility-settings__schedule">
           <summary>早期警告スコア(NEWS2)</summary>
           <div className="facility-settings__schedule-body">

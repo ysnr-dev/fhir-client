@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_13_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_16_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -205,6 +205,40 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_100000) do
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_file_categories_on_code", unique: true
     t.index ["name"], name: "index_file_categories_on_name", unique: true
+  end
+
+  create_table "intake_links", force: :cascade do |t|
+    t.string "token_digest", null: false
+    t.string "appointment_fhir_id"
+    t.string "patient_fhir_id", null: false
+    t.jsonb "questionnaire_urls", default: [], null: false
+    t.string "birth_date"
+    t.datetime "expires_at", null: false
+    t.datetime "verified_at"
+    t.integer "failed_attempts", default: 0, null: false
+    t.datetime "revoked_at"
+    t.string "created_by_id"
+    t.string "created_by_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["appointment_fhir_id"], name: "index_intake_links_on_appointment_fhir_id"
+    t.index ["patient_fhir_id"], name: "index_intake_links_on_patient_fhir_id"
+    t.index ["token_digest"], name: "index_intake_links_on_token_digest", unique: true
+  end
+
+  create_table "intake_responses", force: :cascade do |t|
+    t.bigint "intake_link_id", null: false
+    t.string "questionnaire_url", null: false
+    t.string "questionnaire_version"
+    t.jsonb "answers", default: [], null: false
+    t.datetime "submitted_at", null: false
+    t.string "status", default: "pending", null: false
+    t.string "imported_qr_id"
+    t.string "imported_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["intake_link_id", "questionnaire_url"], name: "index_intake_responses_on_link_and_url"
+    t.index ["status"], name: "index_intake_responses_on_status"
   end
 
   create_table "lab_result_import_rows", force: :cascade do |t|

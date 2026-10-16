@@ -399,6 +399,11 @@
   color: var(--danger);
 }
 
+/* 取込待ちの Web 問診。 */
+.patient-header__caution--intake {
+  color: var(--accent);
+}
+
 .patient-header__caution--chemo {
   color: #7e57c2;
 }
@@ -26761,4 +26766,141 @@ input.nursing-picker__search {
   .karte-print__toolbar {
     display: none;
   }
+}
+
+/* ---- Web 問診の患者画面(pages/IntakePage.tsx)。スマホで開く前提で、文字と入力欄を大きくする。 ---- */
+.intake-page {
+  min-height: 100vh;
+  padding: 16px;
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.intake-page__card {
+  --control-height: var(--control-height-lg);
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.intake-page__title {
+  margin: 0 0 12px;
+  font-size: 22px;
+  color: var(--text-h);
+}
+
+.intake-page__progress {
+  margin: 0 0 16px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.intake-page__message {
+  margin: 0;
+  font-size: 17px;
+}
+
+.intake-page__error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 15px;
+}
+
+.intake-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.intake-page__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 16px;
+}
+
+.intake-page__field input {
+  font: inherit;
+  font-size: 18px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.intake-page .qp {
+  max-width: none;
+  font-size: 17px;
+}
+
+.intake-page .qp-group legend {
+  font-size: 17px;
+}
+
+.intake-page .qp-field__label {
+  font-size: 16px;
+}
+
+.intake-page .qp-field input,
+.intake-page .qp-field select,
+.intake-page .qp-field textarea {
+  font-size: 18px;
+}
+
+.intake-page .prescription-form__submit button,
+.intake-page .intake-page__form button {
+  --control-height: 46px;
+  width: 100%;
+  justify-content: center;
+  font-size: 17px;
+}
+
+.intake-page__back {
+  --control-height: 40px;
+  width: 100%;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+/* 問診 QR のモーダル(components/IntakeQrModal.tsx)。 */
+.intake-qr {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.intake-qr .client-secret-modal__field {
+  align-self: stretch;
+}
+
+.intake-qr .client-secret-modal__value {
+  min-width: 0;
+}
+
+.intake-qr__image {
+  width: 220px;
+  height: 220px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.intake-qr__meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 外来一覧の「問診」列。 */
+.outpatient__intake--answered {
+  color: var(--accent);
+  font-weight: 700;
 }

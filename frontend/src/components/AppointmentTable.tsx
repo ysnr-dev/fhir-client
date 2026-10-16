@@ -16,14 +16,15 @@ interface AppointmentTableProps {
   onReschedule: (appointmentId: string) => void;
   onCancel: (appointment: fhir4.Appointment) => void;
   busy: boolean;
+  /** Web 問診の QR を出す(通常の予約だけ)。 */
+  onIntakeQr?: (appointment: fhir4.Appointment) => void;
 }
 
 export function AppointmentTable({
   appointments,
   onReschedule,
   onCancel,
-  busy,
-}: AppointmentTableProps) {
+  busy, onIntakeQr }: AppointmentTableProps) {
   if (appointments.length === 0) {
     return <p className="patient-table__empty">予約がありません。</p>;
   }
@@ -91,6 +92,16 @@ export function AppointmentTable({
                       </span>
                     ) : (
                       <>
+                        {onIntakeQr && (
+                          <button
+                            type="button"
+                            className="row-menu__item"
+                            onClick={() => onIntakeQr(appointment)}
+                            disabled={busy}
+                          >
+                            問診 QR
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="row-menu__item"

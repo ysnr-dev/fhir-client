@@ -63,7 +63,14 @@ interface QuestionnaireResponseCreatePanelProps {
   showProblem?: boolean;
   /** 回答と同じ transaction に足す entry(特定抗菌薬の届出書で通知を閉じるなど)。回答の参照を受け取って作る。 */
   extraEntries?: (responseReference: string) => fhir4.BundleEntry[];
-  onSaved: () => void;
+  /** 初期値にする回答(Web 問診で患者が答えたもの)。item だけを読む。 */
+  initialResponse?: fhir4.QuestionnaireResponse;
+  /** 回答の日時。省くと保存時(Web 問診の取込は患者が答えた日時)。 */
+  authored?: string;
+  /** 回答に足す拡張(回答の出どころなど)。 */
+  extension?: fhir4.Extension[];
+  /** 保存後。保存した回答を受け取れる(Web 問診の取込済みの書き戻しに使う)。 */
+  onSaved: (saved?: fhir4.QuestionnaireResponse) => void;
 }
 
 export function QuestionnaireResponseCreatePanel({
@@ -75,6 +82,9 @@ export function QuestionnaireResponseCreatePanel({
   fixedQuestionnaire,
   encounterId,
   showProblem = true,
+  initialResponse,
+  authored,
+  extension,
   onSaved,
 }: QuestionnaireResponseCreatePanelProps) {
   const { data: patientResult } = usePatient(patientId);
@@ -199,11 +209,13 @@ export function QuestionnaireResponseCreatePanel({
           basedOn,
           department: orderContext,
           encounterId,
+          authored,
+          extension,
         }),
         imageEntries,
         extraEntries,
       },
-      { onSuccess: onSaved },
+      { onSuccess: (result) => onSaved(result.data) },
     );
   }
 
@@ -252,9 +264,9 @@ export function QuestionnaireResponseCreatePanel({
         (expressionContext && loginAutofill.ready ? (
           // テンプレート切替時と複写の切替で入力途中の回答を持ち越さないよう key で作り直す。
           <QuestionnaireResponseForm
-            key={`${questionnaire.id}:${copied ? "copy" : "new"}`}
+            key={`${questionnaire.id}:${copied ? "copy" : initialResponse ? "initial" : "new"}`}
             questionnaire={questionnaire}
-            initialResponse={copied ?? undefined}
+            initialResponse={copied ?? initialResponse}
             onSubmit={handleSubmit}
             submitLabel="登録"
             submitting={createResponse.isPending}
