@@ -2850,6 +2850,83 @@ fieldset.rp-card {
   color: #fff;
 }
 
+/* 新着の通知のトースト。ヘッダーの下、右端に新しいものを下へ積む。
+   body 直下に置き、モーダル(z-index: 100)より上に出して作業中でも見落とさせない。 */
+.notification-toasts {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(340px, calc(100vw - 32px));
+}
+
+.notification-toast {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-card);
+  box-shadow: var(--shadow);
+  color: var(--text-h);
+  font-size: 13px;
+}
+
+/* アラートは一覧の行と同じく左端の帯で拾わせる。 */
+.notification-toast--alert {
+  border-color: var(--lab-high);
+  box-shadow: inset 4px 0 0 var(--lab-high), var(--shadow);
+}
+
+.notification-toast--caution {
+  box-shadow: inset 4px 0 0 var(--warning), var(--shadow);
+}
+
+.notification-toast__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-toast__kind {
+  flex: 1;
+  font-weight: 600;
+}
+
+.notification-toast__close {
+  height: auto;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.notification-toast__close:hover {
+  color: var(--text-h);
+}
+
+.notification-toast__patient {
+  font-weight: 600;
+}
+
+.notification-toast__body {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.notification-toast__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 2px;
+}
+
 
 /* パニック値(緊急異常値)の HH / LL。H / L と一目で区別できるよう、色を反転して塗る。 */
 .rp-card__medicines--detail td.rp-card__lab-value--critical-high,

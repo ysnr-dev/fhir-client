@@ -9,9 +9,9 @@ export function useNotificationRows(ownerId?: string | null) {
   return useNotifications(NOTIFICATION_CODES, notificationRows, ownerId);
 }
 
-/** ヘッダーのベルに出す未対応件数(全体とアラート)。 */
+/** ヘッダーのベルに出す未対応件数(全体とアラート)と、更新の新しい順の数件。 */
 export function useNotificationRowCounts(ownerId: string | null | undefined, polling: boolean) {
-  return useNotificationCounts(NOTIFICATION_CODES, ownerId, polling);
+  return useNotificationCounts(NOTIFICATION_CODES, ownerId, polling, notificationRows);
 }
 
 /** 選んだ行を対応済みにする。 */

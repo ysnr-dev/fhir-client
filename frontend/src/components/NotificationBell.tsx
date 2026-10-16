@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useNotificationPolling } from "../hooks/useNotificationPolling";
+import { NotificationToasts } from "./notifications/NotificationToasts";
 import { useNotificationRowCounts } from "./notifications/notificationQueries";
 
 /**
@@ -15,7 +16,7 @@ import { useNotificationRowCounts } from "./notifications/notificationQueries";
  * 自動更新の入り切りは通知一覧に置く(ヘッダーは常に見えているぶん、置くものを
  * 件数だけに絞る)。切っている間も、ページを移るたびと、ウィンドウに戻ったときに
  * 読み直す。通知が増える書き込み(結果登録・オーダーの登録や編集)と対応済みの操作は
- * invalidate で即座に反映される。
+ * invalidate で即座に反映される。読み直しで新しく届いた通知はトーストでも知らせる。
  */
 export function NotificationBell() {
   const { practitionerId } = useCurrentPractitioner();
@@ -40,28 +41,31 @@ export function NotificationBell() {
       : "通知";
 
   return (
-    <Link
-      to="/notifications"
-      className={`notification-bell${total > 0 ? " notification-bell--unread" : ""}${
-        alertTotal > 0 ? " notification-bell--alert" : ""
-      }`}
-      aria-label={label}
-      title={label}
-    >
-      <svg className="notification-bell__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path
-          d="M12 2.75a5.75 5.75 0 0 0-5.75 5.75v3.36L4.6 15.4a.6.6 0 0 0 .53.9h13.74a.6.6 0 0 0 .53-.9l-1.65-3.54V8.5A5.75 5.75 0 0 0 12 2.75Z"
-          fill="currentColor"
-        />
-        <path
-          d="M9.5 18.6a2.5 2.5 0 0 0 5 0"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-        />
-      </svg>
-      {total > 0 && <span className="notification-bell__count">{total}</span>}
-    </Link>
+    <>
+      <Link
+        to="/notifications"
+        className={`notification-bell${total > 0 ? " notification-bell--unread" : ""}${
+          alertTotal > 0 ? " notification-bell--alert" : ""
+        }`}
+        aria-label={label}
+        title={label}
+      >
+        <svg className="notification-bell__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            d="M12 2.75a5.75 5.75 0 0 0-5.75 5.75v3.36L4.6 15.4a.6.6 0 0 0 .53.9h13.74a.6.6 0 0 0 .53-.9l-1.65-3.54V8.5A5.75 5.75 0 0 0 12 2.75Z"
+            fill="currentColor"
+          />
+          <path
+            d="M9.5 18.6a2.5 2.5 0 0 0 5 0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+        </svg>
+        {total > 0 && <span className="notification-bell__count">{total}</span>}
+      </Link>
+      <NotificationToasts latest={counts.latest} ownerId={practitionerId} />
+    </>
   );
 }

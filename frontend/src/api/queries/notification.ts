@@ -230,24 +230,50 @@ export function useNotifications<Row>(
   });
 }
 
+/** ベルの検索で添える新しい順の件数。トーストはこの中から前回より新しいものを拾う。 */
+const LATEST_NOTIFICATION_COUNT = 5;
+
 /**
- * ヘッダーのベルに出す未対応件数。`_summary=count` で件数だけを引く
- * (本文も `_include` も返らないので、自動更新を入れても軽い)。
+ * ヘッダーのベルに出す未対応件数と、更新の新しい順の数件。
  *
- * 全体とアラート(`priority=stat,asap`)の **2 本**を引く。ベルはアラートが 1 件でも
- * あるときだけ赤くするので、内訳が要る。
+ * 全体は `_sort=-_lastUpdated` の検索 1 本で、`total` を件数に、先頭の数件を新着の
+ * トーストに使う(出し直しは authoredOn が変わらないので、更新日時で並べる)。
+ * アラート(`priority=stat,asap`)は `_summary=count` でもう 1 本引く。ベルは
+ * アラートが 1 件でもあるときだけ赤くするので、内訳が要る。
  *
  * 自動更新は既定では止めてある。上流は FHIR リクエストごとに AuditEvent を 1 行書くので、
  * 無償のサーバーでは開きっぱなしの画面が監査ログとインスタンスの稼働時間を食う。
  * 止めている間も、ページ遷移・ウィンドウのフォーカス復帰・通知の書き込みでは読み直す。
  */
-export function useNotificationCounts(codes: string, ownerId: string | null | undefined, polling: boolean) {
-  const all = useNotificationCount(codes, ownerId, polling);
+export function useNotificationCounts<Row>(
+  codes: string,
+  ownerId: string | null | undefined,
+  polling: boolean,
+  toRows: (tasks: fhir4.Task[], patients: Map<string, fhir4.Patient>) => Row[],
+) {
+  const params = notificationParams(codes, ownerId);
+  params.set("_include", "Task:subject");
+  params.set("_sort", "-_lastUpdated");
+  params.set("_count", String(LATEST_NOTIFICATION_COUNT));
+  const all = useQuery({
+    queryKey: [...NOTIFICATION_TASK_KEY, "count", ownerId ?? "all", "latest"],
+    queryFn: () => searchResource<fhir4.Resource>("Task", params),
+    select: (result) => {
+      const { tasks, patients } = splitNotificationBundle(result.data);
+      return { total: result.data.total ?? 0, latest: toRows(tasks, patients) };
+    },
+    staleTime: 60_000,
+    refetchInterval: polling ? 60_000 : false,
+    // 上流が落ちているときにヘッダーで再試行を繰り返さない(件数を出さないだけにする)。
+    retry: false,
+  });
   const alert = useNotificationCount(codes, ownerId, polling, ALERT_PRIORITY_PARAM);
 
   return {
-    total: all.data ?? 0,
+    total: all.data?.total ?? 0,
     alertTotal: alert.data ?? 0,
+    /** 未対応の通知を更新の新しい順に数件。取れていないあいだは undefined。 */
+    latest: all.data?.latest,
     isStale: all.isStale || alert.isStale,
     refetch: () => {
       all.refetch();
@@ -260,19 +286,18 @@ function useNotificationCount(
   codes: string,
   ownerId: string | null | undefined,
   polling: boolean,
-  priority?: string,
+  priority: string,
 ) {
   const params = notificationParams(codes, ownerId);
-  if (priority) params.set("priority", priority);
+  params.set("priority", priority);
   params.set("_summary", "count");
 
   return useQuery({
-    queryKey: [...NOTIFICATION_TASK_KEY, "count", ownerId ?? "all", priority ?? "all"],
+    queryKey: [...NOTIFICATION_TASK_KEY, "count", ownerId ?? "all", priority],
     queryFn: () => searchResource<fhir4.Resource>("Task", params),
     select: (result) => result.data.total ?? 0,
     staleTime: 60_000,
     refetchInterval: polling ? 60_000 : false,
-    // 上流が落ちているときにヘッダーで再試行を繰り返さない(件数を出さないだけにする)。
     retry: false,
   });
 }
