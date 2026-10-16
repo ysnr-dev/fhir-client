@@ -8403,6 +8403,12 @@ body.karte-wide {
   line-height: 18px;
 }
 
+/* アレルゲン名は長くなりがちなので折り返しをアレルゲン列に寄せ、短い区分の列は 1 行に保つ。 */
+.allergy-table th:not(:first-child),
+.allergy-table td:not(:first-child) {
+  white-space: nowrap;
+}
+
 /* 時系列表示の表もペインの地から浮かせ、見出し行と 1 行おきの濃淡は
    上の一覧と揃える。横スクロールで残る項目カラムは表と同じ濃さにしないと、
    値のセルが下に透けて見える。 */

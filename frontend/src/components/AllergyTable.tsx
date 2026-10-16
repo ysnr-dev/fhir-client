@@ -29,7 +29,7 @@ export function AllergyTable({ allergies, onView, onEdit }: AllergyTableProps) {
   return (
     <>
       <ErrorBanner error={deleteAllergy.error} />
-      <table className="patient-table">
+      <table className="patient-table allergy-table">
         <thead>
           <tr>
             <th>アレルゲン</th>
@@ -37,7 +37,6 @@ export function AllergyTable({ allergies, onView, onEdit }: AllergyTableProps) {
             <th>タイプ</th>
             <th>重篤化リスク</th>
             <th>臨床状態</th>
-            <th>記録日</th>
             <th></th>
           </tr>
         </thead>
@@ -51,7 +50,6 @@ export function AllergyTable({ allergies, onView, onEdit }: AllergyTableProps) {
                 <td>{summary.typeLabel || "-"}</td>
                 <td>{summary.criticalityLabel || "-"}</td>
                 <td>{summary.clinicalStatusLabel || "-"}</td>
-                <td>{summary.recordedDate || "-"}</td>
                 <td className="patient-table__actions">
                   <button type="button" onClick={() => onView(summary.id)}>
                     表示
