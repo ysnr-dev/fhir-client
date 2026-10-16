@@ -5,7 +5,7 @@ export function ExamCriticalFindingNotificationCells({ row }: { row: ExamCritica
   return (
     <>
       <td className="notification__compact">{row.date}</td>
-      <td>
+      <td className="notification__content">
         {row.exam && <span className="notification__review-kind">{row.exam}</span>}
         {row.point}
       </td>

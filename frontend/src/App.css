@@ -2633,6 +2633,13 @@ fieldset.rp-card {
   width: 1%;
 }
 
+/* 内容の列は長い文(薬剤名・項目の並び)が入るので折り返す。狭くなりすぎないよう下限の幅を持たせる。 */
+.notification td.notification__content {
+  min-width: 20em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 /* 1 件の通知に複数の項目が入るので、項目ごとに 1 行にして列を揃える。 */
 .notification__items {
   min-width: 22em;

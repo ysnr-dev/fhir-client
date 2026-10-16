@@ -5,7 +5,7 @@ export function MealAllergyCheckNotificationCells({ row }: { row: MealAllergyChe
   return (
     <>
       <td className="notification__compact">{row.startDate || "-"}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">食事</span>
         食物アレルギー「{row.allergyName}」が {row.orderLabel || "食事オーダー"} に反映されていません
       </td>

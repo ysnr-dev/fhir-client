@@ -5,7 +5,7 @@ export function NoteCountersignNotificationCells({ row }: { row: NoteCountersign
   return (
     <>
       <td className="notification__compact">{row.authoredOn.slice(0, 10)}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">{row.noteLabel}</span>
         {row.traineeName && <span className="order-select__muted">{`研修医: ${row.traineeName}`}</span>}
       </td>

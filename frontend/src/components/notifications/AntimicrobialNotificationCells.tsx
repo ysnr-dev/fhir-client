@@ -9,7 +9,7 @@ export function AntimicrobialNotificationCells({ row }: { row: AntimicrobialNoti
   return (
     <>
       <td className="notification__compact">{row.startDate || "-"}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">{ANTIMICROBIAL_CATEGORY_LABEL[row.category]}</span>
         {row.kind && `${row.kind} `}
         {row.medicines}

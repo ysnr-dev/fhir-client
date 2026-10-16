@@ -8,7 +8,7 @@ export function RadiotherapyReviewDueNotificationCells({ row }: { row: Radiother
   return (
     <>
       <td className="notification__compact">{row.lastReview || "-"}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">{row.courseLabel || "治療コース"}</span>
         {row.lastReview ? "診察から" : "診察の記録がありません"}
         {row.elapsed !== null && <span className="notification__overdue"> {row.elapsed} 日</span>}

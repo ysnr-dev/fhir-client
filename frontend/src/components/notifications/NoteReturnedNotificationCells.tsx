@@ -5,7 +5,7 @@ export function NoteReturnedNotificationCells({ row }: { row: NoteReturnedRow })
   return (
     <>
       <td className="notification__compact">{row.authoredOn.slice(0, 10)}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">{row.noteLabel}</span>
         {row.reason}
         {row.requesterName && ` (${row.requesterName})`}

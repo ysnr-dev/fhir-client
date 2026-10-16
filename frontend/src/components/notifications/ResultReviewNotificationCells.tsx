@@ -8,7 +8,7 @@ export function ResultReviewNotificationCells({ row }: { row: ResultReviewRow })
   return (
     <>
       <td className="notification__compact">{row.date}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">{REVIEW_REPORT_KIND_LABEL[row.kind]}</span>
         {row.summary}
       </td>

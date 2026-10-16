@@ -7,7 +7,7 @@ export function EarlyWarningNotificationCells({ row }: { row: EwsAlertRow }) {
   return (
     <>
       <td className="notification__compact">{row.measuredAt ? dateTimeLabel(row.measuredAt) : "-"}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">NEWS2</span>
         {row.total}点({EARLY_WARNING_BAND_LABEL[row.band]}){row.missingText ? "・暫定" : ""}
         {row.itemsText && <span className="notification__detail">{row.itemsText}</span>}

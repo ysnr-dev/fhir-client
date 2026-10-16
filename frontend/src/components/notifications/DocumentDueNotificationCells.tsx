@@ -8,7 +8,7 @@ export function DocumentDueNotificationCells({ row }: { row: DocumentDueRow }) {
   return (
     <>
       <td className="notification__compact">{row.dischargeDate}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">{row.documentLabel}</span>
         未作成(期限 {row.dueDate || "-"})
         {row.overdueDays > 0 && (

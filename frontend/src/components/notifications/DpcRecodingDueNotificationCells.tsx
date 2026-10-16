@@ -5,7 +5,7 @@ export function DpcRecodingDueNotificationCells({ row }: { row: DpcRecodingDueRo
   return (
     <>
       <td className="notification__compact">{row.transferDate}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">転棟</span>
         {row.fromWard || "-"} → {row.toWard || "-"} の診断群分類が未判定
       </td>

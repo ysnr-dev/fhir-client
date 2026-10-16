@@ -8,7 +8,7 @@ export function PathwayVarianceNotificationCells({ row }: { row: PathwayVariance
   return (
     <>
       <td className="notification__compact">{row.date}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">{row.pathwayTitle}</span>
         <span className="notification__review-kind">{row.eventLabel}</span>
         {row.unitName}

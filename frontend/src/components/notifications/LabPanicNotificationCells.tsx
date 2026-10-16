@@ -9,7 +9,7 @@ export function LabPanicNotificationCells({ row }: { row: PanicTaskRow }) {
   return (
     <>
       <td className="notification__compact">{row.specimenDate}</td>
-      <td className="notification__items">
+      <td className="notification__content notification__items">
         {row.items.length > 0
           ? row.items.map((item, index) => (
               <span className="notification__item" key={index}>

@@ -199,7 +199,7 @@ export function NotificationPage() {
               <th className="notification__compact">患者番号</th>
               <th>氏名</th>
               <th className="notification__compact">対象日</th>
-              <th>内容</th>
+              <th className="notification__content">内容</th>
               <th>宛先</th>
               <th></th>
             </tr>

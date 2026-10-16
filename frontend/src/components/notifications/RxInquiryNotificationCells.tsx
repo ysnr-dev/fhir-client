@@ -5,7 +5,7 @@ export function RxInquiryNotificationCells({ row }: { row: RxInquiryRow }) {
   return (
     <>
       <td className="notification__compact">{row.authoredOn.slice(0, 10)}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">{row.orderLabel}</span>
         {row.question}
         {row.requesterName && ` (${row.requesterName})`}
@@ -19,7 +19,7 @@ export function RxInquiryAnsweredNotificationCells({ row }: { row: RxInquiryAnsw
   return (
     <>
       <td className="notification__compact">{row.authoredOn.slice(0, 10)}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__review-kind">{row.orderLabel}</span>
         <span className="rx-inquiry__answer">{row.answerLabel}</span>
         {row.answerText}

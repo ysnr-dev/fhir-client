@@ -12,7 +12,7 @@ export function OrderApprovalNotificationCells({ row }: { row: OrderApprovalRow 
   return (
     <>
       <td className="notification__compact">{row.dayLabel || "-"}</td>
-      <td>
+      <td className="notification__content">
         <span className="notification__approval-kind">
           {row.kinds.map(kindLabel).join(" / ")}
           {row.orderSetName && (
