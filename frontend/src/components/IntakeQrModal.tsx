@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { useIssuedIntakeLink } from "../api/intakeQueries";
 import { dateTimeLabel } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
+import { CopyIcon } from "./icons/CopyIcon";
 import { Modal } from "./Modal";
 
 // Web 問診の QR(docs/web-intake-design.md §3.2)。開いた時点でリンクを発行し、QR と URL を出す。
@@ -51,9 +52,12 @@ export function IntakeQrModal({
           <div className="client-secret-modal__field">
             <span className="client-secret-modal__label">URL</span>
             <pre className="client-secret-modal__value">{url}</pre>
-            <button type="button" onClick={copy}>
-              {copied ? "コピーしました" : "コピー"}
-            </button>
+            <span className="intake-qr__copy">
+              <button type="button" className="rp-card__icon-button" title="URLをコピー" aria-label="URLをコピー" onClick={copy}>
+                <CopyIcon />
+              </button>
+              {copied && <span className="intake-qr__copied">コピーしました</span>}
+            </span>
           </div>
           <p className="intake-qr__meta">有効期限 {dateTimeLabel(link.expires_at)}・質問票 {link.questionnaire_urls.length} 本</p>
         </div>

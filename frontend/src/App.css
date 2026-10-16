@@ -26881,8 +26881,28 @@ input.nursing-picker__search {
   align-self: stretch;
 }
 
+.intake-qr .client-secret-modal__label {
+  flex: 0 0 auto;
+}
+
 .intake-qr .client-secret-modal__value {
   min-width: 0;
+}
+
+.intake-qr__copy {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
+.intake-qr__copied {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .intake-qr__image {
