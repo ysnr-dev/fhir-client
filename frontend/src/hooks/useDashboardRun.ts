@@ -6,7 +6,7 @@ import type { DashboardTile } from "../fhir/dashboardLayout";
 import { leafLabel, resolvePeriod, validateExtractQuery } from "../fhir/extractQueryHelpers";
 import { recordDefinitionOf, type ExtractRecordDefinition, type ExtractRecordTab } from "../fhir/extractRecordQuery";
 import { EXTRACT_TAB_RUNNERS, type ExtractRunContext, type RecordTable } from "../fhir/extractTabRunners";
-import type { PatientAttribute } from "../fhir/recordTableHelpers";
+import { CLUSTER_COLUMN, STRATUM_COLUMN, type PatientAttribute } from "../fhir/recordTableHelpers";
 import { today } from "../lib/dates";
 import { resolvePatientScope, type ScopeSummary } from "./useExtractPatientScope";
 import { patientAttributesOf } from "./useRecordPatientAttributes";
@@ -62,7 +62,9 @@ export function useDashboardRun(queries: ExtractQuery[], folders: PatientFolder[
       const runner = EXTRACT_TAB_RUNNERS[tab];
       const definition = recordDefinitionOf<ExtractRecordDefinition>(query);
       const patientQueries = allQueries.filter((q) => q.tab === "patient");
-      const scope = await resolvePatientScope(definition, definition.period, patientQueries, allFolders, run);
+      const scope = await resolvePatientScope(definition, definition.period, patientQueries, allFolders, run, {
+        groupLabel: tab === "cluster" ? CLUSTER_COLUMN : STRATUM_COLUMN,
+      });
       if (!scope) throw new DOMException("aborted", "AbortError");
       const range = resolvePeriod(definition.period, today());
       const criteria = runner.criteria(definition, { range, patientIds: scope.patientIds }, runContext);
@@ -84,7 +86,7 @@ export function useDashboardRun(queries: ExtractQuery[], folders: PatientFolder[
         table,
         truncated: (result as { truncated?: boolean }).truncated ?? false,
         summary: scope.summary,
-        attributes: patientAttributesOf(scope.ran.groupsOf, scope.ran.attending, names),
+        attributes: patientAttributesOf(scope.ran.groupsOf, scope.ran.attending, names, scope.ran.groupLabel),
         attendingTruncated,
       };
     },

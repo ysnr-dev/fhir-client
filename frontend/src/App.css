@@ -9675,6 +9675,18 @@ input.lot-number-cell__input.is-invalid {
   line-height: inherit;
 }
 
+/* データ抽出のクラスタの概要と重なり。区切りの行(性別・年齢・指標)は見出しとして左に寄せる。 */
+.extract-cluster__heading {
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+
+.master-search__table.extract-breakdown .extract-cluster__section th {
+  text-align: left;
+  background: var(--surface-stripe);
+  color: var(--text-h);
+}
+
 /* 内訳から絞った一覧の帯。 */
 .extract-results__drill {
   display: flex;
@@ -16427,7 +16439,7 @@ button.meal-calendar__cell:hover {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px 12px;
-  background: var(--surface-muted, transparent);
+  background: var(--surface-stripe);
   /* カードの中も fieldset と同じ折り返す横並びにする。縦積みのままだと広い
      カードで 1 検体が縦に伸び、複数検体を見比べられなくなるため。 */
   display: flex;
@@ -16952,7 +16964,7 @@ button.meal-calendar__cell:hover {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px 12px;
-  background: var(--surface-muted, transparent);
+  background: var(--surface-stripe);
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;

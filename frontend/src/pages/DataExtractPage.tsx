@@ -7,6 +7,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { EXTRACT_TABS, type ExtractTab } from "../fhir/extractRecordQuery";
 import { AdverseEventExtractPanel } from "../components/extract/AdverseEventExtractPanel";
 import { ConditionExtractPanel } from "../components/extract/ConditionExtractPanel";
+import { ClusterExtractPanel } from "../components/extract/ClusterExtractPanel";
 import { DataExtractGuide, type GuideTopic } from "../components/extract/DataExtractGuide";
 import { EncounterExtractPanel } from "../components/extract/EncounterExtractPanel";
 import { ExtractConditionBuilder } from "../components/extract/ExtractConditionBuilder";
@@ -43,7 +44,8 @@ import { downloadBlob } from "../lib/download";
 // 「テンプレート」は 1 つのテンプレートの回答、「検査結果」は検査・バイタルの結果、「投薬」は処方・注射の薬剤、
 // 「細菌検査」は分離菌と薬剤感受性、「手術」は手術の実施記録、「部門実施」は放射線・内視鏡などの実施記録、
 // 「有害事象」は CTCAE Grade の記録、「パス」はクリニカルパスの適用と評価(バリアンス)。
-// いずれも保存した患者の条件や患者フォルダの患者に絞れる。
+// いずれも保存した患者の条件や患者フォルダの患者に絞れる。「クラスタ」は保存した患者の条件・患者フォルダを
+// クラスタにして、人数・性別・年齢・指標(記録の件数と値)・重なりを比べる。
 // 抽出は上流 FHIR をその場で引く。
 
 type Tab = ExtractTab;
@@ -95,6 +97,7 @@ export function DataExtractPage() {
         ))}
       </div>
       {tab === "patient" && <PatientExtractTab />}
+      {tab === "cluster" && <ClusterExtractPanel />}
       {tab === "encounter" && <EncounterExtractPanel />}
       {tab === "condition" && <ConditionExtractPanel />}
       {tab === "template" && <TemplateExtractPanel />}

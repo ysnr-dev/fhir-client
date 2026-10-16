@@ -3,9 +3,9 @@ import { Modal } from "../Modal";
 
 // データ抽出の使い方。中身は docs/data-extract-design.md の利用者向けの要約で、話題ごとに分け、左の一覧で切り替える。
 // 画面の各所の「?」から、その場所の話題を開く(見出し=流れ、条件木=条件の組み方、「比較」の行=比較群と担当医、
-// 結果の切替=内訳)。機能を足したらここも直す。
+// 結果の切替=内訳、クラスタの行=クラスタ)。機能を足したらここも直す。
 
-export type GuideTopic = "flow" | "conditions" | "records" | "breakdown" | "compare" | "output" | "notes";
+export type GuideTopic = "flow" | "conditions" | "records" | "breakdown" | "compare" | "cluster" | "output" | "notes";
 
 const TOPICS: { key: GuideTopic; label: string }[] = [
   { key: "flow", label: "流れ" },
@@ -13,6 +13,7 @@ const TOPICS: { key: GuideTopic; label: string }[] = [
   { key: "records", label: "記録の表" },
   { key: "breakdown", label: "内訳" },
   { key: "compare", label: "比較群と担当医" },
+  { key: "cluster", label: "クラスタ" },
   { key: "output", label: "保存と出力" },
   { key: "notes", label: "注意" },
 ];
@@ -313,7 +314,7 @@ function TopicBody({ topic }: { topic: GuideTopic }) {
         <section>
           <h3>比較群と担当医</h3>
           <dl className="extract-guide__terms">
-            <Term name="比較群">記録のタブの「比較」の行で、患者を比較群に分ける(8 つまで)。比較群ごとに名前と、条件 1 件か「患者」タブに保存した条件を入れる</Term>
+            <Term name="比較群">記録のタブの「比較」の行で、患者を比較群に分ける(8 つまで)。比較群ごとに名前と、条件 1 件・「患者」タブに保存した条件・患者フォルダ(下位フォルダを含む)のどれかを入れる</Term>
             <Term name="比較群の列">結果に「比較群」の列が足される。2 つ以上の比較群に入る患者は「、」でつなぎ、比較群に入らない患者は「(なし)」</Term>
             <Term name="比較群の期間">比較群の条件で期間を入れなければ、タブの期間で数える</Term>
             <Term name="比較群外を除く">どの比較群にも入らない患者の記録を出さない</Term>
@@ -321,6 +322,22 @@ function TopicBody({ topic }: { topic: GuideTopic }) {
             <Term name="担当医">外来の担当医・入院の主治医・処方の依頼医から選ぶ。タブの期間の記録で最も多い医師(同数なら新しい方)を「担当医」の列に出す</Term>
             <Term name="例">比較群を薬効分類で分け、内訳で行=期間・列=比較群・値=検査値の平均・分割にすると、比較群ごとの推移の折れ線になる。行=担当医・列=検査値の最新(区切り)・行の中の割合にすると、医師ごとの達成率になる</Term>
             <Term name="院内共通の例">検査結果のタブに「HbA1c 8以上 薬効群別の推移」「医師別 HbA1c コントロール」を用意している</Term>
+          </dl>
+        </section>
+      );
+    case "cluster":
+      return (
+        <section>
+          <h3>クラスタ</h3>
+          <dl className="extract-guide__terms">
+            <Term name="クラスタ">比べたい患者の集団(8 つまで)。「患者」タブに保存した条件・患者フォルダ(下位フォルダを含む)・条件 1 件のどれかで作る。名前は重ならないようにする</Term>
+            <Term name="指標">クラスタごとに比べる記録(8 つまで)。病名・検査結果・処方 / 注射・部門オーダー・入院・外来の条件 1 件ずつ。期間を入れなければタブの期間で数える</Term>
+            <Term name="結果の行">どれかのクラスタに入る患者 1 人が 1 行。「クラスタ」の列(2 つ以上に入れば「、」でつなぐ)と、指標ごとの件数・最新(検査結果は数値、単位は見出し)・最終日</Term>
+            <Term name="患者">「患者」の行で選んだ条件・患者フォルダは、クラスタ全体をさらに絞る</Term>
+            <Term name="概要">クラスタごとの人数、性別・年齢階級の人数と割合、平均・中央値の年齢、指標ごとの該当人数と割合・件数・最新の平均。右端の「いずれか」はすべての患者</Term>
+            <Term name="重なり">2 つのクラスタの両方に入る患者の数。対角はそのクラスタの人数</Term>
+            <Term name="一覧へ">概要・重なりの数を押すと、一覧をその患者に絞る(フォルダ登録・CSV もできる)</Term>
+            <Term name="内訳">行=クラスタ・分割、列=検査結果の最新(区切り 7,8)・行の中の割合で、クラスタごとの達成率になる。値に最新の平均を選べばクラスタごとの平均になる</Term>
           </dl>
         </section>
       );

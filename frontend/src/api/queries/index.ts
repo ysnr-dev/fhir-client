@@ -61,6 +61,7 @@ export * from "./pathwayExtract";
 export * from "./medicationExtract";
 export * from "./encounterExtract";
 export * from "./conditionExtract";
+export * from "./clusterExtract";
 export * from "./nursingWorksheet";
 export * from "./bedManagement";
 export * from "./nursingAcuity";

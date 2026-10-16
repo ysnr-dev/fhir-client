@@ -38,26 +38,61 @@ export function PatientScopeRow({ scope }: { scope: ExtractPatientScope }) {
   );
 }
 
-export function CompareRow({ scope }: { scope: ExtractPatientScope }) {
-  const [editingStrata, setEditingStrata] = useState(false);
-  const [guide, setGuide] = useState(false);
+/** 比較群(クラスタ)のボタンとチップ、入力のモーダル。 */
+export function StrataField({ scope }: { scope: ExtractPatientScope }) {
+  const [editing, setEditing] = useState(false);
   return (
-    <ExtractFormRow label="比較" onGuide={() => setGuide(true)}>
+    <>
       <span className="extract-checks">
-        <button type="button" className="rp-card__compact-button" onClick={() => setEditingStrata(true)}>
-          比較群
+        <button type="button" className="rp-card__compact-button" onClick={() => setEditing(true)}>
+          {scope.groupLabel}
         </button>
         {scope.strata.length > 0 && (
           <span className="extract-chips">
             {scope.strata.map((stratum) => (
               <span key={stratum.key} className="extract-chip">
-                {stratumName(stratum, scope.queries)}
+                {stratumName(stratum, scope.queries, scope.folders)}
               </span>
             ))}
           </span>
         )}
       </span>
-      {scope.strata.length > 0 && (
+      {editing && (
+        <StrataEditorModal
+          strata={scope.strata}
+          queries={scope.queries}
+          folders={scope.folders}
+          itemLabel={scope.groupLabel}
+          onChange={scope.setStrata}
+          onClose={() => setEditing(false)}
+        />
+      )}
+    </>
+  );
+}
+
+export function AttendingField({ scope }: { scope: ExtractPatientScope }) {
+  return (
+    <label className="extract-field">
+      担当医
+      <select value={scope.attending} onChange={(e) => scope.setAttending(e.target.value as AttendingMode | "")}>
+        <option value="">なし</option>
+        {ATTENDING_MODES.map((mode) => (
+          <option key={mode.value} value={mode.value}>
+            {mode.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export function CompareRow({ scope }: { scope: ExtractPatientScope }) {
+  const [guide, setGuide] = useState(false);
+  return (
+    <ExtractFormRow label="比較" onGuide={() => setGuide(true)}>
+      <StrataField scope={scope} />
+      {scope.strata.length > 0 && !scope.fixedStrataOnly && (
         <label className="extract-checks__item">
           <input
             type="checkbox"
@@ -67,28 +102,7 @@ export function CompareRow({ scope }: { scope: ExtractPatientScope }) {
           比較群外を除く
         </label>
       )}
-      <label className="extract-field">
-        担当医
-        <select
-          value={scope.attending}
-          onChange={(e) => scope.setAttending(e.target.value as AttendingMode | "")}
-        >
-          <option value="">なし</option>
-          {ATTENDING_MODES.map((mode) => (
-            <option key={mode.value} value={mode.value}>
-              {mode.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {editingStrata && (
-        <StrataEditorModal
-          strata={scope.strata}
-          queries={scope.queries}
-          onChange={scope.setStrata}
-          onClose={() => setEditingStrata(false)}
-        />
-      )}
+      <AttendingField scope={scope} />
       {guide && <DataExtractGuide topic="compare" onClose={() => setGuide(false)} />}
     </ExtractFormRow>
   );
@@ -101,7 +115,7 @@ export function PatientScopeSummary({ scope }: { scope: ExtractPatientScope }) {
       {query && <span className="order-select__muted">{`「${query.name}」に該当 ${query.count} 人`}</span>}
       {folder && <span className="order-select__muted">{`フォルダ「${folder.name}」に ${folder.count} 人`}</span>}
       {strata.map((s) => (
-        <span key={s.name} className="order-select__muted">{`比較群「${s.name}」${s.count} 人`}</span>
+        <span key={s.name} className="order-select__muted">{`${scope.groupLabel}「${s.name}」${s.count} 人`}</span>
       ))}
     </>
   );

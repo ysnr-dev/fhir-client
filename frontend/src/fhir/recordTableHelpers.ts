@@ -21,6 +21,8 @@ export interface PatientAttribute {
 
 /** 比較群の列の見出し。 */
 export const STRATUM_COLUMN = "比較群";
+/** クラスタタブ(§22)の比較群の列の見出し。 */
+export const CLUSTER_COLUMN = "クラスタ";
 /** 担当医の列の見出し。 */
 export const ATTENDING_COLUMN = "担当医";
 

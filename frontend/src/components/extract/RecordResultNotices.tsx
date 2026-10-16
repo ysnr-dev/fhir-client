@@ -19,7 +19,7 @@ export function RecordResultNotices({
       </TruncatedNotice>
       <TruncatedNotice show={table.incomplete}>{runner.incompleteMessage}</TruncatedNotice>
       <TruncatedNotice show={table.rows.length > RECORD_DISPLAY_LIMIT}>
-        {`先頭の ${RECORD_DISPLAY_LIMIT} ${table.unit === "行" ? "行" : "件"}を表示しています。すべては CSV に出ます。`}
+        {`先頭の ${RECORD_DISPLAY_LIMIT} ${table.unit}を表示しています。すべては CSV に出ます。`}
       </TruncatedNotice>
     </>
   );

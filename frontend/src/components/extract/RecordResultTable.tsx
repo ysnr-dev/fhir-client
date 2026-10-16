@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { RECORD_DISPLAY_LIMIT, patientCell, type PatientColumn } from "../../fhir/extractQueryHelpers";
 import type { BreakdownSettings } from "../../fhir/recordBreakdownHelpers";
@@ -27,9 +27,21 @@ interface Props {
   /** 内訳の切り口。保存する条件に含めるときはタブが持って渡す(渡さなければここで持つ)。 */
   breakdown?: BreakdownSettings;
   onBreakdownChange?: (settings: BreakdownSettings) => void;
+  /**
+   * 一覧・内訳の前に置くタブ固有の見方(クラスタの概要など)。drill に行の添字を渡すと一覧をその行に絞る。
+   * initial なら最初に開く。
+   */
+  extraView?: {
+    key: string;
+    label: string;
+    initial?: boolean;
+    render: (drill: (indices: number[], label: string) => void) => ReactNode;
+  };
+  /** 一覧の行の単位(絞り込みの帯の件数に添える)。 */
+  unit?: string;
 }
 
-type View = "list" | "breakdown";
+type View = string;
 
 const VIEWS: { key: View; label: string }[] = [
   { key: "list", label: "一覧" },
@@ -38,6 +50,8 @@ const VIEWS: { key: View; label: string }[] = [
 
 /** 内訳のセルから絞った一覧。signature は絞ったときの結果の目印(実行し直したら外す)。 */
 interface Drill {
+  /** 絞った元の見方(内訳・クラスタなど)。 */
+  source: string;
   label: string;
   indices: number[];
   signature: string;
@@ -56,7 +70,9 @@ export function RecordResultTable(props: Props) {
     () => recordTableHeader(header, patientColumns, attributes),
     [header, patientColumns, attributes],
   );
-  const [view, setView] = useState<View>("list");
+  const extraView = props.extraView;
+  const views = extraView ? [{ key: extraView.key, label: extraView.label }, ...VIEWS] : VIEWS;
+  const [view, setView] = useState<View>(extraView?.initial ? extraView.key : "list");
   const [guide, setGuide] = useState(false);
   const [drillState, setDrill] = useState<Drill | null>(null);
   const [localBreakdown, setLocalBreakdown] = useState<BreakdownSettings>({});
@@ -69,10 +85,14 @@ export function RecordResultTable(props: Props) {
   );
   const patientIds = useMemo(() => rows.map((row) => row.patient.patientId), [rows]);
   const drilledRows = drill ? drill.indices.map((i) => rows[i]).filter(Boolean) : rows;
+  const drillFrom = (source: string) => (indices: number[], label: string) => {
+    setDrill({ source, indices, label, signature });
+    setView("list");
+  };
   return (
     <>
       <div className="inpatient-tabs" role="tablist" aria-label="結果の表示切替">
-        {VIEWS.map((item) => (
+        {views.map((item) => (
           <button
             key={item.key}
             type="button"
@@ -95,10 +115,11 @@ export function RecordResultTable(props: Props) {
         </button>
       </div>
       {guide && <DataExtractGuide topic="breakdown" onClose={() => setGuide(false)} />}
+      {extraView && <div hidden={view !== extraView.key}>{extraView.render(drillFrom(extraView.label))}</div>}
       <div hidden={view !== "list"}>
         {drill && (
           <div className="extract-results__drill">
-            <span>{`内訳「${drill.label}」の ${drilledRows.length} 件`}</span>
+            <span>{`${drill.source}「${drill.label}」の ${drilledRows.length} ${props.unit ?? "件"}`}</span>
             <FolderRegisterButton patientIds={drilledRows.map((row) => row.patient.patientId)} />
             <button
               type="button"
@@ -128,10 +149,7 @@ export function RecordResultTable(props: Props) {
           patientIds={patientIds}
           settings={props.breakdown ?? localBreakdown}
           onSettingsChange={props.onBreakdownChange ?? setLocalBreakdown}
-          onDrill={(indices, label) => {
-            setDrill({ indices, label, signature });
-            setView("list");
-          }}
+          onDrill={drillFrom("内訳")}
         />
       </div>
     </>

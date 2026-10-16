@@ -1,5 +1,5 @@
 import { csvBlob } from "../lib/csv";
-import { ATTENDING_COLUMN, STRATUM_COLUMN } from "./recordTableHelpers";
+import { ATTENDING_COLUMN, CLUSTER_COLUMN, STRATUM_COLUMN } from "./recordTableHelpers";
 
 // 記録を表にするタブの内訳(docs/data-extract-design.md §18)。結果の表(見出しと行のセル)だけから、
 // 行と列の軸に期間(年・年度・四半期・月・週・日)か分類の列を置き、件数・患者数と数値の列の集計を出す。
@@ -24,8 +24,8 @@ const PATIENT_LABELS = new Set(["患者番号", "氏名", "カナ", "患者ID", 
 /** 数字だけでも量ではない列(コード・番号)。名前で見分けて分類として扱う。 */
 const CODE_LABEL = /(コード|番号|ID|^RP$|^版$)/;
 
-/** 患者ごとの属性の列(比較群・担当医。§21)。値が数字や日付に見えても分類として扱う。 */
-const CATEGORY_LABELS = new Set([STRATUM_COLUMN, ATTENDING_COLUMN]);
+/** 患者ごとの属性の列(比較群・クラスタ・担当医。§21・§22)。値が数字や日付に見えても分類として扱う。 */
+const CATEGORY_LABELS = new Set([STRATUM_COLUMN, CLUSTER_COLUMN, ATTENDING_COLUMN]);
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}/;
 const NUMBER_PATTERN = /^-?\d+(\.\d+)?$/;

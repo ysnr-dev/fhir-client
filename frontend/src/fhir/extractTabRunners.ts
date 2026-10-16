@@ -1,5 +1,6 @@
 import {
   fetchAdverseEventExtract,
+  fetchClusterExtract,
   fetchConditionExtract,
   fetchEncounterExtract,
   fetchLabExtract,
@@ -11,6 +12,8 @@ import {
   fetchTemplateExtract,
   type AdverseEventExtractCriteria,
   type AdverseEventExtractResult,
+  type ClusterExtractCriteria,
+  type ClusterExtractResult,
   type ConditionExtractCriteria,
   type ConditionExtractResult,
   type EncounterExtractCriteria,
@@ -33,13 +36,21 @@ import {
 } from "../api/queries";
 import { today } from "../lib/dates";
 import { adverseEventExtractHeader, adverseEventExtractTable } from "./adverseEventExtractHelpers";
+import { metricHeader, metricName } from "./clusterExtractHelpers";
 import { conditionExtractHeader, conditionExtractRows } from "./conditionExtractHelpers";
 import { departmentCode } from "./departmentHelpers";
 import { encounterExtractHeader, encounterExtractRows } from "./encounterExtractHelpers";
-import type { ExtractPatientRow } from "./extractQueryHelpers";
+import {
+  patientColumnLabel,
+  patientColumnsOf,
+  patientRowOf,
+  type ExtractPatientRow,
+} from "./extractQueryHelpers";
 import type { ResolvedPeriod } from "./extractQueryModel";
+import { stratumLeaf } from "./extractRecordQuery";
 import type {
   AdverseEventExtractDefinition,
+  ClusterExtractDefinition,
   ConditionExtractDefinition,
   EncounterExtractDefinition,
   ExtractRecordDefinition,
@@ -439,6 +450,49 @@ export const pathwayRunner: ExtractTabRunner<PathwayExtractDefinition, PathwayEx
   },
 };
 
+/**
+ * クラスタ(docs/data-extract-design.md §22)。クラスタ(strata)の患者は resolvePatientScope が解いた patientIds で受け取り、
+ * 患者 1 人を 1 行に、指標ごとの件数・最新・最終日を列にする。
+ */
+export const clusterRunner: ExtractTabRunner<ClusterExtractDefinition, ClusterExtractCriteria, ClusterExtractResult> = {
+  label: "クラスタ",
+  emptyLabel: "クラスタに入る患者はいません",
+  criteria(definition, { patientIds }) {
+    if (!definition.strata?.length || !patientIds) return null;
+    return {
+      patientIds,
+      metrics: (definition.metrics ?? []).map((metric) => {
+        const name = metricName(metric);
+        return { leaf: stratumLeaf(metric, definition.period, name), name };
+      }),
+    };
+  },
+  fetch: fetchClusterExtract,
+  table(result, definition) {
+    const header = [
+      "患者番号",
+      "氏名",
+      ...patientColumnsOf(definition.output).map(patientColumnLabel),
+      ...result.metrics.flatMap((metric) => metricHeader(metric.name, metric.unit)),
+    ];
+    const rows = result.patientIds
+      .map((patientId) => patientRowOf(patientId, result.patients.get(patientId)))
+      .sort((a, b) => a.patientNumber.localeCompare(b.patientNumber, undefined, { numeric: true }))
+      .map((patient) => ({
+        key: patient.patientId,
+        patient,
+        fixed: [],
+        values: result.metrics.flatMap((metric) => {
+          const hit = metric.hits.get(patient.patientId);
+          if (!hit) return ["", "", ""];
+          const latest = metric.values ? String(metric.values.get(patient.patientId) ?? "") : hit.latest;
+          return [String(hit.count), latest, hit.last];
+        }),
+      }));
+    return { header, rows, unit: "人", incomplete: false };
+  },
+};
+
 /** タブ → 実行の組。タブを足すときはここに 1 行足す。 */
 export const EXTRACT_TAB_RUNNERS: {
   [K in ExtractRecordTab]: ExtractTabRunner<ExtractRecordDefinition, unknown, unknown>;
@@ -453,4 +507,5 @@ export const EXTRACT_TAB_RUNNERS: {
   perform: performRunner,
   adverse: adverseEventRunner,
   pathway: pathwayRunner,
+  cluster: clusterRunner,
 };

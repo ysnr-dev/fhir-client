@@ -28,15 +28,16 @@ export interface RecordPatientAttributes {
   error: unknown;
 }
 
-/** 属性の列(比較群・担当医)。担当医の名前がまだ無ければ空欄にする。 */
+/** 属性の列(比較群・担当医)。担当医の名前がまだ無ければ空欄にする。groupLabel は比較群の列の見出し。 */
 export function patientAttributesOf(
   groupsOf: Map<string, string[]> | null,
   mode: AttendingMode | null,
   names: Map<string, string> | null,
+  groupLabel: string = STRATUM_COLUMN,
 ): PatientAttribute[] {
   const list: PatientAttribute[] = [];
   if (groupsOf) {
-    list.push({ label: STRATUM_COLUMN, valueOf: (id) => groupsOf.get(id)?.join("、") || EMPTY_ATTRIBUTE });
+    list.push({ label: groupLabel, valueOf: (id) => groupsOf.get(id)?.join("、") || EMPTY_ATTRIBUTE });
   }
   if (mode) {
     list.push({ label: ATTENDING_COLUMN, valueOf: (id) => (names ? names.get(id) || EMPTY_ATTRIBUTE : "") });
@@ -73,7 +74,11 @@ export function useRecordPatientAttributes(
 
   const current = attending && attending.signature === signature ? attending : null;
   const groupsOf = ran?.groupsOf ?? null;
-  const attributes = useMemo(() => patientAttributesOf(groupsOf, mode, current?.names ?? null), [groupsOf, mode, current]);
+  const groupLabel = ran?.groupLabel;
+  const attributes = useMemo(
+    () => patientAttributesOf(groupsOf, mode, current?.names ?? null, groupLabel),
+    [groupsOf, mode, current, groupLabel],
+  );
 
   return {
     attributes,

@@ -7,16 +7,19 @@ import { leafLabel, validateExtractQuery, type ExtractQueryBody } from "../fhir/
 import { resolvePeriod, type ExtractLeaf, type ExtractPeriod, type ResolvedPeriod } from "../fhir/extractQueryModel";
 import {
   compactDefinition,
+  isFolderStratum,
+  stratumLeaf,
   type AttendingMode,
   type ExtractRecordDefinition,
   type ExtractStratum,
 } from "../fhir/extractRecordQuery";
+import { STRATUM_COLUMN } from "../fhir/recordTableHelpers";
 import { today } from "../lib/dates";
 import { useDefinitionOwners } from "./useDefinitionOwners";
 
 // データ抽出の記録を表にするタブの患者の絞り込みと、患者ごとの属性(比較群・担当医)。
 // 絞り込みは「患者」タブに保存した条件と患者フォルダ(下位フォルダを含む)で、両方なら両方に入る患者
-// (docs/data-extract-design.md §8)。比較群と担当医は §21。
+// (docs/data-extract-design.md §8)。比較群と担当医は §21。クラスタタブ(§22)は比較群をクラスタとして使う。
 
 export interface ScopeSummary {
   query: { name: string; count: number } | null;
@@ -31,19 +34,42 @@ export interface RanScope {
   attending: AttendingMode | null;
   /** タブの期間(担当医を決める記録の期間)。 */
   range: ResolvedPeriod | null;
+  /** 比較群の呼び名(列の見出し。「比較群」か「クラスタ」)。 */
+  groupLabel: string;
 }
 
-/** 比較群の名前。付けた名前、保存した条件の名前、条件の表示名の順。 */
-export function stratumName(stratum: ExtractStratum, queries: ExtractQuery[]): string {
+/** 比較群の名前。付けた名前、保存した条件の名前、患者フォルダの名前、条件の表示名の順。 */
+export function stratumName(stratum: ExtractStratum, queries: ExtractQuery[], folders: PatientFolder[]): string {
   if (stratum.label?.trim()) return stratum.label.trim();
   if (stratum.query_code) return queries.find((q) => q.code === stratum.query_code)?.name ?? "保存した条件";
+  if (isFolderStratum(stratum)) {
+    const id = stratum.patient_folder_id;
+    return (id != null && folders.some((f) => f.id === id) && patientFolderPath(folders, id)) || "患者フォルダ";
+  }
   return stratum.kind ? leafLabel(stratum as ExtractLeaf) : "比較群";
 }
 
-/** 条件型の比較群を「患者」タブの条件にする。期間を入れていなければタブの期間で数える。 */
-function stratumLeaf(stratum: ExtractStratum, period: ExtractPeriod | null | undefined, name: string): ExtractLeaf {
-  const { query_code: _code, ...rest } = stratum;
-  return { ...rest, kind: stratum.kind!, label: name, period: stratum.period ?? period ?? null };
+/** 条件型の比較群か(保存した条件・患者フォルダでない)。 */
+function isLeafStratum(stratum: ExtractStratum): boolean {
+  return Boolean(stratum.kind) && !stratum.query_code && !isFolderStratum(stratum);
+}
+
+/** 比較群の入力の誤り(実行の前に確かめる)。名前が重なると列の値で区別できないので弾く。 */
+export function strataErrors(
+  strata: ExtractStratum[],
+  queries: ExtractQuery[],
+  folders: PatientFolder[],
+  groupLabel: string,
+): string[] {
+  const errors: string[] = [];
+  const names = strata.map((s) => stratumName(s, queries, folders));
+  strata.forEach((s, i) => {
+    if (isFolderStratum(s) && s.patient_folder_id == null) errors.push(`${groupLabel}「${names[i]}」: 患者フォルダを選んでください。`);
+    if (!s.kind && !isFolderStratum(s) && !s.query_code) errors.push(`${groupLabel}「${names[i]}」: 条件を選んでください。`);
+  });
+  const duplicated = [...new Set(names.filter((name, i) => names.indexOf(name) !== i))];
+  for (const name of duplicated) errors.push(`${groupLabel}の名前「${name}」が重なっています。名前を付けて分けてください。`);
+  return errors;
 }
 
 /** 絞り込みを解いた結果(患者の id と、結果の表の属性の列に使う評価)。 */
@@ -60,15 +86,20 @@ type PatientRun = (
   options?: ExtractRunOptions,
 ) => Promise<ExtractResult | null>;
 
-/** 比較群ごとの患者。条件型の比較群はまとめて 1 回で抽出し、保存した条件の比較群は 1 つずつ抽出する。読めなければ null。 */
+/**
+ * 比較群ごとの患者。条件型の比較群はまとめて 1 回で抽出し、保存した条件の比較群は 1 つずつ抽出し、
+ * 患者フォルダの比較群は下位フォルダを含めた患者を読む。読めなければ null。
+ */
 async function resolveStrata(
   strata: ExtractStratum[],
   period: ExtractPeriod | null | undefined,
   queries: ExtractQuery[],
+  folders: PatientFolder[],
   run: PatientRun,
+  groupLabel: string,
 ): Promise<Set<string>[] | null> {
-  const names = strata.map((s) => stratumName(s, queries));
-  const leaves = strata.flatMap((s, i) => (s.kind && !s.query_code ? [stratumLeaf(s, period, `比較群「${names[i]}」`)] : []));
+  const names = strata.map((s) => stratumName(s, queries, folders));
+  const leaves = strata.flatMap((s, i) => (isLeafStratum(s) ? [stratumLeaf(s, period, `${groupLabel}「${names[i]}」`)] : []));
   const members: (Set<string> | null)[] = strata.map(() => null);
   if (leaves.length > 0) {
     const body: ExtractQueryBody = { schema_version: 1, root: { op: "or", children: leaves } };
@@ -77,13 +108,20 @@ async function resolveStrata(
     const result = await run(body, leafLabel, { skipPatients: true });
     if (!result) return null;
     strata.forEach((s, i) => {
-      if (s.kind && !s.query_code) members[i] = new Set(result.hits.get(s.key)?.keys() ?? []);
+      if (isLeafStratum(s)) members[i] = new Set(result.hits.get(s.key)?.keys() ?? []);
     });
+  }
+  for (const [i, s] of strata.entries()) {
+    if (!isFolderStratum(s)) continue;
+    const folder = folders.find((f) => f.id === s.patient_folder_id);
+    if (!folder) throw new Error(`${groupLabel}「${names[i]}」: 患者フォルダが見つかりません。`);
+    const folderMembers = await fetchPatientFolderMembers({ patient_folder_id: folder.id, include_descendants: true });
+    members[i] = new Set(folderMembers.items.map((m) => m.patient_id));
   }
   for (const [i, s] of strata.entries()) {
     if (!s.query_code) continue;
     const query = queries.find((q) => q.code === s.query_code);
-    if (!query) throw new Error(`比較群「${names[i]}」: 保存した条件が見つかりません。`);
+    if (!query) throw new Error(`${groupLabel}「${names[i]}」: 保存した条件が見つかりません。`);
     const result = await run(query.definition, leafLabel, { skipPatients: true });
     if (!result) return null;
     members[i] = new Set(result.rows.map((row) => row.patientId));
@@ -94,7 +132,7 @@ async function resolveStrata(
 /**
  * 保存した条件の患者の絞り込み(患者の条件・フォルダ・比較群)を解く。絞り込みの読み込みに失敗したら
  * 例外、患者の抽出が止まった(中止・エラー。run が null)なら null。patientIds は絞り込みが無ければ undefined(全患者)。
- * period はタブの期間(期間を入れていない比較群と担当医に使う)。
+ * period はタブの期間(期間を入れていない比較群と担当医に使う)。groupLabel は比較群の呼び名(既定「比較群」)。
  */
 export async function resolvePatientScope(
   definition: ScopeDefinition,
@@ -102,7 +140,9 @@ export async function resolvePatientScope(
   queries: ExtractQuery[],
   folders: PatientFolder[],
   run: PatientRun,
+  options: { groupLabel?: string } = {},
 ): Promise<ResolvedPatientScope | null> {
+  const groupLabel = options.groupLabel ?? STRATUM_COLUMN;
   const query = queries.find((q) => q.code === definition.patient_query_code) ?? null;
   const folder = folders.find((f) => f.id === definition.patient_folder_id) ?? null;
   const strata = definition.strata ?? [];
@@ -122,17 +162,19 @@ export async function resolvePatientScope(
   }
   let groupsOf: Map<string, string[]> | null = null;
   if (strata.length > 0) {
-    const members = await resolveStrata(strata, period, queries, run);
+    const errors = strataErrors(strata, queries, folders, groupLabel);
+    if (errors.length > 0) throw new Error(errors.join("\n"));
+    const members = await resolveStrata(strata, period, queries, folders, run, groupLabel);
     if (!members) return null;
     groupsOf = new Map();
     strata.forEach((s, i) => {
-      const name = stratumName(s, queries);
+      const name = stratumName(s, queries, folders);
       for (const id of members[i]) groupsOf!.set(id, [...(groupsOf!.get(id) ?? []), name]);
     });
     // 比較群の人数は、ほかの絞り込み(患者の条件・フォルダ)に入る患者で数える。
     const inScope = patientIds ? new Set(patientIds) : null;
     summary.strata = strata.map((s, i) => ({
-      name: stratumName(s, queries),
+      name: stratumName(s, queries, folders),
       count: inScope ? [...members[i]].filter((id) => inScope.has(id)).length : members[i].size,
     }));
     if (definition.strata_only) {
@@ -143,11 +185,17 @@ export async function resolvePatientScope(
   return {
     patientIds,
     summary,
-    ran: { groupsOf, attending: definition.attending ?? null, range: resolvePeriod(period, today()) },
+    ran: { groupsOf, attending: definition.attending ?? null, range: resolvePeriod(period, today()), groupLabel },
   };
 }
 
-export function useExtractPatientScope() {
+/**
+ * 記録タブの患者の絞り込みと比較群・担当医の入力。groupLabel は比較群の呼び名、strataOnly を true にすると
+ * 「比較群外を除く」を常に付ける(クラスタタブ)。
+ */
+export function useExtractPatientScope(options: { groupLabel?: string; strataOnly?: boolean } = {}) {
+  const groupLabel = options.groupLabel ?? STRATUM_COLUMN;
+  const fixedStrataOnly = options.strataOnly === true;
   const owners = useDefinitionOwners("自分の条件");
   const queryList = useExtractQueries(owners.departmentId, owners.practitionerId, owners.ready, "patient", owners.teamIds);
   const queries = useMemo(() => queryList.data?.items ?? [], [queryList.data]);
@@ -160,7 +208,8 @@ export function useExtractPatientScope() {
   const setQueryId = (id: number | null) => setQueryCode(queries.find((q) => q.id === id)?.code ?? null);
   const [folderId, setFolderId] = useState<number | null>(null);
   const [strata, setStrata] = useState<ExtractStratum[]>([]);
-  const [strataOnly, setStrataOnly] = useState(false);
+  const [strataOnlyState, setStrataOnly] = useState(false);
+  const strataOnly = fixedStrataOnly || strataOnlyState;
   const [attending, setAttending] = useState<AttendingMode | "">("");
   const [scopeError, setScopeError] = useState<unknown>(null);
   const [summary, setSummary] = useState<ScopeSummary>({ query: null, folder: null, strata: [] });
@@ -187,6 +236,7 @@ export function useExtractPatientScope() {
         queries,
         folders,
         patientExtract.run,
+        { groupLabel },
       );
       if (!resolved) return null;
       setSummary(resolved.summary);
@@ -199,6 +249,8 @@ export function useExtractPatientScope() {
   }
 
   return {
+    groupLabel,
+    fixedStrataOnly,
     owners,
     queries,
     folders,

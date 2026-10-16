@@ -6,27 +6,42 @@
 # 比較群と担当医・出力する患者の列。タブ固有の項目は TAB_FIELDS に足す。中身のコード(どの薬・どの検査か)は解釈しない。
 module ExtractRecordDefinition
   SCHEMA_VERSION = 1
-  TABS = %w[encounter condition template lab medication micro surgery perform adverse pathway].freeze
+  TABS = %w[encounter condition template lab medication micro surgery perform adverse pathway cluster].freeze
   MAX_ITEMS = 50
 
   CODE_SHAPE = ExtractQuery::CODE_SHAPE
   MAX_STRATA = 8
 
-  # 比較群(§21)の 1 つ。「患者」タブの条件 1 件(kind。患者属性は置けない)か、「患者」タブに保存した
-  # 条件の code(query_code)のどちらか。label が比較群の名前。除外・時間関係・出力項目は持たない。
+  # 比較群(§21)・クラスタ(§22)の 1 つ。「患者」タブの条件 1 件(kind。患者属性は置けない)、「患者」タブに保存した
+  # 条件の code(query_code)、患者フォルダ(patient_folder_id。下位フォルダを含む)のどれか。label が名前。
+  # 除外・時間関係・出力項目は持たない。
+  STRATUM_SOURCES = %w[kind query_code patient_folder_id].freeze
+
   STRATUM_SHAPE = {
-    fields: ExtractQuery::LEAF_FIELDS.except("not", "relation", "output_fields").merge("query_code" => :text),
+    fields: ExtractQuery::LEAF_FIELDS.except("not", "relation", "output_fields")
+                                     .merge("query_code" => :text, "patient_folder_id" => { integer: { min: 1 } }),
     required: %w[key],
     check: lambda { |stratum, path|
-      if stratum.key?("query_code")
-        stratum.key?("kind") ? ["#{path} は条件か保存した条件のどちらかです"] : []
-      elsif stratum["kind"].nil?
-        ["#{path}.kind は必須です"]
+      chosen = STRATUM_SOURCES.count { |field| !stratum[field].nil? }
+      if chosen != 1
+        ["#{path} は条件・保存した条件・患者フォルダのどれか 1 つを指定してください(kind・query_code・patient_folder_id)"]
       elsif stratum["kind"] == "patient"
         ["#{path} に患者属性の条件は置けません"]
-      else
+      elsif stratum["kind"]
         ExtractQuery::LEAF_CHECK.call(stratum, path)
+      else
+        []
       end
+    }
+  }.freeze
+
+  # クラスタタブ(§22)の指標の 1 つ。「患者」タブの条件 1 件(患者属性は置けない)。
+  MAX_METRICS = 8
+  METRIC_SHAPE = {
+    fields: ExtractQuery::LEAF_FIELDS.except("not", "relation", "output_fields"),
+    required: %w[key kind],
+    check: lambda { |metric, path|
+      metric["kind"] == "patient" ? ["#{path} に患者属性の条件は置けません"] : ExtractQuery::LEAF_CHECK.call(metric, path)
     }
   }.freeze
 
@@ -148,6 +163,14 @@ module ExtractRecordDefinition
         "ward_name" => :string
       }.merge(DEPARTMENT_FIELDS),
       required: %w[kind]
+    },
+    # クラスタは共通の strata(1 件以上)、比べる指標は metrics。
+    "cluster" => {
+      fields: {
+        "strata" => COMMON_FIELDS["strata"].merge(min: 1),
+        "metrics" => { list: METRIC_SHAPE, max: MAX_METRICS, unique: "key" }
+      },
+      required: %w[strata]
     }
   }.freeze
 

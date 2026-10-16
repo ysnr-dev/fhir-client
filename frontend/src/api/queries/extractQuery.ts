@@ -45,9 +45,9 @@ export const EXTRACT_MAX_PAGES = 20;
 /** 1 回の実行で上流へ送る検索の上限(レート制限は全利用者の合計で 300 件/分)。 */
 export const EXTRACT_MAX_REQUESTS = 120;
 export const EXTRACT_MAX_PATIENTS = 5000;
-const LEAF_CONCURRENCY = 2;
+export const LEAF_CONCURRENCY = 2;
 /** 明細の検索で 1 回に指定する患者の数(URL の長さ)。 */
-const DETAIL_PATIENT_CHUNK = 100;
+export const DETAIL_PATIENT_CHUNK = 100;
 /** 明細の書き出し 1 回で上流へ送る検索の上限。 */
 export const EXTRACT_DETAIL_MAX_REQUESTS = 200;
 const PATIENT_CHUNK = 50;
@@ -79,8 +79,9 @@ export interface ExtractResult {
   ranAt: string;
 }
 
-interface RunContext {
-  queryClient: QueryClient;
+/** 上流の検索の文脈。queryClient が無ければ検索も薬効分類の展開も覚えずに引く(クラスタタブの指標)。 */
+export interface RunContext {
+  queryClient?: QueryClient;
   signal: AbortSignal;
   requests: { count: number };
   maxRequests: number;
@@ -118,7 +119,7 @@ async function fetchPage(
 }
 
 /** 検索 1 つを読み切る。上限で切れたら例外(欠けた集合は使わない)。 */
-async function fetchAll(
+export async function fetchAll(
   resourceType: string,
   base: URLSearchParams,
   context: RunContext,
@@ -145,15 +146,17 @@ async function fetchAll(
  * 薬効分類で指定した処方・注射の条件を、医薬品コードに展開した条件にする。展開は実行のたびに
  * 医薬品マスタから引く(保存した条件に新しい薬も入る)。
  */
-async function resolveLeaf(leaf: ExtractLeaf, context: RunContext): Promise<ExtractLeaf> {
+export async function resolveLeaf(leaf: ExtractLeaf, context: RunContext): Promise<ExtractLeaf> {
   const classes = leaf.kind === "medication" ? (leaf.drug_classes ?? []) : [];
   if (classes.length === 0) return leaf;
   const prefixes = classes.map((c) => c.code).sort();
-  const codes = await context.queryClient.fetchQuery({
-    queryKey: ["ExtractDrugClass", prefixes],
-    queryFn: () => fetchMedicineCodesByClass(prefixes),
-    staleTime: 30 * 60 * 1000,
-  });
+  const codes = context.queryClient
+    ? await context.queryClient.fetchQuery({
+        queryKey: ["ExtractDrugClass", prefixes],
+        queryFn: () => fetchMedicineCodesByClass(prefixes),
+        staleTime: 30 * 60 * 1000,
+      })
+    : await fetchMedicineCodesByClass(prefixes);
   const known = new Set((leaf.codes ?? []).map((c) => `${c.system}|${c.code}`));
   const expanded = codes
     .map((code) => ({ system: MEDICINE_CODE_SYSTEM, code }))
@@ -169,9 +172,10 @@ async function fetchLeaf(leaf: ExtractLeaf, context: RunContext, label: string):
   const resolved = await resolveLeaf(leaf, context);
   if (resolved.kind === "medication" && (resolved.codes ?? []).length === 0) return [];
   const search = leafSearch(resolved, today());
+  const queryClient = context.queryClient!;
   const chunks = await Promise.all(
     search.paramsList.map((params) =>
-      context.queryClient.fetchQuery({
+      queryClient.fetchQuery({
         queryKey: ["ExtractLeaf", search.resourceType, params.toString()],
         queryFn: () => fetchAll(search.resourceType, params, context, label),
         staleTime: 5 * 60 * 1000,

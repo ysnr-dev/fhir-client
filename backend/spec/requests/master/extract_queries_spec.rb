@@ -249,7 +249,8 @@ RSpec.describe "Master::ExtractQueries", type: :request do
         "pathway" => { "pathway_code" => "900001" },
         "condition" => { "codes" => [{ "system" => "icd10", "code" => "E11" }], "clinical_status" => ["active"],
                          "category" => "billing", "suspected" => "exclude", "date_field" => "recorded" },
-        "encounter" => { "kind" => "inpatient", "date_mode" => "discharged", "department_id" => "d1", "ward_id" => "w1" }
+        "encounter" => { "kind" => "inpatient", "date_mode" => "discharged", "department_id" => "d1", "ward_id" => "w1" },
+        "cluster" => { "strata" => [{ "key" => "f", "patient_folder_id" => 3 }] }
       }
       criteria.each do |tab, value|
         create_record(tab, value, name: "同じ名前")
@@ -285,16 +286,53 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       expect(errors_text).to include("患者属性")
       create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "x", "kind" => "condition", "query_code" => "abc" }] },
                     name: "両方")
-      expect(errors_text).to include("どちらか")
+      expect(errors_text).to include("どれか 1 つ")
       create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "m", "kind" => "medication" }] }, name: "薬なし")
       expect(errors_text).to include("codes")
       create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "n", "label" => "名前だけ" }] }, name: "種類なし")
       expect(errors_text).to include("kind")
+      create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "f", "patient_folder_id" => 3 }] }, name: "フォルダ")
+      expect(response).to have_http_status(:created), response.body
+      expect(body["definition"]["strata"]).to eq([{ "key" => "f", "patient_folder_id" => 3 }])
+      create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "f", "patient_folder_id" => 3, "query_code" => "abc" }] },
+                    name: "フォルダと条件")
+      expect(errors_text).to include("どれか 1 つ")
+      create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "f", "patient_folder_id" => 0 }] }, name: "フォルダ0")
+      expect(response).to have_http_status(:unprocessable_content)
       nine = (1..9).map { |i| { "key" => "s#{i}", "query_code" => "q#{i}" } }
       create_record("lab", { "items" => [lab_item], "strata" => nine }, name: "9 比較群")
       expect(errors_text).to include("8 件まで")
       create_record("lab", { "items" => [lab_item], "attending" => "nurse" }, name: "担当医違い")
       expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "クラスタは 1 件以上で、指標は患者属性以外の条件を 8 件まで" do
+      strata = [
+        { "key" => "dm", "query_code" => "abc" },
+        { "key" => "folder", "label" => "大腸がん", "patient_folder_id" => 3 }
+      ]
+      metrics = [
+        { "key" => "a1c", "label" => "HbA1c", "kind" => "observation", "codes" => lab_item["codings"] },
+        { "key" => "adm", "kind" => "admission", "period" => { "mode" => "relative", "days" => 365 } }
+      ]
+      create_record("cluster", { "strata" => strata, "strata_only" => true, "metrics" => metrics })
+      expect(response).to have_http_status(:created), response.body
+      expect(body["tab"]).to eq("cluster")
+      expect(body["definition"]["strata"]).to eq(strata)
+      expect(body["definition"]["metrics"]).to eq(metrics)
+
+      create_record("cluster", { "metrics" => metrics }, name: "クラスタなし")
+      expect(errors_text).to include("strata")
+      create_record("cluster", { "strata" => [] }, name: "クラスタ空")
+      expect(errors_text).to include("strata")
+      create_record("cluster", { "strata" => strata, "metrics" => [{ "key" => "p", "kind" => "patient", "gender" => ["male"] }] },
+                    name: "患者属性の指標")
+      expect(errors_text).to include("患者属性")
+      create_record("cluster", { "strata" => strata, "metrics" => [{ "key" => "q", "query_code" => "abc" }] }, name: "保存した指標")
+      expect(response).to have_http_status(:unprocessable_content)
+      nine = (1..9).map { |i| { "key" => "m#{i}", "kind" => "outpatient", "period" => { "mode" => "relative", "days" => 30 } } }
+      create_record("cluster", { "strata" => strata, "metrics" => nine }, name: "9 指標")
+      expect(errors_text).to include("8 件まで")
     end
 
     it "内訳の区切りと検査結果の変化を保存できる" do

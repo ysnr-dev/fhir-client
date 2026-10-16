@@ -29,13 +29,15 @@ export type ExtractRecordTab =
   | "adverse"
   | "pathway"
   | "encounter"
-  | "condition";
+  | "condition"
+  | "cluster";
 
 export type ExtractTab = "patient" | ExtractRecordTab;
 
 /** データ抽出のタブ(画面の並び順)。 */
 export const EXTRACT_TABS: { key: ExtractTab; label: string }[] = [
   { key: "patient", label: "患者" },
+  { key: "cluster", label: "クラスタ" },
   { key: "encounter", label: "入院・外来" },
   { key: "condition", label: "病名" },
   { key: "template", label: "テンプレート" },
@@ -134,16 +136,45 @@ export interface PathwayExtractDefinition extends ExtractRecordDefinition {
   pathway_code?: string;
 }
 
+export interface ClusterExtractDefinition extends ExtractRecordDefinition {
+  /** クラスタごとに比べる指標(条件 1 件ずつ。§22)。クラスタは共通項目の strata。 */
+  metrics?: ExtractMetric[];
+}
+
+export type StratumKind = Exclude<ExtractKind, "patient">;
+
 /**
- * 比較群 1 つ(docs/data-extract-design.md §21)。条件 1 件(kind あり。「患者」タブの条件と同じ形)か、
- * 「患者」タブに保存した条件(query_code)のどちらか。label が比較群の名前。
+ * 比較群(クラスタ)1 つ(docs/data-extract-design.md §21・§22)。条件 1 件(kind あり。「患者」タブの条件と同じ形)、
+ * 「患者」タブに保存した条件(query_code)、患者フォルダ(patient_folder_id。下位フォルダを含む)のどれか。label が名前。
  */
 export type ExtractStratum = Omit<ExtractLeaf, "kind" | "not" | "relation" | "output_fields"> & {
-  kind?: Exclude<ExtractKind, "patient">;
+  kind?: StratumKind;
   query_code?: string;
+  /** 選ぶ前は null。 */
+  patient_folder_id?: number | null;
 };
 
 export const MAX_STRATA = 8;
+
+/** クラスタタブの指標(条件型の比較群と同じ形)。 */
+export type ExtractMetric = ExtractStratum & { kind: StratumKind };
+
+export const MAX_METRICS = 8;
+
+export function isMetric(stratum: ExtractStratum): stratum is ExtractMetric {
+  return Boolean(stratum.kind);
+}
+
+/** 患者フォルダの比較群か(選ぶ前の null も含む)。 */
+export function isFolderStratum(stratum: ExtractStratum): boolean {
+  return "patient_folder_id" in stratum && !stratum.kind && !stratum.query_code;
+}
+
+/** 条件型の比較群・指標を「患者」タブの条件にする。期間を入れていなければタブの期間で数える。 */
+export function stratumLeaf(stratum: ExtractStratum, period: ExtractPeriod | null | undefined, name: string): ExtractLeaf {
+  const { query_code: _code, patient_folder_id: _folder, ...rest } = stratum;
+  return { ...rest, kind: stratum.kind!, label: name, period: stratum.period ?? period ?? null };
+}
 
 /** 担当医の決め方。期間内の記録から患者ごとに最も多い医師を 1 人とる。 */
 export type AttendingMode = "outpatient" | "inpatient" | "prescriber";
