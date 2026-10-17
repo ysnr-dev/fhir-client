@@ -12,7 +12,13 @@ import {
   type ToothRecord,
 } from "../fhir/oralExamHelpers";
 import { prosthesisMarks } from "../fhir/oralExamProsthesisHelpers";
+import { useStoredToggle } from "../hooks/useStoredToggle";
+import { ActualSizeIcon } from "./icons/ActualSizeIcon";
+import { FitScreenIcon } from "./icons/FitScreenIcon";
 import { OralExamToothGlyph } from "./OralExamToothGlyph";
+
+/** 歯式図をペインの幅いっぱいに広げるか(端末ごとに覚える)。 */
+const MAXIMIZED_KEY = "oral-exam-chart-maximized";
 
 interface OralExamChartProps {
   teeth: ToothRecord[];
@@ -28,6 +34,8 @@ interface OralExamChartProps {
   roleMarks?: Record<string, string>;
   /** 前回の診査から変わった歯(印を付ける)。 */
   changed?: Set<string>;
+  /** 最大化の切り替え(OralExamChartSizeButton)に従う。モーダルの中の歯式図は従わない。 */
+  resizable?: boolean;
 }
 
 /**
@@ -44,13 +52,19 @@ export function OralExamChart({
   rowKeys,
   roleMarks,
   changed,
+  resizable = false,
 }: OralExamChartProps) {
+  const [maximized] = useStoredToggle(MAXIMIZED_KEY);
   const rows = TOOTH_ROWS.filter((row) => (rowKeys ? rowKeys.includes(row.key) : showDeciduous || !row.deciduous));
   const devices = prosthesisMarks(teeth);
   const supernumeraries = new Set(teeth.filter((t) => isSupernumerary(t.toothCode)).map((t) => t.toothCode));
 
   return (
-    <div className="oral-exam__chart" role="group" aria-label="歯式">
+    <div
+      className={resizable && maximized ? "oral-exam__chart oral-exam__chart--max" : "oral-exam__chart"}
+      role="group"
+      aria-label="歯式"
+    >
       {rows.map((row) => (
         <div
           key={row.key}
@@ -122,5 +136,23 @@ export function OralExamChart({
         </div>
       ))}
     </div>
+  );
+}
+
+/** 歯式図をペインの幅いっぱいに広げる / 元の大きさに戻す切り替え。 */
+export function OralExamChartSizeButton() {
+  const [maximized, setMaximized] = useStoredToggle(MAXIMIZED_KEY);
+  const label = maximized ? "歯式図を元の大きさに戻す" : "歯式図を最大化";
+  return (
+    <button
+      type="button"
+      className="rp-card__icon-button"
+      onClick={() => setMaximized(!maximized)}
+      aria-pressed={maximized}
+      aria-label={label}
+      title={label}
+    >
+      {maximized ? <ActualSizeIcon /> : <FitScreenIcon />}
+    </button>
   );
 }

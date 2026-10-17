@@ -23,7 +23,7 @@ import { calculateAge, isPatientMismatch } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useEditSnapshot } from "../hooks/useEditSnapshot";
 import { ErrorBanner } from "./ErrorBanner";
-import { OralExamChart } from "./OralExamChart";
+import { OralExamChart, OralExamChartSizeButton } from "./OralExamChart";
 import { OralExamMouthDetail, OralExamToothDetail } from "./OralExamDetail";
 import { OralExamForm } from "./OralExamForm";
 import { OralExamLegendButton } from "./OralExamLegend";
@@ -165,6 +165,7 @@ export function KarteOralExamTab({ patientId, view, onViewChange }: KarteOralExa
           <TruncatedNotice show={loaded?.truncated} />
           <p className="oral-exam__summary">
             <OralExamLegendButton />
+            <OralExamChartSizeButton />
             {current?.summary.performer && <span>診査者 {current.summary.performer}</span>}
             {counts && (
               <>
@@ -188,6 +189,7 @@ export function KarteOralExamTab({ patientId, view, onViewChange }: KarteOralExa
             onSelect={setSelectedTooth}
             showDeciduous={showDeciduous}
             changed={changed}
+            resizable
           />
           {selectedTooth && (
             <OralExamToothDetail

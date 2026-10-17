@@ -27232,6 +27232,7 @@ input.nursing-picker__search {
 .oral-exam__summary {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px 14px;
   margin: 0;
   font-size: 13px;
@@ -27879,4 +27880,57 @@ input.nursing-picker__search {
 
 .oral-exam__mouth-entry + .oral-exam__mouth-entry {
   margin-top: 8px;
+}
+
+/* 歯式図の最大化。ペインの幅いっぱいに 16 列を割り付け、歯の図と字を比例して大きくする。 */
+.oral-exam__chart--max {
+  align-self: stretch;
+}
+
+.oral-exam__chart--max .oral-exam__row {
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  padding: 6px 0;
+}
+
+.oral-exam__chart--max .oral-exam__tooth {
+  width: 100%;
+  gap: 2px;
+  padding: 4px 0;
+  font-size: 14px;
+}
+
+.oral-exam__chart--max .oral-exam__glyph {
+  width: min(80%, 72px);
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.oral-exam__chart--max .oral-exam__symbol {
+  min-height: 18px;
+  font-size: 16px;
+}
+
+.oral-exam__chart--max .oral-exam__abbr,
+.oral-exam__chart--max .oral-exam__clasp {
+  min-height: 15px;
+  font-size: 12px;
+  line-height: 15px;
+}
+
+.oral-exam__chart--max .oral-exam__badge {
+  min-width: 18px;
+  font-size: 11px;
+  line-height: 18px;
+  border-radius: 9px;
+}
+
+.oral-exam__chart--max .oral-exam__extra {
+  width: 28px;
+  height: 22px;
+  font-size: 13px;
+}
+
+.oral-exam__chart--max .oral-exam__span--bridge,
+.oral-exam__chart--max .oral-exam__span--denture {
+  border-top-width: 3px;
 }

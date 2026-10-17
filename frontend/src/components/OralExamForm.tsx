@@ -18,7 +18,7 @@ import {
   withUpdatedOn,
 } from "../fhir/oralExamHelpers";
 import { ErrorBanner } from "./ErrorBanner";
-import { OralExamChart } from "./OralExamChart";
+import { OralExamChart, OralExamChartSizeButton } from "./OralExamChart";
 import { OralExamMouthForm, type MouthPick } from "./OralExamMouthForm";
 import { OralExamStampPalette } from "./OralExamStampPalette";
 import { OralExamLegendButton } from "./OralExamLegend";
@@ -201,6 +201,7 @@ export function OralExamForm({
 
       <div className="oral-exam__toolbar">
         <OralExamLegendButton />
+        <OralExamChartSizeButton />
         <label className="oral-exam__check">
           <input type="checkbox" checked={showDeciduous} onChange={(e) => setShowDeciduous(e.target.checked)} />
           乳歯
@@ -237,6 +238,7 @@ export function OralExamForm({
         onSelectFace={stamp?.surface && !picking ? (toothCode, face) => stampTooth(toothCode, face) : undefined}
         showDeciduous={showDeciduous}
         changed={changed}
+        resizable
       />
 
       {selected && !picking && !stamp && (
