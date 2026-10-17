@@ -100,6 +100,14 @@ import {
   EARLY_WARNING_NOTIFY_BANDS,
   type EarlyWarningSettings,
 } from "../fhir/earlyWarningHelpers";
+import {
+  DEFAULT_KARTE_CARD_ORDER,
+  KARTE_CARD_ORDER_MODE_LABELS,
+  resolveKarteCardKinds,
+  type KarteCardOrderMode,
+  type KarteCardOrderSettings,
+} from "../fhir/karteCardOrderHelpers";
+import { KARTE_KIND_LABELS } from "../fhir/karteTimeline";
 
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
 // 診療科・診察室・スタッフは自院のものしか登録しない。他院は診療情報提供書の
@@ -125,6 +133,7 @@ interface AcuityYearRow {
 // 左の一覧に並べる設定。保存は全設定をまとめて行うので、切り替えても未保存の入力は残る。
 const FACILITY_SECTIONS = [
   { key: "self_organization", label: "自院の医療機関" },
+  { key: "karte_card_order", label: "カルテカードの並び順" },
   { key: "nursing_schedule", label: "看護指示の既定時刻" },
   { key: "meal_schedule", label: "食事の提供時刻" },
   { key: "vital_thresholds", label: "バイタルの異常値" },
@@ -448,6 +457,19 @@ export function FacilitySettingsPage() {
     updateProfileTemplates(next);
   }
 
+  // カルテのカードの同じ日の中での並び。種別順のときの種別は全種別を並べて持つ。
+  const [cardOrderDraft, setCardOrderDraft] = useState<KarteCardOrderSettings | undefined>(undefined);
+  const savedCardOrder = settings.data?.karte_card_order ?? DEFAULT_KARTE_CARD_ORDER;
+  const cardOrder = cardOrderDraft ?? savedCardOrder;
+  const cardKinds = resolveKarteCardKinds(cardOrder.kinds);
+
+  function moveCardKind(index: number, delta: number) {
+    const next = [...cardKinds];
+    const [moved] = next.splice(index, 1);
+    next.splice(index + delta, 0, moved);
+    setCardOrderDraft({ ...cardOrder, kinds: next });
+  }
+
   // 経過表一括入力の列。並べた順が画面の列の順で、1 列は残す。
   const [bulkDraft, setBulkDraft] = useState<BulkVitalEntrySettings | undefined>(undefined);
   const bulkVitalEntry = bulkDraft ?? settings.data?.bulk_vital_entry ?? DEFAULT_BULK_VITAL_ENTRY;
@@ -525,6 +547,7 @@ export function FacilitySettingsPage() {
       pressure_ulcer: pressureUlcer,
       early_warning: earlyWarning,
       intake,
+      karte_card_order: { ...cardOrder, kinds: cardKinds },
     });
   }
 
@@ -635,6 +658,54 @@ export function FacilitySettingsPage() {
               初期値で、登録済みの指示には時刻が焼き付いているのでここを変えても動かない。
               ほかの設定を表示している間はブラウザの必須チェックが効かない(表示していない入力に
               フォーカスできない)ため、required は付けずに scheduleValid で保存ボタンを止める。 */}
+          {section === "karte_card_order" && (
+            <div className="facility-settings__schedule-body">
+              <fieldset className="facility-settings__radio-group">
+                <legend>同じ日の中の並び</legend>
+                {(Object.keys(KARTE_CARD_ORDER_MODE_LABELS) as KarteCardOrderMode[]).map((mode) => (
+                  <label key={mode} className="connection-settings-form__checkbox">
+                    <input
+                      type="radio"
+                      name="karte-card-order-mode"
+                      checked={cardOrder.mode === mode}
+                      onChange={() => setCardOrderDraft({ ...cardOrder, mode })}
+                    />
+                    {KARTE_CARD_ORDER_MODE_LABELS[mode]}
+                  </label>
+                ))}
+              </fieldset>
+              {cardOrder.mode === "kind" && (
+                <ul className="facility-settings__balance-list facility-settings__profile-list">
+                  {cardKinds.map((kind, index) => (
+                    <li key={kind}>
+                      <span>{KARTE_KIND_LABELS[kind]}</span>
+                      <button
+                        type="button"
+                        className="rp-card__icon-button"
+                        title="上へ"
+                        aria-label={`${KARTE_KIND_LABELS[kind]} を上へ`}
+                        disabled={index === 0}
+                        onClick={() => moveCardKind(index, -1)}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="rp-card__icon-button"
+                        title="下へ"
+                        aria-label={`${KARTE_KIND_LABELS[kind]} を下へ`}
+                        disabled={index === cardKinds.length - 1}
+                        onClick={() => moveCardKind(index, 1)}
+                      >
+                        ↓
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {section === "nursing_schedule" && (
             <div className="facility-settings__schedule-body">
               {["1", "2", "3", "4"].map((count) => (

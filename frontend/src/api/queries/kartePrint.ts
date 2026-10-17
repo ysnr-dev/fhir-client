@@ -14,6 +14,7 @@ import {
   type KarteDayGroup,
   type KarteTimelineItem,
 } from "../../fhir/karteTimeline";
+import { DEFAULT_KARTE_CARD_ORDER, sortKarteDayItems } from "../../fhir/karteCardOrderHelpers";
 import { searchAllPages } from "./core";
 import {
   appendKarteOrderIncludes,
@@ -24,6 +25,7 @@ import {
   useKartePathwayEvaluations,
 } from "./karte";
 import { readAllTypeHistory } from "./karteCardHistory";
+import { useFacilitySettings } from "./organization";
 
 // ---- カルテ印刷 ----
 //
@@ -104,6 +106,7 @@ export function useKartePrintTimeline(patientId: string | undefined, from: strin
     enabled: Boolean(patientId && from && to),
   });
   const pathwayEvaluations = useKartePathwayEvaluations(patientId, null);
+  const cardOrder = useFacilitySettings().data?.karte_card_order ?? DEFAULT_KARTE_CARD_ORDER;
 
   const groups = useMemo<KarteDayGroup[]>(() => {
     if (!source.data || !pathwayEvaluations.data) return [];
@@ -123,10 +126,10 @@ export function useKartePrintTimeline(patientId: string | undefined, from: strin
       .filter((group) => /^\d{4}-\d{2}-\d{2}$/.test(group.day) && group.day >= from && group.day <= to)
       .map((group) => ({
         ...group,
-        items: [...group.items].sort((a, b) => a.dateTime.localeCompare(b.dateTime)),
+        items: sortKarteDayItems(group.items, cardOrder, "asc"),
       }))
       .sort((a, b) => a.day.localeCompare(b.day));
-  }, [source.data, pathwayEvaluations.data, from, to]);
+  }, [source.data, pathwayEvaluations.data, from, to, cardOrder]);
 
   return {
     groups,

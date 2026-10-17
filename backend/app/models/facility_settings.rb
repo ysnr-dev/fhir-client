@@ -147,6 +147,12 @@ class FacilitySettings < ApplicationRecord
   # show_qsofa は入力フォームに qSOFA を併記するか(docs/early-warning-design.md)。
   EARLY_WARNING_NOTIFY_BANDS = %w[low-medium medium high].freeze
   DEFAULT_EARLY_WARNING = { "enabled" => false, "notify_band" => "medium", "show_qsofa" => true }.freeze
+  # カルテのカードの同じ日の中での並び。mode は time(日時の順)か kind(種別の順。同じ種別の中は日時の順)、
+  # kinds は種別のコードを並べた順。種別の一覧と表示名は frontend(KARTE_KIND_LABELS)が持ち、ここに無い種別は
+  # 既定の順で後ろに付く(種別を足しても backend は触らない)。表示時の並べ替えだけなので、過去の日にも効く。
+  KARTE_CARD_ORDER_MODES = %w[time kind].freeze
+  KARTE_CARD_KIND = { pattern: /\A[a-z][a-z-]*\z/, label: "種別のコード" }.freeze
+  DEFAULT_KARTE_CARD_ORDER = { "mode" => "time", "kinds" => [] }.freeze
   # DPC の医療機関別係数(基礎係数・機能評価係数Ⅰ・Ⅱ・救急補正係数などを合わせた値)。年度の途中でも
   # 変わるので { 適用開始日(YYYY-MM-DD) => 係数 } で持ち、診断群分類の推定包括額
   # (点数 × 係数 × 10 円)に使う。
@@ -394,6 +400,15 @@ class FacilitySettings < ApplicationRecord
           "enabled" => :boolean,
           "notify_band" => { enum: EARLY_WARNING_NOTIFY_BANDS },
           "show_qsofa" => :boolean
+        }
+      }
+    },
+    "karte_card_order" => {
+      default: DEFAULT_KARTE_CARD_ORDER,
+      shape: {
+        fields: {
+          "mode" => { enum: KARTE_CARD_ORDER_MODES },
+          "kinds" => { list: KARTE_CARD_KIND, unique: true }
         }
       }
     },

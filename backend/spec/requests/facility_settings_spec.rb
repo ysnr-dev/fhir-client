@@ -508,6 +508,37 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (karte_card_order)" do
+    it "orders by time by default" do
+      get "/facility_settings"
+
+      expect(JSON.parse(response.body)["karte_card_order"]).to eq("mode" => "time", "kinds" => [])
+    end
+
+    it "stores the kinds in the given order" do
+      with_admin_token(nil) do
+        patch "/facility_settings",
+              params: { karte_card_order: { mode: "kind", kinds: %w[prescription note lab-order] } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["karte_card_order"]).to eq(
+        "mode" => "kind", "kinds" => %w[prescription note lab-order]
+      )
+    end
+
+    it "rejects an unknown mode and the same kind twice" do
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { karte_card_order: { mode: "day", kinds: [] } }, as: :json
+        expect(response).to have_http_status(:unprocessable_content)
+
+        patch "/facility_settings", params: { karte_card_order: { mode: "kind", kinds: %w[note note] } }, as: :json
+        expect(response).to have_http_status(:unprocessable_content)
+      end
+    end
+  end
+
   describe "PATCH /facility_settings (early_warning)" do
     it "is disabled by default" do
       get "/facility_settings"

@@ -24,6 +24,7 @@ import type { BulkVitalEntrySettings } from "../fhir/bulkVitalHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
 import type { IntakeSettings } from "../fhir/intakeHelpers";
+import type { KarteCardOrderSettings } from "../fhir/karteCardOrderHelpers";
 
 export interface ConnectionSettings {
   base_url: string | null;
@@ -83,6 +84,8 @@ export interface FacilitySettings {
   early_warning: EarlyWarningSettings;
   /** Web 問診(既定の質問票・診療科ごとの質問票・有効時間)。 */
   intake: IntakeSettings;
+  /** カルテのカードの同じ日の中での並び(時系列か種別順か、種別の順)。 */
+  karte_card_order: KarteCardOrderSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -105,6 +108,7 @@ export type FacilitySettingsPayload = Partial<{
   pressure_ulcer: PressureUlcerSettings;
   early_warning: EarlyWarningSettings;
   intake: IntakeSettings;
+  karte_card_order: KarteCardOrderSettings;
 }>;
 
 export interface ConnectionTestResult {

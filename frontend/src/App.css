@@ -18439,6 +18439,24 @@ button.nursing-worksheet__mark {
   min-width: 320px;
 }
 
+/* カルテカードの並び順の選択。ラジオを横に並べる。 */
+.facility-settings__radio-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.facility-settings__radio-group legend {
+  float: left;
+  padding: 0;
+  margin-right: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
 .facility-settings__profile-list li span {
   flex: 1;
 }

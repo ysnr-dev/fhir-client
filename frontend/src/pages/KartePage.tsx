@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  useFacilitySettings,
   useKarteClinicalNotesInfinite,
   useKarteConditions,
   useKarteDayIndex,
@@ -127,6 +128,7 @@ import {
 import { pendingExamOrderLabels } from "../fhir/outpatientOrderProgressHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { isDateOnly, localDay, nowFhirDateTime, today } from "../lib/dates";
+import { DEFAULT_KARTE_CARD_ORDER, sortKarteDayGroups } from "../fhir/karteCardOrderHelpers";
 import { useKarteReturnTo } from "../returnTo";
 import {
   clampLeftWidthRatio,
@@ -626,33 +628,35 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     [filterProblemId, selectedProblemId, updateParams],
   );
 
-  const timeline = useMemo(
-    () =>
-      buildKarteTimeline({
-        noteBundles: notes.data?.pages.map((page) => page.data) ?? [],
-        prescriptionBundles: prescriptions.data?.pages.map((page) => page.data) ?? [],
-        pendingBundles: pendingOrders.bundles,
-        responseBundles: responses.data?.pages.map((page) => page.data) ?? [],
-        vitalBundles: vitals.data?.pages.map((page) => page.data) ?? [],
-        pathwayEvaluations: pathwayEvaluations.data ?? [],
-        noteHasNext: Boolean(notes.hasNextPage),
-        prescriptionHasNext: Boolean(prescriptions.hasNextPage),
-        responseHasNext: Boolean(responses.hasNextPage),
-        vitalHasNext: Boolean(vitals.hasNextPage),
-      }),
-    [
-      notes.data,
-      prescriptions.data,
-      pendingOrders.bundles,
-      responses.data,
-      vitals.data,
-      pathwayEvaluations.data,
-      notes.hasNextPage,
-      prescriptions.hasNextPage,
-      responses.hasNextPage,
-      vitals.hasNextPage,
-    ],
-  );
+  const facilitySettings = useFacilitySettings();
+  const cardOrder = facilitySettings.data?.karte_card_order ?? DEFAULT_KARTE_CARD_ORDER;
+  const timeline = useMemo(() => {
+    const built = buildKarteTimeline({
+      noteBundles: notes.data?.pages.map((page) => page.data) ?? [],
+      prescriptionBundles: prescriptions.data?.pages.map((page) => page.data) ?? [],
+      pendingBundles: pendingOrders.bundles,
+      responseBundles: responses.data?.pages.map((page) => page.data) ?? [],
+      vitalBundles: vitals.data?.pages.map((page) => page.data) ?? [],
+      pathwayEvaluations: pathwayEvaluations.data ?? [],
+      noteHasNext: Boolean(notes.hasNextPage),
+      prescriptionHasNext: Boolean(prescriptions.hasNextPage),
+      responseHasNext: Boolean(responses.hasNextPage),
+      vitalHasNext: Boolean(vitals.hasNextPage),
+    });
+    return { ...built, groups: sortKarteDayGroups(built.groups, cardOrder, "desc") };
+  }, [
+    cardOrder,
+    notes.data,
+    prescriptions.data,
+    pendingOrders.bundles,
+    responses.data,
+    vitals.data,
+    pathwayEvaluations.data,
+    notes.hasNextPage,
+    prescriptions.hasNextPage,
+    responses.hasNextPage,
+    vitals.hasNextPage,
+  ]);
 
   // プロブレムと自科・個人の絞り込みはサーバー検索で済んでいる。ここで残るのは種別と、
   // 全件読んであるパス評価の自科・個人。ページングの判定(カットオフ・pending)より後に行う。判定は
