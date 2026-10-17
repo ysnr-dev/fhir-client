@@ -1,5 +1,5 @@
 import { useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
-import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
+import { EditorContent, Extension, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Color, FontSize, TextStyle } from "@tiptap/extension-text-style";
 import Image from "@tiptap/extension-image";
@@ -29,6 +29,7 @@ interface RichTextEditorProps {
   onChange: (html: string) => void;
   // 操作バーの左端・右端に差し込む要素(セクション種別の選択や並べ替え/削除ボタン)。
   // 呼び出し側が別の枠を作らずに済むよう、同じバーへ同居させるための口。
+  // Tab で本文から本文へ移れるよう、操作バーの部品には tabIndex={-1} を付ける。
   leading?: ReactNode;
   trailing?: ReactNode;
   // 画像ボタンの右に差し込む追加ボタン(テンプレート記載など)。
@@ -64,6 +65,34 @@ const KarteLinkMark = Link.extend({
   isAllowedUri: (url) => isKarteLinkHref(url),
 });
 
+// Tab / Shift+Tab で同じフォーム内の前後のエディタ(SOAP の次のセクションなど)へ移る。
+// 箇条書きの字下げ(ListItem の Tab)を優先させるため priority を既定(100)より下げる。
+// 移り先が無いときはブラウザ既定のフォーカス移動に任せる。
+const TabToSiblingEditor = Extension.create({
+  name: "tabToSiblingEditor",
+  priority: 50,
+  addKeyboardShortcuts() {
+    const move = (delta: 1 | -1) => {
+      const dom = this.editor.view.dom;
+      if (this.editor.view.composing) return false;
+      const scope = dom.closest("form") ?? document;
+      const editors = Array.from(
+        scope.querySelectorAll<HTMLElement & { editor?: Editor }>(
+          '.rich-text-editor .ProseMirror[contenteditable="true"]',
+        ),
+      );
+      const target = editors[editors.indexOf(dom) + delta];
+      if (!target?.editor) return false;
+      target.editor.commands.focus("end");
+      return true;
+    };
+    return {
+      Tab: () => move(1),
+      "Shift-Tab": () => move(-1),
+    };
+  },
+});
+
 // SchemaPaintModal の PEN_COLORS と同じパレット(アプリ内で装飾色を統一する)。
 const TEXT_COLORS = [
   { code: "#d32f2f", label: "赤" },
@@ -96,6 +125,7 @@ export function RichTextEditor({
     extensions: [
       StarterKit.configure({ link: false }),
       KarteLinkMark,
+      TabToSiblingEditor,
       TextStyle,
       Color,
       FontSize,
@@ -162,6 +192,7 @@ export function RichTextEditor({
               type="button"
               className={`rich-text-editor__tool${toolbarOpen ? " is-active" : ""}`}
               title="文字装飾パネルの表示切替"
+              tabIndex={-1}
               aria-expanded={toolbarOpen}
               onClick={() => setToolbarOpen((open) => !open)}
             >
@@ -171,6 +202,7 @@ export function RichTextEditor({
               type="button"
               className="rich-text-editor__tool"
               title="画像を挿入"
+              tabIndex={-1}
               onClick={() => fileInputRef.current?.click()}
             >
               画像

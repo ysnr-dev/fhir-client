@@ -147,6 +147,7 @@ export function useNoteSectionsEditor({
                 <button
                   type="button"
                   className="rich-text-editor__tool"
+                  tabIndex={-1}
                   title={
                     section.template
                       ? "テンプレートから再編集"
@@ -160,6 +161,7 @@ export function useNoteSectionsEditor({
                   <button
                     type="button"
                     className="rich-text-editor__tool"
+                    tabIndex={-1}
                     title="シェーマを選んで描き込み、カーソル位置に挿入"
                     onClick={() => setSchemaPickTarget(section.uid)}
                   >
@@ -174,6 +176,7 @@ export function useNoteSectionsEditor({
                   value={section.code}
                   onChange={(e) => updateSection(section.uid, { code: e.target.value })}
                   aria-label="セクション種別"
+                  tabIndex={-1}
                 >
                   {sectionOptions.map((o) => (
                     <option key={o.code} value={o.code}>
@@ -191,6 +194,7 @@ export function useNoteSectionsEditor({
                     onClick={() => moveSection(section.uid, -1)}
                     disabled={index === 0}
                     title="上へ移動"
+                    tabIndex={-1}
                   >
                     ↑
                   </button>
@@ -199,6 +203,7 @@ export function useNoteSectionsEditor({
                     onClick={() => moveSection(section.uid, 1)}
                     disabled={index === sections.length - 1}
                     title="下へ移動"
+                    tabIndex={-1}
                   >
                     ↓
                   </button>
@@ -206,6 +211,7 @@ export function useNoteSectionsEditor({
                     type="button"
                     onClick={() => removeSection(section.uid)}
                     title="セクションを削除"
+                    tabIndex={-1}
                     aria-label="セクションを削除"
                   >
                     <TrashIcon />
