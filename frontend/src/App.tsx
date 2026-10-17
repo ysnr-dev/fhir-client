@@ -666,6 +666,7 @@ function App() {
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
           <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />
           <Route path="/questionnaires/:questionnaireId/preview" element={<QuestionnairePreviewPage />} />
+          <Route path="/facility-settings" element={<FacilitySettingsPage />} />
           {/* 管理画面は AdminGate で包む。/settings も対象にするのは、
               これまで ADMIN_TOKEN ヘッダーを送っておらず、本番で
               ADMIN_TOKEN を設定すると 401 で開けなくなっていたため。 */}
@@ -674,14 +675,6 @@ function App() {
             element={
               <AdminGate>
                 <ConnectionSettingsPage />
-              </AdminGate>
-            }
-          />
-          <Route
-            path="/facility-settings"
-            element={
-              <AdminGate>
-                <FacilitySettingsPage />
               </AdminGate>
             }
           />

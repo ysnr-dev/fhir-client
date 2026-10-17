@@ -8,7 +8,11 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { fetchFacilitySettings } from "../facilityClient";
+import {
+  fetchFacilitySettings,
+  type FacilitySettingsPayload,
+  updateFacilitySettings,
+} from "../facilityClient";
 import { hasRelation, resourcesOfType } from "./core";
 
 // --- 自院 --------------------------------------------------------------------
@@ -26,6 +30,18 @@ export function useFacilitySettings() {
     queryFn: fetchFacilitySettings,
     // ほぼ変わらない設定なので、画面遷移のたびに引き直さない。
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+// 渡した項目だけを書き換える。保存結果で読み取りのキャッシュを置き換え、各画面の既定値を追従させる。
+export function useUpdateFacilitySettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: FacilitySettingsPayload) => updateFacilitySettings(payload),
+    retry: false,
+    onSuccess: (data) => {
+      queryClient.setQueryData(["facility", "settings"], data);
+    },
   });
 }
 

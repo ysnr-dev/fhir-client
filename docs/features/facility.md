@@ -6,9 +6,12 @@
 **自院のものだけ**を登録し、他院の医療機関・医師は診療情報提供書の送付先候補として
 **連携先**に登録する、という切り分けです。
 
-「どの Organization が自院か」はヘッダーの「管理 > 自院設定」（`/facility-settings`、AdminGate 対象）で
+「どの Organization が自院か」はヘッダーの「管理 > 施設設定」（`/facility-settings`）で
 指定します。backend の単一行設定（`facility_settings` テーブル）に Organization.id を持ち、
-`GET /facility_settings` でログイン済みユーザー全員が読めます（変更は `/admin/facility_settings`）。
+`GET` / `PATCH /facility_settings` でログイン済みユーザー全員が読み書きできます（管理者パスワードは不要）。
+
+施設設定の画面は左に設定名の一覧、右に選んだ設定の入力欄を出します。「保存」は全設定をまとめて
+保存するので、設定を切り替えても未保存の入力は残ります。
 
 この設定が入ると各画面の挙動が変わります。
 
@@ -32,7 +35,7 @@ frontend と、会計送信のコード引き当て・DPC の推定包括額だ�
 
 **項目を足すときに書くのは `FacilitySettings::SETTINGS`（項目表）だけです。** 検証・既定値の
 穴埋め・読み書きのメソッド（`meal_schedule` / `meal_schedule_with_defaults` /
-`FacilitySettings.meal_schedule`）・管理 API の受け取りと応答は、項目表から
+`FacilitySettings.meal_schedule`）・API の受け取りと応答は、項目表から
 `JsonShape`(`app/models/json_shape.rb`。チャート定義の検証と共用)が回します（migration も要りません）。
 
 ```ruby
@@ -47,7 +50,7 @@ frontend と、会計送信のコード引き当て・DPC の推定包括額だ�
   葉は `:time` / `:number` / `{ integer: }` / `{ enum: }` / `{ pattern: }` です。
 - 既定値の重ね方は節で変わります。`fields` は**キーごと**（空欄は既定値に戻る）、`map` は
   **キー単位で差し替え**（バイタルのしきい値で「上限だけ空にする」を保存できるように）。
-- `PATCH /admin/facility_settings` は**渡した項目だけ**を差し替えます（看護指示の既定時刻だけを
+- `PATCH /facility_settings` は**渡した項目だけ**を差し替えます（看護指示の既定時刻だけを
   保存しても他の設定は消えません）。応答と `GET /facility_settings` は、常に既定値で埋めた
   全項目を平らな JSON で返します（frontend から見える形は項目表の前後で変わりません）。
 

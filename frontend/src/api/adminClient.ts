@@ -256,23 +256,6 @@ export async function testConnection(): Promise<ConnectionTestResult> {
   return adminJson<ConnectionTestResult>(`${SETTINGS}/test`, { method: "POST" });
 }
 
-// --- 施設設定 ----------------------------------------------------------------
-
-// 「どの Organization が自院か」の指定。書き込みは管理者だけなので /admin 配下に
-// あるが、読み取りはログイン済みユーザー全員が使う /facility_settings 側
-// (api/facilityClient.ts)。
-const FACILITY_SETTINGS = "/admin/facility_settings";
-
-// 渡した項目だけを書き換える(backend は無い項目を触らない)。
-export async function updateAdminFacilitySettings(
-  payload: FacilitySettingsPayload,
-): Promise<FacilitySettings> {
-  return adminJson<FacilitySettings>(FACILITY_SETTINGS, {
-    method: "PATCH",
-    ...jsonBody(payload),
-  });
-}
-
 // --- OAuth クライアント ------------------------------------------------------
 
 const OAUTH_CLIENTS = "/admin/oauth_clients";

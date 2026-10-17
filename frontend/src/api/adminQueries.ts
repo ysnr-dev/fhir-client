@@ -31,8 +31,6 @@ import {
   testExternalSystem,
   updateExternalCodeMappings,
   updateExternalSystem,
-  updateAdminFacilitySettings,
-  type FacilitySettingsPayload,
   updateConnectionSettings,
   updateDocumentTemplate,
   updateFileCategory,
@@ -52,7 +50,6 @@ const CONNECTION_SETTINGS_KEY = ["admin", "connection_settings"];
 const EXTERNAL_SYSTEMS_KEY = ["admin", "external_systems"];
 const EXTERNAL_CODE_MAPPINGS_KEY = ["admin", "external_code_mappings"];
 const EXTERNAL_CODE_CANDIDATES_KEY = ["admin", "external_code_candidates"];
-const FACILITY_SETTINGS_KEY = ["admin", "facility_settings"];
 export const ADMIN_SESSION_KEY = ["admin", "session"];
 const OAUTH_CLIENTS_KEY = ["admin", "oauth_clients"];
 const SCOPE_OPTIONS_KEY = ["admin", "scope_options"];
@@ -202,22 +199,6 @@ export function useUpdateExternalCodeMappings(systemKey: string) {
     retry: false,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [...EXTERNAL_CODE_MAPPINGS_KEY, systemKey] });
-    },
-  });
-}
-
-// --- 施設設定 ----------------------------------------------------------------
-// 読み取りは全ユーザー向けの useFacilitySettings(api/queries/organization.ts)が別にある。
-// 保存したらそちらのキャッシュも捨てて、各画面の所属既定値を追従させる。
-
-export function useUpdateFacilitySettings() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: FacilitySettingsPayload) => updateAdminFacilitySettings(payload),
-    retry: false,
-    onSuccess: (data) => {
-      queryClient.setQueryData(FACILITY_SETTINGS_KEY, data);
-      queryClient.invalidateQueries({ queryKey: ["facility", "settings"] });
     },
   });
 }

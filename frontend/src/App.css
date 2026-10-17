@@ -18317,26 +18317,70 @@ button.nursing-worksheet__mark {
   font-size: 12px;
 }
 
-/* 施設設定: 看護指示の既定時刻(折り畳み)。details 自体は display を変えない
-   (flex にすると閉じていても中身が出るブラウザがある)。 */
-.facility-settings__schedule {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 12px;
+/* 施設設定。左に設定名の一覧、右に選んだ設定の入力欄。保存ボタンは右側の下にあり全設定をまとめて保存する。 */
+.facility-settings {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
 }
 
-.facility-settings__schedule > summary {
-  font-size: 13px;
+.facility-settings__nav {
+  position: sticky;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+}
+
+.facility-settings__nav .facility-settings__nav-item {
+  height: auto;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
   color: var(--text);
-  cursor: pointer;
-  width: fit-content;
+  font-size: 13px;
+  font-weight: normal;
+  text-align: left;
+}
+
+.facility-settings__nav .facility-settings__nav-item:hover,
+.facility-settings__nav .facility-settings__nav-item.is-active {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* レセプト電算コードの表などが入るので、接続設定フォームの幅制限を外す。 */
+.connection-settings-form.facility-settings__content {
+  max-width: none;
+}
+
+.facility-settings__title {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+@media (max-width: 720px) {
+  .facility-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .facility-settings__nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 
 .facility-settings__schedule-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 8px;
 }
 
 /* 水分出納の対象項目。IN / OUT ごとに選んだ観察を並べる。 */

@@ -41,10 +41,6 @@ Rails.application.routes.draw do
       end
     end
 
-    # 「自院」の Organization 指定(書き込み)。読み取りは全ユーザー向けに
-    # トップレベルの /facility_settings がある。
-    resource :facility_settings, only: %i[show update]
-
     # 上流 FHIR サーバーの管理API(/admin/oauth_clients、/admin/scopes)への中継。
     # ブラウザから上流を直接叩けない(CORS無効)ため、ここでサーバー間中継する。
     resources :oauth_clients, only: %i[index create destroy]
@@ -98,9 +94,8 @@ Rails.application.routes.draw do
     post "public/responses", to: "public#create_response"
   end
 
-  # 「自院」がどの Organization かの参照(ログイン済みユーザー全員が読む)。
-  # 変更は管理者だけなので /admin/facility_settings 側。
-  resource :facility_settings, only: :show
+  # 「自院」がどの Organization かと施設ごとの業務設定(ログイン済みユーザー全員が読み書きする)。
+  resource :facility_settings, only: %i[show update]
 
   # 取り込んだ DICOM(docs/imaging-design.md)。実体はこの backend が持ち、上流には
   # ImagingStudy だけを置く。UID はドットを含むので format を切り、制約で形を絞る。
