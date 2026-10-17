@@ -10873,6 +10873,11 @@ fieldset.lab-order-item__section label.dose-conversion__checkbox {
   max-width: 100%;
 }
 
+/* inline のままだとベースラインの余白で枠に縦スクロールが出る */
+.schema-paint__canvas canvas {
+  display: block;
+}
+
 /* ---- シェーマ選択モーダル(カテゴリツリー + サムネイルグリッド) ---- */
 
 .modal--schema-picker {

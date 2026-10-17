@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Canvas,
   Ellipse,
@@ -15,6 +15,8 @@ import {
 import { Modal } from "./Modal";
 import { PHOTO_JPEG_QUALITY } from "../fhir/schemaImage";
 import { PEN_COLORS, type PenColor } from "./penColors";
+import { FitScreenIcon } from "./icons/FitScreenIcon";
+import { ActualSizeIcon } from "./icons/ActualSizeIcon";
 
 // シェーマのペイントモーダル(fabric.js)。台紙(backgroundDataUrl)を背景に、
 // ペン・図形・矢印・テキストを描き込み、保存時に背景込みの合成画像(dataURL)を返す。
@@ -40,10 +42,12 @@ interface SchemaPaintModalProps {
 
 const PEN_WIDTHS = [2, 4, 8] as const;
 
-// 画面上のキャンバス長辺上限(px)。
-const MAX_CANVAS_DIMENSION = 1200;
-// 書き出し PNG の長辺上限。normalizeImageFile(登録時の縮小)と揃える。
+// 線の太さ・文字の大きさの基準になる長辺(px)。台紙がこれより大きいときは太さを比例して増やす。
+const STROKE_BASE_DIMENSION = 1200;
+// キャンバス(=書き出し画像)の長辺上限。normalizeImageFile(登録時の縮小)と揃える。
 const MAX_EXPORT_DIMENSION = 1600;
+// 画面に合わせる表示での高さの上限(ビューポート比)。.schema-paint__canvas の max-height と揃える。
+const FIT_MAX_HEIGHT_RATIO = 0.65;
 // undo 履歴の上限(スナップショット方式なので無制限にしない)。
 const MAX_HISTORY = 50;
 
@@ -58,6 +62,16 @@ const TOOLS: { id: Tool; label: string }[] = [
   { id: "ellipse", label: "楕円" },
   { id: "text", label: "文字" },
 ];
+
+// fit: 表示領域に合わせて拡大縮小、actual: 台紙の 1 画素を 1 CSS px で表示(はみ出たらスクロール)。
+type ViewMode = "fit" | "actual";
+
+interface CanvasSizes {
+  canvasWidth: number;
+  canvasHeight: number;
+  naturalWidth: number;
+  naturalHeight: number;
+}
 
 // ドラッグで作成中の図形(mouse:up で確定)。
 interface DraftShape {
@@ -77,8 +91,11 @@ export function SchemaPaintModal({
 }: SchemaPaintModalProps) {
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<Canvas | null>(null);
-  // 書き出し倍率(表示サイズ → 台紙実寸基準の出力サイズ)。
-  const exportMultiplierRef = useRef(1);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  // 線の太さ・文字の大きさに掛ける倍率(キャンバスが大きいほど太くする)。
+  const strokeScaleRef = useRef(1);
+  const [sizes, setSizes] = useState<CanvasSizes | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("fit");
 
   const [tool, setTool] = useState<Tool>("pen");
   const [color, setColor] = useState<string>(colors[0]?.code ?? PEN_COLORS[0].code);
@@ -160,17 +177,17 @@ export function SchemaPaintModal({
 
       const naturalWidth = img.width ?? 1;
       const naturalHeight = img.height ?? 1;
-      const scale = Math.min(1, MAX_CANVAS_DIMENSION / Math.max(naturalWidth, naturalHeight));
-      const displayWidth = Math.round(naturalWidth * scale);
-      const displayHeight = Math.round(naturalHeight * scale);
-      // 出力は台紙実寸(上限あり)に戻す。表示で縮めた分を multiplier で補う。
-      exportMultiplierRef.current =
-        Math.min(Math.max(naturalWidth, naturalHeight), MAX_EXPORT_DIMENSION) /
-        Math.max(displayWidth, displayHeight);
+      // キャンバスは書き出し解像度で作り、画面上の大きさは CSS だけで変える。
+      const naturalLong = Math.max(naturalWidth, naturalHeight);
+      const scale = Math.min(1, MAX_EXPORT_DIMENSION / naturalLong);
+      const canvasWidth = Math.round(naturalWidth * scale);
+      const canvasHeight = Math.round(naturalHeight * scale);
+      const canvasLong = Math.max(canvasWidth, canvasHeight);
+      strokeScaleRef.current = canvasLong / Math.min(canvasLong, STROKE_BASE_DIMENSION);
 
       canvas = new Canvas(el, {
-        width: displayWidth,
-        height: displayHeight,
+        width: canvasWidth,
+        height: canvasHeight,
         backgroundColor: "#ffffff",
         // 枠からはみ出た描画も書き出しに含まれるよう既定のまま(クリップしない)。
       });
@@ -180,8 +197,8 @@ export function SchemaPaintModal({
         top: 0,
         originX: "left",
         originY: "top",
-        scaleX: displayWidth / naturalWidth,
-        scaleY: displayHeight / naturalHeight,
+        scaleX: canvasWidth / naturalWidth,
+        scaleY: canvasHeight / naturalHeight,
       });
       canvas.backgroundImage = img;
 
@@ -194,6 +211,7 @@ export function SchemaPaintModal({
 
       attachHandlers(canvas);
       canvas.requestRenderAll();
+      setSizes({ canvasWidth, canvasHeight, naturalWidth, naturalHeight });
       setReady(true);
     })();
 
@@ -203,7 +221,8 @@ export function SchemaPaintModal({
       let draft: DraftShape | null = null;
 
       target.on("mouse:down", (opt) => {
-        const { tool: activeTool, color: activeColor, width: activeWidth } = toolStateRef.current;
+        const { tool: activeTool, color: activeColor } = toolStateRef.current;
+        const activeWidth = toolStateRef.current.width * strokeScaleRef.current;
         const point = target.getScenePoint(opt.e);
 
         if (activeTool === "text") {
@@ -213,7 +232,7 @@ export function SchemaPaintModal({
             originX: "left",
             originY: "top",
             fill: activeColor,
-            fontSize: 20,
+            fontSize: 20 * strokeScaleRef.current,
           });
           target.add(text);
           target.setActiveObject(text);
@@ -281,7 +300,8 @@ export function SchemaPaintModal({
       target.on("mouse:up", (opt) => {
         if (!draft) return;
         const { object, startX, startY } = draft;
-        const { tool: activeTool, color: activeColor, width: activeWidth } = toolStateRef.current;
+        const { tool: activeTool, color: activeColor } = toolStateRef.current;
+        const activeWidth = toolStateRef.current.width * strokeScaleRef.current;
         draft = null;
 
         const point = target.getScenePoint(opt.e);
@@ -344,7 +364,7 @@ export function SchemaPaintModal({
     canvas.isDrawingMode = tool === "pen";
     if (canvas.freeDrawingBrush) {
       canvas.freeDrawingBrush.color = color;
-      canvas.freeDrawingBrush.width = width;
+      canvas.freeDrawingBrush.width = width * strokeScaleRef.current;
     }
     // 図形・テキストツール中は既存オブジェクトを掴まない(ドラッグ=新規作成)。
     const drawing = tool !== "select" && tool !== "pen";
@@ -354,6 +374,30 @@ export function SchemaPaintModal({
     if (drawing) canvas.discardActiveObject();
     canvas.requestRenderAll();
   }, [tool, color, width, ready]);
+
+  // 画面上の大きさ(CSS)の反映。描画座標はキャンバスの実寸のまま。
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    const viewport = viewportRef.current;
+    if (!canvas || !viewport || !sizes) return;
+    const apply = () => {
+      let cssWidth = sizes.naturalWidth;
+      let cssHeight = sizes.naturalHeight;
+      if (viewMode === "fit") {
+        // 枠線(上下左右 1px)の分を差し引く。
+        const availableWidth = Math.max(1, viewport.clientWidth - 2);
+        const availableHeight = Math.max(1, window.innerHeight * FIT_MAX_HEIGHT_RATIO - 2);
+        const scale = Math.min(availableWidth / sizes.canvasWidth, availableHeight / sizes.canvasHeight);
+        cssWidth = Math.floor(sizes.canvasWidth * scale);
+        cssHeight = Math.floor(sizes.canvasHeight * scale);
+      }
+      canvas.setDimensions({ width: `${cssWidth}px`, height: `${cssHeight}px` }, { cssOnly: true });
+      canvas.calcOffset();
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, [sizes, viewMode]);
 
   const deleteSelection = useCallback(() => {
     const canvas = canvasRef.current;
@@ -425,9 +469,9 @@ export function SchemaPaintModal({
           ? canvas.toDataURL({
               format: "jpeg",
               quality: PHOTO_JPEG_QUALITY,
-              multiplier: exportMultiplierRef.current,
+              multiplier: 1,
             })
-          : canvas.toDataURL({ format: "png", multiplier: exportMultiplierRef.current });
+          : canvas.toDataURL({ format: "png", multiplier: 1 });
       onSave(dataUrl);
     } catch {
       setError("画像の書き出しに失敗しました。");
@@ -439,7 +483,7 @@ export function SchemaPaintModal({
     <Modal title={title} onClose={guardedClose} className="modal--schema">
       {error && <p className="schema-image__error">{error}</p>}
       {!ready && !error && <p>読み込み中...</p>}
-      <div style={{ display: ready ? undefined : "none" }}>
+      <div ref={viewportRef} style={{ display: ready ? undefined : "none" }}>
         <div className="schema-annotator__toolbar">
           <span className="schema-annotator__tool-group" role="group" aria-label="ツール">
             {TOOLS.map((entry) => (
@@ -491,6 +535,28 @@ export function SchemaPaintModal({
             </button>
             <button type="button" onClick={handleClear}>
               クリア
+            </button>
+          </span>
+          <span className="schema-annotator__tool-group" role="group" aria-label="表示">
+            <button
+              type="button"
+              className={`rp-card__icon-button${viewMode === "fit" ? " schema-annotator__tool--active" : ""}`}
+              title="画面に合わせる"
+              aria-label="画面に合わせる"
+              aria-pressed={viewMode === "fit"}
+              onClick={() => setViewMode("fit")}
+            >
+              <FitScreenIcon />
+            </button>
+            <button
+              type="button"
+              className={`rp-card__icon-button${viewMode === "actual" ? " schema-annotator__tool--active" : ""}`}
+              title="原寸大"
+              aria-label="原寸大"
+              aria-pressed={viewMode === "actual"}
+              onClick={() => setViewMode("actual")}
+            >
+              <ActualSizeIcon />
             </button>
           </span>
         </div>
