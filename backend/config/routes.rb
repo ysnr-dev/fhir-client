@@ -127,6 +127,8 @@ Rails.application.routes.draw do
     # DPC 様式1 の提出ファイル(FF1)。対象月(退院月)の一覧と、ファイル本体。
     get "dpc_form1", to: "dpc_form1#show"
     get "dpc_form1/file", to: "dpc_form1#file"
+    # 口腔状態スナップショットの CSV(.oes)。画面が組み立てたレコードを Shift_JIS のファイルにする。
+    post "oral_exam_file", to: "oral_exam_files#create"
   end
 
   # 国内マスタデータ（FHIR リソースではないプレーンな JSON REST）

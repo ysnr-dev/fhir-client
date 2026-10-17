@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FhirError } from "../api/fhirClient";
 import { useCurrentPractitioner } from "../api/authQueries";
+import { downloadOralExamFile } from "../api/oralExamFileClient";
 import { useOralExamCodes } from "../api/masterQueries";
 import {
   useDeleteOralExam,
@@ -8,7 +9,9 @@ import {
   useOralExamSnapshots,
   usePatient,
   useSaveOralExam,
+  useSelfOrganization,
 } from "../api/queries";
+import { buildOesRecords, oesFileName, oesWarnings } from "../fhir/oralExamCsv";
 import {
   changedTeeth,
   codeDisplay,
@@ -57,6 +60,10 @@ export function KarteOralExamTab({ patientId, view, onViewChange }: KarteOralExa
   const age = calculateAge(patient.data?.data.birthDate ?? "");
   const youngPatient = age !== undefined && age < DECIDUOUS_AGE;
   const deleteOralExam = useDeleteOralExam();
+  const { organization: selfOrganization } = useSelfOrganization();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<unknown>(null);
+  const [exportWarnings, setExportWarnings] = useState<string[]>([]);
 
   useEffect(() => setForm(null), [view]);
 
@@ -70,6 +77,27 @@ export function KarteOralExamTab({ patientId, view, onViewChange }: KarteOralExa
 
   function backToView() {
     setForm(null);
+  }
+
+  // 表示中の診査を口腔状態スナップショットの CSV(.oes)にする。足りない項目は知らせるが出力は止めない。
+  async function handleExport() {
+    const patientResource = patient.data?.data;
+    const snapshotToExport = detail.data?.snapshot;
+    if (!patientResource || !snapshotToExport) return;
+    const now = new Date();
+    setExportError(null);
+    setExportWarnings(oesWarnings({ patient: patientResource, organization: selfOrganization }));
+    setExporting(true);
+    try {
+      await downloadOralExamFile(
+        oesFileName(snapshotToExport, patientResource, now),
+        buildOesRecords(snapshotToExport, { patient: patientResource, organization: selfOrganization, book, now }),
+      );
+    } catch (error) {
+      setExportError(error);
+    } finally {
+      setExporting(false);
+    }
   }
 
   function handleDelete() {
@@ -149,12 +177,29 @@ export function KarteOralExamTab({ patientId, view, onViewChange }: KarteOralExa
               <button type="button" onClick={handleDelete} disabled={deleteOralExam.isPending}>
                 削除
               </button>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exporting || !detail.data || !patient.data}
+                title="口腔状態スナップショット(.oes)"
+              >
+                CSV出力
+              </button>
             </>
           )}
         </div>
       </div>
 
-      <ErrorBanner error={error ?? codes.error ?? detail.error ?? deleteOralExam.error} />
+      <ErrorBanner error={error ?? codes.error ?? detail.error ?? deleteOralExam.error ?? exportError} />
+      {exportWarnings.length > 0 && (
+        <div className="error-banner" role="status">
+          {exportWarnings.map((w) => (
+            <p key={w} className="error-banner__line error-banner__line--warning">
+              {w}
+            </p>
+          ))}
+        </div>
+      )}
 
       {isLoading || detail.isLoading ? (
         <p>読み込み中...</p>
