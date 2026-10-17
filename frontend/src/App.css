@@ -27657,3 +27657,63 @@ input.nursing-picker__search {
   font-size: 13px;
   white-space: pre-wrap;
 }
+
+/* スタンプのパレット。選んで歯(う蝕・充填は歯面)を押す。 */
+.oral-exam__palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-panel);
+}
+
+.oral-exam__palette-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.oral-exam__palette-label {
+  margin-right: 2px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.oral-exam__stamp {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 13px;
+}
+
+.oral-exam__stamp.is-active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.oral-exam__stamp--c1,
+.oral-exam__stamp--c2,
+.oral-exam__stamp--c3,
+.oral-exam__stamp--c4 {
+  color: var(--danger);
+}
+
+.oral-exam__stamp--missing,
+.oral-exam__stamp--erase {
+  color: var(--text);
+}
+
+.oral-exam__face.is-clickable {
+  cursor: crosshair;
+}
+
+.oral-exam__face.is-clickable:hover {
+  stroke-width: 2;
+}

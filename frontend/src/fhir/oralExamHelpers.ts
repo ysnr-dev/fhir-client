@@ -1028,3 +1028,235 @@ export function parseOralExamSnapshot(observations: fhir4.Observation[]): OralEx
     mouth,
   };
 }
+
+// ---- スタンプ(歯式図に押して入れる、よく使う状態) ----
+
+export type StampGroup = "state" | "caries" | "restoration" | "prosthesis";
+
+export interface OralExamStamp {
+  key: string;
+  /** パレットの表記。 */
+  label: string;
+  /** パレットのツールチップ(コード表の名称)。 */
+  title: string;
+  group: StampGroup;
+  /** 歯の基本状態(TD-2)を決め打ちするスタンプ。現在歯の内容・欠損歯の内容は置き換える。 */
+  basic?: string;
+  stateCode?: string;
+  /** 現在歯の内容(TP)に足す値。先頭の項目がその内容の種類(TP-9 = う蝕、TP-11 = 部分修復など)。 */
+  content?: Record<string, string>;
+  /** 欠損歯の内容(TM)。 */
+  missing?: Record<string, string>;
+  /** 歯面を押すとその面に付く。 */
+  surface?: boolean;
+  /** 冠(う蝕と部分修復を置き換える)。 */
+  crown?: boolean;
+  /** 記録を消す。 */
+  erase?: boolean;
+}
+
+export const STAMP_GROUP_LABELS: Record<StampGroup, string> = {
+  state: "状態",
+  caries: "う蝕",
+  restoration: "修復",
+  prosthesis: "欠損・補綴",
+};
+
+export const ORAL_EXAM_STAMPS: OralExamStamp[] = [
+  { key: "sound", label: "健全", title: "現在歯【健全歯／】(治療痕なし)", group: "state", basic: "02" },
+  { key: "co", label: "CO", title: "現在歯【要観察歯ＣＯ】", group: "state", basic: "04" },
+  { key: "sealant", label: "シーラント", title: "現在歯【健全歯(シーラント：シ)】", group: "state", basic: "03" },
+  { key: "unerupted", label: "未萌出", title: "未萌出歯", group: "state", basic: "36" },
+  { key: "impacted", label: "埋伏", title: "埋伏歯(ＲＴ)(詳細不明)", group: "state", basic: "32" },
+  { key: "unknown", label: "未検査", title: "記号なし(未検査)", group: "state", basic: "98" },
+  { key: "c1", label: "C1", title: "未処置歯 Ｃ１", group: "caries", content: { "TP-9": "02" }, surface: true },
+  { key: "c2", label: "C2", title: "未処置歯 Ｃ２", group: "caries", content: { "TP-9": "03" }, surface: true },
+  { key: "c3", label: "C3", title: "未処置歯 Ｃ３", group: "caries", content: { "TP-9": "04" }, surface: true },
+  {
+    key: "c4",
+    label: "C4・残根",
+    title: "残根、Ｃ４",
+    group: "caries",
+    basic: "08",
+    stateCode: "6",
+    content: { "TP-9": "10", "TP-3": "02" },
+  },
+  {
+    key: "cr",
+    label: "CR",
+    title: "部分修復(歯冠色充填)(ＣＦ、ＲＦ、ＧＣＦ)",
+    group: "restoration",
+    content: { "TP-11": "03" },
+    surface: true,
+  },
+  {
+    key: "inlay",
+    label: "インレー",
+    title: "部分修復(金属インレー・銀色)(Ｉｎ)",
+    group: "restoration",
+    content: { "TP-11": "20" },
+    surface: true,
+  },
+  {
+    key: "fmc",
+    label: "FMC",
+    title: "全部修復(全部金属冠・銀色)(ＦＭＣ)",
+    group: "restoration",
+    content: { "TP-21": "01", "TP-18": "01" },
+    crown: true,
+  },
+  {
+    key: "veneer-crown",
+    label: "前装冠",
+    title: "全部修復(前装金属冠・銀色)(前装ＭＣ)",
+    group: "restoration",
+    content: { "TP-21": "07", "TP-18": "01" },
+    crown: true,
+  },
+  {
+    key: "jacket",
+    label: "白い冠",
+    title: "全部修復(全部非金属冠・セラミック系(様)・歯冠色)(ＪＣ)",
+    group: "restoration",
+    content: { "TP-21": "05", "TP-18": "01" },
+    crown: true,
+  },
+  {
+    key: "endo",
+    label: "失活歯",
+    title: "失活歯(根管充填歯など)",
+    group: "restoration",
+    content: { "TP-3": "02" },
+  },
+  {
+    key: "abutment",
+    label: "Br支台",
+    title: "全部金属冠のブリッジ支台歯(同顎１装置目)",
+    group: "prosthesis",
+    content: { "TP-23": "02", "TP-21": "01", "TP-24": "01" },
+    crown: true,
+  },
+  {
+    key: "pontic",
+    label: "ポンティック",
+    title: "欠損歯【喪失歯(欠損補綴歯・ポンティック)】鋳造ポンティック・銀色",
+    group: "prosthesis",
+    basic: "60",
+    missing: { "TM-2": "05", "TM-3": "01" },
+  },
+  {
+    key: "partial-denture",
+    label: "部分床義歯",
+    title: "欠損歯【喪失歯(欠損補綴歯・義歯)】局部義歯(内容不明)(ＰＤ)",
+    group: "prosthesis",
+    basic: "57",
+    missing: { "TM-4": "15" },
+  },
+  {
+    key: "full-denture",
+    label: "総義歯",
+    title: "欠損歯【喪失歯(欠損補綴歯・義歯)】総義歯(内容不明)(ＦＤ)",
+    group: "prosthesis",
+    basic: "57",
+    missing: { "TM-4": "08" },
+  },
+  {
+    key: "implant",
+    label: "インプラント",
+    title: "欠損歯【喪失歯(インプラント・タイプ不明)】アバットメント",
+    group: "prosthesis",
+    basic: "62",
+    content: { "TP-22": "10" },
+  },
+  { key: "missing", label: "喪失", title: "欠損歯【喪失歯△】", group: "prosthesis", basic: "51" },
+  { key: "erase", label: "消す", title: "この歯の記録を消す", group: "prosthesis", erase: true },
+];
+
+/** う蝕(治療が要る)の未処置歯コード(TP-9)。咬耗・破折・酸蝕症などは含めない。 */
+function isCariesCode(code: string | undefined): boolean {
+  const n = Number(code);
+  return Boolean(code) && ((n >= 1 && n <= 8) || (n >= 22 && n <= 32));
+}
+
+const RESTORATION_ITEMS = ["TP-11", "TP-21", "TP-22"];
+
+/** 現在歯の内容から基本状態を決める(う蝕があれば未処置歯、修復があれば処置歯)。 */
+function basicFromContents(contents: ToothContent[], current: string): string {
+  if (contents.some((c) => c.values["TP-9"] === "10" || c.values["TP-9"] === "11")) return "08";
+  if (contents.some((c) => isCariesCode(c.values["TP-9"]))) return "06";
+  if (contents.some((c) => RESTORATION_ITEMS.some((item) => c.values[item]))) return "10";
+  return current && !usesMissingContent(current) && current !== "08" && current !== "06" ? current : "02";
+}
+
+function surfaceCount(values: Record<string, string>): number {
+  return TP_SURFACE_ITEMS.filter((s) => values[s.item]).length;
+}
+
+/**
+ * スタンプを歯に押した結果(その歯の併存グループの並び)。最初の併存グループに書き、
+ * ほかのグループはそのまま残す。face は押した歯面(TP-13〜17)。
+ */
+export function applyStamp(
+  records: ToothRecord[],
+  toothCode: string,
+  stamp: OralExamStamp,
+  face?: string,
+): ToothRecord[] {
+  if (stamp.erase) return [];
+  const primary = records[0] ?? newToothRecord(toothCode, stamp.basic ?? "02");
+  const rest = records.slice(1);
+  const newContent = (values: Record<string, string>): ToothContent => ({ key: draftKey(), values: { ...values } });
+
+  if (stamp.basic) {
+    const next: ToothRecord = {
+      ...primary,
+      basic: stamp.basic,
+      stateCode: stamp.stateCode ?? defaultStateCode(stamp.basic),
+      contents: stamp.content ? [newContent(stamp.content)] : [],
+      missing: stamp.missing ? { ...stamp.missing } : {},
+    };
+    return [next, ...rest];
+  }
+
+  const content = stamp.content ?? {};
+  const [kind] = Object.keys(content);
+  const code = content[kind];
+  // 欠損歯にう蝕や修復を押したら、現在歯に戻して書く。
+  let contents = usesMissingContent(primary.basic) || primary.basic === "08" ? [] : [...primary.contents];
+
+  if (stamp.crown) {
+    // 冠はう蝕・部分修復・ほかの冠を置き換える。
+    contents = contents.filter(
+      (c) => !isCariesCode(c.values["TP-9"]) && !c.values["TP-11"] && !c.values["TP-21"],
+    );
+    contents.push(newContent(content));
+  } else if (stamp.surface && face) {
+    const same = contents.find((c) => c.values[kind] === code);
+    if (same) {
+      const values = { ...same.values };
+      if (values[face]) delete values[face];
+      else values[face] = "01";
+      contents = surfaceCount(values) || !surfaceCount(same.values)
+        ? contents.map((c) => (c === same ? { ...c, values } : c))
+        : contents.filter((c) => c !== same);
+    } else {
+      contents.push(newContent({ ...content, [face]: "01" }));
+    }
+    // 修復した面のう蝕は消す(面が無くなったう蝕の内容ごと)。
+    if (kind === "TP-11") {
+      contents = contents.flatMap((c) => {
+        if (!isCariesCode(c.values["TP-9"]) || !c.values[face]) return [c];
+        const values = { ...c.values };
+        delete values[face];
+        return surfaceCount(values) ? [{ ...c, values }] : [];
+      });
+    }
+  } else {
+    const same = contents.find((c) => c.values[kind]);
+    if (same) contents = contents.map((c) => (c === same ? { ...c, values: { ...c.values, ...content } } : c));
+    else contents.push(newContent(content));
+  }
+
+  const basic = basicFromContents(contents, primary.basic);
+  return [{ ...primary, basic, stateCode: defaultStateCode(basic), contents, missing: {} }, ...rest];
+}

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import {
+  applyStamp,
   isDeciduous,
   isSupernumerary,
   itemOptions,
@@ -11,11 +12,13 @@ import {
   TOOTH_ROWS,
   type OralExamCodeBook,
   type OralExamSnapshot,
+  type OralExamStamp,
   type ToothRecord,
 } from "../fhir/oralExamHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { OralExamChart } from "./OralExamChart";
 import { OralExamMouthForm } from "./OralExamMouthForm";
+import { OralExamStampPalette } from "./OralExamStampPalette";
 import { OralExamToothEditor } from "./OralExamToothEditor";
 
 interface OralExamFormProps {
@@ -47,6 +50,7 @@ export function OralExamForm({
     defaultDeciduous || initialValues.teeth.some((t) => isDeciduous(t.toothCode)),
   );
   const [pickingItem, setPickingItem] = useState<string | null>(null);
+  const [stamp, setStamp] = useState<OralExamStamp | null>(null);
   const [bulkBasic, setBulkBasic] = useState("02");
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -58,9 +62,22 @@ export function OralExamForm({
     setValues((v) => ({ ...v, teeth: sortTeeth([...v.teeth.filter((t) => t.toothCode !== toothCode), ...records]) }));
   }
 
+  function stampTooth(toothCode: string, face?: string) {
+    if (!stamp) return;
+    setValues((v) => ({
+      ...v,
+      teeth: sortTeeth([
+        ...v.teeth.filter((t) => t.toothCode !== toothCode),
+        ...applyStamp(recordsOfTooth(v.teeth, toothCode), toothCode, stamp, face),
+      ]),
+    }));
+    setSelected(toothCode);
+  }
+
   function handleChartClick(toothCode: string) {
     if (!pickingItem) {
-      setSelected(toothCode);
+      if (stamp) stampTooth(toothCode);
+      else setSelected(toothCode);
       return;
     }
     const item = pickingItem;
@@ -154,16 +171,18 @@ export function OralExamForm({
         </button>
       </div>
 
+      {!pickingItem && <OralExamStampPalette stamp={stamp} onChange={setStamp} />}
       {pickingItem && <p className="oral-exam__picking">歯式を選択中</p>}
 
       <OralExamChart
         teeth={values.teeth}
         selected={chartSelected}
         onSelect={handleChartClick}
+        onSelectFace={stamp?.surface && !pickingItem ? (toothCode, face) => stampTooth(toothCode, face) : undefined}
         showDeciduous={showDeciduous}
       />
 
-      {selected && !pickingItem && (
+      {selected && !pickingItem && !stamp && (
         <OralExamToothEditor
           key={selected}
           book={book}

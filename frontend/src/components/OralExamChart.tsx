@@ -16,6 +16,8 @@ interface OralExamChartProps {
   /** 選んでいる歯(歯種コード)。 */
   selected: string[];
   onSelect: (toothCode: string) => void;
+  /** 歯面を押したとき(スタンプを面に付ける)。無ければ歯面は押せない。 */
+  onSelectFace?: (toothCode: string, face: string) => void;
   showDeciduous: boolean;
 }
 
@@ -24,7 +26,7 @@ interface OralExamChartProps {
  * 歯の色は基本状態、塗った面は現在歯の内容の歯面、下の字は歯科健診記号。
  * 併存グループ・併存レコードが複数ある歯は右肩に数を出し、近傍過剰歯は歯の下に小さく並べる。
  */
-export function OralExamChart({ teeth, selected, onSelect, showDeciduous }: OralExamChartProps) {
+export function OralExamChart({ teeth, selected, onSelect, onSelectFace, showDeciduous }: OralExamChartProps) {
   const rows = TOOTH_ROWS.filter((row) => showDeciduous || !row.deciduous);
   const supernumeraries = new Set(teeth.filter((t) => isSupernumerary(t.toothCode)).map((t) => t.toothCode));
 
@@ -61,6 +63,7 @@ export function OralExamChart({ teeth, selected, onSelect, showDeciduous }: Oral
                     tooth={def}
                     surfaces={filledSurfaces(records)}
                     crossed={category === "missing"}
+                    onFace={onSelectFace ? (face) => onSelectFace(def.code, face) : undefined}
                   />
                   {row.key.startsWith("upper") && <span className="oral-exam__symbol">{primary ? checkupSymbol(primary.basic) : ""}</span>}
                   {row.key.startsWith("lower") && <span className="oral-exam__number">{def.label}</span>}
