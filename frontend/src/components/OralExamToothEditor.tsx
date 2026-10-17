@@ -36,6 +36,9 @@ interface OralExamToothEditorProps {
   /** 近傍過剰歯を足して、そちらを選ぶ。 */
   onAddSupernumerary?: (toothCode: string) => void;
   hasSupernumerary: boolean;
+  /** その歯が属するブリッジ・連結冠 / 有床義歯をモーダルで開く(属していなければ無い)。 */
+  onEditBridge?: () => void;
+  onEditDenture?: () => void;
 }
 
 /** 選んだ歯の編集。併存グループごとに、基本状態・現在歯の内容(または欠損歯の内容)・その他を書く。 */
@@ -46,6 +49,8 @@ export function OralExamToothEditor({
   onChange,
   onAddSupernumerary,
   hasSupernumerary,
+  onEditBridge,
+  onEditDenture,
 }: OralExamToothEditorProps) {
   const [groupIndex, setGroupIndex] = useState(0);
   const index = Math.min(groupIndex, Math.max(records.length - 1, 0));
@@ -78,6 +83,16 @@ export function OralExamToothEditor({
       <div className="oral-exam__editor-head">
         <h4>{toothLabel(toothCode)}</h4>
         <div className="karte-tabpanel__actions">
+          {onEditBridge && (
+            <button type="button" className="rp-card__compact-button" onClick={onEditBridge}>
+              ブリッジを編集
+            </button>
+          )}
+          {onEditDenture && (
+            <button type="button" className="rp-card__compact-button" onClick={onEditDenture}>
+              義歯を編集
+            </button>
+          )}
           {record && (
             <button type="button" className="rp-card__compact-button" onClick={addGroup}>
               併存グループを追加

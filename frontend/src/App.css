@@ -27374,12 +27374,6 @@ input.nursing-picker__search {
   color: var(--warning);
 }
 
-.oral-exam .oral-exam__denture-number {
-  height: 26px;
-  padding: 0 4px;
-  font-size: 13px;
-}
-
 .oral-exam__extra {
   width: 18px;
   height: 16px;
@@ -27744,4 +27738,76 @@ input.nursing-picker__search {
 
 .oral-exam__face.is-clickable:hover {
   stroke-width: 2;
+}
+
+/* 同じブリッジ・連結冠(実線)・有床義歯(破線)の歯の間の線。セルの全幅に引くので、隣り合う歯でつながる。 */
+.oral-exam__span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.oral-exam__row--upper .oral-exam__span,
+.oral-exam__row--upper-deciduous .oral-exam__span {
+  bottom: 0;
+}
+
+.oral-exam__row--lower .oral-exam__span,
+.oral-exam__row--lower-deciduous .oral-exam__span {
+  top: 0;
+}
+
+.oral-exam__span--bridge {
+  border-top: 2px solid var(--accent);
+}
+
+.oral-exam__span--denture {
+  border-top: 2px dashed var(--lab-low);
+}
+
+.oral-exam__row--upper .oral-exam__span--denture {
+  bottom: 3px;
+}
+
+.oral-exam__row--lower .oral-exam__span--denture {
+  top: 3px;
+}
+
+/* ブリッジ・有床義歯のモーダル。 */
+.oral-exam__device-modal {
+  width: min(680px, 94vw);
+}
+
+.oral-exam__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.oral-exam__role {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 15px;
+  pointer-events: none;
+}
+
+.oral-exam__stamp--device {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.oral-exam__modal-actions {
+  display: flex;
+  gap: 8px;
 }

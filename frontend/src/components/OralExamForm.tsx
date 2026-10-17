@@ -19,6 +19,18 @@ import { ErrorBanner } from "./ErrorBanner";
 import { OralExamChart } from "./OralExamChart";
 import { OralExamMouthForm } from "./OralExamMouthForm";
 import { OralExamStampPalette } from "./OralExamStampPalette";
+import { OralExamBridgeModal } from "./OralExamBridgeModal";
+import { OralExamDentureModal } from "./OralExamDentureModal";
+import {
+  bridgeOfTooth,
+  dentureOfTooth,
+  jawOf,
+  loadBridge,
+  loadDenture,
+  newBridgeDraft,
+  type BridgeDraft,
+  type DentureDraft,
+} from "../fhir/oralExamProsthesisHelpers";
 import { OralExamToothEditor } from "./OralExamToothEditor";
 
 interface OralExamFormProps {
@@ -51,7 +63,9 @@ export function OralExamForm({
   );
   const [pickingItem, setPickingItem] = useState<string | null>(null);
   const [stamp, setStamp] = useState<OralExamStamp | null>(null);
-  const [dentureNumber, setDentureNumber] = useState("");
+  const [device, setDevice] = useState<
+    { kind: "bridge"; draft: BridgeDraft } | { kind: "denture"; draft: DentureDraft } | null
+  >(null);
   const [bulkBasic, setBulkBasic] = useState("02");
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -69,10 +83,31 @@ export function OralExamForm({
       ...v,
       teeth: sortTeeth([
         ...v.teeth.filter((t) => t.toothCode !== toothCode),
-        ...applyStamp(recordsOfTooth(v.teeth, toothCode), toothCode, stamp, { face, dentureNumber, book }),
+        ...applyStamp(recordsOfTooth(v.teeth, toothCode), toothCode, stamp, { face, book }),
       ]),
     }));
     setSelected(toothCode);
+  }
+
+  function openBridge(toothCode = selected) {
+    const existing = toothCode ? bridgeOfTooth(values.teeth, toothCode) : null;
+    setDevice({
+      kind: "bridge",
+      draft: existing
+        ? loadBridge(values.teeth, existing.jaw, existing.number)
+        : newBridgeDraft(values.teeth, (toothCode && jawOf(toothCode)) || "upper"),
+    });
+  }
+
+  function openDenture(toothCode = selected) {
+    const existing = toothCode ? dentureOfTooth(values.teeth, toothCode) : null;
+    const jaw = existing?.jaw ?? ((toothCode && jawOf(toothCode)) || "upper");
+    setDevice({ kind: "denture", draft: loadDenture(values.teeth, jaw, existing?.number ?? "") });
+  }
+
+  function applyDevice(teeth: ToothRecord[]) {
+    setValues((v) => ({ ...v, teeth }));
+    setDevice(null);
   }
 
   function handleChartClick(toothCode: string) {
@@ -176,8 +211,8 @@ export function OralExamForm({
         <OralExamStampPalette
           stamp={stamp}
           onChange={setStamp}
-          dentureNumber={dentureNumber}
-          onDentureNumberChange={setDentureNumber}
+          onOpenBridge={() => openBridge()}
+          onOpenDenture={() => openDenture()}
         />
       )}
       {pickingItem && <p className="oral-exam__picking">歯式を選択中</p>}
@@ -200,10 +235,31 @@ export function OralExamForm({
           hasSupernumerary={
             !isSupernumerary(selected) && values.teeth.some((t) => t.toothCode === supernumeraryCode(selected))
           }
+          onEditBridge={bridgeOfTooth(values.teeth, selected) ? () => openBridge(selected) : undefined}
+          onEditDenture={dentureOfTooth(values.teeth, selected) ? () => openDenture(selected) : undefined}
           onAddSupernumerary={(code) => {
             replaceTooth(code, [newToothRecord(code, "01")]);
             setSelected(code);
           }}
+        />
+      )}
+
+      {device?.kind === "bridge" && (
+        <OralExamBridgeModal
+          book={book}
+          teeth={values.teeth}
+          initial={device.draft}
+          onApply={applyDevice}
+          onClose={() => setDevice(null)}
+        />
+      )}
+      {device?.kind === "denture" && (
+        <OralExamDentureModal
+          book={book}
+          teeth={values.teeth}
+          initial={device.draft}
+          onApply={applyDevice}
+          onClose={() => setDevice(null)}
         />
       )}
 

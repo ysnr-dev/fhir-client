@@ -11,6 +11,7 @@ import {
   toothLabel,
   type ToothRecord,
 } from "../fhir/oralExamHelpers";
+import { prosthesisMarks } from "../fhir/oralExamProsthesisHelpers";
 import { OralExamToothGlyph } from "./OralExamToothGlyph";
 
 interface OralExamChartProps {
@@ -21,6 +22,10 @@ interface OralExamChartProps {
   /** 歯面を押したとき(スタンプを面に付ける)。無ければ歯面は押せない。 */
   onSelectFace?: (toothCode: string, face: string) => void;
   showDeciduous: boolean;
+  /** 出す行(TOOTH_ROWS の key)。無ければ乳歯の有無で決める。ブリッジ・義歯のモーダルでは顎の 1 行だけ。 */
+  rowKeys?: string[];
+  /** 歯に重ねる役割の印(モーダルの「支」「ポ」「人」「Cl」など)。 */
+  roleMarks?: Record<string, string>;
 }
 
 /**
@@ -28,8 +33,17 @@ interface OralExamChartProps {
  * 歯の色は基本状態、塗った面は現在歯の内容の歯面、下の字は歯科健診記号。
  * 併存グループ・併存レコードが複数ある歯は右肩に数を出し、近傍過剰歯は歯の下に小さく並べる。
  */
-export function OralExamChart({ teeth, selected, onSelect, onSelectFace, showDeciduous }: OralExamChartProps) {
-  const rows = TOOTH_ROWS.filter((row) => showDeciduous || !row.deciduous);
+export function OralExamChart({
+  teeth,
+  selected,
+  onSelect,
+  onSelectFace,
+  showDeciduous,
+  rowKeys,
+  roleMarks,
+}: OralExamChartProps) {
+  const rows = TOOTH_ROWS.filter((row) => (rowKeys ? rowKeys.includes(row.key) : showDeciduous || !row.deciduous));
+  const devices = prosthesisMarks(teeth);
   const supernumeraries = new Set(teeth.filter((t) => isSupernumerary(t.toothCode)).map((t) => t.toothCode));
 
   return (
@@ -52,13 +66,18 @@ export function OralExamChart({ teeth, selected, onSelect, onSelectFace, showDec
             const clasp = <span className="oral-exam__clasp">{clasps.join(" ")}</span>;
             const title = [toothLabel(def.code), ...abbreviations, ...clasps].join(" ");
             const midline = index === row.teeth.length / 2;
+            const device = devices.get(def.code);
+            const role = roleMarks?.[def.code];
             return (
               <div key={def.code} className={midline ? "oral-exam__cell is-midline" : "oral-exam__cell"}>
+                {device?.bridge && <span className="oral-exam__span oral-exam__span--bridge" aria-hidden="true" />}
+                {device?.denture && <span className="oral-exam__span oral-exam__span--denture" aria-hidden="true" />}
+                {role && <span className="oral-exam__role">{role}</span>}
                 <button
                   type="button"
                   className={`oral-exam__tooth oral-exam__tooth--${category}${
                     selected.includes(def.code) ? " is-selected" : ""
-                  }`}
+                  }${role ? " has-role" : ""}`}
                   onClick={() => onSelect(def.code)}
                   title={title}
                   aria-label={toothLabel(def.code)}

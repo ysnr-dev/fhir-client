@@ -1130,10 +1130,8 @@ export interface OralExamStamp {
   surface?: boolean;
   /** 冠(う蝕・部分修復・ほかの冠を置き換える)。 */
   crown?: boolean;
-  /** 現在歯の内容の 1 行目に書き足す(クラスプ・レスト・失活歯。別の併存レコードにしない)。 */
+  /** 現在歯の内容の 1 行目に書き足す(失活歯など。別の併存レコードにしない)。 */
   attach?: boolean;
-  /** 義歯(床番号を付ける)。欠損歯側は TM-5、鉤歯側は TP-34。 */
-  denture?: "base" | "clasp";
   /** 特記事項に書く材料。 */
   material?: string;
   /** 記録を消す。 */
@@ -1147,7 +1145,7 @@ export const STAMP_GROUP_LABELS: Record<StampGroup, string> = {
   prosthesis: "欠損・補綴",
 };
 
-/** 同じ顎の何床目の義歯か。1 床目は番号を付けない(コード表の「同顎２床目」「同顎３床目」)。 */
+/** 同じ顎の何床目の義歯か。1 床目は番号を付けない(コード表の「同顎２床目」「同顎３床目」)。有床義歯のモーダルで選ぶ。 */
 export const DENTURE_NUMBERS = [
   { code: "", label: "1床目" },
   { code: "01", label: "2床目" },
@@ -1248,60 +1246,6 @@ export const ORAL_EXAM_STAMPS: OralExamStamp[] = [
     attach: true,
   },
   {
-    key: "abutment",
-    label: "Br支台",
-    title: "全部金属冠のブリッジ支台歯(同顎１装置目)・金銀パラジウム",
-    group: "prosthesis",
-    content: { "TP-23": "02", "TP-21": "01", "TP-18": "01", "TP-24": "01" },
-    crown: true,
-    material: GOLD_PALLADIUM,
-  },
-  {
-    key: "pontic",
-    label: "ポンティック",
-    title: "欠損歯【喪失歯(欠損補綴歯・ポンティック)】鋳造ポンティック・銀色・金銀パラジウム",
-    group: "prosthesis",
-    basic: "60",
-    missing: { "TM-2": "05", "TM-3": "01" },
-    material: GOLD_PALLADIUM,
-  },
-  {
-    key: "partial-denture",
-    label: "部分床義歯",
-    title: "欠損歯【喪失歯(欠損補綴歯・義歯)】局部義歯(内容不明)(ＰＤ)",
-    group: "prosthesis",
-    basic: "57",
-    missing: { "TM-4": "15" },
-    denture: "base",
-  },
-  {
-    key: "full-denture",
-    label: "総義歯",
-    title: "欠損歯【喪失歯(欠損補綴歯・義歯)】総義歯(内容不明)(ＦＤ)",
-    group: "prosthesis",
-    basic: "57",
-    missing: { "TM-4": "08" },
-    denture: "base",
-  },
-  {
-    key: "clasp",
-    label: "クラスプ",
-    title: "鋳造鉤(二腕鉤・レスト付き・銀色)(Ｃｌ)",
-    group: "prosthesis",
-    content: { "TP-26": "05" },
-    attach: true,
-    denture: "clasp",
-  },
-  {
-    key: "rest",
-    label: "レスト",
-    title: "レストシート等あり",
-    group: "prosthesis",
-    content: { "TP-25": "01" },
-    attach: true,
-    denture: "clasp",
-  },
-  {
     key: "implant",
     label: "インプラント",
     title: "欠損歯【喪失歯(インプラント・タイプ不明)】アバットメント",
@@ -1314,7 +1258,7 @@ export const ORAL_EXAM_STAMPS: OralExamStamp[] = [
 ];
 
 /** う蝕(治療が要る)の未処置歯コード(TP-9)。咬耗・破折・酸蝕症などは含めない。 */
-function isCariesCode(code: string | undefined): boolean {
+export function isCariesCode(code: string | undefined): boolean {
   const n = Number(code);
   return Boolean(code) && ((n >= 1 && n <= 8) || (n >= 22 && n <= 32));
 }
@@ -1322,7 +1266,7 @@ function isCariesCode(code: string | undefined): boolean {
 const RESTORATION_ITEMS = ["TP-11", "TP-21", "TP-22"];
 
 /** 冠を被せると無くなる内容(う蝕・部分修復・窩洞・ほかの冠・仮歯と、それらの歯面)。 */
-const CROWN_REPLACED_ITEMS = ["TP-10", "TP-11", "TP-12", "TP-21", ...TP_SURFACE_ITEMS.map((s) => s.item)];
+export const CROWN_REPLACED_ITEMS = ["TP-10", "TP-11", "TP-12", "TP-21", ...TP_SURFACE_ITEMS.map((s) => s.item)];
 
 /** 現在歯の内容から基本状態を決める(う蝕があれば未処置歯、修復があれば処置歯)。 */
 function basicFromContents(contents: ToothContent[], current: string): string {
@@ -1336,15 +1280,13 @@ function surfaceCount(values: Record<string, string>): number {
   return TP_SURFACE_ITEMS.filter((s) => values[s.item]).length;
 }
 
-function withoutEmpty(contents: ToothContent[]): ToothContent[] {
+export function withoutEmpty(contents: ToothContent[]): ToothContent[] {
   return contents.filter((c) => Object.values(c.values).some(Boolean));
 }
 
 export interface ApplyStampOptions {
   /** 押した歯面(TP-13〜17)。 */
   face?: string;
-  /** 義歯の床番号(DENTURE_NUMBERS の code)。 */
-  dentureNumber?: string;
   book?: OralExamCodeBook;
 }
 
@@ -1356,7 +1298,7 @@ export function applyStamp(
   records: ToothRecord[],
   toothCode: string,
   stamp: OralExamStamp,
-  { face, dentureNumber = "", book }: ApplyStampOptions = {},
+  { face, book }: ApplyStampOptions = {},
 ): ToothRecord[] {
   if (stamp.erase) return [];
   const primary = records[0] ?? newToothRecord(toothCode, stamp.basic ?? "02");
@@ -1369,7 +1311,6 @@ export function applyStamp(
 
   if (stamp.basic) {
     const missing: Record<string, string> = { ...stamp.missing };
-    if (stamp.denture === "base" && dentureNumber) missing["TM-5"] = dentureNumber;
     return finish({
       ...primary,
       basic: stamp.basic,
@@ -1380,7 +1321,6 @@ export function applyStamp(
   }
 
   const content: Record<string, string> = { ...stamp.content };
-  if (stamp.denture === "clasp" && dentureNumber) content["TP-34"] = dentureNumber;
   const [kind] = Object.keys(content);
   const code = content[kind];
   // 欠損歯にう蝕や修復を押したら、現在歯に戻して書く。
@@ -1399,11 +1339,8 @@ export function applyStamp(
     if (contents.length) contents[0] = { ...contents[0], values: { ...contents[0].values, ...content } };
     else contents.push(newContent(content));
   } else if (stamp.attach) {
-    if (contents.length) {
-      const values = { ...contents[0].values, ...content };
-      if (stamp.denture === "clasp" && !dentureNumber) delete values["TP-34"];
-      contents[0] = { ...contents[0], values };
-    } else contents.push(newContent(content));
+    if (contents.length) contents[0] = { ...contents[0], values: { ...contents[0].values, ...content } };
+    else contents.push(newContent(content));
   } else if (stamp.surface && face) {
     const same = contents.find((c) => c.values[kind] === code);
     if (same) {
@@ -1529,6 +1466,8 @@ const ABBR_RULES: AbbrRule[] = [
         [[[1, 7], [23, 23], [29, 34]], "Den"],
       ]),
   },
+  { item: "TM-8", abbr: (code) => pick(code, [[[[1, 2]], "Bar"], [[[3, 3]], "Pl"], [[[4, 4]], "LA"]]) },
+  { item: "TM-9", abbr: () => "補強" },
   { item: "TP-27", abbr: () => "矯正" },
   { item: "TP-28", abbr: () => "固定" },
 ];
