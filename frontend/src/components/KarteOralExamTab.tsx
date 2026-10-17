@@ -25,6 +25,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { OralExamChart } from "./OralExamChart";
 import { OralExamMouthDetail, OralExamToothDetail } from "./OralExamDetail";
 import { OralExamForm } from "./OralExamForm";
+import { OralExamLegendButton } from "./OralExamLegend";
 import { TruncatedNotice } from "./TruncatedNotice";
 
 // カルテ画面の「口腔診査情報」タブ。口腔診査情報標準コード仕様(JDAOES)の口腔状態スナップショットを
@@ -155,6 +156,7 @@ export function KarteOralExamTab({ patientId, view, onViewChange }: KarteOralExa
         <>
           <TruncatedNotice show={loaded?.truncated} />
           <p className="oral-exam__summary">
+            <OralExamLegendButton />
             {current?.summary.performer && <span>診査者 {current.summary.performer}</span>}
             {counts && (
               <>

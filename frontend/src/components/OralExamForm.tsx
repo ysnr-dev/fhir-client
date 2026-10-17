@@ -19,6 +19,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { OralExamChart } from "./OralExamChart";
 import { OralExamMouthForm } from "./OralExamMouthForm";
 import { OralExamStampPalette } from "./OralExamStampPalette";
+import { OralExamLegendButton } from "./OralExamLegend";
 import { OralExamBridgeModal } from "./OralExamBridgeModal";
 import { OralExamDentureModal } from "./OralExamDentureModal";
 import {
@@ -188,6 +189,7 @@ export function OralExamForm({
       </div>
 
       <div className="oral-exam__toolbar">
+        <OralExamLegendButton />
         <label className="oral-exam__check">
           <input type="checkbox" checked={showDeciduous} onChange={(e) => setShowDeciduous(e.target.checked)} />
           乳歯

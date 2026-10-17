@@ -27811,3 +27811,57 @@ input.nursing-picker__search {
   display: flex;
   gap: 8px;
 }
+
+/* 歯式図の見方(凡例)。 */
+.oral-exam__legend-tooth {
+  display: inline-flex;
+  flex: none;
+}
+
+.oral-exam__legend-tooth .oral-exam__glyph {
+  width: 24px;
+  height: 24px;
+}
+
+.oral-exam__legend ul.oral-exam__legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 6px 16px;
+}
+
+.oral-exam__legend-code {
+  flex: none;
+  min-width: 3.5em;
+  font-weight: 600;
+}
+
+.oral-exam__legend-code--wide {
+  min-width: 13em;
+}
+
+.oral-exam__legend-badge {
+  position: static;
+  min-width: 0;
+  padding: 0 4px;
+  text-align: center;
+}
+
+.oral-exam__legend-line {
+  flex: none;
+  width: 3.5em;
+  height: 0;
+  margin-top: 0.8em;
+}
+
+.oral-exam__legend-line--bridge {
+  border-top: 2px solid var(--accent);
+}
+
+.oral-exam__legend-line--denture {
+  border-top: 2px dashed var(--lab-low);
+}
+
+.oral-exam__legend .oral-exam__clasp {
+  font-size: 13px;
+  line-height: inherit;
+}
