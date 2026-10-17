@@ -27267,7 +27267,7 @@ input.nursing-picker__search {
 .oral-exam__row--upper + .oral-exam__row--lower,
 .oral-exam__row--upper + .oral-exam__row--lower-deciduous,
 .oral-exam__row--upper-deciduous + .oral-exam__row--lower-deciduous {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--text);
 }
 
 .oral-exam__cell {
@@ -27278,8 +27278,9 @@ input.nursing-picker__search {
   gap: 2px;
 }
 
+/* 十字線(正中と上下顎の境)。歯の枠より一段濃くして、象限の区切りが読めるようにする。 */
 .oral-exam__cell.is-midline {
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--text);
 }
 
 .oral-exam__tooth {
