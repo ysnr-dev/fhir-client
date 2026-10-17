@@ -16,16 +16,19 @@ import { resourcesOfType } from "./core";
 /**
  * その患者の予約。1 患者の予約は当面 100 件を超えない前提でまとめて取り、
  * 並べ替え(新しい順)は画面側で行う(上流の _sort に依存しないため)。
+ * from / to は予約の開始日(Appointment.start)で絞る。どちらも端を含む。
  */
-export function useAppointmentSearch(patientId: string | undefined) {
+export function useAppointmentSearch(patientId: string | undefined, from?: string, to?: string) {
   const params = new URLSearchParams();
   if (patientId) params.set("patient", `Patient/${patientId}`);
+  if (from) params.append("date", `ge${from}`);
+  if (to) params.append("date", `le${to}`);
   params.set("_count", "100");
   // 新しい順。上流は同値を id でタイブレークするのでページ送りをまたいでも安定する。
   params.set("_sort", "-date");
 
   const query = useQuery({
-    queryKey: ["Appointment", "search", patientId],
+    queryKey: ["Appointment", "search", patientId, from ?? "", to ?? ""],
     queryFn: () => searchResource<fhir4.Appointment>("Appointment", params),
     enabled: Boolean(patientId),
   });

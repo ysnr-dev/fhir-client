@@ -7,6 +7,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { useState } from "react";
 import { usePatient } from "../api/queries";
 import { displayName } from "../fhir/patientHelpers";
+import { addMonths, today } from "../lib/dates";
 import { IntakeQrModal } from "./IntakeQrModal";
 
 // カルテ画面の「予約」タブ。その患者の予約を一覧し、取消を行う。
@@ -22,7 +23,15 @@ interface KarteAppointmentTabProps {
 }
 
 export function KarteAppointmentTab({ patientId, onReschedule }: KarteAppointmentTabProps) {
-  const { appointments, isLoading, error } = useAppointmentSearch(patientId);
+  const [period, setPeriod] = useState<"all" | "range">("range");
+  const [from, setFrom] = useState(() => addMonths(today(), -1));
+  const [to, setTo] = useState("");
+  const ranged = period === "range";
+  const { appointments, isLoading, error } = useAppointmentSearch(
+    patientId,
+    ranged ? from || undefined : undefined,
+    ranged ? to || undefined : undefined,
+  );
   const cancel = useCancelAppointment();
   const { data: patientResult } = usePatient(patientId);
   const [intakeTarget, setIntakeTarget] = useState<fhir4.Appointment | null>(null);
@@ -40,8 +49,23 @@ export function KarteAppointmentTab({ patientId, onReschedule }: KarteAppointmen
 
   return (
     <div className="karte-tabpanel">
-      <div className="karte-tabpanel__header">
-        <h3>予約</h3>
+      <div className="patient-chart__toolbar">
+        <h3 className="patient-chart__title">予約</h3>
+        <select
+          value={period}
+          aria-label="表示期間"
+          onChange={(e) => setPeriod(e.target.value as "all" | "range")}
+        >
+          <option value="all">全期間</option>
+          <option value="range">期間指定</option>
+        </select>
+        {ranged && (
+          <div className="patient-chart__nav">
+            <input type="date" value={from} aria-label="開始日" onChange={(e) => setFrom(e.target.value)} />
+            〜
+            <input type="date" value={to} aria-label="終了日" onChange={(e) => setTo(e.target.value)} />
+          </div>
+        )}
       </div>
 
       <ErrorBanner error={error} />
