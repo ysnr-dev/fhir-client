@@ -27318,6 +27318,18 @@ input.nursing-picker__search {
   font-weight: 600;
 }
 
+/* 内容の略号(FMC・Pon・PD・C2 など)。基本状態の色と健診記号だけでは補綴や修復の種類が読めないので添える。 */
+.oral-exam__abbr {
+  max-width: 100%;
+  min-height: 11px;
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 11px;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  color: var(--text-h);
+}
+
 .oral-exam__glyph {
   width: 28px;
   height: 28px;

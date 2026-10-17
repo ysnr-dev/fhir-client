@@ -1260,3 +1260,138 @@ export function applyStamp(
   const basic = basicFromContents(contents, primary.basic);
   return [{ ...primary, basic, stateCode: defaultStateCode(basic), contents, missing: {} }, ...rest];
 }
+
+// ---- 歯式図の略号 ----
+
+type AbbrRule = { item: string; abbr: (code: string) => string };
+
+function inRange(code: string, ...ranges: [number, number][]): boolean {
+  const n = Number(code);
+  return ranges.some(([from, to]) => n >= from && n <= to);
+}
+
+function pick(code: string, table: [[number, number][], string][]): string {
+  return table.find(([ranges]) => inRange(code, ...ranges))?.[1] ?? "";
+}
+
+/**
+ * 歯式図に添える略号。並びが優先順(う蝕 → 冠 → その他修復 → 部分修復 → 仮歯 → 支台 → 欠損補綴 → 鉤 → 矯正)。
+ * 紙の歯式で使う略称(レセプトの略称名・標準プロファイル 26 項目の略号)に寄せる。
+ */
+const ABBR_RULES: AbbrRule[] = [
+  {
+    item: "TP-9",
+    abbr: (code) =>
+      pick(code, [
+        [[[1, 1]], "C"],
+        [[[2, 2], [5, 5]], "C1"],
+        [[[3, 3], [6, 6]], "C2"],
+        [[[4, 4], [7, 7]], "C3"],
+        [[[8, 8]], "仮封"],
+        [[[10, 11]], "C4"],
+        [[[12, 12]], "Att"],
+        [[[13, 13]], "Abr"],
+        [[[14, 14]], "WSD"],
+        [[[15, 15]], "FrT"],
+        [[[16, 21]], "Ero"],
+        [[[22, 24]], "窩洞"],
+        [[[25, 27], [32, 32]], "形成"],
+        [[[28, 31]], "コア"],
+      ]),
+  },
+  {
+    item: "TP-21",
+    abbr: (code) =>
+      pick(code, [
+        [[[1, 3]], "FMC"],
+        [[[4, 6]], "JC"],
+        [[[7, 9]], "前装"],
+        [[[10, 12]], "MB"],
+        [[[13, 21]], "外冠"],
+        [[[22, 36]], "帯環"],
+        [[[37, 40]], "PC"],
+        [[[41, 42]], "乳歯冠"],
+        [[[43, 43]], "保隙"],
+        [[[44, 44]], "既製冠"],
+      ]),
+  },
+  {
+    item: "TP-22",
+    abbr: (code) =>
+      pick(code, [
+        [[[1, 6]], "根面板"],
+        [[[7, 9]], "内冠"],
+        [[[10, 10]], "Abu"],
+        [[[11, 13]], "At"],
+      ]),
+  },
+  {
+    item: "TP-11",
+    abbr: (code) =>
+      pick(code, [
+        [[[1, 3]], "CR"],
+        [[[4, 6]], "AF"],
+        [[[7, 7]], "GF"],
+        [[[8, 25]], "In"],
+        [[[26, 31]], "On"],
+        [[[32, 37]], "3/4"],
+        [[[38, 43]], "4/5"],
+        [[[44, 46]], "LV"],
+        [[[47, 52]], "接着冠"],
+      ]),
+  },
+  { item: "TP-10", abbr: () => "TeC" },
+  { item: "TP-23", abbr: (code) => pick(code, [[[[1, 1]], "連結"], [[[2, 2]], "Br"], [[[3, 3]], "隙支台"]]) },
+  { item: "TM-2", abbr: (code) => pick(code, [[[[1, 19]], "Pon"], [[[20, 34]], "隙"]]) },
+  {
+    item: "TM-4",
+    abbr: (code) =>
+      pick(code, [
+        [[[8, 14], [35, 40]], "FD"],
+        [[[15, 21], [41, 46]], "PD"],
+        [[[22, 22], [24, 28]], "顎補綴"],
+        [[[1, 7], [23, 23], [29, 34]], "Den"],
+      ]),
+  },
+  { item: "TP-26", abbr: () => "Cl" },
+  { item: "TP-27", abbr: () => "矯正" },
+  { item: "TP-28", abbr: () => "固定" },
+];
+
+/** 内容の無い歯でも基本状態から分かる略号。 */
+function basicAbbr(basic: string): string {
+  return pick(basic, [
+    [[[13, 13]], "MPM"],
+    [[[30, 31]], "HRT"],
+    [[[32, 34]], "RT"],
+    [[[35, 35]], "HIT"],
+    [[[36, 36]], "未萌出"],
+    [[[37, 37]], "萌出中"],
+    [[[57, 59]], "Den"],
+    [[[60, 60]], "Pon"],
+    [[[61, 61]], "隙"],
+    [[[62, 66]], "Im"],
+  ]);
+}
+
+/** 歯式図に添える略号(優先順、重複なし)。併存グループ全部から集める。 */
+export function toothAbbreviations(records: ToothRecord[]): string[] {
+  const found = new Set<string>();
+  for (const record of records) {
+    const sources = usesMissingContent(record.basic) ? [record.missing] : record.contents.map((c) => c.values);
+    for (const rule of ABBR_RULES) {
+      for (const values of sources) {
+        const code = values[rule.item];
+        if (!code) continue;
+        const abbr = rule.abbr(code);
+        if (abbr) found.add(abbr);
+      }
+    }
+    if (inRange(record.basic, [62, 66])) found.add("Im");
+    if (!found.size) {
+      const abbr = basicAbbr(record.basic);
+      if (abbr) found.add(abbr);
+    }
+  }
+  return [...found];
+}

@@ -4,6 +4,7 @@ import {
   isSupernumerary,
   recordsOfTooth,
   supernumeraryCode,
+  toothAbbreviations,
   TOOTH_ROWS,
   toothCategory,
   toothLabel,
@@ -44,6 +45,9 @@ export function OralExamChart({ teeth, selected, onSelect, onSelectFace, showDec
             const contents = records.reduce((n, r) => n + r.contents.length, 0);
             const badge = records.length > 1 ? String(records.length) : contents > 1 ? String(contents) : "";
             const extra = supernumeraryCode(def.code);
+            const abbreviations = toothAbbreviations(records);
+            const abbr = <span className="oral-exam__abbr">{abbreviations.slice(0, 2).join("·")}</span>;
+            const title = [toothLabel(def.code), ...abbreviations].join(" ");
             const midline = index === row.teeth.length / 2;
             return (
               <div key={def.code} className={midline ? "oral-exam__cell is-midline" : "oral-exam__cell"}>
@@ -53,10 +57,11 @@ export function OralExamChart({ teeth, selected, onSelect, onSelectFace, showDec
                     selected.includes(def.code) ? " is-selected" : ""
                   }`}
                   onClick={() => onSelect(def.code)}
-                  title={toothLabel(def.code)}
+                  title={title}
                   aria-label={toothLabel(def.code)}
                   aria-pressed={selected.includes(def.code)}
                 >
+                  {row.key.startsWith("lower") && abbr}
                   {row.key.startsWith("lower") && <span className="oral-exam__symbol">{primary ? checkupSymbol(primary.basic) : ""}</span>}
                   {row.key.startsWith("upper") && <span className="oral-exam__number">{def.label}</span>}
                   <OralExamToothGlyph
@@ -66,6 +71,7 @@ export function OralExamChart({ teeth, selected, onSelect, onSelectFace, showDec
                     onFace={onSelectFace ? (face) => onSelectFace(def.code, face) : undefined}
                   />
                   {row.key.startsWith("upper") && <span className="oral-exam__symbol">{primary ? checkupSymbol(primary.basic) : ""}</span>}
+                  {row.key.startsWith("upper") && abbr}
                   {row.key.startsWith("lower") && <span className="oral-exam__number">{def.label}</span>}
                   {badge && <span className="oral-exam__badge">{badge}</span>}
                 </button>
