@@ -3147,6 +3147,36 @@ fieldset.rp-card {
   font-size: 14px;
 }
 
+/* 患者の緊急連絡先・キーパーソン。狭いドロワーでも読めるよう、1 件ずつ
+   氏名と続柄の見出しの下に入力済みの項目だけを並べる。 */
+.patient-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.patient-contacts__item + .patient-contacts__item {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.patient-contacts__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 4px;
+  color: var(--text-h);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.patient-contacts__relationship {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: normal;
+}
+
 /* 検査結果の検査共通。採取日・入外区分・診療科を 1 行目、報告区分・報告日時を 2 行目に置き、
    幅を食う検体検査オーダーだけを次の行で残り幅いっぱいに置く。 */
 .prescription-detail__common--lab {

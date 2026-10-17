@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { usePatient } from "../api/queries";
 import {
   calculateAge,
@@ -115,35 +116,41 @@ function BasicTables({ patient }: { patient: fhir4.Patient }) {
         {values.contacts.length === 0 ? (
           <p className="patient-table__empty">登録されている連絡先がありません。</p>
         ) : (
-          <table className="patient-table">
-            <thead>
-              <tr>
-                <th>続柄</th>
-                <th>氏名</th>
-                <th>固定電話</th>
-                <th>携帯電話</th>
-                <th>住所</th>
-              </tr>
-            </thead>
-            <tbody>
-              {values.contacts.map((contact, index) => (
-                <tr key={index}>
-                  <td>
-                    {[
-                      ...contact.relationships.map(contactRelationshipLabel).filter(Boolean),
-                      contact.relationshipNote,
-                    ]
-                      .filter(Boolean)
-                      .join(" / ") || "-"}
-                  </td>
-                  <td>{[contact.family, contact.given].filter(Boolean).join(" ") || "-"}</td>
-                  <td>{contact.homePhone || "-"}</td>
-                  <td>{contact.mobilePhone || "-"}</td>
-                  <td>{contact.address || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="patient-contacts">
+            {values.contacts.map((contact, index) => {
+              const relationship = [
+                ...contact.relationships.map(contactRelationshipLabel).filter(Boolean),
+                contact.relationshipNote,
+              ]
+                .filter(Boolean)
+                .join(" / ");
+              const fields = [
+                ["固定電話", contact.homePhone],
+                ["携帯電話", contact.mobilePhone],
+                ["住所", contact.address],
+              ].filter(([, value]) => value);
+              return (
+                <div key={index} className="patient-contacts__item">
+                  <div className="patient-contacts__name">
+                    {[contact.family, contact.given].filter(Boolean).join(" ") || "-"}
+                    {relationship && (
+                      <span className="patient-contacts__relationship">{relationship}</span>
+                    )}
+                  </div>
+                  {fields.length > 0 && (
+                    <dl className="prescription-detail__common">
+                      {fields.map(([label, value]) => (
+                        <Fragment key={label}>
+                          <dt>{label}</dt>
+                          <dd>{value}</dd>
+                        </Fragment>
+                      ))}
+                    </dl>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </fieldset>
 
