@@ -1,4 +1,5 @@
 import { csvBlob } from "../lib/csv";
+import { addDays } from "../lib/dates";
 import { ATTENDING_COLUMN, CLUSTER_COLUMN, STRATUM_COLUMN } from "./recordTableHelpers";
 
 // 記録を表にするタブの内訳(docs/data-extract-design.md §18)。結果の表(見出しと行のセル)だけから、
@@ -66,9 +67,12 @@ export function breakdownColumns(header: string[], cells: string[][]): Breakdown
 
 // ---- 期間の刻み ----
 
-export type TimeGrain = "year" | "fiscal" | "quarter" | "month" | "week" | "day";
+export type CalendarGrain = "year" | "fiscal" | "quarter" | "month" | "week" | "day";
+/** 基準日(§24)からの経過の刻み。日付の列と「基準日」の列の差を日・週・暦月で整数にする。 */
+export type ElapsedGrain = "elapsed_day" | "elapsed_week" | "elapsed_month";
+export type TimeGrain = CalendarGrain | ElapsedGrain;
 
-export const TIME_GRAINS: { value: TimeGrain; label: string }[] = [
+export const TIME_GRAINS: { value: CalendarGrain; label: string }[] = [
   { value: "year", label: "年" },
   { value: "fiscal", label: "年度" },
   { value: "quarter", label: "四半期" },
@@ -76,6 +80,47 @@ export const TIME_GRAINS: { value: TimeGrain; label: string }[] = [
   { value: "week", label: "週" },
   { value: "day", label: "日" },
 ];
+
+export const ELAPSED_GRAINS: { value: ElapsedGrain; label: string }[] = [
+  { value: "elapsed_day", label: "基準日から(日)" },
+  { value: "elapsed_week", label: "基準日から(週)" },
+  { value: "elapsed_month", label: "基準日から(月)" },
+];
+
+export function isElapsedGrain(grain: TimeGrain): grain is ElapsedGrain {
+  return grain.startsWith("elapsed_");
+}
+
+/** 刻みの名前(軸の見出し)。 */
+export function grainName(grain: TimeGrain): string {
+  return [...TIME_GRAINS, ...ELAPSED_GRAINS].find((g) => g.value === grain)?.label ?? "";
+}
+
+/** 経過の刻みのキー。文字列の並びが数の順になるよう、負の数も含めて 1,000,000 を足した固定桁にする。 */
+const ELAPSED_OFFSET = 1_000_000;
+
+function elapsedKey(n: number): string {
+  return String(n + ELAPSED_OFFSET).padStart(7, "0");
+}
+
+function elapsedOf(key: string): number {
+  return Number(key) - ELAPSED_OFFSET;
+}
+
+function dayNumber(value: string): number {
+  return Date.UTC(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10))) / 86_400_000;
+}
+
+/** 基準日から日付までの経過(日・週・暦月)。前なら負。 */
+function elapsed(value: string, indexDate: string, grain: ElapsedGrain): number {
+  if (grain === "elapsed_month") {
+    const months = (Number(value.slice(0, 4)) - Number(indexDate.slice(0, 4))) * 12 + Number(value.slice(5, 7)) - Number(indexDate.slice(5, 7));
+    const before = Number(value.slice(8, 10)) < Number(indexDate.slice(8, 10));
+    return months > 0 && before ? months - 1 : months < 0 && !before ? months + 1 : months;
+  }
+  const days = Math.floor(dayNumber(value) - dayNumber(indexDate));
+  return grain === "elapsed_week" ? Math.floor(days / 7) : days;
+}
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -85,9 +130,15 @@ function ymd(date: Date): string {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
 
-/** 日付の値を刻みのキーにする(キーは文字列の並びで時間の順になる)。日付でなければ null。 */
-function grainKey(value: string, grain: TimeGrain): string | null {
+/**
+ * 日付の値を刻みのキーにする(キーは文字列の並びで時間の順になる)。日付でなければ null。
+ * 経過の刻みは基準日(indexDate)からの差で、基準日が無ければ null。
+ */
+export function grainKey(value: string, grain: TimeGrain, indexDate?: string): string | null {
   if (!DATE_PATTERN.test(value)) return null;
+  if (isElapsedGrain(grain)) {
+    return indexDate && DATE_PATTERN.test(indexDate) ? elapsedKey(elapsed(value, indexDate, grain)) : null;
+  }
   const year = Number(value.slice(0, 4));
   const month = Number(value.slice(5, 7));
   switch (grain) {
@@ -111,8 +162,14 @@ function grainKey(value: string, grain: TimeGrain): string | null {
 }
 
 /** 刻みのキーの見出し。 */
-function grainLabel(key: string, grain: TimeGrain): string {
+export function grainLabel(key: string, grain: TimeGrain): string {
   switch (grain) {
+    case "elapsed_day":
+      return `${elapsedOf(key)}日`;
+    case "elapsed_week":
+      return `${elapsedOf(key)}週`;
+    case "elapsed_month":
+      return `${elapsedOf(key)}月`;
     case "year":
       return `${key}年`;
     case "fiscal":
@@ -129,8 +186,12 @@ function grainLabel(key: string, grain: TimeGrain): string {
 }
 
 /** 刻みのキーの次。0 件の期間を埋めるのに使う。 */
-function nextGrainKey(key: string, grain: TimeGrain): string {
+export function nextGrainKey(key: string, grain: TimeGrain): string {
   switch (grain) {
+    case "elapsed_day":
+    case "elapsed_week":
+    case "elapsed_month":
+      return elapsedKey(elapsedOf(key) + 1);
     case "year":
     case "fiscal":
       return String(Number(key) + 1);
@@ -149,6 +210,55 @@ function nextGrainKey(key: string, grain: TimeGrain): string {
       return ymd(date);
     }
   }
+}
+
+/** 刻みのキーの最初の日(暦の刻みだけ)。 */
+function grainStart(key: string, grain: CalendarGrain): string {
+  switch (grain) {
+    case "year":
+      return `${key}-01-01`;
+    case "fiscal":
+      return `${key}-04-01`;
+    case "quarter": {
+      const [year, q] = key.split("-").map(Number);
+      return `${year}-${pad2(q * 3 - 2)}-01`;
+    }
+    case "month":
+      return `${key}-01`;
+    default:
+      return key;
+  }
+}
+
+export interface PeriodBucket {
+  key: string;
+  label: string;
+  /** 刻みの最初の日(範囲の最初の刻みは範囲の開始日)。 */
+  from: string;
+  /** 刻みの最後の日(範囲の最後の刻みは範囲の終了日)。両端を含む。 */
+  to: string;
+}
+
+/** 日付の範囲(両端を含む)を刻みで区切った期間の並び。範囲の端の刻みは範囲で切る。limit を超えたら途中で止める。 */
+export function periodBuckets(range: { from: string; to: string }, grain: CalendarGrain, limit = MAX_FILLED_PERIODS): PeriodBucket[] {
+  const first = grainKey(range.from, grain);
+  const last = grainKey(range.to, grain);
+  if (!first || !last || range.from > range.to) return [];
+  const buckets: PeriodBucket[] = [];
+  let key = first;
+  while (key <= last && buckets.length < limit) {
+    const next = nextGrainKey(key, grain);
+    const from = grainStart(key, grain);
+    const to = addDays(grainStart(next, grain), -1);
+    buckets.push({
+      key,
+      label: grainLabel(key, grain),
+      from: from < range.from ? range.from : from,
+      to: to > range.to ? range.to : to,
+    });
+    key = next;
+  }
+  return buckets;
 }
 
 /** 0 件の期間を埋める上限(日の刻みで何年もの期間を選んだときに表が膨らみすぎないように)。超えたら埋めない。 */
@@ -286,6 +396,8 @@ export interface BreakdownOptions {
   /** 期間の列。null なら期間の軸は使えない。 */
   dateIndex: number | null;
   grain: TimeGrain;
+  /** 「基準日」の列(§24)。経過の刻みで使う。無ければ経過の刻みは「(なし)」になる。 */
+  indexDateIndex?: number | null;
   /** 0 件の期間も並べる。 */
   fillEmpty: boolean;
   /** 行の軸。null なら「計」の 1 行。 */
@@ -379,13 +491,15 @@ function resolveAxis(
   options: BreakdownOptions,
   limit: number,
 ): ResolvedAxis {
-  const { dateIndex, grain, fillEmpty } = options;
+  const { dateIndex, grain, fillEmpty, indexDateIndex } = options;
   if (axis.type === "period") {
     const keyOf = (row: string[]) =>
-      dateIndex === null ? TOTAL : (grainKey(row[dateIndex] ?? "", grain) ?? EMPTY);
+      dateIndex === null
+        ? TOTAL
+        : (grainKey(row[dateIndex] ?? "", grain, indexDateIndex != null ? row[indexDateIndex] : undefined) ?? EMPTY);
     const periods = dateIndex === null ? { keys: [TOTAL], filled: false } : periodKeys(rows.map(keyOf), grain, fillEmpty);
     return {
-      name: TIME_GRAINS.find((g) => g.value === grain)?.label ?? "",
+      name: grainName(grain),
       keys: periods.keys,
       labels: periods.keys.map((key) => (key === EMPTY || dateIndex === null ? key : grainLabel(key, grain))),
       keysOf: (row) => [keyOf(row)],

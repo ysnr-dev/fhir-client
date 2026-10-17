@@ -31,6 +31,8 @@ export interface ScopeSummary {
 export interface RanScope {
   /** 患者 id → 入った比較群の名前(比較群の並び順)。比較群を使っていなければ null。 */
   groupsOf: Map<string, string[]> | null;
+  /** 患者 → 基準日(§24)。基準日を持つ比較群が無ければ null。 */
+  indexOf: Map<string, string> | null;
   attending: AttendingMode | null;
   /** タブの期間(担当医を決める記録の期間)。 */
   range: ResolvedPeriod | null;
@@ -97,10 +99,12 @@ async function resolveStrata(
   folders: PatientFolder[],
   run: PatientRun,
   groupLabel: string,
-): Promise<Set<string>[] | null> {
+): Promise<{ members: Set<string>[]; indexOf: Map<string, string>[] } | null> {
   const names = strata.map((s) => stratumName(s, queries, folders));
   const leaves = strata.flatMap((s, i) => (isLeafStratum(s) ? [stratumLeaf(s, period, `${groupLabel}「${names[i]}」`)] : []));
   const members: (Set<string> | null)[] = strata.map(() => null);
+  // 基準日(§24)。条件型の比較群の該当記録の最初 / 最後の日。
+  const indexOf: Map<string, string>[] = strata.map(() => new Map());
   if (leaves.length > 0) {
     const body: ExtractQueryBody = { schema_version: 1, root: { op: "or", children: leaves } };
     const errors = validateExtractQuery(body);
@@ -108,7 +112,14 @@ async function resolveStrata(
     const result = await run(body, leafLabel, { skipPatients: true });
     if (!result) return null;
     strata.forEach((s, i) => {
-      if (isLeafStratum(s)) members[i] = new Set(result.hits.get(s.key)?.keys() ?? []);
+      if (!isLeafStratum(s)) return;
+      const hits = result.hits.get(s.key) ?? new Map();
+      members[i] = new Set(hits.keys());
+      if (!s.index_date) return;
+      for (const [id, hit] of hits) {
+        const day = s.index_date === "last" ? hit.last : hit.first;
+        if (day) indexOf[i].set(id, day);
+      }
     });
   }
   for (const [i, s] of strata.entries()) {
@@ -126,7 +137,7 @@ async function resolveStrata(
     if (!result) return null;
     members[i] = new Set(result.rows.map((row) => row.patientId));
   }
-  return members.map((m) => m ?? new Set());
+  return { members: members.map((m) => m ?? new Set()), indexOf };
 }
 
 /**
@@ -161,16 +172,25 @@ export async function resolvePatientScope(
     summary.query = { name: query.name, count: matched.size };
   }
   let groupsOf: Map<string, string[]> | null = null;
+  let indexOf: Map<string, string> | null = null;
   if (strata.length > 0) {
     const errors = strataErrors(strata, queries, folders, groupLabel);
     if (errors.length > 0) throw new Error(errors.join("\n"));
-    const members = await resolveStrata(strata, period, queries, folders, run, groupLabel);
-    if (!members) return null;
+    const resolved = await resolveStrata(strata, period, queries, folders, run, groupLabel);
+    if (!resolved) return null;
+    const { members } = resolved;
     groupsOf = new Map();
     strata.forEach((s, i) => {
       const name = stratumName(s, queries, folders);
       for (const id of members[i]) groupsOf!.set(id, [...(groupsOf!.get(id) ?? []), name]);
     });
+    // 2 つ以上の比較群で基準日を持つ患者は、並びの早い比較群の日。
+    if (strata.some((s) => s.index_date)) {
+      indexOf = new Map();
+      for (const map of resolved.indexOf) {
+        for (const [id, day] of map) if (!indexOf.has(id)) indexOf.set(id, day);
+      }
+    }
     // 比較群の人数は、ほかの絞り込み(患者の条件・フォルダ)に入る患者で数える。
     const inScope = patientIds ? new Set(patientIds) : null;
     summary.strata = strata.map((s, i) => ({
@@ -185,7 +205,7 @@ export async function resolvePatientScope(
   return {
     patientIds,
     summary,
-    ran: { groupsOf, attending: definition.attending ?? null, range: resolvePeriod(period, today()), groupLabel },
+    ran: { groupsOf, indexOf, attending: definition.attending ?? null, range: resolvePeriod(period, today()), groupLabel },
   };
 }
 

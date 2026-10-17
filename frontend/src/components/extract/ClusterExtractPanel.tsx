@@ -168,6 +168,7 @@ export function ClusterExtractPanel() {
           itemLabel="指標"
           allow={{ saved: false, folder: false }}
           max={MAX_METRICS}
+          indexDate={false}
           onChange={(next) => setMetrics(next.filter(isMetric))}
           onClose={() => setEditingMetrics(false)}
         />

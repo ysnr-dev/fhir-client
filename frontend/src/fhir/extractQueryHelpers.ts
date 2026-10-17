@@ -1,5 +1,5 @@
 import { csvBlob } from "../lib/csv";
-import { localDay } from "../lib/dates";
+import { addDays, localDay } from "../lib/dates";
 import { DETAIL_COLUMNS, EXTRACT_KIND_DEFS, extractKindDef } from "./extractKinds";
 import {
   EXTRACT_KINDS,
@@ -128,6 +128,24 @@ export function periodLabel(period: ExtractPeriod | null | undefined): string {
   if (period.from && period.to) return `${period.from}〜${period.to}`;
   if (period.from) return `${period.from}以降`;
   return period.to ? `${period.to}まで` : "";
+}
+
+/**
+ * 条件の木のすべての条件の期間を、日付の範囲(両端を含む)に置き換える(指標タブが期間の刻みごとに条件を評価するため)。
+ * 患者属性は期間を持たない。基準(relation)を持つ条件は基準の記録から窓の分だけ前後にずれるので、範囲を窓の分だけ広げる。
+ */
+export function withBucketPeriod<T extends ExtractNode>(node: T, range: { from: string; to: string }): T {
+  if (isGroup(node)) return { ...node, children: node.children.map((child) => withBucketPeriod(child, range)) };
+  if (node.kind === "patient") return node;
+  const relation = node.relation;
+  const period: ExtractPeriod = relation
+    ? {
+        mode: "absolute",
+        from: addDays(range.from, Math.min(0, relation.from_days)),
+        to: addDays(range.to, Math.max(0, relation.to_days)),
+      }
+    : { mode: "absolute", from: range.from, to: range.to };
+  return { ...node, period };
 }
 
 /** 条件の表示名。手で付けた名前が無ければ中身から作る(一覧の列名・CSV の見出しにも使う)。 */

@@ -79,7 +79,7 @@ export interface ExtractResult {
   ranAt: string;
 }
 
-/** 上流の検索の文脈。queryClient が無ければ検索も薬効分類の展開も覚えずに引く(クラスタタブの指標)。 */
+/** 上流の検索の文脈。queryClient が無ければ検索も薬効分類の展開も覚えずに引く(クラスタタブの指標・イベントタブ)。 */
 export interface RunContext {
   queryClient?: QueryClient;
   signal: AbortSignal;
@@ -172,14 +172,16 @@ async function fetchLeaf(leaf: ExtractLeaf, context: RunContext, label: string):
   const resolved = await resolveLeaf(leaf, context);
   if (resolved.kind === "medication" && (resolved.codes ?? []).length === 0) return [];
   const search = leafSearch(resolved, today());
-  const queryClient = context.queryClient!;
+  const queryClient = context.queryClient;
   const chunks = await Promise.all(
     search.paramsList.map((params) =>
-      queryClient.fetchQuery({
-        queryKey: ["ExtractLeaf", search.resourceType, params.toString()],
-        queryFn: () => fetchAll(search.resourceType, params, context, label),
-        staleTime: 5 * 60 * 1000,
-      }),
+      queryClient
+        ? queryClient.fetchQuery({
+            queryKey: ["ExtractLeaf", search.resourceType, params.toString()],
+            queryFn: () => fetchAll(search.resourceType, params, context, label),
+            staleTime: 5 * 60 * 1000,
+          })
+        : fetchAll(search.resourceType, params, context, label),
     ),
   );
   return chunks.flat();
@@ -231,6 +233,103 @@ export interface ExtractRunState {
 
 const IDLE: ExtractRunState = { running: false, progress: {}, requests: 0, error: null, result: null };
 
+/**
+ * 条件の木を評価して該当する患者を返す(hook の useExtractRun と、期間の刻みごとに条件を評価する指標タブが使う)。
+ * onProgress は条件ごとの進み具合が変わるたびに呼ぶ。失敗は例外(中止は AbortError)。
+ */
+export async function runExtract(
+  body: ExtractQueryBody,
+  labelOf: (leaf: ExtractLeaf) => string,
+  context: RunContext,
+  options: ExtractRunOptions = {},
+  onProgress: (progress: Record<string, LeafProgress>) => void = () => undefined,
+): Promise<ExtractResult> {
+  const leaves = collectLeaves(body.root);
+  const filterKeys = patientFilterLeaves(body.root);
+  const progress: Record<string, LeafProgress> = Object.fromEntries(
+    leaves.map((leaf) => [leaf.key, { state: "pending" as LeafState, records: 0, patients: 0 }]),
+  );
+  const publish = () => onProgress({ ...progress });
+  publish();
+
+  const hits = new Map<string, LeafHits>();
+  const recordsByLeaf = new Map<string, LeafRecord[]>();
+  const resourcesByLeaf = new Map<string, ExtractRecord[]>();
+  await runWithConcurrency(
+    leaves
+      .filter((leaf) => !filterKeys.has(leaf.key))
+      .map((leaf) => async () => {
+        progress[leaf.key] = { ...progress[leaf.key], state: "running" };
+        publish();
+        try {
+          const records = await fetchLeaf(leaf, context, labelOf(leaf));
+          resourcesByLeaf.set(leaf.key, records);
+          const leafHits = leafHitsOf(leaf, records);
+          hits.set(leaf.key, leafHits);
+          if (leaf.kind !== "patient") recordsByLeaf.set(leaf.key, leafRecordsOf(leaf, records));
+          progress[leaf.key] = { state: "done", records: records.length, patients: leafHits.size };
+        } catch (error) {
+          progress[leaf.key] = { ...progress[leaf.key], state: "error" };
+          throw error;
+        } finally {
+          publish();
+        }
+      }),
+    LEAF_CONCURRENCY,
+  );
+
+  // 時間関係は基準の条件の記録と突き合わせて絞る(上流では表せない)。基準は min_count を
+  // 満たした患者の記録だけを使う。
+  for (const leaf of leaves.filter((l) => l.relation && resourcesByLeaf.has(l.key))) {
+    const anchor = leaves.find((l) => l.key === leaf.relation!.key);
+    if (!anchor) continue;
+    const anchorPatients = hits.get(anchor.key) ?? new Map();
+    const anchorRecords = (resourcesByLeaf.get(anchor.key) ?? []).filter((r) =>
+      anchorPatients.has(referencePatientId(r)),
+    );
+    const filtered = applyRelation(leaf, resourcesByLeaf.get(leaf.key) ?? [], anchor, anchorRecords);
+    const leafHits = leafHitsOf(leaf, filtered);
+    hits.set(leaf.key, leafHits);
+    recordsByLeaf.set(leaf.key, leafRecordsOf(leaf, filtered));
+    progress[leaf.key] = { state: "done", records: filtered.length, patients: leafHits.size };
+  }
+  publish();
+
+  const setOf = (leaf: ExtractLeaf) => {
+    const leafHits = hits.get(leaf.key);
+    return leafHits ? new Set(leafHits.keys()) : null;
+  };
+  // 患者属性を兄弟に当てる条件は、いったん外して絞った患者に当ててから組み直す。
+  let ids = combineSets(body.root, setOf);
+  if (ids.size > EXTRACT_MAX_PATIENTS) {
+    throw new ExtractLimitError(`該当者が ${EXTRACT_MAX_PATIENTS} 人を超えました。条件を絞ってください。`);
+  }
+  const patients = new Map<string, fhir4.Patient>();
+  // 患者属性を手元で当てる条件が無ければ、患者の中身が要らない呼び出し(比較群)では読まない。
+  if (!options.skipPatients || filterKeys.size > 0) await fetchPatients([...ids], context, patients);
+  if (filterKeys.size > 0) {
+    const day = today();
+    for (const leaf of leaves.filter((l) => filterKeys.has(l.key))) {
+      const matched: LeafHits = new Map();
+      for (const id of ids) {
+        if (patientMatches(leaf, patients.get(id), day)) matched.set(id, { count: 1, first: "", last: "", latest: "" });
+      }
+      hits.set(leaf.key, matched);
+      progress[leaf.key] = { state: "done", records: ids.size, patients: matched.size };
+    }
+    ids = combineSets(body.root, setOf);
+    publish();
+  }
+
+  return {
+    rows: extractRows(ids, patients, leaves, hits),
+    leaves,
+    hits,
+    records: recordsByLeaf,
+    ranAt: new Date().toISOString(),
+  };
+}
+
 /** データ抽出の実行。実行は明示のボタンだけで、条件を変えても自動では走らせない。 */
 export function useExtractRun() {
   const queryClient = useQueryClient();
@@ -246,15 +345,11 @@ export function useExtractRun() {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
-      const leaves = collectLeaves(body.root);
-      const filterKeys = patientFilterLeaves(body.root);
-      const progress: Record<string, LeafProgress> = Object.fromEntries(
-        leaves.map((leaf) => [leaf.key, { state: "pending" as LeafState, records: 0, patients: 0 }]),
-      );
       const requests = { count: 0 };
+      let progress: Record<string, LeafProgress> = {};
       const publish = (patch: Partial<ExtractRunState> = {}) =>
-        setState((prev) => ({ ...prev, ...patch, progress: { ...progress }, requests: requests.count }));
-      setState({ ...IDLE, running: true, progress: { ...progress } });
+        setState((prev) => ({ ...prev, ...patch, progress, requests: requests.count }));
+      setState({ ...IDLE, running: true });
 
       const context: RunContext = {
         queryClient,
@@ -264,81 +359,10 @@ export function useExtractRun() {
         onRequest: () => publish(),
       };
       try {
-        const hits = new Map<string, LeafHits>();
-        const recordsByLeaf = new Map<string, LeafRecord[]>();
-        const resourcesByLeaf = new Map<string, ExtractRecord[]>();
-        await runWithConcurrency(
-          leaves
-            .filter((leaf) => !filterKeys.has(leaf.key))
-            .map((leaf) => async () => {
-              progress[leaf.key] = { ...progress[leaf.key], state: "running" };
-              publish();
-              try {
-                const records = await fetchLeaf(leaf, context, labelOf(leaf));
-                resourcesByLeaf.set(leaf.key, records);
-                const leafHits = leafHitsOf(leaf, records);
-                hits.set(leaf.key, leafHits);
-                if (leaf.kind !== "patient") recordsByLeaf.set(leaf.key, leafRecordsOf(leaf, records));
-                progress[leaf.key] = { state: "done", records: records.length, patients: leafHits.size };
-              } catch (error) {
-                progress[leaf.key] = { ...progress[leaf.key], state: "error" };
-                throw error;
-              } finally {
-                publish();
-              }
-            }),
-          LEAF_CONCURRENCY,
-        );
-
-        // 時間関係は基準の条件の記録と突き合わせて絞る(上流では表せない)。基準は min_count を
-        // 満たした患者の記録だけを使う。
-        for (const leaf of leaves.filter((l) => l.relation && resourcesByLeaf.has(l.key))) {
-          const anchor = leaves.find((l) => l.key === leaf.relation!.key);
-          if (!anchor) continue;
-          const anchorPatients = hits.get(anchor.key) ?? new Map();
-          const anchorRecords = (resourcesByLeaf.get(anchor.key) ?? []).filter((r) =>
-            anchorPatients.has(referencePatientId(r)),
-          );
-          const filtered = applyRelation(leaf, resourcesByLeaf.get(leaf.key) ?? [], anchor, anchorRecords);
-          const leafHits = leafHitsOf(leaf, filtered);
-          hits.set(leaf.key, leafHits);
-          recordsByLeaf.set(leaf.key, leafRecordsOf(leaf, filtered));
-          progress[leaf.key] = { state: "done", records: filtered.length, patients: leafHits.size };
-        }
-        publish();
-
-        const setOf = (leaf: ExtractLeaf) => {
-          const leafHits = hits.get(leaf.key);
-          return leafHits ? new Set(leafHits.keys()) : null;
-        };
-        // 患者属性を兄弟に当てる条件は、いったん外して絞った患者に当ててから組み直す。
-        let ids = combineSets(body.root, setOf);
-        if (ids.size > EXTRACT_MAX_PATIENTS) {
-          throw new ExtractLimitError(`該当者が ${EXTRACT_MAX_PATIENTS} 人を超えました。条件を絞ってください。`);
-        }
-        const patients = new Map<string, fhir4.Patient>();
-        // 患者属性を手元で当てる条件が無ければ、患者の中身が要らない呼び出し(比較群)では読まない。
-        if (!options.skipPatients || filterKeys.size > 0) await fetchPatients([...ids], context, patients);
-        if (filterKeys.size > 0) {
-          const day = today();
-          for (const leaf of leaves.filter((l) => filterKeys.has(l.key))) {
-            const matched: LeafHits = new Map();
-            for (const id of ids) {
-              if (patientMatches(leaf, patients.get(id), day)) matched.set(id, { count: 1, first: "", last: "", latest: "" });
-            }
-            hits.set(leaf.key, matched);
-            progress[leaf.key] = { state: "done", records: ids.size, patients: matched.size };
-          }
-          ids = combineSets(body.root, setOf);
-        }
-
-        const result: ExtractResult = {
-          rows: extractRows(ids, patients, leaves, hits),
-          leaves,
-          hits,
-          records: recordsByLeaf,
-          ranAt: new Date().toISOString(),
-        };
+        const result = await runExtract(body, labelOf, context, options, (next) => {
+          progress = next;
+          publish();
+        });
         publish({ running: false, result });
         return result;
       } catch (error) {

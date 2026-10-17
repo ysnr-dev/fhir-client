@@ -25,6 +25,8 @@ export const STRATUM_COLUMN = "比較群";
 export const CLUSTER_COLUMN = "クラスタ";
 /** 担当医の列の見出し。 */
 export const ATTENDING_COLUMN = "担当医";
+/** 基準日(§24)の列の見出し。 */
+export const INDEX_DATE_COLUMN = "基準日";
 
 /** 属性を持たない患者の値。 */
 export const EMPTY_ATTRIBUTE = "(なし)";

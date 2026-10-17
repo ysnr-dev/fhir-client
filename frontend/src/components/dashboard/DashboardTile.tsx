@@ -3,13 +3,14 @@ import { Link } from "react-router-dom";
 import type { ExtractQuery } from "../../api/masterClient";
 import { dashboardViewLabel, type DashboardTile as Tile } from "../../fhir/dashboardLayout";
 import { patientColumnsOf } from "../../fhir/extractQueryHelpers";
-import { extractTabLabel, type ExtractTab } from "../../fhir/extractRecordQuery";
+import { extractTabLabel, type ExtractTab, type IndicatorExtractDefinition } from "../../fhir/extractRecordQuery";
 import { EXTRACT_TAB_RUNNERS, recordCountLabel } from "../../fhir/extractTabRunners";
 import { recordTableCells, recordTableHeader } from "../../fhir/recordTableHelpers";
 import type { TileOutcome, TileState } from "../../hooks/useDashboardRun";
 import { dateTimeLabel } from "../../lib/dates";
 import { ErrorBanner } from "../ErrorBanner";
 import { BreakdownTable, ResultTable } from "../extract/ExtractResults";
+import { IndicatorTrendView } from "../extract/IndicatorTrendView";
 import { RecordBreakdownView } from "../extract/RecordBreakdownView";
 import { RecordResultNotices } from "../extract/RecordResultNotices";
 import { RecordListTable } from "../extract/RecordResultTable";
@@ -156,8 +157,23 @@ function RecordTileBody({ tile, outcome }: { tile: Tile; outcome: Extract<TileOu
   if (tile.view === "count") {
     return (
       <>
-        <p className="dashboard-tile__number">{recordCountLabel(table)}</p>
+        <p className="dashboard-tile__number">{table.headline ?? recordCountLabel(table)}</p>
         {notices}
+      </>
+    );
+  }
+  if (tile.view === "breakdown" && outcome.tab === "indicator") {
+    return (
+      <>
+        {notices}
+        <IndicatorTrendView
+          header={header}
+          cells={cells}
+          patientIds={patientIds}
+          definition={definition as IndicatorExtractDefinition}
+          periods={table.periods}
+          controls={false}
+        />
       </>
     );
   }

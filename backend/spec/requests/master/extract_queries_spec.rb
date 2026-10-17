@@ -297,6 +297,13 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "f", "patient_folder_id" => 3, "query_code" => "abc" }] },
                     name: "フォルダと条件")
       expect(errors_text).to include("どれか 1 つ")
+      create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "f", "patient_folder_id" => 3, "index_date" => "first" }] },
+                    name: "フォルダに基準日")
+      expect(errors_text).to include("基準日")
+      create_record("lab", { "items" => [lab_item], "strata" => [strata.first.merge("index_date" => "first")],
+                             "breakdown" => { "date" => "日付", "grain" => "elapsed_month", "rows" => "period" } }, name: "基準日")
+      expect(response).to have_http_status(:created), response.body
+      expect(body["definition"]["strata"].first["index_date"]).to eq("first")
       create_record("lab", { "items" => [lab_item], "strata" => [{ "key" => "f", "patient_folder_id" => 0 }] }, name: "フォルダ0")
       expect(response).to have_http_status(:unprocessable_content)
       nine = (1..9).map { |i| { "key" => "s#{i}", "query_code" => "q#{i}" } }
@@ -333,6 +340,57 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       nine = (1..9).map { |i| { "key" => "m#{i}", "kind" => "outpatient", "period" => { "mode" => "relative", "days" => 30 } } }
       create_record("cluster", { "strata" => strata, "metrics" => nine }, name: "9 指標")
       expect(errors_text).to include("8 件まで")
+    end
+
+    it "指標は分母・分子・刻み・期間の開始が要り、分子に患者フォルダは置けず、目標は 0〜100" do
+      denominator = { "key" => "dis", "kind" => "admission", "date_mode" => "discharged", "period" => { "mode" => "relative", "days" => 365 } }
+      numerator = { "key" => "re", "query_code" => "abc" }
+      create_record("indicator", { "grain" => "month", "denominator" => denominator, "numerator" => numerator,
+                                   "target" => 10, "target_direction" => "le" })
+      expect(response).to have_http_status(:created), response.body
+      expect(body["tab"]).to eq("indicator")
+      expect(body["definition"]["denominator"]).to eq(denominator)
+      expect(body["definition"]["target"]).to eq(10)
+
+      create_record("indicator", { "grain" => "month", "denominator" => denominator }, name: "分子なし")
+      expect(errors_text).to include("numerator")
+      create_record("indicator", { "denominator" => denominator, "numerator" => numerator }, name: "刻みなし")
+      expect(errors_text).to include("grain")
+      create_record("indicator", { "grain" => "week", "denominator" => denominator, "numerator" => numerator }, name: "週")
+      expect(errors_text).to include("grain")
+      create_record("indicator", { "grain" => "month", "denominator" => { "key" => "f", "patient_folder_id" => 3 },
+                                   "numerator" => { "key" => "n", "patient_folder_id" => 3 } }, name: "分子フォルダ")
+      expect(errors_text).to include("患者フォルダは置けません")
+      create_record("indicator", { "grain" => "month", "denominator" => denominator, "numerator" => numerator,
+                                   "period" => { "mode" => "absolute", "to" => "2026-10-01" } }, name: "開始なし")
+      expect(errors_text).to include("from")
+      create_record("indicator", { "grain" => "month", "denominator" => denominator, "numerator" => numerator, "target" => 120 },
+                    name: "目標超え")
+      expect(errors_text).to include("target")
+      post "/master/extract_queries",
+           params: { scope: "facility", name: "期間なし", tab: "indicator",
+                     definition: { "schema_version" => 1, "grain" => "month", "denominator" => denominator, "numerator" => numerator } },
+           as: :json
+      expect(errors_text).to include("period")
+    end
+
+    it "イベントは基準・結果(条件か死亡)・期間の開始が要り、数え始めと最大追跡は日数" do
+      index = { "key" => "dis", "kind" => "admission", "date_mode" => "discharged", "period" => { "mode" => "relative", "days" => 365 } }
+      outcome = { "key" => "re", "kind" => "admission", "date_mode" => "admitted" }
+      create_record("event", { "index" => index, "index_anchor" => "end", "outcome" => outcome, "outcome_from_days" => 1, "follow_days" => 90 })
+      expect(response).to have_http_status(:created), response.body
+      expect(body["definition"]["outcome"]).to eq(outcome)
+      create_record("event", { "index" => index, "outcome" => { "key" => "d", "kind" => "death" } }, name: "死亡")
+      expect(response).to have_http_status(:created), response.body
+      create_record("event", { "index" => index }, name: "結果なし")
+      expect(errors_text).to include("outcome")
+      create_record("event", { "index" => { "key" => "p", "kind" => "patient", "gender" => ["male"] }, "outcome" => outcome }, name: "患者属性")
+      expect(errors_text).to include("患者属性")
+      create_record("event", { "index" => index, "outcome" => outcome, "outcome_from_days" => -1 }, name: "負の日数")
+      expect(errors_text).to include("outcome_from_days")
+      create_record("event", { "index" => index, "outcome" => outcome, "period" => { "mode" => "absolute", "to" => "2026-10-01" } },
+                    name: "開始なし")
+      expect(errors_text).to include("from")
     end
 
     it "内訳の区切りと検査結果の変化を保存できる" do
@@ -386,6 +444,19 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       expect(trend.definition["strata"].size).to eq(3)
       physician = ExtractQuery.find_by!(scope: "facility", tab: "lab", name: "医師別 HbA1c コントロール")
       expect(physician.definition["attending"]).to eq("outpatient")
+      readmission = ExtractQuery.find_by!(scope: "facility", tab: "patient", name: "退院後30日以内の再入院")
+      indicator = ExtractQuery.find_by!(scope: "facility", tab: "indicator", name: "退院後30日以内の再入院率(月)")
+      expect(indicator.definition["numerator"]).to eq({ "key" => "re", "query_code" => readmission.code })
+    end
+
+    it "分母・分子が指す「患者」タブの条件が見つからなければ、その指標は入れない" do
+      presets = [{ "name" => "分子なし", "tab" => "indicator",
+                   "definition" => { "schema_version" => 1, "period" => { "mode" => "relative", "days" => 365 }, "grain" => "month",
+                                     "denominator" => { "key" => "d", "kind" => "outpatient", "period" => { "mode" => "relative", "days" => 365 } },
+                                     "numerator" => { "key" => "n", "patient_query_name" => "存在しない条件" } } }]
+      result = ExtractQueryPresets.new(presets).load!
+      expect(result.skipped).to eq(["分子なし"])
+      expect(ExtractQuery.where(tab: "indicator")).to be_empty
     end
 
     it "「患者」タブの条件が見つからなければ患者の絞り込みを外して入れる" do

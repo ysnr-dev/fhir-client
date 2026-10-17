@@ -9869,6 +9869,35 @@ input.lot-number-cell__input.is-invalid {
   height: 12px;
 }
 
+/* 指標の目標の参照線(破線)と、その凡例。 */
+.extract-breakdown-chart__reference-line {
+  stroke: var(--text);
+  stroke-width: 1;
+  stroke-dasharray: 5 3;
+  opacity: 0.6;
+}
+
+.extract-breakdown-chart__reference .patient-chart__swatch line {
+  stroke: var(--text);
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
+}
+
+/* 指標の表の、目標に達した / 達しない印。 */
+.extract-indicator__met,
+.extract-indicator__unmet {
+  margin-left: 4px;
+  font-size: 12px;
+}
+
+.extract-indicator__met {
+  color: var(--accent);
+}
+
+.extract-indicator__unmet {
+  color: var(--danger);
+}
+
 /* 内訳のセルの数。押すと一覧をそのセルの記録に絞る。 */
 .extract-breakdown__drill {
   height: auto;

@@ -64,6 +64,8 @@ export * from "./medicationExtract";
 export * from "./encounterExtract";
 export * from "./conditionExtract";
 export * from "./clusterExtract";
+export * from "./indicatorExtract";
+export * from "./eventExtract";
 export * from "./nursingWorksheet";
 export * from "./bedManagement";
 export * from "./nursingAcuity";

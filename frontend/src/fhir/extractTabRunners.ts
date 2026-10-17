@@ -1,8 +1,12 @@
+import type { QueryClient } from "@tanstack/react-query";
+import type { ExtractQuery, PatientFolder } from "../api/masterClient";
 import {
   fetchAdverseEventExtract,
   fetchClusterExtract,
   fetchConditionExtract,
   fetchEncounterExtract,
+  fetchEventExtract,
+  fetchIndicatorExtract,
   fetchLabExtract,
   fetchMedicationExtract,
   fetchMicroExtract,
@@ -19,6 +23,10 @@ import {
   type EncounterExtractCriteria,
   type EncounterExtractKind,
   type EncounterExtractResult,
+  type EventExtractCriteria,
+  type EventExtractResult,
+  type IndicatorExtractCriteria,
+  type IndicatorExtractResult,
   type LabExtractCriteria,
   type LabExtractResult,
   type MedicationExtractCriteria,
@@ -47,14 +55,25 @@ import {
   type ExtractPatientRow,
 } from "./extractQueryHelpers";
 import type { ResolvedPeriod } from "./extractQueryModel";
-import { stratumLeaf } from "./extractRecordQuery";
+import { isDeathOutcome, stratumLeaf } from "./extractRecordQuery";
+import {
+  EVENT_CENSORED,
+  EVENT_DAYS_COLUMN,
+  EVENT_DAY_COLUMN,
+  EVENT_END_COLUMN,
+  EVENT_INDEX_COLUMN,
+  EVENT_OCCURRED,
+  EVENT_OUTCOME_COLUMN,
+} from "./eventExtractHelpers";
 import type {
   AdverseEventExtractDefinition,
   ClusterExtractDefinition,
   ConditionExtractDefinition,
   EncounterExtractDefinition,
+  EventExtractDefinition,
   ExtractRecordDefinition,
   ExtractRecordTab,
+  IndicatorExtractDefinition,
   LabExtractDefinition,
   MedicationExtractDefinition,
   MicroExtractDefinition,
@@ -63,6 +82,15 @@ import type {
   SurgeryExtractDefinition,
   TemplateExtractDefinition,
 } from "./extractRecordQuery";
+import {
+  INDICATOR_HIT,
+  INDICATOR_HIT_COLUMN,
+  INDICATOR_MISS,
+  INDICATOR_PERIOD_COLUMN,
+  INDICATOR_PERIOD_NAME_COLUMN,
+  indicatorHeadline,
+  indicatorPointsOf,
+} from "./indicatorExtractHelpers";
 import { labExtractHeader, labExtractTable, labFixedCells, type LabExtractAggregate } from "./labExtractHelpers";
 import { medicationExtractHeader, medicationExtractRows } from "./medicationExtractHelpers";
 import { microExtractHeader, microExtractTable, type MicroSusceptibilityField } from "./microExtractHelpers";
@@ -73,7 +101,8 @@ import {
   performExtractTable,
   performRowCells,
 } from "./performExtractHelpers";
-import type { RecordTableRow } from "./recordTableHelpers";
+import { periodBuckets } from "./recordBreakdownHelpers";
+import { recordTableCells, type RecordTableRow } from "./recordTableHelpers";
 import { surgeryExtractHeader, surgeryExtractRows } from "./surgeryExtractHelpers";
 import {
   latestPerPatient,
@@ -92,6 +121,13 @@ import type { VitalThresholdSettings } from "./vitalHelpers";
 export interface ExtractRunInput {
   range: ResolvedPeriod | null;
   patientIds?: string[];
+  /** 実行の中で「患者」タブの条件を評価するタブ(指標)に渡すもの。無ければそのタブは実行できない。 */
+  evaluator?: {
+    /** 「患者」タブに保存した条件。 */
+    queries: ExtractQuery[];
+    folders: PatientFolder[];
+    queryClient?: QueryClient;
+  };
 }
 
 /** 画面から渡す参照データ(診療科の一覧はコードに、バイタルの閾値は H/L の判定に使う)。 */
@@ -110,6 +146,10 @@ export interface RecordTable {
   prefix?: string;
   /** 読み切れなかった結果では表を出せない(患者ごとの集計など)。rows は空。 */
   incomplete: boolean;
+  /** 件数の代わりに結果を 1 行で表すもの(指標の直近の割合)。ダッシュボードの「件数」のタイルに出す。 */
+  headline?: string;
+  /** 結果が持つ期間の並び(行の無い 0 件の期間も含む。指標)。 */
+  periods?: { date: string; label: string }[];
 }
 
 export interface ExtractTabRunner<D extends ExtractRecordDefinition, C, R> {
@@ -493,6 +533,106 @@ export const clusterRunner: ExtractTabRunner<ClusterExtractDefinition, ClusterEx
   },
 };
 
+/**
+ * 指標(docs/data-extract-design.md §23)。期間の刻みごとに分母・分子の条件を評価し、分母に入った患者 × 期間を 1 行に、
+ * 「期間」(刻みの最初の日)・「期間名」・「分子」(該当 / 非該当)を固定列にする。割合は行から数える(indicatorPointsOf)。
+ */
+export const indicatorRunner: ExtractTabRunner<IndicatorExtractDefinition, IndicatorExtractCriteria, IndicatorExtractResult> = {
+  label: "指標",
+  emptyLabel: "分母に入る患者はいません",
+  criteria(definition, { range, patientIds, evaluator }) {
+    if (!definition.denominator || !definition.numerator || !range?.from || !evaluator) return null;
+    const buckets = periodBuckets({ from: range.from, to: range.to ?? today() }, definition.grain ?? "month");
+    if (buckets.length === 0) return null;
+    return {
+      buckets,
+      denominator: definition.denominator,
+      numerator: definition.numerator,
+      queries: evaluator.queries,
+      folders: evaluator.folders,
+      queryClient: evaluator.queryClient,
+      patientIds,
+    };
+  },
+  fetch: fetchIndicatorExtract,
+  table(result, definition) {
+    const patientColumns = patientColumnsOf(definition.output);
+    const header = [
+      "患者番号",
+      "氏名",
+      ...patientColumns.map(patientColumnLabel),
+      INDICATOR_PERIOD_COLUMN,
+      INDICATOR_PERIOD_NAME_COLUMN,
+      INDICATOR_HIT_COLUMN,
+    ];
+    const rows = result.buckets.flatMap((bucket) =>
+      [...bucket.denominator]
+        .map((patientId) => patientRowOf(patientId, result.patients.get(patientId)))
+        .sort((a, b) => a.patientNumber.localeCompare(b.patientNumber, undefined, { numeric: true }))
+        .map((patient) => ({
+          key: `${bucket.key}:${patient.patientId}`,
+          patient,
+          fixed: [bucket.from, bucket.label, bucket.numerator.has(patient.patientId) ? INDICATOR_HIT : INDICATOR_MISS],
+          values: [],
+        })),
+    );
+    const periods = result.buckets.map((bucket) => ({ date: bucket.from, label: bucket.label }));
+    const { points } = indicatorPointsOf(header, recordTableCells(rows, patientColumns), rows.map((r) => r.patient.patientId), periods);
+    return { header, rows, unit: "行", incomplete: false, headline: indicatorHeadline(points), periods };
+  },
+};
+
+/**
+ * イベントまでの日数(docs/data-extract-design.md §25)。基準イベントの最初の記録の日から、結果イベント(条件 1 件か死亡)の
+ * 最初の記録の日までの日数と転帰(発生 / 打ち切り)を患者 1 人 1 行にする。累積発生率は行から数える(incidenceCurves)。
+ */
+export const eventRunner: ExtractTabRunner<EventExtractDefinition, EventExtractCriteria, EventExtractResult> = {
+  label: "イベント",
+  emptyLabel: "基準イベントのある患者はいません",
+  criteria(definition, { range, patientIds }) {
+    if (!definition.index || !definition.outcome || !range?.from) return null;
+    const outcome = isDeathOutcome(definition.outcome) ? null : stratumLeaf(definition.outcome, null, "結果イベント");
+    return {
+      // 基準イベントの期間はタブの期間(条件に入れた期間は使わない)。
+      index: stratumLeaf({ ...definition.index, period: null }, definition.period, "基準イベント"),
+      indexAnchor: definition.index_anchor ?? "start",
+      outcome,
+      fromDays: definition.outcome_from_days ?? 1,
+      followDays: definition.follow_days ?? undefined,
+      patientIds,
+    };
+  },
+  fetch: fetchEventExtract,
+  table(result, definition) {
+    const header = [
+      "患者番号",
+      "氏名",
+      ...patientColumnsOf(definition.output).map(patientColumnLabel),
+      EVENT_INDEX_COLUMN,
+      EVENT_DAY_COLUMN,
+      EVENT_DAYS_COLUMN,
+      EVENT_OUTCOME_COLUMN,
+      EVENT_END_COLUMN,
+    ];
+    const rows = [...result.subjects]
+      .sort((a, b) => (a.indexDay > b.indexDay ? -1 : a.indexDay < b.indexDay ? 1 : 0))
+      .map((subject) => ({
+        key: subject.patientId,
+        patient: patientRowOf(subject.patientId, result.patients.get(subject.patientId)),
+        fixed: [
+          subject.indexDay,
+          subject.eventDay ?? "",
+          String(subject.days),
+          subject.eventDay ? EVENT_OCCURRED : EVENT_CENSORED,
+          subject.endDay,
+        ],
+        values: [],
+      }));
+    const events = result.subjects.filter((s) => s.eventDay).length;
+    return { header, rows, unit: "人", incomplete: false, headline: `${rows.length} 人(発生 ${events})` };
+  },
+};
+
 /** タブ → 実行の組。タブを足すときはここに 1 行足す。 */
 export const EXTRACT_TAB_RUNNERS: {
   [K in ExtractRecordTab]: ExtractTabRunner<ExtractRecordDefinition, unknown, unknown>;
@@ -508,4 +648,6 @@ export const EXTRACT_TAB_RUNNERS: {
   adverse: adverseEventRunner,
   pathway: pathwayRunner,
   cluster: clusterRunner,
+  indicator: indicatorRunner,
+  event: eventRunner,
 };

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ExtractQuery, PatientFolder } from "../api/masterClient";
 import { useExtractRun, type ExtractResult } from "../api/queries";
 import { fetchAttendingPhysicians } from "../api/queries/extractAttending";
@@ -40,6 +41,7 @@ const IDLE_TILE: TileState = { running: false, ranAt: null, outcome: null };
 
 export function useDashboardRun(queries: ExtractQuery[], folders: PatientFolder[], context: ExtractRunContext) {
   const patientExtract = useExtractRun();
+  const queryClient = useQueryClient();
   const [states, setStates] = useState<Record<string, TileState>>({});
   const [running, setRunning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -67,7 +69,11 @@ export function useDashboardRun(queries: ExtractQuery[], folders: PatientFolder[
       });
       if (!scope) throw new DOMException("aborted", "AbortError");
       const range = resolvePeriod(definition.period, today());
-      const criteria = runner.criteria(definition, { range, patientIds: scope.patientIds }, runContext);
+      const criteria = runner.criteria(
+        definition,
+        { range, patientIds: scope.patientIds, evaluator: { queries: patientQueries, folders: allFolders, queryClient } },
+        runContext,
+      );
       if (criteria === null) throw new Error("条件が足りないため実行できません。データ抽出で条件を直してください。");
       const result = await runner.fetch(criteria, signal);
       const table = runner.table(result, definition, runContext);
@@ -86,11 +92,11 @@ export function useDashboardRun(queries: ExtractQuery[], folders: PatientFolder[
         table,
         truncated: (result as { truncated?: boolean }).truncated ?? false,
         summary: scope.summary,
-        attributes: patientAttributesOf(scope.ran.groupsOf, scope.ran.attending, names, scope.ran.groupLabel),
+        attributes: patientAttributesOf(scope.ran.groupsOf, scope.ran.attending, names, scope.ran.groupLabel, scope.ran.indexOf),
         attendingTruncated,
       };
     },
-    [patientExtract],
+    [patientExtract, queryClient],
   );
 
   /** タイルを上から順に実行する。実行中なら前の実行を止めてから始める。 */

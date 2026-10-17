@@ -5,7 +5,17 @@ import { Modal } from "../Modal";
 // 画面の各所の「?」から、その場所の話題を開く(見出し=流れ、条件木=条件の組み方、「比較」の行=比較群と担当医、
 // 結果の切替=内訳、クラスタの行=クラスタ)。機能を足したらここも直す。
 
-export type GuideTopic = "flow" | "conditions" | "records" | "breakdown" | "compare" | "cluster" | "output" | "notes";
+export type GuideTopic =
+  | "flow"
+  | "conditions"
+  | "records"
+  | "breakdown"
+  | "compare"
+  | "cluster"
+  | "indicator"
+  | "event"
+  | "output"
+  | "notes";
 
 const TOPICS: { key: GuideTopic; label: string }[] = [
   { key: "flow", label: "流れ" },
@@ -14,6 +24,8 @@ const TOPICS: { key: GuideTopic; label: string }[] = [
   { key: "breakdown", label: "内訳" },
   { key: "compare", label: "比較群と担当医" },
   { key: "cluster", label: "クラスタ" },
+  { key: "indicator", label: "指標" },
+  { key: "event", label: "イベント" },
   { key: "output", label: "保存と出力" },
   { key: "notes", label: "注意" },
 ];
@@ -338,6 +350,39 @@ function TopicBody({ topic }: { topic: GuideTopic }) {
             <Term name="重なり">2 つのクラスタの両方に入る患者の数。対角はそのクラスタの人数</Term>
             <Term name="一覧へ">概要・重なりの数を押すと、一覧をその患者に絞る(フォルダ登録・CSV もできる)</Term>
             <Term name="内訳">行=クラスタ・分割、列=検査結果の最新(区切り 7,8)・行の中の割合で、クラスタごとの達成率になる。値に最新の平均を選べばクラスタごとの平均になる</Term>
+          </dl>
+        </section>
+      );
+    case "indicator":
+      return (
+        <section>
+          <h3>指標</h3>
+          <dl className="extract-guide__terms">
+            <Term name="分母">割合の母集団。条件 1 件・「患者」タブに保存した条件・患者フォルダ(下位フォルダを含む)のどれか</Term>
+            <Term name="分子">分母のうち、この条件に当たる患者。条件 1 件か「患者」タブに保存した条件</Term>
+            <Term name="期間と刻み">期間を刻み(月・四半期・年度・年)で区切り、刻みごとに分母と分子の条件を「その刻みを期間にして」実行する。条件に入れた期間は刻みに置き換わる。基準(〜日以内)を持つ条件は、窓の分だけ刻みの外も読む(退院が月内なら再入院は翌月でも数える)</Term>
+            <Term name="割合">刻みごとの 分子の患者数 ÷ 分母の患者数。件数の割合は出せない</Term>
+            <Term name="目標">目標の割合と向き(以上が良い / 以下が良い)。グラフに破線で出し、表に ○ × を付ける</Term>
+            <Term name="結果の行">分母に入った患者 × 刻みが 1 行。「期間」「期間名」「分子」(該当 / 非該当)の列を持ち、比較群・担当医の列も付く</Term>
+            <Term name="指標の見方">割合の推移の折れ線(比較群があれば群ごとにも)と、期間ごとの分母・分子・割合の表。数を押すと一覧をその行に絞る</Term>
+            <Term name="内訳">行=期間・列=分子・行の中の割合が既定。列を担当医にすれば医師ごとの該当の割合になる</Term>
+            <Term name="例">再入院率: 分母=入院(退院した)、分子=保存した条件「退院後30日以内の再入院」。達成率: 分母=HbA1c の測定、分子=HbA1c 7.0 未満</Term>
+          </dl>
+        </section>
+      );
+    case "event":
+      return (
+        <section>
+          <h3>イベント</h3>
+          <dl className="extract-guide__terms">
+            <Term name="基準">基準イベントの条件 1 件。タブの期間内の最初の記録の日が患者の基準日(日 0)。入院・手術の実施など終了日を持つ種類は「基準の日」で終了日(退院日)にできる</Term>
+            <Term name="結果">結果イベント。条件 1 件か死亡(患者の死亡日)。基準日の「数え始め」(既定 1 日後)以降の最初の記録の日がイベント日。条件の件数(以上)は使わず、値の範囲や項目はそのまま効く</Term>
+            <Term name="最大追跡">基準日から何日まで追うか。無ければ今日まで。それまでに結果が無ければ「打ち切り」</Term>
+            <Term name="結果の行">基準イベントのある患者 1 人が 1 行。基準日・イベント日・日数(結果があればイベント日まで、無ければ観察の終わりまで)・転帰(発生 / 打ち切り)・観察終了日</Term>
+            <Term name="累積発生率">Kaplan-Meier の 1 − S(t)。全体と比較群ごと(7 群まで)の階段グラフと、人数・発生・打ち切り・50% に達した日数、節目の日数ごとの累積発生率(リスク集団)。群の人数を押すと一覧をその患者に絞る</Term>
+            <Term name="内訳">行=日数(区切り 30,90,180)・列=転帰で日数の分布、列=比較群で群ごとの発生の数</Term>
+            <Term name="例">退院から再入院まで: 基準=入院(退院した。基準の日=終了日)、結果=入院(入院した)、最大追跡 90 日。診断から腎症まで: 基準=2型糖尿病、結果=糖尿病性腎症</Term>
+            <Term name="注意">死亡で結果が起こらなくなる競合は扱わない(死亡も打ち切り)。読み切れない条件があると結果は出ない</Term>
           </dl>
         </section>
       );

@@ -21,8 +21,8 @@
 
 | 表示 | 「患者」タブの条件 | 記録タブの条件 |
 |---|---|---|
-| `count`(件数) | 該当人数 | 件数と人数(`recordCountLabel`) |
-| `breakdown`(内訳) | 性別 × 年齢帯と条件ごとの人数(`ExtractResults` の `BreakdownTable`) | 保存した切り口(`definition.breakdown`)の表とグラフ(`RecordBreakdownView` を `controls={false}` で)。行が期間なら推移の折れ線 |
+| `count`(件数) | 該当人数 | 件数と人数(`recordCountLabel`)。指標タブは直近の割合(`RecordTable.headline`) |
+| `breakdown`(内訳) | 性別 × 年齢帯と条件ごとの人数(`ExtractResults` の `BreakdownTable`) | 保存した切り口(`definition.breakdown`)の表とグラフ(`RecordBreakdownView` を `controls={false}` で)。行が期間なら推移の折れ線。指標タブは割合の推移(`IndicatorTrendView`) |
 | `list`(一覧) | 患者の一覧(`ResultTable`) | 記録の一覧(`RecordListTable`) |
 
 - 一覧は画面に並べるだけなので先頭だけを出し、切ったことを `TruncatedNotice` で示す(すべてはデータ抽出で開いて見る)。

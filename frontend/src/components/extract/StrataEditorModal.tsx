@@ -1,7 +1,14 @@
 import type { ExtractQuery, PatientFolder } from "../../api/masterClient";
 import { EXTRACT_KIND_LABELS, newLeaf } from "../../fhir/extractQueryHelpers";
 import { EXTRACT_KINDS, type ExtractLeaf } from "../../fhir/extractQueryModel";
-import { MAX_STRATA, isFolderStratum, type ExtractStratum, type StratumKind } from "../../fhir/extractRecordQuery";
+import {
+  INDEX_DATE_MODES,
+  MAX_STRATA,
+  isFolderStratum,
+  type ExtractStratum,
+  type IndexDateMode,
+  type StratumKind,
+} from "../../fhir/extractRecordQuery";
 import { stratumName } from "../../hooks/useExtractPatientScope";
 import { TrashIcon } from "../icons/TrashIcon";
 import { Modal } from "../Modal";
@@ -44,6 +51,8 @@ interface Props {
   /** 保存した条件・患者フォルダを選べるか(既定はどちらも選べる)。 */
   allow?: { saved?: boolean; folder?: boolean };
   max?: number;
+  /** 条件型に基準日(§24)を選ばせるか(既定は選ばせる。クラスタの指標・指標タブの分母・分子は選ばせない)。 */
+  indexDate?: boolean;
 }
 
 export function StrataEditorModal({
@@ -55,6 +64,7 @@ export function StrataEditorModal({
   itemLabel = "比較群",
   allow = { saved: true, folder: true },
   max = MAX_STRATA,
+  indexDate = true,
 }: Props) {
   const update = (index: number, next: ExtractStratum) =>
     onChange(strata.map((s, i) => (i === index ? next : s)));
@@ -77,6 +87,24 @@ export function StrataEditorModal({
                   onChange={(e) => update(index, { ...stratum, label: e.target.value })}
                 />
               </label>
+              {indexDate && stratum.kind && (
+                <label className="extract-field extract-field--inline">
+                  基準日
+                  <select
+                    value={stratum.index_date ?? ""}
+                    onChange={(e) =>
+                      update(index, { ...stratum, index_date: (e.target.value || undefined) as IndexDateMode | undefined })
+                    }
+                  >
+                    <option value="">なし</option>
+                    {INDEX_DATE_MODES.map((mode) => (
+                      <option key={mode.value} value={mode.value}>
+                        {mode.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <button
                 type="button"
                 className="rp-card__icon-button extract-leaf__remove"

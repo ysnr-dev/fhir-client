@@ -3,6 +3,7 @@ import { fetchAttendingPhysicians } from "../api/queries/extractAttending";
 import {
   ATTENDING_COLUMN,
   EMPTY_ATTRIBUTE,
+  INDEX_DATE_COLUMN,
   STRATUM_COLUMN,
   type PatientAttribute,
   type RecordTableRow,
@@ -28,16 +29,20 @@ export interface RecordPatientAttributes {
   error: unknown;
 }
 
-/** 属性の列(比較群・担当医)。担当医の名前がまだ無ければ空欄にする。groupLabel は比較群の列の見出し。 */
+/** 属性の列(比較群・基準日・担当医)。担当医の名前がまだ無ければ空欄にする。groupLabel は比較群の列の見出し。 */
 export function patientAttributesOf(
   groupsOf: Map<string, string[]> | null,
   mode: AttendingMode | null,
   names: Map<string, string> | null,
   groupLabel: string = STRATUM_COLUMN,
+  indexOf: Map<string, string> | null = null,
 ): PatientAttribute[] {
   const list: PatientAttribute[] = [];
   if (groupsOf) {
     list.push({ label: groupLabel, valueOf: (id) => groupsOf.get(id)?.join("、") || EMPTY_ATTRIBUTE });
+  }
+  if (indexOf) {
+    list.push({ label: INDEX_DATE_COLUMN, valueOf: (id) => indexOf.get(id) ?? "" });
   }
   if (mode) {
     list.push({ label: ATTENDING_COLUMN, valueOf: (id) => (names ? names.get(id) || EMPTY_ATTRIBUTE : "") });
@@ -75,9 +80,10 @@ export function useRecordPatientAttributes(
   const current = attending && attending.signature === signature ? attending : null;
   const groupsOf = ran?.groupsOf ?? null;
   const groupLabel = ran?.groupLabel;
+  const indexOf = ran?.indexOf ?? null;
   const attributes = useMemo(
-    () => patientAttributesOf(groupsOf, mode, current?.names ?? null, groupLabel),
-    [groupsOf, mode, current, groupLabel],
+    () => patientAttributesOf(groupsOf, mode, current?.names ?? null, groupLabel, indexOf),
+    [groupsOf, mode, current, groupLabel, indexOf],
   );
 
   return {

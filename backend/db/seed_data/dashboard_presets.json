@@ -16,7 +16,8 @@
       { "query_tab": "lab", "query_name": "医師別 腎症の進み具合(尿A/C比)", "view": "breakdown", "x": 6, "y": 9, "w": 6, "h": 5 },
       { "query_tab": "medication", "query_name": "糖尿病薬の処方(薬剤別)", "view": "breakdown", "x": 0, "y": 14, "w": 6, "h": 5 },
       { "query_tab": "condition", "query_name": "糖尿病合併症の病名", "view": "breakdown", "x": 6, "y": 14, "w": 6, "h": 5 },
-      { "query_name": "糖尿病の受診中断(180日以上)", "view": "list", "x": 0, "y": 19, "w": 12, "h": 6 }
+      { "query_name": "糖尿病の受診中断(180日以上)", "view": "list", "x": 0, "y": 19, "w": 12, "h": 6 },
+      { "query_tab": "indicator", "query_name": "HbA1c 7.0未満の患者の割合(四半期)", "view": "breakdown", "x": 0, "y": 25, "w": 6, "h": 5 }
     ]
   },
   {
@@ -32,7 +33,9 @@
       { "query_name": "直近30日の入院", "view": "list", "x": 0, "y": 4, "w": 12, "h": 6 },
       { "query_name": "抗菌薬の注射が30日に2回以上", "view": "list", "x": 0, "y": 10, "w": 6, "h": 6 },
       { "query_name": "退院後30日以内の再入院", "view": "list", "x": 6, "y": 10, "w": 6, "h": 6 },
-      { "query_name": "内視鏡の依頼があり実施のない患者(90日)", "view": "list", "x": 0, "y": 16, "w": 12, "h": 5 }
+      { "query_name": "内視鏡の依頼があり実施のない患者(90日)", "view": "list", "x": 0, "y": 16, "w": 12, "h": 5 },
+      { "query_tab": "indicator", "query_name": "退院後30日以内の再入院率(月)", "view": "breakdown", "x": 0, "y": 21, "w": 6, "h": 5 },
+      { "query_tab": "indicator", "query_name": "手術後30日以内の再入院率(月)", "view": "breakdown", "x": 6, "y": 21, "w": 6, "h": 5 }
     ]
   }
 ]

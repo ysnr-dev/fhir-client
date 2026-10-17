@@ -6,7 +6,7 @@
 # 比較群と担当医・出力する患者の列。タブ固有の項目は TAB_FIELDS に足す。中身のコード(どの薬・どの検査か)は解釈しない。
 module ExtractRecordDefinition
   SCHEMA_VERSION = 1
-  TABS = %w[encounter condition template lab medication micro surgery perform adverse pathway cluster].freeze
+  TABS = %w[encounter condition template lab medication micro surgery perform adverse pathway cluster indicator event].freeze
   MAX_ITEMS = 50
 
   CODE_SHAPE = ExtractQuery::CODE_SHAPE
@@ -17,9 +17,11 @@ module ExtractRecordDefinition
   # 除外・時間関係・出力項目は持たない。
   STRATUM_SOURCES = %w[kind query_code patient_folder_id].freeze
 
+  # index_date は基準日(§24。条件型だけ。該当記録の最初 / 最後の日)。
   STRATUM_SHAPE = {
     fields: ExtractQuery::LEAF_FIELDS.except("not", "relation", "output_fields")
-                                     .merge("query_code" => :text, "patient_folder_id" => { integer: { min: 1 } }),
+                                     .merge("query_code" => :text, "patient_folder_id" => { integer: { min: 1 } },
+                                            "index_date" => { enum: %w[first last] }),
     required: %w[key],
     check: lambda { |stratum, path|
       chosen = STRATUM_SOURCES.count { |field| !stratum[field].nil? }
@@ -29,6 +31,8 @@ module ExtractRecordDefinition
         ["#{path} に患者属性の条件は置けません"]
       elsif stratum["kind"]
         ExtractQuery::LEAF_CHECK.call(stratum, path)
+      elsif stratum.key?("index_date")
+        ["#{path} の基準日は条件型の比較群だけに置けます"]
       else
         []
       end
@@ -44,6 +48,38 @@ module ExtractRecordDefinition
       metric["kind"] == "patient" ? ["#{path} に患者属性の条件は置けません"] : ExtractQuery::LEAF_CHECK.call(metric, path)
     }
   }.freeze
+
+  # 指標タブ(§23)の分子。比較群と同じ形だが、患者フォルダは置けない(日付が無く、刻みごとに評価できない)。
+  NUMERATOR_SHAPE = STRATUM_SHAPE.merge(
+    check: lambda { |stratum, path|
+      errors = STRATUM_SHAPE[:check].call(stratum, path)
+      errors << "#{path} に患者フォルダは置けません" if stratum.key?("patient_folder_id")
+      errors
+    }
+  ).freeze
+
+  # イベントタブ(§25)の基準イベント。条件 1 件(指標と同じ形)だが、期間はタブの期間で読むので無くてよい
+  # (入院・外来の期間必須を、仮の期間を補って通す)。
+  EVENT_LEAF_CHECK = lambda { |leaf, path|
+    if leaf["kind"] == "patient"
+      ["#{path} に患者属性の条件は置けません"]
+    else
+      ExtractQuery::LEAF_CHECK.call(leaf.merge("period" => leaf["period"] || { "mode" => "relative", "days" => 1 }), path)
+    end
+  }
+  EVENT_INDEX_SHAPE = METRIC_SHAPE.merge(check: EVENT_LEAF_CHECK).freeze
+
+  # 結果イベント。条件 1 件(期間は基準日から決まるので無くてよい)か死亡(kind "death")。
+  EVENT_OUTCOME_SHAPE = {
+    fields: METRIC_SHAPE[:fields].merge("kind" => { enum: ExtractQuery::KINDS + %w[death] }),
+    required: %w[key kind],
+    check: lambda { |outcome, path|
+      outcome["kind"] == "death" ? [] : EVENT_LEAF_CHECK.call(outcome, path)
+    }
+  }.freeze
+
+  INDICATOR_GRAINS = %w[year fiscal quarter month].freeze
+  TARGET_DIRECTIONS = %w[ge le].freeze
 
   COMMON_FIELDS = {
     "schema_version" => { const: SCHEMA_VERSION },
@@ -63,7 +99,7 @@ module ExtractRecordDefinition
     "breakdown" => {
       fields: {
         "date" => :string,
-        "grain" => { enum: %w[year fiscal quarter month week day] },
+        "grain" => { enum: %w[year fiscal quarter month week day elapsed_day elapsed_week elapsed_month] },
         "fill_empty" => :boolean,
         "rows" => :string,
         "columns" => :string,
@@ -171,6 +207,46 @@ module ExtractRecordDefinition
         "metrics" => { list: METRIC_SHAPE, max: MAX_METRICS, unique: "key" }
       },
       required: %w[strata]
+    },
+    # 指標(§23)は期間の刻みごとに分母・分子を評価するので、期間の開始が要る。目標は割合(%)。
+    "indicator" => {
+      fields: {
+        "grain" => { enum: INDICATOR_GRAINS },
+        "denominator" => STRATUM_SHAPE,
+        "numerator" => NUMERATOR_SHAPE,
+        "target" => :number,
+        "target_direction" => { enum: TARGET_DIRECTIONS }
+      },
+      required: %w[grain denominator numerator period],
+      check: lambda { |definition, path|
+        period = definition["period"]
+        errors = []
+        if period.is_a?(Hash) && period["mode"] == "absolute" && period["from"].nil?
+          errors << "#{path || 'definition'}.period は from が要ります"
+        end
+        target = definition["target"]
+        errors << "#{path || 'definition'}.target は 0〜100 にしてください" if target.is_a?(Numeric) && !target.between?(0, 100)
+        errors
+      }
+    },
+    # イベント(§25)。基準イベントはタブの期間で読むので期間の開始が要る。
+    "event" => {
+      fields: {
+        "index" => EVENT_INDEX_SHAPE,
+        "index_anchor" => { enum: %w[start end] },
+        "outcome" => EVENT_OUTCOME_SHAPE,
+        "outcome_from_days" => { integer: { min: 0, max: 365, unit: "日" } },
+        "follow_days" => { integer: { min: 1, max: 3650, unit: "日" } }
+      },
+      required: %w[index outcome period],
+      check: lambda { |definition, path|
+        period = definition["period"]
+        if period.is_a?(Hash) && period["mode"] == "absolute" && period["from"].nil?
+          ["#{path || 'definition'}.period は from が要ります"]
+        else
+          []
+        end
+      }
     }
   }.freeze
 
@@ -179,7 +255,8 @@ module ExtractRecordDefinition
     specific = TAB_FIELDS.fetch(tab)
     {
       fields: COMMON_FIELDS.merge(specific[:fields]),
-      required: Array(specific[:required])
+      required: Array(specific[:required]),
+      check: specific[:check]
     }
   end
 

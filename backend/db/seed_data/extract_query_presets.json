@@ -1350,5 +1350,329 @@
         "metric": "mean"
       }
     }
+  },
+  {
+    "name": "退院後30日以内の再入院率(月)",
+    "tab": "indicator",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 365
+      },
+      "grain": "month",
+      "denominator": {
+        "key": "dis",
+        "kind": "admission",
+        "label": "退院",
+        "date_mode": "discharged",
+        "period": {
+          "mode": "relative",
+          "days": 365
+        }
+      },
+      "numerator": {
+        "key": "re",
+        "patient_query_name": "退院後30日以内の再入院"
+      },
+      "target": 10,
+      "target_direction": "le"
+    }
+  },
+  {
+    "name": "手術後30日以内の再入院率(月)",
+    "tab": "indicator",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 365
+      },
+      "grain": "month",
+      "denominator": {
+        "key": "ope",
+        "kind": "order",
+        "label": "手術の実施",
+        "order_kind": "surgery",
+        "stage": "performed"
+      },
+      "numerator": {
+        "key": "re",
+        "patient_query_name": "手術後30日以内の再入院"
+      }
+    }
+  },
+  {
+    "name": "HbA1c 7.0未満の患者の割合(四半期)",
+    "tab": "indicator",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 730
+      },
+      "grain": "quarter",
+      "denominator": {
+        "key": "a1c",
+        "kind": "observation",
+        "label": "HbA1cの測定",
+        "codes": [
+          {
+            "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+            "code": "160010010",
+            "display": "HbA1c"
+          }
+        ]
+      },
+      "numerator": {
+        "key": "ok",
+        "kind": "observation",
+        "label": "HbA1c 7.0未満",
+        "codes": [
+          {
+            "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+            "code": "160010010",
+            "display": "HbA1c"
+          }
+        ],
+        "value": {
+          "op": "lt",
+          "value": 7
+        }
+      },
+      "target": 50,
+      "target_direction": "ge"
+    }
+  },
+  {
+    "name": "抗菌薬注射患者の細菌検査提出率(月)",
+    "tab": "indicator",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 365
+      },
+      "grain": "month",
+      "denominator": {
+        "key": "abx",
+        "kind": "medication",
+        "label": "抗菌薬の注射",
+        "order_type": "injection",
+        "drug_classes": [
+          {
+            "code": "61",
+            "name": "抗生物質製剤"
+          },
+          {
+            "code": "62",
+            "name": "化学療法剤"
+          }
+        ]
+      },
+      "numerator": {
+        "key": "micro",
+        "kind": "order",
+        "label": "細菌検査の依頼",
+        "order_kind": "micro",
+        "stage": "ordered"
+      }
+    }
+  },
+  {
+    "name": "HbA1c 8以上 薬効群別の推移(処方開始から)",
+    "tab": "lab",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 730
+      },
+      "patient_query_name": "HbA1c 8.0以上(180日)",
+      "items": [
+        {
+          "key": "lab:160010010",
+          "source": "lab",
+          "name": "HbA1c",
+          "unit": "%",
+          "codings": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/lab-result-item",
+              "code": "160010010",
+              "display": "HbA1c"
+            }
+          ]
+        }
+      ],
+      "mode": "day",
+      "aggregates": [
+        "latest"
+      ],
+      "strata": [
+        {
+          "key": "su",
+          "label": "SU薬",
+          "kind": "medication",
+          "drug_classes": [
+            {
+              "code": "3961",
+              "name": "スルフォニル尿素系製剤"
+            }
+          ],
+          "index_date": "first"
+        },
+        {
+          "key": "bg",
+          "label": "ビグアナイド",
+          "kind": "medication",
+          "drug_classes": [
+            {
+              "code": "3962",
+              "name": "ビグアナイド系製剤"
+            }
+          ],
+          "index_date": "first"
+        },
+        {
+          "key": "other",
+          "label": "その他の糖尿病薬",
+          "kind": "medication",
+          "drug_classes": [
+            {
+              "code": "3969",
+              "name": "その他の糖尿病用剤"
+            }
+          ],
+          "index_date": "first"
+        }
+      ],
+      "strata_only": true,
+      "breakdown": {
+        "date": "日付",
+        "grain": "elapsed_month",
+        "rows": "period",
+        "columns": "比較群",
+        "value": "HbA1c(%)",
+        "metric": "mean",
+        "split_multi": true
+      }
+    }
+  },
+  {
+    "name": "退院から再入院までの日数(90日)",
+    "tab": "event",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 365
+      },
+      "index": {
+        "key": "dis",
+        "kind": "admission",
+        "label": "退院",
+        "date_mode": "discharged"
+      },
+      "index_anchor": "end",
+      "outcome": {
+        "key": "re",
+        "kind": "admission",
+        "label": "再入院",
+        "date_mode": "admitted"
+      },
+      "outcome_from_days": 1,
+      "follow_days": 90
+    }
+  },
+  {
+    "name": "2型糖尿病の診断から腎症の病名まで",
+    "tab": "event",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 1095
+      },
+      "index": {
+        "key": "dm",
+        "kind": "condition",
+        "label": "2型糖尿病",
+        "codes": [
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E11",
+            "display": "2型糖尿病"
+          },
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E110",
+            "display": "2型糖尿病(E110)"
+          },
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E111",
+            "display": "2型糖尿病(E111)"
+          },
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E112",
+            "display": "2型糖尿病(E112)"
+          },
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E113",
+            "display": "2型糖尿病(E113)"
+          },
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E114",
+            "display": "2型糖尿病(E114)"
+          },
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E115",
+            "display": "2型糖尿病(E115)"
+          },
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E116",
+            "display": "2型糖尿病(E116)"
+          },
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E117",
+            "display": "2型糖尿病(E117)"
+          },
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E118",
+            "display": "2型糖尿病(E118)"
+          },
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E119",
+            "display": "2型糖尿病(E119)"
+          }
+        ],
+        "clinical_status": [
+          "active"
+        ],
+        "date_field": "onset"
+      },
+      "outcome": {
+        "key": "neph",
+        "kind": "condition",
+        "label": "糖尿病性腎症",
+        "codes": [
+          {
+            "system": "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full",
+            "code": "E112",
+            "display": "2型糖尿病性腎症"
+          }
+        ],
+        "date_field": "onset"
+      },
+      "outcome_from_days": 0
+    }
   }
 ]

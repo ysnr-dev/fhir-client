@@ -30,7 +30,9 @@ export type ExtractRecordTab =
   | "pathway"
   | "encounter"
   | "condition"
-  | "cluster";
+  | "cluster"
+  | "indicator"
+  | "event";
 
 export type ExtractTab = "patient" | ExtractRecordTab;
 
@@ -38,6 +40,8 @@ export type ExtractTab = "patient" | ExtractRecordTab;
 export const EXTRACT_TABS: { key: ExtractTab; label: string }[] = [
   { key: "patient", label: "患者" },
   { key: "cluster", label: "クラスタ" },
+  { key: "indicator", label: "指標" },
+  { key: "event", label: "イベント" },
   { key: "encounter", label: "入院・外来" },
   { key: "condition", label: "病名" },
   { key: "template", label: "テンプレート" },
@@ -141,6 +145,51 @@ export interface ClusterExtractDefinition extends ExtractRecordDefinition {
   metrics?: ExtractMetric[];
 }
 
+/** 指標の期間の刻み(内訳の刻みのうち週・日を除いたもの)。 */
+export type IndicatorGrain = "year" | "fiscal" | "quarter" | "month";
+
+export const INDICATOR_GRAINS: { value: IndicatorGrain; label: string }[] = [
+  { value: "month", label: "月" },
+  { value: "quarter", label: "四半期" },
+  { value: "fiscal", label: "年度" },
+  { value: "year", label: "年" },
+];
+
+/** 目標の向き(ge: 目標以上が良い、le: 目標以下が良い)。 */
+export type TargetDirection = "ge" | "le";
+
+export interface IndicatorExtractDefinition extends ExtractRecordDefinition {
+  grain?: IndicatorGrain;
+  /** 分母(患者の集団)。条件 1 件・「患者」タブに保存した条件・患者フォルダのどれか。 */
+  denominator?: ExtractStratum;
+  /** 分子(分母のうち条件に当たる患者)。患者フォルダは置けない。 */
+  numerator?: ExtractStratum;
+  /** 目標値(%)。 */
+  target?: number;
+  target_direction?: TargetDirection;
+}
+
+/** イベントタブ(§25)の結果イベント。条件 1 件か死亡(Patient.deceasedDateTime)。 */
+export type EventOutcome = ExtractMetric | { key: string; kind: "death"; label?: string };
+
+export const DEATH_OUTCOME_KIND = "death";
+
+export function isDeathOutcome(outcome: EventOutcome | undefined): outcome is { key: string; kind: "death"; label?: string } {
+  return outcome?.kind === DEATH_OUTCOME_KIND;
+}
+
+export interface EventExtractDefinition extends ExtractRecordDefinition {
+  /** 基準イベント(条件 1 件)。タブの期間内の最初の記録の日が患者の基準日。 */
+  index?: ExtractMetric;
+  /** 基準の日(開始日 / 終了日。終了日を持つ種類だけ)。 */
+  index_anchor?: "start" | "end";
+  outcome?: EventOutcome;
+  /** 基準日の何日後から結果を数えるか(既定 1)。 */
+  outcome_from_days?: number;
+  /** 最大の追跡日数(無ければ今日まで)。 */
+  follow_days?: number;
+}
+
 export type StratumKind = Exclude<ExtractKind, "patient">;
 
 /**
@@ -152,7 +201,17 @@ export type ExtractStratum = Omit<ExtractLeaf, "kind" | "not" | "relation" | "ou
   query_code?: string;
   /** 選ぶ前は null。 */
   patient_folder_id?: number | null;
+  /** 基準日(§24)。条件型の比較群で、該当記録の最初 / 最後の日を患者の基準日にする。 */
+  index_date?: IndexDateMode;
 };
+
+/** 比較群の基準日の取り方(該当記録の最初の日 / 最後の日。日は記録の開始日)。 */
+export type IndexDateMode = "first" | "last";
+
+export const INDEX_DATE_MODES: { value: IndexDateMode; label: string }[] = [
+  { value: "first", label: "最初の記録" },
+  { value: "last", label: "最後の記録" },
+];
 
 export const MAX_STRATA = 8;
 

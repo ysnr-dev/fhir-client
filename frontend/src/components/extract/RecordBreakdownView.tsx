@@ -2,10 +2,12 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   BREAKDOWN_MAX_CATEGORIES,
   BREAKDOWN_MAX_COLUMN_CATEGORIES,
+  ELAPSED_GRAINS,
   MAX_FILLED_PERIODS,
   METRICS,
   TIME_GRAINS,
   breakdownColumns,
+  isElapsedGrain,
   normalizeBins,
   recordBreakdown,
   recordBreakdownCsv,
@@ -17,6 +19,7 @@ import {
   type Metric,
   type TimeGrain,
 } from "../../fhir/recordBreakdownHelpers";
+import { INDEX_DATE_COLUMN } from "../../fhir/recordTableHelpers";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { HelpTip } from "../HelpTip";
@@ -71,7 +74,10 @@ export function RecordBreakdownView({
   const periodAvailable = dateColumns.length > 0;
   const dateLabel = dateColumns.some((c) => c.label === settings.date) ? settings.date! : (dateColumns[0]?.label ?? "");
   const dateIndex = dateColumns.find((c) => c.label === dateLabel)?.index ?? null;
-  const grain: TimeGrain = settings.grain ?? "month";
+  // 「基準日」の列(§24)があるときだけ、刻みに「基準日から(日 / 週 / 月)」を選べる。
+  const indexDateIndex = columns.find((c) => c.label === INDEX_DATE_COLUMN)?.index ?? null;
+  const grains = indexDateIndex === null ? TIME_GRAINS : [...TIME_GRAINS, ...ELAPSED_GRAINS];
+  const grain: TimeGrain = settings.grain && grains.some((g) => g.value === settings.grain) ? settings.grain : "month";
   const fillEmpty = settings.fill_empty ?? true;
   // date: "" は日付の列を使わない切り口として保存したもの。行の既定を「計のみ」にする。
   const rowValue = settings.rows ?? (periodAvailable && settings.date !== "" ? "period" : "");
@@ -105,6 +111,7 @@ export function RecordBreakdownView({
       recordBreakdown(header, cells, patientIds, {
         dateIndex,
         grain,
+        indexDateIndex,
         fillEmpty,
         rows: axisOf(rowKey, dateIndex, categoryColumns),
         columns: axisOf(columnKey, dateIndex, categoryColumns),
@@ -119,6 +126,7 @@ export function RecordBreakdownView({
       patientIds,
       dateIndex,
       grain,
+      indexDateIndex,
       fillEmpty,
       rowKey,
       columnKey,
@@ -196,9 +204,9 @@ export function RecordBreakdownView({
         </select>
       )}
       <select aria-label="期間の刻み" value={grain} onChange={(e) => update({ grain: e.target.value as TimeGrain })}>
-        {TIME_GRAINS.map((g) => (
+        {grains.map((g) => (
           <option key={g.value} value={g.value}>
-            {`${g.label}ごと`}
+            {isElapsedGrain(g.value) ? g.label : `${g.label}ごと`}
           </option>
         ))}
       </select>
