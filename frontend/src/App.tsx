@@ -1,5 +1,6 @@
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useParams } from "react-router-dom";
 import "./App.css";
+import { APP_MENU, type AppMenuItem } from "./appMenu";
 import { AdminGate } from "./components/AdminGate";
 import { AuthGate } from "./components/AuthGate";
 import { CurrentUserBadge } from "./components/CurrentUserBadge";
@@ -180,6 +181,14 @@ function KarteRedirect() {
   return <Navigate to={patientId ? `/patients/${patientId}/karte` : "/patients"} replace />;
 }
 
+function menuLink(item: AppMenuItem) {
+  return (
+    <Link key={item.to} to={item.to} className="row-menu__item">
+      {item.label}
+    </Link>
+  );
+}
+
 function App() {
   // カルテの左ペインを出す別タブ。サブモニターに置いて参照するだけの画面なので、
   // アプリのヘッダー(ナビ)を出さず縦幅をカルテに回す。
@@ -205,229 +214,24 @@ function App() {
           FHIR Client
         </Link>
         <nav className="app__nav">
-          {/* 患者を探す入口。患者検索で探すか、その日の外来予約から探すかで分ける。 */}
-          <HoverMenu label="患者一覧">
-            <Link to="/patients" className="row-menu__item">
-              患者検索
-            </Link>
-            {/* 外来患者一覧はその日の予約患者を受付する画面。 */}
-            <Link to="/outpatients" className="row-menu__item">
-              外来患者一覧
-            </Link>
-            {/* 救急患者一覧は救急外来に来院した患者を来院から転帰まで追う画面。 */}
-            <Link to="/emergency" className="row-menu__item">
-              救急患者一覧
-            </Link>
-            {/* 入院患者一覧は病棟のベッドの埋まり具合と在院患者を見る画面。 */}
-            <Link to="/inpatients" className="row-menu__item">
-              入院患者一覧
-            </Link>
-            {/* 病棟マップは入院患者一覧の別の見え方(間取りの上に患者を出す)。 */}
-            <Link to="/ward-map" className="row-menu__item">
-              病棟マップ
-            </Link>
-            {/* ベッドスケジュールはベッド × 日付の帯で入院・予定を見る画面、病床状況は病棟ごとの集計。 */}
-            <Link to="/bed-schedule" className="row-menu__item">
-              ベッドスケジュール
-            </Link>
-            <Link to="/bed-status" className="row-menu__item">
-              病床状況
-            </Link>
-            {/* 患者フォルダは患者を任意の階層の分類に仕分けて見る画面。 */}
-            <Link to="/patient-folders" className="row-menu__item">
-              患者フォルダ
-            </Link>
-          </HoverMenu>
-          {/* 診療業務は「診療科の医師が捌く仕事」の画面。部門業務(検査室・薬剤部など、
-              依頼を受ける部門の仕事)とは受け手が違うのでメニューを分ける
-              — 他科依頼を受けるのは技師ではなく他科の医師で、返すのは結果ではなく
-              診療記録(docs/consult-order-design.md §1)。 */}
-          <HoverMenu label="診療業務">
-            <Link to="/consult-worklist" className="row-menu__item">
-              他科依頼一覧
-            </Link>
-            {/* チーム医療(NST・ICT・褥瘡対策など)への介入依頼。受けるのはチームの医師・看護師・薬剤師など。 */}
-            <Link to="/team-worklist" className="row-menu__item">
-              チーム依頼一覧
-            </Link>
-            {/* 宛先の決まった通知(緊急異常値・オーダー承認…)の一覧。受け取るのは部門ではなく
-                医師なので診療業務に置く(`docs/features/notifications.md`)。件数はヘッダーのベルに出る。 */}
-            <Link to="/notifications" className="row-menu__item">
-              通知
-            </Link>
-            {/* 研修医・学生の記録とオーダーのカウンターサイン(指導医向け。docs/countersign-design.md)。 */}
-            <Link to="/countersigns" className="row-menu__item">
-              カルテ承認
-            </Link>
-            {/* 入院診療計画書・退院時サマリー・看護サマリーの作成状況と期限(docs/bed-management-design.md §4)。 */}
-            <Link to="/admission-documents" className="row-menu__item">
-              入退院文書
-            </Link>
-            {/* よく出すオーダーのひとまとめ(オーダーセット)の登録。出すのは診療科の
-                医師なので部門業務ではなくここに置く(docs/order-set-design.md §1)。 */}
-            <Link to="/order-sets" className="row-menu__item">
-              セット登録
-            </Link>
-          </HoverMenu>
-          {/* 看護業務は病棟の看護師の画面。入院患者一覧の病棟の導線(指示簿・病棟マップ・ケバブ)と
-              同じ並びで、どれも病棟を指定しなければ先頭の病棟で開く。 */}
-          <HoverMenu label="看護業務">
-            <Link to="/nursing-worklist" className="row-menu__item">
-              指示簿
-            </Link>
-            <Link to="/nursing-worksheet" className="row-menu__item">
-              ワークシート
-            </Link>
-            <Link to="/nursing-assignments" className="row-menu__item">
-              業務分担
-            </Link>
-            <Link to="/nursing-acuity" className="row-menu__item">
-              看護必要度
-            </Link>
-            <Link to="/pressure-ulcer" className="row-menu__item">
-              褥瘡管理
-            </Link>
-            <Link to="/ward-map" className="row-menu__item">
-              病棟マップ
-            </Link>
-            <Link to="/insulin-worklist" className="row-menu__item">
-              血糖インスリン
-            </Link>
-            <Link to="/nursing-summary-approvals" className="row-menu__item">
-              看護サマリー承認
-            </Link>
-            <Link to="/inpatients/bulk-vitals" className="row-menu__item">
-              経過表一括入力
-            </Link>
-          </HoverMenu>
-          {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテの
-              次に置く。項目が多いので部門ごとに入れ子にする
-              (1 項目だけの部門も並びを揃えるためサブメニューにする)。 */}
-          <HoverMenu label="部門業務">
-            <SubMenu label="臨床検査部門">
-              <Link to="/lab-worklist" className="row-menu__item">
-                検体検査一覧
-              </Link>
-              <Link to="/lab-arrivals" className="row-menu__item">
-                検体到着確認
-              </Link>
-              {/* 検査室・分析装置・外注ラボから受け取った結果ファイルを読み込む
-                  (docs/lab-result-import-design.md)。 */}
-              <Link to="/lab-result-imports" className="row-menu__item">
-                検査結果取込
-              </Link>
-            </SubMenu>
-            <SubMenu label="病理部門">
-              <Link to="/patho-worklist" className="row-menu__item">
-                病理検査一覧
-              </Link>
-            </SubMenu>
-            <SubMenu label="放射線部門">
-              <Link to="/rad-worklist" className="row-menu__item">
-                放射線検査一覧
-              </Link>
-              {/* 放射線治療は装置 × 時刻のカレンダーで照射の予定と実績を見る(右に治療コースの一覧)。 */}
-              <Link to="/radiotherapy-worklist" className="row-menu__item">
-                放射線治療カレンダー
-              </Link>
-            </SubMenu>
-            <SubMenu label="生理検査部門">
-              <Link to="/physio-worklist" className="row-menu__item">
-                生理検査一覧
-              </Link>
-            </SubMenu>
-            <SubMenu label="内視鏡部門">
-              <Link to="/endoscopy-worklist" className="row-menu__item">
-                内視鏡一覧
-              </Link>
-            </SubMenu>
-            <SubMenu label="手術部門">
-              <Link to="/surgery-worklist" className="row-menu__item">
-                手術一覧
-              </Link>
-              {/* 手術一覧が「その日の手術を 1 件ずつ処理する」画面なのに対し、
-                  カレンダーは「空いているところを探して日程を組む」画面。 */}
-              <Link to="/surgery-calendar" className="row-menu__item">
-                手術カレンダー
-              </Link>
-            </SubMenu>
-            {/* 輸血は依頼を受けてから製剤を払い出すまでが部門の仕事で、投与は病棟。 */}
-            <SubMenu label="輸血部門">
-              <Link to="/transfusion-worklist" className="row-menu__item">
-                輸血一覧
-              </Link>
-            </SubMenu>
-            {/* リハビリは他の部門一覧と違い「その日に効いている期間オーダー」を並べる
-                (1 オーダーが数か月続き、実施が日々積み上がる)。 */}
-            <SubMenu label="リハビリ部門">
-              <Link to="/rehab-worklist" className="row-menu__item">
-                リハビリ一覧
-              </Link>
-            </SubMenu>
-            {/* 栄養指導もリハビリと同じ期間継続型(1 オーダーに初回・継続の指導が積み上がる)。 */}
-            <SubMenu label="栄養部門">
-              <Link to="/nutrition-guidance-worklist" className="row-menu__item">
-                栄養指導一覧
-              </Link>
-              {/* 給食はオーダーを 1 件ずつ処理せず、その日の食事を患者別に並べて食数を数える。 */}
-              <Link to="/meal-worklist" className="row-menu__item">
-                食事一覧
-              </Link>
-            </SubMenu>
-            <SubMenu label="薬剤部門">
-              <Link to="/rx-worklist" className="row-menu__item">
-                処方一覧
-              </Link>
-              <Link to="/brought-med-worklist" className="row-menu__item">
-                持参薬鑑別一覧
-              </Link>
-              {/* 服薬指導は栄養指導と同じ期間継続型(1 オーダーに入院中の指導が積み上がる)。 */}
-              <Link to="/medication-guidance-worklist" className="row-menu__item">
-                服薬指導一覧
-              </Link>
-              <Link to="/injection-worklist" className="row-menu__item">
-                注射一覧
-              </Link>
-              <Link to="/lot-management" className="row-menu__item">
-                ロット管理
-              </Link>
-              <Link to="/ast-worklist" className="row-menu__item">
-                抗菌薬適正使用
-              </Link>
-            </SubMenu>
-            <SubMenu label="処置">
-              <Link to="/treatment-worklist" className="row-menu__item">
-                処置一覧
-              </Link>
-            </SubMenu>
-            {/* 化学療法室は注射一覧(オーダー軸)と違い、その日の予約(時間割)で回る部門なので
-                別の面にする(docs/chemo-regimen-design.md §7.6 E-7)。 */}
-            <SubMenu label="外来化学療法室">
-              <Link to="/chemo-room-worklist" className="row-menu__item">
-                外来化学療法室
-              </Link>
-            </SubMenu>
-          </HoverMenu>
-          {/* 予約枠は診療科がオーダーを出す前段(いつ診るかを決める)なので、
-              部門業務の次に独立して置く。 */}
-          <NavLink to="/schedules">予約枠</NavLink>
-          {/* 掲示板は院内のお知らせ。職種を問わず全員が読むので独立して置く(ホームにも出る)。 */}
-          <NavLink to="/bulletin">掲示板</NavLink>
-          {/* 院外へ提出するデータ(DPC 調査など)と、患者を条件で抜き出す二次利用のデータをまとめる。 */}
-          <HoverMenu label="データ">
-            <Link to="/dpc-patients" className="row-menu__item">
-              DPC患者
-            </Link>
-            <Link to="/dpc-form1-export" className="row-menu__item">
-              DPC様式1
-            </Link>
-            <Link to="/data-extract" className="row-menu__item">
-              データ抽出
-            </Link>
-            <Link to="/dashboards" className="row-menu__item">
-              ダッシュボード
-            </Link>
-          </HoverMenu>
+          {/* メニューの並びと項目は appMenu.ts(ホームのショートカットの候補と同じ表)。 */}
+          {APP_MENU.map((entry) =>
+            entry.kind === "link" ? (
+              <NavLink key={entry.to} to={entry.to}>
+                {entry.label}
+              </NavLink>
+            ) : (
+              <HoverMenu key={entry.label} label={entry.label}>
+                {"sections" in entry
+                  ? entry.sections.map((section) => (
+                      <SubMenu key={section.label} label={section.label}>
+                        {section.items.map(menuLink)}
+                      </SubMenu>
+                    ))
+                  : entry.items.map(menuLink)}
+              </HoverMenu>
+            ),
+          )}
           <HoverMenu label="管理">
             {/* マスタメンテは項目が多くメニューに収まらないので、一覧のページ(/masters)へ送る。
                 そこから入ったマスタの画面にいる間も、戻り先としてこの項目を強調する。 */}

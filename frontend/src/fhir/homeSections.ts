@@ -1,15 +1,9 @@
 import type { BedWard } from "../api/queries/encounter";
 import { ADMISSION_STATUS, encounterAttendingId, encounterBedId, encounterBedLabel, encounterNurseIds, encounterPatientId } from "./encounterHelpers";
 import { appointmentActorId } from "./appointmentHelpers";
-import { isDoctorRoleCode, isNursingRoleCode } from "./practitionerRoleHelpers";
 
-// ホーム(トップページ)の「誰に何を出すか」。職種(所属ロールの code)から表示する
-// セクションと絞り込みを決める。hook を持たない純関数だけにして、画面(pages/HomePage.tsx)
-// はここで決めた profile に従って部品を並べるだけにする。
-
-export type HomeKind = "administrator" | "doctor" | "nurse" | "department" | "clerk" | "unknown";
-
-export type HomeSectionKey = "notifications" | "outpatient" | "inpatient" | "worklists" | "launcher";
+// ホーム(トップページ)のカードが使う純関数。部門ワークリストの対応表、Task の状態の集計、
+// 外来・入院の絞り込み。どのカードを並べるか(既定と保存した設定)は fhir/homeCards.ts。
 
 /** 部門ワークリスト件数のカード。職種→部門の対応は HOME_WORKLISTS 1 か所で持つ。 */
 export type HomeWorklistKey =
@@ -25,12 +19,15 @@ export type HomeWorklistKey =
   | "medicationGuidance"
   | "antimicrobial"
   | "rehab"
-  | "nutritionGuidance";
+  | "nutritionGuidance"
+  | "endoscopy"
+  | "treatment"
+  | "surgery";
 
 export interface HomeWorklistDef {
   label: string;
   path: string;
-  /** このカードを出す職種。 */
+  /** 既定でこのカードを出す職種。空なら編集で足したときだけ出る。 */
   roleCodes: readonly string[];
 }
 
@@ -63,87 +60,12 @@ export const HOME_WORKLISTS: Record<HomeWorklistKey, HomeWorklistDef> = {
     path: "/nutrition-guidance-worklist",
     roleCodes: ["dietitian"],
   },
+  endoscopy: { label: "内視鏡", path: "/endoscopy-worklist", roleCodes: [] },
+  treatment: { label: "処置", path: "/treatment-worklist", roleCodes: [] },
+  surgery: { label: "手術", path: "/surgery-worklist", roleCodes: [] },
 };
 
 export const HOME_WORKLIST_KEYS = Object.keys(HOME_WORKLISTS) as HomeWorklistKey[];
-
-const CLERK_ROLE_CODES: readonly string[] = ["clerk", "medical-clerk"];
-
-export interface HomeProfile {
-  kind: HomeKind;
-  sections: HomeSectionKey[];
-  worklists: HomeWorklistKey[];
-  /** 本日の外来を自分の予約に絞る(医師)。false は全体。 */
-  outpatientMine: boolean;
-  /** 担当入院患者の絞り方。出さない職種は null。 */
-  inpatientBy: "attending" | "nurse" | null;
-}
-
-/**
- * ログインした人の職種からホームの構成を決める。
- *
- *   administrator(医療従事者に紐付かない) … ランチャーだけ
- *   医師・歯科医師                        … 通知 / 自分の外来予約 / 主治医の入院患者
- *   看護師・保健師・助産師                … 通知 / 担当看護師の入院患者
- *   部門の職種(HOME_WORKLISTS に載る)     … 通知 / 自部門のワークリスト件数
- *   事務職員・それ以外・職種未登録        … 通知 / 本日の外来(全体)
- *
- * 所属科は絞り込みに使わない(医師の外来・入院は医師 id で絞る。科で絞ると他科で
- * 診た予約が落ちる)。
- */
-export function homeProfileOf(input: {
-  administrator: boolean;
-  practitionerId: string | null;
-  roleCode: string | undefined;
-}): HomeProfile {
-  if (input.administrator || !input.practitionerId) {
-    return {
-      kind: "administrator",
-      sections: ["launcher"],
-      worklists: [],
-      outpatientMine: false,
-      inpatientBy: null,
-    };
-  }
-  const code = input.roleCode;
-  if (isDoctorRoleCode(code)) {
-    return {
-      kind: "doctor",
-      sections: ["notifications", "outpatient", "inpatient", "launcher"],
-      worklists: [],
-      outpatientMine: true,
-      inpatientBy: "attending",
-    };
-  }
-  if (isNursingRoleCode(code)) {
-    return {
-      kind: "nurse",
-      sections: ["notifications", "inpatient", "launcher"],
-      worklists: [],
-      outpatientMine: false,
-      inpatientBy: "nurse",
-    };
-  }
-  const worklists = code
-    ? HOME_WORKLIST_KEYS.filter((key) => HOME_WORKLISTS[key].roleCodes.includes(code))
-    : [];
-  if (worklists.length > 0) {
-    return {
-      kind: "department",
-      sections: ["notifications", "worklists", "launcher"],
-      worklists,
-      outpatientMine: false,
-      inpatientBy: null,
-    };
-  }
-  return {
-    kind: code && CLERK_ROLE_CODES.includes(code) ? "clerk" : "unknown",
-    sections: ["notifications", "outpatient", "launcher"],
-    worklists: [],
-    outpatientMine: false,
-    inpatientBy: null,
-  };
-}
 
 // ---- 部門ワークリストの件数 ----
 

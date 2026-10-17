@@ -24546,6 +24546,83 @@ body.page-home .app__main {
   .home__card {
     max-height: 70svh;
   }
+
+  .home__card--wide {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+/* ダッシュボードの埋め込みは横 2 列・縦 2 段を使う(タイルは 12 列のマス目なので 1 列では狭い)。 */
+.home__card--wide {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.home__dashboard {
+  padding-top: 4px;
+}
+
+/* ショートカットは画面名のボタンを折り返して並べる。 */
+.home__shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ホームの編集(カードの設定欄と追加の行)。 */
+.home-editor__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.home-editor__field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+/* カード名は折り返さず、残りの幅を設定欄に回す。 */
+.home-editor__items .home-editor__name {
+  white-space: nowrap;
+  vertical-align: top;
+  padding-top: 6px;
+}
+
+.home-editor__items .home-editor__settings {
+  width: 100%;
+}
+
+/* ショートカットの候補は数が多いので、格子に並べて高さを抑え、枠の中で送る。 */
+.home-editor__links {
+  display: grid;
+  flex: 1 1 100%;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 2px 12px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.home-editor__links label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.home-editor__add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* --- 掲示板(院内のお知らせ) ------------------------------------------------ */

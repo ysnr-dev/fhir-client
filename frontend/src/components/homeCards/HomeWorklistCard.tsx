@@ -1,7 +1,7 @@
-import { useMemo, type ComponentType } from "react";
-import { Link } from "react-router-dom";
+import type { ComponentType } from "react";
 import {
   useBroughtMedWorklist,
+  useEndoscopyWorklist,
   useInjectionWorklist,
   useLabWorklist,
   useMedicationGuidanceWorklist,
@@ -12,108 +12,57 @@ import {
   useRadiotherapyWorklist,
   useRehabWorklist,
   useRxWorklist,
+  useSurgeryUnscheduledList,
+  useSurgeryWorklist,
   useTransfusionWorklist,
-} from "../api/queries";
-import { BROUGHT_MED_REVIEW_STATUS_OPTIONS } from "../fhir/broughtMedTaskHelpers";
-import { HOME_WORKLISTS, summarizeTaskStatuses, type HomeWorklistKey } from "../fhir/homeSections";
-import { INJECTION_TASK_STATUS_OPTIONS, injectionTaskStatus } from "../fhir/injectionTaskHelpers";
-import { LAB_TASK_STATUS_OPTIONS, labTaskStatus } from "../fhir/labTaskHelpers";
+  useTreatmentWorklist,
+} from "../../api/queries";
+import { BROUGHT_MED_REVIEW_STATUS_OPTIONS } from "../../fhir/broughtMedTaskHelpers";
+import { ENDOSCOPY_TASK_STATUS_OPTIONS, endoscopyTaskStatus } from "../../fhir/endoscopyTaskHelpers";
+import { HOME_WORKLISTS, type HomeWorklistKey } from "../../fhir/homeSections";
+import { INJECTION_TASK_STATUS_OPTIONS, injectionTaskStatus } from "../../fhir/injectionTaskHelpers";
+import { LAB_TASK_STATUS_OPTIONS, labTaskStatus } from "../../fhir/labTaskHelpers";
 import {
   MEDICATION_GUIDANCE_TASK_STATUS_OPTIONS,
   medicationGuidanceAssignee,
   medicationGuidanceTaskStatus,
-} from "../fhir/medicationGuidanceTaskHelpers";
+} from "../../fhir/medicationGuidanceTaskHelpers";
 import {
   NUTRITION_GUIDANCE_TASK_STATUS_OPTIONS,
   nutritionGuidanceTaskStatus,
-} from "../fhir/nutritionGuidanceTaskHelpers";
-import { PATHO_TASK_STATUS_OPTIONS, pathoTaskStatus } from "../fhir/pathoTaskHelpers";
-import { PHYSIO_TASK_STATUS_OPTIONS, physioTaskStatus } from "../fhir/physioTaskHelpers";
-import { RAD_TASK_STATUS_OPTIONS, radTaskStatus } from "../fhir/radTaskHelpers";
+} from "../../fhir/nutritionGuidanceTaskHelpers";
+import { PATHO_TASK_STATUS_OPTIONS, pathoTaskStatus } from "../../fhir/pathoTaskHelpers";
+import { PHYSIO_TASK_STATUS_OPTIONS, physioTaskStatus } from "../../fhir/physioTaskHelpers";
+import { RAD_TASK_STATUS_OPTIONS, radTaskStatus } from "../../fhir/radTaskHelpers";
 import {
   RADIOTHERAPY_TASK_STATUS_OPTIONS,
   radiotherapyTaskStatus,
-} from "../fhir/radiotherapyTaskHelpers";
-import { REHAB_TASK_STATUS_OPTIONS, rehabTaskStatus } from "../fhir/rehabTaskHelpers";
-import { RX_TASK_STATUS_OPTIONS, rxTaskStatus } from "../fhir/rxTaskHelpers";
+} from "../../fhir/radiotherapyTaskHelpers";
+import { REHAB_TASK_STATUS_OPTIONS, rehabTaskStatus } from "../../fhir/rehabTaskHelpers";
+import { RX_TASK_STATUS_OPTIONS, rxTaskStatus } from "../../fhir/rxTaskHelpers";
+import { SURGERY_TASK_STATUS_OPTIONS, surgeryTaskStatus } from "../../fhir/surgeryTaskHelpers";
 import {
   TRANSFUSION_TASK_STATUS_OPTIONS,
   transfusionTaskStatus,
-} from "../fhir/transfusionTaskHelpers";
-import { ErrorBanner } from "./ErrorBanner";
-import { useOpenAntimicrobialNotifications } from "../api/queries";
+} from "../../fhir/transfusionTaskHelpers";
+import { TREATMENT_TASK_STATUS_OPTIONS, treatmentTaskStatus } from "../../fhir/treatmentTaskHelpers";
+import { HomeCountsCard, type HomeCountsCardProps } from "./HomeCountsCard";
+import type { HomeCardProps } from "./shared";
+import { useOpenAntimicrobialNotifications } from "../../api/queries";
 import {
   ANTIMICROBIAL_NOTIFICATION_STATE_LABEL,
   antimicrobialNotificationState,
-} from "../fhir/antimicrobialNotificationHelpers";
+} from "../../fhir/antimicrobialNotificationHelpers";
 
 // ホームの「自部門のワークリスト件数」。部門ごとに一覧の hook をそのまま呼び、Task の
 // 状態を数える(一覧ページと同じキャッシュに乗るので、カードから一覧へ移っても読み直さない)。
 // hook は条件付きで呼べないので、部門ごとに別のコンポーネントにして親が kind で出し分ける。
 
-interface WorklistCountsProps {
-  kind: HomeWorklistKey;
-  isPending: boolean;
-  error: unknown;
-  /** 行ごとの Task の状態(Task 無しは requested)。読み込み前は undefined。 */
-  statuses: string[] | undefined;
-  /** 状態コード → 表示名。部門ごとの語彙(受付済 / 実施中 / 出庫済 …)で出す。 */
-  options: { code: string; display: string }[];
-  truncated?: boolean;
-  /** 部門固有の補足(リハビリの「本日未実施」など)。 */
-  extra?: { label: string; count: number }[];
-}
+type WorklistCountsProps = Omit<HomeCountsCardProps, "title" | "path"> & { kind: HomeWorklistKey };
 
-function WorklistCounts({
-  kind,
-  isPending,
-  error,
-  statuses,
-  options,
-  truncated,
-  extra,
-}: WorklistCountsProps) {
+function WorklistCounts({ kind, ...rest }: WorklistCountsProps) {
   const def = HOME_WORKLISTS[kind];
-  const summary = useMemo(() => summarizeTaskStatuses(statuses ?? []), [statuses]);
-  return (
-    <section className="home__card">
-      <div className="home__card-header">
-        <h2>{def.label}</h2>
-        <Link to={def.path}>一覧</Link>
-      </div>
-      <ErrorBanner error={error} />
-      {isPending ? (
-        <p className="home__empty">読み込み中...</p>
-      ) : (
-        <>
-          <p className="home__counts">
-            <span className="home__count home__count--big">
-              未処理 <strong>{summary.open}</strong>
-            </span>
-          </p>
-          <p className="home__counts">
-            {options
-              .filter((option) => (summary.byStatus.get(option.code) ?? 0) > 0)
-              .map((option) => (
-                <span key={option.code} className="home__count">
-                  {option.display} <strong>{summary.byStatus.get(option.code)}</strong>
-                </span>
-              ))}
-            {extra?.map((item) => (
-              <span key={item.label} className="home__count">
-                {item.label} <strong>{item.count}</strong>
-              </span>
-            ))}
-          </p>
-          {truncated && (
-            <p className="error-banner__line error-banner__line--warning" role="status">
-              件数が多いため、一部のみ数えています。
-            </p>
-          )}
-        </>
-      )}
-    </section>
-  );
+  return <HomeCountsCard title={def.label} path={def.path} {...rest} />;
 }
 
 interface DateProps {
@@ -320,6 +269,51 @@ function AntimicrobialCard() {
   );
 }
 
+function EndoscopyCard({ date }: DateProps) {
+  const query = useEndoscopyWorklist(date);
+  return (
+    <WorklistCounts
+      kind="endoscopy"
+      isPending={query.isPending}
+      error={query.error}
+      statuses={query.data?.rows.map((row) => endoscopyTaskStatus(row.task))}
+      options={ENDOSCOPY_TASK_STATUS_OPTIONS}
+      truncated={query.data?.truncated}
+    />
+  );
+}
+
+function TreatmentCard({ date }: DateProps) {
+  const query = useTreatmentWorklist(date);
+  return (
+    <WorklistCounts
+      kind="treatment"
+      isPending={query.isPending}
+      error={query.error}
+      statuses={query.data?.rows.map((row) => treatmentTaskStatus(row.task))}
+      options={TREATMENT_TASK_STATUS_OPTIONS}
+      truncated={query.data?.truncated}
+    />
+  );
+}
+
+/** 手術は当日の件数に、日程が決まっていない申込の件数を添える。 */
+function SurgeryCard({ date }: DateProps) {
+  const query = useSurgeryWorklist(date);
+  const unscheduled = useSurgeryUnscheduledList();
+  return (
+    <WorklistCounts
+      kind="surgery"
+      isPending={query.isPending}
+      error={query.error ?? unscheduled.error}
+      statuses={query.data?.rows.map((row) => surgeryTaskStatus(row.task))}
+      options={SURGERY_TASK_STATUS_OPTIONS}
+      truncated={query.data?.truncated}
+      extra={unscheduled.data ? [{ label: "日程未定", count: unscheduled.data.rows.length }] : undefined}
+    />
+  );
+}
+
 const WORKLIST_CARDS: Record<HomeWorklistKey, ComponentType<DateProps>> = {
   lab: LabCard,
   physio: PhysioCard,
@@ -334,9 +328,12 @@ const WORKLIST_CARDS: Record<HomeWorklistKey, ComponentType<DateProps>> = {
   antimicrobial: AntimicrobialCard,
   rehab: RehabCard,
   nutritionGuidance: NutritionGuidanceCard,
+  endoscopy: EndoscopyCard,
+  treatment: TreatmentCard,
+  surgery: SurgeryCard,
 };
 
-export function HomeWorklistCard({ kind, date }: { kind: HomeWorklistKey; date: string }) {
-  const Card = WORKLIST_CARDS[kind];
+export function HomeWorklistCard({ card, date }: HomeCardProps<"worklist">) {
+  const Card = WORKLIST_CARDS[card.settings.worklist];
   return <Card date={date} />;
 }

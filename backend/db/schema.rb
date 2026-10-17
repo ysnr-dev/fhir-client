@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_17_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_17_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -205,6 +205,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_120000) do
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_file_categories_on_code", unique: true
     t.index ["name"], name: "index_file_categories_on_name", unique: true
+  end
+
+  create_table "home_layouts", force: :cascade do |t|
+    t.string "practitioner_id", null: false
+    t.jsonb "definition", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["practitioner_id"], name: "index_home_layouts_on_practitioner_id", unique: true
   end
 
   create_table "intake_links", force: :cascade do |t|

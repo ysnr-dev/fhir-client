@@ -1,28 +1,20 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import type {
-  PatientCaution,
   PatientFolder,
   PatientFolderMember,
   PatientFolderScope,
 } from "../api/masterClient";
 import {
-  usePatientCautions,
   usePatientFolderMembers,
   usePatientFolderMutations,
   usePatientFolders,
 } from "../api/masterQueries";
-import {
-  useAllergiesForPatients,
-  useFlagsForPatients,
-  useInfectionsForPatients,
-  usePatientsByIds,
-} from "../api/queries";
+import { usePatientsByIds } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
-import { RowPictograms } from "../components/PatientListRowParts";
-import { PatientDeceasedMark, PatientKana } from "../components/PatientRowCells";
+import { PatientFolderMemberTable } from "../components/PatientFolderMemberTable";
 import { RowMenu } from "../components/RowMenu";
 import { WalkInPatientSearch } from "../components/WalkInCheckInModal";
 import {
@@ -32,10 +24,9 @@ import {
   patientFolderSiblings,
   type PatientFolderNode,
 } from "../components/patientFolderTree";
-import { ageWithMonthsLabel, displayName, genderShortLabel } from "../fhir/patientHelpers";
+import { displayName } from "../fhir/patientHelpers";
 import { usePatientFolderOwners, type PatientFolderOwner } from "../hooks/usePatientFolderOwners";
-import { localDay } from "../lib/dates";
-import { useReturnLinkState } from "../returnTo";
+import { useRowPictograms } from "../hooks/useRowPictograms";
 
 // 患者フォルダ。左で持ち主(院内共通 / 診療科 / 自分)ごとのフォルダの木を管理し、右に選んだ
 // フォルダの患者を並べる。選んだフォルダは URL に載せ、カルテから戻ったときに同じフォルダを開く。
@@ -326,17 +317,9 @@ function FolderMembers({
   const patientsQuery = usePatientsByIds(patientIds);
   const patients = patientsQuery.data;
   const mutations = usePatientFolderMutations();
-  const returnLinkState = useReturnLinkState();
 
   const uniquePatientIds = useMemo(() => [...new Set(patientIds)], [patientIds]);
-  const cautions = usePatientCautions();
-  const cautionsByCode = useMemo(
-    () => new Map<string, PatientCaution>((cautions.data?.items ?? []).map((c) => [c.code, c])),
-    [cautions.data],
-  );
-  const flags = useFlagsForPatients(uniquePatientIds);
-  const allergies = useAllergiesForPatients(uniquePatientIds);
-  const infections = useInfectionsForPatients(uniquePatientIds);
+  const pictograms = useRowPictograms(uniquePatientIds);
 
   const drawer = useRowDrawer();
   const [adding, setAdding] = useState(false);
@@ -417,79 +400,15 @@ function FolderMembers({
       ) : members.length === 0 ? (
         <p className="patient-table__empty">登録した患者はいません。</p>
       ) : (
-        <table className="patient-table patient-list">
-          <thead>
-            <tr>
-              <th>患者番号</th>
-              <th>氏名</th>
-              <th>性別</th>
-              <th>生年月日</th>
-              {includeDescendants && <th>フォルダ</th>}
-              <th>メモ</th>
-              <th>登録日</th>
-              <th>登録者</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {members.map((member) => {
-              const patient = patients?.get(member.patient_id);
-              const missing = !patient && !patientsQuery.isPending;
-              return (
-                <tr key={member.id} {...drawer.rowProps(patient ? member.patient_id : undefined)}>
-                  <td>{patient?.identifier?.[0]?.value ?? "-"}</td>
-                  <td>
-                    {patient ? (
-                      <span className="outpatient__name-cell">
-                        <span className="outpatient__name">
-                          {displayName(patient) || "-"}
-                          <PatientKana patient={patient} />
-                        </span>
-                        <PatientDeceasedMark patient={patient} />
-                        <RowPictograms
-                          patientId={member.patient_id}
-                          flags={flags.byPatient}
-                          allergies={allergies.byPatient}
-                          infections={infections.byPatient}
-                          cautionsByCode={cautionsByCode}
-                        />
-                      </span>
-                    ) : missing ? (
-                      <span className="patient-folder__missing">患者が見つかりません({member.patient_id})</span>
-                    ) : (
-                      "…"
-                    )}
-                  </td>
-                  <td>{patient ? genderShortLabel(patient.gender) : "-"}</td>
-                  <td>
-                    {patient?.birthDate ?? "-"}
-                    {patient?.birthDate && ageWithMonthsLabel(patient.birthDate) && (
-                      <span className="patient-cells__age">（{ageWithMonthsLabel(patient.birthDate)}）</span>
-                    )}
-                  </td>
-                  {includeDescendants && (
-                    <td>{patientFolderPath(items, member.patient_folder_id)}</td>
-                  )}
-                  <td className="patient-folder__note">{member.note ?? ""}</td>
-                  <td>{localDay(member.created_at)}</td>
-                  <td>{member.added_by_name ?? ""}</td>
-                  <td className="patient-table__actions">
-                    {patient && (
-                      <Link
-                        className="button"
-                        to={`/patients/${member.patient_id}/karte`}
-                        state={returnLinkState}
-                      >
-                        カルテ
-                      </Link>
-                    )}
-                    <RowMenu label={`${labelOf(member)} の操作`}>{menuItems(member)}</RowMenu>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <PatientFolderMemberTable
+          members={members}
+          patients={patients}
+          patientsPending={patientsQuery.isPending}
+          pictograms={pictograms}
+          folderPathOf={includeDescendants ? (folderId) => patientFolderPath(items, folderId) : undefined}
+          rowProps={drawer.rowProps}
+          actions={(member) => <RowMenu label={`${labelOf(member)} の操作`}>{menuItems(member)}</RowMenu>}
+        />
       )}
 
       {drawerPatient?.id && (

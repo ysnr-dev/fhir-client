@@ -38,5 +38,6 @@ export * from "./medicineAttribute";
 export * from "./extractQuery";
 export * from "./dashboard";
 export * from "./patientFolder";
+export * from "./homeLayout";
 export * from "./nursingAssignment";
 export * from "./nursingAcuity";

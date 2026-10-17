@@ -431,6 +431,8 @@ Rails.application.routes.draw do
     resources :patient_folder_members, only: %i[index create update destroy]
     # 掲示板(院内のお知らせ)。ホームのカードと掲示板の画面が読む。
     resources :bulletin_posts, only: %i[index show create update destroy]
+    # ホームのカードの並び。ログイン中の医療従事者につき 1 つ(docs/features/home.md)。
+    resource :home_layout, only: %i[show update destroy]
     # 看護の業務分担(日・勤務帯ごとの受け持ち)。病棟 × 日 × 勤務帯をまとめて置き換える。
     resources :nursing_assignments, only: %i[index] do
       collection { put :replace }
