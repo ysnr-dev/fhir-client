@@ -1,6 +1,10 @@
 import { useState } from "react";
 import {
+  applyMaterial,
   deriveTf,
+  materialOf,
+  ORAL_EXAM_MATERIALS,
+  withMaterial,
   emptyContent,
   isSupernumerary,
   itemOptions,
@@ -182,9 +186,29 @@ export function OralExamToothEditor({
                 onChange={(e) => replace({ ...record, productNumber: e.target.value })}
               />
             </label>
+            <label className="oral-exam__field">
+              材料
+              <select
+                value={materialOf(record.remark)}
+                onChange={(e) => replace(applyMaterial(record, e.target.value, book))}
+              >
+                <option value="" />
+                {ORAL_EXAM_MATERIALS.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="oral-exam__field oral-exam__field--wide">
               特記事項
-              <input type="text" value={record.remark} onChange={(e) => replace({ ...record, remark: e.target.value })} />
+              <input
+                type="text"
+                value={withMaterial(record.remark, "")}
+                onChange={(e) =>
+                  replace({ ...record, remark: withMaterial(e.target.value, materialOf(record.remark)) })
+                }
+              />
             </label>
           </div>
           <TfLine book={book} record={record} />

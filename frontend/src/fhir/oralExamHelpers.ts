@@ -1029,6 +1029,85 @@ export function parseOralExamSnapshot(observations: fhir4.Observation[]): OralEx
   };
 }
 
+// ---- 材料(当該歯特記事項 TE-6) ----
+
+/**
+ * 修復・補綴の材料。仕様のコードは見た目の色(銀色・黒色・金色・歯冠色)までで合金名を持たないので、
+ * 配布の「口腔状態モデルケースとコード化例」と同じく特記事項(TE-6)の先頭に材料名を書く。
+ * 表記はモデルケースに合わせる(照合で表記がそろっていることが大事なため)。
+ * color は金属の色。選ぶと修復コードの色をそれに合わせる。
+ */
+export const ORAL_EXAM_MATERIALS: { name: string; color?: MetalColor }[] = [
+  { name: "金銀パラジウム", color: "銀色" },
+  { name: "銀合金", color: "銀色" },
+  { name: "金合金", color: "金色" },
+  { name: "チタン", color: "銀色" },
+  { name: "コバルトクロム", color: "銀色" },
+  { name: "金床" },
+  { name: "CAD/CAM冠用材料" },
+  { name: "ハイブリッドレジン" },
+  { name: "硬質レジン" },
+  { name: "コンポジットレジン" },
+  { name: "グラスアイオノマー" },
+  { name: "セラミック" },
+  { name: "ジルコニア" },
+  { name: "ファイバーポスト" },
+];
+
+export type MetalColor = "銀色" | "黒色" | "金色";
+
+const MATERIAL_SEPARATOR = "、";
+
+/** 特記事項の先頭にある材料名(無ければ空)。 */
+export function materialOf(remark: string): string {
+  return (
+    ORAL_EXAM_MATERIALS.find(
+      (m) => remark === m.name || remark.startsWith(`${m.name}${MATERIAL_SEPARATOR}`),
+    )?.name ?? ""
+  );
+}
+
+/** 特記事項の先頭の材料名を差し替える(材料の後ろの自由記載は残す)。 */
+export function withMaterial(remark: string, material: string): string {
+  const current = materialOf(remark);
+  const rest = current ? remark.slice(current.length).replace(/^、/, "") : remark;
+  if (!material) return rest;
+  return rest ? `${material}${MATERIAL_SEPARATOR}${rest}` : material;
+}
+
+const METAL_COLORS: MetalColor[] = ["銀色", "黒色", "金色"];
+
+/**
+ * 修復・補綴のコードを同じ種類の別の色のコードに置き換える(銀色 → 金色など)。
+ * コード表で色だけが違う名称のコードを探し、無ければそのまま。
+ */
+function recolorCode(book: OralExamCodeBook | undefined, item: string, code: string, color: MetalColor): string {
+  const display = book?.find(item, code)?.display;
+  const current = METAL_COLORS.find((c) => display?.includes(c));
+  if (!display || !current || current === color) return code;
+  const target = display.replace(current, color);
+  return book?.byItem.get(item)?.find((c) => c.display === target)?.code ?? code;
+}
+
+/** 歯の材料を変える。特記事項の材料名を差し替え、金属の色をその材料に合わせる。 */
+export function applyMaterial(
+  record: ToothRecord,
+  material: string,
+  book: OralExamCodeBook | undefined,
+): ToothRecord {
+  const color = ORAL_EXAM_MATERIALS.find((m) => m.name === material)?.color;
+  const recolor = (values: Record<string, string>) =>
+    color
+      ? Object.fromEntries(Object.entries(values).map(([item, code]) => [item, recolorCode(book, item, code, color)]))
+      : values;
+  return {
+    ...record,
+    remark: withMaterial(record.remark, material),
+    contents: record.contents.map((c) => ({ ...c, values: recolor(c.values) })),
+    missing: recolor(record.missing),
+  };
+}
+
 // ---- スタンプ(歯式図に押して入れる、よく使う状態) ----
 
 export type StampGroup = "state" | "caries" | "restoration" | "prosthesis";
@@ -1049,8 +1128,14 @@ export interface OralExamStamp {
   missing?: Record<string, string>;
   /** 歯面を押すとその面に付く。 */
   surface?: boolean;
-  /** 冠(う蝕と部分修復を置き換える)。 */
+  /** 冠(う蝕・部分修復・ほかの冠を置き換える)。 */
   crown?: boolean;
+  /** 現在歯の内容の 1 行目に書き足す(クラスプ・レスト・失活歯。別の併存レコードにしない)。 */
+  attach?: boolean;
+  /** 義歯(床番号を付ける)。欠損歯側は TM-5、鉤歯側は TP-34。 */
+  denture?: "base" | "clasp";
+  /** 特記事項に書く材料。 */
+  material?: string;
   /** 記録を消す。 */
   erase?: boolean;
 }
@@ -1061,6 +1146,16 @@ export const STAMP_GROUP_LABELS: Record<StampGroup, string> = {
   restoration: "修復",
   prosthesis: "欠損・補綴",
 };
+
+/** 同じ顎の何床目の義歯か。1 床目は番号を付けない(コード表の「同顎２床目」「同顎３床目」)。 */
+export const DENTURE_NUMBERS = [
+  { code: "", label: "1床目" },
+  { code: "01", label: "2床目" },
+  { code: "02", label: "3床目" },
+] as const;
+
+const GOLD_PALLADIUM = "金銀パラジウム";
+const CAD_CAM = "CAD/CAM冠用材料";
 
 export const ORAL_EXAM_STAMPS: OralExamStamp[] = [
   { key: "sound", label: "健全", title: "現在歯【健全歯／】(治療痕なし)", group: "state", basic: "02" },
@@ -1084,42 +1179,65 @@ export const ORAL_EXAM_STAMPS: OralExamStamp[] = [
   {
     key: "cr",
     label: "CR",
-    title: "部分修復(歯冠色充填)(ＣＦ、ＲＦ、ＧＣＦ)",
+    title: "部分修復(歯冠色充填)(ＣＦ、ＲＦ、ＧＣＦ)・コンポジットレジン",
     group: "restoration",
     content: { "TP-11": "03" },
     surface: true,
+    material: "コンポジットレジン",
   },
   {
     key: "inlay",
     label: "インレー",
-    title: "部分修復(金属インレー・銀色)(Ｉｎ)",
+    title: "部分修復(金属インレー・銀色)(Ｉｎ)・金銀パラジウム",
     group: "restoration",
     content: { "TP-11": "20" },
     surface: true,
+    material: GOLD_PALLADIUM,
+  },
+  {
+    key: "cadcam-inlay",
+    label: "CAD/CAMインレー",
+    title: "部分修復(非金属インレー・レジン系(様)・歯冠色)(Ｉｎ)・CAD/CAM冠用材料",
+    group: "restoration",
+    content: { "TP-11": "23" },
+    surface: true,
+    material: CAD_CAM,
   },
   {
     key: "fmc",
     label: "FMC",
-    title: "全部修復(全部金属冠・銀色)(ＦＭＣ)",
+    title: "全部修復(全部金属冠・銀色)(ＦＭＣ)・金銀パラジウム",
     group: "restoration",
     content: { "TP-21": "01", "TP-18": "01" },
     crown: true,
+    material: GOLD_PALLADIUM,
   },
   {
     key: "veneer-crown",
     label: "前装冠",
-    title: "全部修復(前装金属冠・銀色)(前装ＭＣ)",
+    title: "全部修復(前装金属冠・銀色)(前装ＭＣ)・金銀パラジウム",
     group: "restoration",
     content: { "TP-21": "07", "TP-18": "01" },
     crown: true,
+    material: GOLD_PALLADIUM,
   },
   {
-    key: "jacket",
-    label: "白い冠",
-    title: "全部修復(全部非金属冠・セラミック系(様)・歯冠色)(ＪＣ)",
+    key: "cadcam-crown",
+    label: "CAD/CAM冠",
+    title: "全部修復(全部非金属冠・レジン系(様)・歯冠色)(ＪＣ)・CAD/CAM冠用材料",
+    group: "restoration",
+    content: { "TP-21": "04", "TP-18": "01" },
+    crown: true,
+    material: CAD_CAM,
+  },
+  {
+    key: "ceramic-crown",
+    label: "セラミック冠",
+    title: "全部修復(全部非金属冠・セラミック系(様)・歯冠色)(ＪＣ)・セラミック",
     group: "restoration",
     content: { "TP-21": "05", "TP-18": "01" },
     crown: true,
+    material: "セラミック",
   },
   {
     key: "endo",
@@ -1127,22 +1245,25 @@ export const ORAL_EXAM_STAMPS: OralExamStamp[] = [
     title: "失活歯(根管充填歯など)",
     group: "restoration",
     content: { "TP-3": "02" },
+    attach: true,
   },
   {
     key: "abutment",
     label: "Br支台",
-    title: "全部金属冠のブリッジ支台歯(同顎１装置目)",
+    title: "全部金属冠のブリッジ支台歯(同顎１装置目)・金銀パラジウム",
     group: "prosthesis",
-    content: { "TP-23": "02", "TP-21": "01", "TP-24": "01" },
+    content: { "TP-23": "02", "TP-21": "01", "TP-18": "01", "TP-24": "01" },
     crown: true,
+    material: GOLD_PALLADIUM,
   },
   {
     key: "pontic",
     label: "ポンティック",
-    title: "欠損歯【喪失歯(欠損補綴歯・ポンティック)】鋳造ポンティック・銀色",
+    title: "欠損歯【喪失歯(欠損補綴歯・ポンティック)】鋳造ポンティック・銀色・金銀パラジウム",
     group: "prosthesis",
     basic: "60",
     missing: { "TM-2": "05", "TM-3": "01" },
+    material: GOLD_PALLADIUM,
   },
   {
     key: "partial-denture",
@@ -1151,6 +1272,7 @@ export const ORAL_EXAM_STAMPS: OralExamStamp[] = [
     group: "prosthesis",
     basic: "57",
     missing: { "TM-4": "15" },
+    denture: "base",
   },
   {
     key: "full-denture",
@@ -1159,6 +1281,25 @@ export const ORAL_EXAM_STAMPS: OralExamStamp[] = [
     group: "prosthesis",
     basic: "57",
     missing: { "TM-4": "08" },
+    denture: "base",
+  },
+  {
+    key: "clasp",
+    label: "クラスプ",
+    title: "鋳造鉤(二腕鉤・レスト付き・銀色)(Ｃｌ)",
+    group: "prosthesis",
+    content: { "TP-26": "05" },
+    attach: true,
+    denture: "clasp",
+  },
+  {
+    key: "rest",
+    label: "レスト",
+    title: "レストシート等あり",
+    group: "prosthesis",
+    content: { "TP-25": "01" },
+    attach: true,
+    denture: "clasp",
   },
   {
     key: "implant",
@@ -1180,6 +1321,9 @@ function isCariesCode(code: string | undefined): boolean {
 
 const RESTORATION_ITEMS = ["TP-11", "TP-21", "TP-22"];
 
+/** 冠を被せると無くなる内容(う蝕・部分修復・窩洞・ほかの冠・仮歯と、それらの歯面)。 */
+const CROWN_REPLACED_ITEMS = ["TP-10", "TP-11", "TP-12", "TP-21", ...TP_SURFACE_ITEMS.map((s) => s.item)];
+
 /** 現在歯の内容から基本状態を決める(う蝕があれば未処置歯、修復があれば処置歯)。 */
 function basicFromContents(contents: ToothContent[], current: string): string {
   if (contents.some((c) => c.values["TP-9"] === "10" || c.values["TP-9"] === "11")) return "08";
@@ -1192,44 +1336,74 @@ function surfaceCount(values: Record<string, string>): number {
   return TP_SURFACE_ITEMS.filter((s) => values[s.item]).length;
 }
 
+function withoutEmpty(contents: ToothContent[]): ToothContent[] {
+  return contents.filter((c) => Object.values(c.values).some(Boolean));
+}
+
+export interface ApplyStampOptions {
+  /** 押した歯面(TP-13〜17)。 */
+  face?: string;
+  /** 義歯の床番号(DENTURE_NUMBERS の code)。 */
+  dentureNumber?: string;
+  book?: OralExamCodeBook;
+}
+
 /**
  * スタンプを歯に押した結果(その歯の併存グループの並び)。最初の併存グループに書き、
- * ほかのグループはそのまま残す。face は押した歯面(TP-13〜17)。
+ * ほかのグループはそのまま残す。
  */
 export function applyStamp(
   records: ToothRecord[],
   toothCode: string,
   stamp: OralExamStamp,
-  face?: string,
+  { face, dentureNumber = "", book }: ApplyStampOptions = {},
 ): ToothRecord[] {
   if (stamp.erase) return [];
   const primary = records[0] ?? newToothRecord(toothCode, stamp.basic ?? "02");
   const rest = records.slice(1);
   const newContent = (values: Record<string, string>): ToothContent => ({ key: draftKey(), values: { ...values } });
+  const finish = (record: ToothRecord) => [
+    stamp.material ? applyMaterial(record, stamp.material, book) : record,
+    ...rest,
+  ];
 
   if (stamp.basic) {
-    const next: ToothRecord = {
+    const missing: Record<string, string> = { ...stamp.missing };
+    if (stamp.denture === "base" && dentureNumber) missing["TM-5"] = dentureNumber;
+    return finish({
       ...primary,
       basic: stamp.basic,
       stateCode: stamp.stateCode ?? defaultStateCode(stamp.basic),
       contents: stamp.content ? [newContent(stamp.content)] : [],
-      missing: stamp.missing ? { ...stamp.missing } : {},
-    };
-    return [next, ...rest];
+      missing,
+    });
   }
 
-  const content = stamp.content ?? {};
+  const content: Record<string, string> = { ...stamp.content };
+  if (stamp.denture === "clasp" && dentureNumber) content["TP-34"] = dentureNumber;
   const [kind] = Object.keys(content);
   const code = content[kind];
   // 欠損歯にう蝕や修復を押したら、現在歯に戻して書く。
   let contents = usesMissingContent(primary.basic) || primary.basic === "08" ? [] : [...primary.contents];
 
   if (stamp.crown) {
-    // 冠はう蝕・部分修復・ほかの冠を置き換える。
-    contents = contents.filter(
-      (c) => !isCariesCode(c.values["TP-9"]) && !c.values["TP-11"] && !c.values["TP-21"],
+    // 冠はう蝕・部分修復・ほかの冠を置き換える。同じ行のクラスプ・レスト・失活歯などは残す。
+    contents = withoutEmpty(
+      contents.map((c) => {
+        const values = { ...c.values };
+        for (const item of CROWN_REPLACED_ITEMS) delete values[item];
+        if (isCariesCode(values["TP-9"])) delete values["TP-9"];
+        return { ...c, values };
+      }),
     );
-    contents.push(newContent(content));
+    if (contents.length) contents[0] = { ...contents[0], values: { ...contents[0].values, ...content } };
+    else contents.push(newContent(content));
+  } else if (stamp.attach) {
+    if (contents.length) {
+      const values = { ...contents[0].values, ...content };
+      if (stamp.denture === "clasp" && !dentureNumber) delete values["TP-34"];
+      contents[0] = { ...contents[0], values };
+    } else contents.push(newContent(content));
   } else if (stamp.surface && face) {
     const same = contents.find((c) => c.values[kind] === code);
     if (same) {
@@ -1258,7 +1432,7 @@ export function applyStamp(
   }
 
   const basic = basicFromContents(contents, primary.basic);
-  return [{ ...primary, basic, stateCode: defaultStateCode(basic), contents, missing: {} }, ...rest];
+  return finish({ ...primary, basic, stateCode: defaultStateCode(basic), contents, missing: {} });
 }
 
 // ---- 歯式図の略号 ----
@@ -1304,7 +1478,9 @@ const ABBR_RULES: AbbrRule[] = [
     abbr: (code) =>
       pick(code, [
         [[[1, 3]], "FMC"],
-        [[[4, 6]], "JC"],
+        [[[4, 4]], "HJC"],
+        [[[5, 5]], "セラ"],
+        [[[6, 6]], "JC"],
         [[[7, 9]], "前装"],
         [[[10, 12]], "MB"],
         [[[13, 21]], "外冠"],
@@ -1353,7 +1529,6 @@ const ABBR_RULES: AbbrRule[] = [
         [[[1, 7], [23, 23], [29, 34]], "Den"],
       ]),
   },
-  { item: "TP-26", abbr: () => "Cl" },
   { item: "TP-27", abbr: () => "矯正" },
   { item: "TP-28", abbr: () => "固定" },
 ];
@@ -1374,7 +1549,17 @@ function basicAbbr(basic: string): string {
   ]);
 }
 
-/** 歯式図に添える略号(優先順、重複なし)。併存グループ全部から集める。 */
+/** 2 床目・3 床目の義歯は略号に床の番号を付ける(PD2 など)。 */
+function dentureSuffix(number: string | undefined): string {
+  return number === "01" ? "2" : number === "02" ? "3" : "";
+}
+
+/** CAD/CAM の材料で作った非金属の修復(特記事項の材料で見分ける)。 */
+function isCadCam(record: ToothRecord): boolean {
+  return materialOf(record.remark) === CAD_CAM;
+}
+
+/** 歯式図に添える略号(優先順、重複なし)。併存グループ全部から集める。クラスプ・レストは別(toothClaspMarks)。 */
 export function toothAbbreviations(records: ToothRecord[]): string[] {
   const found = new Set<string>();
   for (const record of records) {
@@ -1383,8 +1568,13 @@ export function toothAbbreviations(records: ToothRecord[]): string[] {
       for (const values of sources) {
         const code = values[rule.item];
         if (!code) continue;
-        const abbr = rule.abbr(code);
-        if (abbr) found.add(abbr);
+        let abbr = rule.abbr(code);
+        if (!abbr) continue;
+        if (isCadCam(record) && (rule.item === "TP-21" || rule.item === "TP-11") && /^(HJC|JC|In)$/.test(abbr)) {
+          abbr = rule.item === "TP-21" ? "CAD" : "CAD-In";
+        }
+        if (rule.item === "TM-4") abbr += dentureSuffix(values["TM-5"]);
+        found.add(abbr);
       }
     }
     if (inRange(record.basic, [62, 66])) found.add("Im");
@@ -1394,4 +1584,21 @@ export function toothAbbreviations(records: ToothRecord[]): string[] {
     }
   }
   return [...found];
+}
+
+/**
+ * クラスプ・レストの印(Cl・R、2 床目以降は Cl2 など)。略号は 2 つまでしか出さないので、
+ * 鉤歯であることが隠れないよう別に出す。
+ */
+export function toothClaspMarks(records: ToothRecord[]): string[] {
+  const marks = new Set<string>();
+  for (const record of records) {
+    if (usesMissingContent(record.basic)) continue;
+    for (const content of record.contents) {
+      const suffix = dentureSuffix(content.values["TP-34"]);
+      if (content.values["TP-26"]) marks.add(`Cl${suffix}`);
+      if (content.values["TP-25"]) marks.add(`R${suffix}`);
+    }
+  }
+  return [...marks];
 }

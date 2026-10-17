@@ -27364,6 +27364,22 @@ input.nursing-picker__search {
   line-height: 13px;
 }
 
+/* 鉤歯の印(クラスプ Cl・レスト R)。略号は 2 つまでなので、鉤歯であることが隠れないよう別の行に出す。 */
+.oral-exam__clasp {
+  min-height: 11px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 11px;
+  white-space: nowrap;
+  color: var(--warning);
+}
+
+.oral-exam .oral-exam__denture-number {
+  height: 26px;
+  padding: 0 4px;
+  font-size: 13px;
+}
+
 .oral-exam__extra {
   width: 18px;
   height: 16px;

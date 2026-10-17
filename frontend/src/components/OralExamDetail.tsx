@@ -1,5 +1,7 @@
 import {
   codeDisplay,
+  materialOf,
+  withMaterial,
   MOUTH_SECTIONS,
   TM_MAIN_ITEMS,
   TM_MORE_ITEMS,
@@ -59,7 +61,8 @@ export function OralExamToothDetail({
             {record.productName || record.productNumber ? (
               <Row label="製品" value={[record.productName, record.productNumber].filter(Boolean).join(" / ")} />
             ) : null}
-            {record.remark && <Row label="特記事項" value={record.remark} />}
+            {materialOf(record.remark) && <Row label="材料" value={materialOf(record.remark)} />}
+            {withMaterial(record.remark, "") && <Row label="特記事項" value={withMaterial(record.remark, "")} />}
           </dl>
           <TfLine book={book} record={record} />
         </div>

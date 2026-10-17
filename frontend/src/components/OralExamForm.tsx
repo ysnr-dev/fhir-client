@@ -51,6 +51,7 @@ export function OralExamForm({
   );
   const [pickingItem, setPickingItem] = useState<string | null>(null);
   const [stamp, setStamp] = useState<OralExamStamp | null>(null);
+  const [dentureNumber, setDentureNumber] = useState("");
   const [bulkBasic, setBulkBasic] = useState("02");
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -68,7 +69,7 @@ export function OralExamForm({
       ...v,
       teeth: sortTeeth([
         ...v.teeth.filter((t) => t.toothCode !== toothCode),
-        ...applyStamp(recordsOfTooth(v.teeth, toothCode), toothCode, stamp, face),
+        ...applyStamp(recordsOfTooth(v.teeth, toothCode), toothCode, stamp, { face, dentureNumber, book }),
       ]),
     }));
     setSelected(toothCode);
@@ -171,7 +172,14 @@ export function OralExamForm({
         </button>
       </div>
 
-      {!pickingItem && <OralExamStampPalette stamp={stamp} onChange={setStamp} />}
+      {!pickingItem && (
+        <OralExamStampPalette
+          stamp={stamp}
+          onChange={setStamp}
+          dentureNumber={dentureNumber}
+          onDentureNumberChange={setDentureNumber}
+        />
+      )}
       {pickingItem && <p className="oral-exam__picking">歯式を選択中</p>}
 
       <OralExamChart
