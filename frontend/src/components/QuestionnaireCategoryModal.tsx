@@ -7,6 +7,7 @@ import {
   useUpdateQuestionnaireCategory,
 } from "../api/adminQueries";
 import { ErrorBanner } from "./ErrorBanner";
+import { TrashIcon } from "./icons/TrashIcon";
 import { Modal } from "./Modal";
 
 // テンプレートカテゴリ(独自マスタ)の管理。テンプレート一覧から開く。
@@ -95,6 +96,21 @@ export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void })
         <ul className="category-modal__list">
           {categories.map((category, index) => (
             <li key={category.id} className="category-modal__row">
+              <input
+                type="text"
+                aria-label={`${category.name} の名前`}
+                value={nameOf(category)}
+                onChange={(e) =>
+                  setDrafts((prev) => ({ ...prev, [category.id]: e.target.value }))
+                }
+              />
+              <button
+                type="button"
+                disabled={busy || nameOf(category).trim() === category.name}
+                onClick={() => handleRename(category)}
+              >
+                保存
+              </button>
               <span className="category-modal__order">
                 <button
                   type="button"
@@ -113,28 +129,15 @@ export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void })
                   ↓
                 </button>
               </span>
-              <input
-                type="text"
-                aria-label={`${category.name} の名前`}
-                value={nameOf(category)}
-                onChange={(e) =>
-                  setDrafts((prev) => ({ ...prev, [category.id]: e.target.value }))
-                }
-              />
               <button
                 type="button"
-                disabled={busy || nameOf(category).trim() === category.name}
-                onClick={() => handleRename(category)}
-              >
-                保存
-              </button>
-              <button
-                type="button"
-                className="category-modal__delete"
+                className="category-modal__delete category-modal__delete--icon icon-tooltip"
+                data-tooltip="削除"
+                aria-label={`${category.name} を削除`}
                 disabled={busy}
                 onClick={() => handleDelete(category)}
               >
-                削除
+                <TrashIcon />
               </button>
             </li>
           ))}
