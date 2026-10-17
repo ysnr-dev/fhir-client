@@ -1,0 +1,88 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/nursing-focus-01",
+  "version": "1.0.0",
+  "name": "NURS_FOCUS_01",
+  "title": "フォーカスチャーティング(F-DAR)",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "看護記録をフォーカスチャーティングの形式で書く。患者の関心事・出来事を見出し(F)に立て、データ(D)・アクション(A)・レスポンス(R)に分けて書く。1 回の記録に複数のフォーカスを立てられるよう、F-DAR を繰り返しグループにしている。診療記録の記載形式「テンプレート」で使う(タイトルマスタの既定テンプレートに設定する)。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "ed9cf5a2-5752-4e62-85e5-cab6667aa11d",
+        "display": "看護記録"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "focus",
+      "type": "group",
+      "text": "フォーカス",
+      "repeats": true,
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-maxOccurs",
+          "valueInteger": 10
+        }
+      ],
+      "item": [
+        {
+          "linkId": "focus_f",
+          "type": "string",
+          "text": "F(フォーカス)",
+          "required": true,
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "記録の見出し。看護問題・看護診断に限らず、症状(疼痛・発熱)、出来事(転倒・急変)、状態の変化、治療・処置(術後・輸血)、患者・家族の反応(不安・受容)など、いま注目すべきことを短く書く。看護計画の看護問題を立てていれば「#1 転倒リスク状態」のように番号ごと書くと計画と照合しやすい。"
+            }
+          ]
+        },
+        {
+          "linkId": "focus_d",
+          "type": "text",
+          "text": "D(データ)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "フォーカスを裏づける主観的・客観的な情報(患者の訴え、観察した状態、バイタルサイン、検査値など)。"
+            }
+          ]
+        },
+        {
+          "linkId": "focus_a",
+          "type": "text",
+          "text": "A(アクション)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "行った看護行為・ケア・指導・医師への報告と、これから行う予定。計画の変更もここに書く。"
+            }
+          ]
+        },
+        {
+          "linkId": "focus_r",
+          "type": "text",
+          "text": "R(レスポンス)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "アクションに対する患者の反応・結果。反応がその場で分からないときは空けておき、後の記録で同じフォーカスの R として書く。"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

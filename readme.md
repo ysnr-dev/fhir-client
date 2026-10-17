@@ -47,7 +47,7 @@ cd ../fhir-client && docker compose up --build    # db(5434) / backend(3001) / f
 | [features/medication.md](docs/features/medication.md) | 処方、疑義照会、持参薬、服薬指導、薬剤付加情報、ロット番号、注射 |
 | [features/lab.md](docs/features/lab.md) | 検体検査の結果項目マスタ、パニック値、既読、基準値と H/L、報告区分、結果取込、読影・所見レポート |
 | [features/notifications.md](docs/features/notifications.md) | 通知(Task)の種別と画面 |
-| [features/nursing.md](docs/features/nursing.md) | 看護計画・看護サマリー・看護プロファイル・ワークシート・看護必要度・チーム医療・褥瘡、看護マスタ |
+| [features/nursing.md](docs/features/nursing.md) | 看護計画・看護サマリー・看護記録(フォーカスチャーティング)・看護プロファイル・ワークシート・看護必要度・チーム医療・褥瘡、看護マスタ |
 | [features/templates.md](docs/features/templates.md) | シェーマ、テンプレートカテゴリ・入出力、帳票 PDF、基礎データ・初期計画、項目コード、回答の複写、Observation 生成 |
 | [features/patient-profile.md](docs/features/patient-profile.md) | 患者の基本情報、血液型・身長体重・妊娠・感染症、診療上の注意(Flag)、病名の区分 |
 | [features/facility.md](docs/features/facility.md) | 自院と連携先、施設設定、医療機関(Organization)、医療従事者(Practitioner / PractitionerRole) |
