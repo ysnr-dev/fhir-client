@@ -1239,6 +1239,19 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   color: var(--text-h);
 }
 
+.questionnaire-list__content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.facility-settings__nav .facility-settings__nav-item .questionnaire-list__count {
+  margin-left: 6px;
+  color: var(--text);
+  font-size: 12px;
+}
+
 .connection-settings__lead {
   margin: 0 0 16px;
   max-width: 560px;

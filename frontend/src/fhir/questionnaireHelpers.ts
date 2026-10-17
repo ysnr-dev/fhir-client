@@ -773,8 +773,6 @@ export interface QuestionnaireSummary {
   version: string;
   status: string;
   statusLabel: string;
-  /** 拡張に埋まっているカテゴリ名(未設定なら空文字)。 */
-  categoryName: string;
   lastUpdated: string;
 }
 
@@ -786,7 +784,6 @@ export function summarizeQuestionnaire(questionnaire: fhir4.Questionnaire): Ques
     name: questionnaire.name ?? "",
     version: questionnaire.version ?? "",
     status: questionnaire.status ?? "",
-    categoryName: templateCategoryOf(questionnaire)?.display ?? "",
     statusLabel: statusLabel(questionnaire.status),
     lastUpdated: lastUpdated ? new Date(lastUpdated).toLocaleString("ja-JP") : "",
   };

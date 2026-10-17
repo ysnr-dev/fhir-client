@@ -34,7 +34,7 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { hasRelation, NOTIFICATION_TASK_KEY, resourcesOfType, saveWithImages } from "./core";
+import { hasRelation, NOTIFICATION_TASK_KEY, resourcesOfType, saveWithImages, searchAllPages } from "./core";
 
 // ---- 診療上の注意(Flag) ----
 
@@ -517,30 +517,24 @@ export function useRecentLabResults(patientId: string | undefined) {
   return { ...query, observations };
 }
 
-const QUESTIONNAIRE_COUNT = 20;
-
 // canonical (url, version) の一意性は上流の Questionnaire バリデーション + DB 制約が
 // 保証する(重複時は 422 / issue code: duplicate。和訳は fhir/outcome.ts)。
-export function useQuestionnaireSearch(offset: number) {
+
+// テンプレート一覧はカテゴリで振り分けて並べるので全件を読む。
+export function useAllQuestionnaires() {
   const params = new URLSearchParams();
-  params.set("_count", String(QUESTIONNAIRE_COUNT));
-  params.set("_offset", String(offset));
   // 更新日時の降順(新しい順)。
   params.set("_sort", "-_lastUpdated");
 
   const query = useQuery({
-    queryKey: ["Questionnaire", "search", offset],
-    queryFn: () => searchResource<fhir4.Questionnaire>("Questionnaire", params),
-    placeholderData: keepPreviousData,
+    queryKey: ["Questionnaire", "search", "all"],
+    queryFn: () => searchAllPages<fhir4.Questionnaire>("Questionnaire", params, { page: 500, maxPages: 4 }),
   });
 
   return {
     ...query,
-    bundle: query.data?.data,
-    total: query.data?.data.total ?? 0,
-    count: QUESTIONNAIRE_COUNT,
-    hasPrevious: hasRelation(query.data?.data, "previous"),
-    hasNext: hasRelation(query.data?.data, "next"),
+    questionnaires: query.data?.matches ?? [],
+    truncated: query.data?.truncated ?? false,
   };
 }
 

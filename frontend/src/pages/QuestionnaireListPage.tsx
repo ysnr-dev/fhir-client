@@ -1,21 +1,63 @@
-import { useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { useImportQuestionnaire, useQuestionnaireSearch } from "../api/queries";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useQuestionnaireCategories } from "../api/adminQueries";
+import { useAllQuestionnaires, useImportQuestionnaire } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { Pagination } from "../components/Pagination";
 import { QuestionnaireCategoryModal } from "../components/QuestionnaireCategoryModal";
 import { QuestionnaireTable } from "../components/QuestionnaireTable";
-import { resourcesOfType } from "../fhir/shared";
+import { TruncatedNotice } from "../components/TruncatedNotice";
+import { groupTemplatesByCategory } from "../fhir/questionnaireCategory";
 
+// カテゴリ未設定のテンプレートを表す左の一覧の項目。
+const UNCATEGORIZED = "uncategorized";
+
+interface CategoryNavItem {
+  key: string;
+  label: string;
+  questionnaires: fhir4.Questionnaire[];
+}
+
+// 左にカテゴリ、右に選んだカテゴリのテンプレートを並べる。テンプレートの無いカテゴリも
+// 左に出す。選択は URL に持たせ、編集画面から戻っても同じカテゴリを開く。
 export function QuestionnaireListPage() {
-  const [offset, setOffset] = useState(0);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const { bundle, total, count, hasPrevious, hasNext, isLoading, error } =
-    useQuestionnaireSearch(offset);
-  const questionnaires =
-    resourcesOfType<fhir4.Questionnaire>(bundle, "Questionnaire");
+  // 左のカテゴリの分だけ表が狭くなるので、ページの幅を広げる。
+  useEffect(() => {
+    document.body.classList.add("page-wide-md");
+    return () => document.body.classList.remove("page-wide-md");
+  }, []);
+
+  const { questionnaires, truncated, isLoading, error } = useAllQuestionnaires();
+  const { data: categories = [], error: categoriesError } = useQuestionnaireCategories();
+
+  const navItems = useMemo<CategoryNavItem[]>(() => {
+    const grouped = groupTemplatesByCategory(questionnaires, categories);
+    const byCode = new Map(grouped.groups.map((group) => [group.code, group]));
+    const items: CategoryNavItem[] = categories.map((category) => ({
+      key: category.code,
+      label: category.name,
+      questionnaires: byCode.get(category.code)?.questionnaires ?? [],
+    }));
+    const registered = new Set(categories.map((category) => category.code));
+    for (const group of grouped.groups) {
+      if (registered.has(group.code)) continue;
+      items.push({ key: group.code, label: group.name, questionnaires: group.questionnaires });
+    }
+    if (grouped.uncategorized.length > 0) {
+      items.push({ key: UNCATEGORIZED, label: "未分類", questionnaires: grouped.uncategorized });
+    }
+    return items;
+  }, [questionnaires, categories]);
+
+  const selectedKey = searchParams.get("category");
+  const selected = navItems.find((item) => item.key === selectedKey) ?? navItems[0];
+
+  function selectCategory(key: string) {
+    setSearchParams({ category: key }, { replace: true });
+  }
 
   const importQuestionnaire = useImportQuestionnaire();
 
@@ -60,6 +102,7 @@ export function QuestionnaireListPage() {
       )}
 
       <ErrorBanner error={error} />
+      <ErrorBanner error={categoriesError} />
       <ErrorBanner error={importQuestionnaire.error} />
       {importQuestionnaire.isSuccess && (
         <p className="questionnaire-import__success" role="status">
@@ -80,21 +123,37 @@ export function QuestionnaireListPage() {
         </p>
       )}
 
+      <TruncatedNotice show={truncated} />
+
       {isLoading ? (
         <p>読み込み中...</p>
       ) : (
-        <>
-          <QuestionnaireTable questionnaires={questionnaires} />
-          <Pagination
-            offset={offset}
-            count={count}
-            total={total}
-            hasPrevious={hasPrevious}
-            hasNext={hasNext}
-            onPrevious={() => setOffset((o) => Math.max(0, o - count))}
-            onNext={() => setOffset((o) => o + count)}
-          />
-        </>
+        <div className="facility-settings">
+          <nav className="facility-settings__nav" aria-label="カテゴリ">
+            {navItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={`facility-settings__nav-item${item === selected ? " is-active" : ""}`}
+                aria-current={item === selected ? "true" : undefined}
+                onClick={() => selectCategory(item.key)}
+              >
+                {item.label}
+                <span className="questionnaire-list__count">{item.questionnaires.length}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="questionnaire-list__content">
+            {selected ? (
+              <>
+                <h2 className="facility-settings__title">{selected.label}</h2>
+                <QuestionnaireTable questionnaires={selected.questionnaires} />
+              </>
+            ) : (
+              <p className="patient-table__empty">登録されているテンプレートがありません。</p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
