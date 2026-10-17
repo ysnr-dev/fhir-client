@@ -52,6 +52,7 @@ import { KarteNursingTab } from "../components/KarteNursingTab";
 import { KartePathwayTab } from "../components/KartePathwayTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteProfileTab } from "../components/KarteProfileTab";
+import { KarteOralExamTab } from "../components/KarteOralExamTab";
 import { KarteSidePane } from "../components/KarteSidePane";
 import { VitalFlowsheetPanel } from "../components/VitalFlowsheetPanel";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
@@ -1058,6 +1059,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
       );
     }
     if (key === "profile") return <KarteProfileTab {...props} />;
+    if (key === "oral-exam") return <KarteOralExamTab {...props} />;
     // 経過表は view に「基準日(と全画面)」を載せる(どの週を見ているかが読む位置
     // そのものなので、リロード・共有で戻れるようにする)。イベント一覧からはカルテの
     // カードと同じオーダー詳細モーダル、測定の時刻からはバイタル編集を開く。

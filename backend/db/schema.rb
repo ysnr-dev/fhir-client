@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_17_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_18_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1805,6 +1805,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_140000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["unit_code"], name: "index_master_nursing_units_on_unit_code", unique: true
+  end
+
+  create_table "master_oral_exam_codes", force: :cascade do |t|
+    t.string "record", null: false
+    t.string "item", null: false
+    t.string "item_name"
+    t.string "code", null: false
+    t.string "display", null: false
+    t.string "tf_ref"
+    t.string "cs_name"
+    t.string "cs_oid"
+    t.string "note"
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["item", "code"], name: "index_master_oral_exam_codes_on_item_and_code", unique: true
+    t.index ["record"], name: "index_master_oral_exam_codes_on_record"
   end
 
   create_table "master_patho_collection_methods", force: :cascade do |t|

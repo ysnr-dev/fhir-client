@@ -326,6 +326,8 @@ Rails.application.routes.draw do
     # 患者の診療上の注意(転倒リスク・DNAR など)の区分。実体の注意は上流の
     # FHIR Flag が持ち、このマスタは選択肢と患者帯のピクトグラムを決める。
     resources :patient_cautions, only: %i[index create update destroy]
+    # 口腔診査情報標準コード仕様(JDAOES)のコード表。固定の標準コード表なので読み取りだけ。
+    resources :oral_exam_codes, only: %i[index]
     resources :clinical_note_titles, only: %i[index create update destroy]
     resources :insulin_scale_sets, only: %i[index create update destroy]
     resources :diseases, only: %i[index show create update destroy] do

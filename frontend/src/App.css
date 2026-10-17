@@ -809,6 +809,8 @@ button:disabled {
 .dpc-coding select,
 .dpc-coding input,
 .nursing-assignment select,
+.oral-exam select,
+.oral-exam input:not([type="checkbox"]),
 .karte-print-form input[type="date"] {
   font: inherit;
   font-size: 15px;
@@ -27217,4 +27219,441 @@ input.nursing-picker__search {
 .outpatient__intake--answered {
   color: var(--accent);
   font-weight: 700;
+}
+
+/* ---- 口腔診査情報(KarteOralExamTab) ---- */
+
+.oral-exam {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.oral-exam__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.oral-exam__empty,
+.oral-exam__muted {
+  color: var(--text);
+}
+
+/* 歯式図。上下顎とも 16 列(患者の右が画面の左)、乳歯は 4〜13 列に並べて永久歯の位置にそろえる。 */
+.oral-exam__chart {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.oral-exam__row {
+  display: grid;
+  grid-template-columns: repeat(16, 36px);
+  padding: 4px 0;
+}
+
+.oral-exam__row--upper-deciduous > :first-child,
+.oral-exam__row--lower-deciduous > :first-child {
+  grid-column-start: 4;
+}
+
+.oral-exam__row--upper + .oral-exam__row--lower,
+.oral-exam__row--upper + .oral-exam__row--lower-deciduous,
+.oral-exam__row--upper-deciduous + .oral-exam__row--lower-deciduous {
+  border-top: 1px solid var(--border);
+}
+
+.oral-exam__cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.oral-exam__cell.is-midline {
+  border-left: 1px solid var(--border);
+}
+
+.oral-exam__tooth {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 34px;
+  height: auto;
+  min-height: 0;
+  padding: 2px 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-h);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.oral-exam__tooth:hover {
+  border-color: var(--border);
+}
+
+.oral-exam__tooth.is-selected,
+.oral-exam__extra.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.oral-exam__number {
+  color: var(--text);
+}
+
+.oral-exam__symbol {
+  min-height: 13px;
+  font-weight: 600;
+}
+
+.oral-exam__glyph {
+  width: 28px;
+  height: 28px;
+}
+
+.oral-exam__face {
+  fill: var(--surface-card);
+  stroke: currentColor;
+  stroke-width: 0.8;
+}
+
+.oral-exam__face.is-filled {
+  fill: currentColor;
+  fill-opacity: 0.75;
+}
+
+.oral-exam__cross {
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.oral-exam__badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 13px;
+  padding: 0 2px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 9px;
+  line-height: 13px;
+}
+
+.oral-exam__extra {
+  width: 18px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  background: none;
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* 基本状態ごとの色。歯の輪郭と塗った面に使う。 */
+.oral-exam__tooth--none .oral-exam__face {
+  stroke: var(--border);
+  stroke-dasharray: 2 2;
+}
+
+.oral-exam__tooth--observe,
+.oral-exam__tooth--caution {
+  color: var(--warning);
+}
+
+.oral-exam__tooth--caries {
+  color: var(--danger);
+}
+
+.oral-exam__tooth--treated {
+  color: var(--accent);
+}
+
+.oral-exam__tooth--prosthetic,
+.oral-exam__tooth--implant {
+  color: var(--lab-low);
+}
+
+.oral-exam__tooth--missing,
+.oral-exam__tooth--impacted {
+  color: var(--text);
+}
+
+.oral-exam__tooth--impacted .oral-exam__face {
+  stroke-dasharray: 3 2;
+}
+
+.oral-exam__tooth--unknown .oral-exam__face {
+  fill: var(--surface-stripe);
+}
+
+.oral-exam__tooth--prosthetic .oral-exam__face,
+.oral-exam__tooth--implant .oral-exam__face {
+  fill: var(--surface-sunken);
+}
+
+/* 登録・編集 */
+.oral-exam__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.oral-exam__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px 12px;
+  align-items: end;
+}
+
+.oral-exam__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.oral-exam__field select,
+.oral-exam__field input {
+  width: 100%;
+  min-width: 0;
+}
+
+.oral-exam__field--wide {
+  grid-column: 1 / -1;
+}
+
+.oral-exam__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.oral-exam__checks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+/* 歯面・部位の行に並ぶセレクト(歯根部)は、チェックと同じ高さに横並びで置く。 */
+.oral-exam__checks .oral-exam__field {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.oral-exam__checks .oral-exam__field select {
+  width: auto;
+}
+
+.oral-exam__checks-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.oral-exam__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.oral-exam__inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.oral-exam__inline select {
+  max-width: 260px;
+}
+
+/* 歯式を選んでいる項目のボタン。 */
+.oral-exam .rp-card__compact-button.is-active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.oral-exam__picking {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.oral-exam__editor,
+.oral-exam__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.oral-exam__editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.oral-exam__editor h4,
+.oral-exam__detail h4 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.oral-exam__contents {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oral-exam__subhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.oral-exam__content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--surface-card);
+}
+
+.oral-exam__content-head,
+.oral-exam__group-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.oral-exam__group-actions {
+  justify-content: flex-end;
+}
+
+.oral-exam__more summary {
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.oral-exam__more > .oral-exam__fields {
+  margin-top: 8px;
+}
+
+.oral-exam__tf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.oral-exam__tf-label {
+  color: var(--text);
+}
+
+.oral-exam__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-h);
+}
+
+.oral-exam__chip-remove {
+  height: auto;
+  min-height: 0;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.oral-exam__mouth {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oral-exam__section {
+  margin: 0;
+  padding: 6px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.oral-exam__section legend {
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.oral-exam__teeth-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.oral-exam__dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.oral-exam__dl dt {
+  color: var(--text);
+}
+
+.oral-exam__dl dd {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.oral-exam__detail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.oral-exam__note {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
 }

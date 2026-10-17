@@ -103,6 +103,8 @@ export const KARTE_TABS = [
   { key: "allergy", label: "アレルギー" },
   // 入院時の持参薬。登録・鑑別・継続/中止の判断をタブの中で行う(docs/brought-medication-design.md)。
   { key: "brought-medication", label: "持参薬" },
+  // 口腔診査情報(JDAOES の口腔状態スナップショット)。診査ごとに残し、最新を歯式図で読む。
+  { key: "oral-exam", label: "口腔診査情報" },
   // 投薬歴。処方・注射・持参薬を「薬剤 × 日付」の表にして、いつ何をどれだけ使っていたかを読む。
   { key: "medication-history", label: "投薬歴" },
   // 注射カレンダー。連日の注射は日ごとのカードに散らばるので、「RP × 日付」の表で
@@ -158,7 +160,7 @@ export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
  * 並ぶ位置は配下の先頭のタブの位置で、メニューの順もこの keys の順。
  */
 export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly KarteTabKey[] }> = [
-  { label: "患者情報", keys: ["profile", "allergy", "brought-medication"] },
+  { label: "患者情報", keys: ["profile", "allergy", "brought-medication", "oral-exam"] },
   { label: "診療情報", keys: ["medication-history", "injection", "chemo", "pathway", "meal", "chart"] },
   {
     label: "検査結果",

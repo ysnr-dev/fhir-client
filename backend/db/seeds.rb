@@ -172,6 +172,10 @@ else
   puts "master_lab_panel_items: #{lab_panel_items_csv} not found, skipped"
 end
 
+# 口腔診査情報標準コード仕様(JDAOES)のコード表。migration でも同じ投入を行う(本番は db:seed が走らない)。
+oral_exam_codes = OralExamCodeSeed.load!
+puts "master_oral_exam_codes: seeded #{oral_exam_codes.created} rows (kept #{oral_exam_codes.kept})"
+
 # 結果項目と、オーダー項目 → 結果項目の対応。同梱 CSV(多結果項目の分解)を入れてから、
 # 単項目オーダー項目 1 件につき同じコードの結果項目を作って 1:1 で対応づける。
 # 既存行は上書きしない(migration からも同じ処理を呼ぶ)。

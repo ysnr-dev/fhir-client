@@ -74,3 +74,4 @@ export * from "./teamRequest";
 export * from "./pressureUlcer";
 export * from "./karteCardHistory";
 export * from "./kartePrint";
+export * from "./oralExam";

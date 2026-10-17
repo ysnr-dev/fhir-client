@@ -13,6 +13,7 @@ JSON REST**（snake_case、`OperationOutcome` は使わず `{error: ...}` / `{er
 | 医薬品 | `/master/medicines` | 医薬品マスタ（CSV, Shift_JIS, ヘッダーなし） |
 | 用法 | `/master/medicine_usages` | 電子処方箋用法マスタ（xlsx） |
 | 薬効分類 | `/master/medicine_types` | 薬効分類番号(4桁)→名称。`db/seed_data/medicine_types.csv` を `db:seed` で投入（日本標準商品分類「87」由来） |
+| 口腔診査コード | `/master/oral_exam_codes` | 口腔診査情報標準コード仕様(JDAOES)のコード表。配布 xlsx から rake で作った `db/seed_data/oral_exam_codes.csv` を seed と migration で投入。読み取り専用（`docs/features/oral-exam.md`） |
 
 ### 薬効分類（薬効検索）
 
