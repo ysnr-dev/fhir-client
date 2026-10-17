@@ -10,6 +10,7 @@ import {
   useSaveOralExam,
 } from "../api/queries";
 import {
+  changedTeeth,
   codeDisplay,
   copySnapshotForNew,
   countTeeth,
@@ -48,6 +49,7 @@ interface KarteOralExamTabProps {
 export function KarteOralExamTab({ patientId, view, onViewChange }: KarteOralExamTabProps) {
   const [form, setForm] = useState<FormMode>(null);
   const [selectedTooth, setSelectedTooth] = useState("");
+  const [showDiff, setShowDiff] = useState(false);
   const codes = useOralExamCodes();
   const book = codes.data;
   const { snapshots, isLoading, error } = useOralExamSnapshots(patientId);
@@ -58,9 +60,13 @@ export function KarteOralExamTab({ patientId, view, onViewChange }: KarteOralExa
 
   useEffect(() => setForm(null), [view]);
 
-  const current = snapshots.find((s) => s.summary.headerId === view) ?? snapshots[0];
+  const currentIndex = Math.max(0, snapshots.findIndex((s) => s.summary.headerId === view));
+  const current = snapshots[currentIndex];
+  const previous = snapshots[currentIndex + 1];
   const detail = useOralExamSnapshot(current?.summary.snapshotId);
   const loaded = detail.data;
+  // 「前回との違い」は 1 つ前の診査と比べる。
+  const previousDetail = useOralExamSnapshot(showDiff ? previous?.summary.snapshotId : undefined);
 
   function backToView() {
     setForm(null);
@@ -110,6 +116,8 @@ export function KarteOralExamTab({ patientId, view, onViewChange }: KarteOralExa
 
   const snapshot = loaded?.snapshot;
   const counts = snapshot ? countTeeth(snapshot.teeth) : null;
+  const changed =
+    showDiff && snapshot && previousDetail.data ? changedTeeth(snapshot.teeth, previousDetail.data.snapshot.teeth) : undefined;
   const showDeciduous = youngPatient || Boolean(snapshot?.teeth.some((t) => isDeciduous(t.toothCode)));
 
   return (
@@ -166,12 +174,20 @@ export function KarteOralExamTab({ patientId, view, onViewChange }: KarteOralExa
                 <span>喪失歯 {counts.missing}</span>
               </>
             )}
+            {previous && (
+              <label className="oral-exam__check">
+                <input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} />
+                前回との違い
+              </label>
+            )}
+            {changed && <span>変更 {changed.size} 歯</span>}
           </p>
           <OralExamChart
             teeth={snapshot.teeth}
             selected={selectedTooth ? [selectedTooth] : []}
             onSelect={setSelectedTooth}
             showDeciduous={showDeciduous}
+            changed={changed}
           />
           {selectedTooth && (
             <OralExamToothDetail
@@ -255,6 +271,7 @@ function CreateForm({
         book={codes.data}
         initialValues={initial}
         defaultDeciduous={defaultDeciduous}
+        baseline={previous?.teeth}
         onSubmit={handleSubmit}
         onCancel={onCancel}
         submitting={save.isPending}
@@ -313,6 +330,7 @@ function EditForm({
             book={codes.data}
             initialValues={loaded.snapshot}
             defaultDeciduous={defaultDeciduous}
+            baseline={loaded.snapshot.teeth}
             onSubmit={handleSubmit}
             onCancel={onCancel}
             submitting={save.isPending}

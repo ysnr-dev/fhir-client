@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import {
   applyStamp,
+  changedTeeth,
   isDeciduous,
   isSupernumerary,
   itemOptions,
@@ -14,10 +15,11 @@ import {
   type OralExamSnapshot,
   type OralExamStamp,
   type ToothRecord,
+  withUpdatedOn,
 } from "../fhir/oralExamHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { OralExamChart } from "./OralExamChart";
-import { OralExamMouthForm } from "./OralExamMouthForm";
+import { OralExamMouthForm, type MouthPick } from "./OralExamMouthForm";
 import { OralExamStampPalette } from "./OralExamStampPalette";
 import { OralExamLegendButton } from "./OralExamLegend";
 import { OralExamBridgeModal } from "./OralExamBridgeModal";
@@ -39,6 +41,8 @@ interface OralExamFormProps {
   initialValues: OralExamSnapshot;
   /** 乳歯の行を既定で出すか。 */
   defaultDeciduous: boolean;
+  /** 比べる元(新規なら前回の診査、編集なら開いたときの記録)。変えた歯に印を付け、更新日を書く。 */
+  baseline?: ToothRecord[];
   onSubmit: (snapshot: OralExamSnapshot) => void;
   onCancel: () => void;
   submitting: boolean;
@@ -51,6 +55,7 @@ export function OralExamForm({
   book,
   initialValues,
   defaultDeciduous,
+  baseline,
   onSubmit,
   onCancel,
   submitting,
@@ -62,7 +67,7 @@ export function OralExamForm({
   const [showDeciduous, setShowDeciduous] = useState(
     defaultDeciduous || initialValues.teeth.some((t) => isDeciduous(t.toothCode)),
   );
-  const [pickingItem, setPickingItem] = useState<string | null>(null);
+  const [picking, setPicking] = useState<MouthPick | null>(null);
   const [stamp, setStamp] = useState<OralExamStamp | null>(null);
   const [device, setDevice] = useState<
     { kind: "bridge"; draft: BridgeDraft } | { kind: "denture"; draft: DentureDraft } | null
@@ -96,7 +101,7 @@ export function OralExamForm({
       kind: "bridge",
       draft: existing
         ? loadBridge(values.teeth, existing.jaw, existing.number)
-        : newBridgeDraft(values.teeth, (toothCode && jawOf(toothCode)) || "upper"),
+        : newBridgeDraft(values.teeth, (toothCode && jawOf(toothCode)) || "upper", toothCode || undefined),
     });
   }
 
@@ -112,17 +117,21 @@ export function OralExamForm({
   }
 
   function handleChartClick(toothCode: string) {
-    if (!pickingItem) {
+    if (!picking) {
       if (stamp) stampTooth(toothCode);
       else setSelected(toothCode);
       return;
     }
-    const item = pickingItem;
-    setValues((v) => {
-      const current = v.mouth.teeth[item] ?? [];
-      const next = current.includes(toothCode) ? current.filter((c) => c !== toothCode) : [...current, toothCode];
-      return { ...v, mouth: { ...v.mouth, teeth: { ...v.mouth.teeth, [item]: sortToothCodes(next) } } };
-    });
+    const { key, item } = picking;
+    setValues((v) => ({
+      ...v,
+      mouth: v.mouth.map((entry) => {
+        if (entry.key !== key) return entry;
+        const current = entry.teeth[item] ?? [];
+        const next = current.includes(toothCode) ? current.filter((c) => c !== toothCode) : [...current, toothCode];
+        return { ...entry, teeth: { ...entry.teeth, [item]: sortToothCodes(next) } };
+      }),
+    }));
   }
 
   // 初診時は全部の歯を書くので、記録の無い歯をまとめて同じ基本状態にできるようにする。
@@ -147,11 +156,13 @@ export function OralExamForm({
       return;
     }
     setValidationError(null);
-    onSubmit(values);
+    onSubmit({ ...values, teeth: withUpdatedOn(values.teeth, baseline, values.examDate) });
   }
 
   const selectedRecords = selected ? recordsOfTooth(values.teeth, selected) : [];
-  const chartSelected = pickingItem ? (values.mouth.teeth[pickingItem] ?? []) : selected ? [selected] : [];
+  const pickingEntry = picking ? values.mouth.find((m) => m.key === picking.key) : undefined;
+  const chartSelected = picking ? (pickingEntry?.teeth[picking.item] ?? []) : selected ? [selected] : [];
+  const changed = baseline ? changedTeeth(values.teeth, baseline) : undefined;
 
   return (
     <form className="oral-exam__form" onSubmit={handleSubmit}>
@@ -209,7 +220,7 @@ export function OralExamForm({
         </button>
       </div>
 
-      {!pickingItem && (
+      {!picking && (
         <OralExamStampPalette
           stamp={stamp}
           onChange={setStamp}
@@ -217,17 +228,18 @@ export function OralExamForm({
           onOpenDenture={() => openDenture()}
         />
       )}
-      {pickingItem && <p className="oral-exam__picking">歯式を選択中</p>}
+      {picking && <p className="oral-exam__picking">歯式を選択中</p>}
 
       <OralExamChart
         teeth={values.teeth}
         selected={chartSelected}
         onSelect={handleChartClick}
-        onSelectFace={stamp?.surface && !pickingItem ? (toothCode, face) => stampTooth(toothCode, face) : undefined}
+        onSelectFace={stamp?.surface && !picking ? (toothCode, face) => stampTooth(toothCode, face) : undefined}
         showDeciduous={showDeciduous}
+        changed={changed}
       />
 
-      {selected && !pickingItem && !stamp && (
+      {selected && !picking && !stamp && (
         <OralExamToothEditor
           key={selected}
           book={book}
@@ -269,8 +281,8 @@ export function OralExamForm({
         book={book}
         mouth={values.mouth}
         onChange={(mouth) => update("mouth", mouth)}
-        pickingItem={pickingItem}
-        onPick={setPickingItem}
+        picking={picking}
+        onPick={setPicking}
       />
 
       <div className="oral-exam__fields">

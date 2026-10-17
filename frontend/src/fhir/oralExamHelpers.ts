@@ -13,7 +13,8 @@ import { transactionBundle, withVersionLock } from "./shared";
  *    標準プロファイル 26 項目(TF)は component。
  *  - 現在歯の内容(code `tooth-content`): TP 1 行(併存レコードがあれば行ごと)。親の歯とは
  *    歯種 + 状態コード + 部分コード + 併存グループ連番の一致で結びつける(参照は使わない)。
- *  - 口腔全体(code `mouth`): 口腔内装置等(KS)・矯正関係(KK)・その他の疾病及び異常(SI)・所見(SK)。
+ *  - 口腔全体(code `mouth`): 口腔内装置等(KS)・矯正関係(KK)・その他の疾病及び異常(SI)・所見(SK)。区分 1 行につき 1 件
+ *    (矯正装置が 2 つなら KK が 2 件)。
  *
  * component の code は「口腔診査情報 CSV 形式データから HL7 への変換仕様」の項目コード(JDAS 表 0003、
  * OBX-3 の TP11 など)、値は項目ごとのコーディングシステム(OID 表)。HL7 の OBX を 1 つずつ
@@ -229,6 +230,12 @@ export function toothCategory(basic: string): ToothCategory {
   if (n >= 50 && n <= 69) return "missing";
   if (basic === "98" || basic === "99") return "unknown";
   return "present";
+}
+
+/** インプラント(基本状態 62〜66)。欠損歯だが、アバットメントや上部構造は現在歯の内容に書く。 */
+export function isImplantBasic(basic: string): boolean {
+  const n = Number(basic);
+  return n >= 62 && n <= 66;
 }
 
 /**
@@ -452,9 +459,15 @@ export interface ToothRecord {
   productName: string;
   productNumber: string;
   remark: string;
+  /** 当該歯情報入力・更新年月日(TE-8)。前回の診査から内容が変わった歯に診査日を書く。 */
+  updatedOn?: string;
 }
 
+/** 口腔全体のレコード 1 行(口腔内装置等 KS・矯正関係 KK・その他の疾病及び異常 SI・所見 SK)。同じ区分を複数行書ける。 */
 export interface MouthRecord {
+  key: string;
+  /** KS / KK / SI / SK。 */
+  record: string;
   /** コードの項目(KS-2 など)。 */
   values: Record<string, string>;
   /** 自由記載の項目(KS-3 など)。 */
@@ -478,7 +491,7 @@ export interface OralExamSnapshot {
   note: string;
   performer?: fhir4.Reference;
   teeth: ToothRecord[];
-  mouth: MouthRecord;
+  mouth: MouthRecord[];
 }
 
 let draftSeq = 0;
@@ -487,8 +500,17 @@ export function draftKey(): string {
   return `oral-${draftSeq}`;
 }
 
-export function emptyMouth(): MouthRecord {
-  return { values: {}, texts: {}, teeth: {} };
+export function newMouthRecord(record: string): MouthRecord {
+  return { key: draftKey(), record, values: {}, texts: {}, teeth: {} };
+}
+
+/** 口腔全体のレコードに中身があるか(空の行は保存しない)。 */
+export function mouthRecordHasContent(entry: MouthRecord): boolean {
+  return (
+    Object.values(entry.values).some(Boolean) ||
+    Object.values(entry.texts).some((t) => t.trim()) ||
+    Object.values(entry.teeth).some((codes) => codes.length)
+  );
 }
 
 export function emptyContent(): ToothContent {
@@ -521,7 +543,7 @@ export function emptyOralExamSnapshot(): OralExamSnapshot {
     lastVisitDate: date,
     note: "",
     teeth: [],
-    mouth: emptyMouth(),
+    mouth: [],
   };
 }
 
@@ -540,12 +562,67 @@ export function copySnapshotForNew(previous: OralExamSnapshot): OralExamSnapshot
       contents: tooth.contents.map((content) => ({ key: draftKey(), values: { ...content.values } })),
       missing: { ...tooth.missing },
     })),
-    mouth: {
-      values: { ...previous.mouth.values },
-      texts: { ...previous.mouth.texts },
-      teeth: Object.fromEntries(Object.entries(previous.mouth.teeth).map(([k, v]) => [k, [...v]])),
-    },
+    mouth: previous.mouth.map((entry) => ({
+      ...entry,
+      key: draftKey(),
+      values: { ...entry.values },
+      texts: { ...entry.texts },
+      teeth: Object.fromEntries(Object.entries(entry.teeth).map(([k, v]) => [k, [...v]])),
+    })),
   };
+}
+
+// ---- 前回との差分 ----
+
+/** 比較用の形(React の key・更新日を除く)。 */
+function toothRecordShape(record: ToothRecord): string {
+  return JSON.stringify({
+    s: record.stateCode,
+    p: record.partCode,
+    b: record.basic,
+    c: record.contents.map((c) => sortedEntries(c.values)),
+    m: sortedEntries(record.missing),
+    k: record.productKind,
+    n: record.productName,
+    u: record.productNumber,
+    r: record.remark,
+  });
+}
+
+function sortedEntries(values: Record<string, string>): [string, string][] {
+  return Object.entries(values)
+    .filter(([, v]) => v)
+    .sort(([a], [b]) => a.localeCompare(b));
+}
+
+/** 歯ごとに、前回(baseline)と記録が違う歯(歯種コード)。 */
+export function changedTeeth(current: ToothRecord[], baseline: ToothRecord[]): Set<string> {
+  const shape = (teeth: ToothRecord[]) => {
+    const byTooth = new Map<string, string>();
+    for (const record of teeth) {
+      if (!record.basic) continue;
+      byTooth.set(record.toothCode, `${byTooth.get(record.toothCode) ?? ""}|${toothRecordShape(record)}`);
+    }
+    return byTooth;
+  };
+  const now = shape(current);
+  const before = shape(baseline);
+  const changed = new Set<string>();
+  for (const code of new Set([...now.keys(), ...before.keys()])) {
+    if (now.get(code) !== before.get(code)) changed.add(code);
+  }
+  return changed;
+}
+
+/**
+ * 変わった歯に更新日(TE-8)として診査日を書く。前回と同じ歯は前回の更新日を引き継ぐ。
+ * baseline が無い(最初の診査)ときは全部の歯に診査日を書く。
+ */
+export function withUpdatedOn(teeth: ToothRecord[], baseline: ToothRecord[] | undefined, examDate: string): ToothRecord[] {
+  const changed = baseline ? changedTeeth(teeth, baseline) : new Set(teeth.map((t) => t.toothCode));
+  return teeth.map((tooth) =>
+    changed.has(tooth.toothCode) ? { ...tooth, updatedOn: examDate } : tooth,
+  );
 }
 
 /** 歯ごとの記録(併存グループの順)。 */
@@ -781,6 +858,9 @@ function buildTooth(
     component.push(codedComponent("TE-5", "01", book));
     component.push(textComponent("TE-6", tooth.remark.trim(), book));
   }
+  if (tooth.updatedOn) {
+    component.push({ code: itemConcept("TE-8", book, "当該歯情報入力・更新年月日"), valueDateTime: tooth.updatedOn });
+  }
 
   const tf = deriveTf(tooth, book);
   if (tf.length) component.push(codedComponent("TF-2", "01", book));
@@ -812,31 +892,35 @@ function buildTooth(
   return observations;
 }
 
-function buildMouth(snapshot: OralExamSnapshot, context: BuildContext): fhir4.Observation | null {
+function buildMouth(snapshot: OralExamSnapshot, context: BuildContext): fhir4.Observation[] {
   const { book } = context;
-  const { values, texts, teeth } = snapshot.mouth;
-  const component: fhir4.ObservationComponent[] = [];
+  const observations: fhir4.Observation[] = [];
   for (const section of MOUTH_SECTIONS) {
-    const parts: fhir4.ObservationComponent[] = [];
-    for (const def of section.items) {
-      if (def.teeth) {
-        for (const toothCode of teeth[def.item] ?? []) parts.push(toothComponent(def.item, toothCode, book));
-      } else if (def.text) {
-        const text = texts[def.item]?.trim();
-        if (text) parts.push(textComponent(def.item, text, book));
-      } else if (values[def.item]) {
-        parts.push(codedComponent(def.item, values[def.item], book));
+    for (const entry of snapshot.mouth.filter((m) => m.record === section.record && mouthRecordHasContent(m))) {
+      const { values, texts, teeth } = entry;
+      const parts: fhir4.ObservationComponent[] = [];
+      for (const def of section.items) {
+        if (def.teeth) {
+          for (const toothCode of teeth[def.item] ?? []) parts.push(toothComponent(def.item, toothCode, book));
+        } else if (def.text) {
+          const text = texts[def.item]?.trim();
+          if (text) parts.push(textComponent(def.item, text, book));
+        } else if (values[def.item]) {
+          parts.push(codedComponent(def.item, values[def.item], book));
+        }
       }
+      if (!parts.length) continue;
+      const component: fhir4.ObservationComponent[] = [];
+      const presence = MOUTH_PRESENCE_ITEM[section.record];
+      if (presence) component.push(codedComponent(presence, "01", book));
+      if (section.record === "KK" && (texts["KK-8"]?.trim() || teeth["KK-9"]?.length)) {
+        component.push(codedComponent("KK-7", "01", book));
+      }
+      component.push(...parts);
+      observations.push({ ...baseObservation(snapshot, "mouth", context), component });
     }
-    const presence = MOUTH_PRESENCE_ITEM[section.record];
-    if (parts.length && presence) component.push(codedComponent(presence, "01", book));
-    if (section.record === "KK" && (texts["KK-8"]?.trim() || teeth["KK-9"]?.length)) {
-      component.push(codedComponent("KK-7", "01", book));
-    }
-    component.push(...parts);
   }
-  if (!component.length) return null;
-  return { ...baseObservation(snapshot, "mouth", context), component };
+  return observations;
 }
 
 /** 見出しと子(歯・現在歯の内容・口腔全体)の Observation。 */
@@ -855,8 +939,7 @@ export function buildOralExamObservations(
       children.push(...buildTooth(snapshot, tooth, seqOf(index, records.length), context));
     });
   }
-  const mouth = buildMouth(snapshot, context);
-  if (mouth) children.push(mouth);
+  children.push(...buildMouth(snapshot, context));
   return { header: buildHeader(snapshot, context), children };
 }
 
@@ -992,26 +1075,31 @@ export function parseOralExamSnapshot(observations: fhir4.Observation[]): OralEx
         productName: stringOfItem(observation, "TE-3"),
         productNumber: stringOfItem(observation, "TE-4"),
         remark: stringOfItem(observation, "TE-6"),
+        updatedOn: dateOfItem(observation, "TE-8") || undefined,
       };
     })
     .filter((t) => t.toothCode);
 
-  const mouth = emptyMouth();
-  const mouthObservation = observations.find((o) => oralExamKindOf(o) === "mouth");
-  if (mouthObservation) {
-    for (const def of MOUTH_ITEM_DEFS) {
-      if (def.teeth) {
-        const codes = componentsOf(mouthObservation, def.item)
-          .map((c) => c.valueCodeableConcept?.coding?.[0]?.code?.slice(0, 4) ?? "")
-          .filter(Boolean);
-        if (codes.length) mouth.teeth[def.item] = codes;
-      } else if (def.text) {
-        const text = stringOfItem(mouthObservation, def.item);
-        if (text) mouth.texts[def.item] = text;
-      } else {
-        const code = codeOfItem(mouthObservation, def.item);
-        if (code) mouth.values[def.item] = code;
+  // 口腔全体は区分ごとに 1 Observation。以前の形(全区分を 1 つにまとめたもの)も区分ごとに分けて読む。
+  const mouth: MouthRecord[] = [];
+  for (const observation of observations.filter((o) => oralExamKindOf(o) === "mouth")) {
+    for (const section of MOUTH_SECTIONS) {
+      const entry = newMouthRecord(section.record);
+      for (const def of section.items) {
+        if (def.teeth) {
+          const codes = componentsOf(observation, def.item)
+            .map((c) => c.valueCodeableConcept?.coding?.[0]?.code?.slice(0, 4) ?? "")
+            .filter(Boolean);
+          if (codes.length) entry.teeth[def.item] = codes;
+        } else if (def.text) {
+          const text = stringOfItem(observation, def.item);
+          if (text) entry.texts[def.item] = text;
+        } else {
+          const code = codeOfItem(observation, def.item);
+          if (code) entry.values[def.item] = code;
+        }
       }
+      if (mouthRecordHasContent(entry)) mouth.push(entry);
     }
   }
 
@@ -1110,7 +1198,7 @@ export function applyMaterial(
 
 // ---- スタンプ(歯式図に押して入れる、よく使う状態) ----
 
-export type StampGroup = "state" | "caries" | "restoration" | "prosthesis";
+export type StampGroup = "state" | "caries" | "restoration" | "prosthesis" | "other";
 
 export interface OralExamStamp {
   key: string;
@@ -1143,6 +1231,7 @@ export const STAMP_GROUP_LABELS: Record<StampGroup, string> = {
   caries: "う蝕",
   restoration: "修復",
   prosthesis: "欠損・補綴",
+  other: "その他",
 };
 
 /** 同じ顎の何床目の義歯か。1 床目は番号を付けない(コード表の「同顎２床目」「同顎３床目」)。有床義歯のモーダルで選ぶ。 */
@@ -1173,6 +1262,32 @@ export const ORAL_EXAM_STAMPS: OralExamStamp[] = [
     basic: "08",
     stateCode: "6",
     content: { "TP-9": "10", "TP-3": "02" },
+  },
+  {
+    key: "root-cap",
+    label: "根面板",
+    title: "残根・根面板(金属・銀色)(処置歯)・金銀パラジウム",
+    group: "caries",
+    basic: "09",
+    stateCode: "6",
+    content: { "TP-3": "02", "TP-20": "01", "TP-22": "01" },
+    material: GOLD_PALLADIUM,
+  },
+  {
+    key: "core",
+    label: "コア",
+    title: "支台築造(メタルコア・銀色)(Ｍコア)・金銀パラジウム",
+    group: "restoration",
+    content: { "TP-9": "28" },
+    material: GOLD_PALLADIUM,
+  },
+  {
+    key: "tec",
+    label: "仮歯",
+    title: "テンポラリークラウン(ＴｅＣ)",
+    group: "restoration",
+    content: { "TP-10": "03" },
+    attach: true,
   },
   {
     key: "cr",
@@ -1254,7 +1369,9 @@ export const ORAL_EXAM_STAMPS: OralExamStamp[] = [
     content: { "TP-22": "10" },
   },
   { key: "missing", label: "喪失", title: "欠損歯【喪失歯△】", group: "prosthesis", basic: "51" },
-  { key: "erase", label: "消す", title: "この歯の記録を消す", group: "prosthesis", erase: true },
+  { key: "splinting", label: "暫間固定", title: "暫間固定(ＴＦｉｘ)", group: "other", content: { "TP-28": "01" }, attach: true },
+  { key: "calculus", label: "歯石", title: "歯石沈着(ＺＳ)", group: "other", content: { "TP-30": "01" }, attach: true },
+  { key: "erase", label: "消す", title: "この歯の記録を消す", group: "other", erase: true },
 ];
 
 /** う蝕(治療が要る)の未処置歯コード(TP-9)。咬耗・破折・酸蝕症などは含めない。 */
@@ -1270,6 +1387,8 @@ export const CROWN_REPLACED_ITEMS = ["TP-10", "TP-11", "TP-12", "TP-21", ...TP_S
 
 /** 現在歯の内容から基本状態を決める(う蝕があれば未処置歯、修復があれば処置歯)。 */
 function basicFromContents(contents: ToothContent[], current: string): string {
+  // インプラントは上部構造やう蝕(周囲の歯質)を書いても基本状態はインプラントのまま。
+  if (isImplantBasic(current)) return current;
   if (contents.some((c) => c.values["TP-9"] === "10" || c.values["TP-9"] === "11")) return "08";
   if (contents.some((c) => isCariesCode(c.values["TP-9"]))) return "06";
   if (contents.some((c) => RESTORATION_ITEMS.some((item) => c.values[item]))) return "10";

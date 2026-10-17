@@ -24,8 +24,10 @@ interface OralExamChartProps {
   showDeciduous: boolean;
   /** 出す行(TOOTH_ROWS の key)。無ければ乳歯の有無で決める。ブリッジ・義歯のモーダルでは顎の 1 行だけ。 */
   rowKeys?: string[];
-  /** 歯に重ねる役割の印(モーダルの「支」「ポ」「人」「Cl」など)。 */
+  /** 歯に重ねる役割の印(モーダルの「Br」「Pon」「PD」「Cl」など)。 */
   roleMarks?: Record<string, string>;
+  /** 前回の診査から変わった歯(印を付ける)。 */
+  changed?: Set<string>;
 }
 
 /**
@@ -41,6 +43,7 @@ export function OralExamChart({
   showDeciduous,
   rowKeys,
   roleMarks,
+  changed,
 }: OralExamChartProps) {
   const rows = TOOTH_ROWS.filter((row) => (rowKeys ? rowKeys.includes(row.key) : showDeciduous || !row.deciduous));
   const devices = prosthesisMarks(teeth);
@@ -77,7 +80,7 @@ export function OralExamChart({
                   type="button"
                   className={`oral-exam__tooth oral-exam__tooth--${category}${
                     selected.includes(def.code) ? " is-selected" : ""
-                  }${role ? " has-role" : ""}`}
+                  }${role ? " has-role" : ""}${changed?.has(def.code) ? " is-changed" : ""}`}
                   onClick={() => onSelect(def.code)}
                   title={title}
                   aria-label={toothLabel(def.code)}

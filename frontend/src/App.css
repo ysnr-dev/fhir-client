@@ -27865,3 +27865,18 @@ input.nursing-picker__search {
   font-size: 13px;
   line-height: inherit;
 }
+
+/* 前回の診査から変わった歯。 */
+.oral-exam__tooth.is-changed {
+  box-shadow: inset 0 0 0 2px var(--warning);
+}
+
+.oral-exam__mouth-entry {
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--surface-card);
+}
+
+.oral-exam__mouth-entry + .oral-exam__mouth-entry {
+  margin-top: 8px;
+}

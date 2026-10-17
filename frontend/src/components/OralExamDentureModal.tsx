@@ -22,9 +22,14 @@ import {
 import { Modal } from "./Modal";
 import { OralExamChart } from "./OralExamChart";
 
-type Role = "replaced" | "clasp" | "rest";
+type Role = "replaced" | "overdenture" | "clasp" | "rest";
 
-const ROLE_LABELS: Record<Role, string> = { replaced: "人工歯", clasp: "クラスプ", rest: "レスト" };
+const ROLE_LABELS: Record<Role, string> = {
+  replaced: "人工歯",
+  overdenture: "残根上",
+  clasp: "クラスプ",
+  rest: "レスト",
+};
 
 interface OralExamDentureModalProps {
   book: OralExamCodeBook | undefined;
@@ -54,26 +59,21 @@ export function OralExamDentureModal({ book, teeth, initial, onApply, onClose }:
     setRole("replaced");
   }
 
-  // 人工歯と鉤(クラスプ・レスト)は同じ歯に付かない。クラスプとレストは同じ歯に付けられる。
+  // 人工歯・残根上と鉤(クラスプ・レスト)は同じ歯に付かない。クラスプとレストは同じ歯に付けられる。
   function toggle(toothCode: string) {
     setDraft((d) => {
       const without = (list: string[]) => list.filter((c) => c !== toothCode);
-      const list = role === "replaced" ? d.replaced : role === "clasp" ? d.clasps : d.rests;
-      const adding = !list.includes(toothCode);
-      if (role === "replaced") {
-        return {
-          ...d,
-          replaced: adding ? [...d.replaced, toothCode] : without(d.replaced),
-          clasps: adding ? without(d.clasps) : d.clasps,
-          rests: adding ? without(d.rests) : d.rests,
-        };
-      }
-      const next = adding ? [...list, toothCode] : without(list);
+      const lists = { replaced: d.replaced, overdenture: d.overdentures, clasp: d.clasps, rest: d.rests };
+      const adding = !lists[role].includes(toothCode);
+      const next = (r: Role) => (r === role ? (adding ? [...lists[r], toothCode] : without(lists[r])) : adding ? without(lists[r]) : lists[r]);
+      // クラスプとレストは共存できるので、片方を足してももう片方は外さない。
+      const keepPair = (r: Role) => (role === "clasp" && r === "rest") || (role === "rest" && r === "clasp");
       return {
         ...d,
-        replaced: adding ? without(d.replaced) : d.replaced,
-        clasps: role === "clasp" ? next : d.clasps,
-        rests: role === "rest" ? next : d.rests,
+        replaced: next("replaced"),
+        overdentures: next("overdenture"),
+        clasps: keepPair("clasp") ? d.clasps : next("clasp"),
+        rests: keepPair("rest") ? d.rests : next("rest"),
       };
     });
   }
@@ -92,9 +92,10 @@ export function OralExamDentureModal({ book, teeth, initial, onApply, onClose }:
   // 歯に重ねる印。反映後の歯式図の略号(PD・FD・Cl・R)とそろえる。
   const roleMarks: Record<string, string> = {};
   for (const c of draft.replaced) roleMarks[c] = draft.type;
+  for (const c of draft.overdentures) roleMarks[c] = "残根";
   for (const c of draft.clasps) roleMarks[c] = "Cl";
   for (const c of draft.rests) roleMarks[c] = roleMarks[c] ? `${roleMarks[c]}·R` : "R";
-  const roles: Role[] = draft.type === "FD" ? ["replaced"] : ["replaced", "clasp", "rest"];
+  const roles: Role[] = draft.type === "FD" ? ["replaced", "overdenture"] : ["replaced", "overdenture", "clasp", "rest"];
   const baseFilter = dentureBaseFilter(draft.type);
 
   return (
@@ -148,7 +149,7 @@ export function OralExamDentureModal({ book, teeth, initial, onApply, onClose }:
 
       <OralExamChart
         teeth={teeth}
-        selected={[...draft.replaced, ...draft.clasps, ...draft.rests]}
+        selected={[...draft.replaced, ...draft.overdentures, ...draft.clasps, ...draft.rests]}
         onSelect={toggle}
         showDeciduous={false}
         rowKeys={[draft.jaw]}

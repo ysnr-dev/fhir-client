@@ -6,6 +6,7 @@ import {
   bridgeNumberOptions,
   isSemiFixed,
   JAW_OPTIONS,
+  lostTeethBetween,
   nextBridgeNumber,
   removeBridge,
   validateBridge,
@@ -60,6 +61,10 @@ export function OralExamBridgeModal({ book, teeth, initial, onApply, onClose }: 
       const abutments = d.abutments.filter((c) => c !== toothCode);
       const pontics = d.pontics.filter((c) => c !== toothCode);
       if (!has) (role === "abutment" ? abutments : pontics).push(toothCode);
+      // 支台を 2 本以上選んだら、その間の喪失歯をポンティックにしておく。
+      if (d.kind === "bridge" && role === "abutment") {
+        for (const code of lostTeethBetween(teeth, d.jaw, abutments)) if (!pontics.includes(code)) pontics.push(code);
+      }
       return { ...d, abutments, pontics };
     });
   }

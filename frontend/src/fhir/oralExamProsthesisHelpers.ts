@@ -3,11 +3,13 @@ import {
   CROWN_REPLACED_ITEMS,
   draftKey,
   isCariesCode,
+  isImplantBasic,
   materialOf,
   newToothRecord,
   recordsOfTooth,
   sortTeeth,
   TOOTH_ROWS,
+  toothCategory,
   toothDefOf,
   toothLabel,
   usesMissingContent,
@@ -45,6 +47,25 @@ export function jawOf(toothCode: string): Jaw | undefined {
 /** 装置を置く歯の並び(その顎の永久歯、患者の右から左)。 */
 export function jawTeeth(jaw: Jaw): string[] {
   return TOOTH_ROWS.find((row) => row.key === jaw)?.teeth.map((t) => t.code) ?? [];
+}
+
+/** その顎の喪失歯(補綴されていない欠損歯)。義歯の人工歯・ブリッジのポンティックの候補。 */
+export function lostTeethOfJaw(teeth: ToothRecord[], jaw: Jaw): string[] {
+  return jawTeeth(jaw).filter((code) => {
+    const primary = recordsOfTooth(teeth, code)[0];
+    return primary && toothCategory(primary.basic) === "missing";
+  });
+}
+
+/** 支台歯の外側の間にある喪失歯(ブリッジのポンティックの候補)。 */
+export function lostTeethBetween(teeth: ToothRecord[], jaw: Jaw, abutments: string[]): string[] {
+  if (abutments.length < 2) return [];
+  const order = jawTeeth(jaw);
+  const indexes = abutments.map((c) => order.indexOf(c)).filter((i) => i >= 0);
+  const from = Math.min(...indexes);
+  const to = Math.max(...indexes);
+  const lost = new Set(lostTeethOfJaw(teeth, jaw));
+  return order.slice(from + 1, to).filter((code) => lost.has(code) && !abutments.includes(code));
 }
 
 function replaceTooth(teeth: ToothRecord[], toothCode: string, records: ToothRecord[]): ToothRecord[] {
@@ -165,13 +186,16 @@ export function nextBridgeNumber(teeth: ToothRecord[], jaw: Jaw, semiFixed: bool
   return bridgeNumberOptions(semiFixed).find((o) => !used.has(o.code))?.code ?? bridgeNumberOptions(semiFixed)[0].code;
 }
 
-export function newBridgeDraft(teeth: ToothRecord[], jaw: Jaw): BridgeDraft {
+export function newBridgeDraft(teeth: ToothRecord[], jaw: Jaw, fromTooth?: string): BridgeDraft {
+  // 喪失歯から開いたらその歯をポンティックに、現在歯から開いたら支台にしておく。
+  const primary = fromTooth ? recordsOfTooth(teeth, fromTooth)[0] : undefined;
+  const lost = primary ? toothCategory(primary.basic) === "missing" : false;
   return {
     kind: "bridge",
     jaw,
     number: nextBridgeNumber(teeth, jaw, false),
-    abutments: [],
-    pontics: [],
+    abutments: fromTooth && primary && !lost ? [fromTooth] : [],
+    pontics: fromTooth && lost ? [fromTooth] : [],
     crown: "01",
     pontic: "05",
     material: "金銀パラジウム",
@@ -271,6 +295,8 @@ export function applyBridge(teeth: ToothRecord[], draft: BridgeDraft, book: Oral
             }),
           );
       const contents = mergeFirst(kept, { "TP-21": draft.crown, "TP-18": "01", "TP-23": tp23, "TP-24": draft.number });
+      // インプラントの支台は基本状態と状態コード「部インプラント」を保つ(アバットメントは現在歯の内容に残る)。
+      if (isImplantBasic(record.basic)) return withMat({ ...record, stateCode: "7", contents });
       return withMat({ ...record, basic: "10", stateCode: "3", contents, missing: {} });
     });
   }
@@ -316,6 +342,8 @@ export interface DentureDraft {
   replaced: string[];
   clasps: string[];
   rests: string[];
+  /** 残根上義歯の歯(残根・根面板の上に義歯が乗る。残根と義歯の 2 つの併存グループで書く)。 */
+  overdentures: string[];
   original?: { jaw: Jaw; number: string };
 }
 
@@ -342,7 +370,21 @@ export function dentureBaseFilter(type: DentureType): (code: string) => boolean 
 
 const DEFAULT_BASE: Record<DentureType, string> = { PD: "16", FD: "09" };
 
-export function newDentureDraft(jaw: Jaw, number = ""): DentureDraft {
+/** 残根(根面板)のグループ。残根上義歯の歯の 2 つ目の併存グループに使う。 */
+function rootRemnantRecord(toothCode: string, existing?: ToothRecord): ToothRecord {
+  if (existing) return existing;
+  return {
+    ...newToothRecord(toothCode, "09"),
+    stateCode: "6",
+    contents: [{ key: draftKey(), values: { "TP-3": "02", "TP-20": "01", "TP-22": "01" } }],
+  };
+}
+
+function isRootRemnant(record: ToothRecord): boolean {
+  return record.stateCode === "6" || record.basic === "08" || record.basic === "09";
+}
+
+export function newDentureDraft(jaw: Jaw, number = "", teeth: ToothRecord[] = []): DentureDraft {
   return {
     jaw,
     number,
@@ -353,9 +395,11 @@ export function newDentureDraft(jaw: Jaw, number = ""): DentureDraft {
     reinforcement: false,
     clasp: "05",
     material: "",
-    replaced: [],
+    // 補綴されていない喪失歯を人工歯の候補として選んでおく。
+    replaced: lostTeethOfJaw(teeth, jaw),
     clasps: [],
     rests: [],
+    overdentures: [],
   };
 }
 
@@ -365,7 +409,7 @@ export function withDentureType(draft: DentureDraft, type: DentureType): Denture
     ...draft,
     type,
     base: dentureBaseFilter(type)(draft.base) ? draft.base : DEFAULT_BASE[type],
-    replaced: type === "FD" ? jawTeeth(draft.jaw) : draft.replaced,
+    replaced: type === "FD" ? jawTeeth(draft.jaw).filter((c) => !draft.overdentures.includes(c)) : draft.replaced,
     clasps: type === "FD" ? [] : draft.clasps,
     rests: type === "FD" ? [] : draft.rests,
   };
@@ -378,7 +422,9 @@ function dentureMembers(teeth: ToothRecord[], jaw: Jaw, number: string) {
     if (jawOf(record.toothCode) !== jaw) continue;
     if (usesMissingContent(record.basic)) {
       if (record.missing["TM-4"] && (record.missing["TM-5"] ?? "") === number) replaced.push(record);
-    } else {
+      continue;
+    }
+    {
       for (const content of record.contents) {
         if ((content.values["TP-26"] || content.values["TP-25"]) && (content.values["TP-34"] ?? "") === number) {
           supports.push({ record, content });
@@ -387,6 +433,12 @@ function dentureMembers(teeth: ToothRecord[], jaw: Jaw, number: string) {
     }
   }
   return { replaced, supports };
+}
+
+/** 残根上義歯の歯か(義歯の人工歯のグループと残根のグループが併存)。 */
+function isOverdentureTooth(teeth: ToothRecord[], toothCode: string): boolean {
+  const records = recordsOfTooth(teeth, toothCode);
+  return records.some((r) => usesMissingContent(r.basic) && r.missing["TM-4"]) && records.some(isRootRemnant);
 }
 
 /** その歯が属する有床義歯(顎と床番号)。人工歯・鉤歯のどちらでも。 */
@@ -404,8 +456,9 @@ export function dentureOfTooth(teeth: ToothRecord[], toothCode: string): { jaw: 
 /** 既存の有床義歯を読み込む。無ければ新しい下書き。 */
 export function loadDenture(teeth: ToothRecord[], jaw: Jaw, number: string): DentureDraft {
   const { replaced, supports } = dentureMembers(teeth, jaw, number);
-  if (!replaced.length && !supports.length) return newDentureDraft(jaw, number);
+  if (!replaced.length && !supports.length) return newDentureDraft(jaw, number, teeth);
   const first = replaced[0];
+  const overdentures = replaced.map((r) => r.toothCode).filter((c) => isOverdentureTooth(teeth, c));
   const base = first?.missing["TM-4"] ?? DEFAULT_BASE.PD;
   return {
     jaw,
@@ -417,9 +470,10 @@ export function loadDenture(teeth: ToothRecord[], jaw: Jaw, number: string): Den
     reinforcement: Boolean(first?.missing["TM-9"]),
     clasp: supports.find((s) => s.content.values["TP-26"])?.content.values["TP-26"] ?? "05",
     material: materialOf(first?.remark ?? ""),
-    replaced: replaced.map((r) => r.toothCode),
+    replaced: replaced.map((r) => r.toothCode).filter((c) => !overdentures.includes(c)),
     clasps: supports.filter((s) => s.content.values["TP-26"]).map((s) => s.record.toothCode),
     rests: supports.filter((s) => s.content.values["TP-25"]).map((s) => s.record.toothCode),
+    overdentures,
     original: { jaw, number },
   };
 }
@@ -429,10 +483,13 @@ export function removeDenture(teeth: ToothRecord[], jaw: Jaw, number: string): T
   const { replaced, supports } = dentureMembers(teeth, jaw, number);
   let next = teeth;
   for (const record of replaced) {
+    const records = recordsOfTooth(next, record.toothCode);
+    // 残根上義歯は義歯のグループだけ外し、残根のグループを残す。
+    const remnant = records.some((r) => r !== record && isRootRemnant(r));
     next = replaceTooth(
       next,
       record.toothCode,
-      recordsOfTooth(next, record.toothCode).map((r) => (r === record ? toLost(r) : r)),
+      remnant ? records.filter((r) => r !== record) : records.map((r) => (r === record ? toLost(r) : r)),
     );
   }
   for (const { record, content } of supports) {
@@ -458,7 +515,7 @@ export function removeDenture(teeth: ToothRecord[], jaw: Jaw, number: string): T
 
 export function validateDenture(teeth: ToothRecord[], draft: DentureDraft): string[] {
   const errors: string[] = [];
-  if (!draft.replaced.length) errors.push("人工歯の歯を 1 本以上選んでください。");
+  if (!draft.replaced.length && !draft.overdentures.length) errors.push("人工歯の歯を 1 本以上選んでください。");
   for (const code of [...draft.clasps, ...draft.rests]) {
     const primary = recordsOfTooth(teeth, code)[0];
     if (primary && usesMissingContent(primary.basic)) {
@@ -488,16 +545,19 @@ export function applyDenture(
   if (draft.connector) missing["TM-8"] = draft.connector;
   if (draft.reinforcement) missing["TM-9"] = "01";
 
+  const dentureRecord = (record: ToothRecord): ToothRecord => {
+    const written = { ...record, basic: "57", stateCode: "2", contents: [], missing: { ...missing } };
+    return draft.material ? applyMaterial(written, draft.material, book) : written;
+  };
   for (const code of draft.replaced) {
-    next = updatePrimary(
-      next,
-      code,
-      (record) => {
-        const written = { ...record, basic: "57", stateCode: "2", contents: [], missing: { ...missing } };
-        return draft.material ? applyMaterial(written, draft.material, book) : written;
-      },
-      "57",
-    );
+    next = updatePrimary(next, code, dentureRecord, "57");
+  }
+  // 残根上義歯: 義歯のグループ(1 つ目)と残根のグループ(2 つ目)の併存グループで書く(仕様の記録例)。
+  for (const code of draft.overdentures) {
+    const records = recordsOfTooth(next, code);
+    const remnant = rootRemnantRecord(code, records.find(isRootRemnant));
+    const base = records.find((r) => r !== remnant && !isRootRemnant(r)) ?? newToothRecord(code, "57");
+    next = replaceTooth(next, code, [dentureRecord(base), remnant]);
   }
   for (const code of new Set([...draft.clasps, ...draft.rests])) {
     const values: Record<string, string> = {};

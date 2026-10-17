@@ -14,7 +14,7 @@ interface OralExamStampPaletteProps {
   onOpenDenture: () => void;
 }
 
-const GROUPS: StampGroup[] = ["state", "caries", "restoration", "prosthesis"];
+const GROUPS: StampGroup[] = ["state", "caries", "restoration", "prosthesis", "other"];
 
 /**
  * 歯式図に押すスタンプのパレット。スタンプを選んで歯(う蝕・充填は歯面)を押すと、その状態になる。

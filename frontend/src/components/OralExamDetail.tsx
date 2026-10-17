@@ -63,6 +63,7 @@ export function OralExamToothDetail({
             ) : null}
             {materialOf(record.remark) && <Row label="材料" value={materialOf(record.remark)} />}
             {withMaterial(record.remark, "") && <Row label="特記事項" value={withMaterial(record.remark, "")} />}
+            {record.updatedOn && <Row label="更新日" value={record.updatedOn} />}
           </dl>
           <TfLine book={book} record={record} />
         </div>
@@ -87,22 +88,26 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** 口腔全体の記録(読み取り)。書いてある区分だけを出す。 */
-export function OralExamMouthDetail({ book, mouth }: { book: OralExamCodeBook | undefined; mouth: MouthRecord }) {
-  const rows = MOUTH_SECTIONS.flatMap((section) =>
-    section.items
-      .map((def) => {
-        const value = def.teeth
-          ? (mouth.teeth[def.item] ?? []).map(toothLabel).join("、")
-          : def.text
-            ? (mouth.texts[def.item] ?? "")
-            : mouth.values[def.item]
-              ? codeDisplay(book, def.item, mouth.values[def.item])
-              : "";
-        return { key: def.item, label: `${section.label} ${def.label === section.label ? "" : def.label}`.trim(), value };
-      })
-      .filter((row) => row.value),
-  );
+/** 口腔全体の記録(読み取り)。書いてある行だけを出す。 */
+export function OralExamMouthDetail({ book, mouth }: { book: OralExamCodeBook | undefined; mouth: MouthRecord[] }) {
+  const rows = MOUTH_SECTIONS.flatMap((section) => {
+    const entries = mouth.filter((m) => m.record === section.record);
+    return entries.flatMap((entry, index) =>
+      section.items
+        .map((def) => {
+          const value = def.teeth
+            ? (entry.teeth[def.item] ?? []).map(toothLabel).join("、")
+            : def.text
+              ? (entry.texts[def.item] ?? "")
+              : entry.values[def.item]
+                ? codeDisplay(book, def.item, entry.values[def.item])
+                : "";
+          const head = entries.length > 1 ? `${section.label} ${index + 1}` : section.label;
+          return { key: `${entry.key}-${def.item}`, label: `${head} ${def.label === section.label ? "" : def.label}`.trim(), value };
+        })
+        .filter((row) => row.value),
+    );
+  });
   if (!rows.length) return null;
   return (
     <section className="oral-exam__detail" aria-label="口腔全体">
