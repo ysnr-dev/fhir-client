@@ -33,8 +33,18 @@ const VB_HEIGHT = 220;
 const MARGIN = { top: 12, right: 16, bottom: 24, left: 52 };
 const PLOT_W = VB_WIDTH - MARGIN.left - MARGIN.right;
 const PLOT_H = VB_HEIGHT - MARGIN.top - MARGIN.bottom;
-/** 期間の名前を重ねずに置ける最小の間隔(viewBox 座標)。 */
-const MIN_LABEL_GAP = 72;
+/** 目盛りの文字 1 つの幅の見積もり(viewBox 座標。文字は 11px)。全角は半角の倍ほど。 */
+const HALF_WIDTH_CHAR = 6.5;
+const FULL_WIDTH_CHAR = 11.5;
+/** 隣の目盛りとの隙間。 */
+const LABEL_GAP = 12;
+
+/** 期間の名前の幅の見積もり。 */
+function labelWidth(label: string): number {
+  let width = 0;
+  for (const char of label) width += char.charCodeAt(0) > 0xff ? FULL_WIDTH_CHAR : HALF_WIDTH_CHAR;
+  return width;
+}
 
 export function SeriesLineChart({ title, labels, series, unit, fromZero, minStep, reference, note }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -49,7 +59,9 @@ export function SeriesLineChart({ title, labels, series, unit, fromZero, minStep
   const toY = (value: number) => MARGIN.top + PLOT_H - ((value - low) / (high - low || 1)) * PLOT_H;
   const step = labels.length > 1 ? PLOT_W / (labels.length - 1) : 0;
   const toX = (i: number) => MARGIN.left + i * step;
-  const labelEvery = Math.max(1, Math.ceil(MIN_LABEL_GAP / (step || MIN_LABEL_GAP)));
+  // 最も長い名前が隣と重ならない間隔で間引く。
+  const minGap = Math.max(...labels.map(labelWidth)) + LABEL_GAP;
+  const labelEvery = Math.max(1, Math.ceil(minGap / (step || minGap)));
   // 最後の期間はいつも出し、それに近すぎる途中の目盛りは出さない(文字が重ならないように)。
   const last = labels.length - 1;
   const isLabeled = (i: number) => i === last || (i % labelEvery === 0 && last - i >= labelEvery);
