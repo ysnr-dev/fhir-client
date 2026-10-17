@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import {
   applyStamp,
+  bulkBasicFor,
   changedTeeth,
   isDeciduous,
   isSupernumerary,
@@ -134,13 +135,14 @@ export function OralExamForm({
     }));
   }
 
-  // 初診時は全部の歯を書くので、記録の無い歯をまとめて同じ基本状態にできるようにする。
+  // 初診時は全部の歯を書くので、記録の無い歯をまとめて同じ基本状態にできるようにする
+  // (8 番は未萌出歯にする。bulkBasicFor)。
   function fillUnrecorded() {
     const shown = TOOTH_ROWS.filter((row) => showDeciduous || !row.deciduous).flatMap((row) => row.teeth);
     setValues((v) => {
       const added = shown
         .filter((def) => !v.teeth.some((t) => t.toothCode === def.code))
-        .map((def) => newToothRecord(def.code, bulkBasic));
+        .map((def) => newToothRecord(def.code, bulkBasicFor(def, bulkBasic)));
       return { ...v, teeth: sortTeeth([...v.teeth, ...added]) };
     });
   }

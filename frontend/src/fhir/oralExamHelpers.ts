@@ -282,6 +282,19 @@ export function checkupSymbol(basic: string): string {
   return CHECKUP_SYMBOLS[checkupSymbolCode(basic)] ?? "";
 }
 
+/** 未萌出歯(TD-2)。 */
+export const UNERUPTED_BASIC = "36";
+
+/**
+ * 一括設定で記録の無い歯に入れる基本状態。現在歯の状態(健全歯など)をまとめて入れるとき、
+ * 永久歯の 8 番(第 3 大臼歯)は萌出していないことが多いので未萌出歯にする。
+ * 未検査・欠損などを入れるときは 8 番も同じにする。
+ */
+export function bulkBasicFor(tooth: ToothDef, basic: string): string {
+  const presentState = ["sound", "present", "observe", "caries", "treated", "caution"].includes(toothCategory(basic));
+  return !tooth.deciduous && tooth.position === 8 && presentState ? UNERUPTED_BASIC : basic;
+}
+
 /** 基本状態から決まる状態コード(TB-3)の既定値。 */
 export function defaultStateCode(basic: string): string {
   const n = Number(basic);
