@@ -11,7 +11,7 @@
 
 ## 1. 現状
 
-### 1.1 出せるもの(7 系統)
+### 1.1 出せるもの(8 系統)
 
 backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports`、frontend の URL 生成は
 `frontend/src/api/reportsClient.ts` に集まっている。
@@ -25,6 +25,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 | 5 | テンプレート回答(QuestionnaireResponse)の PDF | カルテ時系列(`components/KarteTimeline.tsx`)のテンプレートカードの「PDF」。レイアウト登録済みのテンプレートだけ有効 | `GET /reports/questionnaire_responses/:id/pdf`。レイアウトは `/report-layouts` で DB(`report_layouts`)に登録 | `docs/report-mappings/` に見本 4 本(入院診療計画書 `admission-plan-01`・診療情報提供書 `referral-01`・手術説明同意書 `sur-consent-01`・周術期口腔機能管理計画書 `perio-01`)。`shikan-01` は mapping だけで .tlf が無い |
 | 6 | カルテ印刷(診療経過記録 = 2 号用紙、A4、期間指定、履歴の差分) | 「その他」→「カルテ印刷」(`components/KartePrintTab.tsx`)→ 別タブ `pages/KartePrintPage.tsx` | `window.print()`。`App.css` の `@page` / `@media print` | なし(HTML) |
 | 7 | 文書作成(Word / Excel 様式への差し込み) | カルテ右ペイン「文書作成」(`components/DocumentCreatePanel.tsx`) | ブラウザ内で `{{ }}` を置換し患者ファイルに保存してダウンロード。PDF 化はしない | 施設が `/document-templates` に登録。同梱様式なし |
+| 8 | 検査結果報告書(1 件分、A4、2 段組み、材料なし) | 検査結果の内容表示(`components/LabResultDetailPanel.tsx`)の「印刷」 | `GET /reports/lab_results/:report_id/pdf`、ThinReports(左右 2 本の list) | `lab_result.tlf` |
 
 印刷ではないファイル出力: データ抽出の CSV、DPC 患者一覧 CSV と様式 1 提出ファイル(FF1)、
 看護必要度の様式 10・43(CSV / Excel)、AST 抗菌薬使用量 CSV、ロット番号 CSV。
@@ -32,6 +33,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 ### 1.2 基盤の現状
 
 - PDF 生成は ThinReports(prawn)1 本。固定レイアウト向けで、長文・可変行数(記録・サマリー・一覧表)には向かない。
+  可変行数の表は検査結果報告書が list を自動改ページなしで使い、段・ページの割り付けを Ruby で行う前例になる。
   HTML → PDF の経路は無い。
 - `window.print` を使うのはカルテ印刷の 1 件だけ。印刷用ビューの共通部品(自院ヘッダ・患者帯・`@page`)は無い。
 - 自院欄(医療機関名・住所・電話・FAX・保険医療機関コード)は自院 Organization から取るが、読むのは処方箋・注射箋だけ。
@@ -40,7 +42,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 - 保険情報は持たないので処方箋の保険・公費欄は空枠。リフィル・分割調剤も枠だけ(同 41〜42 行)。
 - 施設設定に印刷・用紙・既定プリンタの項目は無い。
 - `report_layouts` に帳票種別(`kind`)が無く、DB 登録のレイアウトは QuestionnaireResponse 用に限られる。
-  同梱 5 種(ラベル・処方箋・注射)は施設が差し替えられない(`docs/lab-label-design.md` §7)。
+  同梱 6 種(ラベル・処方箋・注射・検査結果)は施設が差し替えられない(`docs/lab-label-design.md` §7)。
 - 帳票内に QR コードは無い(Web 問診の QR は画面表示のみ)。
 - 処方箋 PDF はカルテのカードから出せず、処方一覧からだけ(`docs/order-common-backlog.md` §4.6)。
 
@@ -54,7 +56,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 |---|---|---|---|
 | 予約票(次回以降の予約、保存時印刷、日未定、バーコード) | 高 | gap §2.10 | `GET /reports/appointment_slip/:patient_id/pdf`、同梱 .tlf 1 枚 |
 | 薬剤情報提供書・お薬手帳シール・薬袋ラベル | 高 | order-common §4.6 | ラベルは `injection_label.tlf` と同じ器。情報提供書は医薬品マスタに効能・注意文が要る |
-| 検査結果報告書(患者控え。累積表 = 項目 × 採取日) | 高 | lab B-3、gap §4.5 | Observation の時系列を ThinReports の表か印刷用ビューで |
+| 検査結果報告書(患者控え。累積表 = 項目 × 採取日) | 高 | lab B-3、gap §4.5 | 1 件分は対応済み(§1.1 #8)。累積表は `lab_result.tlf` の list の作りを流用できる |
 | 検査案内(放射線・内視鏡・生理の前処置説明、患者控え) | 中 | rad C-1 | 項目マスタに `patient_instruction` を足して差し込む |
 | 説明書・パンフレット(印刷だけの文書ライブラリ) | 中 | gap §2.2 | `document_templates.kind = reference`、右ペインから「印刷のみ」 |
 | 患者用パス(クリニカルパスの患者向け日程表) | 中 | pathway E-4 | — |

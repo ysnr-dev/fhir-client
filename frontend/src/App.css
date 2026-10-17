@@ -2585,7 +2585,8 @@ fieldset.rp-card {
   margin-bottom: -8px;
 }
 
-.lab-result-detail__actions button {
+.lab-result-detail__actions button,
+.lab-result-detail__actions .button {
   font-size: 12px;
   padding: 4px 10px;
 }

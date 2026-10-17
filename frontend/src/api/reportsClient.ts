@@ -44,6 +44,11 @@ export function injectionLabelPdfUrl(orderId: string): string {
   return `/reports/injection_labels/${encodeURIComponent(orderId)}/pdf`;
 }
 
+/** 検体検査結果(DiagnosticReport)1 件ぶんの報告書 PDF の URL(A4、左右 2 段、材料なし)。 */
+export function labResultPdfUrl(reportId: string): string {
+  return `/reports/lab_results/${encodeURIComponent(reportId)}/pdf`;
+}
+
 /** canonical(url|version)に帳票レイアウトが登録されているかを照会する。 */
 export function useReportLayoutStatus(canonical: string | undefined) {
   return useQuery({

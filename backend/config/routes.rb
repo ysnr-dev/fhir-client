@@ -122,6 +122,8 @@ Rails.application.routes.draw do
     # 注射箋(注射指示票)・注射ラベル。処方箋と同じくオーダー id だけを受け取る。
     get "injections/:order_id/pdf", to: "injection_pdfs#show"
     get "injection_labels/:order_id/pdf", to: "injection_label_pdfs#show"
+    # 検体検査結果の報告書(DiagnosticReport 1 件ぶん)
+    get "lab_results/:report_id/pdf", to: "lab_result_pdfs#show"
     # DPC 様式1 の提出ファイル(FF1)。対象月(退院月)の一覧と、ファイル本体。
     get "dpc_form1", to: "dpc_form1#show"
     get "dpc_form1/file", to: "dpc_form1#file"

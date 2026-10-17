@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLabResultItemsByCodes, useLabResultItemsByJlac11Codes } from "../api/masterQueries";
 import { useLabOrderDetail, useLabResultDetail } from "../api/queries";
+import { labResultPdfUrl } from "../api/reportsClient";
 import { karteLinkLabel } from "../fhir/karteLinkHelpers";
 import {
   labOrderItemRequests,
@@ -314,6 +315,9 @@ export function LabResultDetailPanel({
               >
                 時系列表示
               </button>
+              <a className="button" href={labResultPdfUrl(reportId)} target="_blank" rel="noopener">
+                印刷
+              </a>
               {menuContainer ? createPortal(menu, menuContainer) : menu}
             </div>
 
