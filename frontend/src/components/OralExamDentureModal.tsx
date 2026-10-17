@@ -89,10 +89,11 @@ export function OralExamDentureModal({ book, teeth, initial, onApply, onClose }:
     onApply(removeDenture(teeth, draft.original.jaw, draft.original.number));
   }
 
+  // 歯に重ねる印。反映後の歯式図の略号(PD・FD・Cl・R)とそろえる。
   const roleMarks: Record<string, string> = {};
-  for (const c of draft.replaced) roleMarks[c] = "人";
+  for (const c of draft.replaced) roleMarks[c] = draft.type;
   for (const c of draft.clasps) roleMarks[c] = "Cl";
-  for (const c of draft.rests) roleMarks[c] = roleMarks[c] ? `${roleMarks[c]}R` : "R";
+  for (const c of draft.rests) roleMarks[c] = roleMarks[c] ? `${roleMarks[c]}·R` : "R";
   const roles: Role[] = draft.type === "FD" ? ["replaced"] : ["replaced", "clasp", "rest"];
   const baseFilter = dentureBaseFilter(draft.type);
 

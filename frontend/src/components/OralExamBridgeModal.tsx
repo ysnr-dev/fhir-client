@@ -19,7 +19,11 @@ import { OralExamChart } from "./OralExamChart";
 type Role = "abutment" | "pontic";
 
 const ROLE_LABELS: Record<Role, string> = { abutment: "支台", pontic: "ポンティック" };
-const ROLE_MARKS: Record<Role, string> = { abutment: "支", pontic: "ポ" };
+/** 歯に重ねる印。反映後の歯式図の略号(Br・連結・Pon)とそろえる。 */
+const ROLE_MARKS: Record<BridgeKind, Record<Role, string>> = {
+  bridge: { abutment: "Br", pontic: "Pon" },
+  splint: { abutment: "連結", pontic: "Pon" },
+};
 
 interface OralExamBridgeModalProps {
   book: OralExamCodeBook | undefined;
@@ -72,8 +76,8 @@ export function OralExamBridgeModal({ book, teeth, initial, onApply, onClose }: 
   }
 
   const roleMarks = Object.fromEntries([
-    ...draft.abutments.map((c) => [c, ROLE_MARKS.abutment]),
-    ...draft.pontics.map((c) => [c, ROLE_MARKS.pontic]),
+    ...draft.abutments.map((c) => [c, ROLE_MARKS[draft.kind].abutment]),
+    ...draft.pontics.map((c) => [c, ROLE_MARKS[draft.kind].pontic]),
   ]);
   const roles: Role[] = draft.kind === "bridge" ? ["abutment", "pontic"] : ["abutment"];
 
