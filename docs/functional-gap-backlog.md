@@ -33,6 +33,8 @@
   Windows クライアント配布(マスタアップロード・端末マスタ・プリンタマスタ・ランチャー・SE ツール)、
   ベンダー製品連携(DICS-PS・Simplewrite・ARENA・HumanBridge・麻酔器・勤務割)、排他ロック(楽観ロックで代替)、
   保険情報の保持(レセコン正本)、IME 辞書、Excel チャート、移行ツール。
+- 海外 EHR(Epic・NHS ほか)との照合で出た候補は §5(2026-10-18)。要フォロー推奨の追跡、退院時の薬剤調整、警告のガバナンス、
+  NKDA、計算スコア、Health Maintenance、SMART on FHIR アプリ起動が上位。
 
 ## 1. 優先度の高い候補(まとめ)
 
@@ -355,3 +357,185 @@
 - **モバイル・タブレット対応**(拡張、中): ベッドサイドの実施入力・カメラでのバーコード照合。
 - **Web Push / メールでの緊急通知**(拡張、中): パニック値・早期警告だけベル以外の経路で届ける。
 - **医療の質指標(QI)のダッシュボード見本**(拡張、中) — **対応済み(2026-10-17、データ抽出の「指標」タブ。`docs/data-extract-design.md` §23。再入院率・HbA1c 7.0 未満の割合・細菌検査提出率の初期値。転倒率・血培 2 セット率・退院サマリー 14 日以内作成率・AUD / DOT は条件で表せず残り)**
+
+## 5. 海外 EHR との照合(2026-10-18)
+
+§1〜§4 は国内商用カルテの機能一覧と国内制度からの候補だった。ここには、海外 EHR(Epic / Oracle Health / MEDITECH Expanse /
+athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion Miya / OpenMRS O3 / Medplum ほか)と HL7 標準の
+2024〜2026 年の動向を調べ、本リポジトリと突き合わせて**海外に特徴的で本リポジトリに無い(または土台だけある)もの**を並べる。
+§1〜§4 に既に載っているもの(顔写真、全文検索、ヒストリカルビュー、患者メモ、音声入力、電子カルテ情報共有サービスなど)は除いた。
+
+### 5.1 海外 EHR に共通して見える差
+
+- **患者アクセスが法・国の基盤で義務になっている**: 米国の 21st Century Cures Act(情報ブロッキング禁止)で結果は医師確認前に患者へ届くのが標準。
+  豪州 My Health Record は病理・画像の既定共有を法定(2026-07)、独 ePA はオプトアウトで 7,300 万件、NHS App は登録 4,100 万人。
+  一方で悪性・遺伝の結果だけ 72 時間保留する州法(テキサス、2025)も出た。
+- **外部アプリと判断支援を差し込む標準の経路**: SMART App Launch 2.2、CDS Hooks 2.0〜3.0(override reason の feedback を含む)、
+  Epic Showroom(旧 App Orchard)、Medplum・OpenEMR の SMART 対応。医師自身がテンプレート・警告を作る文化と、
+  それを統制する CDS ガバナンス委員会(発火数・上書き率の定期見直し)が組になっている。
+- **記録の出自**: Epic は本文を文字単位で手入力 / コピー / テンプレートに分けて保持し、色分けで見せる。
+  入院の経過記録の 80% 超がコピー・転記という報告(UCSF)が背景。HL7 も「AI Transparency on FHIR」(AI 由来データの印)を検討中。
+- **閉ループの台帳化**: 偶発所見のフォロー、退院時の Medication Reconciliation、Health Maintenance(予防・定期項目の期限)を
+  患者ごとに追い、未完了を可視化する。
+- **評価・批判**:
+  - アンビエント記録は燃え尽きの改善には証拠があるが、時間短縮・ROI の証拠は弱い。2026 年は EHR 同梱・無償化が主流になった。
+  - 敗血症・急変の予測モデル(Epic Sepsis Model / Deterioration Index)は AUROC 0.63〜0.79 で施設差とアラート負担が大きい。
+    米国では予測型 CDS に透明性の開示(HTI-1 の source attributes)が求められた。
+  - In Basket(受信箱)は医師 1 人あたり週 243 件、うち 114 件がシステム自動生成。削減の手順は「自動生成を減らす」が先で、AI 下書きは後。
+  - 北欧の大規模一体型導入(Region Skåne の Millennium 廃止、ノルウェー Helseplattformen への会計検査院の批判)は、
+    退院要約・紹介などの機関間データが確実に届くことを最優先にすべきと示している。
+
+### 5.2 候補の一覧
+
+| # | 候補 | 区分 | 必要度 | 大きさ | 詳細 |
+|---|---|---|---|---|---|
+| 1 | 要フォロー推奨の閉ループ追跡(偶発所見)と未確認結果の滞留一覧 | 拡張 | 高 | 小〜中 | §5.3 |
+| 2 | 退院時の薬剤調整(Medication Reconciliation) | 拡張 | 高 | 中 | §5.3 |
+| 3 | 警告(判断支援)の共通の器とガバナンス(無視理由・発火率・無視率) | 拡張 | 高 | 中 | §5.3 |
+| 4 | アレルギー「無し(確認済)」の明示(NKDA) | 拡張 | 高 | 小 | §5.3 |
+| 5 | 医療計算スコアの同梱と自動充填 | 拡張 | 中〜高 | 小 | §5.3 |
+| 6 | Health Maintenance(患者単位の定期検査・検診の期限) | 新規 | 中〜高 | 中 | §5.3 |
+| 7 | SMART on FHIR アプリ起動(外部アプリの埋め込み) | 新規 | 中〜高 | 中(上流) | §5.3 |
+| 8 | 記録の出自表示(複写・テンプレート・AI 由来の色分け) | 拡張 | 中 | 中 | §5.4 |
+| 9 | 申し送り(ハンドオフ)の器と自動下書き | 新規 | 中 | 中 | §5.4 |
+| 10 | ACP・コードステータスの構造化(Consent) | 拡張 | 中 | 中(上流) | §5.4 |
+| 11 | 患者向けの結果公開(段階制御)と患者入力の継続(PRO・家庭血圧) | 拡張 | 中 | 中〜大 | §5.4 |
+| 12 | 薬剤師の処方監査キューと介入記録(プレアボイド) | 拡張 | 中 | 中 | §5.4 |
+| 13 | 術者別プリファレンスカードと手術室ボードの術中時刻 | 拡張 | 中(手術病院) | 中 | §5.4 |
+| 14 | 病理のシノプティックレポート | 拡張 | 中 | 小〜中 | §5.5 |
+| 15 | 口頭指示の区分と事後署名の期限 | 拡張 | 中 | 小 | §5.5 |
+| 16 | 予約リマインド(SMS / LINE / メール) | 新規 | 中 | 中 | §5.5 |
+| 17 | 創部・褥瘡の写真の部位への紐付けと経時表示 | 拡張 | 中 | 小 | §5.5 |
+| 18 | 予防接種(Immunization) | 新規 | 中 | 中(上流) | §5.5 |
+| 19 | FHIR Subscription による一覧・ベルの自動更新 | 新規 | 中〜低 | 中(上流) | §5.5 |
+| 20 | IPS(`Patient/$summary`)と SMART Health Links の QR | 拡張 | 低〜中 | 中(上流) | §5.5 |
+
+上流が要る項目(#7・#10・#18・#19・#20)は `server-improvement-backlog.md` の L-3 にまとめた。
+
+### 5.3 優先度の高い候補
+
+- **要フォロー推奨の閉ループ追跡と未確認結果の滞留一覧**(拡張、高)
+  - ［対応物］重要所見の通知 Task(`rad-` / `physio-` / `endoscopy-critical-finding`)、検査結果確認の既読(`result-review`、Provenance)、
+    通知レジストリ(`components/notifications/notificationRegistry.tsx`)。
+  - ［不足］レポートの「6 か月後に CT 再検」のような推奨と期限を構造化して持ち、推奨どおりのオーダーが実施されたら閉じる台帳。
+    未確認の結果が n 日以上残った一覧と督促。海外では Duke の追跡で完了率 43→71%、国内でも初回連絡時に 60.7% が未対応という報告がある(昭和医大、2026)。
+  - ［当たり］`DiagnosticReport` に拡張 `follow-up-recommendation`(内容・期限・推奨検査コード)を所見・読影レポートのフォームに 1 区画。
+    通知レジストリに `followup-due`(宛先 = 依頼医、期限 = 推奨日)を 1 要素。`ServiceRequest.supportingInfo` でレポートを参照したオーダーが
+    `completed` になれば Task を閉じる。一覧は部門一覧の雛形で `/followup-worklist`(未実施・期限超過)。
+    滞留一覧は既存の `result-review` Task を作成日で絞ってホームのカードに 1 枚。
+- **退院時の薬剤調整(Medication Reconciliation)**(拡張、高)
+  - ［対応物］持参薬の継続 / 休止 / 中止(`brought-medication-design.md`)、退院処方(区分「退院」)、退院モーダル(持参薬を終了にするだけ)。
+    休止した持参薬を退院時に再開する導線は未実装(同 §8)。
+  - ［不足］入院前の薬(持参薬)・入院中の定期処方・退院処方を 1 画面で突き合わせ、薬ごとに「継続 / 中止 / 変更 / 新規」と理由を残す。患者向けの薬一覧。
+    薬剤師主導の調整で重要な誤りが 61.9% → 9.3% に減った対照試験がある(2024)。
+  - ［当たり］退院処方フォームの前段に「薬剤調整」の手順。行は `ingredientKey` で持参薬・入院処方・退院処方を突き合わせ、判断は
+    `MedicationStatement`(拡張 `reconciliation-decision` + 理由)を transaction で書く。休止持参薬の再開は持参薬を `active` に戻す。
+    患者向けの一覧は §4.5「お薬と次回予約の一枚紙」と同じ帳票にまとめる。
+- **警告(判断支援)の共通の器とガバナンス**(拡張、高)
+  - ［対応物］`medicationSafetyHelpers`・`drugCheckHelpers`・`radSafetyHelpers`・`RegimenPreCheck`・`PregnancyNotice`・`InfectionNotice`・
+    `MealAllergyNotice`・早期警告。いずれも機能ごとの実装で、確認・無視の理由は残らない。§2.1(警告を無視した理由)・§2.3(患者状態チェックの器)に一部既載。
+  - ［不足］警告の種別と重さ(表示のみ / 確認を要する / 止める)を 1 つの型にまとめる。確認・無視の理由を記録し、警告ごとの発火数・無視率を管理画面で見る。
+    海外では警告の上書き率 95.7% という報告があり、Northwestern は高頻度の警告 19 件を廃止して入院あたりの割り込みを 35 → 16.6 件にした。
+  - ［当たり］純関数 `fhir/advisoryHelpers.ts` に `Advisory {kind, severity, message, source}` を定め、既存の各ヘルパーをこれに寄せる。表示は `AdvisoryNotice` 1 部品。
+    無視は登録の transaction に `Provenance`(activity = override、`reason` に理由の Coding)を積み、理由の候補は §2.1 の定型文マスタと共用。
+    集計は backend `advisory_events`(kind・severity・outcome・user・at)に記録し、管理画面「警告の見直し」に種別 × 月の発火数・無視率。
+- **アレルギー「無し(確認済)」の明示(NKDA)**(拡張、高・小)
+  - ［対応物］`AllergyIntolerance.verificationStatus`(未確定・否定)、患者帯のアレルギー表示。
+  - ［不足］「既知のアレルギー無し」を記録して「未確認」と区別する。海外 EHR では入院時の必須項目で、未確認のまま処方すると警告が出る。
+  - ［当たり］`AllergyIntolerance`(code = SNOMED CT 716186003 No known allergy、verificationStatus = confirmed)を 1 件。`allergyHelpers.ts` に判定関数、
+    患者帯は「無し(確認日)」と「未確認」を出し分ける。未確認のまま処方・注射を登録するときは上記の警告の器で「表示のみ」。食物アレルギー照合も同じ判定を使う。
+- **医療計算スコアの同梱と自動充填**(拡張、中〜高・小)
+  - ［対応物］テンプレートの `calculatedExpression` と `%` 変数(`fhir/populateContext.ts`)。eGFR・CCr・体表面積・NEWS2・qSOFA・ブリンクマン指数・Barthel・DESIGN-R はある。
+  - ［不足］CHA2DS2-VASc・HAS-BLED・A-DROP(日本呼吸器学会、CURB-65 の国内版)・Child-Pugh・MELD・Wells・FRAX の雛形。
+    海外では MDCalc on FHIR のように患者の値を自動で埋め、結果を記録に書き戻す。
+  - ［当たり］seed に Questionnaire(テンプレートカテゴリ「スコア」)を同梱。`populateContext` に「コードを指定して直近の検査値」「病名コードの有無」を返す汎用の変数を足し、
+    病名・検査値から初期値を埋める。結果は既存の Observation 生成で時系列に乗せる。根拠の弱い予測スコア(再入院の LACE など)は入れない。
+- **Health Maintenance(患者単位の定期検査・検診の期限)**(新規、中〜高)
+  - ［対応物］データ抽出の指標(集団単位)、Flag、`%` 変数。患者ごとに期限を出す仕組みは無い。
+  - ［不足］年齢・性・病名・薬剤から定期項目の期限を出し、期限超過を患者帯・プロファイルに出す。
+    例: ワルファリン → PT-INR、メトホルミン → eGFR、ステロイド長期 → 骨密度、糖尿病 → 眼底・尿アルブミン、年齢 → がん検診・肺炎球菌ワクチン。
+  - ［当たり］backend `health_maintenance_rules`(条件: 年齢範囲・性・病名コード・薬剤 YJ の前方一致 → 項目コード・間隔・根拠)。
+    画面側は `Observation` / `Procedure` / `Immunization` を項目コードで `_count=1` 引いて最終実施日を出す。患者ごとの延期・対象外は理由つきの `Flag`(category `health-maintenance`)。
+    督促 Task は作らず画面表示だけから始める(受信箱を自動生成の通知で埋めない)。
+- **SMART on FHIR アプリ起動**(新規、中〜高・上流)
+  - ［対応物］上流の OAuth クライアント管理(Backend Services と対話型 launch の登録、`features/admin-integration.md`)。外部アプリをカルテに埋め込む機能は無い。
+  - ［不足］EHR launch(`launch` パラメータ、`launch/patient` scope)で患者・利用者の文脈を渡し、外部アプリ(計算ツール・PHR ビューア・AI 記録製品・院内開発の小画面)を
+    カルテのタブに出す。アンビエント記録などを自前で作らず、施設が選んだ製品を差し込める。
+  - ［当たり］上流に SMART App Launch 2.2 の EHR launch(launch context の発行・`fhirContext`・`.well-known/smart-configuration`)。
+    client は backend `smart_apps`(名称・launch URL・client_id・表示場所)と管理画面、カルテに「アプリ」タブ(iframe に `iss` と `launch`)。
+    アプリは `/fhir` プロキシを通らず上流に直接認可されるので、CORS とトークン寿命は上流で決める。
+
+### 5.4 中くらいの候補
+
+- **記録の出自表示**(拡張、中)
+  - ［対応物］Tiptap の記録エディタ、テンプレートの前回複写、変更履歴の差分。LLM 記録支援(`llm-assist-design.md`、設計のみ)は生成文を空欄にだけ入れ、Provenance に `assembler = Device` を付ける。
+  - ［不足］本文の各部分が手入力・前回複写・テンプレート・AI 下書きのどれかを保持して色分けで見せる。
+  - ［当たり］Tiptap の mark(`data-origin` に copied / template / ai、`data-source` に元の記録)を複写・下書きの挿入時に付け、手入力で書き換えた部分は mark を外す。
+    保存する HTML(`Composition.section.text.div`)に属性ごと残し、閲覧時はテーマ変数の下線色で示す。LLM 記録支援の実装と同時に行う。
+- **申し送り(ハンドオフ)の器と自動下書き**(新規、中)
+  - ［対応物］看護ワークシート・業務分担、看護サマリー、NEWS2、未指示受けの件数。`llm-assist-design.md` §3 が「申し送り(I-SBAR)は記録の器が無い」と明記。
+  - ［不足］看護の勤務交代と医師の当直への引き継ぎを、1 患者 1 枚の構造(I-PASS: 重症度・要約・すること・起こりうることと対応・読み返し)で残す。
+    Epic の Handoff は別画面だったため記入率 40〜50% で定着しなかったので、ワークシートの行から開く形にする。
+  - ［当たり］`Composition`(category `handover`、I-PASS を section に)を診療記録タイトルマスタのプリセットに。初期値は NEWS2・未実施の予定・直近に変わったオーダー・未確認の結果から `%` 変数で埋める。
+    LLM 下書きは `llm-assist-design.md` §3 の機能に 1 行足す。
+- **ACP・コードステータスの構造化**(拡張、中・上流)
+  - ［対応物］注意区分 Flag の DNAR・輸血拒否(患者帯のピクトグラム)。Consent での構造化は `patient-profile-design.md` §2.6 で第 3 段階に先送り。
+  - ［不足］いつ・誰と話し合い、どこまでの処置(蘇生・挿管・透析・人工栄養)を望むか、代理決定者、再確認日。入院ごとの再確認。
+  - ［当たり］上流に `Consent`(Flag と同じく HL7 基本定義 + 手書きバリデータ)。`provision` に処置ごとの可否。登録時に患者帯用の Flag を同じ transaction で書く。
+- **患者向けの結果公開と患者入力の継続**(拡張、中・中〜大)
+  - ［対応物］Web 問診(期限付きの使い捨てトークン・生年月日照合・QR、`web-intake-design.md`)。患者ポータル・予約の Web 取得は同書で対象外。
+  - ［不足］検査結果・次回予約・薬一覧を患者が見る経路と、公開の段階(即時 / 医師確認後 / 悪性・遺伝は保留)。症状スコア(PRO)や家庭血圧・血糖を繰り返し入力させて経過表に乗せる。
+  - ［当たり］第 1 段は Web 問診の器の延長。職員が発行する期限付きリンクに「結果の控え」「次回予約」「薬一覧」を載せ、患者の繰り返し入力は予約ごとにリンクを出し直す。
+    入力値は Observation 生成で `performer = Patient` の Observation に。公開の段階は結果項目マスタに列を 1 つ。
+    患者アカウント(継続ログイン・代理人)は第 2 段で、§4.1 のマイナポータル・§4.5 の PHR と合わせて判断する。
+- **薬剤師の処方監査キューと介入記録**(拡張、中)
+  - ［対応物］疑義照会(照会中は調剤・払出を止める)、注射の受付 → 払出、レジメン監査の目印。
+  - ［不足］「監査済」の状態、未監査の処方の一覧、介入(プレアボイド)の種別(用量・相互作用・重複・腎機能など)と月次の集計。
+  - ［当たり］通知レジストリに `rx-verification`(処方確定で薬剤部あてに作り、監査で完了)。介入は `Task.output` に理由の Coding。集計はデータ抽出の記録タブに「薬剤師介入」。
+    監査前の実施を止めるかは施設設定で選ぶ(「承認前でも部門へ流す」方針と揃える)。
+- **術者別プリファレンスカードと手術室ボードの術中時刻**(拡張、中・手術のある病院)
+  - ［対応物］手術申込(執刀医・助手・麻酔科医)、実施入力の明細、手術室カレンダー日ビューの状態の色分け。術式ごとの定型明細は `surgery-result-design.md` §8 の将来案。
+  - ［不足］術式 × 術者ごとの器械・材料・体位・特記事項の雛形(Epic OpTime の中核)。入室・執刀・閉創・退室を術中に押し、ボードが自動で更新される。
+  - ［当たり］backend `surgery_preference_cards`(術式コード × 医療従事者、明細 JSON)を申込・実施入力の初期値に。術中の時刻は実施入力と同じキーでカレンダーのカードから 1 回ずつ書き、
+    日ビューは一定間隔で読み直す。清掃時間(ターンオーバー)は §2.8 手術申込の重なり判定と共用。
+
+### 5.5 小さめの候補・上流待ちの候補
+
+- **病理のシノプティックレポート**(拡張、中): 組織診の診断はいま自由文(valueString)。癌取扱い規約の項目(組織型・深達度・脈管侵襲・断端・TNM)を臓器別の所見テンプレートにし、
+  `Observation.component` に落とす。`exam-report-design.md` の所見テンプレートの器で足せ、§4.1 のがん登録の材料にもなる。
+- **口頭指示の区分と事後署名の期限**(拡張、中): 代行入力の Provenance に口頭指示の区分を足し、指示医の承認期限(例: 24 時間)を `order-approval` の派生 Task で督促する。
+  復唱確認(read-back)は指示を受けた人が付ける欄 1 つ。
+- **予約リマインド**(新規、中): `Integrations::ExternalSystems::DEFINITIONS` に SMS / LINE の送信先を 1 要素、backend の日次処理で翌日の `Appointment` に送る。
+  連絡先と送信の同意は `Patient.telecom` の拡張。NHS は紙の通知をアプリ通知に置き換えて 2,250 万通を減らした。
+- **創部・褥瘡の写真の部位への紐付けと経時表示**(拡張、中): ファイル取込の `DocumentReference` に部位(`bodySite`)と褥瘡の `Condition` 参照を足し、DESIGN-R の経過の横に写真の列。
+  カメラでの撮影は §4.5 のモバイル対応と同時。
+- **予防接種**(新規、中・上流): 上流に `Immunization`(JP Core あり)。患者プロファイルの区画と、Health Maintenance(§5.3)の入力源。小児科・高齢者施設で効く。
+- **FHIR Subscription による自動更新**(新規、中〜低・上流): 上流に Subscriptions Backport(Task の作成、パニック値の Observation を topic に)を足し、ベル・病棟の一覧をポーリングから更新通知に切り替える。
+  規格の普及が萌芽期なので急がない。
+- **IPS と SMART Health Links**(拡張、低〜中・上流): `Patient/$summary`(IPS IG 2.0.1)を上流に足し、患者が持ち運ぶ QR(SMART Health Links)にする。
+  §4.1 の電子カルテ情報共有サービス(JP-CLINS)が先で、IPS はその派生として扱う。
+
+### 5.6 取り込まないもの
+
+- **全顧客共通の匿名データベースと基盤モデル**(Epic Cosmos / Look-Alikes / CoMET): 単一施設の製品では成り立たない。独立した検証も無い。
+- **敗血症・急変の予測モデル**(Epic Sepsis Model / Deterioration Index): 性能の施設差とアラート負担が大きい。規則型の NEWS2 / qSOFA(実装済み)にとどめる。
+- **第三者のアンビエント記録製品の個別統合**: 2026 年は EHR 同梱・無償化が主流。差し込み口(§5.3 SMART)を整え、製品は施設が選ぶ。
+- **受信箱型の通知の拡大**: 通知 Task はシステム発生が中心のまま。種別を足す前に、§5.3 の警告の集計で無視率を見て削る運用を置く。
+- **音声主体の画面設計**(Oracle Health の新 EHR): 稼働は外来のみで評価が無い。音声入力は §4.4 のまま。
+- **大規模な統合データ基盤**(NHS Federated Data Platform 型): データ抽出・ダッシュボードで足りる規模。
+
+### 5.7 主な出典
+
+- Epic: Problem-Oriented Charting(https://pmc.ncbi.nlm.nih.gov/articles/PMC6018915)、記録の膨張とコピー(https://www.healthcareitnews.com/news/epic-research-shows-note-bloat-increased-8)、
+  Health Maintenance(https://manual.connect-care.ca/tools/health-maintenance)、警告の削減(https://physicianforum.nm.org/clinical-update---interruptive-epic-alerts-reduced-to-decrease-alert-fatigue-antimicrobial-and-diagnostic-stewardship-program-upgrades-website.html)、
+  In Basket の負担(https://pubmed.ncbi.nlm.nih.gov/31260371/)、予測モデルの評価(https://www.pubmed.ncbi.nlm.nih.gov/34152373/)、ハンドオフの定着(https://assets.cureus.com/uploads/original_article/pdf/329100/20250304-110895-72pwz3.pdf)
+- 警告の上書き率(https://academic.oup.com/jamia/article/25/5/476/4569609)、偶発所見の追跡(https://pubs.rsna.org/doi/10.1148/radiol.2021210057、https://www.jstage.jst.go.jp/article/smuj/38/2/38_41/_article/-char/en)、
+  退院時の薬剤調整(https://www.frontiersin.org/journals/pharmacology/articles/10.3389/fphar.2024.1377781/epub)、MDCalc on FHIR(https://ehr.mdcalc.com/)
+- アンビエント記録の評価(https://www.phti.org/announcement/ai-scribes-reduce-clinician-burnout/、https://klasresearch.com/report/ambient-ai-2026-a-high-performing-market-shifts-as-ehr-native-tools-adjust-long-term-strategies/3982)
+- 標準: SMART App Launch 2.2(https://standups.hl7.org/2024/04/30/stu-publication-of-hl7-fhir-implementation-guide-smart-application-launch-framework-release-2-2/)、
+  CDS Hooks(https://cds-hooks.hl7.org/changes.html)、Subscriptions Backport(https://hl7.org/fhir/uv/subscriptions-backport/)、IPS(https://hl7.org/fhir/uv/ips/en/)、
+  SMART Health Cards and Links(https://hl7.org/fhir/uv/smart-health-cards-and-links/STU1/history.html)、HTI-1(https://www.federalregister.gov/documents/2024/01/09/2023-28857/health-data-technology-and-interoperability-certification-program-updates-algorithm-transparency-and)
+- 患者アクセス: 結果の即時開放の調査(https://www.hcinnovationgroup.com/clinical-it/patient-portals/news/53029048/survey-patients-prefer-immediate-access-to-test-results-through-portal)、
+  州法の保留(https://www.ama-assn.org/practice-management/digital-health/states-move-give-patients-more-control-over-test-results)、
+  豪 My Health Record(https://anmj.org.au/modernising-my-health-record-improved-access-to-pathology-and-diagnostic-imaging-results/)、NHS のアプリ通知(https://nhsd-proxy.openprescribing.net/blog/transformation-blog/2025/a-digital-first-approach-to-patient-communications)
+- 北欧の導入の教訓(https://www.svt.se/nyheter/lokalt/skane/besked-idag-millenium-skrotas-nya-alternativ-ska-utredas、https://digi.no/nyhetsstudio/59313)

@@ -578,6 +578,21 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 - **バリデーションエラーの日本語化**: OperationOutcome の diagnostics が英語のため、
   クライアントが issue.code から日本語文言を組み立てている（`frontend/src/fhir/outcome.ts`）。
 
+### L-3. 海外 EHR との照合で出た上流の要望(2026-10-18)
+
+`functional-gap-backlog.md` §5 の候補のうち、上流の実装が先に要るもの。どれも未着手で、client 側の設計もまだ無い。
+
+- **SMART App Launch 2.2 の EHR launch**(§5.3、中〜高): いまの OAuth クライアントは Backend Services と対話型 launch の登録まで。
+  カルテから外部アプリを起動するには、launch context の発行(患者・利用者・Encounter を `launch` に結び付ける)、
+  トークン応答の `patient` / `fhirContext`、`.well-known/smart-configuration` の `launch-ehr` と `context-ehr-patient` が要る。
+  client は launch を発行してもらう API を backend 経由で呼び、iframe に `iss` と `launch` を渡す。
+- **`Consent`**(§5.4、中): ACP・コードステータスの構造化。JP Core プロファイルが無いので Flag と同じく HL7 基本定義 + 手書きバリデータ、
+  患者コンパートメントに入れる。検索は `patient`・`category`・`status`・`date`。
+- **`Immunization`**(§5.5、中): JP Core プロファイルあり。検索は `patient`・`vaccine-code`・`date`・`status`。Health Maintenance の入力源。
+- **Subscriptions Backport IG 1.1**(§5.5、中〜低): SubscriptionTopic(Task の作成・更新、パニック値の Observation)と rest-hook / websocket 通知。
+  ベル・病棟一覧のポーリングを置き換える。規格の普及が萌芽期なので急がない。
+- **`Patient/$summary`(IPS IG 2.0.1)**(§5.5、低〜中): 電子カルテ情報共有サービス(JP-CLINS)の文書生成の後に、その派生として扱う。
+
 ---
 
 ## fhir-client 側の課題（サーバー改修不要・ついでに記録）
