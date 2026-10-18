@@ -28,6 +28,8 @@ import type { KarteCardOrderSettings } from "../fhir/karteCardOrderHelpers";
 
 export interface ConnectionSettings {
   base_url: string | null;
+  /** ブラウザから見た上流の URL(SMART の iss、起こしボタンの宛先)。空なら base_url と同じ。 */
+  public_base_url: string | null;
   client_id: string | null;
   token_path: string;
   host_header: string | null;
@@ -36,11 +38,13 @@ export interface ConnectionSettings {
   admin_api_available: boolean;
   auth_enabled: boolean;
   effective_base_url: string;
+  effective_public_base_url: string;
   effective_auth_source: "db" | "env" | "none";
 }
 
 export interface ConnectionSettingsUpdate {
   base_url?: string;
+  public_base_url?: string;
   client_id?: string;
   client_secret?: string;
   token_path?: string;
@@ -134,6 +138,8 @@ export interface OauthClientSummary {
   scopes: string[];
   redirect_uris: string[];
   kind: OauthClientKind;
+  /** カルテから EHR launch で起動できる(launch スコープを登録した)クライアント。 */
+  ehr_launchable: boolean;
   auth_method: OauthClientAuthMethod;
   jwks_key_count: number;
   active_access_token_count: number;
@@ -174,6 +180,7 @@ export interface ScopeOptions {
   resource_types: { type: string; label: string }[];
   system_access: { value: string; label: string }[];
   patient_access: { value: string; label: string }[];
+  user_access: { value: string; label: string }[];
   context_scopes: { scope: string; label: string }[];
 }
 
@@ -670,4 +677,49 @@ export async function fetchExternalCodeCandidates(
   return adminJson<{ items: ExternalCodeCandidate[] }>(
     `${systemPath(systemKey)}/code_mappings/candidates?kind=${encodeURIComponent(kind)}`,
   );
+}
+
+// --- SMART アプリ(カルテから起動する外部アプリ) --------------------------------
+
+export type SmartAppDisplay = "embed" | "window";
+
+export interface SmartAppSummary {
+  id: number;
+  name: string;
+  /** 上流 OAuth クライアントの client_id(launch 形)。 */
+  client_id: string;
+  launch_url: string;
+  display: SmartAppDisplay;
+  enabled: boolean;
+  position: number;
+  updated_at: string;
+}
+
+export interface SmartAppPayload {
+  name?: string;
+  client_id?: string;
+  launch_url?: string;
+  display?: SmartAppDisplay;
+  enabled?: boolean;
+  position?: number | null;
+}
+
+const SMART_APPS = "/admin/smart_apps";
+
+export async function fetchSmartApps(): Promise<SmartAppSummary[]> {
+  const body = await adminJson<{ total: number; items: SmartAppSummary[] }>(SMART_APPS);
+  return body.items;
+}
+
+export async function createSmartApp(payload: SmartAppPayload): Promise<SmartAppSummary> {
+  return adminJson<SmartAppSummary>(SMART_APPS, { method: "POST", ...jsonBody(payload) });
+}
+
+export async function updateSmartApp(id: number, payload: SmartAppPayload): Promise<SmartAppSummary> {
+  return adminJson<SmartAppSummary>(`${SMART_APPS}/${id}`, { method: "PATCH", ...jsonBody(payload) });
+}
+
+export async function deleteSmartApp(id: number): Promise<void> {
+  const res = await adminFetch(`${SMART_APPS}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
 }

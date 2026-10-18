@@ -16,7 +16,7 @@ cd fhir-client
 docker compose up --build
 ```
 
-- backend: `http://localhost:3001`(コンテナから `http://host.docker.internal:3000` 経由で fhir-server に接続。別サーバーに向けたい場合は `docker-compose.yml` の `FHIR_SERVER_BASE_URL` を変更)
+- backend: `http://localhost:3001`(コンテナから `http://host.docker.internal:3000` 経由で fhir-server に接続。別サーバーに向けたい場合は `docker-compose.yml` の `FHIR_SERVER_BASE_URL` を変更。ブラウザが上流を直接叩く URL(SMART アプリの `iss`・起こしボタン)は `FHIR_SERVER_PUBLIC_BASE_URL`、既定 `http://localhost:3000`)
 - frontend: `http://localhost:5173/patients`
 - db: `localhost:5434`(fhir-server の db の 5433、ローカル Homebrew Postgres の 5432 と衝突しないポート)
 

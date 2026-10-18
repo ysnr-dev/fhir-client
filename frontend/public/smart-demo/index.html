@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SMART demo</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { margin: 0; padding: 16px; font-size: 14px; line-height: 1.5; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 16px; }
+  dt { opacity: 0.7; }
+  dd { margin: 0; word-break: break-all; }
+  code { font-size: 12px; }
+  .error { color: #c0392b; }
+  table { border-collapse: collapse; }
+  td, th { border-bottom: 1px solid #8884; padding: 2px 8px; text-align: left; }
+</style>
+</head>
+<body>
+<h1>SMART demo</h1>
+<div id="out">起動中...</div>
+<script>
+// 検証用の最小 SMART アプリ(docs/smart-app-launch-design.md §5.1)。依存ゼロの素の JS。
+//
+// EHR launch の手順をそのまま踏む: ?iss&launch で起動 → smart-configuration → PKCE で
+// /oauth/authorize → code → /oauth/token → 文脈(patient / encounter / fhirUser)を表示し、
+// Patient・Encounter・Observation を読む。client_id は起動 URL のクエリ(?client_id=)で受ける。
+// id_token は署名を検証せず payload を表示するだけ。
+(async function () {
+  const out = document.getElementById("out");
+  const params = new URLSearchParams(location.search);
+  const redirectUri = location.origin + location.pathname;
+
+  function show(html) { out.innerHTML = html; }
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  }
+  function b64url(bytes) {
+    return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function decodeJwtPayload(jwt) {
+    const payload = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(payload + "=".repeat((4 - (payload.length % 4)) % 4)));
+  }
+
+  if (params.get("error")) {
+    show(`<p class="error">認可エラー: <code>${esc(params.get("error"))}</code> ${esc(params.get("error_description"))}</p>`);
+    return;
+  }
+
+  // 1. 起動: iss と launch を受け取り、PKCE を用意して authorize へ。
+  if (params.get("iss") && params.get("launch")) {
+    const iss = params.get("iss").replace(/\/$/, "");
+    const clientId = params.get("client_id");
+    if (!clientId) return show('<p class="error">起動 URL に ?client_id= が必要です。</p>');
+
+    const config = await fetch(iss + "/.well-known/smart-configuration").then((r) => r.json());
+    const verifierBytes = crypto.getRandomValues(new Uint8Array(32));
+    const verifier = b64url(verifierBytes);
+    const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+    const state = b64url(crypto.getRandomValues(new Uint8Array(16)));
+    sessionStorage.setItem("smart-demo", JSON.stringify({ iss, clientId, verifier, state, tokenEndpoint: config.token_endpoint }));
+
+    const authorize = new URL(config.authorization_endpoint);
+    authorize.search = new URLSearchParams({
+      response_type: "code",
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: "launch launch/patient launch/encounter openid fhirUser user/Patient.read user/Encounter.read user/Observation.read",
+      state,
+      aud: iss,
+      launch: params.get("launch"),
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    }).toString();
+    location.replace(authorize.toString());
+    return;
+  }
+
+  // 2. 戻り: code を token に交換し、文脈とリソースを表示する。
+  if (params.get("code")) {
+    const saved = JSON.parse(sessionStorage.getItem("smart-demo") || "null");
+    if (!saved) return show('<p class="error">起動の状態が残っていません。カルテから再起動してください。</p>');
+    if (params.get("state") !== saved.state) return show('<p class="error">state が一致しません。</p>');
+
+    const tokenRes = await fetch(saved.tokenEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: params.get("code"),
+        redirect_uri: redirectUri,
+        client_id: saved.clientId,
+        code_verifier: saved.verifier,
+      }),
+    });
+    const token = await tokenRes.json();
+    if (!tokenRes.ok) return show(`<p class="error">トークン取得に失敗: <code>${esc(JSON.stringify(token))}</code></p>`);
+    history.replaceState(null, "", redirectUri);
+
+    const headers = { Authorization: "Bearer " + token.access_token, Accept: "application/fhir+json" };
+    const read = (path) => fetch(saved.iss + path, { headers }).then((r) => r.json());
+    const idToken = token.id_token ? decodeJwtPayload(token.id_token) : {};
+    const patient = token.patient ? await read("/Patient/" + token.patient) : null;
+    const encounter = token.encounter ? await read("/Encounter/" + token.encounter) : null;
+    const observations = token.patient ? await read("/Observation?patient=" + token.patient + "&_count=5&_sort=-date") : null;
+
+    const name = patient?.name?.[0];
+    const patientName = name ? name.text || [name.family, ...(name.given || [])].join(" ") : "";
+    const rows = (observations?.entry || []).map((e) => {
+      const o = e.resource;
+      const value = o.valueQuantity ? `${o.valueQuantity.value} ${o.valueQuantity.unit || ""}` : o.valueString || "";
+      return `<tr><td>${esc(o.effectiveDateTime || o.effectivePeriod?.start || "")}</td><td>${esc(o.code?.text || o.code?.coding?.[0]?.display || "")}</td><td>${esc(value)}</td></tr>`;
+    }).join("");
+
+    show(`
+      <dl>
+        <dt>fhirUser</dt><dd><code>${esc(idToken.fhirUser || "(id_token なし)")}</code></dd>
+        <dt>patient</dt><dd>${esc(patientName)} <code>${esc(token.patient)}</code></dd>
+        <dt>encounter</dt><dd>${esc(encounter ? `${encounter.class?.code || ""} ${encounter.period?.start || ""}` : "(なし)")} <code>${esc(token.encounter || "")}</code></dd>
+        <dt>scope</dt><dd><code>${esc(token.scope)}</code></dd>
+        <dt>need_patient_banner</dt><dd><code>${esc(String(token.need_patient_banner))}</code></dd>
+      </dl>
+      <table><thead><tr><th>日時</th><th>項目</th><th>値</th></tr></thead><tbody>${rows || '<tr><td colspan="3">検査結果なし</td></tr>'}</tbody></table>
+    `);
+    return;
+  }
+
+  show('<p class="error">カルテの「アプリ」タブから起動してください(iss と launch が必要です)。</p>');
+})().catch((e) => {
+  document.getElementById("out").innerHTML = `<p class="error">${String(e)}</p>`;
+});
+</script>
+</body>
+</html>

@@ -17,7 +17,7 @@ class FhirConnectionSettings < ApplicationRecord
   # DB 由来と env 由来をマージした実効設定。env のキー・デフォルトは
   # FhirTokenProvider / FhirGateway の現行値と完全一致させる。
   EffectiveConfig = Struct.new(
-    :base_url, :client_id, :client_secret, :token_path, :host_header, :admin_token,
+    :base_url, :public_base_url, :client_id, :client_secret, :token_path, :host_header, :admin_token,
     keyword_init: true
   )
 
@@ -52,8 +52,12 @@ class FhirConnectionSettings < ApplicationRecord
     # env フォールバック込みの実効設定。
     def effective
       row = current
+      base_url = row.base_url.presence || ENV.fetch("FHIR_SERVER_BASE_URL", "http://localhost:3000")
       EffectiveConfig.new(
-        base_url:      row.base_url.presence      || ENV.fetch("FHIR_SERVER_BASE_URL", "http://localhost:3000"),
+        base_url:      base_url,
+        # ブラウザから見た上流の URL(SMART の iss、起こしボタンの宛先)。backend が上流を
+        # 呼ぶ URL(dev では host.docker.internal)とは別になり得る。無ければ base_url と同じ。
+        public_base_url: row.public_base_url.presence || ENV["FHIR_SERVER_PUBLIC_BASE_URL"].presence || base_url,
         client_id:     row.client_id.presence     || ENV["FHIR_SERVER_CLIENT_ID"].presence,
         client_secret: row.client_secret.presence || ENV["FHIR_SERVER_CLIENT_SECRET"].presence,
         token_path:    row.token_path.presence    || "/oauth/token",

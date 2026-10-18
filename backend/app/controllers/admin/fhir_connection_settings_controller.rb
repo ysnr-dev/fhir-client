@@ -66,7 +66,8 @@ module Admin
 
     def settings_params
       # master コントローラと同様にフラットな params を許可する(パラメータラップに依存しない)。
-      params.permit(:base_url, :client_id, :client_secret, :token_path, :host_header, :fhir_admin_token)
+      params.permit(:base_url, :public_base_url, :client_id, :client_secret, :token_path, :host_header,
+                    :fhir_admin_token)
     end
 
     # ブラウザ向けの表現。client_secret / fhir_admin_token の値は決して含めない。
@@ -74,6 +75,7 @@ module Admin
       effective = FhirConnectionSettings.effective
       {
         base_url: settings.base_url,
+        public_base_url: settings.public_base_url,
         client_id: settings.client_id,
         token_path: settings.token_path,
         host_header: settings.host_header,
@@ -85,6 +87,7 @@ module Admin
         auth_enabled: effective.client_id.present? && effective.client_secret.present?,
         # env にフォールバック中かどうかを UI で示すための参考情報(secret は含めない)。
         effective_base_url: effective.base_url,
+        effective_public_base_url: effective.public_base_url,
         effective_auth_source: auth_source(settings, effective)
       }
     end

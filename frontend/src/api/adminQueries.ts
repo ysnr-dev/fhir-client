@@ -5,11 +5,13 @@ import {
   createOauthClient,
   createQuestionnaireCategory,
   createReportLayout,
+  createSmartApp,
   deleteDocumentTemplate,
   deleteFileCategory,
   deleteOauthClient,
   deleteQuestionnaireCategory,
   deleteReportLayout,
+  deleteSmartApp,
   fetchAdminSession,
   fetchConnectionSettings,
   fetchDocumentTemplateFile,
@@ -24,6 +26,7 @@ import {
   fetchReportLayout,
   fetchReportLayouts,
   fetchScopeOptions,
+  fetchSmartApps,
   login,
   logout,
   testConnection,
@@ -36,6 +39,7 @@ import {
   updateFileCategory,
   updateQuestionnaireCategory,
   updateReportLayout,
+  updateSmartApp,
   type ConnectionSettingsUpdate,
   type DocumentTemplatePayload,
   type DocumentTemplateSummary,
@@ -44,6 +48,7 @@ import {
   type NewOauthClient,
   type QuestionnaireCategoryPayload,
   type ReportLayoutPayload,
+  type SmartAppPayload,
 } from "./adminClient";
 
 const CONNECTION_SETTINGS_KEY = ["admin", "connection_settings"];
@@ -57,6 +62,7 @@ const REPORT_LAYOUTS_KEY = ["admin", "report_layouts"];
 const QUESTIONNAIRE_CATEGORIES_KEY = ["admin", "questionnaire_categories"];
 const FILE_CATEGORIES_KEY = ["admin", "file_categories"];
 const DOCUMENT_TEMPLATES_KEY = ["admin", "document_templates"];
+const SMART_APPS_KEY = ["admin", "smart_apps"];
 
 // 管理系はすべて retry: false。自動リトライされた 401 は上流 fhir-server の
 // レート制限(admin/ip)を無駄に消費するだけで、状況を改善しない。
@@ -445,6 +451,49 @@ export function useDeleteDocumentTemplate() {
     retry: false,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: DOCUMENT_TEMPLATES_KEY });
+    },
+  });
+}
+
+// --- SMART アプリ -------------------------------------------------------------
+
+export function useSmartApps() {
+  return useQuery({
+    queryKey: SMART_APPS_KEY,
+    queryFn: fetchSmartApps,
+    retry: false,
+  });
+}
+
+export function useCreateSmartApp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SmartAppPayload) => createSmartApp(payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: SMART_APPS_KEY });
+    },
+  });
+}
+
+export function useUpdateSmartApp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: SmartAppPayload }) => updateSmartApp(id, payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: SMART_APPS_KEY });
+    },
+  });
+}
+
+export function useDeleteSmartApp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteSmartApp(id),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: SMART_APPS_KEY });
     },
   });
 }

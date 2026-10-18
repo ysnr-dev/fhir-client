@@ -46,6 +46,9 @@ Rails.application.routes.draw do
     resources :oauth_clients, only: %i[index create destroy]
     get "scopes", to: "scopes#show"
 
+    # カルテから起動する SMART アプリの台帳(docs/smart-app-launch-design.md)。
+    resources :smart_apps, only: %i[index create update destroy]
+
     # 帳票レイアウト(.tlf)の管理。Questionnaire の canonical と紐付けて保存する。
     resources :report_layouts, only: %i[index show create update destroy]
 
@@ -96,6 +99,11 @@ Rails.application.routes.draw do
 
   # 「自院」がどの Organization かと施設ごとの業務設定(ログイン済みユーザー全員が読み書きする)。
   resource :facility_settings, only: %i[show update]
+
+  # カルテの「アプリ」タブ: 起動できる SMART アプリの一覧と EHR launch の起動(利用者ログイン)。
+  resources :smart_apps, only: :index do
+    post :launch, on: :member
+  end
 
   # 取り込んだ DICOM(docs/imaging-design.md)。実体はこの backend が持ち、上流には
   # ImagingStudy だけを置く。UID はドットを含むので format を切り、制約で形を絞る。

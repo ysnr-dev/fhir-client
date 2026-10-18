@@ -2,13 +2,16 @@ import { useState } from "react";
 import type { NewOauthClient, OauthClientCreated } from "../api/adminClient";
 import { useCreateOauthClient } from "../api/adminQueries";
 import { ErrorBanner } from "./ErrorBanner";
-import { ContextScopeSelector, ScopeSelector } from "./ScopeSelector";
+import { ContextScopeSelector, ScopeSelector, type ScopeFamily } from "./ScopeSelector";
 
 // クライアントの「形」は判別フィールドではなく、送るフィールドの組み合わせで
 // 決まる(上流の OauthClient.register がそうなっている)。この画面のラジオは
 // あくまで入力補助で、排他性の担保はサーバー側の検証に任せる -- 二重に持つと
 // いずれ食い違う。
 type Shape = "backend" | "launch";
+// アプリ連携の相手: 患者本人(standalone、patient/)か、カルテから起動する医療者向け
+// (EHR launch、user/)。上流は両方の混在を 422 で弾く。
+type Audience = Extract<ScopeFamily, "patient" | "user">;
 
 interface Props {
   onCreated: (client: OauthClientCreated) => void;
@@ -19,7 +22,9 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
   const [shape, setShape] = useState<Shape>("backend");
   const [name, setName] = useState("");
   const [systemScopes, setSystemScopes] = useState<string[]>([]);
+  const [audience, setAudience] = useState<Audience>("patient");
   const [patientScopes, setPatientScopes] = useState<string[]>([]);
+  const [userScopes, setUserScopes] = useState<string[]>([]);
   const [contextScopes, setContextScopes] = useState<string[]>([]);
   const [redirectUris, setRedirectUris] = useState<string[]>([""]);
   const [clientType, setClientType] = useState<"public" | "confidential">("public");
@@ -32,6 +37,7 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
     setName("");
     setSystemScopes([]);
     setPatientScopes([]);
+    setUserScopes([]);
     setContextScopes([]);
     setRedirectUris([""]);
     setJwksText("");
@@ -61,11 +67,12 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
         }
       }
     } else {
-      if (patientScopes.length === 0) return setValidationError("スコープを1つ以上選択してください");
+      const resourceScopes = audience === "user" ? userScopes : patientScopes;
+      if (resourceScopes.length === 0) return setValidationError("スコープを1つ以上選択してください");
       const uris = redirectUris.map((uri) => uri.trim()).filter(Boolean);
       if (uris.length === 0) return setValidationError("リダイレクトURIを1つ以上入力してください");
 
-      payload.scopes = [...patientScopes, ...contextScopes];
+      payload.scopes = [...resourceScopes, ...contextScopes];
       payload.redirect_uris = uris;
       payload.client_type = clientType;
     }
@@ -131,13 +138,39 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
         </>
       ) : (
         <>
-          <fieldset>
-            <legend>スコープ</legend>
-            <ScopeSelector family="patient" value={patientScopes} onChange={setPatientScopes} />
+          <fieldset className="oauth-client-form__shape">
+            <legend>利用者</legend>
+            <label>
+              <input
+                type="radio"
+                name="audience"
+                checked={audience === "patient"}
+                onChange={() => setAudience("patient")}
+              />
+              患者本人（patient/）
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="audience"
+                checked={audience === "user"}
+                onChange={() => setAudience("user")}
+              />
+              医療従事者（user/、カルテから起動）
+            </label>
           </fieldset>
 
           <fieldset>
-            <legend>アクセスの継続・ユーザー識別（任意）</legend>
+            <legend>スコープ</legend>
+            {audience === "user" ? (
+              <ScopeSelector family="user" value={userScopes} onChange={setUserScopes} />
+            ) : (
+              <ScopeSelector family="patient" value={patientScopes} onChange={setPatientScopes} />
+            )}
+          </fieldset>
+
+          <fieldset>
+            <legend>アクセスの継続・ユーザー識別・起動の文脈（任意）</legend>
             <ContextScopeSelector value={contextScopes} onChange={setContextScopes} />
           </fieldset>
 

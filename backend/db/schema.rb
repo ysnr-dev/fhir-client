@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_18_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_18_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -194,6 +194,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_100000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.text "fhir_admin_token"
+    t.string "public_base_url"
     t.index ["singleton_guard"], name: "index_fhir_connection_settings_on_singleton_guard", unique: true
   end
 
@@ -2794,6 +2795,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_100000) do
     t.datetime "updated_at", null: false
     t.text "mapping", default: "", null: false
     t.index ["questionnaire_url", "questionnaire_version"], name: "index_report_layouts_on_canonical", unique: true
+  end
+
+  create_table "smart_apps", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "client_id", null: false
+    t.string "launch_url", null: false
+    t.string "display", default: "embed", null: false
+    t.boolean "enabled", default: true, null: false
+    t.integer "position", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["client_id"], name: "index_smart_apps_on_client_id", unique: true
   end
 
   create_table "supervisor_group_members", force: :cascade do |t|

@@ -30,10 +30,12 @@ class WakeupController < ActionController::API
   # リクエストを保留して起動が走り、~45 秒で 200 を返すようになる。
   # そこで起こす役はブラウザに渡し、backend は可否の判定だけを受け持つ。
   #
+  # ブラウザが叩くので、backend 用の base_url ではなくブラウザから見た URL(public_base_url)。
   # 設定行が引けなくても env から組み立てる。判定はできなくても「起こす」ことは
   # できたほうがよいため。
   def probe_url(config)
-    base = config&.base_url.presence || ENV["FHIR_SERVER_BASE_URL"].presence
+    base = config&.public_base_url.presence ||
+           ENV["FHIR_SERVER_PUBLIC_BASE_URL"].presence || ENV["FHIR_SERVER_BASE_URL"].presence
     return nil if base.blank?
 
     "#{base.to_s.chomp('/')}/up"

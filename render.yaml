@@ -137,6 +137,14 @@ services:
       - type: rewrite
         source: /intake/*
         destination: https://ysnr-fhir-client-api.onrender.com/intake/*
+      # SMART アプリの一覧と起動(カルテの「アプリ」タブ)。管理画面の SPA ルートは
+      # /smart-apps(ハイフン)なので衝突しない。
+      - type: rewrite
+        source: /smart_apps
+        destination: https://ysnr-fhir-client-api.onrender.com/smart_apps
+      - type: rewrite
+        source: /smart_apps/*
+        destination: https://ysnr-fhir-client-api.onrender.com/smart_apps/*
       # SPA フォールバック(react-router の直リンク対応)
       - type: rewrite
         source: /*

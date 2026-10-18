@@ -2,7 +2,9 @@ require "rails_helper"
 
 RSpec.describe "Wakeup", type: :request do
   let(:upstream_base) { ENV.fetch("FHIR_SERVER_BASE_URL", "http://localhost:3000") }
+  # backend 自身のプローブは base_url へ、ブラウザに渡す宛先はブラウザから見た URL。
   let(:up_url) { "#{upstream_base}/up" }
+  let(:probe_url) { "#{ENV["FHIR_SERVER_PUBLIC_BASE_URL"].presence || upstream_base}/up" }
 
   it "reports both sides ready when the upstream answers /up" do
     stub_request(:get, up_url).to_return(status: 200, body: "ok")
@@ -11,7 +13,7 @@ RSpec.describe "Wakeup", type: :request do
 
     expect(response).to have_http_status(:ok)
     expect(response.parsed_body)
-      .to eq("backend" => "ready", "upstream" => "ready", "upstream_probe_url" => up_url)
+      .to eq("backend" => "ready", "upstream" => "ready", "upstream_probe_url" => probe_url)
   end
 
   # 上流が起動中でも待ち切らずに即返す(待ちはクライアント側のポーリング)。
@@ -32,7 +34,7 @@ RSpec.describe "Wakeup", type: :request do
 
     get "/wakeup"
 
-    expect(response.parsed_body["upstream_probe_url"]).to eq(up_url)
+    expect(response.parsed_body["upstream_probe_url"]).to eq(probe_url)
   end
 
   # 設定行が引けなくても(DB が寝ている等)、起こす宛先だけは env から返す。
@@ -43,8 +45,18 @@ RSpec.describe "Wakeup", type: :request do
 
     expect(response).to have_http_status(:ok)
     expect(response.parsed_body)
-      .to eq("backend" => "ready", "upstream" => "waking", "upstream_probe_url" => up_url)
+      .to eq("backend" => "ready", "upstream" => "waking", "upstream_probe_url" => probe_url)
     expect(a_request(:get, up_url)).not_to have_been_made
+  end
+
+  it "hands the browser the public URL when it differs from the backend's" do
+    FhirConnectionSettings.current.update!(public_base_url: "https://fhir.example.org/")
+    stub_request(:get, up_url).to_return(status: 200, body: "ok")
+
+    get "/wakeup"
+
+    expect(response.parsed_body["upstream_probe_url"]).to eq("https://fhir.example.org/up")
+    expect(a_request(:get, up_url)).to have_been_made.once
   end
 
   it "reports the upstream as waking on a 5xx from the gateway" do

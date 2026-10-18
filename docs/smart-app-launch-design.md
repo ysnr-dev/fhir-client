@@ -1,7 +1,7 @@
 # SMART on FHIR アプリ起動(EHR launch)
 
 `docs/functional-gap-backlog.md` §5.3「SMART on FHIR アプリ起動」(2026-10-18 の海外 EHR 照合で出た候補 7)。
-**状態: 設計のみ(2026-10-18)。実装は未着手。上流(`../fhir-server`)の実装が先、client はその後。**
+**状態: 実装済み(2026-10-18、上流・client とも)。本番デプロイは fhir-server を client より先に行う(上流の migration あり)。**
 カルテから外部アプリ(計算ツール・PHR ビューア・AI 記録製品・院内開発の小画面)を、患者・利用者・受診の文脈つきで起動し、
 カルテのタブに埋め込む。アンビエント記録などを自前で作らず、施設が選んだ製品を差し込める入口にする。
 準拠する規格は SMART App Launch 2.2 の EHR launch(`launch` パラメータ + `launch` スコープ)。
@@ -13,7 +13,7 @@
 ユーザー決定(2026-10-18): (1) EHR launch の認可はログイン・同意画面を出さず即 302、(2) アプリの書き込みは OAuth クライアント登録時の
 スコープに従う(既定は読み取り)、(3) 起動場所はカルテの「アプリ」タブのみ(患者なし起動は残課題)。
 
-## 0. 現状(実装済みの範囲)
+## 0. 実装前の状態(設計時の前提)
 
 上流(`../fhir-server`、SMART の認可サーバー兼リソースサーバー):
 
@@ -415,6 +415,18 @@ Growth Chart 等)— https 公開 URL が要り、`http://localhost:3000` の is
 7. ブラウザのサードパーティ Cookie を全ブロックしても 1 が通る。
 8. `administrator` でログインするとアプリタブは 403(「医療従事者でログイン」)を表示する。
 9. 上流 rspec と client rspec が通る。`tsc -b`、lint。
+
+### 5.4 検証結果(2026-10-18、開発環境・医師 一郎でログイン)
+
+- 上流 rspec 2226 例・client rspec 全件・`tsc -b`・lint が通る(新規 spec: 上流 `smart_ehr_launch_spec` / `admin/launch_contexts_spec` /
+  `cors_spec` / rack-attack の別枠、client `smart_apps_spec` / `admin/smart_apps_spec` / `models/smart_app_spec`)。
+- カルテ「その他 → アプリ」で同梱の demo を起動: 上流の authorize が HTML を出さず 302 → token → `fhirUser = Practitioner/<一郎>`、
+  テスト太郎の氏名と直近の Observation 5 件が枠内に出る(`need_patient_banner: false`)。CORS の preflight は `*` で通る。
+- 患者を切り替える(テスト 20260923)と新しい launch で起動し直し、別の患者が残らない。「再起動」で 3 本目の launch が発行される。
+  上流の `launch_contexts` は 3 行とも消費済み、`audit_events` の authorize 行に `agent_who_reference = Practitioner/…` が入る。
+- 期限切れ・再利用・client_id 不一致・aud 不一致・`offline_access`・standalone 分岐での `user/`、`patient/` 登録時のコンパートメント、
+  `user/` での `AuditEvent` 403 と登録時だけの書き込みは上流の request spec で確認。
+- 上流は `FHIR_AUTH_ENABLED=false` のままなので、FHIR 読み取りの監査行にはトークンの帰属が付かない(認証 ON なら付く。spec で確認)。
 
 ## 6. 採らなかった案
 

@@ -1,8 +1,13 @@
 # 管理画面・外部連携・サーバー起動
 
-## 管理画面（接続設定 / OAuth クライアント）
+## 管理画面（接続設定 / OAuth クライアント / SMART アプリ）
 
-`/settings`（接続設定）と `/oauth-clients`（OAuth クライアント）は管理用の画面です。
+`/settings`（接続設定）、`/oauth-clients`（OAuth クライアント）、`/smart-apps`（SMART アプリ）は管理用の画面です。
+
+接続設定の「ブラウザから見た FHIR サーバー URL」は、backend が上流を呼ぶ URL とは別に、ブラウザが上流を
+直接叩くときの URL です（SMART アプリに渡す `iss`、ヘッダーの「起こす」ボタンの宛先）。開発環境では backend は
+`host.docker.internal:3000` で繋ぎ、ブラウザは `localhost:3000` で繋ぐので値が違います。空欄なら
+環境変数 `FHIR_SERVER_PUBLIC_BASE_URL`、それも無ければ FHIR サーバー URL と同じ値を使います。
 
 ### アクセス制限
 
@@ -40,6 +45,34 @@ fhir-server は CORS を意図的に無効にしているため、ブラウザ�
 > 上流の管理トークンが誤っている場合、画面は 502「管理トークンを拒否されました」を表示します
 > （401 をそのまま返すとログアウト扱いになってしまうため、意図的に読み替えています）。
 > 上流がスリープ中の場合、初回の表示は最大 90 秒ほどかかることがあります。
+
+アプリ連携（SMART App Launch）のクライアントは「利用者」で患者本人（`patient/`、standalone launch）と
+医療従事者（`user/`、カルテから起動する EHR launch）を選びます。両方を混ぜた登録は上流が 422 で拒みます。
+カルテから起動するアプリには、スコープに加えて「電子カルテからの起動」（`launch`）を付けてください。
+これが無いクライアントには起動文脈を発行しません（SMART アプリ画面の選択肢に「launch 未登録」と出ます）。
+
+### SMART アプリ
+
+カルテの「アプリ」タブから起動する外部アプリの台帳です（`docs/smart-app-launch-design.md`）。名称、
+OAuth クライアント（アプリ連携のもの）、起動 URL、表示（埋め込み / 別ウィンドウ）、有効、表示順を持ちます。
+認可（スコープ・リダイレクト URI）は OAuth クライアント側の登録が正で、ここでは変えられません。
+
+起動の流れ: カルテがこの backend に起動を求める → backend が上流の管理 API `POST /admin/launch_contexts` に
+開いている患者・受診とログイン中の医療者を名乗って launch トークン（5 分・単回）を発行してもらう →
+起動 URL に `iss`（ブラウザから見た FHIR サーバー URL）と `launch` を添えて iframe に出す → アプリが上流の
+`/oauth/authorize` に `launch` を持って行くと、上流はログイン・同意画面を出さずに認可コードを返す。
+医療者の身元は「この backend が管理トークンを持って名乗った」ことで保証されるので、管理トークンの扱いは
+OAuth クライアントの発行と同じ重さです。
+
+埋め込み表示のアプリは、自身の応答に `Content-Security-Policy: frame-ancestors <このアプリのオリジン>` を
+出す必要があります（`X-Frame-Options: DENY / SAMEORIGIN` を出すと枠内に表示されません）。起動 URL は
+本番では `https` だけ受け付けます。
+
+検証用の最小アプリを `frontend/public/smart-demo/index.html` に同梱しています。OAuth クライアントに
+アプリ連携・医療従事者・public・リダイレクト URI `http://localhost:5173/smart-demo/index.html`・
+スコープ `user/Patient.read user/Encounter.read user/Observation.read launch launch/patient launch/encounter openid fhirUser`
+で登録し、SMART アプリに起動 URL `http://localhost:5173/smart-demo/index.html?client_id=<client_id>` で登録すると、
+カルテの「アプリ」タブで氏名・受診・直近の検査結果と `fhirUser` が出ます。
 
 ## 外部システム連携
 

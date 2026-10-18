@@ -9,8 +9,10 @@ import { ErrorBanner } from "./ErrorBanner";
 
 const WILDCARD = "*";
 
+export type ScopeFamily = "system" | "patient" | "user";
+
 interface ScopeSelectorProps {
-  family: "system" | "patient";
+  family: ScopeFamily;
   /** 現在選択されているリソーススコープ(コンテキストスコープは含まない) */
   value: string[];
   onChange: (scopes: string[]) => void;
@@ -18,7 +20,7 @@ interface ScopeSelectorProps {
 
 /** "system/Patient.read" -> { type: "Patient", access: "read" } */
 function parseScope(scope: string): { type: string; access: string } | null {
-  const match = /^(?:system|patient)\/([^.]+)\.(.+)$/.exec(scope);
+  const match = /^(?:system|patient|user)\/([^.]+)\.(.+)$/.exec(scope);
   return match ? { type: match[1], access: match[2] } : null;
 }
 
@@ -36,7 +38,8 @@ export function ScopeSelector({ family, value, onChange }: ScopeSelectorProps) {
   if (error) return <ErrorBanner error={error} />;
   if (!data) return null;
 
-  const accessOptions = family === "system" ? data.system_access : data.patient_access;
+  const accessOptions =
+    family === "system" ? data.system_access : family === "user" ? data.user_access : data.patient_access;
   const defaultAccess = accessOptions[0]?.value ?? "read";
 
   function emit(next: Map<string, string>) {

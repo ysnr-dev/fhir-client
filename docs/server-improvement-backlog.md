@@ -587,9 +587,9 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 
 ### L-3. 海外 EHR との照合で出た上流の要望(2026-10-18)
 
-`functional-gap-backlog.md` §5 の候補のうち、上流の実装が先に要るもの。どれも未着手。SMART は設計済み(`smart-app-launch-design.md`)、他は client 側の設計もまだ無い。
+`functional-gap-backlog.md` §5 の候補のうち、上流の実装が先に要るもの。SMART は上流・client とも実装済み(`smart-app-launch-design.md`)、他は未着手で client 側の設計もまだ無い。
 
-- **SMART App Launch 2.2 の EHR launch**(§5.3、中〜高): 設計は `smart-app-launch-design.md` §2。上流に要るもの:
+- **SMART App Launch 2.2 の EHR launch**(§5.3、中〜高)— **実装済み(2026-10-18)**。設計は `smart-app-launch-design.md` §2。上流に入れたもの:
   - `launch_contexts`(ダイジェスト保存・5 分・単回・client_id 束縛)と、管理トークン認証の発行 API `POST /admin/launch_contexts`
     (患者・Encounter・医療者・`need_patient_banner` を受け取る。Backend Services の Bearer ではなく管理トークンにする理由は設計書 §2.4)。
   - `GET /oauth/authorize` の launch 分岐: `launch` と `aud` パラメータ、`aud == issuer` の検証、launch トークンの検証と消費、

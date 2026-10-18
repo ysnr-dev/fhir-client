@@ -10077,6 +10077,7 @@ input.lot-number-cell__input.is-invalid {
 }
 
 .lab-order-item__fields input[type="text"],
+.lab-order-item__fields input[type="url"],
 .lab-order-item__fields input[type="date"],
 .lab-order-item__fields input[type="datetime-local"],
 .lab-order-item__fields input[type="time"],
@@ -27981,4 +27982,72 @@ input.nursing-picker__search {
 .result-followup__order,
 .result-followup__memo-field {
   flex: 1 1 320px;
+}
+
+/* --- SMART アプリ(カルテの「アプリ」タブ、docs/smart-app-launch-design.md) --- */
+.smart-app-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.smart-app-tab__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.smart-app-tab__app {
+  font-size: 13px;
+  height: auto;
+  padding: 4px 10px;
+}
+
+.smart-app-tab__app--selected {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* アプリの枠。残りの高さを全部使う(アプリ側が自分でスクロールする)。 */
+.smart-app-tab__frame {
+  flex: 1;
+  min-height: 320px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+}
+
+.smart-app-tab__empty,
+.smart-app-tab__status,
+.smart-app-tab__hint {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.smart-app-tab__window {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.smart-app-page__url {
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* 起動 URL はクエリ(client_id など)まで入るので行いっぱいに取る。 */
+.smart-app-page__url-field {
+  flex-basis: 100%;
+}
+
+.smart-app-page__check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }

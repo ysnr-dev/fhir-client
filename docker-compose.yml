@@ -33,6 +33,10 @@ services:
       # Docker hostname above. Unset (or remove) when pointing at a server that
       # doesn't need this.
       FHIR_SERVER_HOST_HEADER: localhost:3000
+      # The upstream URL as the browser sees it (SMART `iss`, the wake-up probe).
+      # Differs from FHIR_SERVER_BASE_URL above because the browser cannot reach
+      # host.docker.internal; in production both are usually the same.
+      FHIR_SERVER_PUBLIC_BASE_URL: http://localhost:3000
       # Enables login on the whole app (ID/password; administrator's password
       # is this value) and on the admin screens (接続設定 and OAuth クライアント).
       # Comment out to run everything without authentication.

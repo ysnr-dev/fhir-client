@@ -16,6 +16,7 @@ import { ExternalSystemListPage } from "./pages/ExternalSystemListPage";
 import { ExternalSystemSettingsPage } from "./pages/ExternalSystemSettingsPage";
 import { FacilitySettingsPage } from "./pages/FacilitySettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
+import { SmartAppsPage } from "./pages/SmartAppsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
 import { MasterMenuPage } from "./pages/MasterMenuPage";
 import { LabContainerPage } from "./pages/LabContainerPage";
@@ -244,6 +245,10 @@ function App() {
             </Link>
             <Link to="/oauth-clients" className="row-menu__item">
               OAuth クライアント
+            </Link>
+            {/* カルテの「アプリ」タブから起動する SMART on FHIR アプリの台帳。 */}
+            <Link to="/smart-apps" className="row-menu__item">
+              SMART アプリ
             </Link>
             <Link to="/settings" className="row-menu__item">
               接続設定
@@ -489,6 +494,15 @@ function App() {
             element={
               <AdminGate>
                 <OauthClientsPage />
+              </AdminGate>
+            }
+          />
+          {/* 起動 URL の差し替えは医療者を偽のアプリへ誘導する経路になるので管理者だけ。 */}
+          <Route
+            path="/smart-apps"
+            element={
+              <AdminGate>
+                <SmartAppsPage />
               </AdminGate>
             }
           />

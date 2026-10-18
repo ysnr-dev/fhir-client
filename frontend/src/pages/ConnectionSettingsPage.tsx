@@ -39,6 +39,7 @@ function sourceLabel(settings: ConnectionSettings): string {
 
 function ConnectionSettingsForm({ settings }: { settings: ConnectionSettings }) {
   const [baseUrl, setBaseUrl] = useState(settings.base_url ?? "");
+  const [publicBaseUrl, setPublicBaseUrl] = useState(settings.public_base_url ?? "");
   const [clientId, setClientId] = useState(settings.client_id ?? "");
   const [tokenPath, setTokenPath] = useState(settings.token_path || "/oauth/token");
   const [hostHeader, setHostHeader] = useState(settings.host_header ?? "");
@@ -54,6 +55,7 @@ function ConnectionSettingsForm({ settings }: { settings: ConnectionSettings }) 
     event.preventDefault();
     const payload: ConnectionSettingsUpdate = {
       base_url: baseUrl,
+      public_base_url: publicBaseUrl,
       client_id: clientId,
       token_path: tokenPath,
       host_header: hostHeader,
@@ -86,6 +88,16 @@ function ConnectionSettingsForm({ settings }: { settings: ConnectionSettings }) 
           value={baseUrl}
           placeholder="http://localhost:3000"
           onChange={(e) => setBaseUrl(e.target.value)}
+        />
+      </label>
+
+      <label>
+        ブラウザから見た FHIR サーバー URL
+        <input
+          type="url"
+          value={publicBaseUrl}
+          placeholder={settings.effective_public_base_url}
+          onChange={(e) => setPublicBaseUrl(e.target.value)}
         />
       </label>
 

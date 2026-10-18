@@ -78,6 +78,11 @@ export default defineConfig({
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
         changeOrigin: true,
       },
+      // SMART アプリの一覧と起動。SPA ルートの /smart-apps(ハイフン)とは別パス。
+      '^/smart_apps': {
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
 })

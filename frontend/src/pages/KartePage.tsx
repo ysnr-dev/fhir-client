@@ -43,6 +43,7 @@ import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
 import { KarteFileTab } from "../components/KarteFileTab";
 import { KarteImagingTab } from "../components/KarteImagingTab";
 import { KartePrintTab } from "../components/KartePrintTab";
+import { KarteSmartAppsTab } from "../components/KarteSmartAppsTab";
 import { KarteMealTab } from "../components/KarteMealTab";
 import { KarteChemoTab } from "../components/KarteChemoTab";
 import { KarteInjectionTab } from "../components/KarteInjectionTab";
@@ -1186,6 +1187,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     if (key === "file") return <KarteFileTab {...props} />;
     if (key === "imaging") return <KarteImagingTab {...props} />;
     if (key === "karte-print") return <KartePrintTab patientId={patientId} />;
+    // 外来の診察中なら、その受診を起動の文脈(encounter)として渡す。
+    if (key === "smart-apps") return <KarteSmartAppsTab {...props} encounterId={examEncounter?.id} />;
     return <KarteLabResultTab {...props} />;
   }
 
