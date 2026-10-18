@@ -54,6 +54,8 @@ export const APP_MENU: AppMenuEntry[] = [
       // 宛先の決まった通知(緊急異常値・オーダー承認…)。受け取るのは部門ではなく医師なので
       // 診療業務に置く(docs/features/notifications.md)。件数はヘッダーのベルに出る。
       { label: "通知", to: "/notifications" },
+      // 検査レポートのフォロー推奨と、確認されないまま日数が経った検査結果(docs/result-followup-design.md)。
+      { label: "検査結果フォロー", to: "/result-followup" },
       // 研修医・学生の記録とオーダーのカウンターサイン(指導医向け。docs/countersign-design.md)。
       { label: "カルテ承認", to: "/countersigns" },
       // 入院診療計画書・退院時サマリー・看護サマリーの作成状況と期限(docs/bed-management-design.md §4)。

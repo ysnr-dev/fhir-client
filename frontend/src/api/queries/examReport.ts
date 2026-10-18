@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { examCriticalFindingEntries } from "../../fhir/examCriticalFindingHelpers";
+import { FOLLOW_UP_TASK_CODE, followUpEntries } from "../../fhir/followUpHelpers";
 import {
   buildExamReportDeleteEntries,
   EXAM_REPORT_TOO_LARGE_MESSAGE,
   examCriticalFindingOf,
+  examFollowUpOf,
   examReportBundleTooLarge,
   examReportCategorySearch,
   isExamReport,
@@ -122,6 +124,7 @@ export function useExamReportDetail(reportId: string | undefined) {
  * - 重要所見: 要点があれば暫定報告でも出す。要点の変更で未確認に戻し、外したら取り下げる
  * - 検査結果確認: 最終報告・訂正報告になったとき(暫定報告では出さない)。ただし重要所見が
  *   未確認で残る間は出さず、未確認のものは取り下げる(重要所見の確認で既読も残すため)
+ * - フォロー推奨: 確定したときに台帳へ載せる。推奨・期限の変更で未対応に戻し、外したら取り下げる
  */
 async function withExamReportTasks(
   config: ExamReportConfig,
@@ -140,7 +143,7 @@ async function withExamReportTasks(
   const [owner, tasks] = await Promise.all([
     orderId ? fetchOrderRequester(orderId) : Promise.resolve(undefined),
     report.id
-      ? fetchReportTasks(report.id, [RESULT_REVIEW_TASK_CODE.code, criticalCode])
+      ? fetchReportTasks(report.id, [RESULT_REVIEW_TASK_CODE.code, criticalCode, FOLLOW_UP_TASK_CODE.code])
       : Promise.resolve(new Map<string, fhir4.Task>()),
   ]);
 
@@ -163,14 +166,33 @@ async function withExamReportTasks(
     existingCritical,
   );
 
+  const reviewable = isReviewableReportStatus(report.status);
+  const followUp = examFollowUpOf(config, report);
+  const followUpTaskEntries = followUpEntries(
+    {
+      reportReference: reference,
+      patientId,
+      owner,
+      kind: config.kind,
+      date,
+      exam,
+      recommendation: followUp.recommendation,
+      dueDate: followUp.dueDate,
+      basedOn,
+    },
+    reviewable,
+    tasks.get(FOLLOW_UP_TASK_CODE.code),
+  );
+
   return {
     ...bundle,
     entry: [
       ...entry,
       ...criticalEntries,
+      ...followUpTaskEntries,
       ...urgentAwareReviewTaskEntries(
         { reportReference: reference, patientId, owner, kind: config.kind, date, summary: exam, basedOn },
-        isReviewableReportStatus(report.status),
+        reviewable,
         tasks.get(RESULT_REVIEW_TASK_CODE.code),
         urgentNotificationOpenAfter(criticalEntries, existingCritical),
       ),
@@ -207,8 +229,8 @@ export function useSaveExamReport(config: ExamReportConfig) {
 }
 
 /**
- * レポートの削除。所見・テンプレート回答を消し、未確認の通知(検査結果確認・重要所見)を
- * 取り下げる。削除したレポートを指す通知が未確認のまま残らないようにするため。
+ * レポートの削除。所見・テンプレート回答を消し、未確認の通知(検査結果確認・重要所見)と
+ * 未対応のフォロー推奨を取り下げる。削除したレポートを指す通知が未確認のまま残らないようにするため。
  */
 export function useDeleteExamReport(config: ExamReportConfig) {
   const queryClient = useQueryClient();
@@ -216,7 +238,11 @@ export function useDeleteExamReport(config: ExamReportConfig) {
     mutationFn: async (reportId: string) => {
       const [{ data: report }, tasks] = await Promise.all([
         readResource<fhir4.DiagnosticReport>("DiagnosticReport", reportId),
-        fetchReportTasks(reportId, [RESULT_REVIEW_TASK_CODE.code, config.critical.taskCode.code]),
+        fetchReportTasks(reportId, [
+          RESULT_REVIEW_TASK_CODE.code,
+          config.critical.taskCode.code,
+          FOLLOW_UP_TASK_CODE.code,
+        ]),
       ]);
       const cancelEntries = Array.from(tasks.values())
         .filter((task) => task.status === "requested")

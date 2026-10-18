@@ -401,6 +401,13 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 - **望ましいサーバー機能**: 検索条件 + 集計キー(code / 性別 / 月など)で件数を返す operation。該当が多い統計
   (部門の月報など)を患者を読まずに出せる。
 
+### C-26. Task の期限(`restriction.period`)の検索と並べ替え
+
+- **現状**: 検査結果フォロー(`docs/result-followup-design.md`)は、フォロー推奨の未対応を全件読んでから画面で期限順に並べ、
+  ホームのカードの期限超過の件数も手元で数える。文書作成の督促(`document-due`)の期限超過も表示時に判定している。
+- **望ましいサーバー機能**: `restriction.period.end` の索引と、それを引く検索パラメータ(ローカルの `due` など)。
+  `due=lt<今日>&_summary=count` で期限超過を数え、`_sort=due` で並べられる。
+
 ### C-17. `Composition:entry` の `_include`
 
 - **現状**: `dpcForm1.ts` の `fetchDischargeDiagnoses` が退院時サマリーを引いてから病名を別に読む(2 往復)。

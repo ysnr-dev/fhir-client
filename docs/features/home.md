@@ -12,7 +12,7 @@
 | 職種 | 通知 | 本日の外来 | 担当入院患者 | 部門ワークリスト件数 |
 |---|---|---|---|---|
 | administrator(医療従事者に紐付かない) | – | – | – | –(掲示板だけ。編集もなし) |
-| 医師・歯科医師 | 自分宛て | 自分が担当医の予約 | 主治医(participant ATND) | – |
+| 医師・歯科医師 | 自分宛て | 自分が担当医の予約 | 主治医(participant ATND) | –(検査結果フォローのカードも出す) |
 | 看護師・保健師・助産師 | 自分宛て | – | 担当看護師・その日の受け持ち(業務分担) + 未指示受け件数 | – |
 | 薬剤師 | 自分宛て | – | – | 処方 / 注射 / 持参薬鑑別 / 服薬指導 / 特定抗菌薬の届出 |
 | 診療放射線技師 | 自分宛て | – | – | 放射線検査 / 放射線治療 |
@@ -51,6 +51,7 @@
 | 他科依頼 | 依頼先の科 | `useConsultWorklist("open", 科)` | `/consult-worklist` |
 | カウンターサイン待ち | – | 通知と同じ検索結果をカルテ承認・オーダー承認で絞る | `/countersigns` |
 | 期限のある書類 | – | 通知と同じ検索結果を文書作成で絞り、期限超過の件数を添える | `/admission-documents` |
+| 検査結果フォロー | – | `useFollowUpRows`(自分あての未対応。期限超過・14 日以内の内訳)+ `useStaleResultCount`(7 日以上未確認の結果) | `/result-followup` |
 | 看護指示 | 病棟 | `useNursingWorklist`。未処理は有効な指示のうち指示受け待ち | `/nursing-worklist?ward=` |
 | 看護サマリー承認待ち | 病棟 | `useWardNursingSummaries`(直近 30 日)。承認者なしの確定済みと、自分が承認できる数 | `/nursing-summary-approvals?ward=` |
 | 部門ワークリスト | 部門(16 種) | 部門ごとの一覧の hook(`HOME_WORKLISTS` と `components/homeCards/HomeWorklistCard.tsx`) | 部門の一覧 |

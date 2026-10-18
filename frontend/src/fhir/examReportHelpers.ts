@@ -222,6 +222,11 @@ function extensionUrl(config: ExamReportConfig, name: string): string {
 const imageExtUrl = (config: ExamReportConfig) => extensionUrl(config, "report-image");
 /** 重要所見の要点。あれば依頼医あてにアラートの通知を出す(examCriticalFindingHelpers)。 */
 const criticalFindingExtUrl = (config: ExamReportConfig) => extensionUrl(config, "critical-finding");
+/**
+ * フォロー推奨(推奨と期限)。確定すると依頼医あての台帳に載る(followUpHelpers)。
+ * 子拡張 recommendation(valueString)と due(valueDate)。
+ */
+const followUpExtUrl = (config: ExamReportConfig) => extensionUrl(config, "follow-up");
 /** 所見・診断をテンプレートから記載したときの記入内容(QuestionnaireResponse)への参照。 */
 const findingsQrExtUrl = (config: ExamReportConfig) => extensionUrl(config, "report-findings-response");
 const conclusionQrExtUrl = (config: ExamReportConfig) =>
@@ -287,6 +292,10 @@ export interface ExamReportFormValues {
   conclusionTemplate: TemplateBinding | null;
   criticalFinding: boolean;
   criticalFindingText: string;
+  followUp: boolean;
+  followUpText: string;
+  /** フォローの期限(YYYY-MM-DD)。 */
+  followUpDue: string;
   images: ExamReportImageValues[];
   /** 記載医。保存時にログイン中の医療従事者を入れ、編集では最初の記載医を残す。 */
   interpreterId: string;
@@ -340,6 +349,9 @@ export function emptyExamReportForm(
     conclusionTemplate: null,
     criticalFinding: false,
     criticalFindingText: "",
+    followUp: false,
+    followUpText: "",
+    followUpDue: "",
     images: [],
     interpreterId: "",
     interpreterName: "",
@@ -535,6 +547,17 @@ export function buildExamReportBundle(
     ...(values.criticalFinding && values.criticalFindingText.trim()
       ? [{ url: criticalFindingExtUrl(config), valueString: values.criticalFindingText.trim() }]
       : []),
+    ...(values.followUp && values.followUpText.trim() && values.followUpDue
+      ? [
+          {
+            url: followUpExtUrl(config),
+            extension: [
+              { url: "recommendation", valueString: values.followUpText.trim() },
+              { url: "due", valueDate: values.followUpDue },
+            ],
+          },
+        ]
+      : []),
     ...(findingsResponse
       ? [{ url: findingsQrExtUrl(config), valueReference: { reference: findingsResponse } }]
       : []),
@@ -682,6 +705,21 @@ export function examCriticalFindingOf(
   return report.extension?.find((e) => e.url === criticalFindingExtUrl(config))?.valueString ?? "";
 }
 
+export interface ExamFollowUp {
+  recommendation: string;
+  /** 期限(YYYY-MM-DD)。 */
+  dueDate: string;
+}
+
+/** フォロー推奨。無ければ推奨・期限とも空。 */
+export function examFollowUpOf(config: ExamReportConfig, report: fhir4.DiagnosticReport): ExamFollowUp {
+  const extension = report.extension?.find((e) => e.url === followUpExtUrl(config));
+  return {
+    recommendation: extension?.extension?.find((e) => e.url === "recommendation")?.valueString ?? "",
+    dueDate: extension?.extension?.find((e) => e.url === "due")?.valueDate ?? "",
+  };
+}
+
 function imageDataOf(attachment: fhir4.Attachment | undefined): ExamReportImageData | null {
   const binaryId = binaryIdFromAttachment(attachment);
   if (!binaryId) return null;
@@ -746,6 +784,7 @@ export function parseExamReportForm(
   const interpreter = referenceOf(report.resultsInterpreter, "Practitioner");
   const organization = referenceOf(report.performer, "Organization");
   const criticalFindingText = examCriticalFindingOf(config, report);
+  const followUp = examFollowUpOf(config, report);
   const findingsResponseId = responseIdOf(report, findingsQrExtUrl(config));
   const conclusionResponseId = responseIdOf(report, conclusionQrExtUrl(config));
 
@@ -768,6 +807,9 @@ export function parseExamReportForm(
       : null,
     criticalFinding: Boolean(criticalFindingText),
     criticalFindingText,
+    followUp: Boolean(followUp.recommendation),
+    followUpText: followUp.recommendation,
+    followUpDue: followUp.dueDate,
     images: examReportImages(config, report),
     interpreterId: interpreter.id,
     interpreterName: interpreter.display,

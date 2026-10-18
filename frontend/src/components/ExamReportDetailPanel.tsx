@@ -76,6 +76,14 @@ function ExamReportContent({
         </div>
       )}
 
+      {values.followUp && (
+        <div className="exam-report-detail__follow-up" role="note">
+          <span className="exam-report-detail__follow-up-label">フォロー推奨</span>
+          {values.followUpText}
+          <span className="exam-report-detail__follow-up-due">期限 {values.followUpDue}</span>
+        </div>
+      )}
+
       <fieldset>
         <legend>{labels.report}</legend>
         <dl className="prescription-detail__common">

@@ -20,6 +20,7 @@ export type HomeCardKind =
   | "wardStatus"
   | "countersigns"
   | "documentsDue"
+  | "resultFollowup"
   | "nursingSummaryApprovals"
   | "dashboard"
   | "folder"
@@ -44,6 +45,7 @@ export interface HomeCardSettingsMap {
   wardStatus: { wardId: string };
   countersigns: Record<never, never>;
   documentsDue: Record<never, never>;
+  resultFollowup: Record<never, never>;
   nursingSummaryApprovals: { wardId: string };
   dashboard: { code: string };
   folder: { folderId: number };
@@ -143,6 +145,7 @@ export const HOME_CARD_KINDS: { [K in HomeCardKind]: HomeCardDef<K> } = {
   },
   countersigns: { label: "カウンターサイン待ち", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
   documentsDue: { label: "期限のある書類", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
+  resultFollowup: { label: "検査結果フォロー", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
   nursing: {
     label: "看護指示",
     group: "看護",
@@ -228,7 +231,7 @@ function card<K extends HomeCardKind>(kind: K, settings: HomeCardSettingsMap[K],
  * 保存した設定が無い人の既定。職種(所属ロールの code)で決める。
  *
  *   administrator(医療従事者に紐付かない) … 掲示板だけ
- *   医師・歯科医師                        … 掲示板 / 通知 / 自分の外来予約 / 主治医の入院患者
+ *   医師・歯科医師                        … 掲示板 / 通知 / 自分の外来予約 / 主治医の入院患者 / 検査結果フォロー
  *   看護師・保健師・助産師                … 掲示板 / 通知 / 担当看護師の入院患者
  *   部門の職種(HOME_WORKLISTS に載る)     … 掲示板 / 通知 / 自部門のワークリスト件数
  *   事務職員・それ以外・職種未登録        … 掲示板 / 通知 / 本日の外来(全体)
@@ -245,7 +248,12 @@ export function defaultHomeCards(input: {
   const code = input.roleCode;
   const head: HomeCard[] = [card("bulletin", NONE), card("notifications", NONE)];
   if (isDoctorRoleCode(code)) {
-    return [...head, card("outpatient", { scope: "mine" }), card("inpatient", { by: "attending" })];
+    return [
+      ...head,
+      card("outpatient", { scope: "mine" }),
+      card("inpatient", { by: "attending" }),
+      card("resultFollowup", NONE),
+    ];
   }
   if (isNursingRoleCode(code)) return [...head, card("inpatient", { by: "nurse" })];
   const worklists = code

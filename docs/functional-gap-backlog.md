@@ -389,7 +389,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
 
 | # | 候補 | 区分 | 必要度 | 大きさ | 詳細 |
 |---|---|---|---|---|---|
-| 1 | 要フォロー推奨の閉ループ追跡(偶発所見)と未確認結果の滞留一覧 | 拡張 | 高 | 小〜中 | §5.3 |
+| 1 | 要フォロー推奨の閉ループ追跡(偶発所見)と未確認結果の滞留一覧 — **対応済み(2026-10-18、`docs/result-followup-design.md`。病理・自動で閉じる仕組みは残り)** | 拡張 | 高 | 小〜中 | §5.3 |
 | 2 | 退院時の薬剤調整(Medication Reconciliation) | 拡張 | 高 | 中 | §5.3 |
 | 3 | 警告(判断支援)の共通の器とガバナンス(無視理由・発火率・無視率) | 拡張 | 高 | 中 | §5.3 |
 | 4 | アレルギー「無し(確認済)」の明示(NKDA) | 拡張 | 高 | 小 | §5.3 |
@@ -414,7 +414,8 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
 
 ### 5.3 優先度の高い候補
 
-- **要フォロー推奨の閉ループ追跡と未確認結果の滞留一覧**(拡張、高)
+- **要フォロー推奨の閉ループ追跡と未確認結果の滞留一覧**(拡張、高) — **対応済み(2026-10-18、`docs/result-followup-design.md`)。
+  当初案の通知一覧への登録はやめ、`/result-followup` とホームのカードで追う形にした。推奨どおりのオーダーで自動で閉じる仕組み・病理は残り**
   - ［対応物］重要所見の通知 Task(`rad-` / `physio-` / `endoscopy-critical-finding`)、検査結果確認の既読(`result-review`、Provenance)、
     通知レジストリ(`components/notifications/notificationRegistry.tsx`)。
   - ［不足］レポートの「6 か月後に CT 再検」のような推奨と期限を構造化して持ち、推奨どおりのオーダーが実施されたら閉じる台帳。

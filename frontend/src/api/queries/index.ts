@@ -18,6 +18,7 @@ export * from "./injection";
 export * from "./rxInquiry";
 export * from "./labResult";
 export * from "./notification";
+export * from "./resultFollowup";
 export * from "./micro";
 export * from "./dischargeSummary";
 export * from "./broughtMedication";

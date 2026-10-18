@@ -2784,7 +2784,8 @@ fieldset.rp-card {
 }
 
 .notification__severity-select,
-.notification__kind-select {
+.notification__kind-select,
+.result-followup__filters select {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
@@ -17074,6 +17075,32 @@ button.meal-calendar__cell:hover {
   white-space: nowrap;
 }
 
+/* フォロー推奨。重要所見ほど急がないので、枠の色はアクセントにする。 */
+.exam-report-detail__follow-up {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 14px;
+  gap: 8px;
+  align-items: baseline;
+  padding: 8px 12px;
+  border: 1px solid var(--accent-border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  color: var(--text-h);
+  margin-bottom: 12px;
+}
+
+.exam-report-detail__follow-up-label {
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.exam-report-detail__follow-up-due {
+  color: var(--text);
+  white-space: nowrap;
+}
+
 .exam-report-detail__review {
   display: flex;
   justify-content: flex-end;
@@ -27934,4 +27961,24 @@ input.nursing-picker__search {
 .oral-exam__chart--max .oral-exam__span--bridge,
 .oral-exam__chart--max .oral-exam__span--denture {
   border-top-width: 3px;
+}
+
+/* 検査結果フォロー(pages/ResultFollowupPage)。期限の近いものは赤(超過)より一段弱い色で示す。 */
+.result-followup__filters {
+  margin: 8px 0;
+}
+
+.result-followup__soon {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.result-followup__memo {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.result-followup__order,
+.result-followup__memo-field {
+  flex: 1 1 320px;
 }

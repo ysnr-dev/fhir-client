@@ -69,6 +69,10 @@ export function ExamReportForm({
       setValidationError("重要所見の要点を入力してください。");
       return;
     }
+    if (values.followUp && (!values.followUpText.trim() || !values.followUpDue)) {
+      setValidationError("フォロー推奨の内容と期限を入力してください。");
+      return;
+    }
     setValidationError(null);
     onSubmit(values);
   }
@@ -165,6 +169,38 @@ export function ExamReportForm({
                   onChange={(e) => patch({ criticalFindingText: e.target.value })}
                 />
               </label>
+            )}
+          </fieldset>
+
+          <fieldset>
+            <legend>フォロー推奨</legend>
+            <label className="exam-report-form__critical">
+              <input
+                type="checkbox"
+                checked={values.followUp}
+                onChange={(e) => patch({ followUp: e.target.checked })}
+              />
+              フォロー推奨あり
+            </label>
+            {values.followUp && (
+              <>
+                <label className="exam-report-form__critical-text">
+                  内容
+                  <input
+                    type="text"
+                    value={values.followUpText}
+                    onChange={(e) => patch({ followUpText: e.target.value })}
+                  />
+                </label>
+                <label>
+                  期限
+                  <input
+                    type="date"
+                    value={values.followUpDue}
+                    onChange={(e) => patch({ followUpDue: e.target.value })}
+                  />
+                </label>
+              </>
             )}
           </fieldset>
         </form>
