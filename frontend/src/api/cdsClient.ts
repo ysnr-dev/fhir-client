@@ -68,3 +68,24 @@ export async function sendCdsFeedback(params: CdsFeedbackParams): Promise<void> 
   });
   if (!res.ok) throw await buildError(res);
 }
+
+export type CdsOrderHook = "order-select" | "order-sign";
+
+export interface CdsOrderHookParams {
+  patient_id: string;
+  /** 未保存のオーダー(Bundle、MedicationRequest だけ)。 */
+  draft_orders: fhir4.Bundle;
+  /** order-select のとき、いま選んだオーダー("MedicationRequest/<id>")。 */
+  selections?: string[];
+}
+
+export async function fetchCdsOrderHook(hook: CdsOrderHook, params: CdsOrderHookParams): Promise<CdsPatientViewResult> {
+  const path = hook === "order-select" ? "order_select" : "order_sign";
+  const res = await masterFetch(`/integrations/cds/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as CdsPatientViewResult;
+}

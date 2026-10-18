@@ -3,7 +3,8 @@
 #   docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_service.ru
 #
 # backend からは http://localhost:8787 で届くので、管理画面「CDS サービス」にそのまま登録する。
-# patient-view に 3 枚のカード(情報 / warning + SMART リンク / critical + 無視理由)を返し、
+# patient-view に 3 枚のカード(情報 / warning + SMART リンク / critical + 無視理由)、
+# order-select に選んだ薬剤の数の情報カード、order-sign に重要(critical)のカードを 1 枚返す。
 # feedback は受けた内容を標準出力に出す。
 require "json"
 require "securerandom"
@@ -21,9 +22,54 @@ DISCOVERY = {
         "patient" => "Patient/{{context.patientId}}",
         "meds" => "MedicationRequest?patient={{context.patientId}}&status=active"
       }
+    },
+    {
+      "hook" => "order-select",
+      "id" => "demo-order-select",
+      "title" => "デモ: 薬剤を選んだときの判断支援",
+      "description" => "selections の薬剤名を返す模擬サービス"
+    },
+    {
+      "hook" => "order-sign",
+      "id" => "demo-order-sign",
+      "title" => "デモ: 処方の登録前の判断支援",
+      "description" => "draftOrders の件数と、重要のカードを返す模擬サービス",
+      "prefetch" => { "patient" => "Patient/{{context.patientId}}" }
     }
   ]
 }.freeze
+
+def draft_names(request, ids = nil)
+  entries = Array(request.dig("context", "draftOrders", "entry"))
+  entries = entries.select { |e| ids.include?("MedicationRequest/#{e.dig('resource', 'id')}") } if ids
+  entries.map { |e| e.dig("resource", "medicationCodeableConcept", "text") || "(名称なし)" }
+end
+
+def order_select_cards(request)
+  names = draft_names(request, Array(request.dig("context", "selections")))
+  [{
+    "uuid" => SecureRandom.uuid,
+    "summary" => "選んだ薬剤: #{names.join('、')}",
+    "detail" => "order-select の selections に含まれる MedicationRequest の名称です。",
+    "indicator" => "info",
+    "source" => { "label" => "CDS デモ", "topic" => { "display" => "order-select" } }
+  }]
+end
+
+def order_sign_cards(request)
+  names = draft_names(request)
+  [{
+    "uuid" => SecureRandom.uuid,
+    "summary" => "登録前の確認: #{names.size} 剤(#{names.first(3).join('、')})",
+    "detail" => "order-sign の draftOrders を受け取りました。重要のカードは無視の理由を選ぶまで登録できません。",
+    "indicator" => "critical",
+    "source" => { "label" => "CDS デモ", "topic" => { "display" => "order-sign" } },
+    "overrideReasons" => [
+      { "code" => "benefit-outweighs-risk", "system" => "http://example.org/cds-demo/override", "display" => "利益が上回る" },
+      { "code" => "already-reviewed", "system" => "http://example.org/cds-demo/override", "display" => "確認済み" }
+    ]
+  }]
+end
 
 def patient_name(patient)
   name = Array(patient&.dig("name")).first
@@ -91,8 +137,17 @@ app = lambda do |env|
     body = JSON.parse(request.body.read)
     $stdout.puts("[cds-demo] #{body['hook']} patient=#{body.dig('context', 'patientId')} prefetch=#{(body['prefetch'] || {}).keys.join(',')}")
     json.call(200, { "cards" => cards_for(body) })
-  when ["POST", "/cds-services/demo-patient-view/feedback"]
-    $stdout.puts("[cds-demo] feedback #{request.body.read}")
+  when ["POST", "/cds-services/demo-order-select"]
+    body = JSON.parse(request.body.read)
+    $stdout.puts("[cds-demo] order-select selections=#{body.dig('context', 'selections').inspect}")
+    json.call(200, { "cards" => order_select_cards(body) })
+  when ["POST", "/cds-services/demo-order-sign"]
+    body = JSON.parse(request.body.read)
+    $stdout.puts("[cds-demo] order-sign drafts=#{Array(body.dig('context', 'draftOrders', 'entry')).size}")
+    json.call(200, { "cards" => order_sign_cards(body) })
+  when ["POST", "/cds-services/demo-patient-view/feedback"], ["POST", "/cds-services/demo-order-select/feedback"],
+       ["POST", "/cds-services/demo-order-sign/feedback"]
+    $stdout.puts("[cds-demo] feedback #{request.path} #{request.body.read}")
     json.call(200, {})
   else
     json.call(404, { "error" => "not found" })

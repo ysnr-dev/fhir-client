@@ -12,6 +12,7 @@ import {
   emptyPrescriptionForm,
   emptyRp,
   hasDoseDays,
+  buildPrescriptionDraftOrders,
   prescriptionLineDose,
   SETTING_OPTIONS,
   SUBSTITUTION_BLOCK_OPTIONS,
@@ -43,6 +44,9 @@ import {
   useMedicationWarnings,
 } from "./MedicineWarnings";
 import { PregnancyNotice } from "./PregnancyNotice";
+import { PrescriptionOrderSelectCards, PrescriptionOrderSignModal } from "./PrescriptionCdsCards";
+import { fetchCdsOrderHook, type CdsCard } from "../api/cdsClient";
+import { useOrderContext } from "../hooks/useOrderContext";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 import { RowMenu } from "./RowMenu";
@@ -152,6 +156,17 @@ export function PrescriptionForm({
     excludeOrderId: orderId,
     excludeBroughtIds: broughtIds,
   });
+
+  // 外部の判断支援(CDS Hooks の order-select / order-sign)。患者が決まらないオーダーセットの内容入力と、
+  // 外から一括 submit する画面(確認モーダルを挟めない)では呼ばない。
+  const cdsEnabled = !setMode && !hideSubmit;
+  const requester = useOrderContext();
+  const draftOrders = useMemo(
+    () => buildPrescriptionDraftOrders(values, patientId, requester),
+    [values, patientId, requester],
+  );
+  const [signCards, setSignCards] = useState<CdsCard[] | null>(null);
+  const [signing, setSigning] = useState(false);
 
   // 一般名処方は保険上、外来の院外処方でだけ算定できる。
   const allowGeneric = values.setting === "outpatient" && values.category === "external";
@@ -304,7 +319,7 @@ export function PrescriptionForm({
     return null;
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const error = validate();
     if (error) {
@@ -312,6 +327,25 @@ export function PrescriptionForm({
       return;
     }
     setValidationError(null);
+    if (cdsEnabled && (draftOrders.entry?.length ?? 0) > 0) {
+      // 登録の直前に order-sign を呼び、カードがあれば確認を挟む。サービスの不調で登録は止めない。
+      setSigning(true);
+      try {
+        const result = await fetchCdsOrderHook("order-sign", { patient_id: patientId, draft_orders: draftOrders });
+        if (result.cards.length > 0) {
+          setSignCards(result.cards);
+          return;
+        }
+      } catch {
+        // 判断支援に届かなくても登録はできる。
+      } finally {
+        setSigning(false);
+      }
+    }
+    save();
+  }
+
+  function save() {
     // プロブレムの表示名は保存時点の最新にそろえる(病名を変えたあとに処方を編集保存
     // したとき、参照の display だけ古い名前で残らないように)。
     onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
@@ -335,6 +369,7 @@ export function PrescriptionForm({
       <ErrorBanner error={submitError} />
       {/* 催奇形性・乳汁移行の判断に要るので、妊娠中・授乳中なら入力欄の前に出す。 */}
       {!setMode && <PregnancyNotice patientId={patientId} />}
+      {cdsEnabled && <PrescriptionOrderSelectCards patientId={patientId} draftOrders={draftOrders} />}
 
       <fieldset>
         <legend>処方共通</legend>
@@ -753,8 +788,8 @@ export function PrescriptionForm({
 
       {!hideSubmit && (
         <div className="prescription-form__submit">
-          <button type="submit" disabled={submitting}>
-            {submitting ? "送信中..." : submitLabel}
+          <button type="submit" disabled={submitting || signing}>
+            {submitting ? "送信中..." : signing ? "確認中..." : submitLabel}
           </button>
         </div>
       )}
@@ -774,6 +809,18 @@ export function PrescriptionForm({
           onClose={() => setModal(null)}
           allowGeneric={allowGeneric}
           formularyPick={{}}
+        />
+      )}
+      {signCards && (
+        <PrescriptionOrderSignModal
+          patientId={patientId}
+          cards={signCards}
+          submitting={submitting}
+          onConfirm={() => {
+            setSignCards(null);
+            save();
+          }}
+          onCancel={() => setSignCards(null)}
         />
       )}
     </form>

@@ -646,6 +646,39 @@ export function buildPrescriptionBundle(
   return buildPrescriptionTransactionBundle(values, patientId, requester, registrationAuthoredOn());
 }
 
+/**
+ * CDS Hooks の order-select / order-sign に渡す未保存の処方(draftOrders、docs/cds-hooks-design.md §2.5)。
+ * 薬剤が入った行だけを MedicationRequest(status=draft)にし、id は RP と行の位置から作る
+ * (入力のたびに同じ行は同じ id になり、selections で「いま選んだ行」を指せる)。
+ * オーダーヘッダはまだ無いので basedOn は付けない。authoredOn は日付だけにする(時刻を入れると
+ * 呼ぶたびに内容が変わり、どの行を選んだかが分からなくなる)。
+ */
+export function buildPrescriptionDraftOrders(
+  values: PrescriptionFormValues,
+  patientId: string,
+  requester: OrderContext,
+): fhir4.Bundle {
+  const authoredOn = today();
+  const entry: fhir4.BundleEntry[] = [];
+  values.rps.forEach((rp, rpIndex) => {
+    rp.medicines.forEach((line, lineIndex) => {
+      if (!line.medicine) return;
+      const resource = buildMedicationRequest(
+        rp, { ...line, id: undefined }, values.setting, values.startDate, rpIndex + 1, lineIndex + 1,
+        patientId, authoredOn, "", requester,
+      );
+      delete resource.basedOn;
+      const draft: fhir4.MedicationRequest = { ...resource, id: prescriptionDraftOrderId(rpIndex, lineIndex), status: "draft" };
+      entry.push({ resource: draft });
+    });
+  });
+  return { resourceType: "Bundle", type: "collection", entry };
+}
+
+export function prescriptionDraftOrderId(rpIndex: number, lineIndex: number): string {
+  return `draft-${rpIndex + 1}-${lineIndex + 1}`;
+}
+
 // 更新は元の ServiceRequest を受け取る。id のほかに登録日時(authoredOn)を引き継ぐため。
 export function buildPrescriptionUpdateBundle(
   values: PrescriptionFormValues,

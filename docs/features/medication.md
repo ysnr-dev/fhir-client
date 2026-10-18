@@ -38,6 +38,11 @@
   `components/MedicineWarnings.tsx` を共用します。同一成分は YJ コードの上 7 桁で見るため、
   同じ成分でも薬効分類が違えば(アスピリンとバイアスピリン)重複になりません。
   継続・中止の判断が済んでいない持参薬も重複の相手に数えます(「同一成分を服用中(持参薬)」)。
+- **外部の判断支援(CDS Hooks)**: 管理画面「CDS サービス」に order-select / order-sign のサービスがあれば呼びます
+  (`docs/cds-hooks-design.md` §3.3)。医薬品・用法・用量を変えると 1 秒後に order-select を呼び、返ったカードを
+  入力欄の前に並べます(登録は止めない。「無視…」で理由を選ぶとカードを閉じる)。「登録」では order-sign を呼び、
+  カードがあれば確認モーダルを出します。**重要のカードは無視の理由を選ぶまで登録できません**。サービスに届かないときは
+  そのまま登録します。オーダーセットの内容入力では呼びません。注射は未対応です。
 - **調剤指示**: RP の用法のメニュー「調剤指示」で、一包化・粉砕・別包化・混合を選べます(複数可。持参の処方には
   出ません)。RP 内の明細すべての `dispenseRequest.extension` に JP Core の `instructionForDispense` 拡張を
   コードごとに書きます(コードは JAMI の調剤方法コード `http://jami.jp/CodeSystem/DrugDispensePreparationMethod`)。

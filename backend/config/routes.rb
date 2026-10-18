@@ -89,9 +89,11 @@ Rails.application.routes.draw do
       post "events", to: "events#create"
     end
 
-    # CDS Hooks(docs/cds-hooks-design.md)。カルテを開いたときの patient-view と、カードの無視の feedback。
+    # CDS Hooks(docs/cds-hooks-design.md)。カルテを開いたときの patient-view、処方フォームの order-select / order-sign、カードの無視の feedback。
     scope "cds", module: "cds", as: "cds" do
       post "patient_view", to: "hooks#patient_view"
+      post "order_select", to: "hooks#order_select"
+      post "order_sign", to: "hooks#order_sign"
       post "feedback", to: "hooks#feedback"
     end
   end

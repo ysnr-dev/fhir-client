@@ -1,28 +1,35 @@
 module Integrations
   module Cds
-    # patient-view hook の呼び出し全体(docs/cds-hooks-design.md §1)。
+    # hook 1 回ぶんの呼び出し全体(docs/cds-hooks-design.md §1)。
     #
-    # 有効な提供元ごとに discovery を読み、patient-view のサービスに prefetch を添えて呼び、
+    # 有効な提供元ごとに discovery を読み、その hook のサービスに prefetch を添えて呼び、
     # カードをまとめる。提供元 1 つの失敗はその提供元のカードが無いだけで、全体は失敗しない
     # (判断支援の不調で診療を止めない)。
-    class PatientView
-      HOOK = "patient-view".freeze
+    #
+    # context は hook ごとに違う: patient-view は userId・patientId・encounterId、
+    # order-select はそれに selections と draftOrders、order-sign は draftOrders が加わる。
+    class Invocation
+      HOOKS = %w[patient-view order-select order-sign].freeze
 
       Result = Struct.new(:cards, :services, keyword_init: true)
 
-      def initialize(providers: CdsService.enabled.ordered.to_a, smart_apps: SmartApp.enabled.to_a,
+      def initialize(hook:, providers: CdsService.enabled.ordered.to_a, smart_apps: SmartApp.enabled.to_a,
                      fhir_server: FhirConnectionSettings.effective.public_base_url)
+        raise ArgumentError, "unknown hook: #{hook}" unless HOOKS.include?(hook)
+
+        @hook = hook
         @providers = providers
         @smart_apps = smart_apps
         @fhir_server = fhir_server.to_s.chomp("/")
       end
 
-      def call(patient_id:, practitioner_id:, encounter_id: nil)
+      # extra_context: hook 固有の context(selections / draftOrders)。
+      def call(patient_id:, practitioner_id:, encounter_id: nil, extra_context: {})
         context = {
           "userId" => "Practitioner/#{practitioner_id}",
           "patientId" => patient_id,
           "encounterId" => encounter_id.presence
-        }.compact
+        }.compact.merge(extra_context)
 
         # prefetch は上流(施設トークン)を読むので主スレッドで済ませ、提供元への送信だけ並列にする。
         calls = providers.flat_map { |provider| prepare(provider, context) }
@@ -37,17 +44,17 @@ module Integrations
 
       private
 
-      attr_reader :providers, :smart_apps, :fhir_server
+      attr_reader :hook, :providers, :smart_apps, :fhir_server
 
-      # 提供元の patient-view サービスごとに、送るリクエストを組み立てる。
+      # 提供元のその hook のサービスごとに、送るリクエストを組み立てる。
       def prepare(provider, context)
-        services = Discovery.services(provider).select { |service| service["hook"] == HOOK }
+        services = Discovery.services(provider).select { |service| service["hook"] == hook }
         services.map do |service|
           prefetch = Prefetch.new(context).resolve(service["prefetch"])
           body = {
             "hookInstance" => SecureRandom.uuid,
             "fhirServer" => fhir_server,
-            "hook" => HOOK,
+            "hook" => hook,
             "context" => context,
             "prefetch" => prefetch
           }

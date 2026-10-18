@@ -76,7 +76,7 @@ OAuth クライアントの発行と同じ重さです。
 
 ### CDS サービス
 
-カルテを開いたときに呼ぶ外部の判断支援サービス（CDS Hooks 2.0 の `patient-view`）の提供元です
+カルテを開いたとき（`patient-view`）と処方オーダーの入力・登録のとき（`order-select` / `order-sign`）に呼ぶ外部の判断支援サービス（CDS Hooks 2.0）の提供元です
 （`docs/cds-hooks-design.md`）。名称、URL（`/cds-services` を持つ base URL）、認証トークン（任意、書き込み専用で
 `Authorization: Bearer` に付ける）、有効、表示順を持ちます。提供元が持つサービスの一覧は保存せず、
 backend が discovery（`GET {URL}/cds-services`、5 分キャッシュ）で読みます。行の「探索」でその場の discovery を

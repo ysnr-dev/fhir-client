@@ -1,7 +1,7 @@
 # CDS Hooks(外部の判断支援サービスの呼び出しとカード表示)
 
 `docs/functional-gap-backlog.md` §5.1「外部アプリと判断支援を差し込む標準の経路」と `smart-app-launch-design.md` §7 の残課題 3。
-**状態: 実装済み(2026-10-18)。hook は `patient-view` だけ。**
+**状態: 実装済み(2026-10-18)。hook は `patient-view` と、処方オーダーの `order-select` / `order-sign`。**
 カルテを開いたときに、登録した外部の CDS サービス(CDS Hooks 2.0)を backend から呼び、返ってきたカードを患者帯の
 ピクトグラム(吹き出し)に出す。サービスへのデータは prefetch で backend が同梱し、上流のトークンは渡さない。
 カードのリンク(`smart`)は `smart-app-launch-design.md` の EHR launch に `appContext` を添えて起動する。
@@ -10,7 +10,7 @@
 - **［設計］** = 本ドキュメントの決めごと
 - **［要確認］** = 実装時・運用で確かめること
 
-ユーザー決定(2026-10-18): (1) hook は `patient-view` のみ、(2) データは prefetch のみ(`fhirAuthorization` は渡さない)、
+ユーザー決定(2026-10-18): (1) hook は `patient-view` から始め、同日に処方の `order-select` / `order-sign` を追加(§3.3)、(2) データは prefetch のみ(`fhirAuthorization` は渡さない)、
 (3) カードは情報・リンク・無視理由(feedback)まで。提案(suggestion)は内容を表示するだけでリソースは作らない、
 (4) 表示は患者帯のピクトグラム「判断支援 N」+ 吹き出し(帯の下に常時出す案は採らない)。
 
@@ -69,6 +69,8 @@
 | `GET/POST/PATCH/DELETE /admin/cds_services` | 管理者(本番で `ADMIN_TOKEN` 未設定なら 503) | 台帳の CRUD。`auth_token` は書き込み専用 |
 | `GET /admin/cds_services/:id/discover` | 管理者 | discovery をその場で読んで `{services: [{id, hook, title, description, prefetch}]}` を返す(登録の確認用) |
 | `POST /integrations/cds/patient_view {patient_id, encounter_id?}` | 利用者 | §1 の呼び出し。`{cards, services: [{id, name, status}]}` |
+| `POST /integrations/cds/order_select {patient_id, draft_orders, selections}` | 利用者 | §3.3。`selections` は `draft_orders` の中のオーダー("MedicationRequest/<id>")に限る |
+| `POST /integrations/cds/order_sign {patient_id, draft_orders}` | 利用者 | §3.3 |
 | `POST /integrations/cds/feedback {service_id, service, card, outcome, override_reason?, user_comment?}` | 利用者 | `POST {base_url}/cds-services/{service}/feedback` に転送。サービスの失敗は 204 のまま(ログに残す) |
 
 `/integrations/` は vite proxy と `render.yaml` に登録済みなので追加不要。
@@ -84,8 +86,11 @@
     `_count` が無い検索は `_count=100` を補う。
   - **［事実］** 規格では満たせないテンプレートは省略してよい。`encounterId` が無いとき・型が許可外のとき・上流が 2xx 以外のときは
     その key を省く(サービスは無い前提で振る舞う)。
-- `PatientView`: 提供元 → discovery → `patient-view` のサービスごとに prefetch を解決 → 提供元ごとにスレッドで `invoke` → `Cards.normalize`。
-  提供元 1 つの失敗はその提供元のカードが無いだけ。
+- `Invocation`(hook 名を受ける): 提供元 → discovery → その hook のサービスごとに prefetch を解決 → 提供元ごとにスレッドで `invoke` →
+  `Cards.normalize`。提供元 1 つの失敗はその提供元のカードが無いだけ。context は共通の `userId` / `patientId` / `encounterId` に、
+  hook 固有の `selections` / `draftOrders` を足す。
+- `draft_orders` の検査(コントローラ): `Bundle` で、entry は id 付きの `MedicationRequest` だけ、100 件まで、`subject` が `patient_id` の患者。
+  prefetch のテンプレートに `{{context.draftOrders...}}` は使えない(埋まらないので省く)。
 
 ### 2.4 カードの正規化(`Cards`)
 
@@ -129,6 +134,20 @@
 - 読み込みは `useQuery`(キー `["cds","patient-view",patientId,encounterId]`、staleTime 5 分、retry なし)。
   カルテの描画を待たせない(帯のアイコンは届いてから現れる)。
 
+### 3.3 処方フォーム(`order-select` / `order-sign`)
+
+- `buildPrescriptionDraftOrders(values, patientId, requester)`(`fhir/prescriptionHelpers.ts`): 薬剤が入った行を
+  `MedicationRequest`(status=draft、`basedOn` なし、`authoredOn` は日付だけ)にし、id は RP と行の位置から `draft-<RP>-<行>`。
+  入力のたびに同じ行は同じ id で、内容が変わった行を `selections` で指せる。
+- **order-select**(`PrescriptionOrderSelectCards`): draftOrders を 1 秒置いてから、前回から内容が変わった行を `selections` にして呼ぶ。
+  開いたときの内容(編集の読み込み)は呼ばない。カードは妊娠の注意の下、入力欄の前に並べ、登録は止めない。「無視…」で理由を選ぶと
+  feedback を送ってそのカードを閉じる。次の応答までは前のカードを出したまま。
+- **order-sign**(`PrescriptionOrderSignModal`): 「登録」で検証が通ったら order-sign を呼ぶ(ボタンは「確認中...」)。
+  カードがあれば確認モーダルを出し、「登録」「戻る」。**重要(critical)のカードは理由を選ぶまで「登録」できない**。登録するときに、
+  理由を選んだカードの feedback を送る。カードが無い・サービスに届かない(例外)ときはそのまま登録する。
+- オーダーセットの内容入力(`setMode`)と外から一括 submit する画面(`hideSubmit`)では呼ばない(患者が決まらない / 確認を挟めない)。
+- `encounterId` は渡さない(フォームは受診を持たない)。注射は未対応(Bundle の組み立てが別実装)。
+
 ### 3.2 管理画面「CDS サービス」(`/cds-services`)
 
 名称 / URL / 認証トークン(書き込み専用、有無だけ表示)/ 有効 / 表示順。行の「探索」で discovery の結果(サービス id・hook・
@@ -160,7 +179,9 @@ docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_servic
 
 管理画面「CDS サービス」に `http://localhost:8787` を登録し、「探索」でサービスが見えることを確認する。
 
-### 5.2 確認項目(2026-10-18、開発環境・医師 一郎でログイン。1〜3・6・7 は実施済み、4・5 はコードの構造で担保)
+模擬サービスは order-select(選んだ薬剤名の情報カード)と order-sign(重要のカード、無視理由 2 つ)も返す。
+
+### 5.2 確認項目(2026-10-18、開発環境・医師 一郎でログイン。1〜3・6〜9 は実施済み、4・5 はコードの構造で担保)
 
 1. テスト太郎のカルテを開くと患者帯に「判断支援 3」が出て、吹き出しに 3 枚のカードが指標の色つきで並ぶ。
 2. warning カードの「アプリで開く」でアプリタブに切り替わり、demo アプリの表示に `appContext` の値が出る(上流のトークン応答に `appContext`)。
@@ -169,6 +190,9 @@ docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_servic
 5. 一覧の患者ドロワーの帯では `/integrations/cds/patient_view` が呼ばれない。
 6. `administrator` でログインすると呼ばれず、アイコンも出ない。
 7. 上流 rspec・client rspec・`tsc -b`・lint。
+8. 処方フォームで薬剤を選ぶと 1 秒後に「選んだ薬剤: …」のカードが入力欄の前に出る(`selections` は `MedicationRequest/draft-1-1`)。
+9. 「登録」で確認モーダルに重要のカードが出て、理由を選ぶまで「登録」が押せない。理由を選んで登録すると処方が作られ、
+   模擬サービスに `overridden` と理由の feedback が届く(テスト 20260923 に 10/18 のガスター散の処方が残っている)。
 
 ## 6. 採らなかった案
 
@@ -184,7 +208,7 @@ docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_servic
 
 ## 7. 残課題
 
-1. `order-select` / `order-sign`(処方フォームの中でカードを出す。`context.draftOrders` の組み立て)。
+1. ~~`order-select` / `order-sign`~~ — 処方は対応済み(§3.3)。注射・部門オーダーへの展開と、order-sign への `encounterId` は残り。
 2. `fhirAuthorization`(上流に医療者文脈のトークン発行 API)。
 3. suggestion の適用(`actions` の `create` をフォームの初期値に)と `systemActions`。
 4. Markdown の `detail`。
@@ -198,9 +222,10 @@ docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_servic
 |---|---|---|
 | 上流 | `app/models/launch_context.rb`、`admin/launch_contexts_controller.rb`、`oauth_tokens_controller.rb` | `app_context` / `appContext` |
 | backend | `app/models/cds_service.rb`、`admin/cds_services_controller.rb` | 提供元の台帳 |
-| backend | `app/services/integrations/cds/{client,discovery,prefetch,cards,patient_view}.rb` | 呼び出し・prefetch・正規化 |
-| backend | `app/controllers/integrations/cds/hooks_controller.rb` | `patient_view` / `feedback` |
+| backend | `app/services/integrations/cds/{client,discovery,prefetch,cards,invocation}.rb` | 呼び出し・prefetch・正規化 |
+| backend | `app/controllers/integrations/cds/hooks_controller.rb` | `patient_view` / `order_select` / `order_sign` / `feedback` |
 | backend | `script/cds_demo_service.ru` | 検証用の模擬サービス |
-| frontend | `api/cdsClient.ts`、`api/cdsQueries.ts`、`components/CdsPictogram.tsx`、`components/PictogramPopover.tsx` | 帯のアイコンと吹き出し |
+| frontend | `api/cdsClient.ts`、`api/cdsQueries.ts`、`components/CdsPictogram.tsx`、`components/CdsCardList.tsx`、`fhir/cdsCardHelpers.ts`、`components/PictogramPopover.tsx` | 帯のアイコンと吹き出し、カードの一覧 |
+| frontend | `fhir/prescriptionHelpers.ts`(`buildPrescriptionDraftOrders`)、`components/PrescriptionCdsCards.tsx`、`components/PrescriptionForm.tsx`、`hooks/useDebouncedValue.ts` | 処方の order-select / order-sign |
 | frontend | `lib/smartAppLaunchContext.ts`、`components/KarteSmartAppsTab.tsx`、`api/smartAppsClient.ts` | `appContext` の受け渡し |
 | frontend | `pages/CdsServicesPage.tsx`、`api/adminClient.ts`、`api/adminQueries.ts`、`App.tsx` | 管理画面 |

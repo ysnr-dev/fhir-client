@@ -39,7 +39,8 @@ RSpec.describe "CDS Hooks (patient-view / feedback)", type: :request do
                       meds: "MedicationRequest?patient={{context.patientId}}&status=active",
                       enc: "Encounter/{{context.encounterId}}",
                       audit: "AuditEvent?patient={{context.patientId}}" } },
-        { id: "os", hook: "order-sign" }
+        { id: "os", hook: "order-sign", prefetch: { patient: "Patient/{{context.patientId}}" } },
+        { id: "osel", hook: "order-select" }
       ]
     }.to_json)
     stub_request(:get, "#{fhir_base}/Patient/p-1").to_return(status: 200, body: { resourceType: "Patient", id: "p-1" }.to_json)
@@ -169,6 +170,81 @@ RSpec.describe "CDS Hooks (patient-view / feedback)", type: :request do
       end
 
       expect(response).to have_http_status(:bad_request)
+    end
+  end
+
+  describe "order hooks" do
+    def draft_orders(patient_id = "p-1")
+      {
+        resourceType: "Bundle", type: "collection",
+        entry: [
+          { resource: { resourceType: "MedicationRequest", id: "draft-1-1", status: "draft", intent: "order",
+                        subject: { reference: "Patient/#{patient_id}" },
+                        medicationCodeableConcept: { text: "メトホルミン塩酸塩錠250mg" } } },
+          { resource: { resourceType: "MedicationRequest", id: "draft-1-2", status: "draft", intent: "order",
+                        subject: { reference: "Patient/#{patient_id}" } } }
+        ]
+      }
+    end
+
+    it "calls order-sign services with draftOrders in the context" do
+      captured = nil
+      stub_request(:post, "#{cds_base}/cds-services/os").with { |req| captured = JSON.parse(req.body) }
+                                                        .to_return(status: 200, body: { cards: [{ summary: "腎機能", indicator: "critical" }] }.to_json)
+
+      with_admin_token do
+        csrf = login_as_practitioner
+        post "/integrations/cds/order_sign", params: { patient_id: "p-1", draft_orders: draft_orders },
+                                             headers: { "X-CSRF-Token" => csrf }, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body["cards"].first).to include("summary" => "腎機能", "indicator" => "critical")
+      expect(response.parsed_body["cards"].first["service"]).to include("service" => "os")
+      expect(captured["hook"]).to eq("order-sign")
+      expect(captured["context"]["draftOrders"]["entry"].map { |e| e["resource"]["id"] }).to eq(%w[draft-1-1 draft-1-2])
+      expect(captured["context"]).not_to have_key("selections")
+      expect(captured["prefetch"].keys).to eq(["patient"])
+      expect(a_request(:post, "#{cds_base}/cds-services/pv")).not_to have_been_made
+    end
+
+    it "calls order-select services with the selections" do
+      captured = nil
+      stub_request(:post, "#{cds_base}/cds-services/osel").with { |req| captured = JSON.parse(req.body) }
+                                                          .to_return(status: 200, body: { cards: [] }.to_json)
+
+      with_admin_token do
+        csrf = login_as_practitioner
+        post "/integrations/cds/order_select",
+             params: { patient_id: "p-1", draft_orders: draft_orders, selections: ["MedicationRequest/draft-1-2"] },
+             headers: { "X-CSRF-Token" => csrf }, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(captured["hook"]).to eq("order-select")
+      expect(captured["context"]["selections"]).to eq(["MedicationRequest/draft-1-2"])
+      expect(captured["context"]["draftOrders"]["entry"].size).to eq(2)
+    end
+
+    it "rejects draft orders that are malformed, of another patient or not selected" do
+      with_admin_token do
+        csrf = login_as_practitioner
+        headers = { "X-CSRF-Token" => csrf }
+
+        post "/integrations/cds/order_sign", params: { patient_id: "p-1", draft_orders: { resourceType: "Patient" } },
+                                             headers: headers, as: :json
+        expect(response).to have_http_status(:bad_request)
+
+        post "/integrations/cds/order_sign", params: { patient_id: "p-1", draft_orders: draft_orders("p-2") },
+                                             headers: headers, as: :json
+        expect(response).to have_http_status(:bad_request)
+        expect(response.parsed_body["error"]).to include("patient")
+
+        post "/integrations/cds/order_select",
+             params: { patient_id: "p-1", draft_orders: draft_orders, selections: ["MedicationRequest/other"] },
+             headers: headers, as: :json
+        expect(response).to have_http_status(:bad_request)
+      end
     end
   end
 

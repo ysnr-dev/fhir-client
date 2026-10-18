@@ -1,8 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  fetchCdsOrderHook,
   fetchCdsPatientView,
   sendCdsFeedback,
   type CdsFeedbackParams,
+  type CdsOrderHookParams,
   type CdsPatientViewResult,
 } from "./cdsClient";
 
@@ -39,5 +41,29 @@ export function useCdsFeedback(patientId: string | undefined, encounterId?: stri
         current ? { ...current, cards: current.cards.filter((card) => card.uuid !== params.card) } : current,
       );
     },
+  });
+}
+
+/**
+ * 処方フォームの order-select。入力が落ち着いた draftOrders(呼び出し側で間を置いたもの)が
+ * 変わるたびに呼ぶ。次の応答が届くまで前のカードを出したままにする(入力のたびに一覧が消えないように)。
+ */
+export function useCdsOrderSelect(params: CdsOrderHookParams | null) {
+  return useQuery<CdsPatientViewResult>({
+    queryKey: [...CDS_KEY, "order-select", params ? JSON.stringify(params) : null],
+    queryFn: () => fetchCdsOrderHook("order-select", params as CdsOrderHookParams),
+    enabled: params !== null,
+    retry: false,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** 画面のデータに触れない feedback の送信(処方フォームのカード用)。 */
+export function useSendCdsFeedback() {
+  return useMutation({
+    mutationFn: (params: CdsFeedbackParams) => sendCdsFeedback(params),
+    retry: false,
   });
 }
