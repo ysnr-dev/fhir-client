@@ -587,12 +587,21 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 
 ### L-3. 海外 EHR との照合で出た上流の要望(2026-10-18)
 
-`functional-gap-backlog.md` §5 の候補のうち、上流の実装が先に要るもの。どれも未着手で、client 側の設計もまだ無い。
+`functional-gap-backlog.md` §5 の候補のうち、上流の実装が先に要るもの。どれも未着手。SMART は設計済み(`smart-app-launch-design.md`)、他は client 側の設計もまだ無い。
 
-- **SMART App Launch 2.2 の EHR launch**(§5.3、中〜高): いまの OAuth クライアントは Backend Services と対話型 launch の登録まで。
-  カルテから外部アプリを起動するには、launch context の発行(患者・利用者・Encounter を `launch` に結び付ける)、
-  トークン応答の `patient` / `fhirContext`、`.well-known/smart-configuration` の `launch-ehr` と `context-ehr-patient` が要る。
-  client は launch を発行してもらう API を backend 経由で呼び、iframe に `iss` と `launch` を渡す。
+- **SMART App Launch 2.2 の EHR launch**(§5.3、中〜高): 設計は `smart-app-launch-design.md` §2。上流に要るもの:
+  - `launch_contexts`(ダイジェスト保存・5 分・単回・client_id 束縛)と、管理トークン認証の発行 API `POST /admin/launch_contexts`
+    (患者・Encounter・医療者・`need_patient_banner` を受け取る。Backend Services の Bearer ではなく管理トークンにする理由は設計書 §2.4)。
+  - `GET /oauth/authorize` の launch 分岐: `launch` と `aud` パラメータ、`aud == issuer` の検証、launch トークンの検証と消費、
+    ログイン・同意画面を出さず HTML もセッションも使わずに即 302 で code を返す。`offline_access` は拒否。
+  - `user/` スコープ(コンパートメント制限なし、書き込みは登録スコープ次第、`require_system` の操作は不可)と `launch` 系 context scope。
+    `patient/` と `user/` の混在禁止、`ehr_launchable?`。`access_context` の分岐を「patient_id あり かつ patient/ grant あり」に変更。
+    `authorization_codes` / `refresh_tokens` の `user_id` を nullable にし `practitioner_id` `encounter_id` を追加。
+  - トークン応答の `patient` `encounter` `need_patient_banner`、refresh での引き継ぎ、`id_token` の `fhirUser = Practitioner/{id}`、introspect の拡張。
+  - `.well-known/smart-configuration` に `launch-ehr` `context-ehr-patient` `context-ehr-encounter` `permission-user` `context-banner` と `user/`・`launch` 系の scopes。
+  - CORS(rack-cors、Bearer 専用パスのみ `*`・`credentials: false`。`/oauth/authorize|login|consent`・`/admin` は対象外)。
+  - rack-attack の別枠(`admin-launch/ip`、`oauth-launch/client`)、`purge_expired`、`filter_parameters` に `launch` `code` `code_verifier`、
+    `AuditEvent` の `agent_who_reference`。
 - **`Consent`**(§5.4、中): ACP・コードステータスの構造化。JP Core プロファイルが無いので Flag と同じく HL7 基本定義 + 手書きバリデータ、
   患者コンパートメントに入れる。検索は `patient`・`category`・`status`・`date`。
 - **`Immunization`**(§5.5、中): JP Core プロファイルあり。検索は `patient`・`vaccine-code`・`date`・`status`。Health Maintenance の入力源。
