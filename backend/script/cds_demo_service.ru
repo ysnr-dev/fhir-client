@@ -7,9 +7,14 @@
 # order-select に選んだ薬剤の数の情報カード、order-sign に重要(critical)のカードを 1 枚返す。
 # feedback は受けた内容を標準出力に出す。
 require "json"
+require "net/http"
 require "securerandom"
 
 DEMO_SMART_APP_URL = ENV.fetch("CDS_DEMO_SMART_APP_URL", "http://localhost:5173/smart-demo/index.html")
+# fhirAuthorization で上流を読むときの接続先。リクエストの fhirServer はブラウザから見た URL
+# (localhost:3000)で、backend コンテナの中からは届かないので差し替える。
+FHIR_BASE_OVERRIDE = ENV.fetch("CDS_DEMO_FHIR_BASE", "http://host.docker.internal:3000")
+FHIR_HOST_HEADER = ENV.fetch("CDS_DEMO_FHIR_HOST", "localhost:3000")
 
 DISCOVERY = {
   "services" => [
@@ -78,6 +83,42 @@ def patient_name(patient)
   name["text"] || [name["family"], *Array(name["given"])].compact.join(" ")
 end
 
+# fhirAuthorization があれば、そのトークンで患者を読み直す(サービスが自分で上流を読めることの確認)。
+def read_with_authorization(request)
+  auth = request["fhirAuthorization"]
+  patient_id = request.dig("context", "patientId")
+  return nil unless auth.is_a?(Hash) && patient_id
+
+  uri = URI.parse("#{FHIR_BASE_OVERRIDE}/Patient/#{patient_id}")
+  http_request = Net::HTTP::Get.new(uri)
+  http_request["Authorization"] = "#{auth['token_type']} #{auth['access_token']}"
+  http_request["Accept"] = "application/fhir+json"
+  http_request["Host"] = FHIR_HOST_HEADER
+  response = Net::HTTP.start(uri.host, uri.port, open_timeout: 2, read_timeout: 5) { |http| http.request(http_request) }
+  { status: response.code.to_i, patient: (JSON.parse(response.body) if response.code.to_i == 200), auth: auth }
+rescue StandardError => e
+  { status: 0, error: e.class.name, auth: auth }
+end
+
+def authorization_card(request)
+  result = read_with_authorization(request)
+  return nil unless result
+
+  summary =
+    if result[:patient]
+      "fhirAuthorization で上流から読みました: #{patient_name(result[:patient])}"
+    else
+      "fhirAuthorization で読めませんでした(HTTP #{result[:status]}#{result[:error] ? " #{result[:error]}" : ''})"
+    end
+  {
+    "uuid" => SecureRandom.uuid,
+    "summary" => summary,
+    "detail" => "scope: #{result[:auth]['scope']}\nsubject: #{result[:auth]['subject']}\nexpires_in: #{result[:auth]['expires_in']}",
+    "indicator" => "info",
+    "source" => { "label" => "CDS デモ", "topic" => { "display" => "fhirAuthorization" } }
+  }
+end
+
 def cards_for(request)
   context = request["context"] || {}
   prefetch = request["prefetch"] || {}
@@ -135,8 +176,8 @@ app = lambda do |env|
     json.call(200, DISCOVERY)
   when ["POST", "/cds-services/demo-patient-view"]
     body = JSON.parse(request.body.read)
-    $stdout.puts("[cds-demo] #{body['hook']} patient=#{body.dig('context', 'patientId')} prefetch=#{(body['prefetch'] || {}).keys.join(',')}")
-    json.call(200, { "cards" => cards_for(body) })
+    $stdout.puts("[cds-demo] #{body['hook']} patient=#{body.dig('context', 'patientId')} prefetch=#{(body['prefetch'] || {}).keys.join(',')} fhirAuthorization=#{body['fhirAuthorization'] ? 'yes' : 'no'}")
+    json.call(200, { "cards" => [authorization_card(body), *cards_for(body)].compact })
   when ["POST", "/cds-services/demo-order-select"]
     body = JSON.parse(request.body.read)
     $stdout.puts("[cds-demo] order-select selections=#{body.dig('context', 'selections').inspect}")

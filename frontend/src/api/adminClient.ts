@@ -128,7 +128,8 @@ export interface AdminSession {
   csrf_token: string | null;
 }
 
-export type OauthClientKind = "backend" | "launch";
+/** delegated は CDS Hooks のサービス(user/ スコープでリダイレクト URI なし。トークンは EHR が発行して渡す)。 */
+export type OauthClientKind = "backend" | "launch" | "delegated";
 export type OauthClientAuthMethod = "client_secret" | "private_key_jwt" | "none";
 
 export interface OauthClientSummary {
@@ -731,6 +732,8 @@ export interface CdsServiceSummary {
   name: string;
   base_url: string;
   auth_token_set: boolean;
+  /** 上流の委任クライアント。あれば hook のたびに短命トークンを fhirAuthorization で渡す。 */
+  client_id: string | null;
   enabled: boolean;
   position: number;
   updated_at: string;
@@ -741,6 +744,7 @@ export interface CdsServicePayload {
   base_url?: string;
   /** 書き込み専用。空なら既存の値を保持する。 */
   auth_token?: string;
+  client_id?: string | null;
   enabled?: boolean;
   position?: number | null;
 }

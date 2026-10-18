@@ -8,7 +8,9 @@ import { ContextScopeSelector, ScopeSelector, type ScopeFamily } from "./ScopeSe
 // 決まる(上流の OauthClient.register がそうなっている)。この画面のラジオは
 // あくまで入力補助で、排他性の担保はサーバー側の検証に任せる -- 二重に持つと
 // いずれ食い違う。
-type Shape = "backend" | "launch";
+// delegated は CDS Hooks のサービス。user/ の参照スコープだけを持ち、リダイレクト URI もシークレットも持たない
+// (トークンは EHR が hook を呼ぶたびに発行して fhirAuthorization で渡す)。
+type Shape = "backend" | "launch" | "delegated";
 // アプリ連携の相手: 患者本人(standalone、patient/)か、カルテから起動する医療者向け
 // (EHR launch、user/)。上流は両方の混在を 422 で弾く。
 type Audience = Extract<ScopeFamily, "patient" | "user">;
@@ -25,6 +27,7 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
   const [audience, setAudience] = useState<Audience>("patient");
   const [patientScopes, setPatientScopes] = useState<string[]>([]);
   const [userScopes, setUserScopes] = useState<string[]>([]);
+  const [delegatedScopes, setDelegatedScopes] = useState<string[]>([]);
   const [contextScopes, setContextScopes] = useState<string[]>([]);
   const [redirectUris, setRedirectUris] = useState<string[]>([""]);
   const [clientType, setClientType] = useState<"public" | "confidential">("public");
@@ -38,6 +41,7 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
     setSystemScopes([]);
     setPatientScopes([]);
     setUserScopes([]);
+    setDelegatedScopes([]);
     setContextScopes([]);
     setRedirectUris([""]);
     setJwksText("");
@@ -66,6 +70,10 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
           return setValidationError("JWKS が JSON として解釈できません");
         }
       }
+    } else if (shape === "delegated") {
+      if (delegatedScopes.length === 0) return setValidationError("スコープを1つ以上選択してください");
+      payload.scopes = delegatedScopes;
+      payload.client_type = "public";
     } else {
       const resourceScopes = audience === "user" ? userScopes : patientScopes;
       if (resourceScopes.length === 0) return setValidationError("スコープを1つ以上選択してください");
@@ -107,6 +115,15 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
           />
           アプリ連携（SMART App Launch）
         </label>
+        <label>
+          <input
+            type="radio"
+            name="shape"
+            checked={shape === "delegated"}
+            onChange={() => setShape("delegated")}
+          />
+          CDS サービス（CDS Hooks）
+        </label>
       </fieldset>
 
       <label>
@@ -119,7 +136,12 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
         />
       </label>
 
-      {shape === "backend" ? (
+      {shape === "delegated" ? (
+        <fieldset>
+          <legend>スコープ</legend>
+          <ScopeSelector family="user" readOnly value={delegatedScopes} onChange={setDelegatedScopes} />
+        </fieldset>
+      ) : shape === "backend" ? (
         <>
           <fieldset>
             <legend>スコープ</legend>

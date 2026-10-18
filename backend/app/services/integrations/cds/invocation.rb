@@ -31,8 +31,10 @@ module Integrations
           "encounterId" => encounter_id.presence
         }.compact.merge(extra_context)
 
-        # prefetch は上流(施設トークン)を読むので主スレッドで済ませ、提供元への送信だけ並列にする。
-        calls = providers.flat_map { |provider| prepare(provider, context) }
+        # prefetch と委任トークンは上流を呼ぶので主スレッドで済ませ、提供元への送信だけ並列にする。
+        calls = providers.flat_map do |provider|
+          prepare(provider, context, practitioner_id: practitioner_id, patient_id: patient_id)
+        end
         threads = calls.map { |call| Thread.new { call[:cards] = invoke(call) } }
         threads.each(&:join)
 
@@ -46,9 +48,14 @@ module Integrations
 
       attr_reader :hook, :providers, :smart_apps, :fhir_server
 
-      # 提供元のその hook のサービスごとに、送るリクエストを組み立てる。
-      def prepare(provider, context)
+      # 提供元のその hook のサービスごとに、送るリクエストを組み立てる。委任トークンは提供元に 1 本
+      # (同じ提供元のサービスは同じ client_id なので使い回す)。
+      def prepare(provider, context, practitioner_id:, patient_id:)
         services = Discovery.services(provider).select { |service| service["hook"] == hook }
+        authorization = if services.any?
+                          Authorization.new.issue(provider: provider, practitioner_id: practitioner_id,
+                                                  patient_id: patient_id)
+                        end
         services.map do |service|
           prefetch = Prefetch.new(context).resolve(service["prefetch"])
           body = {
@@ -56,8 +63,9 @@ module Integrations
             "fhirServer" => fhir_server,
             "hook" => hook,
             "context" => context,
-            "prefetch" => prefetch
-          }
+            "prefetch" => prefetch,
+            "fhirAuthorization" => authorization
+          }.compact
           { provider: provider, service_id: service["id"], body: body, error: nil }
         end
       rescue Integrations::Error => e

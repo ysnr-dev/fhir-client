@@ -124,6 +124,50 @@ RSpec.describe "CDS Hooks (patient-view / feedback)", type: :request do
       expect(a_request(:get, /AuditEvent/)).not_to have_been_made
     end
 
+    it "hands a delegated token as fhirAuthorization when the provider has a client" do
+      provider.update!(client_id: "c0ffee-0001")
+      FhirConnectionSettings.current.update!(fhir_admin_token: "upstream-admin")
+      stub_request(:get, "#{fhir_base}/up").to_return(status: 200, body: "ok")
+      issued = stub_request(:post, "#{fhir_base}/admin/delegated_tokens")
+               .with(body: { client_id: "c0ffee-0001", practitioner_id: "prac-1", patient_id: "p-1" }.to_json,
+                     headers: { "X-FHIR-Admin-Token" => "upstream-admin" })
+               .to_return(status: 201, body: {
+                 access_token: "tok-1", token_type: "Bearer", expires_in: 300, scope: "user/*.read",
+                 subject: "c0ffee-0001", patient: "p-1"
+               }.to_json)
+      captured = nil
+      stub_request(:post, "#{cds_base}/cds-services/pv").with { |req| captured = JSON.parse(req.body) }
+                                                        .to_return(status: 200, body: { cards: [] }.to_json)
+
+      with_admin_token do
+        csrf = login_as_practitioner
+        post_patient_view(csrf)
+      end
+
+      expect(issued).to have_been_requested.once
+      expect(captured["fhirAuthorization"]).to eq(
+        "access_token" => "tok-1", "token_type" => "Bearer", "expires_in" => 300, "scope" => "user/*.read",
+        "subject" => "c0ffee-0001", "patient" => "p-1"
+      )
+    end
+
+    it "still calls the service without fhirAuthorization when the token cannot be issued" do
+      provider.update!(client_id: "c0ffee-0001")
+      FhirConnectionSettings.current.update!(fhir_admin_token: "upstream-admin")
+      stub_request(:post, "#{fhir_base}/admin/delegated_tokens").to_return(status: 422, body: { errors: ["x"] }.to_json)
+      captured = nil
+      stub_request(:post, "#{cds_base}/cds-services/pv").with { |req| captured = JSON.parse(req.body) }
+                                                        .to_return(status: 200, body: { cards: [] }.to_json)
+
+      with_admin_token do
+        csrf = login_as_practitioner
+        post_patient_view(csrf)
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(captured).not_to have_key("fhirAuthorization")
+    end
+
     it "includes the encounter when given" do
       captured = nil
       stub_request(:get, "#{fhir_base}/Encounter/e-1").to_return(status: 200, body: { resourceType: "Encounter", id: "e-1" }.to_json)

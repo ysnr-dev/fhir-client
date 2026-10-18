@@ -79,11 +79,17 @@ module Integrations
       end
 
       def log(action, service, outcome:, request: nil, response: nil, **fields)
-        bodies = EventLog.bodies? ? { request: request, response: response } : {}
+        bodies = EventLog.bodies? ? { request: redact(request), response: response } : {}
         EventLog.for("cds_hooks").write(
           direction: :out, action: action, outcome: outcome,
           provider: provider.name, service: service, **fields, **bodies
         )
+      end
+      # 電文を残すときも、委任トークンの生値はログに出さない。
+      def redact(body)
+        return body unless body.is_a?(Hash) && body["fhirAuthorization"].is_a?(Hash)
+
+        body.merge("fhirAuthorization" => body["fhirAuthorization"].merge("access_token" => "[FILTERED]"))
       end
     end
   end

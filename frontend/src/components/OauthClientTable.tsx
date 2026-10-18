@@ -6,6 +6,7 @@ import { ErrorBanner } from "./ErrorBanner";
 const KIND_LABELS: Record<OauthClientSummary["kind"], string> = {
   backend: "バックエンド連携",
   launch: "アプリ連携",
+  delegated: "CDS サービス",
 };
 
 const AUTH_METHOD_LABELS: Record<OauthClientSummary["auth_method"], string> = {

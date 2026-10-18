@@ -3,7 +3,8 @@
 `docs/functional-gap-backlog.md` §5.1「外部アプリと判断支援を差し込む標準の経路」と `smart-app-launch-design.md` §7 の残課題 3。
 **状態: 実装済み(2026-10-18)。hook は `patient-view` と、処方オーダーの `order-select` / `order-sign`。**
 カルテを開いたときに、登録した外部の CDS サービス(CDS Hooks 2.0)を backend から呼び、返ってきたカードを患者帯の
-ピクトグラム(吹き出し)に出す。サービスへのデータは prefetch で backend が同梱し、上流のトークンは渡さない。
+ピクトグラム(吹き出し)に出す。サービスへのデータは prefetch で backend が同梱する。提供元に委任クライアントを紐づけたときだけ、
+読み取り専用・5 分の短命トークンを `fhirAuthorization` で渡し、サービスが自分で上流を読めるようにする(§2.6)。
 カードのリンク(`smart`)は `smart-app-launch-design.md` の EHR launch に `appContext` を添えて起動する。
 
 - **［事実］** = 規格(https://cds-hooks.hl7.org/2.0/)、上流・このリポジトリの実装で確認した内容
@@ -46,7 +47,7 @@
   "prefetch": { "patient": { "resourceType": "Patient", ... }, "meds": { "resourceType": "Bundle", ... } } }
 ```
 
-`fhirAuthorization` は付けない。`encounterId` は外来の診察中のときだけ(カルテが持つ `examEncounter`)。
+`fhirAuthorization` は提供元に委任クライアントがあるときだけ付ける(§2.6)。`encounterId` は外来の診察中のときだけ(カルテが持つ `examEncounter`)。
 
 ## 2. backend
 
@@ -108,6 +109,21 @@
 | `overrideReasons` | `{code, system, display}` をそのまま |
 | `service` | `{id: cds_services.id, name, service: <discovery の id>}`(feedback の宛先) |
 
+### 2.6 `fhirAuthorization`(委任トークン)
+
+- **［設計］** CDS サービスは上流に **委任クライアント**(`user/` スコープだけ、リダイレクト URI なし、`kind: "delegated"`)として登録する。
+  トークン窓口(`client_credentials` / `authorize`)は使えず、コンテキストスコープ(`openid` など)も持てない。
+- **［設計］** 上流 `POST /admin/delegated_tokens {client_id, practitioner_id, patient_id?}`(管理トークン認証):
+  登録スコープのうち**読み取りだけ**(`user/X.read`)を持つ `AccessToken`(practitioner_id・patient_id 付き、**寿命 5 分**)を発行し、
+  CDS Hooks 2.0 の `fhirAuthorization` の形(`access_token` `token_type: "Bearer"` `expires_in` `scope` `subject`=client_id `patient`)で返す。
+  EHR launch と同じく「その医療者がログイン中か」は管理トークンを持つ中継(client backend)を信頼する。rack-attack は起動文脈と同じ別枠。
+- **［設計］** client: `cds_services.client_id` に委任クライアントを紐づけると、`Integrations::Cds::Authorization` が hook を呼ぶ直前に
+  提供元ごとに 1 本発行し、その提供元の全サービスのリクエストに載せる。発行に失敗したら `fhirAuthorization` なしで呼ぶ(prefetch は渡る)。
+  電文をログに残す設定(`INTEGRATION_LOG_BODIES`)でもトークンの生値は `[FILTERED]` にする。
+- **［事実］** `user/` トークンは患者コンパートメントに閉じない(`smart-app-launch-design.md` §2.2)ので、サービスは施設内の全患者を読める。
+  書き込み・`AuditEvent`・`_history`・`$export` は不可。監査にはサービス(client)と医療者(`agent.who.reference`)が残る。
+- `fhirServer` はブラウザから見た上流の URL。サービスが別のネットワークにいる場合は、サービス側で到達できる URL に読み替える運用になる。
+
 ### 2.5 SMART launch の `appContext`
 
 - 上流: `launch_contexts.app_context`(text)を足し、`POST /admin/launch_contexts` で `app_context`(文字列、8 KB まで)を受け、
@@ -157,7 +173,7 @@ title・prefetch の key)をモーダルに出す。メニューは「管理」�
 
 | 論点 | 設計 |
 |---|---|
-| サービスに渡す情報 | prefetch で同梱する分だけ。上流のトークンは渡さない。`fhirServer` は URL を知らせるだけでサービスは読めない(CORS は開いているが Bearer が無い) |
+| サービスに渡す情報 | prefetch で同梱する分と、委任クライアントを紐づけた提供元には読み取り専用・5 分の `fhirAuthorization`(§2.6)。紐づけなければ `fhirServer` は URL を知らせるだけで読めない |
 | prefetch の範囲 | 許可リストの型だけ、`_count` の上限 100、`encounterId` が無いテンプレートは省く |
 | サービスの応答 | 正規化して画面に出す。`detail` はプレーンテキスト、`absolute` リンクは http(s) のみ、`smart` リンクは登録済みアプリだけ起動 |
 | 失敗 | 提供元ごとに握り、カード無しで返す。EventLog と管理画面の「探索」で切り分ける |
@@ -180,6 +196,8 @@ docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_servic
 管理画面「CDS サービス」に `http://localhost:8787` を登録し、「探索」でサービスが見えることを確認する。
 
 模擬サービスは order-select(選んだ薬剤名の情報カード)と order-sign(重要のカード、無視理由 2 つ)も返す。
+`fhirAuthorization` を受け取ると、そのトークンで `Patient/{patientId}` を読み直して「fhirAuthorization で上流から読みました: 氏名」の
+カードを足す(コンテナの中からは `CDS_DEMO_FHIR_BASE`、既定 `http://host.docker.internal:3000` で読む)。
 
 ### 5.2 確認項目(2026-10-18、開発環境・医師 一郎でログイン。1〜3・6〜9 は実施済み、4・5 はコードの構造で担保)
 
@@ -193,13 +211,17 @@ docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_servic
 8. 処方フォームで薬剤を選ぶと 1 秒後に「選んだ薬剤: …」のカードが入力欄の前に出る(`selections` は `MedicationRequest/draft-1-1`)。
 9. 「登録」で確認モーダルに重要のカードが出て、理由を選ぶまで「登録」が押せない。理由を選んで登録すると処方が作られ、
    模擬サービスに `overridden` と理由の feedback が届く(テスト 20260923 に 10/18 のガスター散の処方が残っている)。
+10. 提供元に委任クライアント「CDS デモ(FHIR 読み取り)」を紐づけると、patient-view のリクエストに `fhirAuthorization` が付き、
+    模擬サービスがそのトークンでテスト太郎を読めた。上流の `access_tokens` は委任クライアント・一郎の Practitioner・読み取り 3 スコープ・寿命 5 分。
+    開発の上流は認証 OFF なので、トークンの効き(他患者は読める・書けない・AuditEvent 403・監査の帰属)は上流の request spec で確認した。
 
 ## 6. 採らなかった案
 
 | 案 | 理由 |
 |---|---|
 | 帯の下に常時カードの帯を出す | 画面の高さを取る。ユーザー決定でアイコン + 吹き出しに |
-| `fhirAuthorization` でサービスに上流のトークンを渡す | 上流に「医療者文脈の `user/` トークンを管理 API から発行する」機能が要り、サービスの到達範囲を backend が決められなくなる。prefetch で足りる範囲から始める |
+| `fhirAuthorization` に書き込みも含める | サービスは判断のために読むだけで、書き込みは医師が提案を受けて行う(suggestion)。読み取りだけを発行する |
+| 委任トークンをトークン窓口(token exchange など)で取らせる | サービス側に OAuth の実装と秘密の保管を求めることになる。EHR が発行して渡す CDS Hooks の想定どおりにする |
 | `ExternalSystemConnection` に載せる | 1 システム 1 行で提供元を複数持てない。`:connection` 区画は username/password を要求する |
 | suggestion の `actions` を登録フォームの初期値にする | 種別ごとの対応表が要り大きい。まず表示だけ |
 | Markdown のレンダラを足す | 依存を増やし XSS の面を広げる。`detail` はプレーンテキストで十分なところから |
@@ -209,7 +231,7 @@ docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_servic
 ## 7. 残課題
 
 1. ~~`order-select` / `order-sign`~~ — 処方は対応済み(§3.3)。注射・部門オーダーへの展開と、order-sign への `encounterId` は残り。
-2. `fhirAuthorization`(上流に医療者文脈のトークン発行 API)。
+2. ~~`fhirAuthorization`~~ — 対応済み(§2.6、読み取りのみ・5 分)。サービスごとにスコープを絞る設定画面(今は登録スコープの読み取り全部)は残り。
 3. suggestion の適用(`actions` の `create` をフォームの初期値に)と `systemActions`。
 4. Markdown の `detail`。
 5. 無視の台帳と発火数・無視率の管理画面(§5.3 の警告の器と一緒に)。
@@ -221,6 +243,8 @@ docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_servic
 | 場所 | ファイル | 役割 |
 |---|---|---|
 | 上流 | `app/models/launch_context.rb`、`admin/launch_contexts_controller.rb`、`oauth_tokens_controller.rb` | `app_context` / `appContext` |
+| 上流 | `app/models/oauth_client.rb`(`delegated_client?` / `delegated_scopes`)、`admin/delegated_tokens_controller.rb`、`access_token.rb`(`DELEGATED_TTL`) | 委任トークン |
+| backend | `app/services/integrations/cds/authorization.rb` | `fhirAuthorization` の発行 |
 | backend | `app/models/cds_service.rb`、`admin/cds_services_controller.rb` | 提供元の台帳 |
 | backend | `app/services/integrations/cds/{client,discovery,prefetch,cards,invocation}.rb` | 呼び出し・prefetch・正規化 |
 | backend | `app/controllers/integrations/cds/hooks_controller.rb` | `patient_view` / `order_select` / `order_sign` / `feedback` |

@@ -5,6 +5,7 @@ import {
   useCreateCdsService,
   useDeleteCdsService,
   useDiscoverCdsServices,
+  useOauthClients,
   useUpdateCdsService,
 } from "../api/adminQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -47,6 +48,7 @@ export function CdsServicesPage() {
             <th>名称</th>
             <th>URL</th>
             <th className="rad-code__compact">認証</th>
+            <th className="rad-code__compact">FHIR 読み取り</th>
             <th className="rad-code__compact">有効</th>
             <th className="rad-code__compact">表示順</th>
             <th className="rad-code__compact"></th>
@@ -58,6 +60,7 @@ export function CdsServicesPage() {
               <td>{item.name}</td>
               <td className="smart-app-page__url">{item.base_url}</td>
               <td className="rad-code__compact">{item.auth_token_set ? "あり" : "なし"}</td>
+              <td className="rad-code__compact">{item.client_id ? "あり" : "なし"}</td>
               <td className="rad-code__compact">{item.enabled ? "有効" : "無効"}</td>
               <td className="rad-code__compact">{item.position}</td>
               <td className="rad-code__compact">
@@ -77,7 +80,7 @@ export function CdsServicesPage() {
           ))}
           {list.data && list.data.length === 0 && (
             <tr>
-              <td colSpan={6} className="master-search__empty">
+              <td colSpan={7} className="master-search__empty">
                 提供元がありません。
               </td>
             </tr>
@@ -131,9 +134,13 @@ function CdsServiceEditModal({ item, onClose }: CdsServiceEditModalProps) {
   const create = useCreateCdsService();
   const update = useUpdateCdsService();
   const remove = useDeleteCdsService();
+  const clients = useOauthClients();
+  // fhirAuthorization の発行先に選べるのは CDS サービス用(委任)のクライアントだけ。
+  const delegatedClients = clients.data?.filter((client) => client.kind === "delegated") ?? [];
   const [draft, setDraft] = useState({
     name: item?.name ?? "",
     baseUrl: item?.base_url ?? "",
+    clientId: item?.client_id ?? "",
     authToken: "",
     enabled: item?.enabled ?? true,
     position: item?.position != null ? String(item.position) : "",
@@ -146,6 +153,7 @@ function CdsServiceEditModal({ item, onClose }: CdsServiceEditModalProps) {
     const payload: CdsServicePayload = {
       name: draft.name.trim(),
       base_url: draft.baseUrl.trim(),
+      client_id: draft.clientId || null,
       enabled: draft.enabled,
       position: draft.position ? Number(draft.position) : null,
     };
@@ -199,6 +207,17 @@ function CdsServiceEditModal({ item, onClose }: CdsServiceEditModalProps) {
               onChange={(e) => setDraft({ ...draft, authToken: e.target.value })}
             />
           </label>
+          <label className="smart-app-page__url-field">
+            FHIR 読み取り用の OAuth クライアント
+            <select value={draft.clientId} onChange={(e) => setDraft({ ...draft, clientId: e.target.value })}>
+              <option value="">(渡さない)</option>
+              {delegatedClients.map((client) => (
+                <option key={client.client_id} value={client.client_id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <label>
             表示順
             <input
@@ -217,6 +236,7 @@ function CdsServiceEditModal({ item, onClose }: CdsServiceEditModalProps) {
           </label>
         </div>
 
+        <ErrorBanner error={clients.error} />
         <ErrorBanner error={create.error ?? update.error ?? remove.error} />
 
         <div className="lab-order-item__actions">

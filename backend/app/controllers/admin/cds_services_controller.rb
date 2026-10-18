@@ -66,7 +66,7 @@ module Admin
     end
 
     def service_params
-      params.permit(:name, :base_url, :auth_token, :enabled, :position)
+      params.permit(:name, :base_url, :auth_token, :client_id, :enabled, :position)
     end
 
     def next_position
@@ -87,6 +87,7 @@ module Admin
         name: service.name,
         base_url: service.base_url,
         auth_token_set: service.auth_token.present?,
+        client_id: service.client_id.presence,
         enabled: service.enabled,
         position: service.position,
         updated_at: service.updated_at

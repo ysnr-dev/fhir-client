@@ -39,6 +39,15 @@ RSpec.describe "Admin::CdsServices", type: :request do
     expect(response).to have_http_status(:no_content)
   end
 
+  it "stores the delegated client id and rejects a malformed one" do
+    with_admin_token(nil) { post "/admin/cds_services", params: payload.merge(client_id: "4f3c-11"), as: :json }
+    expect(response).to have_http_status(:created)
+    expect(response.parsed_body["client_id"]).to eq("4f3c-11")
+
+    with_admin_token(nil) { post "/admin/cds_services", params: payload.merge(client_id: "not a uuid"), as: :json }
+    expect(response).to have_http_status(:unprocessable_content)
+  end
+
   it "returns 422 for a bad URL" do
     with_admin_token(nil) { post "/admin/cds_services", params: payload.merge(base_url: "cds"), as: :json }
 

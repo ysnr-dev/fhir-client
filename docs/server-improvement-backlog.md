@@ -602,6 +602,8 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   - CORS(rack-cors、Bearer 専用パスのみ `*`・`credentials: false`。`/oauth/authorize|login|consent`・`/admin` は対象外)。
   - rack-attack の別枠(`admin-launch/ip`、`oauth-launch/client`)、`purge_expired`、`filter_parameters` に `launch` `code` `code_verifier`、
     `AuditEvent` の `agent_who_reference`。
+  - (2026-10-18 追加)CDS Hooks 用: 起動文脈の `app_context` とトークン応答の `appContext`、委任クライアント(`user/` でリダイレクト URI なし)と
+    `POST /admin/delegated_tokens`(`fhirAuthorization` 用の読み取り専用・5 分のトークン)。`cds-hooks-design.md` §2.5・§2.6。
 - **`Consent`**(§5.4、中): ACP・コードステータスの構造化。JP Core プロファイルが無いので Flag と同じく HL7 基本定義 + 手書きバリデータ、
   患者コンパートメントに入れる。検索は `patient`・`category`・`status`・`date`。
 - **`Immunization`**(§5.5、中): JP Core プロファイルあり。検索は `patient`・`vaccine-code`・`date`・`status`。Health Maintenance の入力源。

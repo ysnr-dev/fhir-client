@@ -2,13 +2,16 @@
 #
 # 1 行が `/cds-services` を持つ 1 つの URL。配下に複数のサービス(id)があり、
 # その一覧と prefetch テンプレートは保存せず discovery で読む(提供元がサービスを
-# 足しても登録し直さなくてよい)。
+# 足しても登録し直さなくてよい)。client_id があれば、hook のたびに上流から
+# 委任トークンを発行して fhirAuthorization で渡す。
 class CdsService < ApplicationRecord
   # 任意の Bearer。ブラウザへは有無だけ返す。
   encrypts :auth_token
 
   validates :name, presence: true, length: { maximum: 100 }
   validates :base_url, presence: true
+  # 上流の委任クライアントの client_id(UUID)。空なら fhirAuthorization を渡さない。
+  validates :client_id, format: { with: SmartApp::CLIENT_ID_PATTERN }, allow_blank: true
   validate :base_url_is_absolute_https
 
   scope :enabled, -> { where(enabled: true) }
