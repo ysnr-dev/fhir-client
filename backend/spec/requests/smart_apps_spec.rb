@@ -73,6 +73,19 @@ RSpec.describe "SmartApps (karte tab)", type: :request do
       expect(query).to eq("mode" => "karte", "iss" => "http://localhost:3000", "launch" => "abc123")
     end
 
+    it "hands an app_context to the upstream" do
+      stub_request(:post, upstream).with(body: hash_including("app_context" => "{\"card\":\"x\"}"))
+                                   .to_return(status: 201, body: { launch: "x", expires_in: 300 }.to_json)
+
+      with_admin_token do
+        csrf = login_as_practitioner
+        post "/smart_apps/#{smart_app.id}/launch", params: { patient_id: "p-1", app_context: "{\"card\":\"x\"}" },
+                                                   headers: { "X-CSRF-Token" => csrf }, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+    end
+
     it "asks for a patient banner when the app opens in a window" do
       smart_app.update!(display: "window")
       stub_request(:post, upstream).with(body: hash_including("need_patient_banner" => true))

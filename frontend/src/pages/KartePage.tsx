@@ -1261,7 +1261,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
       <div className="page karte-page">
         {/* 見出しは置かず、患者情報と戻るボタンを 1 行にまとめて縦幅を左右のペインに回す。 */}
         <div className="karte-page__header">
-          <PatientHeader patientId={patientId} />
+          <PatientHeader patientId={patientId} cds />
           {!detached && examInProgress && (
             <button
               type="button"

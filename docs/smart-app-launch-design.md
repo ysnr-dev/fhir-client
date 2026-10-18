@@ -446,7 +446,7 @@ Growth Chart 等)— https 公開 URL が要り、`http://localhost:3000` の is
 
 1. **患者なし起動**(`launch_contexts.patient_id` を nullable に、`launch/patient` を要求されたときの患者選択 UI、`refresh_tokens.patient_id` NOT NULL の緩和、アプリメニューからの起動)。
 2. **standalone の医療者ログイン**(client の `/auth/session` を IdP にする OIDC 連携か、上流に Practitioner 連動の `User` を作るか)。
-3. **CDS Hooks**(`hook` 呼び出しと `appContext` を使った launch。`launch_contexts` に `app_context` 列を足せば乗る)。
+3. ~~CDS Hooks~~ — `patient-view` と `appContext` 付きの launch は `cds-hooks-design.md` で対応済み(2026-10-18)。
 4. **SMART Health Links** との関係整理(患者向け共有は別の信頼モデル)。
 5. **Subscriptions**(`server-improvement-backlog.md` L-3)との関係: アプリが rest-hook を受けるにはトークン寿命を超える購読が要り、`offline_access` 拒否と
    矛盾する。購読は `system/` クライアント側で行う前提にする。

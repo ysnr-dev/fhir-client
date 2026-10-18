@@ -21,6 +21,7 @@ export interface EmbeddedLaunchTarget {
   appId: number;
   patientId: string;
   encounterId?: string;
+  appContext?: string;
 }
 
 /**
@@ -31,9 +32,21 @@ export interface EmbeddedLaunchTarget {
  */
 export function useEmbeddedSmartAppLaunch(target: EmbeddedLaunchTarget | null, nonce: number) {
   return useQuery<SmartAppLaunch>({
-    queryKey: [...SMART_APPS_KEY, "launch", target?.appId, target?.patientId, target?.encounterId ?? "", nonce],
+    queryKey: [
+      ...SMART_APPS_KEY,
+      "launch",
+      target?.appId,
+      target?.patientId,
+      target?.encounterId ?? "",
+      target?.appContext ?? "",
+      nonce,
+    ],
     queryFn: () =>
-      launchSmartApp(target!.appId, { patient_id: target!.patientId, encounter_id: target!.encounterId }),
+      launchSmartApp(target!.appId, {
+        patient_id: target!.patientId,
+        encounter_id: target!.encounterId,
+        app_context: target!.appContext,
+      }),
     enabled: target !== null,
     retry: false,
     staleTime: Infinity,

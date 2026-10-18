@@ -10078,6 +10078,7 @@ input.lot-number-cell__input.is-invalid {
 
 .lab-order-item__fields input[type="text"],
 .lab-order-item__fields input[type="url"],
+.lab-order-item__fields input[type="password"],
 .lab-order-item__fields input[type="date"],
 .lab-order-item__fields input[type="datetime-local"],
 .lab-order-item__fields input[type="time"],
@@ -28050,4 +28051,111 @@ input.nursing-picker__search {
   flex-direction: row;
   align-items: center;
   gap: 6px;
+}
+
+/* --- 判断支援(CDS Hooks)のピクトグラムと吹き出し(docs/cds-hooks-design.md) --- */
+.patient-header__caution--cds-info {
+  color: var(--accent);
+}
+
+.patient-header__caution--cds-warning {
+  color: var(--warning);
+}
+
+.patient-header__caution--cds-critical {
+  color: var(--danger);
+}
+
+/* カードは一覧より幅が要る(要約・出所・ボタンを 1 枚に収める)。 */
+.patient-header__popover:has(.cds-cards) {
+  width: 420px;
+  max-width: min(420px, calc(100vw - 16px));
+}
+
+.cds-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cds-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px 6px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  background: var(--surface-card);
+}
+
+.cds-card--warning {
+  border-left-color: var(--warning);
+}
+
+.cds-card--critical {
+  border-left-color: var(--danger);
+}
+
+.cds-card__head {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.cds-card__indicator {
+  display: none;
+}
+
+.cds-card__summary {
+  white-space: normal;
+}
+
+.cds-card__source {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.cds-card__detail {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.cds-card__suggestions {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.cds-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.cds-card__link--disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 吹き出しの中のボタンは補助ボタンの大きさ(文字 13px)に留め、縦積みの中で横に伸ばさない。 */
+.cds-card .rp-card__compact-button {
+  align-self: flex-start;
+  height: auto;
+  min-height: 0;
+  padding: 2px 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.cds-card__override {
+  font: inherit;
+  font-size: 13px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
 }

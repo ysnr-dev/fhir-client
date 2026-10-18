@@ -22,6 +22,8 @@ export interface SmartAppLaunch {
 export interface SmartAppLaunchParams {
   patient_id: string;
   encounter_id?: string;
+  /** CDS Hooks のカードのリンクが持つ appContext。上流がトークン応答の appContext でアプリに渡す。 */
+  app_context?: string;
 }
 
 const SMART_APPS = "/smart_apps";

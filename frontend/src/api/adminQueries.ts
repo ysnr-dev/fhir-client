@@ -4,15 +4,19 @@ import {
   createFileCategory,
   createOauthClient,
   createQuestionnaireCategory,
+  createCdsService,
   createReportLayout,
   createSmartApp,
+  deleteCdsService,
   deleteDocumentTemplate,
   deleteFileCategory,
   deleteOauthClient,
   deleteQuestionnaireCategory,
   deleteReportLayout,
   deleteSmartApp,
+  discoverCdsServices,
   fetchAdminSession,
+  fetchCdsServices,
   fetchConnectionSettings,
   fetchDocumentTemplateFile,
   fetchDocumentTemplates,
@@ -38,6 +42,7 @@ import {
   updateDocumentTemplate,
   updateFileCategory,
   updateQuestionnaireCategory,
+  updateCdsService,
   updateReportLayout,
   updateSmartApp,
   type ConnectionSettingsUpdate,
@@ -49,6 +54,7 @@ import {
   type QuestionnaireCategoryPayload,
   type ReportLayoutPayload,
   type SmartAppPayload,
+  type CdsServicePayload,
 } from "./adminClient";
 
 const CONNECTION_SETTINGS_KEY = ["admin", "connection_settings"];
@@ -63,6 +69,7 @@ const QUESTIONNAIRE_CATEGORIES_KEY = ["admin", "questionnaire_categories"];
 const FILE_CATEGORIES_KEY = ["admin", "file_categories"];
 const DOCUMENT_TEMPLATES_KEY = ["admin", "document_templates"];
 const SMART_APPS_KEY = ["admin", "smart_apps"];
+const CDS_SERVICES_KEY = ["admin", "cds_services"];
 
 // 管理系はすべて retry: false。自動リトライされた 401 は上流 fhir-server の
 // レート制限(admin/ip)を無駄に消費するだけで、状況を改善しない。
@@ -495,5 +502,56 @@ export function useDeleteSmartApp() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: SMART_APPS_KEY });
     },
+  });
+}
+
+// --- CDS サービス -------------------------------------------------------------
+
+export function useCdsServices() {
+  return useQuery({
+    queryKey: CDS_SERVICES_KEY,
+    queryFn: fetchCdsServices,
+    retry: false,
+  });
+}
+
+export function useCreateCdsService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CdsServicePayload) => createCdsService(payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CDS_SERVICES_KEY });
+    },
+  });
+}
+
+export function useUpdateCdsService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: CdsServicePayload }) => updateCdsService(id, payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CDS_SERVICES_KEY });
+    },
+  });
+}
+
+export function useDeleteCdsService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteCdsService(id),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CDS_SERVICES_KEY });
+    },
+  });
+}
+
+/** 「探索」: その場で discovery を読む(登録した URL が正しいかの確認)。 */
+export function useDiscoverCdsServices() {
+  return useMutation({
+    mutationFn: (id: number) => discoverCdsServices(id),
+    retry: false,
   });
 }

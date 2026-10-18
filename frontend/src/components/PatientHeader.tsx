@@ -50,12 +50,15 @@ import {
 } from "./PatientPictograms";
 import { PathwayNameLinks } from "./PathwayNameLinks";
 import { PictogramPopover } from "./PictogramPopover";
+import { CdsPictogram } from "./CdsPictogram";
 
 interface PatientHeaderProps {
   patientId: string | undefined;
+  /** 外部の判断支援(CDS Hooks)のカードを帯に出す(カルテだけ)。 */
+  cds?: boolean;
 }
 
-export function PatientHeader({ patientId }: PatientHeaderProps) {
+export function PatientHeader({ patientId, cds = false }: PatientHeaderProps) {
   const patient = usePatient(patientId);
   // 入院中なら居場所を添える(外来のときは項目ごと出さない)。
   const admission = usePatientAdmission(patientId);
@@ -123,7 +126,7 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
       )}
       {emergency.data && <EmergencyStay encounter={emergency.data} />}
       <Pathways patientId={patientId} />
-      <PatientPictogramStrip patientId={patientId} />
+      <PatientPictogramStrip patientId={patientId} cds={cds} />
     </div>
   );
 }
@@ -133,6 +136,11 @@ interface PictogramProps {
   size?: number;
   /** true なら吹き出しを body 直下に出す(PictogramPopover を参照)。 */
   portal?: boolean;
+  /**
+   * 外部の判断支援(CDS Hooks)のカードも出す。カルテだけ true にする。一覧の患者ドロワーの帯で
+   * 外部のサービスを患者ごとに呼ばないため、既定は出さない。
+   */
+  cds?: boolean;
 }
 
 /**
@@ -148,6 +156,7 @@ export function PatientPictogramStrip(props: PictogramProps) {
       <ChemotherapyPictogram {...props} />
       <EarlyWarningPictogram {...props} />
       <IntakePictogram {...props} />
+      {props.cds && <CdsPictogram {...props} />}
     </>
   );
 }

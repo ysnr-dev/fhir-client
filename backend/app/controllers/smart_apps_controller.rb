@@ -26,9 +26,14 @@ class SmartAppsController < ActionController::API
     app = SmartApp.enabled.find_by(id: params[:id])
     return render json: { error: "not_found" }, status: :not_found unless app
 
+    # app_context は CDS Hooks のカードのリンクが持つ文字列。中身に立ち入らず上流に預ける。
+    app_context = params[:app_context]
+    return render json: { error: "app_context must be a string" }, status: :bad_request unless
+      app_context.nil? || app_context.is_a?(String)
+
     result = SmartLaunchIssuer.new.call(
       app: app, patient_id: patient_id, practitioner_id: practitioner_id,
-      encounter_id: params[:encounter_id].to_s.strip.presence
+      encounter_id: params[:encounter_id].to_s.strip.presence, app_context: app_context.presence
     )
     render json: { launch_url: result.launch_url, display: result.display, expires_in: result.expires_in }
   rescue FhirAdminGateway::NotConfigured

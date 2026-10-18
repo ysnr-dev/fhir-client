@@ -42,6 +42,8 @@ export const CAUTION_PICTOGRAM_KEYS = [
   "early-warning",
   // 取込待ちの Web 問診。注意区分マスタでは選ばせず、患者帯が問診の回答から直接使う。
   "intake",
+  // 外部の判断支援(CDS Hooks)のカード。注意区分マスタでは選ばせず、患者帯がサービスの応答から直接使う。
+  "cds",
 ] as const;
 
 export type CautionPictogramKey = (typeof CAUTION_PICTOGRAM_KEYS)[number];
@@ -69,6 +71,7 @@ export const CAUTION_PICTOGRAM_LABELS: Record<CautionPictogramKey, string> = {
   "allergy-other": "皿に禁止記号",
   "early-warning": "心拍の波形",
   intake: "用紙にチェック",
+  cds: "吹き出しに電球",
 };
 
 // 線画の共通属性。塗りは持たず、太さは他の画面のアイコンと揃える。
@@ -266,6 +269,14 @@ const SHAPES: Record<CautionPictogramKey, ReactNode> = {
       <path d="M5.5 9.5l1.8 1.8 3.4-3.8" {...STROKE} />
     </>
   ),
+  // 吹き出しの中に電球(外部の判断支援からの助言)。
+  cds: (
+    <>
+      <path d="M2 2.5h12v8.5H9l-3 3v-3H2Z" {...STROKE} />
+      <path d="M8 4.2a2.2 2.2 0 0 1 1.2 4.05V9H6.8v-.75A2.2 2.2 0 0 1 8 4.2Z" {...STROKE} />
+      <path d="M7 10h2" {...STROKE} />
+    </>
+  ),
   // 三角の感嘆符(汎用。区分に合う図柄が無いときの既定)。
   alert: (
     <>
@@ -287,6 +298,7 @@ const NON_MASTER_KEYS: readonly CautionPictogramKey[] = [
   "chemotherapy",
   "early-warning",
   "intake",
+  "cds",
 ];
 
 export const CAUTION_MASTER_PICTOGRAM_KEYS = CAUTION_PICTOGRAM_KEYS.filter(

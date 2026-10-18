@@ -49,6 +49,11 @@ Rails.application.routes.draw do
     # カルテから起動する SMART アプリの台帳(docs/smart-app-launch-design.md)。
     resources :smart_apps, only: %i[index create update destroy]
 
+    # CDS Hooks のサービス提供元(docs/cds-hooks-design.md)。discover は登録先の確認。
+    resources :cds_services, only: %i[index create update destroy] do
+      get :discover, on: :member
+    end
+
     # 帳票レイアウト(.tlf)の管理。Questionnaire の canonical と紐付けて保存する。
     resources :report_layouts, only: %i[index show create update destroy]
 
@@ -82,6 +87,12 @@ Rails.application.routes.draw do
 
       # 院内エージェント(fhir-client-agent)からの通知。ログインではなく発行済みトークンで認証する。
       post "events", to: "events#create"
+    end
+
+    # CDS Hooks(docs/cds-hooks-design.md)。カルテを開いたときの patient-view と、カードの無視の feedback。
+    scope "cds", module: "cds", as: "cds" do
+      post "patient_view", to: "hooks#patient_view"
+      post "feedback", to: "hooks#feedback"
     end
   end
 

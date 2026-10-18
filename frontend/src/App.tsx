@@ -17,6 +17,7 @@ import { ExternalSystemSettingsPage } from "./pages/ExternalSystemSettingsPage";
 import { FacilitySettingsPage } from "./pages/FacilitySettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { SmartAppsPage } from "./pages/SmartAppsPage";
+import { CdsServicesPage } from "./pages/CdsServicesPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
 import { MasterMenuPage } from "./pages/MasterMenuPage";
 import { LabContainerPage } from "./pages/LabContainerPage";
@@ -249,6 +250,10 @@ function App() {
             {/* カルテの「アプリ」タブから起動する SMART on FHIR アプリの台帳。 */}
             <Link to="/smart-apps" className="row-menu__item">
               SMART アプリ
+            </Link>
+            {/* カルテを開いたときに呼ぶ外部の判断支援(CDS Hooks)の提供元。 */}
+            <Link to="/cds-services" className="row-menu__item">
+              CDS サービス
             </Link>
             <Link to="/settings" className="row-menu__item">
               接続設定
@@ -503,6 +508,15 @@ function App() {
             element={
               <AdminGate>
                 <SmartAppsPage />
+              </AdminGate>
+            }
+          />
+          {/* 患者情報(prefetch)の送り先なので管理者だけ。 */}
+          <Route
+            path="/cds-services"
+            element={
+              <AdminGate>
+                <CdsServicesPage />
               </AdminGate>
             }
           />

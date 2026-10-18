@@ -74,6 +74,22 @@ OAuth クライアントの発行と同じ重さです。
 で登録し、SMART アプリに起動 URL `http://localhost:5173/smart-demo/index.html?client_id=<client_id>` で登録すると、
 カルテの「アプリ」タブで氏名・受診・直近の検査結果と `fhirUser` が出ます。
 
+### CDS サービス
+
+カルテを開いたときに呼ぶ外部の判断支援サービス（CDS Hooks 2.0 の `patient-view`）の提供元です
+（`docs/cds-hooks-design.md`）。名称、URL（`/cds-services` を持つ base URL）、認証トークン（任意、書き込み専用で
+`Authorization: Bearer` に付ける）、有効、表示順を持ちます。提供元が持つサービスの一覧は保存せず、
+backend が discovery（`GET {URL}/cds-services`、5 分キャッシュ）で読みます。行の「探索」でその場の discovery を
+確認できます。
+
+呼び出しは backend が行い、サービスには prefetch（テンプレートを施設トークンで解決した結果）を同梱します。
+上流のトークンは渡しません。読めるのは画面の中継と同じ型だけで、受診が無いなど満たせないテンプレートは省きます。
+提供元が落ちていてもカルテは開け、その提供元のカードが無いだけです。
+
+検証用の模擬サービス `backend/script/cds_demo_service.ru` は、backend コンテナで
+`docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_service.ru` と動かし、URL `http://localhost:8787`
+で登録します。
+
 ## 外部システム連携
 
 レセコンをはじめとする外部システムの設定は、管理 > 外部システム連携の一覧に並びます。

@@ -121,6 +121,7 @@
         <dt>encounter</dt><dd>${esc(encounter ? `${encounter.class?.code || ""} ${encounter.period?.start || ""}` : "(なし)")} <code>${esc(token.encounter || "")}</code></dd>
         <dt>scope</dt><dd><code>${esc(token.scope)}</code></dd>
         <dt>need_patient_banner</dt><dd><code>${esc(String(token.need_patient_banner))}</code></dd>
+        <dt>appContext</dt><dd><code>${esc(token.appContext || "(なし)")}</code></dd>
       </dl>
       <table><thead><tr><th>日時</th><th>項目</th><th>値</th></tr></thead><tbody>${rows || '<tr><td colspan="3">検査結果なし</td></tr>'}</tbody></table>
     `);

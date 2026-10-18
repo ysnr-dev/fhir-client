@@ -25,14 +25,15 @@ class SmartLaunchIssuer
     @config = config
   end
 
-  def call(app:, patient_id:, practitioner_id:, encounter_id: nil)
+  def call(app:, patient_id:, practitioner_id:, encounter_id: nil, app_context: nil)
     body = {
       client_id: app.client_id,
       patient_id: patient_id,
       encounter_id: encounter_id.presence,
       practitioner_id: practitioner_id,
       need_patient_banner: !app.embed?,
-      issued_by: ISSUED_BY
+      issued_by: ISSUED_BY,
+      app_context: app_context.presence
     }.compact
     response = @gateway.request(:post, "/admin/launch_contexts", body: body.to_json)
     raise Upstream.new(response.status, response.body.to_s) unless response.status == 201

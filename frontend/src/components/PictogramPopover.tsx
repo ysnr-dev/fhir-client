@@ -22,6 +22,7 @@ export function PictogramPopover({
   icon,
   count,
   portal = false,
+  closeOnClick = true,
   children,
 }: {
   /** 読み上げに使う文言。中身と同じことを 1 行で表す。 */
@@ -34,6 +35,8 @@ export function PictogramPopover({
   count?: number;
   /** true なら吹き出しを body 直下に出す(一覧の行に並べるとき)。 */
   portal?: boolean;
+  /** false なら中を押しても閉じない(吹き出しの中で選択や入力をするとき)。リンクを押したときは閉じる。 */
+  closeOnClick?: boolean;
   /** 吹き出しの中身。 */
   children: ReactNode;
 }) {
@@ -98,7 +101,9 @@ export function PictogramPopover({
       style={portal ? (position ?? { visibility: "hidden" }) : undefined}
       role="dialog"
       aria-label={label}
-      onClick={() => setOpen(false)}
+      onClick={(event) => {
+        if (closeOnClick || (event.target as HTMLElement).closest("a")) setOpen(false);
+      }}
     >
       {children}
     </div>

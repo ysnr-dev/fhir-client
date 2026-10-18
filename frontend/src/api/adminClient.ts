@@ -723,3 +723,58 @@ export async function deleteSmartApp(id: number): Promise<void> {
   const res = await adminFetch(`${SMART_APPS}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
+
+// --- CDS サービス(CDS Hooks の提供元) ----------------------------------------
+
+export interface CdsServiceSummary {
+  id: number;
+  name: string;
+  base_url: string;
+  auth_token_set: boolean;
+  enabled: boolean;
+  position: number;
+  updated_at: string;
+}
+
+export interface CdsServicePayload {
+  name?: string;
+  base_url?: string;
+  /** 書き込み専用。空なら既存の値を保持する。 */
+  auth_token?: string;
+  enabled?: boolean;
+  position?: number | null;
+}
+
+/** discovery(GET /cds-services)の 1 サービス。 */
+export interface CdsDiscoveredService {
+  id: string;
+  hook: string | null;
+  title: string | null;
+  description: string | null;
+  prefetch: string[];
+}
+
+const CDS_SERVICES = "/admin/cds_services";
+
+export async function fetchCdsServices(): Promise<CdsServiceSummary[]> {
+  const body = await adminJson<{ total: number; items: CdsServiceSummary[] }>(CDS_SERVICES);
+  return body.items;
+}
+
+export async function createCdsService(payload: CdsServicePayload): Promise<CdsServiceSummary> {
+  return adminJson<CdsServiceSummary>(CDS_SERVICES, { method: "POST", ...jsonBody(payload) });
+}
+
+export async function updateCdsService(id: number, payload: CdsServicePayload): Promise<CdsServiceSummary> {
+  return adminJson<CdsServiceSummary>(`${CDS_SERVICES}/${id}`, { method: "PATCH", ...jsonBody(payload) });
+}
+
+export async function deleteCdsService(id: number): Promise<void> {
+  const res = await adminFetch(`${CDS_SERVICES}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+export async function discoverCdsServices(id: number): Promise<CdsDiscoveredService[]> {
+  const body = await adminJson<{ services: CdsDiscoveredService[] }>(`${CDS_SERVICES}/${id}/discover`);
+  return body.services;
+}

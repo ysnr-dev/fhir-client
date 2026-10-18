@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   useEmbeddedSmartAppLaunch,
   useLaunchableSmartApps,
   useSmartAppWindowLaunch,
 } from "../api/smartAppsQueries";
 import { ErrorBanner } from "./ErrorBanner";
+import { takePendingAppContext } from "../lib/smartAppLaunchContext";
 
 // カルテ画面の「アプリ」タブ(docs/smart-app-launch-design.md §3.3)。登録済みの SMART アプリを
 // 開いている患者・利用者の文脈(EHR launch)で起動し、枠内(iframe)に出す。
@@ -33,9 +34,18 @@ export function KarteSmartAppsTab({ patientId, view, onViewChange, encounterId }
   const [nonce, setNonce] = useState(0);
   const selected = apps.data?.find((app) => String(app.id) === view) ?? null;
 
+  // CDS Hooks のカードから来たときは appContext を添えて起動する。最初の起動から添える必要が
+  // あるので effect ではなく描画の中で受け取り、アプリごとに ref に留めて「再起動」でも同じ値を使う。
+  const appContexts = useRef<Record<number, string>>({});
+  if (selected) {
+    const pending = takePendingAppContext(selected.id);
+    if (pending !== undefined) appContexts.current[selected.id] = pending;
+  }
+  const appContext = selected ? appContexts.current[selected.id] : undefined;
+
   const embedded = selected?.display === "embed" ? selected : null;
   const launch = useEmbeddedSmartAppLaunch(
-    embedded ? { appId: embedded.id, patientId, encounterId } : null,
+    embedded ? { appId: embedded.id, patientId, encounterId, appContext } : null,
     nonce,
   );
   const windowLaunch = useSmartAppWindowLaunch();
@@ -47,7 +57,10 @@ export function KarteSmartAppsTab({ patientId, view, onViewChange, encounterId }
     const popup = window.open("", "_blank");
     if (popup) popup.opener = null;
     windowLaunch.mutate(
-      { appId: selected.id, params: { patient_id: patientId, encounter_id: encounterId } },
+      {
+        appId: selected.id,
+        params: { patient_id: patientId, encounter_id: encounterId, app_context: appContext },
+      },
       {
         onSuccess: (data) => {
           if (popup) popup.location.replace(data.launch_url);

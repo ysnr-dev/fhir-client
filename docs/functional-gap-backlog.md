@@ -395,7 +395,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
 | 4 | アレルギー「無し(確認済)」の明示(NKDA) | 拡張 | 高 | 小 | §5.3 |
 | 5 | 医療計算スコアの同梱と自動充填 | 拡張 | 中〜高 | 小 | §5.3 |
 | 6 | Health Maintenance(患者単位の定期検査・検診の期限) | 新規 | 中〜高 | 中 | §5.3 |
-| 7 | SMART on FHIR アプリ起動(外部アプリの埋め込み) — **対応済み(2026-10-18、`docs/smart-app-launch-design.md`。患者なし起動・CDS Hooks は残り)** | 新規 | 中〜高 | 中(上流) | §5.3 |
+| 7 | SMART on FHIR アプリ起動(外部アプリの埋め込み) — **対応済み(2026-10-18、`docs/smart-app-launch-design.md`。CDS Hooks の patient-view も `docs/cds-hooks-design.md` で対応済み。患者なし起動は残り)** | 新規 | 中〜高 | 中(上流) | §5.3 |
 | 8 | 記録の出自表示(複写・テンプレート・AI 由来の色分け) | 拡張 | 中 | 中 | §5.4 |
 | 9 | 申し送り(ハンドオフ)の器と自動下書き | 新規 | 中 | 中 | §5.4 |
 | 10 | ACP・コードステータスの構造化(Consent) | 拡張 | 中 | 中(上流) | §5.4 |
