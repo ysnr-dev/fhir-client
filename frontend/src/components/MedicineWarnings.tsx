@@ -25,17 +25,20 @@ import {
   type CheckedRp,
   type PatientFactors,
 } from "../fhir/drugCheckHelpers";
+import type { Advisory } from "../fhir/advisoryHelpers";
 import {
   buildMedicationWarnings,
   ingredientKey,
+  medicationAdvisories,
   medicineCautions,
   type MedicationWarning,
 } from "../fhir/medicationSafetyHelpers";
 import { calculateAge } from "../fhir/patientHelpers";
 import type { Medicine } from "../api/masterClient";
 
-// 薬剤オーダーの安全性チェックの表示(`docs/order-common-backlog.md` §3)。
-// 処方・注射のフォームが同じ部品を使う。**登録は止めない**(判断は医師のもの)。
+// 薬剤オーダーの安全性チェック(`docs/order-common-backlog.md` §3)。処方・注射のフォームが同じ hook を使い、
+// 結果は共通の警告(docs/advisory-design.md)に写して `AdvisoryInlineMarks` で行の下に出す。
+// 重篤なアレルギー・併用禁忌・上限超過は登録時に理由の確認を要する。
 // 相互作用・用量と患者条件は施設マスタで照合する(docs/drug-check-master-design.md)。
 
 /**
@@ -131,6 +134,12 @@ export function useMedicationWarnings(args: {
   ]);
 }
 
+/** `useMedicationWarnings` の結果を共通の警告(行の位置つき)にしたもの。 */
+export function useMedicationAdvisories(args: Parameters<typeof useMedicationWarnings>[0]): Advisory[] {
+  const warnings = useMedicationWarnings(args);
+  return useMemo(() => medicationAdvisories(warnings, args.rps), [warnings, args.rps]);
+}
+
 /** 成分キーが取れず、医薬品マスタを引けば薬価基準コードが分かりうる薬か。 */
 function needsYakkaLookup(medicine: Medicine | null | undefined): boolean {
   return Boolean(medicine?.medicine_code) && !medicine?.generic && !ingredientKey(medicine);
@@ -201,22 +210,3 @@ export function SubstitutionBlockMark({ block }: { block: SubstitutionBlock | nu
   return <span className="medicine-caution substitution-mark">{substitutionBlockMark(block)}</span>;
 }
 
-/** 1 つの薬剤行に出すアレルギー・重複投与の警告。 */
-export function MedicineWarnings({ warnings }: { warnings: MedicationWarning[] | undefined }) {
-  if (!warnings || warnings.length === 0) return null;
-
-  return (
-    <>
-      {warnings.map((w, i) => (
-        <span
-          key={i}
-          className={`medicine-warning medicine-warning--${w.kind}${w.high ? " medicine-warning--high" : ""}`}
-          title={w.detail}
-          role="note"
-        >
-          {w.text}
-        </span>
-      ))}
-    </>
-  );
-}

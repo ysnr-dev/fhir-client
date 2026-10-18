@@ -54,11 +54,13 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
-import { InfectionNotice } from "./InfectionNotice";
-import { PregnancyNotice } from "./PregnancyNotice";
+import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
+import { AdvisoryNotice } from "./AdvisoryNotice";
+import { useAdvisorySession } from "../hooks/useAdvisorySession";
+import { useInfectionAdvisory, usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
+import { useRadSafetyAdvisories } from "../hooks/useRadSafetyAdvisories";
 import { ProblemSelect } from "./ProblemSelect";
 import { RadPerformInputModal } from "./RadPerformModal";
-import { RadSafetyNotice } from "./RadSafetyNotice";
 import { TemplateTextField } from "./TemplateTextField";
 import { TrashIcon } from "./icons/TrashIcon";
 import { bookingLabel } from "../fhir/appointmentHelpers";
@@ -441,10 +443,23 @@ export function RadOrderForm({
     [catalogByCode],
   );
 
+  // 被曝の判断に要る妊娠・授乳、検査室の感染対策に要る感染症、選んだ撮影項目で決まる造影・MRI の注意。
+  const pregnancy = usePregnancyAdvisory(setMode ? "" : patientId);
+  const infection = useInfectionAdvisory(setMode ? "" : patientId);
+  const radSafety = useRadSafetyAdvisories(setMode ? "" : patientId, values.items);
+  const advisoryInput = useMemo(() => [...radSafety, ...pregnancy, ...infection], [radSafety, pregnancy, infection]);
+  const session = useAdvisorySession(advisoryInput, "rad-order", !setMode);
+  /** 確認を要する警告の理由を選んだあとに行う登録。 */
+  const [confirmSubmit, setConfirmSubmit] = useState<(() => void) | null>(null);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (values.items.length === 0) {
       setValidationError("撮影項目を 1 つ以上選択してください。");
+      return;
+    }
+    if (session.blocked.length > 0) {
+      setValidationError(session.blocked.map((advisory) => advisory.message).join(" / "));
       return;
     }
 
@@ -533,24 +548,32 @@ export function RadOrderForm({
     const activeBookings = Object.keys(selected).length > 0 ? selected : null;
 
     setValidationError(null);
-    onSubmit(
-      {
-        ...values,
-        undated,
-        startDate,
-        items,
-        problem: refreshProblemDisplay(values.problem, problemOptions),
-      },
-      performingSplits.length > 0
-        ? new Map(
-            performingSplits.map((split) => [
-              split.key,
-              needsPerformInput(split.values.items) ? (performs[split.key] ?? null) : null,
-            ]),
-          )
-        : null,
-      activeBookings,
-    );
+    const submit = () =>
+      onSubmit(
+        {
+          ...values,
+          undated,
+          startDate,
+          items,
+          problem: refreshProblemDisplay(values.problem, problemOptions),
+        },
+        performingSplits.length > 0
+          ? new Map(
+              performingSplits.map((split) => [
+                split.key,
+                needsPerformInput(split.values.items) ? (performs[split.key] ?? null) : null,
+              ]),
+            )
+          : null,
+        activeBookings,
+      );
+    // 確認を要する警告があれば理由を選んでから登録する。
+    if (session.pending.length > 0) {
+      setConfirmSubmit(() => submit);
+      return;
+    }
+    session.confirm([]);
+    submit();
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
@@ -638,11 +661,7 @@ export function RadOrderForm({
         )}
         <ErrorBanner error={submitError} />
         <ErrorBanner error={layouts.error ?? setMembers.error ?? catalog.error} />
-        {/* 被曝の判断に要るので、妊娠中・授乳中なら入力欄の前に出す。 */}
-        {!setMode && <PregnancyNotice patientId={patientId} />}
-        {!setMode && <InfectionNotice patientId={patientId} />}
-        {/* 造影・MRI の注意は選んだ撮影項目で決まる。 */}
-        {!setMode && <RadSafetyNotice patientId={patientId} items={values.items} />}
+        <AdvisoryNotice advisories={session.advisories} />
 
         <fieldset>
           <legend>検査共通</legend>
@@ -908,6 +927,18 @@ export function RadOrderForm({
               {submitting ? "送信中..." : submitLabel}
             </button>
           </div>
+        )}
+        {confirmSubmit && (
+          <AdvisoryConfirmModal
+            advisories={session.pending}
+            submitting={submitting}
+            onConfirm={(overrides) => {
+              session.confirm(overrides);
+              setConfirmSubmit(null);
+              confirmSubmit();
+            }}
+            onCancel={() => setConfirmSubmit(null)}
+          />
         )}
       </form>
 

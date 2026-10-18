@@ -1,4 +1,5 @@
 import type { Medicine } from "../api/masterClient";
+import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
 import { allergyMatchLabel, matchMedicationAllergies } from "./allergyHelpers";
 
 // 薬剤オーダーの安全性チェック(`docs/order-common-backlog.md` §3)。
@@ -141,6 +142,26 @@ export interface MedicationWarning {
 
 export interface MedicationLine {
   medicine: Medicine | null;
+}
+
+/**
+ * 薬剤行の警告([RP][薬剤])を共通の警告(docs/advisory-design.md)に写す。key は添字を含めず
+ * 種別・薬剤コード・文言で作る(行を動かしても同じ警告)。アレルギーの一致は重篤度に関係なく
+ * 確認を要する(アレルゲンの処方は常に上書き)。他は「強く出す」ものだけ既定の重さ、残りは表示のみ。
+ */
+export function medicationAdvisories(warnings: MedicationWarning[][][], rps: MedicationRp[]): Advisory[] {
+  return warnings.flatMap((rp, rpIndex) =>
+    rp.flatMap((line, lineIndex) =>
+      line.map((warning) => ({
+        key: advisoryKey(warning.kind, rps[rpIndex]?.medicines[lineIndex]?.medicine?.medicine_code, warning.text),
+        kind: warning.kind,
+        severity: severityOf(warning.kind, warning.kind === "allergy" || warning.high),
+        message: warning.text,
+        detail: warning.detail,
+        scope: { rp: rpIndex, line: lineIndex },
+      })),
+    ),
+  );
 }
 
 export interface MedicationRp {

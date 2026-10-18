@@ -1,10 +1,12 @@
 import type { QueryClient } from "@tanstack/react-query";
 import {
   buildActivityProvenanceEntry,
+  buildAdvisoryOverrideProvenanceEntry,
   buildOrderProvenanceEntry,
   type OrderActivity,
   type OrderEnterer,
 } from "../../fhir/provenanceHelpers";
+import { takeStagedAdvisoryOverrides } from "../../lib/advisoryOverrideStage";
 import { approvalOrdersOfBundle, buildOrderApprovalTaskEntries } from "../../fhir/orderApprovalTaskHelpers";
 import { NOTIFICATION_TASK_KEY } from "./core";
 import { useCountersignContext } from "./countersign";
@@ -30,12 +32,16 @@ export function useOrderEnterer(): OrderEnterer | null {
 export function useWithOrderProvenance(): (bundle: fhir4.Bundle) => fhir4.Bundle {
   const enterer = useOrderEnterer();
   return (bundle) => {
+    // フォームが登録の直前に置いた、無視した警告(docs/advisory-design.md §2.8)。来歴を付けない
+    // 登録でも取り出して捨てる(次の登録に持ち越さない)。
+    const overrides = takeStagedAdvisoryOverrides();
     const entry = enterer ? buildOrderProvenanceEntry(bundle, enterer) : null;
     if (!entry || !enterer) return bundle;
     // 代行入力なら指示医師あて、研修医の入力なら指導医あての承認待ちの通知も同じ
     // transaction で作る(来歴は urn:uuid で参照する。上流が採番済みの id に解決する)。
     const tasks = buildOrderApprovalTaskEntries(entry, approvalOrdersOfBundle(bundle), enterer);
-    return { ...bundle, entry: [...(bundle.entry ?? []), entry, ...tasks] };
+    const override = overrides ? buildAdvisoryOverrideProvenanceEntry(bundle, enterer, overrides) : null;
+    return { ...bundle, entry: [...(bundle.entry ?? []), entry, ...tasks, ...(override ? [override] : [])] };
   };
 }
 

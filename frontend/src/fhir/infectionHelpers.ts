@@ -1,3 +1,4 @@
+import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
 import { today } from "../lib/dates";
 import { LOINC_SYSTEM } from "./shared";
 
@@ -333,3 +334,19 @@ export function parseInfectionForm(observation: fhir4.Observation): InfectionFor
   };
 }
 
+
+/**
+ * 陽性の感染症の注意(放射線・生理・内視鏡の清掃順・感染対策の判断)。陽性が無ければ null。
+ */
+export function infectionAdvisory(rows: InfectionRow[]): Advisory | null {
+  const positives = rows.filter((row) => row.result === "positive");
+  if (positives.length === 0) return null;
+  return {
+    key: advisoryKey("infection", ...positives.map((row) => row.type)),
+    kind: "infection",
+    severity: severityOf("infection", true),
+    message: `感染症: ${positives
+      .map((row) => `${row.typeLabel} 陽性${row.effectiveDate ? `（${row.effectiveDate}）` : ""}`)
+      .join(" / ")}`,
+  };
+}

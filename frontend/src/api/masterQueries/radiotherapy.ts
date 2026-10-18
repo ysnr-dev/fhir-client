@@ -3,7 +3,7 @@ import {
   type MasterSearchResult,
   type RadiotherapyDevice,
   radiotherapyDeviceClient,
-  type RadiotherapyMasterSearchParams,
+  type SimpleMasterSearchParams,
   type RadiotherapyModality,
   radiotherapyModalityClient,
   type RadiotherapyProtocol,
@@ -20,10 +20,10 @@ import {
 
 const RADIOTHERAPY_MASTER_PER = 500;
 
-function radiotherapyMasterHooks<T extends { id: number }>(
+export function simpleMasterHooks<T extends { id: number }>(
   name: string,
   client: {
-    search: (params: RadiotherapyMasterSearchParams) => Promise<MasterSearchResult<T>>;
+    search: (params: SimpleMasterSearchParams) => Promise<MasterSearchResult<T>>;
     create: (payload: Partial<Omit<T, "id">>) => Promise<T>;
     update: (id: number, payload: Partial<Omit<T, "id">>) => Promise<T>;
     remove: (id: number) => Promise<void>;
@@ -76,23 +76,23 @@ function radiotherapyMasterHooks<T extends { id: number }>(
 
 const EMPTY_RADIOTHERAPY_ITEMS: never[] = [];
 
-export const radiotherapyModalityHooks = radiotherapyMasterHooks<RadiotherapyModality>(
+export const radiotherapyModalityHooks = simpleMasterHooks<RadiotherapyModality>(
   "radiotherapy_modalities",
   radiotherapyModalityClient,
 );
-export const radiotherapyTechniqueHooks = radiotherapyMasterHooks<RadiotherapyTechnique>(
+export const radiotherapyTechniqueHooks = simpleMasterHooks<RadiotherapyTechnique>(
   "radiotherapy_techniques",
   radiotherapyTechniqueClient,
 );
-export const radiotherapyDeviceHooks = radiotherapyMasterHooks<RadiotherapyDevice>(
+export const radiotherapyDeviceHooks = simpleMasterHooks<RadiotherapyDevice>(
   "radiotherapy_devices",
   radiotherapyDeviceClient,
 );
-export const radiotherapyStopReasonHooks = radiotherapyMasterHooks<RadiotherapyStopReason>(
+export const radiotherapyStopReasonHooks = simpleMasterHooks<RadiotherapyStopReason>(
   "radiotherapy_stop_reasons",
   radiotherapyStopReasonClient,
 );
-export const radiotherapyProtocolHooks = radiotherapyMasterHooks<RadiotherapyProtocol>(
+export const radiotherapyProtocolHooks = simpleMasterHooks<RadiotherapyProtocol>(
   "radiotherapy_protocols",
   radiotherapyProtocolClient,
 );

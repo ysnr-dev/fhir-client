@@ -18,6 +18,8 @@ import { FacilitySettingsPage } from "./pages/FacilitySettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { SmartAppsPage } from "./pages/SmartAppsPage";
 import { CdsServicesPage } from "./pages/CdsServicesPage";
+import { AdvisoryOverrideReasonPage } from "./pages/AdvisoryMasterPages";
+import { AdvisoryReviewPage } from "./pages/AdvisoryReviewPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
 import { MasterMenuPage } from "./pages/MasterMenuPage";
 import { LabContainerPage } from "./pages/LabContainerPage";
@@ -255,6 +257,10 @@ function App() {
             <Link to="/cds-services" className="row-menu__item">
               CDS サービス
             </Link>
+            {/* 警告(判断支援)の発火数・無視率と、種別ごとの重さの調整。 */}
+            <Link to="/advisory-review" className="row-menu__item">
+              警告の集計と設定
+            </Link>
             <Link to="/settings" className="row-menu__item">
               接続設定
             </Link>
@@ -375,6 +381,7 @@ function App() {
           <Route path="/radiotherapy-techniques" element={<RadiotherapyTechniquePage />} />
           <Route path="/radiotherapy-devices" element={<RadiotherapyDevicePage />} />
           <Route path="/radiotherapy-stop-reasons" element={<RadiotherapyStopReasonPage />} />
+          <Route path="/advisory-override-reasons" element={<AdvisoryOverrideReasonPage />} />
           <Route
             path="/nutrition-guidance-worklist"
             element={<NutritionGuidanceWorklistPage />}
@@ -517,6 +524,15 @@ function App() {
             element={
               <AdminGate>
                 <CdsServicesPage />
+              </AdminGate>
+            }
+          />
+          {/* 警告の統計は管理 API。重さの調整は施設設定に書く。 */}
+          <Route
+            path="/advisory-review"
+            element={
+              <AdminGate>
+                <AdvisoryReviewPage />
               </AdminGate>
             }
           />

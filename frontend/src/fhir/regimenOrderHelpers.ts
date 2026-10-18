@@ -1,3 +1,4 @@
+import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
 import type { Medicine, MedicineUsage, RegimenDetail, RegimenDrug, RegimenStep } from "../api/masterClient";
 import { addDays, diffDays, today } from "../lib/dates";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
@@ -1304,38 +1305,56 @@ export function buildRegimenMoveBundle(
 // ---- 重なり・重複の検出(§7.6 A-7) ----
 
 /**
- * 新規適用のときの注意。
- * ［決定］**止めない**(投与前チェックと同じ。§8.3)。同じレジメンを続けて 2 本立てる運用
- * (前の適用を閉じ忘れたまま新しく作る)も、別のレジメンとの併用も、あり得ないとは言えない。
- * 気付ける形にすることだけを担う。
+ * 新規適用のときの注意。同じレジメンが進行中なら確認を要する(二重適用の疑い)、別のレジメンとの
+ * 併用は表示のみ。どちらも止めない(前の適用を閉じ忘れたまま新しく作る運用も、併用も、あり得る)。
  */
-export function applicationConflicts(code: string, existing: RegimenApplication[]): string[] {
+export function applicationConflictAdvisories(code: string, existing: RegimenApplication[]): Advisory[] {
   const running = existing.filter((a) => a.status === "active" || a.status === "on-hold");
   const same = running.filter((a) => a.code === code);
   const others = running.filter((a) => a.code !== code);
-  const warnings: string[] = [];
+  const advisories: Advisory[] = [];
   if (same.length > 0) {
-    warnings.push(
-      `このレジメンは${regimenStatusLabel(same[0].status)}です(${same[0].name}、開始 ${same[0].startDate})。二重に適用しようとしていないか確かめてください。`,
-    );
+    advisories.push({
+      key: advisoryKey("regimen-conflict", "same", same[0].id),
+      kind: "regimen-conflict",
+      severity: severityOf("regimen-conflict", true),
+      message: `このレジメンは${regimenStatusLabel(same[0].status)}です(${same[0].name}、開始 ${same[0].startDate})。二重に適用しようとしていないか確かめてください。`,
+    });
   }
   if (others.length > 0) {
-    warnings.push(`ほかに進行中のレジメンがあります(${others.map((a) => a.name).join("・")})。`);
+    advisories.push({
+      key: advisoryKey("regimen-conflict", "others", ...others.map((a) => a.id)),
+      kind: "regimen-conflict",
+      severity: severityOf("regimen-conflict", false),
+      message: `ほかに進行中のレジメンがあります(${others.map((a) => a.name).join("・")})。`,
+    });
   }
-  return warnings;
+  return advisories;
 }
 
 /**
- * 開始日の注意。過去日はどちらのモードでも、重なりは次クールの登録で見る
+ * 開始日の注意(表示のみ)。過去日はどちらのモードでも、重なりは次クールの登録で見る
  * (前のクールの最終投与日以前に Day 1 を置くと、暦の休薬期間もクールの進捗も読めなくなる)。
  */
-export function startDateWarnings(startDate: string, lastAdministered: string): string[] {
-  const warnings: string[] = [];
-  if (startDate && startDate < today()) warnings.push(`開始日が過去の日付です(${startDate})。`);
-  if (lastAdministered && startDate && startDate <= lastAdministered) {
-    warnings.push(`登録済みの投与日(${lastAdministered})と重なります。開始日を確かめてください。`);
+export function startDateAdvisories(startDate: string, lastAdministered: string): Advisory[] {
+  const advisories: Advisory[] = [];
+  if (startDate && startDate < today()) {
+    advisories.push({
+      key: advisoryKey("regimen-date", "past"),
+      kind: "regimen-date",
+      severity: severityOf("regimen-date", true),
+      message: `開始日が過去の日付です(${startDate})。`,
+    });
   }
-  return warnings;
+  if (lastAdministered && startDate && startDate <= lastAdministered) {
+    advisories.push({
+      key: advisoryKey("regimen-date", "overlap"),
+      kind: "regimen-date",
+      severity: severityOf("regimen-date", true),
+      message: `登録済みの投与日(${lastAdministered})と重なります。開始日を確かめてください。`,
+    });
+  }
+  return advisories;
 }
 
 // ---- ヘッダの編集(§7.6 C-6) ----

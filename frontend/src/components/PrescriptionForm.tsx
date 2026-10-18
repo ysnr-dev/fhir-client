@@ -37,15 +37,18 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
-import {
-  FormularyMark,
-  MedicineCautionMarks,
-  MedicineWarnings,
-  useMedicationWarnings,
-} from "./MedicineWarnings";
-import { PregnancyNotice } from "./PregnancyNotice";
-import { PrescriptionOrderSelectCards, PrescriptionOrderSignModal } from "./PrescriptionCdsCards";
+import { FormularyMark, MedicineCautionMarks, useMedicationAdvisories } from "./MedicineWarnings";
+import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
+import { AdvisoryInlineMarks, AdvisoryNotice } from "./AdvisoryNotice";
+import { CdsCardLinks } from "./CdsCardList";
+import { feedbackParams, PrescriptionOrderSelectCards } from "./PrescriptionCdsCards";
 import { fetchCdsOrderHook, type CdsCard } from "../api/cdsClient";
+import { useSendCdsFeedback } from "../api/cdsQueries";
+import { useAdvisoryOverrideReasons } from "../api/masterQueries";
+import { type Advisory, advisoriesOfScope, unscopedAdvisories } from "../fhir/advisoryHelpers";
+import { cdsCardAdvisories, cdsCardOfAdvisory, overrideReasonsOf } from "../fhir/cdsCardHelpers";
+import { useAdvisorySession } from "../hooks/useAdvisorySession";
+import { usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
@@ -149,13 +152,19 @@ export function PrescriptionForm({
       })),
     [values.rps],
   );
-  const warnings = useMedicationWarnings({
+  const medicationAdvisories = useMedicationAdvisories({
     patientId: setMode ? "" : patientId,
     startDate: values.startDate,
     rps: checkedRps,
     excludeOrderId: orderId,
     excludeBroughtIds: broughtIds,
   });
+  // 催奇形性・乳汁移行の判断に要るので、妊娠中・授乳中は入力欄の前に出す。
+  const pregnancy = usePregnancyAdvisory(setMode ? "" : patientId);
+  const advisoryInput = useMemo(() => [...medicationAdvisories, ...pregnancy], [medicationAdvisories, pregnancy]);
+  const session = useAdvisorySession(advisoryInput, "prescription", !setMode);
+  const masterReasons = useAdvisoryOverrideReasons();
+  const feedback = useSendCdsFeedback();
 
   // 外部の判断支援(CDS Hooks の order-select / order-sign)。患者が決まらないオーダーセットの内容入力と、
   // 外から一括 submit する画面(確認モーダルを挟めない)では呼ばない。
@@ -165,7 +174,8 @@ export function PrescriptionForm({
     () => buildPrescriptionDraftOrders(values, patientId, requester),
     [values, patientId, requester],
   );
-  const [signCards, setSignCards] = useState<CdsCard[] | null>(null);
+  /** 登録前の確認に出す警告と、そのうち外部の判断支援(order-sign)のカード。 */
+  const [confirm, setConfirm] = useState<{ advisories: Advisory[]; cards: CdsCard[] } | null>(null);
   const [signing, setSigning] = useState(false);
 
   // 一般名処方は保険上、外来の院外処方でだけ算定できる。
@@ -326,22 +336,30 @@ export function PrescriptionForm({
       setValidationError(error);
       return;
     }
+    if (session.blocked.length > 0) {
+      setValidationError(session.blocked.map((advisory) => advisory.message).join(" / "));
+      return;
+    }
     setValidationError(null);
+    let cards: CdsCard[] = [];
     if (cdsEnabled && (draftOrders.entry?.length ?? 0) > 0) {
-      // 登録の直前に order-sign を呼び、カードがあれば確認を挟む。サービスの不調で登録は止めない。
+      // 登録の直前に order-sign を呼ぶ。サービスの不調で登録は止めない。
       setSigning(true);
       try {
-        const result = await fetchCdsOrderHook("order-sign", { patient_id: patientId, draft_orders: draftOrders });
-        if (result.cards.length > 0) {
-          setSignCards(result.cards);
-          return;
-        }
+        cards = (await fetchCdsOrderHook("order-sign", { patient_id: patientId, draft_orders: draftOrders })).cards;
       } catch {
         // 判断支援に届かなくても登録はできる。
       } finally {
         setSigning(false);
       }
     }
+    // 確認を要する警告と判断支援のカードがあれば確認を挟む。
+    const advisories = [...session.pending, ...cdsCardAdvisories(cards)];
+    if (advisories.length > 0) {
+      setConfirm({ advisories, cards });
+      return;
+    }
+    session.confirm([]);
     save();
   }
 
@@ -367,8 +385,7 @@ export function PrescriptionForm({
         </div>
       )}
       <ErrorBanner error={submitError} />
-      {/* 催奇形性・乳汁移行の判断に要るので、妊娠中・授乳中なら入力欄の前に出す。 */}
-      {!setMode && <PregnancyNotice patientId={patientId} />}
+      <AdvisoryNotice advisories={unscopedAdvisories(session.advisories)} />
       {cdsEnabled && <PrescriptionOrderSelectCards patientId={patientId} draftOrders={draftOrders} />}
 
       <fieldset>
@@ -507,7 +524,7 @@ export function PrescriptionForm({
                           <span className="rp-card__usage-value--empty">未選択</span>
                         )}
                       </div>
-                      <MedicineWarnings warnings={warnings[rpIndex]?.[medIndex]} />
+                      <AdvisoryInlineMarks advisories={advisoriesOfScope(session.advisories, rpIndex, medIndex)} />
                       {showSubstitution && (
                         <div className="rp-card__comment-field rp-card__comment-field--inline">
                           <label>
@@ -811,16 +828,32 @@ export function PrescriptionForm({
           formularyPick={{}}
         />
       )}
-      {signCards && (
-        <PrescriptionOrderSignModal
-          patientId={patientId}
-          cards={signCards}
+      {confirm && (
+        <AdvisoryConfirmModal
+          advisories={confirm.advisories}
           submitting={submitting}
-          onConfirm={() => {
-            setSignCards(null);
+          reasonOptions={(advisory) => {
+            const card = cdsCardOfAdvisory(confirm.cards, advisory);
+            return card
+              ? overrideReasonsOf(card, masterReasons).map((r) => ({ code: r.code, display: r.display, system: r.system ?? undefined }))
+              : undefined;
+          }}
+          renderExtra={(advisory) => {
+            const card = cdsCardOfAdvisory(confirm.cards, advisory);
+            return card ? <CdsCardLinks card={card} patientId={patientId} /> : null;
+          }}
+          onConfirm={(overrides) => {
+            // 判断支援のカードの無視はサービスにも feedback で返す。
+            for (const override of overrides) {
+              const card = cdsCardOfAdvisory(confirm.cards, override.advisory);
+              const reason = card && overrideReasonsOf(card, masterReasons).find((r) => r.code === override.reasonCode);
+              if (card && reason) feedback.mutate(feedbackParams(card, reason));
+            }
+            session.confirm(overrides);
+            setConfirm(null);
             save();
           }}
-          onCancel={() => setSignCards(null)}
+          onCancel={() => setConfirm(null)}
         />
       )}
     </form>

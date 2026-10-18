@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_18_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_19_090100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -41,6 +41,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_140000) do
     t.bigint "blob_id", null: false
     t.string "variation_digest", null: false
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+  end
+
+  create_table "advisory_events", force: :cascade do |t|
+    t.string "session_id", null: false
+    t.string "advisory_key", null: false
+    t.string "kind", null: false
+    t.string "severity", null: false
+    t.string "outcome", null: false
+    t.string "context", null: false
+    t.string "reason_code"
+    t.text "reason_text"
+    t.string "practitioner_fhir_id"
+    t.string "user_login_id"
+    t.string "order_reference"
+    t.datetime "occurred_at", null: false
+    t.datetime "created_at", null: false
+    t.index ["kind", "occurred_at"], name: "index_advisory_events_on_kind_and_occurred_at"
+    t.index ["session_id", "advisory_key", "outcome"], name: "index_advisory_events_on_session_key_outcome", unique: true
   end
 
   create_table "bulletin_posts", force: :cascade do |t|
@@ -333,6 +351,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_140000) do
     t.index ["created_at"], name: "index_lab_result_imports_on_created_at"
     t.index ["message_control_id"], name: "index_lab_result_imports_on_message_control_id"
     t.index ["source"], name: "index_lab_result_imports_on_source"
+  end
+
+  create_table "master_advisory_override_reasons", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.boolean "enabled", default: true, null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_advisory_override_reasons_on_code", unique: true
   end
 
   create_table "master_clinical_note_titles", force: :cascade do |t|

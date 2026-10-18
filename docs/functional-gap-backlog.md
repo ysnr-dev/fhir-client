@@ -82,7 +82,7 @@
   - ［当たり］`users` に failed_attempts / locked_at / password_changed_at、施設設定にポリシー、frontend にアイドルタイマー + ロック画面。
 - **修正・削除の理由**(拡張、中〜高)
   - ［対応物］`_history`、Provenance(登録・編集)。削除・中止は理由を持たない(`order-common-backlog.md` §2 障壁 4)。
-  - ［不足］文書種別・科ごとに修正・削除時の理由選択を求める、理由の定型文マスタ、警告を無視した理由(共通チェック (37))の記録。
+  - ［不足］文書種別・科ごとに修正・削除時の理由選択を求める、理由の定型文マスタ。警告を無視した理由(共通チェック (37))は `advisory-design.md` で対応済み。
   - ［当たり］`Provenance.reason` / `activity=DELETE`、理由候補は backend の小マスタ。
 - **承認要否の設定**(拡張、中): 研修区分・科・項目(麻薬・抗がん剤)ごとに事前 / 事後承認を設定。
   「承認前でも部門へ流す」方針と衝突するので事前承認は要検討。
@@ -117,7 +117,7 @@
 - **患者状態チェック(種別非依存)**(拡張、高)
   - ［対応物］薬剤安全性チェック(`medicationSafetyHelpers`、アレルギー・重複・相互作用・用量・年齢・腎機能)、`PregnancyNotice`。
   - ［不足］外泊中・退院済の患者への入院オーダー警告、退院時に適用中パスの未評価警告(`clinical-pathway-backlog.md` A-6)、伝票・配膳の締切超過、オーダー発行可能時間、診療科限定薬・利用者限定薬、麻薬施用者免許のチェック、感染症との照合。
-  - ［当たり］純関数の器に「患者状態チェック」を 1 本足し、全フォームの登録前に通す。
+  - ［当たり］器は `advisory-design.md`(`Advisory`、重さ `block` = 止める)にある。各チェックを `block` の種別として足す。
 - **退院後オーダーの検索と一括中止**(拡張、高)
   - ［対応物］退院モーダルは食事・リハ・指導・看護指示・持参薬だけを終了する。
   - ［不足］注射の連日展開・入院処方・検査予約・処置など退院日より後に実施予定日を持つオーダーの一覧と選択中止、入外変更、死亡退院時の自動起動。
@@ -391,7 +391,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
 |---|---|---|---|---|---|
 | 1 | 要フォロー推奨の閉ループ追跡(偶発所見)と未確認結果の滞留一覧 — **対応済み(2026-10-18、`docs/result-followup-design.md`。病理・自動で閉じる仕組みは残り)** | 拡張 | 高 | 小〜中 | §5.3 |
 | 2 | 退院時の薬剤調整(Medication Reconciliation) | 拡張 | 高 | 中 | §5.3 |
-| 3 | 警告(判断支援)の共通の器とガバナンス(無視理由・発火率・無視率) | 拡張 | 高 | 中 | §5.3 |
+| 3 | 警告(判断支援)の共通の器とガバナンス(無視理由・発火率・無視率) — **対応済み(2026-10-19、`docs/advisory-design.md`。止める種別はまだ無い)** | 拡張 | 高 | 中 | §5.3 |
 | 4 | アレルギー「無し(確認済)」の明示(NKDA) | 拡張 | 高 | 小 | §5.3 |
 | 5 | 医療計算スコアの同梱と自動充填 | 拡張 | 中〜高 | 小 | §5.3 |
 | 6 | Health Maintenance(患者単位の定期検査・検診の期限) | 新規 | 中〜高 | 中 | §5.3 |
@@ -432,14 +432,14 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
   - ［当たり］退院処方フォームの前段に「薬剤調整」の手順。行は `ingredientKey` で持参薬・入院処方・退院処方を突き合わせ、判断は
     `MedicationStatement`(拡張 `reconciliation-decision` + 理由)を transaction で書く。休止持参薬の再開は持参薬を `active` に戻す。
     患者向けの一覧は §4.5「お薬と次回予約の一枚紙」と同じ帳票にまとめる。
-- **警告(判断支援)の共通の器とガバナンス**(拡張、高)
+- **警告(判断支援)の共通の器とガバナンス**(拡張、高) — **対応済み(2026-10-19、`docs/advisory-design.md`)。止める(block)種別と患者帯のカードの台帳は残り**
   - ［対応物］`medicationSafetyHelpers`・`drugCheckHelpers`・`radSafetyHelpers`・`RegimenPreCheck`・`PregnancyNotice`・`InfectionNotice`・
     `MealAllergyNotice`・早期警告。いずれも機能ごとの実装で、確認・無視の理由は残らない。§2.1(警告を無視した理由)・§2.3(患者状態チェックの器)に一部既載。
   - ［不足］警告の種別と重さ(表示のみ / 確認を要する / 止める)を 1 つの型にまとめる。確認・無視の理由を記録し、警告ごとの発火数・無視率を管理画面で見る。
     海外では警告の上書き率 95.7% という報告があり、Northwestern は高頻度の警告 19 件を廃止して入院あたりの割り込みを 35 → 16.6 件にした。
   - ［当たり］純関数 `fhir/advisoryHelpers.ts` に `Advisory {kind, severity, message, source}` を定め、既存の各ヘルパーをこれに寄せる。表示は `AdvisoryNotice` 1 部品。
     無視は登録の transaction に `Provenance`(activity = override、`reason` に理由の Coding)を積み、理由の候補は §2.1 の定型文マスタと共用。
-    集計は backend `advisory_events`(kind・severity・outcome・user・at)に記録し、管理画面「警告の見直し」に種別 × 月の発火数・無視率。
+    集計は backend `advisory_events`(kind・severity・outcome・user・at)に記録し、管理画面「警告の集計と設定」に種別 × 月の発火数・無視率。
 - **アレルギー「無し(確認済)」の明示(NKDA)**(拡張、高・小)
   - ［対応物］`AllergyIntolerance.verificationStatus`(未確定・否定)、患者帯のアレルギー表示。
   - ［不足］「既知のアレルギー無し」を記録して「未確認」と区別する。海外 EHR では入院時の必須項目で、未確認のまま処方すると警告が出る。

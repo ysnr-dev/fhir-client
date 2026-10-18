@@ -147,6 +147,11 @@ class FacilitySettings < ApplicationRecord
   # show_qsofa は入力フォームに qSOFA を併記するか(docs/early-warning-design.md)。
   EARLY_WARNING_NOTIFY_BANDS = %w[low-medium medium high].freeze
   DEFAULT_EARLY_WARNING = { "enabled" => false, "notify_band" => "medium", "show_qsofa" => true }.freeze
+  # 警告(判断支援)の種別ごとの重さの調整(docs/advisory-design.md §3.4)。種別 → default(実装の既定)/
+  # info(表示のみに下げる)/ off(出さない)。上げることはできない。種別の一覧は frontend(ADVISORY_KINDS)が持つ。
+  ADVISORY_SEVERITY_OVERRIDES = %w[default info off].freeze
+  ADVISORY_KIND_PATTERN = /\A[a-z][a-z-]*\z/
+  DEFAULT_ADVISORY_SEVERITY = {}.freeze
   # カルテのカードの同じ日の中での並び。mode は time(日時の順)か kind(種別の順。同じ種別の中は日時の順)、
   # kinds は種別のコードを並べた順。種別の一覧と表示名は frontend(KARTE_KIND_LABELS)が持ち、ここに無い種別は
   # 既定の順で後ろに付く(種別を足しても backend は触らない)。表示時の並べ替えだけなので、過去の日にも効く。
@@ -401,6 +406,14 @@ class FacilitySettings < ApplicationRecord
           "notify_band" => { enum: EARLY_WARNING_NOTIFY_BANDS },
           "show_qsofa" => :boolean
         }
+      }
+    },
+    "advisory_severity" => {
+      default: DEFAULT_ADVISORY_SEVERITY,
+      shape: { map: { enum: ADVISORY_SEVERITY_OVERRIDES }, keys: :any },
+      check: lambda { |value|
+        bad = value.is_a?(Hash) ? value.keys.reject { |key| key.to_s.match?(ADVISORY_KIND_PATTERN) } : []
+        bad.map { |key| "advisory_severity の種別「#{key}」が不正です" }
       }
     },
     "karte_card_order" => {

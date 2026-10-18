@@ -22,6 +22,7 @@ import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
 import type { NursingProfileSettings } from "../fhir/nursingProfileHelpers";
 import type { BulkVitalEntrySettings } from "../fhir/bulkVitalHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
+import type { AdvisorySeveritySettings } from "../fhir/advisoryHelpers";
 import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
 import type { IntakeSettings } from "../fhir/intakeHelpers";
 import type { KarteCardOrderSettings } from "../fhir/karteCardOrderHelpers";
@@ -90,6 +91,8 @@ export interface FacilitySettings {
   intake: IntakeSettings;
   /** カルテのカードの同じ日の中での並び(時系列か種別順か、種別の順)。 */
   karte_card_order: KarteCardOrderSettings;
+  /** 警告(判断支援)の種別ごとの重さの調整(下げる・出さない)。 */
+  advisory_severity: AdvisorySeveritySettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -113,6 +116,7 @@ export type FacilitySettingsPayload = Partial<{
   early_warning: EarlyWarningSettings;
   intake: IntakeSettings;
   karte_card_order: KarteCardOrderSettings;
+  advisory_severity: AdvisorySeveritySettings;
 }>;
 
 export interface ConnectionTestResult {
@@ -781,4 +785,27 @@ export async function deleteCdsService(id: number): Promise<void> {
 export async function discoverCdsServices(id: number): Promise<CdsDiscoveredService[]> {
   const body = await adminJson<{ services: CdsDiscoveredService[] }>(`${CDS_SERVICES}/${id}/discover`);
   return body.services;
+}
+
+// --- 警告の集計と設定(docs/advisory-design.md §3.3) --------------------------------
+
+export interface AdvisoryStatRow {
+  kind: string;
+  /** YYYY-MM(日本時間)。 */
+  month: string;
+  fired: number;
+  overridden: number;
+  /** 無視理由のコード → 件数。 */
+  reasons: Record<string, number>;
+}
+
+export interface AdvisoryStats {
+  from: string;
+  to: string;
+  rows: AdvisoryStatRow[];
+}
+
+export async function fetchAdvisoryStats(range: { from: string; to: string }): Promise<AdvisoryStats> {
+  const search = new URLSearchParams(range);
+  return adminJson<AdvisoryStats>(`/admin/advisory_stats?${search.toString()}`);
 }

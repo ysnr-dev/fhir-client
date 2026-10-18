@@ -1,5 +1,11 @@
+import { Fragment } from "react";
 import { useApproveOrderProvenances, useCanApproveOrder, useOrderProvenance } from "../api/queries";
-import { orderActivityLabel, provenancesOf, summarizeOrderProvenance } from "../fhir/provenanceHelpers";
+import {
+  advisoryOverridesOf,
+  orderActivityLabel,
+  provenancesOf,
+  summarizeOrderProvenance,
+} from "../fhir/provenanceHelpers";
 import { dateTimeSecondsLabel } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 
@@ -28,18 +34,34 @@ export function RegisteredAtRow({ authoredOn }: { authoredOn: string | undefined
  * - 最終更新 … 編集があったとき。最後に編集した人と日時
  * - 承認     … 代行の活動があるとき。承認済なら承認した医師と日時、未承認なら
  *              指示医師本人にだけ「承認」ボタン(登録と編集の承認待ちはまとめて承認する)
+ * - 警告の確認 … 警告を無視して登録・編集したとき。誰が・いつ・どの警告をどの理由で(docs/advisory-design.md §2.8)
  */
 export function EnteredByRow({ serviceRequestId }: { serviceRequestId: string | undefined }) {
   const provenance = useOrderProvenance(serviceRequestId);
-  const summary = summarizeOrderProvenance(provenancesOf(provenance.data?.data));
+  const provenances = provenancesOf(provenance.data?.data);
+  const summary = summarizeOrderProvenance(provenances);
+  const overrides = advisoryOverridesOf(provenances);
   const canApprove = useCanApproveOrder(summary);
   const approve = useApproveOrderProvenances();
 
   const { proxyEntry, lastUpdate, pending, approval } = summary;
-  if (!proxyEntry && !lastUpdate && pending.length === 0 && !approval) return null;
+  if (!proxyEntry && !lastUpdate && pending.length === 0 && !approval && overrides.length === 0) return null;
 
   return (
     <>
+      {overrides.map((record) => (
+        <Fragment key={record.at}>
+          <dt>警告の確認</dt>
+          <dd>
+            {`${record.name}　${dateTimeSecondsLabel(record.at)}`}
+            <ul className="order-detail__advisory-overrides">
+              {record.reasons.map((reason, index) => (
+                <li key={index}>{`${reason.text} — ${reason.reason}`}</li>
+              ))}
+            </ul>
+          </dd>
+        </Fragment>
+      ))}
       {proxyEntry && (
         <>
           <dt>代行入力</dt>

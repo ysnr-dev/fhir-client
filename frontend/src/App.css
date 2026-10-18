@@ -518,20 +518,9 @@
   font-weight: 600;
 }
 
-/* 処方・放射線検査のオーダー画面に出す妊娠中・授乳中の注意。オーダーは妨げないので
-   エラーの赤ではなく、注意の橙で枠を付ける。 */
-.pregnancy-notice {
-  margin: 0 0 8px;
-  padding: 6px 10px;
-  border: 1px solid var(--warning);
-  border-radius: 4px;
-  color: var(--warning);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-/* 放射線オーダーの造影・MRI の注意。1 件 1 行で、重いものだけ危険色にする。 */
-.rad-safety-notice {
+/* 警告(判断支援)の一覧(docs/advisory-design.md §2.4)。フォームの先頭に 1 件 1 行で出す。
+   表示のみは注意の橙、確認を要するもの・止めるものは危険色。 */
+.advisory-notice {
   margin: 0 0 8px;
   padding: 6px 10px 6px 26px;
   border: 1px solid var(--warning);
@@ -541,8 +530,79 @@
   font-weight: 600;
 }
 
-.rad-safety-notice__high {
+.advisory--warning {
   color: var(--danger);
+}
+
+.advisory--block {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.advisory__source {
+  margin-left: 6px;
+  font-weight: 400;
+  font-size: 12px;
+}
+
+/* 登録前の警告の確認(AdvisoryConfirmModal)。 */
+.advisory-confirm-modal__list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  max-width: 560px;
+}
+
+.advisory-confirm-modal__item {
+  padding: 8px 10px;
+  border-left: 3px solid var(--warning);
+  margin-bottom: 8px;
+  background: var(--surface-card);
+}
+
+.advisory-confirm-modal__item.advisory--warning,
+.advisory-confirm-modal__item.advisory--block {
+  border-left-color: var(--danger);
+}
+
+.advisory-confirm-modal__head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 14px;
+}
+
+.advisory-confirm-modal__kind {
+  flex: none;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.advisory-confirm-modal__message {
+  font-weight: 600;
+}
+
+.advisory-confirm-modal__detail,
+.advisory-confirm-modal__source {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.advisory-confirm-modal__reason {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.advisory-confirm-modal__reason select {
+  flex: none;
+  min-width: 180px;
+}
+
+.advisory-confirm-modal__reason input {
+  flex: 1;
+  min-width: 0;
 }
 
 /* 食事オーダーの食物アレルギー一覧(docs/meal-order-design.md §2.12)。表示だけで入力は無い。 */
@@ -21622,25 +21682,6 @@ button.chemo-calendar__cell[draggable="true"] {
   font-weight: 600;
 }
 
-.regimen-apply__allergy {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
-  color: var(--warning);
-}
-
-.regimen-apply__allergy--high {
-  color: var(--danger);
-  font-weight: 600;
-}
-
-.regimen-apply__allergy-summary {
-  margin: 0 0 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--danger);
-}
-
 /* CTCAE 用語の選択。用語の行と、開いた Grade の定義の行を 1 組にする。 */
 .ctcae-search__table {
   table-layout: fixed;
@@ -28183,4 +28224,80 @@ input.nursing-picker__search {
   margin: 0 0 8px;
   color: var(--danger);
   font-size: 13px;
+}
+
+/* 警告の集計と設定(docs/advisory-design.md §4)。種別 × 月の「発火 / 無視(率)」。
+   重さの選択は月の列より前に置き、期間を延ばして本文の幅を超えたぶんは表を横に送る。 */
+.advisory-review__range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.advisory-review__range label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.advisory-review__range input,
+.advisory-review__severity select,
+.advisory-confirm-modal__reason select,
+.advisory-confirm-modal__reason input {
+  font: inherit;
+  font-size: 14px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.advisory-review__scroll {
+  overflow-x: auto;
+}
+
+.advisory-review__table {
+  width: 100%;
+}
+
+.advisory-review__table th,
+.advisory-review__table td {
+  white-space: nowrap;
+}
+
+.advisory-review__count {
+  text-align: right;
+}
+
+.advisory-review__overridden {
+  color: var(--danger);
+}
+
+.advisory-review__reasons {
+  min-width: 160px;
+  font-size: 12px;
+}
+
+.advisory-review__table td.advisory-review__reasons {
+  white-space: normal;
+}
+
+.advisory-review__severity select {
+  width: 104px;
+}
+
+.advisory-review__group th {
+  text-align: left;
+  background: var(--surface-panel);
+  font-size: 12px;
+}
+
+/* オーダー詳細の「警告の確認」。無視した警告と理由を 1 件 1 行で。 */
+.order-detail__advisory-overrides {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
 }

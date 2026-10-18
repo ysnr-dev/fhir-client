@@ -54,6 +54,9 @@ Rails.application.routes.draw do
       get :discover, on: :member
     end
 
+    # 警告の集計と設定(docs/advisory-design.md §3.3)。種別 × 月の発火数・無視数。
+    get "advisory_stats", to: "advisory_stats#show"
+
     # 帳票レイアウト(.tlf)の管理。Questionnaire の canonical と紐付けて保存する。
     resources :report_layouts, only: %i[index show create update destroy]
 
@@ -293,6 +296,10 @@ Rails.application.routes.draw do
     resources :radiotherapy_techniques, only: %i[index show create update destroy]
     resources :radiotherapy_devices, only: %i[index show create update destroy]
     resources :radiotherapy_stop_reasons, only: %i[index show create update destroy]
+
+    # 警告(判断支援)の確認理由マスタと、発火・無視の台帳(docs/advisory-design.md)。
+    resources :advisory_override_reasons, only: %i[index show create update destroy]
+    resources :advisory_events, only: :create
     resources :radiotherapy_protocols, only: %i[index show create update destroy]
     # 術式マスタ。手術オーダー(申込)の項目。処置と違いセット・レイアウト・
     # データセットのマスタは持たない(術式は検索で選び、実施入力は第2段階)。

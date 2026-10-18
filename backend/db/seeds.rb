@@ -1626,13 +1626,15 @@ end
 # 標準コードとの対応(reference_*)は mCODE の値セット(SNOMED CT)を参考に付けたもので、
 # オーダーには焼かない。定位照射・全身照射は mCODE の値セットに無いので空。
 # 治療装置は施設ごとに違うので初期値を持たない(画面から登録する)。既存行は上書きしない。
-radiotherapy_csv_masters = [
+# 警告の確認理由(docs/advisory-design.md §3.1)も同じ形の CSV。
+simple_csv_masters = [
   [Master::RadiotherapyModality, "radiotherapy_modalities.csv", %w[name dose_unit reference_system reference_code]],
   [Master::RadiotherapyTechnique, "radiotherapy_techniques.csv",
    %w[name abbreviation reference_system reference_code receipt_code receipt_code_second management_receipt_code]],
-  [Master::RadiotherapyStopReason, "radiotherapy_stop_reasons.csv", %w[name kind]]
+  [Master::RadiotherapyStopReason, "radiotherapy_stop_reasons.csv", %w[name kind]],
+  [Master::AdvisoryOverrideReason, "advisory_override_reasons.csv", %w[name]]
 ]
-radiotherapy_csv_masters.each do |model, file, columns|
+simple_csv_masters.each do |model, file, columns|
   path = Rails.root.join("db/seed_data", file)
   next puts "#{model.table_name}: #{path} not found, skipped" unless File.exist?(path)
 

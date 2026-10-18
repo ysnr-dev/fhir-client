@@ -4,9 +4,9 @@ import { buildError, masterFetch, type MasterSearchResult } from "./core";
 //
 // 保有する装置・実施できる照射技法・定型の線量分割は施設ごとに違うので、治療処方の
 // 選択肢はマスタで持つ(docs/radiotherapy-order-design.md §3)。5 つとも同じ形の
-// 単純編集型なので、CRUD は 1 つの組み立て関数から作る。
+// 単純編集型なので、CRUD は 1 つの組み立て関数から作る(他の単純なマスタも同じ組み立てを使う)。
 
-interface RadiotherapyMasterBase {
+export interface SimpleMasterRow {
   id: number;
   code: string;
   name: string;
@@ -14,7 +14,7 @@ interface RadiotherapyMasterBase {
   display_order: number | null;
 }
 
-export interface RadiotherapyModality extends RadiotherapyMasterBase {
+export interface RadiotherapyModality extends SimpleMasterRow {
   /** 線量の単位。体外照射・小線源は Gy。 */
   dose_unit: string;
   /** 標準コードとの対応(参考。mCODE の値セットは SNOMED CT)。オーダーには焼かない。 */
@@ -23,7 +23,7 @@ export interface RadiotherapyModality extends RadiotherapyMasterBase {
   note: string | null;
 }
 
-export interface RadiotherapyTechnique extends RadiotherapyMasterBase {
+export interface RadiotherapyTechnique extends SimpleMasterRow {
   abbreviation: string | null;
   /** この技法を選べるモダリティのコード。空ならどのモダリティでも選べる。 */
   modality_codes: string[];
@@ -36,14 +36,14 @@ export interface RadiotherapyTechnique extends RadiotherapyMasterBase {
   note: string | null;
 }
 
-export interface RadiotherapyDevice extends RadiotherapyMasterBase {
+export interface RadiotherapyDevice extends SimpleMasterRow {
   /** linac / tomotherapy / stereotactic / particle / brachytherapy / other */
   device_type: string;
   modality_codes: string[];
   note: string | null;
 }
 
-export interface RadiotherapyStopReason extends RadiotherapyMasterBase {
+export interface RadiotherapyStopReason extends SimpleMasterRow {
   /** suspend = 休止 / terminate = 中止 / both = どちらにも出す */
   kind: string;
 }
@@ -70,7 +70,7 @@ export interface RadiotherapyProtocolPhase {
 }
 
 /** 治療プロトコル(定型処方)。処方フォームで選ぶと標的と Phase が展開される。 */
-export interface RadiotherapyProtocol extends RadiotherapyMasterBase {
+export interface RadiotherapyProtocol extends SimpleMasterRow {
   name_kana: string | null;
   intent: string | null;
   volumes: RadiotherapyProtocolVolume[];
@@ -78,7 +78,7 @@ export interface RadiotherapyProtocol extends RadiotherapyMasterBase {
   note: string | null;
 }
 
-export interface RadiotherapyMasterSearchParams {
+export interface SimpleMasterSearchParams {
   name?: string;
   /** コード。カンマ区切りで複数指定できる。 */
   code?: string;
@@ -89,7 +89,7 @@ export interface RadiotherapyMasterSearchParams {
   per?: number;
 }
 
-function radiotherapyMasterClient<T extends RadiotherapyMasterBase>(path: string) {
+export function simpleMasterClient<T extends SimpleMasterRow>(path: string) {
   type Payload = Partial<Omit<T, "id">>;
 
   async function send(url: string, method: string, payload: Payload): Promise<T> {
@@ -103,7 +103,7 @@ function radiotherapyMasterClient<T extends RadiotherapyMasterBase>(path: string
   }
 
   return {
-    async search(params: RadiotherapyMasterSearchParams): Promise<MasterSearchResult<T>> {
+    async search(params: SimpleMasterSearchParams): Promise<MasterSearchResult<T>> {
       const search = new URLSearchParams();
       if (params.name) search.set("name", params.name);
       if (params.code) search.set("code", params.code);
@@ -125,18 +125,18 @@ function radiotherapyMasterClient<T extends RadiotherapyMasterBase>(path: string
   };
 }
 
-export const radiotherapyModalityClient = radiotherapyMasterClient<RadiotherapyModality>(
+export const radiotherapyModalityClient = simpleMasterClient<RadiotherapyModality>(
   "/master/radiotherapy_modalities",
 );
-export const radiotherapyTechniqueClient = radiotherapyMasterClient<RadiotherapyTechnique>(
+export const radiotherapyTechniqueClient = simpleMasterClient<RadiotherapyTechnique>(
   "/master/radiotherapy_techniques",
 );
-export const radiotherapyDeviceClient = radiotherapyMasterClient<RadiotherapyDevice>(
+export const radiotherapyDeviceClient = simpleMasterClient<RadiotherapyDevice>(
   "/master/radiotherapy_devices",
 );
-export const radiotherapyStopReasonClient = radiotherapyMasterClient<RadiotherapyStopReason>(
+export const radiotherapyStopReasonClient = simpleMasterClient<RadiotherapyStopReason>(
   "/master/radiotherapy_stop_reasons",
 );
-export const radiotherapyProtocolClient = radiotherapyMasterClient<RadiotherapyProtocol>(
+export const radiotherapyProtocolClient = simpleMasterClient<RadiotherapyProtocol>(
   "/master/radiotherapy_protocols",
 );

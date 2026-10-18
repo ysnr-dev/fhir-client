@@ -54,12 +54,12 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { InsulinScaleEditor } from "./InsulinScaleEditor";
-import {
-  FormularyMark,
-  MedicineCautionMarks,
-  MedicineWarnings,
-  useMedicationWarnings,
-} from "./MedicineWarnings";
+import { FormularyMark, MedicineCautionMarks, useMedicationAdvisories } from "./MedicineWarnings";
+import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
+import { AdvisoryInlineMarks, AdvisoryNotice } from "./AdvisoryNotice";
+import { advisoriesOfScope, unscopedAdvisories } from "../fhir/advisoryHelpers";
+import { useAdvisorySession } from "../hooks/useAdvisorySession";
+import { usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 import { TrashIcon } from "./icons/TrashIcon";
@@ -182,12 +182,16 @@ export function InjectionForm({
       })),
     [values.rps],
   );
-  const warnings = useMedicationWarnings({
+  const medicationAdvisories = useMedicationAdvisories({
     patientId: setMode ? "" : patientId,
     startDate: values.startDate,
     rps: checkedRps,
     excludeOrderId: orderId,
   });
+  const pregnancy = usePregnancyAdvisory(setMode ? "" : patientId);
+  const advisoryInput = useMemo(() => [...medicationAdvisories, ...pregnancy], [medicationAdvisories, pregnancy]);
+  const session = useAdvisorySession(advisoryInput, "injection", !setMode);
+  const [confirming, setConfirming] = useState(false);
 
   // 総投与量の計算に使う換算(製剤数・力価 → mL)。フォーム上の全医薬品分をまとめて引く。
   const { data: conversions } = useMedicineDoseFactors(
@@ -515,7 +519,21 @@ export function InjectionForm({
       setValidationError(error);
       return;
     }
+    if (session.blocked.length > 0) {
+      setValidationError(session.blocked.map((advisory) => advisory.message).join(" / "));
+      return;
+    }
     setValidationError(null);
+    // 確認を要する警告があれば理由を選んでから登録する。
+    if (session.pending.length > 0) {
+      setConfirming(true);
+      return;
+    }
+    session.confirm([]);
+    save();
+  }
+
+  function save() {
     // 投与時間から計算した投与速度を確定値として保存する(投与時間そのものは保存しない)。
     onSubmit({
       ...values,
@@ -539,6 +557,7 @@ export function InjectionForm({
         </div>
       )}
       <ErrorBanner error={submitError} />
+      <AdvisoryNotice advisories={unscopedAdvisories(session.advisories)} />
 
       <fieldset>
         <legend>注射共通</legend>
@@ -723,7 +742,7 @@ export function InjectionForm({
                           <span className="rp-card__usage-value--empty">未選択</span>
                         )}
                       </div>
-                      <MedicineWarnings warnings={warnings[rpIndex]?.[medIndex]} />
+                      <AdvisoryInlineMarks advisories={advisoriesOfScope(session.advisories, rpIndex, medIndex)} />
                       {!med.insulinScale && isInsulinMedicine(med.medicine, conversions) && (
                           <div className="rp-card__actions insulin-scale-toggle">
                             <button
@@ -1044,6 +1063,18 @@ export function InjectionForm({
         </div>
       )}
 
+      {confirming && (
+        <AdvisoryConfirmModal
+          advisories={session.pending}
+          submitting={submitting}
+          onConfirm={(overrides) => {
+            session.confirm(overrides);
+            setConfirming(false);
+            save();
+          }}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
       {modal?.kind === "medicine" && (
         <MedicineSearchModal
           // 注射オーダーなので注射薬(剤形区分4)を初期絞り込みにする。

@@ -179,6 +179,11 @@ export const MASTER_MENU: MasterMenuGroup[] = [
       { label: "休止・中止理由マスタ", to: "/radiotherapy-stop-reasons" },
     ],
   },
+  // 警告(判断支援)。無視して登録するときに選ぶ理由(docs/advisory-design.md)。
+  {
+    label: "警告",
+    items: [{ label: "警告の確認理由マスタ", to: "/advisory-override-reasons" }],
+  },
   // 看護。MEDIS 看護実践用語標準マスターの閲覧(取込で洗い替える読み取り専用)と、
   // 看護計画の用語・標準看護計画。
   {

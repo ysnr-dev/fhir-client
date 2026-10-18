@@ -1,3 +1,4 @@
+import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
 import type { RegimenLabCriterion } from "../api/masterClient";
 import { diffDays, localDay } from "../lib/dates";
 
@@ -105,6 +106,46 @@ export interface LabCheckSummary {
   missing: number;
   /** 古い結果の件数。 */
   stale: number;
+}
+
+/**
+ * 適応基準の判定を共通の警告に写す。基準外があれば確認を要する。値が取れない・古いだけなら表示のみ。
+ * 件数は入力中に動くので key には入れない(セッション中は同じ警告)。
+ */
+export function regimenLabAdvisory(summary: LabCheckSummary): Advisory | null {
+  if (summary.out > 0) {
+    return {
+      key: advisoryKey("regimen-lab", "out"),
+      kind: "regimen-lab",
+      severity: severityOf("regimen-lab", true),
+      message: `適応基準を外れる項目が ${summary.out} 件あります`,
+    };
+  }
+  if (summary.missing > 0 || summary.stale > 0) {
+    const parts = [
+      summary.missing > 0 ? `値が取れない項目 ${summary.missing} 件` : "",
+      summary.stale > 0 ? `古い結果 ${summary.stale} 件` : "",
+    ].filter(Boolean);
+    return {
+      key: advisoryKey("regimen-lab", "unknown"),
+      kind: "regimen-lab",
+      severity: severityOf("regimen-lab", false),
+      message: `適応基準: ${parts.join(" / ")}`,
+    };
+  }
+  return null;
+}
+
+/** 体重の変化を共通の警告に写す。注意の水準を超えたときだけ(確認を要する)。 */
+export function regimenWeightAdvisory(change: BodyChange | null): Advisory | null {
+  if (!change?.warn) return null;
+  const sign = change.deltaKg > 0 ? "+" : "";
+  return {
+    key: advisoryKey("regimen-weight"),
+    kind: "regimen-weight",
+    severity: severityOf("regimen-weight", true),
+    message: `体重が前回から ${sign}${change.deltaKg} kg(${Math.round(change.ratio * 100)}%)変わっています`,
+  };
 }
 
 function limitOf(value: string | null): number | null {

@@ -42,3 +42,4 @@ export * from "./homeLayout";
 export * from "./nursingAssignment";
 export * from "./nursingAcuity";
 export * from "./oralExam";
+export * from "./advisory";

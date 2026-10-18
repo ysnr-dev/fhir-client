@@ -1,0 +1,9 @@
+code,name,display_order
+already-addressed,対応済み,10
+not-applicable,該当しない,20
+clinical-judgement,臨床判断で不要,30
+patient-informed,患者に説明済み,40
+monitored,モニタリングしながら使用,50
+same-as-before,前回も同じ処方で問題なし,60
+benefit-outweighs-risk,有益性が危険性を上回る,70
+other,その他,80

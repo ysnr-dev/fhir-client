@@ -38,6 +38,10 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useMealNutritionTarget } from "../hooks/useMealNutritionTarget";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import { type Advisory, advisoryKey, severityOf } from "../fhir/advisoryHelpers";
+import { summarizeAllergy } from "../fhir/allergyHelpers";
+import { useAdvisorySession } from "../hooks/useAdvisorySession";
+import { AdvisoryNotice } from "./AdvisoryNotice";
 import { ErrorBanner } from "./ErrorBanner";
 import { MealAllergyList } from "./MealAllergyList";
 import { MealDietPickerModal, type MealPickerTab } from "./MealDietPickerModal";
@@ -172,6 +176,23 @@ export function MealOrderForm({
         : { missing: [], stale: [] },
     [editing, values.allergies, patientAllergies.allergies],
   );
+  // 食い違いは保存で写し直して解消するので表示のみ。発火だけ台帳に残す。
+  const advisoryInput = useMemo<Advisory[]>(() => {
+    const names = [
+      ...allergyMismatch.missing.map((allergy) => `${summarizeAllergy(allergy).name}(未反映)`),
+      ...allergyMismatch.stale.map((ref) => `${ref.name || ref.id}(解消済み)`),
+    ];
+    if (names.length === 0) return [];
+    return [
+      {
+        key: advisoryKey("meal-allergy", ...names),
+        kind: "meal-allergy",
+        severity: severityOf("meal-allergy", true),
+        message: `食物アレルギーの写しが患者の記録と食い違っています: ${names.join("、")}`,
+      },
+    ];
+  }, [allergyMismatch]);
+  const session = useAdvisorySession(advisoryInput, "meal-order", !setMode && Boolean(patientId));
   // 身長・体重と栄養量の目安。食種選択の表に出し、選んだ食種の成分帯の印にも使う(雛形では患者が無いので引かない)。
   const nutrition = useMealNutritionTarget(setMode ? undefined : patientId || undefined);
   useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, startDate: date })));
@@ -348,6 +369,7 @@ export function MealOrderForm({
     setValidationError(error);
     if (error) return;
 
+    session.confirm([]);
     // 終了させないオーダーは戻す対象にもならない(チェックも出ていない)。
     onSubmit(
       submitValues(),
@@ -400,6 +422,7 @@ export function MealOrderForm({
         </div>
       )}
       <ErrorBanner error={submitError} />
+      <AdvisoryNotice advisories={session.advisories} />
       <ErrorBanner
         error={diets.error ?? staples.error ?? sideDishForms.error ?? mealCategories.error}
       />

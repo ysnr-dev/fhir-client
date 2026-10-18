@@ -1,4 +1,5 @@
 import type { Medicine } from "../api/masterClient";
+import { type Advisory, type AdvisoryKind, advisoryKey, severityOf } from "./advisoryHelpers";
 import {
   allergyMatchLabel,
   medicationAllergenCodes,
@@ -10,8 +11,9 @@ import type { FlagSummary } from "./flagHelpers";
 import type { ActiveMedication } from "./medicationSafetyHelpers";
 
 // 放射線オーダーの造影・MRI の注意(docs/rad-backlog.md B-1 / B-2)。
-// カルテにある記録(注意区分・アレルギー・検査結果・処方)から拾って文で出す。
-// 登録は止めない(最終判断は医師のもの。薬剤の安全性チェックと同じ扱い)。
+// カルテにある記録(注意区分・アレルギー・検査結果・処方)から拾って文で出し、共通の警告
+// (docs/advisory-design.md)に写す。強く出すもの(重篤なアレルギー・eGFR 30 未満・注意区分)は
+// 登録時に理由の確認を要する。
 
 /** JJ1017 の種別(1 桁目)。 */
 const MODALITY_ANGIOGRAPHY = "3";
@@ -85,9 +87,20 @@ export function matchContrastAllergies(
 
 export interface RadSafetyNote {
   key: string;
+  kind: AdvisoryKind;
   text: string;
   /** 強く出す(重篤なアレルギー・eGFR 30 未満)。 */
   high: boolean;
+}
+
+/** 注意を共通の警告に写す。造影剤アレルギーの一致は重篤度に関係なく確認を要する。 */
+export function radSafetyAdvisories(notes: RadSafetyNote[]): Advisory[] {
+  return notes.map((note) => ({
+    key: advisoryKey(note.kind, note.text),
+    kind: note.kind,
+    severity: severityOf(note.kind, note.kind === "contrast-allergy" || note.high),
+    message: note.text,
+  }));
 }
 
 export function buildRadSafetyNotes(args: {
@@ -109,12 +122,13 @@ export function buildRadSafetyNotes(args: {
 
   if (contrast) {
     for (const [index, text] of flagNote("contrast").entries()) {
-      notes.push({ key: `flag-contrast-${index}`, text, high: true });
+      notes.push({ key: `flag-contrast-${index}`, kind: "contrast-flag", text, high: true });
     }
     for (const match of args.contrastAllergies) {
       const reaction = match.reaction ? ` ${match.reaction}` : "";
       notes.push({
         key: `allergy-${match.allergyId}`,
+        kind: "contrast-allergy",
         text: `造影剤アレルギー: ${allergyMatchLabel(match)}${reaction}`,
         high: match.high,
       });
@@ -125,6 +139,7 @@ export function buildRadSafetyNotes(args: {
     if (biguanides.length > 0) {
       notes.push({
         key: "biguanide",
+        kind: "biguanide",
         text: `ビグアナイド系内服中: ${[...new Set(biguanides.map((m) => m.name))].join("、")}`,
         high: false,
       });
@@ -133,7 +148,7 @@ export function buildRadSafetyNotes(args: {
 
   if (mri) {
     for (const [index, text] of flagNote("implant").entries()) {
-      notes.push({ key: `flag-implant-${index}`, text, high: true });
+      notes.push({ key: `flag-implant-${index}`, kind: "implant", text, high: true });
     }
   }
 
@@ -146,11 +161,12 @@ export function buildRadSafetyNotes(args: {
  */
 function egfrNote(renal: RenalSummary): RadSafetyNote | null {
   if (!renal.creatinine) {
-    return { key: "egfr", text: "eGFR: 血清クレアチニンの結果がありません", high: false };
+    return { key: "egfr", kind: "egfr", text: "eGFR: 血清クレアチニンの結果がありません", high: false };
   }
   if (renal.egfr === null) {
     return {
       key: "egfr",
+      kind: "egfr",
       text: `eGFR: ${renal.egfrUnavailable || "算出できません"}`,
       high: false,
     };
@@ -158,6 +174,7 @@ function egfrNote(renal: RenalSummary): RadSafetyNote | null {
   if (renal.egfr >= EGFR_CAUTION) return null;
   return {
     key: "egfr",
+    kind: "egfr",
     text: `eGFR ${renal.egfr}(${renal.creatinine.date} クレアチニン ${renal.creatinine.value}${renal.creatinine.unit})`,
     high: renal.egfr < EGFR_HIGH,
   };

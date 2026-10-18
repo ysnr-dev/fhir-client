@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  fetchAdvisoryStats,
   createDocumentTemplate,
   createFileCategory,
   createOauthClient,
@@ -70,6 +71,7 @@ const FILE_CATEGORIES_KEY = ["admin", "file_categories"];
 const DOCUMENT_TEMPLATES_KEY = ["admin", "document_templates"];
 const SMART_APPS_KEY = ["admin", "smart_apps"];
 const CDS_SERVICES_KEY = ["admin", "cds_services"];
+const ADVISORY_STATS_KEY = ["admin", "advisory_stats"];
 
 // 管理系はすべて retry: false。自動リトライされた 401 は上流 fhir-server の
 // レート制限(admin/ip)を無駄に消費するだけで、状況を改善しない。
@@ -552,6 +554,16 @@ export function useDeleteCdsService() {
 export function useDiscoverCdsServices() {
   return useMutation({
     mutationFn: (id: number) => discoverCdsServices(id),
+    retry: false,
+  });
+}
+
+// --- 警告の集計と設定 ---------------------------------------------------------------
+
+export function useAdvisoryStats(range: { from: string; to: string }) {
+  return useQuery({
+    queryKey: [...ADVISORY_STATS_KEY, range.from, range.to],
+    queryFn: () => fetchAdvisoryStats(range),
     retry: false,
   });
 }

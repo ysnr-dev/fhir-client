@@ -42,7 +42,9 @@ import { useValidationError } from "../hooks/useValidationError";
 import { makeFieldUpdater } from "../lib/form";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
-import { RadiotherapyPreCheck } from "./RadiotherapyPreCheck";
+import { AdvisoryNotice } from "./AdvisoryNotice";
+import { RadiotherapyHistory, useRadiotherapyAdvisories } from "./RadiotherapyPreCheck";
+import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { renderJj1017CodeOptions } from "./radItemOptions";
 import { TrashIcon } from "./icons/TrashIcon";
 
@@ -169,12 +171,23 @@ export function RadiotherapyOrderForm({
     return { code, name: found?.name ?? "" };
   }
 
+  const advisoryInput = useRadiotherapyAdvisories({
+    patientId: setMode ? "" : patientId,
+    volumes: values.volumes,
+    excludeSrId: editingSrId,
+  });
+  const session = useAdvisorySession(advisoryInput, "radiotherapy", !setMode);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateRadiotherapyOrderForm(values, { requireDates: !setMode });
+    const error =
+      validateRadiotherapyOrderForm(values, { requireDates: !setMode }) ??
+      (session.blocked.length > 0 ? session.blocked.map((advisory) => advisory.message).join(" / ") : null);
     setValidationError(error);
     if (error) return;
 
+    // 出す警告は表示のみなので、確認は挟まず発火だけ台帳に残す。
+    session.confirm([]);
     const doctor = doctors.doctors.find((p) => p.id === values.practitionerId);
     onSubmit({
       ...values,
@@ -195,13 +208,8 @@ export function RadiotherapyOrderForm({
       )}
       <ErrorBanner error={submitError} />
 
-      {!setMode && (
-        <RadiotherapyPreCheck
-          patientId={patientId}
-          volumes={values.volumes}
-          excludeSrId={editingSrId}
-        />
-      )}
+      <AdvisoryNotice advisories={session.advisories} />
+      {!setMode && <RadiotherapyHistory patientId={patientId} volumes={values.volumes} excludeSrId={editingSrId} />}
 
       {!setMode && (
         <fieldset>

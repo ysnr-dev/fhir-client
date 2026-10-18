@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { CdsCard, CdsCardLink, CdsIndicator, CdsOverrideReason } from "../api/cdsClient";
+import { useAdvisoryOverrideReasons } from "../api/masterQueries";
 import { overrideReasonsOf } from "../fhir/cdsCardHelpers";
 import { KARTE_TAB_PARAM, KARTE_VIEW_PARAM } from "../karteUrl";
 import { setPendingAppContext } from "../lib/smartAppLaunchContext";
 
-// CDS Hooks のカードの一覧(docs/cds-hooks-design.md §3)。患者帯の吹き出し・処方フォームの
-// order-select・登録前の確認モーダルで同じ見た目にする。
+// CDS Hooks のカードの一覧(docs/cds-hooks-design.md §3)。患者帯の吹き出しと処方フォームの
+// order-select で同じ見た目にする。登録前の確認(order-sign)は共通の警告の確認に載り、
+// カードのリンクだけ `CdsCardLinks` で添える。
 
 const INDICATOR_LABELS: Record<CdsIndicator, string> = {
   info: "情報",
@@ -64,7 +66,7 @@ function CdsCardItem({
   onOverride: (reason: CdsOverrideReason) => void;
 }) {
   const [detailOpen, setDetailOpen] = useState(false);
-  const reasons = overrideReasonsOf(card);
+  const reasons = overrideReasonsOf(card, useAdvisoryOverrideReasons());
 
   return (
     <li className={`cds-card cds-card--${card.indicator}`}>
@@ -101,9 +103,7 @@ function CdsCardItem({
         </ul>
       )}
       <div className="cds-card__actions">
-        {card.links.map((link, index) => (
-          <CdsCardLinkButton key={index} link={link} patientId={patientId} />
-        ))}
+        <CdsCardLinks card={card} patientId={patientId} />
         <select
           className="cds-card__override"
           aria-label="無視の理由"
@@ -122,6 +122,17 @@ function CdsCardItem({
         </select>
       </div>
     </li>
+  );
+}
+
+/** カードのリンク(外部 URL・SMART アプリの起動)。 */
+export function CdsCardLinks({ card, patientId }: { card: CdsCard; patientId: string }) {
+  return (
+    <>
+      {card.links.map((link, index) => (
+        <CdsCardLinkButton key={index} link={link} patientId={patientId} />
+      ))}
+    </>
   );
 }
 

@@ -177,7 +177,7 @@ title・prefetch の key)をモーダルに出す。メニューは「管理」�
 | prefetch の範囲 | 許可リストの型だけ、`_count` の上限 100、`encounterId` が無いテンプレートは省く |
 | サービスの応答 | 正規化して画面に出す。`detail` はプレーンテキスト、`absolute` リンクは http(s) のみ、`smart` リンクは登録済みアプリだけ起動 |
 | 失敗 | 提供元ごとに握り、カード無しで返す。EventLog と管理画面の「探索」で切り分ける |
-| 無視の記録 | サービスの feedback に送る。backend 側の台帳(発火数・無視率)は持たない(残課題 = バックログ §5.3「警告の器とガバナンス」) |
+| 無視の記録 | サービスの feedback に送り、重要のカードは共通の警告の器(`advisory-design.md`)の来歴と台帳にも残る。既定の無視理由はマスタ「警告の確認理由」 |
 | 認証トークン | `encrypts`、ブラウザへは有無のみ。本番の URL は https のみ |
 
 ## 5. 検証
@@ -234,7 +234,7 @@ docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_servic
 2. ~~`fhirAuthorization`~~ — 対応済み(§2.6、読み取りのみ・5 分)。サービスごとにスコープを絞る設定画面(今は登録スコープの読み取り全部)は残り。
 3. suggestion の適用(`actions` の `create` をフォームの初期値に)と `systemActions`。
 4. Markdown の `detail`。
-5. 無視の台帳と発火数・無視率の管理画面(§5.3 の警告の器と一緒に)。
+5. ~~無視の台帳と発火数・無視率の管理画面~~ — `advisory-design.md` で対応済み。患者帯(patient-view)のカードの無視は feedback だけ。
 6. `feedback` の `accepted`(suggestion を適用したとき)。
 7. 提供元ごとのタイムアウト・有効な hook の設定、discovery の結果を保存して管理画面で見せる。
 

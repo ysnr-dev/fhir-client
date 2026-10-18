@@ -1,3 +1,4 @@
+import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
 import { today } from "../lib/dates";
 import { LOINC_SYSTEM, loincOf } from "./shared";
 
@@ -229,5 +230,23 @@ export function parsePregnancyForm(observations: fhir4.Observation[]): Pregnancy
     effectiveDate: summary.effectiveDate || today(),
     dueDate: summary.dueDate,
     note: summary.note,
+  };
+}
+
+/**
+ * 妊娠中・授乳中の注意(処方・注射の催奇形性・乳汁移行、放射線の被曝)。該当しなければ null。
+ * 常に出すと読み飛ばされるので、妊娠も授乳もしていないときは何も出さない。
+ */
+export function pregnancyAdvisory(summary: PregnancySummary | null): Advisory | null {
+  if (!summary || (!summary.pregnant && !summary.lactating)) return null;
+  const states = [summary.pregnant ? "妊娠中" : "", summary.lactating ? "授乳中" : ""].filter(Boolean);
+  const due = summary.pregnant && summary.dueDate ? `分娩予定日 ${summary.dueDate}` : "";
+  const confirmed = summary.effectiveDate ? `${summary.effectiveDate} 確認` : "";
+  const notes = [due, confirmed].filter(Boolean);
+  return {
+    key: advisoryKey("pregnancy", states.join("/")),
+    kind: "pregnancy",
+    severity: severityOf("pregnancy", true),
+    message: `${states.join(" / ")}${notes.length > 0 ? `（${notes.join(" ・ ")}）` : ""}`,
   };
 }

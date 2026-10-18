@@ -11,11 +11,18 @@ import {
   useRegimenApplications,
 } from "../api/queries";
 import { adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
-import { allergyMatchLabel, matchMedicationAllergies, type AllergyMatch } from "../fhir/allergyHelpers";
+import { type Advisory, advisoriesOfScope, advisoryKey, severityOf, unscopedAdvisories } from "../fhir/advisoryHelpers";
+import { allergyMatchLabel, matchMedicationAllergies } from "../fhir/allergyHelpers";
 import { summarizeBodyMeasures, summarizeRenal, uncorrectedGfr } from "../fhir/bodyMeasureHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { calculateAge } from "../fhir/patientHelpers";
-import { checkLabCriteria, compareWeight, summarizeLabChecks } from "../fhir/regimenCheckHelpers";
+import {
+  checkLabCriteria,
+  compareWeight,
+  regimenLabAdvisory,
+  regimenWeightAdvisory,
+  summarizeLabChecks,
+} from "../fhir/regimenCheckHelpers";
 import { CATEGORY_OPTIONS as INJECTION_CATEGORY_OPTIONS } from "../fhir/injectionHelpers";
 import { withOrderWard } from "../fhir/orderHeader";
 import {
@@ -30,7 +37,7 @@ import {
 } from "../fhir/regimenHelpers";
 import {
   MAX_REGIMEN_CYCLES_AT_ONCE,
-  applicationConflicts,
+  applicationConflictAdvisories,
   bsaOf,
   buildRegimenApplicationBundle,
   buildRegimenCycleBundle,
@@ -44,7 +51,7 @@ import {
   regimenHasAuc,
   regimenHasInjection,
   regimenHasOral,
-  startDateWarnings,
+  startDateAdvisories,
   validateRegimenApply,
   type GfrSource,
   type PreviousCycle,
@@ -53,11 +60,14 @@ import {
   type RegimenDrugPlan,
 } from "../fhir/regimenOrderHelpers";
 import { displayOf, SETTING_OPTIONS } from "../fhir/shared";
+import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { toDateInput, today } from "../lib/dates";
+import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
+import { AdvisoryInlineMarks, AdvisoryNotice } from "./AdvisoryNotice";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { RegimenBodyChange, RegimenInfoView, RegimenLabCheck, RegimenPreviousAdverseEvents } from "./RegimenPreCheck";
@@ -181,7 +191,7 @@ function RegimenApplyLoader({
         firstCycle={1}
         defaultStartDate={today()}
         defaultProblem={defaultProblem}
-        conflicts={applicationConflicts(regimen.regimen_code, applications.data?.applications ?? [])}
+        conflicts={applicationConflictAdvisories(regimen.regimen_code, applications.data?.applications ?? [])}
         submitting={create.isPending}
         submitError={create.error}
         onSubmit={(values) => {
@@ -270,15 +280,11 @@ export function RegimenCyclePanel({
           {application.name} 第 {cycle} クール
         </span>
       </div>
-      {regimenAvailabilityNotice(regimen) && (
-        <p className="regimen-check__summary regimen-check__summary--out">
-          {`${regimenAvailabilityNotice(regimen)}投与内容を確かめてください。`}
-        </p>
-      )}
       <RegimenApplyForm
         patientId={patientId}
         regimen={regimen}
         mode="cycle"
+        availabilityNotice={regimenAvailabilityNotice(regimen)}
         firstCycle={cycle}
         defaultStartDate={startDate}
         defaultProblem={application.problem ?? undefined}
@@ -301,6 +307,8 @@ export function RegimenCyclePanel({
   );
 }
 
+const NO_CONFLICTS: Advisory[] = [];
+
 interface RegimenApplyFormProps {
   patientId: string;
   regimen: RegimenDetail;
@@ -322,8 +330,10 @@ interface RegimenApplyFormProps {
    * 投与内容を見直すよう促す(§8.13 N-2)。
    */
   masterChangedOn?: string;
+  /** 適用の候補から外れたレジメン(下書き・廃止・有効期間外)の注意文。空なら該当なし。 */
+  availabilityNotice?: string;
   /** 新規適用のときの注意(二重適用・併用)。 */
-  conflicts?: string[];
+  conflicts?: Advisory[];
   /** 登録済みの最後の投与日(次クールの登録で重なりを見る)。 */
   lastAdministered?: string;
   submitting: boolean;
@@ -342,8 +352,9 @@ function RegimenApplyForm({
   previousBody,
   previousCycle,
   previousAdverse = [],
+  availabilityNotice = "",
   masterChangedOn = "",
-  conflicts = [],
+  conflicts = NO_CONFLICTS,
   lastAdministered = "",
   submitting,
   submitError,
@@ -359,15 +370,26 @@ function RegimenApplyForm({
   const patient = usePatient(patientId).data?.data;
   // アレルギー照合(§7.6 A-4)。薬剤の YJ コードで銘柄・成分の両方を見る。
   const allergies = useActiveAllergies(patientId);
-  const allergyMatches = useMemo(() => {
-    const map = new Map<number, AllergyMatch[]>();
-    for (const step of regimen.steps) {
-      for (const drug of step.drugs) {
-        const matches = matchMedicationAllergies(drug.yj_code, allergies.allergies);
-        if (matches.length > 0) map.set(drug.id, matches);
-      }
-    }
-    return map;
+  // 薬剤ごとの警告は投与内容の行に出す。scope はステップと薬剤の位置、drugScope で薬剤 id から引く。
+  const { allergyAdvisories, drugScope } = useMemo(() => {
+    const result: Advisory[] = [];
+    const scopes = new Map<number, { rp: number; line: number }>();
+    regimen.steps.forEach((step, rp) => {
+      step.drugs.forEach((drug, line) => {
+        scopes.set(drug.id, { rp, line });
+        for (const m of matchMedicationAllergies(drug.yj_code, allergies.allergies)) {
+          result.push({
+            key: advisoryKey("allergy", drug.yj_code, m.allergyId),
+            kind: "allergy",
+            severity: severityOf("allergy", true),
+            message: `アレルギー: ${allergyMatchLabel(m)}`,
+            detail: m.reaction || undefined,
+            scope: { rp, line },
+          });
+        }
+      });
+    });
+    return { allergyAdvisories: result, drugScope: scopes };
   }, [regimen, allergies.allergies]);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
 
@@ -446,17 +468,8 @@ function RegimenApplyForm({
     labResults.isPending,
   ]);
 
-  if (!values) {
-    return (
-      <>
-        <ErrorBanner error={body.error ?? factors.error} />
-        <p>読み込み中...</p>
-      </>
-    );
-  }
-
-  const bsa = bsaOf(values);
-  const weightValue = Number(values.weight) || null;
+  // 投与前チェックと警告は hook なので、値が揃う前(読み込み中の早期 return)より上で組む。
+  const weightValue = values ? Number(values.weight) || null : null;
   const renal = summarizeRenal(labResults.observations, {
     age: patient?.birthDate ? calculateAge(patient.birthDate) : undefined,
     gender: patient?.gender,
@@ -471,10 +484,57 @@ function RegimenApplyForm({
       date: renal.creatinine?.date ?? "",
       unavailable: renal.ccrUnavailable || renal.egfrUnavailable || "クレアチニンの結果がありません",
     },
-    values.startDate,
+    values?.startDate ?? "",
   );
   const checkSummary = summarizeLabChecks(checks);
   const weightChange = previousBody ? compareWeight(previousBody.weight, weightValue) : null;
+  const advisoryInput = useMemo<Advisory[]>(() => {
+    const lab = regimenLabAdvisory(checkSummary);
+    const weight = regimenWeightAdvisory(weightChange);
+    const availability: Advisory[] = [
+      ...(availabilityNotice
+        ? [
+            {
+              key: advisoryKey("regimen-availability", "unavailable"),
+              kind: "regimen-availability" as const,
+              severity: severityOf("regimen-availability", true),
+              message: `${availabilityNotice}投与内容を確かめてください。`,
+            },
+          ]
+        : []),
+      ...(masterChangedOn
+        ? [
+            {
+              key: advisoryKey("regimen-availability", "changed"),
+              kind: "regimen-availability" as const,
+              severity: severityOf("regimen-availability", true),
+              message: `このレジメンは適用後(${masterChangedOn})に変更されています。投与内容を確かめてください。`,
+            },
+          ]
+        : []),
+    ];
+    return [
+      ...(lab ? [lab] : []),
+      ...(weight ? [weight] : []),
+      ...conflicts,
+      ...startDateAdvisories(values?.startDate ?? "", lastAdministered),
+      ...availability,
+      ...allergyAdvisories,
+    ];
+  }, [checkSummary, weightChange, conflicts, values?.startDate, lastAdministered, availabilityNotice, masterChangedOn, allergyAdvisories]);
+  const session = useAdvisorySession(advisoryInput, mode === "apply" ? "regimen-apply" : "regimen-cycle");
+  const [confirming, setConfirming] = useState(false);
+
+  if (!values) {
+    return (
+      <>
+        <ErrorBanner error={body.error ?? factors.error} />
+        <p>読み込み中...</p>
+      </>
+    );
+  }
+
+  const bsa = bsaOf(values);
   const reduced = hasReducedDose(values);
   const hasAuc = regimenHasAuc(regimen);
   const hasInjection = regimenHasInjection(regimen);
@@ -634,9 +694,17 @@ function RegimenApplyForm({
 
   function handleSubmit() {
     if (!values) return;
-    const message = validateRegimenApply(values, regimen);
+    const message =
+      validateRegimenApply(values, regimen) ??
+      (session.blocked.length > 0 ? session.blocked.map((advisory) => advisory.message).join(" / ") : null);
     setValidationError(message);
     if (message) return;
+    // 確認を要する警告があれば理由を選んでから登録する。
+    if (session.pending.length > 0) {
+      setConfirming(true);
+      return;
+    }
+    session.confirm([]);
     onSubmit(values);
   }
 
@@ -652,19 +720,9 @@ function RegimenApplyForm({
       )}
       <ErrorBanner error={submitError ?? labResults.error} />
 
+      <AdvisoryNotice advisories={unscopedAdvisories(session.advisories)} />
       <RegimenLabCheck checks={checks} summary={checkSummary} />
-      {allergyMatches.size > 0 && (
-        <p className="regimen-apply__allergy-summary">
-          {`アレルギーに当たる薬剤が ${allergyMatches.size} 件あります(投与内容の欄に出しています)。`}
-        </p>
-      )}
       {previousCycle && <RegimenPreviousAdverseEvents cycle={previousCycle.cycle} records={previousAdverse} />}
-
-      {[...conflicts, ...startDateWarnings(values.startDate, lastAdministered)].map((warning) => (
-        <p key={warning} className="regimen-check__summary regimen-check__summary--out">
-          {warning}
-        </p>
-      ))}
 
       <fieldset className="regimen-apply__fields">
         <legend>スケジュール</legend>
@@ -836,11 +894,6 @@ function RegimenApplyForm({
 
       <fieldset className="regimen-apply__fields">
         <legend>投与内容</legend>
-        {masterChangedOn && (
-          <p className="regimen-check__summary regimen-check__summary--out">
-            {`このレジメンは適用後(${masterChangedOn})に変更されています。投与内容を確かめてください。`}
-          </p>
-        )}
         {previousCycle && (
           <div className="regimen-apply__carry">
             <label>
@@ -965,15 +1018,12 @@ function RegimenApplyForm({
                         </>
                       )}
                       {d.manualReason && <span className="regimen-apply__manual">{d.manualReason}</span>}
-                      {(allergyMatches.get(d.drug.id) ?? []).map((m) => (
-                        <span
-                          key={m.allergyId}
-                          className={`regimen-apply__allergy${m.high ? " regimen-apply__allergy--high" : ""}`}
-                          title={m.reaction}
-                        >
-                          アレルギー: {allergyMatchLabel(m)}
-                        </span>
-                      ))}
+                      {(() => {
+                        const scope = drugScope.get(d.drug.id);
+                        return scope ? (
+                          <AdvisoryInlineMarks advisories={advisoriesOfScope(session.advisories, scope.rp, scope.line)} />
+                        ) : null;
+                      })()}
                     </td>
                   </tr>
                 ))}
@@ -1004,6 +1054,18 @@ function RegimenApplyForm({
           {mode === "apply" ? "レジメン適用" : "クール登録"}
         </button>
       </div>
+      {confirming && (
+        <AdvisoryConfirmModal
+          advisories={session.pending}
+          submitting={submitting}
+          onConfirm={(overrides) => {
+            session.confirm(overrides);
+            setConfirming(false);
+            onSubmit(values);
+          }}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
     </div>
   );
 }

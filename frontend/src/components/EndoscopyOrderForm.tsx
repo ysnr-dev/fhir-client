@@ -53,7 +53,9 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
-import { InfectionNotice } from "./InfectionNotice";
+import { AdvisoryNotice } from "./AdvisoryNotice";
+import { useAdvisorySession } from "../hooks/useAdvisorySession";
+import { useInfectionAdvisory } from "../hooks/usePatientStateAdvisories";
 import { ProblemSelect } from "./ProblemSelect";
 import { EndoscopyPerformInputModal } from "./EndoscopyPerformModal";
 import { TemplateSchemaImages } from "./SchemaImageGallery";
@@ -435,6 +437,10 @@ export function EndoscopyOrderForm({
     [catalogByCode],
   );
 
+  // 検査室の感染対策に要る感染症。表示のみなので確認は挟まず、発火だけ台帳に残す。
+  const infection = useInfectionAdvisory(setMode ? "" : patientId);
+  const session = useAdvisorySession(infection, "endoscopy", !setMode);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (values.items.length === 0) {
@@ -527,6 +533,7 @@ export function EndoscopyOrderForm({
     const activeBookings = Object.keys(selected).length > 0 ? selected : null;
 
     setValidationError(null);
+    session.confirm([]);
     onSubmit(
       {
         ...values,
@@ -637,7 +644,7 @@ export function EndoscopyOrderForm({
         )}
         <ErrorBanner error={submitError} />
         <ErrorBanner error={layouts.error ?? setMembers.error ?? catalog.error} />
-        {!setMode && <InfectionNotice patientId={patientId} />}
+        <AdvisoryNotice advisories={session.advisories} />
 
         <fieldset>
           <legend>検査共通</legend>

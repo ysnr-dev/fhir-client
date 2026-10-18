@@ -108,6 +108,29 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (advisory_severity)" do
+    it "stores per-kind overrides, defaults to empty and rejects raising or unknown kinds" do
+      with_admin_token(nil) { get "/facility_settings" }
+      expect(JSON.parse(response.body)["advisory_severity"]).to eq({})
+
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { advisory_severity: { egfr: "off", duplicate: "info" } }, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["advisory_severity"]).to eq("egfr" => "off", "duplicate" => "info")
+
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { advisory_severity: { dose: "block" } }, as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { advisory_severity: { "Bad Kind" => "info" } }, as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "PATCH /facility_settings (meal_schedule)" do
     it "stores the meal schedule and fills the rest with defaults" do
       with_admin_token(nil) do

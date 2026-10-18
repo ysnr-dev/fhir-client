@@ -1,4 +1,9 @@
 import { nowFhirDateTime } from "../lib/dates";
+import {
+  ADVISORY_OVERRIDE_REASON_SYSTEM,
+  type AdvisoryOverride,
+  overrideReasonText,
+} from "./advisoryHelpers";
 import type { TraineeLevel } from "./practitionerHelpers";
 import { resourcesOfType } from "./shared";
 
@@ -17,6 +22,9 @@ import { resourcesOfType } from "./shared";
 // 代行者が編集すると、その編集ぶんだけがまた承認待ちになる。
 const AGENT_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/provenance-participant-type";
 const ACTIVITY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-DataOperation";
+/** 独自の活動。警告を無視して登録した(docs/advisory-design.md §2.8)。 */
+export const ADVISORY_ACTIVITY_SYSTEM = "http://fhir-client.local/CodeSystem/provenance-activity";
+const ADVISORY_OVERRIDE_ACTIVITY = "override";
 // ASTM E1762 の署名種別。承認(内容を確認した)は Verification Signature。
 const SIGNATURE_TYPE_SYSTEM = "urn:iso-astm:E1762-95:2013";
 const VERIFICATION_SIGNATURE = { code: "1.2.840.10065.1.12.1.5", display: "Verification Signature" };
@@ -153,6 +161,19 @@ export function buildOrderProvenanceEntry(
   bundle: fhir4.Bundle,
   enterer: OrderEnterer,
 ): fhir4.BundleEntry | null {
+  const found = orderProvenanceTargets(bundle);
+  if (!found) return null;
+  const activity: OrderActivity = found.header.request?.method === "PUT" ? "UPDATE" : "CREATE";
+  return provenanceEntry(found.targets, found.requester, activity, enterer);
+}
+
+/**
+ * 登録・編集の Bundle で来歴の target にするもの(ヘッダ全部と MedicationRequest)と、
+ * ヘッダに保存される指示医師。削除だけの Bundle や requester の無いオーダーは null。
+ */
+export function orderProvenanceTargets(
+  bundle: fhir4.Bundle,
+): { header: fhir4.BundleEntry; targets: string[]; requester: fhir4.Reference } | null {
   const entries = bundle.entry ?? [];
   const headers = entries.filter(isHeaderEntry);
   const header = headers[0];
@@ -172,8 +193,73 @@ export function buildOrderProvenanceEntry(
   const requester = header.resource.requester;
   if (!requester?.reference) return null;
 
-  const activity: OrderActivity = header.request?.method === "PUT" ? "UPDATE" : "CREATE";
-  return provenanceEntry(targets, requester, activity, enterer);
+  return { header, targets, requester };
+}
+
+/**
+ * 警告を無視して登録した来歴(docs/advisory-design.md §2.8)。登録の来歴とは別の 1 件で、
+ * target は同じ、agent は無視した本人(入力者)だけ。指示医師を author に入れると代行の活動と
+ * 見分けがつかなくなる(承認待ちに並ぶ)ので入れない。reason に無視 1 件ずつの理由を積む。
+ */
+export function buildAdvisoryOverrideProvenanceEntry(
+  bundle: fhir4.Bundle,
+  enterer: OrderEnterer,
+  overrides: AdvisoryOverride[],
+): fhir4.BundleEntry | null {
+  const found = orderProvenanceTargets(bundle);
+  if (!found || overrides.length === 0) return null;
+  const provenance: fhir4.Provenance = {
+    resourceType: "Provenance",
+    target: found.targets.map((reference) => ({ reference })),
+    recorded: nowFhirDateTime(),
+    activity: {
+      coding: [{ system: ADVISORY_ACTIVITY_SYSTEM, code: ADVISORY_OVERRIDE_ACTIVITY, display: "警告の確認" }],
+    },
+    reason: overrides.map((override) => ({
+      coding: [
+        {
+          system: override.reasonSystem ?? ADVISORY_OVERRIDE_REASON_SYSTEM,
+          code: override.reasonCode,
+          display: override.reasonName,
+        },
+      ],
+      text: overrideReasonText(override),
+    })),
+    agent: [
+      {
+        type: agentType(ENTERER),
+        who: { reference: `Practitioner/${enterer.practitionerId}`, display: enterer.display || undefined },
+      },
+    ],
+  };
+  return { fullUrl: `urn:uuid:${crypto.randomUUID()}`, resource: provenance, request: { method: "POST", url: "Provenance" } };
+}
+
+export function isAdvisoryOverrideProvenance(provenance: fhir4.Provenance): boolean {
+  return Boolean(
+    provenance.activity?.coding?.some(
+      (coding) => coding.system === ADVISORY_ACTIVITY_SYSTEM && coding.code === ADVISORY_OVERRIDE_ACTIVITY,
+    ),
+  );
+}
+
+/** 詳細画面に出す「警告の確認」。誰が・いつ・どの警告をどの理由で無視したか。 */
+export interface AdvisoryOverrideRecord extends ProvenanceActor {
+  reasons: { reason: string; text: string }[];
+}
+
+export function advisoryOverridesOf(provenances: fhir4.Provenance[]): AdvisoryOverrideRecord[] {
+  return provenances
+    .filter(isAdvisoryOverrideProvenance)
+    .sort(byRecorded)
+    .map((provenance) => ({
+      name: agentName(agentOfType(provenance, ENTERER)),
+      at: provenance.recorded ?? "",
+      reasons: (provenance.reason ?? []).map((reason) => ({
+        reason: reason.coding?.[0]?.display || reason.coding?.[0]?.code || "",
+        text: reason.text ?? "",
+      })),
+    }));
 }
 
 /**
@@ -343,7 +429,8 @@ function byRecorded(a: fhir4.Provenance, b: fhir4.Provenance): number {
 }
 
 export function summarizeOrderProvenance(provenances: fhir4.Provenance[]): OrderProvenanceSummary {
-  const sorted = [...provenances].sort(byRecorded);
+  // 警告の確認は登録・編集の活動ではないので要約から外す(`advisoryOverridesOf` で別に出す)。
+  const sorted = provenances.filter((p) => !isAdvisoryOverrideProvenance(p)).sort(byRecorded);
   const creation = sorted.find((p) => provenanceActivity(p) === "CREATE") ?? sorted[0];
   // 登録より後の活動(編集・中止・完了・休止・再開)。最後の 1 件を出す。
   const updates = sorted.filter((p) => provenanceActivity(p) !== "CREATE");

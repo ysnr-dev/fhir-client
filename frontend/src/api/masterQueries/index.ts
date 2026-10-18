@@ -41,3 +41,4 @@ export * from "./patientFolder";
 export * from "./homeLayout";
 export * from "./nursingAssignment";
 export * from "./oralExam";
+export * from "./advisory";

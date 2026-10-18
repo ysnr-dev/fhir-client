@@ -1,17 +1,18 @@
 import { useMemo, useRef, useState } from "react";
+import { recordAdvisoryEvents } from "../api/advisoryClient";
 import type { CdsCard, CdsOverrideReason } from "../api/cdsClient";
 import { useCdsOrderSelect, useSendCdsFeedback } from "../api/cdsQueries";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
-import { overrideReasonsOf } from "../fhir/cdsCardHelpers";
+import { cdsCardAdvisories } from "../fhir/cdsCardHelpers";
 import { CdsCardList } from "./CdsCardList";
-import { Modal } from "./Modal";
 
-// 処方フォームの CDS Hooks(docs/cds-hooks-design.md §3.3)。
+// 処方フォームの CDS Hooks(docs/cds-hooks-design.md §3.3)。order-select はここ、登録前の order-sign は
+// 共通の警告の確認(AdvisoryConfirmModal)に PrescriptionForm が載せる。
 
 /** 入力が落ち着いてから order-select を呼ぶまでの間。 */
 const ORDER_SELECT_DELAY_MS = 1000;
 
-function feedbackParams(card: CdsCard, reason: CdsOverrideReason) {
+export function feedbackParams(card: CdsCard, reason: CdsOverrideReason) {
   return {
     service_id: card.service.id,
     service: card.service.service,
@@ -63,7 +64,19 @@ export function PrescriptionOrderSelectCards({
   const result = useCdsOrderSelect(params);
   const feedback = useSendCdsFeedback();
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  // 台帳(発火・無視)の記録。登録を止めないので、カードが出たとき・無視したときにその都度送る。
+  const sessionId = useRef(crypto.randomUUID());
+  const recorded = useRef(new Set<string>());
   const cards = (result.data?.cards ?? []).filter((card) => !dismissed.has(card.uuid));
+  const fresh = cards.filter((card) => !recorded.current.has(card.uuid));
+  if (fresh.length > 0) {
+    for (const card of fresh) recorded.current.add(card.uuid);
+    recordAdvisoryEvents({
+      context: "prescription",
+      session_id: sessionId.current,
+      events: cdsCardAdvisories(fresh).map((a) => ({ key: a.key, kind: a.kind, severity: a.severity, outcome: "fired" })),
+    });
+  }
   if (cards.length === 0) return null;
 
   return (
@@ -73,65 +86,15 @@ export function PrescriptionOrderSelectCards({
         patientId={patientId}
         onOverride={(card, reason) => {
           feedback.mutate(feedbackParams(card, reason));
+          const [advisory] = cdsCardAdvisories([card]);
+          recordAdvisoryEvents({
+            context: "prescription",
+            session_id: sessionId.current,
+            events: [{ key: advisory.key, kind: advisory.kind, severity: advisory.severity, outcome: "overridden", reason_code: reason.code, reason_text: `${advisory.message}` }],
+          });
           setDismissed((current) => new Set(current).add(card.uuid));
         }}
       />
     </div>
-  );
-}
-
-/**
- * order-sign の確認。カードを並べ、「登録」で続ける。重要(critical)のカードは無視の理由を
- * 選ぶまで登録できない。選んだ理由は登録するときに feedback で送る。
- * フォームの中に置くので、ボタンは type="button"(外側の form を submit させない)。
- */
-export function PrescriptionOrderSignModal({
-  patientId,
-  cards,
-  submitting,
-  onConfirm,
-  onCancel,
-}: {
-  patientId: string;
-  cards: CdsCard[];
-  submitting: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const feedback = useSendCdsFeedback();
-  const [overrides, setOverrides] = useState<Record<string, string>>({});
-  const missing = cards.filter((card) => card.indicator === "critical" && !overrides[card.uuid]);
-
-  function confirm() {
-    for (const card of cards) {
-      const reason = overrideReasonsOf(card).find((r) => r.code === overrides[card.uuid]);
-      if (reason) feedback.mutate(feedbackParams(card, reason));
-    }
-    onConfirm();
-  }
-
-  return (
-    <Modal title="判断支援の確認" onClose={onCancel} className="prescription-cds-modal">
-      <CdsCardList
-        cards={cards}
-        patientId={patientId}
-        overrides={overrides}
-        overridePlaceholder="理由…"
-        onOverride={(card, reason) => setOverrides((current) => ({ ...current, [card.uuid]: reason.code }))}
-      />
-      {missing.length > 0 && (
-        <p className="prescription-cds-modal__required" role="alert">
-          重要のカードは理由を選んでください。
-        </p>
-      )}
-      <div className="lab-order-item__actions">
-        <button type="button" onClick={confirm} disabled={missing.length > 0 || submitting}>
-          登録
-        </button>
-        <button type="button" onClick={onCancel} disabled={submitting}>
-          戻る
-        </button>
-      </div>
-    </Modal>
   );
 }

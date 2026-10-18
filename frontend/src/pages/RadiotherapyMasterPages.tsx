@@ -15,8 +15,9 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 
 // 放射線治療の施設固有マスタのうち、項目が平らな 4 つ(モダリティ・照射技法・治療装置・
-// 休止/中止理由)。どれも数十件で同じ作りなので、1 つの画面部品を項目の定義だけ変えて使う
-// (docs/radiotherapy-order-design.md §3)。治療プロトコルは入れ子を持つので別画面。
+// 休止/中止理由)。どれも数十件で同じ作りなので、1 つの画面部品(SimpleMasterPage)を項目の定義だけ
+// 変えて使う(docs/radiotherapy-order-design.md §3)。同じ形の他のマスタ(警告の確認理由)も使う。
+// 治療プロトコルは入れ子を持つので別画面。
 
 type Row = { id: number; code: string; name: string; enabled: boolean; display_order: number | null };
 
@@ -52,7 +53,7 @@ interface MasterPageProps<T extends Row> {
   defaults: Partial<T>;
 }
 
-function SimpleMasterPage<T extends Row>({ title, itemLabel, hooks, fields, defaults }: MasterPageProps<T>) {
+export function SimpleMasterPage<T extends Row>({ title, itemLabel, hooks, fields, defaults }: MasterPageProps<T>) {
   const list = hooks.useList();
   // 編集対象。"new" は新規作成。
   const [editing, setEditing] = useState<T | "new" | null>(null);
