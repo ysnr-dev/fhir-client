@@ -96,6 +96,10 @@ backend が discovery（`GET {URL}/cds-services`、5 分キャッシュ）で読
 `docker compose exec -d backend bundle exec rackup -p 8787 script/cds_demo_service.ru` と動かし、URL `http://localhost:8787`
 で登録します。
 
+実用のサービスは `../fhir-smart-app` の `apps/cds`(`patient-view` で qSOFA・eGFR・CHA₂DS₂-VASc が基準を超えたらカードを出し、
+「臨床スコアで開く」で同じリポジトリの SMART アプリを該当のタブで起動します)。ホストで動かすので、開発では URL
+`http://host.docker.internal:5181` で登録します。
+
 ### 警告の集計と設定
 
 フォームの中で出す警告（薬剤の安全性チェック・放射線の安全確認・レジメンの投与前チェック・妊娠や感染症の注意・外部の判断支援）の
