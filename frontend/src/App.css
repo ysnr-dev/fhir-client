@@ -28026,7 +28026,7 @@ input.nursing-picker__search {
   flex: 1 1 320px;
 }
 
-/* --- SMART アプリ(カルテの「アプリ」タブ、docs/smart-app-launch-design.md) --- */
+/* --- SMART アプリ(カルテの「SMARTアプリ」タブ、docs/smart-app-launch-design.md) --- */
 .smart-app-tab {
   display: flex;
   flex-direction: column;
@@ -28064,12 +28064,6 @@ input.nursing-picker__search {
 
 .smart-app-tab__empty,
 .smart-app-tab__status,
-.smart-app-tab__hint {
-  margin: 0;
-  color: var(--text);
-  font-size: 13px;
-}
-
 .smart-app-tab__window {
   display: flex;
   flex-direction: column;

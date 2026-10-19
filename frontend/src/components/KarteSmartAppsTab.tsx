@@ -7,7 +7,7 @@ import {
 import { ErrorBanner } from "./ErrorBanner";
 import { takePendingAppContext } from "../lib/smartAppLaunchContext";
 
-// カルテ画面の「アプリ」タブ(docs/smart-app-launch-design.md §3.3)。登録済みの SMART アプリを
+// カルテ画面の「SMARTアプリ」タブ(docs/smart-app-launch-design.md §3.3)。登録済みの SMART アプリを
 // 開いている患者・利用者の文脈(EHR launch)で起動し、枠内(iframe)に出す。
 //
 // 選択中のアプリは URL(view パラメータ)で表す。起動は患者・アプリ・受診が変わるたびに
@@ -74,7 +74,7 @@ export function KarteSmartAppsTab({ patientId, view, onViewChange, encounterId }
   return (
     <div className="karte-tabpanel smart-app-tab">
       <div className="karte-tabpanel__header">
-        <h3>アプリ</h3>
+        <h3>SMARTアプリ</h3>
         {selected && selected.display === "embed" && (
           <div className="karte-tabpanel__actions">
             <button type="button" onClick={() => setNonce((n) => n + 1)} disabled={launch.isFetching}>
@@ -91,7 +91,7 @@ export function KarteSmartAppsTab({ patientId, view, onViewChange, encounterId }
       )}
 
       {apps.data && apps.data.length > 0 && (
-        <div className="smart-app-tab__list" role="tablist" aria-label="アプリ">
+        <div className="smart-app-tab__list" role="tablist" aria-label="SMARTアプリ">
           {apps.data.map((app) => (
             <button
               key={app.id}
@@ -129,9 +129,6 @@ export function KarteSmartAppsTab({ patientId, view, onViewChange, encounterId }
               sandbox={IFRAME_SANDBOX}
               allow="clipboard-write"
             />
-          )}
-          {launch.data && (
-            <p className="smart-app-tab__hint">表示されないときは「再起動」を押してください。</p>
           )}
         </>
       )}

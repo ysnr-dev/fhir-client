@@ -1,4 +1,4 @@
-// カルテの「アプリ」タブ用の API(docs/smart-app-launch-design.md)。
+// カルテの「SMARTアプリ」タブ用の API(docs/smart-app-launch-design.md)。
 //
 // 起動できるアプリの一覧と、EHR launch の起動 URL の取得。認可そのものはアプリと上流の
 // 間で行われ、この backend はログイン中の医療者と開いている患者を名乗って launch

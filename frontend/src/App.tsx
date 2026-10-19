@@ -249,7 +249,7 @@ function App() {
             <Link to="/oauth-clients" className="row-menu__item">
               OAuth クライアント
             </Link>
-            {/* カルテの「アプリ」タブから起動する SMART on FHIR アプリの台帳。 */}
+            {/* カルテの「SMARTアプリ」タブから起動する SMART on FHIR アプリの台帳。 */}
             <Link to="/smart-apps" className="row-menu__item">
               SMART アプリ
             </Link>

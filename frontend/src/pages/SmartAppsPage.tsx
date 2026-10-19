@@ -11,7 +11,7 @@ import {
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 
-// カルテの「アプリ」タブから起動する SMART on FHIR アプリの台帳(docs/smart-app-launch-design.md)。
+// カルテの「SMARTアプリ」タブから起動する SMART on FHIR アプリの台帳(docs/smart-app-launch-design.md)。
 // 認可の実体は上流の OAuth クライアント(launch 形・launch スコープ付き)で、ここは
 // 名称・起動 URL・表示方法・並び順を持つ。
 
@@ -40,7 +40,7 @@ export function SmartAppsPage() {
         </div>
       </div>
       <p className="oauth-clients__lead">
-        カルテの「アプリ」タブから起動する外部アプリを登録します。先に
+        カルテの「SMARTアプリ」タブから起動する外部アプリを登録します。先に
         <Link to="/oauth-clients">OAuth クライアント</Link>
         でアプリ連携(医療従事者・launch スコープ付き)のクライアントを登録してください。
       </p>

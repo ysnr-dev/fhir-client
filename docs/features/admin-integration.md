@@ -53,7 +53,7 @@ fhir-server は CORS を意図的に無効にしているため、ブラウザ�
 
 ### SMART アプリ
 
-カルテの「アプリ」タブから起動する外部アプリの台帳です（`docs/smart-app-launch-design.md`）。名称、
+カルテの「SMARTアプリ」タブから起動する外部アプリの台帳です（`docs/smart-app-launch-design.md`）。名称、
 OAuth クライアント（アプリ連携のもの）、起動 URL、表示（埋め込み / 別ウィンドウ）、有効、表示順を持ちます。
 認可（スコープ・リダイレクト URI）は OAuth クライアント側の登録が正で、ここでは変えられません。
 
@@ -72,7 +72,11 @@ OAuth クライアントの発行と同じ重さです。
 アプリ連携・医療従事者・public・リダイレクト URI `http://localhost:5173/smart-demo/index.html`・
 スコープ `user/Patient.read user/Encounter.read user/Observation.read launch launch/patient launch/encounter openid fhirUser`
 で登録し、SMART アプリに起動 URL `http://localhost:5173/smart-demo/index.html?client_id=<client_id>` で登録すると、
-カルテの「アプリ」タブで氏名・受診・直近の検査結果と `fhirUser` が出ます。
+カルテの「SMARTアプリ」タブで氏名・受診・直近の検査結果と `fhirUser` が出ます。
+
+実用のアプリは別リポジトリ `../fhir-smart-app`(臨床スコア計算。eGFR・CHA₂DS₂-VASc・qSOFA を病名・検査値・バイタルから
+自動で埋め、結果を `Observation` として書き戻す)にあります。登録手順はそちらの README を参照してください。
+書き戻しを使うときは OAuth クライアントのスコープに `user/Observation.write` を足し、起動 URL の `scope` にも同じ組を付けます。
 
 ### CDS サービス
 

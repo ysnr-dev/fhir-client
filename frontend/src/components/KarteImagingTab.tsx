@@ -22,7 +22,7 @@ const KarteImagingImportForm = lazy(() => import("./KarteImagingImportForm"));
 type Mode = { kind: "list" } | { kind: "detail"; studyId: string } | { kind: "import" };
 
 const MODE_TITLES: Record<Mode["kind"], string> = {
-  list: "DICOM",
+  list: "DICOMビューア",
   detail: "DICOM 表示",
   import: "DICOM 取込",
 };

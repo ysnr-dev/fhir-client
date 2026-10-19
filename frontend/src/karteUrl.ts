@@ -145,14 +145,14 @@ export const KARTE_TABS = [
   // 取り込んだファイル(紹介状・同意書・持参の検査結果など)。診療の経過そのもの
   // ではなく「患者に付いている書類の束」なので、タイムラインには出さずタブで見る。
   { key: "file", label: "ファイル" },
-  // 取り込んだ DICOM(他院の CD など)。スタディ → シリーズ → 画像の階層を持ち、専用の
-  // ビューアで開くので、ファイルとは別のタブにする。
-  { key: "imaging", label: "DICOM" },
   // 期間を指定してカルテ 2 号用紙を印刷する。印刷用のページは別タブ(pages/KartePrintPage)。
   { key: "karte-print", label: "カルテ印刷" },
+  // 取り込んだ DICOM(他院の CD など)。スタディ → シリーズ → 画像の階層を持ち、専用の
+  // ビューアで開くので、ファイルとは別のタブにする。
+  { key: "imaging", label: "DICOMビューア" },
   // SMART on FHIR アプリ(docs/smart-app-launch-design.md)。開いている患者・利用者の文脈を渡して
   // 外部アプリを起動し、枠内に出す。view は選択中のアプリ(smart_apps の id)。
-  { key: "smart-apps", label: "アプリ" },
+  { key: "smart-apps", label: "SMARTアプリ" },
 ] as const;
 
 export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
@@ -170,7 +170,7 @@ export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly Kar
     keys: ["lab", "lab-timeline", "micro", "patho", "rad-report", "physio-report", "endoscopy-report"],
   },
   { label: "看護", keys: ["nursing-profile", "nursing", "nursing-care-plan"] },
-  { label: "その他", keys: ["imaging", "karte-print", "smart-apps"] },
+  { label: "その他", keys: ["karte-print", "imaging", "smart-apps"] },
 ];
 
 /** そのタブを畳んでいるグループ。畳んでいなければ undefined。 */

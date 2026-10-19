@@ -463,7 +463,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
   - ［不足］EHR launch(`launch` パラメータ、`launch/patient` scope)で患者・利用者の文脈を渡し、外部アプリ(計算ツール・PHR ビューア・AI 記録製品・院内開発の小画面)を
     カルテのタブに出す。アンビエント記録などを自前で作らず、施設が選んだ製品を差し込める。
   - ［当たり］上流に SMART App Launch 2.2 の EHR launch(launch context の発行・`fhirContext`・`.well-known/smart-configuration`)。
-    client は backend `smart_apps`(名称・launch URL・client_id・表示場所)と管理画面、カルテに「アプリ」タブ(iframe に `iss` と `launch`)。
+    client は backend `smart_apps`(名称・launch URL・client_id・表示場所)と管理画面、カルテに「SMARTアプリ」タブ(iframe に `iss` と `launch`)。
     アプリは `/fhir` プロキシを通らず上流に直接認可されるので、CORS とトークン寿命は上流で決める。
 
 ### 5.4 中くらいの候補

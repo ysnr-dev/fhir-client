@@ -11,7 +11,7 @@
 - **［要確認］** = 実装時に確かめること
 
 ユーザー決定(2026-10-18): (1) EHR launch の認可はログイン・同意画面を出さず即 302、(2) アプリの書き込みは OAuth クライアント登録時の
-スコープに従う(既定は読み取り)、(3) 起動場所はカルテの「アプリ」タブのみ(患者なし起動は残課題)。
+スコープに従う(既定は読み取り)、(3) 起動場所はカルテの「SMARTアプリ」タブのみ(患者なし起動は残課題)。
 
 ## 0. 実装前の状態(設計時の前提)
 
@@ -72,7 +72,7 @@ client(このリポジトリ):
      │                       │                       │                        │◀─────────────────────────│ GET /Patient/{id} (Bearer, CORS)
 ```
 
-1. **［設計］** frontend: カルテ「アプリ」タブでアプリを選ぶと `POST /smart_apps/:id/launch` に `{patient_id, encounter_id?}` を送る(利用者認証 + CSRF)。
+1. **［設計］** frontend: カルテ「SMARTアプリ」タブでアプリを選ぶと `POST /smart_apps/:id/launch` に `{patient_id, encounter_id?}` を送る(利用者認証 + CSRF)。
 2. **［設計］** client backend: `smart_apps` 行を引き、ログイン中の利用者の `practitioner_fhir_id` が無ければ 403。`FhirAdminGateway` で上流に
    `POST /admin/launch_contexts` を送る(§2.4)。
 3. **［設計］** 上流: `launch_contexts` に患者・受診・医療者・アプリ(client_id)を保存し、opaque な `launch` トークン(5 分、単回)を返す。
@@ -325,7 +325,7 @@ end
   `App.tsx` の管理メニューに「SMART アプリ」、ルートは `<AdminGate>` の中。
 - `OauthClientCreateForm` / `ScopeSelector`: launch 形に `user/`(read / write / *)と `launch` 系の選択肢(`/admin/scopes` の `user_access` と `context_scopes` から)。
 
-### 3.3 カルテ「アプリ」タブ
+### 3.3 カルテ「SMARTアプリ」タブ
 
 - `karteUrl.ts`: `KARTE_TABS` に `{ key: "smart-apps", label: "アプリ" }`、`KARTE_TAB_GROUPS` の「その他」に入れる。
 - `KartePage.tsx` の `renderTabPanel`: `<KarteSmartAppsTab {...props} encounterId={examEncounter?.id} />`(外来の診察中 Encounter。
@@ -348,8 +348,7 @@ end
 
 - **アプリ側への要件**(登録時の運用。画面には書かない): 自身の応答に `Content-Security-Policy: frame-ancestors <EHR のオリジン>` を出す
   (`X-Frame-Options: DENY / SAMEORIGIN` を出さない)。EHR 側で枠内表示を強制する手段は無い。
-- **［事実］** 上流のステージ 1 エラー(400 の HTML)は `X-Frame-Options: DENY` のため枠内に描画されず空白になる。タブに「表示されないときは再起動」の
-  一行だけ出す(フォーム外なので可)。
+- **［事実］** 上流のステージ 1 エラー(400 の HTML)は `X-Frame-Options: DENY` のため枠内に描画されず空白になる。復旧は「再起動」ボタンで行う(説明文は出さない)。
 
 ## 4. セキュリティ
 
@@ -420,7 +419,7 @@ Growth Chart 等)— https 公開 URL が要り、`http://localhost:3000` の is
 
 - 上流 rspec 2226 例・client rspec 全件・`tsc -b`・lint が通る(新規 spec: 上流 `smart_ehr_launch_spec` / `admin/launch_contexts_spec` /
   `cors_spec` / rack-attack の別枠、client `smart_apps_spec` / `admin/smart_apps_spec` / `models/smart_app_spec`)。
-- カルテ「その他 → アプリ」で同梱の demo を起動: 上流の authorize が HTML を出さず 302 → token → `fhirUser = Practitioner/<一郎>`、
+- カルテ「その他 → SMARTアプリ」で同梱の demo を起動: 上流の authorize が HTML を出さず 302 → token → `fhirUser = Practitioner/<一郎>`、
   テスト太郎の氏名と直近の Observation 5 件が枠内に出る(`need_patient_banner: false`)。CORS の preflight は `*` で通る。
 - 患者を切り替える(テスト 20260923)と新しい launch で起動し直し、別の患者が残らない。「再起動」で 3 本目の launch が発行される。
   上流の `launch_contexts` は 3 行とも消費済み、`audit_events` の authorize 行に `agent_who_reference = Practitioner/…` が入る。
@@ -471,6 +470,6 @@ Growth Chart 等)— https 公開 URL が要り、`http://localhost:3000` の is
 | client | `backend/app/models/fhir_connection_settings.rb`、`admin/fhir_connection_settings_controller.rb`、`wakeup_controller.rb` | `public_base_url` |
 | client | `backend/app/models/smart_app.rb`、`services/smart_launch_issuer.rb`、`controllers/smart_apps_controller.rb`、`admin/smart_apps_controller.rb`(新規) | アプリ台帳と起動 |
 | client | `backend/config/routes.rb`、`frontend/vite.config.ts`、`render.yaml` | `/smart_apps` |
-| client | `frontend/src/karteUrl.ts`、`pages/KartePage.tsx`、`components/KarteSmartAppsTab.tsx`(新規) | 「アプリ」タブ |
+| client | `frontend/src/karteUrl.ts`、`pages/KartePage.tsx`、`components/KarteSmartAppsTab.tsx`(新規) | 「SMARTアプリ」タブ |
 | client | `frontend/src/pages/SmartAppsPage.tsx`(新規)、`App.tsx`、`api/adminClient.ts`、`api/adminQueries.ts`、`api/queries/smartApps.ts`(新規) | 管理画面と API 層 |
 | client | `frontend/public/smart-demo/index.html`(新規) | 検証用の最小 SMART アプリ |
