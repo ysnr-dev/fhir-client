@@ -14,10 +14,6 @@ module Master
 
     before_save :set_search_columns
 
-    def abolished?
-      abolished_on.present? && abolished_on != NOT_ABOLISHED
-    end
-
     private
 
     def set_search_columns

@@ -12,8 +12,7 @@ import {
 import type { EndoscopyItem } from "../api/masterClient";
 import {
   endoscopyExamTypeName,
-  useEndoscopyItemLayout,
-  useEndoscopyItemLayouts,
+  endoscopyItemLayoutHooks,
   useEndoscopyItemSearch,
   useEndoscopyItemsByCodes,
   useEndoscopySetMembers,
@@ -169,7 +168,7 @@ export function EndoscopyOrderForm({
   );
 
   const problemOptions = useProblemOptions(patientId);
-  const layouts = useEndoscopyItemLayouts();
+  const layouts = endoscopyItemLayoutHooks.useLayouts();
 
   const layoutTabs = useMemo(
     () => (layouts.data?.items ?? []).filter((layout) => layout.active),
@@ -188,7 +187,7 @@ export function EndoscopyOrderForm({
   // 選べる項目のマスタを先に揃えておく。選んだ瞬間にオーダーへ写す値
   // (JJ1017 コード・種別・部位・セットの構成・既定テンプレート)が要るため、
   // 伝票・検索結果・選択済みをまとめて引く。
-  const layout = useEndoscopyItemLayout(active?.kind === "layout" ? active.id : undefined);
+  const layout = endoscopyItemLayoutHooks.useLayout(active?.kind === "layout" ? active.id : undefined);
   const layoutCodes = useMemo(
     () =>
       (layout.data?.cells ?? [])
@@ -1392,7 +1391,7 @@ function LayoutSelectGrid({
   selectedCodes,
   onToggle,
 }: SelectProps & {
-  layout: ReturnType<typeof useEndoscopyItemLayout>["data"];
+  layout: ReturnType<typeof endoscopyItemLayoutHooks.useLayout>["data"];
   error: unknown;
   catalogByCode: Map<string, EndoscopyItem>;
 }) {

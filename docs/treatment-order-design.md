@@ -139,8 +139,8 @@ master_treatment_dataset_details
 | 画面 | パス | 元 |
 |---|---|---|
 | 処置オーダー項目マスタ | `/treatment-items` | `PhysioItemPage`(検査種別・既定テンプレートを削除) |
-| 処置オーダーレイアウト | `/treatment-item-layouts` | `PhysioItemLayoutPage` |
-| 実施入力データセット | `/treatment-datasets` | `PhysioDatasetPage` |
+| 処置オーダーレイアウト | `/treatment-item-layouts` | `ItemLayoutPage`(各部門で共用) |
+| 実施入力データセット | `/treatment-datasets` | `PerformDatasetPage`(各部門で共用) |
 | 処置一覧(部門業務) | `/treatment-worklist` | `PhysioWorklistPage`(検査種別フィルタ・至急バッジを削除) |
 | オーダー入力 | カルテ右ペイン「処置」 | `PhysioOrderForm`(下記の差分) |
 

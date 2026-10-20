@@ -215,10 +215,6 @@ export const HOME_MAX_CARDS = 30;
 /** 自動更新の対象になる種類(外来一覧・救急一覧と同じ 1 分ごとの読み直し)。 */
 export const HOME_POLLING_KINDS: readonly HomeCardKind[] = ["outpatient", "emergency"];
 
-export function isWideHomeCard(card: HomeCard): boolean {
-  return Boolean(HOME_CARD_KINDS[card.kind].wide);
-}
-
 export function newHomeCardId(): string {
   return crypto.randomUUID();
 }

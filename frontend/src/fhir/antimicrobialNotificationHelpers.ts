@@ -4,7 +4,6 @@ import { injectionSeriesOf, INJECTION_ORDER_TYPE } from "./injectionHelpers";
 import {
   buildCompletedNotificationTask,
   buildNotificationTask,
-  hasTaskCode,
   notificationTaskEntry,
   taskInputOf,
   taskOwnerName,
@@ -41,10 +40,6 @@ const START_INPUT = "開始日";
 const SERIES_INPUT = "束";
 const KIND_INPUT = "種別";
 const FORM_INPUT = "届出書";
-
-export function isAntimicrobialNotificationTask(task: fhir4.Task): boolean {
-  return hasTaskCode(task, ANTIMICROBIAL_NOTIFICATION_TASK_CODE.code);
-}
 
 function orderTypeOf(order: fhir4.ServiceRequest): string | undefined {
   return codingBySystem(order.category?.flatMap((c) => c.coding ?? []), ORDER_TYPE_SYSTEM)?.code;

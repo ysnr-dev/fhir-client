@@ -3,7 +3,7 @@ import { rxInquiryTimeLabel, type RxInquirySummary } from "../fhir/rxInquiryHelp
 
 /**
  * 疑義照会の履歴(照会と回答)。薬剤部の画面(表示・調剤登録・払出登録)とカルテの詳細で共用する。
- * legacyNotes は照会の仕組みを入れる前に調剤登録で書いた記録(進捗 Task の note)。
+ * legacyNotes は照会の Task を持たず、調剤登録で進捗 Task の note に書いた記録。
  */
 export function RxInquiryHistory({
   inquiries,

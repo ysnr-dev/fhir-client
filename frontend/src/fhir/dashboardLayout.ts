@@ -117,10 +117,6 @@ export function removeTile(tiles: DashboardTile[], id: string): DashboardTile[] 
   return tiles.filter((tile) => tile.id !== id);
 }
 
-export function updateTile(tiles: DashboardTile[], id: string, patch: Partial<DashboardTile>): DashboardTile[] {
-  return tiles.map((tile) => (tile.id === id ? clampTile({ ...tile, ...patch }) : tile));
-}
-
 /** タイルを dx 列・dy 行だけ動かす(掴んで動かす途中にも呼ぶので、base は掴む前の並び)。 */
 export function moveTile(base: DashboardTile[], id: string, dx: number, dy: number): DashboardTile[] {
   const tile = base.find((t) => t.id === id);

@@ -155,8 +155,8 @@ seed は `db/seed_data/physio_exam_types.csv`(心電図 / 超音波検査 / 呼�
 |---|---|---|
 | 生理検査オーダー項目マスタ | `/physio-items` | `RadItemPage`(JJ1017 要素・32桁プレビュー・頻用一括作成を削除) |
 | 検査種別 | `/physio-exam-types` | 新規(素朴な CRUD) |
-| 生理検査オーダーレイアウト | `/physio-item-layouts` | `RadItemLayoutPage` |
-| 実施入力データセット | `/physio-datasets` | `RadDatasetPage`(器材の参照先を差し替え) |
+| 生理検査オーダーレイアウト | `/physio-item-layouts` | `ItemLayoutPage`(各部門で共用) |
+| 実施入力データセット | `/physio-datasets` | `PerformDatasetPage`(各部門で共用。器材の参照先は設定で差し替え) |
 | 生理検査一覧(部門業務) | `/physio-worklist` | `RadWorklistPage`(モダリティ → 検査種別) |
 | オーダー入力 | カルテ右ペイン「生理検査」 | `RadOrderForm` ほか |
 

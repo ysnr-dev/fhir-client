@@ -12,8 +12,7 @@ import {
 import type { PhysioItem } from "../api/masterClient";
 import {
   physioExamTypeName,
-  usePhysioItemLayout,
-  usePhysioItemLayouts,
+  physioItemLayoutHooks,
   usePhysioItemSearch,
   usePhysioItemsByCodes,
   usePhysioSetMembers,
@@ -169,7 +168,7 @@ export function PhysioOrderForm({
   );
 
   const problemOptions = useProblemOptions(patientId);
-  const layouts = usePhysioItemLayouts();
+  const layouts = physioItemLayoutHooks.useLayouts();
 
   const layoutTabs = useMemo(
     () => (layouts.data?.items ?? []).filter((layout) => layout.active),
@@ -188,7 +187,7 @@ export function PhysioOrderForm({
   // 選べる項目のマスタを先に揃えておく。選んだ瞬間にオーダーへ写す値
   // (JJ1017 コード・種別・部位・セットの構成・既定テンプレート)が要るため、
   // 伝票・検索結果・選択済みをまとめて引く。
-  const layout = usePhysioItemLayout(active?.kind === "layout" ? active.id : undefined);
+  const layout = physioItemLayoutHooks.useLayout(active?.kind === "layout" ? active.id : undefined);
   const layoutCodes = useMemo(
     () =>
       (layout.data?.cells ?? [])
@@ -1384,7 +1383,7 @@ function LayoutSelectGrid({
   selectedCodes,
   onToggle,
 }: SelectProps & {
-  layout: ReturnType<typeof usePhysioItemLayout>["data"];
+  layout: ReturnType<typeof physioItemLayoutHooks.useLayout>["data"];
   error: unknown;
   catalogByCode: Map<string, PhysioItem>;
 }) {

@@ -1,55 +1,38 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   bulkCreateRadItemsFromFrequent,
-  createRadDataset,
-  createRadDatasetDetail,
   createRadItem,
-  createRadItemLayout,
-  createRadItemLayoutCell,
   createRadJj1017Code,
   createRadMaterial,
   createRadSetItem,
-  deleteRadDataset,
-  deleteRadDatasetDetail,
   deleteRadItem,
-  deleteRadItemLayout,
-  deleteRadItemLayoutCell,
   deleteRadJj1017Code,
   deleteRadMaterial,
   deleteRadSetItem,
-  fetchRadDataset,
   fetchRadItem,
-  fetchRadItemLayout,
-  fetchRadItemLayouts,
   fetchRadJj1017Catalog,
   fetchRadJj1017Elements,
   fetchRadMaterial,
   type MasterSearchResult,
-  type RadDatasetDetailPayload,
-  type RadDatasetPayload,
-  type RadItemLayoutCellPayload,
-  type RadItemLayoutPayload,
+  radDatasetClient,
+  radItemLayoutClient,
   type RadItemPayload,
   type RadItemSearchResult,
   type RadJj1017CodePayload,
   type RadMaterialPayload,
   type RadSetItem,
   type RadSetItemPayload,
-  searchRadDatasetDetails,
-  searchRadDatasets,
   searchRadFrequentCodes,
   searchRadItems,
   searchRadJj1017Codes,
   searchRadMaterials,
   searchRadSetItems,
-  updateRadDataset,
-  updateRadDatasetDetail,
   updateRadItem,
-  updateRadItemLayout,
-  updateRadItemLayoutCell,
   updateRadJj1017Code,
   updateRadMaterial,
 } from "../masterClient";
+import { itemLayoutHooks } from "./itemLayout";
+import { performDatasetHooks } from "./performDataset";
 
 // 放射線検査オーダーのマスタ群 ----------------------------------------------
 
@@ -57,7 +40,6 @@ import {
 const RAD_JJ1017_CODES_KEY = ["master", "rad_jj1017_codes"];
 const RAD_FREQUENT_CODES_KEY = ["master", "rad_frequent_codes"];
 const RAD_ITEMS_KEY = ["master", "rad_items"];
-const RAD_LAYOUTS_KEY = ["master", "rad_item_layouts"];
 
 const RAD_MATERIALS_KEY = ["master", "rad_materials"];
 
@@ -120,138 +102,14 @@ export function useRadMaterialMutations() {
   };
 }
 
-const RAD_DATASETS_KEY = ["master", "rad_datasets"];
 // 1データセットの明細も、オーダーに紐付く全データセットの明細も、この上限で足りる。
-const RAD_DATASET_DETAIL_PER = 100;
 
-/** 実施入力用データセットの検索。 */
-export function useRadDatasetSearch(
-  filters: { name?: string; active?: boolean },
-  page: number,
-  enabled = true,
-) {
-  return useQuery({
-    queryKey: [...RAD_DATASETS_KEY, "list", filters, page],
-    queryFn: () =>
-      searchRadDatasets({
-        name: filters.name || undefined,
-        active: filters.active || undefined,
-        page,
-        per: 20,
-      }),
-    placeholderData: keepPreviousData,
-    enabled,
-  });
-}
-
-/** 撮影項目に付けるデータセットの選択肢。件数が少ないので全件まとめて引く。 */
-export function useRadDatasetOptions() {
-  return useQuery({
-    queryKey: [...RAD_DATASETS_KEY, "options"],
-    staleTime: Infinity,
-    queryFn: () => searchRadDatasets({ per: 200 }),
-  });
-}
-
-/** 編集モーダル用の詳細(明細を名称付きで同梱)。データセットコードでも id でも引ける。 */
-export function useRadDataset(idOrCode: string | number | null) {
-  return useQuery({
-    queryKey: [...RAD_DATASETS_KEY, "detail", idOrCode],
-    queryFn: () => fetchRadDataset(idOrCode as string | number),
-    enabled: idOrCode !== null,
-  });
-}
-
-export function useRadDatasetMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_DATASETS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: RadDatasetPayload) => createRadDataset(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: RadDatasetPayload }) =>
-        updateRadDataset(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteRadDataset(id),
-      retry: false,
-      onSuccess: () => {
-        invalidate();
-        // 削除で参照していた項目の dataset_code も外れるので、項目マスタ側も引き直す。
-        queryClient.invalidateQueries({ queryKey: RAD_ITEMS_KEY });
-      },
-    }),
-  };
-}
-
-/** 明細の編集。データセット詳細に同梱されているので詳細ごと破棄する。 */
-export function useRadDatasetDetailMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_DATASETS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: RadDatasetDetailPayload) => createRadDatasetDetail(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: RadDatasetDetailPayload }) =>
-        updateRadDatasetDetail(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteRadDatasetDetail(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
-
-/**
- * 撮影項目コード群が参照するデータセットの明細。実施入力の初期表示に使う。
- *
- * 項目 → 明細の2段。1つのデータセットは複数の撮影項目から参照されるので、
- * 明細を引く前にデータセットコードを一意化する(同じデータセットを2回引かない)。
- */
-export function useRadDatasetLinesForItems(itemCodes: string[]) {
-  const codes = Array.from(new Set(itemCodes.filter(Boolean))).sort();
-
-  const items = useQuery({
-    queryKey: [...RAD_ITEMS_KEY, "dataset-codes", codes],
-    staleTime: Infinity,
-    queryFn: () => searchRadItems({ item_code: codes.join(","), per: RAD_DATASET_DETAIL_PER }),
-    enabled: codes.length > 0,
-  });
-
-  const datasetCodes = Array.from(
-    new Set((items.data?.items ?? []).map((item) => item.dataset_code).filter(Boolean)),
-  ).sort() as string[];
-
-  const details = useQuery({
-    queryKey: [...RAD_DATASETS_KEY, "details-for", datasetCodes],
-    queryFn: () =>
-      searchRadDatasetDetails({
-        dataset_code: datasetCodes.join(","),
-        per: RAD_DATASET_DETAIL_PER,
-      }),
-    enabled: datasetCodes.length > 0,
-  });
-
-  return {
-    details: details.data?.items ?? [],
-    // データセットを持つ項目が1つも無いときは明細クエリが走らないので、その分は待たない。
-    isLoading: items.isLoading || (datasetCodes.length > 0 && details.isLoading),
-    error: items.error ?? details.error,
-  };
-}
+export const radDatasetHooks = performDatasetHooks({
+  name: "rad_datasets",
+  client: radDatasetClient,
+  itemsKey: RAD_ITEMS_KEY,
+  searchItemsByCodes: (codes, per) => searchRadItems({ item_code: codes.join(","), per }),
+});
 
 export interface RadJj1017CodeFilters {
   element?: string;
@@ -441,69 +299,7 @@ export function useRadSetItemMutations() {
   };
 }
 
-export function useRadItemLayouts() {
-  return useQuery({
-    queryKey: [...RAD_LAYOUTS_KEY, "list"],
-    staleTime: Infinity,
-    queryFn: fetchRadItemLayouts,
-  });
-}
-
-export function useRadItemLayout(id: number | undefined) {
-  return useQuery({
-    queryKey: [...RAD_LAYOUTS_KEY, "detail", id],
-    queryFn: () => fetchRadItemLayout(id as number),
-    enabled: id !== undefined,
-  });
-}
-
-export function useRadItemLayoutMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_LAYOUTS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: RadItemLayoutPayload) => createRadItemLayout(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: RadItemLayoutPayload }) =>
-        updateRadItemLayout(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteRadItemLayout(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
-
-export function useRadItemLayoutCellMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_LAYOUTS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: RadItemLayoutCellPayload) => createRadItemLayoutCell(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: Partial<RadItemLayoutCellPayload> }) =>
-        updateRadItemLayoutCell(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteRadItemLayoutCell(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
+export const radItemLayoutHooks = itemLayoutHooks("rad_item_layouts", radItemLayoutClient);
 
 // 放射線オーダー画面用 --------------------------------------------------
 

@@ -1081,8 +1081,3 @@ export function planActivityOrderLines(
   }));
 }
 
-/** 指示簿などで「看護計画から展開した指示」の印を出すための判定。 */
-export function isPlanDerivedOrder(sr: fhir4.ServiceRequest): boolean {
-  return planActivityOf(sr) !== undefined;
-}
-

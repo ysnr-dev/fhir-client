@@ -228,19 +228,6 @@ export function relationAnchorOf(parent: ExtractGroup, leaf: ExtractLeaf): Extra
   return relationAnchors(parent, leaf).find((c) => c.key === leaf.relation!.key);
 }
 
-/** 条件 → それが属するグループ(時間関係の基準を探すため)。 */
-export function parentGroups(root: ExtractGroup): Map<string, ExtractGroup> {
-  const parents = new Map<string, ExtractGroup>();
-  const visit = (group: ExtractGroup) => {
-    for (const child of group.children) {
-      if (isGroup(child)) visit(child);
-      else parents.set(child.key, group);
-    }
-  };
-  visit(root);
-  return parents;
-}
-
 /** 除外にできる位置か(AND の直下で、ほかに除外でない兄弟がある)。 */
 export function canNegate(parent: ExtractGroup, leaf: ExtractLeaf): boolean {
   if (parent.op !== "and") return false;

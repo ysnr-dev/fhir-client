@@ -1,45 +1,28 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  createPhysioDataset,
-  createPhysioDatasetDetail,
   createPhysioExamType,
   createPhysioItem,
-  createPhysioItemLayout,
-  createPhysioItemLayoutCell,
   createPhysioSetItem,
-  deletePhysioDataset,
-  deletePhysioDatasetDetail,
   deletePhysioExamType,
   deletePhysioItem,
-  deletePhysioItemLayout,
-  deletePhysioItemLayoutCell,
   deletePhysioSetItem,
-  fetchPhysioDataset,
   fetchPhysioItem,
-  fetchPhysioItemLayout,
-  fetchPhysioItemLayouts,
   type MasterSearchResult,
-  type PhysioDatasetDetailPayload,
-  type PhysioDatasetPayload,
+  physioDatasetClient,
   type PhysioExamTypePayload,
-  type PhysioItemLayoutCellPayload,
-  type PhysioItemLayoutPayload,
+  physioItemLayoutClient,
   type PhysioItemPayload,
   type PhysioItemSearchResult,
   type PhysioSetItem,
   type PhysioSetItemPayload,
-  searchPhysioDatasetDetails,
-  searchPhysioDatasets,
   searchPhysioExamTypes,
   searchPhysioItems,
   searchPhysioSetItems,
-  updatePhysioDataset,
-  updatePhysioDatasetDetail,
   updatePhysioExamType,
   updatePhysioItem,
-  updatePhysioItemLayout,
-  updatePhysioItemLayoutCell,
 } from "../masterClient";
+import { itemLayoutHooks } from "./itemLayout";
+import { performDatasetHooks } from "./performDataset";
 
 // ---- 生理検査オーダーのマスタ ----
 //
@@ -48,10 +31,7 @@ import {
 
 const PHYSIO_EXAM_TYPES_KEY = ["master", "physio_exam_types"];
 const PHYSIO_ITEMS_KEY = ["master", "physio_items"];
-const PHYSIO_LAYOUTS_KEY = ["master", "physio_item_layouts"];
-const PHYSIO_DATASETS_KEY = ["master", "physio_datasets"];
 // 1データセットの明細も、オーダーに紐付く全データセットの明細も、この上限で足りる。
-const PHYSIO_DATASET_DETAIL_PER = 100;
 
 /** 検査種別の検索(マスタ画面の一覧)。 */
 export function usePhysioExamTypeSearch(
@@ -196,199 +176,14 @@ export function usePhysioSetItemMutations() {
   };
 }
 
-export function usePhysioItemLayouts() {
-  return useQuery({
-    queryKey: [...PHYSIO_LAYOUTS_KEY, "list"],
-    staleTime: Infinity,
-    queryFn: fetchPhysioItemLayouts,
-  });
-}
+export const physioItemLayoutHooks = itemLayoutHooks("physio_item_layouts", physioItemLayoutClient);
 
-export function usePhysioItemLayout(id: number | undefined) {
-  return useQuery({
-    queryKey: [...PHYSIO_LAYOUTS_KEY, "detail", id],
-    queryFn: () => fetchPhysioItemLayout(id as number),
-    enabled: id !== undefined,
-  });
-}
-
-export function usePhysioItemLayoutMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: PHYSIO_LAYOUTS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: PhysioItemLayoutPayload) => createPhysioItemLayout(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: PhysioItemLayoutPayload }) =>
-        updatePhysioItemLayout(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deletePhysioItemLayout(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
-
-export function usePhysioItemLayoutCellMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: PHYSIO_LAYOUTS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: PhysioItemLayoutCellPayload) => createPhysioItemLayoutCell(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: Partial<PhysioItemLayoutCellPayload> }) =>
-        updatePhysioItemLayoutCell(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deletePhysioItemLayoutCell(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
-
-/** 実施入力用データセットの検索。 */
-export function usePhysioDatasetSearch(
-  filters: { name?: string; active?: boolean },
-  page: number,
-  enabled = true,
-) {
-  return useQuery({
-    queryKey: [...PHYSIO_DATASETS_KEY, "list", filters, page],
-    queryFn: () =>
-      searchPhysioDatasets({
-        name: filters.name || undefined,
-        active: filters.active || undefined,
-        page,
-        per: 20,
-      }),
-    placeholderData: keepPreviousData,
-    enabled,
-  });
-}
-
-/** 検査項目に付けるデータセットの選択肢。件数が少ないので全件まとめて引く。 */
-export function usePhysioDatasetOptions() {
-  return useQuery({
-    queryKey: [...PHYSIO_DATASETS_KEY, "options"],
-    staleTime: Infinity,
-    queryFn: () => searchPhysioDatasets({ per: 200 }),
-  });
-}
-
-/** 編集モーダル用の詳細(明細を名称付きで同梱)。データセットコードでも id でも引ける。 */
-export function usePhysioDataset(idOrCode: string | number | null) {
-  return useQuery({
-    queryKey: [...PHYSIO_DATASETS_KEY, "detail", idOrCode],
-    queryFn: () => fetchPhysioDataset(idOrCode as string | number),
-    enabled: idOrCode !== null,
-  });
-}
-
-export function usePhysioDatasetMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: PHYSIO_DATASETS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: PhysioDatasetPayload) => createPhysioDataset(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: PhysioDatasetPayload }) =>
-        updatePhysioDataset(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deletePhysioDataset(id),
-      retry: false,
-      onSuccess: () => {
-        invalidate();
-        // 削除で参照していた項目の dataset_code も外れるので、項目マスタ側も引き直す。
-        queryClient.invalidateQueries({ queryKey: PHYSIO_ITEMS_KEY });
-      },
-    }),
-  };
-}
-
-/** 明細の編集。データセット詳細に同梱されているので詳細ごと破棄する。 */
-export function usePhysioDatasetDetailMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: PHYSIO_DATASETS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: PhysioDatasetDetailPayload) => createPhysioDatasetDetail(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: PhysioDatasetDetailPayload }) =>
-        updatePhysioDatasetDetail(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deletePhysioDatasetDetail(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
-
-/**
- * 検査項目コード群が参照するデータセットの明細。実施入力の初期表示に使う。
- *
- * 項目 → 明細の2段。1つのデータセットは複数の検査項目から参照されるので、
- * 明細を引く前にデータセットコードを一意化する(同じデータセットを2回引かない)。
- */
-export function usePhysioDatasetLinesForItems(itemCodes: string[]) {
-  const codes = Array.from(new Set(itemCodes.filter(Boolean))).sort();
-
-  const items = useQuery({
-    queryKey: [...PHYSIO_ITEMS_KEY, "dataset-codes", codes],
-    staleTime: Infinity,
-    queryFn: () =>
-      searchPhysioItems({ item_code: codes.join(","), per: PHYSIO_DATASET_DETAIL_PER }),
-    enabled: codes.length > 0,
-  });
-
-  const datasetCodes = Array.from(
-    new Set((items.data?.items ?? []).map((item) => item.dataset_code).filter(Boolean)),
-  ).sort() as string[];
-
-  const details = useQuery({
-    queryKey: [...PHYSIO_DATASETS_KEY, "details-for", datasetCodes],
-    queryFn: () =>
-      searchPhysioDatasetDetails({
-        dataset_code: datasetCodes.join(","),
-        per: PHYSIO_DATASET_DETAIL_PER,
-      }),
-    enabled: datasetCodes.length > 0,
-  });
-
-  return {
-    details: details.data?.items ?? [],
-    // データセットを持つ項目が1つも無いときは明細クエリが走らないので、その分は待たない。
-    isLoading: items.isLoading || (datasetCodes.length > 0 && details.isLoading),
-    error: items.error ?? details.error,
-  };
-}
+export const physioDatasetHooks = performDatasetHooks({
+  name: "physio_datasets",
+  client: physioDatasetClient,
+  itemsKey: PHYSIO_ITEMS_KEY,
+  searchItemsByCodes: (codes, per) => searchPhysioItems({ item_code: codes.join(","), per }),
+});
 
 // 生理検査オーダー画面用 --------------------------------------------------
 

@@ -10,9 +10,8 @@ import {
 } from "react";
 import type { LabOrderItem } from "../api/masterClient";
 import {
+  labOrderItemLayoutHooks,
   useLabContainers,
-  useLabOrderItemLayout,
-  useLabOrderItemLayouts,
   useLabOrderItemSearch,
   useLabOrderItemsByCodes,
   useLabPanelMembers,
@@ -95,7 +94,7 @@ export function LabOrderForm({
   );
 
   const problemOptions = useProblemOptions(patientId);
-  const layouts = useLabOrderItemLayouts();
+  const layouts = labOrderItemLayoutHooks.useLayouts();
 
   const layoutTabs = useMemo(
     () => (layouts.data?.items ?? []).filter((layout) => layout.active),
@@ -113,7 +112,7 @@ export function LabOrderForm({
 
   // 選べる項目のマスタを先に揃えておく。チェックを入れた瞬間にオーダーへ写す値
   // (検体・採取管・パネルの構成)が要るため、伝票・検索結果・選択済みをまとめて引く。
-  const layout = useLabOrderItemLayout(active?.kind === "layout" ? active.id : undefined);
+  const layout = labOrderItemLayoutHooks.useLayout(active?.kind === "layout" ? active.id : undefined);
   const layoutCodes = useMemo(
     () =>
       (layout.data?.cells ?? [])
@@ -441,7 +440,7 @@ function LayoutSelectGrid({
   selectedCodes,
   onToggle,
 }: SelectProps & {
-  layout: ReturnType<typeof useLabOrderItemLayout>["data"];
+  layout: ReturnType<typeof labOrderItemLayoutHooks.useLayout>["data"];
   error: unknown;
   catalogByCode: Map<string, LabOrderItem>;
 }) {

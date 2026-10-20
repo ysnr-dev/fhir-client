@@ -438,8 +438,6 @@ export const MOUTH_SECTIONS: { record: string; label: string; items: ItemDef[] }
 /** 区分の「有無」項目(中身があれば 01)。 */
 const MOUTH_PRESENCE_ITEM: Record<string, string> = { KK: "KK-2", SI: "SI-2", SK: "SK-2" };
 
-export const MOUTH_ITEM_DEFS: ItemDef[] = MOUTH_SECTIONS.flatMap((s) => s.items);
-
 /** 入力種別(NS-2)の既定値。 */
 export const INPUT_TYPE_FIRST_VISIT = "01";
 export const INPUT_TYPE_UPDATE = "02";
@@ -1093,7 +1091,7 @@ export function parseOralExamSnapshot(observations: fhir4.Observation[]): OralEx
     })
     .filter((t) => t.toothCode);
 
-  // 口腔全体は区分ごとに 1 Observation。以前の形(全区分を 1 つにまとめたもの)も区分ごとに分けて読む。
+  // 口腔全体は区分ごとに 1 Observation。全区分を 1 つにまとめた Observation も区分ごとに分けて読む。
   const mouth: MouthRecord[] = [];
   for (const observation of observations.filter((o) => oralExamKindOf(o) === "mouth")) {
     for (const section of MOUTH_SECTIONS) {

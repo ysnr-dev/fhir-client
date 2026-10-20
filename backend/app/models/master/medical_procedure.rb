@@ -17,10 +17,6 @@ module Master
 
     before_save :set_search_columns
 
-    def abolished?
-      abolished_on.present? && abolished_on != NOT_ABOLISHED
-    end
-
     # 点数表コード(「K0821」「K082-21」「K4073ｲ」)。DPC 様式1 の手術情報などに書く形。
     # 配布マスタの点数表区分番号があればそれを使い、空のときはコード表用番号の
     # 区分番号(3 桁)・枝番(00 は無し)・項番(000 は無し)から組む。区分番号が

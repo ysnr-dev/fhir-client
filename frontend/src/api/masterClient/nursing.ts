@@ -61,13 +61,6 @@ export interface NursingObservation {
   [key: `result_${number}`]: string | null | undefined;
 }
 
-export interface NursingObservationResult {
-  id: number;
-  result_group_code: string;
-  result_code: string;
-  name: string;
-}
-
 const NURSING_ACTS_PATH = "/master/nursing_acts";
 const NURSING_OBSERVATIONS_PATH = "/master/nursing_observations";
 

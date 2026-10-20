@@ -1,7 +1,7 @@
 // 警告(判断支援)の共通の器(docs/advisory-design.md)。
 //
 // フォームの中で出す警告は、薬剤・放射線・レジメン・外部の判断支援(CDS Hooks)のどれも
-// この `Advisory` に寄せる。各ドメインのヘルパーは今まで通りに判定し、結果をここで定める
+// この `Advisory` に寄せる。各ドメインのヘルパーはそれぞれ判定し、結果をここで定める
 // 形に写す(アダプタ)だけで、画面は `AdvisoryNotice` と登録前の `AdvisoryConfirmModal` が
 // 種別を知らずに描く。種別を足すときは `ADVISORY_KINDS` に 1 行足し、`ADVISORY_KIND_DEFS` を埋める。
 
@@ -144,14 +144,6 @@ export function applySeverityOverrides(
     if (override === "off") return [];
     return [advisory.severity === "info" ? advisory : { ...advisory, severity: "info" as const }];
   });
-}
-
-export function worstSeverity(advisories: Advisory[]): AdvisorySeverity | null {
-  return advisories.reduce<AdvisorySeverity | null>(
-    (acc, advisory) =>
-      acc === null || ADVISORY_SEVERITY_RANK[advisory.severity] > ADVISORY_SEVERITY_RANK[acc] ? advisory.severity : acc,
-    null,
-  );
 }
 
 /** 重いものから順に。同じ重さの中は元の順。 */

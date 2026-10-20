@@ -102,7 +102,6 @@ module Integrations
           self.skipped ||= []
         end
 
-        def succeeded? = outcome == :succeeded
         def failed? = outcome == :failed
       end
     end

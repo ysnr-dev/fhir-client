@@ -7,7 +7,7 @@ module Master
   class TreatmentDatasetDetail < ApplicationRecord
     self.table_name = "master_treatment_dataset_details"
 
-    # detail_type => 参照先マスタのモデルとコード列。名称解決とバリデーションで使う。
+    # detail_type => 参照先マスタのモデルとコード列(名称は with_names で結合する)。
     REFERENCES = {
       "procedure" => { model: "Master::MedicalProcedure", code_column: :procedure_code },
       "medicine" => { model: "Master::Medicine", code_column: :medicine_code },
@@ -55,13 +55,5 @@ module Master
     scope :in_display_order, lambda {
       order(Arel.sql("master_treatment_dataset_details.display_order NULLS LAST")).order(:id)
     }
-
-    # 参照先マスタのレコード。取込前・削除済みなら nil。
-    def referenced_record
-      reference = REFERENCES[detail_type]
-      return nil if reference.nil? || code.blank?
-
-      reference[:model].constantize.find_by(reference[:code_column] => code)
-    end
   end
 end

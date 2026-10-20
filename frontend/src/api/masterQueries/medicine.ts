@@ -271,4 +271,3 @@ export const LAB_ORDER_ITEMS_KEY = ["master", "lab_order_items"];
 export const LAB_RESULT_ITEMS_KEY = ["master", "lab_result_items"];
 export const LAB_SPECIMENS_KEY = ["master", "lab_specimens"];
 export const LAB_CONTAINERS_KEY = ["master", "lab_containers"];
-export const LAB_LAYOUTS_KEY = ["master", "lab_order_item_layouts"];

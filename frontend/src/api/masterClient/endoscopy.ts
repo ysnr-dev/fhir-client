@@ -5,6 +5,8 @@ import {
   type MasterSearchResult,
   type MasterType,
 } from "./core";
+import { performDatasetClient, type PerformDatasetDetail } from "./performDataset";
+import { itemLayoutClient } from "./itemLayout";
 
 // ---- 内視鏡オーダーのマスタ ----
 //
@@ -150,122 +152,6 @@ export interface EndoscopySetItemPayload {
   member_item_code: string;
   display_order?: number | null;
   note?: string | null;
-}
-
-// 内視鏡オーダーレイアウト(伝票のようなグリッド)。1マスの中身は
-// EndoscopyItemLayoutCell が持つ。
-export interface EndoscopyItemLayout {
-  id: number;
-  name: string;
-  row_count: number;
-  column_count: number;
-  display_order: number | null;
-  active: boolean;
-  note: string | null;
-}
-
-export interface EndoscopyItemLayoutCell {
-  id: number;
-  layout_id: number;
-  grid_row: number;
-  grid_column: number;
-  // item=内視鏡オーダー項目 / label=表示専用の文言
-  cell_type: string;
-  item_code: string | null;
-  // item: 伝票上の表示名(空ならオーダー項目名) / label: 表示文言
-  display_name: string | null;
-  item_name?: string | null;
-  item_short_name?: string | null;
-  item_kind?: string | null;
-}
-
-export interface EndoscopyItemLayoutDetail extends EndoscopyItemLayout {
-  cells: EndoscopyItemLayoutCell[];
-  // 行数・列数を縮めたとき、範囲外で片付けられたセルの数(update の応答のみ)。
-  removed_cells?: number;
-}
-
-export interface EndoscopyItemLayoutPayload {
-  name?: string;
-  row_count?: number;
-  column_count?: number;
-  display_order?: number | null;
-  active?: boolean;
-  note?: string | null;
-}
-
-export interface EndoscopyItemLayoutCellPayload {
-  layout_id: number;
-  grid_row: number;
-  grid_column: number;
-  cell_type?: string;
-  item_code?: string | null;
-  display_name?: string | null;
-}
-
-// 実施入力用データセット。実施入力で登録する手技料・薬剤・器材の組み合わせに
-// 名前を付けたもので、検査項目に紐付けておくと実施入力モーダルの初期明細になる。
-
-export interface EndoscopyDataset {
-  id: number;
-  dataset_code: string;
-  name: string;
-  name_kana: string | null;
-  valid_from: string | null;
-  valid_to: string | null;
-  display_order: number | null;
-  note: string | null;
-}
-
-/** データセット明細の種別。参照先マスタが決まる。 */
-export type EndoscopyDatasetDetailType = "procedure" | "medicine" | "material";
-
-export interface EndoscopyDatasetDetail {
-  id: number;
-  dataset_code: string;
-  detail_type: EndoscopyDatasetDetailType;
-  /**
-   * 参照先マスタのコード(診療行為コード / 医薬品コード / 特定器材コード)。
-   * 放射線と違い器材は施設内マスタを挟まないので、これがそのまま算定用の
-   * 特定保険医療材料コードになる。
-   */
-  code: string;
-  /** 実施入力に初期表示する数量。薬剤は使用量、器材は本数など。手技は空。 */
-  default_quantity: string | null;
-  /** 薬剤の既定の投与経路(JP Core の route-codes)。 */
-  route_code: string | null;
-  /** 実施入力を開いたときに最初から並べるか。false は使ったときだけ検索して足す。 */
-  default_selected: boolean;
-  display_order: number | null;
-  /** 参照先マスタから解決した名称。未取込・削除済みなら null。 */
-  resolved_name: string | null;
-  resolved_unit_name: string | null;
-  /** 薬剤の個別医薬品コード(YJコード)。処方・注射と揃えるために添える。 */
-  yj_code: string | null;
-}
-
-export interface EndoscopyDatasetWithDetails extends EndoscopyDataset {
-  details: EndoscopyDatasetDetail[];
-}
-
-export interface EndoscopyDatasetPayload {
-  dataset_code?: string;
-  name?: string;
-  name_kana?: string | null;
-  valid_from?: string | null;
-  valid_to?: string | null;
-  display_order?: number | null;
-  note?: string | null;
-}
-
-export interface EndoscopyDatasetDetailPayload {
-  dataset_code?: string;
-  detail_type?: EndoscopyDatasetDetailType;
-  code?: string;
-  default_quantity?: string | null;
-  route_code?: string | null;
-  default_selected?: boolean;
-  display_order?: number | null;
 }
 
 const ENDOSCOPY_EXAM_TYPES_PATH = "/master/endoscopy_exam_types";
@@ -419,188 +305,16 @@ export async function deleteEndoscopySetItem(id: number): Promise<void> {
   if (!res.ok) throw await buildError(res);
 }
 
-const ENDOSCOPY_DATASETS_PATH = "/master/endoscopy_datasets";
-const ENDOSCOPY_DATASET_DETAILS_PATH = "/master/endoscopy_dataset_details";
+export const endoscopyDatasetClient = performDatasetClient<PerformDatasetDetail>(
+  "/master/endoscopy_datasets",
+  "/master/endoscopy_dataset_details",
+);
 
-export async function searchEndoscopyDatasets(params: {
-  name?: string;
-  /** データセットコード。カンマ区切りで複数指定できる。 */
-  dataset_code?: string;
-  /** true なら今日使えるデータセット(有効期間内)だけ。 */
-  active?: boolean;
-  page?: number;
-  per?: number;
-}): Promise<MasterSearchResult<EndoscopyDataset>> {
-  const search = new URLSearchParams();
-  if (params.name) search.set("name", params.name);
-  if (params.dataset_code) search.set("dataset_code", params.dataset_code);
-  if (params.active) search.set("active", "true");
-  if (params.page) search.set("page", String(params.page));
-  if (params.per) search.set("per", String(params.per));
-
-  const res = await masterFetch(`${ENDOSCOPY_DATASETS_PATH}?${search.toString()}`);
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as MasterSearchResult<EndoscopyDataset>;
-}
-
-// 明細を名称付きで添えた詳細。データセットコードでも id でも引ける。
-export async function fetchEndoscopyDataset(
-  idOrCode: string | number,
-): Promise<EndoscopyDatasetWithDetails> {
-  const res = await masterFetch(`${ENDOSCOPY_DATASETS_PATH}/${encodeURIComponent(String(idOrCode))}`);
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as EndoscopyDatasetWithDetails;
-}
-
-export async function createEndoscopyDataset(payload: EndoscopyDatasetPayload): Promise<EndoscopyDataset> {
-  const res = await masterFetch(ENDOSCOPY_DATASETS_PATH, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as EndoscopyDataset;
-}
-
-export async function updateEndoscopyDataset(
-  id: number,
-  payload: EndoscopyDatasetPayload,
-): Promise<EndoscopyDataset> {
-  const res = await masterFetch(`${ENDOSCOPY_DATASETS_PATH}/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as EndoscopyDataset;
-}
-
-export async function deleteEndoscopyDataset(id: number): Promise<void> {
-  const res = await masterFetch(`${ENDOSCOPY_DATASETS_PATH}/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await buildError(res);
-}
-
-export async function searchEndoscopyDatasetDetails(params: {
-  /** データセットコード。カンマ区切りで複数指定できる(実施入力が一括で引く)。 */
-  dataset_code?: string;
-  detail_type?: EndoscopyDatasetDetailType;
-  page?: number;
-  per?: number;
-}): Promise<MasterSearchResult<EndoscopyDatasetDetail>> {
-  const search = new URLSearchParams();
-  if (params.dataset_code) search.set("dataset_code", params.dataset_code);
-  if (params.detail_type) search.set("detail_type", params.detail_type);
-  if (params.page) search.set("page", String(params.page));
-  if (params.per) search.set("per", String(params.per));
-
-  const res = await masterFetch(`${ENDOSCOPY_DATASET_DETAILS_PATH}?${search.toString()}`);
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as MasterSearchResult<EndoscopyDatasetDetail>;
-}
-
-export async function createEndoscopyDatasetDetail(
-  payload: EndoscopyDatasetDetailPayload,
-): Promise<EndoscopyDatasetDetail> {
-  const res = await masterFetch(ENDOSCOPY_DATASET_DETAILS_PATH, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as EndoscopyDatasetDetail;
-}
-
-export async function updateEndoscopyDatasetDetail(
-  id: number,
-  payload: EndoscopyDatasetDetailPayload,
-): Promise<EndoscopyDatasetDetail> {
-  const res = await masterFetch(`${ENDOSCOPY_DATASET_DETAILS_PATH}/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as EndoscopyDatasetDetail;
-}
-
-export async function deleteEndoscopyDatasetDetail(id: number): Promise<void> {
-  const res = await masterFetch(`${ENDOSCOPY_DATASET_DETAILS_PATH}/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await buildError(res);
-}
-
-const ENDOSCOPY_ITEM_LAYOUTS_PATH = "/master/endoscopy_item_layouts";
-
-export async function fetchEndoscopyItemLayouts(): Promise<MasterSearchResult<EndoscopyItemLayout>> {
-  const res = await masterFetch(`${ENDOSCOPY_ITEM_LAYOUTS_PATH}?per=100`);
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as MasterSearchResult<EndoscopyItemLayout>;
-}
-
-export async function fetchEndoscopyItemLayout(id: number): Promise<EndoscopyItemLayoutDetail> {
-  const res = await masterFetch(`${ENDOSCOPY_ITEM_LAYOUTS_PATH}/${id}`);
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as EndoscopyItemLayoutDetail;
-}
-
-export async function createEndoscopyItemLayout(
-  payload: EndoscopyItemLayoutPayload,
-): Promise<EndoscopyItemLayout> {
-  const res = await masterFetch(ENDOSCOPY_ITEM_LAYOUTS_PATH, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as EndoscopyItemLayout;
-}
-
-export async function updateEndoscopyItemLayout(
-  id: number,
-  payload: EndoscopyItemLayoutPayload,
-): Promise<EndoscopyItemLayoutDetail> {
-  const res = await masterFetch(`${ENDOSCOPY_ITEM_LAYOUTS_PATH}/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as EndoscopyItemLayoutDetail;
-}
-
-export async function deleteEndoscopyItemLayout(id: number): Promise<void> {
-  const res = await masterFetch(`${ENDOSCOPY_ITEM_LAYOUTS_PATH}/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await buildError(res);
-}
-
-export async function createEndoscopyItemLayoutCell(
-  payload: EndoscopyItemLayoutCellPayload,
-): Promise<EndoscopyItemLayoutCell> {
-  const res = await masterFetch("/master/endoscopy_item_layout_cells", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as EndoscopyItemLayoutCell;
-}
-
-export async function updateEndoscopyItemLayoutCell(
-  id: number,
-  payload: Partial<EndoscopyItemLayoutCellPayload>,
-): Promise<EndoscopyItemLayoutCell> {
-  const res = await masterFetch(`/master/endoscopy_item_layout_cells/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as EndoscopyItemLayoutCell;
-}
-
-export async function deleteEndoscopyItemLayoutCell(id: number): Promise<void> {
-  const res = await masterFetch(`/master/endoscopy_item_layout_cells/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await buildError(res);
-}
+export const endoscopyItemLayoutClient = itemLayoutClient(
+  "item_code",
+  "/master/endoscopy_item_layouts",
+  "/master/endoscopy_item_layout_cells",
+);
 
 export async function importMaster(
   masterType: MasterType,

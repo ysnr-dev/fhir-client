@@ -43,10 +43,6 @@ export const TRAINEE_LEVEL_OPTIONS: { code: TraineeLevel; label: string }[] = [
   { code: "student", label: "学生" },
 ];
 
-export function traineeLevelLabel(code: string | undefined): string {
-  return TRAINEE_LEVEL_OPTIONS.find((o) => o.code === code)?.label ?? "";
-}
-
 export function traineeLevelOf(practitioner: fhir4.Practitioner | null | undefined): TraineeLevel | "" {
   const code = practitioner?.extension?.find((e) => e.url === TRAINEE_LEVEL_EXT_URL)?.valueCode;
   return TRAINEE_LEVEL_OPTIONS.some((o) => o.code === code) ? (code as TraineeLevel) : "";

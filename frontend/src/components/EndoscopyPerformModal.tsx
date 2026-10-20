@@ -1,12 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type {
-  EndoscopyDatasetDetail,
-  EndoscopyDatasetDetailType,
+  PerformDatasetDetail,
+  PerformDatasetDetailType,
   Medicine,
   MedicalMaterial,
   MedicalProcedure,
 } from "../api/masterClient";
-import { useEndoscopyDatasetLinesForItems, useLotRequiredCodes } from "../api/masterQueries";
+import { endoscopyDatasetHooks, useLotRequiredCodes } from "../api/masterQueries";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useRegisterEndoscopyPerform, type EndoscopyWorklistRow } from "../api/queries";
 import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
@@ -108,7 +108,7 @@ export function EndoscopyPerformInputModal({
   const { practitionerId, practitioner } = useCurrentPractitioner();
 
   const itemCodes = useMemo(() => items.map((item) => item.code), [items]);
-  const dataset = useEndoscopyDatasetLinesForItems(itemCodes);
+  const dataset = endoscopyDatasetHooks.useLinesForItems(itemCodes);
 
   const [performedAt, setPerformedAt] = useState(
     () => initialValues?.performedAt ?? toDateTimeInput(new Date()),
@@ -148,7 +148,7 @@ export function EndoscopyPerformInputModal({
   }
 
   /** データセットの明細を 1 行足す。3 種で同じ形なので 1 つにまとめる。 */
-  function addDatasetDetail(detail: EndoscopyDatasetDetail) {
+  function addDatasetDetail(detail: PerformDatasetDetail) {
     const next: Lines = {
       procedures: [...lines.procedures],
       medicines: [...lines.medicines],
@@ -163,7 +163,7 @@ export function EndoscopyPerformInputModal({
    * 検索モーダルに渡す「この検査のデータセットに登録されている候補」。初期値OFF で
    * 登録した薬剤・器材は、これが無いと全件検索から名称で探すしかない。
    */
-  function datasetPick(type: EndoscopyDatasetDetailType): DatasetPickProps {
+  function datasetPick(type: PerformDatasetDetailType): DatasetPickProps {
     return buildDatasetPick({
       details: datasetDetails,
       type,
@@ -508,7 +508,7 @@ interface Lines {
  * 紐付くデータセットのうち「初期値」にしてある明細を初期行にする。初期値でない明細は
  * 出さない(実施入力の「データセット」候補から選んだときだけ足す)。
  */
-function initialLines(details: EndoscopyDatasetDetail[]): Lines {
+function initialLines(details: PerformDatasetDetail[]): Lines {
   const lines: Lines = { procedures: [], medicines: [], materials: [] };
   for (const detail of details) {
     if (detail.default_selected) pushDetail(lines, detail);
@@ -517,7 +517,7 @@ function initialLines(details: EndoscopyDatasetDetail[]): Lines {
 }
 
 /** データセットの明細 1 件を、対応する種別の明細行として積む。 */
-function pushDetail(lines: Lines, detail: EndoscopyDatasetDetail) {
+function pushDetail(lines: Lines, detail: PerformDatasetDetail) {
   const name = detail.resolved_name ?? detail.code;
 
   if (detail.detail_type === "procedure") {

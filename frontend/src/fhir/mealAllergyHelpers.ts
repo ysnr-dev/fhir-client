@@ -60,7 +60,3 @@ export function mealOrderAllergyMismatch(
 ): MealAllergyMismatch {
   return mealAllergyMismatch(mealOrderAllergies(sr), allergies);
 }
-
-export function hasMealAllergyMismatch(mismatch: MealAllergyMismatch): boolean {
-  return mismatch.missing.length > 0 || mismatch.stale.length > 0;
-}

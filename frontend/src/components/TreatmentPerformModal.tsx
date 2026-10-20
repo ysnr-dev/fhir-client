@@ -1,12 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type {
-  TreatmentDatasetDetail,
-  TreatmentDatasetDetailType,
+  PerformDatasetDetail,
+  PerformDatasetDetailType,
   Medicine,
   MedicalMaterial,
   MedicalProcedure,
 } from "../api/masterClient";
-import { useTreatmentDatasetLinesForItems, useLotRequiredCodes } from "../api/masterQueries";
+import { treatmentDatasetHooks, useLotRequiredCodes } from "../api/masterQueries";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useRegisterTreatmentPerform, type TreatmentWorklistRow } from "../api/queries";
 import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
@@ -108,7 +108,7 @@ export function TreatmentPerformInputModal({
   const { practitionerId, practitioner } = useCurrentPractitioner();
 
   const itemCodes = useMemo(() => items.map((item) => item.code), [items]);
-  const dataset = useTreatmentDatasetLinesForItems(itemCodes);
+  const dataset = treatmentDatasetHooks.useLinesForItems(itemCodes);
 
   const [performedAt, setPerformedAt] = useState(
     () => initialValues?.performedAt ?? toDateTimeInput(new Date()),
@@ -148,7 +148,7 @@ export function TreatmentPerformInputModal({
   }
 
   /** データセットの明細を 1 行足す。3 種で同じ形なので 1 つにまとめる。 */
-  function addDatasetDetail(detail: TreatmentDatasetDetail) {
+  function addDatasetDetail(detail: PerformDatasetDetail) {
     const next: Lines = {
       procedures: [...lines.procedures],
       medicines: [...lines.medicines],
@@ -163,7 +163,7 @@ export function TreatmentPerformInputModal({
    * 検索モーダルに渡す「この検査のデータセットに登録されている候補」。初期値OFF で
    * 登録した薬剤・器材は、これが無いと全件検索から名称で探すしかない。
    */
-  function datasetPick(type: TreatmentDatasetDetailType): DatasetPickProps {
+  function datasetPick(type: PerformDatasetDetailType): DatasetPickProps {
     return buildDatasetPick({
       details: datasetDetails,
       type,
@@ -509,7 +509,7 @@ interface Lines {
  * 紐付くデータセットのうち「初期値」にしてある明細を初期行にする。初期値でない明細は
  * 出さない(実施入力の「データセット」候補から選んだときだけ足す)。
  */
-function initialLines(details: TreatmentDatasetDetail[]): Lines {
+function initialLines(details: PerformDatasetDetail[]): Lines {
   const lines: Lines = { procedures: [], medicines: [], materials: [] };
   for (const detail of details) {
     if (detail.default_selected) pushDetail(lines, detail);
@@ -518,7 +518,7 @@ function initialLines(details: TreatmentDatasetDetail[]): Lines {
 }
 
 /** データセットの明細 1 件を、対応する種別の明細行として積む。 */
-function pushDetail(lines: Lines, detail: TreatmentDatasetDetail) {
+function pushDetail(lines: Lines, detail: PerformDatasetDetail) {
   const name = detail.resolved_name ?? detail.code;
 
   if (detail.detail_type === "procedure") {

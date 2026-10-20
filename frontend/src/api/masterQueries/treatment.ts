@@ -1,49 +1,29 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  createTreatmentDataset,
-  createTreatmentDatasetDetail,
   createTreatmentItem,
-  createTreatmentItemLayout,
-  createTreatmentItemLayoutCell,
   createTreatmentSetItem,
-  deleteTreatmentDataset,
-  deleteTreatmentDatasetDetail,
   deleteTreatmentItem,
-  deleteTreatmentItemLayout,
-  deleteTreatmentItemLayoutCell,
   deleteTreatmentSetItem,
-  fetchTreatmentDataset,
   fetchTreatmentItem,
-  fetchTreatmentItemLayout,
-  fetchTreatmentItemLayouts,
   type MasterSearchResult,
-  searchTreatmentDatasetDetails,
-  searchTreatmentDatasets,
   searchTreatmentItems,
   searchTreatmentSetItems,
-  type TreatmentDatasetDetailPayload,
-  type TreatmentDatasetPayload,
-  type TreatmentItemLayoutCellPayload,
-  type TreatmentItemLayoutPayload,
+  treatmentDatasetClient,
+  treatmentItemLayoutClient,
   type TreatmentItemPayload,
   type TreatmentSetItem,
   type TreatmentSetItemPayload,
-  updateTreatmentDataset,
-  updateTreatmentDatasetDetail,
   updateTreatmentItem,
-  updateTreatmentItemLayout,
-  updateTreatmentItemLayoutCell,
 } from "../masterClient";
+import { itemLayoutHooks } from "./itemLayout";
+import { performDatasetHooks } from "./performDataset";
 
 // ---- 処置オーダーのマスタ ----
 //
 // 生理検査と同じ構成から検査種別(分類軸)を落としたもの。
 
 const TREATMENT_ITEMS_KEY = ["master", "treatment_items"];
-const TREATMENT_LAYOUTS_KEY = ["master", "treatment_item_layouts"];
-const TREATMENT_DATASETS_KEY = ["master", "treatment_datasets"];
 // 1データセットの明細も、オーダーに紐付く全データセットの明細も、この上限で足りる。
-const TREATMENT_DATASET_DETAIL_PER = 100;
 
 export interface TreatmentItemFilters {
   name?: string;
@@ -125,199 +105,14 @@ export function useTreatmentSetItemMutations() {
   };
 }
 
-export function useTreatmentItemLayouts() {
-  return useQuery({
-    queryKey: [...TREATMENT_LAYOUTS_KEY, "list"],
-    staleTime: Infinity,
-    queryFn: fetchTreatmentItemLayouts,
-  });
-}
+export const treatmentItemLayoutHooks = itemLayoutHooks("treatment_item_layouts", treatmentItemLayoutClient);
 
-export function useTreatmentItemLayout(id: number | undefined) {
-  return useQuery({
-    queryKey: [...TREATMENT_LAYOUTS_KEY, "detail", id],
-    queryFn: () => fetchTreatmentItemLayout(id as number),
-    enabled: id !== undefined,
-  });
-}
-
-export function useTreatmentItemLayoutMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: TREATMENT_LAYOUTS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: TreatmentItemLayoutPayload) => createTreatmentItemLayout(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: TreatmentItemLayoutPayload }) =>
-        updateTreatmentItemLayout(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteTreatmentItemLayout(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
-
-export function useTreatmentItemLayoutCellMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: TREATMENT_LAYOUTS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: TreatmentItemLayoutCellPayload) => createTreatmentItemLayoutCell(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: Partial<TreatmentItemLayoutCellPayload> }) =>
-        updateTreatmentItemLayoutCell(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteTreatmentItemLayoutCell(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
-
-/** 実施入力用データセットの検索。 */
-export function useTreatmentDatasetSearch(
-  filters: { name?: string; active?: boolean },
-  page: number,
-  enabled = true,
-) {
-  return useQuery({
-    queryKey: [...TREATMENT_DATASETS_KEY, "list", filters, page],
-    queryFn: () =>
-      searchTreatmentDatasets({
-        name: filters.name || undefined,
-        active: filters.active || undefined,
-        page,
-        per: 20,
-      }),
-    placeholderData: keepPreviousData,
-    enabled,
-  });
-}
-
-/** 処置項目に付けるデータセットの選択肢。件数が少ないので全件まとめて引く。 */
-export function useTreatmentDatasetOptions() {
-  return useQuery({
-    queryKey: [...TREATMENT_DATASETS_KEY, "options"],
-    staleTime: Infinity,
-    queryFn: () => searchTreatmentDatasets({ per: 200 }),
-  });
-}
-
-/** 編集モーダル用の詳細(明細を名称付きで同梱)。データセットコードでも id でも引ける。 */
-export function useTreatmentDataset(idOrCode: string | number | null) {
-  return useQuery({
-    queryKey: [...TREATMENT_DATASETS_KEY, "detail", idOrCode],
-    queryFn: () => fetchTreatmentDataset(idOrCode as string | number),
-    enabled: idOrCode !== null,
-  });
-}
-
-export function useTreatmentDatasetMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: TREATMENT_DATASETS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: TreatmentDatasetPayload) => createTreatmentDataset(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: TreatmentDatasetPayload }) =>
-        updateTreatmentDataset(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteTreatmentDataset(id),
-      retry: false,
-      onSuccess: () => {
-        invalidate();
-        // 削除で参照していた項目の dataset_code も外れるので、項目マスタ側も引き直す。
-        queryClient.invalidateQueries({ queryKey: TREATMENT_ITEMS_KEY });
-      },
-    }),
-  };
-}
-
-/** 明細の編集。データセット詳細に同梱されているので詳細ごと破棄する。 */
-export function useTreatmentDatasetDetailMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: TREATMENT_DATASETS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: TreatmentDatasetDetailPayload) => createTreatmentDatasetDetail(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: TreatmentDatasetDetailPayload }) =>
-        updateTreatmentDatasetDetail(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteTreatmentDatasetDetail(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
-
-/**
- * 処置項目コード群が参照するデータセットの明細。実施入力の初期表示に使う。
- *
- * 項目 → 明細の2段。1つのデータセットは複数の処置項目から参照されるので、
- * 明細を引く前にデータセットコードを一意化する(同じデータセットを2回引かない)。
- */
-export function useTreatmentDatasetLinesForItems(itemCodes: string[]) {
-  const codes = Array.from(new Set(itemCodes.filter(Boolean))).sort();
-
-  const items = useQuery({
-    queryKey: [...TREATMENT_ITEMS_KEY, "dataset-codes", codes],
-    staleTime: Infinity,
-    queryFn: () =>
-      searchTreatmentItems({ item_code: codes.join(","), per: TREATMENT_DATASET_DETAIL_PER }),
-    enabled: codes.length > 0,
-  });
-
-  const datasetCodes = Array.from(
-    new Set((items.data?.items ?? []).map((item) => item.dataset_code).filter(Boolean)),
-  ).sort() as string[];
-
-  const details = useQuery({
-    queryKey: [...TREATMENT_DATASETS_KEY, "details-for", datasetCodes],
-    queryFn: () =>
-      searchTreatmentDatasetDetails({
-        dataset_code: datasetCodes.join(","),
-        per: TREATMENT_DATASET_DETAIL_PER,
-      }),
-    enabled: datasetCodes.length > 0,
-  });
-
-  return {
-    details: details.data?.items ?? [],
-    // データセットを持つ項目が1つも無いときは明細クエリが走らないので、その分は待たない。
-    isLoading: items.isLoading || (datasetCodes.length > 0 && details.isLoading),
-    error: items.error ?? details.error,
-  };
-}
+export const treatmentDatasetHooks = performDatasetHooks({
+  name: "treatment_datasets",
+  client: treatmentDatasetClient,
+  itemsKey: TREATMENT_ITEMS_KEY,
+  searchItemsByCodes: (codes, per) => searchTreatmentItems({ item_code: codes.join(","), per }),
+});
 
 // 処置オーダー画面用 --------------------------------------------------
 

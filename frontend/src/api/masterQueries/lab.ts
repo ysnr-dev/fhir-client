@@ -3,8 +3,6 @@ import { jlac11AliasKey } from "../../fhir/labResultHelpers";
 import {
   createLabContainer,
   createLabOrderItem,
-  createLabOrderItemLayout,
-  createLabOrderItemLayoutCell,
   createLabOrderItemResult,
   createLabPanelItem,
   createLabReferenceRange,
@@ -12,21 +10,16 @@ import {
   createLabSpecimen,
   deleteLabContainer,
   deleteLabOrderItem,
-  deleteLabOrderItemLayout,
-  deleteLabOrderItemLayoutCell,
   deleteLabOrderItemResult,
   deleteLabPanelItem,
   deleteLabReferenceRange,
   deleteLabResultItem,
   deleteLabSpecimen,
   fetchLabOrderItem,
-  fetchLabOrderItemLayout,
-  fetchLabOrderItemLayouts,
   fetchLabResultItem,
   fetchLabSpecimenCategories,
   type LabContainerPayload,
-  type LabOrderItemLayoutCellPayload,
-  type LabOrderItemLayoutPayload,
+  labOrderItemLayoutClient,
   type LabOrderItemPayload,
   type LabOrderItemResultPayload,
   type LabPanelItem,
@@ -43,17 +36,15 @@ import {
   searchLabSpecimens,
   updateLabContainer,
   updateLabOrderItem,
-  updateLabOrderItemLayout,
-  updateLabOrderItemLayoutCell,
   updateLabOrderItemResult,
   updateLabPanelItem,
   updateLabReferenceRange,
   updateLabResultItem,
   updateLabSpecimen,
 } from "../masterClient";
+import { itemLayoutHooks } from "./itemLayout";
 import {
   LAB_CONTAINERS_KEY,
-  LAB_LAYOUTS_KEY,
   LAB_ORDER_ITEMS_KEY,
   LAB_RESULT_ITEMS_KEY,
   LAB_SPECIMENS_KEY,
@@ -406,69 +397,7 @@ export function useLabContainerMutations() {
   };
 }
 
-export function useLabOrderItemLayouts() {
-  return useQuery({
-    queryKey: [...LAB_LAYOUTS_KEY, "list"],
-    staleTime: Infinity,
-    queryFn: fetchLabOrderItemLayouts,
-  });
-}
-
-export function useLabOrderItemLayout(id: number | undefined) {
-  return useQuery({
-    queryKey: [...LAB_LAYOUTS_KEY, "detail", id],
-    queryFn: () => fetchLabOrderItemLayout(id as number),
-    enabled: id !== undefined,
-  });
-}
-
-export function useLabOrderItemLayoutMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: LAB_LAYOUTS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: LabOrderItemLayoutPayload) => createLabOrderItemLayout(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: LabOrderItemLayoutPayload }) =>
-        updateLabOrderItemLayout(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteLabOrderItemLayout(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
-
-export function useLabOrderItemLayoutCellMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: LAB_LAYOUTS_KEY });
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: LabOrderItemLayoutCellPayload) => createLabOrderItemLayoutCell(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    update: useMutation({
-      mutationFn: ({ id, payload }: { id: number; payload: Partial<LabOrderItemLayoutCellPayload> }) =>
-        updateLabOrderItemLayoutCell(id, payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteLabOrderItemLayoutCell(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
+export const labOrderItemLayoutHooks = itemLayoutHooks("lab_order_item_layouts", labOrderItemLayoutClient);
 
 // 検体検査オーダー画面用 --------------------------------------------------
 

@@ -39,22 +39,6 @@ module Master
       connection.select_values(sql)
     end
 
-    # 最上位からこの分類までの名称("腹部 > 胃、食道、腸、他")。
-    def path_name(separator = " > ")
-      names = [name]
-      code = parent_code
-      MAX_DEPTH.times do
-        break if code.blank?
-
-        parent = self.class.find_by(category_code: code)
-        break if parent.nil?
-
-        names.unshift(parent.name)
-        code = parent.parent_code
-      end
-      names.join(separator)
-    end
-
     private
 
     def valid_period_is_ordered

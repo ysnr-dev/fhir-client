@@ -211,8 +211,8 @@ ServiceRequest(治療処方 = Course 1 件。明細は持たない)   intent=ord
 | 治療プロトコル(定型処方) | `master_radiotherapy_protocols` | 処方フォームで選ぶと標的と Phase が展開される | 15 件(乳房温存術後・前立腺・骨転移・全脳・肺 SBRT・頭頸部 SIB…) |
 
 メニューは「マスタメンテ > 放射線治療」。API は `/master/radiotherapy_*`(コードでも id でも引ける。
-`enabled=true` で有効な行だけ)。フロントは `masterClient.ts` の `radiotherapyMasterClient` と
-`masterQueries.ts` の `radiotherapyMasterHooks` が 5 つ分をまとめて作る。
+`enabled=true` で有効な行だけ)。フロントは `api/masterClient/radiotherapy.ts` の `simpleMasterClient` と
+`api/masterQueries/radiotherapy.ts` の `simpleMasterHooks` が 5 つ分をまとめて作る。
 
 ### 3.1 オーダーにはコードと名称を焼く
 

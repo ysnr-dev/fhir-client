@@ -3,10 +3,10 @@ import type {
   Medicine,
   MedicalProcedure,
   RadDatasetDetail,
-  RadDatasetDetailType,
+  PerformDatasetDetailType,
   RadMaterial,
 } from "../api/masterClient";
-import { useRadDatasetLinesForItems, useLotRequiredCodes } from "../api/masterQueries";
+import { radDatasetHooks, useLotRequiredCodes } from "../api/masterQueries";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useRegisterRadPerform, type RadWorklistRow } from "../api/queries";
 import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
@@ -107,7 +107,7 @@ export function RadPerformInputModal({
   const { practitionerId, practitioner } = useCurrentPractitioner();
 
   const itemCodes = useMemo(() => items.map((item) => item.code), [items]);
-  const dataset = useRadDatasetLinesForItems(itemCodes);
+  const dataset = radDatasetHooks.useLinesForItems(itemCodes);
 
   const doseFields = useMemo(
     () => doseFieldsForModalities(items.map((item) => item.modalityCode)),
@@ -170,7 +170,7 @@ export function RadPerformInputModal({
    * 検索モーダルに渡す「この検査のデータセットに登録されている候補」。初期値OFF で
    * 登録した造影剤・器材は、これが無いと全件検索から名称で探すしかない。
    */
-  function datasetPick(type: RadDatasetDetailType): DatasetPickProps {
+  function datasetPick(type: PerformDatasetDetailType): DatasetPickProps {
     return buildDatasetPick({
       details: datasetDetails,
       type,

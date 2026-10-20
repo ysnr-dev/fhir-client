@@ -23,8 +23,4 @@ class DicomInstance < ApplicationRecord
   scope :in_display_order, -> {
     order(Arel.sql("series_number NULLS LAST, series_instance_uid, instance_number NULLS LAST, sop_instance_uid"))
   }
-
-  def self.valid_uid?(value)
-    value.is_a?(String) && value.length <= UID_MAX_LENGTH && UID_FORMAT.match?(value)
-  end
 end

@@ -16,7 +16,3 @@ export const INTAKE_SOURCE_EXT_URL = "http://fhir-client.local/StructureDefiniti
 export function intakeSourceExtension(): fhir4.Extension {
   return { url: INTAKE_SOURCE_EXT_URL, valueCode: "patient" };
 }
-
-export function isIntakeResponse(response: fhir4.QuestionnaireResponse): boolean {
-  return Boolean(response.extension?.some((e) => e.url === INTAKE_SOURCE_EXT_URL));
-}

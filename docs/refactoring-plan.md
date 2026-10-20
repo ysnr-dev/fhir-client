@@ -6,10 +6,87 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 1. クライアントが手元でしている絞り込み・並べ替え・結合のうち、FHIR サーバーに任せた方がよいもの
 2. コメントに残った修正経緯と、過剰な説明
 
-- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回）、2026-10-04（第 3 回。下の節）
+- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回）、2026-10-04（第 3 回）、2026-10-20（第 4 回。下の節）
 - 調査範囲: `frontend/src`、`backend/app`、上流 fhir-server の
   `app/lib/fhir/search_definitions/*.rb` と `app/lib/fhir/search_references.rb`
 - 行番号は調査時点のもの。着手時は関数名で探し直すこと。
+
+## 第 4 回（2026-10-20）
+
+第 3 回以降の約 118k 行(160 コミット)を対象に候補を洗い、マスタ画面の部門ごとの写しを中心に同日実施した。
+差し引き約 5,100 行減。FHIR に書くリソースと `/master` に送る JSON は変えていない。
+
+### 正しさ
+
+なし(見つけた不具合も無い)。
+
+### 上流に寄せた
+
+なし。上流 fhir-server は触っていない。
+
+### コメント整理(4 件)
+
+「今まで通りに」「以前の形」「照会の仕組みを入れる前に」「従来どおり」を現状の説明に書き換えた
+(`advisoryHelpers.ts`・`oralExamHelpers.ts`・`RxInquiryHistory.tsx`・`notifications.rake`)。スキャンのほかの当たりは
+業務の意味で使う語(「これまでの実施記録」「修正した本人」など)だった。
+
+### 未使用の削除
+
+- frontend の参照ゼロの export 12 件(`worstSeverity`・`isEwsAlertTask`・`isPlanDerivedOrder`・`traineeLevelLabel` ほか)と
+  型 `NursingObservationResult`。
+- backend の参照ゼロのメソッド 12 件(データセット明細 4 モデルの `referenced_record`、`MedicalMaterial` / `MedicalProcedure` の
+  `abolished?`、`SurgeryCategory#path_name`、ORCA の `whole_name` ほか)。データセット明細の `REFERENCES` は
+  `DETAIL_TYPES` の元として残し、「名称解決で使う」という説明を直した。
+
+### 機械的な重複統合
+
+**オーダーレイアウト(検体検査・放射線・生理・内視鏡・処置の 5 部門)**
+
+- クライアント 5 × 8 関数と型 5 × 5 本 → `api/masterClient/itemLayout.ts` の `itemLayoutClient(codeKey, layoutsPath, cellsPath)`。
+  項目コードの列名(検体検査は `order_item_code`、ほかは `item_code`)は `codeKey` で受け、セルの payload は `code` で
+  渡すとクライアントが列名に直して送る。
+- hook 5 × 4 本 → `api/masterQueries/itemLayout.ts` の `itemLayoutHooks(name, client)`(`radItemLayoutHooks.useLayout()` の形)。
+  キャッシュのキーは前と同じ。`medicine.ts` に置かれていた `LAB_LAYOUTS_KEY` は不要になった。
+- 画面 5 本(各 498 行、差は文言 4〜10 行)→ `pages/ItemLayoutPage.tsx` と、設定(題・hook・候補の引き方・検索モーダル・
+  文言)を渡すだけの部門のページ。
+- 検証: 5 画面の表示、放射線と検体検査でマスへの配置・表示名の保存・削除(POST の JSON が `item_code` /
+  `order_item_code` で前と同じ)、内視鏡・生理・処置のマス編集欄と項目選択モーダル、カルテのオーダーフォーム
+  5 部門の伝票タブ。
+
+**実施入力データセット(放射線・生理・内視鏡・処置の 4 部門)**
+
+- クライアント 4 × 9 関数と型 4 × 6 本 → `api/masterClient/performDataset.ts` の `performDatasetClient<D>(datasetsPath, detailsPath)`。
+  放射線だけ明細が算定用コード(`receipt_material_code`)を持つので `RadDatasetDetail` として拡張し、ほかは
+  `PerformDatasetDetail` を直接使う。
+- hook 4 × 6 本 → `api/masterQueries/performDataset.ts` の `performDatasetHooks({ name, client, itemsKey, searchItemsByCodes })`。
+  実施入力モーダルの `useLinesForItems` と項目マスタの `useOptions` もここから。キャッシュのキーは前と同じ。
+- 画面 4 本(差 10〜45 行)→ `pages/PerformDatasetPage.tsx`。部門の違いは設定(薬剤の呼び名と造影剤区分の絞り込み、
+  器材の検索モーダル、手技料の初期区分、器材の算定コード併記、経路の選択肢、紐付け先の呼び名)。
+- 検証: 4 画面の一覧と編集モーダル(見出し・プレースホルダ・経路の選択肢が前と同じ)、放射線の器材の算定コード併記、
+  明細の追加・数量変更・外す(JSON が前と同じ)、造影剤の検索モーダルが造影剤区分で開くこと、処置の手技料が J 区分で
+  開くこと、放射線ワークリストの実施入力に CT のデータセット明細が初期表示されること(検証のために受付し、取消で戻した)、
+  4 部門の項目マスタのデータセット選択肢。
+
+- 検証(全体): `tsc -b`・lint(エラー 0、警告 29 件は着手前と同数)・import 循環 0・backend rspec 2084 件通過。
+
+### 次の候補(今回やらない)
+
+1. **生理・内視鏡の残りの名前だけ違うファイル**。正規化後の差は、ワークリスト 6 行(683 行)、項目マスタ画面 16 行(836 行)、
+   検査種別画面 73 行(311 行)、実施入力モーダル 46 行(処置とは 19 行)、`*OrderHelpers.ts` 41 行。画面はレイアウト・
+   データセットと同じ設定方式で寄せられる見込み。ただし `*OrderHelpers.ts` と実施入力モーダルは FHIR の出力に触れるので、
+   round-trip で前後の JSON を突き合わせながら進める。
+2. **生理・内視鏡・処置のオーダーフォーム**(1,129〜1,530 行、生理と内視鏡は正規化後 112 行差)。第 2 回の候補 1 の残り。
+   放射線(JJ1017・線量)は別のまま。
+3. **ワークリスト 12 画面の共通部品**(第 2 回の候補 3)。
+4. `masterClient` の `if (!res.ok) throw await buildError(res);`(第 2 回の候補 4 の後半)。今回の factory 2 本で
+   約 70 か所減ったが、残りは個別のマスタ。
+5. `dead-exports.cjs` の「export だけ不要」546 件は手を付けていない(多くは部門ごとの型と定数で、外しても読みやすさは変わらない)。
+
+### 残すと判断したもの
+
+- `DatasetPickList` の `DatasetDetailLike`(構造で受ける型)。`PerformDatasetDetail` に揃えられるが、実施入力側の型を
+  触ることになるので次の候補 1 と一緒に見る。
+- `demo-seed/index.ts` の `preflight`(`dead-exports` に出るが `scripts/demo-seed.ts` から使う)。
 
 ## 第 3 回（2026-10-04）
 

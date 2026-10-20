@@ -7,7 +7,7 @@ require "json"
 # 導入前の承認待ちだけがヘッダーのベルと通知一覧に出てこない状態になる。
 #
 # 既に通知を持つ来歴は飛ばすので、何度流しても増えない。通知が作れなかった承認待ちも、
-# オーダーの詳細モーダルからは従来どおり承認できる(通知が無くても承認は通る)。
+# オーダーの詳細モーダルから承認できる(通知が無くても承認は通る)。
 #
 #   docker compose exec backend bin/rails notifications:backfill_order_approval
 #

@@ -19,10 +19,6 @@ module Master
 
     scope :in_display_order, -> { order(Arel.sql("display_order NULLS LAST")).order(:id) }
 
-    def oral?
-      usage_type == "oral"
-    end
-
     private
 
     # 投与日は 1 以上の整数の並びで、同じ日を 2 回書けない。

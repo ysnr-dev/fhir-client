@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { TreatmentItemDetail, TreatmentItemPayload } from "../api/masterClient";
 import {
-  useTreatmentDatasetOptions,
+  treatmentDatasetHooks,
   useTreatmentItem,
   useTreatmentItemMutations,
   useTreatmentItemSearch,
@@ -570,7 +570,7 @@ function DatasetSelect({
   disabled: boolean;
   onChange: (datasetCode: string) => void;
 }) {
-  const datasets = useTreatmentDatasetOptions();
+  const datasets = treatmentDatasetHooks.useOptions();
   const options = datasets.data?.items ?? [];
   const missing = value && !options.some((dataset) => dataset.dataset_code === value);
 

@@ -226,8 +226,8 @@ JED 用語集の版が上がったらテンプレートを改版して取り込�
 |---|---|---|
 | 内視鏡オーダー項目マスタ | `/endoscopy-items` | `PhysioItemPage` |
 | 検査種別 | `/endoscopy-exam-types` | `PhysioExamTypePage` + JED区分列 |
-| 内視鏡オーダーレイアウト | `/endoscopy-item-layouts` | `PhysioItemLayoutPage` |
-| 実施入力データセット | `/endoscopy-datasets` | `PhysioDatasetPage` |
+| 内視鏡オーダーレイアウト | `/endoscopy-item-layouts` | `ItemLayoutPage`(各部門で共用) |
+| 実施入力データセット | `/endoscopy-datasets` | `PerformDatasetPage`(各部門で共用) |
 | 内視鏡一覧(部門業務) | `/endoscopy-worklist` | `PhysioWorklistPage` |
 | オーダー入力 | カルテ右ペイン「内視鏡」 | `PhysioOrderForm`(生理検査と同一構成) |
 

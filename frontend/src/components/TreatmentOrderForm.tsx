@@ -11,8 +11,7 @@ import {
 } from "react";
 import type { TreatmentItem } from "../api/masterClient";
 import {
-  useTreatmentItemLayout,
-  useTreatmentItemLayouts,
+  treatmentItemLayoutHooks,
   useTreatmentItemSearch,
   useTreatmentItemsByCodes,
   useTreatmentSetMembers,
@@ -146,7 +145,7 @@ export function TreatmentOrderForm({
   );
 
   const problemOptions = useProblemOptions(patientId);
-  const layouts = useTreatmentItemLayouts();
+  const layouts = treatmentItemLayoutHooks.useLayouts();
 
   const layoutTabs = useMemo(
     () => (layouts.data?.items ?? []).filter((layout) => layout.active),
@@ -164,7 +163,7 @@ export function TreatmentOrderForm({
 
   // 選べる項目のマスタを先に揃えておく。選んだ瞬間にオーダーへ写す値
   // (名称・略称・セットの構成)が要るため、伝票・検索結果・選択済みをまとめて引く。
-  const layout = useTreatmentItemLayout(active?.kind === "layout" ? active.id : undefined);
+  const layout = treatmentItemLayoutHooks.useLayout(active?.kind === "layout" ? active.id : undefined);
   const layoutCodes = useMemo(
     () =>
       (layout.data?.cells ?? [])
@@ -991,7 +990,7 @@ function LayoutSelectGrid({
   selectedCodes,
   onToggle,
 }: SelectProps & {
-  layout: ReturnType<typeof useTreatmentItemLayout>["data"];
+  layout: ReturnType<typeof treatmentItemLayoutHooks.useLayout>["data"];
   error: unknown;
   catalogByCode: Map<string, TreatmentItem>;
 }) {

@@ -5,7 +5,7 @@ import type {
   PhysioItemPayload,
 } from "../api/masterClient";
 import {
-  usePhysioDatasetOptions,
+  physioDatasetHooks,
   usePhysioExamTypeOptions,
   usePhysioItem,
   usePhysioItemMutations,
@@ -694,7 +694,7 @@ function DatasetSelect({
   disabled: boolean;
   onChange: (datasetCode: string) => void;
 }) {
-  const datasets = usePhysioDatasetOptions();
+  const datasets = physioDatasetHooks.useOptions();
   const options = datasets.data?.items ?? [];
   const missing = value && !options.some((dataset) => dataset.dataset_code === value);
 

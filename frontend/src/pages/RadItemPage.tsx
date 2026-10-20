@@ -9,7 +9,7 @@ import type {
   RadJj1017Elements,
 } from "../api/masterClient";
 import {
-  useRadDatasetOptions,
+  radDatasetHooks,
   useRadItem,
   useRadItemMutations,
   useRadItemSearch,
@@ -869,7 +869,7 @@ function DatasetSelect({
   disabled: boolean;
   onChange: (datasetCode: string) => void;
 }) {
-  const datasets = useRadDatasetOptions();
+  const datasets = radDatasetHooks.useOptions();
   const options = datasets.data?.items ?? [];
   const missing = value && !options.some((dataset) => dataset.dataset_code === value);
 

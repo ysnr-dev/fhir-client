@@ -86,10 +86,6 @@ module LabImport
         unescape(raw_repetitions(index)[rep].to_s)
       end
 
-      def blank_field?(index)
-        raw_field(index).empty?
-      end
-
       # \F\ \S\ \T\ \R\ \E\ を元の文字に戻す。\.br\ は改行、\Xhh\ は 16 進。
       # 未知のエスケープは原文のまま残す(情報を落とさない)。
       def unescape(value)

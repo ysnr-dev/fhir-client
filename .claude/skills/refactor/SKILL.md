@@ -91,7 +91,7 @@ client より先にデプロイする前提なので、client がその変更に
 **重複**は、同じ流れが 2 か所以上にあり、片方を直したらもう片方も直すべき関係にあるときだけまとめる。
 差分は引数か対応表(レジストリ)で表し、「種別ごとの if を並べる」形にはしない。似ているが業務が違うもの
 (検体検査の採血管グループと放射線の器材など)は無理に寄せない。共通化した結果が元より読みにくければ戻す。
-既にある設定方式の例(`createTaskHelpers`、`makeUpdateTaskStatusHook`、`radiotherapyMasterHooks` など)は
+既にある設定方式の例(`createTaskHelpers`、`makeUpdateTaskStatusHook`、`simpleMasterHooks`・`itemLayoutHooks` など)は
 `references/criteria.md` の「まとめ方」にある。先にそれを探し、同じ形に揃える。
 
 **未使用**は、grep で本当に参照が無いことを確かめてから消す。名前で動的に呼ばれるもの(Rails の

@@ -5,7 +5,7 @@ import type {
   EndoscopyItemPayload,
 } from "../api/masterClient";
 import {
-  useEndoscopyDatasetOptions,
+  endoscopyDatasetHooks,
   useEndoscopyExamTypeOptions,
   useEndoscopyItem,
   useEndoscopyItemMutations,
@@ -694,7 +694,7 @@ function DatasetSelect({
   disabled: boolean;
   onChange: (datasetCode: string) => void;
 }) {
-  const datasets = useEndoscopyDatasetOptions();
+  const datasets = endoscopyDatasetHooks.useOptions();
   const options = datasets.data?.items ?? [];
   const missing = value && !options.some((dataset) => dataset.dataset_code === value);
 

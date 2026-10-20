@@ -16,7 +16,6 @@ import { encounterAttendingId, encounterAttendingName } from "./encounterHelpers
 import {
   buildCancelledNotificationTask,
   buildNotificationTask,
-  hasTaskCode,
   notificationTaskEntry,
   taskInputOf,
   taskOwnerName,
@@ -44,10 +43,6 @@ const BAND_INPUT = "区分";
 const ITEMS_INPUT = "項目";
 const MISSING_INPUT = "欠測";
 const MEASURED_AT_INPUT = "測定日時";
-
-export function isEwsAlertTask(task: fhir4.Task): boolean {
-  return hasTaskCode(task, EWS_ALERT_TASK_CODE.code);
-}
 
 /**
  * 測定の transaction に足す通知の entry。

@@ -40,7 +40,7 @@ export interface DatasetPickProps {
 
 /**
  * データセット明細のうち、候補を組み立てるのに要る列。部門ごとに型が別
- * (RadDatasetDetail / PhysioDatasetDetail / …)なので構造で受ける。
+ * (PerformDatasetDetail と、算定コードを足した RadDatasetDetail)なので構造で受ける。
  */
 export interface DatasetDetailLike {
   id: number;

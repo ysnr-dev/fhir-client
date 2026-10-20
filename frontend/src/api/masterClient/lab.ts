@@ -1,4 +1,5 @@
 import { buildError, masterFetch, type MasterSearchResult } from "./core";
+import { itemLayoutClient } from "./itemLayout";
 
 // 検体検査オーダー項目。医師がオーダー画面で選ぶ単位の検査項目で、
 // JLAC コードは共有項目JLACコードマスタから検索して代表コードを1つ設定する。
@@ -255,58 +256,6 @@ export interface LabContainerPayload {
   capacity?: string | null;
   display_order?: number | null;
   note?: string | null;
-}
-
-// 検査オーダーレイアウト(検査伝票のようなグリッド)。グリッドの大きさを持ち、
-// 1マスの中身は LabOrderItemLayoutCell が持つ。
-export interface LabOrderItemLayout {
-  id: number;
-  name: string;
-  row_count: number;
-  column_count: number;
-  display_order: number | null;
-  active: boolean;
-  note: string | null;
-}
-
-// レイアウトの1マス。item=検査オーダー項目 / label=表示専用の文言。
-// item_name 以降は詳細APIがオーダー項目から付与する。
-export interface LabOrderItemLayoutCell {
-  id: number;
-  layout_id: number;
-  grid_row: number;
-  grid_column: number;
-  cell_type: string;
-  order_item_code: string | null;
-  // item: 伝票上の表示名(空ならオーダー項目名) / label: 表示文言
-  display_name: string | null;
-  item_name?: string | null;
-  item_short_name?: string | null;
-  item_kind?: string | null;
-}
-
-export interface LabOrderItemLayoutDetail extends LabOrderItemLayout {
-  cells: LabOrderItemLayoutCell[];
-  // 行数・列数を縮めたとき、範囲外で片付けられたセルの数(update の応答のみ)。
-  removed_cells?: number;
-}
-
-export interface LabOrderItemLayoutPayload {
-  name?: string;
-  row_count?: number;
-  column_count?: number;
-  display_order?: number | null;
-  active?: boolean;
-  note?: string | null;
-}
-
-export interface LabOrderItemLayoutCellPayload {
-  layout_id: number;
-  grid_row: number;
-  grid_column: number;
-  cell_type?: string;
-  order_item_code?: string | null;
-  display_name?: string | null;
 }
 
 const LAB_ORDER_ITEMS_PATH = "/master/lab_order_items";
@@ -681,76 +630,8 @@ export async function deleteLabContainer(id: number): Promise<void> {
   if (!res.ok) throw await buildError(res);
 }
 
-const LAB_LAYOUTS_PATH = "/master/lab_order_item_layouts";
-
-export async function fetchLabOrderItemLayouts(): Promise<MasterSearchResult<LabOrderItemLayout>> {
-  const res = await masterFetch(`${LAB_LAYOUTS_PATH}?per=100`);
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as MasterSearchResult<LabOrderItemLayout>;
-}
-
-export async function fetchLabOrderItemLayout(id: number): Promise<LabOrderItemLayoutDetail> {
-  const res = await masterFetch(`${LAB_LAYOUTS_PATH}/${id}`);
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as LabOrderItemLayoutDetail;
-}
-
-export async function createLabOrderItemLayout(
-  payload: LabOrderItemLayoutPayload,
-): Promise<LabOrderItemLayout> {
-  const res = await masterFetch(LAB_LAYOUTS_PATH, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as LabOrderItemLayout;
-}
-
-export async function updateLabOrderItemLayout(
-  id: number,
-  payload: LabOrderItemLayoutPayload,
-): Promise<LabOrderItemLayoutDetail> {
-  const res = await masterFetch(`${LAB_LAYOUTS_PATH}/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as LabOrderItemLayoutDetail;
-}
-
-export async function deleteLabOrderItemLayout(id: number): Promise<void> {
-  const res = await masterFetch(`${LAB_LAYOUTS_PATH}/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await buildError(res);
-}
-
-export async function createLabOrderItemLayoutCell(
-  payload: LabOrderItemLayoutCellPayload,
-): Promise<LabOrderItemLayoutCell> {
-  const res = await masterFetch("/master/lab_order_item_layout_cells", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as LabOrderItemLayoutCell;
-}
-
-export async function updateLabOrderItemLayoutCell(
-  id: number,
-  payload: Partial<LabOrderItemLayoutCellPayload>,
-): Promise<LabOrderItemLayoutCell> {
-  const res = await masterFetch(`/master/lab_order_item_layout_cells/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as LabOrderItemLayoutCell;
-}
-
-export async function deleteLabOrderItemLayoutCell(id: number): Promise<void> {
-  const res = await masterFetch(`/master/lab_order_item_layout_cells/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await buildError(res);
-}
+export const labOrderItemLayoutClient = itemLayoutClient(
+  "order_item_code",
+  "/master/lab_order_item_layouts",
+  "/master/lab_order_item_layout_cells",
+);

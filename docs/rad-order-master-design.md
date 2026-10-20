@@ -276,7 +276,7 @@ API: `post :bulk_create_from_frequent`（`rad_order_items` の collection）、�
 
 - テーブルは§3の2表（構造は `master_lab_order_item_layout*` と同一、参照コードが `item_code` になるのみ）。
 - モデル制約も同一: MAX_SIZE=50、cell_typeごとの必須項目、layout範囲内チェック、行列縮小時の範囲外セル削除（`removed_cells` 返却）、セル移動時の占有セルswap。
-- UI: `LabOrderItemLayoutPage`（レイアウト選択→`LayoutEditor`（グリッド＋ドラッグ&ドロップ）→`CellEditor`）を流用実装。
+- UI: 検体検査と共用の `ItemLayoutPage`（レイアウト選択→`LayoutEditor`（グリッド＋ドラッグ&ドロップ）→`CellEditor`）に、放射線の項目マスタと文言を設定で渡す。
 - オーダー入力画面での消費（activeなレイアウト→タブ表示、セット項目の事前展開）は§9。
 
 API: `resources :rad_item_layouts, only: %i[index show create update destroy]`、`resources :rad_item_layout_cells, only: %i[create update destroy]`。

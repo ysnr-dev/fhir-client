@@ -65,8 +65,11 @@ SKILL.md の「何を直し、何を残すか」の補足。例はこのリポ�
    - `fhir/taskHelpers.ts` の `createTaskHelpers(config)`: 部門の Task の状態遷移
    - `api/queries/worklist.ts` の `makeUpdateTaskStatusHook` / `makePerformDetailHook` / `deleteOrderWithItems`、
      `api/queries/core.ts` の `makeOrderDetailHook`: 部門一覧の hook
-   - `api/masterClient/radiotherapy.ts` の `radiotherapyMasterClient<T>(path)` と
-     `api/masterQueries/radiotherapy.ts` の `radiotherapyMasterHooks`: マスタの CRUD クライアントと hook
+   - `api/masterClient/radiotherapy.ts` の `simpleMasterClient<T>(path)` と
+     `api/masterQueries/radiotherapy.ts` の `simpleMasterHooks`: マスタの CRUD クライアントと hook
+   - `api/masterClient/itemLayout.ts` + `api/masterQueries/itemLayout.ts` + `pages/ItemLayoutPage.tsx`:
+     部門のオーダーレイアウト(クライアント・hook・画面を部門の設定で作る)。実施入力データセットは
+     `performDataset.ts` の 2 本と `pages/PerformDatasetPage.tsx` が同じ形
    - `components/DatasetPickList.tsx`、`components/TemplateTextField.tsx`: 部門をまたぐ共通部品
      (ローカルに同名のコピーを持つフォームがあれば、まずそれを共通版に置き換える)
    - `fhir/orderKinds.ts` + `components/orderKindRegistry.tsx`: 種別ごとの対応表

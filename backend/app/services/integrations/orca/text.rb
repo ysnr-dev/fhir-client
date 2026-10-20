@@ -18,11 +18,6 @@ module Integrations
         normalized = value.to_s.unicode_normalize(:nfkc)
         normalized.tr("!-~", "！-～").tr(" ", "　").strip
       end
-
-      # 氏名の「姓　名」。ORCA は姓名を 1 項目(WholeName)で持ち、全角空白で区切る。
-      def whole_name(family, given)
-        [widen(family), widen(given)].reject(&:empty?).join("　")
-      end
     end
   end
 end

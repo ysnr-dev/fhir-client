@@ -12,8 +12,7 @@ import {
 import type { RadItem } from "../api/masterClient";
 import {
   elementName,
-  useRadItemLayout,
-  useRadItemLayouts,
+  radItemLayoutHooks,
   useRadItemSearch,
   useRadItemsByCodes,
   useRadSetMembers,
@@ -170,7 +169,7 @@ export function RadOrderForm({
   );
 
   const problemOptions = useProblemOptions(patientId);
-  const layouts = useRadItemLayouts();
+  const layouts = radItemLayoutHooks.useLayouts();
 
   const layoutTabs = useMemo(
     () => (layouts.data?.items ?? []).filter((layout) => layout.active),
@@ -189,7 +188,7 @@ export function RadOrderForm({
   // 選べる項目のマスタを先に揃えておく。選んだ瞬間にオーダーへ写す値
   // (JJ1017 コード・種別・部位・セットの構成・既定テンプレート)が要るため、
   // 伝票・検索結果・選択済みをまとめて引く。
-  const layout = useRadItemLayout(active?.kind === "layout" ? active.id : undefined);
+  const layout = radItemLayoutHooks.useLayout(active?.kind === "layout" ? active.id : undefined);
   const layoutCodes = useMemo(
     () =>
       (layout.data?.cells ?? [])
@@ -1357,7 +1356,7 @@ function LayoutSelectGrid({
   selectedCodes,
   onToggle,
 }: SelectProps & {
-  layout: ReturnType<typeof useRadItemLayout>["data"];
+  layout: ReturnType<typeof radItemLayoutHooks.useLayout>["data"];
   error: unknown;
   catalogByCode: Map<string, RadItem>;
 }) {
