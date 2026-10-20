@@ -1,4 +1,4 @@
-# カルテの「アプリ」タブ: 起動できるアプリの一覧と、EHR launch の起動
+# カルテの「SMARTアプリ」タブ: 起動できるアプリの一覧と、EHR launch の起動
 # (docs/smart-app-launch-design.md §3.1)。登録・編集は Admin::SmartAppsController。
 class SmartAppsController < ActionController::API
   include UserAuthentication

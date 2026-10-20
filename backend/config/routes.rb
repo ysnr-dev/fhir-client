@@ -116,7 +116,7 @@ Rails.application.routes.draw do
   # 「自院」がどの Organization かと施設ごとの業務設定(ログイン済みユーザー全員が読み書きする)。
   resource :facility_settings, only: %i[show update]
 
-  # カルテの「アプリ」タブ: 起動できる SMART アプリの一覧と EHR launch の起動(利用者ログイン)。
+  # カルテの「SMARTアプリ」タブ: 起動できる SMART アプリの一覧と EHR launch の起動(利用者ログイン)。
   resources :smart_apps, only: :index do
     post :launch, on: :member
   end

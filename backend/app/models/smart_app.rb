@@ -1,4 +1,4 @@
-# カルテの「アプリ」タブから起動する SMART on FHIR アプリ(docs/smart-app-launch-design.md)。
+# カルテの「SMARTアプリ」タブから起動する SMART on FHIR アプリ(docs/smart-app-launch-design.md)。
 #
 # 認可の実体は上流 fhir-server の OAuth クライアント(client_id)で、スコープや redirect_uri
 # はそちらの登録が正。この行は「名称・起動 URL・表示方法・並び順」だけを持つ。
