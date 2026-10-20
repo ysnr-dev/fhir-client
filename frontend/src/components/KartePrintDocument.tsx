@@ -150,7 +150,7 @@ function KartePrintCardHistory({ item, history }: { item: KarteTimelineItem; his
       {steps.map((step) => (
         <div className="karte-print__history-step" key={step.label}>
           <div className="karte-print__history-label">{step.label}</div>
-          <VersionDiffView before={step.before} after={step.after} autoScroll={false} context={DIFF_CONTEXT} />
+          <VersionDiffView before={step.before} after={step.after} context={DIFF_CONTEXT} />
         </div>
       ))}
     </div>

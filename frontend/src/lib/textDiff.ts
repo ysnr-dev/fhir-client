@@ -1,6 +1,8 @@
 // 2 つの文章の差分。行単位で比べ、書き換えた行(消えた行と増えた行が並ぶところ)は
 // 文字単位でも比べて、変わった文字だけを示せるようにする(日本語は単語の区切りが無いので
-// 文字単位にする)。
+// 文字単位にする)。行は文字のほかに描き方(太字・字下げ・ラベル)を持ち、差分でも同じに描く。
+
+import type { RenderedLine } from "./renderedLines";
 
 export type DiffKind = "same" | "removed" | "added";
 
@@ -10,9 +12,11 @@ export interface DiffSegment {
   changed: boolean;
 }
 
-export interface DiffRow {
+export interface DiffRow extends RenderedLine {
   kind: DiffKind;
   segments: DiffSegment[];
+  /** 行ごと消えた・増えた行(書き換えではない)。 */
+  whole: boolean;
 }
 
 // LCS の表の大きさの上限。超えたら比べずに「全部消えて全部増えた」とみなす。
@@ -23,7 +27,7 @@ const PAIR_SIMILARITY = 0.4;
 
 type Op<T> = { kind: DiffKind; value: T };
 
-function diffSequence<T>(a: T[], b: T[]): Op<T>[] {
+function diffSequence<T>(a: T[], b: T[], key: (value: T) => string): Op<T>[] {
   const n = a.length;
   const m = b.length;
   if (n * m > MAX_CELLS) {
@@ -32,20 +36,22 @@ function diffSequence<T>(a: T[], b: T[]): Op<T>[] {
       ...b.map((value) => ({ kind: "added" as const, value })),
     ];
   }
+  const ak = a.map(key);
+  const bk = b.map(key);
   // lengths[i][j] = a[i..] と b[j..] の LCS の長さ。
   const lengths = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
   for (let i = n - 1; i >= 0; i -= 1) {
     for (let j = m - 1; j >= 0; j -= 1) {
       lengths[i][j] =
-        a[i] === b[j] ? lengths[i + 1][j + 1] + 1 : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
+        ak[i] === bk[j] ? lengths[i + 1][j + 1] + 1 : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
     }
   }
   const ops: Op<T>[] = [];
   let i = 0;
   let j = 0;
   while (i < n && j < m) {
-    if (a[i] === b[j]) {
-      ops.push({ kind: "same", value: a[i] });
+    if (ak[i] === bk[j]) {
+      ops.push({ kind: "same", value: b[j] });
       i += 1;
       j += 1;
     } else if (lengths[i + 1][j] >= lengths[i][j + 1]) {
@@ -61,8 +67,10 @@ function diffSequence<T>(a: T[], b: T[]): Op<T>[] {
   return ops;
 }
 
-function wholeLine(kind: DiffKind, text: string): DiffRow {
-  return { kind, segments: [{ text, changed: false }] };
+const sameChar = (c: string) => c;
+
+function wholeLine(kind: DiffKind, line: RenderedLine): DiffRow {
+  return { ...line, kind, whole: true, segments: [{ text: line.text, changed: false }] };
 }
 
 // 同じ種類の連続した文字を 1 区間にまとめる。
@@ -78,53 +86,72 @@ function segmentsOf(ops: Op<string>[], side: "removed" | "added"): DiffSegment[]
   return segments;
 }
 
-function pairRows(before: string, after: string): DiffRow[] | null {
-  const ops = diffSequence([...before], [...after]);
+function pairRows(before: RenderedLine, after: RenderedLine): DiffRow[] | null {
+  const ops = diffSequence([...before.text], [...after.text], sameChar);
   const common = ops.filter((op) => op.kind === "same").length;
-  if (common < Math.min([...before].length, [...after].length) * PAIR_SIMILARITY) return null;
+  if (common < Math.min([...before.text].length, [...after.text].length) * PAIR_SIMILARITY) return null;
   return [
-    { kind: "removed", segments: segmentsOf(ops, "removed") },
-    { kind: "added", segments: segmentsOf(ops, "added") },
+    { ...before, kind: "removed", whole: false, segments: segmentsOf(ops, "removed") },
+    { ...after, kind: "added", whole: false, segments: segmentsOf(ops, "added") },
   ];
 }
 
-/** 文章を比べる行に分ける。空行と行末の空白は比べない(描画の都合で増減するため)。 */
-export function diffLinesOf(text: string): string[] {
-  return text
-    .split("\n")
-    .map((line) => line.replace(/\s+$/, ""))
-    .filter((line) => line.trim() !== "");
-}
-
 /** before → after の差分を行で返す。書き換えた行は消えた行・増えた行の組で並ぶ。 */
-export function diffText(before: string, after: string): DiffRow[] {
-  const ops = diffSequence(diffLinesOf(before), diffLinesOf(after));
+export function diffLines(before: RenderedLine[], after: RenderedLine[]): DiffRow[] {
+  const ops = diffSequence(before, after, (line) => line.text);
   const rows: DiffRow[] = [];
   let index = 0;
   while (index < ops.length) {
     if (ops[index].kind === "same") {
-      rows.push(wholeLine("same", ops[index].value));
+      rows.push({ ...ops[index].value, kind: "same", whole: false, segments: [{ text: ops[index].value.text, changed: false }] });
       index += 1;
       continue;
     }
     // 変わったひとかたまり(消えた行・増えた行の連続)。前から順に組にして、
     // 似ている組は書き換えとして文字単位で比べる。
-    const removed: string[] = [];
-    const added: string[] = [];
+    const removed: RenderedLine[] = [];
+    const added: RenderedLine[] = [];
     while (index < ops.length && ops[index].kind !== "same") {
       (ops[index].kind === "removed" ? removed : added).push(ops[index].value);
       index += 1;
     }
     const pairs = Math.min(removed.length, added.length);
-    const pending: DiffRow[] = [];
     for (let k = 0; k < pairs; k += 1) {
       const paired = pairRows(removed[k], added[k]);
-      if (paired) pending.push(...paired);
-      else pending.push(wholeLine("removed", removed[k]), wholeLine("added", added[k]));
+      if (paired) rows.push(...paired);
+      else rows.push(wholeLine("removed", removed[k]), wholeLine("added", added[k]));
     }
-    for (const line of removed.slice(pairs)) pending.push(wholeLine("removed", line));
-    for (const line of added.slice(pairs)) pending.push(wholeLine("added", line));
-    rows.push(...pending);
+    for (const line of removed.slice(pairs)) rows.push(wholeLine("removed", line));
+    for (const line of added.slice(pairs)) rows.push(wholeLine("added", line));
   }
   return rows;
+}
+
+/** 変わった行のかたまり(hunk)ごとの先頭の行番号。 */
+export function changeStarts(rows: DiffRow[]): number[] {
+  const starts: number[] = [];
+  rows.forEach((row, index) => {
+    if (row.kind !== "same" && (index === 0 || rows[index - 1].kind === "same")) starts.push(index);
+  });
+  return starts;
+}
+
+/** 行ごとに出すかどうか。context が無ければすべて出す。変わった行の前後 context 行と、
+ *  そのかたまりが属する直前の太字の行(見出し)を残す。 */
+export function visibleRows(rows: DiffRow[], context: number | undefined): boolean[] {
+  if (context === undefined) return rows.map(() => true);
+  const visible = rows.map(() => false);
+  rows.forEach((row, index) => {
+    if (row.kind === "same") return;
+    for (let near = Math.max(0, index - context); near <= Math.min(rows.length - 1, index + context); near += 1) {
+      visible[near] = true;
+    }
+    for (let back = index - 1; back >= 0; back -= 1) {
+      if (rows[back].strong && rows[back].indent <= row.indent) {
+        visible[back] = true;
+        break;
+      }
+    }
+  });
+  return visible;
 }

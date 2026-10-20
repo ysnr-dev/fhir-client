@@ -7959,11 +7959,31 @@ body.karte-wide {
   line-height: 1.6;
 }
 
+/* 変わらない行は薄く、変わった行は濃く描いて、変更が目に入るようにする。
+   字下げは描画位置から起こした段(--diff-indent)で再現する。 */
 .version-diff__row {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   padding: 1px 4px;
+  padding-left: calc(4px + var(--diff-indent, 0) * 12px);
+  border-left: 3px solid transparent;
   border-radius: 3px;
+  color: var(--text);
+}
+
+.version-diff__row--strong {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.version-diff__row--gap {
+  margin: 2px 0;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.version-diff__row--removed,
+.version-diff__row--added {
   color: var(--text-h);
 }
 
@@ -7971,13 +7991,20 @@ body.karte-wide {
   background: var(--diff-removed-bg);
 }
 
-.version-diff__row--removed .version-diff__text {
+/* 行ごと消えた行は全体に取り消し線、書き換えた行は変わった文字にだけ付ける
+   (残った文字まで消すと読めない)。 */
+.version-diff__row--removed.version-diff__row--whole .version-diff__text,
+.version-diff__row--removed .version-diff__changed {
   text-decoration: line-through;
   text-decoration-color: var(--danger);
 }
 
 .version-diff__row--added {
   background: var(--diff-added-bg);
+}
+
+.version-diff__row--focused {
+  border-left-color: var(--accent);
 }
 
 .version-diff__mark {
@@ -7988,6 +8015,13 @@ body.karte-wide {
 .version-diff__text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  tab-size: 4;
+}
+
+/* 「ラベル: 値」の行のラベル部分。 */
+.version-diff__label {
+  color: var(--text);
+  font-weight: 400;
 }
 
 .version-diff__changed {
@@ -8001,6 +8035,18 @@ body.karte-wide {
 
 .version-diff__row--added .version-diff__changed {
   background: var(--diff-added-strong);
+}
+
+/* 差分の送り(変更 n/m・前へ・次へ・変更箇所のみ)。 */
+.note-history__changes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.note-history__toolbar .note-history__changes button {
+  height: auto;
 }
 
 .karte-timeline {
@@ -27097,6 +27143,10 @@ input.nursing-picker__search {
    (消えた行は .version-diff__row--removed の取消線)。 */
 .karte-print__history .version-diff__row--added .version-diff__text {
   text-decoration: underline;
+}
+
+.karte-print__history .version-diff__row--removed .version-diff__text {
+  text-decoration: line-through;
 }
 
 .karte-print__history .version-diff__changed {
