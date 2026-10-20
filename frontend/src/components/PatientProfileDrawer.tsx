@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 import { useKarteConditions } from "../api/queries";
 import { splitConditions } from "../fhir/conditionHelpers";
 import { displayName } from "../fhir/patientHelpers";
@@ -27,10 +28,6 @@ interface PatientProfileDrawerProps {
   onClose: () => void;
 }
 
-// Escape を先に受け取るもの(モーダル、ケバブメニュー、ピクトグラムの吹き出し)。
-// これらが開いているときの Escape はそちらを閉じるだけにする。
-const ESCAPE_OWNERS = ".modal-overlay, .row-menu__items, .patient-header__popover";
-
 /**
  * 一覧の右から出す患者プロファイル。カルテを開かずに中身を確かめるためのもの。
  * 一覧を覆わない(背景を暗くしない)ので、開いたまま別の行を選べる。
@@ -57,15 +54,8 @@ export function PatientProfileDrawer({
     readResolvedProblemsVisible,
   );
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (document.querySelector(ESCAPE_OWNERS)) return;
-      onClose();
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  // ドロワーの上に開いたモーダルやメニューが先に閉じる(useEscapeClose)。
+  useEscapeClose(onClose);
 
   return (
     <aside className="patient-drawer" aria-label="患者プロファイル">

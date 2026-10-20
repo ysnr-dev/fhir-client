@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 import {
   useNursingPerformsOf,
   useNursingPerformsOn,
@@ -302,66 +303,9 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
     return () => window.removeEventListener("resize", measure);
   }, [fullscreen]);
 
-  // Escape は重なりの外側から閉じる(モーダル → 全画面)。Modal は自分では Escape を
-  // 見ないので、モーダルを開いている間は全画面でなくてもここで拾う。
-  useEffect(() => {
-    if (
-      !fullscreen &&
-      !nursingPerform &&
-      !modalOrder &&
-      !modalUnitId &&
-      !modalTaskId &&
-      !closeOpen &&
-      !unplannedOpen &&
-      !scheduleOpen &&
-      !cancelOpen &&
-      !nextPhaseOpen &&
-      !phaseCancelOpen
-    ) {
-      return;
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      if (closeOpen) {
-        setCloseOpen(false);
-        return;
-      }
-      if (scheduleOpen) {
-        setScheduleOpen(false);
-        return;
-      }
-      if (cancelOpen) {
-        setCancelOpen(false);
-        return;
-      }
-      if (nextPhaseOpen) {
-        setNextPhaseOpen(false);
-        return;
-      }
-      if (phaseCancelOpen) {
-        setPhaseCancelOpen(false);
-        return;
-      }
-      if (unplannedOpen) {
-        // オーダーのフォームがテンプレート記入などのモーダルを重ねている間は、
-        // そちらを閉じる操作なので予定外の入力は閉じない(入力中の値を失わせない)。
-        if (document.querySelectorAll(".modal-overlay").length > 1) return;
-        setUnplannedOpen(false);
-        return;
-      }
-      // オーダー詳細を開いている間は、その中の実施入力から順に閉じたいので
-      // PathwayOrderModal 側に任せる(こちらは何もしない)。
-      if (modalOrder) return;
-      if (nursingPerform) setNursingPerform(null);
-      else if (modalUnitId) setModalUnitId(null);
-      else if (modalTaskId) setModalTaskId(null);
-      else if (fullscreen) updateView({ fullscreen: false });
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-    // updateView は毎描画で作り直されるが、押した時点の選択で戻せればよい。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen, modalUnitId, modalTaskId, modalOrder, nursingPerform, closeOpen, unplannedOpen, scheduleOpen, cancelOpen, nextPhaseOpen, phaseCancelOpen]);
+  // 全画面は Escape でも抜けられる。シートの上に開いたモーダルは、重ねた順に内側から先に閉じる
+  // (useEscapeClose。実施入力 → オーダー詳細 → 全画面)。
+  useEscapeClose(() => updateView({ fullscreen: false }), fullscreen);
 
   return (
     <div

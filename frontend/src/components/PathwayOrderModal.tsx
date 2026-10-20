@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   useEndoscopyItemsByCodes,
   usePhysioItemsByCodes,
@@ -110,17 +110,6 @@ export function PathwayOrderModal({
   onClose,
 }: PathwayOrderModalProps) {
   const [performing, setPerforming] = useState(false);
-
-  // Escape は重なりの外側から閉じる(実施入力 → 詳細)。Modal は自分では Escape を見ない。
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      if (performing) setPerforming(false);
-      else onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [performing, onClose]);
 
   const canPerform = canPerformOrder(order, kind, progress);
   // 実施入力を閉じたら(登録したかに関わらず)パスの木を読み直す。進み具合が変わると「実施入力」を消し、

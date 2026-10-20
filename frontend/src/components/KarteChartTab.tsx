@@ -21,6 +21,7 @@ import {
 } from "../api/queries";
 import { findLabReportIdOf, useVitalThresholds } from "../api/queries";
 import { useDefinitionOwners } from "../hooks/useDefinitionOwners";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 import {
   CHART_AXIS_UNIT_LABELS,
   CHART_COLUMN_CHOICES,
@@ -193,17 +194,8 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     return () => window.removeEventListener("resize", measure);
   }, [fullscreen]);
 
-  // 全画面は Escape でも抜けられるようにする。編集モーダルを開いている間は、
-  // そちらを閉じる操作なのでここでは拾わない。
-  useEffect(() => {
-    if (!fullscreen || editing || guideOpen || analysis) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") updateView({ ...viewRef.current, fullscreen: false });
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen, editing, guideOpen, analysis]);
+  // 全画面は Escape でも抜けられる。上に開いたモーダルが先に閉じる(useEscapeClose)。
+  useEscapeClose(() => updateView({ ...viewRef.current, fullscreen: false }), fullscreen);
 
   // 定義を消した後など、URL が指している id が無くなったら指定を落とす。
   // **引き直している間は触らない** —— 作った直後は一覧がまだ古く、作ったチャートを

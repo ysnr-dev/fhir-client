@@ -26,9 +26,6 @@ export function DicomAnnotationTextModal({
           if (e.key === "Enter" && !e.nativeEvent.isComposing && trimmed) {
             e.preventDefault();
             onDone(trimmed);
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            onDone(null);
           }
         }}
       />

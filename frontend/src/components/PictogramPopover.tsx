@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 import { createPortal } from "react-dom";
 
 /** 吹き出しとアイコンの間隔(px)。CSS の top: calc(100% + 6px) と合わせる。 */
@@ -45,6 +46,7 @@ export function PictogramPopover({
   const ref = useRef<HTMLSpanElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
+  useEscapeClose(() => setOpen(false), open);
   useEffect(() => {
     if (!open) return;
     function handlePointerDown(event: MouseEvent) {
@@ -52,21 +54,16 @@ export function PictogramPopover({
       if (ref.current?.contains(target) || popoverRef.current?.contains(target)) return;
       setOpen(false);
     }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
     function close() {
       setOpen(false);
     }
     document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
     if (portal) {
       window.addEventListener("scroll", close, true);
       window.addEventListener("resize", close);
     }
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", close);
     };

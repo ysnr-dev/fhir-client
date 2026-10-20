@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 import type { KarteDetailTarget } from "../karteUrl";
 import type {
   ChartBandRow,
@@ -381,19 +382,15 @@ function ChartPickMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  useEscapeClose(onClose);
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
       if (!ref.current?.contains(event.target as Node)) onClose();
     }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
     document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
     window.addEventListener("scroll", onClose, true);
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("scroll", onClose, true);
     };
   }, [onClose]);

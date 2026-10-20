@@ -96,6 +96,8 @@ docker compose exec frontend node scripts/import-cycles.cjs src/api/queries
 - カルテの右ペインを使うのは、右ペインの登録ボタンから始める登録(と、その編集)だけ。タブの中から行う操作(評価・展開など)は
   タブの中のボタンとモーダルで行い、右ペインを開かない。
 - `Modal` はポータルではない。フォーム内のモーダルに `<form>` を書かない(外側がネイティブ submit される)。
+- Escape で閉じるもの(モーダル・メニュー・吹き出し・ドロワー・全画面)は `hooks/useEscapeClose` に載せる。
+  開いた順に積まれ、一番上だけが閉じる。個別に keydown を購読して Escape を見ない。
 - 1 行に収まらないトグル類は行のケバブメニュー(RowMenu)に畳む。
 - 通知は Task に統一。種別を足すときはレジストリに 1 要素足す。
 - 部門オーダーの種別を足すときは `fhir/orderKinds.ts` に 1 行足し、型エラーになった対応表

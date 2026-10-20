@@ -6,6 +6,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 
 // パネルの表示位置。下に開くと見切れる場合だけ上に開く
 // (カルテのタイムラインのようにスクロール領域の中に置かれることがある)。
@@ -99,20 +100,14 @@ export function RowMenu({
     return () => window.removeEventListener("scroll", close, true);
   }, [open, escapesClipping]);
 
+  useEscapeClose(() => setOpen(false), open);
   useEffect(() => {
     if (!open) return;
     function handlePointerDown(event: MouseEvent) {
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
     }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
     document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [open]);
 
   return (

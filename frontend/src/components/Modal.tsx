@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 
 interface ModalProps {
   title: string;
@@ -10,6 +11,8 @@ interface ModalProps {
 }
 
 export function Modal({ title, onClose, children, className, titleAction }: ModalProps) {
+  // Escape は × と同じ。重ねて開いたときは一番上から閉じる(useEscapeClose)。
+  useEscapeClose(onClose);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div

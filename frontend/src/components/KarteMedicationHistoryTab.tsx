@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 import {
   usePatientBroughtMedications,
   usePatientChartInjections,
@@ -143,15 +144,8 @@ export function KarteMedicationHistoryTab({ patientId, view, onViewChange, onOpe
     return () => window.removeEventListener("resize", measure);
   }, [fullscreen]);
 
-  useEffect(() => {
-    if (!fullscreen) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") updateView({ ...viewRef.current, fullscreen: false });
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen]);
+  // 全画面は Escape でも抜けられる。上に開いたモーダルが先に閉じる(useEscapeClose)。
+  useEscapeClose(() => updateView({ ...viewRef.current, fullscreen: false }), fullscreen);
 
   function changeAxis(nextUnit: MedicationHistoryUnit, nextColumns: number) {
     updateView({ ...parsed, unit: nextUnit, columns: nextColumns });

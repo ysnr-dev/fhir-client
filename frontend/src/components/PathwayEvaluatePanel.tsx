@@ -66,19 +66,6 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
   // テンプレート記入を開いている欄(S/O/A/P か自由記載)。
   const [templateTarget, setTemplateTarget] = useState<EvaluationField | null>(null);
 
-  // Escape はテンプレートから先に閉じる。パスシート側もモーダルを閉じる listener を
-  // 持つので、こちらで拾ったときはそれ以上伝えない(重なりの外側から閉じる)。
-  useEffect(() => {
-    if (!templateTarget) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      event.stopImmediatePropagation();
-      setTemplateTarget(null);
-    }
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [templateTarget]);
-
   const found = useMemo(() => {
     const application = tree.data?.application;
     if (!application) return null;

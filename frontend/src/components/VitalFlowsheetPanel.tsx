@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 import {
   usePatientEncounterEvents,
   usePatientExamOrders,
@@ -528,15 +529,8 @@ export function VitalFlowsheetPanel({
   // 見出しは 年 / 日付 / 時刻 の 3 段。病日・術後日数を出すぶんだけ rowSpan を伸ばす。
   const headerRowSpan = 3 + (showHospitalDays ? 1 : 0) + (showPostOpDays ? 1 : 0);
 
-  // 全画面は Escape でも抜けられるようにする(モーダルと同じ作法)。
-  useEffect(() => {
-    if (!fullscreen) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setFullscreen(false);
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [fullscreen, setFullscreen]);
+  // 全画面は Escape でも抜けられる。上に開いたモーダルが先に閉じる(useEscapeClose)。
+  useEscapeClose(() => setFullscreen(false), fullscreen);
 
   useEffect(() => {
     if (!fullscreen) return;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
   useDepartmentDoctors,
@@ -134,20 +135,14 @@ export function OrderContextPicker() {
 
   // メニュー外を押すか Esc で閉じる。マウスが離れただけでは閉じない
   // (トリガーとパネルの間に隙間があり、そこを通っただけで消えてしまうため)。
+  useEscapeClose(() => setOpen(false), open);
   useEffect(() => {
     if (!open) return;
     function handlePointerDown(event: MouseEvent) {
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
     }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
     document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [open]);
 
   function update(next: OrderContext) {

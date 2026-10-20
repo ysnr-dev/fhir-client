@@ -1,5 +1,6 @@
 import { cache } from "@cornerstonejs/core";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 import { useImagingStudyInstances } from "../api/queries";
 import {
   imagingInstanceUrl,
@@ -142,12 +143,14 @@ export default function DicomViewerModal({
 
   const dialogOpen = tagsOpen || textRequest !== null || captured !== null;
 
+  // Escape で閉じる。中で開いたダイアログ(タグ一覧・注釈の文字・保存)が先に閉じる(useEscapeClose)。
+  useEscapeClose(onClose);
+
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (dialogOpen) return;
       const position = displayable.findIndex((s) => s.uid === current?.uid);
-      if (e.key === "Escape") onClose();
-      else if (e.key === "Delete" || e.key === "Backspace") {
+      if (e.key === "Delete" || e.key === "Backspace") {
         viewportRef.current?.deleteSelectedAnnotations();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         viewportRef.current?.undo();

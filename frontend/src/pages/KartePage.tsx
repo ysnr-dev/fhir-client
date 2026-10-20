@@ -31,6 +31,7 @@ import {
 import { useReceiptStatus } from "../api/receiptQueries";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useOrderContext } from "../hooks/useOrderContext";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 import { displayJapaneseName } from "../fhir/humanName";
 import { isDischargeSummary, isNursingSummary } from "../fhir/clinicalNoteHelpers";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
@@ -1478,24 +1479,20 @@ function KarteTabGroup<K extends string>({
     setMenuStyle({ position: "fixed", top: rect.bottom, left: rect.left, right: "auto" });
   }, [open]);
 
+  useEscapeClose(() => setOpen(false), open);
   useEffect(() => {
     if (!open) return;
     function handlePointerDown(event: MouseEvent) {
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
     }
     // fixed で置くのでスクロールに追従できない。開いたまま動かす使い方はしないので閉じる。
     function close() {
       setOpen(false);
     }
     document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
     window.addEventListener("scroll", close, true);
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("scroll", close, true);
     };
   }, [open]);
