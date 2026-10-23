@@ -25,6 +25,7 @@ import { PathoResultForm } from "./PathoResultForm";
 import { ResultReviewAction } from "./ResultReviewAction";
 import { SpecimenDateList } from "./SpecimenDateList";
 import { withVersionLock } from "../fhir/shared";
+import { latestSummaryOnOrBefore } from "../fhir/labResultHelpers";
 
 // カルテ画面の「病理検査」タブ(検査結果配下)。「細菌検査」タブと同じ構成で、左端の
 // ペインに報告日を新しい順で並べ、その右に選択した病理レポートの内容を表示する。
@@ -37,12 +38,14 @@ type FormMode = { kind: "create" } | { kind: "edit"; reportId: string };
 
 interface KartePathoResultTabProps {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   /** URL から渡される表示対象の病理レポート ID。空なら最新のレポート。 */
   view: string;
   onViewChange: (view: string | null) => void;
 }
 
-export function KartePathoResultTab({ patientId, view, onViewChange }: KartePathoResultTabProps) {
+export function KartePathoResultTab({ patientId, view, onViewChange, baseDate }: KartePathoResultTabProps) {
   const [form, setForm] = useState<FormMode | null>(null);
 
   // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
@@ -53,7 +56,7 @@ export function KartePathoResultTab({ patientId, view, onViewChange }: KartePath
   const deletePathoResult = useDeletePathoResult();
 
   // view が指すレポートが見つからないとき(削除済み・古いリンク)は最新に落とす。
-  const selected = entries.find((entry) => entry.id === view) ?? entries[0];
+  const selected = entries.find((entry) => entry.id === view) ?? latestSummaryOnOrBefore(entries, baseDate) ?? entries[0];
 
   function closeForm() {
     setForm(null);

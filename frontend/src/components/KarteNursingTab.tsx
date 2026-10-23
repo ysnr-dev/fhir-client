@@ -32,6 +32,8 @@ import { RowMenu } from "./RowMenu";
 
 interface KarteNursingTabProps {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   /** "" = 現在有効な指示の一覧、"history" = 発行単位の履歴。 */
   view: string;
   onViewChange: (view: string) => void;
@@ -47,9 +49,10 @@ interface Row {
 
 // 指示簿。今この患者に効いている看護指示を区分ごとに並べ、看護師が指示受けをする。
 // 指示はカルテの時系列カードにしない(いつ出したかより「今なにが有効か」を見る情報)。
-export function KarteNursingTab({ patientId, view, onViewChange, onCreate, onEdit }: KarteNursingTabProps) {
+export function KarteNursingTab({ patientId, view, onViewChange, onCreate, onEdit, baseDate }: KarteNursingTabProps) {
   const isHistory = view === "history";
-  const at = today();
+  // 一覧・履歴・詳細はこの日に有効な指示を出す。実施入力は常に今日。
+  const at = baseDate ?? today();
   const [showEnded, setShowEnded] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // 詳細を開いている指示。一覧は列を絞ってあるので、コード・依頼科・備考はモーダルで見る。
@@ -57,7 +60,7 @@ export function KarteNursingTab({ patientId, view, onViewChange, onCreate, onEdi
   // 実施入力。渡すのは今日効いている指示だけ(終了・中止済みには記録させない)。
   const [performing, setPerforming] = useState(false);
   // 今日の実施記録(実施入力の予定バッジ用)。モーダルを開いているときだけ引く。
-  const todayPerforms = useNursingPerformsOn(at, performing ? [patientId] : []);
+  const todayPerforms = useNursingPerformsOn(today(), performing ? [patientId] : []);
 
   const active = useActiveNursingOrders(patientId, at);
   // 終了・中止も見るとき、履歴のときは全件を引く。

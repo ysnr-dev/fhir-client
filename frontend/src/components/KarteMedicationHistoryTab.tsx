@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useEscapeClose } from "../hooks/useEscapeClose";
+import { useKarteFullscreenTop } from "../hooks/useKarteFullscreenTop";
 import {
   usePatientBroughtMedications,
   usePatientChartInjections,
@@ -30,6 +31,8 @@ import { ErrorBanner } from "./ErrorBanner";
 
 interface Props {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   view: string;
   onViewChange?: (view: string | null) => void;
   onOpenDetail?: (target: KarteDetailTarget) => void;
@@ -65,7 +68,7 @@ function columnHeading(column: ChartColumn, unit: MedicationHistoryUnit, index: 
   return { upper, lower: `${day}`, weekday };
 }
 
-export function KarteMedicationHistoryTab({ patientId, view, onViewChange, onOpenDetail }: Props) {
+export function KarteMedicationHistoryTab({ patientId, view, onViewChange, onOpenDetail, baseDate: defaultBaseDate }: Props) {
   // タブの外(別ペイン)から使うときは URL に載せずローカルに持つ(チャートと同じ)。
   const [localView, setLocalView] = useState("");
   const parsed = parseMedicationHistoryView(onViewChange ? view : localView);
@@ -73,13 +76,13 @@ export function KarteMedicationHistoryTab({ patientId, view, onViewChange, onOpe
   const viewRef = useRef(parsed);
   viewRef.current = parsed;
   const updateView = (next: MedicationHistoryView) => {
-    const formatted = formatMedicationHistoryView(next, today());
+    const formatted = formatMedicationHistoryView(next, defaultBaseDate ?? today());
     if (onViewChange) onViewChange(formatted);
     else setLocalView(formatted ?? "");
   };
 
   const todayDate = today();
-  const baseDate = parsed.baseDate ?? todayDate;
+  const baseDate = parsed.baseDate ?? defaultBaseDate ?? todayDate;
   const unit = parsed.unit ?? "day";
   const columns = parsed.columns ?? DEFAULT_COLUMNS[unit];
   const range = useMemo(() => chartRangeOf(baseDate, { unit, columns }), [baseDate, unit, columns]);
@@ -132,17 +135,7 @@ export function KarteMedicationHistoryTab({ patientId, view, onViewChange, onOpe
   // 全画面はビューポート全体ではなく「患者情報の下」から始める(経過表・チャートと同じ)。
   const fullscreen = Boolean(parsed.fullscreen);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [fullscreenTop, setFullscreenTop] = useState(0);
-  useEffect(() => {
-    if (!fullscreen) return;
-    function measure() {
-      const layout = panelRef.current?.closest(".karte-layout");
-      setFullscreenTop(layout ? Math.max(0, layout.getBoundingClientRect().top) : 0);
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [fullscreen]);
+  const fullscreenTop = useKarteFullscreenTop(panelRef, fullscreen);
 
   // 全画面は Escape でも抜けられる。上に開いたモーダルが先に閉じる(useEscapeClose)。
   useEscapeClose(() => updateView({ ...viewRef.current, fullscreen: false }), fullscreen);

@@ -4388,7 +4388,8 @@ fieldset.rp-card {
 
 /* 全画面。経過表(.vital-flowsheet--fullscreen)と同じ枠で、上端はパネル側が実測する。 */
 .patient-chart--fullscreen,
-.medication-history--fullscreen {
+.medication-history--fullscreen,
+.clinical-dashboard--fullscreen {
   position: fixed;
   left: 24px;
   right: 24px;
@@ -26967,6 +26968,47 @@ input.nursing-picker__search {
     min-height: calc(var(--dashboard-row) * 2);
     max-height: calc(var(--dashboard-row) * 8);
   }
+}
+
+/* 診療ダッシュボード(docs/clinical-dashboard-design.md)。タイトル行はマルチチャートと同じ
+   (.patient-chart__toolbar)で上に残し、送るのはマス目だけ(karte-tabpanel の overflow-y を
+   上書きするので 2 クラスで書く)。 */
+.karte-tabpanel.clinical-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow: hidden;
+}
+
+.clinical-dashboard > .patient-chart__toolbar {
+  margin-bottom: 0;
+}
+
+.clinical-dashboard > .dashboard {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* カルテのタブパネルをカードの中で描く。カードの本体は中の .karte-tabpanel / タイムラインが
+   スクロールするので、本体自身は溢れを隠す。 */
+.clinical-dashboard .dashboard-tile__body {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.clinical-dashboard .dashboard-tile__body > .karte-tabpanel,
+.clinical-dashboard .dashboard-tile__body > .karte-left__karte,
+.clinical-dashboard .dashboard-tile__body > .karte-left__karte > .karte-left__timeline {
+  flex: 1;
+  min-height: 0;
+}
+
+.clinical-dashboard .dashboard-tile__body > .karte-tabpanel {
+  padding: 8px 10px;
 }
 
 /* ---- カルテ印刷 ---- */

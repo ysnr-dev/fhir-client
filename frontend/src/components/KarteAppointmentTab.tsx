@@ -18,13 +18,15 @@ import { IntakeQrModal } from "./IntakeQrModal";
 
 interface KarteAppointmentTabProps {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   /** 日時変更を右ペインで開く。 */
   onReschedule: (appointmentId: string) => void;
 }
 
-export function KarteAppointmentTab({ patientId, onReschedule }: KarteAppointmentTabProps) {
+export function KarteAppointmentTab({ patientId, onReschedule, baseDate }: KarteAppointmentTabProps) {
   const [period, setPeriod] = useState<"all" | "range">("range");
-  const [from, setFrom] = useState(() => addMonths(today(), -1));
+  const [from, setFrom] = useState(() => addMonths(baseDate ?? today(), -1));
   const [to, setTo] = useState("");
   const ranged = period === "range";
   const { appointments, isLoading, error } = useAppointmentSearch(

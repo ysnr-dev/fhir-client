@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useEscapeClose } from "../hooks/useEscapeClose";
+import { useKarteFullscreenTop } from "../hooks/useKarteFullscreenTop";
 import {
   useNursingPerformsOf,
   useNursingPerformsOn,
@@ -68,6 +69,8 @@ export type PathwayOrderKind = Exclude<ReturnType<typeof orderKindOf>, null | "n
 
 interface KartePathwayTabProps {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   /** URL の view。「適用の id[!]」。 */
   view: string;
   onViewChange: (view: string | null) => void;
@@ -101,7 +104,7 @@ function sheetUnitIdOf(
   return (unitRow?.cells.get(eventId) as SheetUnitCell | undefined)?.unitId ?? null;
 }
 
-export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, onApplyPhase }: KartePathwayTabProps) {
+export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, onApplyPhase, baseDate }: KartePathwayTabProps) {
   const current = parsePathwaySheetView(view);
   const applications = usePathwayApplications(patientId);
   const list = applications.data?.applications ?? [];
@@ -223,12 +226,13 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
     sheet && progress && issue
       ? filterSheetRows(sheet.rows, issue, progress)
       : (sheet?.rows.filter((row) => row.kind === "unit" || !collapsedUnits.has(row.unitKey)) ?? []);
-  const todayEvent = application ? todayEventOf(application.events, todayDate) : null;
+  // 日めくりの既定の病日は基準日(無ければ今日)。遅れ判定とセルの色は今日のまま。
+  const todayEvent = application ? todayEventOf(application.events, baseDate ?? todayDate) : null;
   const dayEventId =
     application && current.eventId && application.events.some((e) => e.id === current.eventId)
       ? current.eventId
       : application
-        ? defaultDayEventId(application.events, todayDate)
+        ? defaultDayEventId(application.events, baseDate ?? todayDate)
         : "";
 
   // タスクのセル・日めくりのタスクから、結んだオーダーの画面(看護指示は実施入力)を開く。
@@ -291,17 +295,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
 
   // 全画面はビューポート全体ではなく「患者情報の下」から始める(経過表と同じ)。
   const panelRef = useRef<HTMLDivElement>(null);
-  const [fullscreenTop, setFullscreenTop] = useState(0);
-  useEffect(() => {
-    if (!fullscreen) return;
-    function measure() {
-      const layout = panelRef.current?.closest(".karte-layout");
-      setFullscreenTop(layout ? Math.max(0, layout.getBoundingClientRect().top) : 0);
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [fullscreen]);
+  const fullscreenTop = useKarteFullscreenTop(panelRef, fullscreen);
 
   // 全画面は Escape でも抜けられる。シートの上に開いたモーダルは、重ねた順に内側から先に閉じる
   // (useEscapeClose。実施入力 → オーダー詳細 → 全画面)。

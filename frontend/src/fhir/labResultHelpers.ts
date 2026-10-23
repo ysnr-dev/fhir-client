@@ -877,6 +877,15 @@ export interface LabResultSummary {
   orderId: string;
 }
 
+/**
+ * 基準日以前で最も新しい要約(新しい順の並びから引く)。基準日が無ければ undefined
+ * (呼び出し側が最新に落とす)。診療ダッシュボードの基準日で開くレポートを決めるのに使う。
+ */
+export function latestSummaryOnOrBefore<T extends { date: string }>(entries: T[], baseDate: string | undefined): T | undefined {
+  if (!baseDate) return undefined;
+  return entries.find((entry) => entry.date <= baseDate);
+}
+
 /** DiagnosticReport.basedOn が指す検体検査オーダー(ヘッダ)の id。無ければ空。 */
 export function labOrderIdFromReport(
   report: fhir4.DiagnosticReport | undefined,

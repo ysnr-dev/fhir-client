@@ -11,11 +11,11 @@ import { HomeCardFrame, HomeCardLoading, type HomeCardProps } from "./shared";
 const noop = () => {};
 
 /**
- * 保存したダッシュボード 1 つをそのまま置く(閲覧のみ)。抽出条件は上流に重いので開いただけでは
- * 走らせず、「実行」で全タイルを実行する(ダッシュボードの画面と同じ)。
+ * 保存した分析ダッシュボード 1 つをそのまま置く(閲覧のみ)。抽出条件は上流に重いので開いただけでは
+ * 走らせず、「実行」で全タイルを実行する(分析ダッシュボードの画面と同じ)。
  */
 export function DashboardCard({ card }: HomeCardProps<"dashboard">) {
-  const { ready, departmentId, practitionerId, teamIds } = useDefinitionOwners("自分のダッシュボード");
+  const { ready, departmentId, practitionerId, teamIds } = useDefinitionOwners("自分の分析ダッシュボード");
   const list = useDashboards(departmentId, practitionerId, ready, teamIds);
   const dashboard = list.data?.items.find((d) => d.code === card.settings.code);
   const queryList = useExtractQueries(departmentId, practitionerId, ready, "all", teamIds);
@@ -28,9 +28,9 @@ export function DashboardCard({ card }: HomeCardProps<"dashboard">) {
 
   return (
     <HomeCardFrame
-      title={dashboard?.name ?? "ダッシュボード"}
+      title={dashboard?.name ?? "分析ダッシュボード"}
       wide
-      link={{ to: dashboard ? `/dashboards?id=${dashboard.id}` : "/dashboards", label: "ダッシュボード" }}
+      link={{ to: dashboard ? `/dashboards?id=${dashboard.id}` : "/dashboards", label: "分析ダッシュボード" }}
       actions={
         <button
           type="button"
@@ -45,7 +45,7 @@ export function DashboardCard({ card }: HomeCardProps<"dashboard">) {
       {list.isPending || !ready ? (
         <HomeCardLoading />
       ) : !body ? (
-        <p className="home__empty">ダッシュボードが見つかりません。</p>
+        <p className="home__empty">分析ダッシュボードが見つかりません。</p>
       ) : body.tiles.length === 0 ? (
         <p className="home__empty">タイルはありません。</p>
       ) : (

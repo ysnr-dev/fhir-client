@@ -25,6 +25,7 @@ import { MicroResultForm } from "./MicroResultForm";
 import { ResultReviewAction } from "./ResultReviewAction";
 import { SpecimenDateList } from "./SpecimenDateList";
 import { withVersionLock } from "../fhir/shared";
+import { latestSummaryOnOrBefore } from "../fhir/labResultHelpers";
 
 // カルテ画面の「細菌検査」タブ(検査結果配下)。「検体検査」タブと同じ構成で、左端の
 // ペインに検体採取日を新しい順で並べ、その右に選択した細菌検査結果の内容を表示する。
@@ -38,12 +39,14 @@ type FormMode = { kind: "create" } | { kind: "edit"; reportId: string };
 
 interface KarteMicroResultTabProps {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   /** URL から渡される表示対象の細菌検査結果 ID。空なら最新の細菌検査結果。 */
   view: string;
   onViewChange: (view: string | null) => void;
 }
 
-export function KarteMicroResultTab({ patientId, view, onViewChange }: KarteMicroResultTabProps) {
+export function KarteMicroResultTab({ patientId, view, onViewChange, baseDate }: KarteMicroResultTabProps) {
   const [form, setForm] = useState<FormMode | null>(null);
 
   // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
@@ -54,7 +57,7 @@ export function KarteMicroResultTab({ patientId, view, onViewChange }: KarteMicr
   const deleteMicroResult = useDeleteMicroResult();
 
   // view が指す結果が見つからないとき(削除済み・古いリンク)は最新に落とす。
-  const selected = entries.find((entry) => entry.id === view) ?? entries[0];
+  const selected = entries.find((entry) => entry.id === view) ?? latestSummaryOnOrBefore(entries, baseDate) ?? entries[0];
 
   function closeForm() {
     setForm(null);

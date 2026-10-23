@@ -19,6 +19,8 @@ import { TruncatedNotice } from "./TruncatedNotice";
 
 interface KarteNursingCarePlanTabProps {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   onCreate: (entry: NursingProblemEntry) => void;
   onEdit: (carePlanId: string) => void;
 }
@@ -35,8 +37,9 @@ export function KarteNursingCarePlanTab({
   patientId,
   onCreate,
   onEdit,
+  baseDate,
 }: KarteNursingCarePlanTabProps) {
-  const at = today();
+  const at = baseDate ?? today();
   const [showResolved, setShowResolved] = useState(false);
   const [guidance, setGuidance] = useState<NursingProblemView | null>(null);
   // 評価・指示展開はタブの中の操作なのでモーダルで開く(右ペインは右ペインの登録ボタンから始めるものだけ)。

@@ -185,11 +185,11 @@ export const HOME_CARD_KINDS: { [K in HomeCardKind]: HomeCardDef<K> } = {
     fields: [{ key: "wardId", label: "病棟", type: "ward", blankLabel: "全病棟" }],
   },
   dashboard: {
-    label: "ダッシュボード",
+    label: "分析ダッシュボード",
     group: "データ",
     defaultSettings: { code: "" },
     multiple: true,
-    fields: [{ key: "code", label: "ダッシュボード", type: "dashboard" }],
+    fields: [{ key: "code", label: "分析ダッシュボード", type: "dashboard" }],
     wide: true,
   },
   folder: {

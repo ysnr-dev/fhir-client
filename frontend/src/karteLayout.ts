@@ -28,6 +28,7 @@ const RESOLVED_PROBLEMS_STORAGE_KEY = "fhir-client.karte.resolvedProblemsVisible
 const PROBLEM_MODE_STORAGE_KEY = "fhir-client.karte.problemMode";
 const SIDE_PANE_MODE_STORAGE_KEY = "fhir-client.karte.sidePaneMode";
 const SCOPE_FILTER_STORAGE_KEY = "fhir-client.karte.scopeFilter";
+const CLINICAL_DASHBOARD_STORAGE_KEY = "fhir-client.karte.clinicalDashboardId";
 const TODAY_PANE_STORAGE_KEY = "fhir-client.karte.todayPaneVisible";
 const TODAY_RATIO_STORAGE_KEY = "fhir-client.karte.todayPaneRatio";
 const FILE_VIEW_MODE_STORAGE_KEY = "fhir-client.karte.fileViewMode";
@@ -344,5 +345,24 @@ export function storeLabTimelineChartView(view: LabTimelineChartView) {
     localStorage.setItem(LAB_TIMELINE_CHART_STORAGE_KEY, JSON.stringify(view));
   } catch {
     // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+/** 診療ダッシュボードのタブで前回選んでいたダッシュボードの id(URL に無いときの初期選択)。 */
+export function readClinicalDashboardId(): number | null {
+  try {
+    const value = Number(localStorage.getItem(CLINICAL_DASHBOARD_STORAGE_KEY));
+    return Number.isInteger(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function storeClinicalDashboardId(id: number | null) {
+  try {
+    if (id) localStorage.setItem(CLINICAL_DASHBOARD_STORAGE_KEY, String(id));
+    else localStorage.removeItem(CLINICAL_DASHBOARD_STORAGE_KEY);
+  } catch {
+    // 保存できなくても動作には影響しない。
   }
 }

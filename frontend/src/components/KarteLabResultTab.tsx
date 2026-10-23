@@ -14,6 +14,7 @@ import {
   labResultSubjectOf,
   specimenRefsFrom,
   type LabResultFormValues,
+  latestSummaryOnOrBefore,
 } from "../fhir/labResultHelpers";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useLabResultInitialValues } from "../hooks/useLabResultInitialValues";
@@ -41,12 +42,14 @@ function formTitle(form: FormMode) {
 
 interface KarteLabResultTabProps {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   /** URL から渡される表示対象の検査結果 ID。空なら最新の検査結果。 */
   view: string;
   onViewChange: (view: string | null) => void;
 }
 
-export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabResultTabProps) {
+export function KarteLabResultTab({ patientId, view, onViewChange, baseDate }: KarteLabResultTabProps) {
   const [form, setForm] = useState<FormMode | null>(null);
   const [menuSlot, setMenuSlot] = useState<HTMLSpanElement | null>(null);
 
@@ -58,7 +61,7 @@ export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabRes
   const deleteLabResult = useDeleteLabResult();
 
   // view が指す検査結果が見つからないとき(削除済み・古いリンク)は最新に落とす。
-  const selected = entries.find((entry) => entry.id === view) ?? entries[0];
+  const selected = entries.find((entry) => entry.id === view) ?? latestSummaryOnOrBefore(entries, baseDate) ?? entries[0];
 
   function closeForm() {
     setForm(null);

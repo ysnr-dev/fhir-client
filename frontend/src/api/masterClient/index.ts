@@ -37,6 +37,7 @@ export * from "./supervisorGroup";
 export * from "./medicineAttribute";
 export * from "./extractQuery";
 export * from "./dashboard";
+export * from "./clinicalDashboard";
 export * from "./patientFolder";
 export * from "./homeLayout";
 export * from "./nursingAssignment";

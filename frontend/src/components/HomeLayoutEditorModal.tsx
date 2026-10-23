@@ -47,7 +47,7 @@ export function HomeLayoutEditorModal({ cards: initial, saved, practitionerId, o
   const wards = useWardOptions();
   const departments = useSelfDepartments();
   const teams = useMyCareTeams(practitionerId);
-  const owners = useDefinitionOwners("自分のダッシュボード");
+  const owners = useDefinitionOwners("自分の分析ダッシュボード");
   const dashboards = useDashboards(owners.departmentId, owners.practitionerId, owners.ready, owners.teamIds);
   const folderOwners = usePatientFolderOwners();
   const folders = usePatientFolders(folderOwners.departmentId || undefined, folderOwners.practitionerId ?? undefined);

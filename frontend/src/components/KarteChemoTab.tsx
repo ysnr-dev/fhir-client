@@ -41,6 +41,8 @@ const CHEMO_VIEWS = [
 
 interface KarteChemoTabProps {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   /** URL から渡される表示。"detail" ならレジメン詳細、空なら暦。 */
   view: string;
   onViewChange: (view: string | null) => void;
@@ -93,6 +95,7 @@ export function KarteChemoTab({
   onOpenDay,
   onOpenAdverseEvents,
   onEditHeader,
+  baseDate,
 }: KarteChemoTabProps) {
   const applications = useRegimenApplications(patientId);
   const adverseEvents = usePatientAdverseEvents(patientId);
@@ -121,17 +124,14 @@ export function KarteChemoTab({
   const isDetail = view === "detail";
   const isHistory = view === "history";
 
-  const [month, setMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
+  // 基準日(無ければ今日)の月を「今月」として暦の初期位置にする。
+  const currentMonth = monthOf(baseDate ?? today());
+  const [month, setMonth] = useState(currentMonth);
   // 選んだ適用を変えたら、その開始月(過去なら今月)へ暦を合わせる。
   useEffect(() => {
     if (!selected) return;
     const start = monthOf(selected.startDate);
-    const now = new Date();
-    const current = new Date(now.getFullYear(), now.getMonth(), 1);
-    setMonth(start > current ? start : current);
+    setMonth(start > currentMonth ? start : currentMonth);
   }, [selected?.id, selected?.startDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { start, end } = monthRange(month);

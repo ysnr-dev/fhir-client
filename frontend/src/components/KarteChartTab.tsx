@@ -22,6 +22,7 @@ import {
 import { findLabReportIdOf, useVitalThresholds } from "../api/queries";
 import { useDefinitionOwners } from "../hooks/useDefinitionOwners";
 import { useEscapeClose } from "../hooks/useEscapeClose";
+import { useKarteFullscreenTop } from "../hooks/useKarteFullscreenTop";
 import {
   CHART_AXIS_UNIT_LABELS,
   CHART_COLUMN_CHOICES,
@@ -70,6 +71,8 @@ import { OverlayToggle, ValuesToggle } from "./ChartModeToggles";
 
 interface Props {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   view: string;
   onViewChange?: (view: string | null) => void;
   onOpenDetail?: (target: KarteDetailTarget) => void;
@@ -77,7 +80,7 @@ interface Props {
 
 type Editing = { mode: "create" | "edit" | "copy"; draft: ChartDefinitionDraft } | null;
 
-export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: Props) {
+export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail, baseDate: defaultBaseDate }: Props) {
   // タブの外(別ペイン)から使うときは URL に載せずローカルに持つ(経過表と同じ)。
   const [localView, setLocalView] = useState("");
   const parsed = parseChartView(onViewChange ? view : localView);
@@ -86,7 +89,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
   viewRef.current = parsed;
 
   const updateView = (next: Parameters<typeof formatChartView>[0]) => {
-    const formatted = formatChartView(next, today());
+    const formatted = formatChartView(next, defaultBaseDate ?? today());
     if (onViewChange) onViewChange(formatted);
     else setLocalView(formatted ?? "");
   };
@@ -128,7 +131,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     () => normalizeChartDefinitionBody(selected?.definition),
     [selected?.definition],
   );
-  const baseDate = parsed.baseDate ?? today();
+  const baseDate = parsed.baseDate ?? defaultBaseDate ?? today();
   // 横軸と重ね表示は定義が既定を持ち、URL の view があればそちらが勝つ(その場の見え方)。
   const unit = parsed.unit ?? body.axis.unit;
   const columns = parsed.columns ?? body.axis.columns;
@@ -182,17 +185,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
   const values = Boolean(parsed.values);
   const fullscreen = Boolean(parsed.fullscreen);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [fullscreenTop, setFullscreenTop] = useState(0);
-  useEffect(() => {
-    if (!fullscreen) return;
-    function measure() {
-      const layout = panelRef.current?.closest(".karte-layout");
-      setFullscreenTop(layout ? Math.max(0, layout.getBoundingClientRect().top) : 0);
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [fullscreen]);
+  const fullscreenTop = useKarteFullscreenTop(panelRef, fullscreen);
 
   // 全画面は Escape でも抜けられる。上に開いたモーダルが先に閉じる(useEscapeClose)。
   useEscapeClose(() => updateView({ ...viewRef.current, fullscreen: false }), fullscreen);

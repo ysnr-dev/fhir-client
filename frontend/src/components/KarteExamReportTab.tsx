@@ -10,6 +10,7 @@ import { ExamReportEntry } from "./ExamReportEntryModal";
 import { KarteLinkMenu } from "./KarteLinkMenu";
 import { ResultReviewAction } from "./ResultReviewAction";
 import { SpecimenDateList } from "./SpecimenDateList";
+import { latestSummaryOnOrBefore } from "../fhir/labResultHelpers";
 
 // カルテ画面の「放射線検査」「生理検査」「内視鏡」タブ(検査結果配下)。「病理検査」タブと同じ構成で、
 // 左端のペインに検査日を新しい順で並べ、その右に選択したレポートの内容を表示する。
@@ -23,6 +24,8 @@ type FormMode = { kind: "create" } | { kind: "edit"; orderId: string };
 interface KarteExamReportTabProps {
   config: ExamReportConfig;
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   /** URL から渡される表示対象のレポート ID。空なら最新のレポート。 */
   view: string;
   onViewChange: (view: string | null) => void;
@@ -33,6 +36,7 @@ export function KarteExamReportTab({
   patientId,
   view,
   onViewChange,
+  baseDate,
 }: KarteExamReportTabProps) {
   const [form, setForm] = useState<FormMode | null>(null);
   const { entries, isLoading, error, truncated } = useExamReportEntries(config, patientId);
@@ -43,7 +47,7 @@ export function KarteExamReportTab({
   useEffect(() => setForm(null), [view]);
 
   // view が指すレポートが見つからないとき(削除済み・古いリンク)は最新に落とす。
-  const selected = entries.find((entry) => entry.id === view) ?? entries[0];
+  const selected = entries.find((entry) => entry.id === view) ?? latestSummaryOnOrBefore(entries, baseDate) ?? entries[0];
 
   function closeForm() {
     setForm(null);

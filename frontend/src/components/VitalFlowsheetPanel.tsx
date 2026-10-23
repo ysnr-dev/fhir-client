@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useEscapeClose } from "../hooks/useEscapeClose";
+import { useKarteFullscreenTop } from "../hooks/useKarteFullscreenTop";
 import {
   usePatientEncounterEvents,
   usePatientExamOrders,
@@ -165,6 +166,7 @@ export function VitalFlowsheetPanel({
   onViewChange,
   onOpenDetail,
   onOpenVital,
+  baseDate: baseDateProp,
 }: {
   patientId: string;
   /** URL の view。基準日(YYYY-MM-DD)と全画面を載せる(`parseFlowsheetView`)。 */
@@ -174,14 +176,17 @@ export function VitalFlowsheetPanel({
   onOpenDetail?: (target: KarteDetailTarget) => void;
   /** 測定の列からバイタル編集(右ペイン)を開く。 */
   onOpenVital?: (entryId: string) => void;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
 }) {
+  const defaultBaseDate = baseDateProp ?? today();
   // 基準日と全画面は URL に載せる(リロード・共有で同じ週が開く)。onViewChange が
   // 無い(タブの外から使う)ときだけ内部の状態で持つ。
   const parsedView = parseFlowsheetView(view);
-  const [localView, setLocalView] = useState<FlowsheetView>(() => ({ baseDate: today() }));
+  const [localView, setLocalView] = useState<FlowsheetView>(() => ({ baseDate: defaultBaseDate }));
   // URL の view をそのまま使う(項目が増えても取りこぼさないよう、既定は基準日だけ埋める)。
   const current: FlowsheetView = onViewChange
-    ? { ...parsedView, baseDate: parsedView.baseDate ?? today() }
+    ? { ...parsedView, baseDate: parsedView.baseDate ?? defaultBaseDate }
     : localView;
   const baseDate = current.baseDate;
   const fullscreen = Boolean(current.fullscreen);
@@ -193,10 +198,10 @@ export function VitalFlowsheetPanel({
 
   const updateView = useCallback(
     (next: FlowsheetView) => {
-      if (onViewChange) onViewChange(formatFlowsheetView(next, today()));
+      if (onViewChange) onViewChange(formatFlowsheetView(next, defaultBaseDate));
       else setLocalView(next);
     },
-    [onViewChange],
+    [onViewChange, defaultBaseDate],
   );
 
   const setBaseDate = (date: string) =>
@@ -238,8 +243,8 @@ export function VitalFlowsheetPanel({
   // 全画面はビューポート全体ではなく「患者情報の下」から始める。開始位置は
   // カルテのレイアウト(左右ペインの上端)を実測して決める。
   const panelRef = useRef<HTMLDivElement>(null);
+  const fullscreenTop = useKarteFullscreenTop(panelRef, fullscreen);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [fullscreenTop, setFullscreenTop] = useState(0);
   const [wrapWidth, setWrapWidth] = useState(0);
 
   // 24 時間表示ではその日だけを引く。期間表示は基準日までの N 日。
@@ -532,16 +537,6 @@ export function VitalFlowsheetPanel({
   // 全画面は Escape でも抜けられる。上に開いたモーダルが先に閉じる(useEscapeClose)。
   useEscapeClose(() => setFullscreen(false), fullscreen);
 
-  useEffect(() => {
-    if (!fullscreen) return;
-    function measure() {
-      const layout = panelRef.current?.closest(".karte-layout");
-      setFullscreenTop(layout ? Math.max(0, layout.getBoundingClientRect().top) : 0);
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [fullscreen]);
 
   // 列幅はパネルの幅から決める。ペインの分割やウィンドウの幅で変わるので、
   // 描画のたびに同期で測り、以後は ResizeObserver で追う。

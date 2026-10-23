@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { Dashboard } from "../api/masterClient";
 import { useDashboardMutations, useDashboards, useExtractQueries, usePatientFolders } from "../api/masterQueries";
@@ -9,38 +9,30 @@ import { ExtractQuerySelect } from "../components/extract/ExtractQuerySelect";
 import { SaveQueryModal } from "../components/extract/SaveQueryModal";
 import { TrashIcon } from "../components/icons/TrashIcon";
 import {
-  DASHBOARD_COLUMNS,
   DASHBOARD_MAX_TILES,
   addTile,
+  defaultTileSize,
   emptyDashboard,
-  moveTile,
   normalizeDashboard,
   removeTile,
-  resizeTile,
   type DashboardBody,
   type DashboardTile as Tile,
 } from "../fhir/dashboardLayout";
 import { stableJson } from "../fhir/extractRecordQuery";
-import { useCardDrag } from "../hooks/useCardDrag";
 import { useDashboardRun } from "../hooks/useDashboardRun";
 import { definitionOwnerOf, useDefinitionOwners } from "../hooks/useDefinitionOwners";
 import { useExtractRunContext } from "../hooks/useExtractRunContext";
+import { useGridTileDrag } from "../hooks/useGridTileDrag";
 import { useUndoableState } from "../hooks/useUndoableState";
 
-// ダッシュボード(docs/dashboard-design.md)。データ抽出の保存した条件をタイルとして並べ、「実行」で
+// 分析ダッシュボード(docs/dashboard-design.md)。データ抽出の保存した条件をタイルとして並べ、「実行」で
 // 上から順に実行する。並べ方は持ち主(院内共通 / 診療科 / 自分 / チーム)ごとに名前を付けて保存する。
-// 掴んで動かす・大きさを変える操作は useCardDrag(Pointer Events)で、途中経過はレイアウトに直接
-// 反映し、離したときだけ取り消しの履歴に積む(病棟マップの編集と同じ)。
-
-/** 1 行の高さと行間(px)。CSS の --dashboard-row / gap と合わせる。 */
-const ROW_PX = 56;
-const GAP_PX = 12;
-
-type DragItem = { kind: "move" | "resize"; id: string };
+// 掴んで動かす・大きさを変える操作は useGridTileDrag で、途中経過はレイアウトに直接反映し、
+// 離したときだけ取り消しの履歴に積む。
 
 export function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { owners, ready, departmentId, practitionerId, teamIds } = useDefinitionOwners("自分のダッシュボード");
+  const { owners, ready, departmentId, practitionerId, teamIds } = useDefinitionOwners("自分の分析ダッシュボード");
   const list = useDashboards(departmentId, practitionerId, ready, teamIds);
   const dashboards = useMemo(() => list.data?.items ?? [], [list.data]);
   const mutations = useDashboardMutations();
@@ -90,7 +82,7 @@ export function DashboardPage() {
   }, [idParam, dashboards]);
 
   function confirmDiscard(): boolean {
-    return !dirty || window.confirm("編集中のダッシュボードを破棄しますか？");
+    return !dirty || window.confirm("編集中の分析ダッシュボードを破棄しますか？");
   }
 
   async function handleOverwrite() {
@@ -106,62 +98,29 @@ export function DashboardPage() {
   }
 
   // ---- 編集(掴んで動かす・大きさを変える) ----
-  const gridRef = useRef<HTMLDivElement>(null);
-  const dragBase = useRef<DashboardBody | null>(null);
-  const lastDelta = useRef({ dx: 0, dy: 0 });
-  const { drag, start } = useCardDrag<DragItem>({
-    onDrop: () => {
-      const base = dragBase.current;
-      dragBase.current = null;
-      if (base) layout.commit(base, layout.present);
-    },
-  });
-  const layoutRef = useRef(body);
-  layoutRef.current = body;
   const { set } = layout;
+  const { gridRef, beginDrag } = useGridTileDrag<Tile>({
+    tiles: body.tiles,
+    set: (tiles) => set((current) => ({ ...current, tiles })),
+    commit: (before, after) => layout.commit({ ...body, tiles: before }, { ...body, tiles: after }),
+  });
 
-  useEffect(() => {
-    if (!drag) {
-      // 掴まずに離した(クリック)か Escape で取りやめたときは、掴む前の形に戻す。
-      if (dragBase.current) set(dragBase.current);
-      dragBase.current = null;
-      return;
-    }
-    const base = dragBase.current;
-    const grid = gridRef.current;
-    if (!base || !grid) return;
-    const cell = (grid.getBoundingClientRect().width + GAP_PX) / DASHBOARD_COLUMNS;
-    const dx = Math.round((drag.x - drag.startX) / cell);
-    const dy = Math.round((drag.y - drag.startY) / (ROW_PX + GAP_PX));
-    if (dx === lastDelta.current.dx && dy === lastDelta.current.dy) return;
-    lastDelta.current = { dx, dy };
-    const tiles =
-      drag.item.kind === "move" ? moveTile(base.tiles, drag.item.id, dx, dy) : resizeTile(base.tiles, drag.item.id, dx, dy);
-    set({ ...base, tiles });
-  }, [drag, set]);
-
-  function beginDrag(item: DragItem, event: PointerEvent<HTMLElement>) {
-    dragBase.current = layoutRef.current;
-    lastDelta.current = { dx: 0, dy: 0 };
-    start(item, event);
-  }
-
-  const setTiles = (tiles: Tile[]) => layout.set({ ...layoutRef.current, tiles }, { record: true });
+  const setTiles = (tiles: Tile[]) => set((current) => ({ ...current, tiles }), { record: true });
 
   const mutationError = mutations.create.error ?? mutations.update.error ?? mutations.remove.error;
 
   return (
     <div className="page data-extract dashboard">
       <div className="page__header">
-        <h1>ダッシュボード</h1>
+        <h1>分析ダッシュボード</h1>
       </div>
       <div className="data-extract__toolbar">
         <label className="extract-field extract-field--inline">
-          ダッシュボード
+          分析ダッシュボード
           <ExtractQuerySelect
             queries={dashboards}
             value={selectedId}
-            emptyLabel="新しいダッシュボード"
+            emptyLabel="新しい分析ダッシュボード"
             teamLabel="チーム"
             onChange={(dashboard) => {
               if (!confirmDiscard()) return;
@@ -214,8 +173,8 @@ export function DashboardPage() {
               <button
                 type="button"
                 className="rp-card__icon-button"
-                title="ダッシュボードを削除"
-                aria-label="ダッシュボードを削除"
+                title="分析ダッシュボードを削除"
+                aria-label="分析ダッシュボードを削除"
                 onClick={handleDelete}
               >
                 <TrashIcon />
@@ -252,7 +211,7 @@ export function DashboardPage() {
         <AddTileModal
           queries={queries}
           onAdd={(tile) => {
-            setTiles(addTile(body.tiles, tile));
+            setTiles(addTile(body.tiles, tile, defaultTileSize(tile.view)));
             setAdding(false);
           }}
           onClose={() => setAdding(false)}
@@ -260,7 +219,7 @@ export function DashboardPage() {
       )}
       {saving && (
         <SaveQueryModal
-          title="ダッシュボードを保存"
+          title="分析ダッシュボードを保存"
           owners={owners}
           initialName={selected ? `${selected.name}のコピー` : ""}
           pending={mutations.create.isPending}

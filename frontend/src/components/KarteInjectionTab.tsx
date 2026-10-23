@@ -36,6 +36,8 @@ const DEFAULT_LOOKBACK = 6;
 
 interface KarteInjectionTabProps {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   /** URL から渡される表示開始日(YYYY-MM-DD)。空なら既定。 */
   view: string;
   onViewChange?: (view: string | null) => void;
@@ -58,12 +60,12 @@ function weekendClass(weekday: number | null): string {
   return "";
 }
 
-export function KarteInjectionTab({ patientId, view, onViewChange, onEdit, onCreate }: KarteInjectionTabProps) {
+export function KarteInjectionTab({ patientId, view, onViewChange, onEdit, onCreate, baseDate }: KarteInjectionTabProps) {
   const todayDate = today();
   // タブの外(別ペイン)から使うときは URL に載せずローカルに持つ。
   const [localView, setLocalView] = useState("");
   const viewValue = onViewChange ? view : localView;
-  const start = isDateOnly(viewValue) ? viewValue : addDays(todayDate, -DEFAULT_LOOKBACK);
+  const start = isDateOnly(viewValue) ? viewValue : addDays(baseDate ?? todayDate, -DEFAULT_LOOKBACK);
   const setStart = (next: string | null) => {
     if (onViewChange) onViewChange(next);
     else setLocalView(next ?? "");

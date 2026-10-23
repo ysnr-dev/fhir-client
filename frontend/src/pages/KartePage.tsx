@@ -10,15 +10,8 @@ import {
 } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  useFacilitySettings,
-  useKarteClinicalNotesInfinite,
   useKarteConditions,
   useKarteDayIndex,
-  useKartePendingOrders,
-  useKartePrescriptionsInfinite,
-  useKarteQuestionnaireResponsesInfinite,
-  useKarteVitalsInfinite,
-  useKartePathwayEvaluations,
   usePatient,
   useOutpatientOrders,
   usePatientTodayOutpatient,
@@ -38,33 +31,9 @@ import { BillingSendModal, type BillingSendTarget } from "../components/BillingS
 import { ExamFinishChoiceModal } from "../components/ExamFinishChoiceModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { TruncatedNotice } from "../components/TruncatedNotice";
-import { KarteAllergyTab } from "../components/KarteAllergyTab";
-import { KarteBroughtMedicationTab } from "../components/KarteBroughtMedicationTab";
-import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
-import { KarteFileTab } from "../components/KarteFileTab";
-import { KarteImagingTab } from "../components/KarteImagingTab";
-import { KartePrintTab } from "../components/KartePrintTab";
-import { KarteSmartAppsTab } from "../components/KarteSmartAppsTab";
-import { KarteMealTab } from "../components/KarteMealTab";
-import { KarteChemoTab } from "../components/KarteChemoTab";
-import { KarteInjectionTab } from "../components/KarteInjectionTab";
-import { KarteNursingCarePlanTab } from "../components/KarteNursingCarePlanTab";
-import { KarteNursingProfileTab } from "../components/KarteNursingProfileTab";
-import { KarteNursingTab } from "../components/KarteNursingTab";
-import { KartePathwayTab } from "../components/KartePathwayTab";
-import { KarteConditionTab } from "../components/KarteConditionTab";
-import { KarteProfileTab } from "../components/KarteProfileTab";
-import { KarteOralExamTab } from "../components/KarteOralExamTab";
 import { KarteSidePane } from "../components/KarteSidePane";
-import { VitalFlowsheetPanel } from "../components/VitalFlowsheetPanel";
-import { KarteLabResultTab } from "../components/KarteLabResultTab";
-import { LabResultTimelinePanel } from "../components/LabResultTimelinePanel";
-import { KarteChartTab } from "../components/KarteChartTab";
-import { KarteMedicationHistoryTab } from "../components/KarteMedicationHistoryTab";
-import { KarteMicroResultTab } from "../components/KarteMicroResultTab";
-import { KartePathoResultTab } from "../components/KartePathoResultTab";
-import { KarteExamReportTab } from "../components/KarteExamReportTab";
-import { EXAM_REPORT_KINDS } from "../fhir/examReportHelpers";
+import { KarteClinicalDashboardTab } from "../components/KarteClinicalDashboardTab";
+import { KarteTabPanel, type KartePanelActions } from "../components/KarteTabPanel";
 import { KarteProblemList } from "../components/KarteProblemList";
 import { KarteProblemSummary } from "../components/KarteProblemSummary";
 import { KarteDetailModal } from "../components/KarteCardModals";
@@ -86,7 +55,6 @@ import {
   splitConditions,
 } from "../fhir/conditionHelpers";
 import {
-  buildKarteTimeline,
   filterKarteGroupsByCard,
   filterKarteGroupsByScope,
   isOrderItem,
@@ -131,7 +99,7 @@ import {
 import { pendingExamOrderLabels } from "../fhir/outpatientOrderProgressHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { isDateOnly, localDay, nowFhirDateTime, today } from "../lib/dates";
-import { DEFAULT_KARTE_CARD_ORDER, sortKarteDayGroups } from "../fhir/karteCardOrderHelpers";
+import { useKarteTimelineFeed } from "../hooks/useKarteTimelineFeed";
 import { useKarteReturnTo } from "../returnTo";
 import {
   clampLeftWidthRatio,
@@ -534,14 +502,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     return [...(activeProblemIds ?? [filterProblemId])].sort();
   }, [filterProblemId, conditionsPending, activeProblemIds]);
 
-  const notes = useKarteClinicalNotesInfinite(patientId, timelineProblemIds, timelineScope);
-  const prescriptions = useKartePrescriptionsInfinite(patientId, timelineProblemIds, timelineScope);
-  const responses = useKarteQuestionnaireResponsesInfinite(patientId, timelineProblemIds, timelineScope);
-  // 日付未定・開始日が今日より後のオーダーは本流(開始日が今日以前)に乗らないので別に先読みする。
-  const pendingOrders = useKartePendingOrders(patientId, timelineProblemIds, timelineScope);
-  const vitals = useKarteVitalsInfinite(patientId, timelineProblemIds, timelineScope);
-  // 記載のあるパスの評価。患者ぶんを全部読むので、ページングの判定には加わらない。
-  const pathwayEvaluations = useKartePathwayEvaluations(patientId, timelineProblemIds);
+  const feed = useKarteTimelineFeed(patientId, timelineProblemIds, timelineScope);
+  const { timeline, loadMore, loadToken, isLoading, isFetchingMore } = feed;
   // 診療日ペイン用の全診療日。タイムラインのページングとは別に日付だけを読み切る
   // ので、スクロール(読み込み状況)に関係なく過去の日付まで最初から並ぶ。
   const dayIndex = useKarteDayIndex(patientId, timelineProblemIds, timelineScope);
@@ -631,36 +593,6 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     [filterProblemId, selectedProblemId, updateParams],
   );
 
-  const facilitySettings = useFacilitySettings();
-  const cardOrder = facilitySettings.data?.karte_card_order ?? DEFAULT_KARTE_CARD_ORDER;
-  const timeline = useMemo(() => {
-    const built = buildKarteTimeline({
-      noteBundles: notes.data?.pages.map((page) => page.data) ?? [],
-      prescriptionBundles: prescriptions.data?.pages.map((page) => page.data) ?? [],
-      pendingBundles: pendingOrders.bundles,
-      responseBundles: responses.data?.pages.map((page) => page.data) ?? [],
-      vitalBundles: vitals.data?.pages.map((page) => page.data) ?? [],
-      pathwayEvaluations: pathwayEvaluations.data ?? [],
-      noteHasNext: Boolean(notes.hasNextPage),
-      prescriptionHasNext: Boolean(prescriptions.hasNextPage),
-      responseHasNext: Boolean(responses.hasNextPage),
-      vitalHasNext: Boolean(vitals.hasNextPage),
-    });
-    return { ...built, groups: sortKarteDayGroups(built.groups, cardOrder, "desc") };
-  }, [
-    cardOrder,
-    notes.data,
-    prescriptions.data,
-    pendingOrders.bundles,
-    responses.data,
-    vitals.data,
-    pathwayEvaluations.data,
-    notes.hasNextPage,
-    prescriptions.hasNextPage,
-    responses.hasNextPage,
-    vitals.hasNextPage,
-  ]);
-
   // プロブレムと自科・個人の絞り込みはサーバー検索で済んでいる。ここで残るのは種別と、
   // 全件読んであるパス評価の自科・個人。ページングの判定(カットオフ・pending)より後に行う。判定は
   // 読み込み済みの全データで決まるので、ここで件数が減っても読み進みには影響しない。
@@ -678,10 +610,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         // 絞り込み後の groups だけで決まるので、評価の日付を足すのは絞り込んでいないときだけ)。
         cardFilter && cardFilter.kind !== "pathway-evaluation"
           ? dayIndex.days
-          : [...dayIndex.days, ...pathwayEvaluationDays(pathwayEvaluations.data ?? [], scopeFilter, scopeTarget)],
+          : [...dayIndex.days, ...pathwayEvaluationDays(feed.pathwayEvaluations, scopeFilter, scopeTarget)],
         timeline.cutoff,
       ),
-    [filteredGroups, dayIndex.days, timeline.cutoff, cardFilter, pathwayEvaluations.data, scopeFilter, scopeTarget],
+    [filteredGroups, dayIndex.days, timeline.cutoff, cardFilter, feed.pathwayEvaluations, scopeFilter, scopeTarget],
   );
 
   // 本日のカルテのペインに出す 1 日分。オーダーの本流は開始日が今日以前のものを新しい順に
@@ -693,28 +625,6 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     () => timeline.groups.find((group) => group.day === todayDay),
     [timeline.groups, todayDay],
   );
-
-  // 表示範囲を押し下げているソースだけ次ページを読む。
-  function loadMore() {
-    if (timeline.pending.note && !notes.isFetchingNextPage) notes.fetchNextPage();
-    if (timeline.pending.prescription && !prescriptions.isFetchingNextPage) {
-      prescriptions.fetchNextPage();
-    }
-    if (timeline.pending.qr && !responses.isFetchingNextPage) responses.fetchNextPage();
-    if (timeline.pending.vital && !vitals.isFetchingNextPage) vitals.fetchNextPage();
-  }
-
-  // 取得が一段落するたびに追加読み込みを再判定させるためのトークン。
-  const loadToken = [
-    notes.data?.pages.length ?? 0,
-    prescriptions.data?.pages.length ?? 0,
-    responses.data?.pages.length ?? 0,
-    vitals.data?.pages.length ?? 0,
-    timeline.pending.note,
-    timeline.pending.prescription,
-    timeline.pending.qr,
-    timeline.pending.vital,
-  ].join("/");
 
   // 診療日パネルからタイムラインの該当位置へ飛ぶ。scrollIntoView はページ側も
   // スクロールさせてしまうため、タイムラインのスクロール位置だけを動かす。
@@ -768,8 +678,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   // 先の予定)と最初のページが揃ってから合わせる(後から上に日が足されてずれないように)。
   // 開いた位置なので、飛んだときの強調はしない。
   const initialScrollPatient = useRef<string | null>(null);
-  const timelineReady =
-    !notes.isPending && !prescriptions.isPending && !responses.isPending && !vitals.isPending && !pendingOrders.isPending;
+  const timelineReady = feed.ready;
   useLayoutEffect(() => {
     if (mode === "tabs" && tab !== "karte") {
       initialScrollPatient.current = null;
@@ -909,6 +818,26 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     [detailTarget, closeDetail],
   );
 
+  // 放射線治療の有害事象・週次レビューは右ペインで開く。
+  const openRadiotherapyPane = useCallback(
+    (kind: "adverse" | "review", srId: string) =>
+      openForm(kind === "review" ? { kind: "radiotherapy-review", srId } : { kind: "radiotherapy-adverse", srId }),
+    [openForm],
+  );
+
+  // タブの中から右ペイン・詳細モーダルを開くための操作の束(KarteTabPanel)。
+  const examEncounterId = examEncounter?.id;
+  const panelActions = useMemo<KartePanelActions>(
+    () => ({
+      openForm,
+      openDetail,
+      selectedProblem,
+      examEncounterId,
+      timeline: { onEdit: handleEdit, onDo: handleDo, onDeleted: handleDeleted, onOpenRadiotherapyPane: openRadiotherapyPane },
+    }),
+    [openForm, openDetail, selectedProblem, examEncounterId, handleEdit, handleDo, handleDeleted, openRadiotherapyPane],
+  );
+
   function toggleDayList() {
     const next = !dayListVisible;
     setDayListVisible(next);
@@ -940,14 +869,6 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   }
 
   if (!patientId) return null;
-
-  const isLoading =
-    notes.isPending || prescriptions.isPending || responses.isPending || vitals.isPending;
-  const isFetchingMore =
-    notes.isFetchingNextPage ||
-    prescriptions.isFetchingNextPage ||
-    responses.isFetchingNextPage ||
-    vitals.isFetchingNextPage;
 
   const karteBody = (
     <div className="karte-left__karte">
@@ -995,14 +916,14 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             onClear={clearProblemFilter}
           />
         )}
-        <ErrorBanner error={notes.error} />
-        <ErrorBanner error={prescriptions.error} />
-        <ErrorBanner error={pendingOrders.error} />
-        <TruncatedNotice show={pendingOrders.truncated}>
+        <ErrorBanner error={feed.errors.notes} />
+        <ErrorBanner error={feed.errors.prescriptions} />
+        <ErrorBanner error={feed.errors.pendingOrders} />
+        <TruncatedNotice show={feed.pendingOrdersTruncated}>
           予定のオーダーが多いため、日付未定と今日より後の一部を表示できていません。
         </TruncatedNotice>
-        <ErrorBanner error={responses.error} />
-        <ErrorBanner error={pathwayEvaluations.error} />
+        <ErrorBanner error={feed.errors.responses} />
+        <ErrorBanner error={feed.errors.pathwayEvaluations} />
         <ErrorBanner error={conditionsError} />
         <KarteTimeline
           groups={filteredGroups}
@@ -1015,13 +936,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
           onEdit={handleEdit}
           onDo={handleDo}
           onOpenDetail={openDetail}
-          onOpenRadiotherapyPane={(kind, srId) =>
-            openForm(
-              kind === "review"
-                ? { kind: "radiotherapy-review", srId }
-                : { kind: "radiotherapy-adverse", srId },
-            )
-          }
+          onOpenRadiotherapyPane={openRadiotherapyPane}
           onDeleted={handleDeleted}
           containerRef={timelineRef}
           problemsById={problemsById}
@@ -1047,150 +962,26 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   // view は選択中のタブに属する値なので、そのタブを描くときだけ渡す。
   function renderTabPanel(key: KarteOtherTabKey) {
     if (!patientId) return null;
-    const props = { patientId, view: tab === key ? view : "", onViewChange: selectView };
-    if (key === "condition") return <KarteConditionTab {...props} />;
-    if (key === "allergy") return <KarteAllergyTab {...props} />;
-    // 継続は右ペインの処方登録を、選んだ持参薬から作った初期値で開く。
-    if (key === "brought-medication") {
+    // 診療ダッシュボードはカードの中に他のタブ(KarteTabPanel)を置くので、ここで直接描く。
+    if (key === "clinical-dashboard") {
       return (
-        <KarteBroughtMedicationTab
-          {...props}
-          onContinue={(broughtIds) => openForm({ kind: "prescription-create", broughtIds })}
-          onOpenPrescription={(srId) => openDetail({ kind: "prescription", id: srId })}
-        />
-      );
-    }
-    if (key === "profile") return <KarteProfileTab {...props} />;
-    if (key === "oral-exam") return <KarteOralExamTab {...props} />;
-    // 経過表は view に「基準日(と全画面)」を載せる(どの週を見ているかが読む位置
-    // そのものなので、リロード・共有で戻れるようにする)。イベント一覧からはカルテの
-    // カードと同じオーダー詳細モーダル、測定の時刻からはバイタル編集を開く。
-    if (key === "flowsheet") {
-      return (
-        <VitalFlowsheetPanel
-          {...props}
-          onOpenDetail={openDetail}
-          onOpenVital={(entryId) => openForm({ kind: "vital-edit", entryId })}
-        />
-      );
-    }
-    // 検査結果時系列は読み取り専用で、詳細を開く導線が無いので view は使わない。
-    if (key === "lab-timeline") {
-      return (
-        <div className="karte-tabpanel">
-          <LabResultTimelinePanel patientId={patientId} splittable />
-        </div>
-      );
-    }
-    // チャートは view に「基準日・横軸・見ているチャート」を載せる(経過表と同じ考え)。
-    // 帯のイベントからはカルテのカードと同じオーダー詳細モーダルを開く。
-    if (key === "chart") return <KarteChartTab {...props} onOpenDetail={openDetail} />;
-    // 投薬歴も view に「基準日・列・絞り込み」を載せ、セルからオーダー詳細モーダルを開く。
-    if (key === "medication-history") {
-      return <KarteMedicationHistoryTab {...props} onOpenDetail={openDetail} />;
-    }
-    if (key === "micro") return <KarteMicroResultTab {...props} />;
-    if (key === "patho") return <KartePathoResultTab {...props} />;
-    if (key === "rad-report" || key === "physio-report" || key === "endoscopy-report") {
-      const config = EXAM_REPORT_KINDS.find((kind) => kind.tabKey === key);
-      return config ? <KarteExamReportTab key={key} config={config} {...props} /> : null;
-    }
-    // 食事オーダーの編集も、登録と同じ右ペインで開く(暦は表示に徹する)。
-    if (key === "meal") {
-      return (
-        <KarteMealTab
+        <KarteClinicalDashboardTab
           patientId={patientId}
-          // オーダーが始まった日のマスは、そのオーダーの編集。
-          onEdit={(srId) => openForm({ kind: "meal-order-edit", srId })}
-          // それ以外の日は、その日に出ている食事を引き継いだ新規登録(= その日からの食事変更)。
-          onCreate={(date, sourceSrId) =>
-            openForm({ kind: "meal-order-create", sourceSrId, startDate: date })
-          }
+          view={tab === key ? view : ""}
+          onViewChange={selectView}
+          actions={panelActions}
         />
       );
     }
-    // 注射カレンダー。view は表示開始日と全画面。マスはタブのモーダルで開き、
-    // 変更・登録の入力は右ペインで行う。
-    if (key === "injection") {
-      return (
-        <KarteInjectionTab
-          {...props}
-          onEdit={(srId) => openForm({ kind: "injection-edit", srId })}
-          onCreate={(startDate, endDate, sourceSrId) =>
-            openForm({ kind: "injection-create", sourceSrId, startDate, endDate, problem: selectedProblem })
-          }
-        />
-      );
-    }
-    // 化学療法。暦とレジメン詳細は左ペインのタブで切り替え、オーダーを作る操作
-    // (適用・次クールの登録)と投与日の操作は右ペインで行う。
-    if (key === "chemo") {
-      return (
-        <KarteChemoTab
-          {...props}
-          onAddCycle={(regimenSrId) => openForm({ kind: "regimen-cycle", regimenSrId })}
-          onOpenDay={(regimenSrId, date) => openForm({ kind: "regimen-day", regimenSrId, date })}
-          onOpenAdverseEvents={(regimenSrId, cycle) => openForm({ kind: "regimen-adverse", regimenSrId, cycle })}
-          onEditHeader={(regimenSrId) => openForm({ kind: "regimen-header", regimenSrId })}
-        />
-      );
-    }
-    // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る。適用は右ペインの
-    // 「クリニカルパス」から、評価の入力も右ペインの担当。
-    if (key === "pathway") {
-      return (
-        <KartePathwayTab
-          {...props}
-          onOpenOrder={(kind, srId) => openForm({ kind: `${kind}-edit`, srId } as KartePaneState)}
-          onApplyPhase={(applyId, phaseKey) => openForm({ kind: "pathway-phase", applyId, phaseKey })}
-        />
-      );
-    }
-    // 指示簿。登録・編集は他のオーダーと同じ右ペインで開く。
-    if (key === "nursing") {
-      return (
-        <KarteNursingTab
-          {...props}
-          onCreate={() => openForm({ kind: "nursing-order-create", problem: selectedProblem })}
-          onEdit={(srId) => openForm({ kind: "nursing-order-edit", srId })}
-        />
-      );
-    }
-    // 看護計画。立案・編集は右ペインで開く(評価・指示展開はタブの中のモーダル)。
-    if (key === "nursing-care-plan") {
-      return (
-        <KarteNursingCarePlanTab
-          patientId={patientId}
-          onCreate={(entry) => openForm({ kind: "nursing-problem-create", entry })}
-          onEdit={(carePlanId) => openForm({ kind: "nursing-problem-edit", carePlanId })}
-        />
-      );
-    }
-    // 看護プロファイル。区画の記入・編集は右ペインの「プロファイル」と同じ画面で開く。
-    if (key === "nursing-profile") {
-      return (
-        <KarteNursingProfileTab
-          {...props}
-          onEdit={(encounterId, templateUrl) => openForm({ kind: "nursing-profile", encounterId, templateUrl })}
-        />
-      );
-    }
-    // 予約の日時変更は枠を選ぶ操作なので、登録と同じ右ペインで開く。
-    if (key === "appointment") {
-      return (
-        <KarteAppointmentTab
-          patientId={patientId}
-          onReschedule={(appointmentId) => openForm({ kind: "appointment-reschedule", appointmentId })}
-        />
-      );
-    }
-    // 取り込んだファイル。登録・編集・削除はタブ内で完結する(右ペインは使わない)。
-    if (key === "file") return <KarteFileTab {...props} />;
-    if (key === "imaging") return <KarteImagingTab {...props} />;
-    if (key === "karte-print") return <KartePrintTab patientId={patientId} />;
-    // 外来の診察中なら、その受診を起動の文脈(encounter)として渡す。
-    if (key === "smart-apps") return <KarteSmartAppsTab {...props} encounterId={examEncounter?.id} />;
-    return <KarteLabResultTab {...props} />;
+    return (
+      <KarteTabPanel
+        tab={key}
+        patientId={patientId}
+        view={tab === key ? view : ""}
+        onViewChange={selectView}
+        actions={panelActions}
+      />
+    );
   }
 
   // タブ行の右端に置く分割の切り替え。左右の分割(本日のカルテ)と上下の分割。
@@ -1244,13 +1035,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
       onEdit={handleEdit}
       onDo={handleDo}
       onOpenDetail={openDetail}
-      onOpenRadiotherapyPane={(kind, srId) =>
-        openForm(
-          kind === "review"
-            ? { kind: "radiotherapy-review", srId }
-            : { kind: "radiotherapy-adverse", srId },
-        )
-      }
+      onOpenRadiotherapyPane={openRadiotherapyPane}
       onDeleted={handleDeleted}
       problemsById={problemsById}
       selectedProblemIds={activeProblemIds}

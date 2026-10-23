@@ -33,6 +33,8 @@ import { MealAllergyNotice } from "./MealAllergyNotice";
 
 interface KarteMealTabProps {
   patientId: string;
+  /** 表示の既定を決める日(診療ダッシュボードの基準日)。無ければ今日。 */
+  baseDate?: string;
   /** 食事オーダーの編集を右ペインで開く。その日に始まったオーダーだけが対象。 */
   onEdit: (srId: string) => void;
   /**
@@ -43,6 +45,11 @@ interface KarteMealTabProps {
 }
 
 /** その月の 1 日と末日(YYYY-MM-DD)。 */
+/** その日の月の 1 日。 */
+function monthOf(date: string): Date {
+  return new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, 1);
+}
+
 function monthRange(month: Date): { start: string; end: string } {
   const start = new Date(month.getFullYear(), month.getMonth(), 1);
   const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
@@ -74,12 +81,9 @@ function calendarDays(month: Date): { date: string; inMonth: boolean; weekday: n
   return days;
 }
 
-export function KarteMealTab({ patientId, onEdit, onCreate }: KarteMealTabProps) {
+export function KarteMealTab({ patientId, onEdit, onCreate, baseDate }: KarteMealTabProps) {
   // 月は Date で持つ(月送りが月末日に引っ張られないよう常に 1 日を指す)。
-  const [month, setMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
+  const [month, setMonth] = useState(() => monthOf(baseDate ?? today()));
 
   const { start, end } = monthRange(month);
   const orders = useMealOrderMonth(patientId, start, end);

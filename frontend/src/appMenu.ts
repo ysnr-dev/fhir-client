@@ -154,7 +154,7 @@ export const APP_MENU: AppMenuEntry[] = [
       { label: "DPC患者", to: "/dpc-patients" },
       { label: "DPC様式1", to: "/dpc-form1-export" },
       { label: "データ抽出", to: "/data-extract" },
-      { label: "ダッシュボード", to: "/dashboards" },
+      { label: "分析ダッシュボード", to: "/dashboards" },
     ],
   },
 ];

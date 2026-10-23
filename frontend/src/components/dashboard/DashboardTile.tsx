@@ -14,7 +14,7 @@ import { IndicatorTrendView } from "../extract/IndicatorTrendView";
 import { RecordBreakdownView } from "../extract/RecordBreakdownView";
 import { RecordResultNotices } from "../extract/RecordResultNotices";
 import { RecordListTable } from "../extract/RecordResultTable";
-import { TrashIcon } from "../icons/TrashIcon";
+import { DashboardTileFrame } from "./DashboardTileFrame";
 import { RowMenu } from "../RowMenu";
 import { TruncatedNotice } from "../TruncatedNotice";
 
@@ -40,59 +40,36 @@ function dataExtractUrl(query: ExtractQuery): string {
   return `/data-extract?${params.toString()}`;
 }
 
-/** ダッシュボードのタイル 1 つ(docs/dashboard-design.md §4)。見出しに条件の名前と実行日時、本体に結果。 */
+/** 分析ダッシュボードのタイル 1 つ(docs/dashboard-design.md §4)。見出しに条件の名前と実行日時、本体に結果。 */
 export function DashboardTile({ tile, query, state, editing, onRun, onRemove, onMoveStart, onResizeStart }: Props) {
   const title = tile.title || query?.name || "条件が見つかりません";
-  const style = { "--tile-x": tile.x, "--tile-y": tile.y, "--tile-w": tile.w, "--tile-h": tile.h } as React.CSSProperties;
   return (
-    <section className={`dashboard-tile${editing ? " is-editing" : ""}`} style={style} aria-label={title}>
-      <header className="dashboard-tile__header" onPointerDown={editing ? onMoveStart : undefined}>
-        <div className="dashboard-tile__heading">
-          <h2 className="dashboard-tile__title">{title}</h2>
-          <span className="dashboard-tile__meta">
-            {query ? `${extractTabLabel(query.tab as ExtractTab)}・${dashboardViewLabel(tile.view)}` : dashboardViewLabel(tile.view)}
-          </span>
-        </div>
-        {editing ? (
-          <button
-            type="button"
-            className="rp-card__icon-button"
-            title="タイルを削除"
-            aria-label="タイルを削除"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={onRemove}
-          >
-            <TrashIcon />
-          </button>
-        ) : (
-          <div className="dashboard-tile__actions">
-            {state.ranAt && <span className="dashboard-tile__ran-at">{dateTimeLabel(state.ranAt)}</span>}
-            <RowMenu label={`${title} の操作`}>
-              <button type="button" className="row-menu__item" disabled={!query || state.running} onClick={onRun}>
-                実行
-              </button>
-              {query && (
-                <Link to={dataExtractUrl(query)} className="row-menu__item">
-                  データ抽出で開く
-                </Link>
-              )}
-            </RowMenu>
-          </div>
-        )}
-      </header>
-      <div className="dashboard-tile__body">
-        <TileBody tile={tile} query={query} state={state} />
-      </div>
-      {editing && (
-        <button
-          type="button"
-          className="dashboard-tile__resize"
-          aria-label="大きさを変える"
-          title="大きさを変える"
-          onPointerDown={onResizeStart}
-        />
-      )}
-    </section>
+    <DashboardTileFrame
+      tile={tile}
+      title={title}
+      meta={query ? `${extractTabLabel(query.tab as ExtractTab)}・${dashboardViewLabel(tile.view)}` : dashboardViewLabel(tile.view)}
+      editing={editing}
+      actions={
+        <>
+          {state.ranAt && <span className="dashboard-tile__ran-at">{dateTimeLabel(state.ranAt)}</span>}
+          <RowMenu label={`${title} の操作`}>
+            <button type="button" className="row-menu__item" disabled={!query || state.running} onClick={onRun}>
+              実行
+            </button>
+            {query && (
+              <Link to={dataExtractUrl(query)} className="row-menu__item">
+                データ抽出で開く
+              </Link>
+            )}
+          </RowMenu>
+        </>
+      }
+      onRemove={onRemove}
+      onMoveStart={onMoveStart}
+      onResizeStart={onResizeStart}
+    >
+      <TileBody tile={tile} query={query} state={state} />
+    </DashboardTileFrame>
   );
 }
 

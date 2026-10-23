@@ -456,6 +456,8 @@ Rails.application.routes.draw do
     resources :extract_queries, only: %i[index show create update destroy]
     # ダッシュボード(データ抽出の保存した条件をタイルで並べる。docs/dashboard-design.md)。
     resources :dashboards, only: %i[index show create update destroy]
+    # 診療ダッシュボード(カルテ左ペインのタブをカードとして並べる。docs/clinical-dashboard-design.md)。
+    resources :clinical_dashboards, only: %i[index show create update destroy]
     # 患者ごとに最初に開くチャート(ピン留め)。患者につき 1 つ、利用者の間で共有する。
     resources :patient_chart_pins, only: %i[show update destroy], param: :patient_id
     # 患者フォルダ(患者を任意の階層の分類に仕分ける。docs/patient-folder-design.md)。

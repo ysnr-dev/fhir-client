@@ -153,6 +153,9 @@ export const KARTE_TABS = [
   // SMART on FHIR アプリ(docs/smart-app-launch-design.md)。開いている患者・利用者の文脈を渡して
   // 外部アプリを起動し、枠内に出す。view は選択中のアプリ(smart_apps の id)。
   { key: "smart-apps", label: "SMARTアプリ" },
+  // 診療ダッシュボード(docs/clinical-dashboard-design.md)。左ペインのタブをカードとして並べて 1 画面で読む。
+  // view は選択中のダッシュボードの id。
+  { key: "clinical-dashboard", label: "診療ダッシュボード" },
 ] as const;
 
 export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
@@ -170,7 +173,7 @@ export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly Kar
     keys: ["lab", "lab-timeline", "micro", "patho", "rad-report", "physio-report", "endoscopy-report"],
   },
   { label: "看護", keys: ["nursing-profile", "nursing", "nursing-care-plan"] },
-  { label: "その他", keys: ["karte-print", "imaging", "smart-apps"] },
+  { label: "その他", keys: ["karte-print", "clinical-dashboard", "imaging", "smart-apps"] },
 ];
 
 /** そのタブを畳んでいるグループ。畳んでいなければ undefined。 */
