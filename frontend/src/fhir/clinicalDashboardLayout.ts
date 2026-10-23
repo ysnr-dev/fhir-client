@@ -15,6 +15,8 @@ export interface ClinicalDashboardCard extends GridTile {
   kind: ClinicalDashboardCardKind;
   /** 無ければタブの名前を出す。 */
   title?: string;
+  /** 中身の表示倍率(%)。無ければ 100。 */
+  zoom?: number;
 }
 
 export interface ClinicalDashboardBody {
@@ -23,6 +25,13 @@ export interface ClinicalDashboardBody {
 }
 
 export const CLINICAL_DASHBOARD_MAX_CARDS = 20;
+
+/** カードの表示倍率の選択肢(%)。タブの部品は文字の大きさを px で持つので、中身ごと縮める。 */
+export const CLINICAL_CARD_ZOOMS = [100, 90, 80, 70, 60] as const;
+
+export function clinicalCardZoom(card: ClinicalDashboardCard): number {
+  return card.zoom ?? 100;
+}
 
 /** カードにできる種別(タブ行の順)。ラベルもタブと同じ。 */
 export const CLINICAL_DASHBOARD_CARD_KINDS = KARTE_TABS.filter(

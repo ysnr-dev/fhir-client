@@ -10,6 +10,10 @@ interface Props {
   editing: boolean;
   /** 非編集時に見出しの右端へ置くもの(実行日時・ケバブメニューなど)。 */
   actions?: ReactNode;
+  /** 編集モードで削除ボタンの左に置くもの(表示倍率など)。 */
+  editActions?: ReactNode;
+  /** 中身の枠に付けるスタイル(表示倍率の CSS 変数など)。 */
+  bodyStyle?: CSSProperties;
   className?: string;
   onRemove: () => void;
   /** 編集モードで見出しを掴んだ(動かす)。 */
@@ -29,6 +33,8 @@ export function DashboardTileFrame({
   meta,
   editing,
   actions,
+  editActions,
+  bodyStyle,
   className,
   onRemove,
   onMoveStart,
@@ -48,21 +54,25 @@ export function DashboardTileFrame({
           {meta && <span className="dashboard-tile__meta">{meta}</span>}
         </div>
         {editing ? (
-          <button
-            type="button"
-            className="rp-card__icon-button"
-            title="タイルを削除"
-            aria-label="タイルを削除"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={onRemove}
-          >
-            <TrashIcon />
-          </button>
+          <div className="dashboard-tile__actions" onPointerDown={(event) => event.stopPropagation()}>
+            {editActions}
+            <button
+              type="button"
+              className="rp-card__icon-button"
+              title="タイルを削除"
+              aria-label="タイルを削除"
+              onClick={onRemove}
+            >
+              <TrashIcon />
+            </button>
+          </div>
         ) : (
           actions && <div className="dashboard-tile__actions">{actions}</div>
         )}
       </header>
-      <div className="dashboard-tile__body">{children}</div>
+      <div className="dashboard-tile__body" style={bodyStyle}>
+        {children}
+      </div>
       {editing && (
         <button
           type="button"

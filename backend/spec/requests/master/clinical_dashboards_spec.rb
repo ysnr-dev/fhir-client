@@ -56,6 +56,17 @@ RSpec.describe "Master::ClinicalDashboards", type: :request do
       expect(body["code"]).to be_present
     end
 
+    it "カードの表示倍率を保存し、範囲外は拒否する" do
+      zoomed = card("c1", x: 0, y: 0).merge("zoom" => 80)
+      post "/master/clinical_dashboards", params: { scope: "facility", name: "A", definition: { "cards" => [zoomed] } }, as: :json
+      expect(response).to have_http_status(:created), response.body
+      expect(body["definition"]["cards"].first["zoom"]).to eq(80)
+
+      post "/master/clinical_dashboards",
+           params: { scope: "facility", name: "B", definition: { "cards" => [zoomed.merge("zoom" => 40)] } }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
     it "右端をはみ出すカード・重なった id・多すぎるカード・チームの持ち主は拒否する" do
       post "/master/clinical_dashboards", params: { scope: "facility", name: "A", definition: { "cards" => [card("c1", x: 10, y: 0, w: 3)] } }, as: :json
       expect(response).to have_http_status(:unprocessable_content)

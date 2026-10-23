@@ -9,17 +9,18 @@
 #   { "schema_version": 1,
 #     "cards": [
 #       { "id": "c1", "kind": "flowsheet", "title": "経過表",
-#         "x": 0, "y": 0, "w": 12, "h": 8 } ] }
+#         "x": 0, "y": 0, "w": 12, "h": 8, "zoom": 80 } ] }
 #
 # 位置と大きさはマス(横 12 列、縦は 1 マスの高さ)の整数。kind はカルテのタブのキーで、
 # 一覧は画面(karteUrl.ts の KARTE_TABS)にしか無いので値は見ない(知らない種別は画面が
-# 「表示できません」と出す)。
+# 「表示できません」と出す)。zoom はカードの中身の表示倍率(%)で、無ければ 100。
 class ClinicalDashboard < ApplicationRecord
   SCOPES = %w[facility department practitioner].freeze
   SCHEMA_VERSION = 1
   COLUMNS = 12
   MAX_CARDS = 20
   MAX_ROWS = 200
+  MIN_ZOOM = 50
 
   CARD_SHAPE = {
     fields: {
@@ -29,7 +30,8 @@ class ClinicalDashboard < ApplicationRecord
       "x" => { integer: { min: 0, max: COLUMNS - 1, unit: "列" } },
       "y" => { integer: { min: 0, max: MAX_ROWS, unit: "行" } },
       "w" => { integer: { min: 1, max: COLUMNS, unit: "列" } },
-      "h" => { integer: { min: 1, max: MAX_ROWS, unit: "行" } }
+      "h" => { integer: { min: 1, max: MAX_ROWS, unit: "行" } },
+      "zoom" => { integer: { min: MIN_ZOOM, max: 100, unit: "%" } }
     },
     required: %w[id kind x y w h],
     check: lambda { |card, path|

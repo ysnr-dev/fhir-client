@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ClinicalDashboard } from "../api/masterClient";
 import { useClinicalDashboardMutations, useClinicalDashboards } from "../api/masterQueries";
 import {
+  CLINICAL_CARD_ZOOMS,
   CLINICAL_DASHBOARD_MAX_CARDS,
   addClinicalCard,
+  clinicalCardZoom,
   clinicalDashboardCardLabel,
   emptyClinicalDashboard,
   isClinicalDashboardCardKind,
@@ -127,6 +129,9 @@ export function KarteClinicalDashboardTab({ patientId, view, onViewChange, actio
     commit: (before, after) => layout.commit({ ...body, cards: before }, { ...body, cards: after }),
   });
   const setCards = (cards: ClinicalDashboardCard[]) => set((current) => ({ ...current, cards }), { record: true });
+  // 100% はキーを持たない(undefined は保存の JSON から落ちる)。
+  const setZoom = (id: string, zoom: number) =>
+    setCards(body.cards.map((card) => (card.id === id ? { ...card, zoom: zoom === 100 ? undefined : zoom } : card)));
 
   const mutationError = mutations.create.error ?? mutations.update.error ?? mutations.remove.error;
 
@@ -224,6 +229,22 @@ export function KarteClinicalDashboardTab({ patientId, view, onViewChange, actio
               tile={card}
               title={card.title || clinicalDashboardCardLabel(card.kind)}
               editing={editing}
+              editActions={
+                <select
+                  className="dashboard-tile__zoom"
+                  value={clinicalCardZoom(card)}
+                  onChange={(e) => setZoom(card.id, Number(e.target.value))}
+                  title="表示倍率"
+                  aria-label="表示倍率"
+                >
+                  {CLINICAL_CARD_ZOOMS.map((zoom) => (
+                    <option key={zoom} value={zoom}>
+                      {zoom}%
+                    </option>
+                  ))}
+                </select>
+              }
+              bodyStyle={{ "--card-zoom": clinicalCardZoom(card) / 100 } as CSSProperties}
               onRemove={() => setCards(removeTile(body.cards, card.id))}
               onMoveStart={(event) => beginDrag({ kind: "move", id: card.id }, event)}
               onResizeStart={(event) => beginDrag({ kind: "resize", id: card.id }, event)}

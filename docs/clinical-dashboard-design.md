@@ -50,11 +50,12 @@ backend の DB に持つ(上流 FHIR には置かない)。
 { "schema_version": 1,
   "cards": [
     { "id": "c1", "kind": "flowsheet", "title": "経過表", "x": 0, "y": 0, "w": 12, "h": 8 },
-    { "id": "c2", "kind": "lab", "x": 0, "y": 8, "w": 6, "h": 8 } ] }
+    { "id": "c2", "kind": "lab", "x": 0, "y": 8, "w": 6, "h": 8, "zoom": 80 } ] }
 ```
 
 - 位置と大きさはマス(横 12 列、縦は 1 マス固定の高さで下へ伸びる)の整数。`x + w <= 12`。
 - `title` は省略でき、無ければタブの名前を出す。
+- `zoom` はカードの中身の表示倍率(%、50〜100)。省略は 100(画面は 100% を選ぶとキーを落とす)。
 - カードは 20 個まで。重なりは backend では拒否しない(画面が読み込むときに `normalizeClinicalDashboard` で解く)。
 - `kind` の値は検証しない(種別の一覧は画面にしか無い)。知らない種別のカードは画面が「この種別は表示できません」と出す。
 - 形の検証は `JsonShape`(`ClinicalDashboard::DEFINITION_SHAPE`)。
@@ -72,7 +73,11 @@ backend の DB に持つ(上流 FHIR には置かない)。
   `.clinical-dashboard` の修飾で本体の溢れを隠し、中の `.karte-tabpanel` / タイムラインがスクロールする。
 - 編集: 「カード追加」(`components/dashboard/AddClinicalCardModal.tsx`。種別とタイトル。空いている最初の位置に既定の大きさ
   (12×8)で置く)、見出しを掴んで動かす・右下の角で大きさを変える(`hooks/useGridTileDrag.ts`)、
-  ゴミ箱で削除、元に戻す / やり直す(`hooks/useUndoableState.ts`)。
+  ゴミ箱で削除、表示倍率(見出しの選択。100〜60%、`CLINICAL_CARD_ZOOMS`)、元に戻す / やり直す(`hooks/useUndoableState.ts`)。
+- 表示倍率: タブの部品は文字の大きさを px で持つので、文字だけでなく中身ごと CSS `zoom` で縮める
+  (本体に `--card-zoom` を渡す)。カードの外(ビューポート基準)に出るもの(モーダル・`escapesClipping` の RowMenu・
+  テンプレート選択・吹き出し・各タブの全画面・DICOM ビューア)は `App.css` で倍率を打ち消し、カルテのタブと同じ大きさで出す。
+  ビューポート基準で出すものを足したら、その打ち消しの一覧にも加える。
 - 保存: 「保存」「別名保存」は分析ダッシュボードと同じ(`useDefinitionOwners` からチームを除く、`SaveQueryModal`)。
   未保存の変更があるときは切り替え時に確認する。
 

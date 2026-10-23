@@ -127,7 +127,7 @@ export function RowMenu({
         <div
           className={`row-menu__items${placement === "up" ? " row-menu__items--up" : ""}${
             alignStart ? " row-menu__items--start" : ""
-          }`}
+          }${escapesClipping ? " row-menu__items--fixed" : ""}`}
           role="menu"
           ref={itemsRef}
           style={fixedStyle}
