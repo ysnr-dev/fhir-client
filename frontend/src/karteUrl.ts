@@ -120,6 +120,9 @@ export const KARTE_TABS = [
   // チャート。検査値・バイタル・テンプレートの数値の推移に、手術・入退院・化学療法などの
   // 実施歴を重ねて読む。項目の組み合わせは名前を付けて保存する(chart_definitions)。
   { key: "chart", label: "マルチチャート" },
+  // 診療ダッシュボード(docs/clinical-dashboard-design.md)。左ペインのタブをカードとして並べて 1 画面で読む。
+  // view は選択中のダッシュボードの id。
+  { key: "clinical-dashboard", label: "診療ダッシュボード" },
   // 経過表(POMR のフローシート)。上下分割で「上にカルテ、下に経過表」と並べて
   // 読めるよう、カルテ以外のタブとして持つ。
   { key: "flowsheet", label: "経過表" },
@@ -153,9 +156,6 @@ export const KARTE_TABS = [
   // SMART on FHIR アプリ(docs/smart-app-launch-design.md)。開いている患者・利用者の文脈を渡して
   // 外部アプリを起動し、枠内に出す。view は選択中のアプリ(smart_apps の id)。
   { key: "smart-apps", label: "SMARTアプリ" },
-  // 診療ダッシュボード(docs/clinical-dashboard-design.md)。左ペインのタブをカードとして並べて 1 画面で読む。
-  // view は選択中のダッシュボードの id。
-  { key: "clinical-dashboard", label: "診療ダッシュボード" },
 ] as const;
 
 export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
@@ -167,13 +167,13 @@ export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
  */
 export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly KarteTabKey[] }> = [
   { label: "患者情報", keys: ["profile", "allergy", "brought-medication", "oral-exam"] },
-  { label: "診療情報", keys: ["medication-history", "injection", "chemo", "pathway", "meal", "chart"] },
+  { label: "診療情報", keys: ["medication-history", "injection", "chemo", "pathway", "meal", "chart", "clinical-dashboard"] },
   {
     label: "検査結果",
     keys: ["lab", "lab-timeline", "micro", "patho", "rad-report", "physio-report", "endoscopy-report"],
   },
   { label: "看護", keys: ["nursing-profile", "nursing", "nursing-care-plan"] },
-  { label: "その他", keys: ["karte-print", "clinical-dashboard", "imaging", "smart-apps"] },
+  { label: "その他", keys: ["karte-print", "imaging", "smart-apps"] },
 ];
 
 /** そのタブを畳んでいるグループ。畳んでいなければ undefined。 */
