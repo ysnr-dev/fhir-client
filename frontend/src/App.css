@@ -21038,8 +21038,81 @@ button.nursing-worksheet__mark {
   margin-bottom: 8px;
 }
 
-.regimen-apply__step {
-  margin-bottom: 10px;
+/* 読むための区画(投与前チェック・レジメンの情報・前クールの有害事象)。見た目は
+   .regimen-apply__fields と同じ枠で、見出しの横に要約を出して畳める。 */
+.regimen-apply__fold {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin: 0 0 12px;
+}
+
+.regimen-apply__fold > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  cursor: pointer;
+  font-size: 13px;
+  list-style: none;
+}
+
+.regimen-apply__fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.regimen-apply__fold > summary::before {
+  content: "▸";
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.regimen-apply__fold[open] > summary::before {
+  content: "▾";
+}
+
+.regimen-apply__fold[open] > summary {
+  margin-bottom: 6px;
+}
+
+.regimen-apply__fold-summary {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.8;
+}
+
+.regimen-apply__fold-summary--out {
+  color: var(--danger);
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* 前回の体格との差。値の行に続けて出す。 */
+.regimen-apply__delta {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.regimen-apply__delta--warn {
+  color: var(--danger);
+  font-weight: 600;
+  opacity: 1;
+}
+
+/* ステップの区切り行(1 つの表の中で見出し行を繰り返さない)。薬剤の行と見分けられるよう
+   アクセントの薄い地と左の縦線を敷く。 */
+.regimen-apply__drugs .regimen-apply__step-row td {
+  padding: 6px 8px;
+  border-bottom: none;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-bg);
+}
+
+.regimen-apply__drugs tbody + tbody .regimen-apply__step-row td {
+  border-top: 8px solid transparent;
+  background-clip: padding-box;
 }
 
 .regimen-apply__step-head {
@@ -21047,7 +21120,6 @@ button.nursing-worksheet__mark {
   align-items: baseline;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 4px;
   font-size: 13px;
 }
 
@@ -21064,10 +21136,8 @@ button.nursing-worksheet__mark {
   color: var(--text);
 }
 
-/* ステップごとに別のテーブルなので、そのままだと内容によって列位置がずれる。
-   table-layout: fixed + 明示幅で、どのステップでも列が揃うようにする
-   (処方内容の .rp-card__medicines--detail と同じ考え方)。医薬品名の列だけが
-   残り幅を吸収して折り返す。 */
+/* 投与内容の表。table-layout: fixed + 明示幅で列を揃え(処方内容の
+   .rp-card__medicines--detail と同じ考え方)、医薬品名の列だけが残り幅を吸収して折り返す。 */
 .regimen-apply__drugs {
   table-layout: fixed;
 }
@@ -21107,18 +21177,14 @@ button.nursing-worksheet__mark {
   gap: 4px;
 }
 
-/* 換算した製剤数の併記。主役は力価(入力欄)なので、読めるだけの控えめな出し方にする。 */
+/* 換算した製剤数の併記。主役は力価(入力欄)なので、読めるだけの控えめな出し方にする。
+   規格(1 瓶 = 100 mg)は title で読む。 */
 .regimen-apply__packs-hint {
   display: block;
   margin-top: 2px;
   font-size: 11px;
   color: var(--text);
   opacity: 0.7;
-}
-
-.regimen-apply__strength {
-  margin-left: 2px;
-  font-size: 10px;
 }
 
 .regimen-apply__dose input {
@@ -21938,7 +22004,7 @@ button.chemo-calendar__cell[draggable="true"] {
 
 /* 投与ステップの注意書き(マスタの note)。 */
 .regimen-apply__step-note {
-  margin: 2px 0 6px;
+  margin: 2px 0 0;
   font-size: 12px;
   color: var(--muted);
 }

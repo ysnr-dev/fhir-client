@@ -15,6 +15,34 @@ import { displayOf } from "../fhir/shared";
 // オーダーを作る画面に持ってくる。
 // 設計は docs/chemo-regimen-design.md §7.6 A。
 
+/**
+ * 折りたためる区画。見出しの横に要約を出し、中身は開いたときだけ読む。
+ * 開閉はブラウザに任せる(details)。既定の開閉だけ props で決める。
+ */
+export function RegimenFold({
+  title,
+  summary,
+  summaryClassName = "",
+  open,
+  children,
+}: {
+  title: React.ReactNode;
+  summary?: React.ReactNode;
+  summaryClassName?: string;
+  open: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="regimen-apply__fold" open={open}>
+      <summary>
+        <span className="regimen-apply__fold-title">{title}</span>
+        {summary && <span className={`regimen-apply__fold-summary ${summaryClassName}`.trim()}>{summary}</span>}
+      </summary>
+      {children}
+    </details>
+  );
+}
+
 /** 投与前チェック(適応基準 × 直近の検査結果)。基準外でも登録は止めない。 */
 export function RegimenLabCheck({
   checks,
@@ -32,13 +60,12 @@ export function RegimenLabCheck({
   ].filter(Boolean);
 
   return (
-    <fieldset className="regimen-apply__fields">
-      <legend>投与前チェック</legend>
-      {notes.length > 0 && (
-        <p className={`regimen-check__summary${summary.out > 0 ? " regimen-check__summary--out" : ""}`}>
-          {notes.join(" · ")}
-        </p>
-      )}
+    <RegimenFold
+      title="投与前チェック"
+      summary={notes.length > 0 ? notes.join(" · ") : "すべて適合"}
+      summaryClassName={summary.out > 0 ? "regimen-apply__fold-summary--out" : ""}
+      open={summary.out > 0 || summary.missing > 0}
+    >
       <table className="master-search__table regimen-check__table">
         <thead>
           <tr>
@@ -88,11 +115,14 @@ export function RegimenLabCheck({
           ))}
         </tbody>
       </table>
-    </fieldset>
+    </RegimenFold>
   );
 }
 
-/** レジメンマスタの臨床情報(制吐リスク・適応疾患・中止/減量基準・副作用・参考文献)。 */
+/**
+ * レジメンマスタの臨床情報(制吐リスク・適応疾患・中止/減量基準・副作用・参考文献)。
+ * 毎回読むものではないので畳んでおき、見出しに分類だけ出す。
+ */
 export function RegimenInfoView({ regimen }: { regimen: RegimenDetail }) {
   const rows: { label: string; value: React.ReactNode }[] = [];
 
@@ -102,7 +132,6 @@ export function RegimenInfoView({ regimen }: { regimen: RegimenDetail }) {
   ]
     .filter(Boolean)
     .join(" · ");
-  if (head) rows.push({ label: "分類", value: head });
 
   if (regimen.indications.length > 0) {
     rows.push({
@@ -142,8 +171,7 @@ export function RegimenInfoView({ regimen }: { regimen: RegimenDetail }) {
   if (rows.length === 0) return null;
 
   return (
-    <fieldset className="regimen-apply__fields">
-      <legend>レジメンの情報</legend>
+    <RegimenFold title="レジメンの情報" summary={head || undefined} open={false}>
       <dl className="regimen-info">
         {rows.map((row) => (
           <div key={row.label} className="regimen-info__row">
@@ -152,7 +180,7 @@ export function RegimenInfoView({ regimen }: { regimen: RegimenDetail }) {
           </div>
         ))}
       </dl>
-    </fieldset>
+    </RegimenFold>
   );
 }
 
@@ -165,9 +193,9 @@ export function RegimenBodyChange({
   change: BodyChange | null;
 }) {
   const label = [
-    previous.height !== null ? `身長 ${previous.height} cm` : "",
-    previous.weight !== null ? `体重 ${previous.weight} kg` : "",
-    previous.bsa !== null ? `体表面積 ${previous.bsa} m²` : "",
+    previous.height !== null ? `${previous.height} cm` : "",
+    previous.weight !== null ? `${previous.weight} kg` : "",
+    previous.bsa !== null ? `${previous.bsa} m²` : "",
   ]
     .filter(Boolean)
     .join(" / ");
@@ -176,13 +204,15 @@ export function RegimenBodyChange({
   return (
     <div className="regimen-editor__derived">
       前回の体格
-      <strong>{label}</strong>
-      {change && change.deltaKg !== 0 && (
-        <span className={change.warn ? "regimen-check__verdict--out" : "regimen-check__note"}>
-          {change.deltaKg > 0 ? "+" : ""}
-          {change.deltaKg} kg（{Math.round(change.ratio * 1000) / 10}%）
-        </span>
-      )}
+      <strong>
+        {label}
+        {change && change.deltaKg !== 0 && (
+          <span className={`regimen-apply__delta${change.warn ? " regimen-apply__delta--warn" : ""}`}>
+            {change.deltaKg > 0 ? "+" : ""}
+            {change.deltaKg} kg（{Math.round(change.ratio * 1000) / 10}%）
+          </span>
+        )}
+      </strong>
     </div>
   );
 }
@@ -190,9 +220,13 @@ export function RegimenBodyChange({
 /** 前クールの有害事象(次クール登録で減量・継続の判断材料にする。§7.6 C-3)。 */
 export function RegimenPreviousAdverseEvents({ cycle, records }: { cycle: number; records: AdverseEventRecord[] }) {
   if (records.length === 0) return null;
+  const maxGrade = Math.max(...records.map((r) => r.grade));
   return (
-    <fieldset className="regimen-apply__fields">
-      <legend>第 {cycle} クールの有害事象</legend>
+    <RegimenFold
+      title={`第 ${cycle} クールの有害事象`}
+      summary={`${records.length} 件 · 最大 Grade ${maxGrade}`}
+      open
+    >
       <ul className="regimen-adverse__list regimen-adverse__list--compact">
         {records.map((r) => (
           <li key={r.id} className="regimen-adverse__item">
@@ -206,6 +240,6 @@ export function RegimenPreviousAdverseEvents({ cycle, records }: { cycle: number
           </li>
         ))}
       </ul>
-    </fieldset>
+    </RegimenFold>
   );
 }

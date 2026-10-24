@@ -879,8 +879,8 @@ function RegimenApplyForm({
               直近の測定
               <strong>
                 {[
-                  measures.height ? `身長 ${measures.height.value}${measures.height.unit}(${measures.height.date})` : "",
-                  measures.weight ? `体重 ${measures.weight.value}${measures.weight.unit}(${measures.weight.date})` : "",
+                  measures.height ? `${measures.height.value} ${measures.height.unit}(${measures.height.date})` : "",
+                  measures.weight ? `${measures.weight.value} ${measures.weight.unit}(${measures.weight.date})` : "",
                 ]
                   .filter(Boolean)
                   .join(" / ")}
@@ -917,120 +917,122 @@ function RegimenApplyForm({
             </label>
           </div>
         )}
-        {values.steps.map((plan, stepIndex) => (
-          <section key={plan.step.id} className="regimen-apply__step">
-            <div className="regimen-apply__step-head">
-              <span className="regimen-apply__step-index">{stepIndex + 1}</span>
-              <span className="regimen-apply__step-name">{plan.step.name || "(見出しなし)"}</span>
-              <span className="regimen-apply__step-meta">
-                {[
-                  `Day ${plan.step.days.join(", ")}`,
-                  displayOf(REGIMEN_STEP_USAGE_TYPE_OPTIONS, plan.step.usage_type),
-                  plan.step.usage_type === "drip" && plan.step.infusion_minutes ? `${plan.step.infusion_minutes} 分` : "",
-                  plan.step.usage_type === "oral" && plan.step.usage ? plan.step.usage.usage_name : "",
-                  plan.step.usage_type === "oral" && plan.step.dose_days ? `${plan.step.dose_days} 日分` : "",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
-            </div>
-            {/* マスタの投与時注意。同時に開始する組(混注ではない)もここに書いてある。 */}
-            {plan.step.note && <p className="regimen-apply__step-note">{plan.step.note}</p>}
-            <table className="master-search__table regimen-apply__drugs">
-              <thead>
-                <tr>
-                  <th>種類</th>
-                  <th>医薬品</th>
-                  <th>基準</th>
-                  <th>投与率・投与量</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plan.drugs.map((d, drugIndex) => (
-                  <tr key={d.drug.id}>
-                    <td>{displayOf(REGIMEN_DRUG_ROLE_OPTIONS, d.drug.drug_role)}</td>
-                    <td>{d.drug.resolved_name ?? d.drug.medicine_code}</td>
-                    <td>
-                      {d.drug.dose_value !== null
-                        ? doseBasisLabel(d.drug.dose_basis, Number(d.drug.dose_value), d.drug.dose_unit ?? "")
-                        : ""}
-                      {d.drug.dose_max !== null && (
-                        <span className="lab-order-item__code">（上限 {Number(d.drug.dose_max)}）</span>
-                      )}
-                    </td>
-                    {/* 抗がん剤の指示は力価(mg)なので入力欄は力価にし、オーダーに載る
-                        製剤数(瓶・錠)は換算して下に添える。製剤単位が基準の補液などは
-                        製剤数をそのまま入れる。 */}
-                    <td>
-                      {canReduceDose(d.drug) && (
-                        <span className="regimen-apply__ratio">
+        {/* ステップは別の表にせず、1 つの表の中のグループ行で区切る(見出し行を繰り返さない)。 */}
+        <table className="master-search__table regimen-apply__drugs">
+          <thead>
+            <tr>
+              <th>種類</th>
+              <th>医薬品</th>
+              <th>基準</th>
+              <th>投与率・投与量</th>
+            </tr>
+          </thead>
+          {values.steps.map((plan, stepIndex) => (
+            <tbody key={plan.step.id}>
+              <tr className="regimen-apply__step-row">
+                <td colSpan={4}>
+                  <div className="regimen-apply__step-head">
+                    <span className="regimen-apply__step-index">{stepIndex + 1}</span>
+                    <span className="regimen-apply__step-name">{plan.step.name || "(見出しなし)"}</span>
+                    <span className="regimen-apply__step-meta">
+                      {[
+                        `Day ${plan.step.days.join(", ")}`,
+                        displayOf(REGIMEN_STEP_USAGE_TYPE_OPTIONS, plan.step.usage_type),
+                        plan.step.usage_type === "drip" && plan.step.infusion_minutes
+                          ? `${plan.step.infusion_minutes} 分`
+                          : "",
+                        plan.step.usage_type === "oral" && plan.step.usage ? plan.step.usage.usage_name : "",
+                        plan.step.usage_type === "oral" && plan.step.dose_days ? `${plan.step.dose_days} 日分` : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </div>
+                  {/* マスタの投与時注意。同時に開始する組(混注ではない)もここに書いてある。 */}
+                  {plan.step.note && <p className="regimen-apply__step-note">{plan.step.note}</p>}
+                </td>
+              </tr>
+              {plan.drugs.map((d, drugIndex) => (
+                <tr key={d.drug.id}>
+                  <td>{displayOf(REGIMEN_DRUG_ROLE_OPTIONS, d.drug.drug_role)}</td>
+                  <td>{d.drug.resolved_name ?? d.drug.medicine_code}</td>
+                  <td>
+                    {d.drug.dose_value !== null
+                      ? doseBasisLabel(d.drug.dose_basis, Number(d.drug.dose_value), d.drug.dose_unit ?? "")
+                      : ""}
+                    {d.drug.dose_max !== null && (
+                      <span className="lab-order-item__code">（上限 {Number(d.drug.dose_max)}）</span>
+                    )}
+                  </td>
+                  {/* 抗がん剤の指示は力価(mg)なので入力欄は力価にし、オーダーに載る
+                      製剤数(瓶・錠)は換算して下に添える。製剤単位が基準の補液などは
+                      製剤数をそのまま入れる。 */}
+                  <td>
+                    {canReduceDose(d.drug) && (
+                      <span className="regimen-apply__ratio">
+                        <input
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="100"
+                          className="regimen-editor__num-input"
+                          value={d.ratio}
+                          onChange={(e) => changeRatio(stepIndex, drugIndex, e.target.value)}
+                        />
+                        %
+                      </span>
+                    )}
+                    {d.input === "amount" ? (
+                      <>
+                        <span className="regimen-apply__dose">
                           <input
                             type="number"
-                            step="1"
-                            min="1"
-                            max="100"
+                            step="any"
+                            min="0"
                             className="regimen-editor__num-input"
-                            value={d.ratio}
-                            onChange={(e) => changeRatio(stepIndex, drugIndex, e.target.value)}
+                            value={d.amount}
+                            onChange={(e) => updateDrug(stepIndex, drugIndex, { amount: e.target.value })}
                           />
-                          %
+                          {d.unit}
                         </span>
-                      )}
-                      {d.input === "amount" ? (
-                        <>
-                          <span className="regimen-apply__dose">
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              className="regimen-editor__num-input"
-                              value={d.amount}
-                              onChange={(e) => updateDrug(stepIndex, drugIndex, { amount: e.target.value })}
-                            />
-                            {d.unit}
-                          </span>
+                        <span className="regimen-apply__packs-hint" title={`1 ${d.packUnit} = ${d.factor} ${d.unit}`}>
+                          ≒ {planPacks(d) || "—"} {d.packUnit}
+                        </span>
+                        {d.capped && <span className="regimen-apply__packs-hint">上限で止めています</span>}
+                      </>
+                    ) : (
+                      <>
+                        <span className="regimen-apply__dose">
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            className="regimen-editor__num-input"
+                            value={d.packs}
+                            onChange={(e) => updateDrug(stepIndex, drugIndex, { packs: e.target.value })}
+                          />
+                          {d.packUnit}
+                        </span>
+                        {d.amount && (
                           <span className="regimen-apply__packs-hint">
-                            ≒ {planPacks(d) || "—"} {d.packUnit}
-                            <span className="regimen-apply__strength">
-                              （1 {d.packUnit} = {d.factor} {d.unit}）
-                            </span>
+                            {d.amount} {d.unit} 相当
                           </span>
-                          {d.capped && <span className="regimen-apply__packs-hint">上限で止めています</span>}
-                        </>
-                      ) : (
-                        <>
-                          <span className="regimen-apply__dose">
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              className="regimen-editor__num-input"
-                              value={d.packs}
-                              onChange={(e) => updateDrug(stepIndex, drugIndex, { packs: e.target.value })}
-                            />
-                            {d.packUnit}
-                          </span>
-                          {d.amount && (
-                            <span className="regimen-apply__packs-hint">
-                              {d.amount} {d.unit} 相当
-                            </span>
-                          )}
-                        </>
-                      )}
-                      {d.manualReason && <span className="regimen-apply__manual">{d.manualReason}</span>}
-                      {(() => {
-                        const scope = drugScope.get(d.drug.id);
-                        return scope ? (
-                          <AdvisoryInlineMarks advisories={advisoriesOfScope(session.advisories, scope.rp, scope.line)} />
-                        ) : null;
-                      })()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        ))}
+                        )}
+                      </>
+                    )}
+                    {d.manualReason && <span className="regimen-apply__manual">{d.manualReason}</span>}
+                    {(() => {
+                      const scope = drugScope.get(d.drug.id);
+                      return scope ? (
+                        <AdvisoryInlineMarks advisories={advisoriesOfScope(session.advisories, scope.rp, scope.line)} />
+                      ) : null;
+                    })()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          ))}
+        </table>
       </fieldset>
 
       {reduced && (
