@@ -6,6 +6,7 @@ import { useImportDocumentFormTemplate } from "../api/queries";
 import { DocumentTemplateForm } from "../components/DocumentTemplateForm";
 import { DocumentTemplateTable } from "../components/DocumentTemplateTable";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { FileCategoryModal } from "../components/FileCategoryModal";
 import { PopulateExpressionModal } from "../components/PopulateExpressionModal";
 import { MasterBackLink } from "../components/MasterBackLink";
 
@@ -32,6 +33,7 @@ export function DocumentTemplatesPage() {
   const tab = tabOf(searchParams.get("tab"));
   const [mode, setMode] = useState<FormMode | null>(null);
   const [variablesOpen, setVariablesOpen] = useState(false);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importTemplate = useImportDocumentFormTemplate();
 
@@ -69,6 +71,9 @@ export function DocumentTemplatesPage() {
         <div>
           <button type="button" onClick={() => setVariablesOpen(true)}>
             変数一覧
+          </button>
+          <button type="button" onClick={() => setCategoriesOpen(true)}>
+            カテゴリ管理
           </button>
           {!mode && tab === "form" && (
             <>
@@ -132,6 +137,7 @@ export function DocumentTemplatesPage() {
       {variablesOpen && (
         <PopulateExpressionModal placeholder onClose={() => setVariablesOpen(false)} />
       )}
+      {categoriesOpen && <FileCategoryModal onClose={() => setCategoriesOpen(false)} />}
     </div>
   );
 }
