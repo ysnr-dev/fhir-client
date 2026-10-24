@@ -40,6 +40,8 @@ interface EventCardProps {
   onRemove: () => void;
   onPickNursingObservation: (unitKey: number, assessmentKey: number) => void;
   onEditTemplate: (unitKey: number, taskKey: number) => void;
+  /** 目次からの移動先。 */
+  anchorId: string;
 }
 
 export function PathwayEventCard({
@@ -53,6 +55,7 @@ export function PathwayEventCard({
   onRemove,
   onPickNursingObservation,
   onEditTemplate,
+  anchorId,
 }: EventCardProps) {
   const day = eventDayOf(event);
 
@@ -61,7 +64,7 @@ export function PathwayEventCard({
   }
 
   return (
-    <section className="pathway-event">
+    <section id={anchorId} className="pathway-event">
       <div className="pathway-event__head">
         <label className="pathway-event__day">
           病日

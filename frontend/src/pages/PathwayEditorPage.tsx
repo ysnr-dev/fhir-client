@@ -6,6 +6,12 @@ import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
+import {
+  PE_SECTIONS,
+  PathwayEditorToc,
+  pathwayEventAnchorId,
+  pathwayPhaseAnchorId,
+} from "../components/PathwayEditorToc";
 import { PathwayEventCard } from "../components/PathwayEventCard";
 import { TrashIcon } from "../components/icons/TrashIcon";
 import { PathwayOverviewTable } from "../components/PathwayOverviewTable";
@@ -93,10 +99,10 @@ export function PathwayEditorPage() {
   const [picker, setPicker] = useState<Picker>(null);
   const update = makeFieldUpdater(setDraft);
 
-  // 病日 × OAT ユニットの表は列が多いので、本文の幅を既定より少し広げる。
+  // 病日 × OAT ユニットの表は列が多く、左に目次も置くので、本文の幅を既定より広げる。
   useEffect(() => {
-    document.body.classList.add("page-wide-md");
-    return () => document.body.classList.remove("page-wide-md");
+    document.body.classList.add("page-wide-md-toc");
+    return () => document.body.classList.remove("page-wide-md-toc");
   }, []);
 
   useEffect(() => {
@@ -288,353 +294,364 @@ export function PathwayEditorPage() {
         </div>
       </div>
 
-      {validationError && (
-        <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
-        </div>
-      )}
-      <ErrorBanner error={detail.error} />
-      <ErrorBanner
-        error={mutations.create.error ?? mutations.update.error ?? mutations.copy.error ?? mutations.remove.error}
-      />
-
-      {frozen && (
-        <p className="regimen-check__summary regimen-check__summary--out">
-          {`${draft.status === "retired" ? "廃止" : "承認済"}のパスは内容を変更できません。直すときは「複製」して新しいパスとして作り、承認してから、こちらを廃止にします。`}
-        </p>
-      )}
-      {draft.copiedFromCode && (
-        <p className="injection-scope__note">
-          {`複製元: `}
-          <Link to={`/pathways/${draft.copiedFromCode}`}>{draft.copiedFromCode}</Link>
-        </p>
-      )}
-
-      <datalist id="pathway-assessment-categories">
-        {ASSESSMENT_CATEGORY_SUGGESTIONS.map((s) => (
-          <option key={s.code} value={s.code}>
-            {s.display}
-          </option>
-        ))}
-      </datalist>
-
-      {/* 内容は承認済・廃止で凍結する。 */}
-      <fieldset className="regimen-editor__content" disabled={frozen}>
-        {/* ---- 基本情報 ---- */}
-        <section className="lab-order-item__section">
-          <div className="lab-order-item__section-head">
-            <h3>基本情報</h3>
-          </div>
-          <div className="lab-order-item__fields">
-            <label>
-              パスコード
-              <input
-                type="text"
-                value={draft.pathwayCode}
-                onChange={(e) => update("pathwayCode", e.target.value)}
-                placeholder={isNew ? "空欄なら自動採番" : undefined}
-                disabled={!isNew}
-              />
-            </label>
-            <label>
-              パス名
-              <input
-                type="text"
-                className="regimen-editor__name"
-                value={draft.name}
-                onChange={(e) => update("name", e.target.value)}
-              />
-            </label>
-            <label>
-              略称
-              <input type="text" value={draft.shortName} onChange={(e) => update("shortName", e.target.value)} />
-            </label>
-            <label>
-              カナ(検索用)
-              <input type="text" value={draft.nameKana} onChange={(e) => update("nameKana", e.target.value)} />
-            </label>
-            <label>
-              診療科
-              <select value={selectedDepartmentId} onChange={(e) => handleDepartmentChange(e.target.value)}>
-                <option value="">未指定</option>
-                {draft.departmentCode && !selectedDepartmentId && (
-                  <option value="">{draft.departmentName || draft.departmentCode}</option>
-                )}
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {departmentDisplayName(d)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              版
-              <input
-                type="text"
-                className="regimen-editor__unit-input"
-                value={draft.version}
-                onChange={(e) => update("version", e.target.value)}
-              />
-            </label>
-            <label>
-              入外
-              <select value={draft.setting} onChange={(e) => update("setting", e.target.value as PathwaySetting)}>
-                {PATHWAY_SETTING_OPTIONS.map((o) => (
-                  <option key={o.code} value={o.code}>
-                    {o.display}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              パス予定日数
-              <input
-                type="number"
-                min={1}
-                className="regimen-editor__num-input"
-                value={draft.scheduledDays}
-                onChange={(e) => update("scheduledDays", e.target.value)}
-              />
-            </label>
-            <label>
-              元ひな型パス
-              <input
-                type="text"
-                className="regimen-editor__name"
-                value={draft.protocolBase}
-                onChange={(e) => update("protocolBase", e.target.value)}
-              />
-            </label>
-          </div>
-          <div className="regimen-editor__texts">
-            <label>
-              適応基準
-              <textarea
-                rows={3}
-                value={draft.adaptiveCriteria}
-                onChange={(e) => update("adaptiveCriteria", e.target.value)}
-              />
-            </label>
-            <label>
-              備考
-              <textarea rows={2} value={draft.note} onChange={(e) => update("note", e.target.value)} />
-            </label>
-          </div>
-        </section>
-
-        {/* ---- 対象病名 ---- */}
-        <section className="lab-order-item__section">
-          <div className="lab-order-item__section-head">
-            <h3>対象病名</h3>
-          </div>
-          {draft.indications.length > 0 && (
-            <table className="master-search__table regimen-editor__rows">
-              <thead>
-                <tr>
-                  <th>病名</th>
-                  <th className="rad-item__compact">ICD10</th>
-                  <th className="rad-item__compact">管理番号</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {draft.indications.map((i) => (
-                  <tr key={i.key}>
-                    <td>{i.name}</td>
-                    <td className="rad-item__compact">{i.icd10}</td>
-                    <td className="rad-item__compact">{i.managementNumber}</td>
-                    <td className="pathway-rows__tools">
-                      <button
-                        type="button"
-                        className="rp-card__icon-button"
-                        onClick={() =>
-                          update(
-                            "indications",
-                            draft.indications.filter((x) => x.key !== i.key),
-                          )
-                        }
-                        aria-label="削除"
-                      >
-                        <TrashIcon />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="qe-layout">
+        <PathwayEditorToc draft={draft} showOverview={overview.columns.length > 0} />
+        <div>
+          {validationError && (
+            <div className="error-banner" role="alert" ref={validationErrorRef}>
+              <p className="error-banner__line error-banner__line--error">{validationError}</p>
+            </div>
           )}
-          <div className="lab-order-item__actions">
-            <button type="button" onClick={() => setPicker({ kind: "disease" })}>
-              ＋ 病名
-            </button>
-          </div>
-        </section>
+          <ErrorBanner error={detail.error} />
+          <ErrorBanner
+            error={mutations.create.error ?? mutations.update.error ?? mutations.copy.error ?? mutations.remove.error}
+          />
 
-        {/* ---- 病日 ---- */}
-        <section className="lab-order-item__section">
-          <div className="lab-order-item__section-head">
-            <h3>病日</h3>
-          </div>
-          {draft.phases.map((phase, phaseIndex) => {
-            const phaseEvents = eventsOfPhase(draft.events, phase.phaseKey);
-            return (
-              <div key={phase.key} className={multiPhase ? "pathway-phase" : undefined}>
-                {multiPhase && (
-                  <div className="pathway-phase__head">
-                    <label>
-                      フェーズ名
-                      <input
-                        type="text"
-                        value={phase.name}
-                        onChange={(e) => updatePhase(phase.phaseKey, { name: e.target.value })}
-                        placeholder={`フェーズ ${phaseIndex + 1}`}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="pathway-phase__branches"
-                      onClick={() => setPicker({ kind: "branch", phaseKey: phase.phaseKey })}
-                    >
-                      {branchSummary(draft.phases, phase)}
-                    </button>
-                    <RowMenu label={`${phaseLabelOf(draft.phases, phase.phaseKey)} の操作`}>
-                      <button
-                        type="button"
-                        className="row-menu__item"
-                        onClick={() => setPicker({ kind: "branch", phaseKey: phase.phaseKey })}
-                      >
-                        分岐編集
-                      </button>
-                      <button
-                        type="button"
-                        className="row-menu__item"
-                        disabled={phaseIndex === 0}
-                        onClick={() => setDraft((prev) => movePhaseDraft(prev, phase.phaseKey, -1))}
-                      >
-                        上へ
-                      </button>
-                      <button
-                        type="button"
-                        className="row-menu__item"
-                        disabled={phaseIndex === draft.phases.length - 1}
-                        onClick={() => setDraft((prev) => movePhaseDraft(prev, phase.phaseKey, 1))}
-                      >
-                        下へ
-                      </button>
-                      <button
-                        type="button"
-                        className="row-menu__item row-menu__item--danger"
-                        onClick={() => removePhase(phase)}
-                      >
-                        フェーズ削除
-                      </button>
-                    </RowMenu>
-                  </div>
-                )}
-                {phaseEvents.map((event) => (
-                  <PathwayEventCard
-                    key={event.key}
-                    event={event}
-                    split={isSplitDay(draft.events, event)}
-                    seriesLabels={seriesLabels}
-                    onChange={(patch) => updateEvent(event.key, patch)}
-                    onDayCommit={() => update("events", orderEventsByPhases(draft.events, draft.phases))}
-                    onCopy={() => copyEvent(event)}
-                    onSplit={() => splitEvent(event)}
-                    onRemove={() => removeEvent(event)}
-                    onPickNursingObservation={(unitKey, assessmentKey) =>
-                      setPicker({ kind: "nursing", eventKey: event.key, unitKey, assessmentKey })
-                    }
-                    onEditTemplate={(unitKey, taskKey) =>
-                      setPicker({ kind: "template", eventKey: event.key, unitKey, taskKey })
-                    }
-                  />
-                ))}
-                <div className="lab-order-item__actions">
-                  <button type="button" onClick={() => addEvent(phase.phaseKey, nextDayNumber(phaseEvents))}>
-                    ＋ 病日
-                  </button>
-                  {phaseIndex === 0 && (
-                    <button type="button" onClick={() => addEvent(phase.phaseKey, previousDayNumber(phaseEvents))}>
-                      ＋ 入院前日
-                    </button>
-                  )}
-                  {phaseIndex === draft.phases.length - 1 && (
-                    <button type="button" onClick={() => setDraft((prev) => addPhaseDraft(prev))}>
-                      ＋ フェーズ
-                    </button>
-                  )}
-                </div>
+          {frozen && (
+            <p className="regimen-check__summary regimen-check__summary--out">
+              {`${draft.status === "retired" ? "廃止" : "承認済"}のパスは内容を変更できません。直すときは「複製」して新しいパスとして作り、承認してから、こちらを廃止にします。`}
+            </p>
+          )}
+          {draft.copiedFromCode && (
+            <p className="injection-scope__note">
+              {`複製元: `}
+              <Link to={`/pathways/${draft.copiedFromCode}`}>{draft.copiedFromCode}</Link>
+            </p>
+          )}
+
+          <datalist id="pathway-assessment-categories">
+            {ASSESSMENT_CATEGORY_SUGGESTIONS.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.display}
+              </option>
+            ))}
+          </datalist>
+
+          {/* 内容は承認済・廃止で凍結する。 */}
+          <fieldset className="regimen-editor__content" disabled={frozen}>
+            {/* ---- 基本情報 ---- */}
+            <section id={PE_SECTIONS.basic} className="lab-order-item__section">
+              <div className="lab-order-item__section-head">
+                <h3>基本情報</h3>
               </div>
-            );
-          })}
-        </section>
+              <div className="lab-order-item__fields">
+                <label>
+                  パスコード
+                  <input
+                    type="text"
+                    value={draft.pathwayCode}
+                    onChange={(e) => update("pathwayCode", e.target.value)}
+                    placeholder={isNew ? "空欄なら自動採番" : undefined}
+                    disabled={!isNew}
+                  />
+                </label>
+                <label>
+                  パス名
+                  <input
+                    type="text"
+                    className="regimen-editor__name"
+                    value={draft.name}
+                    onChange={(e) => update("name", e.target.value)}
+                  />
+                </label>
+                <label>
+                  略称
+                  <input type="text" value={draft.shortName} onChange={(e) => update("shortName", e.target.value)} />
+                </label>
+                <label>
+                  カナ(検索用)
+                  <input type="text" value={draft.nameKana} onChange={(e) => update("nameKana", e.target.value)} />
+                </label>
+                <label>
+                  診療科
+                  <select value={selectedDepartmentId} onChange={(e) => handleDepartmentChange(e.target.value)}>
+                    <option value="">未指定</option>
+                    {draft.departmentCode && !selectedDepartmentId && (
+                      <option value="">{draft.departmentName || draft.departmentCode}</option>
+                    )}
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {departmentDisplayName(d)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  版
+                  <input
+                    type="text"
+                    className="regimen-editor__unit-input"
+                    value={draft.version}
+                    onChange={(e) => update("version", e.target.value)}
+                  />
+                </label>
+                <label>
+                  入外
+                  <select value={draft.setting} onChange={(e) => update("setting", e.target.value as PathwaySetting)}>
+                    {PATHWAY_SETTING_OPTIONS.map((o) => (
+                      <option key={o.code} value={o.code}>
+                        {o.display}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  パス予定日数
+                  <input
+                    type="number"
+                    min={1}
+                    className="regimen-editor__num-input"
+                    value={draft.scheduledDays}
+                    onChange={(e) => update("scheduledDays", e.target.value)}
+                  />
+                </label>
+                <label>
+                  元ひな型パス
+                  <input
+                    type="text"
+                    className="regimen-editor__name"
+                    value={draft.protocolBase}
+                    onChange={(e) => update("protocolBase", e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="regimen-editor__texts">
+                <label>
+                  適応基準
+                  <textarea
+                    rows={3}
+                    value={draft.adaptiveCriteria}
+                    onChange={(e) => update("adaptiveCriteria", e.target.value)}
+                  />
+                </label>
+                <label>
+                  備考
+                  <textarea rows={2} value={draft.note} onChange={(e) => update("note", e.target.value)} />
+                </label>
+              </div>
+            </section>
 
-        <PathwayOverviewTable
-          rows={overview}
-          canAddTask={(row, column) => canAddTaskOccurrence(draft.events, row, column.eventKey)}
-          onToggleOutcome={toggleOutcome}
-          onToggleTask={toggleTask}
-          onLinkSameNames={linkable.linked > 0 ? () => update("events", linkable.events) : null}
-        />
-      </fieldset>
+            {/* ---- 対象病名 ---- */}
+            <section id={PE_SECTIONS.indications} className="lab-order-item__section">
+              <div className="lab-order-item__section-head">
+                <h3>対象病名</h3>
+              </div>
+              {draft.indications.length > 0 && (
+                <table className="master-search__table regimen-editor__rows">
+                  <thead>
+                    <tr>
+                      <th>病名</th>
+                      <th className="rad-item__compact">ICD10</th>
+                      <th className="rad-item__compact">管理番号</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {draft.indications.map((i) => (
+                      <tr key={i.key}>
+                        <td>{i.name}</td>
+                        <td className="rad-item__compact">{i.icd10}</td>
+                        <td className="rad-item__compact">{i.managementNumber}</td>
+                        <td className="pathway-rows__tools">
+                          <button
+                            type="button"
+                            className="rp-card__icon-button"
+                            onClick={() =>
+                              update(
+                                "indications",
+                                draft.indications.filter((x) => x.key !== i.key),
+                              )
+                            }
+                            aria-label="削除"
+                          >
+                            <TrashIcon />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <div className="lab-order-item__actions">
+                <button type="button" onClick={() => setPicker({ kind: "disease" })}>
+                  ＋ 病名
+                </button>
+              </div>
+            </section>
 
-      {/* ---- 運用(凍結中も動かせる) ---- */}
-      <section className="lab-order-item__section">
-        <div className="lab-order-item__section-head">
-          <h3>運用</h3>
-        </div>
-        <div className="lab-order-item__fields">
-          <label>
-            状態
-            <select value={draft.status} onChange={(e) => update("status", e.target.value as PathwayStatus)}>
-              {statusOptions.map((o) => (
-                <option key={o.code} value={o.code}>
-                  {o.display}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="regimen-editor__derived">
-            承認
-            <strong>{draft.approvedOn ? `${draft.approvedOn}${approverName ? ` / ${approverName}` : ""}` : "—"}</strong>
-          </div>
-          <label>
-            有効開始日
-            <input type="date" value={draft.validFrom} onChange={(e) => update("validFrom", e.target.value)} />
-          </label>
-          <label>
-            有効終了日
-            <input type="date" value={draft.validTo} onChange={(e) => update("validTo", e.target.value)} />
-          </label>
-          <label>
-            表示順
-            <input
-              type="number"
-              className="regimen-editor__num-input"
-              value={draft.displayOrder}
-              onChange={(e) => update("displayOrder", e.target.value)}
+            {/* ---- 病日 ---- */}
+            <section id={PE_SECTIONS.days} className="lab-order-item__section">
+              <div className="lab-order-item__section-head">
+                <h3>病日</h3>
+              </div>
+              {draft.phases.map((phase, phaseIndex) => {
+                const phaseEvents = eventsOfPhase(draft.events, phase.phaseKey);
+                return (
+                  <div
+                    key={phase.key}
+                    id={multiPhase ? pathwayPhaseAnchorId(phase.phaseKey) : undefined}
+                    className={multiPhase ? "pathway-phase" : undefined}
+                  >
+                    {multiPhase && (
+                      <div className="pathway-phase__head">
+                        <label>
+                          フェーズ名
+                          <input
+                            type="text"
+                            value={phase.name}
+                            onChange={(e) => updatePhase(phase.phaseKey, { name: e.target.value })}
+                            placeholder={`フェーズ ${phaseIndex + 1}`}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="pathway-phase__branches"
+                          onClick={() => setPicker({ kind: "branch", phaseKey: phase.phaseKey })}
+                        >
+                          {branchSummary(draft.phases, phase)}
+                        </button>
+                        <RowMenu label={`${phaseLabelOf(draft.phases, phase.phaseKey)} の操作`}>
+                          <button
+                            type="button"
+                            className="row-menu__item"
+                            onClick={() => setPicker({ kind: "branch", phaseKey: phase.phaseKey })}
+                          >
+                            分岐編集
+                          </button>
+                          <button
+                            type="button"
+                            className="row-menu__item"
+                            disabled={phaseIndex === 0}
+                            onClick={() => setDraft((prev) => movePhaseDraft(prev, phase.phaseKey, -1))}
+                          >
+                            上へ
+                          </button>
+                          <button
+                            type="button"
+                            className="row-menu__item"
+                            disabled={phaseIndex === draft.phases.length - 1}
+                            onClick={() => setDraft((prev) => movePhaseDraft(prev, phase.phaseKey, 1))}
+                          >
+                            下へ
+                          </button>
+                          <button
+                            type="button"
+                            className="row-menu__item row-menu__item--danger"
+                            onClick={() => removePhase(phase)}
+                          >
+                            フェーズ削除
+                          </button>
+                        </RowMenu>
+                      </div>
+                    )}
+                    {phaseEvents.map((event) => (
+                      <PathwayEventCard
+                        key={event.key}
+                        anchorId={pathwayEventAnchorId(event.key)}
+                        event={event}
+                        split={isSplitDay(draft.events, event)}
+                        seriesLabels={seriesLabels}
+                        onChange={(patch) => updateEvent(event.key, patch)}
+                        onDayCommit={() => update("events", orderEventsByPhases(draft.events, draft.phases))}
+                        onCopy={() => copyEvent(event)}
+                        onSplit={() => splitEvent(event)}
+                        onRemove={() => removeEvent(event)}
+                        onPickNursingObservation={(unitKey, assessmentKey) =>
+                          setPicker({ kind: "nursing", eventKey: event.key, unitKey, assessmentKey })
+                        }
+                        onEditTemplate={(unitKey, taskKey) =>
+                          setPicker({ kind: "template", eventKey: event.key, unitKey, taskKey })
+                        }
+                      />
+                    ))}
+                    <div className="lab-order-item__actions">
+                      <button type="button" onClick={() => addEvent(phase.phaseKey, nextDayNumber(phaseEvents))}>
+                        ＋ 病日
+                      </button>
+                      {phaseIndex === 0 && (
+                        <button type="button" onClick={() => addEvent(phase.phaseKey, previousDayNumber(phaseEvents))}>
+                          ＋ 入院前日
+                        </button>
+                      )}
+                      {phaseIndex === draft.phases.length - 1 && (
+                        <button type="button" onClick={() => setDraft((prev) => addPhaseDraft(prev))}>
+                          ＋ フェーズ
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+
+            <PathwayOverviewTable
+              anchorId={PE_SECTIONS.overview}
+              rows={overview}
+              canAddTask={(row, column) => canAddTaskOccurrence(draft.events, row, column.eventKey)}
+              onToggleOutcome={toggleOutcome}
+              onToggleTask={toggleTask}
+              onLinkSameNames={linkable.linked > 0 ? () => update("events", linkable.events) : null}
             />
-          </label>
-        </div>
-      </section>
+          </fieldset>
 
-      <div className="lab-order-item__actions regimen-editor__footer">
-        <button type="button" onClick={handleSave} disabled={saving}>
-          保存
-        </button>
-        {savedId !== null && (
-          <>
-            <button type="button" onClick={handleCopy} disabled={mutations.copy.isPending}>
-              複製
+          {/* ---- 運用(凍結中も動かせる) ---- */}
+          <section id={PE_SECTIONS.operation} className="lab-order-item__section">
+            <div className="lab-order-item__section-head">
+              <h3>運用</h3>
+            </div>
+            <div className="lab-order-item__fields">
+              <label>
+                状態
+                <select value={draft.status} onChange={(e) => update("status", e.target.value as PathwayStatus)}>
+                  {statusOptions.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="regimen-editor__derived">
+                承認
+                <strong>{draft.approvedOn ? `${draft.approvedOn}${approverName ? ` / ${approverName}` : ""}` : "—"}</strong>
+              </div>
+              <label>
+                有効開始日
+                <input type="date" value={draft.validFrom} onChange={(e) => update("validFrom", e.target.value)} />
+              </label>
+              <label>
+                有効終了日
+                <input type="date" value={draft.validTo} onChange={(e) => update("validTo", e.target.value)} />
+              </label>
+              <label>
+                表示順
+                <input
+                  type="number"
+                  className="regimen-editor__num-input"
+                  value={draft.displayOrder}
+                  onChange={(e) => update("displayOrder", e.target.value)}
+                />
+              </label>
+            </div>
+          </section>
+
+          <div className="lab-order-item__actions regimen-editor__footer">
+            <button type="button" onClick={handleSave} disabled={saving}>
+              保存
             </button>
-            {!frozen && (
-              <button type="button" onClick={handleDelete} disabled={mutations.remove.isPending}>
-                削除
-              </button>
+            {savedId !== null && (
+              <>
+                <button type="button" onClick={handleCopy} disabled={mutations.copy.isPending}>
+                  複製
+                </button>
+                {!frozen && (
+                  <button type="button" onClick={handleDelete} disabled={mutations.remove.isPending}>
+                    削除
+                  </button>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
 
       {picker?.kind === "disease" && (

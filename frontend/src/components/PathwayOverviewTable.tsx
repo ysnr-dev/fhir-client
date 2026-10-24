@@ -11,6 +11,7 @@ export function PathwayOverviewTable({
   onToggleOutcome,
   onToggleTask,
   onLinkSameNames,
+  anchorId,
 }: {
   rows: OverviewRows;
   /** 名前が同じで識別子が別々のアウトカムを続きにまとめる。まとめるものが無ければ null(ボタンを出さない)。 */
@@ -18,6 +19,8 @@ export function PathwayOverviewTable({
   canAddTask: (row: OverviewTaskRow, column: OverviewColumn) => boolean;
   onToggleOutcome: (row: OverviewRow, column: OverviewColumn) => void;
   onToggleTask: (row: OverviewTaskRow, column: OverviewColumn) => void;
+  /** 目次からの移動先。 */
+  anchorId: string;
 }) {
   if (rows.columns.length === 0) return null;
 
@@ -70,7 +73,7 @@ export function PathwayOverviewTable({
   }
 
   return (
-    <section className="lab-order-item__section">
+    <section id={anchorId} className="lab-order-item__section">
       <div className="lab-order-item__section-head">
         <h3>概要表</h3>
         {onLinkSameNames && (
