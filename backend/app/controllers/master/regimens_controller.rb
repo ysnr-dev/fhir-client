@@ -63,6 +63,13 @@ module Master
       %w[step_id]
     end
 
+    # 患者への適用(ヘッダの ServiceRequest)は code にレジメンコードを持つ(frontend の REGIMEN_CODE_SYSTEM)。
+    # 上流の ServiceRequest は instantiates-uri 検索に対応していないので code で数える。
+    def application_search
+      code = "http://fhir-client.local/CodeSystem/regimen|#{@record.regimen_code}"
+      { path: "/ServiceRequest", query: "code=#{CGI.escape(code)}" }
+    end
+
     # 子の配列が来た種別だけ置換する(来ていない種別は触らない)。
     def replace_children(record)
       code = record.regimen_code

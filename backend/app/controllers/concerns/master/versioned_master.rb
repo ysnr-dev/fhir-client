@@ -9,7 +9,7 @@ module Master
   #   master_label        … エラー文言に出す呼び名("パス" / "レジメン")
   #   parent_id_columns   … 子が持つ親の id 列(複製で付け替えるので写さない)
   #   replace_children / load_tree / validate_content! / copy_children / delete_children / detail
-  #   unapproval_blockers … 任意。承認済から下書きへ戻せない理由(既定は常に戻せない)
+  #   application_search  … 患者への適用を上流で数える検索(承認の取り消しは適用が無いときだけ)
   module VersionedMaster
     extend ActiveSupport::Concern
 
@@ -151,11 +151,40 @@ module Master
       frozen_record? && record_params[:status] == "draft"
     end
 
-    # 下書きへ戻せない理由。空なら戻せる。既定では戻せない(戻せると「下書きにしてから直す」で
-    # 凍結をすり抜けられるため。使うのをやめるときは廃止にする)。患者への適用を確かめられる
-    # マスタは、まだ使っていない承認済だけ戻せるように上書きする。
+    # 下書きへ戻せない理由。空なら戻せる。戻せるのは、患者に 1 件も適用していない承認済だけ
+    # (適用はコードで定義を指すので、適用済みの定義を直すと過去の根拠や進行中の展開と食い違う)。
+    # 廃止は承認して使った記録として残し、下書きには戻さない。
     def unapproval_blockers
-      ["承認を取り消せません。使わないようにするには廃止にしてください"]
+      if @record.status == "retired"
+        return ["廃止の#{master_label}は下書きに戻せません。複製して新しい#{master_label}として直してください"]
+      end
+      return ["承認を取り消せません。使わないようにするには廃止にしてください"] unless application_search
+
+      count = application_count
+      return ["上流 FHIR サーバーに適用の有無を確認できないため、承認を取り消せません"] if count.nil?
+      return [] if count.zero?
+
+      ["患者に適用済み(#{count} 件)の#{master_label}は承認を取り消せません。" \
+       "複製して新しい#{master_label}として直してください"]
+    end
+
+    # 患者への適用を上流で数える検索(path と query)。nil なら承認を取り消せない。
+    def application_search
+      nil
+    end
+
+    # 上流の適用の件数。確認できなければ nil。未対応の検索パラメータが黙殺されて
+    # 全件が数えられないように strict で問い合わせる。
+    def application_count
+      search = application_search
+      response = FhirGateway.new.forward(method: :get, path: search[:path], query: "#{search[:query]}&_summary=count",
+                                         headers: { "Prefer" => "handling=strict" })
+      return nil unless response.status == 200
+
+      JSON.parse(response.body)["total"]
+    rescue Faraday::Error, JSON::ParserError => e
+      Rails.logger.warn("#{master_label} application count failed: #{e.class}: #{e.message}")
+      nil
     end
 
     def render_frozen

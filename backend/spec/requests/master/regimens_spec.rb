@@ -256,7 +256,7 @@ RSpec.describe "Master::Regimens", type: :request do
   end
 
   describe "承認の記録" do
-    it "承認したときに承認日をサーバーが入れ、下書きには戻せない" do
+    it "承認したときに承認日をサーバーが入れる" do
       create_regimen("000001", "mFOLFOX6", status: "draft", treatment_days: 3, rest_days: 11)
       step = Master::RegimenStep.create!(regimen_code: "000001", usage_type: "drip", days: [1], display_order: 1)
       Master::RegimenDrug.create!(regimen_code: "000001", step_id: step.id, drug_role: "anticancer",
@@ -267,13 +267,68 @@ RSpec.describe "Master::Regimens", type: :request do
       expect(response).to have_http_status(:ok)
       expect(body["approved_on"]).to eq(FacilityClock.today.to_s)
       expect(body["approved_by"]).to eq("practitioner-1")
+    end
+  end
 
-      # 下書きに戻せると「下書きにしてから直す」で凍結をすり抜けられる。
+  # 承認の取り消し(下書きへ戻す)は、上流に適用のヘッダ(ServiceRequest)が 1 件も無いときだけ。
+  describe "承認の取り消し" do
+    let(:upstream_base) { ENV.fetch("FHIR_SERVER_BASE_URL", "http://localhost:3000") }
+
+    before do
+      FhirGateway.reset_connections!
+      create_regimen("000001", "mFOLFOX6", status: "approved", approved_on: FacilityClock.today,
+                                           approved_by: "practitioner-1", treatment_days: 3, rest_days: 11)
+    end
+
+    def stub_application_count(total)
+      stub_request(:get, "#{upstream_base}/ServiceRequest")
+        .with(query: { "code" => "http://fhir-client.local/CodeSystem/regimen|000001", "_summary" => "count" },
+              headers: { "Prefer" => "handling=strict" })
+        .to_return(status: 200, body: { resourceType: "Bundle", type: "searchset", total: total }.to_json,
+                   headers: { "Content-Type" => "application/fhir+json" })
+    end
+
+    it "適用が無ければ下書きに戻り、承認日・承認者が消える" do
+      stub_application_count(0)
+
+      put "/master/regimens/000001", params: { status: "draft" }, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(body["status"]).to eq("draft")
+      expect(body["approved_on"]).to be_nil
+      expect(body["approved_by"]).to be_nil
+
+      put "/master/regimens/000001", params: { name: "改名" }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(body["name"]).to eq("改名")
+    end
+
+    it "適用済みなら戻せない" do
+      stub_application_count(3)
+
       put "/master/regimens/000001", params: { status: "draft" }, as: :json
 
       expect(response).to have_http_status(:unprocessable_content)
-      expect(body["errors"].join).to include("廃止")
+      expect(body["errors"].join).to include("適用済み(3 件)のレジメン")
       expect(Master::Regimen.find_by(regimen_code: "000001").status).to eq("approved")
+    end
+
+    it "上流に確認できなければ戻せない" do
+      stub_request(:get, "#{upstream_base}/ServiceRequest").with(query: hash_including({})).to_return(status: 500)
+
+      put "/master/regimens/000001", params: { status: "draft" }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("確認できない")
+    end
+
+    it "廃止は下書きに戻せない" do
+      Master::Regimen.find_by(regimen_code: "000001").update!(status: "retired")
+
+      put "/master/regimens/000001", params: { status: "draft" }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("廃止のレジメン")
     end
   end
 

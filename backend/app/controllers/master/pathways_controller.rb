@@ -65,36 +65,11 @@ module Master
       %w[event_id unit_id assessment_id]
     end
 
-    # 適用の CarePlan が指すパス定義の URI(frontend の pathwayInstantiatesUri と同じ形)。
-    def instantiates_uri
-      "http://fhir-client.local/pathway/#{@record.pathway_code}"
-    end
-
-    # 承認の取り消しは、患者に 1 件も適用していない承認済だけ。適用済みの CarePlan は定義を
-    # コードで指し、進行中の適用は次のフェーズを定義から展開するので、下書きに戻して直すと
-    # 適用済みのデータと食い違う。廃止は承認して使った記録として残し、下書きには戻さない。
-    def unapproval_blockers
-      return ["廃止のパスは下書きに戻せません。複製して新しいパスとして直してください"] if @record.status == "retired"
-
-      count = pathway_application_count
-      return ["上流 FHIR サーバーに適用の有無を確認できないため、承認を取り消せません"] if count.nil?
-      return [] if count.zero?
-
-      ["患者に適用済み(#{count} 件)のパスは承認を取り消せません。複製して新しいパスとして直してください"]
-    end
-
-    # 上流の適用(CarePlan)の件数。確認できなければ nil。未対応の検索パラメータが黙殺されて
-    # 全件が数えられないように strict で問い合わせる。
-    def pathway_application_count
-      query = "instantiates-uri=#{CGI.escape(instantiates_uri)}&_summary=count"
-      response = FhirGateway.new.forward(method: :get, path: "/CarePlan", query: query,
-                                         headers: { "Prefer" => "handling=strict" })
-      return nil unless response.status == 200
-
-      JSON.parse(response.body)["total"]
-    rescue Faraday::Error, JSON::ParserError => e
-      Rails.logger.warn("pathway application count failed: #{e.class}: #{e.message}")
-      nil
+    # 患者への適用(CarePlan)は定義を instantiatesUri で指す(frontend の pathwayInstantiatesUri と同じ形)。
+    # 進行中の適用は次のフェーズを定義から展開するので、適用済みの定義は下書きに戻せない。
+    def application_search
+      uri = "http://fhir-client.local/pathway/#{@record.pathway_code}"
+      { path: "/CarePlan", query: "instantiates-uri=#{CGI.escape(uri)}" }
     end
 
     # 子の配列が来た種別だけ置換する(来ていない種別は触らない)。

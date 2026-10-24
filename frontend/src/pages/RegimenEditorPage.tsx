@@ -109,10 +109,9 @@ export function RegimenEditorPage() {
   const showDayTable = draft.steps.length > 0 && cycleDays > 0;
   // 保存済みの状態で判定する(画面で状態を変えただけでは凍結は解けない)。
   const frozen = detail.data ? detail.data.status !== "draft" : false;
-  // 承認を取り消せないので、凍結中は下書きを選べない(使うのをやめるときは廃止)。
-  const statusOptions = frozen
-    ? REGIMEN_STATUS_OPTIONS.filter((o) => o.code !== "draft")
-    : REGIMEN_STATUS_OPTIONS;
+  // 承認済は下書きに戻せる(まだ適用していないときだけ。判定はサーバー)。廃止は戻せない。
+  const statusOptions =
+    detail.data?.status === "retired" ? REGIMEN_STATUS_OPTIONS.filter((o) => o.code !== "draft") : REGIMEN_STATUS_OPTIONS;
   const approver = practitioners.find((p) => p.id === draft.approvedBy);
   const approverName = approver ? practitionerDisplayName(approver) : draft.approvedBy;
 
@@ -236,7 +235,9 @@ export function RegimenEditorPage() {
 
           {frozen && (
             <p className="regimen-check__summary regimen-check__summary--out">
-              {`${draft.status === "retired" ? "廃止" : "承認済"}のレジメンは内容を変更できません。直すときは「複製」して新しいレジメンとして作り、承認してから、こちらを廃止にします。`}
+              {detail.data?.status === "retired"
+                ? "廃止のレジメンは内容を変更できません。直すときは「複製」して新しいレジメンとして作ります。"
+                : "承認済のレジメンは内容を変更できません。直すときは「複製」して新しいレジメンとして作り、承認してから、こちらを廃止にします。まだ患者に適用していなければ、状態を下書きに戻して直せます。"}
             </p>
           )}
           {draft.copiedFromCode && (
