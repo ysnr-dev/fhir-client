@@ -8,6 +8,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { CtcaeTermSearchModal } from "../components/CtcaeTermSearchModal";
 import { JlacItemSearchModal } from "../components/JlacItemSearchModal";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
+import { RE_SECTIONS, RegimenEditorToc, regimenStepAnchorId } from "../components/RegimenEditorToc";
 import { FormularyMark } from "../components/MedicineWarnings";
 import { UsageSearchModal } from "../components/UsageSearchModal";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
@@ -81,6 +82,12 @@ export function RegimenEditorPage() {
   const [picker, setPicker] = useState<Picker>(null);
   const update = makeFieldUpdater(setDraft);
 
+  // 左に目次を置くので、そのぶん本文の幅を既定より広げる。
+  useEffect(() => {
+    document.body.classList.add("page-wide-toc");
+    return () => document.body.classList.remove("page-wide-toc");
+  }, []);
+
   useEffect(() => {
     if (!detail.data || detail.data.id === loadedId) return;
     setDraft(draftFromRegimen(detail.data));
@@ -91,6 +98,7 @@ export function RegimenEditorPage() {
 
   const savedId = detail.data?.id ?? null;
   const cycleDays = cycleDaysOf(draft);
+  const showDayTable = draft.steps.length > 0 && cycleDays > 0;
   // 保存済みの状態で判定する(画面で状態を変えただけでは凍結は解けない)。
   const frozen = detail.data ? detail.data.status !== "draft" : false;
   // 承認を取り消せないので、凍結中は下書きを選べない(使うのをやめるときは廃止)。
@@ -205,568 +213,573 @@ export function RegimenEditorPage() {
         </div>
       </div>
 
-      {validationError && (
-        <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
-        </div>
-      )}
-      <ErrorBanner error={detail.error} />
-      <ErrorBanner
-        error={mutations.create.error ?? mutations.update.error ?? mutations.copy.error ?? mutations.remove.error}
-      />
-
-      {frozen && (
-        <p className="regimen-check__summary regimen-check__summary--out">
-          {`${draft.status === "retired" ? "廃止" : "承認済"}のレジメンは内容を変更できません。直すときは「複製」して新しいレジメンとして作り、承認してから、こちらを廃止にします。`}
-        </p>
-      )}
-      {draft.copiedFromCode && (
-        <p className="injection-scope__note">
-          {`複製元: `}
-          <Link to={`/regimens/${draft.copiedFromCode}`}>{draft.copiedFromCode}</Link>
-        </p>
-      )}
-
-      {/* 内容(オーダーに影響するもの)は承認済・廃止で凍結する(§8.17)。 */}
-      <fieldset className="regimen-editor__content" disabled={frozen}>
-      {/* ---- 基本情報 ---- */}
-      <section className="lab-order-item__section">
-        <div className="lab-order-item__section-head">
-          <h3>基本情報</h3>
-        </div>
-        <div className="lab-order-item__fields">
-          <label>
-            レジメンコード
-            <input
-              type="text"
-              value={draft.regimenCode}
-              onChange={(e) => update("regimenCode", e.target.value)}
-              placeholder={isNew ? "空欄なら自動採番" : undefined}
-              disabled={!isNew}
-            />
-          </label>
-          <label>
-            レジメン名
-            <input
-              type="text"
-              className="regimen-editor__name"
-              value={draft.name}
-              onChange={(e) => update("name", e.target.value)}
-              placeholder="mFOLFOX6 など"
-            />
-          </label>
-          <label>
-            略称
-            <input type="text" value={draft.shortName} onChange={(e) => update("shortName", e.target.value)} />
-          </label>
-          <label>
-            カナ(検索用)
-            <input type="text" value={draft.nameKana} onChange={(e) => update("nameKana", e.target.value)} />
-          </label>
-          <label>
-            診療科
-            <select value={selectedDepartmentId} onChange={(e) => handleDepartmentChange(e.target.value)}>
-              <option value="">未指定</option>
-              {draft.departmentCode && !selectedDepartmentId && (
-                <option value="">{draft.departmentName || draft.departmentCode}</option>
-              )}
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {departmentDisplayName(d)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            治療目的
-            <select value={draft.purpose} onChange={(e) => update("purpose", e.target.value as RegimenPurpose | "")}>
-              <option value="">未指定</option>
-              {REGIMEN_PURPOSE_OPTIONS.map((o) => (
-                <option key={o.code} value={o.code}>
-                  {o.display}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            実施区分
-            <select value={draft.setting} onChange={(e) => update("setting", e.target.value as RegimenSetting | "")}>
-              <option value="">未指定</option>
-              {REGIMEN_SETTING_OPTIONS.map((o) => (
-                <option key={o.code} value={o.code}>
-                  {o.display}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            制吐リスク
-            <select
-              value={draft.emeticRisk}
-              onChange={(e) => update("emeticRisk", e.target.value as RegimenEmeticRisk | "")}
-            >
-              <option value="">未指定</option>
-              {REGIMEN_EMETIC_RISK_OPTIONS.map((o) => (
-                <option key={o.code} value={o.code}>
-                  {o.display}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="lab-order-item__fields">
-          <label>
-            備考
-            <input type="text" value={draft.note} onChange={(e) => update("note", e.target.value)} />
-          </label>
-        </div>
-      </section>
-      {/* ---- 適応疾患 ---- */}
-      <section className="lab-order-item__section">
-        <div className="lab-order-item__section-head">
-          <h3>適応疾患</h3>
-          <button type="button" onClick={() => setPicker({ kind: "disease" })}>
-            病名追加
-          </button>
-        </div>
-        <table className="master-search__table regimen-editor__rows">
-          <thead>
-            <tr>
-              <th>病名</th>
-              <th className="rad-item__compact">ICD10</th>
-              <th className="rad-item__compact">管理番号</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {draft.indications.map((row) => (
-              <tr key={row.key}>
-                <td>{row.name}</td>
-                <td className="rad-item__compact">{row.icd10}</td>
-                <td className="rad-item__compact">{row.managementNumber}</td>
-                <td className="master-search__actions">
-                  <button
-                    type="button"
-                    className="rp-card__icon-button"
-                    title="外す"
-                    aria-label="外す"
-                    onClick={() =>
-                      update(
-                        "indications",
-                        draft.indications.filter((i) => i.key !== row.key),
-                      )
-                    }
-                  >
-                    <TrashIcon />
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {draft.indications.length === 0 && (
-              <tr>
-                <td colSpan={4} className="master-search__empty">
-                  登録がありません
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-
-      {/* ---- スケジュール ---- */}
-      <section className="lab-order-item__section">
-        <div className="lab-order-item__section-head">
-          <h3>スケジュール</h3>
-        </div>
-        <div className="lab-order-item__fields">
-          <label>
-            投与期間(日)
-            <input
-              type="number"
-              min="0"
-              value={draft.treatmentDays}
-              onChange={(e) => update("treatmentDays", e.target.value)}
-            />
-          </label>
-          <label>
-            休薬期間(日)
-            <input type="number" min="0" value={draft.restDays} onChange={(e) => update("restDays", e.target.value)} />
-          </label>
-          <div className="regimen-editor__derived">
-            1 クール
-            <strong>{cycleDays > 0 ? `${cycleDays} 日` : "—"}</strong>
-          </div>
-          <label>
-            予定クール数
-            <input
-              type="number"
-              min="1"
-              value={draft.plannedCycles}
-              onChange={(e) => update("plannedCycles", e.target.value)}
-              placeholder="空欄は継続"
-            />
-          </label>
-        </div>
-      </section>
-
-      {/* ---- 投与内容 ---- */}
-      <section className="lab-order-item__section">
-        <div className="lab-order-item__section-head">
-          <h3>投与内容</h3>
-        </div>
-        {draft.steps.map((step, index) => (
-          <StepCard
-            key={step.key}
-            step={step}
-            index={index}
-            count={draft.steps.length}
-            onChange={(patch) => updateStep(step.key, patch)}
-            onDrugChange={(drugKey, patch) => updateDrug(step.key, drugKey, patch)}
-            onRemoveDrug={(drugKey) =>
-              updateStep(step.key, { drugs: step.drugs.filter((g) => g.key !== drugKey) })
-            }
-            onAddMedicine={() => setPicker({ kind: "medicine", stepKey: step.key })}
-            onPickUsage={() => setPicker({ kind: "usage", stepKey: step.key })}
-            onMove={(delta) => update("steps", moveItem(draft.steps, index, delta))}
-            onRemove={() =>
-              update(
-                "steps",
-                draft.steps.filter((s) => s.key !== step.key),
-              )
-            }
+      <div className="qe-layout">
+        <RegimenEditorToc draft={draft} showDayTable={showDayTable} />
+        <div>
+          {validationError && (
+            <div className="error-banner" role="alert" ref={validationErrorRef}>
+              <p className="error-banner__line error-banner__line--error">{validationError}</p>
+            </div>
+          )}
+          <ErrorBanner error={detail.error} />
+          <ErrorBanner
+            error={mutations.create.error ?? mutations.update.error ?? mutations.copy.error ?? mutations.remove.error}
           />
-        ))}
-        <div className="lab-order-item__actions">
-          <button type="button" onClick={() => update("steps", [...draft.steps, emptyStepDraft("drip")])}>
-            ＋ 注射のステップ
-          </button>
-          <button type="button" onClick={() => update("steps", [...draft.steps, emptyStepDraft("oral")])}>
-            ＋ 内服のステップ
-          </button>
-        </div>
-      </section>
 
-      {/* ---- Day 表 ---- */}
-      {draft.steps.length > 0 && cycleDays > 0 && <DayTable steps={draft.steps} cycleDays={cycleDays} />}
+          {frozen && (
+            <p className="regimen-check__summary regimen-check__summary--out">
+              {`${draft.status === "retired" ? "廃止" : "承認済"}のレジメンは内容を変更できません。直すときは「複製」して新しいレジメンとして作り、承認してから、こちらを廃止にします。`}
+            </p>
+          )}
+          {draft.copiedFromCode && (
+            <p className="injection-scope__note">
+              {`複製元: `}
+              <Link to={`/regimens/${draft.copiedFromCode}`}>{draft.copiedFromCode}</Link>
+            </p>
+          )}
 
-      {/* ---- 適応基準 ---- */}
-      <section className="lab-order-item__section">
-        <div className="lab-order-item__section-head">
-          <h3>適応基準(検査結果値)</h3>
-          <button type="button" onClick={() => update("labCriteria", [...draft.labCriteria, emptyLabCriterionDraft()])}>
-            検査基準追加
-          </button>
-        </div>
-        <div className="lab-order-item__table-wrap">
-          <table className="master-search__table regimen-editor__rows">
-            <thead>
-              <tr>
-                <th className="rad-item__compact">区分</th>
-                <th>検査項目</th>
-                <th className="rad-item__compact">分析物</th>
-                <th className="rad-item__compact">単位</th>
-                <th className="rad-item__compact">下限</th>
-                <th className="rad-item__compact">上限</th>
-                <th>備考</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {draft.labCriteria.map((row) => (
-                <tr key={row.key}>
-                  <td className="rad-item__compact">
-                    <select
-                      value={row.category}
-                      onChange={(e) =>
-                        updateLabCriterion(row.key, {
-                          category: e.target.value as RegimenLabCriterionDraft["category"],
-                        })
-                      }
-                    >
-                      {REGIMEN_LAB_CATEGORY_OPTIONS.map((o) => (
-                        <option key={o.code} value={o.code}>
-                          {o.display}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <div className="regimen-editor__pick">
-                      <input
-                        type="text"
-                        value={row.itemName}
-                        onChange={(e) => updateLabCriterion(row.key, { itemName: e.target.value })}
-                        placeholder="好中球数 / CCr など"
-                      />
+          {/* 内容(オーダーに影響するもの)は承認済・廃止で凍結する(§8.17)。 */}
+          <fieldset className="regimen-editor__content" disabled={frozen}>
+          {/* ---- 基本情報 ---- */}
+          <section id={RE_SECTIONS.basic} className="lab-order-item__section">
+            <div className="lab-order-item__section-head">
+              <h3>基本情報</h3>
+            </div>
+            <div className="lab-order-item__fields">
+              <label>
+                レジメンコード
+                <input
+                  type="text"
+                  value={draft.regimenCode}
+                  onChange={(e) => update("regimenCode", e.target.value)}
+                  placeholder={isNew ? "空欄なら自動採番" : undefined}
+                  disabled={!isNew}
+                />
+              </label>
+              <label>
+                レジメン名
+                <input
+                  type="text"
+                  className="regimen-editor__name"
+                  value={draft.name}
+                  onChange={(e) => update("name", e.target.value)}
+                  placeholder="mFOLFOX6 など"
+                />
+              </label>
+              <label>
+                略称
+                <input type="text" value={draft.shortName} onChange={(e) => update("shortName", e.target.value)} />
+              </label>
+              <label>
+                カナ(検索用)
+                <input type="text" value={draft.nameKana} onChange={(e) => update("nameKana", e.target.value)} />
+              </label>
+              <label>
+                診療科
+                <select value={selectedDepartmentId} onChange={(e) => handleDepartmentChange(e.target.value)}>
+                  <option value="">未指定</option>
+                  {draft.departmentCode && !selectedDepartmentId && (
+                    <option value="">{draft.departmentName || draft.departmentCode}</option>
+                  )}
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {departmentDisplayName(d)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                治療目的
+                <select value={draft.purpose} onChange={(e) => update("purpose", e.target.value as RegimenPurpose | "")}>
+                  <option value="">未指定</option>
+                  {REGIMEN_PURPOSE_OPTIONS.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                実施区分
+                <select value={draft.setting} onChange={(e) => update("setting", e.target.value as RegimenSetting | "")}>
+                  <option value="">未指定</option>
+                  {REGIMEN_SETTING_OPTIONS.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                制吐リスク
+                <select
+                  value={draft.emeticRisk}
+                  onChange={(e) => update("emeticRisk", e.target.value as RegimenEmeticRisk | "")}
+                >
+                  <option value="">未指定</option>
+                  {REGIMEN_EMETIC_RISK_OPTIONS.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="lab-order-item__fields">
+              <label>
+                備考
+                <input type="text" value={draft.note} onChange={(e) => update("note", e.target.value)} />
+              </label>
+            </div>
+          </section>
+          {/* ---- 適応疾患 ---- */}
+          <section id={RE_SECTIONS.indications} className="lab-order-item__section">
+            <div className="lab-order-item__section-head">
+              <h3>適応疾患</h3>
+              <button type="button" onClick={() => setPicker({ kind: "disease" })}>
+                病名追加
+              </button>
+            </div>
+            <table className="master-search__table regimen-editor__rows">
+              <thead>
+                <tr>
+                  <th>病名</th>
+                  <th className="rad-item__compact">ICD10</th>
+                  <th className="rad-item__compact">管理番号</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {draft.indications.map((row) => (
+                  <tr key={row.key}>
+                    <td>{row.name}</td>
+                    <td className="rad-item__compact">{row.icd10}</td>
+                    <td className="rad-item__compact">{row.managementNumber}</td>
+                    <td className="master-search__actions">
                       <button
                         type="button"
-                        className="rp-card__compact-button"
-                        onClick={() => setPicker({ kind: "lab", criterionKey: row.key })}
+                        className="rp-card__icon-button"
+                        title="外す"
+                        aria-label="外す"
+                        onClick={() =>
+                          update(
+                            "indications",
+                            draft.indications.filter((i) => i.key !== row.key),
+                          )
+                        }
                       >
-                        選択
+                        <TrashIcon />
                       </button>
-                    </div>
-                  </td>
-                  <td className="rad-item__compact">
-                    <input
-                      type="text"
-                      className="regimen-editor__code-input"
-                      value={row.analyteCode}
-                      onChange={(e) => updateLabCriterion(row.key, { analyteCode: e.target.value })}
-                      placeholder="JLAC11"
-                    />
-                  </td>
-                  <td className="rad-item__compact">
-                    <input
-                      type="text"
-                      className="regimen-editor__unit-input"
-                      value={row.unit}
-                      onChange={(e) => updateLabCriterion(row.key, { unit: e.target.value })}
-                    />
-                  </td>
-                  <td className="rad-item__compact">
-                    <input
-                      type="number"
-                      step="any"
-                      className="regimen-editor__num-input"
-                      value={row.lowerLimit}
-                      onChange={(e) => updateLabCriterion(row.key, { lowerLimit: e.target.value })}
-                    />
-                  </td>
-                  <td className="rad-item__compact">
-                    <input
-                      type="number"
-                      step="any"
-                      className="regimen-editor__num-input"
-                      value={row.upperLimit}
-                      onChange={(e) => updateLabCriterion(row.key, { upperLimit: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.note}
-                      onChange={(e) => updateLabCriterion(row.key, { note: e.target.value })}
-                    />
-                  </td>
-                  <td className="master-search__actions">
-                    <button
-                      type="button"
-                      className="rp-card__icon-button"
-                      title="外す"
-                      aria-label="外す"
-                      onClick={() =>
-                        update(
-                          "labCriteria",
-                          draft.labCriteria.filter((c) => c.key !== row.key),
-                        )
-                      }
-                    >
-                      <TrashIcon />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {draft.labCriteria.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="master-search__empty">
-                    登録がありません
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="regimen-editor__texts">
-          <label>
-            適応の補足
-            <textarea
-              rows={3}
-              value={draft.indicationNote}
-              onChange={(e) => update("indicationNote", e.target.value)}
-            />
-          </label>
-          <label>
-            中止基準
-            <textarea
-              rows={3}
-              value={draft.discontinuationCriteria}
-              onChange={(e) => update("discontinuationCriteria", e.target.value)}
-            />
-          </label>
-          <label>
-            減量基準
-            <textarea
-              rows={3}
-              value={draft.doseReductionCriteria}
-              onChange={(e) => update("doseReductionCriteria", e.target.value)}
-            />
-          </label>
-        </div>
-      </section>
+                    </td>
+                  </tr>
+                ))}
+                {draft.indications.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="master-search__empty">
+                      登録がありません
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </section>
 
-      {/* ---- 副作用 ---- */}
-      <section className="lab-order-item__section">
-        <div className="lab-order-item__section-head">
-          <h3>副作用</h3>
-          <button
-            type="button"
-            onClick={() => update("adverseEvents", [...draft.adverseEvents, emptyAdverseEventDraft()])}
-          >
-            副作用追加
-          </button>
-        </div>
-        <table className="master-search__table regimen-editor__rows">
-          <thead>
-            <tr>
-              <th>用語(CTCAE)</th>
-              <th className="rad-item__compact">Grade</th>
-              <th>対処</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {draft.adverseEvents.map((row) => (
-              <tr key={row.key}>
-                <td>
-                  <div className="regimen-editor__with-picker">
-                    <input
-                      type="text"
-                      value={row.term}
-                      onChange={(e) => updateAdverseEvent(row.key, { term: e.target.value })}
-                      placeholder="末梢性感覚ニューロパチー など"
-                    />
-                    <button
-                      type="button"
-                      className="rp-card__compact-button"
-                      onClick={() => setPicker({ kind: "ctcae", adverseEventKey: row.key })}
-                    >
-                      選択
-                    </button>
-                  </div>
-                </td>
-                <td className="rad-item__compact">
-                  <select value={row.grade} onChange={(e) => updateAdverseEvent(row.key, { grade: e.target.value })}>
-                    <option value="">—</option>
-                    {CTCAE_GRADE_OPTIONS.map((g) => (
-                      <option key={g} value={g}>
-                        Grade {g}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={row.note}
-                    onChange={(e) => updateAdverseEvent(row.key, { note: e.target.value })}
-                  />
-                </td>
-                <td className="master-search__actions">
-                  <button
-                    type="button"
-                    className="rp-card__icon-button"
-                    title="外す"
-                    aria-label="外す"
-                    onClick={() =>
-                      update(
-                        "adverseEvents",
-                        draft.adverseEvents.filter((a) => a.key !== row.key),
-                      )
-                    }
-                  >
-                    <TrashIcon />
-                  </button>
-                </td>
-              </tr>
+          {/* ---- スケジュール ---- */}
+          <section id={RE_SECTIONS.schedule} className="lab-order-item__section">
+            <div className="lab-order-item__section-head">
+              <h3>スケジュール</h3>
+            </div>
+            <div className="lab-order-item__fields">
+              <label>
+                投与期間(日)
+                <input
+                  type="number"
+                  min="0"
+                  value={draft.treatmentDays}
+                  onChange={(e) => update("treatmentDays", e.target.value)}
+                />
+              </label>
+              <label>
+                休薬期間(日)
+                <input type="number" min="0" value={draft.restDays} onChange={(e) => update("restDays", e.target.value)} />
+              </label>
+              <div className="regimen-editor__derived">
+                1 クール
+                <strong>{cycleDays > 0 ? `${cycleDays} 日` : "—"}</strong>
+              </div>
+              <label>
+                予定クール数
+                <input
+                  type="number"
+                  min="1"
+                  value={draft.plannedCycles}
+                  onChange={(e) => update("plannedCycles", e.target.value)}
+                  placeholder="空欄は継続"
+                />
+              </label>
+            </div>
+          </section>
+
+          {/* ---- 投与内容 ---- */}
+          <section id={RE_SECTIONS.steps} className="lab-order-item__section">
+            <div className="lab-order-item__section-head">
+              <h3>投与内容</h3>
+            </div>
+            {draft.steps.map((step, index) => (
+              <StepCard
+                key={step.key}
+                step={step}
+                index={index}
+                count={draft.steps.length}
+                onChange={(patch) => updateStep(step.key, patch)}
+                onDrugChange={(drugKey, patch) => updateDrug(step.key, drugKey, patch)}
+                onRemoveDrug={(drugKey) =>
+                  updateStep(step.key, { drugs: step.drugs.filter((g) => g.key !== drugKey) })
+                }
+                onAddMedicine={() => setPicker({ kind: "medicine", stepKey: step.key })}
+                onPickUsage={() => setPicker({ kind: "usage", stepKey: step.key })}
+                onMove={(delta) => update("steps", moveItem(draft.steps, index, delta))}
+                onRemove={() =>
+                  update(
+                    "steps",
+                    draft.steps.filter((s) => s.key !== step.key),
+                  )
+                }
+              />
             ))}
-            {draft.adverseEvents.length === 0 && (
-              <tr>
-                <td colSpan={4} className="master-search__empty">
-                  登録がありません
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-
-      {/* ---- 参考文献 ---- */}
-      <section className="lab-order-item__section lab-order-item__section--tail">
-        <div className="lab-order-item__section-head">
-          <h3>参考文献</h3>
-        </div>
-        <div className="regimen-editor__texts">
-          <label>
-            <textarea
-              rows={3}
-              value={draft.referencesNote}
-              onChange={(e) => update("referencesNote", e.target.value)}
-              placeholder="論文・ガイドライン・添付文書など(1 行 1 件)"
-            />
-          </label>
-        </div>
-      </section>
-
-      </fieldset>
-
-      {/* ---- 運用(凍結中も動かせる。使うのをやめる・並び順を変える操作) ---- */}
-      <section className="lab-order-item__section">
-        <div className="lab-order-item__section-head">
-          <h3>運用</h3>
-        </div>
-        <div className="lab-order-item__fields">
-          <label>
-            状態
-            <select value={draft.status} onChange={(e) => update("status", e.target.value as RegimenStatus)}>
-              {statusOptions.map((o) => (
-                <option key={o.code} value={o.code}>
-                  {o.display}
-                </option>
-              ))}
-            </select>
-          </label>
-          {/* 承認日・承認者はサーバーが入れる(承認した人と日を後から書き換えさせない)。 */}
-          <div className="regimen-editor__derived">
-            承認
-            <strong>{draft.approvedOn ? `${draft.approvedOn}${approverName ? ` / ${approverName}` : ""}` : "—"}</strong>
-          </div>
-          <label>
-            有効開始日
-            <input type="date" value={draft.validFrom} onChange={(e) => update("validFrom", e.target.value)} />
-          </label>
-          <label>
-            有効終了日
-            <input type="date" value={draft.validTo} onChange={(e) => update("validTo", e.target.value)} />
-          </label>
-          <label>
-            表示順
-            <input
-              type="number"
-              value={draft.displayOrder}
-              onChange={(e) => update("displayOrder", e.target.value)}
-            />
-          </label>
-        </div>
-      </section>
-
-      <div className="lab-order-item__actions regimen-editor__footer">
-        <button type="button" onClick={handleSave} disabled={saving}>
-          保存
-        </button>
-        {savedId !== null && (
-          <>
-            <button type="button" onClick={handleCopy} disabled={mutations.copy.isPending}>
-              複製
-            </button>
-            {/* 削除できるのは下書きだけ(承認済・廃止は施設の記録で、適用が指している)。 */}
-            {!frozen && (
-              <button type="button" onClick={handleDelete} disabled={mutations.remove.isPending}>
-                削除
+            <div className="lab-order-item__actions">
+              <button type="button" onClick={() => update("steps", [...draft.steps, emptyStepDraft("drip")])}>
+                ＋ 注射のステップ
               </button>
+              <button type="button" onClick={() => update("steps", [...draft.steps, emptyStepDraft("oral")])}>
+                ＋ 内服のステップ
+              </button>
+            </div>
+          </section>
+
+          {/* ---- Day 表 ---- */}
+          {showDayTable && <DayTable steps={draft.steps} cycleDays={cycleDays} />}
+
+          {/* ---- 適応基準 ---- */}
+          <section id={RE_SECTIONS.criteria} className="lab-order-item__section">
+            <div className="lab-order-item__section-head">
+              <h3>適応基準(検査結果値)</h3>
+              <button type="button" onClick={() => update("labCriteria", [...draft.labCriteria, emptyLabCriterionDraft()])}>
+                検査基準追加
+              </button>
+            </div>
+            <div className="lab-order-item__table-wrap">
+              <table className="master-search__table regimen-editor__rows">
+                <thead>
+                  <tr>
+                    <th className="rad-item__compact">区分</th>
+                    <th>検査項目</th>
+                    <th className="rad-item__compact">分析物</th>
+                    <th className="rad-item__compact">単位</th>
+                    <th className="rad-item__compact">下限</th>
+                    <th className="rad-item__compact">上限</th>
+                    <th>備考</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draft.labCriteria.map((row) => (
+                    <tr key={row.key}>
+                      <td className="rad-item__compact">
+                        <select
+                          value={row.category}
+                          onChange={(e) =>
+                            updateLabCriterion(row.key, {
+                              category: e.target.value as RegimenLabCriterionDraft["category"],
+                            })
+                          }
+                        >
+                          {REGIMEN_LAB_CATEGORY_OPTIONS.map((o) => (
+                            <option key={o.code} value={o.code}>
+                              {o.display}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <div className="regimen-editor__pick">
+                          <input
+                            type="text"
+                            value={row.itemName}
+                            onChange={(e) => updateLabCriterion(row.key, { itemName: e.target.value })}
+                            placeholder="好中球数 / CCr など"
+                          />
+                          <button
+                            type="button"
+                            className="rp-card__compact-button"
+                            onClick={() => setPicker({ kind: "lab", criterionKey: row.key })}
+                          >
+                            選択
+                          </button>
+                        </div>
+                      </td>
+                      <td className="rad-item__compact">
+                        <input
+                          type="text"
+                          className="regimen-editor__code-input"
+                          value={row.analyteCode}
+                          onChange={(e) => updateLabCriterion(row.key, { analyteCode: e.target.value })}
+                          placeholder="JLAC11"
+                        />
+                      </td>
+                      <td className="rad-item__compact">
+                        <input
+                          type="text"
+                          className="regimen-editor__unit-input"
+                          value={row.unit}
+                          onChange={(e) => updateLabCriterion(row.key, { unit: e.target.value })}
+                        />
+                      </td>
+                      <td className="rad-item__compact">
+                        <input
+                          type="number"
+                          step="any"
+                          className="regimen-editor__num-input"
+                          value={row.lowerLimit}
+                          onChange={(e) => updateLabCriterion(row.key, { lowerLimit: e.target.value })}
+                        />
+                      </td>
+                      <td className="rad-item__compact">
+                        <input
+                          type="number"
+                          step="any"
+                          className="regimen-editor__num-input"
+                          value={row.upperLimit}
+                          onChange={(e) => updateLabCriterion(row.key, { upperLimit: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={row.note}
+                          onChange={(e) => updateLabCriterion(row.key, { note: e.target.value })}
+                        />
+                      </td>
+                      <td className="master-search__actions">
+                        <button
+                          type="button"
+                          className="rp-card__icon-button"
+                          title="外す"
+                          aria-label="外す"
+                          onClick={() =>
+                            update(
+                              "labCriteria",
+                              draft.labCriteria.filter((c) => c.key !== row.key),
+                            )
+                          }
+                        >
+                          <TrashIcon />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {draft.labCriteria.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="master-search__empty">
+                        登録がありません
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="regimen-editor__texts">
+              <label>
+                適応の補足
+                <textarea
+                  rows={3}
+                  value={draft.indicationNote}
+                  onChange={(e) => update("indicationNote", e.target.value)}
+                />
+              </label>
+              <label>
+                中止基準
+                <textarea
+                  rows={3}
+                  value={draft.discontinuationCriteria}
+                  onChange={(e) => update("discontinuationCriteria", e.target.value)}
+                />
+              </label>
+              <label>
+                減量基準
+                <textarea
+                  rows={3}
+                  value={draft.doseReductionCriteria}
+                  onChange={(e) => update("doseReductionCriteria", e.target.value)}
+                />
+              </label>
+            </div>
+          </section>
+
+          {/* ---- 副作用 ---- */}
+          <section id={RE_SECTIONS.adverseEvents} className="lab-order-item__section">
+            <div className="lab-order-item__section-head">
+              <h3>副作用</h3>
+              <button
+                type="button"
+                onClick={() => update("adverseEvents", [...draft.adverseEvents, emptyAdverseEventDraft()])}
+              >
+                副作用追加
+              </button>
+            </div>
+            <table className="master-search__table regimen-editor__rows">
+              <thead>
+                <tr>
+                  <th>用語(CTCAE)</th>
+                  <th className="rad-item__compact">Grade</th>
+                  <th>対処</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {draft.adverseEvents.map((row) => (
+                  <tr key={row.key}>
+                    <td>
+                      <div className="regimen-editor__with-picker">
+                        <input
+                          type="text"
+                          value={row.term}
+                          onChange={(e) => updateAdverseEvent(row.key, { term: e.target.value })}
+                          placeholder="末梢性感覚ニューロパチー など"
+                        />
+                        <button
+                          type="button"
+                          className="rp-card__compact-button"
+                          onClick={() => setPicker({ kind: "ctcae", adverseEventKey: row.key })}
+                        >
+                          選択
+                        </button>
+                      </div>
+                    </td>
+                    <td className="rad-item__compact">
+                      <select value={row.grade} onChange={(e) => updateAdverseEvent(row.key, { grade: e.target.value })}>
+                        <option value="">—</option>
+                        {CTCAE_GRADE_OPTIONS.map((g) => (
+                          <option key={g} value={g}>
+                            Grade {g}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={row.note}
+                        onChange={(e) => updateAdverseEvent(row.key, { note: e.target.value })}
+                      />
+                    </td>
+                    <td className="master-search__actions">
+                      <button
+                        type="button"
+                        className="rp-card__icon-button"
+                        title="外す"
+                        aria-label="外す"
+                        onClick={() =>
+                          update(
+                            "adverseEvents",
+                            draft.adverseEvents.filter((a) => a.key !== row.key),
+                          )
+                        }
+                      >
+                        <TrashIcon />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {draft.adverseEvents.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="master-search__empty">
+                      登録がありません
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+
+          {/* ---- 参考文献 ---- */}
+          <section id={RE_SECTIONS.references} className="lab-order-item__section lab-order-item__section--tail">
+            <div className="lab-order-item__section-head">
+              <h3>参考文献</h3>
+            </div>
+            <div className="regimen-editor__texts">
+              <label>
+                <textarea
+                  rows={3}
+                  value={draft.referencesNote}
+                  onChange={(e) => update("referencesNote", e.target.value)}
+                  placeholder="論文・ガイドライン・添付文書など(1 行 1 件)"
+                />
+              </label>
+            </div>
+          </section>
+
+          </fieldset>
+
+          {/* ---- 運用(凍結中も動かせる。使うのをやめる・並び順を変える操作) ---- */}
+          <section id={RE_SECTIONS.operation} className="lab-order-item__section">
+            <div className="lab-order-item__section-head">
+              <h3>運用</h3>
+            </div>
+            <div className="lab-order-item__fields">
+              <label>
+                状態
+                <select value={draft.status} onChange={(e) => update("status", e.target.value as RegimenStatus)}>
+                  {statusOptions.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {/* 承認日・承認者はサーバーが入れる(承認した人と日を後から書き換えさせない)。 */}
+              <div className="regimen-editor__derived">
+                承認
+                <strong>{draft.approvedOn ? `${draft.approvedOn}${approverName ? ` / ${approverName}` : ""}` : "—"}</strong>
+              </div>
+              <label>
+                有効開始日
+                <input type="date" value={draft.validFrom} onChange={(e) => update("validFrom", e.target.value)} />
+              </label>
+              <label>
+                有効終了日
+                <input type="date" value={draft.validTo} onChange={(e) => update("validTo", e.target.value)} />
+              </label>
+              <label>
+                表示順
+                <input
+                  type="number"
+                  value={draft.displayOrder}
+                  onChange={(e) => update("displayOrder", e.target.value)}
+                />
+              </label>
+            </div>
+          </section>
+
+          <div className="lab-order-item__actions regimen-editor__footer">
+            <button type="button" onClick={handleSave} disabled={saving}>
+              保存
+            </button>
+            {savedId !== null && (
+              <>
+                <button type="button" onClick={handleCopy} disabled={mutations.copy.isPending}>
+                  複製
+                </button>
+                {/* 削除できるのは下書きだけ(承認済・廃止は施設の記録で、適用が指している)。 */}
+                {!frozen && (
+                  <button type="button" onClick={handleDelete} disabled={mutations.remove.isPending}>
+                    削除
+                  </button>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
 
       {picker?.kind === "disease" && (
@@ -881,7 +894,7 @@ function StepCard({
   }
 
   return (
-    <section className="regimen-step">
+    <section id={regimenStepAnchorId(step.key)} className="regimen-step">
       <div className="regimen-step__head">
         {/* 番号は見出し欄のラベル位置に置き、投与日・用法種別のラベルと高さを揃える。 */}
         <label className="regimen-step__field regimen-step__name-field">
@@ -1229,7 +1242,7 @@ function DayTable({ steps, cycleDays }: { steps: RegimenStepDraft[]; cycleDays: 
   });
 
   return (
-    <section className="lab-order-item__section">
+    <section id={RE_SECTIONS.dayTable} className="lab-order-item__section">
       <div className="lab-order-item__section-head">
         <h3>Day 表</h3>
       </div>
