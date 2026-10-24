@@ -9,6 +9,7 @@ module Master
   #   master_label        … エラー文言に出す呼び名("パス" / "レジメン")
   #   parent_id_columns   … 子が持つ親の id 列(複製で付け替えるので写さない)
   #   replace_children / load_tree / validate_content! / copy_children / delete_children / detail
+  #   unapproval_blockers … 任意。承認済から下書きへ戻せない理由(既定は常に戻せない)
   module VersionedMaster
     extend ActiveSupport::Concern
 
@@ -58,7 +59,11 @@ module Master
 
     def update
       return render_frozen if frozen_change?
-      return render_unapproval if unapproving?
+
+      if unapproving?
+        blockers = unapproval_blockers
+        return render json: { errors: blockers }, status: :unprocessable_content if blockers.any?
+      end
 
       tree = nil
       model_class.transaction do
@@ -141,16 +146,16 @@ module Master
       children_sent || content_sent
     end
 
-    # 承認済・廃止から下書きへは戻せない。戻せると「下書きにしてから直す」で凍結を
-    # すり抜けられるため。使うのをやめるときは廃止にする。
+    # 承認済・廃止から下書きへ戻そうとしているか。
     def unapproving?
       frozen_record? && record_params[:status] == "draft"
     end
 
-    def render_unapproval
-      render json: {
-        errors: ["承認を取り消せません。使わないようにするには廃止にしてください"],
-      }, status: :unprocessable_content
+    # 下書きへ戻せない理由。空なら戻せる。既定では戻せない(戻せると「下書きにしてから直す」で
+    # 凍結をすり抜けられるため。使うのをやめるときは廃止にする)。患者への適用を確かめられる
+    # マスタは、まだ使っていない承認済だけ戻せるように上書きする。
+    def unapproval_blockers
+      ["承認を取り消せません。使わないようにするには廃止にしてください"]
     end
 
     def render_frozen
@@ -159,11 +164,16 @@ module Master
       }, status: :unprocessable_content
     end
 
-    # 承認の記録はサーバーが入れる(画面の手入力にしない)。下書き・廃止へ戻したら消す。
+    # 承認の記録はサーバーが入れる(画面の手入力にしない)。下書きへ戻したら消し、
+    # 廃止では残す(その内容を誰が承認して使ったかの記録)。
     def approval_attrs(previous_status, next_status)
       return {} if next_status.blank? || previous_status == next_status
 
-      next_status == "approved" ? { approved_on: FacilityClock.today, approved_by: approver_id } : {}
+      case next_status
+      when "approved" then { approved_on: FacilityClock.today, approved_by: approver_id }
+      when "draft" then { approved_on: nil, approved_by: nil }
+      else {}
+      end
     end
 
     # 承認者。認証なしモード(開発)ではパラメータを通す(order_sets の持ち主と同じ扱い)。

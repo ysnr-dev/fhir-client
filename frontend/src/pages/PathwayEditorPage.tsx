@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Disease, PathwaySetting, PathwayStatus } from "../api/masterClient";
 import { usePathway, usePathwayMutations } from "../api/masterQueries";
@@ -63,6 +63,7 @@ import {
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useValidationError } from "../hooks/useValidationError";
 import { makeFieldUpdater, newDraftKey } from "../lib/form";
+import { scrollIntoViewVisibly } from "../lib/scroll";
 
 // クリニカルパス(施設パス)定義の登録・編集。1 パス 1 ページで、本体と子(対象病名・病日・
 // OAT ユニット・観察項目・タスク)をローカルの draft に持ち、「保存」で 1 リクエストにまとめる。
@@ -96,6 +97,13 @@ export function PathwayEditorPage() {
   // 同じ id の再取得(フォーカス復帰など)で入力中の draft を上書きしないよう、id が変わったときだけ作り直す。
   const [loadedId, setLoadedId] = useState<number | null>(null);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  // サーバーが返したエラー(承認時の検証・承認の取り消しなど)もバナーはフォームの先頭に出るので、
+  // 入力エラーと同じく出た時点で画面内へ送る。
+  const serverError = mutations.create.error ?? mutations.update.error ?? mutations.copy.error ?? mutations.remove.error;
+  const serverErrorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (serverError) scrollIntoViewVisibly(serverErrorRef.current, "center");
+  }, [serverError]);
   const [picker, setPicker] = useState<Picker>(null);
   const update = makeFieldUpdater(setDraft);
 
@@ -115,9 +123,9 @@ export function PathwayEditorPage() {
   const savedId = detail.data?.id ?? null;
   // 保存済みの状態で判定する(画面で状態を変えただけでは凍結は解けない)。
   const frozen = detail.data ? detail.data.status !== "draft" : false;
-  const statusOptions = frozen
-    ? PATHWAY_STATUS_OPTIONS.filter((o) => o.code !== "draft")
-    : PATHWAY_STATUS_OPTIONS;
+  // 承認済は下書きに戻せる(まだ適用していないときだけ。判定はサーバー)。廃止は戻せない。
+  const statusOptions =
+    detail.data?.status === "retired" ? PATHWAY_STATUS_OPTIONS.filter((o) => o.code !== "draft") : PATHWAY_STATUS_OPTIONS;
   const approver = practitioners.find((p) => p.id === draft.approvedBy);
   const approverName = approver ? practitionerDisplayName(approver) : draft.approvedBy;
   const saving = mutations.create.isPending || mutations.update.isPending;
@@ -303,13 +311,15 @@ export function PathwayEditorPage() {
             </div>
           )}
           <ErrorBanner error={detail.error} />
-          <ErrorBanner
-            error={mutations.create.error ?? mutations.update.error ?? mutations.copy.error ?? mutations.remove.error}
-          />
+          <div ref={serverErrorRef}>
+            <ErrorBanner error={serverError} />
+          </div>
 
           {frozen && (
             <p className="regimen-check__summary regimen-check__summary--out">
-              {`${draft.status === "retired" ? "廃止" : "承認済"}のパスは内容を変更できません。直すときは「複製」して新しいパスとして作り、承認してから、こちらを廃止にします。`}
+              {detail.data?.status === "retired"
+                ? "廃止のパスは内容を変更できません。直すときは「複製」して新しいパスとして作ります。"
+                : "承認済のパスは内容を変更できません。直すときは「複製」して新しいパスとして作り、承認してから、こちらを廃止にします。まだ患者に適用していなければ、状態を下書きに戻して直せます。"}
             </p>
           )}
           {draft.copiedFromCode && (

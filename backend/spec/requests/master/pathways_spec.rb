@@ -333,7 +333,7 @@ RSpec.describe "Master::Pathways", type: :request do
   end
 
   describe "承認の記録" do
-    it "承認したときに承認日をサーバーが入れ、下書きには戻せない" do
+    it "承認したときに承認日をサーバーが入れる" do
       pathway = create_pathway("000001", "PCI", adaptive_criteria: "待機的", scheduled_days: 3)
       create_event("000001", elapsed_days: 1).then do |event|
         Master::PathwayOatUnit.create!(pathway_code: "000001", event_id: event.id, unit_key: UNIT_KEY, name: "x")
@@ -343,11 +343,68 @@ RSpec.describe "Master::Pathways", type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(body["approved_on"]).to eq(FacilityClock.today.to_s)
+    end
+  end
+
+  # 承認の取り消し(下書きへ戻す)は、上流に適用の CarePlan が 1 件も無いときだけ。
+  describe "承認の取り消し" do
+    let(:upstream_base) { ENV.fetch("FHIR_SERVER_BASE_URL", "http://localhost:3000") }
+    let!(:pathway) do
+      create_pathway("000001", "PCI", status: "approved", approved_on: FacilityClock.today, approved_by: "p1",
+                                      adaptive_criteria: "待機的", scheduled_days: 3)
+    end
+
+    before { FhirGateway.reset_connections! }
+
+    def stub_application_count(total)
+      stub_request(:get, "#{upstream_base}/CarePlan")
+        .with(query: { "instantiates-uri" => "http://fhir-client.local/pathway/000001", "_summary" => "count" },
+              headers: { "Prefer" => "handling=strict" })
+        .to_return(status: 200, body: { resourceType: "Bundle", type: "searchset", total: total }.to_json,
+                   headers: { "Content-Type" => "application/fhir+json" })
+    end
+
+    it "適用が無ければ下書きに戻り、承認日・承認者が消える" do
+      stub_application_count(0)
+
+      put "/master/pathways/#{pathway.id}", params: { status: "draft" }, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(body["status"]).to eq("draft")
+      expect(body["approved_on"]).to be_nil
+      expect(body["approved_by"]).to be_nil
+
+      put "/master/pathways/#{pathway.id}", params: { name: "改名" }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(body["name"]).to eq("改名")
+    end
+
+    it "適用済みなら戻せない" do
+      stub_application_count(2)
 
       put "/master/pathways/#{pathway.id}", params: { status: "draft" }, as: :json
 
       expect(response).to have_http_status(:unprocessable_content)
-      expect(body["errors"].join).to include("承認を取り消せません")
+      expect(body["errors"].join).to include("適用済み(2 件)")
+      expect(pathway.reload.status).to eq("approved")
+    end
+
+    it "上流に確認できなければ戻せない" do
+      stub_request(:get, "#{upstream_base}/CarePlan").with(query: hash_including({})).to_return(status: 500)
+
+      put "/master/pathways/#{pathway.id}", params: { status: "draft" }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("確認できない")
+    end
+
+    it "廃止は下書きに戻せない" do
+      pathway.update!(status: "retired")
+
+      put "/master/pathways/#{pathway.id}", params: { status: "draft" }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("廃止のパス")
     end
   end
 

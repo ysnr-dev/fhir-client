@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { CtcaeTerm, Disease, JlacItem, Medicine, MedicineUsage } from "../api/masterClient";
 import { useFormularyRankLookup, useRegimen, useRegimenMutations } from "../api/masterQueries";
@@ -47,6 +47,7 @@ import {
 import type { RegimenEmeticRisk, RegimenPurpose, RegimenSetting, RegimenStatus } from "../api/masterClient";
 import { useValidationError } from "../hooks/useValidationError";
 import { makeFieldUpdater, newDraftKey } from "../lib/form";
+import { scrollIntoViewVisibly } from "../lib/scroll";
 import { TrashIcon } from "../components/icons/TrashIcon";
 import { moveItem } from "../lib/arrays";
 
@@ -79,6 +80,13 @@ export function RegimenEditorPage() {
   // 上書きしないよう、id が変わったときだけ draft を作り直す。
   const [loadedId, setLoadedId] = useState<number | null>(null);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  // サーバーが返したエラー(承認時の検証など)もバナーはフォームの先頭に出るので、
+  // 入力エラーと同じく出た時点で画面内へ送る。
+  const serverError = mutations.create.error ?? mutations.update.error ?? mutations.copy.error ?? mutations.remove.error;
+  const serverErrorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (serverError) scrollIntoViewVisibly(serverErrorRef.current, "center");
+  }, [serverError]);
   const [picker, setPicker] = useState<Picker>(null);
   const update = makeFieldUpdater(setDraft);
 
@@ -222,9 +230,9 @@ export function RegimenEditorPage() {
             </div>
           )}
           <ErrorBanner error={detail.error} />
-          <ErrorBanner
-            error={mutations.create.error ?? mutations.update.error ?? mutations.copy.error ?? mutations.remove.error}
-          />
+          <div ref={serverErrorRef}>
+            <ErrorBanner error={serverError} />
+          </div>
 
           {frozen && (
             <p className="regimen-check__summary regimen-check__summary--out">
