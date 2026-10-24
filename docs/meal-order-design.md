@@ -861,7 +861,7 @@ model・テーブル・search_definition・extraction まで要る。ServiceRequ
 |---|---|---|
 | 食種マスタ | `/meal-diets` | `MealItemPage` に種別・食止め・主成分量・適応を足したもの(§3.3) |
 | 食事オーダー項目マスタ(主食・副食形態) | `/meal-items` | `TreatmentItemPage`(セット・データセット・レセ電算・予約を削除) |
-| 食種 種別 | `/meal-categories` | `PhysioExamTypePage`(略称の欄だけ落とした同じ作り) |
+| 食種 種別 | `/meal-categories` | `ExamTypePage`(生理検査・内視鏡の検査種別画面。略称の欄だけ落とした同じ作り) |
 | パターン食 | `/meal-patterns` | `InsulinScaleSetPage`(一覧 + 編集モーダル)。段階の編集は `MealOrderForm` を再利用(§3.5) |
 | オーダー入力 | カルテ右ペイン「食事」 | 新規(`MealOrderForm`。伝票レイアウトが無いので 1 枚のフォーム) |
 | 食事カレンダー | カルテ左ペイン「食事」タブ | 新規(`KarteMealTab`) |

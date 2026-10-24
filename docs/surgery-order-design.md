@@ -196,7 +196,7 @@ master_surgery_categories -- 術式の種別(分類)。parent_code の自己参�
 | 画面 | パス | 元 |
 |---|---|---|
 | 術式マスタ | `/surgery-items` | `TreatmentItemPage`(セット・レイアウト・予約・データセット列を削除、既定値列を追加。K コードは `MedicalProcedureSearchModal` の `defaultSection="K"` から選べる。種別で絞り込める) |
-| 術式 種別 | `/surgery-categories` | `PhysioExamTypePage`(ページングを外して木の順に並べ、親分類の欄を追加) |
+| 術式 種別 | `/surgery-categories` | `ExamTypePage`(生理検査・内視鏡の検査種別画面。ページングを外して木の順に並べ、親分類の欄を追加) |
 | 手術一覧(手術部業務) | `/surgery-worklist` | `TreatmentWorklistPage`(並びを手術室 → 入室予定時刻に変更、手術室フィルタ追加、実施入力なし) |
 | 手術カレンダー(手術部業務) | `/surgery-calendar` | 第3段階で追加。部屋 × 時刻の面で日程を組む画面(`docs/surgery-calendar-design.md`)。当初は手術一覧のタブだったが独立させた |
 | オーダー入力 | カルテ右ペイン「手術」 | 新規(`SurgeryOrderForm`)。伝票タブ無し、術式は検索モーダル、ヘッダ入力が厚い |

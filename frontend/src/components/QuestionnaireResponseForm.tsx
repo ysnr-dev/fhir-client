@@ -24,11 +24,8 @@ import {
 } from "../fhir/schemaImage";
 import { OrganizationSearchModal } from "./OrganizationSearchModal";
 import { PractitionerSearchModal } from "./PractitionerSearchModal";
-import {
-  QuestionnaireResponseToc,
-  responseTocAnchorId,
-  type ResponseTocEntry,
-} from "./QuestionnaireResponseToc";
+import type { EditorTocEntry } from "./EditorToc";
+import { QuestionnaireResponseToc, responseTocAnchorId } from "./QuestionnaireResponseToc";
 import { SchemaImageField, type AnnotationState } from "./SchemaImageField";
 
 // Questionnaire の item ツリーからテンプレート入力フォームを再帰レンダリングする。
@@ -414,8 +411,8 @@ function buildTocEntries(
   items: fhir4.QuestionnaireItem[] | undefined,
   prefix: string,
   answers: Answers,
-): ResponseTocEntry[] {
-  return (items ?? []).flatMap((item): ResponseTocEntry[] => {
+): EditorTocEntry[] {
+  return (items ?? []).flatMap((item): EditorTocEntry[] => {
     if (isHidden(item)) return [];
     const key = prefix + item.linkId;
     if (item.type !== "group") return buildTocEntries(item.item, `${key}.`, answers);

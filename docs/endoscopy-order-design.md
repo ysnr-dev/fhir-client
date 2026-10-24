@@ -224,11 +224,11 @@ JED 用語集の版が上がったらテンプレートを改版して取り込�
 
 | 画面 | パス | 元 |
 |---|---|---|
-| 内視鏡オーダー項目マスタ | `/endoscopy-items` | `PhysioItemPage` |
-| 検査種別 | `/endoscopy-exam-types` | `PhysioExamTypePage` + JED区分列 |
+| 内視鏡オーダー項目マスタ | `/endoscopy-items` | `ExamItemPage`(生理検査と共用) |
+| 検査種別 | `/endoscopy-exam-types` | `ExamTypePage`(生理検査と共用)+ JED区分列 |
 | 内視鏡オーダーレイアウト | `/endoscopy-item-layouts` | `ItemLayoutPage`(各部門で共用) |
 | 実施入力データセット | `/endoscopy-datasets` | `PerformDatasetPage`(各部門で共用) |
-| 内視鏡一覧(部門業務) | `/endoscopy-worklist` | `PhysioWorklistPage` |
+| 内視鏡一覧(部門業務) | `/endoscopy-worklist` | `ExamWorklistPage`(生理検査と共用) |
 | オーダー入力 | カルテ右ペイン「内視鏡」 | `PhysioOrderForm`(生理検査と同一構成) |
 
 オーダー画面は生理検査と同一で、内視鏡固有の UI は無い。検査目的の JED 用語は
@@ -246,7 +246,7 @@ JED 用語集の版が上がったらテンプレートを改版して取り込�
 | seed | `db/seed_data/endoscopy_exam_types.csv`(6件) |
 | spec | リクエスト6本(75 examples)。backend 全 911 examples green |
 | FHIR 変換 | `fhir/endoscopyOrderHelpers.ts` / `endoscopyTaskHelpers.ts` / `endoscopyResultHelpers.ts` |
-| 画面 | §6 の6画面と `EndoscopyOrderForm` / `Panels` / `DetailPanel` / `EndoscopyItemSearchModal` / `EndoscopyPerformModal` / `endoscopyItemOptions` |
+| 画面 | §6 の6画面と `EndoscopyOrderForm` / `Panels` / `DetailPanel` / `EndoscopyItemSearchModal` / `EndoscopyPerformModal` / `examItemOptions` |
 | カルテ | `karteTimeline` に `endoscopy-order` 種別、`KarteRightPane` の起動ボタン、`KarteTimeline` のカード・実施情報、`KarteCardModals` の詳細/JSON、`KarteCategoryList` / `karteUrl` / `KartePage` の分岐 |
 | テンプレート | 検査目的4本(END_EGD/CS/SB/ERCP_PUR_01、§4)+ END_EGD_01(上部内視鏡 前処置・鎮静指示)。いずれも開発環境にインポート済み |
 

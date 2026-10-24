@@ -138,10 +138,10 @@ master_treatment_dataset_details
 
 | 画面 | パス | 元 |
 |---|---|---|
-| 処置オーダー項目マスタ | `/treatment-items` | `PhysioItemPage`(検査種別・既定テンプレートを削除) |
+| 処置オーダー項目マスタ | `/treatment-items` | `ExamItemPage`(生理検査・内視鏡の項目マスタ画面。検査種別・既定テンプレートを削除) |
 | 処置オーダーレイアウト | `/treatment-item-layouts` | `ItemLayoutPage`(各部門で共用) |
 | 実施入力データセット | `/treatment-datasets` | `PerformDatasetPage`(各部門で共用) |
-| 処置一覧(部門業務) | `/treatment-worklist` | `PhysioWorklistPage`(検査種別フィルタ・至急バッジを削除) |
+| 処置一覧(部門業務) | `/treatment-worklist` | `ExamWorklistPage`(生理検査・内視鏡の一覧。検査種別フィルタ・至急バッジを削除) |
 | オーダー入力 | カルテ右ペイン「処置」 | `PhysioOrderForm`(下記の差分) |
 
 オーダー画面の「選択中」枠は、生理検査から**至急区分**(オーダー枠の見出し)と

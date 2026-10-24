@@ -6,10 +6,108 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 1. クライアントが手元でしている絞り込み・並べ替え・結合のうち、FHIR サーバーに任せた方がよいもの
 2. コメントに残った修正経緯と、過剰な説明
 
-- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回）、2026-10-04（第 3 回）、2026-10-20（第 4 回。下の節）
+- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回）、2026-10-04（第 3 回）、2026-10-20（第 4 回）、2026-10-24（第 5 回。下の節）
 - 調査範囲: `frontend/src`、`backend/app`、上流 fhir-server の
   `app/lib/fhir/search_definitions/*.rb` と `app/lib/fhir/search_references.rb`
 - 行番号は調査時点のもの。着手時は関数名で探し直すこと。
+
+## 第 5 回（2026-10-24）
+
+第 4 回以降の約 11k 行(33 コミット。様式テンプレート・診療ダッシュボード・パス／レジメンの目次と承認取消ほか)を
+含めて全体を洗い、第 4 回の「次の候補 1」(生理・内視鏡の名前だけ違うファイル)のうち FHIR の出力に触れない層を
+同日実施した。差し引き約 2,400 行減。FHIR に書くリソースと `/master` に送る JSON は変えていない。
+
+### 正しさ
+
+なし。見つけた不具合も無い(backend rspec の `spec/requests/intake/staff_spec.rb:48` が 1 件落ちるが、
+変更前のツリーでも同じく落ちる。Web 問診のリンク発行し直しで前のリンクが失効しない。今回は触っていない)。
+
+### 上流に寄せた
+
+なし。上流 fhir-server は触っていない。
+
+### コメント整理
+
+スキャンの当たりはすべて業務の意味で使う語(「以前はどう書いてあったか」を辿る版履歴、「修正した本人」、
+「予定していたが止めた」など)だったので、書き換えは無し。共通化で消えた部門ごとの比較コメント
+(「生理検査の PhysioItem と同型」「放射線の RadItem との違いは」)は、共通化先の 1 か所に残した。
+
+### 未使用の削除
+
+- backend `Integrations::Orca::Text.widen`(第 4 回で唯一の呼び元 `whole_name` を消した残り)。モジュールごと削除。
+- frontend の参照ゼロの export は `demo-seed/index.ts` の `preflight` だけ(第 4 回と同じく `scripts/demo-seed.ts` から使うので残す)。
+
+### 機械的な重複統合
+
+**生理検査・内視鏡の項目検索モーダルと選択肢(正規化後の差 0 行)**
+
+- `components/ExamItemSearchModal.tsx` に寄せ、部門のモーダルは見出しと hook を渡すだけ(呼び出し側は変えていない)。
+- `physioItemOptions.tsx` / `endoscopyItemOptions.tsx` → `examItemOptions.tsx`(`KIND_LABELS` と `renderExamTypeOptions`)。
+- 両部門で同一だったオーダー項目の型 7 本(`PhysioItem` / `PhysioItemDetail` / `PhysioItemPayload` / `PhysioSetItem` …)を
+  `api/masterClient/examItem.ts` の `ExamItem*` に移し、部門名の型は別名として残した(import 元 129 ファイルを触らないため)。
+  検索条件 `PhysioItemFilters` / `EndoscopyItemFilters` も `api/masterQueries/examItem.ts` の `ExamItemFilters` の別名。
+  検査種別の型は内視鏡だけ JED 区分を持つので部門ごとのまま。
+
+**進捗 Task のヘルパー(生理・内視鏡・処置、正規化後の差 0 行)**
+
+- 状態(4 値)・選択肢・遷移表(`taskActions`)が 3 部門で同じだったので `fhir/examTaskHelpers.ts` に 1 つにし、
+  部門ごとのファイルは `Task.code` を渡して helper を作るだけ(`createExamTaskHelpers(PHYSIO_TASK_CODE)`)。
+  `createTaskHelpers` に渡す設定は前と同じなので、組み立てる Task は変わらない。部門名の export はすべて残した。
+
+**ワークリスト(生理・内視鏡、差 6 行=文言 3 か所)**
+
+- `pages/ExamWorklistPage.tsx` と `ExamWorklistConfig`(部門名・列の見出し・hook・オーダーの読み方・実施入力モーダル)。
+  一覧の 1 行の型 `PhysioWorklistRow` / `EndoscopyWorklistRow` は `api/queries/worklist.ts` の `ExamWorklistRow` の別名にした。
+  GP の見出しは `orderEntries` + `entryLabel` を部門側で `{ key, label }` に畳んで渡す(DOM は同じ)。
+
+**項目マスタ画面(差 16 行=コメントと選択肢の文言 1 つ)**
+
+- `pages/ExamItemPage.tsx` と `ExamItemPageConfig`(部門名・「単独(1オーダー1検査項目)」の呼び名・hook・データセットの hook・検索モーダル)。
+
+**検査種別画面(差 53 行=内視鏡だけ JED 区分の列と欄)**
+
+- `pages/ExamTypePage.tsx` と `ExamTypePageConfig`。JED 区分は `jedCategoryOptions` を渡した部門だけ列・欄・payload に出る
+  (生理検査の PATCH に `jed_exam_category` が混ざらないことを保存で確認)。
+
+**backend のモデルとコントローラ**
+
+- 生理・内視鏡・処置のオーダー項目モデル(本体同一)→ `concerns/master/order_item_model.rb`。セット構成のモデルは
+  名前の規約で引く(`PhysioItem` → `PhysioSetItem`)。
+- 同 3 部門のデータセット明細モデル(テーブル名だけ違う)→ `concerns/master/dataset_detail_model.rb`(`with_names` は `table_name` で組む)。
+- 生理・内視鏡の項目コントローラ(差はコメント 1 行)→ `concerns/master/exam_item_actions.rb`(`ItemLayoutActions` などと同じ形)。
+  処置の項目コントローラは検索と検査種別の扱いが違うので残した。
+
+**目次(テンプレート編集・記入フォーム)**
+
+- `QuestionnaireEditorToc` が自前で持っていた追従処理(約 50 行)を捨て、パス・レジメンと同じ `EditorToc` に区画と項目のツリーを
+  渡す形にした。`QuestionnaireResponseToc` は `EditorToc` の項目ツリー(`EditorTocEntries`)を使い、`ResponseTocEntry` は
+  `EditorTocEntry` に統一。id の並びにする `flattenAnchorIds` は `hooks/useTocTracking.ts` へ。
+
+- 検証: `tsc -b`・lint(エラー 0、警告 33 件。着手前は 34)・import 循環 0・backend rspec 2128 件中 2127 通過(上記の 1 件は前からの失敗)。
+  開発環境の画面で、生理検査一覧(08-24)と内視鏡一覧(08-24。実施入力モーダル・ケバブの取消／中止・所見編集ボタン)、
+  内視鏡の項目マスタの一覧と編集モーダル、生理検査のセット項目の編集モーダル(セット構成 2 件・項目検索モーダル)、
+  生理検査・内視鏡の検査種別(JED 区分の列・欄の有無と、保存で送る JSON が前と同じこと)、パス編集とテンプレート編集の目次
+  (押して移動・現在位置の強調)を確認。
+
+### 次の候補(今回やらない)
+
+1. **生理・内視鏡・処置の FHIR に触れる層**。実施入力モーダル(正規化後の差 19〜57 行、各 587 行)、`*OrderHelpers.ts`(41 行、857 行)、
+   `*ResultHelpers.ts`(29〜38 行、529 行)、オーダーフォーム(生理と内視鏡で 112 行、1,529 行)。round-trip で前後の JSON を
+   突き合わせながら進める。
+2. **生理・内視鏡の `masterClient` / `masterQueries`**(型を寄せたあとも関数は部門ごと。正規化後の差は 40 行 / 7 行)。
+   第 4 回の `itemLayoutClient` / `itemLayoutHooks` と同じ factory にできる。
+3. **ワークリスト 12 画面の共通部品**(第 2 回の候補 3)。リハビリと栄養指導は 512 行が同じ(差 233 行)。
+4. `masterClient` の `if (!res.ok) throw await buildError(res);`(318 か所)。
+5. backend の official/local 区分を持つマスタ 5 本(細菌 4 本・病理臓器)の同じ定型 14 行。concern にできるが小さい。
+6. `dead-exports.cjs` の「export だけ不要」1,115 件(第 4 回から据え置き)。
+
+### 残すと判断したもの
+
+- `extractQueryModel.ts` の `date.toISOString().slice(0, 10)`。`Date.UTC` で組んだ日付の算術なので JST 9 時前の問題は起きない(スキャンの誤検出)。
+- `oralExamHelpers.ts` の PUT エントリに `fullUrl` が無い点。既存の Observation を更新する PUT で、来歴は `url` の id で付く。
+- `KarteTimeline.tsx` の種別ごとの分岐(33 か所)。カード本体は第 3 回で種別ごとのファイルに分けてあり、残りは種別固有のバッジと操作。
+- `App.css` の色の直書き 144 行。第 4 回以降に増えたものは無く、危険色・警告色は第 3 回で変数化済み。
+- 処置の項目マスタ画面・ワークリスト・項目コントローラ。検査種別を持たないので、生理・内視鏡の共通化には乗せない。
 
 ## 第 4 回（2026-10-20）
 

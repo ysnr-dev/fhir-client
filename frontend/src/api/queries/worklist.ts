@@ -24,6 +24,25 @@ const WORKLIST_MAX_PAGES = 2;
  */
 export const UNSCHEDULED_WORKLIST_DATE = "unscheduled";
 
+/** 生理検査・内視鏡の一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
+export interface ExamWorklistRow {
+  order: fhir4.ServiceRequest;
+  /** 検査項目(明細)。セットの構成項目まで含む平坦な一覧。 */
+  itemRequests: fhir4.ServiceRequest[];
+  patient?: fhir4.Patient;
+  /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
+  task?: fhir4.Task;
+  /** 所見レポート。未登録なら空。 */
+  reportId: string;
+  reportStatus: string;
+}
+
+export interface ExamWorklistResult {
+  rows: ExamWorklistRow[];
+  /** 上限まで読んでも読み切れなかった。 */
+  truncated: boolean;
+}
+
 export function worklistParams(
   category: string,
   date: string,

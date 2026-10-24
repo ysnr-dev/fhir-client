@@ -1,3 +1,4 @@
+import type { ExamItemFilters } from "./examItem";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createEndoscopyExamType,
@@ -93,16 +94,7 @@ export function useEndoscopyExamTypeMutations() {
   };
 }
 
-export interface EndoscopyItemFilters {
-  name?: string;
-  /** 名称・検査種別をまとめて探す1つの語。 */
-  keyword?: string;
-  kind?: string;
-  /** オーダー単位。"true"=グループ化のみ / "false"=単独オーダーのみ。 */
-  groupable?: string;
-  examTypeCode?: string;
-  active?: boolean;
-}
+export type EndoscopyItemFilters = ExamItemFilters;
 
 export function useEndoscopyItemSearch(filters: EndoscopyItemFilters, page: number, enabled = true) {
   return useQuery({

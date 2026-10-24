@@ -2,7 +2,7 @@ import type { SurgeryCategory } from "../api/masterClient";
 
 // 術式の種別(分類)を画面に出すための共通処理。分類は親子になっている
 // (点数表 第10部の「款 → 区分」)ので、平らな一覧を木の順に並べ直してから使う。
-// 生理検査の physioItemOptions に当たるが、あちらは 1 段なので並べ替えが要らない。
+// 生理検査・内視鏡の examItemOptions に当たるが、あちらは 1 段なので並べ替えが要らない。
 
 /** 木の順に並べた1行。depth は最上位が 0。 */
 export interface SurgeryCategoryNode {

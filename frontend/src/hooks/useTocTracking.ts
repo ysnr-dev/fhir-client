@@ -8,6 +8,11 @@ import { useEffect, useRef, useState, type RefObject } from "react";
  *  スクロール位置から求めると手前の項目になるため)。 */
 const USER_SCROLL_EVENTS = ["wheel", "touchmove", "keydown", "pointerdown"] as const;
 
+/** 目次のツリーを文書順の id の並びにする(anchorIds に渡す形)。 */
+export function flattenAnchorIds<T extends { anchorId: string; children: T[] }>(entries: T[]): string[] {
+  return entries.flatMap((entry) => [entry.anchorId, ...flattenAnchorIds(entry.children)]);
+}
+
 function scrollParentOf(element: HTMLElement): HTMLElement | null {
   for (let parent = element.parentElement; parent; parent = parent.parentElement) {
     const overflowY = getComputedStyle(parent).overflowY;

@@ -1,3 +1,4 @@
+import type { ExamItemFilters } from "./examItem";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createPhysioExamType,
@@ -94,16 +95,7 @@ export function usePhysioExamTypeMutations() {
   };
 }
 
-export interface PhysioItemFilters {
-  name?: string;
-  /** 名称・検査種別をまとめて探す1つの語。 */
-  keyword?: string;
-  kind?: string;
-  /** オーダー単位。"true"=グループ化のみ / "false"=単独オーダーのみ。 */
-  groupable?: string;
-  examTypeCode?: string;
-  active?: boolean;
-}
+export type PhysioItemFilters = ExamItemFilters;
 
 export function usePhysioItemSearch(filters: PhysioItemFilters, page: number, enabled = true) {
   return useQuery({

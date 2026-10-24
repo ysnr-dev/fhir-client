@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { useTocTracking } from "../hooks/useTocTracking";
+import { flattenAnchorIds, useTocTracking } from "../hooks/useTocTracking";
 
 // マスタの編集画面(パス定義・レジメン)の左に出す目次。区画と、区画の下の項目のツリーを並べ、
 // 押すとその位置へ移動する。見た目はテンプレート編集画面の目次(.qe-toc)と揃える。
@@ -16,11 +16,8 @@ export interface EditorTocEntry {
  *  追従するヘッダーの高さ(scroll-margin-top)に少し余裕を足した値。 */
 const ACTIVE_LINE = 96;
 
-function flatten(entries: EditorTocEntry[]): string[] {
-  return entries.flatMap((entry) => [entry.anchorId, ...flatten(entry.children)]);
-}
-
-function EntryTree({
+/** 区画の下の項目のツリー。区画を持たない目次(テンプレート記入フォーム)はこれだけを使う。 */
+export function EditorTocEntries({
   entries,
   activeId,
   onJump,
@@ -45,7 +42,7 @@ function EntryTree({
             {entry.type && <span className="qe-toc__item-type">{entry.type}</span>}
             <span className="qe-toc__item-text">{entry.text}</span>
           </button>
-          <EntryTree entries={entry.children} activeId={activeId} onJump={onJump} />
+          <EditorTocEntries entries={entry.children} activeId={activeId} onJump={onJump} />
         </li>
       ))}
     </ul>
@@ -54,7 +51,7 @@ function EntryTree({
 
 export function EditorToc({ sections }: { sections: EditorTocEntry[] }) {
   const navRef = useRef<HTMLElement>(null);
-  const { activeId, jumpTo } = useTocTracking(navRef, flatten(sections), ACTIVE_LINE);
+  const { activeId, jumpTo } = useTocTracking(navRef, flattenAnchorIds(sections), ACTIVE_LINE);
 
   return (
     <nav className="qe-toc" aria-label="目次" ref={navRef}>
@@ -70,7 +67,7 @@ export function EditorToc({ sections }: { sections: EditorTocEntry[] }) {
             >
               {section.text}
             </button>
-            <EntryTree entries={section.children} activeId={activeId} onJump={jumpTo} />
+            <EditorTocEntries entries={section.children} activeId={activeId} onJump={jumpTo} />
           </li>
         ))}
       </ul>

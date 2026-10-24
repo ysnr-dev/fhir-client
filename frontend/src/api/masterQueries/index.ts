@@ -10,6 +10,7 @@ export * from "./dpc";
 export * from "./lab";
 export * from "./medicalMaterial";
 export * from "./rad";
+export * from "./examItem";
 export * from "./physio";
 export * from "./endoscopy";
 export * from "./schema";

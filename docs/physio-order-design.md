@@ -179,7 +179,7 @@ seed は `db/seed_data/physio_exam_types.csv`(心電図 / 超音波検査 / 呼�
 | seed | `db/seed_data/physio_exam_types.csv`(8 件) |
 | spec | リクエスト 6 本(73 examples)。backend 全 836 examples green |
 | FHIR 変換 | `fhir/physioOrderHelpers.ts` / `physioTaskHelpers.ts` / `physioResultHelpers.ts` |
-| 画面 | 上表の 6 画面と `PhysioOrderForm` / `Panels` / `DetailPanel` / `PhysioItemSearchModal` / `PhysioPerformModal` / `physioItemOptions` |
+| 画面 | 上表の 6 画面と `PhysioOrderForm` / `Panels` / `DetailPanel` / `PhysioItemSearchModal` / `PhysioPerformModal` / `examItemOptions` |
 | カルテ | `karteTimeline` に `physio-order` 種別、`KarteRightPane` の起動ボタン、`KarteTimeline` のカード・実施情報、`KarteCardModals` の詳細/JSON、`KarteCategoryList` / `karteUrl` / `KartePage` の分岐 |
 
 ### 6.1 検証したこと

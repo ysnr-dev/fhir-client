@@ -26,6 +26,8 @@ import {
   makeUpdateTaskStatusHook,
   performCancelEntries,
   worklistParams,
+  type ExamWorklistResult,
+  type ExamWorklistRow,
 } from "./worklist";
 import { invalidateOrderDependents } from "./orderDelete";
 
@@ -39,24 +41,9 @@ export const usePhysioOrderDetail = makeOrderDetailHook("physio-order", ORDER_IT
 
 export const usePhysioPerformDetail = makePerformDetailHook("physio-perform", { observations: false });
 
-/** 生理検査一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
-export interface PhysioWorklistRow {
-  order: fhir4.ServiceRequest;
-  /** 検査項目(明細)。セットの構成項目まで含む平坦な一覧。 */
-  itemRequests: fhir4.ServiceRequest[];
-  patient?: fhir4.Patient;
-  /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
-  task?: fhir4.Task;
-  /** 所見レポート。未登録なら空。 */
-  reportId: string;
-  reportStatus: string;
-}
-
-export interface PhysioWorklistResult {
-  rows: PhysioWorklistRow[];
-  /** 上限まで読んでも読み切れなかった。 */
-  truncated: boolean;
-}
+/** 生理検査一覧の 1 行。内視鏡と同じ形なので型は worklist.ts のものを使う。 */
+export type PhysioWorklistRow = ExamWorklistRow;
+export type PhysioWorklistResult = ExamWorklistResult;
 
 async function fetchPhysioWorklist(date: string): Promise<PhysioWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
