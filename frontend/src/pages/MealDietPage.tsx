@@ -14,6 +14,7 @@ import {
   formatMealNutrient,
   type MealNutrientKey,
 } from "../components/mealItemOptions";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 食種マスタ。食事オーダー項目(MealItemPage: 主食・副食形態)と同じ最小の作りに、
 // 食種だけが持つ種別・食止め・主成分量・適応を足したもの(docs/meal-order-design.md §3)。
@@ -112,6 +113,7 @@ export function MealDietPage() {
           <button type="button" onClick={() => setEditing("new")}>
             食種追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

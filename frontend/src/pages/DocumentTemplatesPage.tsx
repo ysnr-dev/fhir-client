@@ -7,6 +7,7 @@ import { DocumentTemplateForm } from "../components/DocumentTemplateForm";
 import { DocumentTemplateTable } from "../components/DocumentTemplateTable";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PopulateExpressionModal } from "../components/PopulateExpressionModal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // デザイナは pdfjs を使うので、開くときだけ読み込む。
 const DocumentFormDesigner = lazy(() => import("../components/documentForm/DocumentFormDesigner"));
@@ -82,6 +83,7 @@ export function DocumentTemplatesPage() {
               新規登録
             </button>
           )}
+          <MasterBackLink />
         </div>
       </div>
 

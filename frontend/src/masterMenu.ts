@@ -208,3 +208,13 @@ export function isMasterPath(pathname: string): boolean {
   if (pathname === MASTER_MENU_PATH) return true;
   return MASTER_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
+
+/**
+ * マスタの画面の「戻る」の行き先。マスタの一覧の画面からはマスタメンテの一覧へ、
+ * その配下(登録・編集など)からはそのマスタの一覧へ戻す。マスタの画面でなければ null。
+ */
+export function masterBackPath(pathname: string): string | null {
+  const path = MASTER_PATHS.find((p) => pathname === p || pathname.startsWith(`${p}/`));
+  if (!path) return null;
+  return pathname === path ? MASTER_MENU_PATH : path;
+}

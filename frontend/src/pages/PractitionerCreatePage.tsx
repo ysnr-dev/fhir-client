@@ -60,7 +60,7 @@ export function PractitionerCreatePage() {
       <div className="page__header">
         <h1>医療従事者登録</h1>
         <Link to="/practitioners" className="button">
-          ← 一覧に戻る
+          戻る
         </Link>
       </div>
       {accountFailure && (

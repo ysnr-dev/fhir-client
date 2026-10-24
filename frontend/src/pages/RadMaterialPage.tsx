@@ -9,6 +9,7 @@ import {
 import { ErrorBanner } from "../components/ErrorBanner";
 import { MedicalMaterialSearchModal } from "../components/MedicalMaterialSearchModal";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 放射線検査で使う器材の施設マスタ。
 //
@@ -82,9 +83,12 @@ export function RadMaterialPage() {
     <div className="page">
       <div className="page__header">
         <h1>放射線器材マスタ</h1>
-        <button type="button" onClick={() => setEditing("new")}>
-          器材追加
-        </button>
+        <div>
+          <button type="button" onClick={() => setEditing("new")}>
+            器材追加
+          </button>
+          <MasterBackLink />
+        </div>
       </div>
 
       <form className="patient-search-form" onSubmit={handleSearch}>

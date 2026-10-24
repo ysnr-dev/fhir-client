@@ -6,6 +6,7 @@ import {
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // JANIS 薬剤感受性検査測定法コード表。標準コードは取込で洗い替えるので読むだけ。
 // 書けるのは施設追加コードだけ。
@@ -33,6 +34,7 @@ export function MicroSusceptibilityMethodPage() {
           <button type="button" onClick={() => setEditing("new")}>
             施設追加コード追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

@@ -18,6 +18,7 @@ import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { Modal } from "../components/Modal";
 import { ingredientKey } from "../fhir/medicationSafetyHelpers";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 薬剤チェックの施設マスタ(docs/drug-check-master-design.md)。
 // 相互作用(併用禁忌・併用注意)と、用量と患者条件(年齢・腎機能・体重)の規則を
@@ -60,6 +61,7 @@ export function DrugCheckPage() {
     <div className="page">
       <div className="page__header">
         <h1>薬剤チェック</h1>
+        <MasterBackLink />
       </div>
 
       <div className="order-select__tabs" role="tablist">

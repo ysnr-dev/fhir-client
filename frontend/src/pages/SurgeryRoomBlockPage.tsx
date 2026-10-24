@@ -7,6 +7,7 @@ import { locationDisplayName, locationTypeCode } from "../fhir/locationHelpers";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { WEEKDAY_LABELS } from "../lib/dates";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 手術室のブロックスケジュール(曜日ごとの科割り当て)のマスタ。
 //
@@ -77,6 +78,7 @@ export function SurgeryRoomBlockPage() {
           <button type="button" onClick={() => setEditing("new")}>
             割り当て追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

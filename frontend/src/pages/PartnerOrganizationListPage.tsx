@@ -9,6 +9,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { OrganizationTable } from "../components/OrganizationTable";
 import { Pagination } from "../components/Pagination";
 import { resourcesOfType } from "../fhir/shared";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 const emptySearch: OrganizationSearchParams = { name: "", identifier: "" };
 
@@ -45,9 +46,12 @@ export function PartnerOrganizationListPage() {
     <div className="page">
       <div className="page__header">
         <h1>連携先医療機関一覧</h1>
-        <Link to="/partner-organizations/new" className="button">
-          新規登録
-        </Link>
+        <div>
+          <Link to="/partner-organizations/new" className="button">
+            新規登録
+          </Link>
+          <MasterBackLink />
+        </div>
       </div>
 
       <form className="patient-search-form" onSubmit={handleSearch}>

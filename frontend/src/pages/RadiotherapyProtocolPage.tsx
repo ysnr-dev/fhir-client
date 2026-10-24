@@ -22,6 +22,7 @@ import {
   radiotherapyTotalDose,
 } from "../fhir/radiotherapyOrderHelpers";
 import { displayOf } from "../fhir/shared";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 放射線治療の治療プロトコル(定型処方)マスタ(docs/radiotherapy-order-design.md §3)。
 //
@@ -147,6 +148,7 @@ export function RadiotherapyProtocolPage() {
           <button type="button" onClick={() => setEditing("new")}>
             プロトコル追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

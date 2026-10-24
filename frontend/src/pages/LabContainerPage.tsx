@@ -3,6 +3,7 @@ import type { LabContainer, LabContainerPayload } from "../api/masterClient";
 import { useLabContainerMutations, useLabContainers } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 interface Draft {
   container_code: string;
@@ -51,6 +52,7 @@ export function LabContainerPage() {
           <button type="button" onClick={() => setEditing("new")}>
             採取管追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

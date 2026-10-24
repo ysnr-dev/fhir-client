@@ -3,6 +3,7 @@ import type { MicroSpecimenType } from "../api/masterClient";
 import { useMicroSpecimenTypeMutations, useMicroSpecimenTypeSearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // JANIS 材料(検査材料)コード表。標準コードは取込で洗い替えるのでこの画面では
 // 読むだけ。書けるのは施設追加分だけ。
@@ -30,6 +31,7 @@ export function MicroSpecimenTypePage() {
           <button type="button" onClick={() => setEditing("new")}>
             施設追加コード追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

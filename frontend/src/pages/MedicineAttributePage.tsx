@@ -10,6 +10,7 @@ import type {
 import { ErrorBanner } from "../components/ErrorBanner";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { TrashIcon } from "../components/icons/TrashIcon";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 薬剤付加情報(docs/lot-number-design.md)。施設独自の薬剤の設定を 1 薬 1 行で持つ。
 // 列は backend の項目の定義(definitions)から組み立てるので、項目が増えても画面は直さない。
@@ -73,9 +74,12 @@ export function MedicineAttributePage() {
     <div className="page">
       <div className="page__header">
         <h1>薬剤付加情報</h1>
-        <button type="button" onClick={() => setAdding(true)} disabled={busy}>
-          ＋薬剤
-        </button>
+        <div>
+          <button type="button" onClick={() => setAdding(true)} disabled={busy}>
+            ＋薬剤
+          </button>
+          <MasterBackLink />
+        </div>
       </div>
 
       <div className="patient-search-form">

@@ -16,6 +16,7 @@ import {
   buildNursingTermTree,
 } from "../fhir/nursingCarePlanHelpers";
 import { TrashIcon } from "../components/icons/TrashIcon";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 const TAXONOMY_TITLES: Record<NursingTaxonomy, string> = {
   diagnosis: "看護診断",
@@ -55,6 +56,7 @@ export function NursingTermMasterPage({ taxonomy }: { taxonomy: NursingTaxonomy 
           <button type="button" onClick={() => setEditing("new")}>
             追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

@@ -38,7 +38,7 @@ export function WardEditPage() {
         <div className="page__header">
           <h1>病棟編集</h1>
           <Link to="/wards" className="button">
-            ← 一覧に戻る
+            戻る
           </Link>
         </div>
         <ErrorBanner error={loadError} />
@@ -51,7 +51,7 @@ export function WardEditPage() {
       <div className="page__header">
         <h1>病棟編集</h1>
         <Link to="/wards" className="button">
-          ← 一覧に戻る
+          戻る
         </Link>
       </div>
       {conflict && (

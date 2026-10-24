@@ -9,6 +9,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { OrganizationTable } from "../components/OrganizationTable";
 import { Pagination } from "../components/Pagination";
 import { resourcesOfType } from "../fhir/shared";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 const emptySearch: OrganizationSearchParams = { name: "", identifier: "" };
 
@@ -28,6 +29,7 @@ function SelfOrganizationView() {
     <div className="page">
       <div className="page__header">
         <h1>医療機関</h1>
+        <MasterBackLink />
       </div>
       <p className="connection-settings__lead">
         自院として設定されている医療機関です。別の医療機関を自院にするには「管理 &gt; 施設設定」で
@@ -68,9 +70,12 @@ function UnsetOrganizationView() {
     <div className="page">
       <div className="page__header">
         <h1>医療機関一覧</h1>
-        <Link to="/organizations/new" className="button">
-          新規登録
-        </Link>
+        <div>
+          <Link to="/organizations/new" className="button">
+            新規登録
+          </Link>
+          <MasterBackLink />
+        </div>
       </div>
 
       <div className="error-banner" role="status">

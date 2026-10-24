@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNursingObservationSearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { NURSING_OBSERVATION_CATEGORIES, nursingObservationResults } from "../components/nursingItemOptions";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // MEDIS 看護実践用語標準マスター(看護観察編)の閲覧。読むだけで登録・編集は持たない。
 export function NursingObservationPage() {
@@ -23,6 +24,7 @@ export function NursingObservationPage() {
     <div className="page">
       <div className="page__header">
         <h1>看護観察マスタ</h1>
+        <MasterBackLink />
       </div>
 
       <form className="patient-search-form" onSubmit={handleSearch}>

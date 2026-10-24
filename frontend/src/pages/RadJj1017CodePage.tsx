@@ -7,6 +7,7 @@ import {
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // JJ1017 の部品コード表。配布ファイル由来の標準コードは取込で洗い替えるので
 // この画面では読むだけ。書けるのは施設独自の拡張コードだけ。
@@ -59,6 +60,7 @@ export function RadJj1017CodePage() {
           >
             拡張コード追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

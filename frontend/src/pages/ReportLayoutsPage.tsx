@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ReportLayoutSummary } from "../api/adminClient";
 import { useReportLayouts } from "../api/adminQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { MasterBackLink } from "../components/MasterBackLink";
 import { ReportLayoutForm } from "../components/ReportLayoutForm";
 import { ReportLayoutTable } from "../components/ReportLayoutTable";
 
@@ -21,11 +22,14 @@ export function ReportLayoutsPage() {
     <div className="page">
       <div className="page__header">
         <h1>帳票レイアウト</h1>
-        {!showForm && !editing && (
-          <button type="button" onClick={() => setShowForm(true)}>
-            新規登録
-          </button>
-        )}
+        <div>
+          {!showForm && !editing && (
+            <button type="button" onClick={() => setShowForm(true)}>
+              新規登録
+            </button>
+          )}
+          <MasterBackLink />
+        </div>
       </div>
       <p className="oauth-clients__lead">
         テンプレートの回答(QuestionnaireResponse)を PDF 帳票にするレイアウトを管理します。

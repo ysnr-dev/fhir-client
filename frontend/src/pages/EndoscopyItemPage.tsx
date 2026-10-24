@@ -23,6 +23,7 @@ import { KIND_LABELS, renderExamTypeOptions } from "../components/endoscopyItemO
 import { TemplateSelect } from "../components/TemplateSelect";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { TrashIcon } from "../components/icons/TrashIcon";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 内視鏡オーダー項目マスタ。放射線の RadItemPage と同じ作りだが、JJ1017 の
 // 11 要素・32桁コードのプレビュー・頻用コードからの一括作成は持たない。
@@ -138,6 +139,7 @@ export function EndoscopyItemPage() {
           <button type="button" onClick={() => setEditing("new")}>
             項目追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

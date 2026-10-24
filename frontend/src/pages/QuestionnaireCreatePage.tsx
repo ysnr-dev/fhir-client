@@ -25,7 +25,7 @@ export function QuestionnaireCreatePage() {
       <div className="page__header">
         <h1>テンプレート作成</h1>
         <Link to="/questionnaires" className="button">
-          ← テンプレート一覧に戻る
+          戻る
         </Link>
       </div>
 

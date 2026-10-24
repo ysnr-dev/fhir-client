@@ -4,6 +4,7 @@ import type { WardMap } from "../api/masterClient";
 import { useWardMap, useWardMapMutations } from "../api/masterQueries";
 import { useWardGrid, useWardOptions } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { MasterBackLink } from "../components/MasterBackLink";
 import { WardMapCanvas } from "../components/WardMapCanvas";
 import { WardMapEditorPalette } from "../components/WardMapEditorPalette";
 import { WardMapEditorProperties } from "../components/WardMapEditorProperties";
@@ -543,6 +544,7 @@ function WardMapEditor({
         <Link className="button ward-map-edit__toolbar-link" to={`/ward-map?ward=${wardId}`}>
           マップ表示
         </Link>
+        <MasterBackLink />
       </div>
 
       <div className="ward-map-edit__body">

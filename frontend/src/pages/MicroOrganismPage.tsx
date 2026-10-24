@@ -3,6 +3,7 @@ import type { MicroOrganism } from "../api/masterClient";
 import { useMicroOrganismMutations, useMicroOrganismSearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // JANIS 感染症病原体コード表。標準コードは取込で洗い替えるので、この画面で
 // 書けるのは「頻用菌の印(オーダー画面に直接並べる菌)」と施設追加コードだけ。
@@ -32,6 +33,7 @@ export function MicroOrganismPage() {
           <button type="button" onClick={() => setEditing("new")}>
             施設追加コード追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

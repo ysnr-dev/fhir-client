@@ -3,6 +3,7 @@ import type { PathoOrgan } from "../api/masterClient";
 import { usePathoOrganMutations, usePathoOrganSearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 病理検査の臓器・検査材料(JAHIS 病理・臨床細胞データ交換規約 付録-3 テーブル
 // LPATHO003)。規約付録の標準コードは seed で投入するのでこの画面では読むだけ。
@@ -37,6 +38,7 @@ export function PathoOrganPage() {
           <button type="button" onClick={() => setEditing("new")}>
             施設追加コード追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

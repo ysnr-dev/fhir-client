@@ -12,6 +12,7 @@ import {
   TRANSFUSION_CATEGORY_OPTIONS,
   transfusionCategoryLabel,
 } from "../components/transfusionProductOptions";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 輸血製剤マスタ。食事オーダー項目(MealItemPage)と同じ最小の作りで、セット構成・
 // 実施入力データセット・レセ電算コード・予約枠はいずれも持たない。
@@ -92,6 +93,7 @@ export function TransfusionProductPage() {
           <button type="button" onClick={() => setEditing("new")}>
             製剤追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

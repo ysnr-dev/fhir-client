@@ -8,6 +8,7 @@ import {
   surgeryCategoryPathName,
   surgeryCategorySubtreeCodes,
 } from "../components/surgeryCategoryOptions";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 術式の種別(分類)マスタ。生理検査の PhysioExamTypePage に当たるが、分類が
 // 入れ子になる(医科点数表 第2章第10部 手術 第1節の「款 → 区分」)ので、一覧は
@@ -74,6 +75,7 @@ export function SurgeryCategoryPage() {
           <button type="button" onClick={() => setEditing("new")}>
             種別追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

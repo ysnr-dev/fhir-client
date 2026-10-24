@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useDpcClassifications, useDpcEditions } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { formatDateTime } from "../lib/dates";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // DPC 電子点数表の閲覧。取り込んだ版と、分類(上 6 桁)を選んだときの 14 桁・入院期間・点数。
 // 取込はマスタ取込の画面で行い、ここでは読むだけ。
@@ -27,6 +28,7 @@ export function DpcTablesPage() {
           <Link className="button" to="/master-import">
             取込
           </Link>
+          <MasterBackLink />
         </div>
       </div>
 

@@ -23,7 +23,7 @@ export function WardRoomCreatePage() {
       <div className="page__header">
         <h1>病室登録</h1>
         <Link to={`/wards/${wardId}/rooms`} className="button">
-          ← 病室一覧に戻る
+          戻る
         </Link>
       </div>
       <RoomForm

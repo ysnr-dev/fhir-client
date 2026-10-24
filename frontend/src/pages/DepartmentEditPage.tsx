@@ -42,7 +42,7 @@ export function DepartmentEditPage() {
         <div className="page__header">
           <h1>診療科編集</h1>
           <Link to="/departments" className="button">
-            ← 一覧に戻る
+            戻る
           </Link>
         </div>
         <ErrorBanner error={loadError} />
@@ -55,7 +55,7 @@ export function DepartmentEditPage() {
       <div className="page__header">
         <h1>診療科編集</h1>
         <Link to="/departments" className="button">
-          ← 一覧に戻る
+          戻る
         </Link>
       </div>
       {conflict && (

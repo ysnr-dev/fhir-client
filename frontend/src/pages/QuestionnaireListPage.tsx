@@ -7,6 +7,7 @@ import { QuestionnaireCategoryModal } from "../components/QuestionnaireCategoryM
 import { QuestionnaireTable } from "../components/QuestionnaireTable";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { groupTemplatesByCategory } from "../fhir/questionnaireCategory";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // カテゴリ未設定のテンプレートを表す左の一覧の項目。
 const UNCATEGORIZED = "uncategorized";
@@ -94,6 +95,7 @@ export function QuestionnaireListPage() {
           <Link to="/questionnaires/new" className="button">
             新規作成
           </Link>
+          <MasterBackLink />
         </div>
       </div>
 

@@ -10,6 +10,7 @@ import {
   PATHWAY_STATUS_OPTIONS,
 } from "../fhir/pathwayHelpers";
 import { displayOf } from "../fhir/shared";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // クリニカルパス(施設パス)定義マスタの一覧。編集は 1 パス 1 ページ(/pathways/:id)。
 // 設計は docs/clinical-pathway-design.md。
@@ -47,6 +48,7 @@ export function PathwayListPage() {
           <Link to="/pathways/new" className="button">
             パス追加
           </Link>
+          <MasterBackLink />
         </div>
       </div>
 

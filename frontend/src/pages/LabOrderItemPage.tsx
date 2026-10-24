@@ -17,6 +17,7 @@ import { JlacItemSearchModal } from "../components/JlacItemSearchModal";
 import { LabResultItemSearchModal } from "../components/LabResultItemSearchModal";
 import { LAB_CATEGORIES, LAB_DATA_TYPE_LABELS, LAB_KIND_LABELS } from "../components/labOrderItemOptions";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 const MEMBER_TYPE_LABELS: Record<string, string> = {
   required: "必須",
@@ -138,6 +139,7 @@ export function LabOrderItemPage() {
           <button type="button" onClick={() => setEditing("new")}>
             項目追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

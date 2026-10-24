@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useImportMaster } from "../api/masterQueries";
 import type { MasterType } from "../api/masterClient";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 interface MasterOption {
   type: MasterType;
@@ -227,6 +228,7 @@ export function MasterImportPage() {
     <div className="page">
       <div className="page__header">
         <h1>マスタ取込</h1>
+        <MasterBackLink />
       </div>
       <form className="master-import-form" onSubmit={handleSubmit}>
         <label>

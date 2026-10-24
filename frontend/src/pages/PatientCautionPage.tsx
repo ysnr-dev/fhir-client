@@ -9,6 +9,7 @@ import {
   CautionPictogram,
 } from "../components/icons/cautionPictograms";
 import { FLAG_CATEGORY_OPTIONS, flagCategoryLabel } from "../fhir/flagHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 患者の診療上の注意の区分マスタ。実体の注意は上流の FHIR Flag が患者ごとに
 // 持ち、この画面は「何を注意として選べるか」と「患者帯にどう出すか」を決める。
@@ -24,6 +25,7 @@ export function PatientCautionPage() {
           <button type="button" onClick={() => setEditing("new")}>
             追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

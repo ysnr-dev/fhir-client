@@ -9,6 +9,7 @@ import {
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Pagination } from "../components/Pagination";
 import { PractitionerTable } from "../components/PractitionerTable";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 const emptySearch: PractitionerSearchParams = { name: "", identifier: "" };
 
@@ -46,9 +47,12 @@ export function PractitionerListPage() {
     <div className="page">
       <div className="page__header">
         <h1>医療従事者一覧</h1>
-        <Link to="/practitioners/new" className="button">
-          新規登録
-        </Link>
+        <div>
+          <Link to="/practitioners/new" className="button">
+            新規登録
+          </Link>
+          <MasterBackLink />
+        </div>
       </div>
 
       <form className="patient-search-form" onSubmit={handleSearch}>

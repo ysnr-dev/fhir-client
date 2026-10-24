@@ -9,6 +9,7 @@ import {
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { MEAL_ITEM_KIND_LABELS } from "../components/mealItemOptions";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 食事オーダー項目マスタ(主食・副食形態)。処置の TreatmentItemPage から、セット構成・
 // 実施入力データセット・レセ電算コード・予約枠を全て落とした最小の作り。
@@ -76,6 +77,7 @@ export function MealItemPage() {
           <button type="button" onClick={() => setEditing("new")}>
             項目追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

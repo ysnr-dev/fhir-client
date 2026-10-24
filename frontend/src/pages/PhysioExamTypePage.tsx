@@ -3,6 +3,7 @@ import type { PhysioExamType, PhysioExamTypePayload } from "../api/masterClient"
 import { usePhysioExamTypeMutations, usePhysioExamTypeSearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 生理検査の検査種別マスタ。放射線検査でいう JJ1017 の「種別(モダリティ)」に
 // 当たる分類軸だが、生理検査は JJ1017 に収載されておらず標準コード体系が無いので、
@@ -66,6 +67,7 @@ export function PhysioExamTypePage() {
           <button type="button" onClick={() => setEditing("new")}>
             検査種別追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

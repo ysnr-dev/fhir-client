@@ -6,6 +6,7 @@ import { TrashIcon } from "../components/icons/TrashIcon";
 import { Modal } from "../components/Modal";
 import { PractitionerSearchModal } from "../components/PractitionerSearchModal";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 指導医グループのマスタ(docs/countersign-design.md)。左にグループ、右に選んだグループの
 // 指導医と研修医を並べる。構成員は医療従事者から選び、表示名を焼き付ける。
@@ -44,9 +45,12 @@ export function SupervisorGroupPage() {
     <div className="page">
       <div className="page__header">
         <h1>指導医グループ</h1>
-        <button type="button" onClick={() => setEditing("new")}>
-          グループ追加
-        </button>
+        <div>
+          <button type="button" onClick={() => setEditing("new")}>
+            グループ追加
+          </button>
+          <MasterBackLink />
+        </div>
       </div>
 
       <ErrorBanner error={groups.error} />

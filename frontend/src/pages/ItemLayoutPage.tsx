@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ComponentType, type FormEvent } from
 import type { ItemLayoutHooks } from "../api/masterQueries";
 import type { ItemLayoutCell } from "../api/masterClient";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { MasterBackLink } from "../components/MasterBackLink";
 import { Modal } from "../components/Modal";
 
 // オーダーレイアウト(伝票のようなグリッド)の編集画面。検体検査・放射線・生理・内視鏡・処置で共用し、
@@ -56,6 +57,7 @@ export function ItemLayoutPage<K extends string, Item extends LayoutItem<K>>({
           <button type="button" onClick={() => setCreating(true)}>
             レイアウト追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

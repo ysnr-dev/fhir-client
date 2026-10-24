@@ -32,6 +32,7 @@ import {
 import { TemplateSelect } from "../components/TemplateSelect";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { TrashIcon } from "../components/icons/TrashIcon";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 編集フォームの値。input で扱うため全て文字列で持ち、保存時に payload へ変換する。
 interface Draft {
@@ -200,6 +201,7 @@ export function RadItemPage() {
           <button type="button" onClick={() => setEditing("new")}>
             項目追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

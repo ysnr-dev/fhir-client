@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNursingActLevels, useNursingActSearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // MEDIS 看護実践用語標準マスター(看護行為編)の閲覧。配布ファイルを取込で
 // 洗い替えるだけなので、この画面は読むだけで登録・編集は持たない。
@@ -26,6 +27,7 @@ export function NursingActPage() {
     <div className="page">
       <div className="page__header">
         <h1>看護行為マスタ</h1>
+        <MasterBackLink />
       </div>
 
       <ErrorBanner error={levels.error} />

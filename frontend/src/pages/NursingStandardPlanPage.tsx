@@ -15,6 +15,7 @@ import { Modal } from "../components/Modal";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 import { NURSING_ACTIVITY_TYPES, NURSING_ACTIVITY_TYPE_LABELS } from "../fhir/nursingCarePlanHelpers";
 import { TrashIcon } from "../components/icons/TrashIcon";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 標準看護計画。看護診断 1 件に目標と OP/TP/EP の雛形を結びつける。看護問題の立案で選ぶと写る。
 export function NursingStandardPlanPage() {
@@ -32,6 +33,7 @@ export function NursingStandardPlanPage() {
           <button type="button" onClick={() => setEditing("new")}>
             追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

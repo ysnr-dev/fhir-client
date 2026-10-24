@@ -18,7 +18,7 @@ export function LocationCreatePage() {
       <div className="page__header">
         <h1>診察室・撮影室登録</h1>
         <Link to="/locations" className="button">
-          ← 一覧に戻る
+          戻る
         </Link>
       </div>
       <LocationForm

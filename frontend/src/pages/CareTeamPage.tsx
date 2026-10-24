@@ -24,6 +24,7 @@ import {
 } from "../fhir/careTeamHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // チーム医療のチームのマスタ(docs/care-team-design.md §1)。左にチーム、右に選んだチームのメンバー。
 // 指導医グループと同じ作りで、保存先は上流の CareTeam(メンバーの追加・削除も CareTeam の PUT)。
@@ -71,9 +72,12 @@ export function CareTeamPage() {
     <div className="page">
       <div className="page__header">
         <h1>チーム医療</h1>
-        <button type="button" onClick={() => setEditing("new")}>
-          チーム追加
-        </button>
+        <div>
+          <button type="button" onClick={() => setEditing("new")}>
+            チーム追加
+          </button>
+          <MasterBackLink />
+        </div>
       </div>
 
       <ErrorBanner error={teams.error} />

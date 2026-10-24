@@ -283,7 +283,7 @@ export function PathwayEditorPage() {
         <h1>{isNew ? "パスを追加" : "パスを編集"}</h1>
         <div className="page__header-actions">
           <Link to="/pathways" className="button">
-            一覧へ戻る
+            戻る
           </Link>
         </div>
       </div>

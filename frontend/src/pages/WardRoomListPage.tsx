@@ -26,7 +26,7 @@ export function WardRoomListPage() {
         <div className="page__header">
           <h1>病室一覧</h1>
           <Link to="/wards" className="button">
-            ← 病棟一覧に戻る
+            戻る
           </Link>
         </div>
         <ErrorBanner error={wardError} />
@@ -46,7 +46,7 @@ export function WardRoomListPage() {
             病棟編集
           </Link>
           <Link to="/wards" className="button">
-            ← 病棟一覧に戻る
+            戻る
           </Link>
         </div>
       </div>

@@ -38,7 +38,7 @@ export function LocationEditPage() {
         <div className="page__header">
           <h1>診察室・撮影室編集</h1>
           <Link to="/locations" className="button">
-            ← 一覧に戻る
+            戻る
           </Link>
         </div>
         <ErrorBanner error={loadError} />
@@ -51,7 +51,7 @@ export function LocationEditPage() {
       <div className="page__header">
         <h1>診察室・撮影室編集</h1>
         <Link to="/locations" className="button">
-          ← 一覧に戻る
+          戻る
         </Link>
       </div>
       {conflict && (

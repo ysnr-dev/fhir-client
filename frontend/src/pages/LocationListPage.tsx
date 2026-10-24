@@ -5,6 +5,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { LocationTable } from "../components/LocationTable";
 import { Pagination } from "../components/Pagination";
 import { LOCATION_STATUS_OPTIONS } from "../fhir/locationHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 const emptySearch: LocationSearchParams = { name: "", status: "" };
 
@@ -34,9 +35,12 @@ export function LocationListPage() {
     <div className="page">
       <div className="page__header">
         <h1>診察室・撮影室一覧</h1>
-        <Link to="/locations/new" className="button">
-          新規登録
-        </Link>
+        <div>
+          <Link to="/locations/new" className="button">
+            新規登録
+          </Link>
+          <MasterBackLink />
+        </div>
       </div>
 
       <form className="patient-search-form" onSubmit={handleSearch}>

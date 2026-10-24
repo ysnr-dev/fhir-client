@@ -24,6 +24,7 @@ import {
   SURGERY_POSITION_OPTIONS,
   surgeryApproachDisplay,
 } from "../fhir/surgeryOrderHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 術式マスタ。処置の TreatmentItemPage と同じ作りだが、セット・レイアウト・
 // データセット・予約の紐づけは持たず、代わりに申込フォームの初期値になる
@@ -122,6 +123,7 @@ export function SurgeryItemPage() {
           <button type="button" onClick={() => setEditing("new")}>
             術式追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

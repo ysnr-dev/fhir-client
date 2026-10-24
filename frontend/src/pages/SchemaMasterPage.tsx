@@ -15,6 +15,7 @@ import {
   type CategoryNode,
 } from "../components/schemaCategoryTree";
 import { makeThumbnailDataUrl, normalizeImageFile } from "../fhir/schemaImage";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // シェーママスタ。左ペインでカテゴリ(任意の深さの階層)を管理し、
 // 右ペインで選択カテゴリ直下のシェーマ(台紙画像)を管理する。
@@ -171,6 +172,7 @@ export function SchemaMasterPage() {
           <button type="button" onClick={() => setSchemaEditing("new")}>
             シェーマ追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

@@ -49,7 +49,7 @@ export function QuestionnaireEditPage() {
       <div className="page__header">
         <h1>テンプレート編集</h1>
         <Link to="/questionnaires" className="button">
-          ← テンプレート一覧に戻る
+          戻る
         </Link>
       </div>
 

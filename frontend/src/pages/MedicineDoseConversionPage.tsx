@@ -11,6 +11,7 @@ import {
 import type { MedicineDoseConversion, UnmappedMedicine } from "../api/masterClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 導出根拠の表示名。値は backend の Master::MedicineDoseConversion::SOURCES と対応する。
 const SOURCE_LABELS: Record<string, string> = {
@@ -145,9 +146,12 @@ export function MedicineDoseConversionPage() {
     <div className="page">
       <div className="page__header">
         <h1>投与量換算マスタ</h1>
-        <button type="button" onClick={() => generate.mutate()} disabled={busy}>
-          {generate.isPending ? "作成中..." : "未紐付け一括作成"}
-        </button>
+        <div>
+          <button type="button" onClick={() => generate.mutate()} disabled={busy}>
+            {generate.isPending ? "作成中..." : "未紐付け一括作成"}
+          </button>
+          <MasterBackLink />
+        </div>
       </div>
 
       <p className="dose-conversion__lead">

@@ -6,6 +6,7 @@ import {
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 病理検査の採取法(JAHIS 病理・臨床細胞データ交換規約 付録-3 テーブル LPATHO004)。
 // 23 件の小マスタなので、seed の初期値をこの画面で直す(細菌検査の採取方法と同じ扱い)。
@@ -21,6 +22,7 @@ export function PathoCollectionMethodPage() {
           <button type="button" onClick={() => setEditing("new")}>
             追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

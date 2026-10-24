@@ -14,6 +14,7 @@ import {
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 type Tab = "items" | "sites" | "methods";
 
@@ -26,6 +27,7 @@ export function MicroOrderItemPage() {
     <div className="page">
       <div className="page__header">
         <h1>細菌検査オーダーマスタ</h1>
+        <MasterBackLink />
       </div>
 
       <div className="dose-conversion__tabs">

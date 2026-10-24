@@ -3,6 +3,7 @@ import type { EndoscopyExamType, EndoscopyExamTypePayload, JedExamCategory } fro
 import { useEndoscopyExamTypeMutations, useEndoscopyExamTypeSearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 内視鏡の検査種別マスタ。放射線検査でいう JJ1017 の「種別(モダリティ)」に
 // 当たる分類軸だが、内視鏡は JJ1017 に収載されておらず標準コード体系が無いので、
@@ -83,6 +84,7 @@ export function EndoscopyExamTypePage() {
           <button type="button" onClick={() => setEditing("new")}>
             検査種別追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

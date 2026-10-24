@@ -19,7 +19,7 @@ export function DepartmentCreatePage() {
       <div className="page__header">
         <h1>診療科登録</h1>
         <Link to="/departments" className="button">
-          ← 一覧に戻る
+          戻る
         </Link>
       </div>
       <DepartmentForm

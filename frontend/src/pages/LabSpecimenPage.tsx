@@ -9,6 +9,7 @@ import {
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 編集フォームの値。配布ファイル由来の列(コード・名称・分類)は手動追加の検体
 // だけで編集し、取込済みの検体では略称・既定採取管・備考をメンテする。
@@ -73,6 +74,7 @@ export function LabSpecimenPage() {
           <button type="button" onClick={() => setEditing("new")}>
             検体追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

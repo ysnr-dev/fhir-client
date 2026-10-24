@@ -51,7 +51,7 @@ export function OrganizationEditPage({
         <div className="page__header">
           <h1>{title}</h1>
           <Link to={backTo} className="button">
-            ← 一覧に戻る
+            戻る
           </Link>
         </div>
         <ErrorBanner error={loadError} />
@@ -64,7 +64,7 @@ export function OrganizationEditPage({
       <div className="page__header">
         <h1>{title}</h1>
         <Link to={backTo} className="button">
-          ← 一覧に戻る
+          戻る
         </Link>
       </div>
       {conflict && (

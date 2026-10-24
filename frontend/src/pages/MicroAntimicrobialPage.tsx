@@ -3,6 +3,7 @@ import type { MicroAntimicrobial } from "../api/masterClient";
 import { useMicroAntimicrobialMutations, useMicroAntimicrobialSearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // JANIS 抗菌薬コード表。標準コードは取込で洗い替えるので、この画面で
 // 書けるのは「頻用薬の印(結果画面の感受性欄に直接並べる薬)」と施設追加コードだけ。
@@ -32,6 +33,7 @@ export function MicroAntimicrobialPage() {
           <button type="button" onClick={() => setEditing("new")}>
             施設追加コード追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

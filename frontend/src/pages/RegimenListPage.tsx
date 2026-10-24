@@ -11,6 +11,7 @@ import {
   REGIMEN_STATUS_OPTIONS,
 } from "../fhir/regimenHelpers";
 import { displayOf } from "../fhir/shared";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 化学療法レジメンマスタの一覧。編集は 1 レジメン 1 ページ(/regimens/:id)。
 // 設計は docs/chemo-regimen-design.md。
@@ -46,6 +47,7 @@ export function RegimenListPage() {
           <Link to="/regimens/new" className="button">
             レジメン追加
           </Link>
+          <MasterBackLink />
         </div>
       </div>
 

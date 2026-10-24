@@ -22,7 +22,7 @@ export function QuestionnairePreviewPage() {
             編集
           </Link>
           <Link to="/questionnaires" className="button">
-            ← テンプレート一覧に戻る
+            戻る
           </Link>
         </div>
       </div>

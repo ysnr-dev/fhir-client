@@ -13,6 +13,7 @@ import {
   validateInsulinScale,
   type InsulinScaleValues,
 } from "../fhir/insulinScaleHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // インスリンのスライディングスケールのセット。注射オーダーのスケールの入力で選ぶと行が写る。
 export function InsulinScaleSetPage() {
@@ -27,6 +28,7 @@ export function InsulinScaleSetPage() {
           <button type="button" onClick={() => setEditing("new")}>
             追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

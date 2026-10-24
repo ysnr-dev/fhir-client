@@ -14,6 +14,7 @@ import { Pagination } from "../components/Pagination";
 import { SSMIX2_DEPARTMENT_CODES } from "../fhir/departmentCodes";
 import { buildDepartmentSeedBundle } from "../fhir/departmentHelpers";
 import { organizationDisplayName } from "../fhir/organizationHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 const emptySearch: DepartmentSearchParams = { name: "", partOfId: "" };
 
@@ -98,9 +99,12 @@ export function DepartmentListPage() {
     <div className="page">
       <div className="page__header">
         <h1>診療科一覧</h1>
-        <Link to={newDepartmentPath} className="button">
-          新規登録
-        </Link>
+        <div>
+          <Link to={newDepartmentPath} className="button">
+            新規登録
+          </Link>
+          <MasterBackLink />
+        </div>
       </div>
 
       <form className="patient-search-form" onSubmit={handleSearch}>

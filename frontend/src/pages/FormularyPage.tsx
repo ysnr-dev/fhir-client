@@ -6,6 +6,7 @@ import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { TrashIcon } from "../components/icons/TrashIcon";
 import { Modal } from "../components/Modal";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 院内フォーミュラリのマスタ(docs/formulary-design.md)。
 // 左に薬効群、右に選んだ群の薬剤を推奨順位の順で並べ、↑↓で順位を入れ替える。
@@ -117,9 +118,12 @@ export function FormularyPage() {
     <div className="page">
       <div className="page__header">
         <h1>フォーミュラリ</h1>
-        <button type="button" onClick={() => setEditing("new")}>
-          薬効群追加
-        </button>
+        <div>
+          <button type="button" onClick={() => setEditing("new")}>
+            薬効群追加
+          </button>
+          <MasterBackLink />
+        </div>
       </div>
 
       <ErrorBanner error={groups.error} />

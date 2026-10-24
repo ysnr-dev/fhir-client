@@ -11,6 +11,7 @@ import {
   validateMealPatternSteps,
   type MealPatternStep,
 } from "../fhir/mealPatternHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // パターン食。術後の食上げ(流動食 → 三分粥 → … → 常食)のように段階的に変わる食事の雛形で、
 // 食事オーダー画面で選ぶと段階ごとのオーダーがまとめて立つ(docs/meal-order-design.md §3.5)。
@@ -26,6 +27,7 @@ export function MealPatternPage() {
           <button type="button" onClick={() => setEditing("new")}>
             追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

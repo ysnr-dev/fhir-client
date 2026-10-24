@@ -8,6 +8,7 @@ import type {
 } from "../api/masterClient";
 import type { PerformDatasetHooks } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { MasterBackLink } from "../components/MasterBackLink";
 import { MedicalProcedureSearchModal } from "../components/MedicalProcedureSearchModal";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { Modal } from "../components/Modal";
@@ -99,9 +100,12 @@ export function PerformDatasetPage<D extends PerformDatasetDetail>({
     <div className="page">
       <div className="page__header">
         <h1>実施入力データセット</h1>
-        <button type="button" onClick={() => setEditing("new")}>
-          データセット追加
-        </button>
+        <div>
+          <button type="button" onClick={() => setEditing("new")}>
+            データセット追加
+          </button>
+          <MasterBackLink />
+        </div>
       </div>
 
       <form className="patient-search-form" onSubmit={handleSearch}>

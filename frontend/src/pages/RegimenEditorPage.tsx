@@ -200,7 +200,7 @@ export function RegimenEditorPage() {
         <h1>{isNew ? "レジメンを追加" : "レジメンを編集"}</h1>
         <div className="page__header-actions">
           <Link to="/regimens" className="button">
-            一覧へ戻る
+            戻る
           </Link>
         </div>
       </div>

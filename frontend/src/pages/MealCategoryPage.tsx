@@ -8,6 +8,7 @@ import {
   mealNutritionFormLabel,
 } from "../components/mealItemOptions";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 食種の種別マスタ。一般食・特別食(治療食)など、食種をまとめる 1 段の分類で、
 // 生理検査の PhysioExamTypePage と同じ作り。主食(kind = staple)には付けない。
@@ -72,6 +73,7 @@ export function MealCategoryPage() {
           <button type="button" onClick={() => setEditing("new")}>
             種別追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

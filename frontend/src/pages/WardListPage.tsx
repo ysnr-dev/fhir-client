@@ -5,6 +5,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { Pagination } from "../components/Pagination";
 import { WardTable } from "../components/WardTable";
 import { LOCATION_STATUS_OPTIONS } from "../fhir/locationHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 const emptySearch: WardSearchParams = { name: "", status: "" };
 
@@ -32,9 +33,12 @@ export function WardListPage() {
     <div className="page">
       <div className="page__header">
         <h1>病棟一覧</h1>
-        <Link to="/wards/new" className="button">
-          新規登録
-        </Link>
+        <div>
+          <Link to="/wards/new" className="button">
+            新規登録
+          </Link>
+          <MasterBackLink />
+        </div>
       </div>
 
       <form className="patient-search-form" onSubmit={handleSearch}>

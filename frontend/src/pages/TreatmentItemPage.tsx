@@ -16,6 +16,7 @@ import { Modal } from "../components/Modal";
 import { TreatmentItemSearchModal } from "../components/TreatmentItemSearchModal";
 import { KIND_LABELS } from "../components/treatmentItemOptions";
 import { TrashIcon } from "../components/icons/TrashIcon";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 処置オーダー項目マスタ。生理検査の PhysioItemPage と同じ作りだが、分類軸
 // (検査種別)と検査目的・特別指示の既定テンプレートは持たない。
@@ -114,6 +115,7 @@ export function TreatmentItemPage() {
           <button type="button" onClick={() => setEditing("new")}>
             項目追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

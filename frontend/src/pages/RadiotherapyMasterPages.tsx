@@ -13,6 +13,7 @@ import {
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 放射線治療の施設固有マスタのうち、項目が平らな 4 つ(モダリティ・照射技法・治療装置・
 // 休止/中止理由)。どれも数十件で同じ作りなので、1 つの画面部品(SimpleMasterPage)を項目の定義だけ
@@ -81,6 +82,7 @@ export function SimpleMasterPage<T extends Row>({ title, itemLabel, hooks, field
           <button type="button" onClick={() => setEditing("new")}>
             {itemLabel}追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import { TemplateSelect } from "../components/TemplateSelect";
 import { CLINICAL_NOTE_MODE_OPTIONS, clinicalNoteModeLabel } from "../fhir/clinicalNoteHelpers";
 import { PRACTITIONER_ROLE_OPTIONS, practitionerRoleLabel } from "../fhir/practitionerRoleHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 診療記録のタイトルのマスタ。タイトルごとに記載形式(テンプレートなら既定の
 // テンプレート)を決めておき、診療記録のフォームで選んだときに当てる。職種が
@@ -34,6 +35,7 @@ export function ClinicalNoteTitlePage() {
           <button type="button" onClick={() => setEditing("new")}>
             追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 

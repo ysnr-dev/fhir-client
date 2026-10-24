@@ -16,6 +16,7 @@ import {
   LAB_REFERENCE_SEX_LABELS,
 } from "../components/labOrderItemOptions";
 import { Modal } from "../components/Modal";
+import { MasterBackLink } from "../components/MasterBackLink";
 
 // 検体検査の結果項目(施設マスタ)のメンテナンス。検査結果として返ってくる単位で、
 // データ型・単位・選択肢を持つ。オーダー項目との対応づけは検査オーダー項目マスタ側で行う。
@@ -126,6 +127,7 @@ export function LabResultItemPage() {
           <button type="button" onClick={() => setEditing("new")}>
             項目追加
           </button>
+          <MasterBackLink />
         </div>
       </div>
 
