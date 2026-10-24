@@ -385,33 +385,36 @@ export default function DocumentFormDesigner({
                 <TrashIcon />
               </button>
               <span className="document-form-designer__sep" />
-              <button
-                type="button"
-                className="rp-card__compact-button"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => p - 1)}
-              >
-                ‹
-              </button>
-              <span>
-                {currentPage} / {source.metas.length}
+              {/* ページ切替と表示倍率はまとめて折り返す(途中で行が分かれないように)。 */}
+              <span className="document-form-designer__group">
+                <button
+                  type="button"
+                  className="rp-card__compact-button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                >
+                  ‹
+                </button>
+                <span>
+                  {currentPage} / {source.metas.length}
+                </span>
+                <button
+                  type="button"
+                  className="rp-card__compact-button"
+                  disabled={currentPage >= source.metas.length}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                >
+                  ›
+                </button>
+                <span className="document-form-designer__sep" />
+                <button
+                  type="button"
+                  className="rp-card__compact-button"
+                  onClick={() => setZoomMode(zoomMode === "fit" ? "actual" : "fit")}
+                >
+                  {zoomMode === "fit" ? "原寸" : "幅に合わせる"}
+                </button>
               </span>
-              <button
-                type="button"
-                className="rp-card__compact-button"
-                disabled={currentPage >= source.metas.length}
-                onClick={() => setCurrentPage((p) => p + 1)}
-              >
-                ›
-              </button>
-              <span className="document-form-designer__sep" />
-              <button
-                type="button"
-                className="rp-card__compact-button"
-                onClick={() => setZoomMode(zoomMode === "fit" ? "actual" : "fit")}
-              >
-                {zoomMode === "fit" ? "原寸" : "幅に合わせる"}
-              </button>
             </div>
             <div
               ref={scrollRef}

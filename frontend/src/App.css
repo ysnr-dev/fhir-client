@@ -28576,6 +28576,13 @@ input.nursing-picker__search {
   border-color: var(--accent);
 }
 
+.document-form-designer__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 .document-form-designer__sep {
   width: 1px;
   height: 20px;
