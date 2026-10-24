@@ -91,7 +91,7 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
                 )}
                 <RowMenu label={`${template.name} の操作`}>
                   <button type="button" className="row-menu__item" onClick={() => onEdit(template)}>
-                    {template.kind === "form" ? "デザイン" : "編集"}
+                    編集
                   </button>
                   {template.kind === "form" && (
                     <button
