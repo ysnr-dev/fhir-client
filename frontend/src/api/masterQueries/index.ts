@@ -40,6 +40,7 @@ export * from "./dashboard";
 export * from "./clinicalDashboard";
 export * from "./patientFolder";
 export * from "./homeLayout";
+export * from "./kartePaneFavorite";
 export * from "./nursingAssignment";
 export * from "./oralExam";
 export * from "./advisory";

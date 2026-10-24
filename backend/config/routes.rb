@@ -470,6 +470,8 @@ Rails.application.routes.draw do
     resources :bulletin_posts, only: %i[index show create update destroy]
     # ホームのカードの並び。ログイン中の医療従事者につき 1 つ(docs/features/home.md)。
     resource :home_layout, only: %i[show update destroy]
+    # カルテ右ペインの頻用メニュー。ログイン中の医療従事者につき 1 つ(docs/features/karte.md)。
+    resource :karte_pane_favorite, only: %i[show update]
     # 看護の業務分担(日・勤務帯ごとの受け持ち)。病棟 × 日 × 勤務帯をまとめて置き換える。
     resources :nursing_assignments, only: %i[index] do
       collection { put :replace }

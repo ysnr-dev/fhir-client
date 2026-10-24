@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_24_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_24_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -312,6 +312,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_090000) do
     t.datetime "updated_at", null: false
     t.index ["intake_link_id", "questionnaire_url"], name: "index_intake_responses_on_link_and_url"
     t.index ["status"], name: "index_intake_responses_on_status"
+  end
+
+  create_table "karte_pane_favorites", force: :cascade do |t|
+    t.string "practitioner_id", null: false
+    t.jsonb "menu_keys", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["practitioner_id"], name: "index_karte_pane_favorites_on_practitioner_id", unique: true
   end
 
   create_table "lab_result_import_rows", force: :cascade do |t|

@@ -8744,18 +8744,23 @@ body.karte-wide {
 .karte-right__actions {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   flex: none;
   overflow-y: auto;
 }
 
 /* 縮めずにスクロールさせる。flex の既定(shrink: 1)のままだと、種別が増えるほど
    1 つずつが薄くなって押しにくくなる。 */
+/* 幅は 7 文字分に揃える(左右の余白 7px と枠線 1px を足す)。超える名前は折り返す。 */
 .karte-right__actions button {
   font-size: 13px;
-  /* 列の幅はいちばん長いラベル(クリニカルパス)で決まるので、左右の余白は詰める。 */
-  padding: 6px 7px;
+  width: calc(7em + 16px);
+  height: auto;
+  min-height: var(--control-height);
+  padding: 0 7px;
   justify-content: center;
+  text-align: center;
+  white-space: normal;
   flex: none;
 }
 
@@ -8767,15 +8772,100 @@ body.karte-wide {
   font-size: 10px;
 }
 
-/* 畳んだボタンは見出しのボタンより字下げし、左の線で同じ領域だと分かるようにする。 */
+/* 畳んだボタンは幅を揃えたまま、左の太い線で同じ領域だと分かるようにする。 */
 .karte-right__group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   flex: none;
-  margin-left: 6px;
-  padding-left: 6px;
-  border-left: 2px solid var(--border);
+}
+
+.karte-right__group button {
+  border-left-width: 4px;
+}
+
+/* 「全て」「頻用」の切り替え。列の幅は最長のラベルで決まるので、2 つで列幅に収める。 */
+.karte-right__menu-tabs {
+  display: flex;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.karte-right__actions .karte-right__menu-tab {
+  flex: 1 1 0;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  padding: 2px 0;
+  font-size: 11px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.karte-right__actions .karte-right__menu-tab:hover {
+  color: var(--accent);
+}
+
+.karte-right__actions .karte-right__menu-tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* メニューを開くボタンと区別するため、枠を点線にして一段控えめにする。 */
+.karte-right__actions .karte-right__favorite-settings {
+  border-style: dashed;
+  background: transparent;
+  color: var(--text);
+}
+
+.modal--karte-favorite {
+  width: min(560px, 94vw);
+}
+
+.karte-favorite {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.karte-favorite__column h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.karte-favorite__choices,
+.karte-favorite__order {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  font-size: 14px;
+}
+
+.karte-favorite__choices label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.karte-favorite__order li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.karte-favorite__name {
+  flex: 1;
+  min-width: 0;
 }
 
 /* 右ペインのフォームはペイン幅いっぱいに使う(既定の max-width を外す)。 */

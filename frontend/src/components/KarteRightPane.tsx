@@ -1,4 +1,4 @@
-import { useState, type ComponentType, type ReactNode } from "react";
+import type { ComponentType } from "react";
 import { useFacilitySettings } from "../api/queries";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { isOrderKind, ORDER_KINDS, type OrderKind } from "../fhir/orderKinds";
@@ -56,6 +56,7 @@ import { IntakeReviewPanel } from "./IntakeReviewPanel";
 import { RadiotherapyAdverseEventPanel } from "./RadiotherapyAdverseEventPanel";
 import { RadiotherapyReviewPanel } from "./RadiotherapyReviewPanel";
 import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
+import { KartePaneMenu } from "./KartePaneMenu";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
 
@@ -432,220 +433,11 @@ export function KarteRightPane({
         )}
       </div>
 
-      {/* 新規登録の入口。デザイン上は右端に縦並び。 */}
-      <div className="karte-right__actions">
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "note-create", problem: selectedProblem })}
-        >
-          診療記録
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "vital-create", problem: selectedProblem })}
-        >
-          バイタル
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "qr-create", problem: selectedProblem })}
-        >
-          テンプレート
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "appointment-create", problem: selectedProblem })}
-        >
-          予約
-        </button>
-        {/* 入院予定も先の日を押さえる操作なので、予約の隣に置く。 */}
-        <button type="button" onClick={() => onStateChange({ kind: "planned-admission-create" })}>
-          入院予定
-        </button>
-        {/* よく出すオーダーをまとめて出す入口。個別の種別ボタンより前に置く
-            (「セットにあればセット、無ければ個別」の順で探すため)。 */}
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "order-set", problem: selectedProblem })}
-        >
-          セット
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "prescription-create", problem: selectedProblem })}
-        >
-          処方
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "injection-create", problem: selectedProblem })}
-        >
-          注射
-        </button>
-        {/* レジメン(化学療法)の適用。注射・処方に展開されるので、その隣に置く。 */}
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "regimen-apply", problem: selectedProblem })}
-        >
-          化学療法
-        </button>
-        {/* 放射線治療の治療処方(放射線治療医が書く)。化学療法と同じくがんの治療計画なので
-            隣に置く。臨床医からの依頼は下の「他科依頼」で出す。 */}
-        <button
-          type="button"
-          onClick={() =>
-            onStateChange({ kind: "radiotherapy-order-create", problem: selectedProblem })
-          }
-        >
-          放射線治療
-        </button>
-        {/* クリニカルパスの適用。入院の計画そのものなので、化学療法の隣に置く。 */}
-        <button type="button" onClick={() => onStateChange({ kind: "pathway-apply" })}>
-          クリニカルパス
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "lab-order-create", problem: selectedProblem })}
-        >
-          検体検査
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "micro-order-create", problem: selectedProblem })}
-        >
-          細菌検査
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "patho-order-create", problem: selectedProblem })}
-        >
-          病理検査
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "rad-order-create", problem: selectedProblem })}
-        >
-          放射線検査
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "physio-order-create", problem: selectedProblem })}
-        >
-          生理検査
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "endoscopy-order-create", problem: selectedProblem })}
-        >
-          内視鏡
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "treatment-order-create", problem: selectedProblem })}
-        >
-          処置
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "surgery-order-create", problem: selectedProblem })}
-        >
-          手術
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "meal-order-create", problem: selectedProblem })}
-        >
-          食事
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            onStateChange({ kind: "transfusion-order-create", problem: selectedProblem })
-          }
-        >
-          輸血
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "rehab-order-create", problem: selectedProblem })}
-        >
-          リハビリ
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            onStateChange({ kind: "nutrition-guidance-order-create", problem: selectedProblem })
-          }
-        >
-          栄養指導
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            onStateChange({ kind: "medication-guidance-order-create", problem: selectedProblem })
-          }
-        >
-          服薬指導
-        </button>
-        <PaneActionGroup label="看護">
-          {/* 看護過程の順(情報収集 → 計画 → 指示 → サマリー)に並べる。見出し「看護」の下なので
-              「看護」を付けない(列の幅は最長のラベルで決まる)。 */}
-          <button type="button" onClick={() => onStateChange({ kind: "nursing-profile" })}>
-            プロファイル
-          </button>
-          <button
-            type="button"
-            onClick={() => onStateChange({ kind: "nursing-problem-create", entry: "standard_plan" })}
-          >
-            看護計画
-          </button>
-          <button
-            type="button"
-            onClick={() => onStateChange({ kind: "nursing-problem-create", entry: "diagnosis" })}
-          >
-            看護診断
-          </button>
-          <button
-            type="button"
-            onClick={() => onStateChange({ kind: "nursing-order-create", problem: selectedProblem })}
-          >
-            看護指示
-          </button>
-          <button type="button" onClick={() => onStateChange({ kind: "nursing-summary-create" })}>
-            看護サマリー
-          </button>
-        </PaneActionGroup>
-        {/* 他科依頼は部門ではなく人(他の診療科の医師)への依頼なので、部門オーダーを
-            並べた最後に置く。 */}
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "consult-order-create", problem: selectedProblem })}
-        >
-          他科依頼
-        </button>
-        {/* チーム依頼(NST・ICT・褥瘡対策など)も人への依頼なので他科依頼の隣。 */}
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "team-request-create", problem: selectedProblem })}
-        >
-          チーム依頼
-        </button>
-        {/* 退院時サマリーは入院の締めくくりに書く文書なので、一番下に置く。 */}
-        <button type="button" onClick={() => onStateChange({ kind: "summary-create" })}>
-          退院時サマリー
-        </button>
-        <button type="button" onClick={() => onStateChange({ kind: "dpc-form1-create" })}>
-          DPC
-        </button>
-        <button type="button" onClick={() => onStateChange({ kind: "document-create" })}>
-          文書作成
-        </button>
-      </div>
+      <KartePaneMenu selectedProblem={selectedProblem} onStateChange={onStateChange} />
     </section>
   );
 }
 
-// 登録ボタン列の中で、同じ領域のボタンを見出しのボタンの下に畳む。
 /** 入院診療計画書を書き始める。テンプレートは施設設定(入退院文書の作成状況と同じもの)。 */
 function AdmissionPlanCreatePanel({
   patientId,
@@ -664,30 +456,6 @@ function AdmissionPlanCreatePanel({
       encounterId={encounterId}
       onSaved={onSaved}
     />
-  );
-}
-
-function PaneActionGroup({ label, children }: { label: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        className="karte-right__group-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {label}
-        <span className="karte-right__group-caret" aria-hidden="true">
-          {open ? "▾" : "▸"}
-        </span>
-      </button>
-      {open && (
-        <div className="karte-right__group" role="group" aria-label={label}>
-          {children}
-        </div>
-      )}
-    </>
   );
 }
 
