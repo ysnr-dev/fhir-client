@@ -1883,6 +1883,19 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   color: var(--text);
 }
 
+.prescription-form label.prescription-form__check {
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+}
+
+.prescription-form label.prescription-form__check input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
 .prescription-form input,
 .prescription-form select,
 .prescription-form textarea {
