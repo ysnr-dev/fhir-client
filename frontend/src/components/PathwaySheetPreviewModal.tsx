@@ -12,15 +12,27 @@ import { PathwayTaskTemplateModal } from "./PathwayTaskTemplateModal";
 // パス定義のプレビュー。編集中の draft(保存前の内容も含む)を、患者に適用したときのパスシート
 // (KartePathwayTab のオーバービュー)と同じ並びで見る。読むだけで、評価・実施は記録しない。
 // オーダー雛形を持つタスクのセルは押せて、雛形の中身を読み取り専用のモーダルで重ねて開く。
-// 実日付は入院日から割り付け、フェーズを分けたパスは分岐の先を選んで経路を切り替える(既定は標準の経路)。
+// 実日付は入院日(次のフェーズの適用から開いたときはそのフェーズの開始日)から割り付け、フェーズを分けたパスは分岐の先を選んで経路を切り替える(既定は標準の経路)。
 
-export function PathwaySheetPreviewModal({ draft, onClose }: { draft: PathwayDraft; onClose: () => void }) {
-  const [admissionDate, setAdmissionDate] = useState(today);
+export function PathwaySheetPreviewModal({
+  draft,
+  startPhaseKey,
+  initialDate,
+  onClose,
+}: {
+  draft: PathwayDraft;
+  /** 次のフェーズの適用から開くとき、経路の先頭にするフェーズ。日付はそのフェーズの開始日になる。 */
+  startPhaseKey?: string;
+  /** 日付の初期値。無ければ今日。 */
+  initialDate?: string;
+  onClose: () => void;
+}) {
+  const [admissionDate, setAdmissionDate] = useState(() => initialDate || today());
   const [choices, setChoices] = useState<Map<string, string>>(new Map());
   const [collapsedUnits, setCollapsedUnits] = useState<Set<string>>(new Set());
   const [templateTask, setTemplateTask] = useState<PathwayTaskDraft | null>(null);
 
-  const route = previewPhaseRoute(draft.phases, choices);
+  const route = previewPhaseRoute(draft.phases, choices, startPhaseKey);
   const { application, tasks } = buildPathwayPreview(draft, admissionDate || today(), route);
   const sheet = buildPathwaySheet(application);
   const visibleRows = sheet.rows.filter((row) => row.kind === "unit" || !collapsedUnits.has(row.unitKey));
@@ -46,7 +58,7 @@ export function PathwaySheetPreviewModal({ draft, onClose }: { draft: PathwayDra
           <div className="chemo-calendar__summary pathway-sheet__summary">
             <span className="pathway-sheet__name">{application.title || "(名称未入力)"}</span>
             <label className="pathway-preview__field">
-              入院日
+              {route[0] && route[0] !== draft.phases[0] ? "開始日" : "入院日"}
               <input type="date" value={admissionDate} onChange={(e) => setAdmissionDate(e.target.value)} />
             </label>
             {branching.map((phase) => (

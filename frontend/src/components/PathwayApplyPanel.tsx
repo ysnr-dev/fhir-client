@@ -42,7 +42,7 @@ import {
   type PathwayOrderStart,
 } from "../fhir/pathwayApplyHelpers";
 import { phaseClosingEntries, planPhaseOrderClosings } from "../fhir/pathwayScheduleHelpers";
-import { PATHWAY_SETTING_OPTIONS, eventDayStepLabel } from "../fhir/pathwayHelpers";
+import { PATHWAY_SETTING_OPTIONS, draftFromPathway, eventDayStepLabel, type PathwayDraft } from "../fhir/pathwayHelpers";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
@@ -50,6 +50,7 @@ import { useStackedOrderForms } from "../hooks/useStackedOrderForms";
 import { useValidationError } from "../hooks/useValidationError";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
+import { PathwaySheetPreviewModal } from "./PathwaySheetPreviewModal";
 import { ORDER_SET_TYPE_LABELS, ORDER_SET_TYPES } from "./orderSetRegistry";
 import { displayOf } from "../fhir/shared";
 
@@ -143,6 +144,7 @@ function PathwayApplyLoader({
       <PathwayApplyForm
         patientId={patientId}
         pathway={pathwayOfPhase(detail.data, firstPhaseOf(detail.data)?.phase_key ?? "")}
+        definition={detail.data}
         defaultSetting={defaultSetting}
         patient={patientResult?.data}
         onSaved={onSaved}
@@ -191,6 +193,7 @@ export function PathwayPhasePanel({
       <PathwayApplyForm
         patientId={patientId}
         pathway={pathwayOfPhase(detail.data, phaseKey)}
+        definition={detail.data}
         defaultSetting={defaultSetting}
         patient={patientResult?.data}
         phase={{ application, orders: tree.data.orders, branch, defaultStartDate: next.defaultStartDate }}
@@ -240,6 +243,7 @@ interface EncounterOption {
 function PathwayApplyForm({
   patientId,
   pathway,
+  definition,
   defaultSetting,
   patient,
   phase,
@@ -248,6 +252,8 @@ function PathwayApplyForm({
   patientId: string;
   /** 適用するフェーズに絞ったパス定義。 */
   pathway: PathwayDetail;
+  /** 絞る前のパス定義(プレビューで続くフェーズまで見せる)。 */
+  definition: PathwayDetail;
   defaultSetting: ReturnType<typeof useDefaultOrderSetting>;
   patient?: fhir4.Patient;
   /** 渡すと「次のフェーズ」の適用になる(入院・適応基準・対象病名は適用済みのものを使う)。 */
@@ -292,6 +298,7 @@ function PathwayApplyForm({
   const [comment, setComment] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [conditionIds, setConditionIds] = useState<string[] | null>(null);
+  const [previewDraft, setPreviewDraft] = useState<PathwayDraft | null>(null);
   const stack = useStackedOrderForms<number>();
 
   const events = useMemo(
@@ -774,7 +781,19 @@ function PathwayApplyForm({
         <button type="button" onClick={handleApply} disabled={apply.isPending}>
           {apply.isPending ? "送信中..." : includedTemplateCount > 0 ? `適用(オーダー ${includedTemplateCount} 件)` : "適用"}
         </button>
+        <button type="button" onClick={() => setPreviewDraft(draftFromPathway(definition))}>
+          プレビュー
+        </button>
       </div>
+
+      {previewDraft && (
+        <PathwaySheetPreviewModal
+          draft={previewDraft}
+          startPhaseKey={pathway.events[0]?.phase_key}
+          initialDate={admissionDate}
+          onClose={() => setPreviewDraft(null)}
+        />
+      )}
     </div>
   );
 }
