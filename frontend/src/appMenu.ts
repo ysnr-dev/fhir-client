@@ -1,5 +1,5 @@
 // ヘッダーのメニュー(「管理」以外)の登録表。App.tsx はこの表を描き、ホームのショートカットの
-// 候補(components/homeCards/ShortcutsCard)もここから引く。項目を足すときはここに 1 行足す。
+// 候補(components/homeCards/ShortcutsCard)もここから引く(「管理」からはマスタメンテだけを足す)。項目を足すときはここに 1 行足す。
 //
 // 並びの考え方:
 //   患者一覧 … 患者を探す入口。患者検索で探すか、その日の外来予約から探すかで分ける。
@@ -159,7 +159,13 @@ export const APP_MENU: AppMenuEntry[] = [
   },
 ];
 
-/** ショートカットの候補(メニューの順に平坦化。病棟マップのように 2 か所にある画面は 1 つに)。 */
+// 「管理」メニューの項目のうち、ショートカットに置けるもの。管理の他の項目は設定画面なので候補に入れない。
+const ADMIN_SHORTCUT_LINKS: AppMenuItem[] = [{ label: "マスタメンテ", to: "/masters" }];
+
+/**
+ * ショートカットの候補(メニューの順に平坦化し、末尾に ADMIN_SHORTCUT_LINKS。
+ * 病棟マップのように 2 か所にある画面は 1 つに)。
+ */
 export function appMenuLinks(): AppMenuItem[] {
   const seen = new Set<string>();
   const links: AppMenuItem[] = [];
@@ -173,6 +179,7 @@ export function appMenuLinks(): AppMenuItem[] {
     else if ("sections" in entry) entry.sections.forEach((s) => s.items.forEach(push));
     else entry.items.forEach(push);
   }
+  ADMIN_SHORTCUT_LINKS.forEach(push);
   return links;
 }
 
