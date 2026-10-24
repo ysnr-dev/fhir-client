@@ -871,6 +871,8 @@ button:disabled {
 .nursing-assignment select,
 .oral-exam select,
 .oral-exam input:not([type="checkbox"]),
+.pathway-preview__field select,
+.pathway-preview__field input,
 .karte-print-form input[type="date"] {
   font: inherit;
   font-size: 15px;
@@ -20189,6 +20191,33 @@ button.nursing-worksheet__mark {
   min-height: 0;
   overflow: auto;
   margin-bottom: 0;
+}
+
+/* パス定義のプレビュー(PathwaySheetPreviewModal)。シートが横に伸びるので広く取り、表の中だけを送る。 */
+/* 編集画面(.regimen-editor)の中に開くので、詰めた入力欄の高さを受け継がないよう既定に戻す。 */
+.modal--pathway-preview {
+  --control-height: 34px;
+  width: min(1200px, 96vw);
+}
+
+.pathway-preview .pathway-sheet__wrap {
+  max-height: 65vh;
+}
+
+.pathway-preview__field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* カルテのパスタブ(.karte-tabpanel の表の塗り)と同じ地を敷く。塗らないと縦に送ったとき、貼り付けた見出しの下に行が透ける。 */
+.pathway-preview .lab-timeline__table-wrap {
+  background: var(--surface-card);
+  border-radius: 6px;
+}
+
+.pathway-preview .lab-timeline__table thead th {
+  background: var(--surface-panel);
 }
 
 .pathway-sheet__table thead {

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useEscapeClose } from "../hooks/useEscapeClose";
 import { useKarteFullscreenTop } from "../hooks/useKarteFullscreenTop";
 import {
@@ -47,6 +47,7 @@ import { PathwayOrderModal } from "./PathwayOrderModal";
 import { PathwaySchedulePanel } from "./PathwaySchedulePanel";
 import { PathwayTaskPanel } from "./PathwayTaskPanel";
 import { PathwayUnplannedPanel } from "./PathwayUnplannedPanel";
+import { PathwaySeriesLink } from "./PathwaySeriesLink";
 import { RowMenu } from "./RowMenu";
 
 // カルテ画面の「パス」タブ。適用したクリニカルパスを、紙のパスシートと同じ
@@ -622,7 +623,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                         return (
                           <td key={day.eventId} className={`${classes} pathway-sheet__cell--unit`}>
                             <button type="button" className="pathway-sheet__cell-button" onClick={openUnit}>
-                              <SeriesLink fromPrev={fromPrev} toNext={toNext}>
+                              <PathwaySeriesLink fromPrev={fromPrev} toNext={toNext}>
                                 <span
                                   className={`pathway-sheet__outcome${
                                     unit.achievement ? ` pathway-sheet__outcome--${unit.achievement}` : " pathway-sheet__outcome--pending"
@@ -631,7 +632,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                                   {unit.achievementLabel || "未評価"}
                                 </span>
                                 {unit.unplanned && <span className="pathway-sheet__unplanned">予定外</span>}
-                              </SeriesLink>
+                              </PathwaySeriesLink>
                             </button>
                           </td>
                         );
@@ -646,13 +647,13 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                             title={assessment.properValue ? `適正値: ${assessment.properValue}` : undefined}
                           >
                             <span className="pathway-sheet__cell-static">
-                              <SeriesLink fromPrev={fromPrev} toNext={toNext}>
+                              <PathwaySeriesLink fromPrev={fromPrev} toNext={toNext}>
                                 {assessment.value ? (
                                   <span className="pathway-sheet__value">{assessment.value}</span>
                                 ) : (
                                   <span className="pathway-sheet__planned">○</span>
                                 )}
-                              </SeriesLink>
+                              </PathwaySeriesLink>
                             </span>
                           </td>
                         );
@@ -664,7 +665,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                       return (
                         <td key={day.eventId} className={classes} data-procedure-id={task.procedureId}>
                           <button type="button" className="pathway-sheet__cell-button" onClick={() => openCellTask(task)}>
-                            <SeriesLink fromPrev={fromPrev} toNext={toNext}>
+                            <PathwaySeriesLink fromPrev={fromPrev} toNext={toNext}>
                               <span className={`pathway-sheet__task${done ? " pathway-sheet__task--done" : ""}`}>
                                 {done ? "☑" : "☐"}
                               </span>
@@ -682,7 +683,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                                     日付違い
                                   </span>
                                 )}
-                            </SeriesLink>
+                            </PathwaySeriesLink>
                           </button>
                         </td>
                       );
@@ -856,11 +857,6 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
   );
 }
 
-/**
- * 複数の病日に続く行(日をまたぐアウトカム・続く観察項目やタスク)のセルの中身。前の列から続いていれば左に、
- * 次の列へ続いていれば右に線を引き、続きの最後のセルは矢印で終える(紙のパスシートで日をまたいで引く矢印)。
- * 線はセルの余白まで伸ばして隣のセルとつなげる。続いていないセルは中身だけ。
- */
 const ACTION_ICON_PATHS = {
   // 次のフェーズ(先へ進む矢印)
   next: "M2.5 8h9M8 4l4 4-4 4M13.5 3v10",
@@ -883,23 +879,5 @@ function ActionIcon({ name }: { name: keyof typeof ACTION_ICON_PATHS }) {
         strokeLinejoin="round"
       />
     </svg>
-  );
-}
-
-function SeriesLink({ fromPrev, toNext, children }: { fromPrev: boolean; toNext: boolean; children: ReactNode }) {
-  if (!fromPrev && !toNext) return <>{children}</>;
-  return (
-    <span className="pathway-sheet__series">
-      <span
-        className={
-          fromPrev
-            ? `pathway-sheet__link pathway-sheet__link--in${toNext ? "" : " pathway-sheet__link--end"}`
-            : "pathway-sheet__link-spacer"
-        }
-        aria-hidden="true"
-      />
-      <span className="pathway-sheet__series-content">{children}</span>
-      <span className={toNext ? "pathway-sheet__link pathway-sheet__link--out" : "pathway-sheet__link-spacer"} aria-hidden="true" />
-    </span>
   );
 }

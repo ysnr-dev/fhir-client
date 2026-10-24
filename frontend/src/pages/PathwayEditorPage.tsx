@@ -16,6 +16,7 @@ import { PathwayEventCard } from "../components/PathwayEventCard";
 import { TrashIcon } from "../components/icons/TrashIcon";
 import { PathwayOverviewTable } from "../components/PathwayOverviewTable";
 import { PathwayPhaseBranchModal } from "../components/PathwayPhaseBranchModal";
+import { PathwaySheetPreviewModal } from "../components/PathwaySheetPreviewModal";
 import { RowMenu } from "../components/RowMenu";
 import { PathwayTaskTemplateModal } from "../components/PathwayTaskTemplateModal";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
@@ -105,6 +106,7 @@ export function PathwayEditorPage() {
     if (serverError) scrollIntoViewVisibly(serverErrorRef.current, "center");
   }, [serverError]);
   const [picker, setPicker] = useState<Picker>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const update = makeFieldUpdater(setDraft);
 
   // 病日 × OAT ユニットの表は列が多く、左に目次も置くので、本文の幅を既定より広げる。
@@ -296,6 +298,9 @@ export function PathwayEditorPage() {
       <div className="page__header">
         <h1>{isNew ? "パスを追加" : "パスを編集"}</h1>
         <div className="page__header-actions">
+          <button type="button" onClick={() => setPreviewOpen(true)}>
+            プレビュー
+          </button>
           <Link to="/pathways" className="button">
             戻る
           </Link>
@@ -682,6 +687,7 @@ export function PathwayEditorPage() {
           onClose={() => setPicker(null)}
         />
       )}
+      {previewOpen && <PathwaySheetPreviewModal draft={draft} onClose={() => setPreviewOpen(false)} />}
       {branchPhase && (
         <PathwayPhaseBranchModal
           phase={branchPhase}
