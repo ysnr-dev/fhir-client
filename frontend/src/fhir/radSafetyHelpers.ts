@@ -1,6 +1,7 @@
 import type { Medicine } from "../api/masterClient";
 import { type Advisory, type AdvisoryKind, advisoryKey, severityOf } from "./advisoryHelpers";
 import {
+  allergenIngredient,
   allergyMatchLabel,
   medicationAllergenCodes,
   summarizeAllergy,
@@ -43,17 +44,24 @@ export function isMriExam(item: RadSafetyItem): boolean {
   return item.modalityCode === MODALITY_MRI;
 }
 
+export interface ContrastAllergenCodes {
+  /** 銘柄指定(YCM + YJ コード)。 */
+  brands: Set<string>;
+  /** 成分(薬効分類 4 桁 + 成分 3 桁)。 */
+  ingredients: Set<string>;
+}
+
 /**
- * 造影剤に当たる JFAGY のアレルゲンコード(銘柄 YCM・成分 GCM)。造影剤マスタの全件から作る。
+ * 造影剤に当たる JFAGY のアレルゲンコード(銘柄 YCM)と成分。造影剤マスタの全件から作る。
  */
-export function contrastAllergenCodes(medicines: Medicine[]): Set<string> {
-  const codes = new Set<string>();
+export function contrastAllergenCodes(medicines: Medicine[]): ContrastAllergenCodes {
+  const codes: ContrastAllergenCodes = { brands: new Set(), ingredients: new Set() };
   for (const medicine of medicines) {
     if ((medicine.contrast_medium_category ?? "0").trim() !== "1") continue;
     const allergen = medicationAllergenCodes(medicine.yj_code);
     if (!allergen) continue;
-    codes.add(allergen.brand);
-    codes.add(allergen.generic);
+    codes.brands.add(allergen.brand);
+    codes.ingredients.add(allergen.ingredient);
   }
   return codes;
 }
@@ -64,13 +72,16 @@ export function contrastAllergenCodes(medicines: Medicine[]): Set<string> {
  */
 export function matchContrastAllergies(
   allergies: fhir4.AllergyIntolerance[],
-  contrastCodes: Set<string>,
+  contrastCodes: ContrastAllergenCodes,
 ): AllergyMatch[] {
   const matches: AllergyMatch[] = [];
   for (const allergy of allergies) {
     if (allergy.verificationStatus?.coding?.[0]?.code === "refuted") continue;
     const summary = summarizeAllergy(allergy);
-    const byCode = summary.jfagyCode !== "" && contrastCodes.has(summary.jfagyCode);
+    const ingredient = allergenIngredient(summary.jfagyCode);
+    const byCode =
+      contrastCodes.brands.has(summary.jfagyCode) ||
+      (ingredient !== null && contrastCodes.ingredients.has(ingredient));
     const byName = summary.jfagyCode === "" && summary.name.includes("造影");
     if (!byCode && !byName) continue;
     matches.push({

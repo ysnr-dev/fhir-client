@@ -324,28 +324,42 @@ export function parseAllergyForm(allergy: fhir4.AllergyIntolerance): AllergyForm
 
 // ---- 薬剤とアレルギーの照合(docs/order-common-backlog.md §3) ----
 //
-// 患者のアレルギーは銘柄指定(YCM + YJ コード 12 桁)と成分指定(GCM + 一般名コード)の
-// 2 系統で登録される。一般名コードは YJ コードの規格・銘柄部を ZZZ にした形なので
-// (「GCM4291410A1ZZZ オキサリプラチン」に対し YJ は「4291410A1070」)、薬剤 1 件から
-// 両方のコードを作って突き合わせる。銘柄だけを見ると成分で登録されたアレルギーを
-// 取りこぼす。
+// 患者のアレルギーは銘柄指定(YCM + YJ コード 12 桁)と成分指定(GCM + 剤形・規格・銘柄不明コード)の
+// 2 系統で登録される。銘柄は YJ コードの完全一致で見る。
+//
+// 成分は上 7 桁(薬効分類 4 桁 + 成分 3 桁)で見る。剤形・規格・銘柄不明コードは
+// 「GCM1149019C1ZZZ ロキソプロフェンナトリウム水和物」のように 8〜9 桁目に剤形の記号を
+// 持つが、実際の YJ コード(ロキソニン錠は 1149019F1030)や一般名処方コード(1149019F1ZZZ)
+// の剤形とは一致しないことがあるので、剤形以降は照合に使わない。
+// 銘柄だけを見ると成分で登録されたアレルギーを取りこぼす。
 
-/** 一般名コードの規格・銘柄部の長さ(YJ コード 12 桁の末尾 3 桁)。 */
-const GENERIC_SUFFIX = "ZZZ";
-const YJ_GENERIC_LENGTH = 9;
+/** 成分部(薬効分類 4 桁 + 成分 3 桁)の長さ。 */
+const INGREDIENT_LENGTH = 7;
+const BRAND_PREFIX = "YCM";
+const GENERIC_PREFIX = "GCM";
 
 export interface MedicationAllergenCodes {
   /** 銘柄指定(YCM + YJ コード)。 */
   brand: string;
-  /** 成分指定(GCM + 一般名コード)。 */
-  generic: string;
+  /** 成分(薬効分類 4 桁 + 成分 3 桁)。 */
+  ingredient: string;
 }
 
-/** 医薬品の YJ コードから、照合に使う JFAGY のアレルゲンコードを作る。 */
-export function medicationAllergenCodes(yjCode: string | null | undefined): MedicationAllergenCodes | null {
-  const yj = (yjCode ?? "").trim();
-  if (yj.length < YJ_GENERIC_LENGTH) return null;
-  return { brand: `YCM${yj}`, generic: `GCM${yj.slice(0, YJ_GENERIC_LENGTH)}${GENERIC_SUFFIX}` };
+/**
+ * 医薬品のコードから、照合に使う JFAGY のアレルゲンコードを作る。YJ コードのほか、
+ * 同じ桁構造の一般名処方コードや薬価基準コードも渡せる(成分の照合だけが効く)。
+ */
+export function medicationAllergenCodes(code: string | null | undefined): MedicationAllergenCodes | null {
+  const trimmed = (code ?? "").trim();
+  if (trimmed.length < INGREDIENT_LENGTH) return null;
+  return { brand: `${BRAND_PREFIX}${trimmed}`, ingredient: trimmed.slice(0, INGREDIENT_LENGTH) };
+}
+
+/** 成分指定(GCM)のアレルゲンコードから成分部を取り出す。銘柄指定や食品などは null。 */
+export function allergenIngredient(jfagyCode: string | undefined): string | null {
+  if (!jfagyCode?.startsWith(GENERIC_PREFIX)) return null;
+  const ingredient = jfagyCode.slice(GENERIC_PREFIX.length, GENERIC_PREFIX.length + INGREDIENT_LENGTH);
+  return ingredient.length === INGREDIENT_LENGTH ? ingredient : null;
 }
 
 export interface AllergyMatch {
@@ -368,17 +382,21 @@ export interface AllergyMatch {
  * 本当の警告が埋もれる。`clinicalStatus` の絞り込みは呼び出し側(`useActiveAllergies`)に任せる。
  */
 export function matchMedicationAllergies(
-  yjCode: string | null | undefined,
+  code: string | null | undefined,
   allergies: fhir4.AllergyIntolerance[],
 ): AllergyMatch[] {
-  const codes = medicationAllergenCodes(yjCode);
+  const codes = medicationAllergenCodes(code);
   if (!codes) return [];
   const matches: AllergyMatch[] = [];
   for (const allergy of allergies) {
     if (allergy.verificationStatus?.coding?.[0]?.code === "refuted") continue;
     const summary = summarizeAllergy(allergy);
     const kind =
-      summary.jfagyCode === codes.brand ? "brand" : summary.jfagyCode === codes.generic ? "generic" : null;
+      summary.jfagyCode === codes.brand
+        ? "brand"
+        : allergenIngredient(summary.jfagyCode) === codes.ingredient
+          ? "generic"
+          : null;
     if (!kind) continue;
     matches.push({
       allergyId: summary.id,

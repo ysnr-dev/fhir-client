@@ -45,15 +45,18 @@ export function ingredientKey(
     | undefined,
 ): string | null {
   if (!medicine) return null;
-  const code =
-    ingredientSourceCode(medicine) || (medicine.generic ? medicine.medicine_code : "");
-  const trimmed = (code ?? "").trim();
-  return trimmed.length >= INGREDIENT_LENGTH ? trimmed.slice(0, INGREDIENT_LENGTH) : null;
+  const code = ingredientSourceCode(medicine);
+  return code.length >= INGREDIENT_LENGTH ? code.slice(0, INGREDIENT_LENGTH) : null;
 }
 
-/** 成分の判定に使う 12 桁のコード。YJ コード、無ければ薬価基準コード。 */
-function ingredientSourceCode(medicine: { yj_code?: string | null; yakka_code?: string | null }): string {
-  return (medicine.yj_code || medicine.yakka_code || "").trim();
+/** 成分の判定に使う 12 桁のコード。YJ コード、無ければ薬価基準コード、一般名処方なら一般名処方コード。 */
+function ingredientSourceCode(medicine: {
+  yj_code?: string | null;
+  medicine_code?: string | null;
+  generic?: boolean;
+  yakka_code?: string | null;
+}): string {
+  return (medicine.yj_code || medicine.yakka_code || (medicine.generic ? medicine.medicine_code : "") || "").trim();
 }
 
 export type MedicineCautionKind =
@@ -201,7 +204,7 @@ export function buildMedicationWarnings(args: {
       const warnings: MedicationWarning[] = [];
       if (!line.medicine) return warnings;
 
-      // 成分指定のアレルギー(一般名コード = 上 9 桁)は薬価基準コードでも当たる。
+      // 成分指定のアレルギー(上 7 桁)は薬価基準コード・一般名処方コードでも当たる。
       for (const match of matchMedicationAllergies(ingredientSourceCode(line.medicine), allergies)) {
         warnings.push({
           kind: "allergy",
