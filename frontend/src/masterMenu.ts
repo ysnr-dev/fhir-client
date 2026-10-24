@@ -15,7 +15,7 @@ export const MASTER_MENU: MasterMenuGroup[] = [
       { label: "診療科", to: "/departments" },
       { label: "医療従事者", to: "/practitioners" },
       { label: "指導医グループ", to: "/supervisor-groups" },
-      { label: "チーム医療のチーム", to: "/care-teams" },
+      { label: "チーム医療", to: "/care-teams" },
       { label: "診察室・撮影室", to: "/locations" },
       { label: "病棟・病室", to: "/wards" },
       { label: "注意区分", to: "/patient-cautions" },

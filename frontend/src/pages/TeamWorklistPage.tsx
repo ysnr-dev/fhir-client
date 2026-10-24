@@ -40,7 +40,7 @@ import { today } from "../lib/dates";
 // - 介入中 … status=active / revoked(依頼済・介入中・却下)。いま溜まっている仕事なので有限
 // - 終了 … status=completed の直近ぶん
 //
-// 宛先のチームは performer=CareTeam/{id} で上流が絞る。既定は自分が構成員のチームの先頭。
+// 宛先のチームは performer=CareTeam/{id} で上流が絞る。既定は自分がメンバーのチームの先頭。
 // 回診記録は進捗ボタンではなくモーダル(TeamRoundModal)で書く。却下は理由を入れるモーダル。
 
 interface Filters {
@@ -64,7 +64,7 @@ export function TeamWorklistPage() {
   const myTeams = useMyCareTeams(practitionerId);
   const teams = useCareTeams();
   const [filters, setFilters] = useState<Filters | null>(null);
-  // 既定のチームは自分が構成員のチームの先頭(読めるまでは全チーム)。
+  // 既定のチームは自分がメンバーのチームの先頭(読めるまでは全チーム)。
   const defaultTeamId = myTeams.data?.[0]?.id ?? "";
   const effectiveFilters = filters ?? emptyFilters(defaultTeamId);
 

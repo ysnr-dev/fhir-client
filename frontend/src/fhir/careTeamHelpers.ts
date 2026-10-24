@@ -23,7 +23,7 @@ export type CareTeamKind = (typeof CARE_TEAM_KIND_OPTIONS)[number]["code"];
 
 export const CARE_TEAM_ROLE_OPTIONS = [
   { code: "lead", label: "リーダー" },
-  { code: "member", label: "構成員" },
+  { code: "member", label: "メンバー" },
 ] as const;
 
 export type CareTeamRole = (typeof CARE_TEAM_ROLE_OPTIONS)[number]["code"];
@@ -96,7 +96,7 @@ function participantOf(member: CareTeamMember): fhir4.CareTeamParticipant {
   };
 }
 
-/** チームの組み立て。existing があれば id・構成員・meta を引き継ぎ、フォームの値だけ書き換える。 */
+/** チームの組み立て。existing があれば id・メンバー・meta を引き継ぎ、フォームの値だけ書き換える。 */
 export function buildCareTeam(
   values: CareTeamFormValues,
   members: CareTeamMember[],
@@ -126,7 +126,7 @@ export function buildCareTeam(
   return team;
 }
 
-/** 構成員の入れ替え(フォームの値はそのまま)。 */
+/** メンバーの入れ替え(フォームの値はそのまま)。 */
 export function withCareTeamMembers(team: fhir4.CareTeam, members: CareTeamMember[]): fhir4.CareTeam {
   return { ...team, participant: members.map(participantOf) };
 }

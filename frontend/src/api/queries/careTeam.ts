@@ -29,7 +29,7 @@ export function useCareTeams(options: { includeInactive?: boolean; kind?: string
   });
 }
 
-/** ログイン中の医療従事者が構成員になっている有効なチーム。 */
+/** ログイン中の医療従事者がメンバーになっている有効なチーム。 */
 export function useMyCareTeams(practitionerId: string | null | undefined) {
   return useQuery({
     queryKey: [...CARE_TEAM_KEY, "mine", practitionerId ?? ""],

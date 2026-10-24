@@ -39,7 +39,7 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 export async function fetchExtractQueries(params: {
   department_id?: string;
   practitioner_id?: string;
-  /** 自分が構成員のチーム(CareTeam.id)。スクリーニングの条件を一緒に引く。 */
+  /** 自分がメンバーのチーム(CareTeam.id)。スクリーニングの条件を一緒に引く。 */
   team_ids?: string[];
   tab?: ExtractTab;
 }): Promise<{ total: number; items: ExtractQuery[] }> {

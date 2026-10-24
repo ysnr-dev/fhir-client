@@ -22,7 +22,7 @@ import { codingBySystem, MEDICINE_CODE_SYSTEM, PRESCRIPTION_ORDER_TYPE } from ".
 // 連日の注射は束(requisition)で 1 件にし、初日のオーダーを focus、束の全オーダーを basedOn にする。
 // 同じ束・同じ処方に通知が既にあれば作らない(状態は問わない。編集で特定抗菌薬が増えても出し直さない)。
 // 閉じ方: 届出制は届出書(AST_NOTIFY_01)を basedOn 付きで保存すると完了。許可制は届出書で「許可待ち」になり、
-// AST チームの構成員が一覧で許可すると完了する。
+// AST チームのメンバーが一覧で許可すると完了する。
 
 export const ANTIMICROBIAL_NOTIFICATION_TASK_CODE = { code: "antimicrobial-notification", display: "特定抗菌薬の届出" };
 

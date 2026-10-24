@@ -29,7 +29,7 @@ export function definitionOwnerKey(owner: { scope: OrderSetScope; ownerId: strin
  * 持ち主ごとに保存する定義(チャート定義・データ抽出の条件)の持ち主の選択肢。
  * 院内共通・診療科に書けるのは医師だけ(backend では医師かどうかが分からないので画面で絞る)。
  * 自分の定義は医療従事者なら誰でも持てる。診療科はヘッダーで選んでいる依頼科を優先し、
- * 無ければ担当科の先頭。自分が構成員のチーム(チーム医療)は構成員なら誰でも書ける
+ * 無ければ担当科の先頭。自分がメンバーのチーム(チーム医療)はメンバーなら誰でも書ける
  * (チームの条件 = スクリーニング一覧。docs/care-team-design.md §5)。ready は自分・診療科・チームが
  * 決まったか(決まる前に一覧を引くと院内共通だけを一度返してちらつく)。
  */
@@ -84,7 +84,7 @@ export function useDefinitionOwners(personalLabel: string) {
     departmentId: department?.organizationId,
     practitionerId: practitionerId ?? undefined,
     practitionerName,
-    /** 自分が構成員のチーム(定義の一覧をチームの分も引くのに渡す)。 */
+    /** 自分がメンバーのチーム(定義の一覧をチームの分も引くのに渡す)。 */
     teamIds,
   };
 }

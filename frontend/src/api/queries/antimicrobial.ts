@@ -374,7 +374,7 @@ export function useOpenAntimicrobialNotifications() {
   });
 }
 
-/** 許可制の届出を許可する(AST チームの構成員)。 */
+/** 許可制の届出を許可する(AST チームのメンバー)。 */
 export function useApproveAntimicrobialNotification() {
   const queryClient = useQueryClient();
   const enterer = useOrderEnterer();

@@ -70,7 +70,7 @@ AST チームの介入、AUD / DOT の集計。抗菌薬適正使用支援加算
 - **［設計］** 届出書 `AST_NOTIFY_01`(`docs/report-mappings/ast-notify-01.questionnaire.json`)は `/ast-worklist` の「届出」タブから
   オーダーに `basedOn` で結んで書く。テンプレート回答の保存(`saveResponse`)に `extraEntries` を通し、同じ transaction で:
   届出制は通知を完了(note「届出書を提出しました。」)、許可制は通知の `input` に届出書の参照を足して「許可待ち」にする。
-  許可は AST チームの構成員だけが一覧の「許可」で行い、完了(note「特定抗菌薬の使用を許可しました。」)。
+  許可は AST チームのメンバーだけが一覧の「許可」で行い、完了(note「特定抗菌薬の使用を許可しました。」)。
   通知一覧からは閉じない(`canAct: () => false`)。通知の「カルテ」は `/ast-worklist?tab=notify` を開く。
 - **［事実］** 上流の Task は `subject` のカンマ OR を受け付ける(2026-10-16 に strict で確認)。
 

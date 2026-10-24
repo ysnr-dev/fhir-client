@@ -25,8 +25,8 @@ import {
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 
-// チーム医療のチームのマスタ(docs/care-team-design.md §1)。左にチーム、右に選んだチームの構成員。
-// 指導医グループと同じ作りで、保存先は上流の CareTeam(構成員の追加・削除も CareTeam の PUT)。
+// チーム医療のチームのマスタ(docs/care-team-design.md §1)。左にチーム、右に選んだチームのメンバー。
+// 指導医グループと同じ作りで、保存先は上流の CareTeam(メンバーの追加・削除も CareTeam の PUT)。
 
 export function CareTeamPage() {
   const teams = useCareTeams({ includeInactive: true });
@@ -35,7 +35,7 @@ export function CareTeamPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // チームの編集モーダル。"new" は新規作成。
   const [editing, setEditing] = useState<string | "new" | null>(null);
-  // 構成員を選ぶモーダル。開いた役割で追加する。
+  // メンバーを選ぶモーダル。開いた役割で追加する。
   const [adding, setAdding] = useState<CareTeamRole | null>(null);
 
   const selected = teams.data?.find((t) => t.id === selectedId) ?? null;
@@ -70,7 +70,7 @@ export function CareTeamPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>チーム医療のチーム</h1>
+        <h1>チーム医療</h1>
         <button type="button" onClick={() => setEditing("new")}>
           チーム追加
         </button>

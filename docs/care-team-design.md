@@ -28,8 +28,8 @@ CareTeam
   extension[care-team-round-template] = valueCanonical(回診記録に挿入する既定テンプレート。任意)
 ```
 
-- **［設計］** マスタ画面はマスタメンテ > 共通 >「チーム医療のチーム」(`/care-teams`、`pages/CareTeamPage.tsx`)。指導医グループと
-  同じ作りで、構成員の追加・役割の変更・削除は CareTeam の PUT(読んだ版を If-Match に添える)。
+- **［設計］** マスタ画面はマスタメンテ > 共通 >「チーム医療」(`/care-teams`、`pages/CareTeamPage.tsx`)。指導医グループと
+  同じ作りで、メンバーの追加・役割の変更・削除は CareTeam の PUT(読んだ版を If-Match に添える)。
 - 採らなかった案: 診療科と同じ Organization(type=team)+ PractitionerRole。診療科・連携先の一覧は `partof` の有無で見分けて
   いるので、チームが混ざるのを防ぐために多くの検索を直すことになる。backend の `care_teams` テーブルは上流の変更が
   要らないが、依頼の宛先が論理参照になり、上流で絞れない。
@@ -82,7 +82,7 @@ ServiceRequest (category: order-type|team-request)
 ## 4. チーム依頼一覧(`/team-worklist`、「診療業務」メニュー)
 
 - **［設計］** 他科依頼一覧を写し、タブは「介入中」(`status=active,revoked`。依頼済・介入中・却下)と「終了」(`status=completed`)。
-  チームは `performer=CareTeam/{id}` で上流が絞り、既定は自分が構成員のチームの先頭(`useMyCareTeams`。
+  チームは `performer=CareTeam/{id}` で上流が絞り、既定は自分がメンバーのチームの先頭(`useMyCareTeams`。
   `CareTeam?participant=Practitioner/{me}`)。他の絞り込み(入外・病棟・依頼元の科・ステータス・至急・回診予定)は画面側。
 - **［設計］** 列: 患者、依頼日(至急)、チーム、依頼目的、入外、病棟、依頼科 | 依頼医師、最終回診、次回回診(今日以前は赤)、ステータス
   (却下は理由を吹き出し)。操作: 受付 / 終了 / 回診記録 / 表示。ケバブ: 次回回診日・受付取消・却下(理由必須)・終了取消・却下戻し。
@@ -92,7 +92,7 @@ ServiceRequest (category: order-type|team-request)
 
 - **［設計］** 保存条件の持ち主に `team`(CareTeam の id)を足した(`ChartDefinition::SCOPES`。`ExtractQuery` が共有し、
   `PatientFolder`・`OrderSet` は据え置き)。`roots_for(team_ids:)` と一覧の `team_id`(カンマ区切り)で、自分のチームの条件を
-  院内共通・診療科・自分と並べて引く。チームの条件は構成員なら誰でも書ける(画面で判定。backend が守るのは自分の条件だけ)。
+  院内共通・診療科・自分と並べて引く。チームの条件はメンバーなら誰でも書ける(画面で判定。backend が守るのは自分の条件だけ)。
 - **［設計］** `hooks/useDefinitionOwners.ts` が自分のチームを持ち主の選択肢に並べ(チャート定義にも出る)、`ExtractQuerySelect` は
   チームの条件を「スクリーニング: {チーム名}」の見出しにまとめる。条件の持ち主がチームのとき、抽出結果に「介入」の列を足す
   (`ServiceRequest?category=order-type|team-request&performer=CareTeam/x&status=active` の患者は「介入中」、それ以外は
@@ -140,7 +140,7 @@ ServiceRequest (category: order-type|team-request)
 ## 8. 申し送り
 
 - 通知 Task の宛先は Practitioner 1 人に固定(`notificationParams`)。チームあての通知(新しい依頼・次回回診日の期限)を出すなら、
-  構成員ごとに Task を作るか、owner に CareTeam を許してベルの検索を変える。
+  メンバーごとに Task を作るか、owner に CareTeam を許してベルの検索を変える。
 - 回診記録の一覧は患者の記録を引いて手元で絞る。依頼の数が多い患者でも有限だが、上流に event の検索が付けば置き換える。
 - 創ごとのチャートは持たない(テンプレートの回答を Observation にしているので、部位で分けられない)。創ごとに追うなら
   創 = Condition(bodySite)+ Observation の構造化に進む。
