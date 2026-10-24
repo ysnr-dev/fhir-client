@@ -7289,7 +7289,7 @@ body.karte-wide {
   background: transparent;
   color: var(--text);
   font-size: 14px;
-  padding: 6px 12px;
+  padding: 6px;
 }
 
 .karte-tabs__tab--active {
