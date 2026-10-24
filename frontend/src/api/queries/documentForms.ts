@@ -2,7 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   copyDocumentTemplate,
   createDocumentTemplate,
+  deleteDocumentTemplate,
+  exportDocumentTemplate,
   fetchDocumentTemplates,
+  fetchFileCategories,
   updateDocumentTemplate,
   type DocumentTemplatePagePayload,
   type DocumentTemplateSummary,
@@ -37,7 +40,9 @@ import {
   buildQuestionnaireResponse,
   type QuestionnaireResponseMetaValues,
 } from "../../fhir/questionnaireResponseHelpers";
+import { documentFormExportFileName, parseDocumentFormImport } from "../../fhir/documentFormExport";
 import { readFileAsDataUrl } from "../../fhir/schemaImage";
+import { downloadBlob } from "../../lib/download";
 import { appendKarteOrderIncludes, karteOrderParams } from "./karte";
 
 // --- 様式テンプレート(docs/document-template-design.md §7) --------------------
@@ -110,6 +115,15 @@ export function useSaveDocumentFormTemplate() {
   });
 }
 
+/** 使われていない名称。使われていれば末尾に 2 から番号を付ける。 */
+async function unusedTemplateName(base: string): Promise<string> {
+  // 名称は Word / Excel とも重ならないようにするので、種類を問わず全件の名前を見る。
+  const names = new Set((await fetchDocumentTemplates()).map((t) => t.name));
+  let name = base;
+  for (let n = 2; names.has(name); n += 1) name = `${base}${n}`;
+  return name;
+}
+
 /**
  * 様式テンプレートの複製。新しい code で Questionnaire の 1 版を作ってから、ページ画像と配置を backend で写す。
  * 名称は「〜 のコピー」(使われていれば番号を付ける)。
@@ -118,11 +132,7 @@ export function useCopyDocumentFormTemplate() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (template: DocumentTemplateSummary) => {
-      // 名称は Word / Excel とも重ならないようにするので、種類を問わず全件の名前を見る。
-      const names = new Set((await fetchDocumentTemplates()).map((t) => t.name));
-      const base = `${template.name} のコピー`;
-      let name = base;
-      for (let n = 2; names.has(name); n += 1) name = `${base}${n}`;
+      const name = await unusedTemplateName(`${template.name} のコピー`);
       const code = crypto.randomUUID();
       const url = documentFormQuestionnaireUrl(code);
       const version = nextQuestionnaireVersion(null);
@@ -138,6 +148,67 @@ export function useCopyDocumentFormTemplate() {
     },
     retry: false,
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DOCUMENT_TEMPLATES_KEY });
+      queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
+    },
+  });
+}
+
+/** 様式テンプレートのエクスポート。ページ画像込みの JSON をダウンロードさせる。 */
+export function useExportDocumentFormTemplate() {
+  return useMutation({
+    mutationFn: async (template: DocumentTemplateSummary) => {
+      const exported = await exportDocumentTemplate(template.id);
+      downloadBlob(
+        new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" }),
+        documentFormExportFileName(template.name),
+      );
+    },
+    retry: false,
+  });
+}
+
+/**
+ * 様式テンプレートのインポート。新しい code で登録し、Questionnaire はその url の 1 版として作る。
+ * 名称が使われていれば番号を付け、カルテの文書作成に出ないよう無効で登録する。
+ * テンプレート → Questionnaire の順に書き、Questionnaire を作れなければテンプレートを消す
+ * (ページ画像や配置の不備で backend に弾かれたとき、上流に使われない Questionnaire を残さない)。
+ */
+export function useImportDocumentFormTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File): Promise<DocumentTemplateSummary> => {
+      const imported = parseDocumentFormImport(await file.text());
+      const [name, categories] = await Promise.all([unusedTemplateName(imported.name), fetchFileCategories()]);
+      const category = imported.fileCategory
+        ? (categories.find((c) => c.code === imported.fileCategory?.code) ??
+          categories.find((c) => c.name === imported.fileCategory?.name))
+        : undefined;
+      const code = crypto.randomUUID();
+      const version = nextQuestionnaireVersion(null);
+      const created = await createDocumentTemplate({
+        kind: "form",
+        code,
+        name,
+        file_category_id: category?.id ?? null,
+        file_name: imported.fileName,
+        content_type: imported.contentType,
+        layout: imported.layout,
+        questionnaire_url: documentFormQuestionnaireUrl(code),
+        questionnaire_version: version,
+        active: false,
+        pages: imported.pages,
+      });
+      try {
+        await createResource(buildDocumentFormQuestionnaire({ code, name }, imported.layout, version));
+      } catch (error) {
+        await deleteDocumentTemplate(created.id).catch(() => undefined);
+        throw error;
+      }
+      return created;
+    },
+    retry: false,
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: DOCUMENT_TEMPLATES_KEY });
       queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
     },

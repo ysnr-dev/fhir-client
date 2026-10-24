@@ -12,7 +12,10 @@ module Admin
     before_action :authorize_user!
     before_action :verify_user_csrf!
 
-    before_action :set_template, only: %i[update destroy copy file page]
+    EXPORT_FORMAT = "document-form-template"
+    EXPORT_FORMAT_VERSION = 1
+
+    before_action :set_template, only: %i[update destroy copy export file page]
 
     # ?active=true で有効なものだけに絞る(文書作成の選択肢)。
     def index
@@ -77,6 +80,31 @@ module Admin
       else
         render json: { errors: copied.errors.full_messages }, status: :unprocessable_content
       end
+    end
+
+    # 様式のエクスポート。別環境へ移せるよう、ページ画像(base64)・配置・カテゴリを 1 つの JSON にする。
+    # code と Questionnaire の canonical は環境ごとに採番し直すので含めない。カテゴリは code と名称で引き当てる。
+    def export
+      return render json: { error: "様式テンプレートのみエクスポートできます" }, status: :unprocessable_content unless @template.form?
+
+      render json: {
+        format: EXPORT_FORMAT,
+        format_version: EXPORT_FORMAT_VERSION,
+        template: {
+          name: @template.name,
+          file_name: @template.file_name,
+          content_type: @template.content_type,
+          file_category: @template.file_category && { code: @template.file_category.code, name: @template.file_category.name },
+          layout: @template.layout
+        },
+        pages: @template.pages.ordered.map do |page|
+          page.attributes.slice(*%w[page_number content_type width_px height_px]).merge(
+            "width_pt" => page.width_pt.to_f,
+            "height_pt" => page.height_pt.to_f,
+            "data" => Base64.strict_encode64(page.data)
+          )
+        end
+      }
     end
 
     # 削除しても、作成済みの文書(上流の DocumentReference と Binary、QuestionnaireResponse)は残る。

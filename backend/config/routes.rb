@@ -68,9 +68,11 @@ Rails.application.routes.draw do
     resources :file_categories, only: %i[index create update destroy]
 
     # 文書テンプレート。Word / Excel の本体は file で、様式のページ画像は pages/:number で返す。
-    # copy は様式の複製(Questionnaire は画面が先に作り、その canonical を受け取る)。
+    # copy は様式の複製(Questionnaire は画面が先に作り、その canonical を受け取る)。export は様式の書き出し
+    # (取り込みは画面が create で行う)。
     resources :document_templates, only: %i[index show create update destroy] do
       get :file, on: :member
+      get :export, on: :member
       post :copy, on: :member
       get "pages/:number", action: :page, on: :member, constraints: { number: /\d+/ }
     end

@@ -22,6 +22,7 @@ import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
 import type { NursingProfileSettings } from "../fhir/nursingProfileHelpers";
 import type { BulkVitalEntrySettings } from "../fhir/bulkVitalHelpers";
 import type { DocumentFormLayout, DocumentFormPageMeta } from "../fhir/documentFormLayout";
+import type { DocumentFormTemplateExport } from "../fhir/documentFormExport";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 import type { AdvisorySeveritySettings } from "../fhir/advisoryHelpers";
 import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
@@ -547,6 +548,11 @@ export async function copyDocumentTemplate(
     method: "POST",
     ...jsonBody(payload),
   });
+}
+
+/** 様式のエクスポート。ページ画像を base64 で埋め込んだ JSON(fhir/documentFormExport.ts)。 */
+export async function exportDocumentTemplate(id: number): Promise<DocumentFormTemplateExport> {
+  return adminJson<DocumentFormTemplateExport>(`${DOCUMENT_TEMPLATES}/${id}/export`);
 }
 
 export async function deleteDocumentTemplate(id: number): Promise<void> {

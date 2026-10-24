@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { fetchDocumentTemplateFile, type DocumentTemplateSummary } from "../api/adminClient";
 import { useDeleteDocumentTemplate, useUpdateDocumentTemplate } from "../api/adminQueries";
-import { useCopyDocumentFormTemplate } from "../api/queries";
+import { useCopyDocumentFormTemplate, useExportDocumentFormTemplate } from "../api/queries";
 import { contentTypeLabel, formatFileSize } from "../fhir/patientFileHelpers";
 import { formatDateTime } from "../lib/dates";
 import { downloadBlob } from "../lib/download";
@@ -17,6 +17,7 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
   const deleteTemplate = useDeleteDocumentTemplate();
   const updateTemplate = useUpdateDocumentTemplate();
   const copyTemplate = useCopyDocumentFormTemplate();
+  const exportTemplate = useExportDocumentFormTemplate();
   const [downloadError, setDownloadError] = useState<unknown>(null);
 
   function handleDelete(template: DocumentTemplateSummary) {
@@ -53,6 +54,7 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
       <ErrorBanner error={deleteTemplate.error} />
       <ErrorBanner error={updateTemplate.error} />
       <ErrorBanner error={copyTemplate.error} />
+      <ErrorBanner error={exportTemplate.error} />
       <ErrorBanner error={downloadError} />
       <table className="patient-table document-template-table">
         <thead>
@@ -99,6 +101,16 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
                       onClick={() => copyTemplate.mutate(template)}
                     >
                       複製
+                    </button>
+                  )}
+                  {template.kind === "form" && (
+                    <button
+                      type="button"
+                      className="row-menu__item"
+                      disabled={exportTemplate.isPending}
+                      onClick={() => exportTemplate.mutate(template)}
+                    >
+                      エクスポート
                     </button>
                   )}
                   <button

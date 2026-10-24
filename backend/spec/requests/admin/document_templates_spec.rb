@@ -396,6 +396,36 @@ RSpec.describe "Admin::DocumentTemplates", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
     end
 
+    it "exports a form template with page bodies and its category, without code or canonical" do
+      category = FileCategory.create!(name: "同意書類")
+      template = create_form!
+      template.update!(file_category: category)
+
+      get "/admin/document_templates/#{template.id}/export"
+
+      expect(response).to have_http_status(:ok)
+      body = response.parsed_body
+      expect(body["format"]).to eq("document-form-template")
+      expect(body["format_version"]).to eq(1)
+      expect(body["template"]).to eq(
+        "name" => "同意書", "file_name" => "consent.pdf", "content_type" => "application/pdf",
+        "file_category" => { "code" => category.code, "name" => "同意書類" },
+        "layout" => template.layout
+      )
+      expect(body["pages"].map { |p| p["page_number"] }).to eq([ 1, 2 ])
+      expect(body["pages"].first).to include("content_type" => "image/png", "width_px" => 1240, "height_px" => 1754,
+                                             "width_pt" => 595.28, "height_pt" => 841.89)
+      expect(Base64.strict_decode64(body["pages"].first["data"]).b).to eq(png.b)
+    end
+
+    it "does not export an office template" do
+      template = create_template
+
+      get "/admin/document_templates/#{template.id}/export"
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
     it "deletes the pages with the template" do
       template = create_form!
 

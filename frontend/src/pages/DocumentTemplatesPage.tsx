@@ -1,7 +1,8 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { DocumentTemplateKind, DocumentTemplateSummary } from "../api/adminClient";
 import { useDocumentTemplates } from "../api/adminQueries";
+import { useImportDocumentFormTemplate } from "../api/queries";
 import { DocumentTemplateForm } from "../components/DocumentTemplateForm";
 import { DocumentTemplateTable } from "../components/DocumentTemplateTable";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -30,6 +31,15 @@ export function DocumentTemplatesPage() {
   const tab = tabOf(searchParams.get("tab"));
   const [mode, setMode] = useState<FormMode | null>(null);
   const [variablesOpen, setVariablesOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const importTemplate = useImportDocumentFormTemplate();
+
+  function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // 同じファイルを選び直しても change が発火するよう毎回クリアする。
+    event.target.value = "";
+    if (file) importTemplate.mutate(file);
+  }
 
   function closeForm() {
     setMode(null);
@@ -37,6 +47,7 @@ export function DocumentTemplatesPage() {
 
   function changeTab(next: DocumentTemplateKind) {
     setMode(null);
+    importTemplate.reset();
     setSearchParams(
       (current) => {
         const params = new URLSearchParams(current);
@@ -58,6 +69,14 @@ export function DocumentTemplatesPage() {
           <button type="button" onClick={() => setVariablesOpen(true)}>
             変数一覧
           </button>
+          {!mode && tab === "form" && (
+            <>
+              <input ref={fileInputRef} type="file" accept="application/json,.json" hidden onChange={handleImportFile} />
+              <button type="button" disabled={importTemplate.isPending} onClick={() => fileInputRef.current?.click()}>
+                {importTemplate.isPending ? "インポート中..." : "インポート"}
+              </button>
+            </>
+          )}
           {!mode && (
             <button type="button" onClick={() => setMode({ kind: "create" })}>
               新規登録
@@ -97,6 +116,12 @@ export function DocumentTemplatesPage() {
 
       {isLoading && <p>読み込み中...</p>}
       <ErrorBanner error={error} />
+      <ErrorBanner error={importTemplate.error} />
+      {importTemplate.isSuccess && (
+        <p className="questionnaire-import__success" role="status">
+          様式「{importTemplate.data.name}」を無効の状態でインポートしました。
+        </p>
+      )}
       {/* デザイナは幅を使うので、開いている間は一覧を畳む。 */}
       {data && !(mode && tab === "form") && (
         <DocumentTemplateTable templates={templates} onEdit={(template) => setMode({ kind: "edit", template })} />
