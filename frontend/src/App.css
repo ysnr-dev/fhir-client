@@ -28961,6 +28961,14 @@ input.nursing-picker__search {
   gap: 10px;
 }
 
+.order-transfer__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
 .order-transfer__tabs {
   display: flex;
   flex-wrap: wrap;
@@ -28973,17 +28981,67 @@ input.nursing-picker__search {
   border-color: var(--accent);
 }
 
+.order-transfer__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.order-transfer__controls select {
+  font: inherit;
+  font-size: 15px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
 .order-transfer__list {
   max-height: 55vh;
   overflow: auto;
 }
 
-.order-transfer__list label {
+.order-transfer__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.order-transfer__row label {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   line-height: 1.4;
+}
+
+.order-transfer__toggle {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+  justify-content: center;
+  flex: none;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text);
+}
+
+/* 展開した内容は転記される文字列そのもの(全角空白の字下げを保つ)。 */
+.order-transfer__preview {
+  margin: 2px 0 4px 28px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--border);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .order-transfer__list input[type="checkbox"] {

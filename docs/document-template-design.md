@@ -215,9 +215,13 @@ PDF は値を描く前に枠内を白で塗る(値が空でも塗る)。見た�
   `resolvePlaceholders`。変数一覧の式と `%` の式のどちらも使える)。
 - 転記: `transfer_kinds` を持つ text / textarea に「転記」ボタンを出し、患者の処方・注射・部門オーダー・病名・検査結果を
   一覧から選んで文字で追記する(`components/documentForm/OrderTransferModal.tsx`)。オーダーはカルテのタイムラインと同じ
-  検索(`karteOrderParams` + `appendKarteOrderIncludes`、最新 100 件)を `buildKarteTimeline` でカードの単位にし、
-  処方・注射は Rp 形式(`prescriptionRpLines`)、ほかは「日付 種別 タイトル」の 1 行にする(`fhir/documentFormTransfer.ts`)。
-  開いたタブのぶんだけ読む。
+  検索条件(`karteOrderParams`)に、転記に要る明細の `_revinclude`(MedicationRequest と ServiceRequest:based-on)だけを
+  添えて最新 100 件を読み、`buildKarteTimeline` でカードの単位にする(`useTransferOrders`)。検査結果は `useTransferLabResults`
+  (`date` 降順 200 件)。期間(1か月・3か月・6か月・1年・全期間、既定は 3か月)はオーダーが `authoredon=ge`、検査結果が
+  `date=ge` で上流に絞らせ、病名は期間で絞らない。開いたタブのぶんだけ読む。
+  処方・注射は Rp 形式(`prescriptionRpLines`)、部門オーダーは「【種別 日付】タイトル」の見出しの下に種別ごとの内容
+  (`fhir/orderTransferLines.ts` の `ORDER_TRANSFER_LINES`。`Record<OrderKind, …>` なので種別の足し忘れは型エラー)、
+  病名・検査結果は 1 行にする(`fhir/documentFormTransfer.ts`)。一覧の各行は「▸」で転記される文字列をそのまま展開できる。
 
 ### 7.5 表示用 PDF と保存
 

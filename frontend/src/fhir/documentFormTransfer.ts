@@ -4,8 +4,9 @@ import { cardTitle } from "../components/karteCardLabels";
 import { problemLabel, summarizeCondition } from "./conditionHelpers";
 import type { TransferKind } from "./documentFormLayout";
 import { groupInjectionByRp, injectionUsageSummary } from "./injectionHelpers";
-import { KARTE_KIND_LABELS, karteDayLabel, type KarteTimelineItem } from "./karteTimeline";
+import { KARTE_KIND_LABELS, isOrderItem, karteDayLabel, type KarteTimelineItem } from "./karteTimeline";
 import { observationLineDisplay } from "./labResultHelpers";
+import { orderTransferLines } from "./orderTransferLines";
 import { prescriptionRpLines } from "./populateContext";
 
 export interface TransferRow {
@@ -64,8 +65,11 @@ export function transferRowOfItem(day: string, item: KarteTimelineItem): Transfe
       lines: [`【注射 ${date}】`, ...injectionRpLines(item.medicationRequests)],
     };
   }
-  const line = [date, kindLabel, title].filter(Boolean).join(" ");
-  return { id: item.id, label: line, lines: [line] };
+  const label = [date, kindLabel, title].filter(Boolean).join(" ");
+  if (!isOrderItem(item)) return { id: item.id, label, lines: [label] };
+  // 部門オーダーは処方・注射と同じく見出しの下に内容(項目・検体・指示)を字下げして並べる。
+  const header = `【${kindLabel} ${date}】${title}`.trim();
+  return { id: item.id, label, lines: [header, ...orderTransferLines(item)] };
 }
 
 export function transferRowsOfConditions(conditions: fhir4.Condition[]): TransferRow[] {

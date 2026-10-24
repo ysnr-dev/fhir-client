@@ -43,7 +43,9 @@ import {
 import { documentFormExportFileName, parseDocumentFormImport } from "../../fhir/documentFormExport";
 import { readFileAsDataUrl } from "../../fhir/schemaImage";
 import { downloadBlob } from "../../lib/download";
-import { appendKarteOrderIncludes, karteOrderParams } from "./karte";
+import { resourcesOfType } from "../../fhir/shared";
+import { hasRelation } from "./core";
+import { karteOrderParams } from "./karte";
 
 // --- 様式テンプレート(docs/document-template-design.md §7) --------------------
 
@@ -308,17 +310,23 @@ export function useSaveDocumentFormDocument() {
 // --- 転記の出どころ --------------------------------------------------------------
 
 const TRANSFER_ORDER_COUNT = 100;
+const TRANSFER_LAB_COUNT = 200;
 
 /**
  * 転記モーダルに出すオーダー(処方・注射・部門オーダー)。カルテのタイムラインと同じ検索条件を
  * 1 ページぶん読み、同じ組み立て(buildKarteTimeline)でカードの単位にする。
+ * 期間(since 以降に発行したもの)は上流に絞らせる。since が空なら全期間。
  */
-export function useTransferOrders(patientId: string | undefined, enabled: boolean) {
+export function useTransferOrders(patientId: string | undefined, since: string, enabled: boolean) {
   const query = useQuery({
-    queryKey: ["ServiceRequest", "search", "document-transfer", patientId],
+    queryKey: ["ServiceRequest", "search", "document-transfer", patientId, since],
     queryFn: async () => {
       const params = karteOrderParams(patientId);
-      appendKarteOrderIncludes(params);
+      // 転記に要るのは文字にする内容(処方明細と部門オーダーの明細)だけなので、
+      // カルテのカードが要る進捗・実施記録・検査結果の _revinclude は添えない。
+      params.append("_revinclude", "MedicationRequest:based-on");
+      params.append("_revinclude:iterate", "ServiceRequest:based-on");
+      if (since) params.set("authoredon", `ge${since}`);
       params.set("_sort", "-authoredon");
       params.set("_count", String(TRANSFER_ORDER_COUNT));
       const { data } = await searchResource<fhir4.Resource>("ServiceRequest", params);
@@ -342,6 +350,29 @@ export function useTransferOrders(patientId: string | undefined, enabled: boolea
         (e) => e.resource?.resourceType === "ServiceRequest" && e.search?.mode !== "include",
       ).length;
       return { items, truncated: headers >= TRANSFER_ORDER_COUNT };
+    },
+    enabled: Boolean(patientId) && enabled,
+    staleTime: 60 * 1000,
+  });
+  return query;
+}
+
+/** 転記モーダルに出す検査結果。期間(since 以降の測定)は上流に絞らせる。since が空なら全期間。 */
+export function useTransferLabResults(patientId: string | undefined, since: string, enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["Observation", "search", "document-transfer", patientId, since],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("subject", `Patient/${patientId}`);
+      params.set("category", "laboratory");
+      if (since) params.set("date", `ge${since}`);
+      params.set("_sort", "-date");
+      params.set("_count", String(TRANSFER_LAB_COUNT));
+      const { data } = await searchResource<fhir4.Observation>("Observation", params);
+      return {
+        observations: resourcesOfType<fhir4.Observation>(data, "Observation"),
+        truncated: hasRelation(data, "next"),
+      };
     },
     enabled: Boolean(patientId) && enabled,
     staleTime: 60 * 1000,
