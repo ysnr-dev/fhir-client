@@ -72,7 +72,7 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
               <td>{template.file_name}</td>
               <td>
                 {template.kind === "form"
-                  ? `様式(${template.pages.length}ページ)`
+                  ? `${template.pages.length}ページ`
                   : contentTypeLabel(template.content_type)}
               </td>
               <td>{formatFileSize(template.byte_size)}</td>
