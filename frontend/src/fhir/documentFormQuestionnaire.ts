@@ -11,6 +11,7 @@ import {
   type EditorItem,
   type QuestionnaireFormValues,
 } from "./questionnaireHelpers";
+import { TEMPLATE_CATEGORY_EXT_URL, templateCategoryExtension } from "./questionnaireCategory";
 import {
   CHECKED_VALUE,
   type DocumentFormField,
@@ -125,6 +126,21 @@ export function buildDocumentFormQuestionnaire(
     { url: DOCUMENT_FORM_EXT_URL, valueString: template.code },
   ];
   return questionnaire;
+}
+
+/**
+ * テンプレート選択で様式の Questionnaire を「様式」の見出しの下にまとめるため、表示用にカテゴリを付けた写しを返す
+ * (上流のリソースは書き換えない。カテゴリマスタに無い code は display を見出しにして並ぶ)。
+ */
+export function withDocumentFormCategory(questionnaire: fhir4.Questionnaire): fhir4.Questionnaire {
+  if (!isDocumentFormQuestionnaire(questionnaire)) return questionnaire;
+  return {
+    ...questionnaire,
+    extension: [
+      ...(questionnaire.extension ?? []).filter((e) => e.url !== TEMPLATE_CATEGORY_EXT_URL),
+      templateCategoryExtension({ code: DOCUMENT_FORM_KIND_CODE, display: "様式" }),
+    ],
+  };
 }
 
 export function nextQuestionnaireVersion(current: string | null | undefined): string {

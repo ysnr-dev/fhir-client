@@ -8,6 +8,7 @@ import {
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
 import { sortVersionsDesc } from "../../fhir/templateExtractHelpers";
+import { withDocumentFormCategory } from "../../fhir/documentFormQuestionnaire";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
@@ -37,7 +38,8 @@ const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
  * 患者フォルダを選んだら、そのフォルダ(下位フォルダを含む)の患者の回答だけを読む。両方なら両方に入る患者。
  */
 export function TemplateExtractPanel() {
-  const options = useQuestionnaireOptions();
+  // 様式テンプレートで作った文書の回答も抽出できるようにする(選択肢では「様式」の見出しの下に並ぶ)。
+  const options = useQuestionnaireOptions({ includeDocumentForms: true });
   const { departments } = useSelfDepartments();
   const departmentOptions = sortDepartmentsByCode(departments).filter((d) => d.id);
   const scope = useExtractPatientScope();
@@ -54,7 +56,7 @@ export function TemplateExtractPanel() {
   // 版は url ごとにまとめて集めるので、選択肢には url ごとに最新の版だけを出す。
   const templates = useMemo(() => {
     const byUrl = new Map<string, fhir4.Questionnaire[]>();
-    for (const q of options.questionnaires) {
+    for (const q of options.questionnaires.map(withDocumentFormCategory)) {
       if (!q.url) continue;
       byUrl.set(q.url, [...(byUrl.get(q.url) ?? []), q]);
     }

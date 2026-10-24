@@ -681,16 +681,20 @@ export function useDeleteQuestionnaire() {
 
 // テンプレート選択用に Questionnaire をまとめて取得する。
 // 上流 fhir-server の _count 上限 500 を上限とした簡易版(それ以上は運用上想定しない)。
-export function useQuestionnaireOptions(options?: { status?: fhir4.Questionnaire["status"] }) {
+export function useQuestionnaireOptions(options?: {
+  status?: fhir4.Questionnaire["status"];
+  /** 様式テンプレートが自動生成した Questionnaire も含める(回答を集計するデータ抽出)。 */
+  includeDocumentForms?: boolean;
+}) {
   const params = new URLSearchParams();
   if (options?.status) params.set("status", options.status);
-  // 様式テンプレートが自動生成した Questionnaire は文書作成からだけ使うので選択肢に出さない。
-  params.set("code:not", DOCUMENT_FORM_KIND_TOKEN);
+  // 様式テンプレートが自動生成した Questionnaire は文書作成からだけ書くので、記入の選択肢には出さない。
+  if (!options?.includeDocumentForms) params.set("code:not", DOCUMENT_FORM_KIND_TOKEN);
   params.set("_count", "500");
   params.set("_sort", "-_lastUpdated");
 
   const query = useQuery({
-    queryKey: ["Questionnaire", "search", "options", options?.status ?? ""],
+    queryKey: ["Questionnaire", "search", "options", options?.status ?? "", Boolean(options?.includeDocumentForms)],
     queryFn: () => searchResource<fhir4.Questionnaire>("Questionnaire", params),
   });
 

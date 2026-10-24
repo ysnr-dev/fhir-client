@@ -200,6 +200,8 @@ PDF は値を描く前に枠内を白で塗る(値が空でも塗る)。見た�
 - `code` に `http://fhir-client.local/CodeSystem/questionnaire-kind|document-form` を付け、テンプレート一覧の検索に
   `code:not=` を足して通常のテンプレート選択から隠す(上流は extension を検索できないが `code` と `:not` は対応)。
   拡張 `http://fhir-client.local/StructureDefinition/questionnaire-document-form`(valueString = code)も付ける。
+  データ抽出のテンプレートだけは回答を集計するために含めて読み(`useQuestionnaireOptions({ includeDocumentForms: true })`)、
+  選択肢では表示用の写しにカテゴリ「様式」を付けて見出しの下にまとめる(`withDocumentFormCategory`)。
 - **版**: `questionnaire_version` は整数。回答の意味が変わる差(項目の増減・種類・ラベル・選択肢・初期値式・必須)があるときだけ
   上げ、新しい版を新しい Questionnaire として POST する(旧版は既存の回答が `url|version` で指すので残す)。
   位置や大きさだけの変更では上げない。保存は Questionnaire → テンプレートの順で、途中で止まっても次の保存で同じ版を見つけて続きから進む。
