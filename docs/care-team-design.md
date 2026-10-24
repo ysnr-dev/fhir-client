@@ -28,6 +28,9 @@ CareTeam
   extension[care-team-round-template] = valueCanonical(回診記録に挿入する既定テンプレート。任意)
 ```
 
+- **［設計］** `db/seeds.rb` が `db/seed_data/care_teams.json` の 3 チーム(nst / pressure-ulcer / ast)を上流に POST する。
+  同じ category のチームがあれば飛ばす。participant は環境ごとの Practitioner を指すので持たせず、managingOrganization は
+  自院が設定済みのときだけ付ける。
 - **［設計］** マスタ画面はマスタメンテ > 共通 >「チーム医療」(`/care-teams`、`pages/CareTeamPage.tsx`)。指導医グループと
   同じ作りで、メンバーの追加・役割の変更・削除は CareTeam の PUT(読んだ版を If-Match に添える)。
 - 採らなかった案: 診療科と同じ Organization(type=team)+ PractitionerRole。診療科・連携先の一覧は `partof` の有無で見分けて

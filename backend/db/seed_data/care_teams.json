@@ -1,0 +1,29 @@
+[
+  {
+    "resourceType": "CareTeam",
+    "status": "active",
+    "category": [
+      { "coding": [{ "system": "http://fhir-client.local/CodeSystem/care-team-kind", "code": "nst", "display": "栄養サポート(NST)" }] }
+    ],
+    "name": "栄養サポートチーム"
+  },
+  {
+    "resourceType": "CareTeam",
+    "status": "active",
+    "category": [
+      { "coding": [{ "system": "http://fhir-client.local/CodeSystem/care-team-kind", "code": "pressure-ulcer", "display": "褥瘡対策" }] }
+    ],
+    "name": "褥瘡対策チーム"
+  },
+  {
+    "resourceType": "CareTeam",
+    "status": "active",
+    "category": [
+      { "coding": [{ "system": "http://fhir-client.local/CodeSystem/care-team-kind", "code": "ast", "display": "抗菌薬適正使用(AST)" }] }
+    ],
+    "name": "抗菌薬適正使用支援チーム",
+    "extension": [
+      { "url": "http://fhir-client.local/StructureDefinition/care-team-round-template", "valueCanonical": "http://fhir-client.local/Questionnaire/ast-round-01|1.0.0" }
+    ]
+  }
+]

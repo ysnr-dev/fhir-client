@@ -1733,3 +1733,42 @@ if File.exist?(nursing_care_json)
 else
   puts "master_nursing_terms: #{nursing_care_json} not found, skipped"
 end
+
+# チーム医療のチーム(db/seed_data/care_teams.json、docs/care-team-design.md §1)。上流の CareTeam に入れる。
+# 種別(category)が同じチームが上流に既にあれば入れない。メンバーは環境ごとの Practitioner を指すので持たせず、
+# 管理組織は自院の Organization が設定済みのときだけ付ける。上流に届かなければ飛ばす。
+care_teams_json = Rails.root.join("db/seed_data/care_teams.json")
+if File.exist?(care_teams_json)
+  begin
+    gateway = FhirGateway.new
+    self_organization_id = FacilitySettings.self_organization_id
+    loaded = 0
+    kept = 0
+    JSON.parse(File.read(care_teams_json)).each do |team|
+      coding = team.dig("category", 0, "coding", 0)
+      query = URI.encode_www_form(category: "#{coding['system']}|#{coding['code']}", _summary: "count")
+      found = gateway.forward(method: :get, path: "/CareTeam", query: query, headers: { "Prefer" => "handling=strict" })
+      raise "CareTeam?category=#{coding['code']}: #{found.status}" unless found.success?
+      if JSON.parse(found.body)["total"].to_i.positive?
+        kept += 1
+        next
+      end
+
+      team = team.merge("managingOrganization" => [{ "reference" => "Organization/#{self_organization_id}" }]) if self_organization_id
+      created = gateway.forward(
+        method: :post,
+        path: "/CareTeam",
+        body: team.to_json,
+        headers: { "Content-Type" => "application/fhir+json" }
+      )
+      raise "CareTeam #{team['name']}: #{created.status} #{created.body}" unless created.success?
+
+      loaded += 1
+    end
+    puts "CareTeam: seeded #{loaded} teams (kept #{kept})"
+  rescue Faraday::Error, RuntimeError => e
+    puts "CareTeam: skipped (#{e.message})"
+  end
+else
+  puts "CareTeam: #{care_teams_json} not found, skipped"
+end
