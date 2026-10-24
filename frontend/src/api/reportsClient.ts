@@ -1,7 +1,8 @@
 // 帳票出力(/reports/*)のクライアント。認証は /fhir と同水準
-// (ログインセッション Cookie。GET のみなので CSRF トークンは不要)。
+// (ログインセッション Cookie。非 GET は CSRF トークンを付ける)。
 import { useQuery } from "@tanstack/react-query";
-import { notifyUnauthorized } from "./session";
+import type { PdfFieldPayload } from "../fhir/documentFormLayout";
+import { notifyUnauthorized, withCsrfHeaders } from "./session";
 
 export interface ReportLayoutStatus {
   registered: boolean;
@@ -14,6 +15,30 @@ export async function fetchReportLayoutStatus(canonical: string): Promise<Report
   if (res.status === 401) notifyUnauthorized();
   if (!res.ok) throw new Error(`帳票レイアウトの照会に失敗しました (HTTP ${res.status})`);
   return (await res.json()) as ReportLayoutStatus;
+}
+
+/**
+ * 様式テンプレートの表示用 PDF。画面が整形した値を送り、ページ画像の上に描いたものを受け取る。
+ * 保存は呼び出し側が Binary + DocumentReference として行う。
+ */
+export async function postDocumentFormPdf(templateId: number, fields: PdfFieldPayload[]): Promise<Blob> {
+  const res = await fetch(`/reports/document_forms/${templateId}/pdf`, {
+    method: "POST",
+    headers: withCsrfHeaders("POST", { "Content-Type": "application/json" }),
+    body: JSON.stringify({ fields }),
+  });
+  if (res.status === 401) notifyUnauthorized();
+  if (!res.ok) {
+    let message = `PDF を作成できませんでした (HTTP ${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body.error) message = body.error;
+    } catch {
+      // 非 JSON はそのまま
+    }
+    throw new Error(message);
+  }
+  return res.blob();
 }
 
 /** QuestionnaireResponse の帳票 PDF の URL(新規タブでそのまま開ける)。 */

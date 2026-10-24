@@ -99,8 +99,10 @@ export type KartePaneState =
   // DPC 様式1。encounterId は対象の入院の初期値(提出ファイルの一覧から)。
   | { kind: "dpc-form1-create"; encounterId?: string; tab?: DpcPaneTab }
   | { kind: "dpc-form1-edit"; responseId: string; tab?: DpcPaneTab }
-  // 文書テンプレート(Word / Excel)から文書を作る。作った文書は「ファイル」タブに入る。
+  // 文書テンプレート(Word / Excel / 様式)から文書を作る。作った文書は「ファイル」タブに入る。
   | { kind: "document-create" }
+  // 様式テンプレートから作った文書の内容を直す(ファイルタブの「内容編集」)。documentId は DocumentReference。
+  | { kind: "document-edit"; documentId: string }
   | { kind: "vital-create"; problem?: ProblemRef }
   // 1 回の測定は複数の Observation なので、束ねている identifier で対象を指す。
   | { kind: "vital-edit"; entryId: string }
@@ -279,6 +281,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "dpc-form1-create": "DPC登録",
   "dpc-form1-edit": "DPC編集",
   "document-create": "文書作成",
+  "document-edit": "文書編集",
   "vital-create": "バイタル登録",
   "vital-edit": "バイタル編集",
   "prescription-create": "処方登録",
@@ -832,6 +835,10 @@ function PaneContent({
       );
     case "document-create":
       return <DocumentCreatePanel patientId={patientId} onSaved={onSaved} />;
+    case "document-edit":
+      return (
+        <DocumentCreatePanel patientId={patientId} edit={{ documentId: state.documentId }} onSaved={onSaved} />
+      );
     case "note-edit":
       return (
         <ClinicalNoteEditPanel patientId={patientId} noteId={state.noteId} onSaved={onSaved} />

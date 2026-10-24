@@ -35,8 +35,9 @@
   --diff-removed-strong: rgba(192, 57, 43, 0.3);
   --diff-added-bg: rgba(46, 139, 87, 0.12);
   --diff-added-strong: rgba(46, 139, 87, 0.35);
-  /* 印刷する紙面の地。 */
+  /* 印刷する紙面の地と、その上の文字(様式の入力欄)。テーマによらず紙は白、文字は墨。 */
   --paper: #ffffff;
+  --paper-ink: #111111;
   /* JTAS の色分け(1 蘇生=青 / 2 緊急=赤 / 3 準緊急=黄 / 4 低緊急=緑 / 5 非緊急=白)。
      地の色と、その上に載せる文字の色の組で持つ。 */
   --jtas-1: #1f5fbf;
@@ -118,6 +119,7 @@
   --diff-added-bg: rgba(63, 167, 108, 0.16);
   --diff-added-strong: rgba(63, 167, 108, 0.42);
   --paper: #ffffff;
+  --paper-ink: #111111;
   --jtas-1: #3b7de0;
   --jtas-1-text: #ffffff;
   --jtas-2: #e5484d;

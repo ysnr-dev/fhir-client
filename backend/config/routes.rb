@@ -67,9 +67,10 @@ Rails.application.routes.draw do
     # category の coding に code を持つ。
     resources :file_categories, only: %i[index create update destroy]
 
-    # 文書テンプレート(Word / Excel の様式ファイル)。本体は file で返す。
+    # 文書テンプレート。Word / Excel の本体は file で、様式のページ画像は pages/:number で返す。
     resources :document_templates, only: %i[index show create update destroy] do
       get :file, on: :member
+      get "pages/:number", action: :page, on: :member, constraints: { number: /\d+/ }
     end
   end
 
@@ -153,6 +154,8 @@ Rails.application.routes.draw do
     get "dpc_form1/file", to: "dpc_form1#file"
     # 口腔状態スナップショットの CSV(.oes)。画面が組み立てたレコードを Shift_JIS のファイルにする。
     post "oral_exam_file", to: "oral_exam_files#create"
+    # 様式テンプレート(文書作成)の表示用 PDF。画面が整形した値をページ画像の上に描く。
+    post "document_forms/:template_id/pdf", to: "document_form_pdfs#create"
   end
 
   # 国内マスタデータ（FHIR リソースではないプレーンな JSON REST）

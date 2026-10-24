@@ -558,7 +558,12 @@ export function formatPrescriptions(prescriptionDetail: fhir4.Bundle | undefined
   if (!serviceRequest || medicationRequests.length === 0) return "";
 
   const date = summarizeServiceRequest(serviceRequest).date.replaceAll("-", "/");
-  const lines: string[] = [date ? `【処方 ${date}】` : "【処方】"];
+  return [date ? `【処方 ${date}】` : "【処方】", ...prescriptionRpLines(medicationRequests)].join("\n");
+}
+
+/** 処方 1 件の Rp ごとの行(Rp 見出し → 薬品 → 用法・調剤指示)。文書への転記でも使う。 */
+export function prescriptionRpLines(medicationRequests: fhir4.MedicationRequest[]): string[] {
+  const lines: string[] = [];
   for (const rp of groupByRp(medicationRequests)) {
     lines.push(`Rp${rp.rpNumber}`);
     for (const medicine of rp.medicines) {
@@ -579,7 +584,7 @@ export function formatPrescriptions(prescriptionDetail: fhir4.Bundle | undefined
     if (usage || usageComment) lines.push(`　用法: ${usage}${usageComment}`);
     if (rp.dispenseInstructionLabel) lines.push(`　調剤指示: ${rp.dispenseInstructionLabel}`);
   }
-  return lines.join("\n");
+  return lines;
 }
 
 // 投与中の処方薬を 1 行ずつ。同じ薬が複数の処方にあれば、投与終了日の遅い方だけ残す。

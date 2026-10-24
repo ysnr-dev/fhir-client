@@ -28,7 +28,7 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
     deleteTemplate.mutate(template.id);
   }
 
-  // Word / Excel で編集し直すために、登録済みの本体をダウンロードさせる。
+  // Word / Excel で編集し直すために、登録済みの本体をダウンロードさせる(様式はページ画像しか持たないので出さない)。
   async function handleDownload(template: DocumentTemplateSummary) {
     setDownloadError(null);
     try {
@@ -51,7 +51,7 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
       <ErrorBanner error={deleteTemplate.error} />
       <ErrorBanner error={updateTemplate.error} />
       <ErrorBanner error={downloadError} />
-      <table className="patient-table">
+      <table className="patient-table document-template-table">
         <thead>
           <tr>
             <th>名称</th>
@@ -70,17 +70,23 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
               <td>{template.name}</td>
               <td>{template.file_category_name ?? "-"}</td>
               <td>{template.file_name}</td>
-              <td>{contentTypeLabel(template.content_type)}</td>
+              <td>
+                {template.kind === "form"
+                  ? `様式(${template.pages.length}ページ)`
+                  : contentTypeLabel(template.content_type)}
+              </td>
               <td>{formatFileSize(template.byte_size)}</td>
               <td>{template.active ? "有効" : "無効"}</td>
               <td>{formatDateTime(template.updated_at)}</td>
               <td className="patient-table__actions">
-                <button type="button" onClick={() => void handleDownload(template)}>
-                  ダウンロード
-                </button>
+                {template.kind === "office" && (
+                  <button type="button" onClick={() => void handleDownload(template)}>
+                    ダウンロード
+                  </button>
+                )}
                 <RowMenu label={`${template.name} の操作`}>
                   <button type="button" className="row-menu__item" onClick={() => onEdit(template)}>
-                    編集
+                    {template.kind === "form" ? "デザイン" : "編集"}
                   </button>
                   <button
                     type="button"

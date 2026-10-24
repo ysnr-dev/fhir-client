@@ -6,6 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { DOCUMENT_FORM_KIND_TOKEN } from "../../fhir/documentFormQuestionnaire";
 import { referenceId } from "../../fhir/shared";
 import {
   HAS_LAB_MAPPED_TYPES,
@@ -525,6 +526,7 @@ export function useAllQuestionnaires() {
   const params = new URLSearchParams();
   // 更新日時の降順(新しい順)。
   params.set("_sort", "-_lastUpdated");
+  params.set("code:not", DOCUMENT_FORM_KIND_TOKEN);
 
   const query = useQuery({
     queryKey: ["Questionnaire", "search", "all"],
@@ -678,6 +680,8 @@ export function useDeleteQuestionnaire() {
 export function useQuestionnaireOptions(options?: { status?: fhir4.Questionnaire["status"] }) {
   const params = new URLSearchParams();
   if (options?.status) params.set("status", options.status);
+  // 様式テンプレートが自動生成した Questionnaire は文書作成からだけ使うので選択肢に出さない。
+  params.set("code:not", DOCUMENT_FORM_KIND_TOKEN);
   params.set("_count", "500");
   params.set("_sort", "-_lastUpdated");
 

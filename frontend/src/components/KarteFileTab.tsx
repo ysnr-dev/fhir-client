@@ -32,7 +32,8 @@ import { useEditSnapshot } from "../hooks/useEditSnapshot";
 import { resourcesOfType } from "../fhir/shared";
 
 // カルテ画面の「ファイル」タブ(docs/patient-file-design.md)。
-// 一覧・表示・取込・編集・差し替え・削除を左ペイン内で完結させる。
+// 一覧・表示・取込・編集・差し替え・削除を左ペイン内で完結させる。様式文書の内容編集だけは
+// 右ペインの「文書作成」で作ったものの編集なので、右ペインに頼む(onEditDocument)。
 //
 // 一覧と詳細は URL(view パラメータ)で表す。取込・編集は入力途中の内容を URL では
 // 復元できないので、このコンポーネント内の状態に留める。
@@ -57,9 +58,11 @@ interface KarteFileTabProps {
   /** URL から渡される表示対象の DocumentReference の ID。空なら一覧。 */
   view: string;
   onViewChange: (view: string | null) => void;
+  /** 様式テンプレートから作った文書の内容を右ペインで直す。 */
+  onEditDocument?: (documentId: string) => void;
 }
 
-export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProps) {
+export function KarteFileTab({ patientId, view, onViewChange, onEditDocument }: KarteFileTabProps) {
   const [form, setForm] = useState<FormMode>(null);
   const [offset, setOffset] = useState(0);
   const [categoryCode, setCategoryCode] = useState("");
@@ -160,7 +163,7 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
         </div>
         {replaceControls}
         {mode.kind === "detail" ? (
-          <DetailPanel patientId={patientId} fileId={mode.fileId} />
+          <DetailPanel patientId={patientId} fileId={mode.fileId} onEditDocument={onEditDocument} />
         ) : mode.kind === "create" ? (
           <KarteFileUploadForm patientId={patientId} onSaved={backToList} />
         ) : (
@@ -292,7 +295,15 @@ function FileViewModeButton({
   );
 }
 
-function DetailPanel({ patientId, fileId }: { patientId: string; fileId: string }) {
+function DetailPanel({
+  patientId,
+  fileId,
+  onEditDocument,
+}: {
+  patientId: string;
+  fileId: string;
+  onEditDocument?: (documentId: string) => void;
+}) {
   const { data: result, isLoading, error: loadError } = usePatientFileDocument(fileId);
 
   const doc = result?.data;
@@ -331,6 +342,13 @@ function DetailPanel({ patientId, fileId }: { patientId: string; fileId: string 
                 <dt>更新日時</dt>
                 <dd>{dateTimeLabel(file.lastUpdated) || "-"}</dd>
               </dl>
+              {file.relatedResponseId && onEditDocument && (
+                <div className="karte-file-detail__actions">
+                  <button type="button" onClick={() => onEditDocument(file.id)}>
+                    内容編集
+                  </button>
+                </div>
+              )}
             </fieldset>
             <KarteFilePreview file={file} />
           </div>

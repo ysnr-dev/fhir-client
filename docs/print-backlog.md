@@ -25,6 +25,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 | 5 | テンプレート回答(QuestionnaireResponse)の PDF | カルテ時系列(`components/KarteTimeline.tsx`)のテンプレートカードの「PDF」。レイアウト登録済みのテンプレートだけ有効 | `GET /reports/questionnaire_responses/:id/pdf`。レイアウトは `/report-layouts` で DB(`report_layouts`)に登録 | `docs/report-mappings/` に見本 4 本(入院診療計画書 `admission-plan-01`・診療情報提供書 `referral-01`・手術説明同意書 `sur-consent-01`・周術期口腔機能管理計画書 `perio-01`)。`shikan-01` は mapping だけで .tlf が無い |
 | 6 | カルテ印刷(診療経過記録 = 2 号用紙、A4、期間指定、履歴の差分) | 「その他」→「カルテ印刷」(`components/KartePrintTab.tsx`)→ 別タブ `pages/KartePrintPage.tsx` | `window.print()`。`App.css` の `@page` / `@media print` | なし(HTML) |
 | 7 | 文書作成(Word / Excel 様式への差し込み) | カルテ右ペイン「文書作成」(`components/DocumentCreatePanel.tsx`) | ブラウザ内で `{{ }}` を置換し患者ファイルに保存してダウンロード。PDF 化はしない | 施設が `/document-templates` に登録。同梱様式なし |
+| 9 | 文書作成(PDF / 画像の様式に項目を置いて入力) | 同じ「文書作成」で様式テンプレートを選ぶ(`components/documentForm/DocumentFormFill.tsx`) | `POST /reports/document_forms/:template_id/pdf`、Prawn(ページ画像 + `text_box`)。回答は QuestionnaireResponse | 施設が `/document-templates` のデザイナで登録。同梱様式なし |
 | 8 | 検査結果報告書(1 件分、A4、2 段組み、材料なし) | 検査結果の内容表示(`components/LabResultDetailPanel.tsx`)の「印刷」 | `GET /reports/lab_results/:report_id/pdf`、ThinReports(左右 2 本の list) | `lab_result.tlf` |
 
 印刷ではないファイル出力: データ抽出の CSV、DPC 患者一覧 CSV と様式 1 提出ファイル(FF1)、
@@ -131,7 +132,8 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
    同梱 .tlf は既定値に下げる。ラベル用紙サイズの変更要望(`docs/lab-label-design.md` §7-1)もこれで吸収する。
 3. **帳票ヘッダの共通化**。自院欄を全帳票へ(テンプレート回答の帳票も)、医師名・記名欄の規約。印影は紙押印のまま。
 4. **一覧印刷のエンドポイント 1 種類**(病棟 × 日、または患者 × 期間)。§2.4 と §2.5 の多くがこの上に乗る。
-5. **文書テンプレートの PDF 化は対象外のまま**(手元の Word / Excel で印刷)。LibreOffice 等の変換サーバーは置かない。
+5. **Word / Excel の文書テンプレートの PDF 化は対象外のまま**(手元の Word / Excel で印刷)。LibreOffice 等の変換サーバーは置かない。
+   PDF / 画像の様式は §1.1 の 9 のとおり backend(Prawn)で PDF にする。
 
 ## 4. 対象外
 
@@ -139,7 +141,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 - ハードウェア依存: 病棟プリンタの指定、印刷枚数の指定、プリンタマスタ、ラベルプリンタ・バーコードリーダ・PDA 連携そのもの
   (`docs/functional-gap-backlog.md` §3)。PDF を新しいタブで開いてブラウザから印刷する運用を続ける。
 - 汎用印刷(任意の画面のハードコピー)。ブラウザの印刷で足りる。
-- 文書テンプレート(docx / xlsx)のサーバー側 PDF 変換(§3-5)。
+- 文書テンプレート(docx / xlsx)のサーバー側 PDF 変換(§3-5)。様式(PDF / 画像)は対象内(§1.1 の 9)。
 - 色帯のカラー印刷(ラベル。`docs/lab-label-design.md` §7-4)。プリンタ・用紙が決まるまで保留。
 
 ## 5. 着手順の案

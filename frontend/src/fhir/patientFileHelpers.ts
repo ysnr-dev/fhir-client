@@ -53,6 +53,10 @@ export interface PatientFile {
   authorReference: string;
   authorName: string;
   lastUpdated: string;
+  /** 文書テンプレートから作った文書なら、そのテンプレートの code。それ以外は空。 */
+  documentTypeCode: string;
+  /** 様式テンプレートから作った文書の回答(QuestionnaireResponse)の id。無ければ null。 */
+  relatedResponseId: string | null;
 }
 
 export interface PatientFileCategory {
@@ -140,8 +144,17 @@ export function buildPatientFileReplaceBundle(
   etag: string,
 ): fhir4.Bundle {
   const { placeholder, entry } = imageBinaryEntry(draft.dataUrl, draft.contentType);
+  return resourceWithImagesBundle(replaceAttachment(doc, draft, placeholder), [entry], etag);
+}
+
+/** 添付だけを新しい本体に向け替えた DocumentReference。 */
+function replaceAttachment(
+  doc: fhir4.DocumentReference,
+  draft: PatientFileDraft,
+  attachmentUrl: string,
+): fhir4.DocumentReference {
   const attachment = doc.content?.[0]?.attachment ?? {};
-  const replaced: fhir4.DocumentReference = {
+  return {
     ...doc,
     content: [
       {
@@ -149,7 +162,7 @@ export function buildPatientFileReplaceBundle(
         attachment: {
           ...attachment,
           contentType: draft.contentType,
-          url: placeholder,
+          url: attachmentUrl,
           title: withExtensionOf(attachment.title || draft.title, draft.title),
           size: draft.size,
         },
@@ -157,7 +170,71 @@ export function buildPatientFileReplaceBundle(
       ...(doc.content?.slice(1) ?? []),
     ],
   };
-  return resourceWithImagesBundle(replaced, [entry], etag);
+}
+
+/**
+ * 様式テンプレートから作った文書の transaction Bundle。回答(QuestionnaireResponse)・表示用 PDF の
+ * Binary・DocumentReference を 1 回で保存し、DocumentReference.context.related から回答を指す
+ * (上流が urn:uuid を実 id に書き換える)。
+ */
+export function buildDocumentFormBundle(args: {
+  draft: PatientFileDraft;
+  response: fhir4.QuestionnaireResponse;
+  patientId: string;
+  date: string;
+  category: PatientFileCategory | null;
+  practitionerId?: string;
+  practitionerName?: string;
+  documentType: PatientFileDocumentType;
+}): fhir4.Bundle {
+  const responseUrl = `urn:uuid:${crypto.randomUUID()}`;
+  const { placeholder, entry } = imageBinaryEntry(args.draft.dataUrl, args.draft.contentType);
+  const doc = buildDocumentReference({ ...args, attachmentUrl: placeholder, related: [responseUrl] });
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      { fullUrl: responseUrl, resource: args.response, request: { method: "POST", url: "QuestionnaireResponse" } },
+      entry,
+      { resource: doc, request: { method: "POST", url: "DocumentReference" } },
+    ],
+  };
+}
+
+/**
+ * 様式文書の再編集。回答を更新し、PDF を新しい Binary に置き、DocumentReference を向け替える。
+ * どちらの更新も読んだ版(etag)で楽観ロックする。
+ */
+export function buildDocumentFormReplaceBundle(args: {
+  doc: fhir4.DocumentReference;
+  docEtag: string;
+  response: fhir4.QuestionnaireResponse;
+  responseEtag: string;
+  draft: PatientFileDraft;
+  date: string;
+}): fhir4.Bundle {
+  const { placeholder, entry } = imageBinaryEntry(args.draft.dataUrl, args.draft.contentType);
+  const replaced = replaceAttachment(args.doc, args.draft, placeholder);
+  replaced.date = documentDate(args.date) ?? replaced.date;
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      {
+        resource: args.response,
+        request: {
+          method: "PUT",
+          url: `QuestionnaireResponse/${args.response.id}`,
+          ifMatch: args.responseEtag,
+        },
+      },
+      entry,
+      {
+        resource: replaced,
+        request: { method: "PUT", url: `DocumentReference/${args.doc.id}`, ifMatch: args.docEtag },
+      },
+    ],
+  };
 }
 
 const EXTENSION = /\.[A-Za-z0-9]{1,8}$/;
@@ -201,6 +278,8 @@ function buildDocumentReference(args: {
   practitionerId?: string;
   practitionerName?: string;
   documentType?: PatientFileDocumentType;
+  /** 文書に結び付くリソース(様式の回答)。Bundle 内の urn:uuid でよい。 */
+  related?: string[];
 }): fhir4.DocumentReference {
   const doc: fhir4.DocumentReference = {
     resourceType: "DocumentReference",
@@ -224,6 +303,9 @@ function buildDocumentReference(args: {
   }
   const category = categoryConcepts(args.category);
   if (category) doc.category = category;
+  if (args.related?.length) {
+    doc.context = { related: args.related.map((reference) => ({ reference })) };
+  }
   if (args.practitionerId) {
     doc.author = [
       { reference: `Practitioner/${args.practitionerId}`, display: args.practitionerName || undefined },
@@ -258,6 +340,10 @@ export function parsePatientFile(doc: fhir4.DocumentReference): PatientFile {
     ?.flatMap((concept) => concept.coding ?? [])
     .find((c) => c.system === PATIENT_FILE_CATEGORY_SYSTEM);
   const author = doc.author?.[0];
+  const typeCoding = doc.type?.coding?.find((c) => c.system === DOCUMENT_TEMPLATE_SYSTEM);
+  const related = doc.context?.related
+    ?.map((ref) => ref.reference?.match(/^QuestionnaireResponse\/(.+)$/)?.[1])
+    .find((id) => id);
 
   return {
     id: doc.id ?? "",
@@ -271,6 +357,8 @@ export function parsePatientFile(doc: fhir4.DocumentReference): PatientFile {
     authorReference: author?.reference ?? "",
     authorName: author?.display ?? "",
     lastUpdated: doc.meta?.lastUpdated ?? "",
+    documentTypeCode: typeCoding?.code ?? "",
+    relatedResponseId: related ?? null,
   };
 }
 

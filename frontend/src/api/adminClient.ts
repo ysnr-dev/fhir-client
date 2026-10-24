@@ -21,6 +21,7 @@ import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpe
 import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
 import type { NursingProfileSettings } from "../fhir/nursingProfileHelpers";
 import type { BulkVitalEntrySettings } from "../fhir/bulkVitalHelpers";
+import type { DocumentFormLayout, DocumentFormPageMeta } from "../fhir/documentFormLayout";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 import type { AdvisorySeveritySettings } from "../fhir/advisoryHelpers";
 import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
@@ -455,12 +456,16 @@ export async function deleteFileCategory(id: number): Promise<void> {
 }
 
 // --- 文書テンプレート --------------------------------------------------------
-// Word / Excel の様式ファイル(docs/document-template-design.md)。一覧は本体を含まない。
+// Word / Excel の様式ファイル(office)と、PDF / 画像の様式に項目を置いたもの(form)
+// (docs/document-template-design.md)。一覧は本体(ファイル・ページ画像)を含まない。
+
+export type DocumentTemplateKind = "office" | "form";
 
 export interface DocumentTemplateSummary {
   id: number;
   /** 作成した文書の DocumentReference.type の coding から参照される不変のコード(UUID)。 */
   code: string;
+  kind: DocumentTemplateKind;
   name: string;
   /** 作成した文書を入れるファイルカテゴリ。未設定は null。 */
   file_category_id: number | null;
@@ -471,17 +476,38 @@ export interface DocumentTemplateSummary {
   byte_size: number;
   display_order: number;
   active: boolean;
+  /** form のフィールド配置(fhir/documentFormLayout.ts)。office は null。 */
+  layout: DocumentFormLayout | null;
+  /** form の回答を保存する Questionnaire の canonical。office は null。 */
+  questionnaire_url: string | null;
+  questionnaire_version: string | null;
+  /** form のページ画像のメタ。本体は documentTemplatePageUrl で取る。 */
+  pages: DocumentFormPageMeta[];
   updated_at: string;
 }
 
+export interface DocumentTemplatePagePayload extends DocumentFormPageMeta {
+  /** 本体(base64)。 */
+  data: string;
+}
+
 export interface DocumentTemplatePayload {
+  kind?: DocumentTemplateKind;
+  /** form は Questionnaire の url に使うため、登録時にフロントが採番して送る。 */
+  code?: string;
   name?: string;
   file_category_id?: number | null;
   file_name?: string;
+  content_type?: string;
   /** 本体(base64)。更新で省くと本体は差し替えない。 */
   file_data?: string;
   display_order?: number;
   active?: boolean;
+  layout?: DocumentFormLayout;
+  questionnaire_url?: string;
+  questionnaire_version?: string;
+  /** ページ画像。更新で省くと差し替えない。 */
+  pages?: DocumentTemplatePagePayload[];
 }
 
 const DOCUMENT_TEMPLATES = "/admin/document_templates";
@@ -515,6 +541,11 @@ export async function updateDocumentTemplate(
 export async function deleteDocumentTemplate(id: number): Promise<void> {
   const res = await adminFetch(`${DOCUMENT_TEMPLATES}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
+}
+
+/** 様式のページ画像の URL。差し替えで updated_at が変わるので、それをキャッシュの鍵にする。 */
+export function documentTemplatePageUrl(template: DocumentTemplateSummary, pageNumber: number): string {
+  return `${DOCUMENT_TEMPLATES}/${template.id}/pages/${pageNumber}?v=${encodeURIComponent(template.updated_at)}`;
 }
 
 export async function fetchDocumentTemplateFile(id: number): Promise<Uint8Array> {

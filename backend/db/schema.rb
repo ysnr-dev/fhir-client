@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_22_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_24_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -159,18 +159,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_090000) do
     t.index ["study_instance_uid", "series_instance_uid", "instance_number"], name: "index_dicom_instances_on_study_series_number"
   end
 
+  create_table "document_template_pages", force: :cascade do |t|
+    t.bigint "document_template_id", null: false
+    t.integer "page_number", null: false
+    t.string "content_type", null: false
+    t.binary "data", null: false
+    t.integer "byte_size", null: false
+    t.integer "width_px", null: false
+    t.integer "height_px", null: false
+    t.decimal "width_pt", precision: 8, scale: 2, null: false
+    t.decimal "height_pt", precision: 8, scale: 2, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["document_template_id", "page_number"], name: "index_document_template_pages_on_template_and_number", unique: true
+    t.index ["document_template_id"], name: "index_document_template_pages_on_document_template_id"
+  end
+
   create_table "document_templates", force: :cascade do |t|
     t.string "code", null: false
     t.string "name", null: false
     t.bigint "file_category_id"
     t.string "file_name", null: false
     t.string "content_type", null: false
-    t.binary "data", null: false
+    t.binary "data"
     t.integer "byte_size", null: false
     t.integer "display_order", default: 0, null: false
     t.boolean "active", default: true, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "kind", default: "office", null: false
+    t.jsonb "layout"
+    t.string "questionnaire_url"
+    t.string "questionnaire_version"
     t.index ["code"], name: "index_document_templates_on_code", unique: true
     t.index ["file_category_id"], name: "index_document_templates_on_file_category_id"
     t.index ["name"], name: "index_document_templates_on_name", unique: true
@@ -2895,6 +2915,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_090000) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "document_template_pages", "document_templates", on_delete: :cascade
   add_foreign_key "document_templates", "file_categories", on_delete: :nullify
   add_foreign_key "master_formulary_entries", "master_formulary_groups", column: "formulary_group_id", on_delete: :cascade
   add_foreign_key "supervisor_group_members", "supervisor_groups", on_delete: :cascade

@@ -211,8 +211,16 @@ export function KarteTabPanel({ tab: key, patientId, view, onViewChange, baseDat
       />
     );
   }
-  // 取り込んだファイル。登録・編集・削除はタブ内で完結する(右ペインは使わない)。
-  if (key === "file") return <KarteFileTab {...props} />;
+  // 取り込んだファイル。登録・編集・削除はタブ内で完結し、右ペインを使うのは様式文書の内容編集
+  // (右ペインの「文書作成」で作ったものの編集)だけ。
+  if (key === "file") {
+    return (
+      <KarteFileTab
+        {...props}
+        onEditDocument={(documentId) => openForm({ kind: "document-edit", documentId })}
+      />
+    );
+  }
   if (key === "imaging") return <KarteImagingTab {...props} />;
   if (key === "karte-print") return <KartePrintTab patientId={patientId} />;
   // 外来の診察中なら、その受診を起動の文脈(encounter)として渡す。

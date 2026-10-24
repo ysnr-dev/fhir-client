@@ -28447,3 +28447,445 @@ input.nursing-picker__search {
   padding-left: 16px;
   font-size: 12px;
 }
+
+/* ---- 様式テンプレート(docs/document-template-design.md §7) ---- */
+
+/* ページ画像の器。拡大縮小は内側の transform で行い、外側が拡大後の大きさを持つ。 */
+.document-form-page__outer {
+  position: relative;
+  margin: 0 auto;
+}
+
+/* 紙面はテーマによらず白なので、入力欄(文字・チェック・日付の暦)はライトの描画に固定する。 */
+.document-form-page {
+  position: relative;
+  transform-origin: 0 0;
+  background: var(--paper);
+  color-scheme: light;
+  box-shadow: 0 0 0 1px var(--border);
+  user-select: none;
+}
+
+.document-form-page__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* デザイナ */
+.document-form-designer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.document-form-designer__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+}
+
+.document-form-designer__head label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 入力欄は他のフォーム(.patient-form)と同じ枠・余白。 */
+.document-form-designer__head input:not([type="file"]),
+.document-form-designer__head select,
+.document-form-props input:not([type="checkbox"]),
+.document-form-props select,
+.document-form-props textarea {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  min-width: 0;
+}
+
+.document-form-props textarea {
+  resize: vertical;
+  font-size: 14px;
+}
+
+/* ファイル選択はブラウザ既定だと地の色に埋もれるので、取込画面と同じ見た目にする。 */
+.document-form-designer__head input[type="file"] {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.document-form-designer__head input[type="file"]::file-selector-button {
+  font: inherit;
+  font-size: 14px;
+  height: var(--control-height);
+  padding: 0 12px;
+  margin-right: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
+  cursor: pointer;
+}
+
+.document-form-designer__source {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.document-form-designer__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.document-form-designer__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 12px;
+  align-items: start;
+}
+
+.document-form-designer__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.document-form-designer__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.document-form-designer__toolbar .is-selected {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.document-form-designer__sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.document-form-designer__scroll {
+  overflow: auto;
+  max-height: calc(100vh - 260px);
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+}
+
+.document-form-designer__scroll.is-placing .document-form-page {
+  cursor: crosshair;
+}
+
+.document-form-designer__side {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface-panel);
+  position: sticky;
+  top: 8px;
+}
+
+/* デザイナの箱 */
+.document-form-field {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px dashed var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  cursor: move;
+  touch-action: none;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  padding: 2px 4px;
+  line-height: 1.2;
+}
+
+.document-form-field--checkbox {
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.document-form-field.is-selected {
+  border-style: solid;
+  border-width: 2px;
+  overflow: visible;
+}
+
+.document-form-field__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.document-form-field__handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  touch-action: none;
+  z-index: 4;
+}
+
+.document-form-field__handle--n { top: -5px; left: calc(50% - 5px); cursor: ns-resize; }
+.document-form-field__handle--s { bottom: -5px; left: calc(50% - 5px); cursor: ns-resize; }
+.document-form-field__handle--e { right: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+.document-form-field__handle--w { left: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+.document-form-field__handle--ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.document-form-field__handle--sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.document-form-field__handle--nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.document-form-field__handle--se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+
+/* 属性パネル */
+.document-form-props {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.document-form-props label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text);
+}
+
+.document-form-props__check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.document-form-props__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+  gap: 6px;
+}
+
+.document-form-props__row input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.document-form-props__check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+}
+
+.document-form-props__expression {
+  display: flex;
+  gap: 4px;
+}
+
+.document-form-props__expression input {
+  flex: 1;
+  min-width: 0;
+}
+
+.document-form-props__kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.document-form-props__kinds > span {
+  width: 100%;
+}
+
+/* 入力画面(カルテ右ペイン) */
+.document-form-fill {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.document-form-fill--fullscreen {
+  position: fixed;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  padding: 12px;
+}
+
+.document-form-fill__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.document-form-fill__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.document-form-fill__scroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: calc(var(--karte-pane-height) - 220px);
+}
+
+.document-form-fill--fullscreen .document-form-fill__scroll {
+  max-height: none;
+}
+
+.document-form-fill .document-form-page {
+  user-select: auto;
+}
+
+.document-form-input__box {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.document-form-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 2px;
+  border: 1px solid var(--accent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--paper-ink);
+  color-scheme: light;
+  font-family: inherit;
+  /* 縮小表示で細く薄く見えるので、PDF(IPA ゴシック)に寄せて少し太くする。 */
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.document-form-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  background: var(--accent-bg);
+}
+
+.document-form-input--textarea {
+  resize: none;
+  overflow: auto;
+}
+
+/* チェックはブラウザ既定の描画に任せる(枠・背景を当てると黒塗りの四角になる)。大きさだけ箱に合わせる。 */
+.document-form-input--checkbox {
+  appearance: auto;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.document-form-input--checkbox:focus {
+  background: none;
+}
+
+.document-form-input__transfer {
+  position: absolute;
+  right: 0;
+  top: -30px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* 転記モーダル */
+.order-transfer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.order-transfer__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.order-transfer__tabs .is-selected {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.order-transfer__list {
+  max-height: 55vh;
+  overflow: auto;
+}
+
+.order-transfer__list label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.order-transfer__list input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.order-transfer__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.karte-file-detail__actions {
+  margin-top: 8px;
+}
+
+/* 文書テンプレート一覧。種類・サイズ・状態・日時は折り返さず、名称とファイル名に幅を譲る。 */
+.document-template-table td:nth-child(n + 4),
+.document-template-table th:nth-child(n + 4) {
+  white-space: nowrap;
+}
