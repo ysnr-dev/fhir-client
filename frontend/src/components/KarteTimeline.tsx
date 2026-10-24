@@ -8,6 +8,9 @@ import {
   useDeleteVitalEntry,
 } from "../api/queries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
+import { fetchBinaryBlob, readResource } from "../api/fhirClient";
+import { documentIdOfResponse } from "../fhir/documentFormQuestionnaire";
+import { parsePatientFile } from "../fhir/patientFileHelpers";
 import {
   noteBodySections,
   sectionResponseId,
@@ -331,10 +334,33 @@ const KarteCard = memo(function KarteCard({
 
   // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
   // 他の種別では canonical を渡さないので照会自体が走らない。
+  // 様式文書の回答は、作成時に保存した PDF(文書の本体)を開く。帳票レイアウトは照会しない。
+  const formDocumentId = item.kind === "qr" ? documentIdOfResponse(item.response) : null;
   const { data: layoutStatus } = useReportLayoutStatus(
-    item.kind === "qr" ? item.response.questionnaire : undefined,
+    item.kind === "qr" && !formDocumentId ? item.response.questionnaire : undefined,
   );
   const pdfReady = Boolean(layoutStatus?.registered && item.id);
+  const [documentPdfError, setDocumentPdfError] = useState<unknown>(null);
+
+  async function openDocumentPdf(documentId: string) {
+    setDocumentPdfError(null);
+    // 読み込みを待ってから開くとポップアップとして止められるので、先に空のタブを開いておく。
+    const tab = window.open("", "_blank");
+    try {
+      const { data: doc } = await readResource<fhir4.DocumentReference>("DocumentReference", documentId);
+      const binaryId = parsePatientFile(doc).binaryId;
+      if (!binaryId) throw new Error("文書の本体が見つかりません。");
+      const blob = await fetchBinaryBlob(binaryId);
+      const url = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+      if (tab) tab.location.href = url;
+      else window.open(url, "_blank");
+      // 開いたタブが読み込み終えるまで URL を生かしておく。
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      tab?.close();
+      setDocumentPdfError(err);
+    }
+  }
 
   function handleDelete() {
     // 注射は連日オーダーの後続日も一緒に消すか選ばせるので、専用の確認モーダルにする。
@@ -451,7 +477,18 @@ const KarteCard = memo(function KarteCard({
               <span className="karte-card__icon-label">DO</span>
             </button>
           )}
-          {item.kind === "qr" &&
+          {formDocumentId ? (
+            <button
+              type="button"
+              className="karte-card__icon-button karte-card__icon-button--labeled"
+              title="PDF を開く"
+              aria-label="PDF を開く"
+              onClick={() => void openDocumentPdf(formDocumentId)}
+            >
+              <DocumentIcon />
+              <span className="karte-card__icon-label">PDF</span>
+            </button>
+          ) : item.kind === "qr" &&
             (pdfReady ? (
               <a
                 className="button karte-card__icon-button karte-card__icon-button--labeled"
@@ -766,11 +803,15 @@ const KarteCard = memo(function KarteCard({
       </header>
 
       <ErrorBanner error={deleteError} />
+      <ErrorBanner error={documentPdfError} />
       {item.kind === "injection" && <ErrorBanner error={cancelInjectionPerforms.error} />}
 
-      <CollapsibleBody>
-        <KarteCardBody item={item} />
-      </CollapsibleBody>
+      {/* 様式文書は PDF が本体なので、カードには見出しだけを出す(内容は PDF・詳細表示で見る)。 */}
+      {!formDocumentId && (
+        <CollapsibleBody>
+          <KarteCardBody item={item} />
+        </CollapsibleBody>
+      )}
 
       {plainTextOpen && item.kind === "qr" && item.questionnaire && (
         <PlainTextModal

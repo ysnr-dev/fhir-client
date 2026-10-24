@@ -169,11 +169,15 @@ PNG が 1.5MB を超えるページ(写真)は JPEG に落とす。
 { "schema_version": 1,
   "fields": [{ "id": "f_xxxx", "type": "text", "label": "患者氏名", "page": 1,
                "x": 276, "y": 148, "w": 320, "h": 36, "font_size": 10.5, "align": "left", "required": false,
+               "mask": true,                             // 枠内を白で塗って雛形の印字を隠す(任意)
                "options": ["男", "女"],                  // select のみ
                "initial_expression": "%patientName",     // text / textarea / date。初期値式(変数一覧の式)
                "transfer_kinds": ["prescription"],       // text / textarea。転記ボタンの出どころ
                "date_format": "wareki" }] }              // date のみ(slash / iso / wareki)
 ```
+
+`mask` は雛形の印字(「年 月 日」のような既定の文言)と値が重なる欄のためのもの。入力画面は項目の枠を紙の色で塗り、
+PDF は値を描く前に枠内を白で塗る(値が空でも塗る)。見た目だけの設定なので Questionnaire の版は上げない。
 
 形の検証は backend(`DocumentTemplate#layout_shape`)が担う(既知のキーだけ、id の一意、ページ内に収まること、
 フィールド 200 件まで)。フロントの純粋関数は `fhir/documentFormLayout.ts`。
@@ -222,7 +226,13 @@ PNG が 1.5MB を超えるページ(写真)は JPEG に落とす。
 
 保存は 1 本の transaction Bundle(`fhir/patientFileHelpers.ts` の `buildDocumentFormBundle`):
 QuestionnaireResponse(POST、`fullUrl` は urn:uuid)+ Binary(PDF)+ DocumentReference(POST、`type` はテンプレートの code、
-`context.related` で回答を指す。上流が urn:uuid を実 id に書き換える)。
+`context.related` で回答を指す)。回答からも拡張 `http://fhir-client.local/StructureDefinition/questionnaire-response-document`
+(valueReference)で DocumentReference を指す。上流が urn:uuid を実 id に書き換える(互いを指すので依存順に並べられず
+配列の順に処理されるが、id は先に振られるので参照は正しく入る)。
+
+カルテ時系列では、この拡張を持つ回答のカードを「文書作成」のバッジで、見出しだけ(本文なし)で出す。カードの「PDF」は保存した PDF(文書の本体)を開き、
+「編集」は右ペインの文書編集(`document-edit`)を開く(回答だけを直すと PDF と食い違うため)。削除はカードからでも
+ファイルタブからでも、回答と DocumentReference を 1 本の transaction で一緒に消す(Binary は旧版が参照するので残す)。
 
 再編集はファイルタブの「内容編集」から右ペインで同じ画面を開き(`document-edit`)、保存済みの回答から値を復元する。
 更新は QuestionnaireResponse を PUT(`If-Match`)、PDF を新しい Binary、DocumentReference を向け替え(`If-Match`)で、

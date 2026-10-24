@@ -31,7 +31,7 @@ export function PatientFileGrid({
 
   function handleDelete(file: PatientFile) {
     if (!window.confirm(`ファイル「${file.title}」を削除します。よろしいですか?`)) return;
-    deleteFile.mutate(file.id);
+    deleteFile.mutate(file);
   }
 
   if (files.length === 0) {

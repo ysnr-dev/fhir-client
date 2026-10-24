@@ -49,21 +49,34 @@ module Reports
 
     def draw_field(pdf, field, scale, page_height)
       text = @values[field["id"]].to_s
+      at = [ field["x"] * scale, page_height - field["y"] * scale ]
+      width = field["w"] * scale
+      height = field["h"] * scale
+      # 塗りつぶしの項目は、値が空でも枠内の雛形の印字を隠す(入力画面と同じ見た目にする)。
+      mask(pdf, at, width, height) if field["mask"]
       return if text.empty?
 
       raise InvalidRequest, "値が長すぎます(#{field['id']})" if text.length > MAX_TEXT_LENGTH
 
       pdf.text_box(
         text,
-        at: [ field["x"] * scale, page_height - field["y"] * scale ],
-        width: field["w"] * scale,
-        height: field["h"] * scale,
+        at: at,
+        width: width,
+        height: height,
         size: field["font_size"].to_f,
         align: (field["align"] || "left").to_sym,
         valign: MULTILINE_TYPES.include?(field["type"]) ? :top : :center,
         overflow: :shrink_to_fit,
         min_font_size: MIN_FONT_SIZE
       )
+    end
+
+    def mask(pdf, at, width, height)
+      pdf.save_graphics_state do
+        pdf.fill_color "FFFFFF"
+        pdf.fill_rectangle at, width, height
+      end
+      pdf.fill_color "000000"
     end
   end
 end

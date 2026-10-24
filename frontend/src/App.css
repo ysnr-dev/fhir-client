@@ -28621,6 +28621,11 @@ input.nursing-picker__search {
   line-height: 1.2;
 }
 
+/* 塗りつぶしの項目は、PDF と同じく下の印字を隠した見た目で置く。 */
+.document-form-field--mask {
+  background: var(--paper);
+}
+
 .document-form-field--checkbox {
   padding: 0;
   align-items: center;
@@ -28771,6 +28776,11 @@ input.nursing-picker__search {
 .document-form-input__box {
   position: absolute;
   box-sizing: border-box;
+}
+
+/* 塗りつぶしの項目。PDF と同じく枠内を紙の色で塗り、下の雛形の印字を隠す。 */
+.document-form-input__box--mask {
+  background: var(--paper);
 }
 
 .document-form-input {

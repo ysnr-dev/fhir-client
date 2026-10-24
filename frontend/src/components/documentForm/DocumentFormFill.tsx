@@ -159,7 +159,10 @@ function FieldInput({
   const transferable = (field.type === "text" || field.type === "textarea") && (field.transfer_kinds?.length ?? 0) > 0;
 
   return (
-    <div className="document-form-input__box" style={fieldStyle(field)}>
+    <div
+      className={`document-form-input__box${field.mask ? " document-form-input__box--mask" : ""}`}
+      style={fieldStyle(field)}
+    >
       {field.type === "textarea" ? (
         <textarea
           className={className}

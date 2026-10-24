@@ -56,6 +56,12 @@ const STATUS_NOTES: Partial<Record<PlaceholderStatus, string>> = {
   error: "式を評価できません",
 };
 
+// テンプレートの選択肢は種類で分ける(画面で入力して PDF を残すものか、ファイルを作ってダウンロードするものか)。
+const TEMPLATE_GROUPS: { kind: DocumentTemplateSummary["kind"]; label: string }[] = [
+  { kind: "form", label: "様式" },
+  { kind: "office", label: "Word / Excel" },
+];
+
 function extensionOf(fileName: string): string {
   return /\.[^.]+$/.exec(fileName)?.[0].toLowerCase() ?? "";
 }
@@ -226,11 +232,19 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
             }}
           >
             <option value="">選択してください</option>
-            {choices.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
+            {TEMPLATE_GROUPS.map((group) => {
+              const members = choices.filter((item) => item.kind === group.kind);
+              if (members.length === 0) return null;
+              return (
+                <optgroup key={group.kind} label={group.label}>
+                  {members.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </select>
         </label>
       </div>

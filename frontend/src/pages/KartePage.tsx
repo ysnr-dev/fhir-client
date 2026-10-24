@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { documentIdOfResponse } from "../fhir/documentFormQuestionnaire";
 import {
   useKarteConditions,
   useKarteDayIndex,
@@ -771,6 +772,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     else if (item.kind === "vital") openForm({ kind: "vital-edit", entryId: item.id });
     // パス評価はパスタブの日めくりでその病日を開く(記載はそこから評価で書き直す)。
     else if (item.kind === "pathway-evaluation") openPathwayDayRef.current(item.evaluation.applyId, item.evaluation.eventId);
+    else if (item.kind === "qr" && documentIdOfResponse(item.response)) {
+      // 様式文書は文書の側(右ペインの文書編集)で直す。回答だけを直すと PDF と食い違うため。
+      openForm({ kind: "document-edit", documentId: documentIdOfResponse(item.response) as string });
+    }
     else openForm({ kind: "qr-edit", qrId: item.id });
   }, [openForm]);
 
@@ -810,7 +815,11 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
               ? current.srId
               : current.kind === "qr-edit"
                 ? current.qrId
-                : undefined;
+                : current.kind === "document-edit" && item.kind === "qr"
+                  ? documentIdOfResponse(item.response) === current.documentId
+                    ? item.id
+                    : undefined
+                  : undefined;
         return openId === item.id ? { kind: "empty" } : current;
       });
       if (detailTarget?.kind === item.kind && detailTarget.id === item.id) closeDetail();

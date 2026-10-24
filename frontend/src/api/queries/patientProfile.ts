@@ -6,7 +6,11 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { DOCUMENT_FORM_KIND_TOKEN } from "../../fhir/documentFormQuestionnaire";
+import {
+  DOCUMENT_FORM_KIND_TOKEN,
+  documentIdOfResponse,
+  responseWithDocumentDeleteBundle,
+} from "../../fhir/documentFormQuestionnaire";
 import { referenceId } from "../../fhir/shared";
 import {
   HAS_LAB_MAPPED_TYPES,
@@ -918,6 +922,13 @@ export function useDeleteQuestionnaireResponse() {
     // 無くなり、由来を辿れない Observation だけが残るため)。
     mutationFn: async (response: fhir4.QuestionnaireResponse) => {
       const id = response.id ?? "";
+      // 様式文書の回答は文書(DocumentReference)と一組なので、文書も一緒に消す
+      // (片方だけ残ると、カードかファイルのどちらかが中身の無い文書になる)。
+      const documentId = documentIdOfResponse(response);
+      if (documentId) {
+        await postBundle(responseWithDocumentDeleteBundle(id, documentId));
+        return;
+      }
       const observationRefs = await fetchDerivedObservationRefs([id]);
       if (!observationRefs.length) return deleteResource("QuestionnaireResponse", id);
       await postBundle(responseDeleteBundle(id, observationRefs));
@@ -925,6 +936,7 @@ export function useDeleteQuestionnaireResponse() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["DocumentReference", "search"] });
     },
   });
 }

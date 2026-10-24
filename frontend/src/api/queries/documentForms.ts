@@ -20,6 +20,7 @@ import {
   buildDocumentFormResponseItems,
   documentFormQuestionnaireUrl,
   nextQuestionnaireVersion,
+  responseDocumentExtension,
 } from "../../fhir/documentFormQuestionnaire";
 import { buildKarteTimeline, type KarteTimelineItem } from "../../fhir/karteTimeline";
 import {
@@ -145,12 +146,16 @@ export function useSaveDocumentFormDocument() {
       const dataUrl = await readFileAsDataUrl(new File([blob], fileName, { type: "application/pdf" }));
       const draft = { key: crypto.randomUUID(), title: fileName, contentType: "application/pdf", size: blob.size, dataUrl };
 
+      const documentUrl = args.existing
+        ? `DocumentReference/${args.existing.doc.id}`
+        : `urn:uuid:${crypto.randomUUID()}`;
       const response = buildQuestionnaireResponse({
         questionnaire: args.questionnaire,
         patient: args.patient,
         items: buildDocumentFormResponseItems(args.layout, args.values, args.questionnaire),
         meta: args.meta,
         existing: args.existing?.response,
+        extension: [responseDocumentExtension(documentUrl)],
       });
 
       const documentType: PatientFileDocumentType = { code: args.template.code, name: args.template.name };
@@ -171,6 +176,7 @@ export function useSaveDocumentFormDocument() {
         : buildDocumentFormBundle({
             draft,
             response,
+            documentUrl,
             patientId: args.patient.id ?? "",
             date: args.date,
             category,

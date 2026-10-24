@@ -114,6 +114,10 @@ export function DocumentFormFieldProperties({
         <input type="checkbox" checked={field.required} onChange={(e) => patch({ required: e.target.checked })} />
         必須
       </label>
+      <label className="document-form-props__check">
+        <input type="checkbox" checked={field.mask ?? false} onChange={(e) => patch({ mask: e.target.checked || undefined })} />
+        塗りつぶし
+      </label>
 
       {field.type === "select" && (
         <label>

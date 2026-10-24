@@ -25,6 +25,35 @@ export const DOCUMENT_FORM_KIND_CODE = "document-form";
 export const DOCUMENT_FORM_KIND_TOKEN = `${DOCUMENT_FORM_KIND_SYSTEM}|${DOCUMENT_FORM_KIND_CODE}`;
 const OPTION_SYSTEM = "http://fhir-client.local/CodeSystem/document-form-option";
 
+/**
+ * 様式文書の回答から、その文書(DocumentReference)を指す拡張。カルテのカードを「文書作成」として出し、
+ * 編集・削除・PDF を文書の側へ向けるのに使う(文書から回答へは DocumentReference.context.related)。
+ */
+export const RESPONSE_DOCUMENT_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/questionnaire-response-document";
+
+export function responseDocumentExtension(reference: string): fhir4.Extension {
+  return { url: RESPONSE_DOCUMENT_EXT_URL, valueReference: { reference } };
+}
+
+/** 様式文書の回答なら、その DocumentReference の id。それ以外は null。 */
+export function documentIdOfResponse(response: fhir4.QuestionnaireResponse): string | null {
+  const reference = response.extension?.find((e) => e.url === RESPONSE_DOCUMENT_EXT_URL)?.valueReference?.reference;
+  return reference?.match(/^DocumentReference\/(.+)$/)?.[1] ?? null;
+}
+
+/** 様式文書の回答と文書(DocumentReference)を一緒に消す transaction。Binary は旧版が参照するので残す。 */
+export function responseWithDocumentDeleteBundle(responseId: string, documentId: string): fhir4.Bundle {
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      { request: { method: "DELETE", url: `QuestionnaireResponse/${responseId}` } },
+      { request: { method: "DELETE", url: `DocumentReference/${documentId}` } },
+    ],
+  };
+}
+
 export function documentFormQuestionnaireUrl(code: string): string {
   return `http://fhir-client.local/Questionnaire/document-form/${code}`;
 }

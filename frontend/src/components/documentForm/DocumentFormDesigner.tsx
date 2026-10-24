@@ -429,7 +429,9 @@ export default function DocumentFormDesigner({
                   return (
                     <div
                       key={field.id}
-                      className={`document-form-field document-form-field--${field.type}${selected ? " is-selected" : ""}`}
+                      className={`document-form-field document-form-field--${field.type}${field.mask ? " document-form-field--mask" : ""}${
+                        selected ? " is-selected" : ""
+                      }`}
                       style={{ ...fieldStyle(field), fontSize: field.font_size * pxPerPt(page) }}
                       onPointerDown={(event) => handleFieldPointerDown(event, field)}
                     >

@@ -15,6 +15,7 @@
 #     "fields": [
 #       { "id": "f_...", "type": "text", "label": "患者氏名", "page": 1,
 #         "x": 120, "y": 240, "w": 300, "h": 36, "font_size": 10.5, "align": "left", "required": false,
+#         "mask": true,                             # 枠内を白で塗って雛形の印字を隠す
 #         "options": ["男", "女"],                  # select のみ
 #         "initial_expression": "%patientName",     # text / textarea / date
 #         "transfer_kinds": ["prescription"],       # text / textarea
@@ -42,7 +43,7 @@ class DocumentTemplate < ApplicationRecord
   ALIGNS = %w[left center right].freeze
   DATE_FORMATS = %w[slash iso wareki].freeze
   TRANSFER_KINDS = %w[prescription injection order condition lab].freeze
-  FIELD_BASE_KEYS = %w[id type label page x y w h font_size align required].freeze
+  FIELD_BASE_KEYS = %w[id type label page x y w h font_size align required mask].freeze
   FIELD_EXTRA_KEYS = {
     "text" => %w[initial_expression transfer_kinds],
     "textarea" => %w[initial_expression transfer_kinds],
@@ -217,8 +218,10 @@ class DocumentTemplate < ApplicationRecord
     unless field["align"].nil? || ALIGNS.include?(field["align"])
       errors.add(:layout, "#{label} の align は #{ALIGNS.join(' / ')} のいずれかで指定してください")
     end
-    unless field["required"].nil? || [ true, false ].include?(field["required"])
-      errors.add(:layout, "#{label} の required は真偽値で指定してください")
+    %w[required mask].each do |key|
+      next if field[key].nil? || [ true, false ].include?(field[key])
+
+      errors.add(:layout, "#{label} の #{key} は真偽値で指定してください")
     end
 
     validate_field_extras(field, type, label)

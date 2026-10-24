@@ -69,6 +69,8 @@ export interface DocumentFormField {
   font_size: number;
   align: DocumentFormAlign;
   required: boolean;
+  /** 枠内を白で塗ってから値を書く(雛形の印字を隠す)。 */
+  mask?: boolean;
   /** select のみ。 */
   options?: string[];
   /** text / textarea / date。初期値式(変数一覧の式)。 */
@@ -147,6 +149,7 @@ export function normalizeLayout(raw: unknown): DocumentFormLayout {
       align: includes(ALIGNS, item.align) ? item.align : "left",
       required: item.required === true,
     };
+    if (item.mask === true) field.mask = true;
     if (field.type === "select") {
       field.options = Array.isArray(item.options)
         ? item.options.filter((o): o is string => typeof o === "string")
@@ -201,6 +204,7 @@ function withTypeExtras(field: DocumentFormField, type: DocumentFormFieldType): 
     align: field.align,
     required: field.required,
   };
+  if (field.mask) base.mask = true;
   if (type === "select") base.options = field.options?.length ? field.options : ["選択肢1"];
   if (type === "text" || type === "textarea" || type === "date") {
     base.initial_expression = field.initial_expression ?? "";

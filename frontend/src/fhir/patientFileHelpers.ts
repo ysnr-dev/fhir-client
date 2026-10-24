@@ -174,12 +174,15 @@ function replaceAttachment(
 
 /**
  * 様式テンプレートから作った文書の transaction Bundle。回答(QuestionnaireResponse)・表示用 PDF の
- * Binary・DocumentReference を 1 回で保存し、DocumentReference.context.related から回答を指す
- * (上流が urn:uuid を実 id に書き換える)。
+ * Binary・DocumentReference を 1 回で保存し、DocumentReference.context.related から回答を、
+ * 回答の拡張から DocumentReference を指す(上流が urn:uuid を実 id に書き換える。互いを指すので
+ * 上流は依存順に並べられず配列の順に処理するが、id は先に振られるので参照は正しく入る)。
  */
 export function buildDocumentFormBundle(args: {
   draft: PatientFileDraft;
   response: fhir4.QuestionnaireResponse;
+  /** DocumentReference の fullUrl(urn:uuid)。回答の拡張からこの文書を指すため、呼び出し側が先に決める。 */
+  documentUrl: string;
   patientId: string;
   date: string;
   category: PatientFileCategory | null;
@@ -196,7 +199,7 @@ export function buildDocumentFormBundle(args: {
     entry: [
       { fullUrl: responseUrl, resource: args.response, request: { method: "POST", url: "QuestionnaireResponse" } },
       entry,
-      { resource: doc, request: { method: "POST", url: "DocumentReference" } },
+      { fullUrl: args.documentUrl, resource: doc, request: { method: "POST", url: "DocumentReference" } },
     ],
   };
 }

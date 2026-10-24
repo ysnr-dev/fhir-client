@@ -19,6 +19,7 @@ import {
 } from "../fhirClient";
 import { deleteImagingStudy, fetchStoredStudies, fetchStudyInstances } from "../imagingClient";
 import { IMAGING_STUDY_SUMMARY_ELEMENTS } from "../../fhir/imagingHelpers";
+import { responseWithDocumentDeleteBundle } from "../../fhir/documentFormQuestionnaire";
 import { hasRelation } from "./core";
 
 // --- カルテに取り込んだファイル(docs/patient-file-design.md) ------------------
@@ -167,9 +168,17 @@ export function useReplacePatientFile() {
 export function useDeletePatientFile() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteResource("DocumentReference", id),
+    // 様式文書は回答(QuestionnaireResponse)と一組なので、回答も一緒に消す。
+    mutationFn: async (file: { id: string; relatedResponseId?: string | null }) => {
+      if (file.relatedResponseId) {
+        await postBundle(responseWithDocumentDeleteBundle(file.relatedResponseId, file.id));
+        return;
+      }
+      await deleteResource("DocumentReference", file.id);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PATIENT_FILE_KEY });
+      queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
     },
   });
 }

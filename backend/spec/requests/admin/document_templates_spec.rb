@@ -273,6 +273,19 @@ RSpec.describe "Admin::DocumentTemplates", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
     end
 
+    it "accepts a mask flag and rejects a non-boolean one" do
+      post "/admin/document_templates",
+           params: form_params(layout: { schema_version: 1, fields: [ field(mask: true) ] }), as: :json
+      expect(response).to have_http_status(:created)
+      expect(response.parsed_body["layout"]["fields"].first["mask"]).to be(true)
+
+      post "/admin/document_templates",
+           params: form_params(name: "別様式", code: "22222222-2222-3333-4444-555555555555",
+                               layout: { schema_version: 1, fields: [ field(mask: "yes") ] }),
+           as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
     it "requires a questionnaire canonical for form templates" do
       post "/admin/document_templates", params: form_params(questionnaire_url: nil), as: :json
 

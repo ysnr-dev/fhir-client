@@ -72,6 +72,7 @@ import {
   type ConsultTaskStatus,
 } from "./consultTaskHelpers";
 import { isTeamRequestServiceRequest, teamRequestResponseIds } from "./teamRequestHelpers";
+import { documentIdOfResponse } from "./documentFormQuestionnaire";
 import { teamRequestTaskStatus, teamRequestTasksByOrderId, type TeamRequestTaskStatus } from "./teamRequestTaskHelpers";
 import {
   injectionTaskStatus,
@@ -230,7 +231,11 @@ export function orderKindOf(
  * (どちらのオーダーかは副題に添える)。
  */
 export function karteItemKindLabel(
-  item: Pick<KarteTimelineItem, "kind"> & { serviceRequest?: fhir4.ServiceRequest; note?: fhir4.Composition },
+  item: Pick<KarteTimelineItem, "kind"> & {
+    serviceRequest?: fhir4.ServiceRequest;
+    note?: fhir4.Composition;
+    response?: fhir4.QuestionnaireResponse;
+  },
 ): string {
   if ((item.kind === "injection" || item.kind === "prescription") && item.serviceRequest) {
     if (regimenOrderOf(item.serviceRequest)) return "化学療法";
@@ -238,6 +243,8 @@ export function karteItemKindLabel(
   // 退院時サマリーは診療記録と同じ器だが、バッジでは文書として見分けられるようにする。
   if (item.kind === "note" && item.note && isDischargeSummary(item.note)) return "退院時サマリー";
   if (item.kind === "note" && item.note && isNursingSummary(item.note)) return "看護サマリー";
+  // 様式テンプレートで作った文書の回答は、テンプレート回答ではなく文書として見せる。
+  if (item.kind === "qr" && item.response && documentIdOfResponse(item.response)) return "文書作成";
   return KARTE_KIND_LABELS[item.kind];
 }
 

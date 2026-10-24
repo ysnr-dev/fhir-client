@@ -53,6 +53,19 @@ RSpec.describe "Reports::DocumentFormPdfs", type: :request do
       expect(strings).not_to include("無視")
     end
 
+    it "paints masked fields white even when they are empty" do
+      masked = fields.map { |f| f.merge("mask" => true) }
+      template = create_form!(masked)
+
+      post "/reports/document_forms/#{template.id}/pdf",
+           params: { fields: [ { link_id: "f_name", text: "テスト 太郎" } ] }, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(PDF::Inspector::Text.analyze(response.body).strings.join).to include("テスト 太郎")
+      rectangles = PDF::Inspector::Graphics::Rectangle.analyze(response.body).rectangles
+      expect(rectangles.size).to eq(3)
+    end
+
     it "returns 404 for an unknown template and 422 for an office template" do
       post "/reports/document_forms/999999/pdf", params: { fields: [] }, as: :json
       expect(response).to have_http_status(:not_found)
