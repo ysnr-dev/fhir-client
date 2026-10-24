@@ -38,10 +38,10 @@ export function QuestionnaireEditor({
   submitError,
   submitLabel = "登録",
 }: QuestionnaireEditorProps) {
-  // 左に目次を置くぶん、本文を既定の幅より広げる(作成・編集の両画面)。
+  // 項目の入力欄が多く、左に目次も置くので、本文を既定の幅より広げる(作成・編集の両画面)。
   useEffect(() => {
-    document.body.classList.add("page-wide-md");
-    return () => document.body.classList.remove("page-wide-md");
+    document.body.classList.add("page-wide-md-toc");
+    return () => document.body.classList.remove("page-wide-md-toc");
   }, []);
 
   const [values, setValues] = useState<QuestionnaireFormValues>(
