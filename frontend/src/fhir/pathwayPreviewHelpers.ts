@@ -13,6 +13,7 @@ import {
   sortEventsByDay,
   type PathwayDraft,
   type PathwayPhaseDraft,
+  type PathwayTaskDraft,
 } from "./pathwayHelpers";
 
 // パス定義(編集中の draft)を、患者に適用する前にパスシートの形で見るためのもの。
@@ -34,6 +35,12 @@ export function previewPhaseRoute(phases: PathwayPhaseDraft[], choices: Map<stri
   return route;
 }
 
+export interface PathwayPreview {
+  application: PathwayApplicationRecord;
+  /** シートのタスクのセル(procedureId)→ 元のタスク。雛形の中身を開くのに使う。 */
+  tasks: Map<string, PathwayTaskDraft>;
+}
+
 /**
  * 経路上の病日を適用 1 件の木に組む。［決定］フェーズの最初の病日は前のフェーズの最終日の翌日に置く
  * (次のフェーズの適用の既定と同じ)。病日の書式が不正な行は飛ばす。
@@ -42,7 +49,8 @@ export function buildPathwayPreview(
   draft: PathwayDraft,
   admissionDate: string,
   route: PathwayPhaseDraft[],
-): PathwayApplicationRecord {
+): PathwayPreview {
+  const tasks = new Map<string, PathwayTaskDraft>();
   const multiPhase = draft.phases.length > 1;
   const events: PathwayEventRecord[] = [];
   let nextStart = "";
@@ -90,17 +98,21 @@ export function buildPathwayPreview(
               codings: [],
               nursingObservationManageNo: "",
               properValue: row.properValue,
-              tasks: row.tasks.map((task) => ({
-                id: `${assessmentId}-task-${task.key}`,
-                taskKey: task.taskKey,
-                orderIds: [],
-                name: task.name.trim() || "(名称未入力)",
-                categoryLv1: task.categoryLv1,
-                categoryLv2: task.categoryLv2,
-                performedDateTime: null,
-                plannedDate: date,
-                done: false,
-              })),
+              tasks: row.tasks.map((task) => {
+                const id = `${assessmentId}-task-${task.key}`;
+                tasks.set(id, task);
+                return {
+                  id,
+                  taskKey: task.taskKey,
+                  orderIds: [],
+                  name: task.name.trim() || "(名称未入力)",
+                  categoryLv1: task.categoryLv1,
+                  categoryLv2: task.categoryLv2,
+                  performedDateTime: null,
+                  plannedDate: date,
+                  done: false,
+                };
+              }),
             };
           });
           return {
@@ -119,7 +131,7 @@ export function buildPathwayPreview(
     else if (!nextStart) nextStart = admissionDate;
   }
 
-  return {
+  const application: PathwayApplicationRecord = {
     id: "preview",
     applyId: "",
     title: draft.name.trim(),
@@ -133,4 +145,5 @@ export function buildPathwayPreview(
     adaptiveCriteriaConfirmed: false,
     events,
   };
+  return { application, tasks };
 }

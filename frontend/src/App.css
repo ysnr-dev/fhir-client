@@ -20097,6 +20097,13 @@ button.nursing-worksheet__mark {
   margin-bottom: 8px;
 }
 
+.pathway-template-modal__fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 /* カルテ右ペインのパス適用(PathwayApplyPanel)。区画はレジメン適用と同じ見た目。 */
 .pathway-apply__criteria {
   margin: 4px 0 8px;
