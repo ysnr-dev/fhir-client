@@ -538,6 +538,17 @@ export async function updateDocumentTemplate(
   });
 }
 
+/** 様式の複製。ページ画像と配置を写した無効のテンプレートを作る。Questionnaire は呼び出し側が先に作る。 */
+export async function copyDocumentTemplate(
+  id: number,
+  payload: { code: string; name: string; questionnaire_url: string; questionnaire_version: string },
+): Promise<DocumentTemplateSummary> {
+  return adminJson<DocumentTemplateSummary>(`${DOCUMENT_TEMPLATES}/${id}/copy`, {
+    method: "POST",
+    ...jsonBody(payload),
+  });
+}
+
 export async function deleteDocumentTemplate(id: number): Promise<void> {
   const res = await adminFetch(`${DOCUMENT_TEMPLATES}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);

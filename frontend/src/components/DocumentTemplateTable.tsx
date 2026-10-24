@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { fetchDocumentTemplateFile, type DocumentTemplateSummary } from "../api/adminClient";
 import { useDeleteDocumentTemplate, useUpdateDocumentTemplate } from "../api/adminQueries";
+import { useCopyDocumentFormTemplate } from "../api/queries";
 import { contentTypeLabel, formatFileSize } from "../fhir/patientFileHelpers";
 import { formatDateTime } from "../lib/dates";
 import { downloadBlob } from "../lib/download";
@@ -15,6 +16,7 @@ interface Props {
 export function DocumentTemplateTable({ templates, onEdit }: Props) {
   const deleteTemplate = useDeleteDocumentTemplate();
   const updateTemplate = useUpdateDocumentTemplate();
+  const copyTemplate = useCopyDocumentFormTemplate();
   const [downloadError, setDownloadError] = useState<unknown>(null);
 
   function handleDelete(template: DocumentTemplateSummary) {
@@ -50,6 +52,7 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
     <>
       <ErrorBanner error={deleteTemplate.error} />
       <ErrorBanner error={updateTemplate.error} />
+      <ErrorBanner error={copyTemplate.error} />
       <ErrorBanner error={downloadError} />
       <table className="patient-table document-template-table">
         <thead>
@@ -88,6 +91,16 @@ export function DocumentTemplateTable({ templates, onEdit }: Props) {
                   <button type="button" className="row-menu__item" onClick={() => onEdit(template)}>
                     {template.kind === "form" ? "デザイン" : "編集"}
                   </button>
+                  {template.kind === "form" && (
+                    <button
+                      type="button"
+                      className="row-menu__item"
+                      disabled={copyTemplate.isPending}
+                      onClick={() => copyTemplate.mutate(template)}
+                    >
+                      複製
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="row-menu__item"

@@ -12,7 +12,7 @@ module Admin
     before_action :authorize_user!
     before_action :verify_user_csrf!
 
-    before_action :set_template, only: %i[update destroy file page]
+    before_action :set_template, only: %i[update destroy copy file page]
 
     # ?active=true で有効なものだけに絞る(文書作成の選択肢)。
     def index
@@ -48,6 +48,34 @@ module Admin
         render json: summary(@template)
       else
         render json: { errors: @template.errors.full_messages }, status: :unprocessable_content
+      end
+    end
+
+    # 様式の複製。ページ画像と配置・カテゴリを写し、名称と code・Questionnaire の canonical は受け取った値にする。
+    # 写したものはカルテの文書作成に出さないよう無効で作る。
+    def copy
+      return render json: { error: "様式テンプレートのみ複製できます" }, status: :unprocessable_content unless @template.form?
+
+      copied = DocumentTemplate.new(
+        kind: "form",
+        code: params[:code].to_s.presence,
+        name: params[:name],
+        file_category_id: @template.file_category_id,
+        file_name: @template.file_name,
+        content_type: @template.content_type,
+        layout: @template.layout,
+        questionnaire_url: params[:questionnaire_url],
+        questionnaire_version: params[:questionnaire_version],
+        active: false,
+        display_order: next_display_order
+      )
+      @template.pages.ordered.each do |page|
+        copied.pages.build(page.attributes.slice(*%w[page_number content_type data width_px height_px width_pt height_pt]))
+      end
+      if copied.save
+        render json: summary(copied), status: :created
+      else
+        render json: { errors: copied.errors.full_messages }, status: :unprocessable_content
       end
     end
 

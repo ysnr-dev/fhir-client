@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  copyDocumentTemplate,
   createDocumentTemplate,
+  fetchDocumentTemplates,
   updateDocumentTemplate,
   type DocumentTemplatePagePayload,
   type DocumentTemplateSummary,
@@ -99,6 +101,40 @@ export function useSaveDocumentFormTemplate() {
       return args.template
         ? updateDocumentTemplate(args.template.id, payload)
         : createDocumentTemplate({ ...payload, code });
+    },
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DOCUMENT_TEMPLATES_KEY });
+      queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
+    },
+  });
+}
+
+/**
+ * 様式テンプレートの複製。新しい code で Questionnaire の 1 版を作ってから、ページ画像と配置を backend で写す。
+ * 名称は「〜 のコピー」(使われていれば番号を付ける)。
+ */
+export function useCopyDocumentFormTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (template: DocumentTemplateSummary) => {
+      // 名称は Word / Excel とも重ならないようにするので、種類を問わず全件の名前を見る。
+      const names = new Set((await fetchDocumentTemplates()).map((t) => t.name));
+      const base = `${template.name} のコピー`;
+      let name = base;
+      for (let n = 2; names.has(name); n += 1) name = `${base}${n}`;
+      const code = crypto.randomUUID();
+      const url = documentFormQuestionnaireUrl(code);
+      const version = nextQuestionnaireVersion(null);
+      const layout = template.layout ? normalizeLayout(template.layout) : null;
+      if (!layout) throw new Error("項目の配置が読めないため複製できません。");
+      await createResource(buildDocumentFormQuestionnaire({ code, name }, layout, version));
+      return copyDocumentTemplate(template.id, {
+        code,
+        name,
+        questionnaire_url: url,
+        questionnaire_version: version,
+      });
     },
     retry: false,
     onSuccess: () => {

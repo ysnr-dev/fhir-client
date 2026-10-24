@@ -352,6 +352,50 @@ RSpec.describe "Admin::DocumentTemplates", type: :request do
       expect(response).to have_http_status(:not_found)
     end
 
+    it "copies a form template with its pages and layout as an inactive template" do
+      template = create_form!
+      code = "33333333-2222-3333-4444-555555555555"
+
+      post "/admin/document_templates/#{template.id}/copy",
+           params: { code: code, name: "同意書 のコピー",
+                     questionnaire_url: "http://fhir-client.local/Questionnaire/document-form/#{code}",
+                     questionnaire_version: "1" },
+           as: :json
+
+      expect(response).to have_http_status(:created)
+      body = response.parsed_body
+      expect(body["code"]).to eq(code)
+      expect(body["name"]).to eq("同意書 のコピー")
+      expect(body["active"]).to be(false)
+      expect(body["layout"]).to eq(template.layout)
+      expect(body["pages"].map { |p| p["page_number"] }).to eq([ 1, 2 ])
+      expect(body["display_order"]).to eq(template.display_order + 1)
+      copied = DocumentTemplate.find(body["id"])
+      expect(copied.pages.ordered.map { |p| p.data.b }).to eq(template.pages.ordered.map { |p| p.data.b })
+      expect(template.reload.pages.count).to eq(2)
+    end
+
+    it "rejects a copy whose name is already used" do
+      template = create_form!
+
+      post "/admin/document_templates/#{template.id}/copy",
+           params: { code: "33333333-2222-3333-4444-555555555555", name: "同意書",
+                     questionnaire_url: "http://fhir-client.local/Questionnaire/document-form/x",
+                     questionnaire_version: "1" },
+           as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(DocumentTemplate.count).to eq(1)
+    end
+
+    it "does not copy an office template" do
+      template = create_template
+
+      post "/admin/document_templates/#{template.id}/copy", params: { name: "診断書2" }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
     it "deletes the pages with the template" do
       template = create_form!
 
