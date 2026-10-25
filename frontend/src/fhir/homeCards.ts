@@ -21,6 +21,7 @@ export type HomeCardKind =
   | "countersigns"
   | "documentsDue"
   | "resultFollowup"
+  | "infectiousReports"
   | "nursingSummaryApprovals"
   | "dashboard"
   | "folder"
@@ -46,6 +47,7 @@ export interface HomeCardSettingsMap {
   countersigns: Record<never, never>;
   documentsDue: Record<never, never>;
   resultFollowup: Record<never, never>;
+  infectiousReports: Record<never, never>;
   nursingSummaryApprovals: { wardId: string };
   dashboard: { code: string };
   folder: { folderId: number };
@@ -146,6 +148,7 @@ export const HOME_CARD_KINDS: { [K in HomeCardKind]: HomeCardDef<K> } = {
   countersigns: { label: "カウンターサイン待ち", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
   documentsDue: { label: "期限のある書類", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
   resultFollowup: { label: "検査結果フォロー", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
+  infectiousReports: { label: "感染症発生届", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
   nursing: {
     label: "看護指示",
     group: "看護",
@@ -249,6 +252,7 @@ export function defaultHomeCards(input: {
       card("outpatient", { scope: "mine" }),
       card("inpatient", { by: "attending" }),
       card("resultFollowup", NONE),
+      card("infectiousReports", NONE),
     ];
   }
   if (isNursingRoleCode(code)) return [...head, card("inpatient", { by: "nurse" })];

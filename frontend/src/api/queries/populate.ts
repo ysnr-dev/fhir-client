@@ -36,8 +36,6 @@ const VITAL_COUNT = 50;
 
 /** がん登録の変数(docs/cancer-registry-design.md §3)の元データを読むときの指定。 */
 export interface PopulateCancerOptions {
-  /** 記入を始めたときの対象プロブレム(一覧から渡した腫瘍)。 */
-  focusConditionId?: string;
   /** 記入しているテンプレートの canonical(版付きと版なし)。同じテンプレートの登録件数(腫瘍番号)に使う。 */
   canonicals: string[];
 }
@@ -62,7 +60,12 @@ export interface PopulateCancerOptions {
  */
 export function usePopulateSources(
   patientId: string | undefined,
-  options: { labCodes?: string[]; cancer?: PopulateCancerOptions } = {},
+  options: {
+    labCodes?: string[];
+    /** 記入を始めたときの対象プロブレム(一覧から渡した病名)。がん登録・発生届の変数が対象を決めるのに使う。 */
+    focusConditionId?: string;
+    cancer?: PopulateCancerOptions;
+  } = {},
 ) {
   const labCodes = options.labCodes ?? [];
   const cancer = options.cancer;
@@ -290,6 +293,7 @@ export function usePopulateSources(
     );
     return {
       today,
+      focusConditionId: options.focusConditionId,
       conditions: resourcesOfType<fhir4.Condition>(conditions.data?.data, "Condition"),
       allConditions: resourcesOfType<fhir4.Condition>(allConditions.data?.data, "Condition"),
       labDetail: labDetail.data?.data,
@@ -316,7 +320,6 @@ export function usePopulateSources(
         : null,
       cancer: cancer
         ? ({
-            focusConditionId: cancer.focusConditionId,
             pathoDetail: pathoDetail.data?.data,
             pathoSynoptic: (() => {
               const response = resourcesOfType<fhir4.QuestionnaireResponse>(
@@ -345,6 +348,7 @@ export function usePopulateSources(
     };
   }, [
     today,
+    options.focusConditionId,
     conditions.data,
     allConditions.data,
     labDetail.data,

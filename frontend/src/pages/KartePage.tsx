@@ -400,7 +400,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             ? { kind: "team-request-create", teamId: openTarget.teamId }
           : openTarget.kind === "questionnaire"
             ? { kind: "qr-create", templateCanonical: openTarget.url }
-          : openTarget.kind === "cancer-registry"
+          : openTarget.kind === "condition-template"
             ? {
                 kind: "qr-create",
                 templateCanonical: openTarget.url,

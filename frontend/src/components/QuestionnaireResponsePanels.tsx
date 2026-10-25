@@ -185,13 +185,16 @@ export function QuestionnaireResponseCreatePanel({
     () =>
       questionnaire && usesCancerVariables(expressions)
         ? {
-            focusConditionId: defaultProblem?.conditionId,
             canonicals: [...new Set([questionnaire.url ?? "", questionnaireCanonical(questionnaire)].filter(Boolean))],
           }
         : undefined,
-    [questionnaire, expressions, defaultProblem?.conditionId],
+    [questionnaire, expressions],
   );
-  const populate = usePopulateSources(patientId, { labCodes, cancer });
+  const populate = usePopulateSources(patientId, {
+    labCodes,
+    focusConditionId: defaultProblem?.conditionId,
+    cancer,
+  });
   const expressionContext = useMemo(
     () =>
       patient && !populate.isLoading

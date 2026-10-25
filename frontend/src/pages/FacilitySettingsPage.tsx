@@ -52,6 +52,10 @@ import {
 import { ACUITY_CATEGORY_OPTIONS, unitRoomOptions } from "../fhir/nursingAcuityUnitHelpers";
 import { DEFAULT_PRESSURE_ULCER, type PressureUlcerSettings } from "../fhir/pressureUlcerHelpers";
 import { DEFAULT_CANCER_REGISTRY, type CancerRegistrySettings } from "../fhir/cancerRegistryHelpers";
+import {
+  DEFAULT_INFECTIOUS_DISEASE_REPORT,
+  type InfectiousDiseaseReportSettings,
+} from "../fhir/infectiousDiseaseReportHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import {
   CATEGORY_OPTIONS,
@@ -146,6 +150,7 @@ const FACILITY_SECTIONS = [
   { key: "nursing_acuity", label: "看護必要度" },
   { key: "pressure_ulcer", label: "褥瘡管理" },
   { key: "cancer_registry", label: "院内がん登録" },
+  { key: "infectious_disease_report", label: "感染症発生届" },
   { key: "radiotherapy_review", label: "放射線治療の週次レビュー" },
   { key: "intake", label: "Web 問診" },
   { key: "early_warning", label: "早期警告スコア(NEWS2)" },
@@ -262,6 +267,12 @@ export function FacilitySettingsPage() {
   const savedCancerRegistry = settings.data?.cancer_registry ?? DEFAULT_CANCER_REGISTRY;
   const cancerRegistry = cancerRegistryDraft ?? savedCancerRegistry;
   const cancerRegistryValid = /^https?:\/\/[^\s|]+$/.test(cancerRegistry.template);
+
+  // 感染症の発生届のテンプレート(url。版を問わない)。
+  const [infectiousReportDraft, setInfectiousReportDraft] = useState<InfectiousDiseaseReportSettings | undefined>(undefined);
+  const savedInfectiousReport = settings.data?.infectious_disease_report ?? DEFAULT_INFECTIOUS_DISEASE_REPORT;
+  const infectiousReport = infectiousReportDraft ?? savedInfectiousReport;
+  const infectiousReportValid = /^https?:\/\/[^\s|]+$/.test(infectiousReport.template);
 
   // 看護必要度の評価票の版と該当患者の基準。基準は組("A3" "A2+B3" "#A2")を空白区切りで入れる(組の OR)。
   const [acuityDraft, setAcuityDraft] = useState<
@@ -539,7 +550,7 @@ export function FacilitySettingsPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
-    if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid) return;
+    if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid || !infectiousReportValid) return;
     if (!reviewValid || !receiptCodesOk || !coefficientsValid || !intakeValid) return;
     update.mutate({
       self_organization_id: value,
@@ -560,6 +571,7 @@ export function FacilitySettingsPage() {
       nursing_acuity: acuity,
       pressure_ulcer: pressureUlcer,
       cancer_registry: cancerRegistry,
+      infectious_disease_report: infectiousReport,
       early_warning: earlyWarning,
       rx_verification: rxVerification,
       intake,
@@ -1249,6 +1261,25 @@ export function FacilitySettingsPage() {
             </div>
           )}
 
+          {/* 感染症の発生届。届出対象の一覧はこのテンプレートの回答で届出の状況を出す(url は版を問わない)。 */}
+          {section === "infectious_disease_report" && (
+            <div className="facility-settings__schedule-body">
+              <label>
+                発生届のテンプレート
+                <select
+                  value={infectiousReport.template}
+                  onChange={(e) => setInfectiousReportDraft({ ...infectiousReport, template: e.target.value })}
+                >
+                  {[...new Set([infectiousReport.template, ...templateOptions.questionnaires.map((q) => q.url ?? "").filter(Boolean)])].map((url) => (
+                    <option key={url} value={url}>
+                      {templateOptions.questionnaires.find((q) => q.url === url)?.title ?? url}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
           {/* 放射線治療の治療中の診察。既定の 7 日は外来放射線照射診療料(B001-2-8。7 日間に
               1 回、算定日に放射線治療医の診察)に合わせた値で、入院の患者や施設の運用に合わせて
               変えられるようにしてある。テンプレートは記入欄の初期値(選び直しは妨げない)。 */}
@@ -1781,7 +1812,8 @@ export function FacilitySettingsPage() {
                 !admissionDocsValid ||
                 !acuityValid ||
                 !pressureUlcerValid ||
-                !cancerRegistryValid
+                !cancerRegistryValid ||
+                !infectiousReportValid
               }
             >
               {update.isPending ? "保存中..." : "保存"}

@@ -56,6 +56,8 @@ export const APP_MENU: AppMenuEntry[] = [
       { label: "通知", to: "/notifications" },
       // 検査レポートのフォロー推奨と、確認されないまま日数が経った検査結果(docs/result-followup-design.md)。
       { label: "検査結果フォロー", to: "/result-followup" },
+      // 感染症法の届出対象の病名と発生届の状況・期限(docs/infectious-disease-report-design.md)。届け出るのは診断した医師。
+      { label: "感染症発生届", to: "/infectious-disease-reports" },
       // 研修医・学生の記録とオーダーのカウンターサイン(指導医向け。docs/countersign-design.md)。
       { label: "カルテ承認", to: "/countersigns" },
       // 入院診療計画書・退院時サマリー・看護サマリーの作成状況と期限(docs/bed-management-design.md §4)。

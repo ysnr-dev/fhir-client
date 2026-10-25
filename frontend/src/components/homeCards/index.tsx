@@ -11,6 +11,7 @@ import { CountersignsCard, DocumentsDueCard, NotificationCard } from "./Notifica
 import { NursingSummaryApprovalsCard } from "./NursingSummaryApprovalsCard";
 import { OutpatientCard } from "./OutpatientCard";
 import { ResultFollowupCard } from "./ResultFollowupCard";
+import { InfectiousReportsCard } from "./InfectiousReportsCard";
 import { ShortcutsCard } from "./ShortcutsCard";
 import { WardStatusCard } from "./WardStatusCard";
 import type { HomeCardProps } from "./shared";
@@ -31,6 +32,7 @@ const HOME_CARD_COMPONENTS: { [K in HomeCardKind]: ComponentType<HomeCardProps<K
   countersigns: CountersignsCard,
   documentsDue: DocumentsDueCard,
   resultFollowup: ResultFollowupCard,
+  infectiousReports: InfectiousReportsCard,
   nursingSummaryApprovals: NursingSummaryApprovalsCard,
   dashboard: DashboardCard,
   folder: FolderCard,

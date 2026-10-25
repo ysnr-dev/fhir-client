@@ -1,0 +1,676 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/idsc-notify-01",
+  "version": "1.0.0",
+  "name": "IDSC_NOTIFY_01",
+  "title": "感染症 発生届(共通項目)",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "感染症法 第 12 条の発生届(全数把握の感染症)の共通項目。届出対象の病名を対象プロブレムに選んで記入する。感染症名・類型・診断日・患者の氏名などは診療記録から初期値が入る。感染症ごとの届出様式(別記様式)の固有項目は「症状」「診断方法」「その他」に書く。五類の一部(梅毒・後天性免疫不全症候群など)は氏名・住所を届け出ないので、その欄は空のままにする。届出状況を「届出済」にすると発生届の一覧で届出済になる。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "25675b10-0ef3-4425-83c4-c1f8c3015cca",
+        "display": "検査"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-disease",
+      "type": "group",
+      "text": "感染症",
+      "item": [
+        {
+          "linkId": "idn_disease",
+          "type": "string",
+          "text": "感染症名",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%notifiableDiseaseName"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "届出基準の感染症名。対象プロブレムが届出対象なら自動で入る。"
+            }
+          ],
+          "required": true
+        },
+        {
+          "linkId": "idn_class",
+          "type": "string",
+          "text": "類型",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%notifiableDiseaseClass"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_kind",
+          "type": "choice",
+          "text": "届出の区分",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "required": true,
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "patient",
+                "display": "患者"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "carrier",
+                "display": "無症状病原体保有者"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "suspected",
+                "display": "疑似症患者"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "death",
+                "display": "感染症死亡者の死体"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "death-suspected",
+                "display": "感染症死亡疑い者の死体"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_due",
+          "type": "date",
+          "text": "届出期限",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%notifiableDueDate"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "一類〜四類・新型インフルエンザ等は直ちに(診断日)、五類は診断から 7 日以内(麻しん・風しん・侵襲性髄膜炎菌感染症は直ちに)。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-patient",
+      "type": "group",
+      "text": "患者",
+      "item": [
+        {
+          "linkId": "idn_name",
+          "type": "string",
+          "text": "氏名",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%patient.name.where(extension.where(value = 'SYL').empty()).select(family + '　' + given.first()).first()"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "五類の一部(梅毒・後天性免疫不全症候群・ウイルス性肝炎など)は氏名を届け出ない。該当するときは空にする。"
+            }
+          ]
+        },
+        {
+          "linkId": "idn_sex",
+          "type": "choice",
+          "text": "性別",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "iif(%patient.gender='male','male',iif(%patient.gender='female','female',{}))"
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "male",
+                "display": "男"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "female",
+                "display": "女"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_birth",
+          "type": "date",
+          "text": "生年月日",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%patient.birthDate"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_age",
+          "type": "integer",
+          "text": "年齢",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%age"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            }
+          ]
+        },
+        {
+          "linkId": "idn_address",
+          "type": "string",
+          "text": "住所",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%patient.address.first().text"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "氏名を届け出ない感染症は都道府県・市区町村まで。"
+            }
+          ]
+        },
+        {
+          "linkId": "idn_phone",
+          "type": "string",
+          "text": "電話番号",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%patient.telecom.where(system = 'phone').value.first()"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_occupation",
+          "type": "string",
+          "text": "職業"
+        }
+      ]
+    },
+    {
+      "linkId": "grp-clinical",
+      "type": "group",
+      "text": "診断",
+      "item": [
+        {
+          "linkId": "idn_symptoms",
+          "type": "text",
+          "text": "症状"
+        },
+        {
+          "linkId": "idn_method",
+          "type": "text",
+          "text": "診断方法(検査方法・検体・結果)"
+        },
+        {
+          "linkId": "idn_first-visit",
+          "type": "date",
+          "text": "初診年月日"
+        },
+        {
+          "linkId": "idn_diagnosis-date",
+          "type": "date",
+          "text": "診断(検案)年月日",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%notifiableDiagnosisDate"
+              }
+            }
+          ],
+          "required": true
+        },
+        {
+          "linkId": "idn_onset",
+          "type": "date",
+          "text": "発症年月日"
+        },
+        {
+          "linkId": "idn_infected",
+          "type": "date",
+          "text": "感染したと推定される年月日"
+        },
+        {
+          "linkId": "idn_death",
+          "type": "date",
+          "text": "死亡年月日",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%deathDate"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_admission",
+          "type": "choice",
+          "text": "入院",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "admitted",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_admission-facility",
+          "type": "string",
+          "text": "入院先医療機関",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "iif(%admissionDate != '', %facilityName, {})"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-source",
+      "type": "group",
+      "text": "感染原因・感染経路・感染地域",
+      "item": [
+        {
+          "linkId": "idn_route",
+          "type": "choice",
+          "text": "感染経路",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "drop-down"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "不明"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "airborne",
+                "display": "飛沫・空気"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "contact",
+                "display": "接触"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "food",
+                "display": "飲食物"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "sexual",
+                "display": "性的接触"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "blood",
+                "display": "血液・針刺し"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "vector",
+                "display": "媒介動物"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "mother",
+                "display": "母子"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "other",
+                "display": "その他"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_region",
+          "type": "choice",
+          "text": "感染地域",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "domestic",
+                "display": "国内"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "abroad",
+                "display": "国外"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "不明"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_region-detail",
+          "type": "string",
+          "text": "感染地域(都道府県・国名)"
+        },
+        {
+          "linkId": "idn_source-note",
+          "type": "text",
+          "text": "感染原因(詳細)"
+        }
+      ]
+    },
+    {
+      "linkId": "grp-notify",
+      "type": "group",
+      "text": "届出",
+      "item": [
+        {
+          "linkId": "idn_doctor",
+          "type": "string",
+          "text": "診断した医師",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%authorName"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_facility",
+          "type": "string",
+          "text": "医療機関名",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%facilityName"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_facility-address",
+          "type": "string",
+          "text": "医療機関の所在地",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%facilityAddress"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_facility-phone",
+          "type": "string",
+          "text": "医療機関の電話番号",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%facilityPhone"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_health-center",
+          "type": "string",
+          "text": "届出先保健所"
+        },
+        {
+          "linkId": "idn_status",
+          "type": "choice",
+          "text": "届出状況",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "保健所に届け出たら「届出済」にして届出年月日を入れる。発生届の一覧はこの値で届出済を判定する。"
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "'unreported'"
+              }
+            }
+          ],
+          "required": true,
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "unreported",
+                "display": "未届出"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "reported",
+                "display": "届出済"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_method-notify",
+          "type": "choice",
+          "text": "届出方法",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "online",
+                "display": "感染症サーベイランスシステム"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "fax",
+                "display": "FAX"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "paper",
+                "display": "持参・郵送"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_notify-date",
+          "type": "date",
+          "text": "届出年月日",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%today"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "idn_note",
+          "type": "text",
+          "text": "その他"
+        }
+      ]
+    }
+  ]
+}

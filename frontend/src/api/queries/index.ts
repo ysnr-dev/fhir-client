@@ -72,6 +72,7 @@ export * from "./eventExtract";
 export * from "./nursingWorksheet";
 export * from "./bedManagement";
 export * from "./cancerRegistry";
+export * from "./infectiousDiseaseReport";
 export * from "./nursingAcuity";
 export * from "./careTeam";
 export * from "./teamRequest";

@@ -395,6 +395,24 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (infectious_disease_report)" do
+    it "発生届のテンプレートの url を保存し、既定は同梱の IDSC_NOTIFY_01" do
+      with_admin_token(nil) { get "/facility_settings" }
+      expect(JSON.parse(response.body)["infectious_disease_report"]).to eq(
+        "template" => "http://fhir-client.local/Questionnaire/idsc-notify-01",
+      )
+
+      with_admin_token(nil) do
+        patch "/facility_settings",
+              params: { infectious_disease_report: { template: "http://fhir-client.local/Questionnaire/idsc-local" } }, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["infectious_disease_report"]).to eq(
+        "template" => "http://fhir-client.local/Questionnaire/idsc-local",
+      )
+    end
+  end
+
   describe "PATCH /facility_settings (document_reminder)" do
     it "stores the days and returns the merged defaults" do
       with_admin_token(nil) do

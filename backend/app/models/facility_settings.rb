@@ -233,6 +233,11 @@ class FacilitySettings < ApplicationRecord
     "template" => "http://fhir-client.local/Questionnaire/hbcr-01"
   }.freeze
 
+  # 感染症の発生届(docs/infectious-disease-report-design.md)。template は発生届のテンプレートの url(版を問わない)。
+  DEFAULT_INFECTIOUS_DISEASE_REPORT = {
+    "template" => "http://fhir-client.local/Questionnaire/idsc-notify-01"
+  }.freeze
+
   DEFAULT_ADMISSION_DOCUMENTS = {
     "admission_plan_template" => "",
     "admission_plan_days" => 7,
@@ -409,6 +414,10 @@ class FacilitySettings < ApplicationRecord
     },
     "cancer_registry" => {
       default: DEFAULT_CANCER_REGISTRY,
+      shape: { fields: { "template" => QUESTIONNAIRE_URL } }
+    },
+    "infectious_disease_report" => {
+      default: DEFAULT_INFECTIOUS_DISEASE_REPORT,
       shape: { fields: { "template" => QUESTIONNAIRE_URL } }
     },
     "early_warning" => {

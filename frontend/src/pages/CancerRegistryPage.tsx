@@ -243,7 +243,7 @@ function registrationHref(row: CancerRegistryRow, templateUrl: string): string {
   } else {
     params.set(
       KARTE_OPEN_PARAM,
-      formatKarteOpen({ kind: "cancer-registry", conditionId: row.condition.id ?? "", url: templateUrl }),
+      formatKarteOpen({ kind: "condition-template", conditionId: row.condition.id ?? "", url: templateUrl }),
     );
   }
   return `/patients/${row.patientId}/karte?${params.toString()}`;

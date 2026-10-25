@@ -121,8 +121,9 @@ QuestionnaireResponse 1 件 = 1 腫瘍。
 - **行** = 登録対象の病名 1 件。患者(カルテへのリンク)・性別・年齢・病名(ICD-10)・診断日・転帰・
   登録(未登録 / 登録中 / 登録済)・登録日・届出状況([920])・届出日([921])・登録者・操作(「登録」/「開く」ボタン)。
 - **登録との突き合わせ**: 回答の対象プロブレムがその病名を指していればその行。対象を持たない回答(手で書いたもの)は、
-  その患者の行のうち診断日が最も古い行に当てる。1 つの行に複数の回答が当たるときは確定を優先し、同じ状態なら新しい方。
-- **登録を始める**: 行の「登録」でカルテを `?open=cancer-registry:<Condition id>@<テンプレートの url>` で開き、
+  その患者の行のうち診断日が最も古い行に当てる。1 つの行に複数の回答が当たるときは確定を優先し、同じ状態なら新しい方
+  (`fhir/conditionTemplateHelpers.ts`。感染症の発生届と共用)。
+- **登録を始める**: 行の「登録」でカルテを `?open=condition-template:<Condition id>@<テンプレートの url>` で開き、
   右ペインの「テンプレート登録」にテンプレートと対象プロブレムを選んだ状態で入る(`karteUrl.ts`、`KartePage`)。
   登録中・登録済の行の「開く」はその回答の詳細(`detail=qr:<id>`)を開く。
 - **CSV**: 表示中の行のうち登録済(確定・訂正)の回答を、テンプレートの項目順に 1 行 1 腫瘍で出す。見出しは項目の質問文
@@ -140,7 +141,7 @@ QuestionnaireResponse 1 件 = 1 腫瘍。
   - `fhir/populateContext.ts` / `api/queries/populate.ts`: 変数「がん登録」とその元データ(式が参照するときだけ読む)。
     病期・組織型はシノプティックレポートの回答から(`fhir/pathoResultHelpers.ts` の `patho-diagnosis-response`)
   - `components/QuestionnaireResponsePanels.tsx`: がん登録の変数の検知、プロブレムでない対象病名の選択肢への追加
-  - `karteUrl.ts` / `pages/KartePage.tsx`: `open=cancer-registry:<Condition id>@<url>`
+  - `karteUrl.ts` / `pages/KartePage.tsx`: `open=condition-template:<Condition id>@<url>`(感染症の発生届と共用)
   - `api/queries/cancerRegistry.ts`、`pages/CancerRegistryPage.tsx`、`appMenu.ts`(データ > 院内がん登録)、`App.tsx`
   - `pages/FacilitySettingsPage.tsx` / `api/adminClient.ts`: 施設設定「院内がん登録」
 - `docs/report-mappings/hbcr-01.questionnaire.json`: 初期値式の追加(開発環境のテンプレートにも反映)

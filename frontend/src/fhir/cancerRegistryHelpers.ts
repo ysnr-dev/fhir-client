@@ -3,7 +3,13 @@ import { ICD10_SYSTEM, summarizeCondition } from "./conditionHelpers";
 import { CODE_DIAGNOSIS, REPORT_CATEGORY_SYSTEM, splitPathoResultDetailBundle } from "./pathoResultHelpers";
 import { parseRegimenApplication } from "./regimenOrderHelpers";
 import { isRadiotherapyFraction } from "./radiotherapyResultHelpers";
-import { plainAnswerText, questionnaireResponseProblem } from "./questionnaireResponseHelpers";
+import { plainAnswerText } from "./questionnaireResponseHelpers";
+import {
+  matchConditionResponses,
+  responseAnswer,
+  templateRecordState,
+  type TemplateRecordState,
+} from "./conditionTemplateHelpers";
 import { codingBySystem, LOINC_SYSTEM } from "./shared";
 
 // 院内がん登録(docs/cancer-registry-design.md)。登録は施設設定のテンプレート(標準登録様式 HBCR_01)への
@@ -114,8 +120,6 @@ export function prefectureCodeOf(state: string | undefined): string {
 
 /** 初期値式が参照できる元データ(api/queries/populate.ts が読む)。式がこれらの変数を使うときだけ揃う。 */
 export interface CancerPopulateSources {
-  /** 記入を始めたときの対象プロブレムの Condition id。 */
-  focusConditionId?: string;
   /** 確定した病理レポートの検索結果(_include=DiagnosticReport:result 付き、新しい順)。 */
   pathoDetail?: fhir4.Bundle;
   /** そのレポートの診断のテンプレート回答(シノプティックレポート)とテンプレート。無ければ undefined。 */
@@ -382,9 +386,10 @@ export function hbcrStagingCodes(values: SynopticValues): { pT: string; pN: stri
 export function cancerPopulateValues(
   patient: fhir4.Patient,
   conditions: fhir4.Condition[],
+  focusConditionId: string | undefined,
   sources: CancerPopulateSources | undefined,
 ): Record<string, string | number | undefined> {
-  const condition = focusCancerCondition(conditions, sources?.focusConditionId);
+  const condition = focusCancerCondition(conditions, focusConditionId);
   const icd10 = condition ? conditionIcd10(condition) : "";
   const diagnosisDate = condition ? summarizeCondition(condition).startDate : "";
   const pathology = latestPathology(sources?.pathoDetail);
@@ -435,7 +440,7 @@ export function cancerPopulateValues(
 export const HBCR_REPORT_STATUS_LINK_ID = "hbcr_920";
 export const HBCR_REPORT_DATE_LINK_ID = "hbcr_921";
 
-export type CancerRegistrationState = "missing" | "draft" | "done";
+export type CancerRegistrationState = TemplateRecordState;
 
 export const CANCER_REGISTRATION_STATE_LABELS: Record<CancerRegistrationState, string> = {
   missing: "未登録",
@@ -463,75 +468,21 @@ export function isUnreportedStatus(code: string): boolean {
   return !code || /^[1-4][01]$/.test(code);
 }
 
-export function responseAnswer(
-  response: fhir4.QuestionnaireResponse | undefined,
-  linkId: string,
-): fhir4.QuestionnaireResponseItemAnswer | undefined {
-  const walk = (items: fhir4.QuestionnaireResponseItem[] | undefined): fhir4.QuestionnaireResponseItemAnswer | undefined => {
-    for (const item of items ?? []) {
-      if (item.linkId === linkId) return item.answer?.[0];
-      const found = walk(item.item) ?? walk(item.answer?.flatMap((a) => a.item ?? []));
-      if (found) return found;
-    }
-    return undefined;
-  };
-  return walk(response?.item);
-}
-
-function stateOf(response: fhir4.QuestionnaireResponse | undefined): CancerRegistrationState {
-  if (!response) return "missing";
-  return response.status === "completed" || response.status === "amended" ? "done" : "draft";
-}
-
-/** 同じ行に当たる回答のうち採るもの。確定を優先し、同じ状態なら新しい方。 */
-function pickResponse(responses: fhir4.QuestionnaireResponse[]): fhir4.QuestionnaireResponse | undefined {
-  return [...responses].sort((a, b) => {
-    const rank = (r: fhir4.QuestionnaireResponse) => (stateOf(r) === "done" ? 0 : 1);
-    return rank(a) - rank(b) || (b.authored ?? "").localeCompare(a.authored ?? "");
-  })[0];
-}
-
 /**
- * 登録対象の病名と回答を突き合わせて行にする。回答の対象プロブレムがその病名を指していればその行、
- * 対象を持たない回答はその患者の行のうち診断日が最も古い行に当てる。
+ * 登録対象の病名と回答を突き合わせて行にする(突き合わせの規則は conditionTemplateHelpers)。
  */
 export function cancerRegistryRows(
   conditions: fhir4.Condition[],
   responses: fhir4.QuestionnaireResponse[],
 ): CancerRegistryRow[] {
-  const live = responses.filter((r) => r.status !== "entered-in-error" && r.status !== "stopped");
-  const byCondition = new Map<string, fhir4.QuestionnaireResponse[]>();
-  const unlinkedByPatient = new Map<string, fhir4.QuestionnaireResponse[]>();
-  for (const response of live) {
-    const conditionId = questionnaireResponseProblem(response)?.conditionId;
-    const patientId = response.subject?.reference?.split("/").pop() ?? "";
-    const key = conditionId && conditions.some((c) => c.id === conditionId) ? conditionId : "";
-    const map = key ? byCondition : unlinkedByPatient;
-    const id = key || patientId;
-    map.set(id, [...(map.get(id) ?? []), response]);
-  }
-
-  const sorted = [...conditions].sort(
-    (a, b) =>
-      (a.subject?.reference ?? "").localeCompare(b.subject?.reference ?? "") ||
-      summarizeCondition(a).startDate.localeCompare(summarizeCondition(b).startDate),
-  );
-  const firstRowOfPatient = new Set<string>();
-  return sorted.map((condition) => {
-    const patientId = condition.subject?.reference?.split("/").pop() ?? "";
-    const candidates = [...(byCondition.get(condition.id ?? "") ?? [])];
-    if (!firstRowOfPatient.has(patientId)) {
-      firstRowOfPatient.add(patientId);
-      candidates.push(...(unlinkedByPatient.get(patientId) ?? []));
-    }
-    const response = pickResponse(candidates);
+  return matchConditionResponses(conditions, responses).map(({ condition, patientId, response }) => {
     const status = responseAnswer(response, HBCR_REPORT_STATUS_LINK_ID);
     return {
       condition,
       patientId,
       diagnosisDate: summarizeCondition(condition).startDate,
       icd10: formatIcd10(conditionIcd10(condition)),
-      state: stateOf(response),
+      state: templateRecordState(response),
       response,
       reportStatus: status ? plainAnswerText(status) : "",
       reportStatusCode: status?.valueCoding?.code ?? "",

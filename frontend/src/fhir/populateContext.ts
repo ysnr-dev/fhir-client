@@ -15,6 +15,7 @@ import { summarizeBodyMeasures } from "./bodyMeasureHelpers";
 import { bloodTypeLabel } from "./transfusionOrderHelpers";
 import { summarizeBloodType } from "./bloodTypeHelpers";
 import { cancerPopulateValues, type CancerPopulateSources } from "./cancerRegistryHelpers";
+import { infectiousDiseaseValues } from "./infectiousDiseaseReportHelpers";
 import { conditionCategoryOf, isActiveCondition, summarizeCondition } from "./conditionHelpers";
 import {
   encounterAdmissionDate,
@@ -49,6 +50,8 @@ export interface PopulateSources {
   patient: fhir4.Patient;
   /** 今日(YYYY-MM-DD)。年齢・病日・投与中の判定の基準日。 */
   today: string;
+  /** 記入を始めたときの対象プロブレム(一覧から渡した病名)の Condition id。がん登録・発生届の対象を決める。 */
+  focusConditionId?: string;
   /** 患者のアクティブな Condition(clinical-status=active で検索済み) */
   conditions: fhir4.Condition[];
   /** 患者の Condition 全件(転帰を問わない)。既往歴の一覧に使う。 */
@@ -659,6 +662,49 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     sample: "1",
   },
 
+  // ---- 発生届(docs/infectious-disease-report-design.md §3) ----
+  {
+    group: "発生届",
+    variable: "notifiableDiseaseName",
+    label: "届出対象の感染症名",
+    expression: "%notifiableDiseaseName",
+    description:
+      "届出基準の感染症名を入れます。対象プロブレムが届出対象の病名ならそれ、そうでなければ届出対象の病名のうち開始日が最も新しいものです。",
+    sample: "腸管出血性大腸菌感染症",
+  },
+  {
+    group: "発生届",
+    variable: "notifiableDiseaseClass",
+    label: "感染症の類型",
+    expression: "%notifiableDiseaseClass",
+    description: "届出対象の感染症の類型(一類〜五類・新型インフルエンザ等)を入れます。",
+    sample: "三類",
+  },
+  {
+    group: "発生届",
+    variable: "notifiableDiseaseDeadline",
+    label: "届出期限の区分",
+    expression: "%notifiableDiseaseDeadline",
+    description: "「直ちに」か「7 日以内」を入れます。",
+    sample: "直ちに",
+  },
+  {
+    group: "発生届",
+    variable: "notifiableDueDate",
+    label: "届出期限",
+    expression: "%notifiableDueDate",
+    description: "診断日(病名の開始日)から数えた届出期限を YYYY-MM-DD で入れます。「日付」項目で使えます。",
+    sample: "2026-10-25",
+  },
+  {
+    group: "発生届",
+    variable: "notifiableDiagnosisDate",
+    label: "診断年月日",
+    expression: "%notifiableDiagnosisDate",
+    description: "届出対象の病名の開始日を YYYY-MM-DD で入れます。「日付」項目で使えます。",
+    sample: "2026-10-24",
+  },
+
   // ---- 作成者 ----
   {
     group: "作成者",
@@ -962,6 +1008,7 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     prescriptions: formatPrescriptions(sources.prescriptionDetail),
     ...facilityValues(sources.facility),
     ...authorValues(sources.author),
-    ...cancerPopulateValues(patient, sources.allConditions, sources.cancer),
+    ...cancerPopulateValues(patient, sources.allConditions, sources.focusConditionId, sources.cancer),
+    ...infectiousDiseaseValues(sources.allConditions, sources.focusConditionId),
   };
 }
