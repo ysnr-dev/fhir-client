@@ -96,7 +96,8 @@ Web 問診(`docs/web-intake-design.md`)で患者に見せる質問票も、ふ�
     「様式」タブの「インポート」でそのファイルを取り込むと、新しい code と Questionnaire の 1 版で無効の様式として登録します。
     名称が使われていれば末尾に番号を付け、カテゴリは code、無ければ名称で取り込み先のものに引き当てます(無ければ未設定)。
   - 例として診療情報提供書の様式 `docs/report-mappings/referral-form-01.json`(`referral-form-01.md`)と、
-    主治医意見書の様式 `docs/report-mappings/care-opinion-form-01.json`(`care-opinion-form-01.md`、2 ページ・項目 238 件)を置いてあります。
+    主治医意見書の様式 `docs/report-mappings/care-opinion-form-01.json`(`care-opinion-form-01.md`、2 ページ・項目 238 件)、
+    生活習慣病 療養計画書の初回用・継続用 `lifestyle-plan-initial-form-01.json` / `lifestyle-plan-continued-form-01.json`(`lifestyle-plan-form-01.md`)を置いてあります。
 
 ## テンプレートのエクスポート / インポート
 
