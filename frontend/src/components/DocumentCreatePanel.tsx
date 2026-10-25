@@ -4,6 +4,7 @@ import { useDocumentTemplateFile, useDocumentTemplates } from "../api/adminQueri
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
   useCreatePatientFiles,
+  useLatestQuestionnaireResponse,
   usePatient,
   usePatientFileDocument,
   usePopulateSources,
@@ -18,7 +19,11 @@ import {
   type DocumentFormLayout,
   type DocumentFormValues,
 } from "../fhir/documentFormLayout";
-import { documentFormValuesFromResponse } from "../fhir/documentFormQuestionnaire";
+import {
+  copyPreviousDocumentFormValues,
+  documentFormCanonicalsUpTo,
+  documentFormValuesFromResponse,
+} from "../fhir/documentFormQuestionnaire";
 import {
   placeholderValues,
   resolvePlaceholders,
@@ -39,7 +44,7 @@ import { DEFAULT_INSTITUTION_NUMBER } from "../fhir/questionnaireResponseHelpers
 import { readFileAsDataUrl } from "../fhir/schemaImage";
 import { useEditSnapshot } from "../hooks/useEditSnapshot";
 import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
-import { today } from "../lib/dates";
+import { localDay, today } from "../lib/dates";
 import { downloadBlob } from "../lib/download";
 import { DocumentFormFill } from "./documentForm/DocumentFormFill";
 import { ErrorBanner } from "./ErrorBanner";
@@ -378,6 +383,26 @@ function DocumentFormEntry({
   );
   const [message, setMessage] = useState<string | null>(null);
 
+  // 前回の回答(新規のみ)。自動では入れず、ボタンで重ねる。取消で重ねる前の値に戻す。
+  const { latest } = useLatestQuestionnaireResponse(
+    existing ? undefined : patientId,
+    template.questionnaire_url && template.questionnaire_version
+      ? documentFormCanonicalsUpTo(template.questionnaire_url, template.questionnaire_version)
+      : undefined,
+  );
+  const [beforeCopy, setBeforeCopy] = useState<DocumentFormValues | null>(null);
+
+  function toggleCopy() {
+    if (!values || !latest) return;
+    if (beforeCopy) {
+      setValues(beforeCopy);
+      setBeforeCopy(null);
+    } else {
+      setBeforeCopy(values);
+      setValues(copyPreviousDocumentFormValues(latest, layout, values));
+    }
+  }
+
   // 初期値式は開いた時点の値で 1 回だけ入れる(入力中に読み直されても上書きしない)。
   useEffect(() => {
     if (values !== null || existing || !context) return;
@@ -465,9 +490,25 @@ function DocumentFormEntry({
           values={values}
           onChange={setValues}
           actions={
-            <button type="button" disabled={busy || !ready} onClick={() => void handleSave()}>
-              {busy ? "保存中..." : existing ? "更新" : "作成"}
-            </button>
+            <>
+              {latest && (
+                <button type="button" className="rp-card__compact-button qr-copy-previous" onClick={toggleCopy}>
+                  {beforeCopy ? (
+                    "複写取消"
+                  ) : (
+                    <>
+                      前回値複写
+                      <span className="qr-copy-previous__date">
+                        {latest.authored ? localDay(latest.authored) : "日付不明"}
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
+              <button type="button" disabled={busy || !ready} onClick={() => void handleSave()}>
+                {busy ? "保存中..." : existing ? "更新" : "作成"}
+              </button>
+            </>
           }
         />
       )}

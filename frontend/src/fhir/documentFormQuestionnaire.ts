@@ -148,6 +148,37 @@ export function nextQuestionnaireVersion(current: string | null | undefined): st
   return String(Number.isFinite(n) && n > 0 ? n + 1 : 1);
 }
 
+/**
+ * 様式の Questionnaire の 1 版から現在の版までの canonical をカンマでつないだ検索値(回答の questionnaire の OR 検索)。
+ * 版は項目のラベルや選択肢を変えるたびに上がるが、回答は項目 id で値に戻すので、前回値の複写は版をまたいでよい。
+ */
+export function documentFormCanonicalsUpTo(url: string, version: string): string {
+  const n = Number.parseInt(version, 10);
+  const count = Number.isFinite(n) && n > 0 ? n : 1;
+  return Array.from({ length: count }, (_, i) => `${url}|${i + 1}`).join(",");
+}
+
+/**
+ * 前回の回答を今回の値に重ねる。初期値式で今のカルテの値が入った項目はそのまま残す(患者情報・記入日・最新の検査値など)。
+ * 選択肢から外れた値は写さない。
+ */
+export function copyPreviousDocumentFormValues(
+  previous: fhir4.QuestionnaireResponse,
+  layout: DocumentFormLayout,
+  current: DocumentFormValues,
+): DocumentFormValues {
+  const copied = documentFormValuesFromResponse(previous, layout);
+  const values: DocumentFormValues = { ...current };
+  for (const field of layout.fields) {
+    const value = copied[field.id];
+    if (value === undefined) continue;
+    if (field.initial_expression && current[field.id]) continue;
+    if (field.type === "select" && value && !(field.options ?? []).includes(value)) continue;
+    values[field.id] = value;
+  }
+  return values;
+}
+
 // ---- 回答との変換 ----
 
 function answerOptionsOf(questionnaire: fhir4.Questionnaire | undefined, linkId: string): fhir4.QuestionnaireItemAnswerOption[] {

@@ -756,7 +756,8 @@ export function useQuestionnaireResponse(id: string | undefined) {
  *
  * canonical("<url>|<version>")の完全一致で引くので、テンプレートのバージョンを
  * 上げると前回の回答は見つからなくなる。設問が変わっていれば回答の対応も崩れる
- * ため、版をまたいで複写しないのは意図した動作。
+ * ため、版をまたいで複写しないのは意図した動作。カンマでつないだ複数の canonical を渡すと
+ * そのどれかに対する直近の回答になる(様式は項目 id で値に戻せるので版をまたぐ)。
  * クエリキーを ["QuestionnaireResponse", "search"] 配下に置き、登録・更新・削除の
  * invalidate がそのまま効くようにする。
  */
