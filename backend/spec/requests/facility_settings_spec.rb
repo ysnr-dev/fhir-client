@@ -413,6 +413,24 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (ncd_registration)" do
+    it "症例登録のテンプレートの url を保存し、既定は同梱の NCD_CASE_01" do
+      with_admin_token(nil) { get "/facility_settings" }
+      expect(JSON.parse(response.body)["ncd_registration"]).to eq(
+        "template" => "http://fhir-client.local/Questionnaire/ncd-case-01",
+      )
+
+      with_admin_token(nil) do
+        patch "/facility_settings",
+              params: { ncd_registration: { template: "http://fhir-client.local/Questionnaire/ncd-local" } }, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["ncd_registration"]).to eq(
+        "template" => "http://fhir-client.local/Questionnaire/ncd-local",
+      )
+    end
+  end
+
   describe "PATCH /facility_settings (document_reminder)" do
     it "stores the days and returns the merged defaults" do
       with_admin_token(nil) do

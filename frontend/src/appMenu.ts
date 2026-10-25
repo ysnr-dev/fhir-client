@@ -158,6 +158,8 @@ export const APP_MENU: AppMenuEntry[] = [
       { label: "DPC様式1", to: "/dpc-form1-export" },
       // 院内がん登録の登録対象(がんの病名)と登録・届出の状況(docs/cancer-registry-design.md)。
       { label: "院内がん登録", to: "/cancer-registry" },
+      // NCD の症例登録の対象(手術の実施記録)と登録の状況(docs/ncd-registration-design.md)。
+      { label: "NCD症例登録", to: "/ncd-registrations" },
       { label: "データ抽出", to: "/data-extract" },
       { label: "分析ダッシュボード", to: "/dashboards" },
     ],

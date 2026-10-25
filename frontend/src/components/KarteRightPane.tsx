@@ -135,7 +135,8 @@ export type KartePaneState =
   // 看護プロファイル。入院 × 区画(テンプレートの url)で 1 件の回答を書く・直す。
   | { kind: "nursing-profile"; encounterId?: string; templateUrl?: string }
   // templateCanonical を渡すとそのテンプレートを選択済みで開く(褥瘡管理の DESIGN-R 評価から)。
-  | { kind: "qr-create"; problem?: ProblemRef; templateCanonical?: string }
+  // partOf を渡すと回答がその記録の一部になる(NCD の症例登録は手術の実施記録を指す)。
+  | { kind: "qr-create"; problem?: ProblemRef; templateCanonical?: string; partOf?: fhir4.Reference[] }
   // 入院診療計画書。施設設定のテンプレートで、その入院に紐付けて書き始める(入退院文書の作成状況から)。
   | { kind: "admission-plan-create"; encounterId: string }
   | { kind: "qr-edit"; qrId: string }
@@ -673,6 +674,7 @@ function PaneContent({
           patientId={patientId}
           defaultProblem={state.problem}
           defaultQuestionnaireCanonical={state.templateCanonical}
+          partOf={state.partOf}
           onSaved={onSaved}
         />
       );

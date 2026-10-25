@@ -224,12 +224,13 @@ backend 全 985 examples green(無変更の回帰確認)。
    欲しくなったら、処置と同型の `master_surgery_datasets` + 明細 + マスタ画面を足す。
    `DatasetPick` 機構と `MedicalProcedureSearchModal` の `datasetPick` prop は
    そのまま使える
-3. **合併症のコード化**: 今は `complication[0].text` の自由記載。NCD 提出を見据えると
-   コード表(Clavien-Dindo 等)が要るが、レポート機能と合わせて設計する方が筋がよい
+3. **合併症のコード化**: 今は `complication[0].text` の自由記載(術中)。NCD の術後 30 日の合併症は
+   症例登録のテンプレート(`docs/ncd-registration-design.md`)で NCD の区分と Clavien-Dindo を選ぶ形にした。
+   実施記録へ書き戻すなら `complication` の coding に写す
 4. **ASA-PS**: 麻酔の術前評価は実施記録ではなく麻酔科の術前診察に属するので入れていない。
    麻酔科ワークフロー(surgery-order-design §B-2 で「今は持たない」と決めたもの)を
    作るときに扱う
 5. **会計連携**: K コード(ハブと子の `Procedure.code`)・材料の `usedCode` 数量・
    薬剤の `dosage.dose` が算定の素材。`ChargeItem` / `Claim` は上流に未実装
 6. **DPC / NCD**: K コード・到達法(申込明細)・合併症・創分類が提出データの起点。
-   構造化を崩さないこと
+   構造化を崩さないこと。NCD の症例登録(`docs/ncd-registration-design.md`)はこの実施記録を初期値に読む

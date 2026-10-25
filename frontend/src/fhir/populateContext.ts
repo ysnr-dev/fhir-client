@@ -16,6 +16,7 @@ import { bloodTypeLabel } from "./transfusionOrderHelpers";
 import { summarizeBloodType } from "./bloodTypeHelpers";
 import { cancerPopulateValues, type CancerPopulateSources } from "./cancerRegistryHelpers";
 import { infectiousDiseaseValues } from "./infectiousDiseaseReportHelpers";
+import { ncdPopulateValues, type NcdPopulateSources } from "./ncdHelpers";
 import { conditionCategoryOf, isActiveCondition, summarizeCondition } from "./conditionHelpers";
 import {
   encounterAdmissionDate,
@@ -86,6 +87,8 @@ export interface PopulateSources {
   author: { practitioner: fhir4.Practitioner; roles: fhir4.PractitionerRole[] } | null;
   /** がん登録の変数の元データ(cancerRegistryHelpers.ts)。テンプレートの式が参照するときだけ揃う。 */
   cancer?: CancerPopulateSources;
+  /** NCD の変数の元データ(ncdHelpers.ts)。テンプレートの式が参照するときだけ揃う。 */
+  ncd?: NcdPopulateSources;
 }
 
 // テンプレート編集画面で初期値式として選べる式の一覧(変数選択モーダル)。
@@ -662,6 +665,216 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     sample: "1",
   },
 
+  // ---- NCD(docs/ncd-registration-design.md §3) ----
+  {
+    group: "NCD",
+    variable: "ncdSurgeryDate",
+    label: "手術日",
+    expression: "%ncdSurgeryDate",
+    description: "対象の手術の入室日を YYYY-MM-DD で入れます。対象は NCD 症例登録の一覧から開いた手術、無ければ患者の最新の手術です。",
+    sample: "2026-08-28",
+  },
+  {
+    group: "NCD",
+    variable: "ncdProcedureName",
+    label: "主術式",
+    expression: "%ncdProcedureName",
+    description: "実施した術式の 1 件目(ハブの code)の名称を入れます。",
+    sample: "腹腔鏡下胆嚢摘出術",
+  },
+  {
+    group: "NCD",
+    variable: "ncdProcedureCode",
+    label: "主術式のコード",
+    expression: "%ncdProcedureCode",
+    description: "主術式のレセ電算コード(K コード)を入れます。",
+    sample: "K672-2",
+  },
+  {
+    group: "NCD",
+    variable: "ncdProcedures",
+    label: "術式(すべて)",
+    expression: "%ncdProcedures",
+    description: "実施した術式と麻酔の手技料をすべて「、」区切りで入れます。",
+    sample: "腹腔鏡下胆嚢摘出術、閉鎖循環式全身麻酔",
+  },
+  {
+    group: "NCD",
+    variable: "ncdPriority",
+    label: "予定区分",
+    expression: "%ncdPriority",
+    description: "申込の予定区分(予定 / 緊急など)を入れます。",
+    sample: "予定",
+  },
+  {
+    group: "NCD",
+    variable: "ncdDepartment",
+    label: "依頼科",
+    expression: "%ncdDepartment",
+    description: "申込の依頼科を入れます。",
+    sample: "消化器外科",
+  },
+  {
+    group: "NCD",
+    variable: "ncdSurgicalDepartment",
+    label: "執刀科",
+    expression: "%ncdSurgicalDepartment",
+    description: "申込の執刀科を入れます。",
+    sample: "消化器外科",
+  },
+  {
+    group: "NCD",
+    variable: "ncdSurgeon",
+    label: "執刀医",
+    expression: "%ncdSurgeon",
+    description: "実施記録の執刀医の氏名を入れます。複数なら「、」区切り。",
+    sample: "児玉 義憲",
+  },
+  {
+    group: "NCD",
+    variable: "ncdAssistants",
+    label: "助手",
+    expression: "%ncdAssistants",
+    description: "実施記録の助手の氏名を入れます。",
+    sample: "医師 一郎",
+  },
+  {
+    group: "NCD",
+    variable: "ncdAnesthesiologist",
+    label: "麻酔科医",
+    expression: "%ncdAnesthesiologist",
+    description: "実施記録の麻酔科医の氏名を入れます。",
+    sample: "麻酔 花子",
+  },
+  {
+    group: "NCD",
+    variable: "ncdAnesthesia",
+    label: "麻酔方法",
+    expression: "%ncdAnesthesia",
+    description: "申込の麻酔方法を「、」区切りで入れます。",
+    sample: "全身麻酔(吸入)、硬膜外麻酔",
+  },
+  {
+    group: "NCD",
+    variable: "ncdAnesthesiaManagement",
+    label: "麻酔管理",
+    expression: "%ncdAnesthesiaManagement",
+    description: "麻酔科管理 / 執刀医管理を入れます。",
+    sample: "麻酔科管理",
+  },
+  {
+    group: "NCD",
+    variable: "ncdRoomMinutes",
+    label: "在室時間(分)",
+    expression: "%ncdRoomMinutes",
+    description: "入室から退室までの分を入れます。数値です。",
+    sample: "140",
+  },
+  {
+    group: "NCD",
+    variable: "ncdAnesthesiaMinutes",
+    label: "麻酔時間(分)",
+    expression: "%ncdAnesthesiaMinutes",
+    description: "麻酔開始から麻酔終了までの分を入れます。数値です。",
+    sample: "120",
+  },
+  {
+    group: "NCD",
+    variable: "ncdOperationMinutes",
+    label: "手術時間(分)",
+    expression: "%ncdOperationMinutes",
+    description: "執刀開始から執刀終了までの分を入れます。数値です。",
+    sample: "95",
+  },
+  {
+    group: "NCD",
+    variable: "ncdBloodLoss",
+    label: "出血量(mL)",
+    expression: "%ncdBloodLoss",
+    description: "実施記録の出血量を入れます。数値です。",
+    sample: "50",
+  },
+  {
+    group: "NCD",
+    variable: "ncdTransfusionVolume",
+    label: "輸血量(mL)",
+    expression: "%ncdTransfusionVolume",
+    description: "実施記録の輸血量を入れます。数値です。",
+    sample: "0",
+  },
+  {
+    group: "NCD",
+    variable: "ncdTransfused",
+    label: "輸血の有無",
+    expression: "%ncdTransfused",
+    description: "輸血量が 1 mL 以上なら yes、実施記録があって無ければ no を入れます。選択肢のコードを yes / no にした項目で使います。",
+    sample: "no",
+  },
+  {
+    group: "NCD",
+    variable: "ncdWoundClass",
+    label: "創分類",
+    expression: "%ncdWoundClass",
+    description: "実施記録の創分類(清潔 / 準清潔 / 汚染 / 感染・不潔)を入れます。",
+    sample: "準清潔",
+  },
+  {
+    group: "NCD",
+    variable: "ncdComplicationNote",
+    label: "術中の合併症(自由記載)",
+    expression: "%ncdComplicationNote",
+    description: "実施記録の合併症の記載を入れます。",
+    sample: "なし",
+  },
+  {
+    group: "NCD",
+    variable: "ncdOutcome",
+    label: "転帰(実施記録)",
+    expression: "%ncdOutcome",
+    description: "実施記録の転帰(良好 / 合併症あり / 死亡)を入れます。",
+    sample: "良好",
+  },
+  {
+    group: "NCD",
+    variable: "ncdAdmissionDate",
+    label: "入院日",
+    expression: "%ncdAdmissionDate",
+    description: "手術日を含む入院の入院日を YYYY-MM-DD で入れます。",
+    sample: "2026-08-27",
+  },
+  {
+    group: "NCD",
+    variable: "ncdDischargeDate",
+    label: "退院日",
+    expression: "%ncdDischargeDate",
+    description: "手術日を含む入院の退院日を YYYY-MM-DD で入れます。入院中なら入りません。",
+    sample: "2026-09-03",
+  },
+  {
+    group: "NCD",
+    variable: "ncdPostoperativeDays",
+    label: "術後在院日数",
+    expression: "%ncdPostoperativeDays",
+    description: "手術日から退院日までの日数を入れます。数値です。退院していなければ入りません。",
+    sample: "6",
+  },
+  {
+    group: "NCD",
+    variable: "ncdDeathDate",
+    label: "死亡日",
+    expression: "%ncdDeathDate",
+    description: "患者情報の死亡日を YYYY-MM-DD で入れます。",
+    sample: "2026-09-10",
+  },
+  {
+    group: "NCD",
+    variable: "ncdDiedWithin30Days",
+    label: "術後 30 日以内の死亡",
+    expression: "%ncdDiedWithin30Days",
+    description: "手術日から 30 日以内に死亡日があれば yes、無ければ no を入れます。",
+    sample: "no",
+  },
+
   // ---- 発生届(docs/infectious-disease-report-design.md §3) ----
   {
     group: "発生届",
@@ -1010,5 +1223,6 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     ...authorValues(sources.author),
     ...cancerPopulateValues(patient, sources.allConditions, sources.focusConditionId, sources.cancer),
     ...infectiousDiseaseValues(sources.allConditions, sources.focusConditionId),
+    ...ncdPopulateValues(patient, sources.ncd),
   };
 }

@@ -1,0 +1,1182 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/ncd-case-01",
+  "version": "1.0.0",
+  "name": "NCD_CASE_01",
+  "title": "NCD 症例登録(基本項目)",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "NCD(National Clinical Database)の症例登録の基本項目。NCD 症例登録の一覧から手術の実施記録を選んで記入する。手術日・術式・スタッフ・麻酔・手術時間・出血量・輸血・入退院日は実施記録と申込から初期値が入る。術後 30 日の合併症(種類と Clavien-Dindo 分類)・再手術・転帰は術後に追記する。領域(消化器外科・心臓血管外科など)ごとの術前リスク項目は NCD の各領域の様式に従って「その他」に書くか、テンプレートを複製して項目を足す。NCD への登録状況を「登録済」にすると一覧で登録済になる。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "25675b10-0ef3-4425-83c4-c1f8c3015cca",
+        "display": "検査"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-patient",
+      "type": "group",
+      "text": "患者",
+      "item": [
+        {
+          "linkId": "ncd_name",
+          "type": "string",
+          "text": "氏名",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%patient.name.where(extension.where(value = 'SYL').empty()).select(family + '　' + given.first()).first()"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_sex",
+          "type": "choice",
+          "text": "性別",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "iif(%patient.gender='male','male',iif(%patient.gender='female','female',{}))"
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "male",
+                "display": "男"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "female",
+                "display": "女"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_birth",
+          "type": "date",
+          "text": "生年月日",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%patient.birthDate"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_age",
+          "type": "integer",
+          "text": "手術時年齢",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%age"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_height",
+          "type": "decimal",
+          "text": "身長",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "cm",
+                "display": "cm"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%bodyHeight"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_weight",
+          "type": "decimal",
+          "text": "体重",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "kg",
+                "display": "kg"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%bodyWeight"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-surgery",
+      "type": "group",
+      "text": "手術",
+      "item": [
+        {
+          "linkId": "ncd_surgery-date",
+          "type": "date",
+          "text": "手術日",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdSurgeryDate"
+              }
+            }
+          ],
+          "required": true
+        },
+        {
+          "linkId": "ncd_procedure",
+          "type": "string",
+          "text": "主術式",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdProcedureName"
+              }
+            }
+          ],
+          "required": true
+        },
+        {
+          "linkId": "ncd_procedure-code",
+          "type": "string",
+          "text": "主術式のコード(レセ電算コード)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdProcedureCode"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_procedures",
+          "type": "text",
+          "text": "術式(すべて)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdProcedures"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_department",
+          "type": "string",
+          "text": "診療科",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdDepartment"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_urgency",
+          "type": "choice",
+          "text": "緊急区分",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "NCD の区分。申込の予定区分(予定 / 緊急)は「予定区分」に写るので、それを見て選ぶ。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "elective",
+                "display": "予定"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "urgent",
+                "display": "準緊急"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "emergency",
+                "display": "緊急"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_priority",
+          "type": "string",
+          "text": "予定区分(申込)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdPriority"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_surgeon",
+          "type": "string",
+          "text": "執刀医",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdSurgeon"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_assistants",
+          "type": "string",
+          "text": "助手",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdAssistants"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_anesthesiologist",
+          "type": "string",
+          "text": "麻酔科医",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdAnesthesiologist"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_anesthesia",
+          "type": "string",
+          "text": "麻酔方法",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdAnesthesia"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_operation-minutes",
+          "type": "integer",
+          "text": "手術時間(執刀〜閉創)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "min",
+                "display": "min"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdOperationMinutes"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_anesthesia-minutes",
+          "type": "integer",
+          "text": "麻酔時間",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "min",
+                "display": "min"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdAnesthesiaMinutes"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_blood-loss",
+          "type": "integer",
+          "text": "出血量",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "mL",
+                "display": "mL"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdBloodLoss"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_transfused",
+          "type": "choice",
+          "text": "輸血",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdTransfused"
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_transfusion-volume",
+          "type": "integer",
+          "text": "輸血量",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "mL",
+                "display": "mL"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdTransfusionVolume"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_wound-class",
+          "type": "string",
+          "text": "創分類",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdWoundClass"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-preop",
+      "type": "group",
+      "text": "術前",
+      "item": [
+        {
+          "linkId": "ncd_asa",
+          "type": "choice",
+          "text": "ASA-PS",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3",
+                "display": "3"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "4",
+                "display": "4"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "5"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "6",
+                "display": "6"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_asa-e",
+          "type": "choice",
+          "text": "緊急(E)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_risk",
+          "type": "choice",
+          "text": "術前のリスク因子",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "diabetes",
+                "display": "糖尿病"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "smoking",
+                "display": "喫煙(1 年以内)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "dialysis",
+                "display": "透析"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "steroid",
+                "display": "ステロイド長期使用"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "anticoagulant",
+                "display": "抗凝固・抗血小板薬"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "copd",
+                "display": "COPD"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "heart-failure",
+                "display": "心不全"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "cerebrovascular",
+                "display": "脳血管障害の既往"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "malignancy",
+                "display": "活動性の悪性腫瘍"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_preop-note",
+          "type": "text",
+          "text": "術前の補足"
+        }
+      ]
+    },
+    {
+      "linkId": "grp-postop",
+      "type": "group",
+      "text": "術後(30 日)",
+      "item": [
+        {
+          "linkId": "ncd_intraop-complication",
+          "type": "text",
+          "text": "術中の合併症(実施記録)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdComplicationNote"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_complications",
+          "type": "choice",
+          "text": "術後合併症(30 日以内)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "NCD の術後合併症の区分。該当が無ければ空のまま。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "ssi-superficial",
+                "display": "手術部位感染(表層切開創)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ssi-deep",
+                "display": "手術部位感染(深部切開創)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ssi-organ",
+                "display": "手術部位感染(臓器・体腔)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "anastomotic-leak",
+                "display": "縫合不全"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "bleeding",
+                "display": "術後出血"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ileus",
+                "display": "腸閉塞"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "pneumonia",
+                "display": "肺炎"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "respiratory-failure",
+                "display": "呼吸不全(48 時間超の人工呼吸)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "pulmonary-embolism",
+                "display": "肺塞栓"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "dvt",
+                "display": "深部静脈血栓症"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "myocardial-infarction",
+                "display": "心筋梗塞"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "cardiac-arrest",
+                "display": "心停止"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "stroke",
+                "display": "脳梗塞・脳出血"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "renal-failure",
+                "display": "腎不全(透析導入)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "uti",
+                "display": "尿路感染"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "sepsis",
+                "display": "敗血症"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "wound-dehiscence",
+                "display": "創離開"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "delirium",
+                "display": "せん妄"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "other",
+                "display": "その他"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_clavien-dindo",
+          "type": "choice",
+          "text": "Clavien-Dindo 分類(最も重いもの)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "drop-down"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "I",
+                "display": "Grade I"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "II",
+                "display": "Grade II"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIIa",
+                "display": "Grade IIIa"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIIb",
+                "display": "Grade IIIb"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IVa",
+                "display": "Grade IVa"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IVb",
+                "display": "Grade IVb"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "V",
+                "display": "Grade V(死亡)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_reoperation",
+          "type": "choice",
+          "text": "再手術(30 日以内)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_admission-date",
+          "type": "date",
+          "text": "入院日",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdAdmissionDate"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_discharge-date",
+          "type": "date",
+          "text": "退院日",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdDischargeDate"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_postoperative-days",
+          "type": "integer",
+          "text": "術後在院日数",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "d",
+                "display": "d"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdPostoperativeDays"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_outcome",
+          "type": "choice",
+          "text": "転帰",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "退院時または術後 30 日時点。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "alive",
+                "display": "生存"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "dead",
+                "display": "死亡"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_death-30",
+          "type": "choice",
+          "text": "術後 30 日以内の死亡",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdDiedWithin30Days"
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_death-date",
+          "type": "date",
+          "text": "死亡日",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ncdDeathDate"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_postop-note",
+          "type": "text",
+          "text": "術後の補足"
+        }
+      ]
+    },
+    {
+      "linkId": "grp-register",
+      "type": "group",
+      "text": "NCD 登録",
+      "item": [
+        {
+          "linkId": "ncd_status",
+          "type": "choice",
+          "text": "登録状況",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "NCD の症例登録画面に入力したら「登録済」にして登録日を入れる。一覧はこの値で登録済を判定する。"
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "'unregistered'"
+              }
+            }
+          ],
+          "required": true,
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "unregistered",
+                "display": "未登録"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "registered",
+                "display": "登録済"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_registered-on",
+          "type": "date",
+          "text": "登録日"
+        },
+        {
+          "linkId": "ncd_case-number",
+          "type": "string",
+          "text": "NCD 症例番号"
+        },
+        {
+          "linkId": "ncd_registrant",
+          "type": "string",
+          "text": "登録者",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%authorName"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ncd_note",
+          "type": "text",
+          "text": "その他"
+        }
+      ]
+    }
+  ]
+}

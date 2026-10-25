@@ -182,6 +182,7 @@ import { DpcForm1ExportPage } from "./pages/DpcForm1ExportPage";
 import { DpcPatientListPage } from "./pages/DpcPatientListPage";
 import { CancerRegistryPage } from "./pages/CancerRegistryPage";
 import { InfectiousDiseaseReportPage } from "./pages/InfectiousDiseaseReportPage";
+import { NcdRegistrationPage } from "./pages/NcdRegistrationPage";
 import { DpcTablesPage } from "./pages/DpcTablesPage";
 
 // 患者配下の未定義パスをその患者のカルテへ寄せる。
@@ -372,6 +373,8 @@ function App() {
           <Route path="/dpc-patients" element={<DpcPatientListPage />} />
           {/* 院内がん登録の登録対象と登録・届出の状況。 */}
           <Route path="/cancer-registry" element={<CancerRegistryPage />} />
+          {/* NCD の症例登録の対象(手術の実施記録)と登録の状況。 */}
+          <Route path="/ncd-registrations" element={<NcdRegistrationPage />} />
           {/* 感染症の発生届の届出対象と届出の状況。 */}
           <Route path="/infectious-disease-reports" element={<InfectiousDiseaseReportPage />} />
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}

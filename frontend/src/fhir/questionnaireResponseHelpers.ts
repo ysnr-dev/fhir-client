@@ -117,6 +117,11 @@ export interface BuildQuestionnaireResponseArgs {
    */
   basedOn?: fhir4.Reference[];
   /**
+   * この回答が一部をなす記録(`partOf`)。NCD の症例登録は手術の実施記録(ハブ Procedure)を指す
+   * (`fhir/ncdHelpers.ts`)。更新では保存済みの値を引き継ぐ。
+   */
+  partOf?: fhir4.Reference[];
+  /**
    * 記録した診療科。オーダーの依頼科と同じローカル拡張に入れ、カルテのカードに出す。
    * 更新では保存済みの値を引き継ぐ。
    */
@@ -175,6 +180,8 @@ export function buildQuestionnaireResponse(
   // 更新では元の対象を引き継ぐ(編集の入口が対象を知らないことがある)。
   const target = basedOn ?? existing?.basedOn;
   if (target?.length) response.basedOn = target;
+  const partOf = args.partOf ?? existing?.partOf;
+  if (partOf?.length) response.partOf = partOf;
   if (items.length) response.item = items;
   const extension: fhir4.Extension[] = [...(args.extension ?? [])];
   if (problem) {

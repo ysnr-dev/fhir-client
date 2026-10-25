@@ -13,6 +13,7 @@ import {
   useUpdateQuestionnaireResponse,
 } from "../api/queries";
 import { usesCancerVariables } from "../fhir/cancerRegistryHelpers";
+import { usesNcdVariables } from "../fhir/ncdHelpers";
 import { problemRefOf } from "../fhir/conditionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { QuestionnaireResponseForm } from "./QuestionnaireResponseForm";
@@ -56,6 +57,8 @@ interface QuestionnaireResponseCreatePanelProps {
    * (`fhir/radiotherapyReviewHelpers.ts`)。
    */
   basedOn?: fhir4.Reference[];
+  /** この回答が一部をなす記録(`partOf`)。NCD の症例登録は手術の実施記録を指す(`fhir/ncdHelpers.ts`)。 */
+  partOf?: fhir4.Reference[];
   /** 選択済みにしておくテンプレートの canonical(版を省いた url でもよい)。前回と同じ様式で書き始めるときに渡す。 */
   defaultQuestionnaireCanonical?: string;
   /**
@@ -82,6 +85,7 @@ export function QuestionnaireResponseCreatePanel({
   patientId,
   defaultProblem,
   basedOn,
+  partOf,
   extraEntries,
   defaultQuestionnaireCanonical,
   fixedQuestionnaire,
@@ -190,10 +194,16 @@ export function QuestionnaireResponseCreatePanel({
         : undefined,
     [questionnaire, expressions],
   );
+  // NCD の変数(docs/ncd-registration-design.md §3)も同じく、式が参照するテンプレートのときだけ手術の記録を読む。
+  const focusProcedureId = partOf
+    ?.map((reference) => reference.reference?.match(/^Procedure\/(.+)$/)?.[1] ?? "")
+    .find(Boolean);
+  const ncd = Boolean(questionnaire && usesNcdVariables(expressions));
   const populate = usePopulateSources(patientId, {
     labCodes,
     focusConditionId: defaultProblem?.conditionId,
     cancer,
+    ncd: ncd ? { focusProcedureId } : undefined,
   });
   const expressionContext = useMemo(
     () =>
@@ -243,6 +253,7 @@ export function QuestionnaireResponseCreatePanel({
           meta,
           problem,
           basedOn,
+          partOf,
           department: orderContext,
           encounterId,
           authored,

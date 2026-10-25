@@ -407,6 +407,12 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
                 // 表示名はテンプレート登録の側で病名から埋める。
                 problem: { conditionId: openTarget.conditionId, display: "" },
               }
+          : openTarget.kind === "procedure-template"
+            ? {
+                kind: "qr-create",
+                templateCanonical: openTarget.url,
+                partOf: [{ reference: `Procedure/${openTarget.procedureId}` }],
+              }
           : openTarget.kind === "intake"
             ? { kind: "intake-review", responseId: openTarget.responseId }
             : { kind: "radiotherapy-review", srId: openTarget.srId },

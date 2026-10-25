@@ -54,6 +54,8 @@ export type KarteOpenTarget =
   | { kind: "questionnaire"; url: string }
   // 病名を対象プロブレムに、テンプレートを選択済みでテンプレート登録を開く(院内がん登録・感染症の発生届の一覧から)。
   | { kind: "condition-template"; conditionId: string; url: string }
+  // 手術の実施記録(ハブ Procedure)を partOf に、テンプレートを選択済みでテンプレート登録を開く(NCD 症例登録の一覧から)。
+  | { kind: "procedure-template"; procedureId: string; url: string }
   // Web 問診の回答の取込(患者帯のピクトグラムから)。
   | { kind: "intake"; responseId: number };
 
@@ -69,6 +71,8 @@ export function formatKarteOpen(target: KarteOpenTarget): string {
             ? target.url
             : target.kind === "condition-template"
               ? `${target.conditionId}@${target.url}`
+            : target.kind === "procedure-template"
+              ? `${target.procedureId}@${target.url}`
             : target.kind === "intake"
               ? String(target.responseId)
               : target.encounterId;
@@ -95,11 +99,14 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   if (kind === "nursing-summary") return { kind, compositionId: id };
   if (kind === "team-request") return { kind, teamId: id };
   if (kind === "questionnaire") return { kind, url: id };
-  if (kind === "condition-template") {
-    // Condition の id に「@」は入らないので、最初の 1 つで切る(url 側はコロンを含む)。
+  if (kind === "condition-template" || kind === "procedure-template") {
+    // リソースの id に「@」は入らないので、最初の 1 つで切る(url 側はコロンを含む)。
     const at = id.indexOf("@");
     if (at <= 0 || at === id.length - 1) return null;
-    return { kind, conditionId: id.slice(0, at), url: id.slice(at + 1) };
+    const url = id.slice(at + 1);
+    return kind === "condition-template"
+      ? { kind, conditionId: id.slice(0, at), url }
+      : { kind, procedureId: id.slice(0, at), url };
   }
   if (kind === "intake" && /^\d+$/.test(id)) return { kind, responseId: Number(id) };
   return null;

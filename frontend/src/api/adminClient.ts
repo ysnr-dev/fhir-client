@@ -17,6 +17,7 @@ import type { AdmissionDocumentSettings } from "../fhir/admissionDocumentHelpers
 import type { PressureUlcerSettings } from "../fhir/pressureUlcerHelpers";
 import type { CancerRegistrySettings } from "../fhir/cancerRegistryHelpers";
 import type { InfectiousDiseaseReportSettings } from "../fhir/infectiousDiseaseReportHelpers";
+import type { NcdRegistrationSettings } from "../fhir/ncdHelpers";
 import type { NursingAcuitySettings } from "../fhir/nursingAcuityHelpers";
 import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
 import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
@@ -94,6 +95,8 @@ export interface FacilitySettings {
   cancer_registry: CancerRegistrySettings;
   /** 感染症の発生届(テンプレート)。 */
   infectious_disease_report: InfectiousDiseaseReportSettings;
+  /** NCD の症例登録(テンプレート)。 */
+  ncd_registration: NcdRegistrationSettings;
   /** 早期警告スコア(NEWS2)の算出と通知。 */
   early_warning: EarlyWarningSettings;
   /** Web 問診(既定の質問票・診療科ごとの質問票・有効時間)。 */
@@ -126,6 +129,7 @@ export type FacilitySettingsPayload = Partial<{
   pressure_ulcer: PressureUlcerSettings;
   cancer_registry: CancerRegistrySettings;
   infectious_disease_report: InfectiousDiseaseReportSettings;
+  ncd_registration: NcdRegistrationSettings;
   early_warning: EarlyWarningSettings;
   intake: IntakeSettings;
   karte_card_order: KarteCardOrderSettings;

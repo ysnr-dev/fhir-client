@@ -14,6 +14,9 @@ import { RADIOTHERAPY_ORDER_TYPE } from "../../fhir/radiotherapyOrderHelpers";
 import { SURGERY_ORDER_TYPE } from "../../fhir/surgeryOrderHelpers";
 import type { CancerPopulateSources } from "../../fhir/cancerRegistryHelpers";
 import { pathoDiagnosisResponseIdOf } from "../../fhir/pathoResultHelpers";
+import { ADMISSION_CLASS_CODE } from "../../fhir/encounterHelpers";
+import type { NcdPopulateSources } from "../../fhir/ncdHelpers";
+import { isSurgeryProcedure } from "../../fhir/surgeryResultHelpers";
 import { today as todayString } from "../../lib/dates";
 import { useAuthSession } from "../authQueries";
 import { searchResource } from "../fhirClient";
@@ -38,6 +41,12 @@ const VITAL_COUNT = 50;
 export interface PopulateCancerOptions {
   /** 記入しているテンプレートの canonical(版付きと版なし)。同じテンプレートの登録件数(腫瘍番号)に使う。 */
   canonicals: string[];
+}
+
+/** NCD の変数(docs/ncd-registration-design.md §3)の元データを読むときの指定。 */
+export interface PopulateNcdOptions {
+  /** 対象の手術(ハブ Procedure)の id。無ければ患者の最新の手術。 */
+  focusProcedureId?: string;
 }
 
 /**
@@ -65,10 +74,12 @@ export function usePopulateSources(
     /** 記入を始めたときの対象プロブレム(一覧から渡した病名)。がん登録・発生届の変数が対象を決めるのに使う。 */
     focusConditionId?: string;
     cancer?: PopulateCancerOptions;
+    ncd?: PopulateNcdOptions;
   } = {},
 ) {
   const labCodes = options.labCodes ?? [];
   const cancer = options.cancer;
+  const ncd = options.ncd;
   // 記入を始めた日で固定する(日付をまたいで開きっぱなしでも値がぶれないように)。
   const [today] = useState(todayString);
 
@@ -241,6 +252,41 @@ export function usePopulateSources(
   });
   const cancerQueries = [pathoDetail, pathoSynoptic, surgeries, regimens, radiotherapy, lastEncounter, registrations];
 
+  // ---- NCD(式が参照するときだけ) ----
+  // 対象の手術のハブと、その子(術式・麻酔)・測定値・申込を 1 検索で揃える。id が無ければ患者の最新の手術。
+  const ncdEnabled = Boolean(patientId && ncd);
+  const ncdSurgeryParams = new URLSearchParams();
+  if (ncd?.focusProcedureId) {
+    ncdSurgeryParams.set("_id", ncd.focusProcedureId);
+  } else {
+    ncdSurgeryParams.set("patient", `Patient/${patientId}`);
+    ncdSurgeryParams.set("category", `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`);
+    ncdSurgeryParams.set("part-of:missing", "true");
+    ncdSurgeryParams.set("status:not", "entered-in-error");
+    ncdSurgeryParams.set("_sort", "-date");
+    ncdSurgeryParams.set("_count", "1");
+  }
+  ncdSurgeryParams.append("_include", "Procedure:based-on");
+  ncdSurgeryParams.append("_revinclude", "Procedure:part-of");
+  ncdSurgeryParams.append("_revinclude", "Observation:part-of");
+  const ncdSurgery = useQuery({
+    queryKey: ["Procedure", "search", "populate-ncd", patientId, ncd?.focusProcedureId ?? ""],
+    queryFn: () => searchResource<fhir4.Resource>("Procedure", ncdSurgeryParams),
+    enabled: ncdEnabled,
+  });
+  const ncdAdmissionParams = new URLSearchParams();
+  ncdAdmissionParams.set("patient", `Patient/${patientId}`);
+  ncdAdmissionParams.set("class", ADMISSION_CLASS_CODE);
+  ncdAdmissionParams.set("status", "in-progress,finished");
+  ncdAdmissionParams.set("_sort", "-date");
+  ncdAdmissionParams.set("_count", "20");
+  const ncdAdmissions = useQuery({
+    queryKey: ["Encounter", "populate-ncd-admissions", patientId],
+    queryFn: () => searchResource<fhir4.Encounter>("Encounter", ncdAdmissionParams),
+    enabled: ncdEnabled,
+  });
+  const ncdQueries = [ncdSurgery, ncdAdmissions];
+
   const allConditions = useKarteConditions(patientId);
   const allergies = useActiveAllergies(patientId);
   const flags = useActiveFlags(patientId);
@@ -282,7 +328,8 @@ export function usePopulateSources(
     queries.some((q) => q.isLoading) ||
     facility.isLoading ||
     labQueries.some((q) => q.isLoading) ||
-    cancerQueries.some((q) => q.isLoading);
+    cancerQueries.some((q) => q.isLoading) ||
+    ncdQueries.some((q) => q.isLoading);
 
   const author = practitioner.data?.data;
   const authorRoles = practitionerRoles.data?.data;
@@ -345,6 +392,7 @@ export function usePopulateSources(
             ),
           } satisfies CancerPopulateSources)
         : undefined,
+      ncd: ncd ? ncdSourcesOf(ncdSurgery.data?.data, ncdAdmissions.data?.data) : undefined,
     };
   }, [
     today,
@@ -375,6 +423,9 @@ export function usePopulateSources(
     radiotherapy.data,
     lastEncounter.data,
     registrations.data,
+    ncd,
+    ncdSurgery.data,
+    ncdAdmissions.data,
   ]);
 
   return {
@@ -383,7 +434,29 @@ export function usePopulateSources(
       queries.find((q) => q.error)?.error ??
       labQueries.find((q) => q.error)?.error ??
       cancerQueries.find((q) => q.error)?.error ??
+      ncdQueries.find((q) => q.error)?.error ??
       null,
     sources,
   };
+}
+
+/** 手術の検索結果(ハブ + 子 + 測定値 + 申込)と入院から NCD の元データを組む。ハブは partOf を持たない手術の Procedure。 */
+function ncdSourcesOf(surgeryBundle: fhir4.Bundle | undefined, admissionBundle: fhir4.Bundle | undefined): NcdPopulateSources {
+  const procedures = resourcesOfType<fhir4.Procedure>(surgeryBundle, "Procedure").filter(
+    (procedure) => procedure.status !== "entered-in-error",
+  );
+  const hub = procedures.find((procedure) => isSurgeryProcedure(procedure) && !procedure.partOf?.length);
+  const admissions = resourcesOfType<fhir4.Encounter>(admissionBundle, "Encounter");
+  if (!hub) return { admissions };
+  const partIds = new Set([hub.id ?? ""]);
+  const children = procedures.filter((procedure) =>
+    procedure.partOf?.some((reference) => reference.reference === `Procedure/${hub.id}`),
+  );
+  for (const child of children) if (child.id) partIds.add(child.id);
+  const observations = resourcesOfType<fhir4.Observation>(surgeryBundle, "Observation").filter((observation) =>
+    observation.partOf?.some((reference) => partIds.has(reference.reference?.split("/").pop() ?? "")),
+  );
+  const orderId = hub.basedOn?.find((r) => r.reference?.startsWith("ServiceRequest/"))?.reference?.split("/").pop();
+  const order = resourcesOfType<fhir4.ServiceRequest>(surgeryBundle, "ServiceRequest").find((sr) => sr.id === orderId);
+  return { surgery: { hub, children, observations, order }, admissions };
 }

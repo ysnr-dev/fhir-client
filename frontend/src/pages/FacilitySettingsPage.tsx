@@ -56,6 +56,7 @@ import {
   DEFAULT_INFECTIOUS_DISEASE_REPORT,
   type InfectiousDiseaseReportSettings,
 } from "../fhir/infectiousDiseaseReportHelpers";
+import { DEFAULT_NCD_REGISTRATION, type NcdRegistrationSettings } from "../fhir/ncdHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import {
   CATEGORY_OPTIONS,
@@ -151,6 +152,7 @@ const FACILITY_SECTIONS = [
   { key: "pressure_ulcer", label: "褥瘡管理" },
   { key: "cancer_registry", label: "院内がん登録" },
   { key: "infectious_disease_report", label: "感染症発生届" },
+  { key: "ncd_registration", label: "NCD症例登録" },
   { key: "radiotherapy_review", label: "放射線治療の週次レビュー" },
   { key: "intake", label: "Web 問診" },
   { key: "early_warning", label: "早期警告スコア(NEWS2)" },
@@ -273,6 +275,12 @@ export function FacilitySettingsPage() {
   const savedInfectiousReport = settings.data?.infectious_disease_report ?? DEFAULT_INFECTIOUS_DISEASE_REPORT;
   const infectiousReport = infectiousReportDraft ?? savedInfectiousReport;
   const infectiousReportValid = /^https?:\/\/[^\s|]+$/.test(infectiousReport.template);
+
+  // NCD の症例登録のテンプレート(url。版を問わない)。
+  const [ncdDraft, setNcdDraft] = useState<NcdRegistrationSettings | undefined>(undefined);
+  const savedNcd = settings.data?.ncd_registration ?? DEFAULT_NCD_REGISTRATION;
+  const ncdRegistration = ncdDraft ?? savedNcd;
+  const ncdValid = /^https?:\/\/[^\s|]+$/.test(ncdRegistration.template);
 
   // 看護必要度の評価票の版と該当患者の基準。基準は組("A3" "A2+B3" "#A2")を空白区切りで入れる(組の OR)。
   const [acuityDraft, setAcuityDraft] = useState<
@@ -550,7 +558,7 @@ export function FacilitySettingsPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
-    if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid || !infectiousReportValid) return;
+    if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid || !infectiousReportValid || !ncdValid) return;
     if (!reviewValid || !receiptCodesOk || !coefficientsValid || !intakeValid) return;
     update.mutate({
       self_organization_id: value,
@@ -572,6 +580,7 @@ export function FacilitySettingsPage() {
       pressure_ulcer: pressureUlcer,
       cancer_registry: cancerRegistry,
       infectious_disease_report: infectiousReport,
+      ncd_registration: ncdRegistration,
       early_warning: earlyWarning,
       rx_verification: rxVerification,
       intake,
@@ -1280,6 +1289,25 @@ export function FacilitySettingsPage() {
             </div>
           )}
 
+          {/* NCD の症例登録。対象の一覧はこのテンプレートの回答で登録の状況を出す(url は版を問わない)。 */}
+          {section === "ncd_registration" && (
+            <div className="facility-settings__schedule-body">
+              <label>
+                症例登録のテンプレート
+                <select
+                  value={ncdRegistration.template}
+                  onChange={(e) => setNcdDraft({ ...ncdRegistration, template: e.target.value })}
+                >
+                  {[...new Set([ncdRegistration.template, ...templateOptions.questionnaires.map((q) => q.url ?? "").filter(Boolean)])].map((url) => (
+                    <option key={url} value={url}>
+                      {templateOptions.questionnaires.find((q) => q.url === url)?.title ?? url}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
           {/* 放射線治療の治療中の診察。既定の 7 日は外来放射線照射診療料(B001-2-8。7 日間に
               1 回、算定日に放射線治療医の診察)に合わせた値で、入院の患者や施設の運用に合わせて
               変えられるようにしてある。テンプレートは記入欄の初期値(選び直しは妨げない)。 */}
@@ -1813,7 +1841,8 @@ export function FacilitySettingsPage() {
                 !acuityValid ||
                 !pressureUlcerValid ||
                 !cancerRegistryValid ||
-                !infectiousReportValid
+                !infectiousReportValid ||
+                !ncdValid
               }
             >
               {update.isPending ? "保存中..." : "保存"}

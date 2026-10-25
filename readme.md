@@ -54,7 +54,7 @@ cd ../fhir-client && docker compose up --build    # db(5434) / backend(3001) / f
 | [features/facility.md](docs/features/facility.md) | 自院と連携先、施設設定、医療機関(Organization)、医療従事者(Practitioner / PractitionerRole) |
 | [features/ward.md](docs/features/ward.md) | 病棟・病室・ベッド(Location)、入院患者一覧、病棟マップ、ベッドスケジュール |
 | [features/master-data.md](docs/features/master-data.md) | マスタデータ API(医薬品・用法・頻用コード)、マスタメンテ |
-| [features/data-analysis.md](docs/features/data-analysis.md) | 患者フォルダ、データ抽出、分析ダッシュボード、DPC、院内がん登録 |
+| [features/data-analysis.md](docs/features/data-analysis.md) | 患者フォルダ、データ抽出、分析ダッシュボード、DPC、院内がん登録、NCD 症例登録 |
 | [features/admin-integration.md](docs/features/admin-integration.md) | 管理画面、外部システム連携、レセコン連携、サーバーの休眠と起動 |
 | [demo-seed.md](docs/demo-seed.md) | デモ患者の投入ツール |
 | `docs/*-design.md` | 機能ごとの設計書 |

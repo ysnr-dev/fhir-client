@@ -238,6 +238,11 @@ class FacilitySettings < ApplicationRecord
     "template" => "http://fhir-client.local/Questionnaire/idsc-notify-01"
   }.freeze
 
+  # NCD の症例登録(docs/ncd-registration-design.md)。template は症例登録のテンプレートの url(版を問わない)。
+  DEFAULT_NCD_REGISTRATION = {
+    "template" => "http://fhir-client.local/Questionnaire/ncd-case-01"
+  }.freeze
+
   DEFAULT_ADMISSION_DOCUMENTS = {
     "admission_plan_template" => "",
     "admission_plan_days" => 7,
@@ -418,6 +423,10 @@ class FacilitySettings < ApplicationRecord
     },
     "infectious_disease_report" => {
       default: DEFAULT_INFECTIOUS_DISEASE_REPORT,
+      shape: { fields: { "template" => QUESTIONNAIRE_URL } }
+    },
+    "ncd_registration" => {
+      default: DEFAULT_NCD_REGISTRATION,
       shape: { fields: { "template" => QUESTIONNAIRE_URL } }
     },
     "early_warning" => {
