@@ -45,7 +45,7 @@ export const DOCUMENT_FORM_LIMITS = {
   maxPages: 10,
   pageMaxBytes: 1.5 * 1024 * 1024,
   pagesTotalMaxBytes: 5 * 1024 * 1024,
-  maxFields: 200,
+  maxFields: 300,
   maxOptions: 50,
   fontSize: { min: 6, max: 72 },
 } as const;

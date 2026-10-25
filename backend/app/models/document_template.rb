@@ -51,7 +51,7 @@ class DocumentTemplate < ApplicationRecord
     "checkbox" => [],
     "date" => %w[initial_expression date_format]
   }.freeze
-  MAX_FIELDS = 200
+  MAX_FIELDS = 300
   MAX_LABEL_LENGTH = 100
   MAX_OPTIONS = 50
   MAX_OPTION_LENGTH = 100

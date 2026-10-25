@@ -180,7 +180,7 @@ PNG が 1.5MB を超えるページ(写真)は JPEG に落とす。
 PDF は値を描く前に枠内を白で塗る(値が空でも塗る)。見た目だけの設定なので Questionnaire の版は上げない。
 
 形の検証は backend(`DocumentTemplate#layout_shape`)が担う(既知のキーだけ、id の一意、ページ内に収まること、
-フィールド 200 件まで)。フロントの純粋関数は `fhir/documentFormLayout.ts`。
+フィールド 300 件まで)。フロントの純粋関数は `fhir/documentFormLayout.ts`。
 
 デザイナ(`components/documentForm/DocumentFormDesigner.tsx`)は病棟マップ編集と同じ DOM 方式
 (絶対配置 + CSS `scale`、`useCardDrag` で移動・8 方向リサイズ、`useUndoableState` で取り消し)。

@@ -25,7 +25,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 | 5 | テンプレート回答(QuestionnaireResponse)の PDF | カルテ時系列(`components/KarteTimeline.tsx`)のテンプレートカードの「PDF」。レイアウト登録済みのテンプレートだけ有効 | `GET /reports/questionnaire_responses/:id/pdf`。レイアウトは `/report-layouts` で DB(`report_layouts`)に登録 | `docs/report-mappings/` に見本 4 本(入院診療計画書 `admission-plan-01`・診療情報提供書 `referral-01`・手術説明同意書 `sur-consent-01`・周術期口腔機能管理計画書 `perio-01`)。`shikan-01` は mapping だけで .tlf が無い |
 | 6 | カルテ印刷(診療経過記録 = 2 号用紙、A4、期間指定、履歴の差分) | 「その他」→「カルテ印刷」(`components/KartePrintTab.tsx`)→ 別タブ `pages/KartePrintPage.tsx` | `window.print()`。`App.css` の `@page` / `@media print` | なし(HTML) |
 | 7 | 文書作成(Word / Excel 様式への差し込み) | カルテ右ペイン「文書作成」(`components/DocumentCreatePanel.tsx`) | ブラウザ内で `{{ }}` を置換し患者ファイルに保存してダウンロード。PDF 化はしない | 施設が `/document-templates` に登録。同梱様式なし |
-| 9 | 文書作成(PDF / 画像の様式に項目を置いて入力) | 同じ「文書作成」で様式テンプレートを選ぶ(`components/documentForm/DocumentFormFill.tsx`) | `POST /reports/document_forms/:template_id/pdf`、Prawn(ページ画像 + `text_box`)。回答は QuestionnaireResponse | 施設が `/document-templates` のデザイナで登録。同梱様式なし |
+| 9 | 文書作成(PDF / 画像の様式に項目を置いて入力) | 同じ「文書作成」で様式テンプレートを選ぶ(`components/documentForm/DocumentFormFill.tsx`) | `POST /reports/document_forms/:template_id/pdf`、Prawn(ページ画像 + `text_box`)。回答は QuestionnaireResponse | 施設が `/document-templates` のデザイナで登録。見本は `docs/report-mappings/` の `*-form-01.json`(インポートで取り込む) |
 | 8 | 検査結果報告書(1 件分、A4、2 段組み、材料なし) | 検査結果の内容表示(`components/LabResultDetailPanel.tsx`)の「印刷」 | `GET /reports/lab_results/:report_id/pdf`、ThinReports(左右 2 本の list) | `lab_result.tlf` |
 
 印刷ではないファイル出力: データ抽出の CSV、DPC 患者一覧 CSV と様式 1 提出ファイル(FF1)、
@@ -68,7 +68,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 | 帳票 | 必要度 | 出典 | 当たり |
 |---|---|---|---|
 | 退院時サマリー PDF(科別レイアウト) | 高 | discharge-summary-design §6、gap §2.2 | `GET /reports/discharge_summaries/:composition_id/pdf`。長文の改ページが課題(§3-1) |
-| 診断書・死亡診断書・主治医意見書などの標準様式の同梱 | 中 | — | 現状は施設が docx を登録する前提で同梱なし。診療情報提供書だけ .tlf 見本あり |
+| 診断書・死亡診断書などの標準様式の同梱 | 中 | — | 様式の見本は診療情報提供書(`referral-form-01`)と主治医意見書(`care-opinion-form-01`)。それ以外は施設が登録する |
 | 同意書の状態管理(作成 → 印刷 → 同意済 → 原本保管)と印刷部数 | 中 | gap §2.2 | 文書の横断一覧とスキャン原本の結び付け |
 | 造影剤検査の同意書 | 中 | rad C-2 | テンプレート + .tlf |
 | 輸血の説明書・同意書(現状はオーダーの確認チェックだけ) | 中 | transfusion-design 58 行 | 同上 |
