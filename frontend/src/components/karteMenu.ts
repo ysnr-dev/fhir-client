@@ -19,6 +19,8 @@ export const KARTE_MENU_ITEMS: KarteMenuItem[] = [
   { key: "note", label: "診療記録", open: (problem) => ({ kind: "note-create", problem }) },
   { key: "vital", label: "バイタル", open: (problem) => ({ kind: "vital-create", problem }) },
   { key: "template", label: "テンプレート", open: (problem) => ({ kind: "qr-create", problem }) },
+  // 文書作成も記録を書く入口なので、テンプレートの隣に置く。
+  { key: "document", label: "文書作成", open: () => ({ kind: "document-create" }) },
   { key: "appointment", label: "予約", open: (problem) => ({ kind: "appointment-create", problem }) },
   // 入院予定も先の日を押さえる操作なので、予約の隣に置く。
   { key: "planned-admission", label: "入院予定", open: () => ({ kind: "planned-admission-create" }) },
@@ -94,7 +96,6 @@ export const KARTE_MENU_ITEMS: KarteMenuItem[] = [
   // 退院時サマリーは入院の締めくくりに書く文書なので、下に置く。
   { key: "discharge-summary", label: "退院時サマリー", open: () => ({ kind: "summary-create" }) },
   { key: "dpc", label: "DPC", open: () => ({ kind: "dpc-form1-create" }) },
-  { key: "document", label: "文書作成", open: () => ({ kind: "document-create" }) },
 ];
 
 const ITEM_BY_KEY = new Map(KARTE_MENU_ITEMS.map((item) => [item.key, item]));
