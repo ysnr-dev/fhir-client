@@ -947,7 +947,7 @@
           "font_size": 9.5,
           "align": "center",
           "required": false,
-          "initial_expression": "",
+          "initial_expression": "%labs.where(code = '160010010').date",
           "date_format": "slash"
         },
         {
@@ -975,7 +975,7 @@
           "font_size": 9.5,
           "align": "right",
           "required": false,
-          "initial_expression": "",
+          "initial_expression": "%labs.where(code = '160022410').value",
           "transfer_kinds": []
         },
         {
@@ -1070,7 +1070,7 @@
           "font_size": 9.5,
           "align": "right",
           "required": false,
-          "initial_expression": "",
+          "initial_expression": "%labs.where(code = '160020910').value",
           "transfer_kinds": []
         },
         {
@@ -1085,7 +1085,7 @@
           "font_size": 9.5,
           "align": "right",
           "required": false,
-          "initial_expression": "",
+          "initial_expression": "%labs.where(code = '160019410').value",
           "transfer_kinds": []
         },
         {
@@ -1113,7 +1113,7 @@
           "font_size": 9.5,
           "align": "right",
           "required": false,
-          "initial_expression": "",
+          "initial_expression": "%labs.where(code = '160023410').value",
           "transfer_kinds": []
         },
         {
@@ -1141,7 +1141,7 @@
           "font_size": 9.5,
           "align": "right",
           "required": false,
-          "initial_expression": "",
+          "initial_expression": "%labs.where(code = '160010010').value",
           "transfer_kinds": []
         },
         {
@@ -1169,7 +1169,7 @@
           "font_size": 9.5,
           "align": "right",
           "required": false,
-          "initial_expression": "",
+          "initial_expression": "%labs.where(code = '160167250').value",
           "transfer_kinds": []
         },
         {

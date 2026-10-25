@@ -5746,6 +5746,25 @@ button.populate-expression__option--active {
   justify-content: flex-end;
 }
 
+.populate-expression__lab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.populate-expression__lab-attrs {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.populate-expression__lab-attrs label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* 項目コードはシステム URI が長いので、グリッドを 1 行使い切って広く見せる。 */
 .qe-item__codes {
   flex: 1 1 100%;

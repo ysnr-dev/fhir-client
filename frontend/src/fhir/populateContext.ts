@@ -41,6 +41,7 @@ import {
   groupVitalEntries,
   vitalDisplayRows,
 } from "./vitalHelpers";
+import { labExpression, type PopulateLabRow } from "./populateLab";
 import { LOINC_SYSTEM } from "./shared";
 
 export interface PopulateSources {
@@ -55,6 +56,8 @@ export interface PopulateSources {
   labDetail?: fhir4.Bundle;
   /** 最新の処方の詳細 Bundle(_revinclude 付き検索の結果)。なければ undefined */
   prescriptionDetail?: fhir4.Bundle;
+  /** テンプレートが参照する結果項目の最新値(populateLab.ts)。参照が無ければ空。 */
+  labs: PopulateLabRow[];
   /** 活動中のアレルギー。 */
   allergies: fhir4.AllergyIntolerance[];
   /** 血液型(ABO / RhD)の Observation。 */
@@ -90,6 +93,8 @@ export interface PopulateExpressionOption {
   expression: string;
   description: string;
   sample: string;
+  /** 項目を選んで式を組み立てる変数。expression は見本で、名前だけでは値が決まらない。 */
+  parameterized?: "lab";
 }
 
 // 表記の指定が無い name(他システム由来)は漢字名として扱う(humanName.ts と同じ)ので、
@@ -414,6 +419,16 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     expression: "%labResults",
     description: `最新の検体検査結果 1 件(検査日が最も新しいもの)の全項目を、項目ごとに 1 行で並べます。基準値外は (H)/(L) が付きます。${MULTILINE_NOTE}`,
     sample: "【検査結果 2026/09/05】\nAST: 32 U/L\nALT: 48 U/L (H)\nHbA1c: 7.2 % (H)\n血糖: 142 mg/dL (H)",
+  },
+  {
+    group: "処方・検査",
+    variable: "labs",
+    label: "検査項目の最新値",
+    expression: labExpression("160010010", "value"),
+    parameterized: "lab",
+    description:
+      "結果項目を選んで、その項目の最新の結果 1 件から値・単位・採取日・値と単位・判定のどれかを入れます。値が数値になるのは数値型(PQ)の項目だけで、コード型・文字列型は表示の文字列になります。結果項目マスタの施設コードで引くので、施設コードを持たない旧い結果は対象外です。",
+    sample: "7.2",
   },
 
   // ---- 自院 ----
@@ -765,6 +780,7 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     pastHistory: formatPastHistory(sources.allConditions),
     activeMedications: formatActiveMedications(sources.activeMedications),
     labResults: formatLabResults(sources.labDetail),
+    labs: sources.labs,
     prescriptions: formatPrescriptions(sources.prescriptionDetail),
     ...facilityValues(sources.facility),
     ...authorValues(sources.author),

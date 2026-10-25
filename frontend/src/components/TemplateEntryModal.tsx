@@ -10,6 +10,8 @@ import { displayJapaneseName } from "../fhir/humanName";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { observationExtractEnabled } from "../fhir/observationExtract";
 import { buildPopulateContext } from "../fhir/populateContext";
+import { collectLabCodes } from "../fhir/populateLab";
+import { questionnaireExpressions } from "../fhir/questionnaireHelpers";
 import {
   DEFAULT_INSTITUTION_NUMBER,
   buildQuestionnaireResponse,
@@ -170,7 +172,8 @@ export function TemplateEntryForm({
   }, [fetchedMetaSource]);
 
   // 初期値式(%patient など)の実行時コンテキスト。新規記入時のみ必要。
-  const populate = usePopulateSources(patientId);
+  const labCodes = useMemo(() => collectLabCodes(questionnaireExpressions(questionnaire)), [questionnaire]);
+  const populate = usePopulateSources(patientId, { labCodes });
   const expressionContext = useMemo(
     () =>
       patient && !populate.isLoading

@@ -449,7 +449,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
   - ［対応物］テンプレートの `calculatedExpression` と `%` 変数(`fhir/populateContext.ts`)。eGFR・CCr・体表面積・NEWS2・qSOFA・ブリンクマン指数・Barthel・DESIGN-R はある。
   - ［不足］CHA2DS2-VASc・HAS-BLED・A-DROP(日本呼吸器学会、CURB-65 の国内版)・Child-Pugh・MELD・Wells・FRAX の雛形。
     海外では MDCalc on FHIR のように患者の値を自動で埋め、結果を記録に書き戻す。
-  - ［当たり］seed に Questionnaire(テンプレートカテゴリ「スコア」)を同梱。`populateContext` に「コードを指定して直近の検査値」「病名コードの有無」を返す汎用の変数を足し、
+  - ［当たり］seed に Questionnaire(テンプレートカテゴリ「スコア」)を同梱。`populateContext` に「病名コードの有無」を返す汎用の変数を足し(「コードを指定して直近の検査値」は `%labs` で対応済み)、
     病名・検査値から初期値を埋める。結果は既存の Observation 生成で時系列に乗せる。根拠の弱い予測スコア(再入院の LACE など)は入れない。
 - **Health Maintenance(患者単位の定期検査・検診の期限)**(新規、中〜高)
   - ［対応物］データ抽出の指標(集団単位)、Flag、`%` 変数。患者ごとに期限を出す仕組みは無い。

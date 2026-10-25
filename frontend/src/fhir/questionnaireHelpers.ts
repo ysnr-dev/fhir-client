@@ -738,6 +738,31 @@ export function collectPendingImageEntries(items: EditorItem[]): {
   return { items: walk(items), entries };
 }
 
+/**
+ * テンプレートに書かれた式(項目の初期値式・計算式と、テンプレートの変数)をすべて集める。
+ * 記入前に、式が参照しているデータ(検査項目の最新値など)を知るために使う。
+ */
+export function questionnaireExpressions(questionnaire: fhir4.Questionnaire | undefined): string[] {
+  if (!questionnaire) return [];
+  const expressions: string[] = [];
+  const pushExpressions = (extensions: fhir4.Extension[] | undefined, urls: string[]) => {
+    for (const ext of extensions ?? []) {
+      if (urls.includes(ext.url) && ext.valueExpression?.expression) {
+        expressions.push(ext.valueExpression.expression);
+      }
+    }
+  };
+  const walk = (items: fhir4.QuestionnaireItem[] | undefined) => {
+    for (const item of items ?? []) {
+      pushExpressions(item.extension, [INITIAL_EXPRESSION_EXT_URL, CALCULATED_EXPRESSION_EXT_URL]);
+      walk(item.item);
+    }
+  };
+  pushExpressions(questionnaire.extension, [VARIABLE_EXT_URL]);
+  walk(questionnaire.item);
+  return expressions;
+}
+
 export function parseQuestionnaireForm(questionnaire: fhir4.Questionnaire): QuestionnaireFormValues {
   const status = STATUS_OPTIONS.some((s) => s.code === questionnaire.status)
     ? (questionnaire.status as QuestionnaireStatus)

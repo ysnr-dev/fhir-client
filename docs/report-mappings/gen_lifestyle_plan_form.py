@@ -14,6 +14,12 @@ RH = 30                   # 1 行の高さ(px)
 BOX = 16                  # □の一辺(px)
 FIELD_PT = 9.5            # 入力値の文字サイズ(pt)
 KANJI_NAME = "%patient.name.where(extension.where(value = 'SYL').empty()).select(family + ' ' + given.first()).first()"
+# 血液検査欄の初期値に使う結果項目コード(同梱の結果項目マスタ)。施設のマスタが違えばここを直す。
+LAB_CODES = {"hba1c": "160010010", "glucose": "160019410", "tc": "160022410", "tg": "160020910", "hdl": "160023410", "ldl": "160167250"}
+
+
+def lab(code, attr="value"):
+    return f"%labs.where(code = '{LAB_CODES[code]}').{attr}"
 CATEGORY = {"code": "20f88598-bea0-4280-8e85-24c639035e57", "name": "計画書"}
 
 
@@ -306,12 +312,12 @@ def build(continued):
 
     def lipid(f, code, name):
         f.at(X3).cb(f"f_lab_{code}", f"血液検査：{name}", name, after=0).at(TX).t("（")
-        f.tx(f"f_lab_{code}_value", f"血液検査：{name}（mg/dl）", 140, align="right").t("mg/dl）")
+        f.tx(f"f_lab_{code}_value", f"血液検査：{name}（mg/dl）", 140, align="right", initial_expression=lab(code)).t("mg/dl）")
 
     y += 6
     f = Flow(s, y, X)
     f.t("【血液検査項目】", True).t("（採血日")
-    f.tx("f_lab_date", "採血日", 170, type="date", date_format="slash", align="center").t("）")
+    f.tx("f_lab_date", "採血日", 170, type="date", date_format="slash", align="center", initial_expression=lab("hba1c", "date")).t("）")
     lipid(f, "tc", "総コレステロール")
     y += RH
     f = Flow(s, y, X)
@@ -324,12 +330,12 @@ def build(continued):
     y += RH
     f = Flow(s, y, X + 100)
     f.t("（")
-    f.tx("f_lab_glucose_value", "血液検査：血糖（mg/dl）", 200, align="right").t("mg/dl）")
+    f.tx("f_lab_glucose_value", "血液検査：血糖（mg/dl）", 200, align="right", initial_expression=lab("glucose")).t("mg/dl）")
     lipid(f, "hdl", "HDLコレステロール")
     y += RH
     f = Flow(s, y, X)
     f.cb("f_lab_hba1c", "血液検査：HbA1c", "HbA1c：", after=0).at(X + 100).t("（")
-    f.tx("f_lab_hba1c_value", "血液検査：HbA1c（%）", 200, align="right").t("%）")
+    f.tx("f_lab_hba1c_value", "血液検査：HbA1c（%）", 200, align="right", initial_expression=lab("hba1c")).t("%）")
     lipid(f, "ldl", "LDLコレステロール")
     y += RH
     f = Flow(s, y, X)

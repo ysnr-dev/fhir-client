@@ -70,6 +70,15 @@ Word / Excel で直せる。
 - 自院: 医療機関名・郵便番号・住所・電話番号・FAX・保険医療機関番号(施設設定の自院)
 - 作成者: 氏名・カナ・職種・診療科(ログイン中の医療従事者。紐付く医療従事者が無いログインでは空)
 - 和暦: 今日の日付・生年月日・入院日(`lib/dates.ts` の `toWareki`。1 年目は「元年」)
+- 検査項目の最新値: `%labs`(`fhir/populateLab.ts`)。結果項目コードごとの最新 1 件を `{code, name, value, unit, date, interpretation, text}` で並べた
+  配列で、`%labs.where(code = '160010010').value` のように結果項目コードで引く。名前だけでは項目が決まらないので、変数一覧の名前
+  (`{{検査項目の最新値}}`)では解決せず、式で書く。
+
+［事実］`%labs` に入るのは、テンプレートが式の中で参照している結果項目コードだけ。記入前に式を走査してコードを集め
+(`collectLabCodes`。Questionnaire は `questionnaireExpressions`、様式は項目の `initial_expression`、Word / Excel は届いたファイルの
+プレースホルダー)、`usePopulateSources(patientId, { labCodes })` がコードごとに
+`Observation?patient&code=<施設コード>&status:not=entered-in-error,cancelled&_sort=-date&_count=1` を 1 本ずつ引く。
+上流の code 検索は完全一致なので、施設コードを持たない旧結果(JLAC11 だけ)は拾わない(チャートと同じ制約)。
 
 ## 4. 差し込み(`fhir/officeTemplate.ts`)
 

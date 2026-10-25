@@ -1,10 +1,21 @@
 import { useState } from "react";
+import type { LabResultItem } from "../api/masterClient";
+import { useLabResultItem } from "../api/masterQueries";
 import { POPULATE_EXPRESSION_OPTIONS } from "../fhir/populateContext";
+import {
+  LAB_ATTRS,
+  LAB_ATTR_LABELS,
+  labExpression,
+  parseLabExpression,
+  type LabAttr,
+} from "../fhir/populateLab";
+import { LabResultItemSearchModal } from "./LabResultItemSearchModal";
 import { Modal } from "./Modal";
 
 // カルテから転記できる変数の一覧。左で選ぶと、右に説明と入る値のサンプルを出す。
 // テンプレート項目の初期値式を選ぶとき(onSelect)と、文書テンプレートに書く
 // プレースホルダーを調べるとき(placeholder)に使う。
+// 「検査項目の最新値」だけは結果項目と取り出す値を選んで式を組み立てる。
 
 interface PopulateExpressionModalProps {
   /** 項目に設定済みの式。一覧にあればそれを選んだ状態で開く。 */
@@ -16,25 +27,65 @@ interface PopulateExpressionModalProps {
   onClose: () => void;
 }
 
+const LAB_OPTION_INDEX = POPULATE_EXPRESSION_OPTIONS.findIndex((option) => option.parameterized === "lab");
+
+// 選んだ結果項目のデータ型と単位に合わせたサンプル値。
+function labSample(item: Pick<LabResultItem, "data_type" | "display_unit"> | undefined, attr: LabAttr): string {
+  const numeric = !item || item.data_type === "PQ";
+  const unit = item?.display_unit ?? "%";
+  const value = numeric ? "7.2" : "陰性";
+  switch (attr) {
+    case "value":
+      return value;
+    case "unit":
+      return numeric ? unit : "";
+    case "date":
+      return "2026-09-05";
+    case "text":
+      return numeric ? `${value} ${unit}` : value;
+    case "interpretation":
+      return "H";
+  }
+}
+
 export function PopulateExpressionModal({
   currentExpression,
   onSelect,
   placeholder = false,
   onClose,
 }: PopulateExpressionModalProps) {
+  const currentLab = parseLabExpression(currentExpression);
   const [selectedIndex, setSelectedIndex] = useState(() =>
-    Math.max(
-      0,
-      POPULATE_EXPRESSION_OPTIONS.findIndex((option) => option.expression === currentExpression),
-    ),
+    currentLab
+      ? LAB_OPTION_INDEX
+      : Math.max(
+          0,
+          POPULATE_EXPRESSION_OPTIONS.findIndex((option) => option.expression === currentExpression),
+        ),
   );
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [labCode, setLabCode] = useState(currentLab?.code ?? "");
+  const [labAttr, setLabAttr] = useState<LabAttr>(currentLab?.attr ?? "value");
+  const [labItem, setLabItem] = useState<LabResultItem | null>(null);
+  const [labSearchOpen, setLabSearchOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  // 設定済みの式から開いたときは、コードから結果項目の名前を引く。
+  const currentLabItem = useLabResultItem(labItem || !labCode ? null : labCode);
+  const selectedLabItem = labItem ?? currentLabItem.data ?? undefined;
+
   const selected = POPULATE_EXPRESSION_OPTIONS[selectedIndex];
-  const selectedPlaceholder = `{{${selected.label}}}`;
+  const isLab = selected.parameterized === "lab";
+  const expression = isLab ? (labCode ? labExpression(labCode, labAttr) : "") : selected.expression;
+  const sample = isLab ? labSample(selectedLabItem, labAttr) : selected.sample;
+  const selectedPlaceholder = isLab ? `{{${expression}}}` : `{{${selected.label}}}`;
 
   async function handleCopy() {
     await navigator.clipboard.writeText(selectedPlaceholder);
-    setCopiedIndex(selectedIndex);
+    setCopied(true);
+  }
+
+  function select(index: number) {
+    setSelectedIndex(index);
+    setCopied(false);
   }
 
   return (
@@ -46,7 +97,7 @@ export function PopulateExpressionModal({
       <div className="populate-expression">
         <ul className="populate-expression__list">
           {POPULATE_EXPRESSION_OPTIONS.map((option, index) => (
-            <li key={option.expression}>
+            <li key={index}>
               {option.group !== POPULATE_EXPRESSION_OPTIONS[index - 1]?.group && (
                 <div className="populate-expression__group">{option.group}</div>
               )}
@@ -57,7 +108,7 @@ export function PopulateExpressionModal({
                     ? "populate-expression__option populate-expression__option--active"
                     : "populate-expression__option"
                 }
-                onClick={() => setSelectedIndex(index)}
+                onClick={() => select(index)}
               >
                 <span>{option.label}</span>
                 <code>%{option.variable}</code>
@@ -68,39 +119,83 @@ export function PopulateExpressionModal({
         <div className="populate-expression__detail">
           <h3>{selected.label}</h3>
           <dl>
+            {isLab && (
+              <>
+                <dt>検査項目</dt>
+                <dd className="populate-expression__lab">
+                  <span>
+                    {selectedLabItem
+                      ? `${selectedLabItem.name}(${selectedLabItem.result_item_code})`
+                      : labCode || "未選択"}
+                  </span>
+                  <button type="button" className="rp-card__compact-button" onClick={() => setLabSearchOpen(true)}>
+                    項目を選択
+                  </button>
+                </dd>
+                <dt>取り出す値</dt>
+                <dd className="populate-expression__lab-attrs">
+                  {LAB_ATTRS.map((attr) => (
+                    <label key={attr}>
+                      <input
+                        type="radio"
+                        name="populate-lab-attr"
+                        checked={labAttr === attr}
+                        onChange={() => {
+                          setLabAttr(attr);
+                          setCopied(false);
+                        }}
+                      />
+                      {LAB_ATTR_LABELS[attr]}
+                    </label>
+                  ))}
+                </dd>
+              </>
+            )}
             {placeholder && (
               <>
                 <dt>書式</dt>
                 <dd>
-                  <code className="populate-expression__code">{selectedPlaceholder}</code>
+                  <code className="populate-expression__code">{expression ? selectedPlaceholder : "—"}</code>
                 </dd>
               </>
             )}
             <dt>式</dt>
             <dd>
-              <code className="populate-expression__code">{selected.expression}</code>
+              <code className="populate-expression__code">{expression || "—"}</code>
             </dd>
             <dt>説明</dt>
             <dd>{selected.description}</dd>
             <dt>サンプル</dt>
             <dd>
-              <pre className="populate-expression__sample">{selected.sample}</pre>
+              <pre className="populate-expression__sample">{sample}</pre>
             </dd>
           </dl>
           <div className="populate-expression__actions">
             {placeholder && (
-              <button type="button" onClick={() => void handleCopy()}>
-                {copiedIndex === selectedIndex ? "コピーしました" : "コピー"}
+              <button type="button" disabled={!expression} onClick={() => void handleCopy()}>
+                {copied ? "コピーしました" : "コピー"}
               </button>
             )}
             {onSelect && (
-              <button type="button" onClick={() => onSelect(selected.expression)}>
+              <button type="button" disabled={!expression} onClick={() => onSelect(expression)}>
                 適用
               </button>
             )}
           </div>
         </div>
       </div>
+      {labSearchOpen && (
+        <LabResultItemSearchModal
+          title="検査項目を選択"
+          onSelect={(item) => {
+            setLabItem(item);
+            setLabCode(item.result_item_code);
+            setCopied(false);
+            setLabSearchOpen(false);
+          }}
+          onClose={() => setLabSearchOpen(false)}
+        />
+      )}
     </Modal>
   );
 }

@@ -19,8 +19,12 @@ export interface ResolvedPlaceholder {
   status: PlaceholderStatus;
 }
 
+// 項目を選んで組み立てる変数(検査項目の最新値)は名前だけでは値が決まらないので、式で書く。
 const EXPRESSION_BY_LABEL = new Map(
-  POPULATE_EXPRESSION_OPTIONS.map((option) => [option.label, option.expression]),
+  POPULATE_EXPRESSION_OPTIONS.filter((option) => !option.parameterized).map((option) => [
+    option.label,
+    option.expression,
+  ]),
 );
 
 // Word のオートコレクトは式の中の引用符を全角寄りの記号に変える。

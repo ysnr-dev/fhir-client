@@ -18,6 +18,8 @@ import { TemplateSelect } from "./TemplateSelect";
 import { displayJapaneseName } from "../fhir/humanName";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { buildPopulateContext } from "../fhir/populateContext";
+import { collectLabCodes } from "../fhir/populateLab";
+import { questionnaireExpressions } from "../fhir/questionnaireHelpers";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { ProblemSelect } from "./ProblemSelect";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
@@ -158,7 +160,8 @@ export function QuestionnaireResponseCreatePanel({
 
   // 初期値式(%conditions / %patient など。populateContext.ts 参照)の実行時
   // コンテキスト。取得完了までフォームを描画しない(初期回答はマウント時に確定するため)。
-  const populate = usePopulateSources(patientId);
+  const labCodes = useMemo(() => collectLabCodes(questionnaireExpressions(questionnaire)), [questionnaire]);
+  const populate = usePopulateSources(patientId, { labCodes });
   const expressionContext = useMemo(
     () =>
       patient && !populate.isLoading

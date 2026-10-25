@@ -33,6 +33,7 @@ import {
 import { formatFileSize, parsePatientFile, PATIENT_FILE_MAX_BYTES } from "../fhir/patientFileHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { buildPopulateContext } from "../fhir/populateContext";
+import { collectLabCodes } from "../fhir/populateLab";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { DEFAULT_INSTITUTION_NUMBER } from "../fhir/questionnaireResponseHelpers";
 import { readFileAsDataUrl } from "../fhir/schemaImage";
@@ -83,7 +84,6 @@ export function DocumentCreatePanel({
 function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
   const templates = useDocumentTemplates(true);
   const { data: patientResult, error: patientError } = usePatient(patientId);
-  const populate = usePopulateSources(patientId);
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const createFiles = useCreatePatientFiles();
 
@@ -116,6 +116,27 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
   const extension = template ? (isForm ? ".pdf" : extensionOf(template.file_name)) : "";
   const fileTitle = title ?? (template ? `${template.name}${extension}` : "");
 
+  const kind = useMemo(
+    () => (template && !isForm && file.data ? officeTemplateKindOf(template.file_name, file.data) : null),
+    [template, isForm, file.data],
+  );
+  const placeholders = useMemo(
+    () => (file.data && kind ? extractPlaceholders(file.data, kind) : null),
+    [file.data, kind],
+  );
+  // 検査項目の最新値は、選んだテンプレートの式が参照しているコードだけ取る
+  // (Word / Excel はファイルが届くまで参照が分からないので、届いてから取り直す)。
+  const labCodes = useMemo(
+    () =>
+      collectLabCodes(
+        isForm && template
+          ? normalizeLayout(template.layout).fields.map((field) => field.initial_expression)
+          : (placeholders ?? []),
+      ),
+    [isForm, template, placeholders],
+  );
+  const populate = usePopulateSources(patientId, { labCodes });
+
   const patient = patientResult?.data;
   const context = useMemo(
     () =>
@@ -125,16 +146,9 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
     [patient, populate.isLoading, populate.sources],
   );
 
-  const kind = useMemo(
-    () => (template && !isForm && file.data ? officeTemplateKindOf(template.file_name, file.data) : null),
-    [template, isForm, file.data],
-  );
   const resolved = useMemo(
-    () =>
-      file.data && kind && context
-        ? resolvePlaceholders(extractPlaceholders(file.data, kind), context)
-        : null,
-    [file.data, kind, context],
+    () => (placeholders && context ? resolvePlaceholders(placeholders, context) : null),
+    [placeholders, context],
   );
 
   async function handleCreate() {

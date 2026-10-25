@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { excludeNursingProblems } from "../../fhir/conditionHelpers";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { RESULT_ITEM_SYSTEM } from "../../fhir/labResultHelpers";
+import { populateLabRow } from "../../fhir/populateLab";
 import type { PatientCaution } from "../masterClient";
 import { usePatientCautions } from "../masterQueries";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../../fhir/infectionHelpers";
@@ -36,11 +38,14 @@ const VITAL_COUNT = 50;
  * 身長体重・入院は患者帯やプロファイルと同じ取得を使い回す(キャッシュも共有される)。
  * 自院は施設設定、作成者はログイン中の医療従事者から取る(administrator ログインのように
  * 紐付く医療従事者が無ければ作成者は null)。
+ * 検査項目の最新値(%labs)は、テンプレートが式の中で参照している結果項目コード(labCodes)だけを
+ * コードごとに最新 1 件ずつ取る(呼び出し側が populateLab.ts の collectLabCodes で集める)。
  *
  * 初期回答はフォームのマウント時に一度だけ確定するので、呼び出し側は isLoading が
  * 落ちてから buildPopulateContext に渡す。
  */
-export function usePopulateSources(patientId: string | undefined) {
+export function usePopulateSources(patientId: string | undefined, options: { labCodes?: string[] } = {}) {
+  const labCodes = options.labCodes ?? [];
   // 記入を始めた日で固定する(日付をまたいで開きっぱなしでも値がぶれないように)。
   const [today] = useState(todayString);
 
@@ -94,6 +99,37 @@ export function usePopulateSources(patientId: string | undefined) {
     enabled: Boolean(patientId),
   });
 
+  // 結果項目ごとの最新 1 件。上流の code 検索は完全一致なので施設コードの coding で引く。
+  const labQueries = useQueries({
+    queries: labCodes.map((code) => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("code", `${RESULT_ITEM_SYSTEM}|${code}`);
+      params.set("status:not", "entered-in-error,cancelled");
+      params.set("_sort", "-date");
+      params.set("_count", "1");
+      return {
+        queryKey: ["Observation", "search", "populate-lab", patientId, code],
+        queryFn: async () => {
+          const result = await searchResource<fhir4.Observation>("Observation", params);
+          return resourcesOfType<fhir4.Observation>(result.data, "Observation")[0] ?? null;
+        },
+        enabled: Boolean(patientId),
+      };
+    }),
+  });
+  // useQueries の結果配列は毎回作り直されるので、更新時刻の並びが変わったときだけ組み直す。
+  const labUpdatedKey = labQueries.map((q) => q.dataUpdatedAt).join(",");
+  const labs = useMemo(
+    () =>
+      labQueries
+        .map((q) => q.data)
+        .filter((obs): obs is fhir4.Observation => Boolean(obs))
+        .map(populateLabRow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [labUpdatedKey],
+  );
+
   const allConditions = useKarteConditions(patientId);
   const allergies = useActiveAllergies(patientId);
   const flags = useActiveFlags(patientId);
@@ -131,7 +167,8 @@ export function usePopulateSources(patientId: string | undefined) {
     practitionerRoles,
   ];
   // isPending だと無効化したクエリ(感染症の検査由来など)で落ちないので isLoading で見る。
-  const isLoading = queries.some((q) => q.isLoading) || facility.isLoading;
+  const isLoading =
+    queries.some((q) => q.isLoading) || facility.isLoading || labQueries.some((q) => q.isLoading);
 
   const author = practitioner.data?.data;
   const authorRoles = practitionerRoles.data?.data;
@@ -146,6 +183,7 @@ export function usePopulateSources(patientId: string | undefined) {
       allConditions: resourcesOfType<fhir4.Condition>(allConditions.data?.data, "Condition"),
       labDetail: labDetail.data?.data,
       prescriptionDetail: rxDetail.data?.data,
+      labs,
       allergies: resourcesOfType<fhir4.AllergyIntolerance>(allergies.data?.data, "AllergyIntolerance"),
       bloodType: resourcesOfType<fhir4.Observation>(bloodType.data?.data, "Observation"),
       infections: summarizeInfections(
@@ -172,6 +210,7 @@ export function usePopulateSources(patientId: string | undefined) {
     allConditions.data,
     labDetail.data,
     rxDetail.data,
+    labs,
     allergies.data,
     bloodType.data,
     manualInfections.data,
@@ -189,7 +228,7 @@ export function usePopulateSources(patientId: string | undefined) {
 
   return {
     isLoading,
-    error: queries.find((q) => q.error)?.error ?? null,
+    error: queries.find((q) => q.error)?.error ?? labQueries.find((q) => q.error)?.error ?? null,
     sources,
   };
 }
