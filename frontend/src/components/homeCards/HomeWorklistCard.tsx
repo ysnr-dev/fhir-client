@@ -11,6 +11,7 @@ import {
   useRadWorklist,
   useRadiotherapyWorklist,
   useRehabWorklist,
+  useRxVerificationQueue,
   useRxWorklist,
   useSurgeryUnscheduledList,
   useSurgeryWorklist,
@@ -182,6 +183,25 @@ function InjectionCard({ date }: DateProps) {
   );
 }
 
+const RX_VERIFICATION_STATUS_OPTIONS = [{ code: "requested", display: "未監査" }];
+
+/** 処方監査も日付を持たない(未監査が全部)。至急の件数を添える。 */
+function RxVerificationCard({ date }: DateProps) {
+  const query = useRxVerificationQueue("pending", { from: date, to: date });
+  const urgent = query.data?.tasks.filter((task) => task.priority && task.priority !== "routine").length;
+  return (
+    <WorklistCounts
+      kind="rxVerification"
+      isPending={query.isPending}
+      error={query.error}
+      statuses={query.data?.tasks.map((task) => task.status)}
+      options={RX_VERIFICATION_STATUS_OPTIONS}
+      truncated={query.data?.truncated}
+      extra={urgent !== undefined ? [{ label: "至急", count: urgent }] : undefined}
+    />
+  );
+}
+
 /** 持参薬鑑別は日付を持たない(未鑑別の依頼が全部)。 */
 function BroughtMedCard() {
   const query = useBroughtMedWorklist({});
@@ -321,6 +341,7 @@ const WORKLIST_CARDS: Record<HomeWorklistKey, ComponentType<DateProps>> = {
   transfusion: TransfusionCard,
   rad: RadCard,
   radiotherapy: RadiotherapyCard,
+  rxVerification: RxVerificationCard,
   rx: RxCard,
   injection: InjectionCard,
   broughtMed: BroughtMedCard,

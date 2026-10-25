@@ -307,6 +307,8 @@ Rails.application.routes.draw do
     # 警告(判断支援)の確認理由マスタと、発火・無視の台帳(docs/advisory-design.md)。
     resources :advisory_override_reasons, only: %i[index show create update destroy]
     resources :advisory_events, only: :create
+    # 処方監査の介入種別(docs/rx-verification-design.md §4.1)。
+    resources :pharmacist_intervention_types, only: %i[index show create update destroy]
     resources :radiotherapy_protocols, only: %i[index show create update destroy]
     # 術式マスタ。手術オーダー(申込)の項目。処置と違いセット・レイアウト・
     # データセットのマスタは持たない(術式は検索で選び、実施入力は第2段階)。

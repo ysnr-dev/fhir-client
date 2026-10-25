@@ -22,6 +22,7 @@ import { MedicationExtractPanel } from "../components/extract/MedicationExtractP
 import { MicroExtractPanel } from "../components/extract/MicroExtractPanel";
 import { PathwayExtractPanel } from "../components/extract/PathwayExtractPanel";
 import { PerformExtractPanel } from "../components/extract/PerformExtractPanel";
+import { InterventionExtractPanel } from "../components/extract/InterventionExtractPanel";
 import { SurgeryExtractPanel } from "../components/extract/SurgeryExtractPanel";
 import { PatientColumnsField } from "../components/extract/PatientColumnsField";
 import { SaveQueryModal } from "../components/extract/SaveQueryModal";
@@ -114,6 +115,7 @@ export function DataExtractPage() {
       {tab === "perform" && <PerformExtractPanel />}
       {tab === "adverse" && <AdverseEventExtractPanel />}
       {tab === "pathway" && <PathwayExtractPanel />}
+      {tab === "intervention" && <InterventionExtractPanel />}
       {guide && <DataExtractGuide topic={guide} onClose={() => setGuide(null)} />}
     </div>
   );

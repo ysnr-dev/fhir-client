@@ -1674,5 +1674,23 @@
       },
       "outcome_from_days": 0
     }
+  },
+  {
+    "name": "薬剤師介入 月×種別",
+    "tab": "intervention",
+    "definition": {
+      "schema_version": 1,
+      "period": {
+        "mode": "relative",
+        "days": 365
+      },
+      "breakdown": {
+        "date": "監査日時",
+        "grain": "month",
+        "rows": "period",
+        "columns": "介入種別",
+        "split_multi": true
+      }
+    }
   }
 ]

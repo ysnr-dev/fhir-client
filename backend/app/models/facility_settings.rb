@@ -152,6 +152,9 @@ class FacilitySettings < ApplicationRecord
   ADVISORY_SEVERITY_OVERRIDES = %w[default info off].freeze
   ADVISORY_KIND_PATTERN = /\A[a-z][a-z-]*\z/
   DEFAULT_ADVISORY_SEVERITY = {}.freeze
+  # 処方監査(docs/rx-verification-design.md §2.4)。block_dispense_before_verified で、監査済になるまで
+  # 処方一覧の「調剤登録」・注射一覧の「払出登録」を出さない。
+  DEFAULT_RX_VERIFICATION = { "block_dispense_before_verified" => false }.freeze
   # カルテのカードの同じ日の中での並び。mode は time(日時の順)か kind(種別の順。同じ種別の中は日時の順)、
   # kinds は種別のコードを並べた順。種別の一覧と表示名は frontend(KARTE_KIND_LABELS)が持ち、ここに無い種別は
   # 既定の順で後ろに付く(種別を足しても backend は触らない)。表示時の並べ替えだけなので、過去の日にも効く。
@@ -415,6 +418,10 @@ class FacilitySettings < ApplicationRecord
         bad = value.is_a?(Hash) ? value.keys.reject { |key| key.to_s.match?(ADVISORY_KIND_PATTERN) } : []
         bad.map { |key| "advisory_severity の種別「#{key}」が不正です" }
       }
+    },
+    "rx_verification" => {
+      default: DEFAULT_RX_VERIFICATION,
+      shape: { fields: { "block_dispense_before_verified" => :boolean } }
     },
     "karte_card_order" => {
       default: DEFAULT_KARTE_CARD_ORDER,

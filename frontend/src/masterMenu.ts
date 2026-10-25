@@ -51,6 +51,7 @@ export const MASTER_MENU: MasterMenuGroup[] = [
       { label: "薬剤付加情報", to: "/medicine-attributes" },
       { label: "フォーミュラリ", to: "/formularies" },
       { label: "薬剤チェック", to: "/drug-checks" },
+      { label: "薬剤師介入種別", to: "/pharmacist-intervention-types" },
       { label: "スケールセット", to: "/insulin-scale-sets" },
     ],
   },

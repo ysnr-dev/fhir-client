@@ -397,7 +397,7 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
 月次の統計のように同じ条件を繰り返す使い方のため。
 
 - **保存先**: 「患者」タブと同じ `extract_queries` に、どのタブの条件かを表す `tab` 列(`patient` / `template` / `lab` /
-  `medication` / `micro` / `surgery` / `perform` / `adverse` / `pathway` / `encounter` / `condition` / `cluster`。既存は `patient`。migration
+  `medication` / `micro` / `surgery` / `perform` / `adverse` / `pathway` / `intervention` / `encounter` / `condition` / `cluster`。既存は `patient`。migration
   `20261009000000_add_tab_to_extract_queries.rb`)を足した。名前の重なりは持ち主 × タブごとに見る。タブは作るときだけ受け取り、
   保存した後は変えない(`attr_readonly`)。一覧は `?tab=` で絞る(画面はいつもタブを指定し、「患者」タブと患者の絞り込みの選択肢は
   `patient` だけを読む)。
@@ -407,7 +407,8 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
   - タブ固有: テンプレート(`template_url` 必須・`latest_only`・診療科)、検査結果(`items` 必須。ChartItem と同じ形・`mode`・
     `aggregates`(`delta` は変化)・`interpretation`・診療科)、投薬(`codes`・`drug_classes`・`order_type`・依頼科)、細菌検査
     (`include_no_isolate`・`first_isolate_only`・`susceptibility`)、手術(`procedures`・依頼科)、部門実施(`order_kind` 必須)、
-    有害事象(`treatment_type`・`terms`・`mode`)、パス(`pathway_code`)、クラスタ(`strata` 必須・1 件以上、`metrics`。§22)。知らない項目は弾く。
+    有害事象(`treatment_type`・`terms`・`mode`)、パス(`pathway_code`)、薬剤師介入(`result`・`order_kind`・`types`・依頼科。
+    `docs/rx-verification-design.md` §4.2)、クラスタ(`strata` 必須・1 件以上、`metrics`。§22)。知らない項目は弾く。
 - **画面**: 各タブの上の「条件」の帯(`components/extract/RecordQueryBar.tsx`)。保存・別名保存・削除と「未保存」の印は「患者」タブと同じ。
   名前と持ち主を入れるモーダルは「患者」タブと共通(`SaveQueryModal`)。各タブは「今の入力 → 保存する形」(空の値は落とす。
   `compactDefinition`)と「保存した形 → 入力欄」(`applyDefinition`。null なら初期値。「クリア」もこれ)を持つ。

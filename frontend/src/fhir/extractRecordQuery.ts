@@ -28,6 +28,7 @@ export type ExtractRecordTab =
   | "perform"
   | "adverse"
   | "pathway"
+  | "intervention"
   | "encounter"
   | "condition"
   | "cluster"
@@ -52,6 +53,7 @@ export const EXTRACT_TABS: { key: ExtractTab; label: string }[] = [
   { key: "perform", label: "部門実施" },
   { key: "adverse", label: "有害事象" },
   { key: "pathway", label: "パス" },
+  { key: "intervention", label: "薬剤師介入" },
 ];
 
 export function extractTabLabel(tab: ExtractTab): string {
@@ -134,6 +136,15 @@ export interface AdverseEventExtractDefinition extends ExtractRecordDefinition {
   treatment_type?: TreatmentType;
   terms?: string[];
   mode?: AdverseEventRowMode;
+}
+
+export interface InterventionExtractDefinition extends ExtractRecordDefinition {
+  /** intervened は介入ありだけ(既定)、all は問題なしも含める。 */
+  result?: "intervened" | "all";
+  order_kind?: "prescription" | "injection";
+  /** 介入種別のコード(マスタの code)。 */
+  types?: string[];
+  department_id?: string;
 }
 
 export interface PathwayExtractDefinition extends ExtractRecordDefinition {

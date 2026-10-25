@@ -303,6 +303,16 @@ function TopicBody({ topic }: { topic: GuideTopic }) {
               <Term name="パス">選んだパスの適用だけを出す</Term>
             </dl>
           </section>
+
+          <section>
+            <h3>薬剤師介入の抽出</h3>
+            <dl className="extract-guide__terms">
+              <Term name="表">処方監査 1 件が 1 行。監査日時・監査者・結果、介入種別・処方医の対応・介入内容と、処方・注射の薬剤の列つき</Term>
+              <Term name="期間">監査した日で絞る</Term>
+              <Term name="監査結果">既定は介入ありだけ。「すべて」で問題なしの監査も出す(介入率の分母)</Term>
+              <Term name="介入種別">選んだ種別のどれかを含む監査を出す。種別ごとに数えるときは内訳の「分割」を使う</Term>
+            </dl>
+          </section>
         </>
       );
     case "breakdown":

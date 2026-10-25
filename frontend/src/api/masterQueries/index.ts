@@ -45,5 +45,6 @@ export * from "./kartePaneFavorite";
 export * from "./nursingAssignment";
 export * from "./oralExam";
 export * from "./advisory";
+export * from "./pharmacy";
 export * from "./itemLayout";
 export * from "./performDataset";

@@ -130,6 +130,7 @@ export const APP_MENU: AppMenuEntry[] = [
       {
         label: "薬剤部門",
         items: [
+          { label: "処方監査", to: "/rx-verification" },
           { label: "処方一覧", to: "/rx-worklist" },
           { label: "持参薬鑑別一覧", to: "/brought-med-worklist" },
           // 服薬指導は栄養指導と同じ期間継続型(1 オーダーに入院中の指導が積み上がる)。

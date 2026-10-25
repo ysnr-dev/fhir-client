@@ -17,7 +17,7 @@
 // ここを差し替える。
 import { SSMIX2_DEPARTMENT_CODE_SYSTEM } from "./departmentCodes";
 
-const PRACTITIONER_ROLE_SYSTEM = "http://fhir-client.local/CodeSystem/practitioner-role";
+export const PRACTITIONER_ROLE_SYSTEM = "http://fhir-client.local/CodeSystem/practitioner-role";
 
 export const PRIMARY_DEPARTMENT_EXT_URL =
   "http://fhir-client.local/StructureDefinition/practitioner-role-primary-department";

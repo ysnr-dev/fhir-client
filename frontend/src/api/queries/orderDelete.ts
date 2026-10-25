@@ -1,12 +1,14 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { postBundle } from "../fhirClient";
 import { resourcesOfType, searchAllPages, WORKLIST_PAGE } from "./core";
+import { rxVerificationDeleteEntries } from "./rxVerification";
 
 // オーダー削除の後片付け(全種別共通)。
 //
 // オーダーを指しているリソースのうち、
 //   - 進捗・通知の Task(focus / basedOn がオーダー)と調剤・払出の記録(MedicationDispense)は
 //     オーダーと一緒に消す。オーダーが無くなれば意味を失い、残すと一覧や通知に孤児が出る。
+//     連日の注射の監査 Task だけは、束ねに残る日があればその日へ付け替える(束ねに 1 件のため)。
 //   - 実施記録(Procedure / MedicationAdministration)と結果(DiagnosticReport / Observation)は
 //     診療の記録なので消さず、付いているオーダーは削除させない。実施の取消・結果の削除が先。
 // ラベル発行済みの Specimen は発行・到着の記録として残す(結果の削除と同じ扱い)。
@@ -70,13 +72,17 @@ export async function postOrderDeleteBundle(bundle: fhir4.Bundle) {
   }
 
   const alreadyDeleted = new Set(urls);
+  // 連日の注射の監査 Task は、束ねに残る日があれば消さずに付け替える。
+  const refocus = await rxVerificationDeleteEntries(ofType<fhir4.Task>("Task"), orderIds);
   const extra = [
-    ...idsOf(ofType<fhir4.Task>("Task")).map((id) => `Task/${id}`),
+    ...idsOf(ofType<fhir4.Task>("Task"))
+      .filter((id) => !refocus.keptTaskIds.has(id))
+      .map((id) => `Task/${id}`),
     ...idsOf(ofType<fhir4.MedicationDispense>("MedicationDispense")).map((id) => `MedicationDispense/${id}`),
   ]
     .filter((url) => !alreadyDeleted.has(url))
     .map((url) => ({ request: { method: "DELETE" as const, url } }));
-  return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...extra] });
+  return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...extra, ...refocus.entries] });
 }
 
 /** オーダー削除で一緒に消えた Task(通知を含む)・調剤記録を読み直させる。 */

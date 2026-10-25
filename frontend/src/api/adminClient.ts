@@ -26,6 +26,7 @@ import type { DocumentFormTemplateExport } from "../fhir/documentFormExport";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 import type { AdvisorySeveritySettings } from "../fhir/advisoryHelpers";
 import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
+import type { RxVerificationSettings } from "../fhir/rxVerificationHelpers";
 import type { IntakeSettings } from "../fhir/intakeHelpers";
 import type { KarteCardOrderSettings } from "../fhir/karteCardOrderHelpers";
 
@@ -95,6 +96,8 @@ export interface FacilitySettings {
   karte_card_order: KarteCardOrderSettings;
   /** 警告(判断支援)の種別ごとの重さの調整(下げる・出さない)。 */
   advisory_severity: AdvisorySeveritySettings;
+  /** 処方監査(監査前の調剤登録・払出登録を止めるか)。 */
+  rx_verification: RxVerificationSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -119,6 +122,7 @@ export type FacilitySettingsPayload = Partial<{
   intake: IntakeSettings;
   karte_card_order: KarteCardOrderSettings;
   advisory_severity: AdvisorySeveritySettings;
+  rx_verification: RxVerificationSettings;
 }>;
 
 export interface ConnectionTestResult {

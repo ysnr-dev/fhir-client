@@ -46,5 +46,6 @@ export * from "./nursingAssignment";
 export * from "./nursingAcuity";
 export * from "./oralExam";
 export * from "./advisory";
+export * from "./pharmacy";
 export * from "./itemLayout";
 export * from "./performDataset";

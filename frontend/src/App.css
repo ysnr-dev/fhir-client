@@ -873,6 +873,8 @@ button:disabled {
 .oral-exam input:not([type="checkbox"]),
 .pathway-preview__field select,
 .pathway-preview__field input,
+.rx-verification__field select,
+.rx-verification__field textarea,
 .karte-print-form input[type="date"] {
   font: inherit;
   font-size: 15px;
@@ -12077,6 +12079,119 @@ body.page-wide-md-toc .app__main {
 .rx-inquiry-form__actions {
   display: flex;
   gap: 8px;
+}
+
+/* 処方監査(pages/RxVerificationPage.tsx・components/RxVerificationModal.tsx)。 */
+.rx-verification {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rx-verification__patient {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-card);
+  font-size: 13px;
+}
+
+.rx-verification__patient dt {
+  color: var(--text);
+}
+
+.rx-verification__patient dd {
+  margin: 0;
+  color: var(--text-h);
+}
+
+/* 監査結果の入力。上の内容表示(.prescription-detail fieldset)と同じ枠にそろえる。 */
+.rx-verification__result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.rx-verification__result legend {
+  font-size: 13px;
+  color: var(--text);
+  padding: 0 4px;
+}
+
+.rx-verification__result .rx-verification__choice {
+  font-size: 14px;
+}
+
+.rx-verification__result .rx-inquiry-form__choices {
+  gap: 6px 16px;
+}
+
+.rx-verification__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.rx-verification__field select {
+  align-self: flex-start;
+  min-width: 180px;
+}
+
+.rx-verification__field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+}
+
+.rx-verification__choice {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-h);
+}
+
+/* 「至急のみ」はセレクトと同じ高さの帯に置き、セレクトの縦の中央に揃える。 */
+.patient-search-form label.rx-verification__urgent-only {
+  align-self: flex-end;
+  height: var(--control-height);
+}
+
+.rx-verification__urgent,
+.rx-verification__reverify,
+.rx-verification__mark {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.rx-verification__urgent {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.rx-verification__reverify,
+.rx-verification__mark--pending {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.rx-verification__row--urgent > td:first-child {
+  box-shadow: inset 3px 0 0 var(--danger);
 }
 
 /* 管(検体グループ)ごとの発行・到着バッジ。「表示」で開くオーダー内容

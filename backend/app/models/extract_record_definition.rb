@@ -6,7 +6,7 @@
 # 比較群と担当医・出力する患者の列。タブ固有の項目は TAB_FIELDS に足す。中身のコード(どの薬・どの検査か)は解釈しない。
 module ExtractRecordDefinition
   SCHEMA_VERSION = 1
-  TABS = %w[encounter condition template lab medication micro surgery perform adverse pathway cluster indicator event].freeze
+  TABS = %w[encounter condition template lab medication micro surgery perform adverse pathway intervention cluster indicator event].freeze
   MAX_ITEMS = 50
 
   CODE_SHAPE = ExtractQuery::CODE_SHAPE
@@ -182,6 +182,14 @@ module ExtractRecordDefinition
       }
     },
     "pathway" => { fields: { "pathway_code" => :string } },
+    # 薬剤師介入(処方監査の記録、docs/rx-verification-design.md §4.2)。types は介入種別のコード(マスタの code)。
+    "intervention" => {
+      fields: {
+        "result" => { enum: %w[intervened all] },
+        "order_kind" => { enum: %w[prescription injection] },
+        "types" => { list: :text, unique: true, max: MAX_ITEMS }
+      }.merge(DEPARTMENT_FIELDS)
+    },
     "condition" => {
       fields: {
         "codes" => { list: CODE_SHAPE, max: ExtractQuery::MAX_CODES },

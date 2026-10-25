@@ -157,7 +157,7 @@ function withYakkaCodes(rps: CheckedRp[], yakkaCodes: Map<string, string> | unde
 }
 
 /** 用量規則の条件に使う患者の値(年齢・最新の体重・腎機能)。プロファイルの身体区画と同じ引き方。 */
-function usePatientFactors(patientId: string): PatientFactors {
+export function usePatientFactors(patientId: string): PatientFactors {
   const patient = usePatient(patientId || undefined).data?.data;
   const bodyMeasures = useBodyMeasures(patientId || undefined);
   const labResults = useRecentLabResults(patientId || undefined);

@@ -15,6 +15,7 @@ export type HomeWorklistKey =
   | "radiotherapy"
   | "rx"
   | "injection"
+  | "rxVerification"
   | "broughtMed"
   | "medicationGuidance"
   | "antimicrobial"
@@ -45,6 +46,7 @@ export const HOME_WORKLISTS: Record<HomeWorklistKey, HomeWorklistDef> = {
     path: "/radiotherapy-worklist",
     roleCodes: ["radiological-technologist"],
   },
+  rxVerification: { label: "処方監査", path: "/rx-verification", roleCodes: ["pharmacist"] },
   rx: { label: "処方", path: "/rx-worklist", roleCodes: ["pharmacist"] },
   injection: { label: "注射", path: "/injection-worklist", roleCodes: ["pharmacist"] },
   broughtMed: { label: "持参薬鑑別", path: "/brought-med-worklist", roleCodes: ["pharmacist"] },

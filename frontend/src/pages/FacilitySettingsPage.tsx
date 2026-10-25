@@ -100,6 +100,7 @@ import {
   EARLY_WARNING_NOTIFY_BANDS,
   type EarlyWarningSettings,
 } from "../fhir/earlyWarningHelpers";
+import { DEFAULT_RX_VERIFICATION, type RxVerificationSettings } from "../fhir/rxVerificationHelpers";
 import {
   DEFAULT_KARTE_CARD_ORDER,
   KARTE_CARD_ORDER_MODE_LABELS,
@@ -146,6 +147,7 @@ const FACILITY_SECTIONS = [
   { key: "radiotherapy_review", label: "放射線治療の週次レビュー" },
   { key: "intake", label: "Web 問診" },
   { key: "early_warning", label: "早期警告スコア(NEWS2)" },
+  { key: "rx_verification", label: "処方監査" },
   { key: "receipt_codes", label: "医事会計のレセプト電算コード" },
   { key: "water_balance", label: "水分出納の対象項目" },
   { key: "bulk_vital_entry", label: "経過表一括入力の列" },
@@ -364,6 +366,10 @@ export function FacilitySettingsPage() {
   // 早期警告スコア(NEWS2)。有効にするとバイタルの保存で算出し、区分が下限以上なら主治医に通知する。
   const [earlyWarningDraft, setEarlyWarningDraft] = useState<EarlyWarningSettings | undefined>(undefined);
 
+  // 処方監査。監査済になるまで調剤登録・払出登録を止めるか。
+  const [rxVerificationDraft, setRxVerificationDraft] = useState<RxVerificationSettings | undefined>(undefined);
+  const rxVerification = rxVerificationDraft ?? settings.data?.rx_verification ?? DEFAULT_RX_VERIFICATION;
+
   // Web 問診。既定の質問票(並べた順に答えてもらう)と、診療科ごとの質問票、予約の無いリンクの有効時間。
   const [intakeDraft, setIntakeDraft] = useState<IntakeSettings | undefined>(undefined);
   const intake = intakeDraft ?? settings.data?.intake ?? EMPTY_INTAKE_SETTINGS;
@@ -546,6 +552,7 @@ export function FacilitySettingsPage() {
       nursing_acuity: acuity,
       pressure_ulcer: pressureUlcer,
       early_warning: earlyWarning,
+      rx_verification: rxVerification,
       intake,
       karte_card_order: { ...cardOrder, kinds: cardKinds },
     });
@@ -1384,6 +1391,21 @@ export function FacilitySettingsPage() {
                   onChange={(e) => setEarlyWarningDraft({ ...earlyWarning, show_qsofa: e.target.checked })}
                 />
                 qSOFA を併記する
+              </label>
+            </div>
+          )}
+
+          {section === "rx_verification" && (
+            <div className="facility-settings__schedule-body">
+              <label className="connection-settings-form__checkbox">
+                <input
+                  type="checkbox"
+                  checked={rxVerification.block_dispense_before_verified}
+                  onChange={(e) =>
+                    setRxVerificationDraft({ ...rxVerification, block_dispense_before_verified: e.target.checked })
+                  }
+                />
+                監査済まで調剤登録・払出登録を出さない
               </label>
             </div>
           )}

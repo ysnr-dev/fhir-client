@@ -1,0 +1,11 @@
+code,name,display_order
+dose,用量,10
+interaction,相互作用,20
+duplication,重複投与,30
+renal,腎機能,40
+hepatic,肝機能,50
+allergy,アレルギー・禁忌,60
+usage,用法・投与経路,70
+duration,投与期間・日数,80
+compatibility,配合変化,90
+other,その他,100

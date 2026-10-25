@@ -64,6 +64,7 @@ import { isInjectionTask } from "../fhir/injectionTaskHelpers";
 import { LabOrderDetailPanel } from "./LabOrderDetailPanel";
 import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { RxInquirySection } from "./RxInquirySection";
+import { RxVerificationSection } from "./RxVerificationModal";
 import { Modal } from "./Modal";
 import { MicroOrderDetailPanel } from "./MicroOrderDetailPanel";
 import { MicroResultDetailPanel } from "./MicroResultDetailPanel";
@@ -271,6 +272,7 @@ function PrescriptionDetail({
             problemsById={problemsById}
           />
           <RxInquirySection kind="prescription" order={serviceRequest} onEditOrder={onEditOrder} />
+          <RxVerificationSection order={serviceRequest} />
         </>
       ) : (
         !detail.error && <NotFound label="処方" />
@@ -313,6 +315,7 @@ function InjectionDetail({
             problemsById={problemsById}
           />
           <RxInquirySection kind="injection" order={serviceRequest} onEditOrder={onEditOrder} />
+          <RxVerificationSection order={serviceRequest} />
         </>
       ) : (
         !detail.error && <NotFound label="注射" />

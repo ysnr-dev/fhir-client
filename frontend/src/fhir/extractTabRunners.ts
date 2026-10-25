@@ -7,6 +7,7 @@ import {
   fetchEncounterExtract,
   fetchEventExtract,
   fetchIndicatorExtract,
+  fetchInterventionExtract,
   fetchLabExtract,
   fetchMedicationExtract,
   fetchMicroExtract,
@@ -27,6 +28,8 @@ import {
   type EventExtractResult,
   type IndicatorExtractCriteria,
   type IndicatorExtractResult,
+  type InterventionExtractCriteria,
+  type InterventionExtractResult,
   type LabExtractCriteria,
   type LabExtractResult,
   type MedicationExtractCriteria,
@@ -48,6 +51,7 @@ import { metricHeader, metricName } from "./clusterExtractHelpers";
 import { conditionExtractHeader, conditionExtractRows } from "./conditionExtractHelpers";
 import { departmentCode } from "./departmentHelpers";
 import { encounterExtractHeader, encounterExtractRows } from "./encounterExtractHelpers";
+import { interventionExtractHeader, interventionExtractRows } from "./interventionExtractHelpers";
 import {
   patientColumnLabel,
   patientColumnsOf,
@@ -74,6 +78,7 @@ import type {
   ExtractRecordDefinition,
   ExtractRecordTab,
   IndicatorExtractDefinition,
+  InterventionExtractDefinition,
   LabExtractDefinition,
   MedicationExtractDefinition,
   MicroExtractDefinition,
@@ -633,6 +638,29 @@ export const eventRunner: ExtractTabRunner<EventExtractDefinition, EventExtractC
   },
 };
 
+export const interventionRunner: ExtractTabRunner<
+  InterventionExtractDefinition,
+  InterventionExtractCriteria,
+  InterventionExtractResult
+> = {
+  label: "薬剤師介入",
+  emptyLabel: "該当する監査はありません",
+  truncatedMessage: "監査が多いため、新しいものから一部だけを読みました。期間を絞ってください。",
+  criteria(_definition, { range, patientIds }) {
+    return { ...fromTo(range), patientIds };
+  },
+  fetch: fetchInterventionExtract,
+  table(result, definition) {
+    const rows = interventionExtractRows(result.tasks, result.patients, {
+      result: definition.result ?? "intervened",
+      orderKind: definition.order_kind,
+      types: definition.types ?? [],
+      departmentId: definition.department_id,
+    });
+    return { header: interventionExtractHeader(definition.output), rows: rowsOf(rows), unit: "件", incomplete: false };
+  },
+};
+
 /** タブ → 実行の組。タブを足すときはここに 1 行足す。 */
 export const EXTRACT_TAB_RUNNERS: {
   [K in ExtractRecordTab]: ExtractTabRunner<ExtractRecordDefinition, unknown, unknown>;
@@ -647,6 +675,7 @@ export const EXTRACT_TAB_RUNNERS: {
   perform: performRunner,
   adverse: adverseEventRunner,
   pathway: pathwayRunner,
+  intervention: interventionRunner,
   cluster: clusterRunner,
   indicator: indicatorRunner,
   event: eventRunner,

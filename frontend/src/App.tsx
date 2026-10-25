@@ -19,6 +19,7 @@ import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { SmartAppsPage } from "./pages/SmartAppsPage";
 import { CdsServicesPage } from "./pages/CdsServicesPage";
 import { AdvisoryOverrideReasonPage } from "./pages/AdvisoryMasterPages";
+import { PharmacistInterventionTypePage } from "./pages/PharmacistInterventionTypePage";
 import { AdvisoryReviewPage } from "./pages/AdvisoryReviewPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
 import { MasterMenuPage } from "./pages/MasterMenuPage";
@@ -168,6 +169,7 @@ import { LabResultImportDetailPage } from "./pages/LabResultImportDetailPage";
 import { LabWorklistPage } from "./pages/LabWorklistPage";
 import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { RxWorklistPage } from "./pages/RxWorklistPage";
+import { RxVerificationPage } from "./pages/RxVerificationPage";
 import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklistPage";
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { LotManagementPage } from "./pages/LotManagementPage";
@@ -382,6 +384,7 @@ function App() {
           <Route path="/radiotherapy-devices" element={<RadiotherapyDevicePage />} />
           <Route path="/radiotherapy-stop-reasons" element={<RadiotherapyStopReasonPage />} />
           <Route path="/advisory-override-reasons" element={<AdvisoryOverrideReasonPage />} />
+          <Route path="/pharmacist-intervention-types" element={<PharmacistInterventionTypePage />} />
           <Route
             path="/nutrition-guidance-worklist"
             element={<NutritionGuidanceWorklistPage />}
@@ -411,6 +414,7 @@ function App() {
           <Route path="/nursing-summary-approvals" element={<NursingSummaryApprovalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
+          <Route path="/rx-verification" element={<RxVerificationPage />} />
           <Route path="/brought-med-worklist" element={<BroughtMedicationWorklistPage />} />
           <Route path="/injection-worklist" element={<InjectionWorklistPage />} />
           <Route path="/lot-management" element={<LotManagementPage />} />

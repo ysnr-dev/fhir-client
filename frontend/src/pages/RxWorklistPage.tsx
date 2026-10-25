@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
   useSelfDepartments,
+  useRxVerificationSettings,
   useRxWorklist,
   useUpdateRxTaskStatus,
   type RxWorklistRow,
@@ -22,6 +23,8 @@ import { RowPictograms } from "../components/PatientListRowParts";
 import { RxDispenseModal } from "../components/RxDispenseModal";
 import { RxInquiryModal } from "../components/RxInquiryModal";
 import { RxOrderViewModal } from "../components/RxOrderViewModal";
+import { RxVerificationMark, RxVerificationModal } from "../components/RxVerificationModal";
+import { rxVerificationStateOf } from "../fhir/rxVerificationHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
 import {
@@ -100,6 +103,8 @@ export function RxWorklistPage() {
   const [dispensingId, setDispensingId] = useState<string | null>(null);
   // 疑義照会を開いているオーダー。
   const [inquiringId, setInquiringId] = useState<string | null>(null);
+  // 監査を開いているオーダー。
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
   // 処方内容の列が長くなるので、この画面だけ幅を広げる(検体検査一覧と同じ)。
   useEffect(() => {
@@ -119,6 +124,7 @@ export function RxWorklistPage() {
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
   const inquiring = worklist.data?.rows.find((row) => row.order.id === inquiringId);
+  const verifying = worklist.data?.rows.find((row) => row.order.id === verifyingId);
 
   const patientIds = useMemo(
     () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
@@ -217,6 +223,7 @@ export function RxWorklistPage() {
                     onView={() => setViewingId(row.order.id ?? null)}
                     onDispense={() => setDispensingId(row.order.id ?? null)}
                     onInquire={() => setInquiringId(row.order.id ?? null)}
+                    onVerify={() => setVerifyingId(row.order.id ?? null)}
                     onChangeStatus={(status) => changeStatus(row, status)}
                   />
                 ))}
@@ -248,6 +255,7 @@ export function RxWorklistPage() {
                 onView={() => setViewingId(selectedRow.order.id ?? null)}
                 onDispense={() => setDispensingId(selectedRow.order.id ?? null)}
                 onInquire={() => setInquiringId(selectedRow.order.id ?? null)}
+                onVerify={() => setVerifyingId(selectedRow.order.id ?? null)}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
               {hasRxMenuItems(selectedRow) && (
@@ -265,6 +273,17 @@ export function RxWorklistPage() {
       {viewing && <RxOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
       {dispensing && (
         <RxDispenseModal row={dispensing} onClose={() => setDispensingId(null)} />
+      )}
+      {verifying?.verification && (
+        <RxVerificationModal
+          task={verifying.verification}
+          patient={verifying.patient}
+          onInquire={() => {
+            setVerifyingId(null);
+            setInquiringId(verifying.order.id ?? null);
+          }}
+          onClose={() => setVerifyingId(null)}
+        />
       )}
       {inquiring && (
         <RxInquiryModal
@@ -416,6 +435,7 @@ function WorklistRow({
   onView,
   onDispense,
   onInquire,
+  onVerify,
   onChangeStatus,
 }: {
   /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
@@ -427,6 +447,7 @@ function WorklistRow({
   onView: () => void;
   onDispense: () => void;
   onInquire: () => void;
+  onVerify: () => void;
   onChangeStatus: (status: RxTaskStatus) => void;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
@@ -504,6 +525,7 @@ function WorklistRow({
             {answerLabel}
           </span>
         )}
+        <RxVerificationMark task={row.verification} />
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
         <RxRowButtons
@@ -511,6 +533,7 @@ function WorklistRow({
           onView={onView}
           onDispense={onDispense}
           onInquire={onInquire}
+          onVerify={onVerify}
           onChangeStatus={onChangeStatus}
         />
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。
@@ -531,17 +554,22 @@ function RxRowButtons({
   onView,
   onDispense,
   onInquire,
+  onVerify,
   onChangeStatus,
 }: {
   row: RxWorklistRow;
   onView: () => void;
   onDispense: () => void;
   onInquire: () => void;
+  onVerify: () => void;
   onChangeStatus: (status: RxTaskStatus) => void;
 }) {
   const { order, patient } = row;
   const status = rxTaskStatus(row.task);
   const brought = isBroughtPrescription(order);
+  const verification = rxVerificationStateOf(row.verification);
+  // 施設設定で、監査済になるまで調剤登録を出さない。
+  const blocked = useRxVerificationSettings().block_dispense_before_verified && verification === "pending";
   return (
     <>
       {/* 処方箋の発行が受付を兼ねる(検体検査のラベル発行と同じ)。薬剤部が最初に
@@ -563,7 +591,12 @@ function RxRowButtons({
       )}
       {/* 受付が済んだら調剤の結果を登録できる。紐付け先はこの行のオーダーで決まって
           いるので、モーダルの中でオーダーを選ばせない(RxDispenseModal)。 */}
-      {status === "accepted" && !brought && (
+      {verification === "pending" && (
+        <button type="button" onClick={onVerify}>
+          監査
+        </button>
+      )}
+      {status === "accepted" && !brought && !blocked && (
         <button type="button" disabled={!patient?.id} onClick={onDispense}>
           調剤登録
         </button>

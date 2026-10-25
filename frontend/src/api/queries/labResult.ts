@@ -36,6 +36,7 @@ import {
 } from "./core";
 import { fetchLabelSpecimens } from "./injection";
 import { withAntimicrobialNotifications } from "./antimicrobial";
+import { RX_VERIFICATION_KEY, withRxVerificationTasks } from "./rxVerification";
 import { fetchReportTasks } from "./notification";
 import { invalidateProvenance, useOrderEnterer, useWithOrderProvenance } from "./provenance";
 import { useCountersignContext } from "./countersign";
@@ -210,7 +211,9 @@ export function useCreatePrescription() {
   const withProvenance = useWithOrderProvenance();
   return useMutation({
     // 特定抗菌薬を含む処方・注射なら、依頼医あての届出の通知も同じ transaction で作る。
-    mutationFn: async (bundle: fhir4.Bundle) => postBundle(withProvenance(await withAntimicrobialNotifications(bundle))),
+    // 院内の処方・注射なら、薬剤師の監査 Task も作る。
+    mutationFn: async (bundle: fhir4.Bundle) =>
+      postBundle(withProvenance(await withRxVerificationTasks(await withAntimicrobialNotifications(bundle)))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       invalidateProvenance(queryClient);
@@ -218,6 +221,7 @@ export function useCreatePrescription() {
       queryClient.invalidateQueries({ queryKey: ["MedicationStatement"] });
       queryClient.invalidateQueries({ queryKey: ["Task", "search"] });
       queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+      queryClient.invalidateQueries({ queryKey: RX_VERIFICATION_KEY });
     },
   });
 }
@@ -278,10 +282,13 @@ export function useUpdatePrescription() {
   const queryClient = useQueryClient();
   const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: async (bundle: fhir4.Bundle) => postBundle(withProvenance(await withAntimicrobialNotifications(bundle))),
+    // 監査済の処方・注射を編集したら、監査 Task を未監査に戻す。
+    mutationFn: async (bundle: fhir4.Bundle) =>
+      postBundle(withProvenance(await withRxVerificationTasks(await withAntimicrobialNotifications(bundle)))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      queryClient.invalidateQueries({ queryKey: RX_VERIFICATION_KEY });
       queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
       // 疑義照会の処方変更待ちを編集と一緒に解くので、進捗を読む部門一覧と照会の履歴も読み直す。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });

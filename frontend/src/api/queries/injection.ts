@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { rxInquiryTasksByOrderId } from "../../fhir/rxInquiryHelpers";
+import { isRxVerificationTarget, rxVerificationGroupOf } from "../../fhir/rxVerificationHelpers";
 import { isLabelSpecimen } from "../../fhir/labResultHelpers";
 import { injectionTasksByOrderId } from "../../fhir/injectionTaskHelpers";
 import { INJECTION_ORDER_TYPE, isInjectionServiceRequest } from "../../fhir/injectionHelpers";
@@ -25,6 +26,7 @@ import { postBundle, searchResource } from "../fhirClient";
 import { fetchRxWorklist } from "./prescription";
 import { comparePatientNumber, fetchWorklistBundles, makeUpdateTaskStatusHook, worklistParams } from "./worklist";
 import { resourcesOfType } from "./core";
+import { fetchRxVerificationByGroups } from "./rxVerification";
 
 // ---- 注射一覧(部門ワークリスト) ----
 //
@@ -40,6 +42,8 @@ export interface InjectionWorklistRow {
   task?: fhir4.Task;
   /** 疑義照会(fhir/rxInquiryHelpers.ts)。 */
   inquiries: fhir4.Task[];
+  /** 処方監査(fhir/rxVerificationHelpers.ts)。連日の注射は束ねに 1 件なので、束ねの全日に同じ Task が付く。 */
+  verification?: fhir4.Task;
 }
 
 async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLike<InjectionWorklistRow>> {
@@ -80,12 +84,17 @@ async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLik
     }
   }
 
+  const verificationByGroup = await fetchRxVerificationByGroups(
+    orders.filter(isRxVerificationTarget).map((order) => rxVerificationGroupOf(order) ?? ""),
+  );
+
   const rows = orders.map((order) => ({
     order,
     medicationRequests: mrsByOrderId.get(order.id ?? "") ?? [],
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: taskByOrderId.get(order.id ?? ""),
     inquiries: inquiriesByOrderId.get(order.id ?? "") ?? [],
+    verification: verificationByGroup.get(rxVerificationGroupOf(order) ?? ""),
   }));
   rows.sort(comparePatientNumber);
   return { rows, truncated };

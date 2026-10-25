@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
   useInjectionWorklist,
+  useRxVerificationSettings,
   useSelfDepartments,
   useUpdateInjectionTaskStatus,
   type InjectionWorklistRow,
@@ -14,6 +15,8 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { InjectionDispenseModal } from "../components/InjectionDispenseModal";
 import { InjectionOrderViewModal } from "../components/InjectionOrderViewModal";
 import { RxInquiryModal } from "../components/RxInquiryModal";
+import { RxVerificationMark, RxVerificationModal } from "../components/RxVerificationModal";
+import { rxVerificationStateOf } from "../fhir/rxVerificationHelpers";
 import {
   PatientKana,
   PatientProfileCells,
@@ -90,6 +93,8 @@ export function InjectionWorklistPage() {
   const [dispensingId, setDispensingId] = useState<string | null>(null);
   // 疑義照会を開いているオーダー。
   const [inquiringId, setInquiringId] = useState<string | null>(null);
+  // 監査を開いているオーダー。
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
   useEffect(() => {
     document.body.classList.add("page-wide");
@@ -108,6 +113,7 @@ export function InjectionWorklistPage() {
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
   const inquiring = worklist.data?.rows.find((row) => row.order.id === inquiringId);
+  const verifying = worklist.data?.rows.find((row) => row.order.id === verifyingId);
 
   const patientIds = useMemo(
     () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
@@ -192,6 +198,7 @@ export function InjectionWorklistPage() {
                     onView={() => setViewingId(row.order.id ?? null)}
                     onDispense={() => setDispensingId(row.order.id ?? null)}
                     onInquire={() => setInquiringId(row.order.id ?? null)}
+                    onVerify={() => setVerifyingId(row.order.id ?? null)}
                     onChangeStatus={(status) => changeStatus(row, status)}
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                   />
@@ -223,6 +230,7 @@ export function InjectionWorklistPage() {
                 onView={() => setViewingId(selectedRow.order.id ?? null)}
                 onDispense={() => setDispensingId(selectedRow.order.id ?? null)}
                 onInquire={() => setInquiringId(selectedRow.order.id ?? null)}
+                onVerify={() => setVerifyingId(selectedRow.order.id ?? null)}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
               {hasMenuItems(selectedRow) && (
@@ -240,6 +248,17 @@ export function InjectionWorklistPage() {
       {viewing && <InjectionOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
       {dispensing && (
         <InjectionDispenseModal row={dispensing} onClose={() => setDispensingId(null)} />
+      )}
+      {verifying?.verification && (
+        <RxVerificationModal
+          task={verifying.verification}
+          patient={verifying.patient}
+          onInquire={() => {
+            setVerifyingId(null);
+            setInquiringId(verifying.order.id ?? null);
+          }}
+          onClose={() => setVerifyingId(null)}
+        />
       )}
       {inquiring && (
         <RxInquiryModal
@@ -394,6 +413,7 @@ function WorklistRow({
   onView,
   onDispense,
   onInquire,
+  onVerify,
   onChangeStatus,
   rowProps,
 }: {
@@ -404,6 +424,7 @@ function WorklistRow({
   onView: () => void;
   onDispense: () => void;
   onInquire: () => void;
+  onVerify: () => void;
   onChangeStatus: (status: InjectionTaskStatus) => void;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
@@ -479,6 +500,7 @@ function WorklistRow({
             {answerLabel}
           </span>
         )}
+        <RxVerificationMark task={row.verification} />
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
         <WorklistRowButtons
@@ -486,6 +508,7 @@ function WorklistRow({
           onView={onView}
           onDispense={onDispense}
           onInquire={onInquire}
+          onVerify={onVerify}
           onChangeStatus={onChangeStatus}
         />
         {hasMenuItems(row) && (
@@ -517,15 +540,20 @@ function WorklistRowButtons({
   onView,
   onDispense,
   onInquire,
+  onVerify,
   onChangeStatus,
 }: {
   row: InjectionWorklistRow;
   onView: () => void;
   onDispense: () => void;
   onInquire: () => void;
+  onVerify: () => void;
   onChangeStatus: (status: InjectionTaskStatus) => void;
 }) {
   const status = injectionTaskStatus(row.task);
+  const verification = rxVerificationStateOf(row.verification);
+  // 施設設定で、監査済になるまで払出登録を出さない。
+  const blocked = useRxVerificationSettings().block_dispense_before_verified && verification === "pending";
 
   return (
     <>
@@ -543,7 +571,12 @@ function WorklistRowButtons({
           注射箋発行
         </a>
       )}
-      {status === "accepted" && (
+      {verification === "pending" && (
+        <button type="button" onClick={onVerify}>
+          監査
+        </button>
+      )}
+      {status === "accepted" && !blocked && (
         <button type="button" disabled={!row.patient?.id} onClick={onDispense}>
           払出登録
         </button>
