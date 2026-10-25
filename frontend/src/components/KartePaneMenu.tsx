@@ -7,7 +7,7 @@ import { KARTE_MENU_ITEMS, karteMenuFullLabel, karteMenuItemsOf, type KarteMenuI
 import { KartePaneFavoriteModal } from "./KartePaneFavoriteModal";
 import type { KartePaneState } from "./KarteRightPane";
 
-// カルテ右ペインの新規登録の入口(右端に縦並びのボタン列)。「全て」と、本人が選んだ「頻用」をタブで切り替える。
+// カルテ右ペインの新規登録の入口(右端に縦並びのボタン列)。「共通」と、本人が選んだ「頻用」をタブで切り替える。
 
 const FAVORITE_TAB_KEY = "karte-right-menu-favorite";
 
@@ -38,7 +38,7 @@ export function KartePaneMenu({
         {practitionerId && (
           <div className="karte-right__menu-tabs" role="tablist" aria-label="メニュー">
             {[
-              { favorite: false, label: "全て" },
+              { favorite: false, label: "共通" },
               { favorite: true, label: "頻用" },
             ].map((tab) => (
               <button
@@ -84,7 +84,7 @@ export function KartePaneMenu({
   );
 }
 
-/** 「全て」の並び。同じ見出しの続くメニューを 1 つの見出しに束ねる。 */
+/** 「共通」の並び。同じ見出しの続くメニューを 1 つの見出しに束ねる。 */
 function groupedItems(): (KarteMenuItem | { group: string; items: KarteMenuItem[] })[] {
   const entries: (KarteMenuItem | { group: string; items: KarteMenuItem[] })[] = [];
   for (const item of KARTE_MENU_ITEMS) {
