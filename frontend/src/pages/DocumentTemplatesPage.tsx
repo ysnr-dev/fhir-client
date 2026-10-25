@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { DocumentTemplateKind, DocumentTemplateSummary } from "../api/adminClient";
 import { useDocumentTemplates } from "../api/adminQueries";
@@ -36,6 +36,12 @@ export function DocumentTemplatesPage() {
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importTemplate = useImportDocumentFormTemplate();
+
+  // 一覧の列とデザイナの作業領域が既定の 960px では窮屈なので、本文を少し広げる。
+  useEffect(() => {
+    document.body.classList.add("page-wide-md");
+    return () => document.body.classList.remove("page-wide-md");
+  }, []);
 
   function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
