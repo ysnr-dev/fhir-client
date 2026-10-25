@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FhirError } from "../api/fhirClient";
 import {
   useCreateQuestionnaireResponse,
+  useKarteConditions,
   useLatestQuestionnaireResponse,
   usePatient,
   usePopulateSources,
@@ -11,6 +12,8 @@ import {
   useQuestionnaireResponse,
   useUpdateQuestionnaireResponse,
 } from "../api/queries";
+import { usesCancerVariables } from "../fhir/cancerRegistryHelpers";
+import { problemRefOf } from "../fhir/conditionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { QuestionnaireResponseForm } from "./QuestionnaireResponseForm";
 import { QuestionnaireResponseMetaFields } from "./QuestionnaireResponseMetaFields";
@@ -117,7 +120,22 @@ export function QuestionnaireResponseCreatePanel({
   const [validationError, setValidationError] = useState<string | null>(null);
   // 対象プロブレム(POMR)。診療記録・オーダーと同じく、回答 1 件に 1 プロブレム。
   const [problem, setProblem] = useState<ProblemRef | null>(defaultProblem ?? null);
-  const problemOptions = useProblemOptions(patientId);
+  // 一覧から渡された対象がプロブレムでない病名(院内がん登録の保険病名など)のときは、その病名を選択肢に足して
+  // 選んだ状態にする。表示名が無いまま渡されたら病名から埋める。
+  const { conditions: karteConditions } = useKarteConditions(patientId);
+  const listedProblemOptions = useProblemOptions(patientId);
+  const problemOptions = useMemo(() => {
+    if (!defaultProblem || listedProblemOptions.some((o) => o.conditionId === defaultProblem.conditionId)) {
+      return listedProblemOptions;
+    }
+    const condition = karteConditions.find((c) => c.id === defaultProblem.conditionId);
+    return condition ? [...listedProblemOptions, problemRefOf(condition)] : listedProblemOptions;
+  }, [defaultProblem, listedProblemOptions, karteConditions]);
+  useEffect(() => {
+    if (!problem || problem.display) return;
+    const resolved = problemOptions.find((o) => o.conditionId === problem.conditionId);
+    if (resolved?.display) setProblem(resolved);
+  }, [problem, problemOptions]);
   // 記録した診療科。ヘッダーで選択中の科を焼き付ける(オーダーの依頼科と同じ扱い)。
   const orderContext = useOrderContext();
 
@@ -160,8 +178,20 @@ export function QuestionnaireResponseCreatePanel({
 
   // 初期値式(%conditions / %patient など。populateContext.ts 参照)の実行時
   // コンテキスト。取得完了までフォームを描画しない(初期回答はマウント時に確定するため)。
-  const labCodes = useMemo(() => collectLabCodes(questionnaireExpressions(questionnaire)), [questionnaire]);
-  const populate = usePopulateSources(patientId, { labCodes });
+  const expressions = useMemo(() => questionnaireExpressions(questionnaire), [questionnaire]);
+  const labCodes = useMemo(() => collectLabCodes(expressions), [expressions]);
+  // がん登録の変数(docs/cancer-registry-design.md §3)は、式が参照するテンプレートのときだけ元データを読む。
+  const cancer = useMemo(
+    () =>
+      questionnaire && usesCancerVariables(expressions)
+        ? {
+            focusConditionId: defaultProblem?.conditionId,
+            canonicals: [...new Set([questionnaire.url ?? "", questionnaireCanonical(questionnaire)].filter(Boolean))],
+          }
+        : undefined,
+    [questionnaire, expressions, defaultProblem?.conditionId],
+  );
+  const populate = usePopulateSources(patientId, { labCodes, cancer });
   const expressionContext = useMemo(
     () =>
       patient && !populate.isLoading

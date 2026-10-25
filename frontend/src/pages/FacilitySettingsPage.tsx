@@ -51,6 +51,7 @@ import {
 } from "../fhir/nursingAcuityHelpers";
 import { ACUITY_CATEGORY_OPTIONS, unitRoomOptions } from "../fhir/nursingAcuityUnitHelpers";
 import { DEFAULT_PRESSURE_ULCER, type PressureUlcerSettings } from "../fhir/pressureUlcerHelpers";
+import { DEFAULT_CANCER_REGISTRY, type CancerRegistrySettings } from "../fhir/cancerRegistryHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import {
   CATEGORY_OPTIONS,
@@ -144,6 +145,7 @@ const FACILITY_SECTIONS = [
   { key: "document_reminder", label: "文書作成の督促" },
   { key: "nursing_acuity", label: "看護必要度" },
   { key: "pressure_ulcer", label: "褥瘡管理" },
+  { key: "cancer_registry", label: "院内がん登録" },
   { key: "radiotherapy_review", label: "放射線治療の週次レビュー" },
   { key: "intake", label: "Web 問診" },
   { key: "early_warning", label: "早期警告スコア(NEWS2)" },
@@ -254,6 +256,12 @@ export function FacilitySettingsPage() {
   const savedPressureUlcer = settings.data?.pressure_ulcer ?? DEFAULT_PRESSURE_ULCER;
   const pressureUlcer = pressureUlcerDraft ?? savedPressureUlcer;
   const pressureUlcerValid = /^https?:\/\/[^\s|]+$/.test(pressureUlcer.template);
+
+  // 院内がん登録の標準登録様式のテンプレート(url。版を問わない)。
+  const [cancerRegistryDraft, setCancerRegistryDraft] = useState<CancerRegistrySettings | undefined>(undefined);
+  const savedCancerRegistry = settings.data?.cancer_registry ?? DEFAULT_CANCER_REGISTRY;
+  const cancerRegistry = cancerRegistryDraft ?? savedCancerRegistry;
+  const cancerRegistryValid = /^https?:\/\/[^\s|]+$/.test(cancerRegistry.template);
 
   // 看護必要度の評価票の版と該当患者の基準。基準は組("A3" "A2+B3" "#A2")を空白区切りで入れる(組の OR)。
   const [acuityDraft, setAcuityDraft] = useState<
@@ -531,7 +539,7 @@ export function FacilitySettingsPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
-    if (!admissionDocsValid || !acuityValid || !pressureUlcerValid) return;
+    if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid) return;
     if (!reviewValid || !receiptCodesOk || !coefficientsValid || !intakeValid) return;
     update.mutate({
       self_organization_id: value,
@@ -551,6 +559,7 @@ export function FacilitySettingsPage() {
       admission_documents: admissionDocs,
       nursing_acuity: acuity,
       pressure_ulcer: pressureUlcer,
+      cancer_registry: cancerRegistry,
       early_warning: earlyWarning,
       rx_verification: rxVerification,
       intake,
@@ -1221,6 +1230,25 @@ export function FacilitySettingsPage() {
             </div>
           )}
 
+          {/* 院内がん登録。登録対象の一覧はこのテンプレートの回答で登録・届出の状況を出す(url は版を問わない)。 */}
+          {section === "cancer_registry" && (
+            <div className="facility-settings__schedule-body">
+              <label>
+                標準登録様式のテンプレート
+                <select
+                  value={cancerRegistry.template}
+                  onChange={(e) => setCancerRegistryDraft({ ...cancerRegistry, template: e.target.value })}
+                >
+                  {[...new Set([cancerRegistry.template, ...templateOptions.questionnaires.map((q) => q.url ?? "").filter(Boolean)])].map((url) => (
+                    <option key={url} value={url}>
+                      {templateOptions.questionnaires.find((q) => q.url === url)?.title ?? url}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
           {/* 放射線治療の治療中の診察。既定の 7 日は外来放射線照射診療料(B001-2-8。7 日間に
               1 回、算定日に放射線治療医の診察)に合わせた値で、入院の患者や施設の運用に合わせて
               変えられるようにしてある。テンプレートは記入欄の初期値(選び直しは妨げない)。 */}
@@ -1752,7 +1780,8 @@ export function FacilitySettingsPage() {
                 !reminderValid ||
                 !admissionDocsValid ||
                 !acuityValid ||
-                !pressureUlcerValid
+                !pressureUlcerValid ||
+                !cancerRegistryValid
               }
             >
               {update.isPending ? "保存中..." : "保存"}

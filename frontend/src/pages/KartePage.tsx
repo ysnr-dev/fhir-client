@@ -400,6 +400,13 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             ? { kind: "team-request-create", teamId: openTarget.teamId }
           : openTarget.kind === "questionnaire"
             ? { kind: "qr-create", templateCanonical: openTarget.url }
+          : openTarget.kind === "cancer-registry"
+            ? {
+                kind: "qr-create",
+                templateCanonical: openTarget.url,
+                // 表示名はテンプレート登録の側で病名から埋める。
+                problem: { conditionId: openTarget.conditionId, display: "" },
+              }
           : openTarget.kind === "intake"
             ? { kind: "intake-review", responseId: openTarget.responseId }
             : { kind: "radiotherapy-review", srId: openTarget.srId },

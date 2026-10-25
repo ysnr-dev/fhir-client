@@ -372,6 +372,29 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (cancer_registry)" do
+    it "院内がん登録のテンプレートの url を保存し、既定は同梱の HBCR_01" do
+      with_admin_token(nil) { get "/facility_settings" }
+      expect(JSON.parse(response.body)["cancer_registry"]).to eq(
+        "template" => "http://fhir-client.local/Questionnaire/hbcr-01",
+      )
+
+      with_admin_token(nil) do
+        patch "/facility_settings",
+              params: { cancer_registry: { template: "http://fhir-client.local/Questionnaire/hbcr-local" } }, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["cancer_registry"]).to eq(
+        "template" => "http://fhir-client.local/Questionnaire/hbcr-local",
+      )
+
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { cancer_registry: { template: "" } }, as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "PATCH /facility_settings (document_reminder)" do
     it "stores the days and returns the merged defaults" do
       with_admin_token(nil) do

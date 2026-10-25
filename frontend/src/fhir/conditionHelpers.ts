@@ -8,7 +8,7 @@ const PROFILE_URL = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Condition
 export const DISEASE_KEY_NUMBER_SYSTEM = "http://medis.or.jp/CodeSystem/master-disease-keyNumber"; // 病名管理番号
 const DISEASE_EXCHANGE_SYSTEM = "http://medis.or.jp/CodeSystem/master-disease-exCode"; // 病名交換用コード
 const DISEASE_RECEIPT_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/masterB-disease"; // レセ電算用傷病名コード
-const ICD10_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full";
+export const ICD10_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/ICD10-2013-full";
 // 修飾語: MEDIS 修飾語テーブル
 const MODIFIER_KEY_NUMBER_SYSTEM = "http://medis.or.jp/CodeSystem/master-disease-modKeyNumber"; // 修飾語管理番号
 const MODIFIER_EXCHANGE_SYSTEM = "http://medis.or.jp/CodeSystem/master-disease-modExCode"; // 修飾語交換用コード

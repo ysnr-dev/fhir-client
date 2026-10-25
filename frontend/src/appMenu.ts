@@ -154,6 +154,8 @@ export const APP_MENU: AppMenuEntry[] = [
     items: [
       { label: "DPC患者", to: "/dpc-patients" },
       { label: "DPC様式1", to: "/dpc-form1-export" },
+      // 院内がん登録の登録対象(がんの病名)と登録・届出の状況(docs/cancer-registry-design.md)。
+      { label: "院内がん登録", to: "/cancer-registry" },
       { label: "データ抽出", to: "/data-extract" },
       { label: "分析ダッシュボード", to: "/dashboards" },
     ],

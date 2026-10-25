@@ -52,6 +52,8 @@ export type KarteOpenTarget =
   | { kind: "team-request"; teamId: string }
   // テンプレート回答の登録を、テンプレートを選択済みで開く(褥瘡管理の DESIGN-R 評価から)。
   | { kind: "questionnaire"; url: string }
+  // 院内がん登録の登録を、腫瘍(病名)を対象プロブレムに、施設設定のテンプレートを選択済みで開く(登録対象の一覧から)。
+  | { kind: "cancer-registry"; conditionId: string; url: string }
   // Web 問診の回答の取込(患者帯のピクトグラムから)。
   | { kind: "intake"; responseId: number };
 
@@ -65,6 +67,8 @@ export function formatKarteOpen(target: KarteOpenTarget): string {
           ? target.teamId
           : target.kind === "questionnaire"
             ? target.url
+            : target.kind === "cancer-registry"
+              ? `${target.conditionId}@${target.url}`
             : target.kind === "intake"
               ? String(target.responseId)
               : target.encounterId;
@@ -91,6 +95,12 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   if (kind === "nursing-summary") return { kind, compositionId: id };
   if (kind === "team-request") return { kind, teamId: id };
   if (kind === "questionnaire") return { kind, url: id };
+  if (kind === "cancer-registry") {
+    // Condition の id に「@」は入らないので、最初の 1 つで切る(url 側はコロンを含む)。
+    const at = id.indexOf("@");
+    if (at <= 0 || at === id.length - 1) return null;
+    return { kind, conditionId: id.slice(0, at), url: id.slice(at + 1) };
+  }
   if (kind === "intake" && /^\d+$/.test(id)) return { kind, responseId: Number(id) };
   return null;
 }

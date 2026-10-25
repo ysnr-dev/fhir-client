@@ -26695,6 +26695,13 @@ input.nursing-picker__search {
   font-weight: normal;
 }
 
+/* 院内がん登録の行の操作(登録 / 開く)。文字だけの行より高くならないよう小さめにする。 */
+.cancer-registry__actions .button {
+  --control-height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 /* 看護必要度の評価(モーダル)。項目は番号・内容・点数の 3 列で、B は状態の選択肢を横に並べる。 */
 .nursing-acuity-modal {
   width: min(880px, 96vw);

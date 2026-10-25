@@ -14,6 +14,7 @@ import { summarizeAllergy } from "./allergyHelpers";
 import { summarizeBodyMeasures } from "./bodyMeasureHelpers";
 import { bloodTypeLabel } from "./transfusionOrderHelpers";
 import { summarizeBloodType } from "./bloodTypeHelpers";
+import { cancerPopulateValues, type CancerPopulateSources } from "./cancerRegistryHelpers";
 import { conditionCategoryOf, isActiveCondition, summarizeCondition } from "./conditionHelpers";
 import {
   encounterAdmissionDate,
@@ -80,6 +81,8 @@ export interface PopulateSources {
   facility: fhir4.Organization | null;
   /** ログイン中の医療従事者とそのロール(所属・診療科)。紐付く医療従事者が無ければ null。 */
   author: { practitioner: fhir4.Practitioner; roles: fhir4.PractitionerRole[] } | null;
+  /** がん登録の変数の元データ(cancerRegistryHelpers.ts)。テンプレートの式が参照するときだけ揃う。 */
+  cancer?: CancerPopulateSources;
 }
 
 // テンプレート編集画面で初期値式として選べる式の一覧(変数選択モーダル)。
@@ -481,6 +484,122 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     sample: "1310000001",
   },
 
+  // ---- がん登録(docs/cancer-registry-design.md §3) ----
+  {
+    group: "がん登録",
+    variable: "cancerName",
+    label: "腫瘍の病名",
+    expression: "%cancerName",
+    description:
+      "登録対象(がん)の病名を入れます。対象プロブレムが登録対象の病名ならそれ、そうでなければ登録対象の病名のうち開始日が最も新しいものです。",
+    sample: "S状結腸癌",
+  },
+  {
+    group: "がん登録",
+    variable: "cancerIcd10",
+    label: "腫瘍の ICD-10",
+    expression: "%cancerIcd10",
+    description: "腫瘍の病名の ICD-10 をピリオド付きで入れます。",
+    sample: "C18.7",
+  },
+  {
+    group: "がん登録",
+    variable: "cancerTopography",
+    label: "局在コードの候補",
+    expression: "%cancerTopography",
+    description:
+      "固形がん(C00〜C80)では ICD-10 の 4 桁と同じ局在コードをピリオド無しで入れます。続発性・血液腫瘍・上皮内癌と 3 桁だけの ICD-10 では入りません。",
+    sample: "C187",
+  },
+  {
+    group: "がん登録",
+    variable: "cancerDiagnosisDate",
+    label: "診断日",
+    expression: "%cancerDiagnosisDate.replace('-','')",
+    description: "腫瘍の病名の開始日を YYYYMMDD で入れます(様式の 8 桁)。YYYY-MM-DD で使うときは .replace を外します。",
+    sample: "20260815",
+  },
+  {
+    group: "がん登録",
+    variable: "cancerDiagnosisBasis",
+    label: "診断根拠のコード",
+    expression: "%cancerDiagnosisBasis",
+    description: "確定した病理レポートがあれば組織診の「1」、細胞診だけなら「3」を入れます。無ければ入りません。",
+    sample: "1",
+  },
+  {
+    group: "がん登録",
+    variable: "pathologyDiagnosis",
+    label: "病理診断",
+    expression: "%pathologyDiagnosis",
+    description: "最新の確定した病理レポートの「診断」を入れます。",
+    sample: "Adenocarcinoma, tub1, pT3",
+  },
+  {
+    group: "がん登録",
+    variable: "pathologyDate",
+    label: "病理診断日",
+    expression: "%pathologyDate.replace('-','')",
+    description: "最新の確定した病理レポートの日付を YYYYMMDD で入れます。",
+    sample: "20260820",
+  },
+  {
+    group: "がん登録",
+    variable: "surgeryDate",
+    label: "初回の手術日",
+    expression: "%surgeryDate.replace('-','')",
+    description: "診断日以後で最も早い手術の実施記録の入室日を YYYYMMDD で入れます。",
+    sample: "20260901",
+  },
+  {
+    group: "がん登録",
+    variable: "chemoStartDate",
+    label: "化学療法の開始日",
+    expression: "%chemoStartDate.replace('-','')",
+    description: "診断日以後で最も早いレジメン適用の開始日(C1 Day1)を YYYYMMDD で入れます。",
+    sample: "20260922",
+  },
+  {
+    group: "がん登録",
+    variable: "radiotherapyStartDate",
+    label: "放射線治療の開始日",
+    expression: "%radiotherapyStartDate.replace('-','')",
+    description: "診断日以後で最も早い照射の実施日(無ければコースの開始予定日)を YYYYMMDD で入れます。",
+    sample: "20261001",
+  },
+  {
+    group: "がん登録",
+    variable: "deathDate",
+    label: "死亡日",
+    expression: "%deathDate.replace('-','')",
+    description: "患者情報の死亡日を YYYYMMDD で入れます。生存していれば入りません。",
+    sample: "20261010",
+  },
+  {
+    group: "がん登録",
+    variable: "lastVisitDate",
+    label: "最終来院日",
+    expression: "%lastVisitDate.replace('-','')",
+    description: "最新の受診・入院の開始日を YYYYMMDD で入れます(生存最終確認日の初期値)。",
+    sample: "20261020",
+  },
+  {
+    group: "がん登録",
+    variable: "prefectureCode",
+    label: "都道府県コード",
+    expression: "%prefectureCode",
+    description: "患者の住所の都道府県を 2 桁のコード(01〜47)で入れます。",
+    sample: "13",
+  },
+  {
+    group: "がん登録",
+    variable: "cancerRegistrationNumber",
+    label: "腫瘍番号",
+    expression: "%cancerRegistrationNumber",
+    description: `同じテンプレートのこの患者の登録件数 + 1 を入れます(重複番号)。${NUMBER_NOTE}`,
+    sample: "1",
+  },
+
   // ---- 作成者 ----
   {
     group: "作成者",
@@ -784,5 +903,6 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     prescriptions: formatPrescriptions(sources.prescriptionDetail),
     ...facilityValues(sources.facility),
     ...authorValues(sources.author),
+    ...cancerPopulateValues(patient, sources.allConditions, sources.cancer),
   };
 }

@@ -9,6 +9,10 @@ import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../../fhir/infectionH
 import type { PopulateSources } from "../../fhir/populateContext";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { PRESCRIPTION_ORDER_TYPE } from "../../fhir/prescriptionHelpers";
+import { REGIMEN_ORDER_TYPE } from "../../fhir/regimenOrderHelpers";
+import { RADIOTHERAPY_ORDER_TYPE } from "../../fhir/radiotherapyOrderHelpers";
+import { SURGERY_ORDER_TYPE } from "../../fhir/surgeryOrderHelpers";
+import type { CancerPopulateSources } from "../../fhir/cancerRegistryHelpers";
 import { today as todayString } from "../../lib/dates";
 import { useAuthSession } from "../authQueries";
 import { searchResource } from "../fhirClient";
@@ -29,6 +33,14 @@ import { resourcesOfType } from "./core";
 /** 項目ごとの最新値を拾うのに読むバイタルの件数(新しい順)。測定 10 回ぶん程度。 */
 const VITAL_COUNT = 50;
 
+/** がん登録の変数(docs/cancer-registry-design.md §3)の元データを読むときの指定。 */
+export interface PopulateCancerOptions {
+  /** 記入を始めたときの対象プロブレム(一覧から渡した腫瘍)。 */
+  focusConditionId?: string;
+  /** 記入しているテンプレートの canonical(版付きと版なし)。同じテンプレートの登録件数(腫瘍番号)に使う。 */
+  canonicals: string[];
+}
+
 /**
  * テンプレート回答フォームの初期値式(populateContext.ts の %変数)の元データ取得。
  *
@@ -41,11 +53,18 @@ const VITAL_COUNT = 50;
  * 検査項目の最新値(%labs)は、テンプレートが式の中で参照している結果項目コード(labCodes)だけを
  * コードごとに最新 1 件ずつ取る(呼び出し側が populateLab.ts の collectLabCodes で集める)。
  *
+ * がん登録の変数(病理レポート・手術・レジメン・放射線治療・最終来院・同じテンプレートの登録)は、
+ * テンプレートの式がそれらを参照しているとき(cancer を渡したとき)だけ読む。
+ *
  * 初期回答はフォームのマウント時に一度だけ確定するので、呼び出し側は isLoading が
  * 落ちてから buildPopulateContext に渡す。
  */
-export function usePopulateSources(patientId: string | undefined, options: { labCodes?: string[] } = {}) {
+export function usePopulateSources(
+  patientId: string | undefined,
+  options: { labCodes?: string[]; cancer?: PopulateCancerOptions } = {},
+) {
   const labCodes = options.labCodes ?? [];
+  const cancer = options.cancer;
   // 記入を始めた日で固定する(日付をまたいで開きっぱなしでも値がぶれないように)。
   const [today] = useState(todayString);
 
@@ -130,6 +149,81 @@ export function usePopulateSources(patientId: string | undefined, options: { lab
     [labUpdatedKey],
   );
 
+  // ---- がん登録(式が参照するときだけ) ----
+  const cancerEnabled = Boolean(patientId && cancer);
+  const pathoParams = new URLSearchParams();
+  pathoParams.set("patient", `Patient/${patientId}`);
+  pathoParams.set("category", "SP,CP");
+  pathoParams.set("status", "final,amended");
+  pathoParams.set("_count", "1");
+  pathoParams.set("_sort", "-date");
+  pathoParams.append("_include", "DiagnosticReport:result");
+  const pathoDetail = useQuery({
+    queryKey: ["DiagnosticReport", "populate-patho", patientId],
+    queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", pathoParams),
+    enabled: cancerEnabled,
+  });
+
+  const surgeryParams = new URLSearchParams();
+  surgeryParams.set("patient", `Patient/${patientId}`);
+  surgeryParams.set("category", `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`);
+  surgeryParams.set("part-of:missing", "true");
+  surgeryParams.set("status", "completed");
+  surgeryParams.set("_sort", "date");
+  surgeryParams.set("_count", "100");
+  const surgeries = useQuery({
+    queryKey: ["Procedure", "search", "populate-surgery", patientId],
+    queryFn: () => searchResource<fhir4.Procedure>("Procedure", surgeryParams),
+    enabled: cancerEnabled,
+  });
+
+  const regimenParams = new URLSearchParams();
+  regimenParams.set("subject", `Patient/${patientId}`);
+  regimenParams.set("category", `${ORDER_TYPE_SYSTEM}|${REGIMEN_ORDER_TYPE.code}`);
+  regimenParams.set("_sort", "occurrence");
+  regimenParams.set("_count", "100");
+  const regimens = useQuery({
+    queryKey: ["ServiceRequest", "populate-regimen", patientId],
+    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", regimenParams),
+    enabled: cancerEnabled,
+  });
+
+  const radiotherapyParams = new URLSearchParams();
+  radiotherapyParams.set("subject", `Patient/${patientId}`);
+  radiotherapyParams.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
+  radiotherapyParams.set("status", "active,on-hold,completed");
+  radiotherapyParams.set("_revinclude", "Procedure:based-on");
+  radiotherapyParams.set("_count", "50");
+  const radiotherapy = useQuery({
+    queryKey: ["ServiceRequest", "populate-radiotherapy", patientId],
+    queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", radiotherapyParams),
+    enabled: cancerEnabled,
+  });
+
+  const encounterParams = new URLSearchParams();
+  encounterParams.set("patient", `Patient/${patientId}`);
+  encounterParams.set("status", "in-progress,finished");
+  encounterParams.set("_sort", "-date");
+  encounterParams.set("_count", "1");
+  const lastEncounter = useQuery({
+    queryKey: ["Encounter", "populate-last", patientId],
+    queryFn: () => searchResource<fhir4.Encounter>("Encounter", encounterParams),
+    enabled: cancerEnabled,
+  });
+
+  const canonicals = cancer?.canonicals ?? [];
+  const registrationParams = new URLSearchParams();
+  registrationParams.set("patient", `Patient/${patientId}`);
+  registrationParams.set("questionnaire", canonicals.join(","));
+  registrationParams.set("_elements", "id,status");
+  registrationParams.set("_count", "100");
+  const registrations = useQuery({
+    queryKey: ["QuestionnaireResponse", "search", "populate-registrations", patientId, canonicals.join(",")],
+    queryFn: () => searchResource<fhir4.QuestionnaireResponse>("QuestionnaireResponse", registrationParams),
+    enabled: cancerEnabled && canonicals.length > 0,
+  });
+  const cancerQueries = [pathoDetail, surgeries, regimens, radiotherapy, lastEncounter, registrations];
+
   const allConditions = useKarteConditions(patientId);
   const allergies = useActiveAllergies(patientId);
   const flags = useActiveFlags(patientId);
@@ -168,7 +262,10 @@ export function usePopulateSources(patientId: string | undefined, options: { lab
   ];
   // isPending だと無効化したクエリ(感染症の検査由来など)で落ちないので isLoading で見る。
   const isLoading =
-    queries.some((q) => q.isLoading) || facility.isLoading || labQueries.some((q) => q.isLoading);
+    queries.some((q) => q.isLoading) ||
+    facility.isLoading ||
+    labQueries.some((q) => q.isLoading) ||
+    cancerQueries.some((q) => q.isLoading);
 
   const author = practitioner.data?.data;
   const authorRoles = practitionerRoles.data?.data;
@@ -203,6 +300,22 @@ export function usePopulateSources(patientId: string | undefined, options: { lab
             roles: resourcesOfType<fhir4.PractitionerRole>(authorRoles, "PractitionerRole"),
           }
         : null,
+      cancer: cancer
+        ? ({
+            focusConditionId: cancer.focusConditionId,
+            pathoDetail: pathoDetail.data?.data,
+            surgeries: resourcesOfType<fhir4.Procedure>(surgeries.data?.data, "Procedure"),
+            regimens: resourcesOfType<fhir4.ServiceRequest>(regimens.data?.data, "ServiceRequest"),
+            radiotherapy: (radiotherapy.data?.data.entry ?? [])
+              .map((entry) => entry.resource)
+              .filter((resource): resource is fhir4.Resource => Boolean(resource)),
+            lastEncounter: resourcesOfType<fhir4.Encounter>(lastEncounter.data?.data, "Encounter")[0],
+            registrations: resourcesOfType<fhir4.QuestionnaireResponse>(
+              registrations.data?.data,
+              "QuestionnaireResponse",
+            ),
+          } satisfies CancerPopulateSources)
+        : undefined,
     };
   }, [
     today,
@@ -224,11 +337,22 @@ export function usePopulateSources(patientId: string | undefined, options: { lab
     facility.organization,
     author,
     authorRoles,
+    cancer,
+    pathoDetail.data,
+    surgeries.data,
+    regimens.data,
+    radiotherapy.data,
+    lastEncounter.data,
+    registrations.data,
   ]);
 
   return {
     isLoading,
-    error: queries.find((q) => q.error)?.error ?? labQueries.find((q) => q.error)?.error ?? null,
+    error:
+      queries.find((q) => q.error)?.error ??
+      labQueries.find((q) => q.error)?.error ??
+      cancerQueries.find((q) => q.error)?.error ??
+      null,
     sources,
   };
 }

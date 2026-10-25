@@ -72,14 +72,16 @@
             {
               "url": "http://hl7.org/fhir/StructureDefinition/designNote",
               "valueMarkdown": "1 第 1 がん、2 第 2 がん … 自施設の院内がん登録における当該腫瘍の連番。"
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%cancerRegistrationNumber"
+              }
             }
           ],
-          "text": "[110] 重複番号（腫瘍番号）",
-          "initial": [
-            {
-              "valueInteger": 1
-            }
-          ]
+          "text": "[110] 重複番号（腫瘍番号）"
         },
         {
           "linkId": "hbcr_120",
@@ -230,6 +232,13 @@
                         "code": "drop-down"
                       }
                     ]
+                  }
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%prefectureCode"
                   }
                 }
               ],
@@ -562,6 +571,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "郵便番号から「-」を除いた半角数字 7 桁。不明の場合は 9999999。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%patient.address.first().postalCode.replace('-','')"
+                  }
                 }
               ],
               "text": "[220] 診断時郵便番号",
@@ -578,6 +594,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "ICD-O-3 局在コード。「.」を除いた C999 形式（例: C169）。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%cancerTopography"
+                  }
                 }
               ],
               "text": "[300] 原発部位《局在コード》",
@@ -590,6 +613,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "原発部位・局在コードをテキストで補足する。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%cancerName"
+                  }
                 }
               ],
               "text": "[309] 原発部位《テキスト》",
@@ -678,6 +708,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "病理診断・形態コードをテキストで補足する。病理診断が行われていない場合は他の診断方法による組織型を記載する。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%pathologyDiagnosis"
+                  }
                 }
               ],
               "text": "[329] 病理診断《テキスト》",
@@ -702,6 +739,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "「4 部位特異的腫瘍マーカー」は肝細胞癌の AFP、絨毛癌の HCG、神経芽細胞腫の VMA、ワルデンストレームマクログロブリン血症の免疫グロブリン高値のみ。PSA は含まない。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%cancerDiagnosisBasis"
+                  }
                 }
               ],
               "text": "[330] 診断根拠",
@@ -794,6 +838,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "自施設が主体となって最も確かな検査が実施された日。\n\n日付は YYYYMMDD の 8 桁。年不詳=9999 / 月・日不詳=99、該当せず・適用なし=77777777、全て不明=99999999。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%cancerDiagnosisDate.replace('-','')"
+                  }
                 }
               ],
               "text": "[370] 自施設診断日（YYYYMMDD）",
@@ -810,6 +861,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "[400] が「1 自施設診断」なら [370] 自施設診断日、「2 他施設診断」なら [350] 当該腫瘍初診日。\n\n日付は YYYYMMDD の 8 桁。年不詳=9999 / 月・日不詳=99、該当せず・適用なし=77777777、全て不明=99999999。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%cancerDiagnosisDate.replace('-','')"
+                  }
                 }
               ],
               "text": "[380] 診断日（起算日）（YYYYMMDD）",
@@ -4608,6 +4666,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "[410] 治療施設が 1, 4, 8 の場合は必ず「2 自施設で施行なし」を適用する。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "iif(%surgeryDate != '', '1', {})"
+                  }
                 }
               ],
               "text": "[700] 外科的治療の有無（自施設）",
@@ -4644,6 +4709,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "腫瘍に対しての最初の外科的治療が自施設で施行された日。\n\n日付は YYYYMMDD の 8 桁。年不詳=9999 / 月・日不詳=99、該当せず・適用なし=77777777、全て不明=99999999。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%surgeryDate.replace('-','')"
+                  }
                 }
               ],
               "text": "[701] 外科的治療の施行日（自施設）（YYYYMMDD）",
@@ -5130,6 +5202,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "[410] 治療施設が 1, 4, 8 の場合は必ず「2 自施設で施行なし」を適用する。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "iif(%radiotherapyStartDate != '', '1', {})"
+                  }
                 }
               ],
               "text": "[740] 放射線療法の有無（自施設）",
@@ -5166,6 +5245,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "腫瘍に対しての最初の放射線療法が自施設で施行された日。\n\n日付は YYYYMMDD の 8 桁。年不詳=9999 / 月・日不詳=99、該当せず・適用なし=77777777、全て不明=99999999。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%radiotherapyStartDate.replace('-','')"
+                  }
                 }
               ],
               "text": "[741] 放射線療法の施行日（自施設）（YYYYMMDD）",
@@ -5290,6 +5376,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "[410] 治療施設が 1, 4, 8 の場合は必ず「2 自施設で施行なし」を適用する。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "iif(%chemoStartDate != '', '1', {})"
+                  }
                 }
               ],
               "text": "[750] 化学療法の有無（自施設）",
@@ -5326,6 +5419,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "腫瘍に対しての最初の化学療法が自施設で施行された日。\n\n日付は YYYYMMDD の 8 桁。年不詳=9999 / 月・日不詳=99、該当せず・適用なし=77777777、全て不明=99999999。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%chemoStartDate.replace('-','')"
+                  }
                 }
               ],
               "text": "[751] 化学療法の施行日（自施設）（YYYYMMDD）",
@@ -5850,6 +5950,13 @@
             {
               "url": "http://hl7.org/fhir/StructureDefinition/designNote",
               "valueMarkdown": "生存確認調査を行って、最終来院日などにより生存が確認された日。\n\n日付は YYYYMMDD の 8 桁。年不詳=9999 / 月・日不詳=99、該当せず・適用なし=77777777、全て不明=99999999。"
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%lastVisitDate.replace('-','')"
+              }
             }
           ],
           "text": "[800] 生存最終確認日（YYYYMMDD）",
@@ -5866,16 +5973,18 @@
             {
               "url": "http://hl7.org/fhir/StructureDefinition/designNote",
               "valueMarkdown": "生存症例の既定値は 77777777（該当せず）。\n\n日付は YYYYMMDD の 8 桁。年不詳=9999 / 月・日不詳=99、該当せず・適用なし=77777777、全て不明=99999999。"
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "iif(%deathDate != '', %deathDate.replace('-',''), '77777777')"
+              }
             }
           ],
           "text": "[810] 死亡日（YYYYMMDD）",
           "required": true,
-          "maxLength": 8,
-          "initial": [
-            {
-              "valueString": "77777777"
-            }
-          ]
+          "maxLength": 8
         },
         {
           "linkId": "hbcr_820",
@@ -5899,6 +6008,13 @@
             {
               "url": "http://hl7.org/fhir/StructureDefinition/designNote",
               "valueMarkdown": "既定値は 1 生存。"
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "iif(%deathDate != '', '2', '1')"
+              }
             }
           ],
           "text": "[820] 生存状況",
@@ -5907,8 +6023,7 @@
               "valueCoding": {
                 "code": "1",
                 "display": "生存"
-              },
-              "initialSelected": true
+              }
             },
             {
               "valueCoding": {
@@ -6294,6 +6409,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "最初に情報が確定した日。\n\n日付は YYYYMMDD の 8 桁。年不詳=9999 / 月・日不詳=99、該当せず・適用なし=77777777、全て不明=99999999。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%today.replace('-','')"
+                  }
                 }
               ],
               "text": "[930] 登録日（初回登録日）（YYYYMMDD）",
@@ -6365,6 +6487,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "最新住所が存在しない場合の既定値は長音記号「ー」。履歴を保持できることが望ましい。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%patient.address.first().text"
+                  }
                 }
               ],
               "text": "[950] 最新住所",
@@ -6381,6 +6510,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "最新住所が存在しない場合は 7777777 を既定値とする。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%patient.address.first().postalCode.replace('-','')"
+                  }
                 }
               ],
               "text": "[951] 最新郵便番号",

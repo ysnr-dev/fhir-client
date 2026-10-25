@@ -48,7 +48,7 @@ import {
 const LOINC_PATHO_REPORT_CODE = "11526-1"; // Pathology study(一般病理診断レポート)
 const CODE_GROSS = "22634-0"; // Pathology report gross observation(肉眼所見)
 const CODE_MICROSCOPIC = "22635-7"; // Pathology report microscopic observation(顕微鏡所見)
-const CODE_DIAGNOSIS = "22637-3"; // Pathology report diagnosis(診断)
+export const CODE_DIAGNOSIS = "22637-3"; // Pathology report diagnosis(診断)
 const CODE_PROCEDURE_STEP = "10157-6"; // Special treatments and procedures(採取法／検体処理法)
 
 // 細胞診の判定。領域別の分類(ベセスダ等)は持たず、汎用の 5 段階にする
@@ -67,7 +67,7 @@ const RESULT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/patho-result-ite
 const CODE_ESTIMATED_LESION = "estimated-lesion";
 
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
-const REPORT_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";
+export const REPORT_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";
 
 // Specimen は検体検査・細菌検査の結果と同じ JP Core 共通プロファイル。
 const SPECIMEN_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Specimen_Common";

@@ -15,6 +15,7 @@ import type { MedicationScheduleSettings } from "../fhir/medicationScheduleHelpe
 import type { DocumentReminderSettings } from "../fhir/documentDueHelpers";
 import type { AdmissionDocumentSettings } from "../fhir/admissionDocumentHelpers";
 import type { PressureUlcerSettings } from "../fhir/pressureUlcerHelpers";
+import type { CancerRegistrySettings } from "../fhir/cancerRegistryHelpers";
 import type { NursingAcuitySettings } from "../fhir/nursingAcuityHelpers";
 import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
 import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
@@ -88,6 +89,8 @@ export interface FacilitySettings {
   nursing_acuity: NursingAcuitySettings;
   /** 褥瘡管理(DESIGN-R 評価のテンプレート)。 */
   pressure_ulcer: PressureUlcerSettings;
+  /** 院内がん登録(標準登録様式のテンプレート)。 */
+  cancer_registry: CancerRegistrySettings;
   /** 早期警告スコア(NEWS2)の算出と通知。 */
   early_warning: EarlyWarningSettings;
   /** Web 問診(既定の質問票・診療科ごとの質問票・有効時間)。 */
@@ -118,6 +121,7 @@ export type FacilitySettingsPayload = Partial<{
   admission_documents: AdmissionDocumentSettings;
   nursing_acuity: NursingAcuitySettings;
   pressure_ulcer: PressureUlcerSettings;
+  cancer_registry: CancerRegistrySettings;
   early_warning: EarlyWarningSettings;
   intake: IntakeSettings;
   karte_card_order: KarteCardOrderSettings;

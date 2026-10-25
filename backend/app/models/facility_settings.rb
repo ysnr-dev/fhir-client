@@ -227,6 +227,12 @@ class FacilitySettings < ApplicationRecord
     "template" => "http://fhir-client.local/Questionnaire/pressure-ulcer-designr-01"
   }.freeze
 
+  # 院内がん登録(docs/cancer-registry-design.md)。template は登録(標準登録様式)のテンプレートの url(版を問わない)。
+  # 登録対象の一覧はこのテンプレートの回答で登録の状況を出す。既定は同梱の HBCR_01。
+  DEFAULT_CANCER_REGISTRY = {
+    "template" => "http://fhir-client.local/Questionnaire/hbcr-01"
+  }.freeze
+
   DEFAULT_ADMISSION_DOCUMENTS = {
     "admission_plan_template" => "",
     "admission_plan_days" => 7,
@@ -399,6 +405,10 @@ class FacilitySettings < ApplicationRecord
     },
     "pressure_ulcer" => {
       default: DEFAULT_PRESSURE_ULCER,
+      shape: { fields: { "template" => QUESTIONNAIRE_URL } }
+    },
+    "cancer_registry" => {
+      default: DEFAULT_CANCER_REGISTRY,
       shape: { fields: { "template" => QUESTIONNAIRE_URL } }
     },
     "early_warning" => {
