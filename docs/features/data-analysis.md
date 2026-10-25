@@ -220,8 +220,10 @@
   対象プロブレムに選んだ状態で開きます(プロブレムでない保険病名も選択肢に足します)。登録中・登録済の「開く」はその回答を開きます。
 - **初期値**: テンプレートの初期値変数「がん登録」(`%cancerName` `%cancerIcd10` `%cancerTopography` `%cancerDiagnosisDate`
   `%cancerDiagnosisBasis` `%pathologyDiagnosis` `%pathologyDate` `%surgeryDate` `%chemoStartDate` `%radiotherapyStartDate`
-  `%deathDate` `%lastVisitDate` `%prefectureCode` `%cancerRegistrationNumber`)で、腫瘍の病名・診断日・病理診断・初回治療の日付・
-  生存状況・都道府県コード・腫瘍番号が入ります。これらの変数を参照するテンプレートを開いたときだけ元データを読みます。
+  `%deathDate` `%lastVisitDate` `%prefectureCode` `%cancerRegistrationNumber`、病理の診断がシノプティックレポートのときの
+  `%pathologyMorphology` `%pathologyPT` `%pathologyPN` `%pathologyPM` `%pathologyPStage` `%pathologyExtent`)で、腫瘍の病名・
+  診断日・病理診断・形態コード・病期・初回治療の日付・生存状況・都道府県コード・腫瘍番号が入ります。これらの変数を参照する
+  テンプレートを開いたときだけ元データを読みます。
 - **CSV**: 表示中の行のうち登録済(確定・訂正)の回答を、テンプレートの項目順(見出しは「[900] 病院等の名称」の形)に
   1 行 1 腫瘍で出します。選択肢はコード。全国がん登録の届出ファイルの形式には合わせていません。
 - **施設設定**（管理 > 施設設定 > 院内がん登録）: 登録のテンプレート(url。版を問わない)。既定は `HBCR_01`。

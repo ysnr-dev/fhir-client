@@ -6,6 +6,7 @@ import {
   settingCategory,
 } from "./labResultHelpers";
 import { categoryCoding, type CodeOption, codingBySystem, displayOf, LOINC_SYSTEM } from "./shared";
+import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import { departmentExtension, departmentOf } from "./orderHeader";
 import type { SchemaImageRef } from "./questionnaireResponseHelpers";
 import { binaryIdFromAttachment, imageBinaryEntry } from "./schemaImage";
@@ -62,6 +63,10 @@ const CYTO_JUDGEMENT_SYSTEM = "http://fhir-client.local/CodeSystem/patho-cyto-ju
 // 種別と説明を添えるので複合拡張にする(手術の輸血準備と同じ形)。
 const REPORT_IMAGE_EXT_URL = "http://fhir-client.local/StructureDefinition/patho-report-image";
 const REPORT_IMAGE_KIND_SYSTEM = "http://fhir-client.local/CodeSystem/patho-report-image-kind";
+// 診断をテンプレート(シノプティックレポート)から記載したときの記入内容(QuestionnaireResponse)への参照
+// (docs/patho-order-design.md §4.7)。診断 Observation の valueString にはその平文が入る。
+export const DIAGNOSIS_RESPONSE_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/patho-diagnosis-response";
 // 推定病変(細胞診の診断 Observation の component)。
 const RESULT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/patho-result-item";
 const CODE_ESTIMATED_LESION = "estimated-lesion";
@@ -156,8 +161,10 @@ export interface PathoResultFormValues {
   gross: string;
   /** 顕微鏡所見。空は未入力。 */
   microscopic: string;
-  /** 診断(組織診・術中迅速の自由文)。 */
+  /** 診断(組織診・術中迅速の自由文)。テンプレートから記載したときはその平文。 */
   diagnosis: string;
+  /** 診断をテンプレート(シノプティックレポート)から記載したときの回答との紐付け。 */
+  diagnosisTemplate: TemplateBinding | null;
   /** 細胞診の判定。 */
   cytoJudgement: string;
   /** 細胞診の推定病変。 */
@@ -214,6 +221,7 @@ export function emptyPathoResultForm(
     gross: "",
     microscopic: "",
     diagnosis: "",
+    diagnosisTemplate: null,
     cytoJudgement: "",
     estimatedLesion: "",
     procedureStep: "",
@@ -475,12 +483,49 @@ function pushReportImageEntries(
   });
 }
 
+/**
+ * 診断のテンプレート回答を Bundle に積み、レポートから指す参照を返す。保存済みの回答を再編集して
+ * いなければ参照だけ引き継ぐ(所見レポートの examReportHelpers と同じ形)。
+ */
+function diagnosisTemplateReference(
+  entries: fhir4.BundleEntry[],
+  keptResponseIds: Set<string>,
+  binding: TemplateBinding | null,
+): string {
+  if (!binding) return "";
+  const { responseId, draft } = binding;
+  if (!draft) {
+    if (!responseId) return "";
+    keptResponseIds.add(responseId);
+    return `QuestionnaireResponse/${responseId}`;
+  }
+  const reference = responseId
+    ? `QuestionnaireResponse/${responseId}`
+    : `urn:uuid:${crypto.randomUUID()}`;
+  if (responseId) {
+    keptResponseIds.add(responseId);
+    entries.push({
+      resource: { ...draft.response, id: responseId },
+      request: { method: "PUT", url: reference },
+    });
+  } else {
+    entries.push({
+      fullUrl: reference,
+      resource: draft.response,
+      request: { method: "POST", url: "QuestionnaireResponse" },
+    });
+  }
+  entries.push(...draft.imageEntries);
+  return reference;
+}
+
 function buildPathoResultTransactionBundle(
   values: PathoResultFormValues,
   patientId: string,
   reportId?: string,
   originalObservationIds?: string[],
   originalSpecimenIds?: string[],
+  originalResponseIds?: string[],
 ): fhir4.Bundle {
   // FHIR の dateTime は日付のみ(YYYY-MM-DD)を許容する(検体検査・細菌検査と同じ)。
   const effective = values.reportDate;
@@ -513,9 +558,13 @@ function buildPathoResultTransactionBundle(
     specimenReferences,
   };
 
-  // 画像はレポートより先に積む(レポートがプレースホルダで指すため)。
+  // 画像と診断のテンプレート回答はレポートより先に積む(レポートがプレースホルダで指すため)。
   const imageEntries: fhir4.BundleEntry[] = [];
   const imageExtensions = pushReportImageEntries(imageEntries, values.images);
+  const keptResponseIds = new Set<string>();
+  const diagnosisResponse = isCytologyCategory(values.examCategory)
+    ? ""
+    : diagnosisTemplateReference(imageEntries, keptResponseIds, values.diagnosisTemplate);
 
   const observationEntries: fhir4.BundleEntry[] = [];
   const resultReferences: fhir4.Reference[] = [];
@@ -561,6 +610,9 @@ function buildPathoResultTransactionBundle(
         ? [departmentExtension(values.departmentId, values.departmentName)]
         : []),
       ...imageExtensions,
+      ...(diagnosisResponse
+        ? [{ url: DIAGNOSIS_RESPONSE_EXT_URL, valueReference: { reference: diagnosisResponse } }]
+        : []),
     ],
     // 元になった病理検査オーダー。オーダーの明細ではなくヘッダを指す。
     basedOn: values.orderId ? [{ reference: `ServiceRequest/${values.orderId}` }] : undefined,
@@ -575,6 +627,10 @@ function buildPathoResultTransactionBundle(
   const removedSpecimenEntries: fhir4.BundleEntry[] = (originalSpecimenIds ?? [])
     .filter((id) => !keptSpecimenIds.has(id))
     .map((id) => ({ request: { method: "DELETE" as const, url: `Specimen/${id}` } }));
+  // 紐付けを外した(解除・細胞診に切り替えた)診断のテンプレート回答は同じ transaction で消す。
+  const removedResponseEntries: fhir4.BundleEntry[] = (originalResponseIds ?? [])
+    .filter((id) => !keptResponseIds.has(id))
+    .map((id) => ({ request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` } }));
 
   return {
     resourceType: "Bundle",
@@ -593,6 +649,7 @@ function buildPathoResultTransactionBundle(
       ...removedObservationEntries,
       // 参照元の Observation を消してから検体を消す。
       ...removedSpecimenEntries,
+      ...removedResponseEntries,
     ],
   };
 }
@@ -610,6 +667,7 @@ export function buildPathoResultUpdateBundle(
   reportId: string,
   originalObservationIds: string[],
   originalSpecimenIds: string[],
+  originalResponseIds: string[] = [],
 ): fhir4.Bundle {
   return buildPathoResultTransactionBundle(
     values,
@@ -617,13 +675,16 @@ export function buildPathoResultUpdateBundle(
     reportId,
     originalObservationIds,
     originalSpecimenIds,
+    originalResponseIds,
   );
 }
 
+/** レポートの削除。所見・検体に加え、診断のテンプレート回答も消す。 */
 export function buildPathoResultDeleteBundle(
   reportId: string,
   observationIds: string[],
   specimenIds: string[],
+  responseIds: string[] = [],
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",
@@ -637,8 +698,23 @@ export function buildPathoResultDeleteBundle(
       ...specimenIds.map((id) => ({
         request: { method: "DELETE" as const, url: `Specimen/${id}` },
       })),
+      ...responseIds.map((id) => ({
+        request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
+      })),
     ],
   };
+}
+
+/** レポートが参照している診断のテンプレート回答の id。無ければ空。 */
+export function pathoDiagnosisResponseIdOf(report: fhir4.DiagnosticReport | undefined): string {
+  const reference = report?.extension?.find((e) => e.url === DIAGNOSIS_RESPONSE_EXT_URL)?.valueReference
+    ?.reference;
+  return reference?.match(/^QuestionnaireResponse\/(.+)$/)?.[1] ?? "";
+}
+
+/** 病理レポート群が参照しているテンプレート回答の id(タイムラインで単独カードから外す)。 */
+export function pathoReportResponseIds(reports: fhir4.DiagnosticReport[]): string[] {
+  return reports.map(pathoDiagnosisResponseIdOf).filter(Boolean);
 }
 
 // ---- 詳細表示のための parse ----
@@ -747,6 +823,8 @@ export function parsePathoResultForm(
   values.examCategory = reportExamCategory(report);
   values.specimens = specimens.map(parseSpecimen);
   values.images = pathoReportImages(report);
+  const diagnosisResponseId = pathoDiagnosisResponseIdOf(report);
+  values.diagnosisTemplate = diagnosisResponseId ? { responseId: diagnosisResponseId, draft: null } : null;
 
   for (const obs of observations) {
     switch (loincCodeOf(obs)) {

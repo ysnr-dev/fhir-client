@@ -8,7 +8,7 @@ import {
   pathoOrderLabel,
   pathoOrderResponseIds,
 } from "../../fhir/pathoOrderHelpers";
-import { buildPathoResultDeleteBundle } from "../../fhir/pathoResultHelpers";
+import { buildPathoResultDeleteBundle, pathoReportResponseIds } from "../../fhir/pathoResultHelpers";
 import { buildPathoTaskUpdate, pathoTasksByOrderId, type PathoTaskStatus } from "../../fhir/pathoTaskHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { postBundle, readResource } from "../fhirClient";
@@ -251,6 +251,7 @@ export function useDeletePathoResult() {
           reportId,
           observationIdsFromReport(report),
           specimenIdsFromReport(report),
+          pathoReportResponseIds([report]),
         ),
       );
     },

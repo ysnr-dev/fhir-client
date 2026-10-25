@@ -36,9 +36,15 @@ import {
   type PathoResultSpecimenValues,
 } from "../fhir/pathoResultHelpers";
 import { normalizeImageFile } from "../fhir/schemaImage";
+import {
+  questionnaireResponsePlainText,
+  type TemplateBinding,
+} from "../fhir/questionnaireResponseHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { SchemaImageGallery } from "./SchemaImageGallery";
 import { SchemaPickerModal } from "./SchemaPickerModal";
+import { TemplateEntryModal } from "./TemplateEntryModal";
+import { TemplateTextField } from "./TemplateTextField";
 
 // ペイントモーダル(fabric.js)は重いので、開くまで読み込まない(オーダー側と同じ)。
 const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
@@ -46,7 +52,9 @@ const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
 // 病理診断レポートの入力フォーム。カルテの病理タブと病理部門一覧の双方から使う。
 //
 // 項目立ては JAHIS 病理診断レポート構造化記述規約 のセクションに合わせる
-// (肉眼所見 / 顕微鏡所見 / 診断 / 採取法・検体処理法)。診断欄だけは検査区分で形が
+// (肉眼所見 / 顕微鏡所見 / 診断 / 採取法・検体処理法)。組織診の診断はテンプレート
+// (シノプティックレポート。docs/patho-order-design.md §4.7)からも記入でき、回答の平文が
+// 診断欄に入る。診断欄だけは検査区分で形が
 // 変わり、組織診・術中迅速は自由文、細胞診は「判定 + 推定病変」になる。
 //
 // 検体はオーダーを選んだときに転記する。病理では 1 オーダーに複数検体があるので、
@@ -58,6 +66,8 @@ const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
 // (Binary + 拡張)に合わせている(docs/patho-order-design.md §4.5)。
 
 interface PathoResultFormProps {
+  /** レポートの患者。診断のテンプレート記入(初期値変数)に使う。 */
+  patientId: string;
   initialValues?: PathoResultFormValues;
   onSubmit: (values: PathoResultFormValues) => void;
   submitting: boolean;
@@ -71,6 +81,7 @@ interface PathoResultFormProps {
 }
 
 export function PathoResultForm({
+  patientId,
   initialValues,
   onSubmit,
   submitting,
@@ -88,6 +99,8 @@ export function PathoResultForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [schemaPickOpen, setSchemaPickOpen] = useState(false);
   const [schemaPaint, setSchemaPaint] = useState<{ name: string; background: string } | null>(null);
+  // 診断のテンプレート記入(シノプティックレポート)のモーダル。
+  const [diagnosisTemplateOpen, setDiagnosisTemplateOpen] = useState(false);
 
   const { departments } = useSelfDepartments();
   const update = makeFieldUpdater(setValues);
@@ -442,15 +455,16 @@ export function PathoResultForm({
             </label>
           </>
         ) : (
-          <label className="patho-long-text">
-            診断
-            <textarea
-              rows={8}
-              value={values.diagnosis}
-              onChange={(e) => update("diagnosis", e.target.value)}
-              placeholder="診断名・取扱い規約や UICC の病期など"
-            />
-          </label>
+          <TemplateTextField
+            label="診断"
+            className="patho-long-text"
+            rows={8}
+            value={values.diagnosis}
+            template={values.diagnosisTemplate}
+            onChange={(diagnosis) => update("diagnosis", diagnosis)}
+            onOpenTemplate={() => setDiagnosisTemplateOpen(true)}
+            onClearTemplate={() => update("diagnosisTemplate", null)}
+          />
         )}
       </fieldset>
 
@@ -549,6 +563,27 @@ export function PathoResultForm({
             onClose={() => setSchemaPaint(null)}
           />
         </Suspense>
+      )}
+      {diagnosisTemplateOpen && (
+        <TemplateEntryModal
+          patientId={patientId}
+          draft={values.diagnosisTemplate?.draft ?? null}
+          responseId={values.diagnosisTemplate?.responseId ?? null}
+          onSubmit={(draft) => {
+            // 保存済みの回答を再編集した場合は同じ id へ書き戻す(id は保存時に使う)。
+            const binding: TemplateBinding = {
+              responseId: values.diagnosisTemplate?.responseId ?? null,
+              draft,
+            };
+            setValues((v) => ({
+              ...v,
+              diagnosis: questionnaireResponsePlainText(draft.questionnaire, draft.response),
+              diagnosisTemplate: binding,
+            }));
+            setDiagnosisTemplateOpen(false);
+          }}
+          onClose={() => setDiagnosisTemplateOpen(false)}
+        />
       )}
     </>
   );

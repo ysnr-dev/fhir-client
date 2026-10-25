@@ -74,9 +74,12 @@
 | [220] 診断時郵便番号・[951] 最新郵便番号 | Patient の郵便番号(ハイフン除去) |
 | [300] 原発部位《局在コード》 (`hbcr_300`) | `%cancerTopography`(固形がんの ICD-10 と同じ局在コード。血液腫瘍・上皮内癌・続発性は空) |
 | [309] 原発部位《テキスト》 (`hbcr_309`) | `%cancerName`(腫瘍の病名) |
+| [320] 病理診断《形態コード》 (`hbcr_320`) | `%pathologyMorphology`(シノプティックレポートの組織型の ICD-O-3 + グレード) |
 | [329] 病理診断《テキスト》 (`hbcr_329`) | `%pathologyDiagnosis`(最新の確定した病理レポートの診断) |
 | [330] 診断根拠 (`hbcr_330`) | `%cancerDiagnosisBasis`(組織診のレポートがあれば 1、細胞診だけなら 3) |
 | [370] 自施設診断日・[380] 診断日 | `%cancerDiagnosisDate`(腫瘍の病名の開始日)を YYYYMMDD に |
+| [600] ステージ・[610]〜[630] pT/pN/pM | `%pathologyPStage` `%pathologyPT` `%pathologyPN` `%pathologyPM`(シノプティックレポートの pTNM を様式のコードに) |
+| [680] 進展度・術後病理学的 | `%pathologyExtent`(pTNM からの読み替え) |
 | [700]/[701] 外科的治療 | `%surgeryDate`(診断日以後で最も早い手術の実施日)。日付が入るときだけ [700] を「1 自施設で施行」に |
 | [740]/[741] 放射線療法 | `%radiotherapyStartDate`(最も早い照射の実施日、無ければコースの開始予定日)。同上 |
 | [750]/[751] 化学療法 | `%chemoStartDate`(最も早いレジメン適用の開始日)。同上 |
@@ -84,7 +87,8 @@
 | [810] 死亡日・[820] 生存状況 | `%deathDate`(Patient.deceasedDateTime)。無ければ 77777777 と「1 生存」 |
 | [930] 登録日 (`hbcr_930`) | 記入を始めた日 |
 
-対象の腫瘍の決め方と変数の中身は `docs/cancer-registry-design.md` §3。
+対象の腫瘍の決め方と変数の中身は `docs/cancer-registry-design.md` §3。病期・形態コードは病理レポートの診断を
+シノプティックレポート(`patho-synoptic.md`)で書いたときだけ入る。
 有無の項目は日付が入らないときは空のまま(「施行なし」は機械的に入れない)。
 
 加えて、ログイン中の医療従事者から自動入力される項目がある。

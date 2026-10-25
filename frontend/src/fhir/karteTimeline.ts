@@ -29,6 +29,7 @@ import {
   pathoOrderResponseIds,
 } from "./pathoOrderHelpers";
 import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pathoTaskHelpers";
+import { pathoReportResponseIds } from "./pathoResultHelpers";
 import { pathwayOf } from "./pathwayApplyHelpers";
 import type { PathwayEvaluationCard } from "./pathwayKarteHelpers";
 import { departmentOf, ORDER_TYPE_SYSTEM } from "./orderHeader";
@@ -748,6 +749,8 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     ...endoscopyOrderResponseIds(serviceRequests),
     ...surgeryOrderResponseIds(serviceRequests),
     ...pathoOrderResponseIds(serviceRequests),
+    // 病理レポートの診断(シノプティック)の回答も、レポートの診断欄に平文で入っているので単独カードにしない。
+    ...pathoReportResponseIds(pickByType<fhir4.DiagnosticReport>(prescriptionResources, "DiagnosticReport")),
     ...consultOrderResponseIds(serviceRequests),
     ...teamRequestResponseIds(serviceRequests),
     ...nutritionGuidanceOrderResponseIds(serviceRequests),

@@ -11,6 +11,7 @@ import {
   buildPathoResultBundle,
   buildPathoResultUpdateBundle,
   emptyPathoResultForm,
+  pathoReportResponseIds,
   type PathoResultFormValues,
 } from "../fhir/pathoResultHelpers";
 import { karteLinkLabel } from "../fhir/karteLinkHelpers";
@@ -208,6 +209,7 @@ export function PathoResultCreateForm({
         <p>読み込み中...</p>
       ) : (
         <PathoResultForm
+          patientId={patientId}
           initialValues={initialValues}
           onSubmit={handleSubmit}
           submitting={createPathoResult.isPending}
@@ -254,6 +256,7 @@ export function PathoResultEditForm({
           reportId,
           originalObservationIds,
           originalSpecimenIds,
+          pathoReportResponseIds([report]),
         ),
         report,
       ),
@@ -272,6 +275,7 @@ export function PathoResultEditForm({
         report &&
         initialValues && (
           <PathoResultForm
+            patientId={patientId}
             initialValues={initialValues}
             onSubmit={handleSubmit}
             submitting={updatePathoResult.isPending}

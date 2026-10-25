@@ -85,8 +85,12 @@ QuestionnaireResponse 1 件 = 1 腫瘍。
 | `%cancerTopography` | 局在コードの候補(様式の形式「C187」) | ICD-10 が 4 桁で C00〜C80(C77〜C79 の続発性を除く)のときだけ。それ以外(血液腫瘍・上皮内癌・3 桁だけ)は空 |
 | `%cancerDiagnosisDate` | 診断日(YYYY-MM-DD) | Condition の開始日 |
 | `%cancerDiagnosisBasis` | 診断根拠のコード | 確定した病理レポートがあれば組織診(SP)で `1`、細胞診(CP)だけなら `3`、無ければ空 |
-| `%pathologyDiagnosis` | 病理診断 | 最新の確定した病理レポートの「診断」(LOINC 22637-3) |
+| `%pathologyDiagnosis` | 病理診断 | 最新の確定した病理レポートの「診断」(LOINC 22637-3)。診断がシノプティックレポートなら組織型・グレード・pTNM・病期の要約(様式のテキストは 128 字まで) |
 | `%pathologyDate` | 病理診断日 | そのレポートの日付 |
+| `%pathologyHistologicType` | 組織型 | そのレポートの診断がシノプティックレポート(`docs/report-mappings/patho-synoptic.md`)なら、その組織型の選択肢の表示名 |
+| `%pathologyMorphology` | [320] 形態コード(6 桁) | 組織型の ICD-O-3 形態コード(4 桁 / 性状)+ グレードの分化度 1 桁(無ければ 9) |
+| `%pathologyPT` `%pathologyPN` `%pathologyPM` `%pathologyPStage` | [610] [620] [630] [600] の 4 桁コード | 回答の pT / pN / pM / pStage の表記を様式のコード表(`HBCR_PT_CODES` など)で引く。術前治療ありなら 6620 |
+| `%pathologyExtent` | [680] 進展度のコード | pTNM からの機械的な読み替え(遠隔転移 440 > 領域リンパ節転移 420 > 上皮内 400 > T4 430 > 限局 410)。術前治療ありなら 660 |
 | `%surgeryDate` | 初回の手術日 | 診断日以後で最も早い手術の実施記録(ハブ Procedure)の入室日 |
 | `%chemoStartDate` | 化学療法の開始日 | 診断日以後で最も早いレジメン適用の開始日(C1 Day1) |
 | `%radiotherapyStartDate` | 放射線治療の開始日 | 診断日以後で最も早い照射の実施日。実施が無ければコースの開始予定日 |
@@ -99,6 +103,9 @@ QuestionnaireResponse 1 件 = 1 腫瘍。
   そうでなければ患者の登録対象の病名のうち開始日が最も新しいもの。無ければがん登録の変数は空。
 - ［設計］日付は他の変数と同じ YYYY-MM-DD で返す。様式の 8 桁は式の側で `.replace('-','')` にする(生年月日と同じ)。
 - ［設計］「診断日以後」は、再発・二次がんで前の腫瘍の治療を拾わないための絞り。診断日が無ければ最も早いもの。
+- ［設計］病期・組織型は、最新の確定した病理レポートの診断がシノプティックレポート(テンプレート)のときだけ入る。
+  レポートの拡張 `patho-diagnosis-response` が指す回答をテンプレートごと読み(`_include=QuestionnaireResponse:questionnaire`)、
+  項目コード(`pathology-synoptic`)で値を拾う。自由文の診断からは拾わない。
 - ［設計］内分泌療法・内視鏡的治療・鏡視下治療の日付は作らない(薬剤の分類・内視鏡の治療目的の構造が無い。§7)。
 - ［設計］有無の項目([700] など)は、日付が入るときだけ「1 自施設で施行」にし、無いときは空のまま
   (「施行なし」を機械的に入れると、まだ行っていないだけの治療を「なし」で確定しかねない)。
@@ -130,7 +137,8 @@ QuestionnaireResponse 1 件 = 1 腫瘍。
 - frontend
   - `fhir/cancerRegistryHelpers.ts`: 設定の型・ICD-10 の範囲と検索トークン・対象の判定・都道府県コード・初期値の組み立て・
     一覧の行の突き合わせ・CSV
-  - `fhir/populateContext.ts` / `api/queries/populate.ts`: 変数「がん登録」とその元データ(式が参照するときだけ読む)
+  - `fhir/populateContext.ts` / `api/queries/populate.ts`: 変数「がん登録」とその元データ(式が参照するときだけ読む)。
+    病期・組織型はシノプティックレポートの回答から(`fhir/pathoResultHelpers.ts` の `patho-diagnosis-response`)
   - `components/QuestionnaireResponsePanels.tsx`: がん登録の変数の検知、プロブレムでない対象病名の選択肢への追加
   - `karteUrl.ts` / `pages/KartePage.tsx`: `open=cancer-registry:<Condition id>@<url>`
   - `api/queries/cancerRegistry.ts`、`pages/CancerRegistryPage.tsx`、`appMenu.ts`(データ > 院内がん登録)、`App.tsx`
@@ -155,8 +163,9 @@ QuestionnaireResponse 1 件 = 1 腫瘍。
    切替を足す。
 4. **内分泌療法・内視鏡的治療・鏡視下治療の初期値**: 薬剤の分類(ホルモン療法薬)と内視鏡の治療目的(EMR / ESD)、手術の到達法
    (鏡視下)から出せるが、いずれも対応表か判定の決め事が要る。
-5. **病期の初期値**: 病理のシノプティックレポート(`functional-gap-backlog.md` §5.5)ができれば pT/pN/pM と組織型のコードを
-   埋められる。いまは自由文の診断を [329] に写すだけ。
+5. **病期の初期値** — **対応済み(2026-10-25)**。病理の診断をシノプティックレポート(`docs/patho-order-design.md` §4.7)で
+   書いたときは [320] [600]〜[630] [680] が入る。残り: 臓器別テンプレートは大腸癌だけ(他は固形がん共通 TNM)、
+   治療前(臨床)分類 [500]〜[580] は病理には無いので別の器が要る、[640] 付加因子は未対応。
 6. **予後調査**: 生存最終確認日([800])は最終来院日を入れるだけ。死亡退院・都道府県がん情報からの更新、追跡期間([860])の
    計算、登録の修正時の [940]/[941] の自動更新は無い。
 7. **届出の督促**: 診断日から届出期限(翌年末)までの残りを一覧に出す・期限超過を印にする。通知にはしない。

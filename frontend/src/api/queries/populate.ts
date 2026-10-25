@@ -13,6 +13,7 @@ import { REGIMEN_ORDER_TYPE } from "../../fhir/regimenOrderHelpers";
 import { RADIOTHERAPY_ORDER_TYPE } from "../../fhir/radiotherapyOrderHelpers";
 import { SURGERY_ORDER_TYPE } from "../../fhir/surgeryOrderHelpers";
 import type { CancerPopulateSources } from "../../fhir/cancerRegistryHelpers";
+import { pathoDiagnosisResponseIdOf } from "../../fhir/pathoResultHelpers";
 import { today as todayString } from "../../lib/dates";
 import { useAuthSession } from "../authQueries";
 import { searchResource } from "../fhirClient";
@@ -164,6 +165,19 @@ export function usePopulateSources(
     enabled: cancerEnabled,
   });
 
+  // 最新の病理レポートの診断がテンプレート(シノプティックレポート)なら、その回答とテンプレートを読む
+  // (病期・組織型の初期値。レポートの拡張が指すので _include では辿れない)。
+  const pathoReport = resourcesOfType<fhir4.DiagnosticReport>(pathoDetail.data?.data, "DiagnosticReport")[0];
+  const synopticResponseId = pathoReport ? pathoDiagnosisResponseIdOf(pathoReport) : "";
+  const synopticParams = new URLSearchParams();
+  synopticParams.set("_id", synopticResponseId);
+  synopticParams.set("_include", "QuestionnaireResponse:questionnaire");
+  const pathoSynoptic = useQuery({
+    queryKey: ["QuestionnaireResponse", synopticResponseId, "withQuestionnaire"],
+    queryFn: () => searchResource<fhir4.Resource>("QuestionnaireResponse", synopticParams),
+    enabled: cancerEnabled && Boolean(synopticResponseId),
+  });
+
   const surgeryParams = new URLSearchParams();
   surgeryParams.set("patient", `Patient/${patientId}`);
   surgeryParams.set("category", `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`);
@@ -222,7 +236,7 @@ export function usePopulateSources(
     queryFn: () => searchResource<fhir4.QuestionnaireResponse>("QuestionnaireResponse", registrationParams),
     enabled: cancerEnabled && canonicals.length > 0,
   });
-  const cancerQueries = [pathoDetail, surgeries, regimens, radiotherapy, lastEncounter, registrations];
+  const cancerQueries = [pathoDetail, pathoSynoptic, surgeries, regimens, radiotherapy, lastEncounter, registrations];
 
   const allConditions = useKarteConditions(patientId);
   const allergies = useActiveAllergies(patientId);
@@ -304,6 +318,18 @@ export function usePopulateSources(
         ? ({
             focusConditionId: cancer.focusConditionId,
             pathoDetail: pathoDetail.data?.data,
+            pathoSynoptic: (() => {
+              const response = resourcesOfType<fhir4.QuestionnaireResponse>(
+                pathoSynoptic.data?.data,
+                "QuestionnaireResponse",
+              )[0];
+              return response
+                ? {
+                    response,
+                    questionnaire: resourcesOfType<fhir4.Questionnaire>(pathoSynoptic.data?.data, "Questionnaire")[0],
+                  }
+                : undefined;
+            })(),
             surgeries: resourcesOfType<fhir4.Procedure>(surgeries.data?.data, "Procedure"),
             regimens: resourcesOfType<fhir4.ServiceRequest>(regimens.data?.data, "ServiceRequest"),
             radiotherapy: (radiotherapy.data?.data.entry ?? [])
@@ -339,6 +365,7 @@ export function usePopulateSources(
     authorRoles,
     cancer,
     pathoDetail.data,
+    pathoSynoptic.data,
     surgeries.data,
     regimens.data,
     radiotherapy.data,

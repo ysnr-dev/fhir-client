@@ -132,7 +132,8 @@ DiagnosticReport (code = LOINC 11526-1, status = preliminary|final|amended)
 ```
 
 `category` は v2-0074 の **SP**（組織診・術中迅速）/ **CP**（細胞診）+ 入外区分。
-診療科は他の結果と同じローカル拡張。
+診療科は他の結果と同じローカル拡張。診断をテンプレートから書いたときは拡張
+`patho-diagnosis-response`（valueReference → QuestionnaireResponse）で回答を指す（§4.7）。
 
 ### 4.3 日付軸
 
@@ -211,6 +212,25 @@ extension[patho-report-image]
 completed 検査済 / cancelled 中止`。検体検査と違いラベル発行・スキャンを持たないので、
 受付済・検査済は一覧の**主ボタン**で直接進める（検体検査ではフォールバック扱い）。
 
+### 4.7 診断のテンプレート記入（シノプティックレポート、2026-10-25）
+
+組織診・術中迅速の「診断」は自由文に加えてテンプレート（Questionnaire）から書ける。取扱い規約・UICC TNM の
+項目を選択肢で記録する**シノプティックレポート**で、同梱テンプレートは固形がん共通 TNM（`PATHO_TNM_01`）と
+大腸癌（`PATHO_COLON_01`。`docs/report-mappings/patho-synoptic.md`）。
+
+- 作りは所見レポート（`docs/exam-report-design.md`）の所見・診断と同じ。記入内容の正本は QuestionnaireResponse、
+  診断 Observation（22637-3）の `valueString` にはその平文が入る。テンプレート紐付き中は診断欄を直接編集させず、
+  「解除」で紐付けだけ外せる（文言は残る）。
+- 回答はレポートと**同じ transaction** に積み、レポートの拡張 `patho-diagnosis-response` から指す。保存済みの回答を
+  再編集していなければ参照だけ引き継ぐ。解除・細胞診への切替で参照が外れた回答と、レポートの削除では回答も同じ
+  transaction で消す（`pathoReportResponseIds`）。
+- タイムラインでは、レポートが参照する回答を単独カードにしない（`karteTimeline.ts` の `linkedResponseIds`）。
+- **院内がん登録への写し**: 回答の項目コード（`pathology-synoptic` の `histologic-type` `grade` `pt` `pn` `pm`
+  `pstage` `neoadjuvant`）を院内がん登録の初期値変数（`%pathologyMorphology` `%pathologyPT` など）が読む
+  （`docs/cancer-registry-design.md` §3）。選択肢のコードが様式のコードへの対応の鍵なので、施設が複製して直すときも
+  コードは変えない。
+- 既定テンプレートは持たない（§4.4 と同じ理由）。細胞診の診断（判定 + 推定病変）には出さない。
+
 ---
 
 ## 5. マスタ
@@ -235,7 +255,7 @@ completed 検査済 / cancelled 中止`。検体検査と違いラベル発行�
 | オーダー内容 | `components/PathoOrderDetailPanel.tsx` | カルテ詳細モーダルと部門一覧の「表示」で共用 |
 | カルテカード | `components/KarteTimeline.tsx`（`PathoOrderCardBody` / `cardTitle`） | 「病理検査」バッジの横に「入外区分 \| 検査区分」を出す（処方区分と同じ扱い）。本文は検体の一覧なので、区分が見出しに無いと何の検査か分からない |
 | 部門一覧 | `pages/PathoWorklistPage.tsx` | 採取日で 1 日ぶん。区分・入外・病棟・診療科・進捗で画面側絞り込み。レポート状況の列を持つ |
-| レポート入力 | `components/PathoResultForm.tsx` | オーダーを選ぶと検体と検査区分を転記。診断欄は区分で形が変わる。画像はファイル添付と切り出し図の描画 |
+| レポート入力 | `components/PathoResultForm.tsx` | オーダーを選ぶと検体と検査区分を転記。診断欄は区分で形が変わり、組織診はテンプレート（シノプティックレポート）からも書ける。画像はファイル添付と切り出し図の描画 |
 | レポート表示 | `components/PathoResultDetailPanel.tsx` | カルテの病理タブ・詳細モーダル・部門一覧で共用。画像は種別ごとに並べる |
 | カルテ病理タブ | `components/KartePathoResultTab.tsx` | 報告日ペイン + 内容表示（登録・編集・削除もここから） |
 | マスタメンテ | `pages/PathoOrganPage.tsx` / `PathoCollectionMethodPage.tsx` | 臓器は頻用の印の切替が主な操作 |
@@ -286,8 +306,9 @@ completed 検査済 / cancelled 中止`。検体検査と違いラベル発行�
    検体不適正）+ 推定病変の自由文。ベセスダ分類などの領域別分類は持たない。
 7. **WSI・DICOM 画像**。シェーマ（AP-031）は実装済み（§4.4）だが、規約が扱う
    WSI（バーチャルスライド）・DICOM 画像の連携は対象外。
-8. **JANIS のような提出データ生成**は病理には無い。ただし院内がん登録への連携を考えると、
-   臓器コードに ICD-10 を持たせてあるのが足がかりになる。
+8. **院内がん登録への連携**は、診断のシノプティックレポート（§4.7）の項目コードを登録の初期値が読む形で
+   対応した（`docs/cancer-registry-design.md`）。臓器別のテンプレートは大腸癌だけで、胃・肺・乳腺などは
+   固形がん共通 TNM で書くか、臓器別に足す。
 9. **検査区分ごとの既定テンプレート**。検査区分をマスタ化して
    `clinical_info_template_canonical` を持たせれば、組織診と細胞診で既定を分けられる
    （臨床経過に書く内容は区分で変わる）。今は毎回選ぶ運用（§4.4）。

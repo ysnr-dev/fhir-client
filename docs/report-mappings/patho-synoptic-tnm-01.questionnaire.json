@@ -1,0 +1,832 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/patho-synoptic-tnm-01",
+  "version": "1.0.0",
+  "name": "PATHO_TNM_01",
+  "title": "病理診断 TNM(固形がん共通)",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "病理診断レポートの「診断」に貼るシノプティックレポート(臓器を問わない固形がんの共通項目)。組織型と ICD-O-3 形態コード・グレード・pTNM(UICC 第 8 版)・脈管侵襲・断端を選ぶ。院内がん登録の病期・形態コードの初期値になる。臓器ごとの取扱い規約の項目は臓器別のテンプレート(大腸癌など)を使う。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "25675b10-0ef3-4425-83c4-c1f8c3015cca",
+        "display": "検査"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-tumor",
+      "type": "group",
+      "text": "腫瘍",
+      "item": [
+        {
+          "linkId": "site",
+          "type": "string",
+          "text": "原発部位",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "臓器と亜部位(「S状結腸」「胃体部」)。"
+            }
+          ]
+        },
+        {
+          "linkId": "histologic-type",
+          "type": "string",
+          "text": "組織型",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "取扱い規約・WHO 分類の組織型名(「管状腺癌(tub2)」)。"
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "histologic-type",
+              "display": "組織型"
+            }
+          ]
+        },
+        {
+          "linkId": "morphology-code",
+          "type": "string",
+          "text": "ICD-O-3 形態コード",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/regex",
+              "valueString": "^[0-9]{4}/[0-9]$"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "「8140/3」の形(細胞型 4 桁 / 性状 1 桁)。院内がん登録の [320] 形態コードは、これにグレードの分化度 1 桁を足した 6 桁になる。"
+            }
+          ],
+          "maxLength": 6,
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "morphology-code",
+              "display": "ICD-O-3 形態コード"
+            }
+          ]
+        },
+        {
+          "linkId": "grade",
+          "type": "choice",
+          "text": "組織学的グレード",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "grade",
+              "display": "組織学的グレード"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "G1",
+                "display": "G1(高分化)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "G2",
+                "display": "G2(中分化)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "G3",
+                "display": "G3(低分化)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "G4",
+                "display": "G4(未分化)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "GX",
+                "display": "GX(評価不能)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "size",
+          "type": "decimal",
+          "text": "腫瘍最大径",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "mm",
+                "display": "mm"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-tnm",
+      "type": "group",
+      "text": "病理学的 TNM 分類(UICC 第 8 版)",
+      "item": [
+        {
+          "linkId": "neoadjuvant",
+          "type": "choice",
+          "text": "術前治療",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "術前化学療法・放射線療法のあと切除した標本なら「あり」。院内がん登録では術後病理学的分類を yp の値ではなく「術前治療後(6620)」で登録する。"
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "neoadjuvant",
+              "display": "術前治療"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり(ypTNM)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pt",
+          "type": "choice",
+          "text": "pT",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "drop-down"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "UICC TNM 分類 第 8 版。院内がん登録(標準登録様式)の [610]〜[630] に様式のコードで写る。"
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "pt",
+              "display": "pT"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "Tis",
+                "display": "pTis"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T0",
+                "display": "pT0"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T1",
+                "display": "pT1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T1a",
+                "display": "pT1a"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T1b",
+                "display": "pT1b"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T1c",
+                "display": "pT1c"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T2",
+                "display": "pT2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T2a",
+                "display": "pT2a"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T2b",
+                "display": "pT2b"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T3",
+                "display": "pT3"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T3a",
+                "display": "pT3a"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T3b",
+                "display": "pT3b"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T4",
+                "display": "pT4"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T4a",
+                "display": "pT4a"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "T4b",
+                "display": "pT4b"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "TX",
+                "display": "pTX"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pn",
+          "type": "choice",
+          "text": "pN",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "drop-down"
+                  }
+                ]
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "pn",
+              "display": "pN"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "N0",
+                "display": "pN0"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N1",
+                "display": "pN1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N1a",
+                "display": "pN1a"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N1b",
+                "display": "pN1b"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N1c",
+                "display": "pN1c"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N2",
+                "display": "pN2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N2a",
+                "display": "pN2a"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N2b",
+                "display": "pN2b"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N3",
+                "display": "pN3"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N3a",
+                "display": "pN3a"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "N3b",
+                "display": "pN3b"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "NX",
+                "display": "pNX"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pm",
+          "type": "choice",
+          "text": "pM",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "pM0 は病理学的には確認できない分類だが、臨床的に遠隔転移が無いときに様式へ写すために置く。"
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "pm",
+              "display": "pM"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "M0",
+                "display": "pM0(遠隔転移なし)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "M1",
+                "display": "pM1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "M1a",
+                "display": "pM1a"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "M1b",
+                "display": "pM1b"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "M1c",
+                "display": "pM1c"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "MX",
+                "display": "pMX"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pstage",
+          "type": "choice",
+          "text": "病期(pStage)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "drop-down"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "UICC TNM 分類の病期。様式の院内がん登録では [600] ステージ(術後病理学的)に写る。"
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "pstage",
+              "display": "病期(pStage)"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "0 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "I",
+                "display": "I 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IA",
+                "display": "IA 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IB",
+                "display": "IB 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "II",
+                "display": "II 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIA",
+                "display": "IIA 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIB",
+                "display": "IIB 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIC",
+                "display": "IIC 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "III",
+                "display": "III 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIIA",
+                "display": "IIIA 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIIB",
+                "display": "IIIB 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IIIC",
+                "display": "IIIC 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IV",
+                "display": "IV 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IVA",
+                "display": "IVA 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IVB",
+                "display": "IVB 期"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "IVC",
+                "display": "IVC 期"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-invasion",
+      "type": "group",
+      "text": "脈管侵襲・断端",
+      "item": [
+        {
+          "linkId": "ly",
+          "type": "choice",
+          "text": "リンパ管侵襲",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "ly",
+              "display": "リンパ管侵襲"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "ly0",
+                "display": "ly0"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ly1",
+                "display": "ly1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ly2",
+                "display": "ly2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ly3",
+                "display": "ly3"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "v",
+          "type": "choice",
+          "text": "静脈侵襲",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "v",
+              "display": "静脈侵襲"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "v0",
+                "display": "v0"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "v1",
+                "display": "v1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "v2",
+                "display": "v2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "v3",
+                "display": "v3"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pni",
+          "type": "choice",
+          "text": "神経周囲浸潤",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "perineural-invasion",
+              "display": "神経周囲浸潤"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "Pn0",
+                "display": "Pn0"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "Pn1",
+                "display": "Pn1"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "residual",
+          "type": "choice",
+          "text": "遺残腫瘍(R 分類)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/pathology-synoptic",
+              "code": "residual-tumor",
+              "display": "遺残腫瘍(R 分類)"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "R0",
+                "display": "R0"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "R1",
+                "display": "R1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "R2",
+                "display": "R2"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "note",
+      "type": "text",
+      "text": "補足"
+    }
+  ]
+}

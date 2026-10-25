@@ -696,6 +696,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "ICD-O-3 形態コード。細胞型 4 桁＋性状 1 桁＋分化度 1 桁の 6 桁（例: 800039）。組織型が判断できない場合は 800039（悪性新生物〈腫瘍〉, NOS）。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%pathologyMorphology"
+                  }
                 }
               ],
               "text": "[320] 病理診断《形態コード》",
@@ -2482,6 +2489,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "初回治療継続例で、自施設初回治療開始前に他施設で観血的治療が実施され、他施設から UICC 病期情報が確実に得られる場合は 8000 台のコードを用いる。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%pathologyPStage"
+                  }
                 }
               ],
               "text": "[600] ステージ（術後病理学的・UICC）",
@@ -3112,6 +3126,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "初回治療継続例で、自施設初回治療開始前に他施設で観血的治療が実施され、他施設から UICC 病期情報が確実に得られる場合は 8000 台のコードを用いる。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%pathologyPT"
+                  }
                 }
               ],
               "text": "[610] pTNM 分類（UICC）pT 分類",
@@ -3730,6 +3751,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "初回治療継続例で、自施設初回治療開始前に他施設で観血的治療が実施され、他施設から UICC 病期情報が確実に得られる場合は 8000 台のコードを用いる。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%pathologyPN"
+                  }
                 }
               ],
               "text": "[620] pTNM 分類（UICC）pN 分類",
@@ -4036,6 +4064,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "初回治療継続例で、自施設初回治療開始前に他施設で観血的治療が実施され、他施設から UICC 病期情報が確実に得られる場合は 8000 台のコードを用いる。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%pathologyPM"
+                  }
                 }
               ],
               "text": "[630] pTNM 分類（UICC）pM 分類",
@@ -4558,6 +4593,13 @@
                 {
                   "url": "http://hl7.org/fhir/StructureDefinition/designNote",
                   "valueMarkdown": "自施設で手術が行われなかった場合、または手術前に他の初回治療が開始された場合は「660」。"
+                },
+                {
+                  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+                  "valueExpression": {
+                    "language": "text/fhirpath",
+                    "expression": "%pathologyExtent"
+                  }
                 }
               ],
               "text": "[680] 進展度・術後病理学的（病理学的進展度）",

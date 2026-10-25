@@ -118,6 +118,8 @@ export interface CancerPopulateSources {
   focusConditionId?: string;
   /** 確定した病理レポートの検索結果(_include=DiagnosticReport:result 付き、新しい順)。 */
   pathoDetail?: fhir4.Bundle;
+  /** そのレポートの診断のテンプレート回答(シノプティックレポート)とテンプレート。無ければ undefined。 */
+  pathoSynoptic?: { response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire };
   /** 手術の実施記録(ハブ Procedure、古い順)。 */
   surgeries: fhir4.Procedure[];
   /** レジメン適用のヘッダ。 */
@@ -139,6 +141,13 @@ export const CANCER_POPULATE_VARIABLES = [
   "cancerDiagnosisBasis",
   "pathologyDiagnosis",
   "pathologyDate",
+  "pathologyHistologicType",
+  "pathologyMorphology",
+  "pathologyPT",
+  "pathologyPN",
+  "pathologyPM",
+  "pathologyPStage",
+  "pathologyExtent",
   "surgeryDate",
   "chemoStartDate",
   "radiotherapyStartDate",
@@ -219,6 +228,156 @@ function latestPathology(bundle: fhir4.Bundle | undefined): { diagnosis: string;
   };
 }
 
+// ---- シノプティックレポート(病理の診断テンプレート)からの病期 ----
+
+/** シノプティックレポートのテンプレートの項目コード(docs/report-mappings/patho-synoptic.md)。 */
+export const SYNOPTIC_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/pathology-synoptic";
+export const SYNOPTIC_ITEM_CODES = {
+  histologicType: "histologic-type",
+  morphologyCode: "morphology-code",
+  grade: "grade",
+  pT: "pt",
+  pN: "pn",
+  pM: "pm",
+  pStage: "pstage",
+  neoadjuvant: "neoadjuvant",
+} as const;
+
+/** 標準登録様式の術後病理学的分類のコード。pT「T3a」のような表記(p 無し)→ 4 桁。 */
+export const HBCR_PT_CODES: Record<string, string> = {
+  TX: "1500", T0: "1000", Ta: "1050", Tis: "1010", "Tis(DCIS)": "1021", "Tis(LCIS)": "1022", "Tis(Paget)": "1023",
+  "Tis pu": "1031", "Tis pd": "1032", "Tis(LAMN)": "1033", "Tis, NOS": "1090",
+  T1: "1100", T1Mi: "1106", T1a: "1110", T1a1: "1111", T1a2: "1112", T1b: "1120", T1b1: "1121", T1b2: "1122",
+  T1c: "1130", T1c1: "1131", T1c2: "1132", T1c3: "1133", T1d: "1140", "T1, NOS": "1190",
+  T2: "1200", T2a: "1210", T2a1: "1211", T2a2: "1212", T2b: "1220", T2c: "1230", T2d: "1240", "T2, NOS": "1290",
+  T3: "1300", T3a: "1310", T3b: "1320", T3c: "1330", T3d: "1340", T3e: "1350", "T3, NOS": "1390",
+  T4: "1400", T4a: "1410", T4b: "1420", T4c: "1430", T4d: "1440", T4e: "1450", "T4, NOS": "1490",
+};
+export const HBCR_PN_CODES: Record<string, string> = {
+  NX: "2500", N0: "2000", N1: "2100", N1Mi: "2106", N1a: "2110", "N1a(sN)": "2111", N1b: "2120", N1c: "2130",
+  "N1, NOS": "2190", N2: "2200", N2a: "2210", N2b: "2220", N2c: "2230", "N2, NOS": "2290",
+  N3: "2300", N3a: "2310", N3b: "2320", N3c: "2330", "N3, NOS": "2390", N4: "2400", "N4, NOS": "2490",
+};
+export const HBCR_PM_CODES: Record<string, string> = {
+  MX: "3500", M0: "3000", M1: "3100", M1a: "3110", M1b: "3120", M1c: "3130", M1d: "3140", M1e: "3150", "M1, NOS": "3190",
+};
+export const HBCR_STAGE_CODES: Record<string, string> = {
+  "潜伏期": "4800", "0": "4000", "0a": "4050", "0is": "4010",
+  I: "4100", IA: "4110", IA1: "4111", IA2: "4112", IA3: "4113", IB: "4130", IB1: "4131", IB2: "4132",
+  IC: "4140", IC1: "4141", IC2: "4142", IC3: "4143", IS: "4171", IE: "4172", "I, NOS": "4190",
+  II: "4200", IIA: "4210", IIA1: "4211", IIA2: "4212", IIB: "4230", IIC: "4240", IIE: "4271", "Bulky II": "4272", "II, NOS": "4290",
+  III: "4300", IIIA: "4310", IIIA1: "4311", "IIIA1(i)": "4317", "IIIA1(ii)": "4318", IIIA2: "4312", IIIB: "4320",
+  IIIC: "4330", IIIC1: "4331", IIIC2: "4332", IIID: "4340", IIIE: "4371", IIIS: "4372", "IIIE＋S": "4373", "III, NOS": "4390",
+  IV: "4400", IVA: "4410", IVB: "4420", IVC: "4430", "IV, NOS": "4490",
+};
+/** 術前治療後の術後病理学的分類(様式は yp の値を書かずこのコードにする)。 */
+const HBCR_AFTER_NEOADJUVANT = "6620";
+const HBCR_EXTENT_AFTER_NEOADJUVANT = "660";
+
+/** シノプティックレポートから読んだ値(テンプレートの項目コードで引く)。 */
+export interface SynopticValues {
+  /** 組織型(選択肢の表示名)。 */
+  histologicType: string;
+  /** ICD-O-3 の形態コード「8211/3」(選択肢のコードか、形態コードの入力欄)。 */
+  morphology: string;
+  /** グレード G1〜G4 / GX。 */
+  grade: string;
+  /** T3a のような表記(p 無し)。 */
+  pT: string;
+  pN: string;
+  pM: string;
+  /** IIIA のような表記。 */
+  pStage: string;
+  neoadjuvant: boolean;
+}
+
+/** 回答から項目コードごとの最初の答えを拾う(linkId → 項目コードはテンプレートで引く)。 */
+export function synopticValuesOf(
+  response: fhir4.QuestionnaireResponse,
+  questionnaire: fhir4.Questionnaire | undefined,
+): SynopticValues {
+  const codeByLinkId = new Map<string, string>();
+  for (const item of questionnaireLeafItems(questionnaire)) {
+    const code = item.code?.find((c) => c.system === SYNOPTIC_ITEM_SYSTEM)?.code;
+    if (code) codeByLinkId.set(item.linkId, code);
+  }
+  const answers = new Map<string, fhir4.QuestionnaireResponseItemAnswer>();
+  const walk = (items: fhir4.QuestionnaireResponseItem[] | undefined) => {
+    for (const item of items ?? []) {
+      const code = codeByLinkId.get(item.linkId);
+      if (code && item.answer?.[0] && !answers.has(code)) answers.set(code, item.answer[0]);
+      walk(item.item);
+      for (const answer of item.answer ?? []) walk(answer.item);
+    }
+  };
+  walk(response.item);
+  const codeOf = (key: string) => answers.get(key)?.valueCoding?.code ?? "";
+  const textOf = (key: string) => (answers.has(key) ? plainAnswerText(answers.get(key) ?? {}) : "");
+  const histology = answers.get(SYNOPTIC_ITEM_CODES.histologicType);
+  const morphologyFromOption = /^\d{4}\/\d$/.test(histology?.valueCoding?.code ?? "") ? (histology?.valueCoding?.code ?? "") : "";
+  return {
+    histologicType: histology ? plainAnswerText(histology) : "",
+    morphology: morphologyFromOption || textOf(SYNOPTIC_ITEM_CODES.morphologyCode).trim(),
+    grade: codeOf(SYNOPTIC_ITEM_CODES.grade),
+    pT: codeOf(SYNOPTIC_ITEM_CODES.pT),
+    pN: codeOf(SYNOPTIC_ITEM_CODES.pN),
+    pM: codeOf(SYNOPTIC_ITEM_CODES.pM),
+    pStage: codeOf(SYNOPTIC_ITEM_CODES.pStage),
+    neoadjuvant: codeOf(SYNOPTIC_ITEM_CODES.neoadjuvant) === "yes",
+  };
+}
+
+/** 様式 [329] 病理診断《テキスト》(128 字まで)に写す要約。「管状腺癌(tub) G2 pT3 pN1a pM0 IIIB 期」。 */
+export function synopticSummary(values: SynopticValues): string {
+  return [
+    values.histologicType,
+    values.grade,
+    values.neoadjuvant ? "ypTNM" : "",
+    values.pT ? `p${values.pT}` : "",
+    values.pN ? `p${values.pN}` : "",
+    values.pM ? `p${values.pM}` : "",
+    values.pStage ? `${values.pStage} 期` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** 様式 [320] 病理診断《形態コード》(6 桁 = 細胞型 4 桁 + 性状 1 桁 + 分化度 1 桁)。分化度はグレードから、無ければ 9。 */
+export function hbcrMorphologyCode(morphology: string, grade: string): string {
+  const match = /^(\d{4})\/(\d)$/.exec(morphology);
+  if (!match) return "";
+  const gradeDigit = /^G([1-4])$/.exec(grade)?.[1] ?? "9";
+  return `${match[1]}${match[2]}${gradeDigit}`;
+}
+
+/**
+ * 様式 [680] 進展度・術後病理学的。pTNM からの機械的な読み替え(遠隔転移 > 領域リンパ節転移 > 上皮内 >
+ * 隣接臓器浸潤(T4) > 限局)。部位ごとの規約の進展度とは一致しないことがあるので初期値にとどめる。
+ */
+export function hbcrExtentCode(values: SynopticValues): string {
+  if (values.neoadjuvant) return HBCR_EXTENT_AFTER_NEOADJUVANT;
+  if (/^M1/.test(values.pM)) return "440";
+  if (/^N[1-4]/.test(values.pN)) return "420";
+  if (/^Tis/.test(values.pT)) return "400";
+  if (/^T4/.test(values.pT)) return "430";
+  if (/^T[0-3]/.test(values.pT) || values.pT === "Ta") return "410";
+  return "";
+}
+
+/** 様式 [600]〜[630] のコード。術前治療後はすべて 6620。 */
+export function hbcrStagingCodes(values: SynopticValues): { pT: string; pN: string; pM: string; pStage: string } {
+  if (values.neoadjuvant) {
+    const code = HBCR_AFTER_NEOADJUVANT;
+    return { pT: code, pN: code, pM: code, pStage: code };
+  }
+  return {
+    pT: HBCR_PT_CODES[values.pT] ?? "",
+    pN: HBCR_PN_CODES[values.pN] ?? "",
+    pM: HBCR_PM_CODES[values.pM] ?? "",
+    pStage: HBCR_STAGE_CODES[values.pStage] ?? "",
+  };
+}
+
 /** 初期値式の環境に足す「がん登録」の変数。元データが無いときも変数名は必ず置く。 */
 export function cancerPopulateValues(
   patient: fhir4.Patient,
@@ -229,6 +388,10 @@ export function cancerPopulateValues(
   const icd10 = condition ? conditionIcd10(condition) : "";
   const diagnosisDate = condition ? summarizeCondition(condition).startDate : "";
   const pathology = latestPathology(sources?.pathoDetail);
+  const synoptic = sources?.pathoSynoptic
+    ? synopticValuesOf(sources.pathoSynoptic.response, sources.pathoSynoptic.questionnaire)
+    : undefined;
+  const staging = synoptic ? hbcrStagingCodes(synoptic) : { pT: "", pN: "", pM: "", pStage: "" };
   const surgeryDate = earliestOnOrAfter(
     (sources?.surgeries ?? []).map((p) => dayOf(p.performedPeriod?.start ?? p.performedDateTime)),
     diagnosisDate,
@@ -246,8 +409,16 @@ export function cancerPopulateValues(
     cancerTopography: cancerTopographyOf(icd10),
     cancerDiagnosisDate: diagnosisDate,
     cancerDiagnosisBasis: pathology ? (pathology.category === "CP" ? "3" : "1") : "",
-    pathologyDiagnosis: pathology?.diagnosis ?? "",
+    // シノプティックレポートの平文は長い(様式のテキストは 128 字まで)ので、要約に置き換える。
+    pathologyDiagnosis: synoptic ? synopticSummary(synoptic) : (pathology?.diagnosis ?? ""),
     pathologyDate: pathology?.date ?? "",
+    pathologyHistologicType: synoptic?.histologicType ?? "",
+    pathologyMorphology: synoptic ? hbcrMorphologyCode(synoptic.morphology, synoptic.grade) : "",
+    pathologyPT: staging.pT,
+    pathologyPN: staging.pN,
+    pathologyPM: staging.pM,
+    pathologyPStage: staging.pStage,
+    pathologyExtent: synoptic ? hbcrExtentCode(synoptic) : "",
     surgeryDate,
     chemoStartDate: earliestOnOrAfter(regimenStartDates(sources?.regimens ?? []), diagnosisDate),
     radiotherapyStartDate,
