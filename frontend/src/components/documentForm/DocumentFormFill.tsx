@@ -16,7 +16,9 @@ import { DocumentFormPage } from "./DocumentFormPage";
 import { OrderTransferModal } from "./OrderTransferModal";
 
 // 様式の見た目のまま入力する画面。ページ画像の上に、デザイナで置いた位置に入力欄を重ねる。
-// 幅はペインに合わせて縮め(zoom)、全画面では画面幅いっぱいに広げる。
+// 幅はペインに合わせて縮め(zoom)、最大化では右ペイン全体(ボタン列の上まで)、全画面では画面幅いっぱいに広げる。
+
+type FillView = "normal" | "maximized" | "fullscreen";
 
 export function DocumentFormFill({
   patientId,
@@ -37,13 +39,14 @@ export function DocumentFormFill({
   actions?: ReactNode;
 }) {
   const [currentPage, setCurrentPage] = useState(1);
-  const [fullscreen, setFullscreen] = useState(false);
+  const [view, setView] = useState<FillView>("normal");
+  const fullscreen = view === "fullscreen";
   const [transferTarget, setTransferTarget] = useState<DocumentFormField | null>(null);
   const [zoom, setZoom] = useState(0.5);
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fullscreenTop = useKarteFullscreenTop(rootRef, fullscreen);
-  useEscapeClose(() => setFullscreen(false), fullscreen);
+  useEscapeClose(() => setView("normal"), view !== "normal");
 
   const page = pageOf(pages, currentPage) ?? pages[0];
 
@@ -59,7 +62,7 @@ export function DocumentFormFill({
     const observer = new ResizeObserver(measure);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [page, fullscreen]);
+  }, [page, view]);
 
   useEffect(() => {
     if (!pages.some((p) => p.page_number === currentPage)) setCurrentPage(1);
@@ -82,7 +85,7 @@ export function DocumentFormFill({
   return (
     <div
       ref={rootRef}
-      className={`document-form-fill${fullscreen ? " document-form-fill--fullscreen" : ""}`}
+      className={`document-form-fill${view === "normal" ? "" : ` document-form-fill--${view}`}`}
       style={fullscreen ? { top: fullscreenTop } : undefined}
     >
       <div className="document-form-fill__toolbar">
@@ -109,7 +112,20 @@ export function DocumentFormFill({
             </button>
           </>
         )}
-        <button type="button" className="rp-card__compact-button" onClick={() => setFullscreen(!fullscreen)}>
+        {!fullscreen && (
+          <button
+            type="button"
+            className="rp-card__compact-button"
+            onClick={() => setView(view === "maximized" ? "normal" : "maximized")}
+          >
+            {view === "maximized" ? "元に戻す" : "最大化"}
+          </button>
+        )}
+        <button
+          type="button"
+          className="rp-card__compact-button"
+          onClick={() => setView(fullscreen ? "normal" : "fullscreen")}
+        >
           {fullscreen ? "全画面終了" : "全画面"}
         </button>
         <div className="document-form-fill__actions">{actions}</div>

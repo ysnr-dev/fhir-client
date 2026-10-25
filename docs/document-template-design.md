@@ -218,7 +218,7 @@ PDF は値を描く前に枠内を白で塗る(値が空でも塗る)。見た�
 ### 7.4 入力と転記
 
 カルテ右ペインの「文書作成」で様式を選ぶと、ページ画像の上にフィールドの入力欄を重ねて出す
-(`components/documentForm/DocumentFormFill.tsx`。幅はペインに合わせて縮め、「全画面」で広げる)。
+(`components/documentForm/DocumentFormFill.tsx`。幅はペインに合わせて縮め、「最大化」で右ペイン全体、「全画面」で画面幅いっぱいに広げる)。
 
 - 初期値: 開いた時点で `initial_expression` を `buildPopulateContext` の環境で評価して入れる(`fhir/documentPlaceholders.ts` の
   `resolvePlaceholders`。変数一覧の式と `%` の式のどちらも使える)。

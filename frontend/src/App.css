@@ -7110,7 +7110,9 @@ body.karte-wide {
 /* 左右のペインは同じ高さに固定し、中身が縦の残りを埋める。
    ページの地より一段沈めて、中のパネル・カードが手前に浮いて見えるようにする。 */
 .karte-left,
+/* position: relative は、様式入力の最大化(.document-form-fill--maximized)をペインの枠に重ねるため。 */
 .karte-right {
+  position: relative;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
@@ -29105,6 +29107,17 @@ input.nursing-picker__search {
   padding: 12px;
 }
 
+/* 右ペイン(.karte-right)の枠いっぱいに重ねる。ボタン列も覆い、左ペインはそのまま見える。 */
+.document-form-fill--maximized {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  padding: 12px;
+}
+
 .document-form-fill__toolbar {
   display: flex;
   align-items: center;
@@ -29125,7 +29138,8 @@ input.nursing-picker__search {
   max-height: calc(var(--karte-pane-height) - 220px);
 }
 
-.document-form-fill--fullscreen .document-form-fill__scroll {
+.document-form-fill--fullscreen .document-form-fill__scroll,
+.document-form-fill--maximized .document-form-fill__scroll {
   max-height: none;
 }
 
