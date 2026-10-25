@@ -101,11 +101,16 @@ export function CancerRegistryPage() {
       <form className="patient-search-form" onSubmit={(e: FormEvent) => e.preventDefault()}>
         <label>
           診断日
-          <input type="date" value={from} onChange={(e) => setRange("from", e.target.value)} />
-        </label>
-        <label>
-          〜
-          <input type="date" value={to} onChange={(e) => setRange("to", e.target.value)} />
+          <span className="cancer-registry__range">
+            <input type="date" value={from} onChange={(e) => setRange("from", e.target.value)} />
+            〜
+            <input
+              type="date"
+              aria-label="診断日の終わり"
+              value={to}
+              onChange={(e) => setRange("to", e.target.value)}
+            />
+          </span>
         </label>
         <label>
           状態

@@ -26695,6 +26695,13 @@ input.nursing-picker__search {
   font-weight: normal;
 }
 
+/* 院内がん登録の診断日の期間。2 つの日付を「〜」でつないで横に並べる。 */
+.cancer-registry__range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* 院内がん登録の行の操作(登録 / 開く)。文字だけの行より高くならないよう小さめにする。 */
 .cancer-registry__actions .button {
   --control-height: 26px;
