@@ -73,7 +73,7 @@ export interface DocumentFormField {
   mask?: boolean;
   /** select のみ。 */
   options?: string[];
-  /** text / textarea / date。初期値式(変数一覧の式)。 */
+  /** 初期値式(変数一覧の式)。checkbox は条件式で、真か値があればチェックする。select は選択肢と一致する値だけ選ぶ。 */
   initial_expression?: string;
   /** text / textarea。転記ボタンで出す出どころ。空なら転記ボタン無し。 */
   transfer_kinds?: TransferKind[];
@@ -155,9 +155,7 @@ export function normalizeLayout(raw: unknown): DocumentFormLayout {
         ? item.options.filter((o): o is string => typeof o === "string")
         : [];
     }
-    if (field.type === "text" || field.type === "textarea" || field.type === "date") {
-      if (typeof item.initial_expression === "string") field.initial_expression = item.initial_expression;
-    }
+    if (typeof item.initial_expression === "string") field.initial_expression = item.initial_expression;
     if (field.type === "text" || field.type === "textarea") {
       field.transfer_kinds = Array.isArray(item.transfer_kinds)
         ? item.transfer_kinds.filter((k): k is TransferKind => includes(TRANSFER_KINDS, k))
@@ -206,9 +204,7 @@ function withTypeExtras(field: DocumentFormField, type: DocumentFormFieldType): 
   };
   if (field.mask) base.mask = true;
   if (type === "select") base.options = field.options?.length ? field.options : ["選択肢1"];
-  if (type === "text" || type === "textarea" || type === "date") {
-    base.initial_expression = field.initial_expression ?? "";
-  }
+  base.initial_expression = field.initial_expression ?? "";
   if (type === "text" || type === "textarea") base.transfer_kinds = field.transfer_kinds ?? [];
   if (type === "date") base.date_format = field.date_format ?? "slash";
   return base;
@@ -221,7 +217,10 @@ export function changeFieldType(field: DocumentFormField, type: DocumentFormFiel
     type === "checkbox" || field.type === "checkbox" || type === "textarea" || field.type === "textarea"
       ? { ...field, w: size.w, h: size.h }
       : field;
-  return withTypeExtras(resized, type);
+  // チェックの条件式と値の式は意味が違うので持ち越さない。
+  const expression =
+    type === "checkbox" || field.type === "checkbox" ? { ...resized, initial_expression: "" } : resized;
+  return withTypeExtras(expression, type);
 }
 
 export function pageOf(pages: DocumentFormPageMeta[], pageNumber: number): DocumentFormPageMeta | undefined {

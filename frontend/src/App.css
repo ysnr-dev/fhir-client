@@ -5765,6 +5765,17 @@ button.populate-expression__option--active {
   gap: 4px;
 }
 
+.populate-expression__condition {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.populate-expression__condition input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* 項目コードはシステム URI が長いので、グリッドを 1 行使い切って広く見せる。 */
 .qe-item__codes {
   flex: 1 1 100%;

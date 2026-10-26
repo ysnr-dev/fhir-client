@@ -3,6 +3,13 @@ import type { LabResultItem } from "../api/masterClient";
 import { useLabResultItem } from "../api/masterQueries";
 import { POPULATE_EXPRESSION_OPTIONS } from "../fhir/populateContext";
 import {
+  CONDITION_OPERATOR_LABELS,
+  CONDITION_OPERATORS,
+  conditionExpression,
+  parseConditionExpression,
+  type ConditionOperator,
+} from "../fhir/populateCondition";
+import {
   LAB_ATTRS,
   LAB_ATTR_LABELS,
   labExpression,
@@ -16,6 +23,7 @@ import { Modal } from "./Modal";
 // テンプレート項目の初期値式を選ぶとき(onSelect)と、文書テンプレートに書く
 // プレースホルダーを調べるとき(placeholder)に使う。
 // 「検査項目の最新値」だけは結果項目と取り出す値を選んで式を組み立てる。
+// 様式のチェック項目の条件(condition)では、選んだ変数に比較を足した条件式にする(populateCondition.ts)。
 
 interface PopulateExpressionModalProps {
   /** 項目に設定済みの式。一覧にあればそれを選んだ状態で開く。 */
@@ -24,6 +32,8 @@ interface PopulateExpressionModalProps {
   onSelect?: (expression: string) => void;
   /** 文書テンプレートのプレースホルダー({{名前}})を出し、コピーできるようにする。 */
   placeholder?: boolean;
+  /** 変数と比較から条件式を組み立てる(様式のチェック項目)。 */
+  condition?: boolean;
   onClose: () => void;
 }
 
@@ -52,17 +62,22 @@ export function PopulateExpressionModal({
   currentExpression,
   onSelect,
   placeholder = false,
+  condition = false,
   onClose,
 }: PopulateExpressionModalProps) {
-  const currentLab = parseLabExpression(currentExpression);
+  const currentCondition = condition ? parseConditionExpression(currentExpression) : null;
+  const currentBase = condition ? currentCondition?.base : currentExpression;
+  const currentLab = parseLabExpression(currentBase);
   const [selectedIndex, setSelectedIndex] = useState(() =>
     currentLab
       ? LAB_OPTION_INDEX
       : Math.max(
           0,
-          POPULATE_EXPRESSION_OPTIONS.findIndex((option) => option.expression === currentExpression),
+          POPULATE_EXPRESSION_OPTIONS.findIndex((option) => option.expression === currentBase),
         ),
   );
+  const [operator, setOperator] = useState<ConditionOperator>(currentCondition?.operator ?? "exists");
+  const [operand, setOperand] = useState(currentCondition?.operand ?? "");
   const [labCode, setLabCode] = useState(currentLab?.code ?? "");
   const [labAttr, setLabAttr] = useState<LabAttr>(currentLab?.attr ?? "value");
   const [labItem, setLabItem] = useState<LabResultItem | null>(null);
@@ -74,7 +89,8 @@ export function PopulateExpressionModal({
 
   const selected = POPULATE_EXPRESSION_OPTIONS[selectedIndex];
   const isLab = selected.parameterized === "lab";
-  const expression = isLab ? (labCode ? labExpression(labCode, labAttr) : "") : selected.expression;
+  const baseExpression = isLab ? (labCode ? labExpression(labCode, labAttr) : "") : selected.expression;
+  const expression = condition ? conditionExpression({ base: baseExpression, operator, operand }) : baseExpression;
   const sample = isLab ? labSample(selectedLabItem, labAttr) : selected.sample;
   const selectedPlaceholder = isLab ? `{{${expression}}}` : `{{${selected.label}}}`;
 
@@ -90,7 +106,7 @@ export function PopulateExpressionModal({
 
   return (
     <Modal
-      title={placeholder ? "プレースホルダーの変数" : "初期値式の変数"}
+      title={placeholder ? "プレースホルダーの変数" : condition ? "初期値の条件" : "初期値式の変数"}
       onClose={onClose}
       className="modal--populate-expression"
     >
@@ -148,6 +164,28 @@ export function PopulateExpressionModal({
                       {LAB_ATTR_LABELS[attr]}
                     </label>
                   ))}
+                </dd>
+              </>
+            )}
+            {condition && (
+              <>
+                <dt>条件</dt>
+                <dd className="populate-expression__condition">
+                  <select value={operator} onChange={(e) => setOperator(e.target.value as ConditionOperator)}>
+                    {CONDITION_OPERATORS.map((op) => (
+                      <option key={op} value={op}>
+                        {CONDITION_OPERATOR_LABELS[op]}
+                      </option>
+                    ))}
+                  </select>
+                  {operator !== "exists" && (
+                    <input
+                      type="text"
+                      aria-label="比較する値"
+                      value={operand}
+                      onChange={(e) => setOperand(e.target.value)}
+                    />
+                  )}
                 </dd>
               </>
             )}

@@ -20,6 +20,15 @@ LAB_CODES = {"hba1c": "160010010", "glucose": "160019410", "tc": "160022410", "t
 
 def lab(code, attr="value"):
     return f"%labs.where(code = '{LAB_CODES[code]}').{attr}"
+
+
+def has_lab(code):
+    return f"{lab(code)}.exists()"
+
+
+def has_icd10(*prefixes):
+    """継続中の確定病名に、ICD-10 がどれかで始まるものがあれば真(デザイナの「で始まる」と同じ形)。"""
+    return "%diagnosisIcd10.exists(" + " or ".join(f"$this.startsWith('{p}')" for p in prefixes) + ")"
 CATEGORY = {"code": "20f88598-bea0-4280-8e85-24c639035e57", "name": "計画書"}
 
 
@@ -97,12 +106,12 @@ class Flow:
         self.x += px
         return self
 
-    def cb(self, id, label, caption=None, after=14):
+    def cb(self, id, label, caption=None, after=14, **extra):
         width = BOX + 4 + (tw(caption, self.size) if caption else 0)
         self._fit(width)
         top = self.y + (self.size * 1.3 - BOX) / 2
         self.s.box(self.x, top)
-        self.s.field(id, "checkbox", label, self.x - 5, top - 5, BOX + 10, BOX + 10, 10, align="center")
+        self.s.field(id, "checkbox", label, self.x - 5, top - 5, BOX + 10, BOX + 10, 10, align="center", **extra)
         self.x += BOX + 4
         if caption:
             self.s.text(self.x, self.y, caption, self.size)
@@ -144,8 +153,8 @@ def build(continued):
     f.t("患者氏名：")
     f.tx("f_pt_name", "患者氏名", 420, font_size=11, initial_expression=KANJI_NAME)
     f.at(L + 560).t("（")
-    f.cb("f_pt_male", "性別：男", "男", after=8).t("・").gap(8)
-    f.cb("f_pt_female", "性別：女", "女", after=0).t("）")
+    f.cb("f_pt_male", "性別：男", "男", after=8, initial_expression="%gender.exists($this = '男性')").t("・").gap(8)
+    f.cb("f_pt_female", "性別：女", "女", after=0, initial_expression="%gender.exists($this = '女性')").t("）")
     f = Flow(s, T[1] + 10, L + 14)
     f.t("生年月日：")
     f.tx("f_pt_birth", "生年月日", 300, initial_expression="%patient.birthDate", type="date")
@@ -155,9 +164,9 @@ def build(continued):
     s.rect(790, T[0], R, T[2])
     s.text(804, T[0] + 10, "主病：", FS)
     f = Flow(s, T[1] + 10, 804)
-    f.cb("f_dm", "主病：糖尿病", "糖尿病")
-    f.cb("f_htn", "主病：高血圧症", "高血圧症")
-    f.cb("f_dl", "主病：脂質異常症", "脂質異常症", after=0)
+    f.cb("f_dm", "主病：糖尿病", "糖尿病", initial_expression=has_icd10("E10", "E11", "E12", "E13", "E14"))
+    f.cb("f_htn", "主病：高血圧症", "高血圧症", initial_expression=has_icd10("I10", "I11", "I12", "I13", "I15"))
+    f.cb("f_dl", "主病：脂質異常症", "脂質異常症", after=0, initial_expression=has_icd10("E78"))
 
     # ---- 枠 ----
     TOP = 238
@@ -311,7 +320,7 @@ def build(continued):
     TX = 916                       # 右列の値の欄の左端
 
     def lipid(f, code, name):
-        f.at(X3).cb(f"f_lab_{code}", f"血液検査：{name}", name, after=0).at(TX).t("（")
+        f.at(X3).cb(f"f_lab_{code}", f"血液検査：{name}", name, after=0, initial_expression=has_lab(code)).at(TX).t("（")
         f.tx(f"f_lab_{code}_value", f"血液検査：{name}（mg/dl）", 140, align="right", initial_expression=lab(code)).t("mg/dl）")
 
     y += 6
@@ -321,7 +330,7 @@ def build(continued):
     lipid(f, "tc", "総コレステロール")
     y += RH
     f = Flow(s, y, X)
-    f.cb("f_lab_glucose", "血液検査：血糖", "血糖（", after=0)
+    f.cb("f_lab_glucose", "血液検査：血糖", "血糖（", after=0, initial_expression=has_lab("glucose"))
     f.cb("f_lab_glucose_fasting", "血糖：空腹時", "空腹時", after=8)
     f.cb("f_lab_glucose_random", "血糖：随時", "随時", after=8)
     f.cb("f_lab_glucose_post", "血糖：食後", "食後（", after=0)
@@ -334,7 +343,7 @@ def build(continued):
     lipid(f, "hdl", "HDLコレステロール")
     y += RH
     f = Flow(s, y, X)
-    f.cb("f_lab_hba1c", "血液検査：HbA1c", "HbA1c：", after=0).at(X + 100).t("（")
+    f.cb("f_lab_hba1c", "血液検査：HbA1c", "HbA1c：", after=0, initial_expression=has_lab("hba1c")).at(X + 100).t("（")
     f.tx("f_lab_hba1c_value", "血液検査：HbA1c（%）", 200, align="right", initial_expression=lab("hba1c")).t("%）")
     lipid(f, "ldl", "LDLコレステロール")
     y += RH

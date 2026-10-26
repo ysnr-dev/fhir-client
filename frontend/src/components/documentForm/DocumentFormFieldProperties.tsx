@@ -146,21 +146,19 @@ export function DocumentFormFieldProperties({
         </label>
       )}
 
-      {field.initial_expression !== undefined && (
-        <label>
-          初期値
-          <div className="document-form-props__expression">
-            <input
-              type="text"
-              value={field.initial_expression}
-              onChange={(e) => patch({ initial_expression: e.target.value })}
-            />
-            <button type="button" className="rp-card__compact-button" onClick={() => setVariablesOpen(true)}>
-              変数
-            </button>
-          </div>
-        </label>
-      )}
+      <label>
+        {field.type === "checkbox" ? "条件" : "初期値"}
+        <div className="document-form-props__expression">
+          <input
+            type="text"
+            value={field.initial_expression ?? ""}
+            onChange={(e) => patch({ initial_expression: e.target.value })}
+          />
+          <button type="button" className="rp-card__compact-button" onClick={() => setVariablesOpen(true)}>
+            変数
+          </button>
+        </div>
+      </label>
 
       {field.transfer_kinds !== undefined && (
         <div className="document-form-props__kinds">
@@ -181,6 +179,7 @@ export function DocumentFormFieldProperties({
       {variablesOpen && (
         <PopulateExpressionModal
           currentExpression={field.initial_expression}
+          condition={field.type === "checkbox"}
           onSelect={(expression) => {
             patch({ initial_expression: expression });
             setVariablesOpen(false);

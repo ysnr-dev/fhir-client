@@ -228,6 +228,21 @@ RSpec.describe "Admin::DocumentTemplates", type: :request do
       expect(item["questionnaire_version"]).to eq("1")
     end
 
+    it "accepts an initial expression on a checkbox but not transfer kinds" do
+      checkbox = field(id: "f_dm", type: "checkbox", label: "主病：糖尿病", w: 30,
+                       initial_expression: "%diagnosisIcd10.exists($this.startsWith('E11'))", transfer_kinds: nil).compact
+      post "/admin/document_templates",
+           params: form_params(layout: { schema_version: 1, fields: [ checkbox ] }),
+           as: :json
+      expect(response).to have_http_status(:created)
+
+      post "/admin/document_templates",
+           params: form_params(code: "11111111-2222-3333-4444-666666666666",
+                               layout: { schema_version: 1, fields: [ checkbox.merge(transfer_kinds: []) ] }),
+           as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
     it "rejects a field outside the page" do
       post "/admin/document_templates",
            params: form_params(layout: { schema_version: 1, fields: [ field(x: 1200, w: 100) ] }),

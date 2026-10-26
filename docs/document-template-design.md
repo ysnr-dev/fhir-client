@@ -180,7 +180,7 @@ PNG が 1.5MB を超えるページ(写真)は JPEG に落とす。
                "x": 276, "y": 148, "w": 320, "h": 36, "font_size": 10.5, "align": "left", "required": false,
                "mask": true,                             // 枠内を白で塗って雛形の印字を隠す(任意)
                "options": ["男", "女"],                  // select のみ
-               "initial_expression": "%patientName",     // text / textarea / date。初期値式(変数一覧の式)
+               "initial_expression": "%patientName",     // 初期値式(変数一覧の式)。checkbox は条件式
                "transfer_kinds": ["prescription"],       // text / textarea。転記ボタンの出どころ
                "date_format": "wareki" }] }              // date のみ(slash / iso / wareki)
 ```
@@ -221,7 +221,10 @@ PDF は値を描く前に枠内を白で塗る(値が空でも塗る)。見た�
 (`components/documentForm/DocumentFormFill.tsx`。幅はペインに合わせて縮め、「最大化」で右ペイン全体、「全画面」で画面幅いっぱいに広げる)。
 
 - 初期値: 開いた時点で `initial_expression` を `buildPopulateContext` の環境で評価して入れる(`fhir/documentPlaceholders.ts` の
-  `resolvePlaceholders`。変数一覧の式と `%` の式のどちらも使える)。
+  `documentFormInitialValues`。変数一覧の式と `%` の式のどちらも使える)。checkbox は結果に `false`・空以外の値が 1 つでもあれば
+  チェックし、select は選択肢と一致する値だけを選ぶ。checkbox の条件式はデザイナの変数モーダルで
+  `<変数の式>.exists(<比較>)` の形に組み立てる(`fhir/populateCondition.ts`。この形なら開き直したとき比較と値に読み戻す)。
+  病名の判定用に `%diagnosisIcd10`(継続中で「の疑い」でない病名の ICD-10 の配列)がある。
 - 転記: `transfer_kinds` を持つ text / textarea に「転記」ボタンを出し、患者の処方・注射・部門オーダー・病名・検査結果を
   一覧から選んで文字で追記する(`components/documentForm/OrderTransferModal.tsx`)。オーダーはカルテのタイムラインと同じ
   検索条件(`karteOrderParams`)に、転記に要る明細の `_revinclude`(MedicationRequest と ServiceRequest:based-on)だけを

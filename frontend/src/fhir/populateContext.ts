@@ -17,7 +17,7 @@ import { summarizeBloodType } from "./bloodTypeHelpers";
 import { cancerPopulateValues, type CancerPopulateSources } from "./cancerRegistryHelpers";
 import { infectiousDiseaseValues } from "./infectiousDiseaseReportHelpers";
 import { ncdPopulateValues, type NcdPopulateSources } from "./ncdHelpers";
-import { conditionCategoryOf, isActiveCondition, summarizeCondition } from "./conditionHelpers";
+import { conditionCategoryOf, ICD10_SYSTEM, isActiveCondition, summarizeCondition } from "./conditionHelpers";
 import {
   encounterAdmissionDate,
   encounterAttendingName,
@@ -45,7 +45,7 @@ import {
   vitalDisplayRows,
 } from "./vitalHelpers";
 import { labExpression, type PopulateLabRow } from "./populateLab";
-import { LOINC_SYSTEM } from "./shared";
+import { codingBySystem, LOINC_SYSTEM } from "./shared";
 
 export interface PopulateSources {
   patient: fhir4.Patient;
@@ -393,6 +393,15 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     expression: "%problems",
     description: `転帰が「継続」のプロブレムを、番号順に 1 行ずつ「#番号 病名」で並べます。${MULTILINE_NOTE}`,
     sample: "#1 2型糖尿病\n#2 高血圧症\n#3 S状結腸癌",
+  },
+  {
+    group: "傷病名",
+    variable: "diagnosisIcd10",
+    label: "傷病名の ICD-10(継続中・確定)",
+    expression: "%diagnosisIcd10",
+    description:
+      "転帰が「継続」で「の疑い」の付かない傷病名の ICD-10 コードの並びです。チェック項目の条件で「で始まる」と組み合わせ、病名の有無を判定するのに使います。",
+    sample: "E119、I10、E785",
   },
   {
     group: "傷病名",
@@ -975,6 +984,15 @@ export function formatProblems(conditions: fhir4.Condition[]): string {
     .join("\n");
 }
 
+// 継続中の確定病名の ICD-10(重複なし)。「の疑い」は verificationStatus が provisional。
+export function diagnosisIcd10Codes(conditions: fhir4.Condition[]): string[] {
+  const codes = conditions
+    .filter((c) => c.verificationStatus?.coding?.[0]?.code !== "provisional")
+    .map((c) => codingBySystem(c.code?.coding, ICD10_SYSTEM)?.code ?? "")
+    .filter(Boolean);
+  return [...new Set(codes)];
+}
+
 // 既往歴を(取得時の開始日の新しい順のまま)1 行ずつ。開始日があれば添える。
 export function formatPastHistory(conditions: fhir4.Condition[]): string {
   return conditions
@@ -1214,6 +1232,7 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     ...admissionValues(sources.admission, today),
     conditions: formatConditions(sources.conditions),
     problems: formatProblems(sources.conditions),
+    diagnosisIcd10: diagnosisIcd10Codes(sources.conditions),
     pastHistory: formatPastHistory(sources.allConditions),
     activeMedications: formatActiveMedications(sources.activeMedications),
     labResults: formatLabResults(sources.labDetail),

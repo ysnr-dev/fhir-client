@@ -68,7 +68,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%gender.exists($this = '男性')"
         },
         {
           "id": "f_pt_female",
@@ -81,7 +82,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%gender.exists($this = '女性')"
         },
         {
           "id": "f_pt_birth",
@@ -124,7 +126,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%diagnosisIcd10.exists($this.startsWith('E10') or $this.startsWith('E11') or $this.startsWith('E12') or $this.startsWith('E13') or $this.startsWith('E14'))"
         },
         {
           "id": "f_htn",
@@ -137,7 +140,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%diagnosisIcd10.exists($this.startsWith('I10') or $this.startsWith('I11') or $this.startsWith('I12') or $this.startsWith('I13') or $this.startsWith('I15'))"
         },
         {
           "id": "f_dl",
@@ -150,7 +154,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%diagnosisIcd10.exists($this.startsWith('E78'))"
         },
         {
           "id": "f_goal_weight",
@@ -1004,7 +1009,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%labs.where(code = '160022410').value.exists()"
         },
         {
           "id": "f_lab_tc_value",
@@ -1032,7 +1038,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%labs.where(code = '160019410').value.exists()"
         },
         {
           "id": "f_lab_glucose_fasting",
@@ -1099,7 +1106,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%labs.where(code = '160020910').value.exists()"
         },
         {
           "id": "f_lab_tg_value",
@@ -1142,7 +1150,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%labs.where(code = '160023410').value.exists()"
         },
         {
           "id": "f_lab_hdl_value",
@@ -1170,7 +1179,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%labs.where(code = '160010010').value.exists()"
         },
         {
           "id": "f_lab_hba1c_value",
@@ -1198,7 +1208,8 @@
           "h": 26,
           "font_size": 10,
           "align": "center",
-          "required": false
+          "required": false,
+          "initial_expression": "%labs.where(code = '160167250').value.exists()"
         },
         {
           "id": "f_lab_ldl_value",

@@ -17,7 +17,7 @@
 #         "x": 120, "y": 240, "w": 300, "h": 36, "font_size": 10.5, "align": "left", "required": false,
 #         "mask": true,                             # 枠内を白で塗って雛形の印字を隠す
 #         "options": ["男", "女"],                  # select のみ
-#         "initial_expression": "%patientName",     # text / textarea / date
+#         "initial_expression": "%patientName",     # 初期値式。checkbox は真か値があればチェック
 #         "transfer_kinds": ["prescription"],       # text / textarea
 #         "date_format": "slash" } ] }              # date のみ
 class DocumentTemplate < ApplicationRecord
@@ -47,8 +47,8 @@ class DocumentTemplate < ApplicationRecord
   FIELD_EXTRA_KEYS = {
     "text" => %w[initial_expression transfer_kinds],
     "textarea" => %w[initial_expression transfer_kinds],
-    "select" => %w[options],
-    "checkbox" => [],
+    "select" => %w[options initial_expression],
+    "checkbox" => %w[initial_expression],
     "date" => %w[initial_expression date_format]
   }.freeze
   MAX_FIELDS = 300

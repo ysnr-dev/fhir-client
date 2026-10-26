@@ -25,6 +25,7 @@ import {
   documentFormValuesFromResponse,
 } from "../fhir/documentFormQuestionnaire";
 import {
+  documentFormInitialValues,
   placeholderValues,
   resolvePlaceholders,
   type PlaceholderStatus,
@@ -406,19 +407,7 @@ function DocumentFormEntry({
   // 初期値式は開いた時点の値で 1 回だけ入れる(入力中に読み直されても上書きしない)。
   useEffect(() => {
     if (values !== null || existing || !context) return;
-    const fields = layout.fields.filter((field) => field.initial_expression);
-    const resolved = resolvePlaceholders(
-      fields.map((field) => field.initial_expression as string),
-      context,
-    );
-    const initial: DocumentFormValues = {};
-    fields.forEach((field, index) => {
-      const item = resolved[index];
-      if (item.status === "ok") {
-        initial[field.id] = field.type === "date" ? item.value.slice(0, 10) : item.value;
-      }
-    });
-    setValues(initial);
+    setValues(documentFormInitialValues(layout.fields, context));
   }, [values, existing, context, layout]);
 
   async function handleSave() {
