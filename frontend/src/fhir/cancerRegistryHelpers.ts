@@ -98,24 +98,6 @@ export function cancerTopographyOf(icd10: string): string {
   return icd10;
 }
 
-// ---- 都道府県コード ----
-
-const PREFECTURES = [
-  "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県", "茨城県", "栃木県", "群馬県",
-  "埼玉県", "千葉県", "東京都", "神奈川県", "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県",
-  "岐阜県", "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県",
-  "鳥取県", "島根県", "岡山県", "広島県", "山口県", "徳島県", "香川県", "愛媛県", "高知県", "福岡県",
-  "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
-];
-
-/** 住所の都道府県(「東京都」「東京」)→ JIS X 0401 の 2 桁コード。決められなければ空。 */
-export function prefectureCodeOf(state: string | undefined): string {
-  const text = state?.trim() ?? "";
-  if (!text) return "";
-  const index = PREFECTURES.findIndex((name) => name === text || name.replace(/[都道府県]$/, "") === text);
-  return index < 0 ? "" : String(index + 1).padStart(2, "0");
-}
-
 // ---- 初期値変数 ----
 
 /** 初期値式が参照できる元データ(api/queries/populate.ts が読む)。式がこれらの変数を使うときだけ揃う。 */
@@ -130,10 +112,6 @@ export interface CancerPopulateSources {
   regimens: fhir4.ServiceRequest[];
   /** 放射線治療のコース(ServiceRequest)と照射の実施記録(Procedure)。 */
   radiotherapy: fhir4.Resource[];
-  /** 最新の受診・入院。 */
-  lastEncounter?: fhir4.Encounter;
-  /** 同じテンプレートのこの患者の登録(腫瘍番号の採番)。 */
-  registrations: fhir4.QuestionnaireResponse[];
 }
 
 /** 初期値式から参照できる変数名(% なし)。テンプレートの式がどれかを含むときだけ元データを読む。 */
@@ -152,21 +130,10 @@ export const CANCER_POPULATE_VARIABLES = [
   "pathologyPM",
   "pathologyPStage",
   "pathologyExtent",
-  "surgeryDate",
-  "chemoStartDate",
-  "radiotherapyStartDate",
-  "deathDate",
-  "lastVisitDate",
-  "prefectureCode",
-  "cancerRegistrationNumber",
+  "cancerSurgeryDate",
+  "cancerChemoStartDate",
+  "cancerRadiotherapyStartDate",
 ] as const;
-
-export function usesCancerVariables(expressions: Iterable<string | undefined>): boolean {
-  for (const expression of expressions) {
-    if (expression && CANCER_POPULATE_VARIABLES.some((name) => expression.includes(`%${name}`))) return true;
-  }
-  return false;
-}
 
 /**
  * 記入の対象の腫瘍。対象プロブレムが登録対象の病名ならそれ、そうでなければ登録対象の病名のうち
@@ -382,9 +349,11 @@ export function hbcrStagingCodes(values: SynopticValues): { pT: string; pN: stri
   };
 }
 
-/** 初期値式の環境に足す「がん登録」の変数。元データが無いときも変数名は必ず置く。 */
+/**
+ * 初期値式の環境に足す「腫瘍」「病理」の変数。元データが無いときも変数名は必ず置く。
+ * 診断根拠・形態・pTNM・進展度は院内がん登録の標準様式のコードに読み替えた値。
+ */
 export function cancerPopulateValues(
-  patient: fhir4.Patient,
   conditions: fhir4.Condition[],
   focusConditionId: string | undefined,
   sources: CancerPopulateSources | undefined,
@@ -404,10 +373,6 @@ export function cancerPopulateValues(
   const radiotherapy = radiotherapyDates(sources?.radiotherapy ?? []);
   const radiotherapyStartDate =
     earliestOnOrAfter(radiotherapy.fractions, diagnosisDate) || earliestOnOrAfter(radiotherapy.courses, diagnosisDate);
-  const lastEncounter = sources?.lastEncounter;
-  const registrations = (sources?.registrations ?? []).filter(
-    (r) => r.status !== "entered-in-error" && r.status !== "stopped",
-  );
   return {
     cancerName: condition ? summarizeCondition(condition).name : "",
     cancerIcd10: icd10 ? formatIcd10(icd10) : "",
@@ -424,13 +389,9 @@ export function cancerPopulateValues(
     pathologyPM: staging.pM,
     pathologyPStage: staging.pStage,
     pathologyExtent: synoptic ? hbcrExtentCode(synoptic) : "",
-    surgeryDate,
-    chemoStartDate: earliestOnOrAfter(regimenStartDates(sources?.regimens ?? []), diagnosisDate),
-    radiotherapyStartDate,
-    deathDate: dayOf(patient.deceasedDateTime),
-    lastVisitDate: dayOf(lastEncounter?.period?.start),
-    prefectureCode: prefectureCodeOf(patient.address?.[0]?.state),
-    cancerRegistrationNumber: sources ? registrations.length + 1 : undefined,
+    cancerSurgeryDate: surgeryDate,
+    cancerChemoStartDate: earliestOnOrAfter(regimenStartDates(sources?.regimens ?? []), diagnosisDate),
+    cancerRadiotherapyStartDate: radiotherapyStartDate,
   };
 }
 

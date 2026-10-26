@@ -31,10 +31,10 @@ NCD(National Clinical Database)の症例登録の基本項目。NCD 症例登録
 | 項目 | 初期値 |
 |---|---|
 | 氏名・性別・生年月日・年齢・身長・体重 | 患者情報と最新の身長体重(`%age` `%bodyHeight` `%bodyWeight`) |
-| 手術日・主術式・コード・術式(すべて)・執刀医・助手・麻酔科医・手術時間・麻酔時間・出血量・輸血・輸血量・創分類・術中の合併症 | 手術の実施記録(`%ncdSurgeryDate` `%ncdProcedureName` … `%ncdComplicationNote`) |
-| 診療科・予定区分・麻酔方法 | 手術の申込(`%ncdDepartment` `%ncdPriority` `%ncdAnesthesia`) |
-| 入院日・退院日・術後在院日数 | 手術日を含む入院(`%ncdAdmissionDate` `%ncdDischargeDate` `%ncdPostoperativeDays`) |
-| 術後 30 日以内の死亡・死亡日 | 患者情報の死亡日(`%ncdDiedWithin30Days` `%ncdDeathDate`) |
+| 手術日・主術式・コード・術式(すべて)・執刀医・助手・麻酔科医・手術時間・麻酔時間・出血量・輸血・輸血量・創分類・術中の合併症 | 手術の実施記録(`%surgeryDate` `%surgeryProcedureName` … `%surgeryComplication`) |
+| 診療科・予定区分・麻酔方法 | 手術の申込(`%surgeryRequestDepartment` `%surgeryPriority` `%anesthesiaMethods`) |
+| 入院日・退院日・術後在院日数 | 手術日を含む入院(`%surgeryAdmissionDate` `%surgeryDischargeDate` `%postoperativeDays`) |
+| 術後 30 日以内の死亡・死亡日 | 患者情報の死亡日(`%surgeryToDeathDays` が 30 以下で yes、`%deathDate`) |
 | 登録状況 | 未登録 |
 | 登録者 | ログイン中の医療従事者 |
 

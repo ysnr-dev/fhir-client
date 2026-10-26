@@ -77,7 +77,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%cancerRegistrationNumber"
+                "expression": "%responseSequence"
               }
             }
           ],
@@ -4713,7 +4713,7 @@
                   "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
                   "valueExpression": {
                     "language": "text/fhirpath",
-                    "expression": "iif(%surgeryDate != '', '1', {})"
+                    "expression": "iif(%cancerSurgeryDate != '', '1', {})"
                   }
                 }
               ],
@@ -4756,7 +4756,7 @@
                   "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
                   "valueExpression": {
                     "language": "text/fhirpath",
-                    "expression": "%surgeryDate.replace('-','')"
+                    "expression": "%cancerSurgeryDate.replace('-','')"
                   }
                 }
               ],
@@ -5249,7 +5249,7 @@
                   "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
                   "valueExpression": {
                     "language": "text/fhirpath",
-                    "expression": "iif(%radiotherapyStartDate != '', '1', {})"
+                    "expression": "iif(%cancerRadiotherapyStartDate != '', '1', {})"
                   }
                 }
               ],
@@ -5292,7 +5292,7 @@
                   "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
                   "valueExpression": {
                     "language": "text/fhirpath",
-                    "expression": "%radiotherapyStartDate.replace('-','')"
+                    "expression": "%cancerRadiotherapyStartDate.replace('-','')"
                   }
                 }
               ],
@@ -5423,7 +5423,7 @@
                   "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
                   "valueExpression": {
                     "language": "text/fhirpath",
-                    "expression": "iif(%chemoStartDate != '', '1', {})"
+                    "expression": "iif(%cancerChemoStartDate != '', '1', {})"
                   }
                 }
               ],
@@ -5466,7 +5466,7 @@
                   "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
                   "valueExpression": {
                     "language": "text/fhirpath",
-                    "expression": "%chemoStartDate.replace('-','')"
+                    "expression": "%cancerChemoStartDate.replace('-','')"
                   }
                 }
               ],

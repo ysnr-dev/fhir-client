@@ -18,7 +18,7 @@
 - 手術の実施記録(ハブ Procedure)を手術日の期間で並べ、症例登録の状況と術後日数を見る一覧(データ > NCD症例登録、
   `/ncd-registrations`)
 - 一覧の行からカルテの右ペインで症例登録(テンプレート回答)を書き始める。回答は `partOf` で実施記録を指す
-- 基本項目のテンプレートと、初期値変数「NCD」(実施記録・申込・入院から)。術後合併症は NCD の区分と Clavien-Dindo 分類の選択肢
+- 基本項目のテンプレートと、初期値変数「手術」(実施記録・申込・入院から)。術後合併症は NCD の区分と Clavien-Dindo 分類の選択肢
 - 登録済みの回答の項目順 CSV
 
 含めないもの(§7):
@@ -61,24 +61,27 @@ Observation・申込を 1 検索で揃える。依頼科で絞れる(`based-on.d
 
 ［設計］`facility_settings.ncd_registration = { "template": "<url>" }`(既定は同梱テンプレートの url)。
 
-## 3. 初期値変数「NCD」(`fhir/populateContext.ts`、`fhir/ncdHelpers.ts`)
+## 3. 初期値変数「手術」(`fhir/populateSurgery.ts`)
 
-テンプレートの式がこれらの変数を参照するときだけ、対象の手術(ハブ + 子 + 測定値 + 申込)と患者の入院を読む
-(`usePopulateSources` の `ncd`)。対象の手術は一覧から渡した `partOf` の Procedure、無ければ患者の最新の手術。
+［設計］NCD のために足した変数は、手術記録・紹介状など手術を写す様式でも使えるよう、変数一覧の「手術」に置く(NCD 専用の
+変数は持たない)。式がこれらの変数を参照するときだけ、対象の手術(ハブ + 子 + 測定値 + 申込)と患者の入院を読む
+(`usePopulateSources` の `focusProcedureId`)。対象の手術は記入を始めた `partOf` の Procedure、無ければ患者の最新の手術。
 
 | 変数 | 元 |
 |---|---|
-| `%ncdSurgeryDate` | ハブの `performedPeriod.start`(入室日) |
-| `%ncdProcedureName` `%ncdProcedureCode` `%ncdProcedures` | ハブと子の `code`(主術式はハブ) |
-| `%ncdPriority` `%ncdDepartment` `%ncdSurgicalDepartment` `%ncdAnesthesia` `%ncdAnesthesiaManagement` | 申込(ServiceRequest)の予定区分・依頼科・執刀科・麻酔方法・麻酔管理 |
-| `%ncdSurgeon` `%ncdAssistants` `%ncdAnesthesiologist` | ハブの `performer`(役割) |
-| `%ncdRoomMinutes` `%ncdAnesthesiaMinutes` `%ncdOperationMinutes` | 入室〜退室、麻酔開始〜終了、執刀開始〜終了(拡張の時刻) |
-| `%ncdBloodLoss` `%ncdTransfusionVolume` `%ncdTransfused` | 測定値の Observation(出血量・輸血量)。輸血は 1 mL 以上で yes |
-| `%ncdWoundClass` `%ncdComplicationNote` `%ncdOutcome` | ハブの拡張(創分類)・`complication`・`outcome` |
-| `%ncdAdmissionDate` `%ncdDischargeDate` `%ncdPostoperativeDays` | 手術日を含む入院(class = IMP)。退院していなければ退院日・術後在院日数は空 |
-| `%ncdDeathDate` `%ncdDiedWithin30Days` | `Patient.deceasedDateTime`。手術日から 30 日以内なら yes |
+| `%surgeryDate` | ハブの `performedPeriod.start`(入室日) |
+| `%surgeryProcedureName` `%surgeryProcedureCode` `%surgeryProcedures` | ハブと子の `code`(主術式はハブ) |
+| `%surgeryPriority` `%surgeryRequestDepartment` `%surgeryDepartment` `%anesthesiaMethods` `%anesthesiaManagement` | 申込(ServiceRequest)の予定区分・依頼科・執刀科・麻酔方法・麻酔管理 |
+| `%surgeon` `%surgeryAssistants` `%anesthesiologist` | ハブの `performer`(役割) |
+| `%surgeryRoomMinutes` `%anesthesiaMinutes` `%operationMinutes` | 入室〜退室、麻酔開始〜終了、執刀開始〜終了(拡張の時刻) |
+| `%bloodLoss` `%transfusionVolume` `%transfused` | 測定値の Observation(出血量・輸血量)。`%transfused` は輸血量 1 mL 以上で true の真偽値 |
+| `%woundClass` `%surgeryComplication` `%surgeryOutcome` | ハブの拡張(創分類)・`complication`・`outcome` |
+| `%surgeryAdmissionDate` `%surgeryDischargeDate` `%postoperativeDays` | 手術日を含む入院(class = IMP)。退院していなければ退院日・術後在院日数は空 |
+| `%surgeryToDeathDays` | 手術日から `Patient.deceasedDateTime` までの日数。死亡日は患者の `%deathDate` |
 
-- ［設計］有無の項目(輸血・30 日死亡)は実施記録があるときだけ yes / no を入れる。記録が無いときは空。
+- ［設計］NCD の有無の項目(輸血・30 日死亡)は、テンプレートの式で選択肢のコードにする
+  (`%transfused.select(iif($this, 'yes', 'no'))`、`iif(%surgeryDate = '', {}, iif(%surgeryToDeathDays <= 30, 'yes', 'no'))`)。
+  実施記録が無いときは空。
 - ［設計］身長・体重・年齢は既存の変数(`%bodyHeight` `%bodyWeight` `%age`)を使う。手術時の値ではなく最新の値なので、
   テンプレートの項目名を「手術時年齢」としつつ記入者が直す前提。
 
@@ -96,10 +99,10 @@ Observation・申込を 1 検索で揃える。依頼科で絞れる(`based-on.d
 
 ## 5. 実装したもの
 
-- `fhir/ncdHelpers.ts`: 設定・状態・行・初期値変数
+- `fhir/ncdHelpers.ts`: 設定・状態・行。`fhir/populateSurgery.ts`: 初期値変数「手術」
 - `fhir/questionnaireResponseHelpers.ts`(`partOf`)、`components/QuestionnaireResponsePanels.tsx`(`partOf` と NCD の変数の検知)、
   `components/KarteRightPane.tsx`(`qr-create` の `partOf`)、`karteUrl.ts` / `pages/KartePage.tsx`(`procedure-template`)
-- `api/queries/populate.ts`(手術と入院の読み込み)、`fhir/populateContext.ts`(変数「NCD」)
+- `api/queries/populate.ts`(手術と入院の読み込み)、`fhir/populateContext.ts`(変数一覧)
 - `api/queries/ncd.ts`、`pages/NcdRegistrationPage.tsx`、`appMenu.ts`(データ > NCD症例登録)、`App.tsx`
 - backend `FacilitySettings::SETTINGS` の `ncd_registration`、spec、`FacilitySettingsPage`
 - `docs/report-mappings/ncd-case-01.questionnaire.json`(`NCD_CASE_01`)

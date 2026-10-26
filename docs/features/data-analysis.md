@@ -218,12 +218,11 @@
   登録(未登録 / 登録中 / 登録済)・登録日・届出状況([920])・届出日・登録者を出します。状態と未届出で絞れます。
 - **登録を始める**: 行の「登録」を押すとカルテの右ペインで「テンプレート登録」が、施設設定のテンプレートとその病名を
   対象プロブレムに選んだ状態で開きます(プロブレムでない保険病名も選択肢に足します)。登録中・登録済の「開く」はその回答を開きます。
-- **初期値**: テンプレートの初期値変数「がん登録」(`%cancerName` `%cancerIcd10` `%cancerTopography` `%cancerDiagnosisDate`
-  `%cancerDiagnosisBasis` `%pathologyDiagnosis` `%pathologyDate` `%surgeryDate` `%chemoStartDate` `%radiotherapyStartDate`
-  `%deathDate` `%lastVisitDate` `%prefectureCode` `%cancerRegistrationNumber`、病理の診断がシノプティックレポートのときの
-  `%pathologyMorphology` `%pathologyPT` `%pathologyPN` `%pathologyPM` `%pathologyPStage` `%pathologyExtent`)で、腫瘍の病名・
-  診断日・病理診断・形態コード・病期・初回治療の日付・生存状況・都道府県コード・腫瘍番号が入ります。これらの変数を参照する
-  テンプレートを開いたときだけ元データを読みます。
+- **初期値**: 変数一覧の「腫瘍」「病理」(`%cancerName` `%cancerIcd10` `%cancerTopography` `%cancerDiagnosisDate`
+  `%cancerSurgeryDate` `%cancerChemoStartDate` `%cancerRadiotherapyStartDate` `%cancerDiagnosisBasis` `%pathologyDiagnosis`
+  `%pathologyDate`、病理の診断がシノプティックレポートのときの `%pathologyMorphology` `%pathologyPT` `%pathologyPN` `%pathologyPM`
+  `%pathologyPStage` `%pathologyExtent`)と、患者の `%deathDate` `%lastVisitDate` `%prefectureCode`、記入の `%responseSequence` で、
+  腫瘍の病名・診断日・病理診断・形態コード・病期・初回治療の日付・生存状況・都道府県コード・腫瘍番号が入ります。
 - **CSV**: 表示中の行のうち登録済(確定・訂正)の回答を、テンプレートの項目順(見出しは「[900] 病院等の名称」の形)に
   1 行 1 腫瘍で出します。選択肢はコード。全国がん登録の届出ファイルの形式には合わせていません。
 - **施設設定**（管理 > 施設設定 > 院内がん登録）: 登録のテンプレート(url。版を問わない)。既定は `HBCR_01`。
@@ -237,7 +236,7 @@ NCD(National Clinical Database)の症例登録の対象(手術の実施記録)�
   予定区分・執刀医・術後日数(30 日を過ぎて未登録なら赤)・登録(未登録 / 記入中 / 記入済 / 登録済)・登録日・記入者。依頼科と状態で絞れます。
 - **登録を始める**: 行の「登録」でカルテの右ペインの「テンプレート登録」が、施設設定のテンプレート(既定は同梱の `NCD_CASE_01`、
   `docs/report-mappings/ncd-case-01.md`)を選び、回答の `partOf` にその手術を入れた状態で開きます。手術日・術式・執刀医・麻酔・
-  手術時間・出血量・輸血・創分類・入退院日が初期値で入ります(変数「NCD」)。術後 30 日の合併症(NCD の区分と Clavien-Dindo 分類)・
+  手術時間・出血量・輸血・創分類・入退院日が初期値で入ります(変数一覧の「手術」)。術後 30 日の合併症(NCD の区分と Clavien-Dindo 分類)・
   再手術・転帰は術後に追記し、NCD の画面に入力したら「登録状況」を登録済にして確定します。
 - **CSV**: 表示中の行のうち登録済の回答を項目順に出します。NCD の一括取込の形式には合わせていません。
 - **施設設定**（管理 > 施設設定 > NCD症例登録）: 症例登録のテンプレート。

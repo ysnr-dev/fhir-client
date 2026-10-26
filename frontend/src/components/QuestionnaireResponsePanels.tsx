@@ -12,8 +12,6 @@ import {
   useQuestionnaireResponse,
   useUpdateQuestionnaireResponse,
 } from "../api/queries";
-import { usesCancerVariables } from "../fhir/cancerRegistryHelpers";
-import { usesNcdVariables } from "../fhir/ncdHelpers";
 import { problemRefOf } from "../fhir/conditionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { QuestionnaireResponseForm } from "./QuestionnaireResponseForm";
@@ -22,7 +20,6 @@ import { TemplateSelect } from "./TemplateSelect";
 import { displayJapaneseName } from "../fhir/humanName";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { buildPopulateContext } from "../fhir/populateContext";
-import { collectLabCodes } from "../fhir/populateLab";
 import { questionnaireExpressions } from "../fhir/questionnaireHelpers";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { ProblemSelect } from "./ProblemSelect";
@@ -35,6 +32,7 @@ import {
   emptyQuestionnaireResponseMeta,
   parseQuestionnaireResponseMeta,
   questionnaireCanonical,
+  questionnaireCanonicalVariants,
   questionnaireResponseProblem,
   validateQuestionnaireResponseMeta,
 } from "../fhir/questionnaireResponseHelpers";
@@ -183,27 +181,18 @@ export function QuestionnaireResponseCreatePanel({
   // 初期値式(%conditions / %patient など。populateContext.ts 参照)の実行時
   // コンテキスト。取得完了までフォームを描画しない(初期回答はマウント時に確定するため)。
   const expressions = useMemo(() => questionnaireExpressions(questionnaire), [questionnaire]);
-  const labCodes = useMemo(() => collectLabCodes(expressions), [expressions]);
-  // がん登録の変数(docs/cancer-registry-design.md §3)は、式が参照するテンプレートのときだけ元データを読む。
-  const cancer = useMemo(
-    () =>
-      questionnaire && usesCancerVariables(expressions)
-        ? {
-            canonicals: [...new Set([questionnaire.url ?? "", questionnaireCanonical(questionnaire)].filter(Boolean))],
-          }
-        : undefined,
-    [questionnaire, expressions],
+  const canonicals = useMemo(
+    () => (questionnaire ? questionnaireCanonicalVariants(questionnaire) : []),
+    [questionnaire],
   );
-  // NCD の変数(docs/ncd-registration-design.md §3)も同じく、式が参照するテンプレートのときだけ手術の記録を読む。
   const focusProcedureId = partOf
     ?.map((reference) => reference.reference?.match(/^Procedure\/(.+)$/)?.[1] ?? "")
     .find(Boolean);
-  const ncd = Boolean(questionnaire && usesNcdVariables(expressions));
   const populate = usePopulateSources(patientId, {
-    labCodes,
+    expressions,
     focusConditionId: defaultProblem?.conditionId,
-    cancer,
-    ncd: ncd ? { focusProcedureId } : undefined,
+    focusProcedureId,
+    canonicals,
   });
   const expressionContext = useMemo(
     () =>

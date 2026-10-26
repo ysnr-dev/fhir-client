@@ -33,7 +33,8 @@ function straightenQuotes(expression: string): string {
   return expression.replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
 }
 
-function expressionOf(token: string): string | undefined {
+/** プレースホルダーが表す式(変数一覧の名前なら対応する式)。どちらでもなければ undefined。 */
+export function placeholderExpression(token: string): string | undefined {
   const byLabel = EXPRESSION_BY_LABEL.get(token);
   if (byLabel) return byLabel;
   return token.startsWith("%") ? straightenQuotes(token) : undefined;
@@ -41,7 +42,7 @@ function expressionOf(token: string): string | undefined {
 
 /** プレースホルダーが変数一覧の名前か式として書かれているか(値は見ない)。 */
 export function isKnownPlaceholder(token: string): boolean {
-  return expressionOf(token) !== undefined;
+  return placeholderExpression(token) !== undefined;
 }
 
 /**
@@ -53,7 +54,7 @@ export function resolvePlaceholders(
   context: Record<string, unknown>,
 ): ResolvedPlaceholder[] {
   return tokens.map((token) => {
-    const expression = expressionOf(token);
+    const expression = placeholderExpression(token);
     if (!expression) return { token, value: "", status: "unknown" };
     try {
       const value = joinValues(evaluate(expression, context));
@@ -87,7 +88,7 @@ export function documentFormInitialValues(
 ): DocumentFormValues {
   const values: DocumentFormValues = {};
   for (const field of fields) {
-    const expression = field.initial_expression ? expressionOf(field.initial_expression) : undefined;
+    const expression = field.initial_expression ? placeholderExpression(field.initial_expression) : undefined;
     if (!expression) continue;
     let results: unknown[];
     try {

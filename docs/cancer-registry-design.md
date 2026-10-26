@@ -18,7 +18,7 @@ NCD・感染症の発生届は別に扱う。
 
 - 登録対象(がんの病名が付いた患者)と登録の状況を横断して見る一覧(データ > 院内がん登録、`/cancer-registry`)
 - 一覧の行からカルテの右ペインで登録(テンプレート回答)を始める。腫瘍(病名)を紐付ける
-- テンプレートの初期値変数「がん登録」の追加(腫瘍の病名・診断日・病理診断・初回治療の日付・生存状況・都道府県コードなど)と、
+- テンプレートの初期値変数「腫瘍」「病理」の追加(腫瘍の病名・診断日・病理診断・初回治療の日付など)と、
   同梱テンプレート `HBCR_01` への初期値式の設定
 - 登録済み(確定)の回答を標準登録様式の項目番号順の CSV に出す
 
@@ -73,17 +73,19 @@ QuestionnaireResponse 1 件 = 1 腫瘍。
 ［設計］`facility_settings.cancer_registry = { "template": "<テンプレートの url>" }`(既定は同梱テンプレートの url)。
 褥瘡管理の DESIGN-R と同じ形(`QUESTIONNAIRE_URL`、版を問わない)。
 
-## 3. 初期値変数「がん登録」(`fhir/populateContext.ts`)
+## 3. 初期値変数(`fhir/populateContext.ts`)
 
-［設計］テンプレートの初期値式から参照できる `%` 変数に次を足す。元データの取得(`usePopulateSources`)は、
-テンプレートの式がこれらの変数を参照しているときだけ行う(他のテンプレートの記入に余計な読み込みを足さない)。
+［設計］がん登録のために足した変数は、用途を問わず使えるように変数一覧の「腫瘍」「病理」「患者」「記入」に置く。
+元データの取得(`usePopulateSources`)は、式がこれらの変数を参照しているときだけ行う(他のテンプレートの記入に余計な
+読み込みを足さない)。テンプレート記入・文書作成(様式・Word / Excel)のどれからでも同じように使える。
+院内がん登録の標準様式のコード表に読み替えた値(診断根拠・形態・pTNM・進展度)は、ラベルに「院内がん登録のコード」と付ける。
 
 | 変数 | 内容 | 元 |
 |---|---|---|
 | `%cancerName` | 腫瘍の病名 | 対象の Condition の名称 |
 | `%cancerIcd10` | 腫瘍の ICD-10(「C18.7」) | Condition の ICD-10 coding |
 | `%cancerTopography` | 局在コードの候補(様式の形式「C187」) | ICD-10 が 4 桁で C00〜C80(C77〜C79 の続発性を除く)のときだけ。それ以外(血液腫瘍・上皮内癌・3 桁だけ)は空 |
-| `%cancerDiagnosisDate` | 診断日(YYYY-MM-DD) | Condition の開始日 |
+| `%cancerDiagnosisDate` | 腫瘍の診断日(YYYY-MM-DD) | Condition の開始日 |
 | `%cancerDiagnosisBasis` | 診断根拠のコード | 確定した病理レポートがあれば組織診(SP)で `1`、細胞診(CP)だけなら `3`、無ければ空 |
 | `%pathologyDiagnosis` | 病理診断 | 最新の確定した病理レポートの「診断」(LOINC 22637-3)。診断がシノプティックレポートなら組織型・グレード・pTNM・病期の要約(様式のテキストは 128 字まで) |
 | `%pathologyDate` | 病理診断日 | そのレポートの日付 |
@@ -91,16 +93,16 @@ QuestionnaireResponse 1 件 = 1 腫瘍。
 | `%pathologyMorphology` | [320] 形態コード(6 桁) | 組織型の ICD-O-3 形態コード(4 桁 / 性状)+ グレードの分化度 1 桁(無ければ 9) |
 | `%pathologyPT` `%pathologyPN` `%pathologyPM` `%pathologyPStage` | [610] [620] [630] [600] の 4 桁コード | 回答の pT / pN / pM / pStage の表記を様式のコード表(`HBCR_PT_CODES` など)で引く。術前治療ありなら 6620 |
 | `%pathologyExtent` | [680] 進展度のコード | pTNM からの機械的な読み替え(遠隔転移 440 > 領域リンパ節転移 420 > 上皮内 400 > T4 430 > 限局 410)。術前治療ありなら 660 |
-| `%surgeryDate` | 初回の手術日 | 診断日以後で最も早い手術の実施記録(ハブ Procedure)の入室日 |
-| `%chemoStartDate` | 化学療法の開始日 | 診断日以後で最も早いレジメン適用の開始日(C1 Day1) |
-| `%radiotherapyStartDate` | 放射線治療の開始日 | 診断日以後で最も早い照射の実施日。実施が無ければコースの開始予定日 |
-| `%deathDate` | 死亡日 | `Patient.deceasedDateTime` |
-| `%lastVisitDate` | 最終来院日 | 最新の受診・入院(Encounter)の開始日 |
-| `%prefectureCode` | 都道府県コード(01〜47) | 患者の住所の都道府県 |
-| `%cancerRegistrationNumber` | 腫瘍番号 | 同じテンプレートのこの患者の登録件数 + 1 |
+| `%cancerSurgeryDate` | 腫瘍の初回手術日 | 診断日以後で最も早い手術の実施記録(ハブ Procedure)の入室日 |
+| `%cancerChemoStartDate` | 腫瘍の化学療法の開始日 | 診断日以後で最も早いレジメン適用の開始日(C1 Day1) |
+| `%cancerRadiotherapyStartDate` | 腫瘍の放射線治療の開始日 | 診断日以後で最も早い照射の実施日。実施が無ければコースの開始予定日 |
+| `%deathDate`(患者) | 死亡日 | `Patient.deceasedDateTime`。生存なら空文字 |
+| `%lastVisitDate`(患者) | 最終来院日 | 最新の受診・入院(Encounter)の開始日 |
+| `%prefectureCode`(患者) | 都道府県コード(01〜47) | 患者の住所の都道府県(`patientHelpers.ts` の `prefectureCodeOf`) |
+| `%responseSequence`(記入) | 腫瘍番号に使う記入回数 | 同じテンプレートのこの患者の記入済み件数(取り消しを除く)+ 1 |
 
 - ［設計］**対象の Condition** は、記入を始めたときの対象プロブレム(一覧から渡した腫瘍)が登録対象の病名ならそれ。
-  そうでなければ患者の登録対象の病名のうち開始日が最も新しいもの。無ければがん登録の変数は空。
+  そうでなければ患者の登録対象の病名のうち開始日が最も新しいもの。無ければ腫瘍の変数は空。
 - ［設計］日付は他の変数と同じ YYYY-MM-DD で返す。様式の 8 桁は式の側で `.replace('-','')` にする(生年月日と同じ)。
 - ［設計］「診断日以後」は、再発・二次がんで前の腫瘍の治療を拾わないための絞り。診断日が無ければ最も早いもの。
 - ［設計］病期・組織型は、最新の確定した病理レポートの診断がシノプティックレポート(テンプレート)のときだけ入る。
@@ -136,11 +138,11 @@ QuestionnaireResponse 1 件 = 1 腫瘍。
 
 - backend: `FacilitySettings::SETTINGS` の `cancer_registry`、spec
 - frontend
-  - `fhir/cancerRegistryHelpers.ts`: 設定の型・ICD-10 の範囲と検索トークン・対象の判定・都道府県コード・初期値の組み立て・
+  - `fhir/cancerRegistryHelpers.ts`: 設定の型・ICD-10 の範囲と検索トークン・対象の判定・腫瘍と病理の変数の組み立て・
     一覧の行の突き合わせ・CSV
-  - `fhir/populateContext.ts` / `api/queries/populate.ts`: 変数「がん登録」とその元データ(式が参照するときだけ読む)。
+  - `fhir/populateContext.ts` / `api/queries/populate.ts`: 変数「腫瘍」「病理」とその元データ(式が参照するときだけ読む)。
     病期・組織型はシノプティックレポートの回答から(`fhir/pathoResultHelpers.ts` の `patho-diagnosis-response`)
-  - `components/QuestionnaireResponsePanels.tsx`: がん登録の変数の検知、プロブレムでない対象病名の選択肢への追加
+  - `components/QuestionnaireResponsePanels.tsx`: プロブレムでない対象病名の選択肢への追加
   - `karteUrl.ts` / `pages/KartePage.tsx`: `open=condition-template:<Condition id>@<url>`(感染症の発生届と共用)
   - `api/queries/cancerRegistry.ts`、`pages/CancerRegistryPage.tsx`、`appMenu.ts`(データ > 院内がん登録)、`App.tsx`
   - `pages/FacilitySettingsPage.tsx` / `api/adminClient.ts`: 施設設定「院内がん登録」

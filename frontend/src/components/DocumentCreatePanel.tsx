@@ -26,6 +26,7 @@ import {
 } from "../fhir/documentFormQuestionnaire";
 import {
   documentFormInitialValues,
+  placeholderExpression,
   placeholderValues,
   resolvePlaceholders,
   type PlaceholderStatus,
@@ -39,7 +40,6 @@ import {
 import { formatFileSize, parsePatientFile, PATIENT_FILE_MAX_BYTES } from "../fhir/patientFileHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { buildPopulateContext } from "../fhir/populateContext";
-import { collectLabCodes } from "../fhir/populateLab";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { DEFAULT_INSTITUTION_NUMBER } from "../fhir/questionnaireResponseHelpers";
 import { readFileAsDataUrl } from "../fhir/schemaImage";
@@ -130,18 +130,23 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
     () => (file.data && kind ? extractPlaceholders(file.data, kind) : null),
     [file.data, kind],
   );
-  // 検査項目の最新値は、選んだテンプレートの式が参照しているコードだけ取る
+  // 元データは選んだテンプレートの式が参照している変数のぶんだけ読む
   // (Word / Excel はファイルが届くまで参照が分からないので、届いてから取り直す)。
-  const labCodes = useMemo(
+  const expressions = useMemo(
     () =>
-      collectLabCodes(
-        isForm && template
-          ? normalizeLayout(template.layout).fields.map((field) => field.initial_expression)
-          : (placeholders ?? []),
-      ),
+      isForm && template
+        ? normalizeLayout(template.layout).fields.map((field) => field.initial_expression)
+        : (placeholders ?? []).map(placeholderExpression),
     [isForm, template, placeholders],
   );
-  const populate = usePopulateSources(patientId, { labCodes });
+  const canonicals = useMemo(
+    () =>
+      isForm && template?.questionnaire_url
+        ? documentFormCanonicalsUpTo(template.questionnaire_url, template.questionnaire_version ?? "1").split(",")
+        : [],
+    [isForm, template],
+  );
+  const populate = usePopulateSources(patientId, { expressions, canonicals });
 
   const patient = patientResult?.data;
   const context = useMemo(

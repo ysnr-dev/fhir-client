@@ -18,7 +18,7 @@
 - 届出対象(全数把握)の感染症に当たる病名を見つけ、届出の状況と期限を横断して見る一覧(診療業務 > 感染症発生届、
   `/infectious-disease-reports`)と、ホームのカード(医師の既定)
 - 一覧の行からカルテの右ペインで発生届(テンプレート回答)を書き始める。病名を紐付ける
-- 発生届の共通項目のテンプレートと、初期値変数「発生届」
+- 発生届の共通項目のテンプレートと、初期値変数「届出対象の感染症」(変数一覧の「傷病名」)
 
 含めないもの(§7):
 
@@ -64,7 +64,9 @@ QuestionnaireResponse 1 件 = 届出 1 件。対象の病名は回答の対象�
 
 ［設計］`facility_settings.infectious_disease_report = { "template": "<url>" }`(既定は同梱テンプレートの url)。
 
-## 3. 初期値変数「発生届」(`fhir/populateContext.ts`)
+## 3. 初期値変数「届出対象の感染症」(`fhir/populateContext.ts`)
+
+［設計］病名の属性(感染症法の類型・届出期限)なので、変数一覧では「傷病名」の中に置く。
 
 | 変数 | 内容 |
 |---|---|
@@ -72,10 +74,10 @@ QuestionnaireResponse 1 件 = 届出 1 件。対象の病名は回答の対象�
 | `%notifiableDiseaseClass` | 類型(一類〜五類・新型インフルエンザ等) |
 | `%notifiableDiseaseDeadline` | 「直ちに」/「7 日以内」 |
 | `%notifiableDueDate` | 届出期限(診断日 + 期限の日数) |
-| `%notifiableDiagnosisDate` | 診断日(病名の開始日) |
+| `%notifiableDiagnosisDate` | 届出対象の感染症の診断日(病名の開始日) |
 
 - ［設計］対象の病名は、記入を始めたときの対象プロブレム(一覧から渡した病名)が届出対象ならそれ、そうでなければ
-  届出対象の病名のうち開始日が最も新しいもの。がん登録と同じ規則で、対象プロブレムの id は `usePopulateSources` の
+  届出対象の病名のうち開始日が最も新しいもの。腫瘍の変数と同じ規則で、対象プロブレムの id は `usePopulateSources` の
   `focusConditionId` として両方が読む。
 - ［設計］元データは患者の病名(既に読んでいる)だけなので、余計な読み込みは無い。患者・自院・作成者の既存の変数と
   組み合わせて様式の共通項目を埋める(`docs/report-mappings/idsc-notify-01.md`)。

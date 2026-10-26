@@ -16,7 +16,6 @@ import { bloodTypeLabel } from "./transfusionOrderHelpers";
 import { summarizeBloodType } from "./bloodTypeHelpers";
 import { cancerPopulateValues, type CancerPopulateSources } from "./cancerRegistryHelpers";
 import { infectiousDiseaseValues } from "./infectiousDiseaseReportHelpers";
-import { ncdPopulateValues, type NcdPopulateSources } from "./ncdHelpers";
 import { conditionCategoryOf, ICD10_SYSTEM, isActiveCondition, summarizeCondition } from "./conditionHelpers";
 import {
   encounterAdmissionDate,
@@ -32,7 +31,7 @@ import {
 } from "./labResultHelpers";
 import type { ActiveMedication } from "./medicationSafetyHelpers";
 import { parseOrganization } from "./organizationHelpers";
-import { calculateAge, genderLabel, patientNumberOf } from "./patientHelpers";
+import { calculateAge, genderLabel, patientNumberOf, prefectureCodeOf } from "./patientHelpers";
 import { practitionerFieldValue } from "./practitionerField";
 import { baseRoleOf, parseDepartmentRoles } from "./practitionerRoleHelpers";
 import { groupByRp, splitPrescriptionDetailBundle, summarizeServiceRequest } from "./prescriptionHelpers";
@@ -45,13 +44,14 @@ import {
   vitalDisplayRows,
 } from "./vitalHelpers";
 import { labExpression, type PopulateLabRow } from "./populateLab";
+import { surgeryPopulateValues, type SurgeryPopulateSources } from "./populateSurgery";
 import { codingBySystem, LOINC_SYSTEM } from "./shared";
 
 export interface PopulateSources {
   patient: fhir4.Patient;
   /** 今日(YYYY-MM-DD)。年齢・病日・投与中の判定の基準日。 */
   today: string;
-  /** 記入を始めたときの対象プロブレム(一覧から渡した病名)の Condition id。がん登録・発生届の対象を決める。 */
+  /** 記入を始めたときの対象プロブレム(一覧から渡した病名)の Condition id。腫瘍・届出対象の感染症の対象を決める。 */
   focusConditionId?: string;
   /** 患者のアクティブな Condition(clinical-status=active で検索済み) */
   conditions: fhir4.Condition[];
@@ -85,10 +85,23 @@ export interface PopulateSources {
   facility: fhir4.Organization | null;
   /** ログイン中の医療従事者とそのロール(所属・診療科)。紐付く医療従事者が無ければ null。 */
   author: { practitioner: fhir4.Practitioner; roles: fhir4.PractitionerRole[] } | null;
-  /** がん登録の変数の元データ(cancerRegistryHelpers.ts)。テンプレートの式が参照するときだけ揃う。 */
+  /** 腫瘍・病理の変数の元データ(cancerRegistryHelpers.ts)。テンプレートの式が参照するときだけ揃う。 */
   cancer?: CancerPopulateSources;
-  /** NCD の変数の元データ(ncdHelpers.ts)。テンプレートの式が参照するときだけ揃う。 */
-  ncd?: NcdPopulateSources;
+  /** 手術の変数の元データ(populateSurgery.ts)。テンプレートの式が参照するときだけ揃う。 */
+  surgery?: SurgeryPopulateSources;
+  /** 最新の受診・入院。式が %lastVisitDate を参照するときだけ揃う。 */
+  lastEncounter?: fhir4.Encounter;
+  /** 同じテンプレートのこの患者の記入済みの件数(取り消しを除く)。式が %responseSequence を参照するときだけ揃う。 */
+  responseCount?: number;
+}
+
+/** 式が変数のどれかを参照しているか(%名前 の後ろに名前の続きが無いもの)。 */
+export function usesVariables(expressions: Iterable<string | undefined>, names: readonly string[]): boolean {
+  const pattern = new RegExp(`%(?:${names.join("|")})(?![A-Za-z0-9_])`);
+  for (const expression of expressions) {
+    if (expression && pattern.test(expression)) return true;
+  }
+  return false;
 }
 
 // テンプレート編集画面で初期値式として選べる式の一覧(変数選択モーダル)。
@@ -188,6 +201,30 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     expression: "%patient.telecom.where(system = 'phone').value.first()",
     description: "患者情報に登録した電話番号(1 件目)を入れます。",
     sample: "03-1234-5678",
+  },
+  {
+    group: "患者",
+    variable: "prefectureCode",
+    label: "都道府県コード",
+    expression: "%prefectureCode",
+    description: "患者の住所の都道府県を 2 桁のコード(01〜47)で入れます。",
+    sample: "13",
+  },
+  {
+    group: "患者",
+    variable: "deathDate",
+    label: "死亡日",
+    expression: "%deathDate",
+    description: "患者情報の死亡日を YYYY-MM-DD で入れます。生存していれば空です。",
+    sample: "2026-10-10",
+  },
+  {
+    group: "患者",
+    variable: "lastVisitDate",
+    label: "最終来院日",
+    expression: "%lastVisitDate",
+    description: "最新の受診・入院の開始日を YYYY-MM-DD で入れます。",
+    sample: "2026-10-20",
   },
   {
     group: "患者",
@@ -412,6 +449,397 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     sample: "虫垂炎(2001/06/10)\n胃潰瘍(1998/03)",
   },
 
+  {
+    group: "傷病名",
+    variable: "notifiableDiseaseName",
+    label: "届出対象の感染症名",
+    expression: "%notifiableDiseaseName",
+    description:
+      "届出基準の感染症名を入れます。対象プロブレムが届出対象の病名ならそれ、そうでなければ届出対象の病名のうち開始日が最も新しいものです。",
+    sample: "腸管出血性大腸菌感染症",
+  },
+  {
+    group: "傷病名",
+    variable: "notifiableDiseaseClass",
+    label: "感染症の類型",
+    expression: "%notifiableDiseaseClass",
+    description: "届出対象の感染症の類型(一類〜五類・新型インフルエンザ等)を入れます。",
+    sample: "三類",
+  },
+  {
+    group: "傷病名",
+    variable: "notifiableDiseaseDeadline",
+    label: "届出期限の区分",
+    expression: "%notifiableDiseaseDeadline",
+    description: "「直ちに」か「7 日以内」を入れます。",
+    sample: "直ちに",
+  },
+  {
+    group: "傷病名",
+    variable: "notifiableDueDate",
+    label: "届出期限",
+    expression: "%notifiableDueDate",
+    description: "診断日(病名の開始日)から数えた届出期限を YYYY-MM-DD で入れます。「日付」項目で使えます。",
+    sample: "2026-10-25",
+  },
+  {
+    group: "傷病名",
+    variable: "notifiableDiagnosisDate",
+    label: "届出対象の感染症の診断日",
+    expression: "%notifiableDiagnosisDate",
+    description: "届出対象の病名の開始日を YYYY-MM-DD で入れます。「日付」項目で使えます。",
+    sample: "2026-10-24",
+  },
+
+  // ---- 腫瘍(対象の腫瘍。docs/cancer-registry-design.md §3) ----
+  {
+    group: "腫瘍",
+    variable: "cancerName",
+    label: "腫瘍の病名",
+    expression: "%cancerName",
+    description:
+      "対象の腫瘍の病名を入れます。記入を始めたプロブレムが悪性腫瘍などの病名ならそれ、そうでなければそうした病名のうち開始日が最も新しいものです。",
+    sample: "S状結腸癌",
+  },
+  {
+    group: "腫瘍",
+    variable: "cancerIcd10",
+    label: "腫瘍の ICD-10",
+    expression: "%cancerIcd10",
+    description: "腫瘍の病名の ICD-10 をピリオド付きで入れます。",
+    sample: "C18.7",
+  },
+  {
+    group: "腫瘍",
+    variable: "cancerTopography",
+    label: "腫瘍の局在コード",
+    expression: "%cancerTopography",
+    description:
+      "固形がん(C00〜C80)では ICD-10 の 4 桁と同じ ICD-O-3 の局在コードをピリオド無しで入れます。続発性・血液腫瘍・上皮内癌と 3 桁だけの ICD-10 では入りません。",
+    sample: "C187",
+  },
+  {
+    group: "腫瘍",
+    variable: "cancerDiagnosisDate",
+    label: "腫瘍の診断日",
+    expression: "%cancerDiagnosisDate",
+    description: "腫瘍の病名の開始日を YYYY-MM-DD で入れます。「日付」項目で使えます。",
+    sample: "2026-08-15",
+  },
+  {
+    group: "腫瘍",
+    variable: "cancerSurgeryDate",
+    label: "腫瘍の初回手術日",
+    expression: "%cancerSurgeryDate",
+    description: "腫瘍の診断日以後で最も早い手術の実施記録の入室日を YYYY-MM-DD で入れます。",
+    sample: "2026-09-01",
+  },
+  {
+    group: "腫瘍",
+    variable: "cancerChemoStartDate",
+    label: "腫瘍の化学療法の開始日",
+    expression: "%cancerChemoStartDate",
+    description: "腫瘍の診断日以後で最も早いレジメン適用の開始日(C1 Day1)を YYYY-MM-DD で入れます。",
+    sample: "2026-09-22",
+  },
+  {
+    group: "腫瘍",
+    variable: "cancerRadiotherapyStartDate",
+    label: "腫瘍の放射線治療の開始日",
+    expression: "%cancerRadiotherapyStartDate",
+    description: "腫瘍の診断日以後で最も早い照射の実施日(無ければコースの開始予定日)を YYYY-MM-DD で入れます。",
+    sample: "2026-10-01",
+  },
+  {
+    group: "腫瘍",
+    variable: "cancerDiagnosisBasis",
+    label: "診断根拠(院内がん登録のコード)",
+    expression: "%cancerDiagnosisBasis",
+    description: "確定した病理レポートがあれば組織診の「1」、細胞診だけなら「3」を入れます。無ければ入りません。",
+    sample: "1",
+  },
+
+  // ---- 病理(最新の確定した病理レポート) ----
+  {
+    group: "病理",
+    variable: "pathologyDiagnosis",
+    label: "病理診断",
+    expression: "%pathologyDiagnosis",
+    description:
+      "最新の確定した病理レポートの「診断」を入れます。診断がシノプティックレポート(テンプレート)なら、組織型・グレード・pTNM・病期の要約にします。",
+    sample: "管状腺癌(tub) G2 pT3 pN1a pM0 IIIB 期",
+  },
+  {
+    group: "病理",
+    variable: "pathologyDate",
+    label: "病理診断日",
+    expression: "%pathologyDate",
+    description: "最新の確定した病理レポートの日付を YYYY-MM-DD で入れます。",
+    sample: "2026-08-20",
+  },
+  {
+    group: "病理",
+    variable: "pathologyHistologicType",
+    label: "組織型",
+    expression: "%pathologyHistologicType",
+    description: "最新の確定した病理レポートの診断がシノプティックレポート(テンプレート)なら、その組織型を入れます。",
+    sample: "管状腺癌(tub)",
+  },
+  {
+    group: "病理",
+    variable: "pathologyMorphology",
+    label: "形態コード(院内がん登録のコード)",
+    expression: "%pathologyMorphology",
+    description:
+      "シノプティックレポートの組織型の ICD-O-3 形態コードとグレードから、6 桁(細胞型 4 桁 + 性状 + 分化度)を入れます。グレードが無ければ分化度は 9。",
+    sample: "821132",
+  },
+  {
+    group: "病理",
+    variable: "pathologyPT",
+    label: "pT 分類(院内がん登録のコード)",
+    expression: "%pathologyPT",
+    description: "シノプティックレポートの pT を 4 桁のコードで入れます。術前治療後は 6620。",
+    sample: "1300",
+  },
+  {
+    group: "病理",
+    variable: "pathologyPN",
+    label: "pN 分類(院内がん登録のコード)",
+    expression: "%pathologyPN",
+    description: "シノプティックレポートの pN を 4 桁のコードで入れます。術前治療後は 6620。",
+    sample: "2110",
+  },
+  {
+    group: "病理",
+    variable: "pathologyPM",
+    label: "pM 分類(院内がん登録のコード)",
+    expression: "%pathologyPM",
+    description: "シノプティックレポートの pM を 4 桁のコードで入れます。術前治療後は 6620。",
+    sample: "3000",
+  },
+  {
+    group: "病理",
+    variable: "pathologyPStage",
+    label: "病期(院内がん登録のコード)",
+    expression: "%pathologyPStage",
+    description: "シノプティックレポートの pStage(術後病理学的病期)を 4 桁のコードで入れます。術前治療後は 6620。",
+    sample: "4310",
+  },
+  {
+    group: "病理",
+    variable: "pathologyExtent",
+    label: "進展度(院内がん登録のコード)",
+    expression: "%pathologyExtent",
+    description:
+      "シノプティックレポートの pTNM から術後病理学的進展度のコードを機械的に読み替えます(遠隔転移 440 > 領域リンパ節転移 420 > 上皮内 400 > 隣接臓器浸潤 430 > 限局 410)。部位の規約と合わないことがあるので確かめて直します。",
+    sample: "420",
+  },
+
+  // ---- 手術(対象の手術) ----
+  {
+    group: "手術",
+    variable: "surgeryDate",
+    label: "手術日",
+    expression: "%surgeryDate",
+    description:
+      "対象の手術の入室日を YYYY-MM-DD で入れます。対象は記入を始めた手術(手術の一覧から開いたもの)、無ければ患者の最新の手術です。",
+    sample: "2026-08-28",
+  },
+  {
+    group: "手術",
+    variable: "surgeryProcedureName",
+    label: "主術式",
+    expression: "%surgeryProcedureName",
+    description: "実施した術式の 1 件目の名称を入れます。",
+    sample: "腹腔鏡下胆嚢摘出術",
+  },
+  {
+    group: "手術",
+    variable: "surgeryProcedureCode",
+    label: "主術式のコード",
+    expression: "%surgeryProcedureCode",
+    description: "主術式のレセ電算コード(K コード)を入れます。",
+    sample: "K672-2",
+  },
+  {
+    group: "手術",
+    variable: "surgeryProcedures",
+    label: "術式(すべて)",
+    expression: "%surgeryProcedures",
+    description: "実施した術式と麻酔の手技料をすべて「、」区切りで入れます。",
+    sample: "腹腔鏡下胆嚢摘出術、閉鎖循環式全身麻酔",
+  },
+  {
+    group: "手術",
+    variable: "surgeryPriority",
+    label: "手術の予定区分",
+    expression: "%surgeryPriority",
+    description: "申込の予定区分(予定 / 緊急など)を入れます。",
+    sample: "予定",
+  },
+  {
+    group: "手術",
+    variable: "surgeryRequestDepartment",
+    label: "手術の依頼科",
+    expression: "%surgeryRequestDepartment",
+    description: "申込の依頼科を入れます。",
+    sample: "消化器外科",
+  },
+  {
+    group: "手術",
+    variable: "surgeryDepartment",
+    label: "執刀科",
+    expression: "%surgeryDepartment",
+    description: "申込の執刀科を入れます。",
+    sample: "消化器外科",
+  },
+  {
+    group: "手術",
+    variable: "surgeon",
+    label: "執刀医",
+    expression: "%surgeon",
+    description: "実施記録の執刀医の氏名を入れます。複数なら「、」区切り。",
+    sample: "児玉 義憲",
+  },
+  {
+    group: "手術",
+    variable: "surgeryAssistants",
+    label: "助手",
+    expression: "%surgeryAssistants",
+    description: "実施記録の助手の氏名を入れます。",
+    sample: "医師 一郎",
+  },
+  {
+    group: "手術",
+    variable: "anesthesiologist",
+    label: "麻酔科医",
+    expression: "%anesthesiologist",
+    description: "実施記録の麻酔科医の氏名を入れます。",
+    sample: "麻酔 花子",
+  },
+  {
+    group: "手術",
+    variable: "anesthesiaMethods",
+    label: "麻酔方法",
+    expression: "%anesthesiaMethods",
+    description: "申込の麻酔方法を「、」区切りで入れます。",
+    sample: "全身麻酔(吸入)、硬膜外麻酔",
+  },
+  {
+    group: "手術",
+    variable: "anesthesiaManagement",
+    label: "麻酔管理",
+    expression: "%anesthesiaManagement",
+    description: "麻酔科管理 / 執刀医管理を入れます。",
+    sample: "麻酔科管理",
+  },
+  {
+    group: "手術",
+    variable: "surgeryRoomMinutes",
+    label: "在室時間(分)",
+    expression: "%surgeryRoomMinutes",
+    description: `入室から退室までの分を入れます。${NUMBER_NOTE}`,
+    sample: "140",
+  },
+  {
+    group: "手術",
+    variable: "anesthesiaMinutes",
+    label: "麻酔時間(分)",
+    expression: "%anesthesiaMinutes",
+    description: `麻酔開始から麻酔終了までの分を入れます。${NUMBER_NOTE}`,
+    sample: "120",
+  },
+  {
+    group: "手術",
+    variable: "operationMinutes",
+    label: "手術時間(分)",
+    expression: "%operationMinutes",
+    description: `執刀開始から執刀終了までの分を入れます。${NUMBER_NOTE}`,
+    sample: "95",
+  },
+  {
+    group: "手術",
+    variable: "bloodLoss",
+    label: "出血量(mL)",
+    expression: "%bloodLoss",
+    description: `実施記録の出血量を入れます。${NUMBER_NOTE}`,
+    sample: "50",
+  },
+  {
+    group: "手術",
+    variable: "transfusionVolume",
+    label: "輸血量(mL)",
+    expression: "%transfusionVolume",
+    description: `実施記録の輸血量を入れます。${NUMBER_NOTE}`,
+    sample: "0",
+  },
+  {
+    group: "手術",
+    variable: "transfused",
+    label: "輸血の有無",
+    expression: "%transfused",
+    description:
+      "輸血量が 1 mL 以上なら true、実施記録があって無ければ false です。チェック項目の条件に使えます。選択肢のコードにするときは %transfused.select(iif($this, 'yes', 'no')) のように書きます。",
+    sample: "false",
+  },
+  {
+    group: "手術",
+    variable: "woundClass",
+    label: "創分類",
+    expression: "%woundClass",
+    description: "実施記録の創分類(清潔 / 準清潔 / 汚染 / 感染・不潔)を入れます。",
+    sample: "準清潔",
+  },
+  {
+    group: "手術",
+    variable: "surgeryComplication",
+    label: "術中の合併症(自由記載)",
+    expression: "%surgeryComplication",
+    description: "実施記録の合併症の記載を入れます。",
+    sample: "なし",
+  },
+  {
+    group: "手術",
+    variable: "surgeryOutcome",
+    label: "手術の転帰",
+    expression: "%surgeryOutcome",
+    description: "実施記録の転帰(良好 / 合併症あり / 死亡)を入れます。",
+    sample: "良好",
+  },
+  {
+    group: "手術",
+    variable: "surgeryAdmissionDate",
+    label: "手術の入院日",
+    expression: "%surgeryAdmissionDate",
+    description: "手術日を含む入院の入院日を YYYY-MM-DD で入れます。",
+    sample: "2026-08-27",
+  },
+  {
+    group: "手術",
+    variable: "surgeryDischargeDate",
+    label: "手術の退院日",
+    expression: "%surgeryDischargeDate",
+    description: "手術日を含む入院の退院日を YYYY-MM-DD で入れます。入院中なら入りません。",
+    sample: "2026-09-03",
+  },
+  {
+    group: "手術",
+    variable: "postoperativeDays",
+    label: "術後在院日数",
+    expression: "%postoperativeDays",
+    description: `手術日から退院日までの日数を入れます。退院していなければ入りません。${NUMBER_NOTE}`,
+    sample: "6",
+  },
+  {
+    group: "手術",
+    variable: "surgeryToDeathDays",
+    label: "手術から死亡までの日数",
+    expression: "%surgeryToDeathDays",
+    description: `手術日から死亡日までの日数を入れます。死亡していなければ入りません。術後 30 日以内の死亡は %surgeryToDeathDays <= 30 で判定します。${NUMBER_NOTE}`,
+    sample: "12",
+  },
+
   // ---- 処方・検査 ----
   {
     group: "処方・検査",
@@ -499,437 +927,9 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     sample: "1310000001",
   },
 
-  // ---- がん登録(docs/cancer-registry-design.md §3) ----
+  // ---- 記入 ----
   {
-    group: "がん登録",
-    variable: "cancerName",
-    label: "腫瘍の病名",
-    expression: "%cancerName",
-    description:
-      "登録対象(がん)の病名を入れます。対象プロブレムが登録対象の病名ならそれ、そうでなければ登録対象の病名のうち開始日が最も新しいものです。",
-    sample: "S状結腸癌",
-  },
-  {
-    group: "がん登録",
-    variable: "cancerIcd10",
-    label: "腫瘍の ICD-10",
-    expression: "%cancerIcd10",
-    description: "腫瘍の病名の ICD-10 をピリオド付きで入れます。",
-    sample: "C18.7",
-  },
-  {
-    group: "がん登録",
-    variable: "cancerTopography",
-    label: "局在コードの候補",
-    expression: "%cancerTopography",
-    description:
-      "固形がん(C00〜C80)では ICD-10 の 4 桁と同じ局在コードをピリオド無しで入れます。続発性・血液腫瘍・上皮内癌と 3 桁だけの ICD-10 では入りません。",
-    sample: "C187",
-  },
-  {
-    group: "がん登録",
-    variable: "cancerDiagnosisDate",
-    label: "診断日",
-    expression: "%cancerDiagnosisDate.replace('-','')",
-    description: "腫瘍の病名の開始日を YYYYMMDD で入れます(様式の 8 桁)。YYYY-MM-DD で使うときは .replace を外します。",
-    sample: "20260815",
-  },
-  {
-    group: "がん登録",
-    variable: "cancerDiagnosisBasis",
-    label: "診断根拠のコード",
-    expression: "%cancerDiagnosisBasis",
-    description: "確定した病理レポートがあれば組織診の「1」、細胞診だけなら「3」を入れます。無ければ入りません。",
-    sample: "1",
-  },
-  {
-    group: "がん登録",
-    variable: "pathologyDiagnosis",
-    label: "病理診断",
-    expression: "%pathologyDiagnosis",
-    description:
-      "最新の確定した病理レポートの「診断」を入れます。診断がシノプティックレポート(テンプレート)なら、組織型・グレード・pTNM・病期の要約にします。",
-    sample: "管状腺癌(tub) G2 pT3 pN1a pM0 IIIB 期",
-  },
-  {
-    group: "がん登録",
-    variable: "pathologyDate",
-    label: "病理診断日",
-    expression: "%pathologyDate.replace('-','')",
-    description: "最新の確定した病理レポートの日付を YYYYMMDD で入れます。",
-    sample: "20260820",
-  },
-  {
-    group: "がん登録",
-    variable: "pathologyHistologicType",
-    label: "組織型",
-    expression: "%pathologyHistologicType",
-    description: "最新の確定した病理レポートの診断がシノプティックレポート(テンプレート)なら、その組織型を入れます。",
-    sample: "管状腺癌(tub)",
-  },
-  {
-    group: "がん登録",
-    variable: "pathologyMorphology",
-    label: "形態コード(様式)",
-    expression: "%pathologyMorphology",
-    description:
-      "シノプティックレポートの組織型の ICD-O-3 形態コードとグレードから、様式の 6 桁(細胞型 4 桁 + 性状 + 分化度)を入れます。グレードが無ければ分化度は 9。",
-    sample: "821132",
-  },
-  {
-    group: "がん登録",
-    variable: "pathologyPT",
-    label: "pT 分類(様式のコード)",
-    expression: "%pathologyPT",
-    description: "シノプティックレポートの pT を様式の 4 桁コードで入れます。術前治療後は 6620。",
-    sample: "1300",
-  },
-  {
-    group: "がん登録",
-    variable: "pathologyPN",
-    label: "pN 分類(様式のコード)",
-    expression: "%pathologyPN",
-    description: "シノプティックレポートの pN を様式の 4 桁コードで入れます。術前治療後は 6620。",
-    sample: "2110",
-  },
-  {
-    group: "がん登録",
-    variable: "pathologyPM",
-    label: "pM 分類(様式のコード)",
-    expression: "%pathologyPM",
-    description: "シノプティックレポートの pM を様式の 4 桁コードで入れます。術前治療後は 6620。",
-    sample: "3000",
-  },
-  {
-    group: "がん登録",
-    variable: "pathologyPStage",
-    label: "病期(術後病理学的・様式のコード)",
-    expression: "%pathologyPStage",
-    description: "シノプティックレポートの pStage を様式の 4 桁コードで入れます。術前治療後は 6620。",
-    sample: "4310",
-  },
-  {
-    group: "がん登録",
-    variable: "pathologyExtent",
-    label: "進展度(術後病理学的・様式のコード)",
-    expression: "%pathologyExtent",
-    description:
-      "シノプティックレポートの pTNM から進展度のコードを機械的に読み替えます(遠隔転移 440 > 領域リンパ節転移 420 > 上皮内 400 > 隣接臓器浸潤 430 > 限局 410)。部位の規約と合わないことがあるので確かめて直します。",
-    sample: "420",
-  },
-  {
-    group: "がん登録",
-    variable: "surgeryDate",
-    label: "初回の手術日",
-    expression: "%surgeryDate.replace('-','')",
-    description: "診断日以後で最も早い手術の実施記録の入室日を YYYYMMDD で入れます。",
-    sample: "20260901",
-  },
-  {
-    group: "がん登録",
-    variable: "chemoStartDate",
-    label: "化学療法の開始日",
-    expression: "%chemoStartDate.replace('-','')",
-    description: "診断日以後で最も早いレジメン適用の開始日(C1 Day1)を YYYYMMDD で入れます。",
-    sample: "20260922",
-  },
-  {
-    group: "がん登録",
-    variable: "radiotherapyStartDate",
-    label: "放射線治療の開始日",
-    expression: "%radiotherapyStartDate.replace('-','')",
-    description: "診断日以後で最も早い照射の実施日(無ければコースの開始予定日)を YYYYMMDD で入れます。",
-    sample: "20261001",
-  },
-  {
-    group: "がん登録",
-    variable: "deathDate",
-    label: "死亡日",
-    expression: "%deathDate.replace('-','')",
-    description: "患者情報の死亡日を YYYYMMDD で入れます。生存していれば入りません。",
-    sample: "20261010",
-  },
-  {
-    group: "がん登録",
-    variable: "lastVisitDate",
-    label: "最終来院日",
-    expression: "%lastVisitDate.replace('-','')",
-    description: "最新の受診・入院の開始日を YYYYMMDD で入れます(生存最終確認日の初期値)。",
-    sample: "20261020",
-  },
-  {
-    group: "がん登録",
-    variable: "prefectureCode",
-    label: "都道府県コード",
-    expression: "%prefectureCode",
-    description: "患者の住所の都道府県を 2 桁のコード(01〜47)で入れます。",
-    sample: "13",
-  },
-  {
-    group: "がん登録",
-    variable: "cancerRegistrationNumber",
-    label: "腫瘍番号",
-    expression: "%cancerRegistrationNumber",
-    description: `同じテンプレートのこの患者の登録件数 + 1 を入れます(重複番号)。${NUMBER_NOTE}`,
-    sample: "1",
-  },
-
-  // ---- NCD(docs/ncd-registration-design.md §3) ----
-  {
-    group: "NCD",
-    variable: "ncdSurgeryDate",
-    label: "手術日",
-    expression: "%ncdSurgeryDate",
-    description: "対象の手術の入室日を YYYY-MM-DD で入れます。対象は NCD 症例登録の一覧から開いた手術、無ければ患者の最新の手術です。",
-    sample: "2026-08-28",
-  },
-  {
-    group: "NCD",
-    variable: "ncdProcedureName",
-    label: "主術式",
-    expression: "%ncdProcedureName",
-    description: "実施した術式の 1 件目(ハブの code)の名称を入れます。",
-    sample: "腹腔鏡下胆嚢摘出術",
-  },
-  {
-    group: "NCD",
-    variable: "ncdProcedureCode",
-    label: "主術式のコード",
-    expression: "%ncdProcedureCode",
-    description: "主術式のレセ電算コード(K コード)を入れます。",
-    sample: "K672-2",
-  },
-  {
-    group: "NCD",
-    variable: "ncdProcedures",
-    label: "術式(すべて)",
-    expression: "%ncdProcedures",
-    description: "実施した術式と麻酔の手技料をすべて「、」区切りで入れます。",
-    sample: "腹腔鏡下胆嚢摘出術、閉鎖循環式全身麻酔",
-  },
-  {
-    group: "NCD",
-    variable: "ncdPriority",
-    label: "予定区分",
-    expression: "%ncdPriority",
-    description: "申込の予定区分(予定 / 緊急など)を入れます。",
-    sample: "予定",
-  },
-  {
-    group: "NCD",
-    variable: "ncdDepartment",
-    label: "依頼科",
-    expression: "%ncdDepartment",
-    description: "申込の依頼科を入れます。",
-    sample: "消化器外科",
-  },
-  {
-    group: "NCD",
-    variable: "ncdSurgicalDepartment",
-    label: "執刀科",
-    expression: "%ncdSurgicalDepartment",
-    description: "申込の執刀科を入れます。",
-    sample: "消化器外科",
-  },
-  {
-    group: "NCD",
-    variable: "ncdSurgeon",
-    label: "執刀医",
-    expression: "%ncdSurgeon",
-    description: "実施記録の執刀医の氏名を入れます。複数なら「、」区切り。",
-    sample: "児玉 義憲",
-  },
-  {
-    group: "NCD",
-    variable: "ncdAssistants",
-    label: "助手",
-    expression: "%ncdAssistants",
-    description: "実施記録の助手の氏名を入れます。",
-    sample: "医師 一郎",
-  },
-  {
-    group: "NCD",
-    variable: "ncdAnesthesiologist",
-    label: "麻酔科医",
-    expression: "%ncdAnesthesiologist",
-    description: "実施記録の麻酔科医の氏名を入れます。",
-    sample: "麻酔 花子",
-  },
-  {
-    group: "NCD",
-    variable: "ncdAnesthesia",
-    label: "麻酔方法",
-    expression: "%ncdAnesthesia",
-    description: "申込の麻酔方法を「、」区切りで入れます。",
-    sample: "全身麻酔(吸入)、硬膜外麻酔",
-  },
-  {
-    group: "NCD",
-    variable: "ncdAnesthesiaManagement",
-    label: "麻酔管理",
-    expression: "%ncdAnesthesiaManagement",
-    description: "麻酔科管理 / 執刀医管理を入れます。",
-    sample: "麻酔科管理",
-  },
-  {
-    group: "NCD",
-    variable: "ncdRoomMinutes",
-    label: "在室時間(分)",
-    expression: "%ncdRoomMinutes",
-    description: "入室から退室までの分を入れます。数値です。",
-    sample: "140",
-  },
-  {
-    group: "NCD",
-    variable: "ncdAnesthesiaMinutes",
-    label: "麻酔時間(分)",
-    expression: "%ncdAnesthesiaMinutes",
-    description: "麻酔開始から麻酔終了までの分を入れます。数値です。",
-    sample: "120",
-  },
-  {
-    group: "NCD",
-    variable: "ncdOperationMinutes",
-    label: "手術時間(分)",
-    expression: "%ncdOperationMinutes",
-    description: "執刀開始から執刀終了までの分を入れます。数値です。",
-    sample: "95",
-  },
-  {
-    group: "NCD",
-    variable: "ncdBloodLoss",
-    label: "出血量(mL)",
-    expression: "%ncdBloodLoss",
-    description: "実施記録の出血量を入れます。数値です。",
-    sample: "50",
-  },
-  {
-    group: "NCD",
-    variable: "ncdTransfusionVolume",
-    label: "輸血量(mL)",
-    expression: "%ncdTransfusionVolume",
-    description: "実施記録の輸血量を入れます。数値です。",
-    sample: "0",
-  },
-  {
-    group: "NCD",
-    variable: "ncdTransfused",
-    label: "輸血の有無",
-    expression: "%ncdTransfused",
-    description: "輸血量が 1 mL 以上なら yes、実施記録があって無ければ no を入れます。選択肢のコードを yes / no にした項目で使います。",
-    sample: "no",
-  },
-  {
-    group: "NCD",
-    variable: "ncdWoundClass",
-    label: "創分類",
-    expression: "%ncdWoundClass",
-    description: "実施記録の創分類(清潔 / 準清潔 / 汚染 / 感染・不潔)を入れます。",
-    sample: "準清潔",
-  },
-  {
-    group: "NCD",
-    variable: "ncdComplicationNote",
-    label: "術中の合併症(自由記載)",
-    expression: "%ncdComplicationNote",
-    description: "実施記録の合併症の記載を入れます。",
-    sample: "なし",
-  },
-  {
-    group: "NCD",
-    variable: "ncdOutcome",
-    label: "転帰(実施記録)",
-    expression: "%ncdOutcome",
-    description: "実施記録の転帰(良好 / 合併症あり / 死亡)を入れます。",
-    sample: "良好",
-  },
-  {
-    group: "NCD",
-    variable: "ncdAdmissionDate",
-    label: "入院日",
-    expression: "%ncdAdmissionDate",
-    description: "手術日を含む入院の入院日を YYYY-MM-DD で入れます。",
-    sample: "2026-08-27",
-  },
-  {
-    group: "NCD",
-    variable: "ncdDischargeDate",
-    label: "退院日",
-    expression: "%ncdDischargeDate",
-    description: "手術日を含む入院の退院日を YYYY-MM-DD で入れます。入院中なら入りません。",
-    sample: "2026-09-03",
-  },
-  {
-    group: "NCD",
-    variable: "ncdPostoperativeDays",
-    label: "術後在院日数",
-    expression: "%ncdPostoperativeDays",
-    description: "手術日から退院日までの日数を入れます。数値です。退院していなければ入りません。",
-    sample: "6",
-  },
-  {
-    group: "NCD",
-    variable: "ncdDeathDate",
-    label: "死亡日",
-    expression: "%ncdDeathDate",
-    description: "患者情報の死亡日を YYYY-MM-DD で入れます。",
-    sample: "2026-09-10",
-  },
-  {
-    group: "NCD",
-    variable: "ncdDiedWithin30Days",
-    label: "術後 30 日以内の死亡",
-    expression: "%ncdDiedWithin30Days",
-    description: "手術日から 30 日以内に死亡日があれば yes、無ければ no を入れます。",
-    sample: "no",
-  },
-
-  // ---- 発生届(docs/infectious-disease-report-design.md §3) ----
-  {
-    group: "発生届",
-    variable: "notifiableDiseaseName",
-    label: "届出対象の感染症名",
-    expression: "%notifiableDiseaseName",
-    description:
-      "届出基準の感染症名を入れます。対象プロブレムが届出対象の病名ならそれ、そうでなければ届出対象の病名のうち開始日が最も新しいものです。",
-    sample: "腸管出血性大腸菌感染症",
-  },
-  {
-    group: "発生届",
-    variable: "notifiableDiseaseClass",
-    label: "感染症の類型",
-    expression: "%notifiableDiseaseClass",
-    description: "届出対象の感染症の類型(一類〜五類・新型インフルエンザ等)を入れます。",
-    sample: "三類",
-  },
-  {
-    group: "発生届",
-    variable: "notifiableDiseaseDeadline",
-    label: "届出期限の区分",
-    expression: "%notifiableDiseaseDeadline",
-    description: "「直ちに」か「7 日以内」を入れます。",
-    sample: "直ちに",
-  },
-  {
-    group: "発生届",
-    variable: "notifiableDueDate",
-    label: "届出期限",
-    expression: "%notifiableDueDate",
-    description: "診断日(病名の開始日)から数えた届出期限を YYYY-MM-DD で入れます。「日付」項目で使えます。",
-    sample: "2026-10-25",
-  },
-  {
-    group: "発生届",
-    variable: "notifiableDiagnosisDate",
-    label: "診断年月日",
-    expression: "%notifiableDiagnosisDate",
-    description: "届出対象の病名の開始日を YYYY-MM-DD で入れます。「日付」項目で使えます。",
-    sample: "2026-10-24",
-  },
-
-  // ---- 作成者 ----
-  {
-    group: "作成者",
+    group: "記入",
     variable: "authorName",
     label: "作成者氏名",
     expression: "%authorName",
@@ -937,7 +937,7 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     sample: "児玉 義憲",
   },
   {
-    group: "作成者",
+    group: "記入",
     variable: "authorKana",
     label: "作成者氏名(カナ)",
     expression: "%authorKana",
@@ -945,7 +945,7 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     sample: "コダマ ヨシノリ",
   },
   {
-    group: "作成者",
+    group: "記入",
     variable: "authorRole",
     label: "作成者職種",
     expression: "%authorRole",
@@ -953,12 +953,20 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     sample: "医師",
   },
   {
-    group: "作成者",
+    group: "記入",
     variable: "authorDepartment",
     label: "作成者診療科",
     expression: "%authorDepartment",
     description: "ログイン中の医療従事者の診療科(既定の診療科)を入れます。",
     sample: "消化器外科",
+  },
+  {
+    group: "記入",
+    variable: "responseSequence",
+    label: "記入回数",
+    expression: "%responseSequence",
+    description: `このテンプレートでこの患者に記入するのが何回目かを入れます(記入済みの件数 + 1。取り消したものは数えません)。Word / Excel の文書では入りません。${NUMBER_NOTE}`,
+    sample: "3",
   },
 ];
 
@@ -1240,8 +1248,12 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     prescriptions: formatPrescriptions(sources.prescriptionDetail),
     ...facilityValues(sources.facility),
     ...authorValues(sources.author),
-    ...cancerPopulateValues(patient, sources.allConditions, sources.focusConditionId, sources.cancer),
+    prefectureCode: prefectureCodeOf(patient.address?.[0]?.state),
+    deathDate: patient.deceasedDateTime?.slice(0, 10) ?? "",
+    lastVisitDate: sources.lastEncounter?.period?.start?.slice(0, 10) ?? "",
+    responseSequence: sources.responseCount === undefined ? undefined : sources.responseCount + 1,
+    ...cancerPopulateValues(sources.allConditions, sources.focusConditionId, sources.cancer),
     ...infectiousDiseaseValues(sources.allConditions, sources.focusConditionId),
-    ...ncdPopulateValues(patient, sources.ncd),
+    ...surgeryPopulateValues(patient, sources.surgery),
   };
 }

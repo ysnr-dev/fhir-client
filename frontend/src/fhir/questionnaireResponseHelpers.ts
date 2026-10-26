@@ -41,6 +41,11 @@ export function questionnaireCanonical(questionnaire: fhir4.Questionnaire): stri
   return questionnaire.version ? `${url}|${questionnaire.version}` : url;
 }
 
+// 同じテンプレートの回答を questionnaire で引くときの値(版付きと版なし)。
+export function questionnaireCanonicalVariants(questionnaire: fhir4.Questionnaire): string[] {
+  return [...new Set([questionnaire.url ?? "", questionnaireCanonical(questionnaire)].filter(Boolean))];
+}
+
 // フォームで編集する QuestionnaireResponse のメタ情報。
 export interface QuestionnaireResponseMetaValues {
   status: QuestionnaireResponseStatus;

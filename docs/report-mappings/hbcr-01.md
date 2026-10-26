@@ -68,7 +68,7 @@
 | [130] 氏名 (`hbcr_130`) | Patient の漢字名（同 IDE）を「姓　名」で連結 |
 | [140] 性別 (`hbcr_140`) | Patient.gender を male→1 / female→2 に変換して初期選択 |
 | [150] 生年月日 (`hbcr_150`) | Patient.birthDate をハイフン除去して YYYYMMDD に変換 |
-| [110] 重複番号 (`hbcr_110`) | `%cancerRegistrationNumber`(同じテンプレートのこの患者の登録件数 + 1) |
+| [110] 重複番号 (`hbcr_110`) | `%responseSequence`(同じテンプレートのこの患者の記入済み件数 + 1) |
 | [200] 診断時都道府県コード (`hbcr_200`) | `%prefectureCode`(住所の都道府県 → 01〜47) |
 | [210] 診断時住所・[950] 最新住所 | Patient の住所 |
 | [220] 診断時郵便番号・[951] 最新郵便番号 | Patient の郵便番号(ハイフン除去) |
@@ -80,9 +80,9 @@
 | [370] 自施設診断日・[380] 診断日 | `%cancerDiagnosisDate`(腫瘍の病名の開始日)を YYYYMMDD に |
 | [600] ステージ・[610]〜[630] pT/pN/pM | `%pathologyPStage` `%pathologyPT` `%pathologyPN` `%pathologyPM`(シノプティックレポートの pTNM を様式のコードに) |
 | [680] 進展度・術後病理学的 | `%pathologyExtent`(pTNM からの読み替え) |
-| [700]/[701] 外科的治療 | `%surgeryDate`(診断日以後で最も早い手術の実施日)。日付が入るときだけ [700] を「1 自施設で施行」に |
-| [740]/[741] 放射線療法 | `%radiotherapyStartDate`(最も早い照射の実施日、無ければコースの開始予定日)。同上 |
-| [750]/[751] 化学療法 | `%chemoStartDate`(最も早いレジメン適用の開始日)。同上 |
+| [700]/[701] 外科的治療 | `%cancerSurgeryDate`(診断日以後で最も早い手術の実施日)。日付が入るときだけ [700] を「1 自施設で施行」に |
+| [740]/[741] 放射線療法 | `%cancerRadiotherapyStartDate`(最も早い照射の実施日、無ければコースの開始予定日)。同上 |
+| [750]/[751] 化学療法 | `%cancerChemoStartDate`(最も早いレジメン適用の開始日)。同上 |
 | [800] 生存最終確認日 (`hbcr_800`) | `%lastVisitDate`(最新の受診・入院の開始日) |
 | [810] 死亡日・[820] 生存状況 | `%deathDate`(Patient.deceasedDateTime)。無ければ 77777777 と「1 生存」 |
 | [930] 登録日 (`hbcr_930`) | 記入を始めた日 |

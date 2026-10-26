@@ -74,11 +74,17 @@ Word / Excel で直せる。
   配列で、`%labs.where(code = '160010010').value` のように結果項目コードで引く。名前だけでは項目が決まらないので、変数一覧の名前
   (`{{検査項目の最新値}}`)では解決せず、式で書く。
 
-［事実］`%labs` に入るのは、テンプレートが式の中で参照している結果項目コードだけ。記入前に式を走査してコードを集め
-(`collectLabCodes`。Questionnaire は `questionnaireExpressions`、様式は項目の `initial_expression`、Word / Excel は届いたファイルの
-プレースホルダー)、`usePopulateSources(patientId, { labCodes })` がコードごとに
+［事実］`%labs` に入るのは、テンプレートが式の中で参照している結果項目コードだけ。呼び出し側が式を集めて
+`usePopulateSources(patientId, { expressions })` に渡し(Questionnaire は `questionnaireExpressions`、様式は項目の
+`initial_expression`、Word / Excel は届いたファイルのプレースホルダーを `placeholderExpression` で式にしたもの)、
+`collectLabCodes` で集めたコードごとに
 `Observation?patient&code=<施設コード>&status:not=entered-in-error,cancelled&_sort=-date&_count=1` を 1 本ずつ引く。
 上流の code 検索は完全一致なので、施設コードを持たない旧結果(JLAC11 だけ)は拾わない(チャートと同じ制約)。
+
+［設計］変数一覧の分類は様式の用途ではなくデータの種類で分ける(患者・傷病名・腫瘍・病理・手術・記入など)。院内がん登録・
+NCD・感染症発生届のために足した変数も同じ一覧に置き、どの画面でも使える。読み込みに検索が要る変数(腫瘍・病理・手術・
+最終来院日・記入回数)は、`usePopulateSources` が式の参照を見て(`usesVariables`)その元データだけを読む。
+記入回数(`%responseSequence`)は記入しているテンプレートの canonical(`canonicals`)が要るので、Word / Excel では入らない。
 
 ## 4. 差し込み(`fhir/officeTemplate.ts`)
 

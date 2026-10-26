@@ -183,7 +183,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdSurgeryDate"
+                "expression": "%surgeryDate"
               }
             }
           ],
@@ -198,7 +198,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdProcedureName"
+                "expression": "%surgeryProcedureName"
               }
             }
           ],
@@ -213,7 +213,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdProcedureCode"
+                "expression": "%surgeryProcedureCode"
               }
             }
           ]
@@ -227,7 +227,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdProcedures"
+                "expression": "%surgeryProcedures"
               }
             }
           ]
@@ -241,7 +241,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdDepartment"
+                "expression": "%surgeryRequestDepartment"
               }
             }
           ]
@@ -297,7 +297,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdPriority"
+                "expression": "%surgeryPriority"
               }
             }
           ]
@@ -311,7 +311,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdSurgeon"
+                "expression": "%surgeon"
               }
             }
           ]
@@ -325,7 +325,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdAssistants"
+                "expression": "%surgeryAssistants"
               }
             }
           ]
@@ -339,7 +339,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdAnesthesiologist"
+                "expression": "%anesthesiologist"
               }
             }
           ]
@@ -353,7 +353,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdAnesthesia"
+                "expression": "%anesthesiaMethods"
               }
             }
           ]
@@ -379,7 +379,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdOperationMinutes"
+                "expression": "%operationMinutes"
               }
             }
           ]
@@ -405,7 +405,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdAnesthesiaMinutes"
+                "expression": "%anesthesiaMinutes"
               }
             }
           ]
@@ -431,7 +431,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdBloodLoss"
+                "expression": "%bloodLoss"
               }
             }
           ]
@@ -456,7 +456,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdTransfused"
+                "expression": "%transfused.select(iif($this, 'yes', 'no'))"
               }
             }
           ],
@@ -496,7 +496,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdTransfusionVolume"
+                "expression": "%transfusionVolume"
               }
             }
           ]
@@ -510,7 +510,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdWoundClass"
+                "expression": "%woundClass"
               }
             }
           ]
@@ -711,7 +711,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdComplicationNote"
+                "expression": "%surgeryComplication"
               }
             }
           ]
@@ -957,7 +957,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdAdmissionDate"
+                "expression": "%surgeryAdmissionDate"
               }
             }
           ]
@@ -971,7 +971,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdDischargeDate"
+                "expression": "%surgeryDischargeDate"
               }
             }
           ]
@@ -997,7 +997,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdPostoperativeDays"
+                "expression": "%postoperativeDays"
               }
             }
           ]
@@ -1058,7 +1058,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdDiedWithin30Days"
+                "expression": "iif(%surgeryDate = '', {}, iif(%surgeryToDeathDays <= 30, 'yes', 'no'))"
               }
             }
           ],
@@ -1086,7 +1086,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "%ncdDeathDate"
+                "expression": "%deathDate"
               }
             }
           ]
