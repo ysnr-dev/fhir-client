@@ -5656,14 +5656,27 @@ div.qe-item__text-field {
   overflow-y: auto;
 }
 
-.populate-expression__group {
-  margin: 10px 0 4px;
-  font-size: 12px;
-  color: var(--text);
+button.populate-expression__group {
+  width: 100%;
+  height: auto;
+  padding: 6px 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-h);
+  text-align: left;
 }
 
-.populate-expression__list > li:first-child .populate-expression__group {
-  margin-top: 0;
+.populate-expression__options {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 button.populate-expression__option {

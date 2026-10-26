@@ -39,6 +39,14 @@ interface PopulateExpressionModalProps {
 
 const LAB_OPTION_INDEX = POPULATE_EXPRESSION_OPTIONS.findIndex((option) => option.parameterized === "lab");
 
+// 分類ごとの変数(一覧の並び順のまま)。
+const OPTION_GROUPS = POPULATE_EXPRESSION_OPTIONS.reduce<{ group: string; indexes: number[] }[]>((groups, option, index) => {
+  const last = groups[groups.length - 1];
+  if (last?.group === option.group) last.indexes.push(index);
+  else groups.push({ group: option.group, indexes: [index] });
+  return groups;
+}, []);
+
 // 選んだ結果項目のデータ型と単位に合わせたサンプル値。
 function labSample(item: Pick<LabResultItem, "data_type" | "display_unit"> | undefined, attr: LabAttr): string {
   const numeric = !item || item.data_type === "PQ";
@@ -68,13 +76,13 @@ export function PopulateExpressionModal({
   const currentCondition = condition ? parseConditionExpression(currentExpression) : null;
   const currentBase = condition ? currentCondition?.base : currentExpression;
   const currentLab = parseLabExpression(currentBase);
-  const [selectedIndex, setSelectedIndex] = useState(() =>
-    currentLab
-      ? LAB_OPTION_INDEX
-      : Math.max(
-          0,
-          POPULATE_EXPRESSION_OPTIONS.findIndex((option) => option.expression === currentBase),
-        ),
+  const currentIndex = currentLab
+    ? LAB_OPTION_INDEX
+    : POPULATE_EXPRESSION_OPTIONS.findIndex((option) => option.expression === currentBase);
+  const [selectedIndex, setSelectedIndex] = useState(() => Math.max(0, currentIndex));
+  // 分類は閉じて開く。設定済みの式があればその分類だけ開いておく。
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(
+    () => new Set(currentIndex >= 0 ? [POPULATE_EXPRESSION_OPTIONS[currentIndex].group] : []),
   );
   const [operator, setOperator] = useState<ConditionOperator>(currentCondition?.operator ?? "exists");
   const [operand, setOperand] = useState(currentCondition?.operand ?? "");
@@ -99,6 +107,15 @@ export function PopulateExpressionModal({
     setCopied(true);
   }
 
+  function toggleGroup(group: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
+  }
+
   function select(index: number) {
     setSelectedIndex(index);
     setCopied(false);
@@ -112,25 +129,45 @@ export function PopulateExpressionModal({
     >
       <div className="populate-expression">
         <ul className="populate-expression__list">
-          {POPULATE_EXPRESSION_OPTIONS.map((option, index) => (
-            <li key={index}>
-              {option.group !== POPULATE_EXPRESSION_OPTIONS[index - 1]?.group && (
-                <div className="populate-expression__group">{option.group}</div>
-              )}
-              <button
-                type="button"
-                className={
-                  index === selectedIndex
-                    ? "populate-expression__option populate-expression__option--active"
-                    : "populate-expression__option"
-                }
-                onClick={() => select(index)}
-              >
-                <span>{option.label}</span>
-                <code>%{option.variable}</code>
-              </button>
-            </li>
-          ))}
+          {OPTION_GROUPS.map(({ group, indexes }) => {
+            const open = openGroups.has(group);
+            return (
+              <li key={group}>
+                <button
+                  type="button"
+                  className="populate-expression__group"
+                  aria-expanded={open}
+                  onClick={() => toggleGroup(group)}
+                >
+                  <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+                  {group}
+                </button>
+                {open && (
+                  <ul className="populate-expression__options">
+                    {indexes.map((index) => {
+                      const option = POPULATE_EXPRESSION_OPTIONS[index];
+                      return (
+                        <li key={index}>
+                          <button
+                            type="button"
+                            className={
+                              index === selectedIndex
+                                ? "populate-expression__option populate-expression__option--active"
+                                : "populate-expression__option"
+                            }
+                            onClick={() => select(index)}
+                          >
+                            <span>{option.label}</span>
+                            <code>%{option.variable}</code>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
         </ul>
         <div className="populate-expression__detail">
           <h3>{selected.label}</h3>
