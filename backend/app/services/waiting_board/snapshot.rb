@@ -8,6 +8,8 @@ module WaitingBoard
     OUTPATIENT_ROOM_TYPE_CODE = "OF".freeze
     DISPLAY_ORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/location-display-order".freeze
     CHECKED_IN_AT_URL = "http://fhir-client.local/StructureDefinition/appointment-checked-in-at".freeze
+    # 診察開始の確認で「呼出なし」を選んだ診察の印(frontend の OUTPATIENT_BOARD_CALL_EXTENSION_URL)。
+    BOARD_CALL_URL = "http://fhir-client.local/StructureDefinition/outpatient-board-call".freeze
     # 表示板に載る受付の status。診察中・一時終了でも予約は checked-in のまま、診察終了で fulfilled。
     STATUSES = %w[checked-in fulfilled].freeze
 
@@ -18,7 +20,12 @@ module WaitingBoard
 
       def encounter_status = encounter&.dig("status")
       def waiting? = encounter.nil? && appointment["status"] == "checked-in"
-      def calling? = encounter_status == "in-progress"
+      # 診察中で、呼出なしを選んでいないもの。印の無い診察は呼び出したものとして扱う。
+      def calling? = encounter_status == "in-progress" && board_call?
+
+      def board_call?
+        Array(encounter&.dig("extension")).find { |e| e["url"] == BOARD_CALL_URL }&.dig("valueBoolean") != false
+      end
       def away? = encounter_status == "onleave"
 
       # 診察室。診察が建っていればその場所(受付内容の変更で動く)、無ければ受付の診察室。

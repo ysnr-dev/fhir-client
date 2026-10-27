@@ -77,6 +77,14 @@ function attendingParticipants(
 }
 
 /**
+ * 待合表示板に呼び出さなかった診察の印(docs/waiting-board-design.md)。診察開始の確認で「呼出なし」を
+ * 選んだときだけ valueBoolean false で付け、表示板はこの診察の受付番号を「お呼び出し中」に出さない。
+ * 付いていない診察は呼び出したものとして扱う。
+ */
+export const OUTPATIENT_BOARD_CALL_EXTENSION_URL =
+  "http://fhir-client.local/StructureDefinition/outpatient-board-call";
+
+/**
  * 診察開始。予約 1 件に対して診察の Encounter を建てる。
  *
  * 診療科(serviceProvider)は入れない。Appointment.specialty は SS-MIX2 の診療科コード
@@ -87,6 +95,7 @@ export function buildOutpatientEncounter(
   appointment: fhir4.Appointment,
   patient: fhir4.Patient | undefined,
   startedAt: string,
+  options: { boardCall?: boolean } = {},
 ): fhir4.Encounter {
   const patientId = patient?.id ?? appointmentActorId(appointment, "Patient");
   const encounter: fhir4.Encounter = {
@@ -106,6 +115,10 @@ export function buildOutpatientEncounter(
     appointment: [{ reference: `Appointment/${appointment.id}` }],
     period: { start: startedAt },
   };
+
+  if (options.boardCall === false) {
+    encounter.extension = [{ url: OUTPATIENT_BOARD_CALL_EXTENSION_URL, valueBoolean: false }];
+  }
 
   const practitionerId = appointmentActorId(appointment, "Practitioner");
   if (practitionerId) {

@@ -53,6 +53,10 @@ RSpec.describe "WaitingBoard::Public", type: :request do
       # 取り消した診察開始は無かったことにする(6 番は待ちのまま)。
       appointment("a6", number: "6"),
       encounter("e6", "a6", status: "entered-in-error", start: "09:20", room: "room-1"),
+      # 呼出なしで始めた診察は「お呼び出し中」に出さない(待ちにも数えない)。
+      appointment("a10", number: "10"),
+      encounter("e10", "a10", status: "in-progress", start: "09:10", room: "room-1")
+        .merge("extension" => [{ "url" => WaitingBoard::Snapshot::BOARD_CALL_URL, "valueBoolean" => false }]),
       # 診察室の無い受付は診療科で。
       appointment("a7", number: "7", room: nil),
       # 検査予約(オーダーにぶら下がる)は外来の受付ではない。
@@ -86,8 +90,8 @@ RSpec.describe "WaitingBoard::Public", type: :request do
     expect(first["calling"]).to eq(["1"])
     expect(first["waiting"]).to eq(3)
     expect(first["away"]).to eq(1)
-    # (10 + 20) / 2。一時終了の 5 分も受付→開始の実測なので入る: (10 + 5 + 20) / 3 = 11.67 → 12
-    expect(first["average_wait_minutes"]).to eq(12)
+    # 受付→開始の実測(10・5・20・10 分)の平均。呼出なしの診察も待ち時間には入る。
+    expect(first["average_wait_minutes"]).to eq(11)
     expect(rooms[1]).to include("calling" => [], "waiting" => 0, "away" => 0, "average_wait_minutes" => nil)
 
     expect(body["departments"]).to eq([

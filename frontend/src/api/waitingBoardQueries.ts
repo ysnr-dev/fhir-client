@@ -10,7 +10,14 @@ export function useWaitingBoardLinks(options: { enabled?: boolean } = {}) {
     queryKey: [...BOARD_KEY, "links"],
     queryFn: fetchWaitingBoardLinks,
     enabled: options.enabled !== false,
+    staleTime: 5 * 60_000,
   });
+}
+
+/** 待合表示板を使っているか(有効なリンクが 1 本でもある)。診察開始で呼出の確認を出すかどうかに使う。 */
+export function useWaitingBoardInUse(): boolean {
+  const links = useWaitingBoardLinks();
+  return (links.data?.length ?? 0) > 0;
 }
 
 /**

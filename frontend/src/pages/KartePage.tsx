@@ -86,7 +86,9 @@ import {
   type KarteOtherTabKey,
   type KarteTabKey,
 } from "../karteUrl";
-import { appointmentDepartmentCode } from "../fhir/appointmentHelpers";
+import { appointmentDepartmentCode, appointmentReceptionNumber } from "../fhir/appointmentHelpers";
+import { ExamStartCallModal } from "../components/ExamStartCallModal";
+import { useWaitingBoardInUse } from "../api/waitingBoardQueries";
 import { receptionCoverageSetKey } from "../fhir/coverageHelpers";
 import { encounterAttendingId } from "../fhir/encounterHelpers";
 import {
@@ -175,6 +177,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   /** 一時終了かどうかの選択に出す未実施の検査オーダー。null なら選択を出していない。 */
   const [pendingExamOrders, setPendingExamOrders] = useState<string[] | null>(null);
   const startExam = useStartOutpatientExam();
+  const boardInUse = useWaitingBoardInUse();
+  const [callPromptOpen, setCallPromptOpen] = useState(false);
   const patient = usePatient(patientId);
   // 会計送信はレセコン連携が有効なときだけ。無効なら診察終了でそのまま一覧へ戻る。
   const receiptStatus = useReceiptStatus();
@@ -202,10 +206,23 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     };
   }
 
-  // 外来一覧の診察開始と同じく 1 クリックで現在時刻を記録する。
+  // 外来一覧の診察開始と同じく 1 クリックで現在時刻を記録する。待合表示板を使っていて
+  // 受付番号のある受付は、番号を呼び出すかどうかを確認してから書く。
   function handleStartExam() {
     if (!checkedInAppointment) return;
-    startExam.mutate(buildOutpatientEncounter(checkedInAppointment, patient.data?.data, nowFhirDateTime()));
+    if (boardInUse && appointmentReceptionNumber(checkedInAppointment)) {
+      setCallPromptOpen(true);
+      return;
+    }
+    startExamWith(true);
+  }
+
+  function startExamWith(boardCall: boolean) {
+    if (!checkedInAppointment) return;
+    startExam.mutate(
+      buildOutpatientEncounter(checkedInAppointment, patient.data?.data, nowFhirDateTime(), { boardCall }),
+      { onSuccess: () => setCallPromptOpen(false) },
+    );
   }
 
   async function handleFinishExam() {
@@ -1095,7 +1112,17 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             </Link>
           )}
         </div>
-        <ErrorBanner error={updateExam.error ?? startExam.error} />
+        <ErrorBanner error={updateExam.error ?? (callPromptOpen ? null : startExam.error)} />
+        {callPromptOpen && checkedInAppointment && (
+          <ExamStartCallModal
+            receptionNumber={appointmentReceptionNumber(checkedInAppointment)}
+            patientName={patient.data?.data ? displayName(patient.data.data) : ""}
+            pending={startExam.isPending}
+            error={startExam.error}
+            onStart={startExamWith}
+            onClose={() => setCallPromptOpen(false)}
+          />
+        )}
 
         {/* 左右の幅はカスタムプロパティで渡す。狭い画面では CSS 側で縦積みに切り替える
             ため、grid-template-columns 自体はインラインで上書きしない。 */}

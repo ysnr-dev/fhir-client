@@ -50,6 +50,8 @@ import { OutpatientReceptionModal } from "../components/OutpatientReceptionModal
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
 import { WalkInCheckInModal } from "../components/WalkInCheckInModal";
+import { ExamStartCallModal } from "../components/ExamStartCallModal";
+import { useWaitingBoardInUse } from "../api/waitingBoardQueries";
 import { useNow } from "../hooks/useNow";
 import { useStoredToggle } from "../hooks/useStoredToggle";
 import {
@@ -165,6 +167,9 @@ export function OutpatientListPage() {
   const updateStatus = useUpdateAppointmentStatus();
   const cancel = useCancelAppointment();
   const startExam = useStartOutpatientExam();
+  const boardInUse = useWaitingBoardInUse();
+  // 診察開始で呼出を確認している行。
+  const [callTarget, setCallTarget] = useState<OutpatientRow | null>(null);
   const updateExam = useUpdateOutpatientExam();
   // 会計送信はレセコン連携が有効なときだけ。無効なら行メニューに項目ごと出さない。
   const receiptStatus = useReceiptStatus();
@@ -310,11 +315,26 @@ export function OutpatientListPage() {
   }
 
   // 診察開始・診察終了は受付ボタンと同じく 1 クリック(現在時刻をそのまま記録する)。
-  // 巻き戻しになる取消だけ確認を挟む。
+  // 巻き戻しになる取消だけ確認を挟む。待合表示板を使っていて受付番号のある受付は、
+  // 診察開始で番号を呼び出すかどうかを確認する。
   function handleStartExam(row: OutpatientRow) {
-    startExam.mutate(buildOutpatientEncounter(row.appointment, row.patient, nowFhirDateTime()), {
-      onSuccess: () => openKarte(row),
-    });
+    if (boardInUse && appointmentReceptionNumber(row.appointment)) {
+      setCallTarget(row);
+      return;
+    }
+    startExamFor(row, true);
+  }
+
+  function startExamFor(row: OutpatientRow, boardCall: boolean) {
+    startExam.mutate(
+      buildOutpatientEncounter(row.appointment, row.patient, nowFhirDateTime(), { boardCall }),
+      {
+        onSuccess: () => {
+          setCallTarget(null);
+          openKarte(row);
+        },
+      },
+    );
   }
 
   function handleFinishExam(row: OutpatientRow) {
@@ -555,6 +575,20 @@ export function OutpatientListPage() {
       )}
       {billingTarget && (
         <BillingSendModal target={billingTarget} onClose={() => setBillingTarget(null)} />
+      )}
+      {callTarget && (
+        <ExamStartCallModal
+          receptionNumber={appointmentReceptionNumber(callTarget.appointment)}
+          patientName={
+            callTarget.patient
+              ? displayName(callTarget.patient)
+              : appointmentActorDisplay(callTarget.appointment, "Patient")
+          }
+          pending={startExam.isPending}
+          error={startExam.error}
+          onStart={(boardCall) => startExamFor(callTarget, boardCall)}
+          onClose={() => setCallTarget(null)}
+        />
       )}
       {walkInOpen && <WalkInCheckInModal onClose={() => setWalkInOpen(false)} />}
       {newPatientOpen && <NewPatientCheckInModal onClose={() => setNewPatientOpen(false)} />}

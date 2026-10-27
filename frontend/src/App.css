@@ -27994,6 +27994,18 @@ input.nursing-picker__search {
   color: var(--text-h);
 }
 
+/* 診察開始の呼出の確認(components/ExamStartCallModal.tsx)。 */
+.exam-start-call__message {
+  margin: 0 0 16px;
+}
+
+.exam-start-call__number {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
 /* 施設設定「待合表示板」の区画(components/WaitingBoardLinksSection.tsx)。 */
 .waiting-board-links {
   align-self: flex-start;

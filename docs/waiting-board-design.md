@@ -23,6 +23,9 @@
 
 - **［設計］** 「呼び出し」の操作は新設しない。既存の**診察開始**(外来一覧・カルテ見出し)をそのまま呼出とみなし、
   診察中(`in-progress`)の受付の番号を表示板に出す。一時終了(`onleave`)は「離席中」、受付済で診察の無いものは「お待ちの方」。
+- **［設計］** 待合表示板を使っている(有効なリンクがある)ときは、受付番号のある受付の診察開始で「呼出 / 呼出なし / 戻る」を確認する。
+  「呼出なし」は外来 Encounter に拡張 `http://fhir-client.local/StructureDefinition/outpatient-board-call`(`valueBoolean` false)を付け、
+  表示板はその診察の番号を「お呼び出し中」に出さない(待ちにも数えない。待ち時間の実測には入る)。拡張の無い診察は呼び出したものとして扱う。
 - **［設計］** 区画は**診察室(Location、種別 `OF`)ごと**。診察が建っていればその `location[0]`、無ければ受付の診察室の participant。
   どちらも無い受付は**診療科**(受付の `specialty`、SS-MIX2)でまとめた区画に出す。
 - **［設計］** 受付番号は **backend の日別カウンタ**(`reception_number_counters`)が払い出し、`Appointment.identifier`
@@ -70,7 +73,7 @@ reception_number_counters  day(date、unique) / last_number
     "rooms": [{ "id", "name", "calling": ["12"], "waiting": 3, "away": 1, "average_wait_minutes": 18 }],
     "departments": [{ "code": "01", "name": "内科", "calling": [], "waiting": 1, "away": 0, "average_wait_minutes": null }] }
   ```
-  - `calling` = `in-progress` の受付の番号(番号の無い受付は人数にだけ数える)、`waiting` = 受付済で診察無し、`away` = `onleave`。
+  - `calling` = `in-progress` の受付の番号(呼出なしの診察は除く。番号の無い受付は人数にだけ数える)、`waiting` = 受付済で診察無し、`away` = `onleave`。
   - `average_wait_minutes` = その日の受付のうち受付時刻と診察の `period.start` が両方あるものの (開始 − 受付) の平均(分)。無ければ null。
   - 診察室の並びは `location-display-order` の拡張 → 名前。リンクに `location_ids` があればその診察室だけで、`departments` は空。
 
@@ -94,6 +97,9 @@ reception_number_counters  day(date、unique) / last_number
 - **外来一覧**: 「受付番号」列(患者氏名の右)。受付(`useUpdateAppointmentStatus` の `checked-in`)と当日受付・新患登録(`useWalkInCheckIn`)で
   `POST /waiting_board/reception_numbers` を呼んでから `withReceptionNumber` で書く。レセコン連携の受付(識別子あり)は採番しない。
   受付取消で番号を外す。
+- **診察開始の呼出の確認**(`components/ExamStartCallModal.tsx`): 外来一覧(行・患者ドロワー)とカルテ見出しの「診察開始」で、
+  待合表示板を使っていて(`useWaitingBoardInUse`)受付番号のある受付だけに出す。「受付番号 n ○○ さんを呼び出しますか?」に
+  「呼出」「呼出なし」「戻る」。表示板を使っていない施設・番号の無い受付は、これまでどおり 1 クリックで始まる。
 - **データ抽出**: 外来の行に「待ち時間(分)」(受付時刻 → 診察の `period.start`)。内訳で診療科別・月別の平均・中央値が出せる。
 
 ## 4. 先送り
