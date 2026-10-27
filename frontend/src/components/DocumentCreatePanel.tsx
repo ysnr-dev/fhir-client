@@ -47,6 +47,7 @@ import { useEditSnapshot } from "../hooks/useEditSnapshot";
 import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
 import { localDay, today } from "../lib/dates";
 import { downloadBlob } from "../lib/download";
+import { CategorizedSelect, type CategorizedSelectCategory } from "./CategorizedSelect";
 import { DocumentFormFill } from "./documentForm/DocumentFormFill";
 import { ErrorBanner } from "./ErrorBanner";
 
@@ -64,6 +65,9 @@ const STATUS_NOTES: Partial<Record<PlaceholderStatus, string>> = {
 };
 
 // テンプレートの選択肢は種類で分ける(画面で入力して PDF を残すものか、ファイルを作ってダウンロードするものか)。
+// ファイルカテゴリ未設定のテンプレートを表す左の列の項目。
+const UNCATEGORIZED = "uncategorized";
+
 const TEMPLATE_GROUPS: { kind: DocumentTemplateSummary["kind"]; label: string }[] = [
   { kind: "form", label: "様式" },
   { kind: "office", label: "Word / Excel" },
@@ -93,7 +97,6 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const createFiles = useCreatePatientFiles();
 
-  const [categoryCode, setCategoryCode] = useState("");
   const [templateId, setTemplateId] = useState("");
   // null の間はテンプレートから決まる既定の表示名を使う。
   const [title, setTitle] = useState<string | null>(null);
@@ -102,19 +105,26 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
   const [building, setBuilding] = useState(false);
 
   const items = useMemo(() => templates.data ?? [], [templates.data]);
-  // 絞り込みに出すのは、テンプレートが 1 件でも入っているカテゴリだけ。
-  const categories = useMemo(() => {
-    const byCode = new Map<string, string>();
-    for (const item of items) {
-      if (item.file_category_code) {
-        byCode.set(item.file_category_code, item.file_category_name ?? "");
+  // 左に出すのは、テンプレートが 1 件でも入っているファイルカテゴリだけ。未設定は末尾の「未分類」。
+  // 右はカテゴリの中を種類(様式 / Word・Excel)ごとに見出しを付けて並べる。
+  const categories = useMemo<CategorizedSelectCategory[]>(() => {
+    const byKey = new Map<string, CategorizedSelectCategory>();
+    for (const group of TEMPLATE_GROUPS) {
+      for (const item of items) {
+        if (item.kind !== group.kind) continue;
+        const key = item.file_category_code ?? UNCATEGORIZED;
+        let category = byKey.get(key);
+        if (!category) {
+          category = { key, label: item.file_category_name ?? "未分類", options: [] };
+          byKey.set(key, category);
+        }
+        category.options.push({ id: String(item.id), label: item.name, section: group.label });
       }
     }
-    return [...byCode].map(([code, name]) => ({ code, name }));
+    const uncategorized = byKey.get(UNCATEGORIZED);
+    byKey.delete(UNCATEGORIZED);
+    return uncategorized ? [...byKey.values(), uncategorized] : [...byKey.values()];
   }, [items]);
-  const choices = categoryCode
-    ? items.filter((item) => item.file_category_code === categoryCode)
-    : items;
 
   const template = items.find((item) => String(item.id) === templateId);
   const isForm = template?.kind === "form";
@@ -226,52 +236,16 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
       )}
 
       <div className="karte-file-form__fields">
-        {categories.length > 0 && (
-          <label>
-            カテゴリ
-            <select
-              value={categoryCode}
-              onChange={(e) => {
-                setCategoryCode(e.target.value);
-                setTemplateId("");
-                setTitle(null);
-              }}
-            >
-              <option value="">すべて</option>
-              {categories.map((category) => (
-                <option key={category.code} value={category.code}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label>
-          テンプレート
-          <select
-            value={templateId}
-            onChange={(e) => {
-              setTemplateId(e.target.value);
-              setTitle(null);
-              setMessage(null);
-            }}
-          >
-            <option value="">選択してください</option>
-            {TEMPLATE_GROUPS.map((group) => {
-              const members = choices.filter((item) => item.kind === group.kind);
-              if (members.length === 0) return null;
-              return (
-                <optgroup key={group.kind} label={group.label}>
-                  {members.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </optgroup>
-              );
-            })}
-          </select>
-        </label>
+        <CategorizedSelect
+          categories={categories}
+          value={templateId}
+          onChange={(id) => {
+            setTemplateId(id);
+            setTitle(null);
+            setMessage(null);
+          }}
+          label="テンプレート"
+        />
       </div>
 
       {template && (
