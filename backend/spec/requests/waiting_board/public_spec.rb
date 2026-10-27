@@ -11,10 +11,12 @@ RSpec.describe "WaitingBoard::Public", type: :request do
   let!(:issued) { WaitingBoardLink.issue!(label: "1 階ロビー", location_ids: []) }
   let(:headers) { { "X-Board-Token" => issued[1] } }
 
-  def appointment(id, number:, status: "checked-in", room: "room-1", department: "01", checked_in: "09:00", based_on: nil)
+  def appointment(id, number:, status: "checked-in", room: "room-1", department: "01", checked_in: "09:00", based_on: nil,
+                  start: nil, walk_in: false)
     {
       "resourceType" => "Appointment", "id" => id, "status" => status,
-      "start" => "2026-10-28T#{checked_in}:00+09:00",
+      "start" => "2026-10-28T#{start || checked_in}:00+09:00",
+      "appointmentType" => walk_in ? { "coding" => [{ "code" => "WALKIN" }] } : nil,
       "identifier" => number ? [{ "system" => NUMBER_SYSTEM, "value" => number }] : nil,
       "participant" => [
         { "actor" => { "reference" => "Patient/pat-#{id}", "display" => "患者 #{id}" } },
@@ -44,14 +46,14 @@ RSpec.describe "WaitingBoard::Public", type: :request do
       # 第 1 診察室: 1 番は診察中(受付 9:00 → 開始 9:10)、2・3 番は待ち、4 番は一時終了、5 番は診察済(受付 8:30 → 開始 8:50)。
       appointment("a1", number: "1"),
       encounter("e1", "a1", status: "in-progress", start: "09:10", room: "room-1"),
-      appointment("a2", number: "2"),
-      appointment("a3", number: "3"),
+      appointment("a2", number: "2", start: "09:30"),
+      appointment("a3", number: "3", start: "09:15"),
       appointment("a4", number: "4"),
       encounter("e4", "a4", status: "onleave", start: "09:05", room: "room-1"),
       appointment("a5", number: "5", status: "fulfilled", checked_in: "08:30"),
       encounter("e5", "a5", status: "finished", start: "08:50", room: "room-1"),
       # 取り消した診察開始は無かったことにする(6 番は待ちのまま)。
-      appointment("a6", number: "6"),
+      appointment("a6", number: "6", walk_in: true, checked_in: "09:05"),
       encounter("e6", "a6", status: "entered-in-error", start: "09:20", room: "room-1"),
       # 呼出なしで始めた診察は「お呼び出し中」に出さない(待ちにも数えない)。
       appointment("a10", number: "10"),
@@ -89,13 +91,21 @@ RSpec.describe "WaitingBoard::Public", type: :request do
     first = rooms[0]
     expect(first["calling"]).to eq(["1"])
     expect(first["waiting"]).to eq(3)
+    # 予約時間の順(当日受付は受付時刻から起こした start)。当日受付は予約時間を出さない。
+    expect(first["waiting_list"]).to eq([
+      { "number" => "6", "booked_time" => nil, "checked_in_time" => "09:05" },
+      { "number" => "3", "booked_time" => "09:15", "checked_in_time" => "09:00" },
+      { "number" => "2", "booked_time" => "09:30", "checked_in_time" => "09:00" }
+    ])
     expect(first["away"]).to eq(1)
     # 受付→開始の実測(10・5・20・10 分)の平均。呼出なしの診察も待ち時間には入る。
     expect(first["average_wait_minutes"]).to eq(11)
-    expect(rooms[1]).to include("calling" => [], "waiting" => 0, "away" => 0, "average_wait_minutes" => nil)
+    expect(rooms[1]).to include("calling" => [], "waiting" => 0, "waiting_list" => [], "away" => 0, "average_wait_minutes" => nil)
 
     expect(body["departments"]).to eq([
-      { "code" => "01", "name" => "内科", "calling" => [], "waiting" => 1, "away" => 0, "average_wait_minutes" => nil }
+      { "code" => "01", "name" => "内科", "calling" => [], "waiting" => 1,
+        "waiting_list" => [{ "number" => "7", "booked_time" => "09:00", "checked_in_time" => "09:00" }],
+        "away" => 0, "average_wait_minutes" => nil }
     ])
 
     expect(response.body).not_to include("pat-")

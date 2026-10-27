@@ -3,11 +3,23 @@
 // ログインは無く、リンクのトークンをヘッダで送る。職員のセッション Cookie は送らず(credentials: "omit")、
 // 401 を AuthGate に知らせる仕組み(notifyUnauthorized)も通さない(表示板は AuthGate の外)。
 
+/** 待っている受付 1 件。患者を特定できるものは入らない。 */
+export interface WaitingBoardEntry {
+  /** 受付番号。番号の無い受付は null。 */
+  number: string | null;
+  /** 予約時間「09:30」。当日受付は null。 */
+  booked_time: string | null;
+  /** 受付時刻「09:12」。 */
+  checked_in_time: string | null;
+}
+
 export interface WaitingBoardGroup {
   /** 呼出中の受付番号(診察中の受付)。 */
   calling: string[];
   /** 受付済で診察が始まっていない人数。 */
   waiting: number;
+  /** 待っている受付(予約時間の順)。 */
+  waiting_list: WaitingBoardEntry[];
   /** 検査などで離席中(一時終了)の人数。 */
   away: number;
   /** 本日の受付→診察開始の平均(分)。実測が無ければ null。 */

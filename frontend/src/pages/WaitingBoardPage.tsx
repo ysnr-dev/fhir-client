@@ -7,10 +7,13 @@ import {
 import { useNow } from "../hooks/useNow";
 
 // 待合表示板(docs/waiting-board-design.md §3.1)。ロビーのモニターが /board/<token> で開く。
-// AuthGate の外に置き、ログインも患者の個人情報の表示も無い。診察室ごとに 呼出中の番号・待ち人数・
-// 離席中・本日の平均待ち時間 を出し、30 秒ごとに読み直す。読み直しに失敗しても直前の値は残す。
+// AuthGate の外に置き、ログインも患者の個人情報の表示も無い。診察室ごとに 呼出中の番号・待っている受付
+// (受付番号・予約時間・受付時刻)・離席中・本日の平均待ち時間 を出し、30 秒ごとに読み直す。
+// 読み直しに失敗しても直前の値は残す。
 
 const BOARD_REFRESH_INTERVAL = 30_000;
+/** 1 枚のカードに並べる待ちの行数。超えたぶんは「ほか n 人」にまとめる(カードが縦に伸びすぎないように)。 */
+const WAITING_ROWS = 10;
 
 export function WaitingBoardPage({ token }: { token: string }) {
   const board = useQuery({
@@ -87,11 +90,8 @@ function RoomCard({ name, group }: { name: string; group: WaitingBoardGroup }) {
           </span>
         )}
       </div>
+      <WaitingList group={group} />
       <dl className="waiting-board__facts">
-        <div>
-          <dt>お待ちの方</dt>
-          <dd>{group.waiting} 人</dd>
-        </div>
         {group.away > 0 && (
           <div>
             <dt>検査などで離席中</dt>
@@ -106,6 +106,40 @@ function RoomCard({ name, group }: { name: string; group: WaitingBoardGroup }) {
         )}
       </dl>
     </section>
+  );
+}
+
+function WaitingList({ group }: { group: WaitingBoardGroup }) {
+  const shown = group.waiting_list.slice(0, WAITING_ROWS);
+  const rest = group.waiting - shown.length;
+  return (
+    <div className="waiting-board__waiting">
+      <div className="waiting-board__waiting-head">
+        <span>お待ちの方</span>
+        <span className="waiting-board__waiting-count">{group.waiting} 人</span>
+      </div>
+      {shown.length > 0 && (
+        <table className="waiting-board__waiting-table">
+          <thead>
+            <tr>
+              <th>受付番号</th>
+              <th>予約時間</th>
+              <th>受付時刻</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((entry, index) => (
+              <tr key={`${entry.number ?? "-"}-${index}`}>
+                <td className="waiting-board__waiting-number">{entry.number ?? "-"}</td>
+                <td>{entry.booked_time ?? "当日"}</td>
+                <td>{entry.checked_in_time ?? "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {rest > 0 && <p className="waiting-board__waiting-rest">ほか {rest} 人</p>}
+    </div>
   );
 }
 

@@ -70,10 +70,15 @@ reception_number_counters  day(date、unique) / last_number
 - 応答:
   ```json
   { "generated_at": "...",
-    "rooms": [{ "id", "name", "calling": ["12"], "waiting": 3, "away": 1, "average_wait_minutes": 18 }],
-    "departments": [{ "code": "01", "name": "内科", "calling": [], "waiting": 1, "away": 0, "average_wait_minutes": null }] }
+    "rooms": [{ "id", "name", "calling": ["12"], "waiting": 2,
+                "waiting_list": [{ "number": "14", "booked_time": "09:30", "checked_in_time": "09:12" },
+                                 { "number": "15", "booked_time": null, "checked_in_time": "09:20" }],
+                "away": 1, "average_wait_minutes": 18 }],
+    "departments": [{ "code": "01", "name": "内科", "calling": [], "waiting": 0, "waiting_list": [], "away": 0, "average_wait_minutes": null }] }
   ```
   - `calling` = `in-progress` の受付の番号(呼出なしの診察は除く。番号の無い受付は人数にだけ数える)、`waiting` = 受付済で診察無し、`away` = `onleave`。
+  - `waiting_list` = 待っている受付の受付番号・予約時間・受付時刻(日本時間の「HH:mm」)。当日受付は `start` が受付時刻から起こした
+    名目の時間なので `booked_time` は null。並びは外来一覧と同じ `start` の順。番号の無い受付は `number` が null。
   - `average_wait_minutes` = その日の受付のうち受付時刻と診察の `period.start` が両方あるものの (開始 − 受付) の平均(分)。無ければ null。
   - 診察室の並びは `location-display-order` の拡張 → 名前。リンクに `location_ids` があればその診察室だけで、`departments` は空。
 
@@ -85,8 +90,9 @@ reception_number_counters  day(date、unique) / last_number
   API は `api/waitingBoardPublicClient.ts` の素の `fetch`(`credentials: "omit"`)。
 - 30 秒ごとに読み直す(`refetchInterval`)。読み直しに失敗しても直前の値を残し、時計の横に「更新できていません」を出す。
   401 は「この表示板のリンクは無効です。」。受付が無ければ「本日の受付はありません。」。
-- 区画はカードのグリッド(`.waiting-board__*`、テーマ変数のみ)。呼出中の番号を大きく、「お待ちの方 n 人」「検査などで離席中 n 人」
-  (0 人なら出さない)「本日の平均待ち時間 約 n 分」(実測が無ければ出さない)。
+- 区画はカードのグリッド(`.waiting-board__*`、テーマ変数のみ)。呼出中の番号を大きく、「お待ちの方 n 人」とその下に待っている受付の表
+  (受付番号・予約時間(当日受付は「当日」)・受付時刻。10 行まで、超えたぶんは「ほか n 人」)、「検査などで離席中 n 人」
+  (0 人なら出さない)「本日の平均待ち時間 約 n 分」(実測が無ければ出さない)。患者が自分の順番の目安を掴めるように番号と時刻だけを出す。
 - 上流は検索のたびに監査ログを書くので、表示板を置く端末は絞る(読み直しは 30 秒ごと、1 本の検索 + 診察室の検索)。
 
 ### 3.2 職員側

@@ -27971,6 +27971,55 @@ input.nursing-picker__search {
   color: var(--accent);
 }
 
+.waiting-board__waiting {
+  margin-top: 12px;
+}
+
+.waiting-board__waiting-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+}
+
+.waiting-board__waiting-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-h);
+}
+
+.waiting-board__waiting-table {
+  width: 100%;
+  margin-top: 6px;
+  border-collapse: collapse;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.waiting-board__waiting-table th {
+  padding: 2px 0;
+  font-size: 15px;
+  font-weight: normal;
+  text-align: left;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.waiting-board__waiting-table td {
+  padding: 4px 0;
+  color: var(--text-h);
+  border-bottom: 1px solid var(--surface-stripe);
+}
+
+.waiting-board__waiting-number {
+  font-weight: 700;
+}
+
+.waiting-board__waiting-rest {
+  margin: 6px 0 0;
+  font-size: 18px;
+  color: var(--text);
+}
+
 .waiting-board__facts {
   display: flex;
   flex-direction: column;

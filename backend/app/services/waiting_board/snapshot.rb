@@ -1,6 +1,6 @@
 module WaitingBoard
   # 表示板に出す「いま」の値。当日の受付(Appointment)とその診察(外来 Encounter)を上流から読み、
-  # 診察室ごとに 呼出中の番号・待ち人数・離席中の人数・本日の平均待ち時間 にまとめる。
+  # 診察室ごとに 呼出中の番号・待っている受付(受付番号・予約時間・受付時刻)・離席中の人数・本日の平均待ち時間 にまとめる。
   #
   # 患者を特定できるものは何も返さない(患者の _include もしない)。番号は Appointment.identifier
   # (RECEPTION_NUMBER_IDENTIFIER_SYSTEM)だけを見る。
@@ -43,13 +43,42 @@ module WaitingBoard
         { code: coding["code"], name: coding["display"].presence || appointment.dig("specialty", 0, "text").presence || coding["code"] }
       end
 
+      def checked_in_at
+        Array(appointment["extension"]).find { |e| e["url"] == CHECKED_IN_AT_URL }&.dig("valueDateTime")
+      end
+
+      # 当日受付は枠を持たず、start は受付時刻から起こした名目の時間なので予約時間として出さない。
+      def walk_in?
+        Array(appointment.dig("appointmentType", "coding")).any? { |c| c["code"] == "WALKIN" }
+      end
+
+      # 待っている受付の 1 行。番号と時刻だけで、患者を特定できるものは入れない。
+      def waiting_row
+        {
+          number: number,
+          booked_time: walk_in? ? nil : clock(appointment["start"]),
+          checked_in_time: clock(checked_in_at)
+        }
+      end
+
       # 受付から診察開始までの分。どちらかが無ければ nil。
       def wait_minutes
-        checked_in = Array(appointment["extension"]).find { |e| e["url"] == CHECKED_IN_AT_URL }&.dig("valueDateTime")
+        checked_in = checked_in_at
         started = encounter&.dig("period", "start")
         return nil if checked_in.blank? || started.blank?
 
         ((Time.iso8601(started) - Time.iso8601(checked_in)) / 60).round.clamp(0, nil)
+      rescue ArgumentError
+        nil
+      end
+
+      private
+
+      # 「09:30」(日本時間)。
+      def clock(value)
+        return nil if value.blank? || value.length <= 10
+
+        Time.iso8601(value).in_time_zone(FacilityClock::ZONE).strftime("%H:%M")
       rescue ArgumentError
         nil
       end
@@ -93,6 +122,8 @@ module WaitingBoard
       {
         calling: entries.select(&:calling?).filter_map(&:number).sort_by { |n| [n.to_i, n] },
         waiting: entries.count(&:waiting?),
+        # 外来一覧と同じく予約時間(当日受付は受付時刻から起こした start)の順。
+        waiting_list: entries.select(&:waiting?).sort_by { |e| e.appointment["start"].to_s }.map(&:waiting_row),
         away: entries.count(&:away?),
         average_wait_minutes: waits.empty? ? nil : (waits.sum.to_f / waits.size).round
       }
