@@ -6238,7 +6238,7 @@ button.populate-expression__option--active {
   margin: -8px 0 16px;
 }
 
-/* ---- テンプレート選択(カテゴリ → テンプレートの2階層プルダウン) ---- */
+/* ---- テンプレート選択(左にカテゴリ、右にテンプレートのプルダウン) ---- */
 
 .template-select {
   position: relative;
@@ -6281,69 +6281,95 @@ button.populate-expression__option--active {
 }
 
 /* body 直下のポータルに出す(モーダルの overflow で見切れないように)。
-   left / top / width / max-height はトリガー位置から JS で決める。 */
+   left / top / width / height はトリガー位置から JS で決める。 */
 .template-select__panel {
   position: fixed;
   z-index: 200;
   display: flex;
-  flex-direction: column;
-  overflow-y: auto;
   box-sizing: border-box;
-  padding: 4px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg);
   box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.template-select__categories,
+.template-select__templates {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 4px;
+}
+
+.template-select__categories {
+  flex: 0 0 180px;
+  border-right: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+
+.template-select__templates {
+  flex: 1;
+  min-width: 0;
 }
 
 /* グローバルの button {} を上書きするため詳細度を 2 クラス以上に上げている。 */
-.template-select__panel .template-select__item,
-.template-select__panel .template-select__back {
+.template-select__panel .template-select__category,
+.template-select__panel .template-select__item {
+  flex-shrink: 0;
   height: auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 6px;
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 12px;
+  padding: 6px 8px;
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--text-h);
-  font-size: 14px;
+  font-weight: normal;
   text-align: left;
   cursor: pointer;
 }
 
-.template-select__panel .template-select__back {
-  justify-content: flex-start;
-  gap: 6px;
+.template-select__panel .template-select__category {
+  justify-content: space-between;
   color: var(--text);
   font-size: 13px;
 }
 
-.template-select__panel .template-select__item:hover,
-.template-select__panel .template-select__back:hover {
-  background: var(--accent-bg);
+.template-select__category-name {
+  overflow-wrap: anywhere;
 }
 
-.template-select__panel .template-select__item--selected {
-  color: var(--accent);
-}
-
-/* 階層の見出し(カテゴリ名)と、未分類テンプレートの区切り。 */
-.template-select__heading,
-.template-select__divider {
-  padding: 6px 12px;
+.template-select__count {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--text);
 }
 
-.template-select__divider {
-  margin-top: 4px;
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
+.template-select__panel .template-select__item {
+  color: var(--text-h);
+  font-size: 14px;
+}
+
+.template-select__panel .template-select__category:hover,
+.template-select__panel .template-select__category.is-active,
+.template-select__panel .template-select__item:hover {
+  background: var(--accent-bg);
+}
+
+.template-select__panel .template-select__category.is-active,
+.template-select__panel .template-select__item--selected {
+  color: var(--accent);
+}
+
+.template-select__empty {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
 }
 
 /* ---- カテゴリ管理モーダル(テンプレートカテゴリ・ファイルカテゴリ) ---- */
@@ -10991,8 +11017,7 @@ fieldset.lab-order-item__section label.dose-conversion__checkbox {
   white-space: pre-wrap;
 }
 
-/* マスタメンテの既定テンプレート(検査目的・特記事項)。TemplateSelect のパネルは
-   トリガーと同じ幅で出るので、テンプレート名が読める幅を確保しておく。 */
+/* マスタメンテの既定テンプレート(検査目的・特記事項)。テンプレート名が読める幅を確保しておく。 */
 .rad-item__templates {
   display: flex;
   gap: 16px;

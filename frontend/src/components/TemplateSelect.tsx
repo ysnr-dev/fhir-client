@@ -3,17 +3,22 @@ import { createPortal } from "react-dom";
 import { useQuestionnaireCategories } from "../api/adminQueries";
 import { groupTemplatesByCategory } from "../fhir/questionnaireCategory";
 
-// テンプレート(Questionnaire)選択のプルダウン。1つのプルダウンの中で
-// 「カテゴリ → テンプレート」と辿る(プルダウンを2つ並べるよりクリックが減る)。
-// カテゴリ未設定のテンプレートは、カテゴリと同じ層(先頭階層)に並べる。
+// テンプレート(Questionnaire)選択のプルダウン。パネルはテンプレート一覧と同じく
+// 左にカテゴリ、右に選んだカテゴリのテンプレートを並べる。カテゴリ未設定の
+// テンプレートは左の末尾の「未分類」にまとめる。
 //
-// ネイティブの <select> + <optgroup> ではなくボタンで組んでいるのは、階層を
-// 辿る挙動が <select> では表現できないため。キーボード操作は menu ロールの
-// 慣習(上下移動・左右で階層移動・Esc で閉じる)に合わせる。
+// キーボード操作は menu ロールの慣習(上下で列内の移動・左右で列の移動・Esc で閉じる)
+// に合わせ、左の列はフォーカスしたカテゴリをそのまま右に開く。
 //
 // パネルは body 直下のポータルに fixed で出す。モーダル(.modal は
 // overflow-y: auto)の中で使うと、通常の absolute 配置ではモーダルの枠で
 // 見切れてしまうため。
+
+// カテゴリ未設定のテンプレートを表す左の列の項目。
+const UNCATEGORIZED = "uncategorized";
+
+const PANEL_MIN_WIDTH = 520;
+const PANEL_MAX_HEIGHT = 360;
 
 interface TemplateSelectProps {
   questionnaires: fhir4.Questionnaire[];
@@ -21,6 +26,12 @@ interface TemplateSelectProps {
   value: string;
   onChange: (questionnaireId: string) => void;
   label?: string;
+}
+
+interface CategoryNavItem {
+  key: string;
+  label: string;
+  questionnaires: fhir4.Questionnaire[];
 }
 
 function templateLabel(questionnaire: fhir4.Questionnaire): string {
@@ -35,14 +46,22 @@ export function TemplateSelect({
   label = "テンプレート",
 }: TemplateSelectProps) {
   const { data: categories = [] } = useQuestionnaireCategories();
-  const grouped = useMemo(
-    () => groupTemplatesByCategory(questionnaires, categories),
-    [questionnaires, categories],
-  );
+  const navItems = useMemo<CategoryNavItem[]>(() => {
+    const grouped = groupTemplatesByCategory(questionnaires, categories);
+    const items: CategoryNavItem[] = grouped.groups.map((group) => ({
+      key: group.code,
+      label: group.name,
+      questionnaires: group.questionnaires,
+    }));
+    if (grouped.uncategorized.length > 0) {
+      items.push({ key: UNCATEGORIZED, label: "未分類", questionnaires: grouped.uncategorized });
+    }
+    return items;
+  }, [questionnaires, categories]);
 
   const [open, setOpen] = useState(false);
-  // 開いているカテゴリの code。null なら先頭階層(カテゴリ一覧)。
-  const [openCategory, setOpenCategory] = useState<string | null>(null);
+  // 右に開いているカテゴリ(navItems の key)。
+  const [activeKey, setActiveKey] = useState<string | null>(null);
   // ポータルへ出すパネルの位置(トリガーの画面上の位置から毎回計算する)。
   const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
 
@@ -52,15 +71,16 @@ export function TemplateSelect({
   const labelId = useId();
 
   const selected = questionnaires.find((q) => q.id === value);
-  const currentGroup = grouped.groups.find((g) => g.code === openCategory) ?? null;
+  const activeItem = navItems.find((item) => item.key === activeKey) ?? navItems[0] ?? null;
 
-  function menuItems(): HTMLButtonElement[] {
-    return Array.from(panelRef.current?.querySelectorAll<HTMLButtonElement>("[data-menu-item]") ?? []);
+  function columnItems(column: "category" | "template"): HTMLButtonElement[] {
+    return Array.from(
+      panelRef.current?.querySelectorAll<HTMLButtonElement>(`[data-menu-column="${column}"]`) ?? [],
+    );
   }
 
   function close(focusTrigger = true) {
     setOpen(false);
-    setOpenCategory(null);
     if (focusTrigger) triggerRef.current?.focus();
   }
 
@@ -70,12 +90,13 @@ export function TemplateSelect({
       return;
     }
     // 選択済みならそのテンプレートが属するカテゴリを開いた状態で出す。
-    const category = grouped.groups.find((g) => g.questionnaires.some((q) => q.id === value));
-    setOpenCategory(category?.code ?? null);
+    const item = navItems.find((nav) => nav.questionnaires.some((q) => q.id === value));
+    setActiveKey(item?.key ?? null);
     setOpen(true);
   }
 
-  // パネルはトリガーの直下(下に入りきらなければ直上)へ、トリガーと同じ幅で置く。
+  // パネルはトリガーの直下(下に入りきらなければ直上)へ置く。2 列が読めるよう
+  // トリガーより狭くはせず、画面の右端からはみ出す分は左へずらす。
   useLayoutEffect(() => {
     if (!open) return;
 
@@ -86,11 +107,13 @@ export function TemplateSelect({
       const margin = 8;
       const below = window.innerHeight - rect.bottom - gap - margin;
       const above = rect.top - gap - margin;
-      const openUp = below < 160 && above > below;
+      const openUp = below < 200 && above > below;
+      const width = Math.min(Math.max(rect.width, PANEL_MIN_WIDTH), window.innerWidth - margin * 2);
+      const left = Math.max(margin, Math.min(rect.left, window.innerWidth - margin - width));
       setPanelStyle({
-        left: rect.left,
-        width: rect.width,
-        maxHeight: Math.min(320, Math.max(120, openUp ? above : below)),
+        left,
+        width,
+        height: Math.min(PANEL_MAX_HEIGHT, Math.max(160, openUp ? above : below)),
         ...(openUp
           ? { bottom: window.innerHeight - rect.top + gap }
           : { top: rect.bottom + gap }),
@@ -105,7 +128,7 @@ export function TemplateSelect({
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
     };
-  }, [open, openCategory]);
+  }, [open]);
 
   // 外側クリックで閉じる(フォーカスはボタンへ戻さない)。パネルはポータルで
   // 別 DOM に出ているので、root だけでなくパネル内も「内側」として扱う。
@@ -115,45 +138,53 @@ export function TemplateSelect({
       const target = event.target as Node;
       if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setOpen(false);
-      setOpenCategory(null);
     }
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [open]);
 
-  // 開いた直後と階層移動後は先頭項目へフォーカスを移す(キーボード操作の起点)。
+  // 開いた直後は選択中のテンプレート(無ければ開いたカテゴリ)へフォーカスを移す(キーボード操作の起点)。
   useEffect(() => {
     if (!open) return;
-    menuItems()[0]?.focus();
-  }, [open, openCategory]);
+    const panel = panelRef.current;
+    const target =
+      panel?.querySelector<HTMLButtonElement>('[data-menu-column="template"][aria-checked="true"]') ??
+      panel?.querySelector<HTMLButtonElement>('[data-menu-column="category"].is-active');
+    target?.focus();
+    target?.scrollIntoView({ block: "nearest" });
+  }, [open]);
 
   function handlePanelKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    const items = menuItems();
-    if (items.length === 0) return;
-    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    const focused = document.activeElement as HTMLButtonElement | null;
+    const column = focused?.dataset.menuColumn as "category" | "template" | undefined;
 
     switch (event.key) {
       case "ArrowDown":
+      case "ArrowUp": {
+        if (!column) return;
         event.preventDefault();
-        items[(index + 1) % items.length]?.focus();
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        items[(index - 1 + items.length) % items.length]?.focus();
-        break;
-      case "ArrowRight": {
-        const code = (document.activeElement as HTMLElement | null)?.dataset.categoryCode;
-        if (code) {
-          event.preventDefault();
-          setOpenCategory(code);
+        const items = columnItems(column);
+        const index = items.indexOf(focused as HTMLButtonElement);
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        const next = items[(index + step + items.length) % items.length];
+        next?.focus();
+        if (column === "category" && next?.dataset.categoryKey) {
+          setActiveKey(next.dataset.categoryKey);
         }
         break;
       }
-      case "ArrowLeft":
-      case "Backspace":
-        if (openCategory) {
+      case "ArrowRight":
+        if (column === "category") {
           event.preventDefault();
-          setOpenCategory(null);
+          columnItems("template")[0]?.focus();
+        }
+        break;
+      case "ArrowLeft":
+        if (column === "template") {
+          event.preventDefault();
+          panelRef.current
+            ?.querySelector<HTMLButtonElement>('[data-menu-column="category"].is-active')
+            ?.focus();
         }
         break;
       case "Escape":
@@ -163,34 +194,10 @@ export function TemplateSelect({
       case "Tab":
         // フォーカスはブラウザの既定移動に任せ、メニューだけ畳む。
         setOpen(false);
-        setOpenCategory(null);
         break;
       default:
         break;
     }
-  }
-
-  function renderTemplateItem(questionnaire: fhir4.Questionnaire) {
-    const id = questionnaire.id ?? "";
-    return (
-      <button
-        key={id}
-        type="button"
-        role="menuitem"
-        data-menu-item
-        className={
-          id === value
-            ? "template-select__item template-select__item--selected"
-            : "template-select__item"
-        }
-        onClick={() => {
-          onChange(id);
-          close();
-        }}
-      >
-        {templateLabel(questionnaire)}
-      </button>
-    );
   }
 
   return (
@@ -232,45 +239,56 @@ export function TemplateSelect({
             ref={panelRef}
             onKeyDown={handlePanelKeyDown}
           >
-            {currentGroup ? (
+            {activeItem ? (
               <>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-menu-item
-                  className="template-select__back"
-                  onClick={() => setOpenCategory(null)}
-                >
-                  <span aria-hidden="true">‹</span> 戻る
-                </button>
-                <div className="template-select__heading">{currentGroup.name}</div>
-                {currentGroup.questionnaires.map(renderTemplateItem)}
+                <div className="template-select__categories">
+                  {navItems.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      role="menuitem"
+                      data-menu-column="category"
+                      data-category-key={item.key}
+                      className={
+                        item === activeItem
+                          ? "template-select__category is-active"
+                          : "template-select__category"
+                      }
+                      onClick={() => setActiveKey(item.key)}
+                    >
+                      <span className="template-select__category-name">{item.label}</span>
+                      <span className="template-select__count">{item.questionnaires.length}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="template-select__templates">
+                  {activeItem.questionnaires.map((questionnaire) => {
+                    const id = questionnaire.id ?? "";
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={id === value}
+                        data-menu-column="template"
+                        className={
+                          id === value
+                            ? "template-select__item template-select__item--selected"
+                            : "template-select__item"
+                        }
+                        onClick={() => {
+                          onChange(id);
+                          close();
+                        }}
+                      >
+                        {templateLabel(questionnaire)}
+                      </button>
+                    );
+                  })}
+                </div>
               </>
             ) : (
-              <>
-                {grouped.groups.map((group) => (
-                  <button
-                    key={group.code}
-                    type="button"
-                    role="menuitem"
-                    data-menu-item
-                    data-category-code={group.code}
-                    aria-haspopup="menu"
-                    className="template-select__item template-select__item--category"
-                    onClick={() => setOpenCategory(group.code)}
-                  >
-                    <span>{group.name}</span>
-                    <span aria-hidden="true">›</span>
-                  </button>
-                ))}
-                {grouped.groups.length > 0 && grouped.uncategorized.length > 0 && (
-                  <div className="template-select__divider">未分類</div>
-                )}
-                {grouped.uncategorized.map(renderTemplateItem)}
-                {grouped.groups.length === 0 && grouped.uncategorized.length === 0 && (
-                  <div className="template-select__heading">テンプレートがありません</div>
-                )}
-              </>
+              <div className="template-select__empty">テンプレートがありません</div>
             )}
           </div>,
           document.body,
