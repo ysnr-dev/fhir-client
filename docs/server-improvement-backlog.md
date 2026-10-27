@@ -606,7 +606,7 @@ semantics）で固定し、クライアント側のコメントも「上流の�
     `POST /admin/delegated_tokens`(`fhirAuthorization` 用の読み取り専用・5 分のトークン)。`cds-hooks-design.md` §2.5・§2.6。
 - **`Consent`**(§5.4、中): ACP・コードステータスの構造化。JP Core プロファイルが無いので Flag と同じく HL7 基本定義 + 手書きバリデータ、
   患者コンパートメントに入れる。検索は `patient`・`category`・`status`・`date`。
-- **`Immunization`**(§5.5、中): JP Core プロファイルあり。検索は `patient`・`vaccine-code`・`date`・`status`。Health Maintenance の入力源。
+- **`Immunization`**(§5.5、中)— **上流は実装済み**(`config/routes.rb`。Device / RelatedPerson / Group も同時に入っている)。client のプロキシ許可リストに無く未使用。Health Maintenance の入力源。
 - **Subscriptions Backport IG 1.1**(§5.5、中〜低): SubscriptionTopic(Task の作成・更新、パニック値の Observation)と rest-hook / websocket 通知。
   ベル・病棟一覧のポーリングを置き換える。規格の普及が萌芽期なので急がない。
 - **`Patient/$summary`(IPS IG 2.0.1)**(§5.5、低〜中): 電子カルテ情報共有サービス(JP-CLINS)の文書生成の後に、その派生として扱う。

@@ -35,6 +35,8 @@
   保険情報の保持(レセコン正本)、IME 辞書、Excel チャート、移行ツール。
 - 海外 EHR(Epic・NHS ほか)との照合で出た候補は §5(2026-10-18)。要フォロー推奨の追跡、退院時の薬剤調整、警告のガバナンス、
   NKDA、計算スコア、Health Maintenance、SMART on FHIR アプリ起動が上位。
+- 国内の既出候補にも海外照合にも無いものは §6(2026-10-27)。麻薬帳簿、ライン・ドレーン管理、感染サーベイランス、植込みデバイスの UDI 台帳、
+  退院カルテの点検、ADR 報告、オンライン診療が上位。上流は Immunization・Device・RelatedPerson・Group・`$export` を既に持つ。
 
 ## 1. 優先度の高い候補(まとめ)
 
@@ -542,3 +544,138 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
   州法の保留(https://www.ama-assn.org/practice-management/digital-health/states-move-give-patients-more-control-over-test-results)、
   豪 My Health Record(https://anmj.org.au/modernising-my-health-record-improved-access-to-pathology-and-diagnostic-imaging-results/)、NHS のアプリ通知(https://nhsd-proxy.openprescribing.net/blog/transformation-blog/2025/a-digital-first-approach-to-patient-communications)
 - 北欧の導入の教訓(https://www.svt.se/nyheter/lokalt/skane/besked-idag-millenium-skrotas-nya-alternativ-ska-utredas、https://digi.no/nyhetsstudio/59313)
+
+## 6. 2026-10-27 の追加候補(国内の既出候補にも海外照合にも無いもの)
+
+§1〜§5 と各 `*-backlog.md`、全 `*-design.md` の先送り節、`features/*.md` の「未実装・対象外」を突き合わせ、どこにも載っていない候補だけを並べる。
+重複と判定して落としたもの: 被ばく線量管理(`rad-backlog.md` D-1〜D-4)、累積投与量(chemo A-5)、TDM(AST)、外注検査(`lab-backlog.md` B-2)、
+スコープ洗浄(内視鏡・対象外)、外出泊の登録(病棟マップに有り)、患者統合(§2.3)。
+
+前提の気づき: 上流 `../fhir-server` は **Immunization・Device・RelatedPerson・Group・Bulk Data `$export`** を既に持つ(`config/routes.rb`、
+`docs/api-examples.md`)。client のプロキシ許可リスト(`backend/app/controllers/fhir_proxy_controller.rb` の `ALLOWED_RESOURCE_TYPES`)に無いだけなので、
+これらを使う候補は上流の変更なしで足せる。§5.2 #18(予防接種)の「上流」の印もその意味で外れる。
+
+### 6.0 候補の一覧
+
+| # | 候補 | 区分 | 必要度 | 大きさ | 使う上流リソース | 詳細 |
+|---|---|---|---|---|---|---|
+| 1 | 麻薬・向精神薬の受払管理(麻薬帳簿・廃棄立会・病棟定数) | 新規 | 高 | 中 | MedicationDispense / MedicationAdministration | §6.1 |
+| 2 | ライン・ドレーン・カテーテル管理(LDA) | 新規 | 高 | 中 | Device / Procedure / Observation | §6.1 |
+| 3 | 医療関連感染サーベイランス(SSI・CLABSI・CAUTI、JANIS 全入院患者・SSI 部門) | 新規 | 高 | 中〜大 | Procedure / Condition / 細菌結果 | §6.1 |
+| 4 | 植込みデバイス・インプラントの UDI 台帳(回収時の逆引き・MRI 条件) | 新規 | 高 | 中 | Device / Procedure.focalDevice | §6.1 |
+| 5 | 退院カルテの量的・質的点検と疾病統計(診療情報管理) | 新規 | 高 | 中 | QuestionnaireResponse / Task / Condition | §6.1 |
+| 6 | 薬剤有害事象(ADR)の構造化と PMDA 副作用報告 | 拡張 | 中〜高 | 中 | Observation(有害事象の器)/ AllergyIntolerance | §6.1 |
+| 7 | オンライン診療(情報通信機器を用いた診療) | 新規 | 中〜高 | 小〜中 | Encounter(class VR)/ Appointment | §6.1 |
+| 8 | 救急の応需台帳(ホットライン受信・不応需理由) | 拡張 | 中〜高 | 小〜中 | Encounter(planned)/ backend 台帳 | §6.2 |
+| 9 | 当直・オンコール表と通知の宛先解決 | 新規 | 中〜高 | 小〜中 | PractitionerRole / Task.owner | §6.2 |
+| 10 | 在宅医療(訪問診療・訪問看護)支援 | 新規 | 中〜高(在宅のある病院) | 大 | Encounter(class HH)/ Appointment / CarePlan | §6.2 |
+| 11 | 健診・人間ドック(コース・判定・経年表・事後措置) | 新規 | 中〜高(健診センターのある病院) | 大 | ServiceRequest / Observation / DiagnosticReport | §6.2 |
+| 12 | 研究利用のオプトアウト管理と仮名化エクスポート(Group + `$export`) | 新規 | 中 | 中 | Group / Flag / `$export` | §6.4 |
+| 13 | 施設基準の要件モニター(在院日数・在宅復帰率・特定入院料の上限日数) | 拡張 | 中 | 中 | Encounter 集計(データ抽出の指標) | §6.4 |
+| 14 | 緩和ケア支援(疼痛スケールの経過・オピオイド等価換算・レスキュー集計) | 新規 | 中 | 中 | Observation / MedicationAdministration | §6.3 |
+| 15 | ICU 重症系記録(人工呼吸器設定・RASS / CPOT・SOFA 日次) | 拡張 | 中 | 中〜大 | Observation(経過表の種別) | §6.3 |
+| 16 | 急変対応(コードブルー)のタイムライン記録 | 新規 | 中 | 小〜中 | Procedure / MedicationAdministration(麻酔チャートの器) | §6.3 |
+| 17 | 災害・多数傷病者受入モード(トリアージタグの仮患者・受入ボード) | 新規 | 中 | 中 | Patient(仮)/ Flag / Encounter | §6.3 |
+| 18 | 待合・診察進捗の表示板と待ち時間の実測 | 新規 | 中 | 中 | Encounter.statusHistory / Appointment | §6.4 |
+| 19 | MSW 医療相談・患者相談窓口の記録 | 新規 | 中 | 中 | Composition / Task / RelatedPerson | §6.2 |
+| 20 | 学会・公的レジストリの汎用登録基盤(がん登録・NCD の一般化) | 拡張 | 中 | 中 | 既存(データ抽出条件 + Questionnaire + CSV) | §6.4 |
+| 21 | 通院中断の検知の横断化と連絡記録 | 拡張 | 中 | 小〜中 | MedicationRequest / Appointment / Composition | §6.4 |
+| 22 | 医療機器(ME)の台帳・保守点検・患者使用記録 | 新規 | 中(臨床工学のある病院) | 中〜大 | Device / backend 台帳 | §6.2 |
+| 23 | 専門科の図式入力部品(オージオグラム・視野・眼底・ROM) | 拡張 | 低〜中 | 中 | Questionnaire 項目型 + Observation | §6.4 |
+| 24 | 指定難病・小児慢性の臨床調査個人票と更新期限 | 拡張 | 低〜中 | 小 | 様式テンプレート + Coverage(第 2 段階) | §6.1 |
+| 25 | 小粒(特定行為手順書・薬局のトレーシングレポート・研修医の症例ログ・中材の滅菌・室料差額・精神科の法定記録) | — | 低 | 小 | — | §6.4 |
+
+### 6.1 法令・施設基準で器が無いもの
+
+- **麻薬・向精神薬の受払管理**(新規、高、中)
+  - ［対応物］`master_medicines.narcotic_category`、処方・注射の麻薬の印、注射の払出(`MedicationDispense`)、麻薬施用票(`print-backlog.md` §2.3 既載・帳票のみ)。
+  - ［不足］麻薬及び向精神薬取締法の帳簿(受入・払出・施用・残量廃棄・立会 2 名・年間届)、病棟定数の棚卸、向精神薬・毒薬の受払。
+  - ［当たり］backend `controlled_substance_ledger`(入庫・移動・廃棄)、施用と払出は上流から集計、廃棄の確認者 2 名は輸血の `performer.function` と同型、
+    帳簿 PDF は一覧印刷の基盤(`print-backlog.md` §3-4)。
+- **ライン・ドレーン・カテーテル管理(LDA)**(新規、高、中)
+  - ［対応物］経過表の水分出納(ドレーン排液は部位別)、看護指示、処置オーダー。留置そのものの台帳は無い。
+  - ［不足］挿入日・部位・サイズ・刺入部観察・交換 / 抜去を 1 件ずつ持ち、「留置 n 日目」を看護ワークシート・患者帯に出す。CLABSI / CAUTI の分母(デバイス日数)。
+  - ［当たり］`Device`(カテーテル種、プロキシ許可に追加)+ `Procedure`(挿入 / 抜去、`bodySite`、`focalDevice`)+ `Observation`(刺入部)。経過表に留置の帯、
+    警告の器(`advisory-design.md`)で「○日超」。
+- **医療関連感染サーベイランス**(新規、高、中〜大)
+  - ［対応物］手術実施の創分類(`surgery-wound-class`。`surgery-result-design.md` に「SSI サーベイランスの軸」と明記)、細菌検査結果、AST、感染症 Flag。
+    接触者追跡・隔離(§4.2)と耐性菌の感受性推移(`micro-result-design.md` 先送り)は別軸。
+  - ［不足］SSI 判定ワークリスト(手術 × 30 / 90 日以内の培養・創部所見)、デバイス関連感染(LDA の留置日数が分母)、JANIS 全入院患者部門・SSI 部門の提出ファイル、
+    手指衛生遵守率の入力。感染対策向上加算の JANIS 参加要件。
+  - ［当たり］判定は `Observation`(SSI 判定、手術の Procedure を `focus`)、分母分子はデータ抽出の指標の派生、提出ファイルは `extract/` の CSV 生成を流用。
+- **植込みデバイス・インプラントの UDI 台帳**(新規、高、中)
+  - ［対応物］注意区分 Flag「体内金属」(手入力の文言のみ)、ロット番号の GS1 解析(`lot-number-design.md` 先送り)、手術実施の明細。
+  - ［不足］`Device.udiCarrier`(GS1 AI 01 / 17 / 10 / 21)で型式・製造番号・有効期限を持ち、手術実施記録から患者に紐付け、リコール時の患者逆引き、
+    MRI 条件(条件付き可 / 不可)を放射線の注意に自動反映、材料コードを日レセへ。改正薬機法のバーコード表示義務が背景。
+  - ［当たり］`Device` + `Procedure.focalDevice`、患者プロファイルに「体内デバイス」区画、`LotManagementPage` に逆引きのタブ、`radSafetyHelpers` が Device を読む。
+- **退院カルテの量的・質的点検と疾病統計**(新規、高、中)
+  - ［対応物］入退院文書の作成状況(`/admission-documents`)、退院サマリー督促 Task、DPC 様式 1、データ抽出。
+  - ［不足］診療録管理体制加算の点検業務: 退院後 N 日の点検キュー、量的点検(必須文書の有無を機械判定)、質的点検票(チェックリスト)、
+    指摘 → 医師への Task → 是正の往復、点検率・差戻し率、ICD 大分類別の退院患者疾病統計(月次)。
+  - ［当たり］点検票は `QuestionnaireResponse`(`encounter` 付き)、指摘は通知レジストリに 1 要素、統計は `Condition`(退院時主病名)× `Encounter` のデータ抽出プリセット。
+- **薬剤有害事象(ADR)と PMDA 副作用報告**(拡張、中〜高、中)
+  - ［対応物］化学療法の有害事象(CTCAE、Observation。上流に AdverseEvent は無い)、アレルギー登録、データ抽出の「有害事象」タブ。
+  - ［不足］レジメン外の薬剤 ADR(被疑薬・発現日・重篤度・因果関係・転帰・再投与)、アレルギー登録への連動、医薬品安全性情報報告書の項目生成、月次集計。
+  - ［当たり］既存の `AdverseEventEditor` を右ペインの登録に昇格、被疑薬は `MedicationAdministration` / `MedicationRequest` 参照、報告書は様式テンプレート(PDF 様式)で。
+- **オンライン診療**(新規、中〜高、小〜中)
+  - ［対応物］予約枠、Web 問診、電子処方箋(§4.1 候補)。
+  - ［不足］`Encounter.class = VR` の診察区分、予約枠の「オンライン」区分、本人確認・初診制限の記録(指針)、ビデオ会議 URL(外部サービス、施設設定)、
+    処方の配送 / 薬局指定。算定区分はレセコンへ。
+  - ［当たり］`Schedule` に区分、`Encounter.class`、外来一覧に区分列、Web 問診のリンク発行を予約に紐付け。
+- **指定難病・小児慢性の臨床調査個人票**(拡張、低〜中、小): 様式テンプレートで臨個票(疾患別)、受給者証の有効期間は `Coverage`(患者プロファイル第 2 段階)に持ち、
+  更新期限を期限書類カードに出す。
+
+### 6.2 新しい部門・職種
+
+- **救急の応需台帳**(拡張、中〜高、小〜中): 救急隊からの受入要請(時刻・隊・主訴・バイタル・受入 / 不応需と理由)、来院前の仮患者、受入率・不応需理由の集計
+  (二次救急の実績報告)。`Encounter`(planned、`admitSource` emd)+ 拡張、救急患者一覧(`/emergency`)に「要請」タブ。
+- **当直・オンコール表**(新規、中〜高、小〜中): 日 × 科 × 役割の当直・オンコール(勤務割システム連携は対象外のまま、表だけ持つ)。
+  パニック値・RRS・他科依頼の夜間休日の宛先を Task 生成時に当直表から解決(`lab-backlog.md` A-2 の「当直医が先に読む」、`early-warning-design.md` の「RRS 呼び出し先」が解ける)。
+  backend `on_call_shifts`、ホームに「今日の当直」カード。
+- **在宅医療**(新規、中〜高、大): 訪問スケジュール(担当 × ルート順、`Appointment` + 患家 `Location`)、訪問記録(`Encounter.class = HH`)、在宅療養計画(`CarePlan`)、
+  訪問看護指示書・報告書の往復と期限(文書テンプレート + Task)、在医総管の月回数チェック、在宅酸素・自己注射の管理。`receipt-billing-backlog.md` B-10「在宅」の入力経路になる。
+- **健診・人間ドック**(新規、中〜高、大): コース(項目セット = 検体・放射線・生理のマスタを束ねる)、判定区分(項目別 → 総合、A〜E の施設マスタ)、結果報告書と経年表(帳票)、
+  事後措置(要精検 → 外来予約・紹介、受診勧奨の連絡記録)、特定健診 XML(JLAC10 の方針は `lab-order-master-design.md` に有り)。健診の Encounter は外来と分ける(`Encounter.type`)。
+- **MSW 医療相談・患者相談窓口**(新規、中、中): 患者サポート体制充実加算の相談記録(経済・制度・介護申請・就労・虐待 / DV 通告・苦情)、対応中 / 終結、社会資源台帳、件数報告。
+  `Composition`(type 相談記録 + category)、`RelatedPerson`(家族・キーパーソン、上流に有り)、データ抽出で集計。入退院支援(§4.3)の退院調整以外を受ける。
+- **医療機器(ME)台帳**(新規、中、中〜大): 医療機器安全管理責任者の保守点検計画と実施記録、貸出 / 返却、患者 × 機器 × 期間(人工呼吸器・ポンプが誰に付いていたか)。
+  `Device`(`status`・`location`)、点検は backend 台帳 + 期限 Task、汎用オーダー(§2.7)の「貸出依頼」の受け側。
+
+### 6.3 医療安全・急性期
+
+- **緩和ケア支援**(新規、中、中): NRS / IPOS / STAS-J の経過(経過表に行、チャート定義)、オピオイド等価換算表(backend マスタ、経口モルヒネ換算)、
+  レスキュー回数の自動集計(`MedicationAdministration` 頓用)から定時増量の提案、鎮静の記録。緩和ケアチーム(`care-team-design.md`)の回診記録に初期値。
+- **ICU 重症系記録**(拡張、中、中〜大): 経過表の種別「ICU」(`flowsheet-design.md` §12 の種別は新生児・透析・パルトグラムのみ): 人工呼吸器設定(モード・FiO2・PEEP・TV)、
+  RASS / CPOT / CAM-ICU、SOFA 日次(早期警告の器に有る値を再利用)、ABCDEF バンドル。特定集中治療室管理料の算定上限日数は施設基準モニター(§6.4)と共用。
+- **急変対応(コードブルー)記録**(新規、中、小〜中): 発見〜ROSC / 死亡確認の時刻列(CPR 開始・除細動・アドレナリン・気道確保)、ウツタイン様式の集計、
+  早期警告(RRS)の対応内容と連続。麻酔チャートの時間軸入力を流用、`Procedure`(蘇生)+ 子の `MedicationAdministration`。
+- **災害・多数傷病者受入モード**(新規、中、中): トリアージタグ番号で仮患者を数秒で登録(`Patient.identifier` 別系統 + 仮登録 Flag)、START 区分の受入ボード(救急一覧の切替)、
+  後日の本患者との統合(§2.3 の `Patient.link`)、EMIS 報告の集計値。
+
+### 6.4 診療・運用の横断
+
+- **研究利用のオプトアウトと仮名化エクスポート**(新規、中、中): 倫理指針のオプトアウト(患者ごとの拒否を `Flag` category research-optout、患者帯に表示)、
+  データ抽出の結果 → 上流 `Group` → `Group/$export`(上流に Bulk Data 有り)、backend で患者番号 → 研究 ID の対応表と日付シフト・自由文除去の仮名化を通して ZIP 出力。
+  治験(§2.11 の ResearchSubject)の受け皿にもなる。
+- **施設基準の要件モニター**(拡張、中、中): 平均在院日数・在宅復帰率・看護必要度割合(有り)・特定入院料の算定上限日数(ICU 14 日など、該当患者の残日数)・重症度の基準を
+  月次で機械算出し、届出前に減算リスクを見る。データ抽出「指標」タブに「施設基準」カテゴリ、入院患者一覧に残日数列。
+- **待合・診察進捗の表示板**(新規、中、中): 外来一覧から診察室ごとの呼出番号(患者番号は出さない)と待ち人数を公開画面に、受付 → 診察開始 → 終了の実測から待ち時間を集計。
+  放射線の受付待ちは `rad-backlog.md` に「待合表示の要求が出た時点で」の保留が有り、同じ画面で受ける。
+- **学会・公的レジストリの汎用登録基盤**(拡張、中、中): がん登録・NCD・感染症発生届は個別実装。「対象の判定条件(データ抽出の保存条件)+ テンプレート + 列順 CSV + 期限」を
+  施設定義のレジストリとして一般化し、JROAD・J-TDB(外傷)・透析学会統計調査・JCS を足せるようにする。3 本のリファクタを伴う。
+- **通院中断の検知の横断化**(拡張、中、小〜中): 糖尿病プリセットの「受診中断」(`data-extract-design.md`)を病名に依らない仕組みに(定期処方の投与終了日 + 最終受診 + 予約無し)、
+  連絡(電話・手紙)の記録と結果(再受診・転院・死亡)を残し、Health Maintenance(§5.3)の患者帯表示と並べる。
+- **専門科の図式入力部品**(拡張、低〜中、中): オージオグラム・視野・眼底図・関節可動域を Questionnaire の項目型(歯式の部品方式)として足し、`Observation.component` に落とす。
+- **小粒**: 特定行為研修修了看護師の手順書(包括指示 `ServiceRequest` → 実施 `Procedure` + 医師報告)、保険薬局のトレーシングレポート・残薬報告の受取(処方医へ通知、電子処方箋が先)、
+  研修医の経験症例ログ(カウンターサインの指導医グループで集計)、中材の滅菌ロットと手術器械セットのトレーサビリティ(`Procedure.usedReference`)、
+  室料差額の管理(`Location` 拡張 + 同意 + 日レセ)、精神科の入院形態・隔離拘束の法定記録(§4.3 身体拘束の派生)。
+
+### 6.5 取り込まないもの
+
+- **HPKI 電子署名・タイムスタンプ**: `order-common-backlog.md` と `document-template-design.md` が「暗号署名は持たない」と決めている。電子処方箋(§4.1)の実装時に前提として再検討。
+- **搬送依頼**: 汎用オーダー(§2.7)で足りる。部門の進捗は待合・診察進捗の表示板に含める。
+- **患者統合・外出泊の登録・受診中断の抽出条件**: 既に有る。
+
+### 6.6 機能ではないが併記するもの
+
+- frontend にユニットテストが無い。`fhir/*Helpers.ts` は純粋関数なので vitest で固定し、画面は Playwright のスモーク(ログイン → カルテ → 処方登録)を 1 本。
