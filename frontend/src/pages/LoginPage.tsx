@@ -16,8 +16,9 @@ export function LoginPage() {
   }
 
   return (
-    <div className="page">
-      <form className="admin-login-form" onSubmit={handleSubmit}>
+    <div className="login-page">
+      <form className="admin-login-form login-card" onSubmit={handleSubmit}>
+        <h1 className="login-card__title">FHIR Client</h1>
         <label>
           ログインID
           <input

@@ -745,9 +745,7 @@
    ボタンと並ばない登録ボタン。横に並ぶ入力欄が無く高さを揃える必要がないので、
    押しやすさを優先して一段高くする。
    :only-child の判定で、取消などと 2 つ並ぶ操作列は既定の高さのまま残す。
-   カルテ見出しは直接の子だけを対象にして、患者情報の帯に並ぶ注意ピクトを外す。
-   ログインフォームは操作列を挟まないのでボタンを直接指定する(フォームに当てると
-   縦に積んだ入力欄まで高くなる)。 */
+   カルテ見出しは直接の子だけを対象にして、患者情報の帯に並ぶ注意ピクトを外す。 */
 .karte-right__actions,
 .karte-page__header > button,
 .karte-page__header > .button,
@@ -758,8 +756,7 @@
 .lab-order-item__actions:has(> button:only-child),
 .appointment-panel__actions:has(> button:only-child),
 .master-import-form__actions:has(> button:only-child),
-.connection-settings-form__actions:has(> button:only-child),
-.admin-login-form > button {
+.connection-settings-form__actions:has(> button:only-child) {
   --control-height: var(--control-height-lg);
 }
 
@@ -3457,6 +3454,46 @@ fieldset.rp-card {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
+  color: var(--text-h);
+}
+
+/* ログインボタンは縦に積んだ入力欄に合わせて伸ばさず、右端に通常の大きさで置く。 */
+.admin-login-form > button {
+  align-self: flex-end;
+}
+
+/* アプリ本体のログイン画面。ヘッダー以外に何も無いので、本文の中央にカードとして
+   置く。視線の重心を合わせるため、ぴったり中央より少し上に寄せる。 */
+.app__main:has(> .login-page) {
+  display: flex;
+}
+
+.login-page {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 12vh;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 28px 32px 32px;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--surface-card-shadow);
+}
+
+/* h1 の基底の詰め字は 20px では密着して読めないので、字間を広げて置く。 */
+.login-card__title {
+  margin: 0 0 8px;
+  font-family: var(--sans);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: center;
   color: var(--text-h);
 }
 
