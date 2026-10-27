@@ -8,7 +8,7 @@ import { toWareki } from "../lib/dates";
 
 export const DOCUMENT_FORM_SCHEMA_VERSION = 1;
 
-export const FIELD_TYPES = ["text", "textarea", "select", "checkbox", "date"] as const;
+export const FIELD_TYPES = ["text", "textarea", "select", "checkbox", "date", "image"] as const;
 export type DocumentFormFieldType = (typeof FIELD_TYPES)[number];
 export const FIELD_TYPE_LABELS: Record<DocumentFormFieldType, string> = {
   text: "テキスト",
@@ -16,6 +16,7 @@ export const FIELD_TYPE_LABELS: Record<DocumentFormFieldType, string> = {
   select: "選択",
   checkbox: "チェック",
   date: "日付",
+  image: "画像",
 };
 
 export const ALIGNS = ["left", "center", "right"] as const;
@@ -73,7 +74,10 @@ export interface DocumentFormField {
   mask?: boolean;
   /** select のみ。 */
   options?: string[];
-  /** 初期値式(変数一覧の式)。checkbox は条件式で、真か値があればチェックする。select は選択肢と一致する値だけ選ぶ。 */
+  /**
+   * 初期値式(変数一覧の式)。checkbox は条件式で、真か値があればチェックする。select は選択肢と一致する値だけ選ぶ。
+   * image は画像の data URL を返す式(口腔診査の歯式図など)で、値は入力できず式から入るだけ。
+   */
   initial_expression?: string;
   /** text / textarea。転記ボタンで出す出どころ。空なら転記ボタン無し。 */
   transfer_kinds?: TransferKind[];
@@ -97,7 +101,7 @@ export interface DocumentFormPageMeta {
   height_pt: number;
 }
 
-/** 入力値。すべて文字列で持つ(checkbox は CHECKED_VALUE か空、date は YYYY-MM-DD、select は選択肢の文字)。 */
+/** 入力値。すべて文字列で持つ(checkbox は CHECKED_VALUE か空、date は YYYY-MM-DD、select は選択肢の文字、image は data URL)。 */
 export type DocumentFormValues = Record<string, string>;
 
 /** 置いたときの既定の大きさ(px、150dpi 相当のページ)。 */
@@ -107,6 +111,7 @@ const DEFAULT_SIZES: Record<DocumentFormFieldType, { w: number; h: number }> = {
   select: { w: 240, h: 36 },
   checkbox: { w: 32, h: 32 },
   date: { w: 240, h: 36 },
+  image: { w: 400, h: 480 },
 };
 const DEFAULT_FONT_SIZE = 10.5;
 const MIN_SIZE_PX = 10;
@@ -213,10 +218,8 @@ function withTypeExtras(field: DocumentFormField, type: DocumentFormFieldType): 
 export function changeFieldType(field: DocumentFormField, type: DocumentFormFieldType): DocumentFormField {
   if (field.type === type) return field;
   const size = DEFAULT_SIZES[type];
-  const resized =
-    type === "checkbox" || field.type === "checkbox" || type === "textarea" || field.type === "textarea"
-      ? { ...field, w: size.w, h: size.h }
-      : field;
+  const boxed = (t: DocumentFormFieldType) => t === "checkbox" || t === "textarea" || t === "image";
+  const resized = boxed(type) || boxed(field.type) ? { ...field, w: size.w, h: size.h } : field;
   // チェックの条件式と値の式は意味が違うので持ち越さない。
   const expression =
     type === "checkbox" || field.type === "checkbox" ? { ...resized, initial_expression: "" } : resized;
@@ -372,23 +375,30 @@ export function formatDateValue(value: string, format: DocumentFormDateFormat | 
   return `${match[1]}/${match[2]}/${match[3]}`;
 }
 
-/** 画面の確定表示と PDF に出す文字列。空なら何も描かない。 */
+/** 画面の確定表示と PDF に出す文字列。空なら何も描かない(image は文字を持たない)。 */
 export function displayTextOf(field: DocumentFormField, value: string | undefined): string {
   const raw = value ?? "";
   if (field.type === "checkbox") return raw === CHECKED_VALUE ? CHECK_MARK : "";
   if (field.type === "date") return formatDateValue(raw, field.date_format);
+  if (field.type === "image") return "";
   return raw;
 }
 
 export interface PdfFieldPayload {
   link_id: string;
   text: string;
+  /** image の data URL(PNG / JPEG)。 */
+  image?: string;
 }
 
 export function pdfFieldPayload(layout: DocumentFormLayout, values: DocumentFormValues): PdfFieldPayload[] {
   return layout.fields
-    .map((field) => ({ link_id: field.id, text: displayTextOf(field, values[field.id]) }))
-    .filter((item) => item.text !== "");
+    .map((field): PdfFieldPayload => {
+      const value = values[field.id] ?? "";
+      if (field.type === "image") return { link_id: field.id, text: "", image: value };
+      return { link_id: field.id, text: displayTextOf(field, value) };
+    })
+    .filter((item) => item.text !== "" || item.image);
 }
 
 /** 必須で空の項目のラベル。 */

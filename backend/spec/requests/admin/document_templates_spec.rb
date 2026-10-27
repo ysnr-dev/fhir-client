@@ -243,6 +243,21 @@ RSpec.describe "Admin::DocumentTemplates", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
     end
 
+    it "accepts an image field with an initial expression but not transfer kinds" do
+      image = field(id: "f_chart", type: "image", label: "歯式図", w: 400, h: 480,
+                    initial_expression: "%oralExamChart", transfer_kinds: nil).compact
+      post "/admin/document_templates",
+           params: form_params(layout: { schema_version: 1, fields: [ image ] }),
+           as: :json
+      expect(response).to have_http_status(:created)
+
+      post "/admin/document_templates",
+           params: form_params(code: "11111111-2222-3333-4444-777777777777",
+                               layout: { schema_version: 1, fields: [ image.merge(transfer_kinds: []) ] }),
+           as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
     it "rejects a field outside the page" do
       post "/admin/document_templates",
            params: form_params(layout: { schema_version: 1, fields: [ field(x: 1200, w: 100) ] }),

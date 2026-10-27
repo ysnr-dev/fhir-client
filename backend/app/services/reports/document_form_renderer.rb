@@ -17,8 +17,11 @@ module Reports
     # textarea は上揃え、1 行の項目は箱の縦中央に置く(紙の罫線の中に入るように)。
     MULTILINE_TYPES = %w[textarea].freeze
     MAX_TEXT_LENGTH = 5_000
+    # 画像項目(歯式図など)。data URL か素の base64 で受け、PNG / JPEG だけ描く。
+    MAX_IMAGE_BYTESIZE = 2.megabytes
+    IMAGE_SIGNATURES = { "\x89PNG".b => :png, "\xFF\xD8\xFF".b => :jpeg }.freeze
 
-    # values: { field id => 表示文字列 }
+    # values: { field id => { "text" => 表示文字列, "image" => 画像の data URL } }
     def initialize(template:, values:)
       @template = template
       @values = values
@@ -48,12 +51,15 @@ module Reports
     private
 
     def draw_field(pdf, field, scale, page_height)
-      text = @values[field["id"]].to_s
+      value = @values[field["id"]] || {}
       at = [ field["x"] * scale, page_height - field["y"] * scale ]
       width = field["w"] * scale
       height = field["h"] * scale
       # 塗りつぶしの項目は、値が空でも枠内の雛形の印字を隠す(入力画面と同じ見た目にする)。
       mask(pdf, at, width, height) if field["mask"]
+      return draw_image(pdf, field, value["image"], at, width, height) if field["type"] == "image"
+
+      text = value["text"].to_s
       return if text.empty?
 
       raise InvalidRequest, "値が長すぎます(#{field['id']})" if text.length > MAX_TEXT_LENGTH
@@ -69,6 +75,23 @@ module Reports
         overflow: :shrink_to_fit,
         min_font_size: MIN_FONT_SIZE
       )
+    end
+
+    # 画像は箱に収まるよう縮め(縦横比は保つ)、左上に寄せる(画面の object-fit: contain と同じ)。
+    def draw_image(pdf, field, image, at, width, height)
+      return if image.blank?
+
+      bytes = decode_image(image, field["id"])
+      pdf.image(StringIO.new(bytes), at: at, fit: [ width, height ])
+    end
+
+    def decode_image(image, id)
+      payload = image.to_s.sub(/\Adata:[^,]*,/, "")
+      bytes = Base64.decode64(payload)
+      raise InvalidRequest, "画像が大きすぎます(#{id})" if bytes.bytesize > MAX_IMAGE_BYTESIZE
+      raise InvalidRequest, "画像は PNG / JPEG にしてください(#{id})" unless IMAGE_SIGNATURES.keys.any? { |sig| bytes.start_with?(sig) }
+
+      bytes
     end
 
     def mask(pdf, at, width, height)

@@ -16,6 +16,9 @@ import { CANCER_POPULATE_VARIABLES, type CancerPopulateSources } from "../../fhi
 import { pathoDiagnosisResponseIdOf } from "../../fhir/pathoResultHelpers";
 import { ADMISSION_CLASS_CODE } from "../../fhir/encounterHelpers";
 import { SURGERY_POPULATE_VARIABLES, type SurgeryPopulateSources } from "../../fhir/populateSurgery";
+import { ORAL_EXAM_POPULATE_VARIABLES } from "../../fhir/populateOralExam";
+import { ORAL_EXAM_CODE_SYSTEM, summarizeOralExamHeader } from "../../fhir/oralExamHelpers";
+import { useOralExamSnapshot } from "./oralExam";
 import { isSurgeryProcedure } from "../../fhir/surgeryResultHelpers";
 import { today as todayString } from "../../lib/dates";
 import { useAuthSession } from "../authQueries";
@@ -49,8 +52,8 @@ const VITAL_COUNT = 50;
  * 検査項目の最新値(%labs)は、テンプレートが式の中で参照している結果項目コード(labCodes)だけを
  * コードごとに最新 1 件ずつ取る(呼び出し側が populateLab.ts の collectLabCodes で集める)。
  *
- * 腫瘍・病理(病理レポート・手術・レジメン・放射線治療)、手術(対象の手術と入院)、最終来院日、記入回数
- * (同じテンプレートの記入済みの回答)は、式がそれらの変数を参照しているときだけ読む。
+ * 腫瘍・病理(病理レポート・手術・レジメン・放射線治療)、手術(対象の手術と入院)、口腔診査(最新の診査)、最終来院日、
+ * 記入回数(同じテンプレートの記入済みの回答)は、式がそれらの変数を参照しているときだけ読む。
  *
  * 初期回答はフォームのマウント時に一度だけ確定するので、呼び出し側は isLoading が
  * 落ちてから buildPopulateContext に渡す。
@@ -72,6 +75,7 @@ export function usePopulateSources(
   const labCodes = useMemo(() => collectLabCodes(expressions ?? []), [expressions]);
   const cancer = useMemo(() => usesVariables(expressions ?? [], CANCER_POPULATE_VARIABLES), [expressions]);
   const surgery = useMemo(() => usesVariables(expressions ?? [], SURGERY_POPULATE_VARIABLES), [expressions]);
+  const oralExam = useMemo(() => usesVariables(expressions ?? [], ORAL_EXAM_POPULATE_VARIABLES), [expressions]);
   const lastVisit = useMemo(() => usesVariables(expressions ?? [], ["lastVisitDate"]), [expressions]);
   const canonicals = options.canonicals ?? [];
   const sequence = useMemo(() => usesVariables(expressions ?? [], ["responseSequence"]), [expressions]);
@@ -261,6 +265,23 @@ export function usePopulateSources(
   });
   const surgeryQueries = [surgeryRecord, surgeryAdmissions];
 
+  // ---- 口腔診査(式が参照するときだけ) ----
+  // 最新の診査の見出しを 1 件引き、その identifier で診査全体(歯・口腔全体)を読む。
+  const oralHeaderParams = new URLSearchParams();
+  oralHeaderParams.set("subject", `Patient/${patientId}`);
+  oralHeaderParams.set("code", `${ORAL_EXAM_CODE_SYSTEM}|snapshot`);
+  oralHeaderParams.set("_sort", "-date");
+  oralHeaderParams.set("_count", "1");
+  const oralHeader = useQuery({
+    queryKey: ["Observation", "search", "populate-oral-exam", patientId],
+    queryFn: () => searchResource<fhir4.Observation>("Observation", oralHeaderParams),
+    enabled: Boolean(patientId && oralExam),
+  });
+  const oralHeaderResource = resourcesOfType<fhir4.Observation>(oralHeader.data?.data, "Observation")[0];
+  const oralSnapshotId = oralHeaderResource ? summarizeOralExamHeader(oralHeaderResource).snapshotId : "";
+  const oralSnapshot = useOralExamSnapshot(oralExam ? oralSnapshotId || undefined : undefined);
+  const oralQueries = [oralHeader, oralSnapshot];
+
   // ---- 最終来院日・記入回数(式が参照するときだけ) ----
   const encounterParams = new URLSearchParams();
   encounterParams.set("patient", `Patient/${patientId}`);
@@ -328,6 +349,7 @@ export function usePopulateSources(
     labQueries.some((q) => q.isLoading) ||
     cancerQueries.some((q) => q.isLoading) ||
     surgeryQueries.some((q) => q.isLoading) ||
+    oralQueries.some((q) => q.isLoading) ||
     visitQueries.some((q) => q.isLoading);
 
   const author = practitioner.data?.data;
@@ -387,6 +409,7 @@ export function usePopulateSources(
           } satisfies CancerPopulateSources)
         : undefined,
       surgery: surgery ? surgerySourcesOf(surgeryRecord.data?.data, surgeryAdmissions.data?.data) : undefined,
+      oralExam: oralExam ? { snapshot: oralSnapshot.data?.snapshot } : undefined,
       lastEncounter: lastVisit
         ? resourcesOfType<fhir4.Encounter>(lastEncounter.data?.data, "Encounter")[0]
         : undefined,
@@ -427,6 +450,8 @@ export function usePopulateSources(
     lastEncounter.data,
     registrations.data,
     surgery,
+    oralExam,
+    oralSnapshot.data,
     lastVisit,
     sequence,
     canonicals.length,
@@ -441,6 +466,7 @@ export function usePopulateSources(
       labQueries.find((q) => q.error)?.error ??
       cancerQueries.find((q) => q.error)?.error ??
       surgeryQueries.find((q) => q.error)?.error ??
+      oralQueries.find((q) => q.error)?.error ??
       visitQueries.find((q) => q.error)?.error ??
       null,
     sources,

@@ -157,6 +157,16 @@ TF-3〜TF-26 のどれかがあれば TF-27(歯あり・状態不明)を落と�
 - `category=exam` なので、データ抽出で区分「診察」を選ぶと口腔診査の Observation も件数に入ります。
   感染症の手入力(`category=exam` + 種類コードで絞る)とは混ざりません。
 
+## 文書作成・テンプレートからの参照
+
+テンプレート回答・様式の初期値式の変数一覧(`../features/templates.md`「文書作成」)に「口腔診査」の分類があり、
+患者の最新の診査から診査日(`%oralExamDate`)・現在歯数(`%oralPresentTeeth`)・未処置歯数(`%oralCariesTeeth`)・処置歯数
+(`%oralTreatedTeeth`)・喪失歯数(`%oralMissingTeeth`)・未処置歯の部位(`%oralCariesTeethList`)・歯数のまとめ(`%oralExamSummary`)・
+所見・特記事項(`%oralExamNote`、SK-3)、歯ごとの健診記号(`%oralTeeth.where(tooth = '右上8').symbol`。`.abbr` で略号)、
+歯式図の画像(`%oralExamChart`。様式の「画像」項目用。`fhir/oralExamChartImage.ts` が紙の歯式図と同じアーチ状に描く)を入れられます
+(`fhir/populateOralExam.ts`)。本数の数え方は見出しの下の本数と同じです。
+歯科疾患管理料の管理計画書(`../report-mappings/dental-plan-form-01.md`)の口腔内の状況の歯式図・むし歯の有無・歯数はこれで入ります。
+
 ## コード表(`/master/oral_exam_codes`)
 
 配布の「マスター形式データ」と「OID 表」(xlsx)から、TB/TD/TP/TM/TE/TF/NS/KS/KK/SI/SK のコード値を持つ行

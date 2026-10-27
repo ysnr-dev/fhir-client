@@ -188,6 +188,12 @@ function FieldInput({
           aria-label={field.label}
           onChange={(e) => onChange(e.target.value)}
         />
+      ) : field.type === "image" ? (
+        value ? (
+          <img className={className} src={value} alt={field.label} title={field.label} />
+        ) : (
+          <div className={className} role="img" aria-label={field.label} title={field.label} />
+        )
       ) : field.type === "select" ? (
         <select
           className={className}

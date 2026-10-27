@@ -1,7 +1,8 @@
 // 様式テンプレートの回答を保存する Questionnaire の自動生成と、回答(QuestionnaireResponse)との変換。
 //
 // 項目の定義は様式デザイナ(layout)が正で、Questionnaire はそこから機械的に作る
-// (text→string、textarea→text、date→date、select→choice + drop-down、checkbox→choice + check-box 1 選択肢)。
+// (text→string、textarea→text、date→date、select→choice + drop-down、checkbox→choice + check-box 1 選択肢、
+// image→text。JASPEHR は attachment 型を許さないので、画像は data URL の文字列として回答に残す)。
 // 既存のエディタと同じ buildQuestionnaire に通して、プロファイル(subjectType など)の要件を満たす。
 // 通常のテンプレート選択に出さないため code に印を付ける(上流は extension を検索できないが code は検索できる)。
 import {
@@ -74,7 +75,7 @@ function editorItemOf(field: DocumentFormField): EditorItem {
   const type =
     field.type === "text"
       ? "string"
-      : field.type === "textarea"
+      : field.type === "textarea" || field.type === "image"
         ? "text"
         : field.type === "date"
           ? "date"

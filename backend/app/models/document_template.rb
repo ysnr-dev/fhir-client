@@ -17,7 +17,7 @@
 #         "x": 120, "y": 240, "w": 300, "h": 36, "font_size": 10.5, "align": "left", "required": false,
 #         "mask": true,                             # 枠内を白で塗って雛形の印字を隠す
 #         "options": ["男", "女"],                  # select のみ
-#         "initial_expression": "%patientName",     # 初期値式。checkbox は真か値があればチェック
+#         "initial_expression": "%patientName",     # 初期値式。checkbox は真か値があればチェック、image は画像の data URL を返す式
 #         "transfer_kinds": ["prescription"],       # text / textarea
 #         "date_format": "slash" } ] }              # date のみ
 class DocumentTemplate < ApplicationRecord
@@ -39,7 +39,7 @@ class DocumentTemplate < ApplicationRecord
 
   SCHEMA_VERSION = 1
   LAYOUT_KEYS = %w[schema_version fields].freeze
-  FIELD_TYPES = %w[text textarea select checkbox date].freeze
+  FIELD_TYPES = %w[text textarea select checkbox date image].freeze
   ALIGNS = %w[left center right].freeze
   DATE_FORMATS = %w[slash iso wareki].freeze
   TRANSFER_KINDS = %w[prescription injection order condition lab].freeze
@@ -49,7 +49,8 @@ class DocumentTemplate < ApplicationRecord
     "textarea" => %w[initial_expression transfer_kinds],
     "select" => %w[options initial_expression],
     "checkbox" => %w[initial_expression],
-    "date" => %w[initial_expression date_format]
+    "date" => %w[initial_expression date_format],
+    "image" => %w[initial_expression]
   }.freeze
   MAX_FIELDS = 300
   MAX_LABEL_LENGTH = 100

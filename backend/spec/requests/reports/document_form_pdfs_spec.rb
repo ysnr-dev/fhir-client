@@ -66,6 +66,23 @@ RSpec.describe "Reports::DocumentFormPdfs", type: :request do
       expect(rectangles.size).to eq(3)
     end
 
+    it "draws an image field from a data URL and rejects a body that is not an image" do
+      image = { "id" => "f_chart", "type" => "image", "label" => "歯式図", "page" => 1,
+                "x" => 100, "y" => 500, "w" => 400, "h" => 480, "font_size" => 10, "align" => "left", "mask" => true }
+      template = create_form!(fields + [ image ])
+      data_url = "data:image/png;base64,#{Base64.strict_encode64(png)}"
+
+      post "/reports/document_forms/#{template.id}/pdf",
+           params: { fields: [ { link_id: "f_chart", text: "", image: data_url } ] }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(PDF::Inspector::XObject.analyze(response.body).page_xobjects.first.size).to eq(2)
+
+      post "/reports/document_forms/#{template.id}/pdf",
+           params: { fields: [ { link_id: "f_chart", text: "", image: Base64.strict_encode64("not an image") } ] }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.parsed_body["error"]).to include("PNG / JPEG")
+    end
+
     it "returns 404 for an unknown template and 422 for an office template" do
       post "/reports/document_forms/999999/pdf", params: { fields: [] }, as: :json
       expect(response).to have_http_status(:not_found)

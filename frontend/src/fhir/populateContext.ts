@@ -44,6 +44,7 @@ import {
   vitalDisplayRows,
 } from "./vitalHelpers";
 import { labExpression, type PopulateLabRow } from "./populateLab";
+import { oralExamPopulateValues, type OralExamPopulateSources } from "./populateOralExam";
 import { surgeryPopulateValues, type SurgeryPopulateSources } from "./populateSurgery";
 import { codingBySystem, LOINC_SYSTEM } from "./shared";
 
@@ -89,6 +90,8 @@ export interface PopulateSources {
   cancer?: CancerPopulateSources;
   /** 手術の変数の元データ(populateSurgery.ts)。テンプレートの式が参照するときだけ揃う。 */
   surgery?: SurgeryPopulateSources;
+  /** 口腔診査の変数の元データ(populateOralExam.ts)。テンプレートの式が参照するときだけ揃う。 */
+  oralExam?: OralExamPopulateSources;
   /** 最新の受診・入院。式が %lastVisitDate を参照するときだけ揃う。 */
   lastEncounter?: fhir4.Encounter;
   /** 同じテンプレートのこの患者の記入済みの件数(取り消しを除く)。式が %responseSequence を参照するときだけ揃う。 */
@@ -840,6 +843,90 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     sample: "12",
   },
 
+  // ---- 口腔診査(最新の口腔状態スナップショット) ----
+  {
+    group: "口腔診査",
+    variable: "oralExamDate",
+    label: "口腔診査日",
+    expression: "%oralExamDate",
+    description: "最新の口腔診査の診査日を YYYY-MM-DD で入れます。診査が無ければ入りません。「日付」項目で使えます。",
+    sample: "2026-10-17",
+  },
+  {
+    group: "口腔診査",
+    variable: "oralPresentTeeth",
+    label: "現在歯数",
+    expression: "%oralPresentTeeth",
+    description: `最新の口腔診査の現在歯の本数を入れます。歯ごとに最初の併存グループで数え、過剰歯は数えません。${NUMBER_NOTE}`,
+    sample: "28",
+  },
+  {
+    group: "口腔診査",
+    variable: "oralCariesTeeth",
+    label: "未処置歯数",
+    expression: "%oralCariesTeeth",
+    description: `最新の口腔診査で基本状態が未処置歯(むし歯・治療中)の本数を入れます。チェック項目の条件で「より大きい 0」にすると、むし歯の有無になります。${NUMBER_NOTE}`,
+    sample: "2",
+  },
+  {
+    group: "口腔診査",
+    variable: "oralTreatedTeeth",
+    label: "処置歯数",
+    expression: "%oralTreatedTeeth",
+    description: `最新の口腔診査の処置歯の本数を入れます。${NUMBER_NOTE}`,
+    sample: "8",
+  },
+  {
+    group: "口腔診査",
+    variable: "oralMissingTeeth",
+    label: "喪失歯数",
+    expression: "%oralMissingTeeth",
+    description: `最新の口腔診査の欠損歯(喪失・欠損補綴・インプラント)の本数を入れます。${NUMBER_NOTE}`,
+    sample: "4",
+  },
+  {
+    group: "口腔診査",
+    variable: "oralCariesTeethList",
+    label: "未処置歯の部位",
+    expression: "%oralCariesTeethList",
+    description: "最新の口腔診査の未処置歯を「右上7」のような歯の名前で「、」区切りで並べます。",
+    sample: "右上2、左上6、左上7",
+  },
+  {
+    group: "口腔診査",
+    variable: "oralExamSummary",
+    label: "歯数のまとめ",
+    expression: "%oralExamSummary",
+    description: "最新の口腔診査の現在歯・未処置歯・処置歯・喪失歯の本数を 1 行にまとめます。",
+    sample: "現在歯28本(未処置歯2本・処置歯8本)、喪失歯4本",
+  },
+  {
+    group: "口腔診査",
+    variable: "oralExamNote",
+    label: "口腔診査の所見・特記事項",
+    expression: "%oralExamNote",
+    description: `最新の口腔診査の口腔全体「所見・特記事項」の自由記載を 1 行ずつ並べます。${MULTILINE_NOTE}`,
+    sample: "下顎前歯部に歯石沈着\n左下臼歯部に骨瘤",
+  },
+  {
+    group: "口腔診査",
+    variable: "oralTeeth",
+    label: "歯ごとの健診記号(右上8)",
+    expression: "%oralTeeth.where(tooth = '右上8').symbol",
+    description:
+      "最新の口腔診査のその歯の歯科健診記号(／ C ○ △ (△) シ サ CO ×)を入れます。歯の名前は右上8〜1・左上1〜8・右下8〜1・左下1〜8、乳歯は右上A〜E などに書き換えます。末尾を .abbr にすると内容の略号(C2・FMC など)、.basic にすると基本状態のコードになります。様式の歯式図の歯ごとに置くと図に記号が入ります。",
+    sample: "C",
+  },
+  {
+    group: "口腔診査",
+    variable: "oralExamChart",
+    label: "口腔診査の歯式図(画像)",
+    expression: "%oralExamChart",
+    description:
+      "最新の口腔診査の歯式図を画像(PNG)にして入れます。様式の「画像」項目で使い、紙面の歯式図の欄に塗りつぶしで重ねます。紙の歯式図と同じアーチ状(患者の右が左、乳歯は内側)で、歯の色・歯面・健診記号・略号・ブリッジ・義歯の線は画面の歯式図と同じです。Word / Excel では使えません。",
+    sample: "(画像)",
+  },
+
   // ---- 処方・検査 ----
   {
     group: "処方・検査",
@@ -1255,5 +1342,6 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     ...cancerPopulateValues(sources.allConditions, sources.focusConditionId, sources.cancer),
     ...infectiousDiseaseValues(sources.allConditions, sources.focusConditionId),
     ...surgeryPopulateValues(patient, sources.surgery),
+    ...oralExamPopulateValues(sources.oralExam),
   };
 }

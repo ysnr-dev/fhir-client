@@ -29228,6 +29228,13 @@ input.nursing-picker__search {
   overflow: auto;
 }
 
+/* 画像は式から入るだけで編集できない。箱に収めて左上に寄せる(PDF と同じ)。 */
+.document-form-input--image {
+  padding: 0;
+  object-fit: contain;
+  object-position: left top;
+}
+
 /* チェックはブラウザ既定の描画に任せる(枠・背景を当てると黒塗りの四角になる)。大きさだけ箱に合わせる。 */
 .document-form-input--checkbox {
   appearance: auto;

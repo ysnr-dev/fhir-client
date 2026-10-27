@@ -16,7 +16,8 @@ module Reports
       render json: { error: error.message }, status: :unprocessable_content
     end
 
-    # POST /reports/document_forms/:template_id/pdf  { fields: [{ link_id, text }, ...] }
+    # POST /reports/document_forms/:template_id/pdf  { fields: [{ link_id, text, image }, ...] }
+    # image は画像項目の data URL(PNG / JPEG)。
     def create
       template = DocumentTemplate.without_data.find(params[:template_id])
       raise NotFormTemplate unless template.form?
@@ -40,7 +41,7 @@ module Reports
         id = attrs["link_id"]
         next unless id.is_a?(String)
 
-        acc[id] = attrs["text"].to_s
+        acc[id] = { "text" => attrs["text"].to_s, "image" => attrs["image"].presence }
       end
     end
   end

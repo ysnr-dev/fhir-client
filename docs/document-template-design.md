@@ -83,7 +83,9 @@ Word / Excel で直せる。
 
 ［設計］変数一覧の分類は様式の用途ではなくデータの種類で分ける(患者・傷病名・腫瘍・病理・手術・記入など)。院内がん登録・
 NCD・感染症発生届のために足した変数も同じ一覧に置き、どの画面でも使える。読み込みに検索が要る変数(腫瘍・病理・手術・
-最終来院日・記入回数)は、`usePopulateSources` が式の参照を見て(`usesVariables`)その元データだけを読む。
+口腔診査・最終来院日・記入回数)は、`usePopulateSources` が式の参照を見て(`usesVariables`)その元データだけを読む。
+口腔診査(`fhir/populateOralExam.ts`)は患者の最新の口腔状態スナップショット(見出しを 1 件引いて identifier で全体を読む)から、
+診査日・現在歯数・未処置歯数・処置歯数・喪失歯数・未処置歯の部位・歯数のまとめ・所見を出す(歯科疾患管理料の管理計画書用)。
 記入回数(`%responseSequence`)は記入しているテンプレートの canonical(`canonicals`)が要るので、Word / Excel では入らない。
 
 ## 4. 差し込み(`fhir/officeTemplate.ts`)
@@ -186,10 +188,14 @@ PNG が 1.5MB を超えるページ(写真)は JPEG に落とす。
                "x": 276, "y": 148, "w": 320, "h": 36, "font_size": 10.5, "align": "left", "required": false,
                "mask": true,                             // 枠内を白で塗って雛形の印字を隠す(任意)
                "options": ["男", "女"],                  // select のみ
-               "initial_expression": "%patientName",     // 初期値式(変数一覧の式)。checkbox は条件式
+               "initial_expression": "%patientName",     // 初期値式(変数一覧の式)。checkbox は条件式、image は画像の data URL を返す式
                "transfer_kinds": ["prescription"],       // text / textarea。転記ボタンの出どころ
                "date_format": "wareki" }] }              // date のみ(slash / iso / wareki)
 ```
+
+種別は text / textarea / select / checkbox / date / image。image は手で入力できず、初期値式が返す画像(PNG / JPEG の data URL。
+いまは口腔診査の歯式図 `%oralExamChart`、`fhir/oralExamChartImage.ts` が canvas で描く)を箱に収めて出す。Questionnaire では
+text 型の項目にし、回答には data URL の文字列をそのまま残す(JASPEHR が attachment 型を許さないため。再編集で同じ画像が出る)。
 
 `mask` は雛形の印字(「年 月 日」のような既定の文言)と値が重なる欄のためのもの。入力画面は項目の枠を紙の色で塗り、
 PDF は値を描く前に枠内を白で塗る(値が空でも塗る)。見た目だけの設定なので Questionnaire の版は上げない。
@@ -247,6 +253,7 @@ PDF は値を描く前に枠内を白で塗る(値が空でも塗る)。見た�
 `POST /reports/document_forms/:template_id/pdf`)。フロントは表示用に整形した文字列(選択肢の表示・チェックの ✓・和暦)を
 送るだけにし、値の整形を `fhir/documentFormLayout.ts` の `displayTextOf` に一元化する。ページ画像を敷いて `text_box` で描き、
 箱に収まらない文字は縮める(`shrink_to_fit`)ので、ブラウザと IPA フォントで折返しが違っても箱からはみ出さない。
+画像項目は data URL(`image`)を受け、PNG / JPEG(2MB まで)だけを箱に収めて左上に寄せて描く(`fit`)。
 
 保存は 1 本の transaction Bundle(`fhir/patientFileHelpers.ts` の `buildDocumentFormBundle`):
 QuestionnaireResponse(POST、`fullUrl` は urn:uuid)+ Binary(PDF)+ DocumentReference(POST、`type` はテンプレートの code、
@@ -265,4 +272,5 @@ QuestionnaireResponse(POST、`fullUrl` は urn:uuid)+ Binary(PDF)+ DocumentRefer
 
 ### 7.6 対応しないもの
 
-ベクタのままの PDF 背景、繰り返し行、条件分岐、電子署名。フォントの一致(ブラウザの表示と PDF で折返しが多少違う)。
+ベクタのままの PDF 背景、繰り返し行、条件分岐、電子署名、手でアップロードする画像(画像項目は式から入るものだけ)。
+フォントの一致(ブラウザの表示と PDF で折返しが多少違う)。

@@ -68,7 +68,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 | 帳票 | 必要度 | 出典 | 当たり |
 |---|---|---|---|
 | 退院時サマリー PDF(科別レイアウト) | 高 | discharge-summary-design §6、gap §2.2 | `GET /reports/discharge_summaries/:composition_id/pdf`。長文の改ページが課題(§3-1) |
-| 診断書・死亡診断書などの標準様式の同梱 | 中 | — | 様式の見本は診療情報提供書(`referral-form-01`)・主治医意見書(`care-opinion-form-01`)・生活習慣病 療養計画書(`lifestyle-plan-*-form-01`)。それ以外は施設が登録する |
+| 診断書・死亡診断書などの標準様式の同梱 | 中 | — | 様式の見本は診療情報提供書(`referral-form-01`)・主治医意見書(`care-opinion-form-01`)・生活習慣病 療養計画書(`lifestyle-plan-*-form-01`)・歯科疾患管理料の管理計画書(`dental-plan-*-form-01`)。それ以外は施設が登録する |
 | 同意書の状態管理(作成 → 印刷 → 同意済 → 原本保管)と印刷部数 | 中 | gap §2.2 | 文書の横断一覧とスキャン原本の結び付け |
 | 造影剤検査の同意書 | 中 | rad C-2 | テンプレート + .tlf |
 | 輸血の説明書・同意書(現状はオーダーの確認チェックだけ) | 中 | transfusion-design 58 行 | 同上 |
