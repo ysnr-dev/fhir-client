@@ -40,7 +40,7 @@ module Integrations
         appointment["id"] = existing["id"] if existing
         appointment["specialty"] = specialty(event)
         appointment["participant"] = participants(event, patient_fhir_id, existing)
-        appointment["identifier"] = [identifier(event.reception_key)]
+        appointment["identifier"] = [identifier(event.reception_key), reception_number_identifier(event.reception_key)]
         appointment["extension"] = coverage_set_extension(appointment, event)
         appointment.compact!
 
@@ -90,6 +90,13 @@ module Integrations
       end
 
       def identifier_query(key) = "#{ReceiptComputer::RECEPTION_IDENTIFIER_SYSTEM}|#{key}"
+
+      # 受付番号。レセコンが日ごとに振る受付 ID(key の「日付:ID」の ID。ゼロ埋めは外す)を
+      # そのまま使い、待合表示板と外来一覧に出す(docs/waiting-board-design.md)。
+      def reception_number_identifier(key)
+        number = key.to_s.split(":", 2).last.to_s.sub(/\A0+(?=\d)/, "")
+        { "system" => WaitingBoard::RECEPTION_NUMBER_IDENTIFIER_SYSTEM, "value" => number }
+      end
 
       def find(key)
         store.search("Appointment", { "identifier" => identifier_query(key), "_count" => "2" }, limit: 2).first

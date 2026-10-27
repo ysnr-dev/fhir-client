@@ -11749,9 +11749,9 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
    ために作った仕組みを、外来患者一覧や部門業務のワークリストでも使えるように
    まとめたもの。
    使い方: 表を囲む div に .sticky-table-wrap、表に .sticky-table を付け、固定
-   したいセルに左から順に .sticky-table__fix-1 〜 -5 を、右端の操作列に
-   .sticky-table__fix-actions を付ける(-5 まで使うかは表しだい)。左の列の幅は
-   表ごとに違うので、--sticky-fix-1-w 〜 --sticky-fix-5-w を表の側で決める。 */
+   したいセルに左から順に .sticky-table__fix-1 〜 -6 を、右端の操作列に
+   .sticky-table__fix-actions を付ける(-6 まで使うかは表しだい)。左の列の幅は
+   表ごとに違うので、--sticky-fix-1-w 〜 --sticky-fix-6-w を表の側で決める。 */
 
 /* 行が多いと縦にも送る。ページごと送ると列見出しまで流れてしまうので、表の中だけで
    送れるよう高さを画面に収める(見出しの sticky はこのラップを基準に貼り付くため、
@@ -11784,6 +11784,7 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
 .sticky-table__fix-3,
 .sticky-table__fix-4,
 .sticky-table__fix-5,
+.sticky-table__fix-6,
 .sticky-table__fix-actions {
   position: sticky;
   z-index: 1;
@@ -11796,6 +11797,7 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
 .sticky-table thead .sticky-table__fix-3,
 .sticky-table thead .sticky-table__fix-4,
 .sticky-table thead .sticky-table__fix-5,
+.sticky-table thead .sticky-table__fix-6,
 .sticky-table thead .sticky-table__fix-actions {
   z-index: 3;
 }
@@ -11809,7 +11811,8 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
 .sticky-table__fix-2,
 .sticky-table__fix-3,
 .sticky-table__fix-4,
-.sticky-table__fix-5 {
+.sticky-table__fix-5,
+.sticky-table__fix-6 {
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -11850,6 +11853,16 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
   width: var(--sticky-fix-5-w);
   min-width: var(--sticky-fix-5-w);
   max-width: var(--sticky-fix-5-w);
+}
+
+.sticky-table__fix-6 {
+  left: calc(
+    var(--sticky-fix-1-w) + var(--sticky-fix-2-w) + var(--sticky-fix-3-w) + var(--sticky-fix-4-w) +
+      var(--sticky-fix-5-w)
+  );
+  width: var(--sticky-fix-6-w);
+  min-width: var(--sticky-fix-6-w);
+  max-width: var(--sticky-fix-6-w);
 }
 
 /* 操作列は幅を決めない(right 基準なので手前の列の幅に依らない)。ケバブの
@@ -12465,16 +12478,17 @@ body.page-wide-md-toc .app__main {
 
 /* 表の作りは放射線検査一覧と同じ。幅は page-wide で確保し、画面が狭いときは
    ページ全体ではなく表の中だけを横にスクロールさせる(.sticky-table-wrap)。
-   固定列は 時刻・待ち時間・患者番号・患者氏名で、仕組みは .sticky-table を参照。 */
+   固定列は 時刻・受付番号・待ち時間・患者番号・患者氏名で、仕組みは .sticky-table を参照。 */
 .outpatient {
   width: 100%;
   margin-bottom: 8px;
-  /* 予約時間 / 受付時間 / 待ち時間 / 患者番号 / 患者氏名。 */
+  /* 予約時間 / 受付時間 / 受付番号 / 待ち時間 / 患者番号 / 患者氏名。 */
   --sticky-fix-1-w: 92px;
   --sticky-fix-2-w: 92px;
-  --sticky-fix-3-w: 92px;
-  --sticky-fix-4-w: 104px;
-  --sticky-fix-5-w: 240px;
+  --sticky-fix-3-w: 84px;
+  --sticky-fix-4-w: 92px;
+  --sticky-fix-5-w: 104px;
+  --sticky-fix-6-w: 240px;
 }
 
 .outpatient th,
@@ -27865,6 +27879,144 @@ input.nursing-picker__search {
 }
 
 /* 問診 QR のモーダル(components/IntakeQrModal.tsx)。 */
+/* ---- 待合表示板(pages/WaitingBoardPage.tsx)。ロビーのモニターで離れて読む前提で、文字を大きくする。 ---- */
+.waiting-board {
+  min-height: 100vh;
+  padding: 24px 32px;
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 22px;
+}
+
+.waiting-board__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.waiting-board__title {
+  margin: 0;
+  font-size: 32px;
+  color: var(--text-h);
+}
+
+.waiting-board__clock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 16px;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.waiting-board__stale {
+  font-size: 16px;
+  color: var(--warning);
+}
+
+.waiting-board__message {
+  margin: 0;
+  font-size: 24px;
+}
+
+.waiting-board__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 24px;
+}
+
+.waiting-board__room {
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-card-shadow);
+}
+
+.waiting-board__room-name {
+  margin: 0 0 12px;
+  font-size: 28px;
+  color: var(--text-h);
+}
+
+.waiting-board__calling {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.waiting-board__calling-label {
+  font-size: 20px;
+  color: var(--text);
+}
+
+.waiting-board__numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.waiting-board__number {
+  font-size: 72px;
+  line-height: 1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.waiting-board__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 0;
+}
+
+.waiting-board__facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.waiting-board__facts dt {
+  color: var(--text);
+}
+
+.waiting-board__facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-h);
+}
+
+/* 施設設定「待合表示板」の区画(components/WaitingBoardLinksSection.tsx)。 */
+.waiting-board-links {
+  align-self: flex-start;
+}
+
+.waiting-board-links__rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.waiting-board-links__rooms legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
 .intake-qr {
   display: flex;
   flex-direction: column;

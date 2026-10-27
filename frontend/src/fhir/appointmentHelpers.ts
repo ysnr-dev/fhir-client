@@ -101,6 +101,46 @@ export function appointmentCheckedInTimeLabel(appointment: fhir4.Appointment): s
   return appointmentCheckedInAt(appointment).slice(11, 16) || "-";
 }
 
+// ---- 受付番号 ----
+//
+// 受付のたびに backend が当日の連番を払い出し(docs/waiting-board-design.md)、待合表示板と外来一覧に出す。
+// レセコン連携で取り込んだ受付は、レセコンが振った受付 ID を backend が同じ system で添える。
+
+export const RECEPTION_NUMBER_IDENTIFIER_SYSTEM =
+  "http://fhir-client.local/identifier/reception-number";
+/** レセコン連携の受付の identifier の system(backend の ReceiptComputer::RECEPTION_IDENTIFIER_SYSTEM)。 */
+const RECEIPT_COMPUTER_RECEPTION_SYSTEM =
+  "http://fhir-client.local/integrations/receipt-computer/reception";
+
+/** 受付番号を書き込む(number が空なら取り除く)。他の identifier は保つ。 */
+export function withReceptionNumber(
+  appointment: fhir4.Appointment,
+  number: string,
+): fhir4.Appointment {
+  const rest = (appointment.identifier ?? []).filter(
+    (i) => i.system !== RECEPTION_NUMBER_IDENTIFIER_SYSTEM,
+  );
+  const identifier = number
+    ? [...rest, { system: RECEPTION_NUMBER_IDENTIFIER_SYSTEM, value: number }]
+    : rest;
+  return { ...appointment, identifier: identifier.length > 0 ? identifier : undefined };
+}
+
+/** 受付番号。無ければ空。 */
+export function appointmentReceptionNumber(appointment: fhir4.Appointment): string {
+  return (
+    appointment.identifier?.find((i) => i.system === RECEPTION_NUMBER_IDENTIFIER_SYSTEM)?.value ??
+    ""
+  );
+}
+
+/** レセコンから取り込んだ受付(受付番号はレセコンのものを使うので、こちらでは採番しない)。 */
+export function hasReceiptComputerReception(appointment: fhir4.Appointment): boolean {
+  return Boolean(
+    appointment.identifier?.some((i) => i.system === RECEIPT_COMPUTER_RECEPTION_SYSTEM),
+  );
+}
+
 // ---- 初再診 ----
 //
 // 受付で「初診」「再診」を指定できる。未選択は判定をレセコンに任せる意味で、

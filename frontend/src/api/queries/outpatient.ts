@@ -12,7 +12,14 @@ import {
   injectionSeriesOf,
 } from "../../fhir/injectionHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
-import { appointmentActorId, isExamAppointment, withCheckedInAt } from "../../fhir/appointmentHelpers";
+import {
+  appointmentActorId,
+  hasReceiptComputerReception,
+  isExamAppointment,
+  withCheckedInAt,
+  withReceptionNumber,
+} from "../../fhir/appointmentHelpers";
+import { issueReceptionNumber } from "../waitingBoardClient";
 import {
   EXAM_IN_PROGRESS_STATUS,
   EXAM_PAUSED_STATUS,
@@ -200,29 +207,40 @@ export function useOutpatientOrders(
 }
 
 /**
+ * 受付番号。backend が当日の連番を払い出す(待合表示板の呼出番号)。レセコンから取り込んだ受付は
+ * レセコンの番号が付いているので採番しない。
+ */
+async function receptionNumberFor(appointment: fhir4.Appointment): Promise<string> {
+  if (hasReceiptComputerReception(appointment)) return "";
+  const { number } = await issueReceptionNumber(today());
+  return String(number);
+}
+
+/**
  * 受付・受付取消を予約の status に書き込む。transaction Bundle で書き、一覧が読んだ
  * Appointment の版は postBundle が ifMatch に添える。
  *
- * 受付では受付時刻も一緒に残す(予約時間とは別の列で出すため)。受付取消では
- * 消して、受付していない予約に受付時刻が残らないようにする。
+ * 受付では受付時刻と受付番号も一緒に残す(予約時間とは別の列で出すため)。受付取消では
+ * 消して、受付していない予約に受付時刻・受付番号が残らないようにする。
  */
 export function useUpdateAppointmentStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       appointment,
       status,
     }: {
       appointment: fhir4.Appointment;
       status: fhir4.Appointment["status"];
     }) => {
+      const checkingIn = status === "checked-in";
       // BundleEntry.resource は基底の Resource 型なので、更新後の予約は
       // Appointment として組んでから渡す(直接書くと status が余剰プロパティに
       // なる)。appointmentHelpers の slotEntry と同じ形。
-      const updated: fhir4.Appointment = withCheckedInAt(
-        { ...appointment, status },
-        status === "checked-in" ? nowFhirDateTime() : "",
+      const updated: fhir4.Appointment = withReceptionNumber(
+        withCheckedInAt({ ...appointment, status }, checkingIn ? nowFhirDateTime() : ""),
+        checkingIn ? await receptionNumberFor(appointment) : "",
       );
 
       return postBundle({
@@ -395,11 +413,13 @@ export function usePatientTodayOutpatient(patientId: string | undefined) {
 }
 
 /** 当日受付。枠を持たない予約を受付済で登録する(buildWalkInAppointment を参照)。 */
+/** 当日受付。受付番号を採番してから予約を作る。 */
 export function useWalkInCheckIn() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (appointment: fhir4.Appointment) => createResource(appointment),
+    mutationFn: async (appointment: fhir4.Appointment) =>
+      createResource(withReceptionNumber(appointment, await receptionNumberFor(appointment))),
     onSuccess: () => invalidateAppointments(queryClient),
   });
 }

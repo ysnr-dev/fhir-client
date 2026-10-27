@@ -127,8 +127,9 @@ import { KartePage } from "./pages/KartePage";
 import { KartePanePage } from "./pages/KartePanePage";
 import { KARTE_PANE_PATH, useKartePaneHost } from "./kartePaneChannel";
 import { KartePrintPage } from "./pages/KartePrintPage";
-import { INTAKE_PATH, KARTE_PRINT_PATH } from "./karteUrl";
+import { BOARD_PATH, INTAKE_PATH, KARTE_PRINT_PATH } from "./karteUrl";
 import { IntakePage } from "./pages/IntakePage";
+import { WaitingBoardPage } from "./pages/WaitingBoardPage";
 import { isMasterPath } from "./masterMenu";
 import { DepartmentCreatePage } from "./pages/DepartmentCreatePage";
 import { DepartmentEditPage } from "./pages/DepartmentEditPage";
@@ -208,10 +209,13 @@ function App() {
   const printPage = pathname.startsWith(KARTE_PRINT_PATH);
   // Web 問診の患者画面。ログインの外(AuthGate の外)で、トークンだけで開く。
   const intakeToken = pathname.startsWith(INTAKE_PATH) ? pathname.slice(INTAKE_PATH.length).split("/")[0] : "";
+  // 待合表示板(ロビーのモニター)。同じくログインの外で、トークンだけで開く。
+  const boardToken = pathname.startsWith(BOARD_PATH) ? pathname.slice(BOARD_PATH.length).split("/")[0] : "";
   // メインタブは、別タブから見た「生きているか」「いま誰のカルテか」の応答口になる。
-  useKartePaneHost(!detachedPane && !printPage && !intakeToken);
+  useKartePaneHost(!detachedPane && !printPage && !intakeToken && !boardToken);
 
   if (intakeToken) return <IntakePage token={decodeURIComponent(intakeToken)} />;
+  if (boardToken) return <WaitingBoardPage token={decodeURIComponent(boardToken)} />;
 
   return (
     // アプリ全体をログインゲートで包む(ADMIN_TOKEN 未設定なら素通し)。

@@ -576,7 +576,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
 | 15 | ICU 重症系記録(人工呼吸器設定・RASS / CPOT・SOFA 日次) | 拡張 | 中 | 中〜大 | Observation(経過表の種別) | §6.3 |
 | 16 | 急変対応(コードブルー)のタイムライン記録 | 新規 | 中 | 小〜中 | Procedure / MedicationAdministration(麻酔チャートの器) | §6.3 |
 | 17 | 災害・多数傷病者受入モード(トリアージタグの仮患者・受入ボード) | 新規 | 中 | 中 | Patient(仮)/ Flag / Encounter | §6.3 |
-| 18 | 待合・診察進捗の表示板と待ち時間の実測 | 新規 | 中 | 中 | Encounter.statusHistory / Appointment | §6.4 |
+| 18 | 待合・診察進捗の表示板と待ち時間の実測 — **対応済み(2026-10-28、`docs/waiting-board-design.md`)** | 新規 | 中 | 中 | Encounter.statusHistory / Appointment | §6.4 |
 | 19 | MSW 医療相談・患者相談窓口の記録 | 新規 | 中 | 中 | Composition / Task / RelatedPerson | §6.2 |
 | 20 | 学会・公的レジストリの汎用登録基盤(がん登録・NCD の一般化) | 拡張 | 中 | 中 | 既存(データ抽出条件 + Questionnaire + CSV) | §6.4 |
 | 21 | 通院中断の検知の横断化と連絡記録 | 拡張 | 中 | 小〜中 | MedicationRequest / Appointment / Composition | §6.4 |
@@ -659,8 +659,9 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
   治験(§2.11 の ResearchSubject)の受け皿にもなる。
 - **施設基準の要件モニター**(拡張、中、中): 平均在院日数・在宅復帰率・看護必要度割合(有り)・特定入院料の算定上限日数(ICU 14 日など、該当患者の残日数)・重症度の基準を
   月次で機械算出し、届出前に減算リスクを見る。データ抽出「指標」タブに「施設基準」カテゴリ、入院患者一覧に残日数列。
-- **待合・診察進捗の表示板**(新規、中、中): 外来一覧から診察室ごとの呼出番号(患者番号は出さない)と待ち人数を公開画面に、受付 → 診察開始 → 終了の実測から待ち時間を集計。
-  放射線の受付待ちは `rad-backlog.md` に「待合表示の要求が出た時点で」の保留が有り、同じ画面で受ける。
+- **待合・診察進捗の表示板**(新規、中、中)— **対応済み(2026-10-28)**: 受付番号(backend の日別連番、レセコン連携は受付 ID)、
+  診察室ごとの公開画面 `/board/<token>`、データ抽出の外来に「待ち時間(分)」。`docs/waiting-board-design.md`。
+  放射線の受付待ち(`rad-backlog.md` E-6)は「撮影中」の状態が無いので先送りのまま。
 - **学会・公的レジストリの汎用登録基盤**(拡張、中、中): がん登録・NCD・感染症発生届は個別実装。「対象の判定条件(データ抽出の保存条件)+ テンプレート + 列順 CSV + 期限」を
   施設定義のレジストリとして一般化し、JROAD・J-TDB(外傷)・透析学会統計調査・JCS を足せるようにする。3 本のリファクタを伴う。
 - **通院中断の検知の横断化**(拡張、中、小〜中): 糖尿病プリセットの「受診中断」(`data-extract-design.md`)を病名に依らない仕組みに(定期処方の投与終了日 + 最終受診 + 予約無し)、

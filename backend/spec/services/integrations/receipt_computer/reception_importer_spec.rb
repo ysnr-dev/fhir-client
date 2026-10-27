@@ -58,6 +58,17 @@ RSpec.describe Integrations::ReceiptComputer::ReceptionImporter do
     expect(coverage_set_of(store.written)).to be_nil
   end
 
+  it "レセコンの受付 ID を受付番号(ゼロ埋め無し)として identifier に添える" do
+    key_event = Integrations::ReceiptComputer::Records::ReceptionEvent.new(
+      event_id: "e2", action: :created, reception_key: "2026-09-20:00012", patient_number: "00021",
+      date: "2026-09-20", time: "19:30:00", coverage_set_key: nil
+    )
+    importer.call(key_event, patient_fhir_id: "p1")
+
+    number = store.written["identifier"].find { |i| i["system"] == WaitingBoard::RECEPTION_NUMBER_IDENTIFIER_SYSTEM }
+    expect(number["value"]).to eq "12"
+  end
+
   describe "取消" do
     let(:appointment) { { "resourceType" => "Appointment", "id" => "ap-1", "status" => "checked-in" } }
 

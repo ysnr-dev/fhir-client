@@ -118,6 +118,15 @@ Rails.application.routes.draw do
     post "public/responses", to: "public#create_response"
   end
 
+  # 待合表示板(docs/waiting-board-design.md)。職員用はログイン、ロビーの画面はリンクのトークン(ヘッダ)で開く。
+  scope "waiting_board", module: "waiting_board" do
+    post "links", to: "staff#create_link"
+    get "links", to: "staff#links"
+    delete "links/:id", to: "staff#revoke_link"
+    post "reception_numbers", to: "staff#create_reception_number"
+    get "public", to: "public#show"
+  end
+
   # 「自院」がどの Organization かと施設ごとの業務設定(ログイン済みユーザー全員が読み書きする)。
   resource :facility_settings, only: %i[show update]
 

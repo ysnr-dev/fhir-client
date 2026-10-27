@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_25_090100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_28_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -2878,6 +2878,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_25_090100) do
     t.index ["name"], name: "index_questionnaire_categories_on_name", unique: true
   end
 
+  create_table "reception_number_counters", force: :cascade do |t|
+    t.date "day", null: false
+    t.integer "last_number", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["day"], name: "index_reception_number_counters_on_day", unique: true
+  end
+
   create_table "report_layouts", force: :cascade do |t|
     t.string "name", null: false
     t.string "questionnaire_url", null: false
@@ -2929,6 +2937,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_25_090100) do
     t.datetime "updated_at", null: false
     t.index ["login_id"], name: "index_users_on_login_id", unique: true
     t.index ["practitioner_fhir_id"], name: "index_users_on_practitioner_fhir_id", unique: true
+  end
+
+  create_table "waiting_board_links", force: :cascade do |t|
+    t.string "token_digest", null: false
+    t.string "label", null: false
+    t.jsonb "location_ids", default: [], null: false
+    t.string "created_by_id"
+    t.string "created_by_name"
+    t.datetime "revoked_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["token_digest"], name: "index_waiting_board_links_on_token_digest", unique: true
   end
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"

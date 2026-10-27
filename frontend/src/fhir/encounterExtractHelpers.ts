@@ -1,6 +1,7 @@
 import { dateTimeLabel, diffDays, localDay } from "../lib/dates";
 import { admissionRouteDisplay, encounterAdmissionRoute } from "./admissionRouteHelpers";
 import {
+  appointmentCheckedInAt,
   appointmentDepartmentLabel,
   appointmentVisitKind,
   isWalkInAppointment,
@@ -62,7 +63,19 @@ const INPATIENT_FIXED = [
   "退院先",
 ];
 const INPATIENT_VALUES = ["担当看護師", "メモ"];
-const OUTPATIENT_FIXED = ["受診日", "開始", "終了", "診察時間(分)", "状態", "診療科", "初再診", "当日受付", "担当医", "診察室"];
+const OUTPATIENT_FIXED = [
+  "受診日",
+  "開始",
+  "終了",
+  "診察時間(分)",
+  "待ち時間(分)",
+  "状態",
+  "診療科",
+  "初再診",
+  "当日受付",
+  "担当医",
+  "診察室",
+];
 const EMERGENCY_FIXED = [
   "来院日",
   "来院",
@@ -158,13 +171,22 @@ function outpatientRow(
   appointments: Map<string, fhir4.Appointment>,
 ): Pick<EncounterExtractRow, "fixed" | "values"> {
   const appointment = appointments.get(referenceIdOf(encounter.appointment?.[0]?.reference, "Appointment"));
-  const status = encounter.status === "finished" ? "診察済" : encounter.status === "in-progress" ? "診察中" : encounter.status;
+  const status =
+    encounter.status === "finished"
+      ? "診察済"
+      : encounter.status === "in-progress"
+        ? "診察中"
+        : encounter.status === "onleave"
+          ? "一時終了"
+          : encounter.status;
   return {
     fixed: [
       localDay(encounter.period?.start),
       dateTimeLabel(encounter.period?.start).slice(11, 16),
       dateTimeLabel(encounter.period?.end).slice(11, 16),
       minutesBetween(encounter.period?.start, encounter.period?.end),
+      // 受付から診察開始まで。受付時刻は予約(受付)の拡張に残っている。
+      appointment ? minutesBetween(appointmentCheckedInAt(appointment), encounter.period?.start) : "",
       status,
       appointment ? appointmentDepartmentLabel(appointment) : "",
       appointment ? visitKindLabel(appointmentVisitKind(appointment)) : "",

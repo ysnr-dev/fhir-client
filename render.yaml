@@ -137,6 +137,10 @@ services:
       - type: rewrite
         source: /intake/*
         destination: https://ysnr-fhir-client-api.onrender.com/intake/*
+      # 待合表示板(職員用・公開の API)。ロビーの画面 /board/* は SPA 側。
+      - type: rewrite
+        source: /waiting_board/*
+        destination: https://ysnr-fhir-client-api.onrender.com/waiting_board/*
       # SMART アプリの一覧と起動(カルテの「アプリ」タブ)。管理画面の SPA ルートは
       # /smart-apps(ハイフン)なので衝突しない。
       - type: rewrite

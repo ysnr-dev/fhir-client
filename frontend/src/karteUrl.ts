@@ -204,6 +204,9 @@ export const KARTE_PRINT_PATH = "/karte-print";
 /** Web 問診の患者画面。末尾にリンクのトークンが付く(/q/<token>)。 */
 export const INTAKE_PATH = "/q/";
 
+/** 待合表示板(ロビーのモニター)。末尾にリンクのトークンが付く(/board/<token>)。 */
+export const BOARD_PATH = "/board/";
+
 export function kartePrintUrl(patientId: string, from: string, to: string, history: boolean): string {
   const params = new URLSearchParams({ from, to });
   if (history) params.set("history", "1");

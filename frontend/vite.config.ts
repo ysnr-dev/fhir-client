@@ -73,6 +73,11 @@ export default defineConfig({
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
         changeOrigin: true,
       },
+      // 待合表示板の API(職員用・公開)。ロビーの画面の SPA ルートは /board/ なのでぶつからない。
+      '^/waiting_board/': {
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
+        changeOrigin: true,
+      },
       // レセコン連携。SPA ルートとぶつからないよう /integrations/ 配下に限定する。
       '^/integrations/': {
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',

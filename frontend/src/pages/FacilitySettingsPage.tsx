@@ -89,6 +89,7 @@ import { departmentCode, departmentDisplayName, sortDepartmentsByCode } from "..
 import { EMPTY_INTAKE_SETTINGS, type IntakeSettings } from "../fhir/intakeHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
+import { WaitingBoardLinksSection } from "../components/WaitingBoardLinksSection";
 import { CommentCandidates } from "../components/CommentCandidates";
 import { radiotherapyTechniqueHooks } from "../api/masterQueries";
 import { EMPTY_NURSING_PROFILE, type NursingProfileSettings } from "../fhir/nursingProfileHelpers";
@@ -155,6 +156,7 @@ const FACILITY_SECTIONS = [
   { key: "ncd_registration", label: "NCD症例登録" },
   { key: "radiotherapy_review", label: "放射線治療の週次レビュー" },
   { key: "intake", label: "Web 問診" },
+  { key: "waiting_board", label: "待合表示板" },
   { key: "early_warning", label: "早期警告スコア(NEWS2)" },
   { key: "rx_verification", label: "処方監査" },
   { key: "receipt_codes", label: "医事会計のレセプト電算コード" },
@@ -1442,6 +1444,10 @@ export function FacilitySettingsPage() {
               </label>
             </div>
           )}
+
+          {/* 待合表示板のリンク。設定(settings)ではなく別テーブルに持ち、この区画のボタンがその場で
+              発行・取消する(docs/waiting-board-design.md)。 */}
+          {section === "waiting_board" && <WaitingBoardLinksSection />}
 
           {section === "early_warning" && (
             <div className="facility-settings__schedule-body">

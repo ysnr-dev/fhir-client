@@ -32,6 +32,8 @@
 Web 問診の質問票と有効時間・カルテカードの並び順・院内がん登録・感染症発生届・NCD 症例登録のテンプレート）は、
 **`settings` jsonb 1 列**にまとめて入れます。backend はこれらを検索にも集計にも使わず（読むのは
 frontend と、会計送信のコード引き当て・DPC の推定包括額だけ）、列に分けても索引も WHERE も使わないためです。
+例外は「待合表示板」の区画で、発行したリンクは `settings` ではなく別テーブル(`waiting_board_links`)に持ち、
+区画のボタンがその場で発行・取消します(`features/outpatient.md`)。
 
 **項目を足すときに書くのは `FacilitySettings::SETTINGS`（項目表）だけです。** 検証・既定値の
 穴埋め・読み書きのメソッド（`meal_schedule` / `meal_schedule_with_defaults` /
