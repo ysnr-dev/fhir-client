@@ -8,10 +8,11 @@ export interface WaitingBoardLink {
   location_ids: string[];
   created_at: string;
   created_by_name: string | null;
+  /** 表示板が開くパス("/board/<token>")。サーバーがトークンを起こし直せないリンクは null(発行し直す)。 */
+  path: string | null;
 }
 
 export interface IssuedWaitingBoardLink extends WaitingBoardLink {
-  /** 表示板が開くパス("/board/<token>")。トークンはこの応答にだけ出る。 */
   path: string;
 }
 

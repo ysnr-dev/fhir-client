@@ -12,22 +12,30 @@ RSpec.describe "WaitingBoard::Staff", type: :request do
   end
 
   describe "リンク" do
-    it "発行・一覧・取消。トークンは発行の応答にだけ出る" do
+    it "発行・一覧・取消。一覧でも同じ表示板のパスを起こし直して返す" do
       with_admin_token(nil) { post "/waiting_board/links", params: { label: "1 階ロビー", location_ids: ["room-1", ""] }, as: :json }
       expect(response).to have_http_status(:created)
       expect(body["path"]).to match(%r{\A/board/[A-Za-z0-9_-]{40,}\z})
       expect(body["location_ids"]).to eq(["room-1"])
       id = body["id"]
+      path = body["path"]
 
       with_admin_token(nil) { get "/waiting_board/links" }
       expect(body["items"].map { |i| i.slice("id", "label", "location_ids") }).to eq([{ "id" => id, "label" => "1 階ロビー", "location_ids" => ["room-1"] }])
-      expect(body["items"][0]).not_to have_key("path")
+      expect(body["items"][0]["path"]).to eq(path)
+      expect(WaitingBoardLink.find(id).token_salt).to be_present
       expect(body["items"][0]).not_to have_key("token_digest")
 
       with_admin_token(nil) { delete "/waiting_board/links/#{id}" }
       expect(response).to have_http_status(:no_content)
       with_admin_token(nil) { get "/waiting_board/links" }
       expect(body["items"]).to eq([])
+    end
+
+    it "salt の無いリンクは path が null(発行し直す)" do
+      WaitingBoardLink.create!(label: "旧", token_digest: WaitingBoardLink.digest("legacy"))
+      with_admin_token(nil) { get "/waiting_board/links" }
+      expect(body["items"][0]).to include("label" => "旧", "path" => nil)
     end
 
     it "名前が無ければ 422" do

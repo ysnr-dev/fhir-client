@@ -10,10 +10,11 @@ import { OUTPATIENT_ROOM_TYPE_CODE, locationTypeCode } from "../fhir/locationHel
 import { dateTimeLabel } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { CopyIcon } from "./icons/CopyIcon";
+import { OpenIcon } from "./icons/OpenIcon";
 import { TrashIcon } from "./icons/TrashIcon";
 
 // 施設設定「待合表示板」の区画(docs/waiting-board-design.md §3.2)。ロビーのモニターが開くリンクの
-// 発行・取消。施設設定の保存(フォーム全体の submit)とは別に、この区画のボタンがその場で書く。
+// 発行・表示・取消。施設設定の保存(フォーム全体の submit)とは別に、この区画のボタンがその場で書く。
 // 親が 1 つの <form> なので、ここに <form> は置かずボタンはすべて type="button"。
 
 export function WaitingBoardLinksSection() {
@@ -64,16 +65,28 @@ export function WaitingBoardLinksSection() {
                   {link.created_by_name ? ` ${link.created_by_name}` : ""}
                 </td>
                 <td>
-                  <button
-                    type="button"
-                    className="rp-card__icon-button"
-                    title={`${link.label} を削除`}
-                    aria-label={`${link.label} を削除`}
-                    disabled={revoke.isPending}
-                    onClick={() => revoke.mutate(link.id)}
-                  >
-                    <TrashIcon />
-                  </button>
+                  <div className="waiting-board-links__actions">
+                    <button
+                      type="button"
+                      className="rp-card__icon-button"
+                      title={link.path ? `${link.label} を表示` : "発行し直してください"}
+                      aria-label={`${link.label} を表示`}
+                      disabled={!link.path}
+                      onClick={() => link.path && window.open(link.path, "_blank", "noopener")}
+                    >
+                      <OpenIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className="rp-card__icon-button"
+                      title={`${link.label} を削除`}
+                      aria-label={`${link.label} を削除`}
+                      disabled={revoke.isPending}
+                      onClick={() => revoke.mutate(link.id)}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -120,7 +133,7 @@ export function WaitingBoardLinksSection() {
   );
 }
 
-/** 発行したリンクの URL と QR。トークンは発行の応答にしか出ないので、次の発行で消える。 */
+/** 発行したリンクの URL と QR。次に発行するか画面を離れるまで出しておく。 */
 function IssuedLink({ path, label }: { path: string; label: string }) {
   const url = `${window.location.origin}${path}`;
   const [image, setImage] = useState("");

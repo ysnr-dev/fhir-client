@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_28_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -2948,6 +2948,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_090000) do
     t.datetime "revoked_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "token_salt"
     t.index ["token_digest"], name: "index_waiting_board_links_on_token_digest", unique: true
   end
 

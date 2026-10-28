@@ -28058,6 +28058,12 @@ input.nursing-picker__search {
   align-self: flex-start;
 }
 
+.waiting-board-links__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .waiting-board-links__rooms {
   display: flex;
   flex-wrap: wrap;

@@ -48,11 +48,14 @@
 ### 2.1 テーブル(`db/migrate/20261028090000_create_waiting_board.rb`)
 
 ```text
-waiting_board_links        token_digest(unique) / label / location_ids(jsonb、空なら全診察室) / created_by_id / created_by_name / revoked_at
+waiting_board_links        token_digest(unique) / token_salt / label / location_ids(jsonb、空なら全診察室) / created_by_id / created_by_name / revoked_at
 reception_number_counters  day(date、unique) / last_number
 ```
 
-- `WaitingBoardLink.issue!` は `IntakeLink` と同じく生のトークンを戻り値でだけ返し、DB には SHA-256 を持つ。有効期限は無く、取り消すまで使える。
+- トークンはリンクごとの `token_salt` と `secret_key_base` の HMAC-SHA256(`WaitingBoardLink.token_for`)。DB には salt と SHA-256 だけを持ち、
+  施設設定から表示板を開くときにサーバーが起こし直す(DB だけが漏れてもトークンは分からない)。`secret_key_base` を替えると
+  起こし直したトークンが digest と合わなくなり、そのリンクは開けなくなる(発行し直す)。salt を持たない
+  `20261029090000` より前のリンクも同じ。有効期限は無く、取り消すまで使える。
 - `ReceptionNumberCounter.next!(day)` は日の行を `create_or_find_by!` → `lock!` → `increment!` で進める(受付の端末が複数でも同じ番号を配らない)。
   一意性は DB の unique index に任せる(モデルの uniqueness 検証を付けると `create_or_find_by!` が index の違反まで届かない)。
 
@@ -60,7 +63,7 @@ reception_number_counters  day(date、unique) / last_number
 
 - 職員用(`WaitingBoard::StaffController`、`UserAuthentication`):
   - `POST /waiting_board/links` `{label, location_ids}` → `{id, label, location_ids, created_at, created_by_name, path: "/board/<token>"}`。
-  - `GET /waiting_board/links` → `{items: [...]}`(有効なものだけ。`path` は出ない)。
+  - `GET /waiting_board/links` → `{items: [...]}`(有効なものだけ。`path` は起こし直したもの、起こし直せなければ null)。
   - `DELETE /waiting_board/links/:id` → 204(取消)。
   - `POST /waiting_board/reception_numbers` `{day}` → `{day, number}`。day は frontend の `today()`(無ければ `FacilityClock.today`)。
 - 公開(`WaitingBoard::PublicController`、ログイン無し、ヘッダ `X-Board-Token`、IP ごとに 30 回/分):
@@ -103,10 +106,10 @@ reception_number_counters  day(date、unique) / last_number
 
 ### 3.2 職員側
 
-- **施設設定「待合表示板」**(`components/WaitingBoardLinksSection.tsx`): 発行済みリンクの表(名前・診察室・発行日時と発行者・削除 = 取消)と、
-  名前・診察室のチェック(空なら全部)・「発行」。発行すると URL(コピー)と QR(`qrcode`)を出す。トークンは発行の応答にしか出ないので、
-  次の発行や画面を離れると消える(また要るときは発行し直す)。施設設定のフォームの中なのでボタンはすべて `type="button"`。
-- **外来一覧**: 「受付番号」列(患者氏名の右)。受付(`useUpdateAppointmentStatus` の `checked-in`)と当日受付・新患登録(`useWalkInCheckIn`)で
+- **施設設定「待合表示板」**(`components/WaitingBoardLinksSection.tsx`): 発行済みリンクの表(名前・診察室・発行日時と発行者・「表示」・削除 = 取消)と、
+  名前・診察室のチェック(空なら全部)・「発行」。「表示」は一覧の `path` を別タブで開く(`path` が null なら押せない)。
+  発行すると URL(コピー)と QR(`qrcode`)を出す(次の発行や画面を離れると消える)。施設設定のフォームの中なのでボタンはすべて `type="button"`。
+- **外来一覧**: 「受付番号」列(受付時間の右の固定列)。受付(`useUpdateAppointmentStatus` の `checked-in`)と当日受付・新患登録(`useWalkInCheckIn`)で
   `POST /waiting_board/reception_numbers` を呼んでから `withReceptionNumber` で書く。レセコン連携の受付(識別子あり)は採番しない。
   受付取消で番号を外す。
 - **診察開始の呼出の確認**(`components/ExamStartCallModal.tsx`): 外来一覧(行・患者ドロワー)とカルテ見出しの「診察開始」で、
