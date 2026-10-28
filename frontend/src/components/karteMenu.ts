@@ -2,6 +2,7 @@ import type { ProblemRef } from "../fhir/conditionHelpers";
 import type { KartePaneState } from "./KarteRightPane";
 
 // カルテ右ペインの新規登録メニューの一覧。頻用設定はキーで保存する(backend の karte_pane_favorites)。
+// 右ペインを開かずにその場で行う操作(患者呼出)も同じ一覧に載せ、頻用に選べるようにする。
 
 export interface KarteMenuItem {
   /** 頻用設定に保存するキー。変えると保存済みの頻用から外れる。 */
@@ -11,7 +12,10 @@ export interface KarteMenuItem {
   group?: string;
   /** 見出しから外して並べるときの名前(頻用・頻用設定)。無ければ label。 */
   fullLabel?: string;
-  open: (problem: ProblemRef | undefined) => KartePaneState;
+  /** 右ペインで開く登録。action の項目には無い。 */
+  open?: (problem: ProblemRef | undefined) => KartePaneState;
+  /** 右ペインを開かずに行う操作。 */
+  action?: "patient-call";
 }
 
 // 「全て」の並び順。メニューを足したら 1 要素足す。
@@ -96,6 +100,8 @@ export const KARTE_MENU_ITEMS: KarteMenuItem[] = [
   // 退院時サマリーは入院の締めくくりに書く文書なので、下に置く。
   { key: "discharge-summary", label: "退院時サマリー", open: () => ({ kind: "summary-create" }) },
   { key: "dpc", label: "DPC", open: () => ({ kind: "dpc-form1-create" }) },
+  // 待合表示板への呼出。待合表示板を使っていない施設ではボタンが出ない。
+  { key: "patient-call", label: "患者呼出", action: "patient-call" },
 ];
 
 const ITEM_BY_KEY = new Map(KARTE_MENU_ITEMS.map((item) => [item.key, item]));

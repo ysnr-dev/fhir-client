@@ -101,6 +101,16 @@ export function appointmentCheckedInTimeLabel(appointment: fhir4.Appointment): s
   return appointmentCheckedInAt(appointment).slice(11, 16) || "-";
 }
 
+/** カルテの「患者呼出」で待合表示板に番号を呼び出した時刻(docs/waiting-board-design.md §1)。 */
+export const APPOINTMENT_BOARD_CALLED_AT_EXTENSION_URL =
+  "http://fhir-client.local/StructureDefinition/appointment-board-called-at";
+
+/** 呼び出した時刻を書き込む(呼び直すたびに上書きする)。 */
+export function withBoardCalledAt(appointment: fhir4.Appointment, at: string): fhir4.Appointment {
+  const rest = (appointment.extension ?? []).filter((e) => e.url !== APPOINTMENT_BOARD_CALLED_AT_EXTENSION_URL);
+  return { ...appointment, extension: [...rest, { url: APPOINTMENT_BOARD_CALLED_AT_EXTENSION_URL, valueDateTime: at }] };
+}
+
 // ---- 受付番号 ----
 //
 // 受付のたびに backend が当日の連番を払い出し(docs/waiting-board-design.md)、待合表示板と外来一覧に出す。

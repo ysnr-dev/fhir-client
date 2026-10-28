@@ -12,7 +12,7 @@ RSpec.describe "WaitingBoard::Public", type: :request do
   let(:headers) { { "X-Board-Token" => issued[1] } }
 
   def appointment(id, number:, status: "checked-in", room: "room-1", department: "01", checked_in: "09:00", based_on: nil,
-                  start: nil, walk_in: false)
+                  start: nil, walk_in: false, called: nil)
     {
       "resourceType" => "Appointment", "id" => id, "status" => status,
       "start" => "2026-10-28T#{start || checked_in}:00+09:00",
@@ -23,7 +23,10 @@ RSpec.describe "WaitingBoard::Public", type: :request do
         room ? { "actor" => { "reference" => "Location/#{room}", "display" => "第 1 診察室" } } : nil
       ].compact,
       "specialty" => department ? [{ "coding" => [{ "system" => "urn:oid:1.2.392.100495.20.2.51", "code" => department, "display" => "内科" }] }] : nil,
-      "extension" => [{ "url" => CHECKED_IN_AT, "valueDateTime" => "2026-10-28T#{checked_in}:00+09:00" }],
+      "extension" => [
+        { "url" => CHECKED_IN_AT, "valueDateTime" => "2026-10-28T#{checked_in}:00+09:00" },
+        called ? { "url" => WaitingBoard::Snapshot::CALLED_AT_URL, "valueDateTime" => "2026-10-28T#{called}:00+09:00" } : nil
+      ].compact,
       "basedOn" => based_on
     }.compact
   end
@@ -89,7 +92,8 @@ RSpec.describe "WaitingBoard::Public", type: :request do
     rooms = body["rooms"]
     expect(rooms.map { |r| r["name"] }).to eq(["第 1 診察室", "第 2 診察室"])
     first = rooms[0]
-    expect(first["calling"]).to eq(["1"])
+    # 1 番と 10 番(呼出なし)のうち、呼び出したのは 1 番だけ。
+    expect(first["calling"]).to eq("1")
     expect(first["waiting"]).to eq(3)
     # 予約時間の順(当日受付は受付時刻から起こした start)。当日受付は予約時間を出さない。
     expect(first["waiting_list"]).to eq([
@@ -100,10 +104,10 @@ RSpec.describe "WaitingBoard::Public", type: :request do
     expect(first["away"]).to eq(1)
     # 受付→開始の実測(10・5・20・10 分)の平均。呼出なしの診察も待ち時間には入る。
     expect(first["average_wait_minutes"]).to eq(11)
-    expect(rooms[1]).to include("calling" => [], "waiting" => 0, "waiting_list" => [], "away" => 0, "average_wait_minutes" => nil)
+    expect(rooms[1]).to include("calling" => nil, "waiting" => 0, "waiting_list" => [], "away" => 0, "average_wait_minutes" => nil)
 
     expect(body["departments"]).to eq([
-      { "code" => "01", "name" => "内科", "calling" => [], "waiting" => 1,
+      { "code" => "01", "name" => "内科", "calling" => nil, "waiting" => 1,
         "waiting_list" => [{ "number" => "7", "booked_time" => "09:00", "checked_in_time" => "09:00" }],
         "away" => 0, "average_wait_minutes" => nil }
     ])
@@ -112,6 +116,31 @@ RSpec.describe "WaitingBoard::Public", type: :request do
     expect(response.body).not_to include("患者")
     expect(store.searches.map(&:first)).not_to include("Patient")
     expect(store.searches.flat_map { |_, p| p.values }.join).not_to include("Appointment:patient")
+  end
+
+  it "患者呼出の番号は 10 分間「お呼び出し中」に出し、待ち・離席中から外す。区画に出すのは最後に呼んだ 1 人" do
+    store.add(
+      appointment("a11", number: "11", room: "room-2", called: "09:25"),
+      # 10 分を過ぎた呼出は待ちに戻る。
+      appointment("a12", number: "12", room: "room-2", called: "09:10"),
+      # 一時終了から呼び戻す。
+      appointment("a13", number: "13", room: "room-2", called: "09:28"),
+      encounter("e13", "a13", status: "onleave", start: "09:05", room: "room-2"),
+      # 診察開始より前の呼出は、診察開始で呼出なしを選んだら出さない。
+      appointment("a14", number: "14", room: "room-2", called: "09:15"),
+      encounter("e14", "a14", status: "in-progress", start: "09:20", room: "room-2")
+        .merge("extension" => [{ "url" => WaitingBoard::Snapshot::BOARD_CALL_URL, "valueBoolean" => false }])
+    )
+    travel_to Time.zone.parse("2026-10-28T09:30:00+09:00") do
+      get "/waiting_board/public", headers: headers
+    end
+
+    second = body["rooms"][1]
+    # 11 番(09:25)より後に呼んだ 13 番(09:28)だけを出す。11 番も待ちには戻らない。
+    expect(second["calling"]).to eq("13")
+    expect(second["waiting"]).to eq(1)
+    expect(second["waiting_list"].map { |row| row["number"] }).to eq(["12"])
+    expect(second["away"]).to eq(0)
   end
 
   it "診察室を絞ったリンクはその診察室だけを出し、診療科の区画は出さない" do

@@ -2,9 +2,11 @@ import { useState, type ReactNode } from "react";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useKartePaneFavorite } from "../api/masterQueries";
 import type { ProblemRef } from "../fhir/conditionHelpers";
+import { usePatientCallTarget } from "../hooks/usePatientCallTarget";
 import { useStoredToggle } from "../hooks/useStoredToggle";
 import { KARTE_MENU_ITEMS, karteMenuFullLabel, karteMenuItemsOf, type KarteMenuItem } from "./karteMenu";
 import { KartePaneFavoriteModal } from "./KartePaneFavoriteModal";
+import { PatientCallModal } from "./PatientCallModal";
 import type { KartePaneState } from "./KarteRightPane";
 
 // カルテ右ペインの新規登録の入口(右端に縦並びのボタン列)。「共通」と、本人が選んだ「頻用」をタブで切り替える。
@@ -12,9 +14,11 @@ import type { KartePaneState } from "./KarteRightPane";
 const FAVORITE_TAB_KEY = "karte-right-menu-favorite";
 
 export function KartePaneMenu({
+  patientId,
   selectedProblem,
   onStateChange,
 }: {
+  patientId: string;
   selectedProblem: ProblemRef | undefined;
   onStateChange: (state: KartePaneState) => void;
 }) {
@@ -23,14 +27,33 @@ export function KartePaneMenu({
   // どちらのタブを見ていたかは端末ごとに覚える。頻用は医療従事者に紐付くので administrator には出さない。
   const [favoriteTab, setFavoriteTab] = useStoredToggle(FAVORITE_TAB_KEY);
   const [editing, setEditing] = useState(false);
+  const callTarget = usePatientCallTarget(patientId);
+  const [calling, setCalling] = useState(false);
   const showFavorite = Boolean(practitionerId) && favoriteTab;
   const favoriteItems = karteMenuItemsOf(favorite.data?.menu_keys ?? []);
 
-  const button = (item: KarteMenuItem, label: string) => (
-    <button key={item.key} type="button" onClick={() => onStateChange(item.open(selectedProblem))}>
-      {label}
-    </button>
-  );
+  const button = (item: KarteMenuItem, label: string) => {
+    if (item.action === "patient-call") {
+      if (!callTarget.boardInUse) return null;
+      return (
+        <button
+          key={item.key}
+          type="button"
+          disabled={!callTarget.appointment}
+          title={callTarget.appointment ? undefined : "今日の受付がありません"}
+          onClick={() => setCalling(true)}
+        >
+          {label}
+        </button>
+      );
+    }
+    const open = item.open;
+    return (
+      <button key={item.key} type="button" onClick={() => open && onStateChange(open(selectedProblem))}>
+        {label}
+      </button>
+    );
+  };
 
   return (
     <>
@@ -73,6 +96,14 @@ export function KartePaneMenu({
           )
         )}
       </div>
+      {calling && callTarget.appointment && (
+        <PatientCallModal
+          patientId={patientId}
+          appointment={callTarget.appointment}
+          receptionNumber={callTarget.receptionNumber}
+          onClose={() => setCalling(false)}
+        />
+      )}
       {editing && practitionerId && (
         <KartePaneFavoriteModal
           practitionerId={practitionerId}

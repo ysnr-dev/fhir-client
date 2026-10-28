@@ -7,7 +7,7 @@ import {
 import { useNow } from "../hooks/useNow";
 
 // 待合表示板(docs/waiting-board-design.md §3.1)。ロビーのモニターが /board/<token> で開く。
-// AuthGate の外に置き、ログインも患者の個人情報の表示も無い。診察室ごとに 呼出中の番号・待っている受付
+// AuthGate の外に置き、ログインも患者の個人情報の表示も無い。診察室ごとに 呼出中の番号(1 人)・待っている受付
 // (受付番号・予約時間・受付時刻)・離席中・本日の平均待ち時間 を出し、30 秒ごとに読み直す。
 // 読み直しに失敗しても直前の値は残す。
 
@@ -78,17 +78,9 @@ function RoomCard({ name, group }: { name: string; group: WaitingBoardGroup }) {
       <h2 className="waiting-board__room-name">{name}</h2>
       <div className="waiting-board__calling">
         <span className="waiting-board__calling-label">
-          {group.calling.length > 0 ? "お呼び出し中" : "お呼び出しはありません"}
+          {group.calling ? "お呼び出し中" : "お呼び出しはありません"}
         </span>
-        {group.calling.length > 0 && (
-          <span className="waiting-board__numbers">
-            {group.calling.map((number) => (
-              <span key={number} className="waiting-board__number">
-                {number}
-              </span>
-            ))}
-          </span>
-        )}
+        {group.calling && <span className="waiting-board__number">{group.calling}</span>}
       </div>
       <WaitingList group={group} />
       <dl className="waiting-board__facts">

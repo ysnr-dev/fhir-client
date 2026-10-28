@@ -27942,9 +27942,13 @@ input.nursing-picker__search {
   color: var(--text-h);
 }
 
+/* 呼出中は 1 人なので、見出しと番号をカードの中央に置く。 */
 .waiting-board__calling {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   gap: 8px;
   min-height: 120px;
   padding: 12px 0;
@@ -27955,12 +27959,6 @@ input.nursing-picker__search {
 .waiting-board__calling-label {
   font-size: 20px;
   color: var(--text);
-}
-
-.waiting-board__numbers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
 }
 
 .waiting-board__number {

@@ -16,6 +16,7 @@ import {
   appointmentActorId,
   hasReceiptComputerReception,
   isExamAppointment,
+  withBoardCalledAt,
   withCheckedInAt,
   withReceptionNumber,
 } from "../../fhir/appointmentHelpers";
@@ -258,6 +259,26 @@ export function useUpdateAppointmentStatus() {
   });
 }
 
+/** 待合表示板に受付番号を呼び出す(カルテの「患者呼出」)。予約に呼び出した時刻を書くだけで、状態は変えない。 */
+export function useCallOutpatient() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (appointment: fhir4.Appointment) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          {
+            resource: withBoardCalledAt(appointment, nowFhirDateTime()),
+            request: { method: "PUT", url: `Appointment/${appointment.id}` },
+          },
+        ],
+      }),
+    onSuccess: () => invalidateAppointments(queryClient),
+  });
+}
+
 // ---- 診察の開始・終了(外来 Encounter) ----
 //
 // 診察中は Appointment.status では表せないので、診察開始で外来 Encounter を建てる
@@ -412,8 +433,7 @@ export function usePatientTodayOutpatient(patientId: string | undefined) {
   });
 }
 
-/** 当日受付。枠を持たない予約を受付済で登録する(buildWalkInAppointment を参照)。 */
-/** 当日受付。受付番号を採番してから予約を作る。 */
+/** 当日受付。受付番号を採番してから予約を作る(予約の形は buildWalkInAppointment)。 */
 export function useWalkInCheckIn() {
   const queryClient = useQueryClient();
 

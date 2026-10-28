@@ -14,8 +14,8 @@ export interface WaitingBoardEntry {
 }
 
 export interface WaitingBoardGroup {
-  /** 呼出中の受付番号(診察中の受付)。 */
-  calling: string[];
+  /** 呼出中の受付番号。区画に 1 人で、最後に呼んだ受付(診察開始の呼出か「患者呼出」)。無ければ null。 */
+  calling: string | null;
   /** 受付済で診察が始まっていない人数。 */
   waiting: number;
   /** 待っている受付(予約時間の順)。 */

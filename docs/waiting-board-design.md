@@ -26,6 +26,10 @@
 - **［設計］** 待合表示板を使っている(有効なリンクがある)ときは、受付番号のある受付の診察開始で「呼出 / 呼出なし / 戻る」を確認する。
   「呼出なし」は外来 Encounter に拡張 `http://fhir-client.local/StructureDefinition/outpatient-board-call`(`valueBoolean` false)を付け、
   表示板はその診察の番号を「お呼び出し中」に出さない(待ちにも数えない。待ち時間の実測には入る)。拡張の無い診察は呼び出したものとして扱う。
+- **［設計］** 診察開始とは別の呼出(来ない人の呼び直し、一時終了からの呼び戻し)はカルテの「患者呼出」で行う。予約の拡張
+  `http://fhir-client.local/StructureDefinition/appointment-board-called-at`(`valueDateTime`、呼び直すたびに上書き)に時刻を書くだけで、
+  状態は変えない。表示板は呼出から 10 分間(`CALL_DISPLAY_MINUTES`)その番号を「お呼び出し中」に出し、待ち・離席中からは外す。
+  診察開始より前の呼出は数えない(診察開始の「呼出 / 呼出なし」に任せる)。診察終了・受付取消で消える。
 - **［設計］** 区画は**診察室(Location、種別 `OF`)ごと**。診察が建っていればその `location[0]`、無ければ受付の診察室の participant。
   どちらも無い受付は**診療科**(受付の `specialty`、SS-MIX2)でまとめた区画に出す。
 - **［設計］** 受付番号は **backend の日別カウンタ**(`reception_number_counters`)が払い出し、`Appointment.identifier`
@@ -70,13 +74,15 @@ reception_number_counters  day(date、unique) / last_number
 - 応答:
   ```json
   { "generated_at": "...",
-    "rooms": [{ "id", "name", "calling": ["12"], "waiting": 2,
+    "rooms": [{ "id", "name", "calling": "12", "waiting": 2,
                 "waiting_list": [{ "number": "14", "booked_time": "09:30", "checked_in_time": "09:12" },
                                  { "number": "15", "booked_time": null, "checked_in_time": "09:20" }],
                 "away": 1, "average_wait_minutes": 18 }],
-    "departments": [{ "code": "01", "name": "内科", "calling": [], "waiting": 0, "waiting_list": [], "away": 0, "average_wait_minutes": null }] }
+    "departments": [{ "code": "01", "name": "内科", "calling": null, "waiting": 0, "waiting_list": [], "away": 0, "average_wait_minutes": null }] }
   ```
-  - `calling` = `in-progress` の受付の番号(呼出なしの診察は除く。番号の無い受付は人数にだけ数える)、`waiting` = 受付済で診察無し、`away` = `onleave`。
+  - `calling` = 区画に 1 人。呼出中の受付(`in-progress` で呼出なしでないもの、「患者呼出」から 10 分以内のもの)のうち、
+    最後に呼んだ受付(診察の `period.start` と呼出時刻の新しい方)の番号。無ければ null。前の人は次を呼んだ時点で消える。
+    `waiting` = 受付済で診察無し、`away` = `onleave`(どちらも呼出中のものは除く)。
   - `waiting_list` = 待っている受付の受付番号・予約時間・受付時刻(日本時間の「HH:mm」)。当日受付は `start` が受付時刻から起こした
     名目の時間なので `booked_time` は null。並びは外来一覧と同じ `start` の順。番号の無い受付は `number` が null。
   - `average_wait_minutes` = その日の受付のうち受付時刻と診察の `period.start` が両方あるものの (開始 − 受付) の平均(分)。無ければ null。
@@ -90,7 +96,7 @@ reception_number_counters  day(date、unique) / last_number
   API は `api/waitingBoardPublicClient.ts` の素の `fetch`(`credentials: "omit"`)。
 - 30 秒ごとに読み直す(`refetchInterval`)。読み直しに失敗しても直前の値を残し、時計の横に「更新できていません」を出す。
   401 は「この表示板のリンクは無効です。」。受付が無ければ「本日の受付はありません。」。
-- 区画はカードのグリッド(`.waiting-board__*`、テーマ変数のみ)。呼出中の番号を大きく、「お待ちの方 n 人」とその下に待っている受付の表
+- 区画はカードのグリッド(`.waiting-board__*`、テーマ変数のみ)。呼出中の番号(1 人)を大きく、「お待ちの方 n 人」とその下に待っている受付の表
   (受付番号・予約時間(当日受付は「当日」)・受付時刻。10 行まで、超えたぶんは「ほか n 人」)、「検査などで離席中 n 人」
   (0 人なら出さない)「本日の平均待ち時間 約 n 分」(実測が無ければ出さない)。患者が自分の順番の目安を掴めるように番号と時刻だけを出す。
 - 上流は検索のたびに監査ログを書くので、表示板を置く端末は絞る(読み直しは 30 秒ごと、1 本の検索 + 診察室の検索)。
@@ -106,6 +112,9 @@ reception_number_counters  day(date、unique) / last_number
 - **診察開始の呼出の確認**(`components/ExamStartCallModal.tsx`): 外来一覧(行・患者ドロワー)とカルテ見出しの「診察開始」で、
   待合表示板を使っていて(`useWaitingBoardInUse`)受付番号のある受付だけに出す。「受付番号 n ○○ さんを呼び出しますか?」に
   「呼出」「呼出なし」「戻る」。表示板を使っていない施設・番号の無い受付は、これまでどおり 1 クリックで始まる。
+- **患者呼出**(`components/PatientCallModal.tsx`): カルテ右のボタン列の 1 項目(`karteMenu.ts` の `action` 項目。「共通」の最後で、頻用にも選べる)。
+  待合表示板を使っている施設だけに出し、今日の受付(診察中・一時終了を含む)に受付番号が無ければ押せない。
+  「受付番号 n ○○ さんを呼び出しますか?」に「呼出」「戻る」。`useCallOutpatient` が予約に呼出時刻を書く。
 - **データ抽出**: 外来の行に「待ち時間(分)」(受付時刻 → 診察の `period.start`)。内訳で診療科別・月別の平均・中央値が出せる。
 
 ## 4. 先送り

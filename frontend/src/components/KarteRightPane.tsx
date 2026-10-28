@@ -434,7 +434,7 @@ export function KarteRightPane({
         )}
       </div>
 
-      <KartePaneMenu selectedProblem={selectedProblem} onStateChange={onStateChange} />
+      <KartePaneMenu patientId={patientId} selectedProblem={selectedProblem} onStateChange={onStateChange} />
     </section>
   );
 }
