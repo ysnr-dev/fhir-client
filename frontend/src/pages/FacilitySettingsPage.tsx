@@ -109,6 +109,10 @@ import {
 } from "../fhir/earlyWarningHelpers";
 import { DEFAULT_RX_VERIFICATION, type RxVerificationSettings } from "../fhir/rxVerificationHelpers";
 import {
+  DEFAULT_INJECTION_VERIFICATION,
+  type InjectionVerificationSettings,
+} from "../fhir/injectionVerificationHelpers";
+import {
   DEFAULT_KARTE_CARD_ORDER,
   KARTE_CARD_ORDER_MODE_LABELS,
   resolveKarteCardKinds,
@@ -159,6 +163,7 @@ const FACILITY_SECTIONS = [
   { key: "waiting_board", label: "待合表示板" },
   { key: "early_warning", label: "早期警告スコア(NEWS2)" },
   { key: "rx_verification", label: "処方監査" },
+  { key: "injection_verification", label: "注射の3点認証" },
   { key: "receipt_codes", label: "医事会計のレセプト電算コード" },
   { key: "water_balance", label: "水分出納の対象項目" },
   { key: "bulk_vital_entry", label: "経過表一括入力の列" },
@@ -399,6 +404,13 @@ export function FacilitySettingsPage() {
   const [rxVerificationDraft, setRxVerificationDraft] = useState<RxVerificationSettings | undefined>(undefined);
   const rxVerification = rxVerificationDraft ?? settings.data?.rx_verification ?? DEFAULT_RX_VERIFICATION;
 
+  // 注射の3点認証。実施入力の前に患者番号と注射ラベルの RP バーコードを読む照合を出すか。
+  const [injectionVerificationDraft, setInjectionVerificationDraft] = useState<
+    InjectionVerificationSettings | undefined
+  >(undefined);
+  const injectionVerification =
+    injectionVerificationDraft ?? settings.data?.injection_verification ?? DEFAULT_INJECTION_VERIFICATION;
+
   // Web 問診。既定の質問票(並べた順に答えてもらう)と、診療科ごとの質問票、予約の無いリンクの有効時間。
   const [intakeDraft, setIntakeDraft] = useState<IntakeSettings | undefined>(undefined);
   const intake = intakeDraft ?? settings.data?.intake ?? EMPTY_INTAKE_SETTINGS;
@@ -585,6 +597,7 @@ export function FacilitySettingsPage() {
       ncd_registration: ncdRegistration,
       early_warning: earlyWarning,
       rx_verification: rxVerification,
+      injection_verification: injectionVerification,
       intake,
       karte_card_order: { ...cardOrder, kinds: cardKinds },
     });
@@ -1499,6 +1512,19 @@ export function FacilitySettingsPage() {
                   }
                 />
                 監査済まで調剤登録・払出登録を出さない
+              </label>
+            </div>
+          )}
+
+          {section === "injection_verification" && (
+            <div className="facility-settings__schedule-body">
+              <label className="connection-settings-form__checkbox">
+                <input
+                  type="checkbox"
+                  checked={injectionVerification.enabled}
+                  onChange={(e) => setInjectionVerificationDraft({ ...injectionVerification, enabled: e.target.checked })}
+                />
+                注射の実施入力の前に患者・実施者・薬剤を照合する
               </label>
             </div>
           )}

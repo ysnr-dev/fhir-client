@@ -14,6 +14,13 @@ export function InjectionPerformSection({ perform }: { perform: InjectionPerform
         {perform.performerName && (
           <span className="karte-perform__meta">{perform.performerName}</span>
         )}
+        {/* 3点認証の結果。スキップは理由ごと目立たせる。 */}
+        {perform.verification &&
+          (perform.verificationSkipped ? (
+            <span className="karte-perform__status">{perform.verification}</span>
+          ) : (
+            <span className="karte-perform__meta">{perform.verification}</span>
+          ))}
         {/* 施用まで至らなかった記録(途中で中止・実施せず)。 */}
         {perform.statusNote && <span className="karte-perform__status">{perform.statusNote}</span>}
       </div>

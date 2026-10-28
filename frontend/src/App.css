@@ -2304,6 +2304,84 @@ fieldset.rp-card {
   margin: 0;
 }
 
+/* 注射の3点認証の照合。読み取り欄は番号の目視照合をしやすいよう等幅数字にする。 */
+.injection-verify__scan {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.barcode-scan-field {
+  width: 320px;
+  max-width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.injection-verify__message {
+  margin: 0 0 8px;
+  color: var(--accent);
+}
+
+.injection-verify__message--error {
+  color: var(--danger);
+}
+
+.injection-verify__table {
+  width: 100%;
+  margin-bottom: 12px;
+  border-collapse: collapse;
+}
+
+.injection-verify__table th,
+.injection-verify__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.injection-verify__table th {
+  width: 5em;
+  white-space: nowrap;
+}
+
+.injection-verify__table td:last-child {
+  width: 10em;
+  white-space: nowrap;
+}
+
+.injection-verify__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.injection-verify__state--ok {
+  color: var(--success);
+  font-weight: bold;
+}
+
+.injection-verify__state--error {
+  color: var(--danger);
+  font-weight: bold;
+}
+
+.injection-verify__state--none {
+  color: var(--text);
+}
+
+/* 入力ステップの先頭に出す照合の要約。 */
+.injection-verify__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.injection-verify__summary--skipped {
+  color: var(--danger);
+}
+
 .injection-series-label {
   margin-left: 8px;
   font-size: 12px;

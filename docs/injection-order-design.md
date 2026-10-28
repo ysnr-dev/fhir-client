@@ -264,8 +264,15 @@ InjectionWorklistPage「注射箋発行」<a target="_blank">
   同じ内容を 2 回刷ることになる。
 - **注射ラベルは RP ごと 1 枚**(`injection_label.tlf`、60×40mm、検体ラベルと同じ用紙)。
   混注したボトル・シリンジに貼る単位が RP だから。ベッドサイドの本人確認に使うので
-  漢字氏名も出し、バーコードは患者番号(ラベル番号の採番・台帳は持たない)。緊急の
+  漢字氏名も出し、バーコードは患者番号と RP(ラベル番号の採番・台帳は持たない)。緊急の
   注射区分は「至急」を出す。
+- **RP バーコード**は `INJ-{オーダー id のハイフンを除いた先頭 12 桁(大文字)}-{RP 番号}`
+  (例 `INJ-3F2A9C01B7D4-2`、Code128B)。3点認証(§6.5)で読み、開いているオーダーと RP を照合する。
+  id(UUID)を丸ごと入れると 42 文字で 60mm に収まらないので縮める(照合は開いているオーダー 1 件との
+  一致だけなので衝突は問題にならない)。キーボードウェッジは US 配列のキーを送り、JIS 配列の端末では
+  記号が化けるので、英大文字・数字・ハイフンだけで組む。規則は backend `Reports::InjectionMeta.rp_barcode` と
+  frontend `injectionRpBarcode`(`fhir/injectionVerificationHelpers.ts`)の 2 か所で同じにする。
+  直下に同じ文字列を刷る(読めないときの目視・手入力用)。
 - **発行が受付を兼ねる**(処方箋と同じ)。PDF エンドポイントは Task に触らず、受付の遷移は
   frontend のリンクが行う。再発行はケバブ。ラベルは進捗を動かさず、どの進捗でも刷れる
   (混注の準備で払出の前に使う)。
@@ -286,6 +293,7 @@ ServiceRequest(1 日分)
       │  performer       = 実施者(ログイン中の医療従事者)
       │  status          = completed(実施) / stopped(途中で中止) / not-done(実施せず)
       │  statusReason    = 中止・未実施の理由(text)
+      │  extension       = injection-verification(3点認証の照合結果。§6.5)
       └ partOf ← MedicationAdministration (薬剤 1 件ごと。実施せず のときは作らない)
            request = その薬剤の MedicationRequest
            status  = completed / stopped
@@ -339,6 +347,42 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
 記録が複数あるとき 1 件だけ消す操作は持たない(取り消すのは誤登録で、誤登録なら
 入れ直せばよい)。
 
+### 6.5 3点認証(照合)
+
+施設設定「注射の3点認証」(`injection_verification.enabled`、既定は無効)を有効にすると、実施入力を
+開いたときにまず照合(`components/InjectionVerifyStep.tsx`)を出す。RP バーコード付きの注射ラベルを
+刷る運用が前提なので、既定では出さない(刷っていない施設で有効にすると全件スキップ理由を書くことになる)。
+
+- **患者**: 注射ラベル(またはリストバンド)の患者番号のバーコードを読む。リストバンドの帳票はこのシステムでは
+  刷らない。帳票は identifier の先頭(無ければ id)を刷るので、
+  照合は患者の identifier の値すべてと id のどれかと一致すればよい。
+- **薬剤**: 注射ラベルの RP バーコード(§5.4)を読む。別のオーダーのラベル・オーダーに無い RP は
+  メッセージだけ出して状態を変えない。
+- **実施者**: 職員証は読まず、ログイン中の医療従事者で代替する(照合ステップは端末にログインした本人が開く)。
+  医療従事者の紐づかないログイン(administrator・認証なし)は照合を完了できず、理由「ログインに医療従事者が無い」を
+  選んだ状態でスキップだけができる。
+- 読む順は問わない(1 つの読み取り欄で、`INJ-` で始まれば RP、それ以外は患者番号として振り分ける)。
+  不一致のあいだは「照合完了」を押せない。読み直せば上書きされる。
+- **読めた RP だけを施用にして入力へ進む**。完了の条件は 患者一致・実施者あり・RP が 1 つ以上。読まなかった
+  RP の薬剤行は「施用」を外した状態で入力に渡す。入力で施用に戻した行の RP が未照合なら登録時にエラーにし、
+  照合に戻って読むかスキップさせる。
+- **スキップ**は理由を選ぶ(緊急・急変 / リストバンド未装着・読取不可 / ラベル未発行・読取不可 / リーダー不調 /
+  ログインに医療従事者が無い / その他(自由記入必須))。理由の表は frontend の定数
+  (`SKIP_REASON_OPTIONS`。検索・集計に使わず、表示名を coding に焼くので読む側に表が要らない)。
+- 入力の先頭に「照合: 済(患者・RP1)」「照合: スキップ(緊急・急変)」と「照合へ戻る」を出す。
+- 結果はハブの `Procedure` に拡張で残す(`MedicationAdministration` には付けない。1 回の施用の照合は 1 つ)。
+  照合を出さなかった記録には付けない。カードの実施情報に「照合済」、スキップは「照合スキップ(理由)」を枠付きで出す。
+
+```
+extension[url=http://fhir-client.local/StructureDefinition/injection-verification]
+  status    valueCode     verified | skipped
+  patient   valueCode     matched | not-scanned
+  performer valueCode     login | missing
+  rp        valueString   一致した RP 番号(RP ごとに 1 つ)
+  reason    valueCodeableConcept  スキップの理由(.../CodeSystem/injection-verification-skip-reason、text は自由記入)
+  at        valueDateTime 照合を終えた・スキップした日時
+```
+
 ## 7. ファイル
 
 | 役割 | ファイル |
@@ -354,6 +398,7 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
 | 進捗の書き込み | `frontend/src/api/queries.ts`(`useUpdateInjectionTaskStatus`) |
 | 実施記録の FHIR 変換・表示 | `frontend/src/fhir/injectionPerformHelpers.ts` |
 | 実施入力 | `frontend/src/components/InjectionPerformModal.tsx` |
+| 3点認証(照合) | `frontend/src/fhir/injectionVerificationHelpers.ts`、`components/InjectionVerifyStep.tsx`、`components/BarcodeScanField.tsx` |
 | 実施登録・実施取消 | `frontend/src/api/queries.ts`(`useRegisterInjectionPerform` / `useCancelInjectionPerforms`) |
 | 注射一覧 | `frontend/src/pages/InjectionWorklistPage.tsx`、`api/queries.ts`(`useInjectionWorklist`) |
 | 払出 | `frontend/src/fhir/injectionDispenseHelpers.ts`、`components/InjectionDispenseModal.tsx` |

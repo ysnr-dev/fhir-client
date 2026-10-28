@@ -23,9 +23,9 @@
       "display": true,
       "description": "",
       "x": 8,
-      "y": 4,
+      "y": 2,
       "width": 114,
-      "height": 24,
+      "height": 13,
       "style": {
         "position-x": "center",
         "position-y": "middle"
@@ -37,7 +37,7 @@
       "display": true,
       "description": "",
       "x": 128,
-      "y": 6,
+      "y": 3,
       "width": 36,
       "height": 14,
       "texts": [
@@ -60,12 +60,57 @@
       }
     },
     {
+      "id": "rp_barcode_img",
+      "type": "image-block",
+      "display": true,
+      "description": "",
+      "x": 10,
+      "y": 20,
+      "width": 150,
+      "height": 14,
+      "style": {
+        "position-x": "center",
+        "position-y": "middle"
+      }
+    },
+    {
+      "id": "rp_barcode_text",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 5,
+      "y": 35,
+      "width": 160,
+      "height": 6,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAGothic"
+        ],
+        "font-size": 5,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "none"
+      }
+    },
+    {
       "id": "rp_label",
       "type": "text-block",
       "display": true,
       "description": "",
       "x": 8,
-      "y": 29,
+      "y": 41,
       "width": 114,
       "height": 8,
       "value": "",
@@ -96,9 +141,9 @@
       "display": true,
       "description": "",
       "x": 5,
-      "y": 40,
+      "y": 50,
       "width": 40,
-      "height": 12,
+      "height": 11,
       "value": "",
       "multiple-line": false,
       "format": {
@@ -109,7 +154,7 @@
         "font-family": [
           "IPAGothic"
         ],
-        "font-size": 10,
+        "font-size": 9,
         "font-style": [],
         "color": "#000000",
         "text-align": "left",
@@ -127,9 +172,9 @@
       "display": true,
       "description": "",
       "x": 48,
-      "y": 40,
+      "y": 50,
       "width": 117,
-      "height": 12,
+      "height": 11,
       "value": "",
       "multiple-line": false,
       "format": {
@@ -140,7 +185,7 @@
         "font-family": [
           "IPAGothic"
         ],
-        "font-size": 10,
+        "font-size": 9,
         "font-style": [],
         "color": "#000000",
         "text-align": "left",
@@ -158,7 +203,7 @@
       "display": true,
       "description": "",
       "x": 5,
-      "y": 52,
+      "y": 61,
       "width": 100,
       "height": 11,
       "value": "",
@@ -189,7 +234,7 @@
       "display": true,
       "description": "",
       "x": 108,
-      "y": 53,
+      "y": 62,
       "width": 40,
       "height": 10,
       "value": "",
@@ -220,7 +265,7 @@
       "display": true,
       "description": "",
       "x": 150,
-      "y": 53,
+      "y": 62,
       "width": 18,
       "height": 10,
       "value": "",
@@ -251,9 +296,9 @@
       "display": true,
       "description": "",
       "x": 5,
-      "y": 64,
+      "y": 72,
       "width": 160,
-      "height": 32,
+      "height": 28,
       "value": "",
       "multiple-line": true,
       "format": {
@@ -264,13 +309,13 @@
         "font-family": [
           "IPAGothic"
         ],
-        "font-size": 7,
+        "font-size": 6.5,
         "font-style": [],
         "color": "#000000",
         "text-align": "left",
         "vertical-align": "top",
         "letter-spacing": "",
-        "line-height": 8,
+        "line-height": 7,
         "line-height-ratio": "",
         "overflow": "truncate",
         "word-wrap": "none"
@@ -282,9 +327,9 @@
       "display": true,
       "description": "",
       "x": 5,
-      "y": 96,
+      "y": 100,
       "width": 160,
-      "height": 8,
+      "height": 7,
       "value": "",
       "multiple-line": false,
       "format": {
@@ -313,9 +358,9 @@
       "display": true,
       "description": "",
       "x": 5,
-      "y": 104,
+      "y": 107,
       "width": 160,
-      "height": 8,
+      "height": 6,
       "value": "",
       "multiple-line": false,
       "format": {
@@ -326,7 +371,7 @@
         "font-family": [
           "IPAGothic"
         ],
-        "font-size": 6,
+        "font-size": 5.5,
         "font-style": [],
         "color": "#000000",
         "text-align": "left",
@@ -344,7 +389,7 @@
       "display": true,
       "description": "",
       "x": 125,
-      "y": 29,
+      "y": 41,
       "width": 42,
       "height": 8,
       "value": "",

@@ -27,6 +27,11 @@ import { fetchRxWorklist } from "./prescription";
 import { comparePatientNumber, fetchWorklistBundles, makeUpdateTaskStatusHook, worklistParams } from "./worklist";
 import { resourcesOfType } from "./core";
 import { fetchRxVerificationByGroups } from "./rxVerification";
+import { useFacilitySettings } from "./organization";
+import {
+  DEFAULT_INJECTION_VERIFICATION,
+  type InjectionVerificationSettings,
+} from "../../fhir/injectionVerificationHelpers";
 
 // ---- 注射一覧(部門ワークリスト) ----
 //
@@ -355,4 +360,14 @@ export function useInsulinScaleInputs(patientId: string | undefined, day: string
     },
     enabled: enabled && Boolean(patientId) && Boolean(day),
   });
+}
+
+/**
+ * 注射の3点認証の施設設定。読み込み中は undefined(照合を出すかが決まるまで実施入力を描かない)。
+ * 読めなかったときは既定(照合なし)にする。
+ */
+export function useInjectionVerificationSettings(): InjectionVerificationSettings | undefined {
+  const settings = useFacilitySettings();
+  if (settings.isPending) return undefined;
+  return settings.data?.injection_verification ?? DEFAULT_INJECTION_VERIFICATION;
 }

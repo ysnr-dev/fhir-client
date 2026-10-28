@@ -5,13 +5,14 @@ require "barby/outputter/png_outputter"
 module Reports
   # 注射ラベルを ThinReports レイアウトへ流し込んで PDF を生成する。
   # 1 ページ = ラベル 1 枚 = RP 1 つ(混注したボトル・シリンジに貼る)。
-  # 検体ラベル(LabLabelRenderer)と同じ用紙・同じ患者欄で、バーコードは患者番号
+  # 検体ラベル(LabLabelRenderer)と同じ用紙・同じ患者欄。バーコードは患者番号と RP
   # (ラベル番号の採番は持たない。RP はオーダー内の連番なので台帳が要らない)。
   #
   # プレースホルダー規約(docs/report-mappings/injection-01.md):
   #   pt_id / pt_name / pt_kana / pt_gender / pt_birthdate ... 患者
   #   order_date / rp_label / medicines / usage ... text-block
   #   barcode_img ... 患者番号のバーコード(image-block)
+  #   rp_barcode_img / rp_barcode_text ... RP のバーコードとその文字列(3点認証で読む)
   #   urgent ... 緊急注射区分の表示(id 付きの text。通常は hide)
   class InjectionLabelRenderer
     EMERGENCY_CODE = "emergency".freeze
@@ -31,7 +32,11 @@ module Reports
         report.start_new_page do |page|
           page_values(rp).each { |id, value| page.item(id).value(value) if text_ids.include?(id) }
           if image_ids.include?("barcode_img") && barcode_value.present?
-            page.item("barcode_img").src(StringIO.new(barcode_png(barcode_value)))
+            page.item("barcode_img").src(StringIO.new(barcode_png(barcode_value, height: 26)))
+          end
+          rp_code = InjectionMeta.rp_barcode(@order, rp.rp_number)
+          if image_ids.include?("rp_barcode_img") && rp_code.present?
+            page.item("rp_barcode_img").src(StringIO.new(barcode_png(rp_code, height: 44)))
           end
           if all_ids.include?("urgent")
             urgent? ? page.item("urgent").show : page.item("urgent").hide
@@ -53,6 +58,7 @@ module Reports
         # 注射日(オーダー開始日 = occurrenceDateTime)。
         "order_date" => PatientMeta.format_date(OrderDates.order_day(@order)),
         "rp_label" => rp_label(rp),
+        "rp_barcode_text" => InjectionMeta.rp_barcode(@order, rp.rp_number),
         "medicines" => medicines_block(rp),
         "usage" => InjectionMeta.usage_summary(rp),
         # 化学療法はレジメンとクールが分かると調製・監査の手順が決まる(§7.6 E-6)。
@@ -104,8 +110,9 @@ module Reports
       value.ascii_only? ? value : ""
     end
 
-    def barcode_png(value)
-      Barby::Code128B.new(value).to_png(xdim: 2, height: 60, margin: 0)
+    # image-block は縦横比を保って枠に収めるので、高さは枠の比率に合わせる(高すぎると幅が縮んで読めない)。
+    def barcode_png(value, height:)
+      Barby::Code128B.new(value).to_png(xdim: 2, height: height, margin: 0)
     end
   end
 end

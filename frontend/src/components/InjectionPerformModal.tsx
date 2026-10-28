@@ -1,7 +1,12 @@
 import { useState, type FormEvent } from "react";
 import type { Medicine } from "../api/masterClient";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { useInsulinScaleInputs, useRegisterInjectionPerform } from "../api/queries";
+import {
+  useInjectionVerificationSettings,
+  useInsulinScaleInputs,
+  usePatient,
+  useRegisterInjectionPerform,
+} from "../api/queries";
 import { useLotRequiredCodes } from "../api/masterQueries";
 import {
   groupInjectionByRp,
@@ -31,10 +36,12 @@ import {
   type MeasuredInsulinScaleKind,
 } from "../fhir/insulinScaleHelpers";
 import { isNursingOrderRunningOn } from "../fhir/nursingOrderHelpers";
-import { clockTime } from "../lib/dates";
+import { clockTime, nowFhirDateTime } from "../lib/dates";
 import { referenceIdOfType } from "../fhir/shared";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { duplicateLotIndexes } from "../fhir/lotNumberHelpers";
+import { EMPTY_SCAN_STATE, skipReasonDisplay, type InjectionScanState } from "../fhir/injectionVerificationHelpers";
+import { InjectionVerifyStep } from "./InjectionVerifyStep";
 import { ErrorBanner } from "./ErrorBanner";
 import { LotColumnHeading, LotNumberCell } from "./LotNumberCell";
 import { MedicineSearchModal } from "./MedicineSearchModal";
@@ -49,6 +56,9 @@ import { RemoveRowButton } from "./RemoveRowButton";
 // 混注のうち一部を入れなかったなら「施用」を外す。オーダーに無い薬剤は RP ごとの
 // 「医薬品追加」から足せる(注射は依頼時と実施時で内容が変わることが多い)。
 // オーダーの行は消せない(施用しなかった記録として「施用」を外す)が、足した行は消せる。
+//
+// 施設設定で3点認証を有効にしていれば、入力の前に照合(InjectionVerifyStep)を出す。読めた RP だけを
+// 施用にして入力へ進み、照合の結果は実施記録のハブに残す。
 
 interface Props {
   order: fhir4.ServiceRequest;
@@ -77,6 +87,13 @@ export function InjectionPerformModal({
   // 医薬品検索を開いている RP。追加した行はその RP に属する。
   const [addingRp, setAddingRp] = useState<number | null>(null);
 
+  const verificationSettings = useInjectionVerificationSettings();
+  const verificationEnabled = verificationSettings?.enabled ?? false;
+  // 照合と入力のどちらを出しているか。null のあいだは設定に従う(有効なら照合から)。
+  const [stepChoice, setStepChoice] = useState<"verify" | "input" | null>(null);
+  const step = stepChoice ?? (verificationEnabled ? "verify" : "input");
+  const [scan, setScan] = useState<InjectionScanState>(EMPTY_SCAN_STATE);
+
   // ロット番号を記録する薬(薬剤付加情報)。対象の薬が 1 つでもあればロットの列を出す。
   const lotCodes = useLotRequiredCodes(values.medicines.map((m) => m.code));
   const showLot = values.medicines.some((m) => lotCodes.has(m.code) || m.lotNumber);
@@ -88,6 +105,7 @@ export function InjectionPerformModal({
   // スケールのインスリン。施用時刻の前後の血糖値・主食の摂取量から実施量を案内する
   // (フリースケールは行を選んでもらう)。
   const patientId = referenceIdOfType(order.subject?.reference, "Patient");
+  const patient = usePatient(verificationEnabled ? patientId : undefined).data?.data;
   const day = values.startedAt.slice(0, 10);
   const scaleKinds = new Set(
     values.medicines
@@ -182,7 +200,56 @@ export function InjectionPerformModal({
     setValues((prev) => ({ ...prev, medicines: prev.medicines.filter((_, i) => i !== index) }));
   }
 
+  /** 照合を終えて入力へ。読めなかった RP の行は施用を外し、前回外した行で今回読めたものは戻す。 */
+  function completeVerification() {
+    const previous = values.verification?.rpNumbers;
+    setValues((prev) => ({
+      ...prev,
+      verification: {
+        status: "verified",
+        patientMatched: true,
+        performerFromLogin: true,
+        rpNumbers: scan.rpNumbers,
+        at: nowFhirDateTime(),
+      },
+      medicines: prev.medicines.map((m) => {
+        if (!scan.rpNumbers.includes(m.rpNumber)) return { ...m, skipped: true };
+        if (previous && !previous.includes(m.rpNumber)) return { ...m, skipped: false };
+        return m;
+      }),
+    }));
+    setStepChoice("input");
+  }
+
+  function skipVerification(reasonCode: string, reasonText: string) {
+    setValues((prev) => ({
+      ...prev,
+      verification: {
+        status: "skipped",
+        patientMatched: scan.patient === "matched",
+        performerFromLogin: practitionerId !== null,
+        rpNumbers: scan.rpNumbers,
+        reasonCode,
+        reasonText,
+        at: nowFhirDateTime(),
+      },
+    }));
+    setStepChoice("input");
+  }
+
   function validate(): string | null {
+    if (verificationEnabled) {
+      if (!values.verification) return "照合してください。";
+      if (values.verification.status === "verified" && values.outcome !== "not-done") {
+        const verified = values.verification.rpNumbers;
+        const unverified = [
+          ...new Set(values.medicines.filter((m) => !m.skipped && !verified.includes(m.rpNumber)).map((m) => m.rpNumber)),
+        ];
+        if (unverified.length > 0) {
+          return `${unverified.map((rp) => `RP${rp}`).join("・")} は照合していません。照合に戻って読むか、スキップしてください。`;
+        }
+      }
+    }
     if (!values.startedAt) return "開始時刻を入れてください。";
     if (values.endedAt && values.endedAt < values.startedAt) {
       return "終了時刻は開始時刻より後にしてください。";
@@ -236,6 +303,33 @@ export function InjectionPerformModal({
     );
   }
 
+  if (verificationSettings === undefined) {
+    return (
+      <Modal title="注射の実施入力" onClose={onClose} className="modal--wide">
+        <p className="order-select__muted">読み込み中...</p>
+      </Modal>
+    );
+  }
+
+  if (step === "verify") {
+    return (
+      <Modal title="注射の実施入力" onClose={onClose} className="modal--wide">
+        <InjectionVerifyStep
+          orderId={order.id ?? ""}
+          rps={rps}
+          patient={patient}
+          practitionerName={practitioner ? practitionerDisplayName(practitioner) : null}
+          scan={scan}
+          onScanChange={setScan}
+          onComplete={completeVerification}
+          onSkip={skipVerification}
+        />
+      </Modal>
+    );
+  }
+
+  const verification = values.verification;
+
   return (
     <Modal title="注射の実施入力" onClose={onClose} className="modal--wide">
       <form className="transfusion-perform" onSubmit={handleSubmit}>
@@ -257,6 +351,25 @@ export function InjectionPerformModal({
               ? `${done + 1} 回目(予定は 1 回)`
               : "1 回目"}
         </p>
+
+        {verificationEnabled && (
+          <p
+            className={`injection-verify__summary${
+              verification?.status === "skipped" ? " injection-verify__summary--skipped" : ""
+            }`}
+          >
+            {!verification
+              ? "照合: 未"
+              : verification.status === "verified"
+                ? `照合: 済(患者・${verification.rpNumbers.map((rp) => `RP${rp}`).join("・")})`
+                : `照合: スキップ(${[skipReasonDisplay(verification.reasonCode ?? ""), verification.reasonText?.trim()]
+                    .filter(Boolean)
+                    .join(" ")})`}
+            <button type="button" className="rp-card__compact-button" onClick={() => setStepChoice("verify")}>
+              照合へ戻る
+            </button>
+          </p>
+        )}
 
         <div className="lab-order-item__fields">
           <label>

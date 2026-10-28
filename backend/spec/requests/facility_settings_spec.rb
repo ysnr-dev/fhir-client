@@ -372,6 +372,24 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (injection_verification)" do
+    it "既定は無効で、有効にでき、真偽値でなければ 422" do
+      with_admin_token(nil) { get "/facility_settings" }
+      expect(JSON.parse(response.body)["injection_verification"]).to eq("enabled" => false)
+
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { injection_verification: { enabled: true } }, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["injection_verification"]).to eq("enabled" => true)
+
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { injection_verification: { enabled: "yes" } }, as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "PATCH /facility_settings (cancer_registry)" do
     it "院内がん登録のテンプレートの url を保存し、既定は同梱の HBCR_01" do
       with_admin_token(nil) { get "/facility_settings" }

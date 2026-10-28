@@ -47,14 +47,18 @@ items+= [text(L,491,60,10,"備考",8), rect(L,501,W,34), block("remarks",23.0,50
 json.dump(doc("注射箋",419.53,595.28,items),open("lib/report_layouts/injection_order.tlf","w"),ensure_ascii=False,indent=2)
 
 # ---- 注射ラベル (60x40mm = 170.1 x 113.4) ----
-items=[image("barcode_img",8,4,114,24), text(128,6,36,14,"至急",11,True,id="urgent"),
-       block("rp_label",8,29,114,8,7,"center"),
-       block("pt_id",5,40,40,12,10), block("pt_kana",48,40,117,12,10),
-       block("pt_name",5,52,100,11,9), block("pt_birthdate",108,53,40,10,7), block("pt_gender",150,53,18,10,7),
-       block("medicines",5,64,160,32,7,lh=8),
-       # 用法は 1 行に収まるよう幅いっぱい。注射日はバーコード下の RP 行の右端に置く。
+# 上段は患者番号、その下に RP バーコード(INJ-{オーダー id 先頭 12 桁}-{RP 番号})を横長に置く。
+# 3点認証でベッドサイドの照合に読む。直下の文字列は読めないときの目視用。
+# 2 本のバーコードの間と RP の左右は、リーダーが隣を拾わないよう余白(クワイエットゾーン)を空ける。
+items=[image("barcode_img",8,2,114,13), text(128,3,36,14,"至急",11,True,id="urgent"),
+       image("rp_barcode_img",10,20,150,14), block("rp_barcode_text",5,35,160,6,5,"center"),
+       block("rp_label",8,41,114,8,7,"center"),
+       block("pt_id",5,50,40,11,9), block("pt_kana",48,50,117,11,9),
+       block("pt_name",5,61,100,11,9), block("pt_birthdate",108,62,40,10,7), block("pt_gender",150,62,18,10,7),
+       block("medicines",5,72,160,28,6.5,lh=7),
+       # 用法は 1 行に収まるよう幅いっぱい。注射日は RP 行の右端に置く。
        # 最下段はレジメン名(化学療法のときだけ入る。それ以外は空行になる)。
-       block("usage",5,96,160,8,6), block("regimen",5,104,160,8,6),
-       block("order_date",125,29,42,8,6,"right")]
+       block("usage",5,100,160,7,6), block("regimen",5,107,160,6,5.5),
+       block("order_date",125,41,42,8,6,"right")]
 json.dump(doc("注射ラベル",170.1,113.4,items),open("lib/report_layouts/injection_label.tlf","w"),ensure_ascii=False,indent=2)
 print("generated")

@@ -30,6 +30,7 @@ import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 import type { AdvisorySeveritySettings } from "../fhir/advisoryHelpers";
 import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
 import type { RxVerificationSettings } from "../fhir/rxVerificationHelpers";
+import type { InjectionVerificationSettings } from "../fhir/injectionVerificationHelpers";
 import type { IntakeSettings } from "../fhir/intakeHelpers";
 import type { KarteCardOrderSettings } from "../fhir/karteCardOrderHelpers";
 
@@ -107,6 +108,8 @@ export interface FacilitySettings {
   advisory_severity: AdvisorySeveritySettings;
   /** 処方監査(監査前の調剤登録・払出登録を止めるか)。 */
   rx_verification: RxVerificationSettings;
+  /** 注射の3点認証(実施入力の前に照合を出すか)。 */
+  injection_verification: InjectionVerificationSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -135,6 +138,7 @@ export type FacilitySettingsPayload = Partial<{
   karte_card_order: KarteCardOrderSettings;
   advisory_severity: AdvisorySeveritySettings;
   rx_verification: RxVerificationSettings;
+  injection_verification: InjectionVerificationSettings;
 }>;
 
 export interface ConnectionTestResult {

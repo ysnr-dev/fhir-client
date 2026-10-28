@@ -64,6 +64,8 @@ RP 見出しの用法はカルテの注射カードと同じ並び(`Reports::Inj
 | ID | 種類 | 内容 |
 |---|---|---|
 | `barcode_img` | image-block | 患者番号の CODE128(ASCII でない番号は刷らない) |
+| `rp_barcode_img` | image-block | RP バーコード `INJ-{オーダー id 先頭 12 桁}-{RP 番号}` の CODE128(3点認証で読む。`docs/injection-order-design.md` §5.4) |
+| `rp_barcode_text` | text-block | RP バーコードと同じ文字列(読めないときの目視・手入力用) |
 | `urgent` | text(静的) | 「至急」。注射区分が緊急(emergency)のとき show |
 | `rp_label` | text-block | 「RP1 / 2　10:00、20:30」(RP 番号 / RP 総数 + 開始時刻) |
 | `pt_id` / `pt_name` / `pt_kana` / `pt_birthdate` / `pt_gender` | text-block | 患者(漢字氏名も出す。検体ラベルと違いベッドサイドで本人確認に使うため) |

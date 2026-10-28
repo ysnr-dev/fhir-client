@@ -28,6 +28,12 @@ import {
 } from "./prescriptionHelpers";
 import { LOINC_SYSTEM, conceptLabel, referenceIdOfType } from "./shared";
 import { lotNumberLabel, withLotNumber } from "./lotNumberHelpers";
+import {
+  injectionVerificationLabel,
+  injectionVerificationOf,
+  withInjectionVerification,
+  type InjectionVerificationValues,
+} from "./injectionVerificationHelpers";
 
 // 注射の実施記録(施用)。輸血(transfusionResultHelpers)と同じ形で、実施 1 回を
 // Procedure のハブにし、薬剤ごとの MedicationAdministration をぶら下げる。
@@ -39,6 +45,7 @@ import { lotNumberLabel, withLotNumber } from "./lotNumberHelpers";
 //         │  status          = completed(完了) / stopped(途中で中止) / not-done(実施せず)
 //         │  statusReason    = 中止・未実施の理由(text)
 //         │  note            = 実施コメント
+//         │  extension       = 3点認証の照合結果(injection-verification。照合を出したときだけ)
 //         └ partOf ← MedicationAdministration (薬剤 1 件ごと)
 //              request = その薬剤の MedicationRequest
 //              dosage  = 実施量・経路・部位・手技(オーダーの用法から写す)
@@ -117,6 +124,8 @@ export interface InjectionPerformFormValues {
   glucose: string | null;
   /** 主食の摂取量(%)を手で入れた値。null なら直近の記録を使う。 */
   mealPercent: string | null;
+  /** 3点認証の結果。施設設定で照合を出さないときは null。 */
+  verification: InjectionVerificationValues | null;
 }
 
 /** インスリンのスケールに使った測定値。記録から採ったものは Observation の id を持つ。 */
@@ -183,6 +192,7 @@ export function emptyInjectionPerformForm(
     medicines: medicineLinesFromOrder(mrs),
     glucose: null,
     mealPercent: null,
+    verification: null,
   };
 }
 
@@ -228,7 +238,7 @@ function buildHubProcedure(
   }
   if (values.comment.trim()) procedure.note = [{ text: values.comment.trim() }];
 
-  return procedure;
+  return values.verification ? withInjectionVerification(procedure, values.verification) : procedure;
 }
 
 function buildAdministration(
@@ -437,6 +447,10 @@ export interface InjectionPerformDisplay {
   administrationIds: string[];
   /** 進捗の判定に使う。実施せず は施用の回数に数えない。 */
   counted: boolean;
+  /** 3点認証の結果「照合済」「照合スキップ(緊急・急変)」。照合を出さなかった記録は空。 */
+  verification: string;
+  /** 照合をスキップした記録か(目立たせる)。 */
+  verificationSkipped: boolean;
 }
 
 /** 注射の実施記録か。処置・手術・輸血の Procedure と振り分ける。 */
@@ -487,6 +501,7 @@ export function injectionPerformsByOrderId(
       (a.partOf ?? []).some((r) => referenceIdOfType(r.reference, "Procedure") === hubId),
     );
 
+    const verification = injectionVerificationOf(hub);
     const display: InjectionPerformDisplay = {
       id: hubId,
       performedAt: periodLabel(hub.performedPeriod),
@@ -497,6 +512,8 @@ export function injectionPerformsByOrderId(
       comment: hub.note?.map((note) => note.text).filter(Boolean).join("\n") ?? "",
       administrationIds: children.map((a) => a.id).filter((id): id is string => Boolean(id)),
       counted: hub.status !== "not-done",
+      verification: injectionVerificationLabel(verification),
+      verificationSkipped: verification?.status === "skipped",
     };
 
     for (const basedOn of hub.basedOn ?? []) {

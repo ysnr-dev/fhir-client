@@ -3,7 +3,8 @@ require "pdf/inspector"
 
 RSpec.describe Reports::InjectionLabelRenderer do
   let(:order) do
-    { "authoredOn" => "2026-08-29T17:05:10+09:00",
+    { "id" => "3f2a9c01-b7d4-4e5f-8a90-123456789abc",
+      "authoredOn" => "2026-08-29T17:05:10+09:00",
       "occurrenceDateTime" => "2026-08-30",
       "category" => [{ "coding" => [{ "system" => InjectionReport::INJECTION_CATEGORY_SYSTEM, "code" => "emergency" }] }] }
   end
@@ -31,6 +32,9 @@ RSpec.describe Reports::InjectionLabelRenderer do
     expect(pages[0]).to include("RP1").and include("生理食塩液").and include("KCL").and include("10:00")
     expect(pages[1]).to include("RP2").and include("セファゾリン")
     expect(pages[0]).to include("太郎")
+    # RP バーコードの文字列(オーダー id の先頭 12 桁 + RP 番号)。
+    expect(pages[0]).to include("INJ-3F2A9C01B7D4-1")
+    expect(pages[1]).to include("INJ-3F2A9C01B7D4-2")
     # 注射日は occurrenceDateTime。登録日時(authoredOn)の日付ではない。
     expect(pages[0]).to include("2026/08/30")
     expect(pages[0]).not_to include("2026/08/29")

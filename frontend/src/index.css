@@ -30,6 +30,8 @@
   --warning: #b7791f;
   /* 取り返しのつかない操作や、見落とすと危ない警告の色。 */
   --danger: #c0392b;
+  /* 照合の一致など、確かめて問題なかったことを表す色。 */
+  --success: #2e8b57;
   /* 変更履歴の差分。行の地(消えた行・増えた行)と、行の中で変わった文字の地。 */
   --diff-removed-bg: rgba(192, 57, 43, 0.1);
   --diff-removed-strong: rgba(192, 57, 43, 0.3);
@@ -114,6 +116,7 @@
   --lab-high-text: #ffffff;
   --warning: #e0a33a;
   --danger: #ef5b4f;
+  --success: #3fa76c;
   --diff-removed-bg: rgba(239, 91, 79, 0.14);
   --diff-removed-strong: rgba(239, 91, 79, 0.38);
   --diff-added-bg: rgba(63, 167, 108, 0.16);

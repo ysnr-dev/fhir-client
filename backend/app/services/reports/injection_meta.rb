@@ -5,6 +5,22 @@ module Reports
     module_function
 
     # 「入院 臨時」のような区分表示(入外区分 + 注射区分)。
+    # 注射ラベルの RP バーコード「INJ-3F2A9C01B7D4-2」。3点認証で実施入力の前に読み、開いているオーダーと
+    # RP を照合する(frontend の injectionRpBarcode と同じ規則)。オーダー id(UUID)を丸ごと入れると
+    # 60mm に収まらないので先頭 12 桁に縮める。キーボードウェッジは US 配列のキーを送るため、
+    # JIS 配列で化ける記号を避けて英大文字・数字・ハイフンだけにする。
+    ORDER_KEY_LENGTH = 12
+
+    def order_key(order)
+      order["id"].to_s.delete("-").upcase[0, ORDER_KEY_LENGTH]
+    end
+
+    def rp_barcode(order, rp_number)
+      key = order_key(order)
+      key.present? ? "INJ-#{key}-#{rp_number}" : ""
+    end
+
+    # 「入院 臨時」のような区分表示(入外区分 + 注射区分)。
     def category_display(order)
       Array(order["category"]).filter_map do |category|
         Array(category["coding"]).find do |coding|
