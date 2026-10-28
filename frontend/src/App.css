@@ -28164,6 +28164,7 @@ input.nursing-picker__search {
 .oral-exam__chart {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   align-self: flex-start;
   max-width: 100%;
   overflow-x: auto;
