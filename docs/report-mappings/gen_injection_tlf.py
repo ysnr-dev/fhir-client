@@ -1,5 +1,5 @@
 import json, sys
-# 注射箋(A5)と注射ラベル(60x40mm)の .tlf を生成する。処方箋(院内)と同じスタイル値。
+# 注射箋(A5)と注射ラベル(80x60mm)の .tlf を生成する。処方箋(院内)と同じスタイル値。
 FONT=["IPAGothic"]
 def text(x,y,w,h,s,size=9,bold=False,align="left",id=""):
     return {"id":id,"type":"text","display":True,"description":"","x":x,"y":y,"width":w,"height":h,"texts":[s],
@@ -46,19 +46,20 @@ items+= [text(L,491,60,10,"備考",8), rect(L,501,W,34), block("remarks",23.0,50
          block("hospital_name",L,542.0,250,12,8), block("page_no",342.5,544.0,60,8,6,"right")]
 json.dump(doc("注射箋",419.53,595.28,items),open("lib/report_layouts/injection_order.tlf","w"),ensure_ascii=False,indent=2)
 
-# ---- 注射ラベル (60x40mm = 170.1 x 113.4) ----
+# ---- 注射ラベル (80x60mm = 226.8 x 170.1) ----
+# 点滴パックに貼るので、離れても読めるよう患者氏名と薬剤を大きめにする。
 # 上段は患者番号、その下に RP バーコード(INJ-{オーダー id 先頭 12 桁}-{RP 番号})を横長に置く。
 # 3点認証でベッドサイドの照合に読む。直下の文字列は読めないときの目視用。
 # 2 本のバーコードの間と RP の左右は、リーダーが隣を拾わないよう余白(クワイエットゾーン)を空ける。
-items=[image("barcode_img",8,2,114,13), text(128,3,36,14,"至急",11,True,id="urgent"),
-       image("rp_barcode_img",10,20,150,14), block("rp_barcode_text",5,35,160,6,5,"center"),
-       block("rp_label",8,41,114,8,7,"center"),
-       block("pt_id",5,50,40,11,9), block("pt_kana",48,50,117,11,9),
-       block("pt_name",5,61,100,11,9), block("pt_birthdate",108,62,40,10,7), block("pt_gender",150,62,18,10,7),
-       block("medicines",5,72,160,28,6.5,lh=7),
+items=[image("barcode_img",10,4,150,18), text(172,5,48,18,"至急",14,True,id="urgent"),
+       image("rp_barcode_img",12,28,200,20), block("rp_barcode_text",6,49,215,8,6.5,"center"),
+       block("rp_label",10,59,150,11,9,"center"),
+       block("pt_id",6,72,55,14,12), block("pt_kana",64,73,157,12,10),
+       block("pt_name",6,87,140,16,13), block("pt_birthdate",148,89,50,12,9), block("pt_gender",200,89,22,12,9),
+       block("medicines",6,105,215,40,8.5,lh=9.5),
        # 用法は 1 行に収まるよう幅いっぱい。注射日は RP 行の右端に置く。
        # 最下段はレジメン名(化学療法のときだけ入る。それ以外は空行になる)。
-       block("usage",5,100,160,7,6), block("regimen",5,107,160,6,5.5),
-       block("order_date",125,41,42,8,6,"right")]
-json.dump(doc("注射ラベル",170.1,113.4,items),open("lib/report_layouts/injection_label.tlf","w"),ensure_ascii=False,indent=2)
+       block("usage",6,146,215,10,8), block("regimen",6,157,215,9,7),
+       block("order_date",160,60,60,10,8,"right")]
+json.dump(doc("注射ラベル",226.8,170.1,items),open("lib/report_layouts/injection_label.tlf","w"),ensure_ascii=False,indent=2)
 print("generated")

@@ -306,7 +306,7 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
   疑義照会は処方と共通(下の「疑義照会」)。詳細は `docs/injection-order-design.md` §5.3。
 - **帳票**: 注射一覧の「注射箋発行」(`GET /reports/injections/:order_id/pdf`、A5、注射指示票を兼ねる。
   発行が受付を兼ねる)と「注射ラベル発行」(`GET /reports/injection_labels/:order_id/pdf`、RP ごと 1 枚、
-  60×40mm、患者番号と RP のバーコード)。処方箋と同じ帳票基盤(同梱 `.tlf`)で、プレースホルダーは
+  80×60mm、患者番号と RP のバーコード)。処方箋と同じ帳票基盤(同梱 `.tlf`)で、プレースホルダーは
   `docs/report-mappings/injection-01.md`。
 - テンプレートへの一括入力(`%prescriptions`)は最新の「処方」を対象とし、注射オーダーは
   対象外です(検索結果から category で除外)。

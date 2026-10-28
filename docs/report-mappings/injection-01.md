@@ -6,7 +6,7 @@
 | ファイル | 帳票 | 用紙 |
 |---|---|---|
 | `backend/lib/report_layouts/injection_order.tlf` | 注射箋(注射指示票を兼ねる) | A5(419.53 × 595.28 pt) |
-| `backend/lib/report_layouts/injection_label.tlf` | 注射ラベル(1 ページ = RP 1 つ) | 60 × 40 mm(170.1 × 113.4 pt。検体ラベルと同じ) |
+| `backend/lib/report_layouts/injection_label.tlf` | 注射ラベル(1 ページ = RP 1 つ) | 80 × 60 mm(226.8 × 170.1 pt。点滴パックに貼る) |
 
 処方箋・検体ラベルと同じく `report_layouts`(DB)には登録せず、リポジトリ同梱の `.tlf` を
 backend が直接読む(`InjectionReport::ORDER_LAYOUT` / `LABEL_LAYOUT_PATH`)。

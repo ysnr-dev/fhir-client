@@ -36,7 +36,7 @@ module Reports
           end
           rp_code = InjectionMeta.rp_barcode(@order, rp.rp_number)
           if image_ids.include?("rp_barcode_img") && rp_code.present?
-            page.item("rp_barcode_img").src(StringIO.new(barcode_png(rp_code, height: 44)))
+            page.item("rp_barcode_img").src(StringIO.new(barcode_png(rp_code, height: 47)))
           end
           if all_ids.include?("urgent")
             urgent? ? page.item("urgent").show : page.item("urgent").hide
@@ -74,7 +74,7 @@ module Reports
 
     # 薬剤欄(4 行)。化学療法のときだけ、最後に用法コメント(ステップ名 / 器材 /
     # 投与時注意)の行を足す —— ボトルを混ぜる人が「血管外漏出注意」に気付けるように。
-    # ラベルは 60×40mm しか無いので長い注意は行末で切れる(全文は注射箋にある)。
+    # ラベルは 80×60mm しか無いので長い注意は行末で切れる(全文は注射箋にある)。
     # 手入力の注射では足さない(4 剤の混注で薬剤名が押し出されるため)。
     def medicines_block(rp)
       lines = rp.medicines.map { |m| medicine_line(m) }

@@ -33,7 +33,7 @@ export function skipReasonDisplay(code: string): string {
 /** RP バーコードに入れるオーダー id の桁数(backend の Reports::InjectionMeta::ORDER_KEY_LENGTH と同じ)。 */
 const ORDER_KEY_LENGTH = 12;
 
-/** オーダー id(UUID)を縮めた照合用のキー。60mm のラベルに収めるため先頭だけを使う。 */
+/** オーダー id(UUID)を縮めた照合用のキー。ラベルの幅に収めるため先頭だけを使う。 */
 export function injectionOrderKey(orderId: string): string {
   return orderId.replaceAll("-", "").toUpperCase().slice(0, ORDER_KEY_LENGTH);
 }
