@@ -26974,12 +26974,30 @@ input.nursing-picker__search {
 }
 
 /* 入退院文書の作成状況。セルは状態の語と期限で、未作成は強調、期限超過は赤。 */
+/* セルはすべてカルテへのリンク。枠で押せることを示し、登録を始めるセルは塗りで目立たせる。 */
 .admission-documents__cell {
   display: inline-flex;
   flex-direction: column;
   line-height: 1.3;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   text-decoration: none;
   color: var(--text-h);
+}
+
+.admission-documents__cell:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.admission-documents__cell--start {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.admission-documents__cell--start:hover {
+  border-color: var(--accent);
 }
 
 .admission-documents__cell--done {
@@ -26994,6 +27012,10 @@ input.nursing-picker__search {
 .admission-documents__cell--overdue,
 .admission-documents__overdue {
   color: var(--lab-high);
+}
+
+.admission-documents__cell--overdue {
+  border-color: var(--lab-high);
 }
 
 .admission-documents__due {

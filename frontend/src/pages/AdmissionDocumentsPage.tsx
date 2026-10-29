@@ -366,6 +366,8 @@ function DocumentCellView({
   const target = openTargetOf(kind, cell, encounterId, templateUrl);
   const href = `/patients/${patientId}/karte${target ? `?${KARTE_OPEN_PARAM}=${encodeURIComponent(formatKarteOpen(target))}` : ""}`;
   const due = cell.due ? `期限 ${cell.due.slice(5).replace("-", "/")}` : "";
+  // 押すと登録を始めるセル(未作成・再評価)は、カルテを開くだけのセルより目立たせる。
+  const starts = cell.state === "missing" || (cell.state === "done" && cell.overdue && target !== null);
   return (
     <Link
       to={href}
@@ -373,11 +375,12 @@ function DocumentCellView({
       className={[
         "admission-documents__cell",
         `admission-documents__cell--${cell.state}`,
+        starts ? "admission-documents__cell--start" : "",
         cell.overdue ? "admission-documents__cell--overdue" : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      title={cell.due ? `期限 ${cell.due}` : undefined}
+      title={`${starts ? "登録を開始" : "カルテを開く"}${cell.due ? `(期限 ${cell.due})` : ""}`}
     >
       {cell.state === "missing" ? "未作成" : cell.label}
       {(cell.state !== "done" || cell.overdue) && due && <span className="admission-documents__due">{due}</span>}
