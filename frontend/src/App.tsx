@@ -173,6 +173,8 @@ import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { RxWorklistPage } from "./pages/RxWorklistPage";
 import { RxVerificationPage } from "./pages/RxVerificationPage";
 import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklistPage";
+import { INJECTION_PRINT_PATH } from "./api/reportsClient";
+import { InjectionPrintPage } from "./pages/InjectionPrintPage";
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { LotManagementPage } from "./pages/LotManagementPage";
 import { DataExtractPage } from "./pages/DataExtractPage";
@@ -206,8 +208,8 @@ function App() {
   // アプリのヘッダー(ナビ)を出さず縦幅をカルテに回す。
   const { pathname } = useLocation();
   const detachedPane = pathname.startsWith(KARTE_PANE_PATH);
-  // カルテ印刷も別タブで、印刷する紙面だけを出す。
-  const printPage = pathname.startsWith(KARTE_PRINT_PATH);
+  // カルテ印刷・注射箋の発行も別タブで、印刷する紙面だけを出す。
+  const printPage = pathname.startsWith(KARTE_PRINT_PATH) || pathname.startsWith(INJECTION_PRINT_PATH);
   // Web 問診の患者画面。ログインの外(AuthGate の外)で、トークンだけで開く。
   const intakeToken = pathname.startsWith(INTAKE_PATH) ? pathname.slice(INTAKE_PATH.length).split("/")[0] : "";
   // 待合表示板(ロビーのモニター)。同じくログインの外で、トークンだけで開く。
@@ -432,6 +434,7 @@ function App() {
           <Route path="/rx-verification" element={<RxVerificationPage />} />
           <Route path="/brought-med-worklist" element={<BroughtMedicationWorklistPage />} />
           <Route path="/injection-worklist" element={<InjectionWorklistPage />} />
+          <Route path={`${INJECTION_PRINT_PATH}/:orderId`} element={<InjectionPrintPage />} />
           <Route path="/lot-management" element={<LotManagementPage />} />
           <Route path="/data-extract" element={<DataExtractPage />} />
           <Route path="/dashboards" element={<DashboardPage />} />

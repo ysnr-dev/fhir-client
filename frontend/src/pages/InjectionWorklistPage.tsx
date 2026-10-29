@@ -9,7 +9,7 @@ import {
   useUpdateInjectionTaskStatus,
   type InjectionWorklistRow,
 } from "../api/queries";
-import { injectionLabelPdfUrl, injectionPdfUrl } from "../api/reportsClient";
+import { injectionLabelPdfUrl, injectionPdfUrl, injectionPrintUrl } from "../api/reportsClient";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { InjectionDispenseModal } from "../components/InjectionDispenseModal";
@@ -557,15 +557,15 @@ function WorklistRowButtons({
 
   return (
     <>
-      {/* 注射箋の発行が受付を兼ねる(処方箋発行と同じ)。依頼済のオーダーは PDF を
-          開くと同時に受付済へ進める。再発行はケバブメニューへ畳む。 */}
+      {/* 注射箋の発行が受付を兼ねる(処方箋発行と同じ)。依頼済のオーダーは注射箋と注射ラベルを
+          並べたタブを開くと同時に受付済へ進める。再発行はケバブメニューへ畳む。 */}
       {status === "requested" && (
         <a
           className="button"
-          href={injectionPdfUrl(row.order.id ?? "")}
+          href={injectionPrintUrl(row.order.id ?? "")}
           target="_blank"
           rel="noopener"
-          title="注射箋の PDF を新規タブで開く"
+          title="注射箋と注射ラベルを新規タブで開く"
           onClick={() => onChangeStatus("accepted")}
         >
           注射箋発行

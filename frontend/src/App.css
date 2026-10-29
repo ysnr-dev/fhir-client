@@ -27777,6 +27777,43 @@ input.nursing-picker__search {
   background: var(--bg);
 }
 
+/* 注射箋の発行タブ。注射箋とラベルの PDF ビューアを横に並べ、縦は画面いっぱいに使う。 */
+.injection-print {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  height: calc(100vh - 32px);
+}
+
+.injection-print__panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 280px;
+  min-height: 0;
+}
+
+.injection-print__panel--order {
+  flex: 3 1 480px;
+}
+
+.injection-print__panel--label {
+  flex: 2 1 320px;
+}
+
+.injection-print__panel h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.injection-print__panel iframe {
+  flex: 1;
+  min-height: 360px;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--paper);
+}
+
 .karte-print {
   max-width: 186mm;
   margin: 0 auto;

@@ -69,6 +69,13 @@ export function injectionLabelPdfUrl(orderId: string): string {
   return `/reports/injection_labels/${encodeURIComponent(orderId)}/pdf`;
 }
 
+/** 注射箋と注射ラベルを 1 つのタブに並べる画面(pages/InjectionPrintPage)。 */
+export const INJECTION_PRINT_PATH = "/injection-print";
+
+export function injectionPrintUrl(orderId: string): string {
+  return `${INJECTION_PRINT_PATH}/${encodeURIComponent(orderId)}`;
+}
+
 /** 検体検査結果(DiagnosticReport)1 件ぶんの報告書 PDF の URL(A4、左右 2 段、材料なし)。 */
 export function labResultPdfUrl(reportId: string): string {
   return `/reports/lab_results/${encodeURIComponent(reportId)}/pdf`;
