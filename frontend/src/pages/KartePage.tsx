@@ -430,6 +430,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
                 templateCanonical: openTarget.url,
                 partOf: [{ reference: `Procedure/${openTarget.procedureId}` }],
               }
+          : openTarget.kind === "encounter-template"
+            ? { kind: "qr-create", templateCanonical: openTarget.url, encounterId: openTarget.encounterId }
           : openTarget.kind === "intake"
             ? { kind: "intake-review", responseId: openTarget.responseId }
             : { kind: "radiotherapy-review", srId: openTarget.srId },

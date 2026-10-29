@@ -1,0 +1,407 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/nutrition-plan-01",
+  "version": "1.0.0",
+  "name": "NUT_PLAN_01",
+  "title": "栄養管理計画書",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "item": [
+    {
+      "linkId": "grp_header",
+      "type": "group",
+      "text": "病棟・担当者",
+      "item": [
+        {
+          "linkId": "ward",
+          "type": "string",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%ward"
+              }
+            }
+          ],
+          "text": "病棟"
+        },
+        {
+          "linkId": "attending",
+          "type": "string",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%attending"
+              }
+            }
+          ],
+          "text": "担当医師名"
+        },
+        {
+          "linkId": "dietitian",
+          "type": "string",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%authorName"
+              }
+            }
+          ],
+          "text": "担当管理栄養士名"
+        },
+        {
+          "linkId": "admission_date",
+          "type": "date",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%admissionDate"
+              }
+            }
+          ],
+          "text": "入院日"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_assessment",
+      "type": "group",
+      "text": "栄養状態",
+      "item": [
+        {
+          "linkId": "risk",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "栄養スクリーニングの結果(MUST・GLIM・SGA)を要約して書く。"
+            }
+          ],
+          "text": "入院時栄養状態に関するリスク"
+        },
+        {
+          "linkId": "assessment",
+          "type": "text",
+          "text": "栄養状態の評価と課題"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_plan",
+      "type": "group",
+      "text": "栄養管理計画",
+      "item": [
+        {
+          "linkId": "goal",
+          "type": "text",
+          "text": "目標"
+        },
+        {
+          "linkId": "energy",
+          "type": "integer",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "kcal",
+                "display": "kcal"
+              }
+            }
+          ],
+          "text": "栄養補給量 エネルギー"
+        },
+        {
+          "linkId": "protein",
+          "type": "decimal",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "g",
+                "display": "g"
+              }
+            }
+          ],
+          "text": "栄養補給量 たんぱく質"
+        },
+        {
+          "linkId": "water",
+          "type": "integer",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "mL",
+                "display": "mL"
+              }
+            }
+          ],
+          "text": "栄養補給量 水分"
+        },
+        {
+          "linkId": "supply_other",
+          "type": "string",
+          "text": "栄養補給量 その他"
+        },
+        {
+          "linkId": "supply_route",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "text": "栄養補給方法",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "oral",
+                "display": "経口"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "enteral",
+                "display": "経腸栄養"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "parenteral",
+                "display": "静脈栄養"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "meal_content",
+          "type": "text",
+          "text": "食事内容"
+        },
+        {
+          "linkId": "supply_note",
+          "type": "text",
+          "text": "留意事項"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_counsel",
+      "type": "group",
+      "text": "栄養食事相談",
+      "item": [
+        {
+          "linkId": "counsel_admission",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "入院時栄養食事指導の必要性",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "counsel_admission_detail",
+          "type": "string",
+          "text": "内容"
+        },
+        {
+          "linkId": "counsel_admission_date",
+          "type": "date",
+          "text": "実施予定日"
+        },
+        {
+          "linkId": "counsel_inpatient",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "栄養食事相談の必要性",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "counsel_inpatient_detail",
+          "type": "string",
+          "text": "内容"
+        },
+        {
+          "linkId": "counsel_inpatient_date",
+          "type": "date",
+          "text": "実施予定日"
+        },
+        {
+          "linkId": "counsel_discharge",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "退院時の指導の必要性",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "counsel_discharge_detail",
+          "type": "string",
+          "text": "内容"
+        },
+        {
+          "linkId": "counsel_discharge_date",
+          "type": "date",
+          "text": "実施予定日"
+        },
+        {
+          "linkId": "counsel_note",
+          "type": "text",
+          "text": "備考"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_other",
+      "type": "group",
+      "text": "その他",
+      "item": [
+        {
+          "linkId": "other_issues",
+          "type": "text",
+          "text": "その他栄養管理上解決すべき課題に関する事項"
+        },
+        {
+          "linkId": "reassess_date",
+          "type": "date",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "この日を過ぎて在院していると、入退院文書で栄養管理計画書が期限超過になる。"
+            }
+          ],
+          "text": "栄養状態の再評価の時期"
+        },
+        {
+          "linkId": "discharge_evaluation",
+          "type": "text",
+          "text": "退院時及び終了時の総合的評価"
+        }
+      ]
+    }
+  ],
+  "description": "診療報酬の様式「別紙23 栄養管理計画書」を入力・帳票出力するためのテンプレート。栄養スクリーニングか入院診療計画書で特別な栄養管理の必要性が有の入院に、医師・管理栄養士・看護師などが共同で作る。再評価のたびに新しい回答を書く(前回値複写が使える)。再評価の時期を過ぎて在院していると、入退院文書で期限超過になる。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "7a1d4c86-2f39-4b05-8e6a-0c9b3d5f2e71",
+        "display": "栄養管理"
+      }
+    }
+  ]
+}

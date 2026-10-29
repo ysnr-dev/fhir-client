@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   useBedWardIndex,
   useFacilitySettings,
@@ -261,9 +261,12 @@ export function FacilitySettingsPage() {
   const [admissionDocsDraft, setAdmissionDocsDraft] = useState<AdmissionDocumentSettings | undefined>(undefined);
   const savedAdmissionDocs = settings.data?.admission_documents ?? DEFAULT_ADMISSION_DOCUMENTS;
   const admissionDocs = admissionDocsDraft ?? savedAdmissionDocs;
-  const admissionDocsValid = [admissionDocs.admission_plan_days, admissionDocs.nursing_summary_days].every(
-    (days) => Number.isInteger(days) && days >= 0,
-  );
+  const admissionDocsValid = [
+    admissionDocs.admission_plan_days,
+    admissionDocs.nursing_summary_days,
+    admissionDocs.nutrition_screening_days,
+    admissionDocs.nutrition_plan_days,
+  ].every((days) => Number.isInteger(days) && days >= 0);
 
   // 褥瘡管理の DESIGN-R 評価のテンプレート(url。版を問わない)。
   const [pressureUlcerDraft, setPressureUlcerDraft] = useState<PressureUlcerSettings | undefined>(undefined);
@@ -1023,6 +1026,49 @@ export function FacilitySettingsPage() {
                   <span className="facility-settings__unit">日以内(入院日から)</span>
                 </span>
               </label>
+              {(
+                [
+                  ["nutrition_screening", "栄養スクリーニング"],
+                  ["nutrition_plan", "栄養管理計画書"],
+                ] as const
+              ).map(([key, label]) => (
+                <Fragment key={key}>
+                  <label>
+                    {label}のテンプレート
+                    <select
+                      value={admissionDocs[`${key}_template`]}
+                      onChange={(e) =>
+                        setAdmissionDocsDraft({ ...admissionDocs, [`${key}_template`]: e.target.value })
+                      }
+                    >
+                      <option value="">（なし）</option>
+                      {templateOptions.questionnaires
+                        .filter((q, index, list) => q.url && list.findIndex((other) => other.url === q.url) === index)
+                        .map((q) => (
+                          <option key={q.id} value={q.url}>
+                            {q.title ?? q.name ?? q.id}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    {label}の期限
+                    <span className="facility-settings__times">
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={admissionDocs[`${key}_days`]}
+                        onChange={(e) =>
+                          setAdmissionDocsDraft({ ...admissionDocs, [`${key}_days`]: Number(e.target.value) })
+                        }
+                        aria-label={`${label}の期限の日数`}
+                      />
+                      <span className="facility-settings__unit">日以内(入院日から)</span>
+                    </span>
+                  </label>
+                </Fragment>
+              ))}
             </div>
           )}
 

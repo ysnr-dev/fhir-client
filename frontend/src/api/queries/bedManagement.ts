@@ -66,24 +66,26 @@ function chunks<T>(items: T[], size: number): T[][] {
 export interface AdmissionDocumentResources {
   /** 退院時サマリー・看護サマリー(encounter を持つ Composition)。 */
   compositions: fhir4.Composition[];
-  /** 入院診療計画書のテンプレートへの回答。 */
+  /** 入院診療計画書・栄養スクリーニング・栄養管理計画書のテンプレートへの回答。 */
   responses: fhir4.QuestionnaireResponse[];
   truncated: boolean;
 }
 
 /**
- * 入院ごとの文書。退院時サマリー・看護サマリーは入院(encounter)で、入院診療計画書は患者と
+ * 入院ごとの文書。退院時サマリー・看護サマリーは入院(encounter)で、テンプレートで書く文書は患者と
  * テンプレートで引く(テンプレートの回答は入院を持たないことがあるので、画面側で日付で入院に当てる)。
+ * 回答は栄養管理の必要性・再評価日を読むので item まで取る。
  */
 export function useAdmissionDocumentResources(
   encounterIds: string[],
   patientIds: string[],
-  admissionPlanTemplate: string,
+  templateUrls: string[],
 ) {
   const encounters = [...new Set(encounterIds)].sort();
   const patients = [...new Set(patientIds)].sort();
+  const templates = [...new Set(templateUrls.filter(Boolean))].sort();
   return useQuery({
-    queryKey: ["Composition", "admission-documents", encounters.join(","), patients.join(","), admissionPlanTemplate],
+    queryKey: ["Composition", "admission-documents", encounters.join(","), patients.join(","), templates.join(",")],
     queryFn: async (): Promise<AdmissionDocumentResources> => {
       const paging = { page: 500, maxPages: 4 };
       const compositionSearches = chunks(encounters, DOCUMENT_CHUNK).map((chunk) => {
@@ -95,13 +97,13 @@ export function useAdmissionDocumentResources(
       });
       // 回答は版付きの canonical を持ち、上流の questionnaire 検索は版を省いた url で版付きに当たらない
       // (server-improvement-backlog.md)。テンプレートの版を引いて、版ごとの canonical を並べて引く。
-      const canonicals = admissionPlanTemplate ? await templateCanonicals(admissionPlanTemplate) : [];
-      const responseSearches = admissionPlanTemplate
+      const canonicals = (await Promise.all(templates.map(templateCanonicals))).flat();
+      const responseSearches = canonicals.length
         ? chunks(patients, DOCUMENT_CHUNK).map((chunk) => {
             const params = new URLSearchParams();
             params.set("questionnaire", canonicals.join(","));
             params.set("patient", chunk.map((id) => `Patient/${id}`).join(","));
-            params.set("_elements", "id,status,questionnaire,subject,encounter,authored");
+            params.set("_elements", "id,status,questionnaire,subject,encounter,authored,item");
             return searchAllPages<fhir4.QuestionnaireResponse>("QuestionnaireResponse", params, paging);
           })
         : [];

@@ -16,6 +16,7 @@ import {
   ADMISSION_DOCUMENT_KINDS,
   DEFAULT_ADMISSION_DOCUMENTS,
   admissionDocumentCells,
+  admissionDocumentTemplate,
   type AdmissionDocumentCell,
   type AdmissionDocumentKind,
 } from "../fhir/admissionDocumentHelpers";
@@ -39,9 +40,10 @@ import { formatKarteOpen, KARTE_OPEN_PARAM, type KarteOpenTarget } from "../kart
 import { addDays, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
 
-// 入退院文書の作成状況。入院中と、期間内に退院した入院を並べ、入院診療計画書・退院時サマリー・
-// 看護サマリー(退院)の作成状況と期限を出す(docs/bed-management-design.md §4)。判定は
-// fhir/admissionDocumentHelpers.ts、対象と期限は施設設定(入院診療計画書のテンプレート・日数)。
+// 入退院文書の作成状況。入院中と、期間内に退院した入院を並べ、入院診療計画書・栄養スクリーニング・
+// 栄養管理計画書・退院時サマリー・看護サマリー(退院)の作成状況と期限を出す
+// (docs/bed-management-design.md §4、docs/nutrition-care-plan-design.md)。判定は
+// fhir/admissionDocumentHelpers.ts、対象と期限は施設設定(テンプレート・日数)。
 //
 // セルを押すとカルテを開き、未作成ならその入院の文書の登録を右ペインで始める。
 
@@ -89,14 +91,12 @@ export function AdmissionDocumentsPage() {
       ),
     [encounters.data, from],
   );
+  // テンプレートで書く種別は、テンプレートが設定されているときだけ列を出す。
+  const kinds = ADMISSION_DOCUMENT_KINDS.filter((k) => admissionDocumentTemplate(k.kind, settings) !== "");
   const documents = useAdmissionDocumentResources(
     targets.map((encounter) => encounter.id ?? ""),
     targets.map((encounter) => encounterPatientId(encounter) ?? ""),
-    settings.admission_plan_template,
-  );
-
-  const kinds = ADMISSION_DOCUMENT_KINDS.filter(
-    (k) => k.kind !== "admission-plan" || settings.admission_plan_template,
+    kinds.map((k) => admissionDocumentTemplate(k.kind, settings) ?? ""),
   );
 
   const rows = useMemo(() => {
@@ -286,6 +286,7 @@ export function AdmissionDocumentsPage() {
                         <td key={k.kind} className="lab-worklist__compact">
                           <DocumentCellView
                             kind={k.kind}
+                            templateUrl={admissionDocumentTemplate(k.kind, settings) ?? ""}
                             cell={row.cells[k.kind]}
                             encounterId={row.encounter.id ?? ""}
                             patientId={row.patientId}
@@ -316,15 +317,24 @@ export function AdmissionDocumentsPage() {
   );
 }
 
-/** カルテで開く先。未作成なら登録を始め、作成済・作成中はその文書を開く(入院診療計画書はカルテだけ)。 */
+/**
+ * カルテで開く先。未作成なら登録を始め、作成済・作成中はその文書を開く(テンプレートで書く文書はカルテだけ)。
+ * 栄養管理計画書は再評価日を過ぎていれば書き直し(新しい計画書)を始める。
+ */
 function openTargetOf(
   kind: AdmissionDocumentKind,
   cell: AdmissionDocumentCell,
   encounterId: string,
+  templateUrl: string,
 ): KarteOpenTarget | null {
   switch (kind) {
     case "admission-plan":
       return cell.state === "missing" ? { kind: "admission-plan", encounterId } : null;
+    case "nutrition-screening":
+    case "nutrition-plan":
+      return cell.state === "missing" || (cell.state === "done" && cell.overdue)
+        ? { kind: "encounter-template", encounterId, url: templateUrl }
+        : null;
     case "discharge-summary":
       return { kind: "discharge-summary", encounterId };
     case "nursing-summary":
@@ -336,22 +346,24 @@ function openTargetOf(
 
 function DocumentCellView({
   kind,
+  templateUrl,
   cell,
   encounterId,
   patientId,
   returnLinkState,
 }: {
   kind: AdmissionDocumentKind;
+  templateUrl: string;
   cell: AdmissionDocumentCell;
   encounterId: string;
   patientId: string;
   returnLinkState: ReturnType<typeof useReturnLinkState>;
 }) {
-  if (cell.state === "pending") {
-    // 退院前で、まだ書き始めていない退院系の文書。
-    return <span className="order-select__muted">退院後</span>;
+  if (cell.state === "pending" || cell.state === "not-required") {
+    // 退院前で、まだ書き始めていない退院系の文書と、栄養管理の必要性が判定前・無の栄養管理計画書。
+    return <span className="order-select__muted">{cell.label || "退院後"}</span>;
   }
-  const target = openTargetOf(kind, cell, encounterId);
+  const target = openTargetOf(kind, cell, encounterId, templateUrl);
   const href = `/patients/${patientId}/karte${target ? `?${KARTE_OPEN_PARAM}=${encodeURIComponent(formatKarteOpen(target))}` : ""}`;
   const due = cell.due ? `期限 ${cell.due.slice(5).replace("-", "/")}` : "";
   return (
@@ -368,7 +380,7 @@ function DocumentCellView({
       title={cell.due ? `期限 ${cell.due}` : undefined}
     >
       {cell.state === "missing" ? "未作成" : cell.label}
-      {cell.state !== "done" && due && <span className="admission-documents__due">{due}</span>}
+      {(cell.state !== "done" || cell.overdue) && due && <span className="admission-documents__due">{due}</span>}
     </Link>
   );
 }

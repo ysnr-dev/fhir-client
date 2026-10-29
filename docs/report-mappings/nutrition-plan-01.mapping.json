@@ -1,0 +1,65 @@
+[
+  {
+    "linkId": "supply_route",
+    "code": "oral",
+    "show": [
+      "mark_route_oral"
+    ]
+  },
+  {
+    "linkId": "supply_route",
+    "code": "enteral",
+    "show": [
+      "mark_route_enteral"
+    ]
+  },
+  {
+    "linkId": "supply_route",
+    "code": "parenteral",
+    "show": [
+      "mark_route_parenteral"
+    ]
+  },
+  {
+    "linkId": "counsel_admission",
+    "code": "01",
+    "show": [
+      "mark_counsel_admission_01"
+    ]
+  },
+  {
+    "linkId": "counsel_admission",
+    "code": "02",
+    "show": [
+      "mark_counsel_admission_02"
+    ]
+  },
+  {
+    "linkId": "counsel_inpatient",
+    "code": "01",
+    "show": [
+      "mark_counsel_inpatient_01"
+    ]
+  },
+  {
+    "linkId": "counsel_inpatient",
+    "code": "02",
+    "show": [
+      "mark_counsel_inpatient_02"
+    ]
+  },
+  {
+    "linkId": "counsel_discharge",
+    "code": "01",
+    "show": [
+      "mark_counsel_discharge_01"
+    ]
+  },
+  {
+    "linkId": "counsel_discharge",
+    "code": "02",
+    "show": [
+      "mark_counsel_discharge_02"
+    ]
+  }
+]

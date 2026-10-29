@@ -61,6 +61,7 @@
   | 入院診療計画書 | 施設設定のテンプレート(url、版を問わない)への回答。completed / amended → 作成済、in-progress → 作成中 | 入院日 + `admission_plan_days`(既定 7) |
   | 退院時サマリー | type LOINC 18842-5 の Composition(`encounter`)。preliminary → 作成中、それ以外 → 確定 | 退院日 + `document_reminder.discharge_summary_days` |
   | 看護サマリー | 区分「退院」の看護サマリー(`encounter`)。作成中 / 承認待ち / 承認済(承認待ちも作成済) | 退院日 + `nursing_summary_days`(既定 7) |
+  | 栄養スクリーニング・栄養管理計画書 | `docs/nutrition-care-plan-design.md` | 入院日 + `nutrition_screening_days`(既定 3)・`nutrition_plan_days`(既定 7) |
 
 - **［設計］** 退院系の文書は退院するまで期限が決まらないので「退院後」と出す(書き始めていれば状態を出す)。
   期限を過ぎて作成済でなければ期限超過。

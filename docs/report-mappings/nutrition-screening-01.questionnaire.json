@@ -1,0 +1,962 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/nutrition-screening-01",
+  "version": "1.0.0",
+  "name": "NUT_SCREEN_01",
+  "title": "栄養スクリーニング",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "item": [
+    {
+      "linkId": "grp_body",
+      "type": "group",
+      "text": "身体計測",
+      "item": [
+        {
+          "linkId": "height",
+          "type": "decimal",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "cm",
+                "display": "cm"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%bodyHeight"
+              }
+            }
+          ],
+          "text": "身長"
+        },
+        {
+          "linkId": "weight",
+          "type": "decimal",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "kg",
+                "display": "kg"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%bodyWeight"
+              }
+            }
+          ],
+          "text": "体重"
+        },
+        {
+          "linkId": "bmi",
+          "type": "decimal",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%nutBmi"
+              }
+            }
+          ],
+          "text": "BMI"
+        },
+        {
+          "linkId": "usual_weight",
+          "type": "decimal",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "体重減少率の計算に使う。分からなければ空欄(MUST の体重減少は 0 点になる)。MUST の合計は BMI が出たときだけ入る。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "kg",
+                "display": "kg"
+              }
+            }
+          ],
+          "text": "平常時体重(3〜6か月前)"
+        },
+        {
+          "linkId": "weight_loss_rate",
+          "type": "decimal",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "%",
+                "display": "%"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%nutLossRate"
+              }
+            }
+          ],
+          "text": "体重減少率"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_must",
+      "type": "group",
+      "text": "栄養スクリーニング(MUST)",
+      "item": [
+        {
+          "linkId": "must_bmi",
+          "type": "integer",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "BMI 20 超 = 0、18.5〜20 = 1、18.5 未満 = 2。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "点",
+                "display": "点"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%nutMustBmi"
+              }
+            }
+          ],
+          "text": "BMI"
+        },
+        {
+          "linkId": "must_weight_loss",
+          "type": "integer",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "3〜6 か月の意図しない体重減少 5% 未満 = 0、5〜10% = 1、10% 超 = 2。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "点",
+                "display": "点"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%nutMustLoss"
+              }
+            }
+          ],
+          "text": "体重減少"
+        },
+        {
+          "linkId": "must_acute",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "急性疾患の影響(5 日以上の栄養摂取が無い、または見込み)",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "must_total",
+          "type": "integer",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "点",
+                "display": "点"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%nutMust"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NUT-MUST-SCORE",
+              "display": "MUST の合計"
+            }
+          ],
+          "text": "合計"
+        },
+        {
+          "linkId": "must_risk",
+          "type": "string",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "iif(%nutMust.exists(), iif(%nutMust >= 2, '高', iif(%nutMust = 1, '中', '低')), {})"
+              }
+            }
+          ],
+          "text": "栄養リスク"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_glim",
+      "type": "group",
+      "text": "低栄養の診断(GLIM 基準)",
+      "item": [
+        {
+          "linkId": "glim_weight_loss",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "意図しない体重減少(6 か月以内で 5% 超、または 6 か月超で 10% 超)",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "glim_low_bmi",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "低 BMI(70 歳未満は 18.5 未満、70 歳以上は 20 未満)",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "glim_muscle",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "筋肉量の減少",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "glim_intake",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "食事摂取量の減少・消化吸収能の低下",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "glim_inflammation",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "疾病による負荷・炎症",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "glim_result",
+          "type": "string",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "表現型基準(体重減少・低 BMI・筋肉量の減少)と病因基準(摂取量の減少・炎症)の両方に 1 つ以上あれば低栄養。"
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "iif(descendants().where(linkId.startsWith('glim_') and linkId != 'glim_result' and linkId != 'glim_severity').answer.exists(), iif(descendants().where(linkId = 'glim_weight_loss' or linkId = 'glim_low_bmi' or linkId = 'glim_muscle').answer.value.where(code = '1').exists() and descendants().where(linkId = 'glim_intake' or linkId = 'glim_inflammation').answer.value.where(code = '1').exists(), '低栄養', '該当なし'), {})"
+              }
+            }
+          ],
+          "text": "判定"
+        },
+        {
+          "linkId": "glim_severity",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "重症度(低栄養のとき)",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "中等度"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "重度"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_sga",
+      "type": "group",
+      "text": "主観的包括的評価(SGA)",
+      "item": [
+        {
+          "linkId": "sga_weight",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "体重の変化",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "軽度の減少"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "著しい減少"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sga_intake",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "食事摂取の変化",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "不十分"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "著しく不十分"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sga_gi",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "消化器症状(2 週間以上)",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sga_function",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "身体機能",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "制限なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "歩行可能"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "寝たきり"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sga_stress",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "疾患と栄養必要量(代謝ストレス)",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "軽度"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "中等度"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3",
+                "display": "高度"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sga_physical",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "身体所見(皮下脂肪・筋肉量の減少、浮腫・腹水)",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "正常"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "軽度"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "中等度"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3",
+                "display": "高度"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "sga_result",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NUT-SGA",
+              "display": "SGA の判定"
+            }
+          ],
+          "text": "判定",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "A",
+                "display": "栄養状態良好"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "B",
+                "display": "中等度の栄養不良"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "C",
+                "display": "高度の栄養不良"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_judge",
+      "type": "group",
+      "text": "判定",
+      "item": [
+        {
+          "linkId": "nutrition_need",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "入退院文書の栄養管理計画書の対象を決める(入院診療計画書の同じ欄と共通の linkId とコード)。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "NUT-NEED",
+              "display": "特別な栄養管理の必要性"
+            }
+          ],
+          "text": "特別な栄養管理の必要性",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "有"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "無"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "judge_note",
+          "type": "text",
+          "text": "所見"
+        }
+      ]
+    }
+  ],
+  "description": "入院時の栄養スクリーニングとアセスメント。入院基本料の栄養管理体制の要件(入院時に栄養状態を確認し、特別な栄養管理が必要な患者に栄養管理計画を作る)に沿う。MUST でリスクを、GLIM 基準で低栄養の有無を、SGA で栄養状態を評価し、特別な栄養管理の必要性を判定する。必要性が有の入院は入退院文書で栄養管理計画書の対象になる。回答から Observation を生成する(MUST の合計・SGA・必要性)。",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "language": "text/fhirpath",
+        "expression": "(descendants().where(linkId = 'weight').answer.value.first() / ((descendants().where(linkId = 'height').answer.value.first() / 100) * (descendants().where(linkId = 'height').answer.value.first() / 100))).round(1)",
+        "name": "nutBmi"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "language": "text/fhirpath",
+        "expression": "((descendants().where(linkId = 'usual_weight').answer.value.first() - descendants().where(linkId = 'weight').answer.value.first()) / descendants().where(linkId = 'usual_weight').answer.value.first() * 100).round(1)",
+        "name": "nutLossRate"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "language": "text/fhirpath",
+        "expression": "iif(%nutBmi.exists(), iif(%nutBmi < 18.5, 2, iif(%nutBmi <= 20, 1, 0)), {})",
+        "name": "nutMustBmi"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "language": "text/fhirpath",
+        "expression": "iif(%nutLossRate.exists(), iif(%nutLossRate > 10, 2, iif(%nutLossRate >= 5, 1, 0)), 0)",
+        "name": "nutMustLoss"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "language": "text/fhirpath",
+        "expression": "iif(%nutMustBmi.exists(), %nutMustBmi + %nutMustLoss + descendants().where(linkId = 'must_acute').answer.value.select(code.toInteger()).sum(), {})",
+        "name": "nutMust"
+      }
+    },
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "7a1d4c86-2f39-4b05-8e6a-0c9b3d5f2e71",
+        "display": "栄養管理"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract",
+      "valueBoolean": true
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observation-extract-category",
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+            "code": "survey"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -56,6 +56,8 @@ export type KarteOpenTarget =
   | { kind: "condition-template"; conditionId: string; url: string }
   // 手術の実施記録(ハブ Procedure)を partOf に、テンプレートを選択済みでテンプレート登録を開く(NCD 症例登録の一覧から)。
   | { kind: "procedure-template"; procedureId: string; url: string }
+  // 入院に紐付けて、テンプレートを選択済みでテンプレート登録を開く(入退院文書の栄養スクリーニング・栄養管理計画書から)。
+  | { kind: "encounter-template"; encounterId: string; url: string }
   // Web 問診の回答の取込(患者帯のピクトグラムから)。
   | { kind: "intake"; responseId: number };
 
@@ -73,6 +75,8 @@ export function formatKarteOpen(target: KarteOpenTarget): string {
               ? `${target.conditionId}@${target.url}`
             : target.kind === "procedure-template"
               ? `${target.procedureId}@${target.url}`
+            : target.kind === "encounter-template"
+              ? `${target.encounterId}@${target.url}`
             : target.kind === "intake"
               ? String(target.responseId)
               : target.encounterId;
@@ -99,14 +103,14 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   if (kind === "nursing-summary") return { kind, compositionId: id };
   if (kind === "team-request") return { kind, teamId: id };
   if (kind === "questionnaire") return { kind, url: id };
-  if (kind === "condition-template" || kind === "procedure-template") {
+  if (kind === "condition-template" || kind === "procedure-template" || kind === "encounter-template") {
     // リソースの id に「@」は入らないので、最初の 1 つで切る(url 側はコロンを含む)。
     const at = id.indexOf("@");
     if (at <= 0 || at === id.length - 1) return null;
     const url = id.slice(at + 1);
-    return kind === "condition-template"
-      ? { kind, conditionId: id.slice(0, at), url }
-      : { kind, procedureId: id.slice(0, at), url };
+    if (kind === "condition-template") return { kind, conditionId: id.slice(0, at), url };
+    if (kind === "procedure-template") return { kind, procedureId: id.slice(0, at), url };
+    return { kind, encounterId: id.slice(0, at), url };
   }
   if (kind === "intake" && /^\d+$/.test(id)) return { kind, responseId: Number(id) };
   return null;

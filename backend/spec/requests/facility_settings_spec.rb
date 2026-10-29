@@ -336,6 +336,10 @@ RSpec.describe "FacilitySettings", type: :request do
         "admission_plan_template" => "http://fhir-client.local/Questionnaire/admission-plan-01",
         "admission_plan_days" => 5,
         "nursing_summary_days" => 7,
+        "nutrition_screening_template" => "",
+        "nutrition_screening_days" => 3,
+        "nutrition_plan_template" => "",
+        "nutrition_plan_days" => 7,
       )
     end
 

@@ -246,10 +246,16 @@ class FacilitySettings < ApplicationRecord
     "template" => "http://fhir-client.local/Questionnaire/ncd-case-01"
   }.freeze
 
+  # 入退院文書の作成状況(docs/bed-management-design.md §4、docs/nutrition-care-plan-design.md)。
+  # *_template はテンプレートの url(版を問わない。空なら対象にしない)、*_days は入院日(看護サマリーは退院日)からの期限。
   DEFAULT_ADMISSION_DOCUMENTS = {
     "admission_plan_template" => "",
     "admission_plan_days" => 7,
-    "nursing_summary_days" => 7
+    "nursing_summary_days" => 7,
+    "nutrition_screening_template" => "",
+    "nutrition_screening_days" => 3,
+    "nutrition_plan_template" => "",
+    "nutrition_plan_days" => 7
   }.freeze
 
   # 医事会計へ送るレセプト電算コードのうち、施設基準や届出で決まる「1 施設 1 値」のもの
@@ -412,7 +418,11 @@ class FacilitySettings < ApplicationRecord
         fields: {
           "admission_plan_template" => QUESTIONNAIRE_URL_OR_BLANK,
           "admission_plan_days" => DAYS,
-          "nursing_summary_days" => DAYS
+          "nursing_summary_days" => DAYS,
+          "nutrition_screening_template" => QUESTIONNAIRE_URL_OR_BLANK,
+          "nutrition_screening_days" => DAYS,
+          "nutrition_plan_template" => QUESTIONNAIRE_URL_OR_BLANK,
+          "nutrition_plan_days" => DAYS
         }
       }
     },
