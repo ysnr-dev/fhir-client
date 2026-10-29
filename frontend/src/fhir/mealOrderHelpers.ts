@@ -1108,6 +1108,14 @@ export function summarizeMealOrder(sr: fhir4.ServiceRequest): MealOrderSummary {
   };
 }
 
+/** 食事を 1 行に(食種・主食・副食形態・塩分制限)。テンプレートの初期値と栄養管理の一覧で使う。 */
+export function mealOrderOneLine(sr: fhir4.ServiceRequest): string {
+  const summary = summarizeMealOrder(sr);
+  return [summary.dietName, mealStapleText(summary), summary.sideDishFormName, summary.saltLimitLabel]
+    .filter(Boolean)
+    .join(" ");
+}
+
 /** 食種の参照(コード + 名称)。食種を選んでいなければ null。 */
 export function mealOrderDietRef(sr: fhir4.ServiceRequest): MealItemRef | null {
   const diet = codingBySystem(sr.code?.coding, MEAL_TYPE_SYSTEM);

@@ -86,6 +86,7 @@ import { RadiotherapyWorklistPage } from "./pages/RadiotherapyWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
 import { MealWorklistPage } from "./pages/MealWorklistPage";
+import { NutritionManagementPage } from "./pages/NutritionManagementPage";
 import { MedicationGuidanceWorklistPage } from "./pages/MedicationGuidanceWorklistPage";
 import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
 import { TeamWorklistPage } from "./pages/TeamWorklistPage";
@@ -393,6 +394,7 @@ function App() {
           <Route path="/transfusion-worklist" element={<TransfusionWorklistPage />} />
           <Route path="/rehab-worklist" element={<RehabWorklistPage />} />
           <Route path="/meal-worklist" element={<MealWorklistPage />} />
+          <Route path="/nutrition-management" element={<NutritionManagementPage />} />
           <Route path="/radiotherapy-worklist" element={<RadiotherapyWorklistPage />} />
           <Route path="/radiotherapy-protocols" element={<RadiotherapyProtocolPage />} />
           <Route path="/radiotherapy-modalities" element={<RadiotherapyModalityPage />} />

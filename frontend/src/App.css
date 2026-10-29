@@ -27023,6 +27023,37 @@ input.nursing-picker__search {
   font-weight: normal;
 }
 
+/* 栄養管理の一覧の上の数。 */
+.nutrition-management__indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0 0 12px;
+}
+
+.nutrition-management__indicators div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.nutrition-management__indicators dt {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.nutrition-management__indicators dd {
+  margin: 0;
+  color: var(--text-h);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.nutrition-management__alert {
+  color: var(--lab-high);
+  font-weight: 600;
+}
+
 /* 院内がん登録の診断日の期間。2 つの日付を「〜」でつないで横に並べる。 */
 .cancer-registry__range {
   display: flex;

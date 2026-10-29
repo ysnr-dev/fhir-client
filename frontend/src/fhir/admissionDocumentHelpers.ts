@@ -172,7 +172,7 @@ function isTemplateResponse(response: fhir4.QuestionnaireResponse, url: string):
   return (response.questionnaire ?? "").split("|")[0] === url;
 }
 
-function isCompleted(response: fhir4.QuestionnaireResponse): boolean {
+export function isCompleted(response: fhir4.QuestionnaireResponse): boolean {
   return response.status === "completed" || response.status === "amended";
 }
 
@@ -189,6 +189,38 @@ function responseBelongsTo(response: fhir4.QuestionnaireResponse, encounter: fhi
   const admission = dateOf(encounter.period?.start);
   const discharge = encounter.status === DISCHARGED_STATUS ? dateOf(encounter.period?.end) : today;
   return Boolean(authored && admission) && authored >= addDays(admission, -7) && authored <= discharge;
+}
+
+/** 入院 1 件のテンプレートの回答(その入院のもの、誤記・中止を除く)を新しい順に。url が空なら空。 */
+export function encounterTemplateResponses(
+  encounter: fhir4.Encounter,
+  responses: fhir4.QuestionnaireResponse[],
+  url: string,
+  today: string,
+): fhir4.QuestionnaireResponse[] {
+  if (!url) return [];
+  const patientId = referenceId(encounter.subject?.reference);
+  return responses
+    .filter(
+      (r) =>
+        isTemplateResponse(r, url) &&
+        referenceId(r.subject?.reference) === patientId &&
+        r.status !== "entered-in-error" &&
+        r.status !== "stopped" &&
+        responseBelongsTo(r, encounter, today),
+    )
+    .sort(byAuthoredDesc);
+}
+
+/**
+ * 特別な栄養管理の必要性。確定した回答(入院診療計画書・栄養スクリーニング)のどれかが有なら有、
+ * 無と答えたものがあって有が無ければ無。どれも答えていなければ判定前。
+ */
+export function nutritionNeedOf(responses: fhir4.QuestionnaireResponse[]): "yes" | "no" | "unknown" {
+  const needs = responses
+    .filter(isCompleted)
+    .map((r) => responseAnswer(r, NUTRITION_NEED_LINK_ID)?.valueCoding?.code);
+  return needs.includes(NUTRITION_NEED_YES) ? "yes" : needs.includes(NUTRITION_NEED_NO) ? "no" : "unknown";
 }
 
 function isDischargeSummary(composition: fhir4.Composition): boolean {
@@ -211,18 +243,7 @@ export function admissionDocumentCells(args: {
   const discharge = discharged ? dateOf(encounter.period?.end) : "";
   const own = compositions.filter((c) => referenceId(c.encounter?.reference) === encounter.id);
 
-  // テンプレートの回答(この入院のもの、誤記・中止を除く)を新しい順に。
-  const patientId = referenceId(encounter.subject?.reference);
-  const ownResponses = responses
-    .filter(
-      (r) =>
-        referenceId(r.subject?.reference) === patientId &&
-        r.status !== "entered-in-error" &&
-        r.status !== "stopped" &&
-        responseBelongsTo(r, encounter, today),
-    )
-    .sort(byAuthoredDesc);
-  const responsesOf = (url: string) => (url ? ownResponses.filter((r) => isTemplateResponse(r, url)) : []);
+  const responsesOf = (url: string) => encounterTemplateResponses(encounter, responses, url, today);
 
   // 確定(completed / amended)を優先し、無ければ書きかけ。
   const templateCell = (list: fhir4.QuestionnaireResponse[], due: string): AdmissionDocumentCell => {
@@ -267,20 +288,11 @@ export function admissionDocumentCells(args: {
     admission ? addDays(admission, settings.nutrition_screening_days) : "",
   );
 
-  // 栄養管理計画書。必要性は確定した入院診療計画書・スクリーニングのどれかが有なら有、
-  // 無と答えたものがあって有が無ければ無。どちらも答えていなければ判定前。
-  const needs = [...plans, ...screenings]
-    .filter(isCompleted)
-    .map((r) => responseAnswer(r, NUTRITION_NEED_LINK_ID)?.valueCoding?.code);
-  const nutritionNeed: "yes" | "no" | "unknown" = needs.includes(NUTRITION_NEED_YES)
-    ? "yes"
-    : needs.includes(NUTRITION_NEED_NO)
-      ? "no"
-      : "unknown";
+  // 栄養管理計画書。必要性は入院診療計画書・スクリーニングで決める。
   const nutritionPlanCell = planCell(
     responsesOf(settings.nutrition_plan_template),
     admission ? addDays(admission, settings.nutrition_plan_days) : "",
-    nutritionNeed,
+    nutritionNeedOf([...plans, ...screenings]),
   );
 
   // 褥瘡対策計画書。必要性は確定した最新の褥瘡リスク評価で決める(評価し直したら新しいほうに従う)。

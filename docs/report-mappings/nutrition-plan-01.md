@@ -24,11 +24,11 @@ linkId = レイアウトのアイテム ID。メタ情報は患者氏名 `pt_nam
 | グループ | linkId | 項目 | 備考 |
 |---|---|---|---|
 | 病棟・担当者 | `ward` / `attending` / `dietitian` / `admission_date` | 病棟・担当医師名・担当管理栄養士名・入院日 | 初期値 `%ward` / `%attending` / `%authorName` / `%admissionDate` |
-| 栄養状態 | `risk` / `assessment` | 入院時栄養状態に関するリスク・栄養状態の評価と課題 | |
+| 栄養状態 | `risk` / `assessment` | 入院時栄養状態に関するリスク・栄養状態の評価と課題 | `risk` の初期値は同じ入院の栄養スクリーニング(`%admissionAnswers` の `must_total` / `must_risk` / `glim_result` / `glim_severity` / `sga_result`)を「MUST 2点(高)、GLIM 低栄養(中等度)、SGA B」の形で |
 | 栄養管理計画 | `goal` | 目標 | |
-| | `energy` / `protein` / `water` / `supply_other` | 栄養補給量(kcal / g / mL / その他) | |
+| | `energy` / `protein` / `water` / `supply_other` | 栄養補給量(kcal / g / mL / その他) | `energy` / `protein` の初期値は目安の下限 `%targetEnergyMin` / `%targetProteinMin` |
 | | `supply_route` | 栄養補給方法 | チェックボックス oral 経口 / enteral 経腸栄養 / parenteral 静脈栄養 → `mark_route_<code>` |
-| | `meal_content` / `supply_note` | 食事内容・留意事項 | |
+| | `meal_content` / `supply_note` | 食事内容・留意事項 | `meal_content` の初期値はいまの食事オーダー `%mealDiet` |
 | 栄養食事相談 | `counsel_admission` / `counsel_inpatient` / `counsel_discharge` | 入院時栄養食事指導・栄養食事相談・退院時の指導の必要性 | 01 なし / 02 あり → `mark_<linkId>_<code>`。それぞれ `_detail`(内容)・`_date`(実施予定日) |
 | | `counsel_note` | 備考 | |
 | その他 | `other_issues` | その他栄養管理上解決すべき課題に関する事項 | |

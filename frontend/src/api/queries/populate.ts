@@ -35,7 +35,8 @@ import {
   useManualInfections,
 } from "./patientProfile";
 import { usePractitioner, usePractitionerRoles } from "./practitioner";
-import { resourcesOfType } from "./core";
+import { resourcesOfType, setOrderPeriod } from "./core";
+import { isMealServiceRequest, MEAL_ORDER_TYPE } from "../../fhir/mealOrderHelpers";
 
 /** 項目ごとの最新値を拾うのに読むバイタルの件数(新しい順)。測定 10 回ぶん程度。 */
 const VITAL_COUNT = 50;
@@ -53,7 +54,7 @@ const VITAL_COUNT = 50;
  * コードごとに最新 1 件ずつ取る(呼び出し側が populateLab.ts の collectLabCodes で集める)。
  *
  * 腫瘍・病理(病理レポート・手術・レジメン・放射線治療)、手術(対象の手術と入院)、口腔診査(最新の診査)、最終来院日、
- * 記入回数(同じテンプレートの記入済みの回答)、この入院の回答は、式がそれらの変数を参照しているときだけ読む。
+ * 記入回数(同じテンプレートの記入済みの回答)、この入院の回答、いまの食事は、式がそれらの変数を参照しているときだけ読む。
  *
  * 初期回答はフォームのマウント時に一度だけ確定するので、呼び出し側は isLoading が
  * 落ちてから buildPopulateContext に渡す。
@@ -82,6 +83,7 @@ export function usePopulateSources(
   const canonicals = options.canonicals ?? [];
   const sequence = useMemo(() => usesVariables(expressions ?? [], ["responseSequence"]), [expressions]);
   const admissionAnswers = useMemo(() => usesVariables(expressions ?? [], ["admissionAnswers"]), [expressions]);
+  const mealDiet = useMemo(() => usesVariables(expressions ?? [], ["mealDiet"]), [expressions]);
   // 記入を始めた日で固定する(日付をまたいで開きっぱなしでも値がぶれないように)。
   const [today] = useState(todayString);
 
@@ -309,6 +311,20 @@ export function usePopulateSources(
   });
   const visitQueries = [lastEncounter, registrations];
 
+  // ---- いまの食事(式が参照するときだけ) ----
+  const mealParams = new URLSearchParams();
+  mealParams.set("subject", `Patient/${patientId}`);
+  mealParams.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
+  mealParams.set("status", "active");
+  setOrderPeriod(mealParams, today, today);
+  mealParams.set("_sort", "-authoredon");
+  mealParams.set("_count", "20");
+  const mealOrders = useQuery({
+    queryKey: ["ServiceRequest", "search", "populate-meal", patientId, today],
+    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", mealParams),
+    enabled: Boolean(patientId && mealDiet),
+  });
+
   const allConditions = useKarteConditions(patientId);
   const allergies = useActiveAllergies(patientId);
   const flags = useActiveFlags(patientId);
@@ -366,7 +382,8 @@ export function usePopulateSources(
     surgeryQueries.some((q) => q.isLoading) ||
     oralQueries.some((q) => q.isLoading) ||
     visitQueries.some((q) => q.isLoading) ||
-    admissionResponses.isLoading;
+    admissionResponses.isLoading ||
+    mealOrders.isLoading;
 
   const author = practitioner.data?.data;
   const authorRoles = practitionerRoles.data?.data;
@@ -438,6 +455,9 @@ export function usePopulateSources(
       admissionResponses: admissionAnswers
         ? resourcesOfType<fhir4.QuestionnaireResponse>(admissionResponses.data?.data, "QuestionnaireResponse")
         : undefined,
+      mealOrders: mealDiet
+        ? resourcesOfType<fhir4.ServiceRequest>(mealOrders.data?.data, "ServiceRequest").filter(isMealServiceRequest)
+        : undefined,
     };
   }, [
     today,
@@ -478,6 +498,8 @@ export function usePopulateSources(
     surgeryAdmissions.data,
     admissionAnswers,
     admissionResponses.data,
+    mealDiet,
+    mealOrders.data,
   ]);
 
   return {
@@ -490,6 +512,7 @@ export function usePopulateSources(
       oralQueries.find((q) => q.error)?.error ??
       visitQueries.find((q) => q.error)?.error ??
       admissionResponses.error ??
+      mealOrders.error ??
       null,
     sources,
   };

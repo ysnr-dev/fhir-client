@@ -89,6 +89,13 @@
             {
               "url": "http://hl7.org/fhir/StructureDefinition/designNote",
               "valueMarkdown": "栄養スクリーニングの結果(MUST・GLIM・SGA)を要約して書く。"
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "(iif(%admissionAnswers.where(linkId = 'must_total').exists(), 'MUST ' + %admissionAnswers.where(linkId = 'must_total').value.toString() + '点(' + %admissionAnswers.where(linkId = 'must_risk').value + ')', {}) | iif(%admissionAnswers.where(linkId = 'glim_result').exists(), 'GLIM ' + %admissionAnswers.where(linkId = 'glim_result').value + iif(%admissionAnswers.where(linkId = 'glim_severity').exists(), iif(%admissionAnswers.where(linkId = 'glim_severity').value = '2', '(重度)', '(中等度)'), ''), {}) | iif(%admissionAnswers.where(linkId = 'sga_result').exists(), 'SGA ' + %admissionAnswers.where(linkId = 'sga_result').value, {})).join('、')"
+              }
             }
           ],
           "text": "入院時栄養状態に関するリスク"
@@ -121,6 +128,13 @@
                 "code": "kcal",
                 "display": "kcal"
               }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%targetEnergyMin"
+              }
             }
           ],
           "text": "栄養補給量 エネルギー"
@@ -139,6 +153,13 @@
                 "system": "http://unitsofmeasure.org",
                 "code": "g",
                 "display": "g"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%targetProteinMin"
               }
             }
           ],
@@ -205,6 +226,15 @@
         {
           "linkId": "meal_content",
           "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%mealDiet"
+              }
+            }
+          ],
           "text": "食事内容"
         },
         {
@@ -393,7 +423,7 @@
       ]
     }
   ],
-  "description": "診療報酬の様式「別紙23 栄養管理計画書」を入力・帳票出力するためのテンプレート。栄養スクリーニングか入院診療計画書で特別な栄養管理の必要性が有の入院に、医師・管理栄養士・看護師などが共同で作る。再評価のたびに新しい回答を書く(前回値複写が使える)。再評価の時期を過ぎて在院していると、入退院文書で期限超過になる。",
+  "description": "診療報酬の様式「別紙23 栄養管理計画書」を入力・帳票出力するためのテンプレート。栄養スクリーニングか入院診療計画書で特別な栄養管理の必要性が有の入院に、医師・管理栄養士・看護師などが共同で作る。入院時栄養状態に関するリスクは同じ入院の栄養スクリーニング(MUST・GLIM・SGA)、栄養補給量は標準体重からの目安の下限、食事内容はいまの食事オーダーを初期値にする。再評価のたびに新しい回答を書く(前回値複写が使える)。再評価の時期を過ぎて在院していると、入退院文書で期限超過になる。",
   "extension": [
     {
       "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",

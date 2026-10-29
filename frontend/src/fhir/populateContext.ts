@@ -12,6 +12,8 @@ import type { PatientCaution } from "../api/masterClient";
 import { dateTimeLabel, diffDays, toWareki } from "../lib/dates";
 import { summarizeAllergy } from "./allergyHelpers";
 import { summarizeBodyMeasures } from "./bodyMeasureHelpers";
+import { mealNutritionTarget } from "./mealNutritionTarget";
+import { mealOrderOneLine } from "./mealOrderHelpers";
 import { bloodTypeLabel } from "./transfusionOrderHelpers";
 import { summarizeBloodType } from "./bloodTypeHelpers";
 import { cancerPopulateValues, type CancerPopulateSources } from "./cancerRegistryHelpers";
@@ -98,6 +100,8 @@ export interface PopulateSources {
   responseCount?: number;
   /** 記入する入院(無ければ今の入院)に結び付いた確定済みの回答。式が %admissionAnswers を参照するときだけ揃う。 */
   admissionResponses?: fhir4.QuestionnaireResponse[];
+  /** 今日の時点で続いている食事オーダー(新しい順)。式が %mealDiet を参照するときだけ揃う。 */
+  mealOrders?: fhir4.ServiceRequest[];
 }
 
 /** 式が変数のどれかを参照しているか(%名前 の後ろに名前の続きが無いもの)。 */
@@ -425,6 +429,48 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     description:
       "入院に結び付いた確定済みのテンプレート回答(看護プロファイルなど)の項目を、linkId ごとに最新の値で持ちます。linkId を書き換えて使います。選択肢はコードが入ります。",
     sample: "1",
+  },
+
+  // ---- 栄養 ----
+  {
+    group: "栄養",
+    variable: "mealDiet",
+    label: "いまの食事",
+    expression: "%mealDiet",
+    description: "今日の時点で続いている食事オーダー(最新)の食種・主食・副食形態・塩分制限を 1 行で入れます。食事オーダーが無ければ入りません。",
+    sample: "糖尿病食1600kcal 米飯150g 常菜 塩分6g",
+  },
+  {
+    group: "栄養",
+    variable: "targetEnergyMin",
+    label: "熱量の目安(下限)",
+    expression: "%targetEnergyMin",
+    description: `標準体重(BMI 22)× 25 kcal を 10 kcal 単位で入れます。食事オーダーの栄養量の目安と同じ計算です。身長が無い・18 歳未満なら入りません。${NUMBER_NOTE}`,
+    sample: "1500",
+  },
+  {
+    group: "栄養",
+    variable: "targetEnergyMax",
+    label: "熱量の目安(上限)",
+    expression: "%targetEnergyMax",
+    description: `標準体重(BMI 22)× 30 kcal を 10 kcal 単位で入れます。${NUMBER_NOTE}`,
+    sample: "1800",
+  },
+  {
+    group: "栄養",
+    variable: "targetProteinMin",
+    label: "蛋白質の目安(下限)",
+    expression: "%targetProteinMin",
+    description: `標準体重(BMI 22)× 1.0 g を整数で入れます。${NUMBER_NOTE}`,
+    sample: "60",
+  },
+  {
+    group: "栄養",
+    variable: "targetProteinMax",
+    label: "蛋白質の目安(上限)",
+    expression: "%targetProteinMax",
+    description: `標準体重(BMI 22)× 1.2 g を整数で入れます。${NUMBER_NOTE}`,
+    sample: "72",
   },
 
   // ---- 傷病名 ----
@@ -1347,6 +1393,7 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
   const body = summarizeBodyMeasures(sources.bodyMeasures);
   const age = patient.birthDate ? calculateAge(patient.birthDate, new Date(`${today}T00:00:00`)) : undefined;
   const gender = genderLabel(patient.gender);
+  const target = mealNutritionTarget(body, age);
 
   return {
     patient,
@@ -1381,6 +1428,11 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     lastVisitDate: sources.lastEncounter?.period?.start?.slice(0, 10) ?? "",
     responseSequence: sources.responseCount === undefined ? undefined : sources.responseCount + 1,
     admissionAnswers: admissionAnswerValues(sources.admissionResponses),
+    mealDiet: sources.mealOrders?.[0] ? mealOrderOneLine(sources.mealOrders[0]) : "",
+    targetEnergyMin: target?.energy[0],
+    targetEnergyMax: target?.energy[1],
+    targetProteinMin: target?.protein[0],
+    targetProteinMax: target?.protein[1],
     ...cancerPopulateValues(sources.allConditions, sources.focusConditionId, sources.cancer),
     ...infectiousDiseaseValues(sources.allConditions, sources.focusConditionId),
     ...surgeryPopulateValues(patient, sources.surgery),

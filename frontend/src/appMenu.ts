@@ -129,6 +129,8 @@ export const APP_MENU: AppMenuEntry[] = [
           { label: "栄養指導一覧", to: "/nutrition-guidance-worklist" },
           // 給食はオーダーを 1 件ずつ処理せず、その日の食事を患者別に並べて食数を数える。
           { label: "食事一覧", to: "/meal-worklist" },
+          // 栄養管理はスクリーニングと計画書の状況を入院患者ごとに並べる(入退院文書の栄養の列と同じ判定)。
+          { label: "栄養管理", to: "/nutrition-management" },
         ],
       },
       {
