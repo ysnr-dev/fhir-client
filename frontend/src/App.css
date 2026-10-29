@@ -872,7 +872,9 @@ button:disabled {
 .pathway-preview__field input,
 .rx-verification__field select,
 .rx-verification__field textarea,
-.karte-print-form input[type="date"] {
+.karte-print-form input[type="date"],
+.injection-scan__date input[type="date"],
+.barcode-scan-field {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
@@ -2368,6 +2370,110 @@ fieldset.rp-card {
 
 .injection-verify__state--none {
   color: var(--text);
+}
+
+/* 注射バーコード実施。上に読み取りの手順と欄、その下に読んだ患者と、その日の注射。 */
+.injection-scan__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-card-shadow);
+}
+
+.injection-scan__panel .barcode-scan-field {
+  --control-height: 42px;
+  width: 420px;
+  padding: 8px 12px;
+  font-size: 18px;
+}
+
+.injection-scan__panel .injection-verify__message {
+  margin: 0;
+}
+
+.injection-scan__steps {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.injection-scan__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.injection-scan__step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-size: 13px;
+}
+
+.injection-scan__step--active {
+  color: var(--text-h);
+  font-weight: bold;
+}
+
+.injection-scan__step--active .injection-scan__step-number {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.injection-scan__step--done .injection-scan__step-number {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.injection-scan__patient {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 20px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border);
+}
+
+.injection-scan__patient-number {
+  font-size: 22px;
+  font-weight: bold;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.injection-scan__patient-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 20px;
+}
+
+.injection-scan__patient-profile {
+  color: var(--text);
+}
+
+/* 薬剤と用法は長いので折り返し、表をページの幅に収める。 */
+.injection-scan__table td:not(.lab-worklist__compact) {
+  white-space: normal;
+}
+
+/* オーダーの境目(同じオーダーの RP は罫線を細く)。 */
+.injection-scan__table tr.injection-scan__order-start td {
+  border-top: 2px solid var(--border);
 }
 
 /* 入力ステップの先頭に出す照合の要約。 */

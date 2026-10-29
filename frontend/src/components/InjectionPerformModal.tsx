@@ -58,7 +58,8 @@ import { RemoveRowButton } from "./RemoveRowButton";
 // オーダーの行は消せない(施用しなかった記録として「施用」を外す)が、足した行は消せる。
 //
 // 施設設定で3点認証を有効にしていれば、入力の前に照合(InjectionVerifyStep)を出す。読めた RP だけを
-// 施用にして入力へ進み、照合の結果は実施記録のハブに残す。
+// 施用にして入力へ進み、照合の結果は実施記録のハブに残す。注射バーコード実施の画面から開くときは
+// そこで読んだ結果(initialScan)を持って照合から始め、施設設定に関わらず照合を記録する。
 
 interface Props {
   order: fhir4.ServiceRequest;
@@ -66,6 +67,8 @@ interface Props {
   task: fhir4.Task | undefined;
   /** 既にあるこのオーダーの実施記録。予定回数に達したかの判定に使う。 */
   performs: InjectionPerformDisplay[];
+  /** 開く前に読んだ患者番号・RP バーコードの照合。渡すと照合を必須にする。 */
+  initialScan?: InjectionScanState;
   onClose: () => void;
 }
 
@@ -74,6 +77,7 @@ export function InjectionPerformModal({
   medicationRequests,
   task,
   performs,
+  initialScan,
   onClose,
 }: Props) {
   const register = useRegisterInjectionPerform();
@@ -88,11 +92,11 @@ export function InjectionPerformModal({
   const [addingRp, setAddingRp] = useState<number | null>(null);
 
   const verificationSettings = useInjectionVerificationSettings();
-  const verificationEnabled = verificationSettings?.enabled ?? false;
+  const verificationEnabled = (verificationSettings?.enabled ?? false) || initialScan !== undefined;
   // 照合と入力のどちらを出しているか。null のあいだは設定に従う(有効なら照合から)。
   const [stepChoice, setStepChoice] = useState<"verify" | "input" | null>(null);
   const step = stepChoice ?? (verificationEnabled ? "verify" : "input");
-  const [scan, setScan] = useState<InjectionScanState>(EMPTY_SCAN_STATE);
+  const [scan, setScan] = useState<InjectionScanState>(initialScan ?? EMPTY_SCAN_STATE);
 
   // ロット番号を記録する薬(薬剤付加情報)。対象の薬が 1 つでもあればロットの列を出す。
   const lotCodes = useLotRequiredCodes(values.medicines.map((m) => m.code));
@@ -303,7 +307,7 @@ export function InjectionPerformModal({
     );
   }
 
-  if (verificationSettings === undefined) {
+  if (verificationSettings === undefined && initialScan === undefined) {
     return (
       <Modal title="注射の実施入力" onClose={onClose} className="modal--wide">
         <p className="order-select__muted">読み込み中...</p>

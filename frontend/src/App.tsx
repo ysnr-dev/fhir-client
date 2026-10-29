@@ -101,6 +101,7 @@ import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
 import { PatientCautionPage } from "./pages/PatientCautionPage";
 import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
 import { InsulinScaleSetPage } from "./pages/InsulinScaleSetPage";
+import { InjectionScanPerformPage } from "./pages/InjectionScanPerformPage";
 import { InsulinWorklistPage } from "./pages/InsulinWorklistPage";
 import { AstWorklistPage } from "./pages/AstWorklistPage";
 import { NursingAssignmentPage } from "./pages/NursingAssignmentPage";
@@ -414,6 +415,7 @@ function App() {
           <Route path="/order-sets" element={<OrderSetPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/insulin-worklist" element={<InsulinWorklistPage />} />
+          <Route path="/injection-scan" element={<InjectionScanPerformPage />} />
           <Route path="/ast-worklist" element={<AstWorklistPage />} />
           <Route path="/nursing-worksheet" element={<NursingWorksheetPage />} />
           <Route path="/nursing-assignments" element={<NursingAssignmentPage />} />

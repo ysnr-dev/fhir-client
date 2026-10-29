@@ -6,7 +6,7 @@
 //   診療業務 … 「診療科の医師が捌く仕事」。部門業務(依頼を受ける部門の仕事)とは受け手が違う
 //              — 他科依頼を受けるのは技師ではなく他科の医師で、返すのは結果ではなく診療記録
 //              (docs/consult-order-design.md §1)。
-//   看護業務 … 病棟の看護師の画面。どれも病棟を指定しなければ先頭の病棟で開く。
+//   看護業務 … 病棟の看護師の画面。病棟で見る画面は、病棟を指定しなければ先頭の病棟で開く。
 //   部門業務 … 「依頼を受けた側」の画面。項目が多いので部門ごとに入れ子にする
 //              (1 項目だけの部門も並びを揃えるためサブメニューにする)。
 //   予約枠   … 診療科がオーダーを出す前段(いつ診るかを決める)なので独立して置く。
@@ -78,6 +78,8 @@ export const APP_MENU: AppMenuEntry[] = [
       { label: "褥瘡管理", to: "/pressure-ulcer" },
       { label: "病棟マップ", to: "/ward-map" },
       { label: "血糖インスリン", to: "/insulin-worklist" },
+      // ベッドサイドで患者番号と注射ラベルのバーコードを読んで実施入力する(docs/injection-order-design.md §6.6)。
+      { label: "注射バーコード実施", to: "/injection-scan" },
       { label: "看護サマリー承認", to: "/nursing-summary-approvals" },
       { label: "経過表一括入力", to: "/inpatients/bulk-vitals" },
     ],

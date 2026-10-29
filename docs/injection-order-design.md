@@ -383,6 +383,18 @@ extension[url=http://fhir-client.local/StructureDefinition/injection-verificatio
   at        valueDateTime 照合を終えた・スキップした日時
 ```
 
+### 6.6 注射バーコード実施
+
+看護業務メニューの「注射バーコード実施」(`/injection-scan`、`pages/InjectionScanPerformPage.tsx`)は、
+カルテを開かずにバーコードだけで実施入力に入る画面。
+
+- 患者番号を読むと `Patient?identifier=`(system は問わない)で患者を引き、その患者の選んだ日(既定は今日)の
+  注射を RP ごとに並べる。該当なし・同じ番号の患者が複数いるときは止める。
+- 続けて RP バーコードを読むと、並べた注射の中から id の先頭 12 桁が一致するオーダーを探し、患者番号と RP を
+  読んだ状態の照合(§6.5)を持って実施入力を開く。ほかの RP も読めばそのまま照合に足せる。
+- 患者番号より先の RP、その患者のその日に無いラベル、中止した注射は受け付けない。
+- この画面から開いた実施入力は、施設設定「注射の3点認証」が無効でも照合を記録する(読んで入る画面なので)。
+
 ## 7. ファイル
 
 | 役割 | ファイル |
@@ -399,6 +411,7 @@ extension[url=http://fhir-client.local/StructureDefinition/injection-verificatio
 | 実施記録の FHIR 変換・表示 | `frontend/src/fhir/injectionPerformHelpers.ts` |
 | 実施入力 | `frontend/src/components/InjectionPerformModal.tsx` |
 | 3点認証(照合) | `frontend/src/fhir/injectionVerificationHelpers.ts`、`components/InjectionVerifyStep.tsx`、`components/BarcodeScanField.tsx` |
+| 注射バーコード実施 | `frontend/src/pages/InjectionScanPerformPage.tsx` |
 | 実施登録・実施取消 | `frontend/src/api/queries.ts`(`useRegisterInjectionPerform` / `useCancelInjectionPerforms`) |
 | 注射一覧 | `frontend/src/pages/InjectionWorklistPage.tsx`、`api/queries.ts`(`useInjectionWorklist`) |
 | 払出 | `frontend/src/fhir/injectionDispenseHelpers.ts`、`components/InjectionDispenseModal.tsx` |

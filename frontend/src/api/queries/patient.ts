@@ -10,7 +10,7 @@ import {
   typeOperation,
   updateResource,
 } from "../fhirClient";
-import { hasRelation } from "./core";
+import { hasRelation, resourcesOfType } from "./core";
 
 export interface PatientSearchParams {
   name?: string;
@@ -70,6 +70,22 @@ export function usePatient(id: string | undefined) {
     queryKey: ["Patient", id],
     queryFn: () => readResource<fhir4.Patient>("Patient", id as string),
     enabled: Boolean(id),
+  });
+}
+
+/**
+ * 患者番号(identifier の値。system は問わない)で患者を引く。リストバンドやラベルのバーコードを
+ * 読んだときに使う。同じ番号の患者が複数いれば全員を返す(呼び出し側で取り違えとして止める)。
+ */
+export function usePatientsByNumber(number: string) {
+  return useQuery({
+    queryKey: ["Patient", "by-number", number],
+    queryFn: async () => {
+      const params = new URLSearchParams({ identifier: number, _count: "2" });
+      const { data } = await searchResource<fhir4.Patient>("Patient", params);
+      return resourcesOfType<fhir4.Patient>(data, "Patient");
+    },
+    enabled: Boolean(number),
   });
 }
 
