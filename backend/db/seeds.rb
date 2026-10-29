@@ -345,6 +345,20 @@ end
       display_order: row["display_order"].to_s.strip.presence&.to_i
     }
   }],
+  # 指導・管理料の項目(docs/medical-management-order-design.md §2)。施設の規模でコードが分かれる
+  # 管理料は 100 床以上 200 床未満の病院のものを入れてある。加算は | 区切り。
+  "management_fee_items" => [Master::ManagementFeeItem, :item_code, lambda { |row|
+    {
+      item_code: row["item_code"].to_s.strip,
+      name: row["name"].to_s.strip,
+      receipt_code: row["receipt_code"].to_s.strip,
+      addition_codes: row["addition_codes"].to_s.split("|").map(&:strip),
+      inpatient: row["inpatient"].to_s.strip == "1",
+      outpatient: row["outpatient"].to_s.strip == "1",
+      monthly_limit: row["monthly_limit"].to_s.strip.presence&.to_i,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    }
+  }],
   # 患者の診療上の注意の区分。pictogram が空の行は患者帯に出ない。
   "patient_cautions" => [Master::PatientCaution, :code, lambda { |row|
     {
