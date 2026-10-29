@@ -37,6 +37,10 @@ import {
   NutritionGuidanceOrderEditPanel,
 } from "./NutritionGuidanceOrderPanels";
 import {
+  MedicalManagementOrderCreatePanel,
+  MedicalManagementOrderEditPanel,
+} from "./MedicalManagementOrderPanels";
+import {
   MedicationGuidanceOrderCreatePanel,
   MedicationGuidanceOrderEditPanel,
 } from "./MedicationGuidanceOrderPanels";
@@ -253,6 +257,10 @@ const ORDER_PANES: Record<
   "nutrition-guidance-order": {
     create: { title: "栄養指導登録", Panel: NutritionGuidanceOrderCreatePanel },
     edit: { title: "栄養指導編集", Panel: NutritionGuidanceOrderEditPanel },
+  },
+  "medical-management-order": {
+    create: { title: "指導・管理料登録", Panel: MedicalManagementOrderCreatePanel },
+    edit: { title: "指導・管理料編集", Panel: MedicalManagementOrderEditPanel },
   },
   "medication-guidance-order": {
     create: { title: "服薬指導登録", Panel: MedicationGuidanceOrderCreatePanel },

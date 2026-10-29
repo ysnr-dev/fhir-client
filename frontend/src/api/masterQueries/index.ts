@@ -16,6 +16,7 @@ export * from "./endoscopy";
 export * from "./schema";
 export * from "./micro";
 export * from "./treatment";
+export * from "./managementFee";
 export * from "./meal";
 export * from "./transfusion";
 export * from "./surgery";

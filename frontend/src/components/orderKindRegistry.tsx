@@ -8,6 +8,7 @@ import {
   useDeleteMedicationGuidanceOrder,
   useDeleteMicroOrder,
   useDeleteNutritionGuidanceOrder,
+  useDeleteMedicalManagementOrder,
   useDeletePathoOrder,
   useDeletePhysioOrder,
   useDeleteRadOrder,
@@ -29,6 +30,7 @@ import { labTaskStatusDisplay } from "../fhir/labTaskHelpers";
 import { summarizeMealOrder } from "../fhir/mealOrderHelpers";
 import { summarizeMicroOrder } from "../fhir/microOrderHelpers";
 import { summarizeNutritionGuidanceOrder } from "../fhir/nutritionGuidanceOrderHelpers";
+import { summarizeMedicalManagementOrder } from "../fhir/medicalManagementOrderHelpers";
 import { nutritionGuidanceTaskStatusDisplay } from "../fhir/nutritionGuidanceTaskHelpers";
 import type { OrderKind } from "../fhir/orderKinds";
 import { summarizePathoOrder } from "../fhir/pathoOrderHelpers";
@@ -55,6 +57,7 @@ import { LabOrderCardBody } from "./karteCardBodies/LabOrderCardBody";
 import { MealOrderCardBody } from "./karteCardBodies/MealOrderCardBody";
 import { MicroOrderCardBody } from "./karteCardBodies/MicroOrderCardBody";
 import { NutritionGuidanceOrderCardBody } from "./karteCardBodies/NutritionGuidanceOrderCardBody";
+import { MedicalManagementOrderCardBody } from "./karteCardBodies/MedicalManagementOrderCardBody";
 import { MedicationGuidanceOrderCardBody } from "./karteCardBodies/MedicationGuidanceOrderCardBody";
 import { summarizeMedicationGuidanceOrder } from "../fhir/medicationGuidanceOrderHelpers";
 import { medicationGuidanceTaskStatusDisplay } from "../fhir/medicationGuidanceTaskHelpers";
@@ -313,6 +316,14 @@ export const ORDER_KIND_DEFS: { [K in OrderKind]: OrderKindDef<K> } = {
       <MedicationGuidanceOrderCardBody serviceRequest={item.serviceRequest} performs={item.performs} />
     ),
   },
+  "medical-management-order": {
+    // 登録と同時に実施済なので進捗は出さない。
+    title: (item) => summarizeMedicalManagementOrder(item.serviceRequest).settingDisplay,
+    doable: true,
+    Body: ({ item }) => (
+      <MedicalManagementOrderCardBody serviceRequest={item.serviceRequest} items={item.items} />
+    ),
+  },
   "consult-order": {
     // 「どこへ出したか」が見出しそのもの。至急のときだけ緊急度も並べる。
     title: (item) => {
@@ -373,6 +384,7 @@ export function useOrderKindDeletes() {
     "radiotherapy-order": useDeleteRadiotherapyOrder(),
     "nutrition-guidance-order": useDeleteNutritionGuidanceOrder(),
     "medication-guidance-order": useDeleteMedicationGuidanceOrder(),
+    "medical-management-order": useDeleteMedicalManagementOrder(),
     "consult-order": useDeleteConsultOrder(),
     "team-request": useDeleteTeamRequest(),
   } satisfies Record<OrderKind, unknown>;

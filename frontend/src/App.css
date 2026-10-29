@@ -29952,3 +29952,76 @@ input.nursing-picker__search {
 .document-template-table th:nth-child(n + 4) {
   white-space: nowrap;
 }
+
+/* 指導・管理料の項目マスタの編集。 */
+.lab-order-item__fields label.management-fee-item__check {
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-end;
+}
+
+.management-fee-item__receipt,
+.management-fee-item__additions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  flex-basis: 100%;
+}
+
+.management-fee-item__receipt-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.management-fee-item__additions ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.management-fee-item__additions li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.management-fee-item__additions > button {
+  align-self: flex-start;
+}
+
+/* 指導・管理料オーダーのフォーム。 */
+.medical-management-form__items,
+.medical-management-form__additions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.medical-management-form__additions {
+  padding-left: 24px;
+  margin-top: 2px;
+}
+
+.prescription-form label.medical-management-form__item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.medical-management-form__points,
+.medical-management-form__history {
+  font-size: 13px;
+  color: var(--text);
+}

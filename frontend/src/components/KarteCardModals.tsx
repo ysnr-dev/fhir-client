@@ -22,6 +22,7 @@ import {
   useTreatmentAdverseEvents,
   useRehabOrderDetail,
   useNutritionGuidanceOrderDetail,
+  useMedicalManagementOrderDetail,
   useMedicationGuidanceOrderDetail,
   useTransfusionOrderDetail,
   useTransfusionPerformDetail,
@@ -82,6 +83,8 @@ import { SurgeryOrderDetailPanel } from "./SurgeryOrderDetailPanel";
 import { TransfusionOrderDetailPanel } from "./TransfusionOrderDetailPanel";
 import { RehabOrderDetailPanel } from "./RehabOrderDetailPanel";
 import { NutritionGuidanceOrderDetailPanel } from "./NutritionGuidanceOrderDetailPanel";
+import { MedicalManagementOrderDetailPanel } from "./MedicalManagementOrderDetailPanel";
+import { medicalManagementItemsByOrderId } from "../fhir/medicalManagementOrderHelpers";
 import { ConsultOrderDetailPanel } from "./ConsultOrderDetailPanel";
 import { TeamRequestDetailPanel } from "./TeamRequestDetailPanel";
 import { teamRequestTasksByOrderId } from "../fhir/teamRequestTaskHelpers";
@@ -134,6 +137,7 @@ const ORDER_DETAILS: Record<OrderKind, ComponentType<OrderDetailProps>> = {
   "rehab-order": RehabOrderDetail,
   "radiotherapy-order": RadiotherapyOrderDetail,
   "nutrition-guidance-order": NutritionGuidanceOrderDetail,
+  "medical-management-order": MedicalManagementOrderDetail,
   "medication-guidance-order": MedicationGuidanceOrderDetail,
   "consult-order": ConsultOrderDetail,
   "team-request": TeamRequestDetail,
@@ -609,6 +613,38 @@ function NutritionGuidanceOrderDetail({
   );
 }
 
+// 指導・管理料も実施記録(算定項目)がオーダーの検索に _revinclude で添えてある。
+function MedicalManagementOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useMedicalManagementOrderDetail(srId);
+  const serviceRequest = serviceRequestsOf(detail.data?.data).find((request) => request.id === srId);
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+  const procedures = resourcesOfType<fhir4.Procedure>(detail.data?.data, "Procedure");
+  const items = medicalManagementItemsByOrderId(procedures).get(srId) ?? [];
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された指導・管理料オーダーは別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <MedicalManagementOrderDetailPanel serviceRequest={serviceRequest} items={items} problemsById={problemsById} />
+      ) : (
+        !detail.error && <NotFound label="指導・管理料オーダー" />
+      )}
+    </>
+  );
+}
+
 // 服薬指導も栄養指導と同じく、実施記録がオーダーの検索に _revinclude で添えてある。
 function MedicationGuidanceOrderDetail({
   patientId,
@@ -945,6 +981,7 @@ const ORDER_JSONS: Record<OrderKind, ComponentType<{ srId: string }>> = {
   "rehab-order": RehabOrderJson,
   "radiotherapy-order": RadiotherapyOrderJson,
   "nutrition-guidance-order": NutritionGuidanceOrderJson,
+  "medical-management-order": MedicalManagementOrderJson,
   "medication-guidance-order": MedicationGuidanceOrderJson,
   "consult-order": ConsultOrderJson,
   "team-request": TeamRequestJson,
@@ -1322,6 +1359,17 @@ function RehabOrderJson({ srId }: { srId: string }) {
 // 栄養指導もリハビリと同じく進捗 Task と実施 Procedure が _revinclude で届く。
 function NutritionGuidanceOrderJson({ srId }: { srId: string }) {
   const detail = useNutritionGuidanceOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+    </>
+  );
+}
+
+function MedicalManagementOrderJson({ srId }: { srId: string }) {
+  const detail = useMedicalManagementOrderDetail(srId);
 
   return (
     <>

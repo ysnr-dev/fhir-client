@@ -47,13 +47,14 @@ export const ADVISORY_KINDS = [
   "regimen-conflict",
   "regimen-date",
   "regimen-availability",
+  "management-fee-limit",
   "cds-critical",
   "cds-warning",
   "cds-info",
 ] as const;
 export type AdvisoryKind = (typeof ADVISORY_KINDS)[number];
 
-export const ADVISORY_GROUPS = ["薬剤", "放射線", "患者状態", "食事", "レジメン", "外部"] as const;
+export const ADVISORY_GROUPS = ["薬剤", "放射線", "患者状態", "食事", "レジメン", "医学管理", "外部"] as const;
 export type AdvisoryGroup = (typeof ADVISORY_GROUPS)[number];
 
 export interface AdvisoryKindDef {
@@ -83,6 +84,7 @@ export const ADVISORY_KIND_DEFS: Record<AdvisoryKind, AdvisoryKindDef> = {
   "regimen-conflict": { label: "レジメンの重なり", group: "レジメン", defaultSeverity: "warning" },
   "regimen-date": { label: "開始日", group: "レジメン", defaultSeverity: "info" },
   "regimen-availability": { label: "候補外のレジメン", group: "レジメン", defaultSeverity: "info" },
+  "management-fee-limit": { label: "算定回数の上限", group: "医学管理", defaultSeverity: "info" },
   "cds-critical": { label: "判断支援(重要)", group: "外部", defaultSeverity: "warning" },
   "cds-warning": { label: "判断支援(注意)", group: "外部", defaultSeverity: "info" },
   "cds-info": { label: "判断支援(情報)", group: "外部", defaultSeverity: "info" },

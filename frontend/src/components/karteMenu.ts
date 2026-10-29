@@ -65,6 +65,11 @@ export const KARTE_MENU_ITEMS: KarteMenuItem[] = [
     label: "服薬指導",
     open: (problem) => ({ kind: "medication-guidance-order-create", problem }),
   },
+  {
+    key: "medical-management-order",
+    label: "指導・管理料",
+    open: (problem) => ({ kind: "medical-management-order-create", problem }),
+  },
   // 看護過程の順(情報収集 → 計画 → 指示 → サマリー)に並べる。見出し「看護」の下では
   // 「看護」を付けない(列の幅は最長のラベルで決まる)。
   {

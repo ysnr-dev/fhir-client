@@ -65,6 +65,7 @@ import { NursingStandardPlanPage } from "./pages/NursingStandardPlanPage";
 import { NursingTermMasterPage } from "./pages/NursingTermMasterPage";
 import { NursingObservationPage } from "./pages/NursingObservationPage";
 import { TreatmentItemPage } from "./pages/TreatmentItemPage";
+import { ManagementFeeItemPage } from "./pages/ManagementFeeItemPage";
 import { TreatmentItemLayoutPage } from "./pages/TreatmentItemLayoutPage";
 import { TreatmentDatasetPage } from "./pages/TreatmentDatasetPage";
 import { MicroOrderItemPage } from "./pages/MicroOrderItemPage";
@@ -481,6 +482,7 @@ function App() {
           <Route path="/endoscopy-exam-types" element={<EndoscopyExamTypePage />} />
           <Route path="/endoscopy-datasets" element={<EndoscopyDatasetPage />} />
           <Route path="/treatment-items" element={<TreatmentItemPage />} />
+          <Route path="/management-fee-items" element={<ManagementFeeItemPage />} />
           <Route path="/treatment-item-layouts" element={<TreatmentItemLayoutPage />} />
           <Route path="/treatment-datasets" element={<TreatmentDatasetPage />} />
           <Route path="/meal-diets" element={<MealDietPage />} />

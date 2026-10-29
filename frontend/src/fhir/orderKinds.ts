@@ -7,6 +7,7 @@ import { isMealServiceRequest, mealOrderProblem, MEAL_ORDER_TYPE } from "./mealO
 import { isMicroServiceRequest, microOrderProblem, MICRO_ORDER_TYPE } from "./microOrderHelpers";
 import { isNutritionGuidanceServiceRequest, nutritionGuidanceOrderProblem, NUTRITION_GUIDANCE_ORDER_TYPE } from "./nutritionGuidanceOrderHelpers";
 import { isMedicationGuidanceServiceRequest, medicationGuidanceOrderProblem, MEDICATION_GUIDANCE_ORDER_TYPE } from "./medicationGuidanceOrderHelpers";
+import { isMedicalManagementServiceRequest, medicalManagementOrderProblem, MEDICAL_MANAGEMENT_ORDER_TYPE } from "./medicalManagementOrderHelpers";
 import { isPathoServiceRequest, pathoOrderProblem, PATHO_ORDER_TYPE } from "./pathoOrderHelpers";
 import { isPhysioServiceRequest, physioOrderProblem, PHYSIO_ORDER_TYPE } from "./physioOrderHelpers";
 import { isRadServiceRequest, radOrderProblem, RAD_ORDER_TYPE } from "./radOrderHelpers";
@@ -37,6 +38,7 @@ export const ORDER_KINDS = [
   "radiotherapy-order",
   "nutrition-guidance-order",
   "medication-guidance-order",
+  "medical-management-order",
   "consult-order",
   "team-request",
 ] as const;
@@ -69,6 +71,7 @@ export const ORDER_KIND_CORE: Record<OrderKind, OrderKindCore> = {
   "radiotherapy-order": { label: "放射線治療", orderType: RADIOTHERAPY_ORDER_TYPE, matches: isRadiotherapyServiceRequest, problem: radiotherapyOrderProblem },
   "nutrition-guidance-order": { label: "栄養指導", orderType: NUTRITION_GUIDANCE_ORDER_TYPE, matches: isNutritionGuidanceServiceRequest, problem: nutritionGuidanceOrderProblem },
   "medication-guidance-order": { label: "服薬指導", orderType: MEDICATION_GUIDANCE_ORDER_TYPE, matches: isMedicationGuidanceServiceRequest, problem: medicationGuidanceOrderProblem },
+  "medical-management-order": { label: "指導・管理料", orderType: MEDICAL_MANAGEMENT_ORDER_TYPE, matches: isMedicalManagementServiceRequest, problem: medicalManagementOrderProblem },
   "consult-order": { label: "他科依頼", orderType: CONSULT_ORDER_TYPE, matches: isConsultServiceRequest, problem: consultOrderProblem },
   "team-request": { label: "チーム依頼", orderType: TEAM_REQUEST_ORDER_TYPE, matches: isTeamRequestServiceRequest, problem: teamRequestProblem },
 };

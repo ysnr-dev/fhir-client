@@ -173,6 +173,7 @@ unpaid 未収額 / self_pay 自費 / copay_rate 負担割合 / points 点数)と
 | リハビリ `rehab` | 800 | — | **対応済み(2026-09-23)**。施設設定 `receipt_codes.rehab`(疾患別区分 × 療法士 PT/OT/ST → コード。2024 年改定で担い手ごとにコードが分かれた)。回数 = 実施単位数(同じ日の同じコードは合算) |
 | 放射線治療 `radiotherapy` | 840 | — | **対応済み(2026-09-23)**。`master_radiotherapy_techniques` の `receipt_code`(体外照射 1 回目)・`receipt_code_second`(同日 2 回目)・`management_receipt_code`(放射線治療管理料。コースの初回の照射だけ)。治療終了サマリーは送らない |
 | 栄養指導 `nutrition-guidance` | 130 | — | **対応済み(2026-09-23)**。施設設定 `receipt_codes.nutrition_guidance`(初回 / 2 回目以降 / 集団 → コード) |
+| 指導・管理料 `medical-management` | 130 / 140 | — | **対応済み(2026-10-29)**。登録と同時に書く実施記録のハブ(項目)と子(加算)のコードをそのまま送る。1 項目 1 剤で、区分は章から決まる(B 130・C 140)。`docs/medical-management-order-design.md` |
 | 化学療法 `chemo-regimen` | 注射 + 加算 | — | **対応済み(2026-09-23)**。レジメン由来の注射(ヘッダの `requisition` が regimen-instance)の剤に、施設設定の外来化学療法加算(15 歳未満は別コード。患者の生年月日で判定)と無菌製剤処理料を 1 日 1 回足す |
 | 麻酔(手術配下) | 540 | — | §2 の剤分割で自動(2026-09-23 に spec で固定)。麻酔時間の加算は実施入力で足す |
 | 食事・看護・他科依頼 | — | 出来高の項目が無い | 対象外(`OrderCatalog::IGNORED`。`skipped` にも出さない) |

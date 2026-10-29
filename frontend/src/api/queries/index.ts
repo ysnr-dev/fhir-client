@@ -36,6 +36,7 @@ export * from "./meal";
 export * from "./rehab";
 export * from "./nutritionGuidance";
 export * from "./medicationGuidance";
+export * from "./medicalManagement";
 export * from "./consult";
 export * from "./nursing";
 export * from "./nursingCarePlan";

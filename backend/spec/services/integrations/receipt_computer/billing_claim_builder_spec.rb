@@ -684,6 +684,45 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder, "施設設定
     end
   end
 
+  describe "指導・管理料" do
+    def management_hub(code:, id:, date: "2026-09-20")
+      procedure_hub(order_type: "medical-management", code: code, id: id).tap do |hub|
+        hub["performedDateTime"] = date
+      end
+    end
+
+    before do
+      medical_procedure!("113001810", name: "特定疾患療養管理料（診療所）", chapter: "B", section: "000")
+      medical_procedure!("113041910", name: "生活習慣病管理料１（糖尿病を主病）", chapter: "B", section: "001")
+      medical_procedure!("113010370", name: "血糖自己測定指導加算", chapter: "B", section: "001")
+      medical_procedure!("114001110", name: "往診料", chapter: "C", section: "000")
+      store.add(order_header(order_type: "medical-management", status: "completed"))
+    end
+
+    it "sends each 管理料 with its 加算 as 医学管理" do
+      store.add(management_hub(code: "113041910", id: "m1"))
+      store.add(child_procedure(order_type: "medical-management", code: "113010370", hub: "m1"))
+
+      expect(build.items.size).to eq(1)
+      expect(build.items.first.lines.map(&:code)).to eq(%w[113041910 113010370])
+      expect(orca_classes.first["Medical_Class"]).to eq("130")
+      expect(build.skipped).to be_empty
+    end
+
+    it "sends different 管理料 as separate 剤 and 在宅 as 140" do
+      store.add(management_hub(code: "113001810", id: "m1"))
+      store.add(management_hub(code: "114001110", id: "m2"))
+
+      expect(build.items.size).to eq(2)
+      expect(orca_classes.map { |c| c["Medical_Class"] }).to contain_exactly("130", "140")
+    end
+
+    it "does not report a header without records" do
+      expect(build.items).to be_empty
+      expect(build.skipped).to be_empty
+    end
+  end
+
   describe "放射線治療" do
     let(:kind) { "http://fhir-client.local/CodeSystem/radiotherapy-procedure" }
     let(:technique) { "http://fhir-client.local/CodeSystem/radiotherapy-technique" }

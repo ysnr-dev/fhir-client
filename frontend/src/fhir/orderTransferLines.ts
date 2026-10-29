@@ -26,6 +26,7 @@ import {
   specimenLabel as microSpecimenLabel,
 } from "./microOrderHelpers";
 import { summarizeNutritionGuidanceOrder } from "./nutritionGuidanceOrderHelpers";
+import { medicalManagementItemLines, summarizeMedicalManagementOrder } from "./medicalManagementOrderHelpers";
 import type { OrderKind } from "./orderKinds";
 import {
   organLabel,
@@ -275,6 +276,11 @@ export const ORDER_TRANSFER_LINES: { [K in OrderKind]: (item: OrderItem<K>) => s
       ...noteLines(summary.purpose),
       ...noteLines(summary.comment),
     ];
+  },
+  "medical-management-order": ({ serviceRequest, items }) => {
+    const lines = medicalManagementItemLines(items);
+    if (lines.length === 0) return [];
+    return [...lines, ...noteLines(summarizeMedicalManagementOrder(serviceRequest).comment)];
   },
   "consult-order": ({ serviceRequest }) => {
     const summary = summarizeConsultOrder(serviceRequest);

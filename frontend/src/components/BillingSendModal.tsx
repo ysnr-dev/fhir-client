@@ -38,6 +38,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   rehab: "リハビリ",
   radiotherapy: "放射線治療",
   "nutrition-guidance": "栄養指導",
+  "medical-management": "指導・管理料",
 };
 
 const LINE_KIND_LABELS: Record<BillingLine["kind"], string> = {

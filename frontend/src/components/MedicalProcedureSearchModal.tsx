@@ -19,6 +19,8 @@ import { Modal } from "./Modal";
 
 // コード表用番号のアルファベット部 = 点数表の章。実施入力で使う範囲だけ並べる。
 const SECTIONS: { code: string; label: string }[] = [
+  { code: "B", label: "B 医学管理等" },
+  { code: "C", label: "C 在宅" },
   { code: "E", label: "E 画像診断" },
   { code: "D", label: "D 検査" },
   { code: "G", label: "G 注射" },

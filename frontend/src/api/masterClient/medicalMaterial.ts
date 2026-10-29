@@ -54,6 +54,10 @@ export interface MedicalProcedure {
   /** コード表用番号のアルファベット部。点数表の章で、画像診断は E。 */
   code_table_number_alpha: string | null;
   point_table_section_number: string | null;
+  /** 点数表の区分番号(3 桁)。B 章の 000 は通則の加算など特定の区分に属さない行。 */
+  code_table_section: string | null;
+  /** 算定回数の上限(数字の文字列。"0" は上限なし)。期間は項目ごとに違う。 */
+  max_times: string | null;
   /** 点数表コード(「K0821」「K082-21」)。点数表区分番号が空の行は区分・枝番・項番から組んだ値。 */
   k_code: string | null;
   /** 廃止年月日。"99999999" は廃止されていないことを表す(レセ電算の慣行)。 */

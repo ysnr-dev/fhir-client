@@ -288,6 +288,7 @@ Rails.application.routes.draw do
     # 処置オーダーのマスタ群。生理検査と同じ構成だが、処置には検査種別に当たる
     # 分類軸が無く、検査目的・特別指示の既定テンプレートも持たない。
     resources :treatment_items, only: %i[index show create update destroy]
+    resources :management_fee_items, only: %i[index show create update destroy]
     resources :treatment_set_items, only: %i[index create update destroy]
     resources :treatment_item_layouts, only: %i[index show create update destroy]
     resources :treatment_item_layout_cells, only: %i[create update destroy]

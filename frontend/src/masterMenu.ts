@@ -141,6 +141,11 @@ export const MASTER_MENU: MasterMenuGroup[] = [
       { label: "実施入力データセット", to: "/treatment-datasets" },
     ],
   },
+  // 指導・管理料。点数表 B 章・C 章のうち施設が算定するもの。
+  {
+    label: "医学管理",
+    items: [{ label: "指導・管理料項目", to: "/management-fee-items" }],
+  },
   // 手術。術式は検索で選ぶだけなのでレイアウト・データセットのマスタは無い。
   {
     label: "手術",

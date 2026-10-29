@@ -86,7 +86,10 @@ module Integrations
         Definition.new(order_type: "radiotherapy", label: "放射線治療", source: :procedure,
                        resolver: Resolvers::Radiotherapy, continuous: true),
         Definition.new(order_type: "transfusion", label: "輸血", source: :procedure,
-                       resolver: Resolvers::Transfusion)
+                       resolver: Resolvers::Transfusion),
+        # 医学管理料・在宅。登録と同時に実施記録を書くので、記録の無い日のヘッダは報告しない。
+        Definition.new(order_type: "medical-management", label: "指導・管理料", source: :procedure,
+                       continuous: true)
       ].freeze
 
       BY_TYPE = ALL.index_by(&:order_type).freeze

@@ -60,6 +60,11 @@ import {
   treatmentOrderItemRequests,
 } from "./treatmentOrderHelpers";
 import { treatmentPerformsByOrderId, type TreatmentPerformDisplay } from "./treatmentResultHelpers";
+import {
+  isMedicalManagementServiceRequest,
+  medicalManagementItemsByOrderId,
+  type MedicalManagementItemDisplay,
+} from "./medicalManagementOrderHelpers";
 import { isMealServiceRequest } from "./mealOrderHelpers";
 import { isNursingServiceRequest } from "./nursingOrderHelpers";
 import { isRegimenServiceRequest, regimenOrderOf } from "./regimenOrderHelpers";
@@ -449,6 +454,12 @@ export type KarteTimelineItem = KarteItemBase &
         /** 実施記録(新しい順)。 */
         performs: MedicationGuidancePerformDisplay[];
       }
+    // 指導・管理料。登録と同時に実施済で進捗 Task は持たず、算定した項目(実施記録)を並べる。
+    | {
+        kind: "medical-management-order";
+        serviceRequest: fhir4.ServiceRequest;
+        items: MedicalManagementItemDisplay[];
+      }
     // 他科依頼。明細も実施記録も持たず、返ってくるのは回答の診療記録。
     // 回答への参照はオーダー自身が持つ(ServiceRequest のローカル拡張。
     // docs/consult-order-design.md §2.3)ので、ここで別に突き合わせる必要は無い。
@@ -832,6 +843,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // 服薬指導も同じ形(Task + Procedure がまとめて届く)。
   const medicationGuidanceTaskByOrderId = medicationGuidanceTasksByOrderId(tasks);
   const medicationGuidancePerformByOrderId = medicationGuidancePerformsByOrderId(procedures);
+  const medicalManagementItemsByOrder = medicalManagementItemsByOrderId(procedures);
   // 他科依頼は実施記録を持たない(返ってくるのは回答の診療記録)ので Task だけ。
   const consultTaskByOrderId = consultTasksByOrderId(tasks);
   const teamRequestTaskByOrderId = teamRequestTasksByOrderId(tasks);
@@ -1087,6 +1099,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
           status === "accepted" || status === "completed"
             ? (medicationGuidancePerformByOrderId.get(serviceRequest.id ?? "") ?? [])
             : [],
+      };
+    }
+    if (isMedicalManagementServiceRequest(serviceRequest)) {
+      return {
+        ...base,
+        kind: "medical-management-order" as const,
+        label: KARTE_KIND_LABELS["medical-management-order"],
+        items: medicalManagementItemsByOrder.get(serviceRequest.id ?? "") ?? [],
       };
     }
     if (isConsultServiceRequest(serviceRequest)) {
