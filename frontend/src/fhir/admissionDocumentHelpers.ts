@@ -21,6 +21,9 @@ import { referenceId } from "./shared";
 // - 栄養管理計画書: 施設設定のテンプレートへの回答。スクリーニングか入院診療計画書の「特別な栄養管理の
 //   必要性」(linkId nutrition_need、01 = 有)が有の入院だけが対象で、入院日から N 日以内(既定 7 日)。
 //   作成済でも、最新の計画書の再評価日(linkId reassess_date)を過ぎて在院していれば期限超過にする
+// - 褥瘡リスク評価: 施設設定のテンプレート(看護プロファイルの区画「褥瘡リスク」など)への回答。入院日から N 日以内(既定 1 日)
+// - 褥瘡対策計画書: 施設設定のテンプレートへの回答。最新の褥瘡リスク評価で計画が要る入院だけが対象で、入院日から
+//   N 日以内(既定 7 日)。再評価日の扱いは栄養管理計画書と同じ
 // 退院系の文書は退院するまで期限が決まらない(作り始めていれば状態だけ出す)。
 
 /** 施設設定 admission_documents(backend の DEFAULT_ADMISSION_DOCUMENTS と同じ形)。 */
@@ -35,6 +38,12 @@ export interface AdmissionDocumentSettings {
   /** 栄養管理計画書のテンプレートの url(版を問わない)。空なら対象にしない。 */
   nutrition_plan_template: string;
   nutrition_plan_days: number;
+  /** 褥瘡リスク評価のテンプレートの url(版を問わない)。空なら対象にしない。 */
+  pressure_ulcer_risk_template: string;
+  pressure_ulcer_risk_days: number;
+  /** 褥瘡対策に関する診療計画書のテンプレートの url(版を問わない)。空なら対象にしない。 */
+  pressure_ulcer_plan_template: string;
+  pressure_ulcer_plan_days: number;
 }
 
 export const DEFAULT_ADMISSION_DOCUMENTS: AdmissionDocumentSettings = {
@@ -45,12 +54,18 @@ export const DEFAULT_ADMISSION_DOCUMENTS: AdmissionDocumentSettings = {
   nutrition_screening_days: 3,
   nutrition_plan_template: "",
   nutrition_plan_days: 7,
+  pressure_ulcer_risk_template: "",
+  pressure_ulcer_risk_days: 1,
+  pressure_ulcer_plan_template: "",
+  pressure_ulcer_plan_days: 7,
 };
 
 export type AdmissionDocumentKind =
   | "admission-plan"
   | "nutrition-screening"
   | "nutrition-plan"
+  | "pressure-ulcer-risk"
+  | "pressure-ulcer-plan"
   | "discharge-summary"
   | "nursing-summary";
 
@@ -58,6 +73,8 @@ export const ADMISSION_DOCUMENT_KINDS: { kind: AdmissionDocumentKind; label: str
   { kind: "admission-plan", label: "入院診療計画書" },
   { kind: "nutrition-screening", label: "栄養スクリーニング" },
   { kind: "nutrition-plan", label: "栄養管理計画書" },
+  { kind: "pressure-ulcer-risk", label: "褥瘡リスク評価" },
+  { kind: "pressure-ulcer-plan", label: "褥瘡対策計画書" },
   { kind: "discharge-summary", label: "退院時サマリー" },
   { kind: "nursing-summary", label: "看護サマリー" },
 ];
@@ -74,6 +91,10 @@ export function admissionDocumentTemplate(
       return settings.nutrition_screening_template;
     case "nutrition-plan":
       return settings.nutrition_plan_template;
+    case "pressure-ulcer-risk":
+      return settings.pressure_ulcer_risk_template;
+    case "pressure-ulcer-plan":
+      return settings.pressure_ulcer_plan_template;
     default:
       return undefined;
   }
@@ -83,13 +104,42 @@ export function admissionDocumentTemplate(
 export const NUTRITION_NEED_LINK_ID = "nutrition_need";
 const NUTRITION_NEED_YES = "01";
 const NUTRITION_NEED_NO = "02";
-/** 栄養管理計画書の再評価日。 */
-export const NUTRITION_REASSESS_LINK_ID = "reassess_date";
+/** 計画書(栄養管理計画書・褥瘡対策計画書)の再評価日。 */
+export const REASSESS_LINK_ID = "reassess_date";
+
+/** 褥瘡リスク評価の回答(看護プロファイルの「褥瘡リスク」と褥瘡対策計画書で共通の linkId。「あり・できない」が 1)。 */
+export const PRESSURE_ULCER_ADL_LINK_ID = "pu_bedridden_level";
+export const PRESSURE_ULCER_PRESENT_LINK_ID = "pu_present";
+export const PRESSURE_ULCER_RISK_LINK_PREFIX = "pu_risk_";
+
+/**
+ * 褥瘡対策の計画が要るか。現に褥瘡があれば要る。日常生活自立度が J・A なら要らない。それ以外(B・C か未回答)は
+ * 危険因子(あり・できない)が 1 つでもあれば要る。危険因子も褥瘡の有無も答えていなければ判定できない。
+ */
+export function pressureUlcerPlanNeed(response: fhir4.QuestionnaireResponse | undefined): "yes" | "no" | "unknown" {
+  if (!response) return "unknown";
+  const codes = new Map<string, string>();
+  const walk = (items: fhir4.QuestionnaireResponseItem[] | undefined) => {
+    for (const item of items ?? []) {
+      const code = item.answer?.[0]?.valueCoding?.code;
+      if (code !== undefined) codes.set(item.linkId, code);
+      walk(item.item);
+      for (const answer of item.answer ?? []) walk(answer.item);
+    }
+  };
+  walk(response.item);
+  if (codes.get(PRESSURE_ULCER_PRESENT_LINK_ID) === "1") return "yes";
+  const adl = codes.get(PRESSURE_ULCER_ADL_LINK_ID) ?? "";
+  if (/^[JA]/.test(adl)) return "no";
+  const risks = [...codes].filter(([linkId]) => linkId.startsWith(PRESSURE_ULCER_RISK_LINK_PREFIX));
+  if (risks.some(([, code]) => code === "1")) return "yes";
+  return risks.length > 0 || codes.has(PRESSURE_ULCER_PRESENT_LINK_ID) ? "no" : "unknown";
+}
 
 /**
  * 文書 1 つの状況。done = 作成済(確定・承認待ち・承認済)、draft = 作成中、missing = 未作成、
- * pending = まだ作らなくてよい(退院前の退院系の文書・必要性の判定前の栄養管理計画書)、
- * not-required = 作らなくてよいと決まった(栄養管理の必要性が無の栄養管理計画書)。
+ * pending = まだ作らなくてよい(退院前の退院系の文書・必要性の判定前の計画書)、
+ * not-required = 作らなくてよいと決まった(栄養管理・褥瘡対策の必要性が無の計画書)。
  */
 export interface AdmissionDocumentCell {
   state: "done" | "draft" | "missing" | "pending" | "not-required";
@@ -185,6 +235,26 @@ export function admissionDocumentCells(args: {
         : cell("missing", "", due, today);
   };
 
+  // 必要性で対象が決まる計画書。必要性が有のときだけ未作成、無なら不要、未定なら判定前。作成済でも、最新の
+  // 確定した計画書の再評価日を過ぎて在院していれば書き直し(再評価)を促す。
+  const planCell = (
+    list: fhir4.QuestionnaireResponse[],
+    due: string,
+    need: "yes" | "no" | "unknown",
+  ): AdmissionDocumentCell => {
+    const result = templateCell(list, due);
+    if (result.state === "done") {
+      const reassess = responseAnswer(list.find(isCompleted), REASSESS_LINK_ID)?.valueDate ?? "";
+      return reassess && !discharged && today > reassess
+        ? { ...result, label: "再評価", due: reassess, overdue: true }
+        : result;
+    }
+    if (result.state === "missing" && need !== "yes") {
+      return need === "no" ? cell("not-required", "不要", "", today) : cell("pending", "判定前", "", today);
+    }
+    return result;
+  };
+
   const plans = responsesOf(settings.admission_plan_template);
   const admissionPlan = templateCell(
     plans,
@@ -202,27 +272,28 @@ export function admissionDocumentCells(args: {
   const needs = [...plans, ...screenings]
     .filter(isCompleted)
     .map((r) => responseAnswer(r, NUTRITION_NEED_LINK_ID)?.valueCoding?.code);
-  const nutritionNeed = needs.includes(NUTRITION_NEED_YES)
+  const nutritionNeed: "yes" | "no" | "unknown" = needs.includes(NUTRITION_NEED_YES)
     ? "yes"
     : needs.includes(NUTRITION_NEED_NO)
       ? "no"
       : "unknown";
-  const nutritionPlans = responsesOf(settings.nutrition_plan_template);
-  let nutritionPlanCell = templateCell(
-    nutritionPlans,
+  const nutritionPlanCell = planCell(
+    responsesOf(settings.nutrition_plan_template),
     admission ? addDays(admission, settings.nutrition_plan_days) : "",
+    nutritionNeed,
   );
-  if (nutritionPlanCell.state === "done") {
-    // 再評価は最新の確定した計画書の再評価日まで。過ぎても在院していれば書き直し(再評価)を促す。
-    const latest = nutritionPlans.find(isCompleted);
-    const reassess = responseAnswer(latest, NUTRITION_REASSESS_LINK_ID)?.valueDate ?? "";
-    if (reassess && !discharged && today > reassess) {
-      nutritionPlanCell = { ...nutritionPlanCell, label: "再評価", due: reassess, overdue: true };
-    }
-  } else if (nutritionPlanCell.state === "missing" && nutritionNeed !== "yes") {
-    nutritionPlanCell =
-      nutritionNeed === "no" ? cell("not-required", "不要", "", today) : cell("pending", "判定前", "", today);
-  }
+
+  // 褥瘡対策計画書。必要性は確定した最新の褥瘡リスク評価で決める(評価し直したら新しいほうに従う)。
+  const risks = responsesOf(settings.pressure_ulcer_risk_template);
+  const riskCell = templateCell(
+    risks,
+    admission ? addDays(admission, settings.pressure_ulcer_risk_days) : "",
+  );
+  const pressureUlcerPlanCell = planCell(
+    responsesOf(settings.pressure_ulcer_plan_template),
+    admission ? addDays(admission, settings.pressure_ulcer_plan_days) : "",
+    pressureUlcerPlanNeed(risks.find(isCompleted)),
+  );
 
   // 退院時サマリー。
   const summaryDue = discharge ? addDays(discharge, dischargeSummaryDays) : "";
@@ -254,6 +325,8 @@ export function admissionDocumentCells(args: {
     "admission-plan": admissionPlan,
     "nutrition-screening": screeningCell,
     "nutrition-plan": nutritionPlanCell,
+    "pressure-ulcer-risk": riskCell,
+    "pressure-ulcer-plan": pressureUlcerPlanCell,
     "discharge-summary": summaryCell,
     "nursing-summary": nursingCell,
   };

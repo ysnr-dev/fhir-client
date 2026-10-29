@@ -96,6 +96,8 @@ export interface PopulateSources {
   lastEncounter?: fhir4.Encounter;
   /** 同じテンプレートのこの患者の記入済みの件数(取り消しを除く)。式が %responseSequence を参照するときだけ揃う。 */
   responseCount?: number;
+  /** 記入する入院(無ければ今の入院)に結び付いた確定済みの回答。式が %admissionAnswers を参照するときだけ揃う。 */
+  admissionResponses?: fhir4.QuestionnaireResponse[];
 }
 
 /** 式が変数のどれかを参照しているか(%名前 の後ろに名前の続きが無いもの)。 */
@@ -414,6 +416,15 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     expression: "%attending",
     description: "入院中の主治医の氏名を入れます。入院していなければ入りません。",
     sample: "児玉 義憲",
+  },
+  {
+    group: "入院",
+    variable: "admissionAnswers",
+    label: "この入院の回答",
+    expression: "%admissionAnswers.where(linkId = 'pu_present').value",
+    description:
+      "入院に結び付いた確定済みのテンプレート回答(看護プロファイルなど)の項目を、linkId ごとに最新の値で持ちます。linkId を書き換えて使います。選択肢はコードが入ります。",
+    sample: "1",
   },
 
   // ---- 傷病名 ----
@@ -1275,6 +1286,36 @@ function admissionValues(
   };
 }
 
+/**
+ * 入院に結び付いた回答の項目を { linkId, value } に平らにする。linkId ごとに記入日時の新しい回答の最初の値を採る
+ * (選択肢はコード)。上流の型情報が無い値でも式から .value で読めるよう、値は素の値にしておく。
+ */
+export function admissionAnswerValues(
+  responses: fhir4.QuestionnaireResponse[] | undefined,
+): { linkId: string; value: string | number | boolean }[] {
+  const rows = new Map<string, string | number | boolean>();
+  const sorted = [...(responses ?? [])].sort((a, b) => (b.authored ?? "").localeCompare(a.authored ?? ""));
+  const walk = (items: fhir4.QuestionnaireResponseItem[] | undefined) => {
+    for (const item of items ?? []) {
+      const answer = item.answer?.[0];
+      const value =
+        answer?.valueCoding?.code ??
+        answer?.valueString ??
+        answer?.valueDate ??
+        answer?.valueDateTime ??
+        answer?.valueInteger ??
+        answer?.valueDecimal ??
+        answer?.valueBoolean ??
+        answer?.valueQuantity?.value;
+      if (value !== undefined && value !== "" && !rows.has(item.linkId)) rows.set(item.linkId, value);
+      walk(item.item);
+      for (const a of item.answer ?? []) walk(a.item);
+    }
+  };
+  for (const response of sorted) walk(response.item);
+  return [...rows].map(([linkId, value]) => ({ linkId, value }));
+}
+
 function facilityValues(facility: PopulateSources["facility"]): Record<string, string> {
   const values = facility ? parseOrganization(facility) : undefined;
   return {
@@ -1339,6 +1380,7 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     deathDate: patient.deceasedDateTime?.slice(0, 10) ?? "",
     lastVisitDate: sources.lastEncounter?.period?.start?.slice(0, 10) ?? "",
     responseSequence: sources.responseCount === undefined ? undefined : sources.responseCount + 1,
+    admissionAnswers: admissionAnswerValues(sources.admissionResponses),
     ...cancerPopulateValues(sources.allConditions, sources.focusConditionId, sources.cancer),
     ...infectiousDiseaseValues(sources.allConditions, sources.focusConditionId),
     ...surgeryPopulateValues(patient, sources.surgery),

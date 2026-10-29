@@ -53,7 +53,7 @@ const VITAL_COUNT = 50;
  * コードごとに最新 1 件ずつ取る(呼び出し側が populateLab.ts の collectLabCodes で集める)。
  *
  * 腫瘍・病理(病理レポート・手術・レジメン・放射線治療)、手術(対象の手術と入院)、口腔診査(最新の診査)、最終来院日、
- * 記入回数(同じテンプレートの記入済みの回答)は、式がそれらの変数を参照しているときだけ読む。
+ * 記入回数(同じテンプレートの記入済みの回答)、この入院の回答は、式がそれらの変数を参照しているときだけ読む。
  *
  * 初期回答はフォームのマウント時に一度だけ確定するので、呼び出し側は isLoading が
  * 落ちてから buildPopulateContext に渡す。
@@ -69,6 +69,8 @@ export function usePopulateSources(
     focusProcedureId?: string;
     /** 記入しているテンプレートの canonical(版付きと版なし)。記入回数に使う。 */
     canonicals?: string[];
+    /** 回答を結び付ける入院。無ければ今の入院が %admissionAnswers の対象。 */
+    encounterId?: string;
   } = {},
 ) {
   const expressions = options.expressions;
@@ -79,6 +81,7 @@ export function usePopulateSources(
   const lastVisit = useMemo(() => usesVariables(expressions ?? [], ["lastVisitDate"]), [expressions]);
   const canonicals = options.canonicals ?? [];
   const sequence = useMemo(() => usesVariables(expressions ?? [], ["responseSequence"]), [expressions]);
+  const admissionAnswers = useMemo(() => usesVariables(expressions ?? [], ["admissionAnswers"]), [expressions]);
   // 記入を始めた日で固定する(日付をまたいで開きっぱなしでも値がぶれないように)。
   const [today] = useState(todayString);
 
@@ -317,6 +320,18 @@ export function usePopulateSources(
   const admission = usePatientAdmission(patientId);
   const activeMedications = useActiveMedications(patientId, today);
 
+  // ---- この入院の回答(式が参照するときだけ) ----
+  const answersEncounterId = options.encounterId ?? admission.data?.encounter.id ?? "";
+  const admissionResponseParams = new URLSearchParams();
+  admissionResponseParams.set("encounter", `Encounter/${answersEncounterId}`);
+  admissionResponseParams.set("status", "completed,amended");
+  admissionResponseParams.set("_count", "100");
+  const admissionResponses = useQuery({
+    queryKey: ["QuestionnaireResponse", "search", "populate-admission-answers", answersEncounterId],
+    queryFn: () => searchResource<fhir4.QuestionnaireResponse>("QuestionnaireResponse", admissionResponseParams),
+    enabled: admissionAnswers && Boolean(answersEncounterId),
+  });
+
   const facility = useSelfOrganization();
   const session = useAuthSession();
   const practitionerId = session.data?.user?.practitioner_id ?? undefined;
@@ -350,7 +365,8 @@ export function usePopulateSources(
     cancerQueries.some((q) => q.isLoading) ||
     surgeryQueries.some((q) => q.isLoading) ||
     oralQueries.some((q) => q.isLoading) ||
-    visitQueries.some((q) => q.isLoading);
+    visitQueries.some((q) => q.isLoading) ||
+    admissionResponses.isLoading;
 
   const author = practitioner.data?.data;
   const authorRoles = practitionerRoles.data?.data;
@@ -419,6 +435,9 @@ export function usePopulateSources(
               (r) => r.status !== "entered-in-error" && r.status !== "stopped",
             ).length
           : undefined,
+      admissionResponses: admissionAnswers
+        ? resourcesOfType<fhir4.QuestionnaireResponse>(admissionResponses.data?.data, "QuestionnaireResponse")
+        : undefined,
     };
   }, [
     today,
@@ -457,6 +476,8 @@ export function usePopulateSources(
     canonicals.length,
     surgeryRecord.data,
     surgeryAdmissions.data,
+    admissionAnswers,
+    admissionResponses.data,
   ]);
 
   return {
@@ -468,6 +489,7 @@ export function usePopulateSources(
       surgeryQueries.find((q) => q.error)?.error ??
       oralQueries.find((q) => q.error)?.error ??
       visitQueries.find((q) => q.error)?.error ??
+      admissionResponses.error ??
       null,
     sources,
   };

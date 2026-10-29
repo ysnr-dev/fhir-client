@@ -1,0 +1,198 @@
+[
+  {
+    "linkId": "pu_present",
+    "code": "0",
+    "show": [
+      "mark_pu_present_0"
+    ]
+  },
+  {
+    "linkId": "pu_present",
+    "code": "1",
+    "show": [
+      "mark_pu_present_1"
+    ]
+  },
+  {
+    "linkId": "pu_past",
+    "code": "0",
+    "show": [
+      "mark_pu_past_0"
+    ]
+  },
+  {
+    "linkId": "pu_past",
+    "code": "1",
+    "show": [
+      "mark_pu_past_1"
+    ]
+  },
+  {
+    "linkId": "pu_bedridden_level",
+    "code": "J1",
+    "show": [
+      "mark_pu_bedridden_level_J1"
+    ]
+  },
+  {
+    "linkId": "pu_bedridden_level",
+    "code": "J2",
+    "show": [
+      "mark_pu_bedridden_level_J2"
+    ]
+  },
+  {
+    "linkId": "pu_bedridden_level",
+    "code": "A1",
+    "show": [
+      "mark_pu_bedridden_level_A1"
+    ]
+  },
+  {
+    "linkId": "pu_bedridden_level",
+    "code": "A2",
+    "show": [
+      "mark_pu_bedridden_level_A2"
+    ]
+  },
+  {
+    "linkId": "pu_bedridden_level",
+    "code": "B1",
+    "show": [
+      "mark_pu_bedridden_level_B1"
+    ]
+  },
+  {
+    "linkId": "pu_bedridden_level",
+    "code": "B2",
+    "show": [
+      "mark_pu_bedridden_level_B2"
+    ]
+  },
+  {
+    "linkId": "pu_bedridden_level",
+    "code": "C1",
+    "show": [
+      "mark_pu_bedridden_level_C1"
+    ]
+  },
+  {
+    "linkId": "pu_bedridden_level",
+    "code": "C2",
+    "show": [
+      "mark_pu_bedridden_level_C2"
+    ]
+  },
+  {
+    "linkId": "pu_risk_turn",
+    "code": "0",
+    "show": [
+      "mark_pu_risk_turn_0"
+    ]
+  },
+  {
+    "linkId": "pu_risk_turn",
+    "code": "1",
+    "show": [
+      "mark_pu_risk_turn_1"
+    ]
+  },
+  {
+    "linkId": "pu_risk_sit",
+    "code": "0",
+    "show": [
+      "mark_pu_risk_sit_0"
+    ]
+  },
+  {
+    "linkId": "pu_risk_sit",
+    "code": "1",
+    "show": [
+      "mark_pu_risk_sit_1"
+    ]
+  },
+  {
+    "linkId": "pu_risk_bone",
+    "code": "0",
+    "show": [
+      "mark_pu_risk_bone_0"
+    ]
+  },
+  {
+    "linkId": "pu_risk_bone",
+    "code": "1",
+    "show": [
+      "mark_pu_risk_bone_1"
+    ]
+  },
+  {
+    "linkId": "pu_risk_contracture",
+    "code": "0",
+    "show": [
+      "mark_pu_risk_contracture_0"
+    ]
+  },
+  {
+    "linkId": "pu_risk_contracture",
+    "code": "1",
+    "show": [
+      "mark_pu_risk_contracture_1"
+    ]
+  },
+  {
+    "linkId": "pu_risk_nutrition",
+    "code": "0",
+    "show": [
+      "mark_pu_risk_nutrition_0"
+    ]
+  },
+  {
+    "linkId": "pu_risk_nutrition",
+    "code": "1",
+    "show": [
+      "mark_pu_risk_nutrition_1"
+    ]
+  },
+  {
+    "linkId": "pu_risk_moisture",
+    "code": "0",
+    "show": [
+      "mark_pu_risk_moisture_0"
+    ]
+  },
+  {
+    "linkId": "pu_risk_moisture",
+    "code": "1",
+    "show": [
+      "mark_pu_risk_moisture_1"
+    ]
+  },
+  {
+    "linkId": "pu_risk_edema",
+    "code": "0",
+    "show": [
+      "mark_pu_risk_edema_0"
+    ]
+  },
+  {
+    "linkId": "pu_risk_edema",
+    "code": "1",
+    "show": [
+      "mark_pu_risk_edema_1"
+    ]
+  },
+  {
+    "linkId": "pu_risk_skintear",
+    "code": "0",
+    "show": [
+      "mark_pu_risk_skintear_0"
+    ]
+  },
+  {
+    "linkId": "pu_risk_skintear",
+    "code": "1",
+    "show": [
+      "mark_pu_risk_skintear_1"
+    ]
+  }
+]

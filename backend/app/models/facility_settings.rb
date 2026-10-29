@@ -246,7 +246,8 @@ class FacilitySettings < ApplicationRecord
     "template" => "http://fhir-client.local/Questionnaire/ncd-case-01"
   }.freeze
 
-  # 入退院文書の作成状況(docs/bed-management-design.md §4、docs/nutrition-care-plan-design.md)。
+  # 入退院文書の作成状況(docs/bed-management-design.md §4、docs/nutrition-care-plan-design.md、
+  # docs/pressure-ulcer-plan-design.md)。
   # *_template はテンプレートの url(版を問わない。空なら対象にしない)、*_days は入院日(看護サマリーは退院日)からの期限。
   DEFAULT_ADMISSION_DOCUMENTS = {
     "admission_plan_template" => "",
@@ -255,7 +256,11 @@ class FacilitySettings < ApplicationRecord
     "nutrition_screening_template" => "",
     "nutrition_screening_days" => 3,
     "nutrition_plan_template" => "",
-    "nutrition_plan_days" => 7
+    "nutrition_plan_days" => 7,
+    "pressure_ulcer_risk_template" => "",
+    "pressure_ulcer_risk_days" => 1,
+    "pressure_ulcer_plan_template" => "",
+    "pressure_ulcer_plan_days" => 7
   }.freeze
 
   # 医事会計へ送るレセプト電算コードのうち、施設基準や届出で決まる「1 施設 1 値」のもの
@@ -422,7 +427,11 @@ class FacilitySettings < ApplicationRecord
           "nutrition_screening_template" => QUESTIONNAIRE_URL_OR_BLANK,
           "nutrition_screening_days" => DAYS,
           "nutrition_plan_template" => QUESTIONNAIRE_URL_OR_BLANK,
-          "nutrition_plan_days" => DAYS
+          "nutrition_plan_days" => DAYS,
+          "pressure_ulcer_risk_template" => QUESTIONNAIRE_URL_OR_BLANK,
+          "pressure_ulcer_risk_days" => DAYS,
+          "pressure_ulcer_plan_template" => QUESTIONNAIRE_URL_OR_BLANK,
+          "pressure_ulcer_plan_days" => DAYS
         }
       }
     },

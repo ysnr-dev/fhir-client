@@ -56,8 +56,10 @@ export type KarteOpenTarget =
   | { kind: "condition-template"; conditionId: string; url: string }
   // 手術の実施記録(ハブ Procedure)を partOf に、テンプレートを選択済みでテンプレート登録を開く(NCD 症例登録の一覧から)。
   | { kind: "procedure-template"; procedureId: string; url: string }
-  // 入院に紐付けて、テンプレートを選択済みでテンプレート登録を開く(入退院文書の栄養スクリーニング・栄養管理計画書から)。
+  // 入院に紐付けて、テンプレートを選択済みでテンプレート登録を開く(入退院文書のテンプレートで書く文書から)。
   | { kind: "encounter-template"; encounterId: string; url: string }
+  // 書いたテンプレートの回答を開く(入退院文書から。入院に結び付いた回答はカルテの時系列に出ないため)。
+  | { kind: "questionnaire-response"; responseId: string }
   // Web 問診の回答の取込(患者帯のピクトグラムから)。
   | { kind: "intake"; responseId: number };
 
@@ -77,7 +79,7 @@ export function formatKarteOpen(target: KarteOpenTarget): string {
               ? `${target.procedureId}@${target.url}`
             : target.kind === "encounter-template"
               ? `${target.encounterId}@${target.url}`
-            : target.kind === "intake"
+            : target.kind === "intake" || target.kind === "questionnaire-response"
               ? String(target.responseId)
               : target.encounterId;
   return `${target.kind}:${id}`;
@@ -103,6 +105,7 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   if (kind === "nursing-summary") return { kind, compositionId: id };
   if (kind === "team-request") return { kind, teamId: id };
   if (kind === "questionnaire") return { kind, url: id };
+  if (kind === "questionnaire-response") return { kind, responseId: id };
   if (kind === "condition-template" || kind === "procedure-template" || kind === "encounter-template") {
     // リソースの id に「@」は入らないので、最初の 1 つで切る(url 側はコロンを含む)。
     const at = id.indexOf("@");

@@ -13,7 +13,7 @@
   "subjectType": [
     "Patient"
   ],
-  "description": "看護プロファイルの区画「褥瘡リスク」。診療報酬の褥瘡対策に関する診療計画書(危険因子の評価)の項目に沿う。危険因子が 1 つでもあれば褥瘡対策の診療計画が要る。選択肢のコードは「あり・できない」が 1。回答から Observation を生成する(危険因子の数と褥瘡の有無)。",
+  "description": "看護プロファイルの区画「褥瘡リスク」。診療報酬の褥瘡対策に関する診療計画書(危険因子の評価)の項目に沿う。褥瘡があるか、日常生活自立度が J・A 以外で危険因子が 1 つでもあれば褥瘡対策の診療計画が要る。選択肢のコードは「あり・できない」が 1。回答から Observation を生成する(危険因子の数と褥瘡の有無)。",
   "extension": [
     {
       "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
@@ -29,6 +29,14 @@
         "name": "puRisk",
         "language": "text/fhirpath",
         "expression": "descendants().where(linkId.startsWith('pu_risk_')).answer.value.select(code.toInteger()).sum()"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/variable",
+      "valueExpression": {
+        "language": "text/fhirpath",
+        "expression": "iif((descendants().where(linkId = 'pu_present').answer.value.code) = '1', '要', iif((descendants().where(linkId = 'pu_bedridden_level').answer.value.code).matches('^[JA]'), '不要', iif(%puRisk.exists(), iif(%puRisk > 0, '要', '不要'), iif((descendants().where(linkId = 'pu_present').answer.value.code).exists(), '不要', {}))))",
+        "name": "puNeed"
       }
     },
     {
@@ -458,7 +466,7 @@
               "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
               "valueExpression": {
                 "language": "text/fhirpath",
-                "expression": "iif(%puRisk.exists(), iif(%puRisk > 0, '要', '不要'), {})"
+                "expression": "%puNeed"
               }
             }
           ]

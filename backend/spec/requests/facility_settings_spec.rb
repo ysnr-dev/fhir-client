@@ -340,6 +340,10 @@ RSpec.describe "FacilitySettings", type: :request do
         "nutrition_screening_days" => 3,
         "nutrition_plan_template" => "",
         "nutrition_plan_days" => 7,
+        "pressure_ulcer_risk_template" => "",
+        "pressure_ulcer_risk_days" => 1,
+        "pressure_ulcer_plan_template" => "",
+        "pressure_ulcer_plan_days" => 7,
       )
     end
 

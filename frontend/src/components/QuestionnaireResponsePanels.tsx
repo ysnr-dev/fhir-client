@@ -193,6 +193,7 @@ export function QuestionnaireResponseCreatePanel({
     focusConditionId: defaultProblem?.conditionId,
     focusProcedureId,
     canonicals,
+    encounterId,
   });
   const expressionContext = useMemo(
     () =>

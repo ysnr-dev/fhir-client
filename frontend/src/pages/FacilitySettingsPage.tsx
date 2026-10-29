@@ -266,6 +266,8 @@ export function FacilitySettingsPage() {
     admissionDocs.nursing_summary_days,
     admissionDocs.nutrition_screening_days,
     admissionDocs.nutrition_plan_days,
+    admissionDocs.pressure_ulcer_risk_days,
+    admissionDocs.pressure_ulcer_plan_days,
   ].every((days) => Number.isInteger(days) && days >= 0);
 
   // 褥瘡管理の DESIGN-R 評価のテンプレート(url。版を問わない)。
@@ -1030,6 +1032,8 @@ export function FacilitySettingsPage() {
                 [
                   ["nutrition_screening", "栄養スクリーニング"],
                   ["nutrition_plan", "栄養管理計画書"],
+                  ["pressure_ulcer_risk", "褥瘡リスク評価"],
+                  ["pressure_ulcer_plan", "褥瘡対策計画書"],
                 ] as const
               ).map(([key, label]) => (
                 <Fragment key={key}>

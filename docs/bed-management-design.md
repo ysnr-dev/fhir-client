@@ -53,7 +53,7 @@
 
 ## 4. 入退院文書の作成状況(`/admission-documents`)
 
-- **［設計］** 対象は入院中の入院と、指定日(既定は 30 日前)以降に退院した入院。文書は 3 種類で、判定は
+- **［設計］** 対象は入院中の入院と、指定日(既定は 30 日前)以降に退院した入院。判定は
   `fhir/admissionDocumentHelpers.ts`:
 
   | 文書 | 何で数えるか | 期限 |
@@ -62,6 +62,7 @@
   | 退院時サマリー | type LOINC 18842-5 の Composition(`encounter`)。preliminary → 作成中、それ以外 → 確定 | 退院日 + `document_reminder.discharge_summary_days` |
   | 看護サマリー | 区分「退院」の看護サマリー(`encounter`)。作成中 / 承認待ち / 承認済(承認待ちも作成済) | 退院日 + `nursing_summary_days`(既定 7) |
   | 栄養スクリーニング・栄養管理計画書 | `docs/nutrition-care-plan-design.md` | 入院日 + `nutrition_screening_days`(既定 3)・`nutrition_plan_days`(既定 7) |
+  | 褥瘡リスク評価・褥瘡対策計画書 | `docs/pressure-ulcer-plan-design.md` | 入院日 + `pressure_ulcer_risk_days`(既定 1)・`pressure_ulcer_plan_days`(既定 7) |
 
 - **［設計］** 退院系の文書は退院するまで期限が決まらないので「退院後」と出す(書き始めていれば状態を出す)。
   期限を過ぎて作成済でなければ期限超過。
@@ -70,7 +71,8 @@
   `admission-plan-create`、カルテの `?open=admission-plan:<入院>`)。
 - **［事実］** 上流の canonical 検索は、版を省いた url では版付きの値に当たらない(`server-improvement-backlog.md` C-10)。
   テンプレートの版を `Questionnaire?url=` で引き、版ごとの canonical を並べて引いている。
-- **［設計］** セルからの入口: 入院診療計画書は未作成なら登録を始める(作成済・作成中はカルテを開くだけ)。
+- **［設計］** セルからの入口: テンプレートで書く文書は、未作成なら登録を始め、作成済・作成中はその回答を右ペインで開く
+  (`?open=questionnaire-response:<回答>`。入院に結び付いた回答はカルテの時系列に出ないため)。
   退院時サマリーは既存の `?open=discharge-summary:<入院>`、看護サマリーは作成済なら `?open=nursing-summary:<id>`、
   未作成なら `?open=nursing-summary-create:<入院>`(入院が退院済なら区分「退院」で始まる)。
 - **［設計］** 入院診療計画書のテンプレートの既定は空(どのテンプレートを使うかは施設が決める)。空なら列を出さない。

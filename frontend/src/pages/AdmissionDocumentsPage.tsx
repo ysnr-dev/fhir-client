@@ -41,8 +41,8 @@ import { addDays, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
 
 // 入退院文書の作成状況。入院中と、期間内に退院した入院を並べ、入院診療計画書・栄養スクリーニング・
-// 栄養管理計画書・退院時サマリー・看護サマリー(退院)の作成状況と期限を出す
-// (docs/bed-management-design.md §4、docs/nutrition-care-plan-design.md)。判定は
+// 栄養管理計画書・褥瘡リスク評価・褥瘡対策計画書・退院時サマリー・看護サマリー(退院)の作成状況と期限を出す
+// (docs/bed-management-design.md §4、docs/nutrition-care-plan-design.md、docs/pressure-ulcer-plan-design.md)。判定は
 // fhir/admissionDocumentHelpers.ts、対象と期限は施設設定(テンプレート・日数)。
 //
 // セルを押すとカルテを開き、未作成ならその入院の文書の登録を右ペインで始める。
@@ -318,23 +318,27 @@ export function AdmissionDocumentsPage() {
 }
 
 /**
- * カルテで開く先。未作成なら登録を始め、作成済・作成中はその文書を開く(テンプレートで書く文書はカルテだけ)。
- * 栄養管理計画書は再評価日を過ぎていれば書き直し(新しい計画書)を始める。
+ * カルテで開く先。未作成なら登録を始め、作成済・作成中はその文書を開く。
+ * 計画書は再評価日を過ぎていれば書き直し(新しい計画書)を始める。
  */
 function openTargetOf(
   kind: AdmissionDocumentKind,
   cell: AdmissionDocumentCell,
   encounterId: string,
   templateUrl: string,
-): KarteOpenTarget | null {
+): KarteOpenTarget {
   switch (kind) {
     case "admission-plan":
-      return cell.state === "missing" ? { kind: "admission-plan", encounterId } : null;
+      return cell.state === "missing"
+        ? { kind: "admission-plan", encounterId }
+        : { kind: "questionnaire-response", responseId: cell.resourceId };
     case "nutrition-screening":
     case "nutrition-plan":
+    case "pressure-ulcer-risk":
+    case "pressure-ulcer-plan":
       return cell.state === "missing" || (cell.state === "done" && cell.overdue)
         ? { kind: "encounter-template", encounterId, url: templateUrl }
-        : null;
+        : { kind: "questionnaire-response", responseId: cell.resourceId };
     case "discharge-summary":
       return { kind: "discharge-summary", encounterId };
     case "nursing-summary":
@@ -360,14 +364,14 @@ function DocumentCellView({
   returnLinkState: ReturnType<typeof useReturnLinkState>;
 }) {
   if (cell.state === "pending" || cell.state === "not-required") {
-    // 退院前で、まだ書き始めていない退院系の文書と、栄養管理の必要性が判定前・無の栄養管理計画書。
+    // 退院前で、まだ書き始めていない退院系の文書と、必要性が判定前・無の計画書。
     return <span className="order-select__muted">{cell.label || "退院後"}</span>;
   }
   const target = openTargetOf(kind, cell, encounterId, templateUrl);
-  const href = `/patients/${patientId}/karte${target ? `?${KARTE_OPEN_PARAM}=${encodeURIComponent(formatKarteOpen(target))}` : ""}`;
+  const href = `/patients/${patientId}/karte?${KARTE_OPEN_PARAM}=${encodeURIComponent(formatKarteOpen(target))}`;
   const due = cell.due ? `期限 ${cell.due.slice(5).replace("-", "/")}` : "";
   // 押すと登録を始めるセル(未作成・再評価)は、カルテを開くだけのセルより目立たせる。
-  const starts = cell.state === "missing" || (cell.state === "done" && cell.overdue && target !== null);
+  const starts = cell.state === "missing" || (cell.state === "done" && cell.overdue);
   return (
     <Link
       to={href}
