@@ -160,7 +160,7 @@ export function MedicalManagementOrderForm({
                     checked={Boolean(line)}
                     onChange={(e) => toggleItem(item, e.target.checked)}
                   />
-                  <span>{item.name}</span>
+                  <span className="medical-management-form__name">{item.name}</span>
                   <span className="medical-management-form__points">{formatPoints(item.receipt_points)}</span>
                   {historyOf(item.receipt_code, item.monthly_limit)}
                 </label>
@@ -178,7 +178,7 @@ export function MedicalManagementOrderForm({
                                 toggleAddition(item.receipt_code, { code: addition.code, name }, e.target.checked)
                               }
                             />
-                            <span>{name}</span>
+                            <span className="medical-management-form__addition-name">{name}</span>
                             <span className="medical-management-form__points">{formatPoints(addition.points)}</span>
                           </label>
                         </li>
@@ -193,7 +193,7 @@ export function MedicalManagementOrderForm({
             <li key={line.code}>
               <label className="medical-management-form__item">
                 <input type="checkbox" checked onChange={() => update("lines", values.lines.filter((l) => l !== line))} />
-                <span>{line.name}</span>
+                <span className="medical-management-form__name">{line.name}</span>
                 {historyOf(line.code, null)}
               </label>
               {line.additions.length > 0 && (
@@ -206,7 +206,7 @@ export function MedicalManagementOrderForm({
                           checked
                           onChange={() => toggleAddition(line.code, addition, false)}
                         />
-                        <span>{addition.name}</span>
+                        <span className="medical-management-form__addition-name">{addition.name}</span>
                       </label>
                     </li>
                   ))}

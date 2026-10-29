@@ -30020,8 +30020,19 @@ input.nursing-picker__search {
   flex-wrap: wrap;
 }
 
+.medical-management-form__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.medical-management-form__addition-name {
+  font-size: 13px;
+  color: var(--text-h);
+}
+
 .medical-management-form__points,
 .medical-management-form__history {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text);
 }
