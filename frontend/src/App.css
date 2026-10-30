@@ -21625,6 +21625,24 @@ button.nursing-worksheet__mark {
   width: 190px;
 }
 
+/* 投与内容の種類。抗がん剤だけは塗りつぶして、補液・前投薬などの行と見分ける。 */
+.regimen-apply__role {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.regimen-apply__role--anticancer {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--lab-high-text);
+  font-weight: 700;
+}
+
 .regimen-apply__manual {
   display: block;
   font-size: 12px;

@@ -954,7 +954,13 @@ function RegimenApplyForm({
               </tr>
               {plan.drugs.map((d, drugIndex) => (
                 <tr key={d.drug.id}>
-                  <td>{displayOf(REGIMEN_DRUG_ROLE_OPTIONS, d.drug.drug_role)}</td>
+                  <td>
+                    <span
+                      className={`regimen-apply__role${d.drug.drug_role === "anticancer" ? " regimen-apply__role--anticancer" : ""}`}
+                    >
+                      {displayOf(REGIMEN_DRUG_ROLE_OPTIONS, d.drug.drug_role)}
+                    </span>
+                  </td>
                   <td>{d.drug.resolved_name ?? d.drug.medicine_code}</td>
                   <td>
                     {d.drug.dose_value !== null
