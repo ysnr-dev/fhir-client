@@ -1,6 +1,6 @@
 import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
 import type { Medicine, MedicineUsage, RegimenDetail, RegimenDrug, RegimenStep } from "../api/masterClient";
-import { addDays, diffDays, today } from "../lib/dates";
+import { addDays, diffDays, nowFhirDateTime, today } from "../lib/dates";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   DAILY_SCHEDULE,
@@ -1306,6 +1306,43 @@ export function buildRegimenMoveBundle(
     return carryRegimenDoses(stampRegimenOrder(bundle.entry ?? [], ref), order.medicationRequests);
   });
   return { resourceType: "Bundle", type: "transaction", entry: entries };
+}
+
+/**
+ * 中止取消で戻す Task。中止する前の版(受付・払出など)を今の版の上に戻す。中止より前に依頼済
+ * 以外の版が無い(部門が触る前に止めた)なら null で、呼ぶ側が依頼済に戻す。
+ */
+export function taskBeforeCancel(current: fhir4.Task, versions: fhir4.Task[]): fhir4.Task | null {
+  const before = versions
+    .filter((v) => v.id === current.id && v.status !== "cancelled")
+    .sort((a, b) => Number(b.meta?.versionId ?? 0) - Number(a.meta?.versionId ?? 0))[0];
+  if (!before || before.status === "requested") return null;
+  const { statusReason: _dropped, ...rest } = before;
+  return { ...rest, meta: current.meta, lastModified: nowFhirDateTime() };
+}
+
+/**
+ * 移動後の最初の投与日にヘッダの開始日(occurrenceDateTime)を合わせる entry。開始日は暦の初期位置・
+ * 治療歴・二重適用の注意に出るので、Day 1 を動かしたら追随させる。変わらなければ空。
+ */
+export function regimenStartDateEntries(
+  header: fhir4.ServiceRequest,
+  orders: RegimenDayOrder[],
+  targets: RegimenDayOrder[],
+  deltaDays: number,
+): fhir4.BundleEntry[] {
+  const moved = new Set(targets.map((o) => o.serviceRequest.id));
+  const dates = orders.map((o) => (moved.has(o.serviceRequest.id) ? addDays(o.date, deltaDays) : o.date));
+  if (dates.length === 0) return [];
+  const first = dates.reduce((a, b) => (a < b ? a : b));
+  if (first === orderDay(header)) return [];
+  const resource: fhir4.ServiceRequest = { ...header, occurrenceDateTime: first };
+  return [
+    {
+      resource,
+      request: { method: "PUT", url: `ServiceRequest/${header.id}` },
+    },
+  ];
 }
 
 // ---- 重なり・重複の検出(§7.6 A-7) ----

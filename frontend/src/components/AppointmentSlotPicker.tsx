@@ -61,6 +61,8 @@ interface AppointmentSlotPickerProps {
    * 候補に無ければ(削除済み・無効など)無視して通常の選択に戻る。
    */
   defaultScheduleId?: string;
+  /** 予約する日が決まっているとき(化学療法の投与日)。その日の枠だけを選ばせる。 */
+  fixedDate?: string;
   selected: SlotSelection | null;
   onSelect: (selection: SlotSelection | null) => void;
 }
@@ -71,6 +73,7 @@ export function AppointmentSlotPicker({
   defaultDepartmentCode,
   defaultPractitionerId,
   defaultScheduleId,
+  fixedDate,
   selected,
   onSelect,
 }: AppointmentSlotPickerProps) {
@@ -127,8 +130,9 @@ export function AppointmentSlotPicker({
   // 絞り込みを変えて選択中の枠表が候補から外れたら、選び直させる。
   const schedule = scheduleOptions.schedules.find((s) => s.id === scheduleId);
 
-  const [month, setMonth] = useState(currentMonth);
-  const [date, setDate] = useState("");
+  const initialDate = fixedDate ?? "";
+  const [month, setMonth] = useState(() => (fixedDate ? fixedDate.slice(0, 7) : currentMonth()));
+  const [date, setDate] = useState(initialDate);
 
   const range = useMemo(() => monthRange(month), [month]);
   const monthSlots = useFreeSlotCountsOfMonth(schedule?.id, range);
@@ -141,14 +145,14 @@ export function AppointmentSlotPicker({
 
   function changeSchedule(id: string) {
     setPickedScheduleId(id);
-    setDate("");
+    setDate(initialDate);
     onSelect(null);
   }
 
   // 絞り込みを変えたときは候補ごと変わるので、選択を白紙に戻して初期選択もやり直す。
   function resetSchedule() {
     setPickedScheduleId(null);
-    setDate("");
+    setDate(initialDate);
     onSelect(null);
   }
 
@@ -260,12 +264,12 @@ export function AppointmentSlotPicker({
             <button
               type="button"
               onClick={() => changeMonth(-1)}
-              disabled={month <= currentMonth()}
+              disabled={Boolean(fixedDate) || month <= currentMonth()}
             >
               ← 前月
             </button>
             <span>{monthLabel(month)}</span>
-            <button type="button" onClick={() => changeMonth(1)}>
+            <button type="button" onClick={() => changeMonth(1)} disabled={Boolean(fixedDate)}>
               翌月 →
             </button>
             {monthSlots.isFetching && <span className="appointment-picker__hint">読み込み中...</span>}
@@ -293,6 +297,7 @@ export function AppointmentSlotPicker({
                         free={freeCounts.get(cell.date) ?? 0}
                         holiday={holidays.get(cell.date)?.name}
                         selected={date === cell.date}
+                        locked={Boolean(fixedDate) && cell.date !== fixedDate}
                         onSelect={(next) => {
                           setDate(next);
                           onSelect(null);
@@ -374,6 +379,7 @@ function DayCell({
   free,
   holiday,
   selected,
+  locked,
   onSelect,
 }: {
   date: string;
@@ -382,6 +388,8 @@ function DayCell({
   /** 祝日・休診日の名称。 */
   holiday?: string;
   selected: boolean;
+  /** 予約する日が決まっていて、この日は選べない。 */
+  locked: boolean;
   onSelect: (date: string) => void;
 }) {
   const day = Number(date.slice(8, 10));
@@ -393,7 +401,7 @@ function DayCell({
     "appointment-month__day",
     inMonth ? "" : "appointment-month__day--outside",
     holiday ? "appointment-month__day--holiday" : "",
-    free > 0 && !past ? "appointment-month__day--free" : "",
+    free > 0 && !past && !locked ? "appointment-month__day--free" : "",
     selected ? "appointment-month__day--selected" : "",
     isToday ? "appointment-month__day--today" : "",
   ]
@@ -405,7 +413,7 @@ function DayCell({
       type="button"
       className={className}
       onClick={() => onSelect(date)}
-      disabled={past}
+      disabled={past || locked}
       title={past ? "過ぎた日には予約できません" : holiday}
     >
       <span className="appointment-month__date">{day}</span>

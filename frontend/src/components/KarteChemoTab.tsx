@@ -130,12 +130,13 @@ export function KarteChemoTab({
   // 基準日(無ければ今日)の月を「今月」として暦の初期位置にする。
   const currentMonth = monthOf(baseDate ?? today());
   const [month, setMonth] = useState(currentMonth);
-  // 選んだ適用を変えたら、その開始月(過去なら今月)へ暦を合わせる。
+  // 選んだ適用を変えたら、その開始月(過去なら今月)へ暦を合わせる。投与日の移動で開始日が
+  // 変わっても、見ている月からは動かさない。
   useEffect(() => {
     if (!selected) return;
     const start = monthOf(selected.startDate);
     setMonth(start > currentMonth ? start : currentMonth);
-  }, [selected?.id, selected?.startDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { start, end } = monthRange(month);
   const events = usePatientEncounterEvents(patientId, start, end);
@@ -345,6 +346,8 @@ export function KarteChemoTab({
           {pendingMove && (
             <RegimenMoveModal
               patientId={patientId}
+              header={selectedHeader}
+              orders={own}
               from={pendingMove.from}
               to={pendingMove.to}
               todays={own.filter((o) => o.date === pendingMove.from)}

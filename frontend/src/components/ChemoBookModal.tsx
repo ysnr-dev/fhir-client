@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useBookChemoAppointment, useRescheduleAppointment } from "../api/queries";
 import { appointmentDateTimeLabel, type SlotSelection } from "../fhir/appointmentHelpers";
 import { displayName } from "../fhir/patientHelpers";
+import { orderDay } from "../fhir/shared";
 import { AppointmentSlotPicker } from "./AppointmentSlotPicker";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
@@ -11,7 +12,8 @@ import { Modal } from "./Modal";
 //
 // リハビリ・栄養指導と同じ形。1 つの適用に投与日が何日もあるので、オーダーと同じ
 // transaction には入れず、投与日ごとに都度取る。枠選び UI は診察・検査と同じ
-// AppointmentSlotPicker(scheduleType を渡すだけで切り替わる)。
+// AppointmentSlotPicker(scheduleType を渡すだけで切り替わる)。予約は投与日のためのものなので、
+// 選べる日はオーダーの日に固定する(日を変えるのは投与日の移動で行う)。
 
 interface Props {
   /** その日の注射オーダー(予約の basedOn)。 */
@@ -67,7 +69,12 @@ export function ChemoBookModal({ order, patient, label, appointment, onClose }: 
           </div>
         )}
 
-        <AppointmentSlotPicker scheduleType="chemo" selected={selection} onSelect={setSelection} />
+        <AppointmentSlotPicker
+          scheduleType="chemo"
+          fixedDate={orderDay(order)}
+          selected={selection}
+          onSelect={setSelection}
+        />
 
         <div className="appointment-panel__actions">
           <button

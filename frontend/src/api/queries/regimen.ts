@@ -15,8 +15,10 @@ import {
   regimenDayOrderKind,
   type RegimenDiscontinuation,
   regimenOrderOf,
+  regimenStartDateEntries,
   revokeRegimenEntry,
   sortByRp,
+  taskBeforeCancel,
 } from "../../fhir/regimenOrderHelpers";
 import {
   buildRegimenDecisionTask,
@@ -38,6 +40,7 @@ import {
   orderAppointmentCancelEntries,
   setActiveAppointmentStatus,
 } from "./appointment";
+import { readAllTypeHistory } from "./karteCardHistory";
 import { invalidateProvenance, useActivityProvenance, useWithOrderProvenance } from "./provenance";
 import { taskBundleEntry } from "./worklist";
 
@@ -250,12 +253,19 @@ export function useMoveRegimenDays() {
       targets,
       deltaDays,
       patientId,
+      header,
+      orders,
     }: {
       targets: RegimenDayOrder[];
       deltaDays: number;
       patientId: string;
+      /** 適用のヘッダと全日オーダー。最初の投与日が変わればヘッダの開始日を合わせる。 */
+      header: fhir4.ServiceRequest | null;
+      orders: RegimenDayOrder[];
     }) => {
-      const bundle = withProvenance(buildRegimenMoveBundle(targets, deltaDays, patientId));
+      const moveBundle = buildRegimenMoveBundle(targets, deltaDays, patientId);
+      const headerEntries = header ? regimenStartDateEntries(header, orders, targets, deltaDays) : [];
+      const bundle = withProvenance({ ...moveBundle, entry: [...(moveBundle.entry ?? []), ...headerEntries] });
       const cancels = await chemoAppointmentCancelEntries(targets);
       return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...cancels] });
     },
@@ -267,9 +277,27 @@ export function useMoveRegimenDays() {
 }
 
 /**
+ * 中止取消で戻す Task(Task の id → 中止前の版)。対象の Task の版履歴を型レベルの _history で
+ * まとめて引く。中止前に戻す版が無いものは入らない(依頼済に戻す)。
+ */
+async function tasksBeforeCancel(orders: RegimenDayOrder[]): Promise<Map<string, fhir4.Task>> {
+  const current = orders.flatMap((o) => (o.task?.id ? [o.task] : []));
+  if (current.length === 0) return new Map();
+  const versions = await readAllTypeHistory("Task", new URLSearchParams({ _id: current.map((t) => t.id).join(",") }));
+  const tasks = versions.flatMap((v) => (v.resource?.resourceType === "Task" ? [v.resource as fhir4.Task] : []));
+  const result = new Map<string, fhir4.Task>();
+  for (const task of current) {
+    const restored = taskBeforeCancel(task, tasks);
+    if (restored) result.set(task.id ?? "", restored);
+  }
+  return result;
+}
+
+/**
  * レジメンの日オーダーの中止・中止取消。注射は注射の Task、処方は処方の Task に
  * 同じ状態を書く。複数日をまとめて 1 つの transaction で書く(半端に止まらない)。
  * 中止では化学療法室の予約も取り消す(中止取消で予約は戻さない。取り直す)。
+ * 中止取消は中止する前の進捗(受付・払出など)に戻す。
  */
 export function useUpdateRegimenDayStatus() {
   const queryClient = useQueryClient();
@@ -283,12 +311,16 @@ export function useUpdateRegimenDayStatus() {
       targets: RegimenDayOrder[];
       status: "cancelled" | "requested";
       reason?: string;
-    }) =>
-      postBundle({
+    }) => {
+      const restored = status === "requested" ? await tasksBeforeCancel(targets) : new Map<string, fhir4.Task>();
+      return postBundle({
         resourceType: "Bundle",
         type: "transaction",
         entry: [
-          ...targets.map((order) => regimenDayTaskEntry(order, status, reason)),
+          ...targets.map((order) => {
+            const task = restored.get(order.task?.id ?? "");
+            return task ? taskBundleEntry(task) : regimenDayTaskEntry(order, status, reason);
+          }),
           ...(status === "cancelled" ? await chemoAppointmentCancelEntries(targets) : []),
           // 誰がどの投与日を止めたか(代行なら指示医師の承認待ちに並ぶ)。
           ...activityProvenance(
@@ -296,7 +328,8 @@ export function useUpdateRegimenDayStatus() {
             status === "cancelled" ? "CANCEL" : "REACTIVATE",
           ),
         ],
-      }),
+      });
+    },
     onSuccess: () => {
       invalidateRegimen(queryClient);
       invalidateProvenance(queryClient);

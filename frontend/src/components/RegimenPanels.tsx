@@ -99,7 +99,7 @@ export function RegimenDayPanel({
   onEditPrescription,
   onSaved,
 }: RegimenDayPanelProps) {
-  const { application, orders, isPending, error } = useRegimenApplication(patientId, regimenSrId);
+  const { application, header, orders, isPending, error } = useRegimenApplication(patientId, regimenSrId);
   const updateStatus = useUpdateRegimenDayStatus();
   const move = useMoveRegimenDays();
   const [scope, setScope] = useState<Scope>("one");
@@ -145,7 +145,7 @@ export function RegimenDayPanel({
         ? `${date} 以降の ${movable.length} 件を ${delta > 0 ? `${delta} 日後` : `${-delta} 日前`}に移動します。`
         : `${date} のオーダーを ${moveTo} に移動します。`;
     if (!window.confirm(`${text}${bookingNote(movable, "移動後に予約し直してください。")}よろしいですか？`)) return;
-    move.mutate({ targets: movable, deltaDays: delta, patientId }, { onSuccess: onSaved });
+    move.mutate({ targets: movable, deltaDays: delta, patientId, header, orders }, { onSuccess: onSaved });
   }
 
   function handleCancel() {
@@ -379,6 +379,9 @@ function RegimenOrderBody({ order }: { order: RegimenDayOrder }) {
 
 interface RegimenMoveModalProps {
   patientId: string;
+  /** 適用のヘッダと全日オーダー(最初の投与日が変わればヘッダの開始日を合わせる)。 */
+  header: fhir4.ServiceRequest | null;
+  orders: RegimenDayOrder[];
   /** 動かす元の日と、その日のオーダー。 */
   from: string;
   todays: RegimenDayOrder[];
@@ -394,7 +397,17 @@ interface RegimenMoveModalProps {
  * 反映範囲(この日のみ / この日以降すべて)だけ。注射の中止と同じ 3 ボタンの形にする。
  * 実施済は動かさない(済んだ事実)。
  */
-export function RegimenMoveModal({ patientId, from, todays, following, to, onClose, onDone }: RegimenMoveModalProps) {
+export function RegimenMoveModal({
+  patientId,
+  header,
+  orders,
+  from,
+  todays,
+  following,
+  to,
+  onClose,
+  onDone,
+}: RegimenMoveModalProps) {
   const move = useMoveRegimenDays();
   const delta = diffDays(from, to);
   const movableToday = todays.filter((o) => o.status !== "completed");
@@ -411,7 +424,7 @@ export function RegimenMoveModal({ patientId, from, todays, following, to, onClo
   function run(withFollowing: boolean) {
     const targets = withFollowing ? [...movableToday, ...movableFollowing] : movableToday;
     if (targets.length === 0) return;
-    move.mutate({ targets, deltaDays: delta, patientId }, { onSuccess: onDone });
+    move.mutate({ targets, deltaDays: delta, patientId, header, orders }, { onSuccess: onDone });
   }
 
   return (
