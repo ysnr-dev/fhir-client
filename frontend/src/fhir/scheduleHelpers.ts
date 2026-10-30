@@ -424,12 +424,14 @@ export interface SlotGenerateRange {
  * 分は作らない(同じ期間に対して二度実行しても増えず、定員を 2 → 3 に増やしたときは
  * 不足の 1 件だけが増える)。
  * 時間帯の端数(15分刻みで 09:00-09:50 の最後の 10 分など)は切り捨てる。
+ * closedDays に入っている日(祝日・休診日)には作らない。
  */
 export function generateSlots(
   scheduleId: string,
   pattern: SlotPattern,
   range: SlotGenerateRange,
   existingSlots: fhir4.Slot[],
+  closedDays: ReadonlyMap<string, unknown> = new Map(),
 ): fhir4.Slot[] {
   // 誤登録(entered-in-error)は席として数えない。残っていても作り直せるようにする。
   const counts = new Map<number, number>();
@@ -445,7 +447,7 @@ export function generateSlots(
 
   for (let date = range.from; date <= range.to; date = addDays(date, 1)) {
     const weekday = new Date(`${date}T00:00:00`).getDay();
-    if (!weekdays.has(weekday)) continue;
+    if (!weekdays.has(weekday) || closedDays.has(date)) continue;
 
     for (const block of pattern.blocks) {
       const blockEnd = minutesOf(block.end);

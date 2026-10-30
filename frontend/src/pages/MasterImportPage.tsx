@@ -171,6 +171,13 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".csv",
   },
   {
+    type: "holidays",
+    label: "祝日マスタ",
+    formatHint:
+      "内閣府「国民の祝日」syukujitsu.csv（Shift_JIS、ヘッダあり・2列）。ファイルの期間の祝日だけを入れ替え、休診日は残す",
+    accept: ".csv",
+  },
+  {
     type: "dpc_tables",
     label: "DPC 電子点数表",
     formatHint: "厚生労働省 診断群分類（DPC）電子点数表 .xlsx（全シートを読み、版ごとに入れ替える）",

@@ -319,6 +319,10 @@ Rails.application.routes.draw do
     resources :advisory_events, only: :create
     # 処方監査の介入種別(docs/rx-verification-design.md §4.1)。
     resources :pharmacist_intervention_types, only: %i[index show create update destroy]
+    # 祝日・休診日。国民の祝日は内閣府 CSV の取込で入れ替え、休診日は画面から登録する。
+    resources :holidays, only: %i[index show create update destroy] do
+      collection { post :import }
+    end
     resources :radiotherapy_protocols, only: %i[index show create update destroy]
     # 術式マスタ。手術オーダー(申込)の項目。処置と違いセット・レイアウト・
     # データセットのマスタは持たない(術式は検索で選び、実施入力は第2段階)。

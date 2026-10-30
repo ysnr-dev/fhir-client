@@ -20,6 +20,7 @@ export const MASTER_MENU: MasterMenuGroup[] = [
       { label: "病棟・病室", to: "/wards" },
       { label: "注意区分", to: "/patient-cautions" },
       { label: "診療記録タイトル", to: "/clinical-note-titles" },
+      { label: "祝日・休診日", to: "/holidays" },
     ],
   },
   // DPC 電子点数表(診断群分類の判定・点数)。配布ファイルを取り込んで閲覧するだけ。

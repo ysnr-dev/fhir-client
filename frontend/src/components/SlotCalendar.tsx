@@ -1,3 +1,5 @@
+import { useHolidays } from "../api/masterQueries";
+import { calendarWeekday, holidayName, type HolidayNames } from "../lib/holidays";
 import {
   formatDateLabel,
   slotCellLabel,
@@ -36,6 +38,7 @@ export function SlotCalendar({
   onAddAt,
 }: SlotCalendarProps) {
   const dates = weekDates(weekStartISO);
+  const { holidays } = useHolidays(dates[0], dates[dates.length - 1]);
 
   if (rows.length === 0) {
     return (
@@ -52,7 +55,7 @@ export function SlotCalendar({
           <tr>
             <th className="slot-calendar__time-col">時刻</th>
             {dates.map((date) => (
-              <th key={date} className={weekendClass(date)}>
+              <th key={date} className={weekendClass(date, holidays)} title={holidayName(date, holidays)}>
                 {formatDateLabel(date)}
               </th>
             ))}
@@ -63,7 +66,7 @@ export function SlotCalendar({
             <tr key={row.time}>
               <th className="slot-calendar__time-col">{row.time}</th>
               {row.cells.map((cell) => (
-                <td key={cell.date} className={weekendClass(cell.date)}>
+                <td key={cell.date} className={weekendClass(cell.date, holidays)}>
                   {cell.slots.length > 0 ? (
                     <SlotCell slots={cell.slots} selectedIds={selectedIds} onToggle={onToggle} />
                   ) : (
@@ -135,9 +138,9 @@ function cellTitle(summary: ReturnType<typeof summarizeSlotCell>): string | unde
   return detail || undefined;
 }
 
-// 土日は列の背景を変えて週の区切りを見やすくする。
-function weekendClass(dateISO: string): string {
-  const weekday = new Date(`${dateISO}T00:00:00`).getDay();
+// 土日・祝日は列の背景を変えて週の区切りを見やすくする。
+function weekendClass(dateISO: string, holidays: HolidayNames): string {
+  const weekday = calendarWeekday(dateISO, holidays);
   if (weekday === 0) return "slot-calendar__col--sunday";
   if (weekday === 6) return "slot-calendar__col--saturday";
   return "";

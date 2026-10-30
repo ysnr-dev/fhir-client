@@ -23,6 +23,7 @@ import {
   type MedicationHistoryView,
 } from "../karteUrl";
 import { addDays, today, WEEKDAY_LABELS } from "../lib/dates";
+import { useHolidays } from "../api/masterQueries";
 import { ErrorBanner } from "./ErrorBanner";
 
 // カルテの投薬歴タブ。処方・注射・持参薬を「薬剤 × 日付」の表にして、いつ何をどれだけ
@@ -86,6 +87,10 @@ export function KarteMedicationHistoryTab({ patientId, view, onViewChange, onOpe
   const unit = parsed.unit ?? "day";
   const columns = parsed.columns ?? DEFAULT_COLUMNS[unit];
   const range = useMemo(() => chartRangeOf(baseDate, { unit, columns }), [baseDate, unit, columns]);
+  const { holidays } = useHolidays(
+    unit === "day" ? (range.columns[0]?.start ?? "") : "",
+    unit === "day" ? (range.columns[range.columns.length - 1]?.start ?? "") : "",
+  );
   // parse のたびに配列が作り直されるので、中身で固定して集計の memo を効かせる。
   const hiddenKey = (parsed.hidden ?? []).join(",");
   const hidden = useMemo(() => parsed.hidden, [hiddenKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -272,7 +277,11 @@ export function KarteMedicationHistoryTab({ patientId, view, onViewChange, onOpe
                     "medication-history__date-col",
                     isToday ? "is-today" : "",
                     inpatientColumns.has(column.start) ? "is-inpatient" : "",
-                    heading.weekday === 0 ? "is-sunday" : heading.weekday === 6 ? "is-saturday" : "",
+                    heading.weekday === 0 || (unit === "day" && holidays.has(column.start))
+                      ? "is-sunday"
+                      : heading.weekday === 6
+                        ? "is-saturday"
+                        : "",
                   ]
                     .filter(Boolean)
                     .join(" ");

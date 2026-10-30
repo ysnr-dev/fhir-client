@@ -20,6 +20,7 @@ import { SmartAppsPage } from "./pages/SmartAppsPage";
 import { CdsServicesPage } from "./pages/CdsServicesPage";
 import { AdvisoryOverrideReasonPage } from "./pages/AdvisoryMasterPages";
 import { PharmacistInterventionTypePage } from "./pages/PharmacistInterventionTypePage";
+import { HolidayPage } from "./pages/HolidayPage";
 import { AdvisoryReviewPage } from "./pages/AdvisoryReviewPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
 import { MasterMenuPage } from "./pages/MasterMenuPage";
@@ -404,6 +405,7 @@ function App() {
           <Route path="/radiotherapy-stop-reasons" element={<RadiotherapyStopReasonPage />} />
           <Route path="/advisory-override-reasons" element={<AdvisoryOverrideReasonPage />} />
           <Route path="/pharmacist-intervention-types" element={<PharmacistInterventionTypePage />} />
+          <Route path="/holidays" element={<HolidayPage />} />
           <Route
             path="/nutrition-guidance-worklist"
             element={<NutritionGuidanceWorklistPage />}

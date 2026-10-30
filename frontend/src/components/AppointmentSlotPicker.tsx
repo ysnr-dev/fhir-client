@@ -6,6 +6,7 @@ import {
   usePractitionerOptions,
   useScheduleOptions,
 } from "../api/queries";
+import { useHolidays } from "../api/masterQueries";
 import {
   chainFreeSlots,
   currentMonth,
@@ -135,6 +136,7 @@ export function AppointmentSlotPicker({
 
   const freeCounts = monthSlots.freeCounts;
   const grid = useMemo(() => monthGrid(month), [month]);
+  const { holidays } = useHolidays(grid[0][0].date, grid[grid.length - 1][6].date);
   const timeGroups = useMemo(() => groupSlotsByTime(daySlots.slots), [daySlots.slots]);
 
   function changeSchedule(id: string) {
@@ -289,6 +291,7 @@ export function AppointmentSlotPicker({
                         date={cell.date}
                         inMonth={cell.inMonth}
                         free={freeCounts.get(cell.date) ?? 0}
+                        holiday={holidays.get(cell.date)?.name}
                         selected={date === cell.date}
                         onSelect={(next) => {
                           setDate(next);
@@ -369,12 +372,15 @@ function DayCell({
   date,
   inMonth,
   free,
+  holiday,
   selected,
   onSelect,
 }: {
   date: string;
   inMonth: boolean;
   free: number;
+  /** 祝日・休診日の名称。 */
+  holiday?: string;
   selected: boolean;
   onSelect: (date: string) => void;
 }) {
@@ -386,6 +392,7 @@ function DayCell({
   const className = [
     "appointment-month__day",
     inMonth ? "" : "appointment-month__day--outside",
+    holiday ? "appointment-month__day--holiday" : "",
     free > 0 && !past ? "appointment-month__day--free" : "",
     selected ? "appointment-month__day--selected" : "",
     isToday ? "appointment-month__day--today" : "",
@@ -399,7 +406,7 @@ function DayCell({
       className={className}
       onClick={() => onSelect(date)}
       disabled={past}
-      title={past ? "過ぎた日には予約できません" : undefined}
+      title={past ? "過ぎた日には予約できません" : holiday}
     >
       <span className="appointment-month__date">{day}</span>
       {/* 日付の数字と紛れないよう「空き」を添える。月のカレンダーは空き枠だけを

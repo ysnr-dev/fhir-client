@@ -9,7 +9,7 @@ import {
   useUpdateSurgeryTaskStatus,
   type SurgeryWorklistRow,
 } from "../api/queries";
-import { useSurgeryRoomBlocks } from "../api/masterQueries";
+import { useHolidays, useSurgeryRoomBlocks } from "../api/masterQueries";
 import type { SurgeryRoomBlock } from "../api/masterClient";
 import { locationDisplayName, locationTypeCode } from "../fhir/locationHelpers";
 import { addDays, formatDateLabel, today, weekDates, weekStart } from "../fhir/scheduleHelpers";
@@ -47,7 +47,7 @@ import { SurgeryMoveConfirmModal, type SurgeryMoveTarget } from "./SurgeryMoveCo
 import { SurgeryOrderCreateModal, SurgeryOrderEditModal } from "./SurgeryOrderModals";
 import type { SurgeryDefaultSchedule } from "./SurgeryOrderPanels";
 import { SurgeryPerformModal } from "./SurgeryPerformModal";
-import { weekdayOf } from "../lib/dates";
+import { calendarWeekday, holidayName, type HolidayNames } from "../lib/holidays";
 
 // 手術室カレンダー。手術一覧の 3 つ目のタブ。
 //
@@ -1150,6 +1150,7 @@ function WeekView({
 } & SplitProps) {
   const dates = weekDates(weekStart(date));
   const results = useSurgeryWorklistWeek(dates);
+  const { holidays } = useHolidays(dates[0], dates[dates.length - 1]);
   const blocks = useSurgeryRoomBlocks(date || undefined);
   const rooms = useSurgeryRooms();
 
@@ -1263,7 +1264,7 @@ function WeekView({
                   <tr>
                     <th className="slot-calendar__time-col">手術室</th>
                     {dates.map((d) => (
-                      <th key={d} className={weekendClass(d)}>
+                      <th key={d} className={weekendClass(d, holidays)} title={holidayName(d, holidays)}>
                         <button
                           type="button"
                           className="surgery-calendar__day-link"
@@ -1286,6 +1287,7 @@ function WeekView({
                           room={room}
                           rows={results[index]?.data?.rows ?? []}
                           blocks={blocks.data ?? []}
+                          holidays={holidays}
                           onOpen={() => {
                             // 掴んで離した直後の click は飲む(日ビューへ落ちてしまうため)。
                             if (dragging.consumeClick()) return;
@@ -1328,6 +1330,7 @@ function WeekCell({
   room,
   rows,
   blocks,
+  holidays,
   onOpen,
   cellRef,
   onChipPointerDown,
@@ -1338,6 +1341,7 @@ function WeekCell({
   room: { id: string; name: string };
   rows: SurgeryWorklistRow[];
   blocks: SurgeryRoomBlock[];
+  holidays: HolidayNames;
   onOpen: () => void;
   cellRef: (el: HTMLTableCellElement | null) => void;
   onChipPointerDown: (row: SurgeryWorklistRow, event: React.PointerEvent) => void;
@@ -1367,7 +1371,7 @@ function WeekCell({
   return (
     <td
       ref={cellRef}
-      className={[weekendClass(date) ?? "", dropTarget ? "surgery-calendar__cell--drop-target" : ""]
+      className={[weekendClass(date, holidays) ?? "", dropTarget ? "surgery-calendar__cell--drop-target" : ""]
         .filter(Boolean)
         .join(" ")}
     >
@@ -1492,8 +1496,8 @@ function assignLanes(ranges: MinuteRange[]): { index: number; total: number }[] 
   return result;
 }
 
-function weekendClass(dateISO: string): string | undefined {
-  const weekday = weekdayOf(dateISO);
+function weekendClass(dateISO: string, holidays: HolidayNames): string | undefined {
+  const weekday = calendarWeekday(dateISO, holidays);
   if (weekday === 6) return "slot-calendar__col--saturday";
   if (weekday === 0) return "slot-calendar__col--sunday";
   return undefined;

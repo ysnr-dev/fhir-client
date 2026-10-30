@@ -29,7 +29,8 @@ export type MasterType =
   | "ctcae_terms"
   | "dpc_tables"
   | "dpc_stem7_codes"
-  | "nursing_acuity_codes";
+  | "nursing_acuity_codes"
+  | "holidays";
 
 export interface MasterImportResult {
   imported: number;

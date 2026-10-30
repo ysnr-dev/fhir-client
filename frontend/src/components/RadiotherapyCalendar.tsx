@@ -6,7 +6,7 @@ import {
   type MutableRefObject,
   type ReactNode,
 } from "react";
-import { radiotherapyDeviceHooks } from "../api/masterQueries";
+import { radiotherapyDeviceHooks, useHolidays } from "../api/masterQueries";
 import {
   useRadiotherapyCalendar,
   type RadiotherapyCalendarEntry,
@@ -22,7 +22,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { TruncatedNotice } from "./TruncatedNotice";
 import { KarteSplitter } from "./KarteSplitter";
 import { RowMenu } from "./RowMenu";
-import { weekdayOf } from "../lib/dates";
+import { calendarWeekday, holidayName, type HolidayNames } from "../lib/holidays";
 
 // 放射線治療カレンダー(docs/radiotherapy-order-design.md §7)。
 //
@@ -873,6 +873,7 @@ function WeekGrid({
   coursePoint: { x: number; y: number } | null;
 }) {
   const dates = weekDates(from);
+  const { holidays } = useHolidays(dates[0], dates[dates.length - 1]);
   const cellRefs = useRef(new Map<string, HTMLTableCellElement>());
 
   function cellAt(x: number, y: number): { date: string; column: Column } | null {
@@ -924,7 +925,7 @@ function WeekGrid({
           <tr>
             <th className="slot-calendar__time-col">治療装置</th>
             {dates.map((d) => (
-              <th key={d} className={weekendClass(d)}>
+              <th key={d} className={weekendClass(d, holidays)} title={holidayName(d, holidays)}>
                 <button type="button" className="surgery-calendar__day-link" onClick={() => onOpenDay(d)}>
                   {formatDateLabel(d)}
                 </button>
@@ -953,7 +954,7 @@ function WeekGrid({
                       if (el) cellRefs.current.set(key, el);
                       else cellRefs.current.delete(key);
                     }}
-                    className={[weekendClass(d), isTarget ? "radiotherapy-calendar__week-td--target" : ""]
+                    className={[weekendClass(d, holidays), isTarget ? "radiotherapy-calendar__week-td--target" : ""]
                       .filter(Boolean)
                       .join(" ")}
                     onClick={() => {
@@ -1003,8 +1004,8 @@ function WeekGrid({
   );
 }
 
-function weekendClass(dateISO: string): string | undefined {
-  const weekday = weekdayOf(dateISO);
+function weekendClass(dateISO: string, holidays: HolidayNames): string | undefined {
+  const weekday = calendarWeekday(dateISO, holidays);
   if (weekday === 6) return "slot-calendar__col--saturday";
   if (weekday === 0) return "slot-calendar__col--sunday";
   return undefined;

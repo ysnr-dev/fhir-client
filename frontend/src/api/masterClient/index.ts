@@ -50,3 +50,4 @@ export * from "./advisory";
 export * from "./pharmacy";
 export * from "./itemLayout";
 export * from "./performDataset";
+export * from "./holiday";

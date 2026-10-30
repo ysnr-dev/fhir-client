@@ -14388,6 +14388,13 @@ select.rad-route-select {
   gap: 4px;
 }
 
+.slot-generate__skip-holidays {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
 .slot-generate__preview {
   font-size: 14px;
   color: var(--text-h);
@@ -14785,6 +14792,10 @@ select.rad-route-select {
   font-weight: 500;
   line-height: 1.2;
   color: var(--text-h);
+}
+
+.appointment-month__day--holiday .appointment-month__date {
+  color: var(--lab-high);
 }
 
 .appointment-month__day--selected .appointment-month__date {
@@ -24773,6 +24784,15 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 /* 診療記録タイトルのマスタ。テンプレート名が読める幅を取る。 */
+/* 祝日・休診日マスタの年送り。 */
+.holiday-master__year {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
 .clinical-note-title__template {
   min-width: 260px;
 }

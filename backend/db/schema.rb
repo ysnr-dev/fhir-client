@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -943,6 +943,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_100000) do
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_master_formulary_groups_on_code", unique: true
     t.index ["yakko_codes"], name: "index_master_formulary_groups_on_yakko_codes", using: :gin
+  end
+
+  create_table "master_holidays", force: :cascade do |t|
+    t.date "holiday_date", null: false
+    t.string "name", null: false
+    t.string "kind", default: "national", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["holiday_date"], name: "index_master_holidays_on_holiday_date", unique: true
   end
 
   create_table "master_hot_codes", force: :cascade do |t|

@@ -15,6 +15,8 @@ import {
   type RegimenDayOrder,
 } from "../fhir/regimenOrderHelpers";
 import { toDateInput, today, WEEKDAY_LABELS } from "../lib/dates";
+import { useHolidays } from "../api/masterQueries";
+import { calendarWeekday } from "../lib/holidays";
 import { ErrorBanner } from "./ErrorBanner";
 import { RegimenDetailView } from "./RegimenDetailView";
 import { RegimenHistoryView } from "./RegimenHistoryView";
@@ -137,6 +139,7 @@ export function KarteChemoTab({
   const { start, end } = monthRange(month);
   const events = usePatientEncounterEvents(patientId, start, end);
   const days = useMemo(() => calendarDays(month), [month]);
+  const { holidays } = useHolidays(days[0].date, days[days.length - 1].date);
   const byDate = useMemo(() => {
     const map = new Map<string, RegimenDayOrder[]>();
     for (const order of own) map.set(order.date, [...(map.get(order.date) ?? []), order]);
@@ -319,7 +322,7 @@ export function KarteChemoTab({
                 key={day.date}
                 date={day.date}
                 inMonth={day.inMonth}
-                weekday={day.weekday}
+                weekday={calendarWeekday(day.date, holidays) ?? day.weekday}
                 isToday={day.date === todayDate}
                 orders={day.inMonth ? (byDate.get(day.date) ?? []) : []}
                 position={day.inMonth ? positionOf(day.date) : null}

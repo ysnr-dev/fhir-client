@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useGenerateSlots, useSlotsInRange } from "../api/queries";
+import { useHolidays } from "../api/masterQueries";
 import {
   addMonths,
   emptySlotPattern,
@@ -42,17 +43,26 @@ export function SlotGenerateModal({ schedule, onClose, onGenerated }: SlotGenera
     slotPatternOf(schedule) ?? emptySlotPattern,
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [skipHolidays, setSkipHolidays] = useState(true);
 
   const rangeValid = Boolean(range.from && range.to && range.from <= range.to);
   // カレンダーは 1 週間しか読んでいないので、重複判定用に生成期間ぶんを引き直す。
   const existing = useSlotsInRange(schedule.id, range, rangeValid);
+  const holidays = useHolidays(range.from, range.to);
   const generateSlotsMutation = useGenerateSlots();
+  const loading = existing.isLoading || holidays.isLoading;
 
   const preview = useMemo(() => {
-    if (!schedule.id || !rangeValid || existing.isLoading) return [];
+    if (!schedule.id || !rangeValid || loading) return [];
     if (validateSlotPattern(pattern)) return [];
-    return generateSlots(schedule.id, pattern, range, existing.slots);
-  }, [schedule.id, pattern, range, rangeValid, existing.slots, existing.isLoading]);
+    return generateSlots(
+      schedule.id,
+      pattern,
+      range,
+      existing.slots,
+      skipHolidays ? holidays.holidays : undefined,
+    );
+  }, [schedule.id, pattern, range, rangeValid, existing.slots, loading, skipHolidays, holidays.holidays]);
 
   function handleGenerate() {
     const error = !rangeValid
@@ -81,6 +91,7 @@ export function SlotGenerateModal({ schedule, onClose, onGenerated }: SlotGenera
           </div>
         )}
         <ErrorBanner error={existing.error} />
+        <ErrorBanner error={holidays.error} />
         <ErrorBanner error={generateSlotsMutation.error} />
 
         <div className="slot-generate__range">
@@ -104,8 +115,17 @@ export function SlotGenerateModal({ schedule, onClose, onGenerated }: SlotGenera
 
         <SlotPatternFields value={pattern} onChange={setPattern} />
 
+        <label className="slot-generate__skip-holidays">
+          <input
+            type="checkbox"
+            checked={skipHolidays}
+            onChange={(e) => setSkipHolidays(e.target.checked)}
+          />
+          祝日・休診日を除く
+        </label>
+
         <p className="slot-generate__preview">
-          {existing.isLoading
+          {loading
             ? "既存の枠を確認しています..."
             : `新しく作る枠: ${preview.length} 件(既存 ${existing.slots.length} 件はそのまま)`}
         </p>
@@ -114,7 +134,7 @@ export function SlotGenerateModal({ schedule, onClose, onGenerated }: SlotGenera
           <button
             type="button"
             onClick={handleGenerate}
-            disabled={generateSlotsMutation.isPending || existing.isLoading}
+            disabled={generateSlotsMutation.isPending || loading}
           >
             {generateSlotsMutation.isPending ? "生成中..." : "生成"}
           </button>

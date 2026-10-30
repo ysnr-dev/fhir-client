@@ -395,13 +395,14 @@ function nextDate(date: string): string {
 
 /**
  * 残りの回数ぶんの照射予定を日付に割り付ける。処方の回数から、照射済みの回と登録済みの予定を
- * 引いた残りを、Phase の並び順に、指定の曜日へ 1 日 1 回ずつ置く。祝日は知らないので、
- * 確認表で行の日付を直すか外してもらう。
+ * 引いた残りを、Phase の並び順に、指定の曜日へ 1 日 1 回ずつ置く。closedDays(祝日・休診日)は
+ * 飛ばす。装置の点検日は知らないので、確認表で行の日付を直すか外してもらう。
  */
 export function draftRadiotherapyPlan(
   summary: RadiotherapyOrderSummary,
   fractions: RadiotherapyFractionDisplay[],
   options: RadiotherapyPlanOptions,
+  closedDays: ReadonlyMap<string, unknown> = new Map(),
 ): RadiotherapyPlanRow[] {
   if (!options.startDate || options.weekdays.length === 0) return [];
 
@@ -424,7 +425,10 @@ export function draftRadiotherapyPlan(
     const taken = used.get(phase.phaseId) ?? new Set<number>();
     for (let number = 1; number <= phase.fractions; number += 1) {
       if (taken.has(number)) continue;
-      while (!options.weekdays.includes(new Date(`${date}T00:00:00`).getDay()) && guard < 5000) {
+      while (
+        (!options.weekdays.includes(new Date(`${date}T00:00:00`).getDay()) || closedDays.has(date)) &&
+        guard < 5000
+      ) {
         date = nextDate(date);
         guard += 1;
       }

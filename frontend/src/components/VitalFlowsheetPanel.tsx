@@ -35,7 +35,7 @@ import {
   waterBalanceLabel,
 } from "../fhir/flowsheetWaterBalanceHelpers";
 import { DEFAULT_NURSING_SCHEDULE } from "../fhir/nursingScheduleHelpers";
-import { useFastingDietCodes, useMedicineDoseFactors } from "../api/masterQueries";
+import { useFastingDietCodes, useHolidays, useMedicineDoseFactors } from "../api/masterQueries";
 import { injectionPerformsByOrderId } from "../fhir/injectionPerformHelpers";
 import { injectionTasksByOrderId } from "../fhir/injectionTaskHelpers";
 import { referenceId } from "../fhir/shared";
@@ -267,6 +267,8 @@ export function VitalFlowsheetPanel({
     () => buildVitalFlowsheet(observations ?? [], thresholds),
     [observations, thresholds],
   );
+
+  const { holidays } = useHolidays(days[0] ?? "", days[days.length - 1] ?? "");
 
   // 枠ごとの列。測定があればその日時ごと、無ければ空き列を 1 つ。
   const { columns, dayGroups } = useMemo(() => {
@@ -754,7 +756,7 @@ export function VitalFlowsheetPanel({
                 <tr>
                   {dayGroups.map((group) => {
                     const weekendClass =
-                      group.weekday === 0
+                      group.weekday === 0 || (group.weekday !== undefined && holidays.has(group.day))
                         ? " vital-flowsheet__date-col--sunday"
                         : group.weekday === 6
                           ? " vital-flowsheet__date-col--saturday"
@@ -766,7 +768,11 @@ export function VitalFlowsheetPanel({
                           !dayMode && group.day === baseDate ? " vital-flowsheet__date-col--base" : ""
                         }`}
                         colSpan={group.count}
-                        title={dayMode ? `${group.day} ${group.label}時` : group.day}
+                        title={
+                          dayMode
+                            ? `${group.day} ${group.label}時`
+                            : [group.day, holidays.get(group.day)?.name].filter(Boolean).join(" ")
+                        }
                       >
                         {/* 1 週間表示では日付を押すとその日の 24 時間表示に切り替わる。 */}
                         {dayMode ? (

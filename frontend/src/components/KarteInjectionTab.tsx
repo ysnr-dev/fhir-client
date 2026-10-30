@@ -11,6 +11,8 @@ import {
 import { canCancelInjection, injectionTaskStatus, injectionTasksByOrderId } from "../fhir/injectionTaskHelpers";
 import { referenceId } from "../fhir/shared";
 import { addDays, isDateOnly, today, WEEKDAY_LABELS, weekdayOf } from "../lib/dates";
+import { useHolidays } from "../api/masterQueries";
+import { calendarWeekday, holidayName } from "../lib/holidays";
 import { ErrorBanner } from "./ErrorBanner";
 import { TruncatedNotice } from "./TruncatedNotice";
 import { InjectionCancelModal } from "./InjectionCancelModal";
@@ -73,6 +75,7 @@ export function KarteInjectionTab({ patientId, view, onViewChange, onEdit, onCre
   const [dayTarget, setDayTarget] = useState<{ srId: string; compareSrId?: string } | null>(null);
 
   const dates = useMemo(() => calendarDates(start, CALENDAR_DAYS), [start]);
+  const { holidays } = useHolidays(dates[0], dates[dates.length - 1]);
   const end = dates[dates.length - 1];
   const query = usePatientInjectionOrders(patientId, start, end);
   const rows = useMemo(() => (query.data ? buildInjectionCalendar(query.data, dates) : []), [query.data, dates]);
@@ -223,9 +226,10 @@ export function KarteInjectionTab({ patientId, view, onViewChange, onEdit, onCre
                 {dates.map((date) => (
                   <th
                     key={date}
-                    className={`injection-calendar__day${weekendClass(weekdayOf(date))}${
+                    className={`injection-calendar__day${weekendClass(calendarWeekday(date, holidays))}${
                       date === todayDate ? " injection-calendar__day--today" : ""
                     }`}
+                    title={holidayName(date, holidays)}
                   >
                     <span>{`${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`}</span>
                     <span className="injection-calendar__weekday">{WEEKDAY_LABELS[weekdayOf(date) ?? 0]}</span>
@@ -277,7 +281,7 @@ export function KarteInjectionTab({ patientId, view, onViewChange, onEdit, onCre
                       const entries = row.cells.get(date) ?? [];
                       const selected =
                         selection?.rowKey === row.key && date >= selection.from && date <= selection.to;
-                      const className = `injection-calendar__cell${weekendClass(weekdayOf(date))}${
+                      const className = `injection-calendar__cell${weekendClass(calendarWeekday(date, holidays))}${
                         date === todayDate ? " injection-calendar__cell--today" : ""
                       }${selected ? " injection-calendar__cell--selected" : ""}`;
                       if (entries.length === 0) {

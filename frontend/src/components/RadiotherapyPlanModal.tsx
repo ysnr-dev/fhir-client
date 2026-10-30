@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { radiotherapyDeviceHooks, radiotherapyStopReasonHooks } from "../api/masterQueries";
+import { radiotherapyDeviceHooks, radiotherapyStopReasonHooks, useHolidays } from "../api/masterQueries";
 import {
   useMarkRadiotherapyFractionNotDone,
   useRegisterRadiotherapyPlan,
@@ -15,15 +15,15 @@ import {
   type RadiotherapyPlanOptions,
   type RadiotherapyPlanRow,
 } from "../fhir/radiotherapyResultHelpers";
-import { today, WEEKDAY_LABELS } from "../lib/dates";
+import { addDays, today, WEEKDAY_LABELS } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
 // 照射予定の一括登録(docs/radiotherapy-order-design.md §7)。
 //
 // 処方の回数から、照射済みの回と登録済みの予定を引いた残りを、Phase の順に指定の曜日へ
-// 1 日 1 回ずつ割り付ける。祝日や装置の点検日は知らないので、割り付けた日付は表で直せ、
-// 行ごとに外せる。登録すると 1 回 = Procedure(status=preparation)1 件ができ、カレンダーの
+// 1 日 1 回ずつ割り付ける(祝日・休診日は飛ばす)。装置の点検日は知らないので、割り付けた日付は
+// 表で直せ、行ごとに外せる。登録すると 1 回 = Procedure(status=preparation)1 件ができ、カレンダーの
 // 装置の列に並ぶ。
 
 interface PlanProps {
@@ -63,9 +63,14 @@ export function RadiotherapyPlanModal({
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [removed, setRemoved] = useState<Set<string>>(new Set());
 
+  // 1 コースは長くても数か月なので、開始日から 1 年ぶんの祝日を引けば足りる。
+  const { holidays, isLoading: holidaysLoading } = useHolidays(
+    options.startDate,
+    options.startDate ? addDays(options.startDate, 366) : "",
+  );
   const drafted = useMemo(
-    () => draftRadiotherapyPlan(summary, fractions, options),
-    [summary, fractions, options],
+    () => (holidaysLoading ? [] : draftRadiotherapyPlan(summary, fractions, options, holidays)),
+    [summary, fractions, options, holidays, holidaysLoading],
   );
   const rows: RadiotherapyPlanRow[] = drafted
     .filter((row) => !removed.has(row.key))
@@ -207,7 +212,10 @@ export function RadiotherapyPlanModal({
                           required
                         />
                       </td>
-                      <td>{WEEKDAY_LABELS[new Date(`${row.date}T00:00:00`).getDay()] ?? ""}</td>
+                      <td>
+                        {WEEKDAY_LABELS[new Date(`${row.date}T00:00:00`).getDay()] ?? ""}
+                        {holidays.has(row.date) && `(${holidays.get(row.date)?.name})`}
+                      </td>
                       <td>{row.phaseLabel}</td>
                       <td>{row.fractionNumber}</td>
                       <td>

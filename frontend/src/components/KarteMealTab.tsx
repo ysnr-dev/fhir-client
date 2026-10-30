@@ -17,6 +17,8 @@ import {
   type MealDayEntry,
 } from "../fhir/mealOrderHelpers";
 import { toDateInput, today, WEEKDAY_LABELS } from "../lib/dates";
+import { useHolidays } from "../api/masterQueries";
+import { calendarWeekday } from "../lib/holidays";
 import { ErrorBanner } from "./ErrorBanner";
 import { MealAllergyNotice } from "./MealAllergyNotice";
 
@@ -89,6 +91,7 @@ export function KarteMealTab({ patientId, onEdit, onCreate, baseDate }: KarteMea
   const orders = useMealOrderMonth(patientId, start, end);
   const events = usePatientEncounterEvents(patientId, start, end);
   const days = useMemo(() => calendarDays(month), [month]);
+  const { holidays } = useHolidays(days[0].date, days[days.length - 1].date);
   const rows = orders.data ?? [];
 
   const todayDate = today();
@@ -144,7 +147,7 @@ export function KarteMealTab({ patientId, onEdit, onCreate, baseDate }: KarteMea
                 key={day.date}
                 date={day.date}
                 inMonth={day.inMonth}
-                weekday={day.weekday}
+                weekday={calendarWeekday(day.date, holidays) ?? day.weekday}
                 isToday={day.date === todayDate}
                 // 月外のマスは日付だけ出す(前後の月を開けばそこで見られる)。
                 entries={day.inMonth ? mealDayEntries(rows, day.date) : []}
