@@ -15,6 +15,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { InjectionDispenseModal } from "../components/InjectionDispenseModal";
 import { InjectionOrderViewModal } from "../components/InjectionOrderViewModal";
 import { RxInquiryModal } from "../components/RxInquiryModal";
+import { RegimenDecisionMark } from "../components/RegimenDecision";
 import { RxVerificationMark, RxVerificationModal } from "../components/RxVerificationModal";
 import { rxVerificationStateOf } from "../fhir/rxVerificationHelpers";
 import {
@@ -482,6 +483,7 @@ function WorklistRow({
                 減量
               </span>
             )}
+            <RegimenDecisionMark task={row.decision} order={order} status={status} />
           </span>
         )}
       </td>

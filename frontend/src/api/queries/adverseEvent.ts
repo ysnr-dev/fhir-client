@@ -134,6 +134,9 @@ export function useDeleteRegimenCycle() {
             ...(order.task?.id
               ? [{ request: { method: "DELETE" as const, url: `Task/${order.task.id}` } }]
               : []),
+            ...(order.decision?.id
+              ? [{ request: { method: "DELETE" as const, url: `Task/${order.decision.id}` } }]
+              : []),
           ]),
           ...(await chemoAppointmentCancelEntries(targets)),
         ],

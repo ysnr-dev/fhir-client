@@ -18,6 +18,7 @@ import { toDateInput, today, WEEKDAY_LABELS } from "../lib/dates";
 import { useHolidays } from "../api/masterQueries";
 import { calendarWeekday } from "../lib/holidays";
 import { ErrorBanner } from "./ErrorBanner";
+import { RegimenDecisionMark } from "./RegimenDecision";
 import { RegimenDetailView } from "./RegimenDetailView";
 import { RegimenHistoryView } from "./RegimenHistoryView";
 import { RegimenMoveModal } from "./RegimenPanels";
@@ -475,10 +476,16 @@ function ChemoDayCell({
           className={`chemo-calendar__order chemo-calendar__order--${order.status}`}
           title={dayOrderDrugNames(order).join(" / ")}
         >
-          {/* 注射か内服かはマスに出さない(ステップ名で読める)。進捗は依頼済のときだけ省く。 */}
-          {order.status !== "requested" && (
+          {/* 注射か内服かはマスに出さない(ステップ名で読める)。進捗は依頼済のときだけ省く。
+              投与可否は確認したことがある日だけ出す(未確認の印を全部の日に並べない)。 */}
+          {(order.status !== "requested" || order.decision) && (
             <span className="chemo-calendar__order-head">
-              <span className="chemo-calendar__status">{regimenDayStatusLabel(order.status)}</span>
+              {order.status !== "requested" && (
+                <span className="chemo-calendar__status">{regimenDayStatusLabel(order.status)}</span>
+              )}
+              {order.decision && (
+                <RegimenDecisionMark task={order.decision} order={order.serviceRequest} status={order.status} />
+              )}
             </span>
           )}
           {/* 薬剤名を並べても幅に収まらないので、医師が組んだ単位であるステップ名を出す。

@@ -37,10 +37,11 @@ import { ProblemSelect } from "./ProblemSelect";
 import { Modal } from "./Modal";
 import { ChemoBookModal } from "./ChemoBookModal";
 import { RegimenCyclePanel } from "./RegimenApplyPanel";
+import { RegimenDecisionFields } from "./RegimenDecision";
 
 // カルテ右ペインの、適用済みレジメンに対する操作。
 //   RegimenCycleLoader … 次クールの登録(左ペインの詳細ビューから開く)
-//   RegimenDayPanel    … 暦の 1 日。その日のオーダーの編集・移動・中止
+//   RegimenDayPanel    … 暦の 1 日。その日のオーダーの投与可否・編集・移動・中止
 //   RegimenMoveModal   … 暦のドラッグ＆ドロップで落としたときの確認
 // 適用の概要とクール一覧は左ペイン(RegimenDetailView)の担当。
 
@@ -166,6 +167,9 @@ export function RegimenDayPanel({
       <p className="regimen-day__title">
         {application.name} {label} <span className="regimen-day__date">{date}</span>
       </p>
+
+      {/* 当日まず行うのは投与可否の判断なので、オーダーの中身より上に置く。 */}
+      <RegimenDecisionFields patientId={patientId} application={application} date={date} todays={todays} />
 
       <ul className="regimen-day__orders">
         {todays.map((order) => (

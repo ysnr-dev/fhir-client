@@ -6,6 +6,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "../components/PatientRowCells";
 import { RowPictograms } from "../components/PatientListRowParts";
+import { RegimenDecisionMark } from "../components/RegimenDecision";
 import { appointmentTimeLabel } from "../fhir/appointmentHelpers";
 import { groupInjectionByRp } from "../fhir/injectionHelpers";
 import { injectionTaskStatus, injectionTaskStatusDisplay } from "../fhir/injectionTaskHelpers";
@@ -68,6 +69,7 @@ export function ChemoRoomWorklistPage() {
                   <th className="sticky-table__fix-2">患者氏名</th>
                   <PatientProfileHeadCells />
                   <th>レジメン</th>
+                  <th className="lab-worklist__compact">投与可否</th>
                   <th className="rx-worklist__content">投与内容</th>
                   <th className="lab-worklist__compact">ステータス</th>
                   <th className="lab-worklist__actions sticky-table__fix-actions">操作</th>
@@ -84,7 +86,7 @@ export function ChemoRoomWorklistPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="master-search__empty">
+                    <td colSpan={9} className="master-search__empty">
                       この日の化学療法室の予約はありません
                     </td>
                   </tr>
@@ -130,7 +132,7 @@ function ChemoRoomTableRow({
   rowProps: ComponentProps<"tr">;
 }) {
   const returnLinkState = useReturnLinkState();
-  const { appointment, patient, order, medicationRequests, task } = row;
+  const { appointment, patient, order, medicationRequests, task, decision } = row;
   const regimen = order ? regimenOrderOf(order) : null;
   const status = injectionTaskStatus(task);
 
@@ -167,6 +169,13 @@ function ChemoRoomTableRow({
               </span>
             )}
           </>
+        ) : (
+          <span className="order-select__muted">-</span>
+        )}
+      </td>
+      <td className="lab-worklist__compact">
+        {order && regimen ? (
+          <RegimenDecisionMark task={decision} order={order} status={status} />
         ) : (
           <span className="order-select__muted">-</span>
         )}

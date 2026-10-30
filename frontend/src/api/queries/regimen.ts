@@ -19,6 +19,12 @@ import {
   revokeRegimenEntry,
   sortByRp,
 } from "../../fhir/regimenOrderHelpers";
+import {
+  buildRegimenDecisionTask,
+  buildWithdrawnRegimenDecisionTask,
+  regimenDecisionsByOrderId,
+} from "../../fhir/regimenDecisionHelpers";
+import type { LabCriterionCheck } from "../../fhir/regimenCheckHelpers";
 import { SERVICE_TYPE_SYSTEM as SCHEDULE_SERVICE_TYPE_SYSTEM } from "../../fhir/scheduleHelpers";
 import {
   appointmentActorId,
@@ -175,6 +181,7 @@ export function useRegimenDayOrders(patientId: string | undefined, instanceIds: 
       }
       const injectionTasks = injectionTasksByOrderId(tasks);
       const rxTasks = rxTasksByOrderId(tasks);
+      const decisions = regimenDecisionsByOrderId(tasks);
 
       return requests
         .map((sr): RegimenDayOrder | null => {
@@ -188,6 +195,7 @@ export function useRegimenDayOrders(patientId: string | undefined, instanceIds: 
             serviceRequest: sr,
             medicationRequests: sortByRp(mrsByOrderId.get(sr.id) ?? []),
             task,
+            decision: decisions.get(sr.id),
             ref,
             date: orderDay(sr),
             status,
@@ -298,6 +306,45 @@ export function useUpdateRegimenDayStatus() {
 }
 
 /**
+ * 当日の投与可否(§8.18)。その日の日オーダーそれぞれに「実施可」の Task を書く(確認し直しは
+ * 同じ Task の書き直し)。取消は状態を戻すだけで記録は消さない。1 つの transaction で書く。
+ */
+export function useSaveRegimenDecision() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      targets,
+      action,
+      actor,
+      comment = "",
+      checks = [],
+    }: {
+      targets: RegimenDayOrder[];
+      action: "go" | "withdraw";
+      actor: { practitionerId: string; display: string };
+      comment?: string;
+      checks?: LabCriterionCheck[];
+    }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: targets.flatMap((order) => {
+          if (action === "go") {
+            const task = buildRegimenDecisionTask(order.serviceRequest, order.decision, actor, { comment, checks });
+            return [taskBundleEntry(task)];
+          }
+          return order.decision ? [taskBundleEntry(buildWithdrawnRegimenDecisionTask(order.decision))] : [];
+        }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "injection-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["Appointment", "search", "chemo-room"] });
+    },
+  });
+}
+
+/**
  * レジメンの中止。ヘッダを revoked にし、まだ実施していない日オーダーを中止にする
  * (実施済は事実なので触らない)。止める日の化学療法室の予約も取り消す。
  */
@@ -350,6 +397,8 @@ export interface ChemoRoomRow {
   order?: fhir4.ServiceRequest;
   medicationRequests: fhir4.MedicationRequest[];
   task?: fhir4.Task;
+  /** 当日の投与可否(fhir/regimenDecisionHelpers.ts)。 */
+  decision?: fhir4.Task;
 }
 
 export function useChemoRoomList(date: string) {
@@ -392,6 +441,7 @@ export function useChemoRoomList(date: string) {
         }
       }
       const tasksByOrderId = injectionTasksByOrderId(tasks);
+      const decisionsByOrderId = regimenDecisionsByOrderId(tasks);
 
       return appointments
         .map((appointment) => {
@@ -403,6 +453,7 @@ export function useChemoRoomList(date: string) {
             order: orderId ? ordersById.get(orderId) : undefined,
             medicationRequests: orderId ? sortByRp(mrsByOrderId.get(orderId) ?? []) : [],
             task: orderId ? tasksByOrderId.get(orderId) : undefined,
+            decision: orderId ? decisionsByOrderId.get(orderId) : undefined,
           };
         })
         .sort((a, b) => (a.appointment.start ?? "").localeCompare(b.appointment.start ?? ""));

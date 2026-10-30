@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { rxInquiryTasksByOrderId } from "../../fhir/rxInquiryHelpers";
 import { isRxVerificationTarget, rxVerificationGroupOf } from "../../fhir/rxVerificationHelpers";
+import { regimenDecisionsByOrderId } from "../../fhir/regimenDecisionHelpers";
 import { isLabelSpecimen } from "../../fhir/labResultHelpers";
 import { injectionTasksByOrderId } from "../../fhir/injectionTaskHelpers";
 import { INJECTION_ORDER_TYPE, isInjectionServiceRequest } from "../../fhir/injectionHelpers";
@@ -49,6 +50,8 @@ export interface InjectionWorklistRow {
   inquiries: fhir4.Task[];
   /** 処方監査(fhir/rxVerificationHelpers.ts)。連日の注射は束ねに 1 件なので、束ねの全日に同じ Task が付く。 */
   verification?: fhir4.Task;
+  /** 化学療法の当日の投与可否(fhir/regimenDecisionHelpers.ts)。 */
+  decision?: fhir4.Task;
 }
 
 async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLike<InjectionWorklistRow>> {
@@ -78,6 +81,7 @@ async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLik
 
   const taskByOrderId = injectionTasksByOrderId(tasks);
   const inquiriesByOrderId = rxInquiryTasksByOrderId(tasks);
+  const decisionsByOrderId = regimenDecisionsByOrderId(tasks);
   const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
     for (const reference of mr.basedOn ?? []) {
@@ -100,6 +104,7 @@ async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLik
     task: taskByOrderId.get(order.id ?? ""),
     inquiries: inquiriesByOrderId.get(order.id ?? "") ?? [],
     verification: verificationByGroup.get(rxVerificationGroupOf(order) ?? ""),
+    decision: decisionsByOrderId.get(order.id ?? ""),
   }));
   rows.sort(comparePatientNumber);
   return { rows, truncated };

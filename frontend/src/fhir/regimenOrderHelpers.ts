@@ -1106,6 +1106,8 @@ export interface RegimenDayOrder {
   medicationRequests: fhir4.MedicationRequest[];
   /** 進捗の Task(注射・処方とも同じ形)。まだ無ければ undefined = 依頼済。 */
   task?: fhir4.Task;
+  /** 当日の投与可否の Task(fhir/regimenDecisionHelpers.ts)。まだ確認していなければ undefined。 */
+  decision?: fhir4.Task;
   ref: RegimenOrderRef;
   date: string;
   status: InjectionTaskStatus | RxTaskStatus;
