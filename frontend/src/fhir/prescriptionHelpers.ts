@@ -24,7 +24,7 @@ import {
   SETTING_OPTIONS,
   withVersionLock,
 } from "./shared";
-import { applyOrderContext, ORDER_TYPE_SYSTEM, type OrderAttribution } from "./orderHeader";
+import { applyOrderContext, isRegimenDayOrder, ORDER_TYPE_SYSTEM, type OrderAttribution } from "./orderHeader";
 import type { OrderContext } from "../orderContext";
 
 export { codingBySystem, SETTING_OPTIONS };
@@ -754,7 +754,10 @@ export function buildPrescriptionDeleteBundle(serviceRequestId: string): fhir4.B
 
 export interface PrescriptionSummary {
   id: string;
-  /** 処方日(交付日)= 登録日時の日付。処方箋の交付年月日と同じ。 */
+  /**
+   * 処方日(交付日)。処方箋の交付年月日と同じで、登録日時の日付。化学療法レジメンの日オーダーは
+   * 数クール分を先に登録し、投与日に処方箋を渡すので投与開始日にする。
+   */
   date: string;
   /** 投与開始日(occurrenceDateTime)。持たない処方では処方日と同じ。 */
   startDate: string;
@@ -776,7 +779,7 @@ export function summarizeServiceRequest(sr: fhir4.ServiceRequest): PrescriptionS
 
   return {
     id: sr.id ?? "",
-    date: sr.authoredOn?.slice(0, 10) ?? "",
+    date: isRegimenDayOrder(sr) ? orderDay(sr) : (sr.authoredOn?.slice(0, 10) ?? ""),
     startDate: orderDay(sr),
     settingCode: setting?.code ?? "",
     settingDisplay: setting?.display ?? "",

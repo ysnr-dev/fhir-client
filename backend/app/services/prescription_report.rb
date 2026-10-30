@@ -53,6 +53,8 @@ class PrescriptionReport
   # JAMI 補足用法コード(8 桁)。I/W/D/C は RP 単位の投与スケジュール、V は薬剤ごとの不均等投与。
   SUPPLEMENTARY_USAGE_SYSTEM = "urn:oid:1.2.392.200250.2.2.20.22".freeze
   ORDER_DEPARTMENT_EXT_URL = "http://fhir-client.local/StructureDefinition/order-department".freeze
+  # 化学療法レジメンの適用 1 件の uuid。日オーダーは requisition に持つ(frontend の fhir/orderHeader.ts)。
+  REGIMEN_INSTANCE_SYSTEM = "http://fhir-client.local/Identifier/regimen-instance".freeze
   # 後発品変更不可(frontend の prescriptionHelpers.ts と同じ定義)。変更可否は JP Core のコード
   # (0 = 変更可)、医療上必要か患者希望かは reason のローカルコードで区別する。
   SUBSTITUTION_PROHIBITED_SYSTEM =

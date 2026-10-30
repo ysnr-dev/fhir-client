@@ -100,6 +100,17 @@ RSpec.describe Reports::PrescriptionRenderer do
     end
   end
 
+  it "prints the occurrence day as 交付年月日 for a regimen day order" do
+    order["requisition"] = { "system" => PrescriptionReport::REGIMEN_INSTANCE_SYSTEM, "value" => "inst-1" }
+
+    %i[external internal].each do |key|
+      text = page_texts(render(key, simple_rps)).flatten.join
+
+      expect(text).to include("2026/08/21")
+      expect(text).not_to include("2026/08/20")
+    end
+  end
+
   it "prints the split institution code only on the external layout" do
     external = page_texts(render(:external, simple_rps)).flatten
     internal = page_texts(render(:internal, simple_rps)).flatten

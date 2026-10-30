@@ -8,6 +8,18 @@ import { emptyOrderContext, type OrderContext } from "../orderContext";
 // どの種類のオーダーかを category に持たせて振り分ける。
 export const ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type";
 
+/**
+ * 化学療法レジメンの適用 1 件の uuid(docs/chemo-regimen-design.md §7.1)。ヘッダは identifier に、
+ * 日オーダー(通常の注射・処方)は requisition に持つ。処方側もレジメンの日オーダーかを見分けるので
+ * ここに置く。
+ */
+export const REGIMEN_INSTANCE_SYSTEM = "http://fhir-client.local/Identifier/regimen-instance";
+
+/** 化学療法レジメンから出た日オーダー(注射・処方)か。 */
+export function isRegimenDayOrder(sr: fhir4.ServiceRequest): boolean {
+  return sr.requisition?.system === REGIMEN_INSTANCE_SYSTEM;
+}
+
 // 依頼科(診療科 Organization)。ServiceRequest / MedicationRequest には診療科を持つ
 // 標準要素が無い(FHIR では Encounter 経由で表現する)ため、参照をローカル拡張で持たせる。
 // 依頼医師は標準の requester に入れる。

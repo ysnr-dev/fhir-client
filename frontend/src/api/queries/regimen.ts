@@ -2,14 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orderDay, referenceId } from "../../fhir/shared";
 import { buildInjectionTaskUpdate, injectionTasksByOrderId, type InjectionTaskStatus } from "../../fhir/injectionTaskHelpers";
 import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
+import { ORDER_TYPE_SYSTEM, REGIMEN_INSTANCE_SYSTEM } from "../../fhir/orderHeader";
 import { buildRxTaskUpdate, rxTasksByOrderId, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
 import {
   buildRegimenMoveBundle,
   discontinuationReasonLabel,
   isRegimenServiceRequest,
   parseRegimenApplication,
-  REGIMEN_INSTANCE_SYSTEM,
   REGIMEN_ORDER_TYPE,
   type RegimenApplication,
   type RegimenDayOrder,

@@ -15,7 +15,13 @@ import {
   type InjectionRpValues,
 } from "./injectionHelpers";
 import type { InjectionTaskStatus } from "./injectionTaskHelpers";
-import { ORDER_TYPE_SYSTEM, applyOrderContext, orderRequester, type OrderAttribution } from "./orderHeader";
+import {
+  ORDER_TYPE_SYSTEM,
+  REGIMEN_INSTANCE_SYSTEM,
+  applyOrderContext,
+  orderRequester,
+  type OrderAttribution,
+} from "./orderHeader";
 import {
   SETTING_SYSTEM,
   buildPrescriptionBundle,
@@ -58,8 +64,6 @@ import {
 export const REGIMEN_ORDER_TYPE = { code: "chemo-regimen", display: "化学療法" };
 /** ヘッダの code。レジメンマスタのコードと名前。 */
 export const REGIMEN_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/regimen";
-/** 適用 1 件の uuid。ヘッダは identifier に、日オーダーは requisition に持つ。 */
-export const REGIMEN_INSTANCE_SYSTEM = "http://fhir-client.local/Identifier/regimen-instance";
 /** ヘッダの拡張(1 クールの日数・予定クール数・投与量の算出に使った体表面積など)。 */
 export const REGIMEN_EXT_URL = "http://fhir-client.local/StructureDefinition/regimen";
 /** 日オーダーの拡張(どの適用の何クール目の何日目か)。 */

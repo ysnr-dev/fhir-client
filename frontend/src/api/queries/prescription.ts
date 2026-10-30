@@ -7,7 +7,7 @@ import {
   PRESCRIPTION_ORDER_TYPE,
 } from "../../fhir/prescriptionHelpers";
 import { INJECTION_ORDER_TYPE } from "../../fhir/injectionHelpers";
-import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
+import { ORDER_TYPE_SYSTEM, REGIMEN_INSTANCE_SYSTEM } from "../../fhir/orderHeader";
 import { rxTasksByOrderId } from "../../fhir/rxTaskHelpers";
 import { resourcesOfType } from "../../fhir/shared";
 import { searchResource } from "../fhirClient";
@@ -24,6 +24,12 @@ import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete"
 // された処方」を当日に受け取って開始日の前日までに調剤するため。入院の定期処方は木曜に
 // 出して月曜開始のような形になるので、開始日で引くと月曜まで一覧に出てこない。開始日は
 // 一覧の列で見せる。
+//
+// 化学療法レジメンの内服(日オーダー)だけは投与開始日で引く。数クール分をまとめて登録するので
+// 登録日は投与日よりずっと前になり、交付日で引くと先のクールの内服まで登録日の調剤に並ぶ。
+// 処方箋もその日に渡すので交付日は投与開始日とみなす(`summarizeServiceRequest`)。注射の日
+// オーダーと同じ流れ方になる(docs/chemo-regimen-design.md §8.19)。日オーダーは requisition に
+// 適用の uuid を持つので、交付日の検索から `requisition:not` で外し、投与開始日の検索で拾う。
 
 /** 処方一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
 export interface RxWorklistRow {
@@ -48,28 +54,40 @@ export interface RxWorklistResult {
 export async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const medicationRequests: fhir4.MedicationRequest[] = [];
+  const category = `${ORDER_TYPE_SYSTEM}|${PRESCRIPTION_ORDER_TYPE.code}`;
+  const regimenRequisition = `${REGIMEN_INSTANCE_SYSTEM}|`;
 
-  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
-    (page) => {
-      const params = worklistParams(`${ORDER_TYPE_SYSTEM}|${PRESCRIPTION_ORDER_TYPE.code}`, date, page, "authoredon");
-      // 処方明細も同じ応答に添えてもらう。
-      params.set("_revinclude", "MedicationRequest:based-on");
-      params.append("_revinclude", "Task:focus");
-      return params;
-    },
-    (resource) => {
-      if (resource.resourceType === "MedicationRequest") {
-        medicationRequests.push(resource as fhir4.MedicationRequest);
-      } else if (resource.resourceType === "ServiceRequest") {
-        const request = resource as fhir4.ServiceRequest;
-        if (isPrescriptionServiceRequest(request) && !request.basedOn?.length) {
-          orders.push(request);
-          return true;
+  const fetchPart = (dateParam: "authoredon" | "occurrence", regimen: "requisition" | "requisition:not") =>
+    fetchWorklistBundles(
+      (page) => {
+        const params = worklistParams(category, date, page, dateParam);
+        params.set(regimen, regimenRequisition);
+        // 処方明細も同じ応答に添えてもらう。
+        params.set("_revinclude", "MedicationRequest:based-on");
+        params.append("_revinclude", "Task:focus");
+        return params;
+      },
+      (resource) => {
+        if (resource.resourceType === "MedicationRequest") {
+          medicationRequests.push(resource as fhir4.MedicationRequest);
+        } else if (resource.resourceType === "ServiceRequest") {
+          const request = resource as fhir4.ServiceRequest;
+          if (isPrescriptionServiceRequest(request) && !request.basedOn?.length) {
+            orders.push(request);
+            return true;
+          }
         }
-      }
-      return false;
-    },
-  );
+        return false;
+      },
+    );
+
+  const parts = await Promise.all([
+    fetchPart("authoredon", "requisition:not"),
+    fetchPart("occurrence", "requisition"),
+  ]);
+  const patientsById = new Map(parts.flatMap((part) => [...part.patientsById]));
+  const tasks = parts.flatMap((part) => part.tasks);
+  const truncated = parts.some((part) => part.truncated);
 
   const rxTaskByOrderId = rxTasksByOrderId(tasks);
   const inquiriesByOrderId = rxInquiryTasksByOrderId(tasks);

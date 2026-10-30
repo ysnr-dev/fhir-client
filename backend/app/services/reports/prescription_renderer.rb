@@ -129,15 +129,24 @@ module Reports
         "pt_kana" => PatientMeta.display_kana(@patient),
         "pt_gender" => PatientMeta.gender_label(@patient),
         "pt_birthdate" => PatientMeta.format_date(@patient["birthDate"]),
-        # 交付年月日は登録日時(authoredOn)の日付。オーダー開始日(投与開始日 =
-        # occurrenceDateTime)ではない。発行操作の日でもないので、再発行しても
-        # 同じ日付が刷られる(docs/prescription-report-design.md)。
-        "issue_date" => PatientMeta.format_date(@order["authoredOn"].to_s.first(10)),
+        "issue_date" => PatientMeta.format_date(issue_date),
         "doctor_name" => @order.dig("requester", "display").to_s,
         "department_name" => department_name,
         "rx_category" => rx_category,
         "remarks" => @order.dig("note", 0, "text").to_s
       }.merge(hospital_values)
+    end
+
+    # 交付年月日は登録日時(authoredOn)の日付。オーダー開始日(投与開始日 = occurrenceDateTime)
+    # ではない。発行操作の日でもないので、再発行しても同じ日付が刷られる
+    # (docs/prescription-report-design.md)。化学療法レジメンの日オーダーは数クール分を先に
+    # 登録し、投与日に渡すので投与開始日にする(frontend の summarizeServiceRequest と同じ)。
+    def issue_date
+      if @order.dig("requisition", "system") == PrescriptionReport::REGIMEN_INSTANCE_SYSTEM
+        @order["occurrenceDateTime"].to_s.first(10)
+      else
+        @order["authoredOn"].to_s.first(10)
+      end
     end
 
     def department_name
