@@ -19849,7 +19849,8 @@ button.nursing-worksheet__mark {
   width: 90px;
 }
 
-.regimen-editor__rows input.regimen-editor__unit-input {
+.regimen-editor__rows input.regimen-editor__unit-input,
+.regimen-editor__rows select.regimen-editor__unit-input {
   width: 72px;
 }
 

@@ -9,6 +9,12 @@ RSpec.describe "Master::Regimens", type: :request do
     Master::Regimen.create!({ regimen_code: code, name: name }.merge(attrs))
   end
 
+  # 承認には、基準の単位から製剤数に直す換算行が要る。
+  def create_conversion(medicine_code, from_unit, to_unit, factor = 1)
+    Master::MedicineDoseConversion.create!(medicine_code: medicine_code, from_unit: from_unit, to_unit: to_unit,
+                                           factor: factor, source: "manual")
+  end
+
   let(:step_params) do
     [
       { name: "前投薬", days: "1", usage_type: "drip", route_code: "IV", infusion_minutes: 15,
@@ -122,6 +128,9 @@ RSpec.describe "Master::Regimens", type: :request do
   describe "POST /master/regimens" do
     it "コードを省略すると自動採番し、子を入れ子で保存する" do
       create_regimen("000012", "既存")
+      create_conversion("622356701", "mg", "瓶", 0.75)
+      create_conversion("622480401", "mg", "瓶", 0.01)
+      create_conversion("622200701", "mg", "錠", 0.003333)
 
       post "/master/regimens", params: {
         name: "CapeOX", treatment_days: 14, rest_days: 7, planned_cycles: 8, status: "approved",
@@ -258,6 +267,7 @@ RSpec.describe "Master::Regimens", type: :request do
   describe "承認の記録" do
     it "承認したときに承認日をサーバーが入れる" do
       create_regimen("000001", "mFOLFOX6", status: "draft", treatment_days: 3, rest_days: 11)
+      create_conversion("622480401", "mg", "瓶", 0.01)
       step = Master::RegimenStep.create!(regimen_code: "000001", usage_type: "drip", days: [1], display_order: 1)
       Master::RegimenDrug.create!(regimen_code: "000001", step_id: step.id, drug_role: "anticancer",
                                   medicine_code: "622480401", dose_basis: "bsa", dose_value: 85, dose_unit: "mg")
@@ -372,6 +382,35 @@ RSpec.describe "Master::Regimens", type: :request do
       expect(body["errors"].join).to include("2026-03-31 で経過措置")
       # 削除日の 99999999 は「なし」なので、削除のメッセージは出ない。
       expect(body["errors"].join).not_to include("削除された")
+    end
+
+    it "基準の単位から製剤数に直す換算が無い薬剤は承認できない(下書きなら保存できる)" do
+      Master::Medicine.create!(medicine_code: "622480401", name: "オキサリプラチン", unit_name: "瓶")
+      Master::Medicine.create!(medicine_code: "641190009", name: "生理食塩液", unit_name: "袋")
+      create_conversion("622480401", "mL", "瓶", 0.05)
+      params = {
+        name: "換算なし", treatment_days: 3, rest_days: 11,
+        steps: [{ name: "投与", days: [1], usage_type: "drip",
+                  drugs: [
+                    { drug_role: "anticancer", medicine_code: "622480401", dose_basis: "bsa",
+                      dose_value: 85, dose_unit: "mg" },
+                    # 製剤単位が基準の薬剤は換算行が無くてよい。
+                    { drug_role: "fluid", medicine_code: "641190009", dose_basis: "unit",
+                      dose_value: 1, dose_unit: "袋" },
+                  ] }],
+      }
+
+      post "/master/regimens", params: params, as: :json
+      expect(response).to have_http_status(:created)
+      code = body["regimen_code"]
+
+      put "/master/regimens/#{code}", params: { status: "approved" }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"]).to eq(["オキサリプラチン の mg から 瓶 への換算がありません"])
+
+      create_conversion("622480401", "mg", "瓶", 0.01)
+      put "/master/regimens/#{code}", params: { status: "approved" }, as: :json
+      expect(response).to have_http_status(:ok)
     end
 
     it "承認するときは基準値と単位を求める(下書きなら保存できる)" do

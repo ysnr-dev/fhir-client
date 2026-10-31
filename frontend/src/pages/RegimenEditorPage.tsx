@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { CtcaeTerm, Disease, JlacItem, Medicine, MedicineUsage } from "../api/masterClient";
-import { useFormularyRankLookup, useRegimen, useRegimenMutations } from "../api/masterQueries";
+import { useFormularyRankLookup, useMedicineDoseFactors, useRegimen, useRegimenMutations } from "../api/masterQueries";
 import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -889,6 +889,8 @@ function StepCard({
   const drip = step.usageType === "drip";
   // 薬剤はコードと名称しか持たないので、フォーミュラリの順位は群の一覧から引く。
   const formularyRank = useFormularyRankLookup();
+  // 適用画面は基準の単位で換算行を引くので、単位は換算マスタにあるものから選ばせる。
+  const conversions = useMedicineDoseFactors(step.drugs.flatMap((d) => (d.medicine ? [d.medicine.code] : [])));
 
   function handleUsageTypeChange(usageType: RegimenStepDraft["usageType"]) {
     const patch: Partial<RegimenStepDraft> = { usageType };
@@ -1056,11 +1058,15 @@ function StepCard({
                 />
               </td>
               <td className="rad-item__compact">
-                <input
-                  type="text"
-                  className="regimen-editor__unit-input"
+                <DoseUnitInput
                   value={drug.doseUnit}
-                  onChange={(e) => onDrugChange(drug.key, { doseUnit: e.target.value })}
+                  // 製剤単位が基準なら単位は薬価算定単位そのもので、換算を通らない。
+                  units={
+                    drug.doseBasis === "unit" || !drug.medicine
+                      ? undefined
+                      : conversions.data?.factors.get(drug.medicine.code)
+                  }
+                  onChange={(doseUnit) => onDrugChange(drug.key, { doseUnit })}
                 />
                 <span className="regimen-editor__suffix">{doseUnitSuffix(drug.doseBasis, drug.doseUnit)}</span>
               </td>
@@ -1238,6 +1244,44 @@ function StepCard({
 
 // 1 クールの各日にどのステップが入るかを ● で示す(入力確認用、保存しない)。
 // 内服は開始相対日から投与日数ぶんを連続で塗る。
+/**
+ * 基準の単位。換算マスタに行がある薬剤はその入力単位から選ぶ。保存済みの値が
+ * 換算に無ければ(綴り違いなど)書き換えずに選択肢に残し、承認の検証で止める。
+ * 換算行が 1 行も無い薬剤は自由入力(下書きを作れるように)。
+ */
+function DoseUnitInput({
+  value,
+  units,
+  onChange,
+}: {
+  value: string;
+  units: Map<string, number> | undefined;
+  onChange: (value: string) => void;
+}) {
+  if (!units || units.size === 0) {
+    return (
+      <input
+        type="text"
+        className="regimen-editor__unit-input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+  const options = [...units.keys()];
+  if (value && !units.has(value)) options.unshift(value);
+  return (
+    <select className="regimen-editor__unit-input" value={value} onChange={(e) => onChange(e.target.value)}>
+      {!value && <option value=""></option>}
+      {options.map((unit) => (
+        <option key={unit} value={unit}>
+          {unit}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function DayTable({ steps, cycleDays }: { steps: RegimenStepDraft[]; cycleDays: number }) {
   const days = Array.from({ length: cycleDays }, (_, i) => i + 1);
   const marks = steps.map((step) => {

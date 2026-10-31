@@ -167,16 +167,29 @@ module Master
       return ["投与ステップがありません"] if steps.empty?
 
       messages = steps.filter_map { |s| "#{step_label(s)} に薬剤がありません" if tree.drugs_by_step[s.id].blank? }
-      messages + tree.drugs_by_step.values.flatten.flat_map { |drug| drug_approval_messages(drug) }
+      drugs = tree.drugs_by_step.values.flatten
+      units = conversion_units(drugs)
+      messages + drugs.flat_map { |drug| drug_approval_messages(drug, units.fetch(drug.medicine_code, [])) }
     end
 
-    def drug_approval_messages(drug)
+    # 薬剤ごとに、投与量換算マスタにある入力単位。適用画面は基準の単位で換算行を
+    # 完全一致で引くので、ここに無い単位は製剤数を手で入れることになる。
+    def conversion_units(drugs)
+      Master::MedicineDoseConversion.where(medicine_code: drugs.map(&:medicine_code).uniq)
+                                    .pluck(:medicine_code, :from_unit)
+                                    .group_by(&:first).transform_values { |rows| rows.map(&:last) }
+    end
+
+    def drug_approval_messages(drug, units)
       name = drug.resolved_name.presence || drug.medicine_code
       abolished = retirement_date(drug.abolished_on)
       transitional = retirement_date(drug.transitional_measure_on)
+      # 製剤単位が基準の薬剤は、単位が薬価算定単位そのものなので換算が要らない。
+      unconvertible = drug.dose_unit.present? && drug.dose_basis != "unit" && units.exclude?(drug.dose_unit)
       [
         drug.dose_value.blank? ? "#{name} の基準値がありません" : nil,
         drug.dose_unit.blank? ? "#{name} の単位がありません" : nil,
+        unconvertible ? "#{name} の #{drug.dose_unit} から #{drug.resolved_unit_name.presence || '製剤単位'} への換算がありません" : nil,
         # 経過措置・削除済みの医薬品は、承認したレジメンで使い続けられない。
         abolished ? "#{name} は #{abolished} で薬価基準から削除された医薬品です" : nil,
         transitional ? "#{name} は #{transitional} で経過措置になった医薬品です" : nil,
