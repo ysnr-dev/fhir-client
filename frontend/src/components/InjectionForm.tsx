@@ -64,6 +64,7 @@ import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
+import { PillIcon } from "./icons/PillIcon";
 import { TrashIcon } from "./icons/TrashIcon";
 
 // 注射オーダーの入力フォーム。構成は処方(PrescriptionForm)に合わせ、用法だけ
@@ -731,9 +732,12 @@ export function InjectionForm({
                       <div className="rp-card__medicine-cell">
                         <button
                           type="button"
+                          className="rp-card__icon-button"
+                          title={med.medicine ? "医薬品を変更" : "医薬品を選択"}
+                          aria-label={med.medicine ? "医薬品を変更" : "医薬品を選択"}
                           onClick={() => setModal({ kind: "medicine", rpIndex, medIndex })}
                         >
-                          {med.medicine ? "変更" : "選択"}
+                          <PillIcon />
                         </button>
                         {med.medicine ? (
                           <span className="rp-card__medicine-name">

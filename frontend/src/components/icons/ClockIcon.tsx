@@ -1,4 +1,4 @@
-// 予約時刻に添える時計のアイコン。
+// 時計のアイコン。予約時刻に添えるほか、処方の用法(服用のタイミング)を選ぶボタンに使う。
 export function ClockIcon() {
   return (
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">

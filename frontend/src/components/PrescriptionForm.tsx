@@ -63,6 +63,8 @@ import { DoseUnitSelect } from "./DoseUnitSelect";
 import { RowMenu } from "./RowMenu";
 import { SupplementaryUsageEditor, UnevenDoseEditor } from "./SupplementaryUsageEditor";
 import { UsageSearchModal } from "./UsageSearchModal";
+import { ClockIcon } from "./icons/ClockIcon";
+import { PillIcon } from "./icons/PillIcon";
 import { TrashIcon } from "./icons/TrashIcon";
 
 interface PrescriptionFormProps {
@@ -616,9 +618,12 @@ export function PrescriptionForm({
                       <div className="rp-card__medicine-cell">
                         <button
                           type="button"
+                          className="rp-card__icon-button"
+                          title={med.medicine ? "医薬品を変更" : "医薬品を選択"}
+                          aria-label={med.medicine ? "医薬品を変更" : "医薬品を選択"}
                           onClick={() => setModal({ kind: "medicine", rpIndex, medIndex })}
                         >
-                          {med.medicine ? "変更" : "選択"}
+                          <PillIcon />
                         </button>
                         {med.medicine ? (
                           <span className="rp-card__medicine-name">
@@ -767,10 +772,12 @@ export function PrescriptionForm({
             <div className="rp-card__usage-row">
               <button
                 type="button"
-                className="rp-card__compact-button"
+                className="rp-card__icon-button"
+                title={rp.usage ? "用法を変更" : "用法を選択"}
+                aria-label={rp.usage ? "用法を変更" : "用法を選択"}
                 onClick={() => setModal({ kind: "usage", rpIndex })}
               >
-                {rp.usage ? "用法変更" : "用法選択"}
+                <ClockIcon />
               </button>
               {rp.usage ? (
                 <span className="rp-card__usage-value">{rp.usage.usage_name}</span>
