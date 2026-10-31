@@ -13,7 +13,15 @@ import { hasTaskCode } from "../fhir/notificationHelpers";
 import { injectionLineDose, parseInjectionForm } from "../fhir/injectionHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { dateTimeLabel } from "../lib/dates";
-import { parsePrescriptionForm, prescriptionLineDose, splitPrescriptionDetailBundle } from "../fhir/prescriptionHelpers";
+import { parsePrescriptionForm, splitPrescriptionDetailBundle } from "../fhir/prescriptionHelpers";
+import {
+  prescriptionCategoryOption,
+  prescriptionCheckRpOf,
+  prescriptionDispensing,
+  type Dispensing,
+  type MedicationCheckRp,
+} from "../fhir/prescriptionCheckHelpers";
+import { departmentOf } from "../fhir/orderHeader";
 import {
   isRxVerificationTask,
   RX_INTERVENTION_OUTCOME_OPTIONS,
@@ -27,7 +35,6 @@ import {
   type RxInterventionOutcome,
   type RxVerificationResultCode,
 } from "../fhir/rxVerificationHelpers";
-import type { CheckedRp } from "../fhir/drugCheckHelpers";
 import { AdvisoryNotice } from "./AdvisoryNotice";
 import { ErrorBanner } from "./ErrorBanner";
 import { InjectionDetailPanel } from "./InjectionDetailPanel";
@@ -73,22 +80,33 @@ export function RxVerificationModal({
   const enterer = useOrderEnterer();
   const complete = useCompleteRxVerification();
 
-  const checkedRps = useMemo<CheckedRp[]>(() => {
-    if (!serviceRequest) return [];
+  const check = useMemo<{
+    rps: MedicationCheckRp[];
+    dispensing: Dispensing;
+    category: { code: string; display: string } | null;
+  }>(() => {
+    if (!serviceRequest) return { rps: [], dispensing: null, category: null };
     if (summary.kind === "injection") {
-      return parseInjectionForm(serviceRequest, medicationRequests).rps.map((rp) => ({
+      const rps = parseInjectionForm(serviceRequest, medicationRequests).rps.map((rp) => ({
         medicines: rp.medicines.map((m) => ({ medicine: m.medicine, dose: injectionLineDose(rp, m) })),
       }));
+      return { rps, dispensing: "internal", category: null };
     }
-    return parsePrescriptionForm(serviceRequest, medicationRequests, { basis: "daily" }).rps.map((rp) => ({
-      medicines: rp.medicines.map((m) => ({ medicine: m.medicine, dose: prescriptionLineDose(rp, m, "daily") })),
-    }));
+    const form = parsePrescriptionForm(serviceRequest, medicationRequests, { basis: "daily" });
+    return {
+      rps: form.rps.map((rp) => prescriptionCheckRpOf(rp, "daily")),
+      dispensing: prescriptionDispensing(form.setting, form.category),
+      category: prescriptionCategoryOption(form.setting, form.category),
+    };
   }, [serviceRequest, medicationRequests, summary.kind]);
   const advisories = useMedicationAdvisories({
     patientId: serviceRequest ? patientId : "",
     startDate: summary.orderDate,
-    rps: checkedRps,
+    rps: check.rps,
     excludeOrderId: orderId,
+    dispensing: check.dispensing,
+    departmentId: serviceRequest ? departmentOf(serviceRequest).departmentId : undefined,
+    category: check.category,
   });
 
   function toggleType(code: string) {

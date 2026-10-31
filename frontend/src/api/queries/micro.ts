@@ -20,6 +20,7 @@ import {
   NOTIFICATION_TASK_KEY,
   resourcesOfType,
   saveWithImages,
+  searchAllPages,
 } from "./core";
 import { useLabResultDetail } from "./labResult";
 import { withResultReviewTask } from "./notification";
@@ -213,6 +214,26 @@ export function useCoverages(patientId: string | undefined) {
     resourcesOfType<fhir4.Coverage>(query.data?.data, "Coverage");
 
   return { ...query, coverages };
+}
+
+const EMPTY_CONDITIONS: fhir4.Condition[] = [];
+
+/** 活動中の病名(看護問題を除く)。薬剤の病名禁忌の照合に使う。 */
+export function useActiveConditions(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("clinical-status", "active");
+  excludeNursingProblems(params);
+
+  // 禁忌の有無の判定に使うので、欠けた結果は使わない(complete)。
+  const query = useQuery({
+    queryKey: ["Condition", "search", "active", patientId],
+    queryFn: () => searchAllPages<fhir4.Condition>("Condition", params, { page: 500, maxPages: 4, complete: true }),
+    enabled: Boolean(patientId),
+    staleTime: 30 * 1000,
+  });
+
+  return { ...query, conditions: query.data?.matches ?? EMPTY_CONDITIONS };
 }
 
 export function useKarteConditions(patientId: string | undefined) {

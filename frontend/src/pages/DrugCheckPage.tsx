@@ -1,6 +1,9 @@
 import { useId, useState, type FormEvent } from "react";
 import type {
+  Disease,
   DrugCheckSeverity,
+  DrugDiseaseRule,
+  DrugDiseaseRulePayload,
   DrugDoseRule,
   DrugDoseRulePayload,
   DrugInteraction,
@@ -9,10 +12,12 @@ import type {
 } from "../api/masterClient";
 import {
   useDrugCheckMutations,
+  useDrugDiseaseRules,
   useDrugDoseRules,
   useDrugInteractions,
   useMedicineTypeOptions,
 } from "../api/masterQueries";
+import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { Modal } from "../components/Modal";
@@ -21,10 +26,10 @@ import { dosageFormLabel } from "../fhir/medicineHelpers";
 import { MasterBackLink } from "../components/MasterBackLink";
 
 // 薬剤チェックの施設マスタ(docs/drug-check-master-design.md)。
-// 相互作用(併用禁忌・併用注意)と、用量と患者条件(年齢・腎機能・体重)の規則を
-// タブで切り替える。薬は YJ コードの先頭 4〜7 桁(成分 7 桁 / 薬効分類 4 桁)で持つ。
+// 相互作用(併用禁忌・併用注意)、用量と患者条件(年齢・腎機能・体重・投与日数)の規則、
+// 病名の禁忌・注意をタブで切り替える。薬は YJ コードの先頭 4〜7 桁(成分 7 桁 / 薬効分類 4 桁)で持つ。
 
-type Tab = "interactions" | "doseRules";
+type Tab = "interactions" | "doseRules" | "diseaseRules";
 
 const SEVERITY_OPTIONS: { value: DrugCheckSeverity; label: string }[] = [
   { value: "contraindicated", label: "禁忌" },
@@ -69,6 +74,7 @@ export function DrugCheckPage() {
           [
             ["interactions", "相互作用"],
             ["doseRules", "用量・患者条件"],
+            ["diseaseRules", "病名"],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -95,11 +101,9 @@ export function DrugCheckPage() {
         <button type="submit">検索</button>
       </form>
 
-      {tab === "interactions" ? (
-        <InteractionTab query={submitted} />
-      ) : (
-        <DoseRuleTab query={submitted} />
-      )}
+      {tab === "interactions" && <InteractionTab query={submitted} />}
+      {tab === "doseRules" && <DoseRuleTab query={submitted} />}
+      {tab === "diseaseRules" && <DiseaseRuleTab query={submitted} />}
     </div>
   );
 }
@@ -309,6 +313,7 @@ function limitText(rule: DrugDoseRule): string {
   if (rule.max_cumulative_dose !== null) {
     parts.push(`累積 ${trimNumber(rule.max_cumulative_dose)}${rule.dose_unit ?? ""}${rule.cumulative_per_bsa ? "/m²" : ""}`);
   }
+  if (rule.max_days !== null) parts.push(`${rule.max_days}日`);
   return parts.join(" / ");
 }
 
@@ -391,6 +396,7 @@ interface DoseRuleDraft {
   per_kg: boolean;
   max_cumulative_dose: string;
   cumulative_per_bsa: boolean;
+  max_days: string;
   severity: DrugCheckSeverity;
   message: string;
 }
@@ -410,6 +416,7 @@ function toDoseRuleDraft(rule: DrugDoseRule | null): DoseRuleDraft {
     per_kg: rule?.per_kg ?? false,
     max_cumulative_dose: trimNumber(rule?.max_cumulative_dose ?? null),
     cumulative_per_bsa: rule?.cumulative_per_bsa ?? false,
+    max_days: rule?.max_days?.toString() ?? "",
     severity: rule?.severity ?? "caution",
     message: rule?.message ?? "",
   };
@@ -437,6 +444,7 @@ function toDoseRulePayload(draft: DoseRuleDraft): DrugDoseRulePayload {
     per_kg: hasOrderLimit && draft.per_kg,
     max_cumulative_dose: numberOrNull(draft.max_cumulative_dose),
     cumulative_per_bsa: hasCumulative && draft.cumulative_per_bsa,
+    max_days: numberOrNull(draft.max_days),
     severity: draft.severity,
     message: draft.message.trim() || null,
   };
@@ -606,6 +614,17 @@ function DoseRuleEditModal({ rule, onClose }: { rule: DrugDoseRule | null; onClo
                 /m²
               </label>
             </div>
+            <div className="drug-check__inline">
+              <span>日数</span>
+              <input
+                type="number"
+                min={1}
+                value={draft.max_days}
+                onChange={(e) => update({ max_days: e.target.value })}
+                aria-label="投与日数の上限"
+              />
+              <span>日まで</span>
+            </div>
             <label>
               文言
               <textarea
@@ -624,6 +643,198 @@ function DoseRuleEditModal({ rule, onClose }: { rule: DrugDoseRule | null; onClo
           onSelect={handlePicked}
           onClose={() => setPicking(false)}
         />
+      )}
+    </>
+  );
+}
+
+// ---- 病名 -----------------------------------------------------------------
+
+function DiseaseRuleTab({ query }: { query: string }) {
+  const rules = useDrugDiseaseRules(query);
+  const [editing, setEditing] = useState<DrugDiseaseRule | "new" | null>(null);
+
+  return (
+    <>
+      <ErrorBanner error={rules.error} />
+      <div className="page__header">
+        <p className="master-search__count">{rules.data?.length ?? 0} 件</p>
+        <button type="button" onClick={() => setEditing("new")}>
+          規則追加
+        </button>
+      </div>
+      <table className="master-search__table">
+        <thead>
+          <tr>
+            <th className="rad-item__compact">区分</th>
+            <th>医薬品</th>
+            <th>病名</th>
+            <th>理由・対処</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rules.data?.map((rule) => (
+            <tr key={rule.id}>
+              <td className="rad-item__compact">
+                <span className={rule.severity === "contraindicated" ? "drug-check__severity--high" : ""}>
+                  {severityLabel(rule.severity)}
+                </span>
+              </td>
+              <td>
+                {rule.name}
+                <span className="lab-order-item__code">{rule.code}</span>
+              </td>
+              <td>
+                {rule.disease_name}
+                <span className="lab-order-item__code">{rule.disease_code}</span>
+              </td>
+              <td className="drug-check__note">{rule.note}</td>
+              <td className="master-search__actions">
+                <button type="button" onClick={() => setEditing(rule)}>
+                  編集
+                </button>
+              </td>
+            </tr>
+          ))}
+          {rules.data && rules.data.length === 0 && (
+            <tr>
+              <td colSpan={5} className="master-search__empty">
+                規則が登録されていません
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {editing !== null && (
+        <DiseaseRuleEditModal rule={editing === "new" ? null : editing} onClose={() => setEditing(null)} />
+      )}
+    </>
+  );
+}
+
+function DiseaseRuleEditModal({ rule, onClose }: { rule: DrugDiseaseRule | null; onClose: () => void }) {
+  const mutations = useDrugCheckMutations();
+  const [draft, setDraft] = useState<DrugDiseaseRulePayload>(() =>
+    rule
+      ? {
+          code: rule.code,
+          name: rule.name,
+          disease_code: rule.disease_code,
+          disease_name: rule.disease_name,
+          severity: rule.severity,
+          note: rule.note,
+        }
+      : { code: "", name: "", disease_code: "", disease_name: "", severity: "contraindicated", note: null },
+  );
+  const [picking, setPicking] = useState<"medicine" | "disease" | null>(null);
+  const [pickError, setPickError] = useState<Error | null>(null);
+  const update = (patch: Partial<DrugDiseaseRulePayload>) => setDraft((prev) => ({ ...prev, ...patch }));
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    await mutations.saveDiseaseRule.mutateAsync({ id: rule?.id, payload: draft });
+    onClose();
+  }
+
+  async function handleDelete() {
+    if (!rule) return;
+    if (!window.confirm(`${rule.name} × ${rule.disease_name} を削除しますか？`)) return;
+    await mutations.removeDiseaseRule.mutateAsync(rule.id);
+    onClose();
+  }
+
+  function handleMedicinePicked(medicine: Medicine) {
+    const picked = ingredientFromMedicine(medicine);
+    setPicking(null);
+    setPickError(picked instanceof Error ? picked : null);
+    if (picked instanceof Error) return;
+    update({ code: picked.code, name: picked.name });
+  }
+
+  // 病名マスタから選ぶと ICD-10 を細分類まで入れる。分類でまとめるときは先頭 3 文字に縮める。
+  function handleDiseasePicked(disease: Disease) {
+    setPicking(null);
+    setPickError(disease.icd10_2013 ? null : new Error(`${disease.name} は ICD-10 を持たないため選べません。`));
+    if (!disease.icd10_2013) return;
+    update({ disease_code: disease.icd10_2013, disease_name: disease.name });
+  }
+
+  const saving = mutations.saveDiseaseRule.isPending || mutations.removeDiseaseRule.isPending;
+
+  return (
+    <>
+      <Modal title={rule ? "規則を編集" : "規則を追加"} onClose={onClose} className="modal--lab-order-item">
+        <form onSubmit={handleSubmit}>
+          <ErrorBanner error={pickError ?? mutations.saveDiseaseRule.error ?? mutations.removeDiseaseRule.error} />
+          <div className="lab-order-item__fields">
+            <DrugField
+              label="医薬品"
+              code={draft.code}
+              name={draft.name}
+              onChange={(code, name) => update({ code, name })}
+              onPick={() => setPicking("medicine")}
+            />
+            <div className="drug-check__drug">
+              <span>病名</span>
+              <input
+                type="text"
+                className="drug-check__code"
+                value={draft.disease_code}
+                onChange={(e) => update({ disease_code: e.target.value })}
+                placeholder="ICD-10"
+                aria-label="病名の ICD-10"
+                required
+              />
+              <input
+                type="text"
+                className="drug-check__name"
+                value={draft.disease_name}
+                onChange={(e) => update({ disease_name: e.target.value })}
+                placeholder="名称"
+                aria-label="病名の名称"
+                required
+              />
+              <button type="button" onClick={() => setPicking("disease")}>
+                病名選択
+              </button>
+            </div>
+            <label>
+              区分
+              <select
+                value={draft.severity}
+                onChange={(e) => update({ severity: e.target.value as DrugCheckSeverity })}
+              >
+                {SEVERITY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              理由・対処
+              <textarea
+                className="drug-check__textarea"
+                rows={3}
+                value={draft.note ?? ""}
+                onChange={(e) => update({ note: e.target.value || null })}
+              />
+            </label>
+          </div>
+          <EditActions saving={saving} onDelete={rule ? handleDelete : undefined} onClose={onClose} />
+        </form>
+      </Modal>
+      {picking === "medicine" && (
+        <MedicineSearchModal
+          title="成分を医薬品から選ぶ"
+          onSelect={handleMedicinePicked}
+          onClose={() => setPicking(null)}
+        />
+      )}
+      {picking === "disease" && (
+        <DiseaseSearchModal onSelect={handleDiseasePicked} onClose={() => setPicking(null)} />
       )}
     </>
   );

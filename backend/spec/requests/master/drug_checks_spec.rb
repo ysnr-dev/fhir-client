@@ -94,12 +94,45 @@ RSpec.describe "Master drug checks", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
     end
 
+    it "投与日数の上限だけの規則は文言なしで登録できる" do
+      post "/master/drug_dose_rules",
+           params: { code: "1124017", name: "トリアゾラム", max_days: 30, severity: "caution" }, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(body["max_days"]).to eq(30)
+    end
+
     it "上限の無い規則は文言が要る" do
       post "/master/drug_dose_rules",
            params: { code: "3969010", name: "メトホルミン", renal_index: "egfr", renal_below: 30,
                      severity: "contraindicated" },
            as: :json
 
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
+  describe "/master/drug_disease_rules" do
+    it "病名の ICD-10 は点を外して大文字にそろえ、同じ薬と病名は 1 件だけ" do
+      post "/master/drug_disease_rules",
+           params: { code: "2149", name: "β遮断薬", disease_code: "j45.9", disease_name: "喘息", severity: "contraindicated" },
+           as: :json
+      expect(response).to have_http_status(:created)
+      expect(body["disease_code"]).to eq("J459")
+
+      post "/master/drug_disease_rules",
+           params: { code: "2149", name: "β遮断薬", disease_code: "J459", disease_name: "喘息", severity: "caution" },
+           as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+
+      get "/master/drug_disease_rules", params: { q: "喘息" }
+      expect(body.size).to eq(1)
+    end
+
+    it "病名は ICD-10 の先頭 3〜5 文字" do
+      post "/master/drug_disease_rules",
+           params: { code: "2149", name: "β遮断薬", disease_code: "J4", disease_name: "喘息", severity: "caution" },
+           as: :json
       expect(response).to have_http_status(:unprocessable_content)
     end
   end

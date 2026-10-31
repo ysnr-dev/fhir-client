@@ -37,6 +37,14 @@ module Master
       render json: row(@record, Master::Medicine.find_by(medicine_code: @record.medicine_code))
     end
 
+    # 採用区分の一括取込(CSV)。
+    def import_adoption
+      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
+
+      result = MasterImport::MedicineAdoptionImporter.call(params[:file])
+      render json: { imported: result.imported_count, skipped: result.skipped_count }
+    end
+
     def create
       record = Master::MedicineAttribute.new(record_params)
       if record.save

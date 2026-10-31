@@ -105,6 +105,14 @@ class FacilitySettings < ApplicationRecord
   # 登録済みの処方は入力したときの区分で開く。
   DEFAULT_PRESCRIPTION_DOSE = { "basis" => "daily" }.freeze
 
+  # 処方のチェック。days_limits は処方区分ごとの投与日数の上限(0 は上限なし)。
+  # unset_adoption_as_not_adopted は、採用区分を決めていない薬を採用外として扱うか
+  # (採用薬だけを登録する運用のとき真にする)。
+  DEFAULT_PRESCRIPTION_CHECK = {
+    "days_limits" => %w[regular continuous temporary discharge emergency external internal].index_with(0),
+    "unset_adoption_as_not_adopted" => false
+  }.freeze
+
   # 入外区分ごとに選べる処方区分のコード。表示名は画面側(frontend の CATEGORY_OPTIONS)が
   # 持ち、こちらは初期値として妥当なコードかを見るためだけに並べる。
   PRESCRIPTION_CATEGORY_CODES = {
@@ -364,6 +372,15 @@ class FacilitySettings < ApplicationRecord
     "prescription_dose" => {
       default: DEFAULT_PRESCRIPTION_DOSE,
       shape: { fields: { "basis" => { enum: %w[single daily] } } }
+    },
+    "prescription_check" => {
+      default: DEFAULT_PRESCRIPTION_CHECK,
+      shape: {
+        fields: {
+          "days_limits" => { fields: DEFAULT_PRESCRIPTION_CHECK["days_limits"].transform_values { DAYS } },
+          "unset_adoption_as_not_adopted" => :boolean
+        }
+      }
     },
     "consult_default_templates" => {
       default: DEFAULT_CONSULT_DEFAULT_TEMPLATES,

@@ -9,13 +9,13 @@ export interface MedicineAttributeQuantity {
   unit: string;
 }
 
-export type MedicineAttributeValue = boolean | string | MedicineAttributeQuantity | null;
+export type MedicineAttributeValue = boolean | string | string[] | MedicineAttributeQuantity | null;
 
 export interface MedicineAttributeDefinition {
   key: string;
   label: string;
-  /** 画面の入力の種類。 */
-  type: "boolean" | "enum" | "quantity";
+  /** 画面の入力の種類。departments は診療科コードの並び。 */
+  type: "boolean" | "enum" | "quantity" | "departments";
   /** enum の選択肢。 */
   options?: { value: string; label: string }[];
   /** quantity の単位。 */
@@ -52,11 +52,25 @@ export interface MedicineAttributePayload {
 /** 特定抗菌薬の区分。none は特定抗菌薬ではない。 */
 export type AntimicrobialCategory = "none" | "notify" | "approve";
 
+/** 採用区分。unset は区分を決めていない薬。 */
+export type AdoptionCategory = "unset" | "adopted" | "provisional" | "outpatient_only" | "not_adopted";
+
 /** オーダー・実施入力が参照する項目の実効値。 */
 export interface MedicineAttributeFlags {
   lot_required: boolean;
   antimicrobial_category: AntimicrobialCategory;
   ddd: MedicineAttributeQuantity | null;
+  adoption: AdoptionCategory;
+  no_crush: boolean;
+  no_split: boolean;
+  /** 処方・注射できる診療科コード。空ならすべての科。 */
+  departments: string[];
+}
+
+export interface MedicineAdoptionImportResult {
+  imported: number;
+  /** 医薬品マスタに無いコードの行数。 */
+  skipped: number;
 }
 
 const PATH = "/master/medicine_attributes";
@@ -89,6 +103,15 @@ export async function updateMedicineAttribute(id: number, payload: MedicineAttri
 export async function deleteMedicineAttribute(id: number): Promise<void> {
   const res = await masterFetch(`${PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
+}
+
+/** 採用区分の一括取込(CSV。医薬品コード, 採用区分 の 2 列)。 */
+export async function importMedicineAdoption(file: File): Promise<MedicineAdoptionImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await masterFetch(`${PATH}/import_adoption`, { method: "POST", body: formData });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MedicineAdoptionImportResult;
 }
 
 /** 医薬品コード → 項目の実効値。マスタに無いコードも既定(偽)で返る。 */

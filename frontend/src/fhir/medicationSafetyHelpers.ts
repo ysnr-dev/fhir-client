@@ -8,7 +8,7 @@ import { allergyMatchLabel, matchMedicationAllergies } from "./allergyHelpers";
 // 依存しない素のデータだけで組み立てる。判断は医師のものなので**登録は止めない**
 // (妊娠中の注意 `PregnancyNotice` と同じ扱い)。出すのは 3 種類:
 //
-//   印(caution)    … 医薬品マスタの規制区分・製品区分。麻薬・毒薬など、選んだ薬そのものの性質
+//   印(caution)    … 医薬品マスタの規制区分・製品区分と薬効分類。麻薬・毒薬・ハイリスク薬など、選んだ薬そのものの性質
 //   アレルギー      … 患者の AllergyIntolerance との照合(`allergyHelpers.matchMedicationAllergies`)
 //   重複投与        … 同じ成分がフォーム内の別の行、または投与中の他のオーダーにある
 
@@ -65,7 +65,8 @@ export type MedicineCautionKind =
   | "stimulant"
   | "psychotropic"
   | "biological"
-  | "contrast";
+  | "contrast"
+  | "high-risk";
 
 export interface MedicineCaution {
   kind: MedicineCautionKind;
@@ -96,6 +97,45 @@ const CONTRAST_LABELS: Record<string, string> = {
   "2": "造影補助剤",
 };
 
+/**
+ * ハイリスク薬(薬剤管理指導料の「特に安全管理が必要な医薬品」)。YJ コード・薬価基準コードの前方一致で、
+ * 4 桁は薬効分類、7 桁は成分。薬効分類で切り出せない群(血液凝固阻止剤の DOAC、免疫抑制剤、
+ * カリウム製剤の注射)は成分で挙げる。抗 HIV 薬は抗ウイルス剤(625)から切り出せないので含めない。
+ */
+export const HIGH_RISK_CODE_PREFIXES = [
+  "42", // 腫瘍用薬
+  "212", // 不整脈用剤
+  "113", // 抗てんかん剤
+  "117", // 精神神経用剤
+  "2113", // ジギタリス製剤
+  "2251", // テオフィリン製剤
+  "2492", // 膵臓ホルモン剤(インスリン)
+  "396", // 糖尿病用剤
+  "3332", // 血液凝固阻止剤(ワルファリン)
+  "3339001", // ダビガトラン
+  "3339002", // エドキサバン
+  "3339003", // リバーロキサバン
+  "3339004", // アピキサバン
+  "3999004", // シクロスポリン
+  "3999005", // アザチオプリン
+  "3999014", // タクロリムス
+  "3999017", // ミコフェノール酸モフェチル
+  "3999022", // エベロリムス
+  "3999406", // シクロスポリン注
+  "3999416", // タクロリムス注
+  "3229401", // L-アスパラギン酸カリウム注
+  "3319402", // 塩化カリウム注
+];
+
+/** ハイリスク薬か(`HIGH_RISK_CODE_PREFIXES`)。 */
+export function isHighRiskMedicine(
+  medicine: { yj_code?: string | null; medicine_code?: string | null; generic?: boolean; yakka_code?: string | null } | null | undefined,
+): boolean {
+  if (!medicine) return false;
+  const code = ingredientSourceCode(medicine);
+  return Boolean(code) && HIGH_RISK_CODE_PREFIXES.some((prefix) => code.startsWith(prefix));
+}
+
 /** 医薬品 1 件に付ける印。該当が無ければ空。 */
 export function medicineCautions(medicine: Medicine | null | undefined): MedicineCaution[] {
   if (!medicine) return [];
@@ -116,6 +156,9 @@ export function medicineCautions(medicine: Medicine | null | undefined): Medicin
   if (contrast) {
     cautions.push({ kind: "contrast", label: contrast, strong: false });
   }
+  if (isHighRiskMedicine(medicine)) {
+    cautions.push({ kind: "high-risk", label: "ハイリスク", strong: false });
+  }
   return cautions;
 }
 
@@ -131,8 +174,23 @@ export interface ActiveMedication {
   brought?: boolean;
 }
 
-/** `interaction` と `dose` は施設マスタによるチェック(`drugCheckHelpers.ts`)。 */
-export type MedicationWarningKind = "allergy" | "duplicate" | "interaction" | "dose" | "antimicrobial";
+/**
+ * `interaction`・`dose`・`days-limit`・`disease` は施設マスタによるチェック(`drugCheckHelpers.ts`)、
+ * `crush-split`・`usage-form`・`adoption`・`restricted-department` は薬剤付加情報と処方の入力の照合
+ * (`prescriptionCheckHelpers.ts`)。
+ */
+export type MedicationWarningKind =
+  | "allergy"
+  | "duplicate"
+  | "interaction"
+  | "dose"
+  | "antimicrobial"
+  | "days-limit"
+  | "crush-split"
+  | "usage-form"
+  | "disease"
+  | "adoption"
+  | "restricted-department";
 
 export interface MedicationWarning {
   kind: MedicationWarningKind;

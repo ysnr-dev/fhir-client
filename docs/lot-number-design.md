@@ -39,8 +39,21 @@
 | `GET /definitions` | 項目の定義(key・表示名・型) |
 | `GET /lookup?medicine_code=a,b` | コード → 実効値。実施入力が行ごとにロット欄を出すかを決める |
 | `POST` / `PATCH /:id` / `DELETE /:id` | 行の登録・更新(`medicine_code` は変えない)・削除(既定に戻る) |
+| `POST /import_adoption` | 採用区分の一括取込(CSV。ヘッダあり・医薬品コード, 採用区分 の 2 列。UTF-8 か Shift_JIS)。載っている薬の採用区分だけを書き換え、医薬品マスタに無いコードは数えて飛ばす |
 
-画面はマスタメンテ「医薬品」>「薬剤付加情報」(`/medicine-attributes`)。
+画面はマスタメンテ「医薬品」>「薬剤付加情報」(`/medicine-attributes`)。一覧は既定と違う値の項目を要約で並べ、
+編集はモーダル(項目の入力も `definitions` から組み立てる)。
+
+### 1.4 項目
+
+| key | 表示名 | 型 | 設定できる薬 | 使い道 |
+|---|---|---|---|---|
+| `lot_required` | ロット管理 | boolean | すべて | 実施入力のロット欄(§2)。既定は生物学的製剤の印 |
+| `antimicrobial_category` | 特定抗菌薬 | enum | 抗菌薬 | 届出制・許可制の警告と届出(`antimicrobial-stewardship-design.md`) |
+| `ddd` | DDD | quantity | 抗菌薬 | AUD の分母 |
+| `adoption` | 採用区分 | enum(- / 採用 / 仮採用 / 院外専用 / 採用外) | すべて | 処方・注射の警告(`drug-check-master-design.md` §2.2) |
+| `no_crush` / `no_split` | 粉砕不可 / 分割不可 | boolean | 内用薬 | 調剤指示の粉砕・端数の用量と照合 |
+| `departments` | 処方できる診療科 | 診療科コードの並び(空はすべての科) | すべて | 依頼科と照合 |
 
 ## 2. ロット番号の持ち方
 
@@ -91,4 +104,4 @@ backfill する。**本番は fhir-server を先にデプロイする**(上流�
 
 - 実装ガイド(`../fhir-ig`)に `medication-lot-number` 拡張の定義を足す(未反映)。
 - 有効期限の記録と、GS1 バーコードからのロット・期限の切り出し。
-- 薬剤付加情報の項目の追加(採用区分など)。
+- 採用区分での医薬品検索の絞り込み(「採用薬のみ」)と、採用切れの代替薬の提示。

@@ -2,14 +2,18 @@ import { useMemo } from "react";
 import {
   useActiveAllergies,
   useActiveBroughtMedications,
+  useActiveConditions,
   useActiveMedications,
   useAntimicrobialCourses,
   useAntimicrobialMedicineCodes,
   useBodyMeasures,
   usePatient,
+  usePrescriptionCheckSettings,
   useRecentLabResults,
+  useSelfDepartments,
 } from "../api/queries";
 import {
+  useDrugDiseaseRules,
   useDrugDoseRules,
   useDrugInteractions,
   useMedicineAttributeLookup,
@@ -20,11 +24,14 @@ import { buildAntimicrobialWarnings } from "../fhir/antimicrobialHelpers";
 import { summarizeBodyMeasures, summarizeRenal } from "../fhir/bodyMeasureHelpers";
 import { substitutionBlockMark, type SubstitutionBlock } from "../fhir/prescriptionHelpers";
 import { broughtActiveMedications, summarizeBroughtMedication } from "../fhir/broughtMedicationHelpers";
+import { conditionDiagnoses } from "../fhir/conditionHelpers";
+import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
+import { buildDrugCheckWarnings, type PatientFactors } from "../fhir/drugCheckHelpers";
 import {
-  buildDrugCheckWarnings,
-  type CheckedRp,
-  type PatientFactors,
-} from "../fhir/drugCheckHelpers";
+  buildPrescriptionCheckWarnings,
+  type Dispensing,
+  type MedicationCheckRp,
+} from "../fhir/prescriptionCheckHelpers";
 import type { Advisory } from "../fhir/advisoryHelpers";
 import {
   buildMedicationWarnings,
@@ -39,7 +46,8 @@ import type { Medicine } from "../api/masterClient";
 // 薬剤オーダーの安全性チェック(`docs/order-common-backlog.md` §3)。処方・注射のフォームが同じ hook を使い、
 // 結果は共通の警告(docs/advisory-design.md)に写して `AdvisoryInlineMarks` で行の下に出す。
 // 重篤なアレルギー・併用禁忌・上限超過は登録時に理由の確認を要する。
-// 相互作用・用量と患者条件は施設マスタで照合する(docs/drug-check-master-design.md)。
+// 相互作用・用量と患者条件・病名は施設マスタ、採用区分・診療科・粉砕分割・剤形と用法は薬剤付加情報と
+// 施設設定で照合する(docs/drug-check-master-design.md)。
 
 /**
  * フォームの薬剤行に出す警告を全行ぶんまとめて出す。
@@ -50,13 +58,19 @@ export function useMedicationWarnings(args: {
   /** 投与開始日。この日に効いている他のオーダーと突き合わせる。 */
   startDate: string;
   /** 行に `dose` を渡すと施設マスタの用量上限とも比べる。 */
-  rps: CheckedRp[];
+  rps: MedicationCheckRp[];
   /** 編集中のオーダー(自分自身との重複は出さない)。 */
   excludeOrderId?: string;
   /** 継続して処方に起こしている最中の持参薬。 */
   excludeBroughtIds?: string[];
+  /** 調剤の場所(採用区分の照合)。null なら採用外・院外専用を見ない。 */
+  dispensing?: Dispensing;
+  /** 依頼科(診療科 Organization.id)。処方できる診療科と照合する。 */
+  departmentId?: string;
+  /** 処方区分(施設設定の日数の上限を引く)と表示名。 */
+  category?: { code: string; display: string } | null;
 }): MedicationWarning[][][] {
-  const { patientId, startDate, excludeOrderId, excludeBroughtIds } = args;
+  const { patientId, startDate, excludeOrderId, excludeBroughtIds, dispensing = null, departmentId, category } = args;
   const { allergies } = useActiveAllergies(patientId);
   const { medications } = useActiveMedications(patientId, startDate);
   const { statements: broughtStatements } = useActiveBroughtMedications(patientId);
@@ -79,6 +93,18 @@ export function useMedicationWarnings(args: {
   const enabled = Boolean(patientId);
   const { data: interactions } = useDrugInteractions("", enabled);
   const { data: doseRules } = useDrugDoseRules("", enabled);
+  const { data: diseaseRules } = useDrugDiseaseRules("", enabled);
+  const { conditions } = useActiveConditions(enabled && (diseaseRules?.length ?? 0) > 0 ? patientId : undefined);
+  const diagnoses = useMemo(() => conditionDiagnoses(conditions), [conditions]);
+  const checkSettings = usePrescriptionCheckSettings();
+  const { departments } = useSelfDepartments();
+  const departmentNames = useMemo(
+    () => new Map(departments.map((d) => [departmentCode(d), departmentDisplayName(d)])),
+    [departments],
+  );
+  const orderDepartment = departments.find((d) => d.id === departmentId);
+  const orderDepartmentCode = orderDepartment ? departmentCode(orderDepartment) : undefined;
+  const categoryDays = category ? (checkSettings.days_limits[category.code] ?? 0) : 0;
   const { data: conversions } = useMedicineDoseFactors(
     enabled && (doseRules?.length ?? 0) > 0
       ? rps.flatMap((rp) =>
@@ -103,20 +129,44 @@ export function useMedicationWarnings(args: {
     const base = buildMedicationWarnings({ rps, allergies, active, excludeOrderId, excludeBroughtIds });
     if (!enabled) return base;
     const checks = buildDrugCheckWarnings({
-      rps,
+      rps: rps.map((rp) => ({ medicines: rp.medicines.map((line) => ({ ...line, days: line.days ?? rp.days })) })),
       active,
       interactions: interactions ?? [],
       doseRules: doseRules ?? [],
+      diseaseRules: diseaseRules ?? [],
+      diagnoses,
       patient,
       conversions,
       excludeOrderId,
       excludeBroughtIds,
     });
     const antimicrobial = buildAntimicrobialWarnings({ rps, startDate, courses, attributes, antimicrobialCodes });
+    const facility = buildPrescriptionCheckWarnings({
+      rps,
+      attributes,
+      dispensing,
+      departmentCode: orderDepartmentCode,
+      departmentNames,
+      unsetAsNotAdopted: checkSettings.unset_adoption_as_not_adopted,
+      categoryDaysLimit: category && categoryDays > 0 ? { label: category.display, days: categoryDays } : null,
+    });
     return base.map((rp, i) =>
-      rp.map((line, j) => [...line, ...(checks[i]?.[j] ?? []), ...(antimicrobial[i]?.[j] ?? [])]),
+      rp.map((line, j) => [
+        ...line,
+        ...(checks[i]?.[j] ?? []),
+        ...(antimicrobial[i]?.[j] ?? []),
+        ...(facility[i]?.[j] ?? []),
+      ]),
     );
   }, [
+    diseaseRules,
+    diagnoses,
+    dispensing,
+    orderDepartmentCode,
+    departmentNames,
+    checkSettings.unset_adoption_as_not_adopted,
+    category,
+    categoryDays,
     startDate,
     courses,
     attributes,
@@ -145,7 +195,10 @@ function needsYakkaLookup(medicine: Medicine | null | undefined): boolean {
   return Boolean(medicine?.medicine_code) && !medicine?.generic && !ingredientKey(medicine);
 }
 
-function withYakkaCodes(rps: CheckedRp[], yakkaCodes: Map<string, string> | undefined): CheckedRp[] {
+function withYakkaCodes(
+  rps: MedicationCheckRp[],
+  yakkaCodes: Map<string, string> | undefined,
+): MedicationCheckRp[] {
   if (!yakkaCodes || yakkaCodes.size === 0) return rps;
   return rps.map((rp) => ({
     ...rp,
@@ -179,7 +232,7 @@ export function usePatientFactors(patientId: string): PatientFactors {
   }, [patient, bodyMeasures.observations, labResults.observations]);
 }
 
-/** 医薬品名の後ろに出す印(麻薬・毒薬・向精神薬・生物由来製品・造影剤)。 */
+/** 医薬品名の後ろに出す印(麻薬・毒薬・向精神薬・生物由来製品・造影剤・ハイリスク薬)。 */
 export function MedicineCautionMarks({ medicine }: { medicine: Medicine | null }) {
   const cautions = medicineCautions(medicine);
   if (cautions.length === 0) return null;

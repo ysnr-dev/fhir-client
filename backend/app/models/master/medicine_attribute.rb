@@ -12,15 +12,22 @@ module Master
     ANTIMICROBIAL_YAKKO_PREFIXES = %w[61 622 624].freeze
     ANTIMICROBIAL_CATEGORIES = %w[none notify approve].freeze
     DDD_UNITS = %w[g mg MU].freeze
+    # 採用区分。unset は区分を決めていない薬(施設設定で採用外として扱うかを選ぶ)。
+    ADOPTION_CATEGORIES = %w[unset adopted provisional outpatient_only not_adopted].freeze
+    # 診療科コード(SS-MIX2 の 2〜3 桁。院内で足した科は英字を含む)。
+    DEPARTMENT_CODE = { pattern: /\A[0-9A-Z]{2,3}\z/, label: "診療科コード", strict: true }.freeze
 
     def self.antimicrobial?(medicine)
       code = medicine&.yakka_code.to_s
       ANTIMICROBIAL_YAKKO_PREFIXES.any? { |prefix| code.start_with?(prefix) }
     end
 
+    # 内用薬(剤形区分 1)。粉砕・分割は内用薬だけの性質。
+    def self.oral?(medicine) = medicine&.dosage_form == "1"
+
     # 項目の表。
     #   label:      画面の列名
-    #   type:       画面の入力の種類(boolean / enum / quantity)
+    #   type:       画面の入力の種類(boolean / enum / quantity / departments)
     #   shape:      値の形(JsonShape の葉)
     #   default:    行に値が無いときの既定。医薬品マスタの行を受け取って決める
     #   applicable: その薬に設定できるか(省略は全薬)。偽の薬に値を保存すると 422
@@ -55,6 +62,43 @@ module Master
         shape: { fields: { "value" => :number, "unit" => { enum: DDD_UNITS } }, required: %w[value unit] },
         default: ->(_medicine) {},
         applicable: ->(medicine) { antimicrobial?(medicine) }
+      },
+      # 院内の採用区分。採用外を院内で処方・注射したとき、院外専用を院外処方以外で処方したときに警告する。
+      "adoption" => {
+        label: "採用区分",
+        type: "enum",
+        options: [
+          { value: "unset", label: "-" },
+          { value: "adopted", label: "採用" },
+          { value: "provisional", label: "仮採用" },
+          { value: "outpatient_only", label: "院外専用" },
+          { value: "not_adopted", label: "採用外" }
+        ],
+        shape: { enum: ADOPTION_CATEGORIES },
+        default: ->(_medicine) { "unset" }
+      },
+      # 粉砕できない薬(徐放錠・腸溶錠など)。調剤指示の粉砕と照合する。
+      "no_crush" => {
+        label: "粉砕不可",
+        type: "boolean",
+        shape: :boolean,
+        default: ->(_medicine) { false },
+        applicable: ->(medicine) { oral?(medicine) }
+      },
+      # 割れない薬(割線の無い錠剤など)。端数の用量と照合する。
+      "no_split" => {
+        label: "分割不可",
+        type: "boolean",
+        shape: :boolean,
+        default: ->(_medicine) { false },
+        applicable: ->(medicine) { oral?(medicine) }
+      },
+      # 処方・注射できる診療科(空ならすべての科)。それ以外の科のオーダーで警告する。
+      "departments" => {
+        label: "処方できる診療科",
+        type: "departments",
+        shape: { list: DEPARTMENT_CODE, unique: true },
+        default: ->(_medicine) { [] }
       }
     }.freeze
 
@@ -89,9 +133,9 @@ module Master
 
     private
 
-    # 画面の「未設定」(null)は保存しない(既定に戻す)。
+    # 画面の「未設定」(null・空の並び)は保存しない(既定に戻す)。
     def drop_blank_settings
-      self.settings = (settings.is_a?(Hash) ? settings : {}).compact
+      self.settings = (settings.is_a?(Hash) ? settings : {}).reject { |_key, value| value.nil? || value == [] }
     end
 
     def settings_shape

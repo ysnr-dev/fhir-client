@@ -63,6 +63,12 @@ interface Advisory {
 | `interaction` | 相互作用 | 薬剤 | warning(禁忌)/ info(注意) | 同上(`drugCheckHelpers`) |
 | `dose` | 用量・患者条件 | 薬剤 | warning(上限超過・禁忌)/ info(確認できない) | 同上 |
 | `antimicrobial` | 抗菌薬 | 薬剤 | warning(許可制・14 日以上)/ info | 同上(`antimicrobialHelpers`) |
+| `days-limit` | 投与日数の上限 | 薬剤 | warning | 同上(`drugCheckHelpers` の規則・`prescriptionCheckHelpers` の処方区分) |
+| `crush-split` | 粉砕・分割 | 薬剤 | warning | 同上(`prescriptionCheckHelpers`) |
+| `usage-form` | 剤形と用法 | 薬剤 | info | 同上 |
+| `disease` | 病名禁忌 | 薬剤 | warning(禁忌)/ info(注意) | 同上(`drugCheckHelpers`) |
+| `adoption` | 採用区分 | 薬剤 | warning(採用外・院外専用)/ info(仮採用) | 同上(`prescriptionCheckHelpers`) |
+| `restricted-department` | 処方できる診療科 | 薬剤 | warning | 同上 |
 | `contrast-flag` | 造影の注意区分 | 放射線 | warning | `radSafetyAdvisories` |
 | `contrast-allergy` | 造影剤アレルギー | 放射線 | warning(常に) | 同上 |
 | `egfr` | 腎機能 | 放射線 | warning(30 未満)/ info(45 未満・算出不能) | 同上 |

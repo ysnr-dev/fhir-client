@@ -315,6 +315,22 @@ export interface PrescriptionDoseSettings {
 
 export const DEFAULT_PRESCRIPTION_DOSE: PrescriptionDoseSettings = { basis: "daily" };
 
+/**
+ * 施設設定「処方のチェック」。days_limits は処方区分ごとの投与日数の上限(0 は上限なし)。
+ * unset_adoption_as_not_adopted は採用区分を決めていない薬を採用外として扱うか。
+ */
+export interface PrescriptionCheckSettings {
+  days_limits: Record<string, number>;
+  unset_adoption_as_not_adopted: boolean;
+}
+
+export const DEFAULT_PRESCRIPTION_CHECK: PrescriptionCheckSettings = {
+  days_limits: Object.fromEntries(
+    [...CATEGORY_OPTIONS.inpatient, ...CATEGORY_OPTIONS.outpatient].map((o) => [o.code, 0]),
+  ),
+  unset_adoption_as_not_adopted: false,
+};
+
 export const DEFAULT_PRESCRIPTION_CATEGORY: PrescriptionCategoryDefaults = {
   inpatient: "",
   outpatient: "",

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_31_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_01_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -770,6 +770,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_31_090000) do
     t.index ["edition", "mdc6"], name: "index_master_dpc_surgeries_on_edition_and_mdc6"
   end
 
+  create_table "master_drug_disease_rules", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "disease_code", null: false
+    t.string "disease_name", null: false
+    t.string "severity", null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code", "disease_code"], name: "index_master_drug_disease_rules_on_code_and_disease_code", unique: true
+  end
+
   create_table "master_drug_dose_rules", force: :cascade do |t|
     t.string "code", null: false
     t.string "name", null: false
@@ -788,6 +800,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_31_090000) do
     t.datetime "updated_at", null: false
     t.decimal "max_cumulative_dose", precision: 12, scale: 4
     t.boolean "cumulative_per_bsa", default: false, null: false
+    t.integer "max_days"
     t.index ["code"], name: "index_master_drug_dose_rules_on_code"
   end
 

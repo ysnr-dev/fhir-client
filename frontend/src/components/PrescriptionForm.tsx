@@ -18,7 +18,6 @@ import {
   emptyRp,
   hasDoseDays,
   buildPrescriptionDraftOrders,
-  prescriptionLineDose,
   SETTING_OPTIONS,
   SUBSTITUTION_BLOCK_OPTIONS,
   type DoseBasis,
@@ -44,6 +43,11 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { FormularyMark, MedicineCautionMarks, useMedicationAdvisories } from "./MedicineWarnings";
+import {
+  prescriptionCategoryOption,
+  prescriptionCheckRpOf,
+  prescriptionDispensing,
+} from "../fhir/prescriptionCheckHelpers";
 import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
 import { AdvisoryInlineMarks, AdvisoryNotice } from "./AdvisoryNotice";
 import { CdsCardLinks } from "./CdsCardList";
@@ -182,14 +186,13 @@ export function PrescriptionForm({
     [values.rps],
   );
   const checkedRps = useMemo(
-    () =>
-      values.rps.map((rp) => ({
-        medicines: rp.medicines.map((m) => ({
-          medicine: m.medicine,
-          dose: prescriptionLineDose(rp, m, values.doseBasis),
-        })),
-      })),
+    () => values.rps.map((rp) => prescriptionCheckRpOf(rp, values.doseBasis)),
     [values.rps, values.doseBasis],
+  );
+  const requester = useOrderContext();
+  const categoryOption = useMemo(
+    () => prescriptionCategoryOption(values.setting, values.category),
+    [values.setting, values.category],
   );
   const medicationAdvisories = useMedicationAdvisories({
     patientId: setMode ? "" : patientId,
@@ -197,6 +200,9 @@ export function PrescriptionForm({
     rps: checkedRps,
     excludeOrderId: orderId,
     excludeBroughtIds: broughtIds,
+    dispensing: prescriptionDispensing(values.setting, values.category),
+    departmentId: requester.departmentId,
+    category: categoryOption,
   });
   // 催奇形性・乳汁移行の判断に要るので、妊娠中・授乳中は入力欄の前に出す。
   const pregnancy = usePregnancyAdvisory(setMode ? "" : patientId);
@@ -208,7 +214,6 @@ export function PrescriptionForm({
   // 外部の判断支援(CDS Hooks の order-select / order-sign)。患者が決まらないオーダーセットの内容入力と、
   // 外から一括 submit する画面(確認モーダルを挟めない)では呼ばない。
   const cdsEnabled = !setMode && !hideSubmit;
-  const requester = useOrderContext();
   const draftOrders = useMemo(
     () => buildPrescriptionDraftOrders(values, patientId, requester),
     [values, patientId, requester],

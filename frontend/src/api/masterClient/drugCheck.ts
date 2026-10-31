@@ -1,6 +1,6 @@
 import { buildError, masterFetch } from "./core";
 
-// 薬剤チェックの施設マスタ(相互作用・用量と患者条件)。docs/drug-check-master-design.md
+// 薬剤チェックの施設マスタ(相互作用・用量と患者条件・病名)。docs/drug-check-master-design.md
 // 薬は YJ コードの先頭 4〜7 桁で指す(7 桁 = 成分、4 桁 = 薬効分類)。
 
 export type DrugCheckSeverity = "contraindicated" | "caution";
@@ -39,6 +39,8 @@ export interface DrugDoseRule {
   max_cumulative_dose: string | null;
   // 累積の上限が体表面積 1 m² あたり。
   cumulative_per_bsa: boolean;
+  // 投与日数の上限。処方の日数を持つ内服と比べる。
+  max_days: number | null;
   severity: DrugCheckSeverity;
   message: string | null;
 }
@@ -53,8 +55,22 @@ export type DrugDoseRulePayload = Omit<
   max_cumulative_dose: number | null;
 };
 
+/** 病名と薬の禁忌・注意。病名は ICD-10 の先頭 3〜5 文字(点なし)の前方一致。 */
+export interface DrugDiseaseRule {
+  id: number;
+  code: string;
+  name: string;
+  disease_code: string;
+  disease_name: string;
+  severity: DrugCheckSeverity;
+  note: string | null;
+}
+
+export type DrugDiseaseRulePayload = Omit<DrugDiseaseRule, "id">;
+
 const INTERACTIONS_PATH = "/master/drug_interactions";
 const DOSE_RULES_PATH = "/master/drug_dose_rules";
+const DISEASE_RULES_PATH = "/master/drug_disease_rules";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -90,3 +106,8 @@ export const fetchDrugDoseRules = (q?: string) => fetchAll<DrugDoseRule>(DOSE_RU
 export const saveDrugDoseRule = (id: number | undefined, payload: DrugDoseRulePayload) =>
   save<DrugDoseRule>(DOSE_RULES_PATH, id, payload);
 export const deleteDrugDoseRule = (id: number) => remove(DOSE_RULES_PATH, id);
+
+export const fetchDrugDiseaseRules = (q?: string) => fetchAll<DrugDiseaseRule>(DISEASE_RULES_PATH, q);
+export const saveDrugDiseaseRule = (id: number | undefined, payload: DrugDiseaseRulePayload) =>
+  save<DrugDiseaseRule>(DISEASE_RULES_PATH, id, payload);
+export const deleteDrugDiseaseRule = (id: number) => remove(DISEASE_RULES_PATH, id);

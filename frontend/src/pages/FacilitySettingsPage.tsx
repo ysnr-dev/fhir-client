@@ -61,11 +61,13 @@ import { locationDisplayName } from "../fhir/locationHelpers";
 import {
   CATEGORY_OPTIONS,
   DEFAULT_PRESCRIPTION_CATEGORY,
+  DEFAULT_PRESCRIPTION_CHECK,
   DEFAULT_PRESCRIPTION_DOSE,
   DOSE_BASIS_OPTIONS,
   SETTING_OPTIONS,
   type DoseBasis,
   type PrescriptionCategoryDefaults,
+  type PrescriptionCheckSettings,
 } from "../fhir/prescriptionHelpers";
 import {
   DEFAULT_RADIOTHERAPY_REVIEW,
@@ -154,6 +156,7 @@ const FACILITY_SECTIONS = [
   { key: "vital_thresholds", label: "バイタルの異常値" },
   { key: "medication_schedule", label: "内服の与薬の時刻" },
   { key: "prescription_category", label: "処方の初期値" },
+  { key: "prescription_check", label: "処方のチェック" },
   { key: "consult_default_templates", label: "他科依頼の既定テンプレート" },
   { key: "document_reminder", label: "文書作成の督促" },
   { key: "nursing_acuity", label: "看護必要度" },
@@ -476,6 +479,16 @@ export function FacilitySettingsPage() {
   const prescriptionDoseBasis =
     doseBasisDraft ?? (settings.data?.prescription_dose ?? DEFAULT_PRESCRIPTION_DOSE).basis;
 
+  // 処方のチェック。処方区分ごとの投与日数の上限(0 は上限なし)と、採用区分が未設定の薬の扱い。
+  const [prescriptionCheckDraft, setPrescriptionCheckDraft] = useState<PrescriptionCheckSettings | undefined>(
+    undefined,
+  );
+  const prescriptionCheck =
+    prescriptionCheckDraft ?? settings.data?.prescription_check ?? DEFAULT_PRESCRIPTION_CHECK;
+  const prescriptionCheckValid = Object.values(prescriptionCheck.days_limits).every(
+    (days) => Number.isInteger(days) && days >= 0,
+  );
+
   // 他科依頼の依頼目的テンプレートの既定。依頼先の診療科ごとに 1 つで、未選択の科は保存しない。
   const [consultTemplateDraft, setConsultTemplateDraft] = useState<
     Record<string, string> | undefined
@@ -584,6 +597,7 @@ export function FacilitySettingsPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
+    if (!prescriptionCheckValid) return;
     if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid || !infectiousReportValid || !ncdValid) return;
     if (!reviewValid || !receiptCodesOk || !coefficientsValid || !intakeValid) return;
     update.mutate({
@@ -596,6 +610,7 @@ export function FacilitySettingsPage() {
       document_reminder: reminder,
       prescription_category: prescriptionCategory,
       prescription_dose: { basis: prescriptionDoseBasis },
+      prescription_check: prescriptionCheck,
       consult_default_templates: consultTemplates,
       radiotherapy_review: radiotherapyReview,
       receipt_codes: receiptCodes,
@@ -950,6 +965,49 @@ export function FacilitySettingsPage() {
                     </option>
                   ))}
                 </select>
+              </label>
+            </div>
+          )}
+
+          {/* 処方のチェック。処方区分ごとの投与日数の上限を超える RP に警告を出す(0 は上限なし)。
+              採用区分は薬剤付加情報に持ち、採用薬だけを登録する運用なら未設定の薬を採用外として扱う。 */}
+          {section === "prescription_check" && (
+            <div className="facility-settings__schedule-body">
+              {SETTING_OPTIONS.flatMap((setting) =>
+                CATEGORY_OPTIONS[setting.code].map((o) => (
+                  <label key={o.code}>
+                    {setting.display} {o.display}
+                    <span className="facility-settings__times">
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={prescriptionCheck.days_limits[o.code] ?? 0}
+                        onChange={(e) =>
+                          setPrescriptionCheckDraft({
+                            ...prescriptionCheck,
+                            days_limits: { ...prescriptionCheck.days_limits, [o.code]: Number(e.target.value) },
+                          })
+                        }
+                        aria-label={`${setting.display}${o.display}の日数の上限`}
+                      />
+                      <span className="facility-settings__unit">日まで</span>
+                    </span>
+                  </label>
+                )),
+              )}
+              <label className="connection-settings-form__checkbox">
+                <input
+                  type="checkbox"
+                  checked={prescriptionCheck.unset_adoption_as_not_adopted}
+                  onChange={(e) =>
+                    setPrescriptionCheckDraft({
+                      ...prescriptionCheck,
+                      unset_adoption_as_not_adopted: e.target.checked,
+                    })
+                  }
+                />
+                採用区分が未設定の薬を採用外とする
               </label>
             </div>
           )}
@@ -1941,6 +1999,7 @@ export function FacilitySettingsPage() {
                 !thresholdsValid ||
                 !medicationValid ||
                 !reminderValid ||
+                !prescriptionCheckValid ||
                 !admissionDocsValid ||
                 !acuityValid ||
                 !pressureUlcerValid ||
@@ -1982,6 +2041,11 @@ export function FacilitySettingsPage() {
           {!reminderValid && (
             <p className="connection-settings-form__field-hint" role="status">
               「文書作成の督促」は 0 以上の日数で入れてください。
+            </p>
+          )}
+          {!prescriptionCheckValid && (
+            <p className="connection-settings-form__field-hint" role="status">
+              「処方のチェック」の日数は 0 以上で入れてください。
             </p>
           )}
           {update.isSuccess && (

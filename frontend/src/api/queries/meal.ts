@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_VITAL_THRESHOLDS } from "../../fhir/vitalHelpers";
 import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
-import { DEFAULT_PRESCRIPTION_CATEGORY, DEFAULT_PRESCRIPTION_DOSE } from "../../fhir/prescriptionHelpers";
+import {
+  DEFAULT_PRESCRIPTION_CATEGORY,
+  DEFAULT_PRESCRIPTION_CHECK,
+  DEFAULT_PRESCRIPTION_DOSE,
+  type PrescriptionCheckSettings,
+} from "../../fhir/prescriptionHelpers";
 import { DEFAULT_MEDICATION_SCHEDULE } from "../../fhir/medicationScheduleHelpers";
 import {
   DEFAULT_MEAL_SCHEDULE,
@@ -120,6 +125,12 @@ export function usePrescriptionCategoryDefaults() {
      *  これが true になるまでフォームを描かない。 */
     ready: !settings.isLoading,
   };
+}
+
+/** 処方のチェックの施設設定。設定が読めるまでは既定(上限なし)。 */
+export function usePrescriptionCheckSettings(): PrescriptionCheckSettings {
+  const settings = useFacilitySettings();
+  return settings.data?.prescription_check ?? DEFAULT_PRESCRIPTION_CHECK;
 }
 
 const EMPTY_CONSULT_DEFAULT_TEMPLATES: Record<string, string> = {};

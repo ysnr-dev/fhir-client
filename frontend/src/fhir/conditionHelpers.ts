@@ -629,6 +629,14 @@ export function summarizeCondition(condition: fhir4.Condition): ConditionSummary
   };
 }
 
+/** 病名の ICD-10 と名称(薬剤の病名禁忌の照合に使う)。ICD-10 を持たない病名は除く。 */
+export function conditionDiagnoses(conditions: fhir4.Condition[]): { code: string; name: string }[] {
+  return conditions.flatMap((condition) => {
+    const code = codingBySystem(condition.code?.coding, ICD10_SYSTEM)?.code?.replace(".", "").toUpperCase();
+    return code ? [{ code, name: summarizeCondition(condition).name || code }] : [];
+  });
+}
+
 // ---- 編集フォームへの復元 ----
 //
 // FHIR リソースにはマスタの全項目(id, カナなど)は保存されていないため、フォーム上で

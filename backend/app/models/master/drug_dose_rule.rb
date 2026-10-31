@@ -15,6 +15,7 @@ module Master
     validates :renal_index, inclusion: { in: RENAL_INDEXES }, allow_blank: true
     validates :age_from, :age_to, numericality: { only_integer: true, greater_than_or_equal_to: 0 }, allow_nil: true
     validates :renal_below, :max_single_dose, :max_daily_dose, :max_cumulative_dose, numericality: { greater_than: 0 }, allow_nil: true
+    validates :max_days, numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
     validate :consistent_conditions
 
     private
@@ -45,10 +46,10 @@ module Master
 
       # 条件も上限も無い規則は、その薬を選ぶたびに出るだけになる。
       has_condition = age_from || age_to || renal_index.present?
-      if !has_condition && !has_limit
-        errors.add(:base, "年齢・腎機能の条件か用量の上限のどれかを入力してください")
+      if !has_condition && !has_limit && max_days.blank?
+        errors.add(:base, "年齢・腎機能の条件か用量・日数の上限のどれかを入力してください")
       end
-      if !has_limit && message.blank?
+      if !has_limit && max_days.blank? && message.blank?
         errors.add(:message, "を入力してください(上限が無い規則は文言だけを出します)")
       end
     end

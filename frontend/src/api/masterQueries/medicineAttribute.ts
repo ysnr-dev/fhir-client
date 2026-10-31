@@ -3,6 +3,7 @@ import {
   createMedicineAttribute,
   deleteMedicineAttribute,
   fetchMedicineAttributes,
+  importMedicineAdoption,
   lookupMedicineAttributes,
   type MedicineAttributeFlags,
   type MedicineAttributePayload,
@@ -72,6 +73,11 @@ export function useMedicineAttributeMutations() {
     }),
     remove: useMutation({
       mutationFn: (id: number) => deleteMedicineAttribute(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    importAdoption: useMutation({
+      mutationFn: (file: File) => importMedicineAdoption(file),
       retry: false,
       onSuccess: invalidate,
     }),

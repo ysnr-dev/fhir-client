@@ -1,4 +1,4 @@
-import type { DrugDoseRule, DrugInteraction } from "../api/masterClient";
+import type { DrugDiseaseRule, DrugDoseRule, DrugInteraction } from "../api/masterClient";
 import { convertDose, type MedicineDoseConversionMap } from "./doseConversionHelpers";
 import {
   ingredientKey,
@@ -10,8 +10,9 @@ import {
 // 施設マスタによる薬剤チェック(docs/drug-check-master-design.md)。
 //
 //   相互作用  … 併用禁忌・併用注意。フォームの別の行と、投与中の処方・持参薬が相手
-//   用量規則  … 年齢・腎機能の条件と、1 回量・1 日量の上限(体重あたりも可)
+//   用量規則  … 年齢・腎機能の条件と、1 回量・1 日量・投与日数の上限(体重あたりも可)
 //               累積の上限はここでは見ない(化学療法の適用で `regimenCheckHelpers` が積算する)
+//   病名      … 患者の活動中の病名(ICD-10 の前方一致)との禁忌・注意
 //
 // 薬はマスタ側で YJ コードの先頭 4〜7 桁で書き、薬剤行の成分キー(YJ 上 7 桁)の前方一致で
 // 当てる。**登録は止めない**(`medicationSafetyHelpers` と同じ)。
@@ -29,6 +30,8 @@ export interface LineDose {
 export interface CheckedLine {
   medicine: MedicationRp["medicines"][number]["medicine"];
   dose?: LineDose | null;
+  /** 投与日数。日数を持つ内服の行だけ。 */
+  days?: number | null;
 }
 
 export interface CheckedRp {
@@ -41,6 +44,12 @@ export interface PatientFactors {
   weight: { value: number; date: string } | null;
   egfr: number | null;
   ccr: number | null;
+}
+
+/** 病名の照合に使う患者の病名 1 件。code は ICD-10(点なし)。 */
+export interface PatientDiagnosis {
+  code: string;
+  name: string;
 }
 
 const SEVERITY_LABELS: Record<DrugInteraction["severity"], string> = {
@@ -214,9 +223,28 @@ function limitWarnings(
   return warnings;
 }
 
+/** 投与日数の上限と行の日数を比べる。 */
+function daysWarnings(rule: DrugDoseRule, condition: string, days: number | null | undefined): MedicationWarning[] {
+  if (rule.max_days === null || days == null || days <= rule.max_days) return [];
+  const prefix = condition ? ` ${condition}` : "";
+  return [
+    {
+      kind: "days-limit",
+      text: `投与日数の上限超過${prefix}: ${days}日 > ${rule.max_days}日`,
+      high: true,
+      detail: rule.message ?? undefined,
+    },
+  ];
+}
+
 /** 累積の上限だけを持つ規則。1 回のオーダーでは比べるものが無いので、処方・注射のフォームには出さない。 */
 export function isCumulativeOnlyRule(rule: DrugDoseRule): boolean {
-  return rule.max_cumulative_dose !== null && rule.max_single_dose === null && rule.max_daily_dose === null;
+  return (
+    rule.max_cumulative_dose !== null &&
+    rule.max_single_dose === null &&
+    rule.max_daily_dose === null &&
+    rule.max_days === null
+  );
 }
 
 function doseRuleWarnings(
@@ -247,16 +275,42 @@ function doseRuleWarnings(
       continue;
     }
 
-    const hasLimit = rule.max_daily_dose !== null || rule.max_single_dose !== null;
-    if (hasLimit) {
+    const hasDoseLimit = rule.max_daily_dose !== null || rule.max_single_dose !== null;
+    if (hasDoseLimit) {
       warnings.push(
         ...limitWarnings(rule, condition.label, medicine.medicine_code, line.dose, patient, conversions),
       );
-    } else {
+    }
+    if (rule.max_days !== null) {
+      warnings.push(...daysWarnings(rule, condition.label, line.days));
+    }
+    if (!hasDoseLimit && rule.max_days === null) {
       warnings.push({
         kind: "dose",
         text: `${SEVERITY_LABELS[rule.severity]} ${condition.label}: ${rule.message ?? ""}`,
         high: rule.severity === "contraindicated",
+      });
+    }
+  }
+  return warnings;
+}
+
+/** 病名との禁忌・注意。同じ規則は当たった病名ごとに 1 回。 */
+function diseaseWarnings(
+  key: string,
+  diagnoses: PatientDiagnosis[],
+  diseaseRules: DrugDiseaseRule[],
+): MedicationWarning[] {
+  const warnings: MedicationWarning[] = [];
+  for (const rule of diseaseRules) {
+    if (!codeMatches(key, rule.code)) continue;
+    for (const diagnosis of diagnoses) {
+      if (!diagnosis.code.startsWith(rule.disease_code)) continue;
+      warnings.push({
+        kind: "disease",
+        text: `病名${SEVERITY_LABELS[rule.severity]}: ${diagnosis.name}`,
+        high: rule.severity === "contraindicated",
+        detail: [`${rule.name} × ${rule.disease_name}`, rule.note].filter(Boolean).join("\n"),
       });
     }
   }
@@ -272,6 +326,8 @@ export function buildDrugCheckWarnings(args: {
   active: ActiveMedication[];
   interactions: DrugInteraction[];
   doseRules: DrugDoseRule[];
+  diseaseRules?: DrugDiseaseRule[];
+  diagnoses?: PatientDiagnosis[];
   patient: PatientFactors;
   conversions: MedicineDoseConversionMap | undefined;
   excludeOrderId?: string;
@@ -282,6 +338,8 @@ export function buildDrugCheckWarnings(args: {
     active,
     interactions,
     doseRules,
+    diseaseRules = [],
+    diagnoses = [],
     patient,
     conversions,
     excludeOrderId,
@@ -314,6 +372,7 @@ export function buildDrugCheckWarnings(args: {
       return [
         ...interactionWarnings(key, partners, interactions),
         ...doseRuleWarnings(line, key, doseRules, patient, conversions),
+        ...diseaseWarnings(key, diagnoses, diseaseRules),
       ];
     }),
   );

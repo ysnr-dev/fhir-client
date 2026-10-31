@@ -500,6 +500,38 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (prescription_check)" do
+    it "fills the defaults and stores days limits per category" do
+      with_admin_token(nil) { get "/facility_settings" }
+      check = JSON.parse(response.body)["prescription_check"]
+      expect(check["days_limits"]).to include("temporary" => 0, "external" => 0)
+      expect(check["unset_adoption_as_not_adopted"]).to be(false)
+
+      with_admin_token(nil) do
+        patch "/facility_settings",
+              params: { prescription_check: { days_limits: { temporary: 14 }, unset_adoption_as_not_adopted: true } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      check = JSON.parse(response.body)["prescription_check"]
+      expect(check["days_limits"]).to include("temporary" => 14, "regular" => 0)
+      expect(check["unset_adoption_as_not_adopted"]).to be(true)
+    end
+
+    it "rejects an unknown category and negative days" do
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { prescription_check: { days_limits: { weekly: 7 } } }, as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { prescription_check: { days_limits: { temporary: -1 } } }, as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "PATCH /facility_settings (prescription_category)" do
     it "stores the default category of each setting" do
       with_admin_token(nil) do

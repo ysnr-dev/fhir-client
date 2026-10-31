@@ -61,6 +61,7 @@ import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
 import { AdvisoryInlineMarks, AdvisoryNotice } from "./AdvisoryNotice";
 import { advisoriesOfScope, unscopedAdvisories } from "../fhir/advisoryHelpers";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
+import { useOrderContext } from "../hooks/useOrderContext";
 import { usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
@@ -185,11 +186,14 @@ export function InjectionForm({
       })),
     [values.rps],
   );
+  const orderContext = useOrderContext();
   const medicationAdvisories = useMedicationAdvisories({
     patientId: setMode ? "" : patientId,
     startDate: values.startDate,
     rps: checkedRps,
     excludeOrderId: orderId,
+    dispensing: "internal",
+    departmentId: orderContext.departmentId,
   });
   const pregnancy = usePregnancyAdvisory(setMode ? "" : patientId);
   const advisoryInput = useMemo(() => [...medicationAdvisories, ...pregnancy], [medicationAdvisories, pregnancy]);
