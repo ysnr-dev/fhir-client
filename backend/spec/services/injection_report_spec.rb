@@ -120,6 +120,19 @@ RSpec.describe InjectionReport do
     expect(rps[1].start_times).to eq(["20:30"])
   end
 
+  it "reads a dose ordered in 力価 from the JP Core 力価区分 (原薬量)" do
+    potency = medication_request("m1", rp: 1, index: 1, name: "オキサリプラチン", dose: 148.75, unit: "mg")
+    potency["dosageInstruction"][0]["doseAndRate"][0]["type"] = {
+      "coding" => [{ "system" => PrescriptionReport::DOSE_STRENGTH_TYPE_SYSTEM, "code" => "2", "display" => "原薬量" }]
+    }
+    stub_batch([potency, medication_request("m2", rp: 1, index: 2, name: "ブドウ糖", dose: 250, unit: "mL")])
+    captured = capture(Reports::InjectionLabelRenderer)
+
+    described_class.new("o1", gateway: gateway).generate_labels
+
+    expect(captured.call[:rps][0].medicines.map(&:potency)).to eq([true, false])
+  end
+
   it "raises NotInjectionOrder for prescriptions (no order type)" do
     stub_batch([], order_body: order.except("category"))
     expect { described_class.new("o1", gateway: gateway).generate_order }

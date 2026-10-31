@@ -91,7 +91,7 @@ module Reports
     end
 
     def medicine_line(medicine)
-      dose = medicine.dose.present? ? " #{medicine.dose}#{medicine.unit}" : ""
+      dose = medicine.dose.present? ? " #{medicine.dose}#{medicine.unit}#{'(力価)' if medicine.potency}" : ""
       "#{medicine.name}#{dose}"
     end
 

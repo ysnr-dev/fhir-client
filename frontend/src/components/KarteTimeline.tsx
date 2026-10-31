@@ -1075,6 +1075,7 @@ export function KarteCardBody({ item }: { item: KarteTimelineItem }) {
                   {medicine.dose != null && (
                     <span className="karte-rp__medicine-dose">
                       {`${medicine.dose}${medicine.unit ?? ""}`}
+                      <PotencyMark potency={medicine.potency} />
                     </span>
                   )}
                   {medicine.comment && (

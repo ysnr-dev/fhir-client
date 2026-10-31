@@ -32,7 +32,10 @@ function injectionRpLines(medicationRequests: fhir4.MedicationRequest[]): string
   for (const rp of groupInjectionByRp(medicationRequests)) {
     lines.push(`Rp${rp.rpNumber}`);
     for (const medicine of rp.medicines) {
-      const dose = medicine.dose !== undefined ? ` ${medicine.dose}${medicine.unit ?? ""}` : "";
+      const dose =
+        medicine.dose !== undefined
+          ? ` ${medicine.dose}${medicine.unit ?? ""}${medicine.potency ? "(力価)" : ""}`
+          : "";
       const comment = medicine.comment ? `（${medicine.comment}）` : "";
       lines.push(`　${medicine.name}${dose}${comment}`);
     }

@@ -71,7 +71,7 @@ export const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
 // 印の無い量は製剤量(薬価算定単位)として読む。
 export const DOSE_STRENGTH_TYPE_SYSTEM =
   "http://jpfhir.jp/fhir/core/CodeSystem/JP_MedicationIngredientStrengthStrengthType_CS";
-const POTENCY_DOSE_TYPE: fhir4.CodeableConcept = {
+export const POTENCY_DOSE_TYPE: fhir4.CodeableConcept = {
   coding: [{ system: DOSE_STRENGTH_TYPE_SYSTEM, code: "2", display: "原薬量" }],
 };
 

@@ -149,10 +149,8 @@ module Integrations
             next nil
           end
 
-          dose = administration.dig("dosage", "dose")
-          BillingLine.new(code: code, name: name, kind: :medicine,
-                          quantity: dose && dose["value"] ? Numbers.format(dose["value"]) : nil,
-                          unit: dose&.dig("unit"))
+          quantity, unit = PackQuantity.of(code, administration.dig("dosage", "dose"))
+          BillingLine.new(code: code, name: name, kind: :medicine, quantity: quantity, unit: unit)
         end
       end
 

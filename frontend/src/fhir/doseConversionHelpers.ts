@@ -1,3 +1,5 @@
+import type { Medicine } from "../api/masterClient";
+
 /**
  * 投与量の単位換算(力価 ⇔ 製剤数 ⇔ 容量)。
  *
@@ -104,41 +106,80 @@ export function toPackQuantity(
   return { value: Math.round((dose / factor) * 100) / 100, unit: packUnit };
 }
 
-/** 処方の用量を力価で入れるための単位。`units` は力価の単位 → 1 [薬価算定単位] あたりの力価。 */
-export interface PotencyUnits {
-  packUnit: string;
-  units: Map<string, number>;
-}
+/** 薬価算定単位のほかに選べる量の単位の種類。力価(mg・単位…)か、製剤の容量(mL)。 */
+export type DoseUnitKind = "potency" | "volume";
 
 /**
- * 換算行が力価の単位か。全角半角違いの同じ単位(g → ｇ、薬価算定単位が量そのもの)と、
- * 容量(mL)は力価ではないので外す。
+ * 処方・注射の用量に選べる単位。`units` は単位 → 1 [薬価算定単位] あたりの量と種類。
+ * 換算マスタの行のうち、薬価算定単位と同じ単位(全角半角違い)の行は入らない。
  */
-export function isPotencyConversion(fromUnit: string, toUnit: string): boolean {
+export interface DoseUnits {
+  packUnit: string;
+  units: Map<string, { factor: number; kind: DoseUnitKind }>;
+}
+
+/** 換算行の単位の種類。薬価算定単位と同じ単位(g → ｇ。薬価算定単位が量そのもの)なら null。 */
+export function doseUnitKind(fromUnit: string, toUnit: string): DoseUnitKind | null {
   const from = fromUnit.normalize("NFKC").trim();
-  return from !== toUnit.normalize("NFKC").trim() && from.toLowerCase() !== ML_UNIT.toLowerCase();
+  if (from === toUnit.normalize("NFKC").trim()) return null;
+  return from.toLowerCase() === ML_UNIT.toLowerCase() ? "volume" : "potency";
+}
+
+/** 力価の単位への換算行か。容量(mL)と薬価算定単位そのものは力価ではない。 */
+export function isPotencyConversion(fromUnit: string, toUnit: string): boolean {
+  return doseUnitKind(fromUnit, toUnit) === "potency";
+}
+
+/** 単位の選択肢。薬価算定単位を先頭に、力価は「(力価)」、容量は「(容量)」を添える。 */
+export function doseUnitOptions(
+  doseUnits: DoseUnits,
+  current: string | null,
+  { volume }: { volume: boolean },
+): { unit: string; label: string }[] {
+  const options = [{ unit: doseUnits.packUnit, label: doseUnits.packUnit }];
+  for (const [unit, { kind }] of doseUnits.units) {
+    if (kind === "potency") options.push({ unit, label: `${unit}(力価)` });
+    else if (volume) options.push({ unit, label: `${unit}(容量)` });
+  }
+  // 換算マスタに無い単位で保存された行も、そのまま選ばれた状態で開く。
+  if (current && !options.some((o) => o.unit === current)) options.push({ unit: current, label: current });
+  return options;
+}
+
+/** 薬価算定単位のほかに選べる単位があるか(単位をセレクトにするかの判定)。 */
+export function hasDoseUnitChoice(doseUnits: DoseUnits | undefined, { volume }: { volume: boolean }): boolean {
+  return Array.from(doseUnits?.units.values() ?? []).some((u) => u.kind === "potency" || volume);
 }
 
 /**
- * 単位を切り替えたときの用量。薬価算定単位と力価の単位の間を係数で行き来する。
+ * 単位を切り替えたときの用量。薬価算定単位を介して係数で行き来する。
  * 空・不正な値と、換算できない単位はそのまま返す。
  */
-export function convertPotencyDose(dose: string, from: string, to: string, potency: PotencyUnits): string {
+export function convertDoseUnit(dose: string, from: string, to: string, doseUnits: DoseUnits): string {
   const value = Number(dose);
   if (dose.trim() === "" || !Number.isFinite(value) || from === to) return dose;
-  const packs = from === potency.packUnit ? value : value / (potency.units.get(from) ?? NaN);
-  const converted = to === potency.packUnit ? packs : packs * (potency.units.get(to) ?? NaN);
+  const factorOf = (unit: string) => (unit === doseUnits.packUnit ? 1 : (doseUnits.units.get(unit)?.factor ?? NaN));
+  const converted = (value / factorOf(from)) * factorOf(to);
   if (!Number.isFinite(converted)) return dose;
   return String(Math.round(converted * 1000) / 1000);
 }
 
-/** 単位の選択肢。薬価算定単位を先頭に、力価の単位は「(力価)」を添える。 */
-export function doseUnitOptions(potency: PotencyUnits, current: string | null): { unit: string; label: string }[] {
-  const options = [
-    { unit: potency.packUnit, label: potency.packUnit },
-    ...Array.from(potency.units.keys()).map((unit) => ({ unit, label: `${unit}(力価)` })),
-  ];
-  // 換算マスタに無い単位で保存された行も、そのまま選ばれた状態で開く。
-  if (current && !options.some((o) => o.unit === current)) options.push({ unit: current, label: current });
-  return options;
+/**
+ * 薬剤行の単位を切り替える差分。入力済みの用量(不均等の各回も)を換算し、
+ * 力価の単位なら `potency` を立てる(`doseAndRate.type` の原薬量になる)。
+ */
+export function switchDoseUnit<L extends { medicine: Medicine | null; dose: string; unevenDoses?: string[] | null }>(
+  line: L,
+  unit: string,
+  doseUnits: DoseUnits,
+): Partial<L> & { potency: boolean } {
+  if (!line.medicine) return { potency: false } as Partial<L> & { potency: boolean };
+  const from = line.medicine.unit_name ?? doseUnits.packUnit;
+  const convert = (dose: string) => convertDoseUnit(dose, from, unit, doseUnits);
+  return {
+    medicine: { ...line.medicine, unit_name: unit },
+    potency: doseUnits.units.get(unit)?.kind === "potency",
+    dose: convert(line.dose),
+    ...(line.unevenDoses ? { unevenDoses: line.unevenDoses.map(convert) } : {}),
+  } as Partial<L> & { potency: boolean };
 }

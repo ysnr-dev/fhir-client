@@ -49,7 +49,7 @@ module Reports
         usage = InjectionMeta.usage_summary(rp)
         lines = ["RP#{rp.rp_number}#{usage.present? ? "　#{usage}" : ''}"]
         rp.medicines.each do |medicine|
-          dose = medicine.dose.present? ? " #{medicine.dose}#{medicine.unit}" : ""
+          dose = medicine.dose.present? ? " #{medicine.dose}#{medicine.unit}#{'(力価)' if medicine.potency}" : ""
           comment = medicine.comment.present? ? "（#{medicine.comment}）" : ""
           lines << "　#{medicine.name}#{dose}#{comment}"
         end

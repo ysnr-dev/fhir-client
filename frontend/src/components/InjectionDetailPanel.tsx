@@ -27,6 +27,7 @@ import {
 } from "../fhir/regimenOrderHelpers";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import { RegimenHeldMark } from "./RegimenDecision";
+import { PotencyMark } from "./MedicineWarnings";
 
 // 注射オーダーの内容表示。カルテ画面の詳細モーダルから使う(処方の
 // PrescriptionDetailPanel と同じ構成)。
@@ -175,7 +176,10 @@ export function InjectionDetailPanel({
                       <span className="injection-worklist__reduced">{`${dose.ratio}%`}</span>
                     )}
                   </td>
-                  <td>{med.unit ?? "-"}</td>
+                  <td>
+                    {med.unit ?? "-"}
+                    <PotencyMark potency={med.potency} />
+                  </td>
                   <td>{med.comment || "-"}</td>
                   <td className="rp-card__medicine-di">
                     {med.yjCode && (

@@ -23,6 +23,8 @@ import {
   codingBySystem,
   identifierValue,
   medicineFromCoding,
+  isPotencyDose,
+  POTENCY_DOSE_TYPE,
   type MedicineLineDisplay,
   type MedicineLineValues,
   type PrescriptionSetting,
@@ -702,6 +704,7 @@ function buildInjectionMedicationRequest(
   const doseAndRate: fhir4.DosageDoseAndRate = {};
   const insulinUnit = medLine.medicine?.unit_name === INSULIN_UNIT;
   if (medLine.dose) {
+    if (medLine.potency && !insulinUnit) doseAndRate.type = POTENCY_DOSE_TYPE;
     doseAndRate.doseQuantity = insulinUnit
       ? insulinQuantity(Number(medLine.dose))
       : { value: Number(medLine.dose), unit: medLine.medicine?.unit_name ?? undefined };
@@ -1257,6 +1260,7 @@ export function groupInjectionByRp(mrs: fhir4.MedicationRequest[]): InjectionRpD
       yjCode: yjCoding?.code ?? undefined,
       dose: dosage?.doseAndRate?.[0]?.doseQuantity?.value,
       unit: doseUnitOf(dosage),
+      potency: isPotencyDose(dosage?.doseAndRate?.[0]) || undefined,
       comment: mr.note?.[0]?.text,
       insulinScale: insulinScaleOf(dosage),
     });
@@ -1333,6 +1337,7 @@ export function parseInjectionForm(
       dose: doseValue != null ? String(doseValue) : "",
       comment: mr.note?.[0]?.text ?? "",
       insulinScale: insulinScaleOf(dosage),
+      ...(isPotencyDose(dosage?.doseAndRate?.[0]) ? { potency: true } : {}),
     });
   }
 

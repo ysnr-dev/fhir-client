@@ -1,8 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  isPotencyConversion,
+  doseUnitKind,
+  type DoseUnits,
   type MedicineDoseConversionMap,
-  type PotencyUnits,
 } from "../../fhir/doseConversionHelpers";
 import {
   createMedicineDoseConversion,
@@ -269,22 +269,23 @@ export function useMedicineDoseFactors(medicineCodes: string[]) {
 }
 
 /**
- * 医薬品コード → 処方の用量を力価で入れるときの単位の選択肢。力価の換算行を持たない
- * 医薬品は入らない(薬価算定単位だけで入れる)。
+ * 医薬品コード → 処方・注射の用量に選べる単位(力価・容量)。薬価算定単位のほかに
+ * 換算行を持たない医薬品は入らない(薬価算定単位だけで入れる)。
  */
-export function useMedicinePotencyUnits(medicineCodes: string[]) {
+export function useMedicineDoseUnits(medicineCodes: string[]) {
   const codes = Array.from(new Set(medicineCodes)).sort();
 
   return useQuery({
-    queryKey: ["master", "medicine_dose_conversions", "potency-units", codes],
-    queryFn: async (): Promise<Map<string, PotencyUnits>> => {
+    queryKey: ["master", "medicine_dose_conversions", "dose-units", codes],
+    queryFn: async (): Promise<Map<string, DoseUnits>> => {
       const result = await searchMedicineDoseConversions({ medicine_code: codes.join(","), per: 100 });
-      const byCode = new Map<string, PotencyUnits>();
+      const byCode = new Map<string, DoseUnits>();
       for (const row of result.items) {
         const factor = Number(row.factor);
-        if (!(factor > 0) || !isPotencyConversion(row.from_unit, row.to_unit)) continue;
-        const entry = byCode.get(row.medicine_code) ?? { packUnit: row.to_unit, units: new Map<string, number>() };
-        entry.units.set(row.from_unit, factor);
+        const kind = doseUnitKind(row.from_unit, row.to_unit);
+        if (!(factor > 0) || !kind) continue;
+        const entry = byCode.get(row.medicine_code) ?? { packUnit: row.to_unit, units: new Map() };
+        entry.units.set(row.from_unit, { factor, kind });
         byCode.set(row.medicine_code, entry);
       }
       return byCode;

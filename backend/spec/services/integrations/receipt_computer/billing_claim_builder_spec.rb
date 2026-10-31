@@ -492,6 +492,17 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       expect(orca_classes.first["Medication_info"].map { |m| m["Medication_Code"] }).to eq(%w[620007342 620001234])
     end
 
+    it "converts doses given in 力価 or 容量 to the 薬価算定単位 through the dose conversion master" do
+      Master::MedicineDoseConversion.create!(medicine_code: "640407001", from_unit: "mg", factor: 100,
+                                             to_unit: "瓶", source: "explicit")
+      Master::MedicineDoseConversion.create!(medicine_code: "620007342", from_unit: "mL", factor: 500,
+                                             to_unit: "袋", source: "volume")
+      result = injection(usage_type: "drip", drugs: [%w[640407001 150 mg], %w[620007342 250 mL]])
+
+      expect(result.items.first.lines.map { |l| [l.code, l.quantity, l.unit] })
+        .to eq([["640407001", "1.5", "瓶"], ["620007342", "0.5", "袋"]])
+    end
+
     it "sends a ワンショット 静注 as 320" do
       injection(usage_type: "one-shot", method: "30")
 

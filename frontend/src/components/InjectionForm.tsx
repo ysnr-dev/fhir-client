@@ -48,11 +48,13 @@ import {
   validateInsulinScale,
   withInsulinUnit,
 } from "../fhir/insulinScaleHelpers";
-import { useInsulinScaleSets, useMedicineDoseFactors } from "../api/masterQueries";
+import { useInsulinScaleSets, useMedicineDoseFactors, useMedicineDoseUnits } from "../api/masterQueries";
+import { switchDoseUnit } from "../fhir/doseConversionHelpers";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { DoseUnitSelect } from "./DoseUnitSelect";
 import { InsulinScaleEditor } from "./InsulinScaleEditor";
 import { FormularyMark, MedicineCautionMarks, useMedicationAdvisories } from "./MedicineWarnings";
 import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
@@ -193,12 +195,13 @@ export function InjectionForm({
   const session = useAdvisorySession(advisoryInput, "injection", !setMode);
   const [confirming, setConfirming] = useState(false);
 
-  // 総投与量の計算に使う換算(製剤数・力価 → mL)。フォーム上の全医薬品分をまとめて引く。
-  const { data: conversions } = useMedicineDoseFactors(
-    values.rps.flatMap((rp) =>
-      rp.medicines.map((m) => m.medicine?.medicine_code).filter((c): c is string => Boolean(c)),
-    ),
+  // 総投与量の計算に使う換算(製剤数・力価 → mL)と、単位の選択肢(力価・容量)。
+  // フォーム上の全医薬品分をまとめて引く。
+  const medicineCodes = values.rps.flatMap((rp) =>
+    rp.medicines.map((m) => m.medicine?.medicine_code).filter((c): c is string => Boolean(c)),
   );
+  const { data: conversions } = useMedicineDoseFactors(medicineCodes);
+  const { data: doseUnits } = useMedicineDoseUnits(medicineCodes);
 
   // スケールの入力で選ぶ施設のスケールセット。インスリンの行があるときだけ引く。
   const hasInsulin = values.rps.some((rp) => rp.medicines.some((m) => isInsulinMedicine(m.medicine, conversions)));
@@ -412,7 +415,7 @@ export function InjectionForm({
     const insulin = medicine.unit_name === INSULIN_UNIT;
     updateRpMedicines(rpIndex, (medicines) =>
       medicines.map((m, j) =>
-        j === medIndex ? { ...m, medicine, ...(insulin ? {} : { insulinScale: null }) } : m,
+        j === medIndex ? { ...m, medicine, potency: false, ...(insulin ? {} : { insulinScale: null }) } : m,
       ),
     );
     // インスリンは皮下注。経路を選んでいなければ既定にする(手で選んだ経路は変えない)。
@@ -707,7 +710,7 @@ export function InjectionForm({
             <colgroup>
               <col />
               <col style={{ width: "88px" }} />
-              <col style={{ width: "60px" }} />
+              <col style={{ width: "96px" }} />
               <col style={{ width: "18%" }} />
               <col style={{ width: "32px" }} />
             </colgroup>
@@ -767,7 +770,19 @@ export function InjectionForm({
                         onChange={(e) => updateMedicine(rpIndex, medIndex, { dose: e.target.value })}
                       />
                     </td>
-                    <td className="rp-card__medicine-unit">{med.medicine?.unit_name ?? "-"}</td>
+                    <td className="rp-card__medicine-unit">
+                      {/* インスリンは量を「単位」に固定する(スケールの量と揃える)。 */}
+                      {med.medicine?.unit_name === INSULIN_UNIT ? (
+                        med.medicine.unit_name
+                      ) : (
+                        <DoseUnitSelect
+                          medicine={med.medicine}
+                          doseUnits={doseUnits}
+                          volume
+                          onChange={(unit, units) => updateMedicine(rpIndex, medIndex, switchDoseUnit(med, unit, units))}
+                        />
+                      )}
+                    </td>
                     <td>
                       <input
                         type="text"

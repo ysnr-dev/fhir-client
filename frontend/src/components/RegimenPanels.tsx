@@ -335,7 +335,10 @@ function RegimenOrderBody({ order }: { order: RegimenDayOrder }) {
                 <li key={medicine.orderInRp}>
                   <span className="karte-rp__medicine-name">{medicine.name}</span>
                   {medicine.dose != null && (
-                    <span className="karte-rp__medicine-dose">{`${medicine.dose}${medicine.unit ?? ""}`}</span>
+                    <span className="karte-rp__medicine-dose">
+                      {`${medicine.dose}${medicine.unit ?? ""}`}
+                      <PotencyMark potency={medicine.potency} />
+                    </span>
                   )}
                   {medicine.comment && <span className="karte-rp__comment">{`（${medicine.comment}）`}</span>}
                 </li>

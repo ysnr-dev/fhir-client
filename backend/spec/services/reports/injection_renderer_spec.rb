@@ -31,8 +31,9 @@ RSpec.describe Reports::InjectionRenderer do
     InjectionReport::RpGroup.new(
       rp_number: number, usage_type: "点滴", route: "静脈内", site: "", method: "静脈注射", line: "",
       rate: rate, start_times: times, usage_comment: "",
-      medicines: medicines.each_with_index.map do |(name, dose, unit), index|
-        InjectionReport::MedicineLine.new(order_in_rp: index + 1, name: name, dose: dose, unit: unit, comment: nil)
+      medicines: medicines.each_with_index.map do |(name, dose, unit, potency), index|
+        InjectionReport::MedicineLine.new(order_in_rp: index + 1, name: name, dose: dose, unit: unit, potency: potency,
+                                          comment: nil)
       end
     )
   end
@@ -59,6 +60,15 @@ RSpec.describe Reports::InjectionRenderer do
     expect(texts).not_to include("2026/08/31")
     expect(texts).not_to include("2日目")
     expect(page_texts(pdf).size).to eq(1)
+  end
+
+  it "writes (力価) after the unit when the dose is ordered in 力価" do
+    pdf = render([rp(1, medicines: [["オキサリプラチン点滴静注", 148.75, "mg", true], ["ブドウ糖注", 250, "mL"]])])
+
+    texts = page_texts(pdf)[0].join.gsub(/[[:space:]]/, "")
+    expect(texts).to include("148.75mg(力価)")
+    expect(texts).to include("250mL")
+    expect(texts).not_to include("250mL(力価)")
   end
 
   it "prints the regimen, cycle and day in place of the series label for a regimen day order" do

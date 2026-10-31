@@ -44,8 +44,8 @@ import { CdsCardLinks } from "./CdsCardList";
 import { feedbackParams, PrescriptionOrderSelectCards } from "./PrescriptionCdsCards";
 import { fetchCdsOrderHook, type CdsCard } from "../api/cdsClient";
 import { useSendCdsFeedback } from "../api/cdsQueries";
-import { useAdvisoryOverrideReasons, useMedicinePotencyUnits } from "../api/masterQueries";
-import { convertPotencyDose, doseUnitOptions } from "../fhir/doseConversionHelpers";
+import { useAdvisoryOverrideReasons, useMedicineDoseUnits } from "../api/masterQueries";
+import { switchDoseUnit } from "../fhir/doseConversionHelpers";
 import { type Advisory, advisoriesOfScope, unscopedAdvisories } from "../fhir/advisoryHelpers";
 import { cdsCardAdvisories, cdsCardOfAdvisory, overrideReasonsOf } from "../fhir/cdsCardHelpers";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
@@ -53,6 +53,7 @@ import { usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
+import { DoseUnitSelect } from "./DoseUnitSelect";
 import { RowMenu } from "./RowMenu";
 import { SupplementaryUsageEditor, UnevenDoseEditor } from "./SupplementaryUsageEditor";
 import { UsageSearchModal } from "./UsageSearchModal";
@@ -184,7 +185,7 @@ export function PrescriptionForm({
     () => values.rps.flatMap((rp) => rp.medicines.flatMap((m) => (m.medicine ? [m.medicine.medicine_code] : []))),
     [values.rps],
   );
-  const { data: potencyUnits } = useMedicinePotencyUnits(medicineCodes);
+  const { data: doseUnits } = useMedicineDoseUnits(medicineCodes);
 
   // 一般名処方は保険上、外来の院外処方でだけ算定できる。
   const allowGeneric = values.setting === "outpatient" && values.category === "external";
@@ -242,20 +243,6 @@ export function PrescriptionForm({
     });
   }
 
-  // 単位を切り替えたら、入力済みの用量(不均等の各回も)を換算マスタの係数で直す。
-  function changeDoseUnit(rpIndex: number, medIndex: number, unit: string) {
-    const med = values.rps[rpIndex].medicines[medIndex];
-    const potency = med.medicine ? potencyUnits?.get(med.medicine.medicine_code) : undefined;
-    if (!med.medicine || !potency) return;
-    const from = med.medicine.unit_name ?? potency.packUnit;
-    const convert = (dose: string) => convertPotencyDose(dose, from, unit, potency);
-    updateMedicine(rpIndex, medIndex, {
-      medicine: { ...med.medicine, unit_name: unit },
-      potency: unit !== potency.packUnit,
-      dose: convert(med.dose),
-      unevenDoses: med.unevenDoses ? med.unevenDoses.map(convert) : med.unevenDoses,
-    });
-  }
 
   function updateUnevenDoses(rpIndex: number, medIndex: number, unevenDoses: string[]) {
     updateMedicine(rpIndex, medIndex, { unevenDoses, dose: unevenDailyDose(unevenDoses) });
@@ -613,22 +600,13 @@ export function PrescriptionForm({
                       />
                     </td>
                     <td className="rp-card__medicine-unit">
-                      {med.medicine && potencyUnits?.has(med.medicine.medicine_code) ? (
-                        <select
-                          className="rp-card__unit-select"
-                          aria-label="単位"
-                          value={med.medicine.unit_name ?? ""}
-                          onChange={(e) => changeDoseUnit(rpIndex, medIndex, e.target.value)}
-                        >
-                          {doseUnitOptions(potencyUnits.get(med.medicine.medicine_code)!, med.medicine.unit_name).map((o) => (
-                            <option key={o.unit} value={o.unit}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        (med.medicine?.unit_name ?? "-")
-                      )}
+                      {/* 単位を切り替えたら、入力済みの用量(不均等の各回も)を換算マスタの係数で直す。 */}
+                      <DoseUnitSelect
+                        medicine={med.medicine}
+                        doseUnits={doseUnits}
+                        volume={false}
+                        onChange={(unit, units) => updateMedicine(rpIndex, medIndex, switchDoseUnit(med, unit, units))}
+                      />
                     </td>
                     <td>
                       <div className="rp-card__row-actions">

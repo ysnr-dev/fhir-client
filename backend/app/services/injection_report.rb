@@ -43,7 +43,8 @@ class InjectionReport
     :rp_number, :usage_type, :route, :site, :method, :line, :rate, :start_times, :usage_comment,
     :medicines, keyword_init: true
   )
-  MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :comment, keyword_init: true)
+  # potency: 量が力価(原薬量)。
+  MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :potency, :comment, keyword_init: true)
 
   def initialize(order_id, gateway: FhirGateway.new)
     @order_id = order_id
@@ -148,6 +149,8 @@ class InjectionReport
         name: medicine_name(mr, [MEDICINE_CODE_SYSTEM]),
         dose: dosage.dig("doseAndRate", 0, "doseQuantity", "value"),
         unit: dosage.dig("doseAndRate", 0, "doseQuantity", "unit").to_s,
+        potency: coding_by_system(dosage.dig("doseAndRate", 0, "type", "coding"),
+                                  PrescriptionReport::DOSE_STRENGTH_TYPE_SYSTEM)&.dig("code") == "2",
         comment: mr.dig("note", 0, "text").to_s
       )
     end
