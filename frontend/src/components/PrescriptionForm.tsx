@@ -495,7 +495,7 @@ export function PrescriptionForm({
             disabled={brought}
             onChange={(e) => handleSettingChange(e.target.value as PrescriptionSetting)}
           >
-            <option value="">選択してください</option>
+            <option value="">選択</option>
             {SETTING_OPTIONS.map((o) => (
               <option key={o.code} value={o.code}>
                 {o.display}
@@ -510,7 +510,7 @@ export function PrescriptionForm({
             disabled={brought}
             onChange={(e) => update("category", e.target.value)}
           >
-            <option value="">選択してください</option>
+            <option value="">選択</option>
             {brought && <option value={BROUGHT_CATEGORY.code}>{BROUGHT_CATEGORY.display}</option>}
             {values.setting &&
               CATEGORY_OPTIONS[values.setting].map((o) => (
