@@ -21996,6 +21996,16 @@ button.chemo-calendar__cell[draggable="true"] {
   opacity: 0.35;
 }
 
+/* ドラッグ中の月送りのボタン。かざすと月が送られる。 */
+.chemo-calendar__month-flip {
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
+
+.chemo-calendar__month-flip--active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
 .chemo-calendar__cell--drop-target {
   outline: 1px dashed var(--accent);
   outline-offset: -1px;

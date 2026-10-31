@@ -42,6 +42,9 @@ import { RegimenMoveModal } from "./RegimenPanels";
 /** 暦の 1 マスに出すステップの上限。 */
 const MAX_STEPS_IN_CELL = 3;
 
+/** ドラッグ中に月送りのボタンへかざしてから月を送るまでの間隔(かざし続ければ繰り返す)。 */
+const MONTH_FLIP_MS = 600;
+
 /** 左ペインの中の切り替え。暦と、適用そのものの詳細。 */
 const CHEMO_VIEWS = [
   { key: "", label: "カレンダー" },
@@ -178,13 +181,58 @@ export function KarteChemoTab({
   const [dragFrom, setDragFrom] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [pendingMove, setPendingMove] = useState<{ from: string; to: string } | null>(null);
+  // 月をまたいで落とすため、ドラッグ中に月送りのボタンへかざすと月を送る。
+  const [flipDirection, setFlipDirection] = useState<-1 | 1 | null>(null);
+
+  useEffect(() => {
+    if (flipDirection === null) return;
+    const timer = window.setInterval(() => {
+      setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + flipDirection, 1));
+    }, MONTH_FLIP_MS);
+    return () => window.clearInterval(timer);
+  }, [flipDirection]);
+
+  // 月を送ると掴んだマスが暦から外れて dragend が届かないことがある。ドラッグ中はマウスの
+  // イベントが止まるので、次に動いたマウスでドラッグの終わりとみなす。
+  useEffect(() => {
+    if (dragFrom === null) return;
+    window.addEventListener("mousemove", endDrag);
+    return () => window.removeEventListener("mousemove", endDrag);
+  }, [dragFrom]);
+
+  function endDrag() {
+    setDragFrom(null);
+    setDragOver(null);
+    setFlipDirection(null);
+  }
 
   function handleDrop(to: string) {
     const from = dragFrom;
-    setDragFrom(null);
-    setDragOver(null);
+    endDrag();
     if (!from || from === to) return;
     setPendingMove({ from, to });
+  }
+
+  /** 月送りのボタンをドラッグ中の落とし先にする(落としても何もしない)。 */
+  function monthFlipHandlers(direction: -1 | 1) {
+    if (dragFrom === null) return {};
+    return {
+      onDragEnter: () => setFlipDirection(direction),
+      onDragOver: (e: DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      },
+      onDragLeave: () => setFlipDirection(null),
+      onDrop: (e: DragEvent) => {
+        e.preventDefault();
+        endDrag();
+      },
+    };
+  }
+
+  function flipClass(direction: -1 | 1): string | undefined {
+    if (dragFrom === null) return undefined;
+    return `chemo-calendar__month-flip${flipDirection === direction ? " chemo-calendar__month-flip--active" : ""}`;
   }
 
   const todayDate = today();
@@ -291,11 +339,23 @@ export function KarteChemoTab({
     return (
       <>
       <div className="meal-calendar__toolbar chemo-calendar__toolbar">
-        <button type="button" onClick={() => shiftMonth(-1)} aria-label="前の月">
+        <button
+          type="button"
+          className={flipClass(-1)}
+          onClick={() => shiftMonth(-1)}
+          aria-label="前の月"
+          {...monthFlipHandlers(-1)}
+        >
           ‹
         </button>
         <span className="meal-calendar__month">{monthLabel}</span>
-        <button type="button" onClick={() => shiftMonth(1)} aria-label="次の月">
+        <button
+          type="button"
+          className={flipClass(1)}
+          onClick={() => shiftMonth(1)}
+          aria-label="次の月"
+          {...monthFlipHandlers(1)}
+        >
           ›
         </button>
         <button
@@ -353,10 +413,7 @@ export function KarteChemoTab({
                 dropTarget={dragFrom !== null && dragOver === day.date && dragFrom !== day.date}
                 canDrop={dragFrom !== null && day.inMonth && dragFrom !== day.date}
                 onDragStart={() => setDragFrom(day.date)}
-                onDragEnd={() => {
-                  setDragFrom(null);
-                  setDragOver(null);
-                }}
+                onDragEnd={endDrag}
                 onDragOver={() => setDragOver(day.date)}
                 onDrop={() => handleDrop(day.date)}
               />
