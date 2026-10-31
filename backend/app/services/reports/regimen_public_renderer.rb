@@ -8,7 +8,7 @@ module Reports
   class RegimenPublicRenderer
     LIST_ID = "content".freeze
     # 桁数(半角換算)。それぞれの欄の幅と文字の大きさ(IPAGothic)で入る量。
-    STEP_MAX_COLS = 112
+    STEP_MAX_COLS = 106
     BODY_MAX_COLS = 116
     NOTE_MAX_COLS = 120
 
@@ -63,6 +63,8 @@ module Reports
             section.item("name").value(row.drug[:name])
             section.item("basis").value(row.drug[:basis])
             section.item("max").value(row.drug[:max])
+          when :colhead
+            %w[role name basis max].zip(["種類", "医薬品", "投与量", "上限"]) { |id, label| section.item("h_#{id}").value(label) }
           else section.item(row.kind.to_s).value(row.text)
           end
         end
@@ -82,7 +84,7 @@ module Reports
         end
         next if current.empty? && row.kind == :blank
 
-        current << Row.new(kind: :step, text: "#{step}（続き）") if current.empty? && %i[drug note].include?(row.kind) && step
+        current << Row.new(kind: :step, text: "#{step}（続き）") if current.empty? && %i[usage drug note].include?(row.kind) && step
         current << row
         step = row.text if row.kind == :step
         step = nil if row.kind == :section
@@ -120,26 +122,31 @@ module Reports
       body_rows([names.join("、"), @regimen.indication_note].compact_blank.join("\n"))
     end
 
+    # ステップごとに「見出し(番号と名前)→ 用法 → 薬剤 → 注記」。ステップの間は 1 行空ける。
     def step_rows
       return [] if @steps.empty?
 
-      header = Row.new(kind: :drug, drug: { role: "種類", name: "医薬品", basis: "投与量", max: "上限" })
-      [header] + @steps.each_with_index.flat_map do |step, index|
+      [Row.new(kind: :colhead)] + @steps.each_with_index.flat_map do |step, index|
         drugs = @drugs_by_step[step.id] || []
         [
+          *(index.zero? ? [] : [Row.new(kind: :blank)]),
           *ReportText.wrap(step_heading(step, index + 1), STEP_MAX_COLS).map { |t| Row.new(kind: :step, text: t) },
+          *ReportText.wrap(usage_line(step), BODY_MAX_COLS).map { |t| Row.new(kind: :usage, text: t) },
           *drugs.flat_map { |drug| [Row.new(kind: :drug, drug: drug_values(drug)), *note_rows(drug.note)] },
           *note_rows([step.device_note.present? ? "器材: #{step.device_note}" : nil, step.note].compact_blank.join(" / "))
         ]
       end
     end
 
-    # 「1. オキサリプラチン　Day 1　点滴　静脈内　末梢ルート　2時間」
-    # 「2. カペシタビン　Day 1 から 14 日分　内服　１日２回朝夕食後」
+    # 「1. オキサリプラチン」
     def step_heading(step, number)
-      usage_type = USAGE_TYPE_LABELS.fetch(step.usage_type, step.usage_type)
+      "#{number}. #{step.name.presence || USAGE_TYPE_LABELS.fetch(step.usage_type, step.usage_type)}"
+    end
+
+    # 「Day 1　点滴　静脈内　末梢ルート　2時間」「Day 1 から 14 日分　内服　１日２回朝夕食後」
+    def usage_line(step)
       parts = [
-        "#{number}. #{step.name.presence || usage_type}", days_label(step), usage_type,
+        days_label(step), USAGE_TYPE_LABELS.fetch(step.usage_type, step.usage_type),
         *(step.usage_type == "oral" ? [@usages[step.usage_code]&.usage_name] : injection_parts(step))
       ]
       parts.compact_blank.join("　")

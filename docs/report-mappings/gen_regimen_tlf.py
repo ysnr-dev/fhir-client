@@ -124,19 +124,26 @@ for i,(l1,b1,l2,b2) in enumerate(rows):
     items.append(text(MID+4,y+4,LW-4,10,l2,8))
     items.append(block(b2,MID+LW,y+3.5,W/2-LW-4,11,9,overflow="fit"))
 LIST_Y=TOP+ROW*len(rows)+10; LIST_H=792.0-LIST_Y
-# 行の種類: 見出し(section)/ 投与ステップ(step)/ 薬剤(role・name・basis・max)/ 注記(note)/ 本文(body)。
+# 行の種類: 見出し(section)/ 投与ステップ(step)/ 用法(usage)/ 列名(h_*)/ 薬剤(role・name・basis・max)/
+# 注記(note)/ 本文(body)。投与内容が詰まって見えないよう、行の高さは実施計画書より広く取る。
+PUB_DETAIL=15.0
 detail_y=LIST_Y
-detail_items=[block("section",L,detail_y+1,W,11,10,bold=True),
-              block("step",L+10,detail_y+1.5,W-12,10,9),
-              block("body",L+20,detail_y+1.5,W-22,10,8.5),
-              block("note",L+66,detail_y+2,W-68,10,7.5),
-              block("role",L+20,detail_y+1.5,44,10,8.5),
-              block("name",L+66,detail_y+1.5,270,10,8.5,overflow="fit"),
-              block("basis",L+340,detail_y+1.5,90,10,8.5,"right"),
-              block("max",L+434,detail_y+1.5,89,10,8.5,"right")]
+detail_items=[block("section",L,detail_y+2,W,11,10,bold=True),
+              block("step",L+10,detail_y+2.5,W-12,11,9.5,bold=True),
+              block("usage",L+20,detail_y+3,W-22,10,8.5),
+              block("body",L+20,detail_y+3,W-22,10,8.5),
+              block("note",L+66,detail_y+3.5,W-68,10,7.5),
+              block("role",L+20,detail_y+3,44,10,8.5),
+              block("name",L+66,detail_y+3,270,10,8.5,overflow="fit"),
+              block("basis",L+340,detail_y+3,90,10,8.5,"right"),
+              block("max",L+434,detail_y+3,89,10,8.5,"right"),
+              block("h_role",L+20,detail_y+4,44,9,7.5),
+              block("h_name",L+66,detail_y+4,270,9,7.5),
+              block("h_basis",L+340,detail_y+4,90,9,7.5,"right"),
+              block("h_max",L+434,detail_y+4,89,9,7.5,"right")]
 items.append({"id":"content","type":"list","display":True,"description":"","x":L,"y":LIST_Y,"width":W,"height":LIST_H,
               "content-height":LIST_H,"auto-page-break":False,
-              "header":section(0,[],False),"detail":section(DETAIL,detail_items),
+              "header":section(0,[],False),"detail":section(PUB_DETAIL,detail_items),
               "page-footer":section(0,[],False),"footer":section(0,[],False)})
 items+= [line(L,800,R,800), text(L,804,60,10,"問い合わせ先",7.5), block("contact",L+60,803.5,360,10,8),
          block("page_no",R-60,816,60,10,7,"right")]
