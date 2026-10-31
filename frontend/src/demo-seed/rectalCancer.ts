@@ -31,6 +31,7 @@ import {
   type Named,
   type SeedEnv,
 } from "./base";
+import { readResource } from "../api/fhirClient";
 import { addDays } from "../lib/dates";
 
 const RT_PROTOCOL = "RT-RECTUM-PRE-45";
@@ -369,24 +370,27 @@ async function chemotherapy(
     steps: planSteps(regimen, { bsa, weight: course.weight, gfr: null }, factors),
   };
   // 3 コースずつ登録する(1 回に登録できる上限)。2 回目以降は最初の適用に続けて足す。
-  let application: ReturnType<typeof parseRegimenApplication> = null;
+  // 次のコースの登録はヘッダを更新しうるので、毎回読み直した版を渡す。
+  let header: fhir4.ServiceRequest | null = null;
   for (let first = 0; first < course.cycleStarts.length; first += 3) {
     const count = Math.min(3, course.cycleStarts.length - first);
     const values = { ...base, startDate: course.cycleStarts[first], firstCycle: first + 1, cycleCount: String(count) };
     const invalid = validateRegimenApply(values, regimen);
     if (invalid) throw new Error(`${regimen.name}: ${invalid}`);
-    const bundle = application
-      ? buildRegimenCycleBundle(values, regimen, application, patientId, requester)
+    const bundle = header
+      ? buildRegimenCycleBundle(values, regimen, header, patientId, requester)
       : buildRegimenApplicationBundle(values, regimen, patientId, requester);
     const ids = await post(stampAuthoredOn(bundle, at(addDays(course.cycleStarts[first], -3))));
-    if (!application) {
+    if (header?.id) {
+      header = (await readResource<fhir4.ServiceRequest>("ServiceRequest", header.id)).data;
+    } else {
       const requests = (await createdOf(ids.slice(0, 5), "ServiceRequest")) as fhir4.ServiceRequest[];
-      application = requests.map(parseRegimenApplication).find((a) => a) ?? null;
-      if (!application) throw new Error(`${regimen.name}: 適用のヘッダが見つかりません`);
+      header = requests.find((sr) => parseRegimenApplication(sr)) ?? null;
+      if (!header) throw new Error(`${regimen.name}: 適用のヘッダが見つかりません`);
     }
   }
   env.log(`${regimen.name}: ${course.cycleStarts.length} コースを登録`);
-  return application;
+  return header ? parseRegimenApplication(header) : null;
 }
 
 /** 有害事象をまとめて登録する。今日より後に発現するものは作らない(回復日が未来なら継続中)。 */

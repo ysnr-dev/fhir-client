@@ -65,13 +65,14 @@ RSpec.describe RegimenReport do
                                 medicine_code: "620000002", dose_basis: "bsa", dose_value: 2000, dose_unit: "mg")
   end
 
-  def regimen_order(id, kind:, date:, cycle:, day:, reduction: nil)
+  def regimen_order(id, kind:, date:, cycle:, day:, reduction: nil, body: nil)
     parts = [
       { "url" => "regimen", "valueReference" => { "reference" => "ServiceRequest/h1" } },
       { "url" => "cycle", "valueInteger" => cycle }, { "url" => "day", "valueInteger" => day },
       { "url" => "code", "valueString" => "000001" }, { "url" => "name", "valueString" => "CapeOX" }
     ]
     parts << { "url" => "reduction", "valueString" => reduction } if reduction
+    body&.each { |key, value| parts << { "url" => key.to_s, "valueDecimal" => value } }
     {
       "resourceType" => "ServiceRequest", "id" => id, "status" => "active",
       "category" => [{ "coding" => [{ "system" => described_class::ORDER_TYPE_SYSTEM, "code" => kind }] }],
@@ -195,6 +196,19 @@ RSpec.describe RegimenReport do
 
     expect(text).to include("第2クール").and include("161.2mg").and include("130mg/m²").and include("2000mg/m²")
     expect(text).to include("減量:好中球減少").and include("［中止］")
+  end
+
+  it "prints the body stamped on the day orders of the cycle" do
+    stub_header
+    stub_day_orders([
+      regimen_order("i1", kind: "injection", date: "2026-10-01", cycle: 1, day: 1,
+                          body: { height: 165, weight: 58, bsa: 1.64 }),
+      regimen_order("i2", kind: "injection", date: "2026-10-22", cycle: 2, day: 1)
+    ])
+    text = page_texts(described_class.new("h1", gateway: gateway).generate_plan(cycle: "1")).join
+
+    expect(text).to include("体重58kg").and include("1.64m²")
+    expect(text).not_to include("体重51kg")
   end
 
   it "raises CycleNotFound for an unregistered cycle" do

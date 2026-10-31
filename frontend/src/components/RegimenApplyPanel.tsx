@@ -247,6 +247,8 @@ function masterChangedOn(updatedAt: string, authoredOn: string): string {
 interface RegimenCyclePanelProps {
   patientId: string;
   application: RegimenApplication;
+  /** 適用のヘッダ。登録と一緒に体格・入外区分をこのクールの値に更新する(§7.6 B-8)。 */
+  header: fhir4.ServiceRequest;
   cycle: number;
   startDate: string;
   /** 前クールの投与量(既定でこれを引き継ぐ)。 */
@@ -263,6 +265,7 @@ interface RegimenCyclePanelProps {
 export function RegimenCyclePanel({
   patientId,
   application,
+  header,
   cycle,
   startDate,
   previousCycle,
@@ -307,7 +310,7 @@ export function RegimenCyclePanel({
         submitError={create.error}
         onSubmit={(values) => {
           const attribution = withOrderWard(requester, values.setting, defaultSetting);
-          create.mutate(buildRegimenCycleBundle(values, regimen, application, patientId, attribution), {
+          create.mutate(buildRegimenCycleBundle(values, regimen, header, patientId, attribution), {
             onSuccess: onSaved,
           });
         }}
@@ -325,9 +328,9 @@ interface RegimenApplyFormProps {
   firstCycle: number;
   defaultStartDate: string;
   defaultProblem?: ProblemRef;
-  /** クール追加では最初の適用の入外区分を既定にする。 */
+  /** クール追加では直近のクールの入外区分を既定にする。 */
   defaultSettingOverride?: PrescriptionSetting;
-  /** クール追加では前回の投与量を出した体格。体重の変化を出して見直しを促す。 */
+  /** クール追加では直近のクールの投与量を出した体格。体重の変化を出して見直しを促す。 */
   previousBody?: { height: number | null; weight: number | null; bsa: number | null };
   /** クール追加では前クールの投与量。既定でこれを引き継ぐ(§7.6 B-2)。 */
   previousCycle?: PreviousCycle | null;

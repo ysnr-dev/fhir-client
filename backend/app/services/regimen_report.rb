@@ -44,7 +44,10 @@ class RegimenReport
     :bsa, :height, :weight, :setting, :problem, :comment, :department, :requester, keyword_init: true
   )
   # 日オーダー 1 件(注射 1 件 or 処方 1 件)。kind は :injection / :prescription。
-  DayOrder = Struct.new(:id, :kind, :date, :cycle, :day, :status, :reduction, :steps, keyword_init: true)
+  # height / weight / bsa はそのクールの投与量に使った体格(焼いていない日オーダーは nil)。
+  DayOrder = Struct.new(
+    :id, :kind, :date, :cycle, :day, :status, :reduction, :height, :weight, :bsa, :steps, keyword_init: true
+  )
   # RP 1 つ = レジメンの投与ステップ 1 つ。notes は用法コメントの見出し以外(点滴時間・器材・注意)。
   # supply_days は内服の投与日数(注射は nil)。
   Step = Struct.new(:rp_number, :name, :usage_type, :usage, :notes, :supply_days, :drugs, keyword_init: true)
@@ -203,6 +206,9 @@ class RegimenReport
       id: sr["id"], kind:, date:, cycle: cycle.to_i, day: day.to_i,
       status: progress_status(sr, tasks, kind),
       reduction: regimen_part(sr, "reduction", "valueString").to_s,
+      height: regimen_part(sr, "height", "valueDecimal"),
+      weight: regimen_part(sr, "weight", "valueDecimal"),
+      bsa: regimen_part(sr, "bsa", "valueDecimal"),
       steps: build_steps(own, kind, lookup)
     )
   end

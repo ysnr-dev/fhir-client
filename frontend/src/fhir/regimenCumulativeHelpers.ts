@@ -158,7 +158,8 @@ export function checkCumulativeDoses(args: {
           keyByMedicine.get(medicineCode) ??
           null;
         if (!key || !codeMatches(key, rule.code)) continue;
-        const amount = orderedAmount(mr, unit, perBsa, headerBsa.get(order.ref.regimenSrId) ?? null);
+        const fallbackBsa = order.ref.body?.bsa ?? headerBsa.get(order.ref.regimenSrId) ?? null;
+        const amount = orderedAmount(mr, unit, perBsa, fallbackBsa);
         if (amount === null) {
           unreadable += 1;
           continue;

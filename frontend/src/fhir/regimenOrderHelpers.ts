@@ -105,7 +105,7 @@ export interface RegimenApplication {
   treatmentDays: number;
   /** 予定クール数。null は継続。 */
   plannedCycles: number | null;
-  /** 投与量の算出に使った値。無ければ null。 */
+  /** 直近に登録したクールの投与量の算出に使った値。無ければ null。クールごとの値は日オーダーの印にある。 */
   bsa: number | null;
   height: number | null;
   weight: number | null;
@@ -200,6 +200,13 @@ export function regimenStatusLabel(status: string): string {
 
 // ---- 日オーダーの印 ----
 
+/** そのクールの投与量の算出に使った体格。 */
+export interface RegimenCycleBody {
+  bsa: number | null;
+  height: number | null;
+  weight: number | null;
+}
+
 export interface RegimenOrderRef {
   /** ヘッダ ServiceRequest の id。 */
   regimenSrId: string;
@@ -211,6 +218,8 @@ export interface RegimenOrderRef {
   name: string;
   /** そのクールの減量理由(§7.6 B-1)。減量していなければ空。 */
   reduction: string;
+  /** そのクールの体格(§7.6 B-8)。焼いていない日オーダーは null。 */
+  body: RegimenCycleBody | null;
 }
 
 /** 日オーダー(注射・処方のヘッダ)に焼いてあるレジメンの印。無ければ null。 */
@@ -230,6 +239,47 @@ export function regimenOrderOf(sr: fhir4.ServiceRequest): RegimenOrderRef | null
     code: ext.extension?.find((e) => e.url === "code")?.valueString ?? "",
     name: ext.extension?.find((e) => e.url === "name")?.valueString ?? "",
     reduction: ext.extension?.find((e) => e.url === "reduction")?.valueString ?? "",
+    body: cycleBodyOf(ext),
+  };
+}
+
+function cycleBodyOf(ext: fhir4.Extension): RegimenCycleBody | null {
+  const body = { bsa: extDecimal(ext, "bsa"), height: extDecimal(ext, "height"), weight: extDecimal(ext, "weight") };
+  return body.bsa === null && body.height === null && body.weight === null ? null : body;
+}
+
+/** 体格の拡張の部品。値の無いものは焼かない。 */
+function bodyExtensionParts(body: RegimenCycleBody): fhir4.Extension[] {
+  return [
+    ...(body.bsa !== null ? [{ url: "bsa", valueDecimal: body.bsa }] : []),
+    ...(body.height !== null ? [{ url: "height", valueDecimal: body.height }] : []),
+    ...(body.weight !== null ? [{ url: "weight", valueDecimal: body.weight }] : []),
+  ];
+}
+
+/** 画面の身長・体重から、投与量の算出に使う体格。 */
+function cycleBodyOfValues(values: Pick<RegimenApplyValues, "height" | "weight">): RegimenCycleBody {
+  return { bsa: bsaOf(values), height: Number(values.height) || null, weight: Number(values.weight) || null };
+}
+
+/**
+ * 日オーダーの体格。印に焼いていなければ、薬剤の投与量の拡張の体表面積で補う。ヘッダは直近の
+ * クールの値なので、身長・体重は体表面積がヘッダと一致するときだけ借りる(別のクールの体重を出さない)。
+ */
+export function dayOrderBodyOf(
+  ref: RegimenOrderRef,
+  medicationRequests: fhir4.MedicationRequest[],
+  application: RegimenApplication | null,
+): RegimenCycleBody | null {
+  if (ref.body) return ref.body;
+  const doseBsa = medicationRequests.map((mr) => regimenDoseOf(mr)?.bsa ?? null).find((v) => v !== null) ?? null;
+  const bsa = doseBsa ?? application?.bsa ?? null;
+  if (bsa === null) return null;
+  const sameAsHeader = application !== null && application.bsa === bsa;
+  return {
+    bsa,
+    height: sameAsHeader ? application.height : null,
+    weight: sameAsHeader ? application.weight : null,
   };
 }
 
@@ -731,6 +781,7 @@ interface StampRef {
   name: string;
   /** そのクールの減量理由。空なら焼かない。 */
   reduction: string;
+  body: RegimenCycleBody | null;
 }
 
 function regimenOrderExtension(ref: StampRef): fhir4.Extension {
@@ -743,6 +794,7 @@ function regimenOrderExtension(ref: StampRef): fhir4.Extension {
       { url: "code", valueString: ref.code },
       { url: "name", valueString: ref.name },
       ...(ref.reduction ? [{ url: "reduction", valueString: ref.reduction }] : []),
+      ...(ref.body ? bodyExtensionParts(ref.body) : []),
     ],
   };
 }
@@ -769,7 +821,9 @@ function regimenDoseExtension(plan: RegimenDrugPlan, bsa: number | null): fhir4.
 }
 
 /** 薬剤 1 件の投与量の拡張を読む。レジメンから出たオーダーでなければ null。 */
-export function regimenDoseOf(mr: fhir4.MedicationRequest): (PreviousDose & { drugId: number }) | null {
+export function regimenDoseOf(
+  mr: fhir4.MedicationRequest,
+): (PreviousDose & { drugId: number; bsa: number | null }) | null {
   const ext = mr.extension?.find((e) => e.url === REGIMEN_DOSE_EXT_URL);
   const drugId = ext?.extension?.find((e) => e.url === "drug")?.valueInteger;
   if (!ext || drugId === undefined) return null;
@@ -780,6 +834,7 @@ export function regimenDoseOf(mr: fhir4.MedicationRequest): (PreviousDose & { dr
     amount: decimal("amount"),
     unit: ext.extension?.find((e) => e.url === "unit")?.valueString ?? "",
     packs: decimal("packs"),
+    bsa: decimal("bsa"),
   };
 }
 
@@ -879,6 +934,7 @@ function stampRefOf(ref: RegimenOrderRef): StampRef {
     code: ref.code,
     name: ref.name,
     reduction: ref.reduction,
+    body: ref.body,
   };
 }
 
@@ -941,6 +997,7 @@ function buildCycleEntries(
     name: regimen.name,
     // 出し直して標準量に戻したときは、引き継いだ理由をそのまま焼かない。
     reduction: hasReducedDose(values) ? values.reductionReason.trim() : "",
+    body: cycleBodyOfValues(values),
   });
   const entries: fhir4.BundleEntry[] = [];
   const days = Array.from(new Set([...injectionByDay.keys(), ...oralByDay.keys()])).sort((a, b) => a - b);
@@ -1001,9 +1058,6 @@ function buildHeader(
   authoredOn: string,
   instanceId: string,
 ): fhir4.ServiceRequest {
-  const bsa = bsaOf(values);
-  const height = Number(values.height) || null;
-  const weight = Number(values.weight) || null;
   const planned = values.plannedCycles.trim() === "" ? null : Number(values.plannedCycles);
   const sr: fhir4.ServiceRequest = {
     resourceType: "ServiceRequest",
@@ -1032,9 +1086,7 @@ function buildHeader(
           { url: "cycleDays", valueInteger: cycleDaysOfRegimen(regimen) },
           { url: "treatmentDays", valueInteger: regimen.treatment_days ?? 0 },
           ...(planned !== null ? [{ url: "plannedCycles", valueInteger: planned }] : []),
-          ...(bsa !== null ? [{ url: "bsa", valueDecimal: bsa }] : []),
-          ...(height !== null ? [{ url: "height", valueDecimal: height }] : []),
-          ...(weight !== null ? [{ url: "weight", valueDecimal: weight }] : []),
+          ...bodyExtensionParts(cycleBodyOfValues(values)),
         ],
       },
     ],
@@ -1078,14 +1130,20 @@ export function buildRegimenApplicationBundle(
   return { resourceType: "Bundle", type: "transaction", entry: entries };
 }
 
-/** 適用済みのレジメンにクールを追加登録する。ヘッダは触らない。 */
+/**
+ * 適用済みのレジメンにクールを追加登録する。ヘッダの体格と入外区分は、このクールの値に
+ * 合わせて更新する(§7.6 B-8。ヘッダは「直近のクール」を表し、クールごとの値は日オーダーの印に残る)。
+ * ヘッダの PUT は末尾に置く(来歴の活動は先頭のヘッダで決まり、登録は CREATE にしたい)。
+ */
 export function buildRegimenCycleBundle(
   values: RegimenApplyValues,
   regimen: RegimenDetail,
-  application: RegimenApplication,
+  header: fhir4.ServiceRequest,
   patientId: string,
   requester: OrderAttribution,
 ): fhir4.Bundle {
+  const application = parseRegimenApplication(header);
+  if (!application) throw new Error("レジメンの適用ではありません");
   const authoredOn = registrationAuthoredOn();
   const headerReference = `ServiceRequest/${application.id}`;
   const cycleDays = application.cycleDays || cycleDaysOfRegimen(regimen);
@@ -1108,7 +1166,45 @@ export function buildRegimenCycleBundle(
       ),
     );
   }
-  return { resourceType: "Bundle", type: "transaction", entry: entries };
+  const headerEntry = regimenHeaderCycleEntry(header, application, values);
+  return { resourceType: "Bundle", type: "transaction", entry: headerEntry ? [...entries, headerEntry] : entries };
+}
+
+/** ヘッダの体格・入外区分をこのクールの値にする PUT。変わらなければ null(版を無駄に増やさない)。 */
+function regimenHeaderCycleEntry(
+  header: fhir4.ServiceRequest,
+  application: RegimenApplication,
+  values: RegimenApplyValues,
+): fhir4.BundleEntry | null {
+  const body = cycleBodyOfValues(values);
+  const unchanged =
+    application.setting === values.setting &&
+    application.bsa === body.bsa &&
+    application.height === body.height &&
+    application.weight === body.weight;
+  if (unchanged) return null;
+  const bodyUrls = new Set(["bsa", "height", "weight"]);
+  const current = header.extension?.find((e) => e.url === REGIMEN_EXT_URL);
+  const resource: fhir4.ServiceRequest = {
+    ...header,
+    category: [
+      ...(header.category ?? []).filter((c) => !c.coding?.some((coding) => coding.system === SETTING_SYSTEM)),
+      {
+        coding: [{ system: SETTING_SYSTEM, code: values.setting, display: findSettingDisplay(values.setting) }],
+      },
+    ],
+    extension: [
+      ...(header.extension ?? []).filter((e) => e.url !== REGIMEN_EXT_URL),
+      {
+        url: REGIMEN_EXT_URL,
+        extension: [
+          ...(current?.extension ?? []).filter((e) => !bodyUrls.has(e.url)),
+          ...bodyExtensionParts(body),
+        ],
+      },
+    ],
+  };
+  return { resource, request: { method: "PUT", url: `ServiceRequest/${header.id}` } };
 }
 
 // ---- 登録済みの日オーダー ----
@@ -1432,7 +1528,7 @@ export function startDateAdvisories(startDate: string, lastAdministered: string)
 
 /**
  * 適用のヘッダで後から直せる項目。投与内容(ステップ・薬剤)は直せない —— それはレジメン
- * マスタのものだから。体格も直さない(出し直すと登録済みの投与量と食い違う。§7.6 B-8)。
+ * マスタのものだから。体格も直さない(次クールの登録で、そのクールの値に更新される。§7.6 B-8)。
  */
 export interface RegimenHeaderValues {
   setting: PrescriptionSetting;

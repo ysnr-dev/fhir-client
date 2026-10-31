@@ -186,12 +186,16 @@ module Reports
       [@cycle_start.strftime("%Y/%m/%d"), finish&.strftime("%Y/%m/%d")].compact.join(" 〜 ")
     end
 
-    # 身長・体重は適用時の値(ヘッダ)。体表面積はこのクールの投与量に使った値(明細の拡張)を優先する。
+    # このクールの投与量に使った体格(日オーダーの印)。印の無い日オーダーは、体表面積を明細の拡張から、
+    # 身長・体重をヘッダ(直近のクールの値)から補う。
     def body_line
-      bsa = @orders.flat_map(&:steps).flat_map(&:drugs).filter_map(&:bsa).first || @application.bsa
+      stamped = @orders.find { |o| o.bsa || o.height || o.weight }
+      height = stamped ? stamped.height : @application.height
+      weight = stamped ? stamped.weight : @application.weight
+      bsa = stamped&.bsa || @orders.flat_map(&:steps).flat_map(&:drugs).filter_map(&:bsa).first || @application.bsa
       [
-        @application.height ? "身長 #{RegimenNumber.format(@application.height)} cm" : nil,
-        @application.weight ? "体重 #{RegimenNumber.format(@application.weight)} kg" : nil,
+        height ? "身長 #{RegimenNumber.format(height)} cm" : nil,
+        weight ? "体重 #{RegimenNumber.format(weight)} kg" : nil,
         bsa ? "体表面積 #{RegimenNumber.format(bsa)} m²" : nil
       ].compact.join(" / ")
     end

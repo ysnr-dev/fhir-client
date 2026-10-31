@@ -21,6 +21,7 @@ import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { ORDER_IN_RP_SYSTEM, RP_NUMBER_SYSTEM, identifierValue } from "../fhir/prescriptionHelpers";
 import {
   cycleDayLabel,
+  dayOrderBodyOf,
   regimenDoseOf,
   regimenOrderOf,
 } from "../fhir/regimenOrderHelpers";
@@ -53,11 +54,12 @@ export function InjectionDetailPanel({
   children,
 }: InjectionDetailPanelProps) {
   const regimenRef = regimenOrderOf(serviceRequest);
-  // 化学療法から出たオーダーなら、適用ヘッダから体格を引き、体表面積あたりの逆算を薬剤の行に出す
-  // (薬剤部の監査。chemo-regimen-design.md §7.6 E-1 / E-10)。
+  // 化学療法から出たオーダーなら、このクールの体格を出し、体表面積あたりの逆算を薬剤の行に出す
+  // (薬剤部の監査。chemo-regimen-design.md §7.6 E-1 / E-10 / B-8)。
   const regimenSrId = regimenRef?.regimenSrId ?? "";
   const headers = useRegimenHeaders(regimenSrId ? [regimenSrId] : []);
   const regimenApplication = headers.data?.get(regimenSrId) ?? null;
+  const body = regimenRef ? dayOrderBodyOf(regimenRef, medicationRequests, regimenApplication) : null;
   // 減量率は MedicationRequest の拡張にある。RP 番号 + RP 内の順で薬剤の行に当てる。
   const doseByRp = new Map(
     medicationRequests.flatMap((mr) => {
@@ -95,12 +97,12 @@ export function InjectionDetailPanel({
               <dt>化学療法</dt>
               <dd>
                 {`${regimenRef.name} ${cycleDayLabel(regimenRef)}`}
-                {regimenApplication?.bsa !== null && regimenApplication?.bsa !== undefined && (
+                {body?.bsa !== null && body?.bsa !== undefined && (
                   <span className="injection-detail__body">
                     {[
-                      `体表面積 ${regimenApplication.bsa} m²`,
-                      regimenApplication.height !== null ? `身長 ${regimenApplication.height} cm` : "",
-                      regimenApplication.weight !== null ? `体重 ${regimenApplication.weight} kg` : "",
+                      `体表面積 ${body.bsa} m²`,
+                      body.height !== null ? `身長 ${body.height} cm` : "",
+                      body.weight !== null ? `体重 ${body.weight} kg` : "",
                     ]
                       .filter(Boolean)
                       .join(" / ")}
@@ -153,7 +155,7 @@ export function InjectionDetailPanel({
             <tbody>
               {rp.medicines.map((med) => {
                 const dose = doseByRp.get(`${rp.rpNumber}-${med.orderInRp}`);
-                const perBsa = perBsaLabel(med.dose, med.unit, regimenApplication?.bsa ?? null);
+                const perBsa = perBsaLabel(med.dose, med.unit, dose?.bsa ?? body?.bsa ?? null);
                 return (
                 <tr key={med.orderInRp}>
                   <td>

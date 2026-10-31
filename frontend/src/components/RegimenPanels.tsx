@@ -59,10 +59,10 @@ export function RegimenCycleLoader({
   regimenSrId: string;
   onSaved: () => void;
 }) {
-  const { application, orders, isPending, error } = useRegimenApplication(patientId, regimenSrId);
+  const { application, header, orders, isPending, error } = useRegimenApplication(patientId, regimenSrId);
 
   if (isPending) return <p>読み込み中...</p>;
-  if (!application) return <ErrorBanner error={error ?? new Error("レジメンの適用が見つかりません")} />;
+  if (!application || !header) return <ErrorBanner error={error ?? new Error("レジメンの適用が見つかりません")} />;
 
   const next = nextCycleOf(application, orders);
   return (
@@ -71,6 +71,7 @@ export function RegimenCycleLoader({
       <RegimenCyclePanel
         patientId={patientId}
         application={application}
+        header={header}
         cycle={next.cycle}
         startDate={next.startDate}
         previousCycle={previousCycleOf(orders, next.cycle)}
