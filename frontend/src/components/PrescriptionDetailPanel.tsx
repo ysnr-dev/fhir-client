@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useHeldRegimenIds } from "../api/queries";
 import { problemLabel } from "../fhir/conditionHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
@@ -12,6 +13,7 @@ import {
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { SubstitutionBlockMark } from "./MedicineWarnings";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
+import { RegimenHeldMark } from "./RegimenDecision";
 
 // 処方の内容表示。処方内容ページとカルテ画面の詳細モーダルの双方から使う。
 // DO・編集・削除の操作ボタンは、遷移先が異なるので呼び出し側が持つ。
@@ -38,6 +40,7 @@ export function PrescriptionDetailPanel({
   const rps = groupByRp(medicationRequests);
   const comment = prescriptionComment(serviceRequest);
   const regimen = regimenOrderOf(serviceRequest);
+  const heldRegimenIds = useHeldRegimenIds([serviceRequest]);
 
   const problem = prescriptionProblem(serviceRequest);
   const currentProblem = problem ? problemsById?.get(problem.conditionId) : undefined;
@@ -70,6 +73,7 @@ export function PrescriptionDetailPanel({
                     減量
                   </span>
                 )}
+                <RegimenHeldMark held={heldRegimenIds.has(regimen.regimenSrId)} />
               </dd>
             </>
           )}

@@ -138,6 +138,19 @@ export function useRegimenHeaders(regimenSrIds: string[]) {
 }
 
 /**
+ * 並んだオーダーのうち、休止中の適用から出た日オーダーの適用ヘッダ id(§7.6 A-8)。
+ * 休止は日オーダーを書き換えないので、ヘッダの状態を読んで部門の一覧・払出に印を出す。
+ */
+export function useHeldRegimenIds(orders: (fhir4.ServiceRequest | undefined)[]): Set<string> {
+  const headers = useRegimenHeaders(orders.map((order) => (order ? regimenOrderOf(order)?.regimenSrId ?? "" : "")));
+  const held = new Set<string>();
+  for (const [id, application] of headers.data ?? []) {
+    if (application.status === "on-hold") held.add(id);
+  }
+  return held;
+}
+
+/**
  * レジメンから出た日オーダー(注射・処方)を、適用(instanceId = 日オーダーの requisition)
  * ごとにまとめて引く。requisition はカンマで OR にできるので患者の全適用を 1 検索で読める。
  * 進捗の Task と薬剤も同じレスポンスで受ける。1 患者の日オーダーは多くても数百件なので

@@ -30139,6 +30139,11 @@ input.nursing-picker__search {
   border-color: var(--warning);
 }
 
+.regimen-decision__mark--held {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 .regimen-decision__status {
   display: flex;
   align-items: center;

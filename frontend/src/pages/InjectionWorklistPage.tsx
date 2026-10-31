@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } fro
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
+  useHeldRegimenIds,
   useInjectionWorklist,
   useRxVerificationSettings,
   useSelfDepartments,
@@ -15,7 +16,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { InjectionDispenseModal } from "../components/InjectionDispenseModal";
 import { InjectionOrderViewModal } from "../components/InjectionOrderViewModal";
 import { RxInquiryModal } from "../components/RxInquiryModal";
-import { RegimenDecisionMark } from "../components/RegimenDecision";
+import { RegimenDecisionMark, RegimenHeldMark } from "../components/RegimenDecision";
 import { RxVerificationMark, RxVerificationModal } from "../components/RxVerificationModal";
 import { rxVerificationStateOf } from "../fhir/rxVerificationHelpers";
 import {
@@ -121,6 +122,7 @@ export function InjectionWorklistPage() {
     [rows],
   );
   const pictograms = useRowPictogramSources(patientIds);
+  const heldRegimenIds = useHeldRegimenIds((worklist.data?.rows ?? []).map((row) => row.order));
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ
   // (同じ患者が同じ日に複数の注射を持つこともある)。絞り込みで行が消えたら閉じる。
@@ -195,6 +197,7 @@ export function InjectionWorklistPage() {
                     key={row.order.id}
                     row={row}
                     pictograms={pictograms}
+                    heldRegimenIds={heldRegimenIds}
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onDispense={() => setDispensingId(row.order.id ?? null)}
@@ -410,6 +413,7 @@ function hasMenuItems(row: InjectionWorklistRow): boolean {
 function WorklistRow({
   row,
   pictograms,
+  heldRegimenIds,
   pending,
   onView,
   onDispense,
@@ -420,6 +424,8 @@ function WorklistRow({
 }: {
   /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
   pictograms: RowPictogramSources;
+  /** 休止中の適用ヘッダ id(§7.6 A-8)。 */
+  heldRegimenIds: Set<string>;
   row: InjectionWorklistRow;
   pending: boolean;
   onView: () => void;
@@ -483,7 +489,11 @@ function WorklistRow({
                 減量
               </span>
             )}
-            <RegimenDecisionMark task={row.decision} order={order} status={status} />
+            {heldRegimenIds.has(regimen.regimenSrId) ? (
+              <RegimenHeldMark held status={status} />
+            ) : (
+              <RegimenDecisionMark task={row.decision} order={order} status={status} />
+            )}
           </span>
         )}
       </td>

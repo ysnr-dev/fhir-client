@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useMedicineDoseFactors } from "../api/masterQueries";
-import { useOrderInquiryTasks, useRegisterRxDispense, type RxWorklistRow } from "../api/queries";
+import { useHeldRegimenIds, useOrderInquiryTasks, useRegisterRxDispense, type RxWorklistRow } from "../api/queries";
 import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
@@ -25,6 +25,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { SubstitutionBlockMark } from "./MedicineWarnings";
 import { Modal } from "./Modal";
+import { RegimenHeldMark } from "./RegimenDecision";
 import { OrderRxInquiryNotes } from "./RxInquiryHistory";
 import { UsageSearchModal } from "./UsageSearchModal";
 
@@ -103,6 +104,7 @@ function RxDispenseForm({
   const summary = summarizeServiceRequest(order);
   const comment = prescriptionComment(order);
   const regimen = regimenOrderOf(order);
+  const heldRegimenIds = useHeldRegimenIds([order]);
   // 一般名処方(【般】〜)は外来の院外処方でだけ出せる。調剤で銘柄を選び直すときも
   // 同じ制限を掛ける(処方オーダー登録と同じ判定)。
   const allowGeneric = summary.settingCode === "outpatient" && summary.categoryCode === "external";
@@ -223,6 +225,7 @@ function RxDispenseForm({
                       減量
                     </span>
                   )}
+                  <RegimenHeldMark held={heldRegimenIds.has(regimen.regimenSrId)} />
                 </dd>
               </>
             )}

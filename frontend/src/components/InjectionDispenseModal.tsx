@@ -2,7 +2,12 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { Medicine } from "../api/masterClient";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useMedicineDoseFactors } from "../api/masterQueries";
-import { useOrderInquiryTasks, useRegisterInjectionDispense, type InjectionWorklistRow } from "../api/queries";
+import {
+  useHeldRegimenIds,
+  useOrderInquiryTasks,
+  useRegisterInjectionDispense,
+  type InjectionWorklistRow,
+} from "../api/queries";
 import {
   buildInjectionDispenseBundle,
   dispenseLinesFromOrder,
@@ -24,6 +29,7 @@ import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
+import { RegimenHeldMark } from "./RegimenDecision";
 import { OrderRxInquiryNotes } from "./RxInquiryHistory";
 
 // 注射一覧の「払出登録」。受付済のオーダーを薬剤部が払い出し、その結果を登録する。
@@ -86,6 +92,7 @@ function InjectionDispenseForm({
   const summary = summarizeInjectionServiceRequest(order);
   const comment = injectionComment(order);
   const regimen = regimenOrderOf(order);
+  const heldRegimenIds = useHeldRegimenIds([order]);
 
   const performer = useMemo(
     () => ({
@@ -161,6 +168,7 @@ function InjectionDispenseForm({
                       減量
                     </span>
                   )}
+                  <RegimenHeldMark held={heldRegimenIds.has(regimen.regimenSrId)} />
                 </dd>
               </>
             )}

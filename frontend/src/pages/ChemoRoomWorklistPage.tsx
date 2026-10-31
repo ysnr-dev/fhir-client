@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { Link } from "react-router-dom";
-import { useChemoRoomList, type ChemoRoomRow } from "../api/queries";
+import { useChemoRoomList, useHeldRegimenIds, type ChemoRoomRow } from "../api/queries";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "../components/PatientRowCells";
 import { RowPictograms } from "../components/PatientListRowParts";
-import { RegimenDecisionMark } from "../components/RegimenDecision";
+import { RegimenDecisionMark, RegimenHeldMark } from "../components/RegimenDecision";
 import { appointmentTimeLabel } from "../fhir/appointmentHelpers";
 import { groupInjectionByRp } from "../fhir/injectionHelpers";
 import { injectionTaskStatus, injectionTaskStatusDisplay } from "../fhir/injectionTaskHelpers";
@@ -43,6 +43,7 @@ export function ChemoRoomWorklistPage() {
     [list.data],
   );
   const pictograms = useRowPictogramSources(patientIds);
+  const heldRegimenIds = useHeldRegimenIds(rows.map((row) => row.order));
 
   // 行を押すと右に患者プロファイルを出す。行は予約ごとなので予約で選ぶ。
   // 日付を替えて行が消えたら閉じる。
@@ -81,6 +82,7 @@ export function ChemoRoomWorklistPage() {
                     key={row.appointment.id}
                     row={row}
                     pictograms={pictograms}
+                    heldRegimenIds={heldRegimenIds}
                     rowProps={drawer.rowProps(row.patient?.id && row.appointment.id)}
                   />
                 ))}
@@ -123,10 +125,13 @@ function DateForm({ date, onChange }: { date: string; onChange: (date: string) =
 function ChemoRoomTableRow({
   row,
   pictograms,
+  heldRegimenIds,
   rowProps,
 }: {
   /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
   pictograms: RowPictogramSources;
+  /** 休止中の適用ヘッダ id(§7.6 A-8)。 */
+  heldRegimenIds: Set<string>;
   row: ChemoRoomRow;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
@@ -175,7 +180,11 @@ function ChemoRoomTableRow({
       </td>
       <td className="lab-worklist__compact">
         {order && regimen ? (
-          <RegimenDecisionMark task={decision} order={order} status={status} />
+          heldRegimenIds.has(regimen.regimenSrId) ? (
+            <RegimenHeldMark held status={status} />
+          ) : (
+            <RegimenDecisionMark task={decision} order={order} status={status} />
+          )
         ) : (
           <span className="order-select__muted">-</span>
         )}

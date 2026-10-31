@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } fro
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
+  useHeldRegimenIds,
   useSelfDepartments,
   useRxVerificationSettings,
   useRxWorklist,
@@ -20,6 +21,7 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { RowPictograms } from "../components/PatientListRowParts";
+import { RegimenHeldMark } from "../components/RegimenDecision";
 import { RxDispenseModal } from "../components/RxDispenseModal";
 import { RxInquiryModal } from "../components/RxInquiryModal";
 import { RxOrderViewModal } from "../components/RxOrderViewModal";
@@ -131,6 +133,7 @@ export function RxWorklistPage() {
     [rows],
   );
   const pictograms = useRowPictogramSources(patientIds);
+  const heldRegimenIds = useHeldRegimenIds((worklist.data?.rows ?? []).map((row) => row.order));
 
   // 行を押すと右に患者プロファイルを出す。行はオーダーごとなのでオーダーで選ぶ。
   // 絞り込みで行が消えたら閉じる。
@@ -218,6 +221,7 @@ export function RxWorklistPage() {
                     key={row.order.id}
                     row={row}
                     pictograms={pictograms}
+                    heldRegimenIds={heldRegimenIds}
                     pending={updateStatus.isPending}
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                     onView={() => setViewingId(row.order.id ?? null)}
@@ -430,6 +434,7 @@ function FilterForm({
 function WorklistRow({
   row,
   pictograms,
+  heldRegimenIds,
   pending,
   rowProps,
   onView,
@@ -440,6 +445,8 @@ function WorklistRow({
 }: {
   /** 患者氏名の後ろに並べる注意のピクトグラムの材料(一覧の患者ぶんをまとめて引いたもの)。 */
   pictograms: RowPictogramSources;
+  /** 休止中の適用ヘッダ id(§7.6 A-8)。 */
+  heldRegimenIds: Set<string>;
   row: RxWorklistRow;
   pending: boolean;
   /** 行を押してドロワーを開くための className と onClick。 */
@@ -501,6 +508,7 @@ function WorklistRow({
                 減量
               </span>
             )}
+            <RegimenHeldMark held={heldRegimenIds.has(regimen.regimenSrId)} status={status} />
           </span>
         )}
       </td>

@@ -25,6 +25,7 @@ import {
   regimenOrderOf,
 } from "../fhir/regimenOrderHelpers";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
+import { RegimenHeldMark } from "./RegimenDecision";
 
 // 注射オーダーの内容表示。カルテ画面の詳細モーダルから使う(処方の
 // PrescriptionDetailPanel と同じ構成)。
@@ -108,6 +109,7 @@ export function InjectionDetailPanel({
                 {regimenRef.reduction && (
                   <span className="injection-worklist__reduced">{`減量: ${regimenRef.reduction}`}</span>
                 )}
+                <RegimenHeldMark held={regimenApplication?.status === "on-hold"} />
               </dd>
             </>
           )}

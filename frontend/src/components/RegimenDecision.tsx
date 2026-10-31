@@ -26,6 +26,7 @@ import { RegimenLabCheck } from "./RegimenPreCheck";
 
 // 化学療法の当日の投与可否確認(docs/chemo-regimen-design.md §8.18)。
 //   RegimenDecisionMark   … 一覧・暦に出す「実施可 / 要再確認 / 未確認」の印
+//   RegimenHeldMark       … 適用が休止中の日オーダーに出す「休止中」の印(§7.6 A-8)
 //   RegimenDecisionFields … 投与日パネルの確認欄(投与前チェックと「実施可」「取消」)
 
 function decisionTitle(decision: RegimenDecision): string | undefined {
@@ -50,6 +51,19 @@ export function RegimenDecisionMark({
   return (
     <span className={`regimen-decision__mark regimen-decision__mark--${decision.state}`} title={decisionTitle(decision)}>
       {REGIMEN_DECISION_LABELS[decision.state]}
+    </span>
+  );
+}
+
+/**
+ * 適用が休止中であることの印(§7.6 A-8)。休止中の日オーダーは投与しないので、投与可否の印より優先して出す。
+ * status を渡したときは、実施済・中止のオーダーでは出さない。
+ */
+export function RegimenHeldMark({ held, status }: { held: boolean; status?: string }) {
+  if (!held || status === "completed" || status === "cancelled") return null;
+  return (
+    <span className="regimen-decision__mark regimen-decision__mark--held" title="レジメンが休止中です">
+      休止中
     </span>
   );
 }
