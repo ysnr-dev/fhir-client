@@ -22324,6 +22324,13 @@ button.chemo-calendar__cell[draggable="true"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* 治療と記録者。治療をまたいで読む一覧(プロファイル)で出す。 */
+.regimen-adverse__meta {
+  flex-basis: 100%;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
 .regimen-adverse__note {
   flex-basis: 100%;
   font-size: 12px;

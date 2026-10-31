@@ -43,44 +43,30 @@ export function PatientAdverseEventSection({ patientId }: { patientId: string })
           {ongoingOnly ? "継続中の有害事象はありません。" : "有害事象の記録がありません。"}
         </p>
       ) : (
-        <table className="patient-table">
-          <thead>
-            <tr>
-              <th>用語</th>
-              <th className="rad-code__compact">Grade</th>
-              <th className="rad-code__compact">発現日</th>
-              <th className="rad-code__compact">回復日</th>
-              <th>治療</th>
-              <th>対処・経過</th>
-              <th className="rad-code__compact">記録者</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td>{row.term}</td>
-                <td className="rad-code__compact">
-                  <span className={`regimen-adverse__grade regimen-adverse__grade--${row.grade}`}>G{row.grade}</span>
-                </td>
-                <td className="rad-code__compact">{row.onset || "-"}</td>
-                <td className="rad-code__compact">
-                  {row.resolved || <span className="regimen-adverse__ongoing">継続</span>}
-                </td>
-                <td>{adverseEventTreatmentLabel(row) || "-"}</td>
-                <td>{row.note || "-"}</td>
-                <td className="rad-code__compact">{row.performer?.display || "-"}</td>
-                <td className="patient-table__actions">
-                  {!row.resolved && (
+        <ul className="regimen-adverse__list">
+          {rows.map((row) => {
+            const meta = [adverseEventTreatmentLabel(row), row.performer?.display].filter(Boolean).join(" ・ ");
+            return (
+              <li key={row.id} className="regimen-adverse__item">
+                <span className={`regimen-adverse__grade regimen-adverse__grade--${row.grade}`}>G{row.grade}</span>
+                <span className="regimen-adverse__term">{row.term}</span>
+                <span className="regimen-adverse__period">
+                  {row.onset || "-"}
+                  {row.resolved ? ` 〜 ${row.resolved}` : " 〜（継続中）"}
+                </span>
+                {!row.resolved && (
+                  <span className="regimen-adverse__actions">
                     <button type="button" className="rp-card__compact-button" onClick={() => setRecovering(row)}>
                       回復
                     </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  </span>
+                )}
+                {meta && <span className="regimen-adverse__meta">{meta}</span>}
+                {row.note && <span className="regimen-adverse__note">{row.note}</span>}
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {recovering && (
