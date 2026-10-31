@@ -30,20 +30,20 @@ export function FlagTable({ flags, cautionsByCode, onView, onEdit }: FlagTablePr
     });
 
   return (
-    <ul className="flag-list">
+    <ul className="profile-list">
       {rows.map((row) => {
         const period =
           row.periodStart || row.periodEnd ? `${row.periodStart || ""} 〜 ${row.periodEnd || ""}` : "";
         const meta = [row.categoryLabel, period, row.statusLabel].filter(Boolean).join(" ・ ");
         return (
-          <li key={row.id} className="flag-list__item">
+          <li key={row.id} className="profile-list__item">
             {row.pictogram && (
               <span className={`flag-table__pictogram flag-table__pictogram--${row.category}`}>
                 <CautionPictogram pictogram={row.pictogram} />
               </span>
             )}
-            <span className="flag-list__name">{row.name}</span>
-            <span className="flag-list__actions">
+            <span className="profile-list__name">{row.name}</span>
+            <span className="profile-list__actions">
               <button type="button" className="rp-card__compact-button" onClick={() => onView(row.id)}>
                 表示
               </button>
@@ -51,8 +51,8 @@ export function FlagTable({ flags, cautionsByCode, onView, onEdit }: FlagTablePr
                 編集
               </button>
             </span>
-            {meta && <span className="flag-list__meta">{meta}</span>}
-            {row.text && <span className="flag-list__text">{row.text}</span>}
+            {meta && <span className="profile-list__meta">{meta}</span>}
+            {row.text && <span className="profile-list__note">{row.text}</span>}
           </li>
         );
       })}

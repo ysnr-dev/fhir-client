@@ -505,8 +505,8 @@
   color: #6b7280;
 }
 
-/* 診療上の注意の一覧。狭いドロワーでも読めるよう 1 件を 1 枚に畳む。 */
-.flag-list {
+/* プロファイルの区画の一覧(注意・感染症・保険)。狭いドロワーでも読めるよう 1 件を 1 枚に畳む。 */
+.profile-list {
   list-style: none;
   margin: 0 0 12px;
   padding: 0;
@@ -515,7 +515,7 @@
   gap: 6px;
 }
 
-.flag-list__item {
+.profile-list__item {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -526,28 +526,33 @@
   font-size: 13px;
 }
 
-.flag-list__item .flag-table__pictogram {
+.profile-list__item .flag-table__pictogram {
   margin-right: 0;
 }
 
-.flag-list__name {
+/* 失効した保険など、履歴として残すもの。使えるものと見分けが付くようにする。 */
+.profile-list__item--muted {
+  opacity: 0.6;
+}
+
+.profile-list__name {
   font-weight: 600;
 }
 
-.flag-list__actions {
+.profile-list__actions {
   margin-left: auto;
   display: inline-flex;
   gap: 4px;
 }
 
-.flag-list__meta {
+.profile-list__meta {
   flex-basis: 100%;
   font-size: 12px;
   opacity: 0.7;
   font-variant-numeric: tabular-nums;
 }
 
-.flag-list__text {
+.profile-list__note {
   flex-basis: 100%;
   font-size: 12px;
   opacity: 0.8;
@@ -24198,11 +24203,6 @@ button.chemo-calendar__cell[draggable="true"] {
   border-radius: 4px;
   background: var(--bg);
   color: var(--text-h);
-}
-
-/* 失効した保険も履歴として残すので、使えるものと見分けが付くようにする。 */
-.receipt-coverage--expired {
-  color: var(--text);
 }
 
 /* 送信内容は件数が多くなるので、本文の大きさではなく一覧と同じ大きさで読ませる。 */

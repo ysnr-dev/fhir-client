@@ -49,34 +49,33 @@ export function KarteCoverageSection({ patientId }: { patientId: string }) {
       ) : rows.length === 0 ? (
         <p className="patient-table__empty">保険が登録されていません</p>
       ) : (
-        <table className="patient-table">
-          <thead>
-            <tr>
-              <th>保険</th>
-              <th>保険者番号</th>
-              <th>記号・番号</th>
-              <th>負担割合</th>
-              <th>有効期間</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...active, ...expired].map((row) => (
-              <tr key={row.id} className={row.active ? undefined : "receipt-coverage--expired"}>
-                <td>
+        <ul className="profile-list">
+          {[...active, ...expired].map((row) => {
+            const symbolNumber =
+              [row.symbol, row.number].filter(Boolean).join("・") + (row.branch ? `（枝番 ${row.branch}）` : "");
+            const meta = [
+              row.insurerNumber && `保険者番号 ${row.insurerNumber}`,
+              symbolNumber && `記号・番号 ${symbolNumber}`,
+            ]
+              .filter(Boolean)
+              .join(" ・ ");
+            const period = [row.start, row.end].filter(Boolean).join(" 〜 ");
+            return (
+              <li
+                key={row.id}
+                className={row.active ? "profile-list__item" : "profile-list__item profile-list__item--muted"}
+              >
+                <span className="profile-list__name">
                   {row.name}
                   {row.active ? "" : "（失効）"}
-                </td>
-                <td>{row.insurerNumber ?? ""}</td>
-                <td>
-                  {[row.symbol, row.number].filter(Boolean).join("・")}
-                  {row.branch ? `（枝番 ${row.branch}）` : ""}
-                </td>
-                <td>{row.copayPercent === null ? "" : `${row.copayPercent}%`}</td>
-                <td>{[row.start, row.end].filter(Boolean).join(" 〜 ")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </span>
+                {row.copayPercent !== null && <span>{row.copayPercent}%</span>}
+                {meta && <span className="profile-list__meta">{meta}</span>}
+                {period && <span className="profile-list__meta">{period}</span>}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </section>
   );

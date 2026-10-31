@@ -5,7 +5,7 @@ import { ErrorBanner } from "./ErrorBanner";
 /**
  * プロファイルタブの「感染症」区画。
  *
- * 検体検査の結果と手入力の 2 経路をまとめて 1 種類 1 行で出す。検査結果は
+ * 検体検査の結果と手入力の 2 経路をまとめて 1 種類 1 枚で出す。検査結果は
  * JLAC11 の分析物コードで拾い、手入力はここで足す。
  * 同じ種類が両方にあれば検査結果を優先する(検査で出た値が正)。
  */
@@ -42,39 +42,31 @@ export function PatientInfectionSection({
       ) : rows.length === 0 ? (
         <p className="patient-table__empty">感染症の登録がありません。</p>
       ) : (
-        <table className="patient-table">
-          <thead>
-            <tr>
-              <th>種類</th>
-              <th className="rad-code__compact">結果</th>
-              <th className="rad-code__compact">確認日</th>
-              <th className="rad-code__compact">情報源</th>
-              <th>備考</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.type}>
-                <td>{row.typeLabel}</td>
-                <td className="rad-code__compact">
-                  <span className={resultClass(row.result)}>{row.resultLabel || "-"}</span>
-                </td>
-                <td className="rad-code__compact">{row.effectiveDate || "-"}</td>
-                <td className="rad-code__compact">{row.sourceLabel || "-"}</td>
-                <td>{row.note || "-"}</td>
-                <td className="patient-table__actions">
-                  {/* 検査結果由来の行はここでは直せない(正本は検査結果)。 */}
-                  {!row.fromLab && (
-                    <button type="button" onClick={() => onEdit(row.observationId)}>
+        <ul className="profile-list">
+          {rows.map((row) => {
+            const meta = [row.effectiveDate, row.sourceLabel].filter(Boolean).join(" ・ ");
+            return (
+              <li key={row.type} className="profile-list__item">
+                <span className="profile-list__name">{row.typeLabel}</span>
+                <span className={resultClass(row.result)}>{row.resultLabel || "-"}</span>
+                {/* 検査結果由来の行はここでは直せない(正本は検査結果)。 */}
+                {!row.fromLab && (
+                  <span className="profile-list__actions">
+                    <button
+                      type="button"
+                      className="rp-card__compact-button"
+                      onClick={() => onEdit(row.observationId)}
+                    >
                       編集
                     </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  </span>
+                )}
+                {meta && <span className="profile-list__meta">{meta}</span>}
+                {row.note && <span className="profile-list__note">{row.note}</span>}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </section>
   );
