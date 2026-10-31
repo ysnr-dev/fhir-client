@@ -73,6 +73,14 @@ module Reports
       render json: { error: "too_many_day_orders" }, status: :unprocessable_content
     end
 
+    rescue_from RegimenMasterReport::NotFound do
+      render json: { error: "regimen_not_found" }, status: :not_found
+    end
+
+    rescue_from RegimenMasterReport::NotApproved do
+      render json: { error: "regimen_not_approved" }, status: :unprocessable_content
+    end
+
     rescue_from LabResultReport::NotFound do
       render json: { error: "lab_result_not_found" }, status: :not_found
     end
@@ -96,6 +104,7 @@ module Reports
     rescue_from QuestionnaireResponseReport::UpstreamError, LabLabelReport::UpstreamError,
                 PrescriptionReport::UpstreamError, InjectionReport::UpstreamError,
                 LabResultReport::UpstreamError, RegimenReport::UpstreamError,
+                RegimenMasterReport::UpstreamError,
                 Faraday::ConnectionFailed, Faraday::TimeoutError do
       render json: { error: "upstream_unreachable" }, status: :bad_gateway
     end

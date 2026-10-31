@@ -1,5 +1,6 @@
 import json
-# 化学療法実施計画書(A4 縦)と患者向けのスケジュール表(A4 縦、1 ページ = 1 か月)の .tlf を生成する。
+# 化学療法実施計画書(A4 縦)、患者向けのスケジュール表(A4 縦、1 ページ = 1 か月)、外部公開用のレジメン(A4 縦)の
+# .tlf を生成する。
 # backend ディレクトリで実行すると lib/report_layouts/ に書き出す。部品の書式は gen_injection_tlf.py と同じ。
 FONT=["IPAGothic"]
 def text(x,y,w,h,s,size=9,bold=False,align="left",id=""):
@@ -105,4 +106,39 @@ items+= [text(L,FOOT,80,10,"メモ",8), rect(L,FOOT+11,W,40),
          block("contact",L,FOOT+70,W,12,10),
          block("page_no",R-60,816,60,10,7,"right")]
 json.dump(doc("化学療法スケジュール表",items),open("lib/report_layouts/regimen_schedule.tlf","w"),ensure_ascii=False,indent=2)
+# ---- 外部公開用のレジメン ----
+# 患者情報を持たない。上段 = レジメンの属性(2 列 × 4 行)、中段 = 適応疾患・投与内容・基準・副作用を
+# 見出しごとに流す list、下段 = 問い合わせ先。
+items=[text(L,26,W,20,"がん化学療法レジメン",16,True,"center"),
+       block("hospital_name",381,30,180.3,10,8,"right"), block("printed_on",381,42,180.3,10,8,"right"),
+       block("regimen_title",L,52,W,16,13,bold=True,overflow="fit")]
+TOP=74.0
+rows=[("コード","regimen_code","診療科","department"),("治療目的","purpose","実施区分","setting"),
+      ("1 クール","cycle_rule","クール数","planned_cycles"),("制吐リスク","emetic_risk","承認日","approved_on")]
+items.append(rect(L,TOP,W,ROW*len(rows))); items.append(line(MID,TOP,MID,TOP+ROW*len(rows)))
+for i,(l1,b1,l2,b2) in enumerate(rows):
+    y=TOP+ROW*i
+    if i>0: items.append(line(L,y,R,y))
+    items.append(text(L+4,y+4,LW-4,10,l1,8))
+    items.append(block(b1,L+LW,y+3.5,W/2-LW-4,11,9,overflow="fit"))
+    items.append(text(MID+4,y+4,LW-4,10,l2,8))
+    items.append(block(b2,MID+LW,y+3.5,W/2-LW-4,11,9,overflow="fit"))
+LIST_Y=TOP+ROW*len(rows)+10; LIST_H=792.0-LIST_Y
+# 行の種類: 見出し(section)/ 投与ステップ(step)/ 薬剤(role・name・basis・max)/ 注記(note)/ 本文(body)。
+detail_y=LIST_Y
+detail_items=[block("section",L,detail_y+1,W,11,10,bold=True),
+              block("step",L+10,detail_y+1.5,W-12,10,9),
+              block("body",L+20,detail_y+1.5,W-22,10,8.5),
+              block("note",L+66,detail_y+2,W-68,10,7.5),
+              block("role",L+20,detail_y+1.5,44,10,8.5),
+              block("name",L+66,detail_y+1.5,270,10,8.5,overflow="fit"),
+              block("basis",L+340,detail_y+1.5,90,10,8.5,"right"),
+              block("max",L+434,detail_y+1.5,89,10,8.5,"right")]
+items.append({"id":"content","type":"list","display":True,"description":"","x":L,"y":LIST_Y,"width":W,"height":LIST_H,
+              "content-height":LIST_H,"auto-page-break":False,
+              "header":section(0,[],False),"detail":section(DETAIL,detail_items),
+              "page-footer":section(0,[],False),"footer":section(0,[],False)})
+items+= [line(L,800,R,800), text(L,804,60,10,"問い合わせ先",7.5), block("contact",L+60,803.5,360,10,8),
+         block("page_no",R-60,816,60,10,7,"right")]
+json.dump(doc("がん化学療法レジメン",items),open("lib/report_layouts/regimen_public.tlf","w"),ensure_ascii=False,indent=2)
 print("generated")

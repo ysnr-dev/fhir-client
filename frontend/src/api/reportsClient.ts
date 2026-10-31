@@ -79,6 +79,11 @@ export function regimenSchedulePdfUrl(regimenOrderId: string): string {
   return `/reports/regimens/${encodeURIComponent(regimenOrderId)}/schedule/pdf`;
 }
 
+/** 外部公開用のレジメン(承認済のレジメンマスタ 1 件。患者情報なし)の PDF の URL。 */
+export function regimenPublicPdfUrl(regimenId: number): string {
+  return `/reports/regimen_masters/${regimenId}/pdf`;
+}
+
 /** 注射箋と注射ラベルを 1 つのタブに並べる画面(pages/InjectionPrintPage)。 */
 export const INJECTION_PRINT_PATH = "/injection-print";
 

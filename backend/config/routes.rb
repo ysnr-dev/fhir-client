@@ -163,6 +163,8 @@ Rails.application.routes.draw do
     # 化学療法実施計画書(1 クールぶん)・患者向けのスケジュール表。適用のヘッダ id を受け取る。
     get "regimens/:order_id/plan/pdf", to: "regimen_pdfs#plan"
     get "regimens/:order_id/schedule/pdf", to: "regimen_pdfs#schedule"
+    # 外部公開用のレジメン(レジメンマスタ 1 件。患者情報なし)。マスタの id を受け取る。
+    get "regimen_masters/:id/pdf", to: "regimen_master_pdfs#show"
     # 検体検査結果の報告書(DiagnosticReport 1 件ぶん)
     get "lab_results/:report_id/pdf", to: "lab_result_pdfs#show"
     # DPC 様式1 の提出ファイル(FF1)。対象月(退院月)の一覧と、ファイル本体。

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import type { CtcaeTerm, Disease, JlacItem, Medicine, MedicineUsage } from "../api/masterClient";
 import { useFormularyRankLookup, useMedicineDoseFactors, useRegimen, useRegimenMutations } from "../api/masterQueries";
 import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
+import { regimenPublicPdfUrl } from "../api/reportsClient";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RegimenGuide } from "../components/RegimenGuide";
@@ -792,6 +793,12 @@ export function RegimenEditorPage() {
                 <button type="button" onClick={handleCopy} disabled={mutations.copy.isPending}>
                   複製
                 </button>
+                {/* 外部公開用の帳票は、保存済みの承認済レジメンだけ。 */}
+                {detail.data?.status === "approved" && (
+                  <button type="button" onClick={() => window.open(regimenPublicPdfUrl(savedId), "_blank", "noopener")}>
+                    公開用PDF
+                  </button>
+                )}
                 {/* 削除できるのは下書きだけ(承認済・廃止は施設の記録で、適用が指している)。 */}
                 {!frozen && (
                   <button type="button" onClick={handleDelete} disabled={mutations.remove.isPending}>

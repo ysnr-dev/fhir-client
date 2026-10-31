@@ -1,15 +1,16 @@
 # 化学療法実施計画書・スケジュール表
 
-カルテの化学療法タブ「レジメン詳細」の「計画書」(クールごと)と「スケジュール表」で刷る帳票。
+カルテの化学療法タブ「レジメン詳細」の「計画書」(クールごと)と「スケジュール表」、レジメンマスタ編集画面の「公開用PDF」で刷る帳票。
 設計は `docs/chemo-regimen-design.md` §8.25 を参照。
 
 | ファイル | 帳票 | 用紙 |
 |---|---|---|
 | `backend/lib/report_layouts/regimen_plan.tlf` | 化学療法実施計画書(1 クールぶん) | A4 縦 |
 | `backend/lib/report_layouts/regimen_schedule.tlf` | 患者向けのスケジュール表(1 ページ = 1 か月) | A4 縦 |
+| `backend/lib/report_layouts/regimen_public.tlf` | 外部公開用のレジメン(レジメンマスタ 1 件。患者情報なし) | A4 縦 |
 
 注射箋と同じく `report_layouts`(DB)には登録せず、同梱の `.tlf` を backend が直接読む
-(`RegimenReport::PLAN_LAYOUT_PATH` / `SCHEDULE_LAYOUT_PATH`)。2 つの `.tlf` は
+(`RegimenReport::PLAN_LAYOUT_PATH` / `SCHEDULE_LAYOUT_PATH`、`RegimenMasterReport::LAYOUT_PATH`)。3 つの `.tlf` は
 `docs/report-mappings/gen_regimen_tlf.py` で生成した(backend ディレクトリで実行すると `lib/report_layouts/` に書き出す)。
 .tlf を手で直さず、スクリプトを直して再生成すること。
 
@@ -60,3 +61,32 @@
 | `c{行}{列}` | text-block(複数行) | 「C1 Day1」「点滴: …」「内服: …」「休薬」(18 桁 × 7 行で折り返し・打ち切り) |
 | `contact` | text-block | 自院の名称と電話番号(Organization の telecom phone) |
 | `printed_on` / `page_no` | text-block | 発行日・「n / m」 |
+
+## 外部公開用のレジメンのプレースホルダー
+
+流し込みは `backend/app/services/reports/regimen_public_renderer.rb`。
+
+| ID | 種類 | 内容 |
+|---|---|---|
+| `regimen_title` | text-block | レジメン名 |
+| `regimen_code` / `department` | text-block | レジメンコード・診療科 |
+| `purpose` / `setting` | text-block | 治療目的・実施区分 |
+| `cycle_rule` / `planned_cycles` | text-block | 「21 日（投与 14 日・休薬 7 日）」/「8 クール」(空なら「継続」) |
+| `emetic_risk` / `approved_on` | text-block | 制吐リスク・承認日 |
+| `content` | list | 本文(下記) |
+| `contact` | text-block | 自院の名称と電話番号 |
+| `hospital_name` / `printed_on` / `page_no` | text-block | 自院・発行日・「n / m」 |
+
+### 本文(list `content`)
+
+見出しごとに流す(中身の無い見出しは出さない): 適応疾患 → 投与内容 → 投与基準（検査値）→ 減量基準 → 中止基準 → 主な副作用 → 参考文献。
+
+| 行 | 使う ID | 例 |
+|---|---|---|
+| 見出し | `section` | 「■ 投与内容」 |
+| ステップ | `step` | 「1. オキサリプラチン　Day 1　点滴　静脈内　末梢ルート　2時間」 |
+| 薬剤 | `role` / `name` / `basis` / `max` | 抗がん剤 / 医薬品名 / 85 mg/m² / 上限。投与内容の先頭は列名の行 |
+| 注記 | `note` | 薬剤のコメント、器材・投与時注意 |
+| 本文 | `body` | 自由記述・検査基準・副作用 |
+
+見出しをページの最終行に残さず、ページの頭が薬剤の途中なら「（続き）」のステップ見出しを補う。
