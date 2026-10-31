@@ -505,6 +505,55 @@
   color: #6b7280;
 }
 
+/* 診療上の注意の一覧。狭いドロワーでも読めるよう 1 件を 1 枚に畳む。 */
+.flag-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.flag-list__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.flag-list__item .flag-table__pictogram {
+  margin-right: 0;
+}
+
+.flag-list__name {
+  font-weight: 600;
+}
+
+.flag-list__actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.flag-list__meta {
+  flex-basis: 100%;
+  font-size: 12px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.flag-list__text {
+  flex-basis: 100%;
+  font-size: 12px;
+  opacity: 0.8;
+  white-space: pre-wrap;
+}
+
 /* 輸血オーダーに出す「患者に登録された血液型」。選んだ型と食い違うときだけ
    赤くする(食い違い自体は妨げない。意図して別の型を出すことがあるため)。 */
 .transfusion-order__patient-blood-type {

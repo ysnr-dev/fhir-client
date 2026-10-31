@@ -30,48 +30,32 @@ export function FlagTable({ flags, cautionsByCode, onView, onEdit }: FlagTablePr
     });
 
   return (
-    <table className="patient-table">
-      <thead>
-        <tr>
-          <th className="rad-code__compact"></th>
-          <th>注意</th>
-          <th>内容</th>
-          <th className="rad-code__compact">区分</th>
-          <th className="rad-code__compact">期間</th>
-          <th className="rad-code__compact">状態</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.id}>
-            <td className="rad-code__compact">
-              {row.pictogram && (
-                <span className={`flag-table__pictogram flag-table__pictogram--${row.category}`}>
-                  <CautionPictogram pictogram={row.pictogram} />
-                </span>
-              )}
-            </td>
-            <td>{row.name}</td>
-            <td>{row.text || "-"}</td>
-            <td className="rad-code__compact">{row.categoryLabel || "-"}</td>
-            <td className="rad-code__compact">
-              {row.periodStart || row.periodEnd
-                ? `${row.periodStart || ""} 〜 ${row.periodEnd || ""}`
-                : "-"}
-            </td>
-            <td className="rad-code__compact">{row.statusLabel || "-"}</td>
-            <td className="patient-table__actions">
-              <button type="button" onClick={() => onView(row.id)}>
+    <ul className="flag-list">
+      {rows.map((row) => {
+        const period =
+          row.periodStart || row.periodEnd ? `${row.periodStart || ""} 〜 ${row.periodEnd || ""}` : "";
+        const meta = [row.categoryLabel, period, row.statusLabel].filter(Boolean).join(" ・ ");
+        return (
+          <li key={row.id} className="flag-list__item">
+            {row.pictogram && (
+              <span className={`flag-table__pictogram flag-table__pictogram--${row.category}`}>
+                <CautionPictogram pictogram={row.pictogram} />
+              </span>
+            )}
+            <span className="flag-list__name">{row.name}</span>
+            <span className="flag-list__actions">
+              <button type="button" className="rp-card__compact-button" onClick={() => onView(row.id)}>
                 表示
               </button>
-              <button type="button" onClick={() => onEdit(row.id)}>
+              <button type="button" className="rp-card__compact-button" onClick={() => onEdit(row.id)}>
                 編集
               </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+            </span>
+            {meta && <span className="flag-list__meta">{meta}</span>}
+            {row.text && <span className="flag-list__text">{row.text}</span>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
