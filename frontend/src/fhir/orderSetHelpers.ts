@@ -391,11 +391,15 @@ export function sanitizeValuesForSet(orderType: OrderSetOrderType, values: unkno
  * unsupported を立て、画面は読み取り専用にする。
  */
 export function migrateEntryValues(
-  _orderType: OrderSetOrderType,
+  orderType: OrderSetOrderType,
   schemaVersion: number,
   values: unknown,
 ): { values: unknown; unsupported: boolean } {
   if (schemaVersion > ORDER_SET_SCHEMA_VERSION) return { values, unsupported: true };
+  // 用量の入力区分を持たない処方は 1 日量で入れたもの。未設定のままだとフォームが施設設定の初期値で開く。
+  if (orderType === "prescription" && !(values as PrescriptionFormValues).doseBasis) {
+    return { values: { ...(values as PrescriptionFormValues), doseBasis: "daily" }, unsupported: false };
+  }
   return { values, unsupported: false };
 }
 

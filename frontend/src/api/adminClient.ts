@@ -19,7 +19,7 @@ import type { CancerRegistrySettings } from "../fhir/cancerRegistryHelpers";
 import type { InfectiousDiseaseReportSettings } from "../fhir/infectiousDiseaseReportHelpers";
 import type { NcdRegistrationSettings } from "../fhir/ncdHelpers";
 import type { NursingAcuitySettings } from "../fhir/nursingAcuityHelpers";
-import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
+import type { PrescriptionCategoryDefaults, PrescriptionDoseSettings } from "../fhir/prescriptionHelpers";
 import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
 import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
 import type { NursingProfileSettings } from "../fhir/nursingProfileHelpers";
@@ -74,6 +74,8 @@ export interface FacilitySettings {
   document_reminder: DocumentReminderSettings;
   /** 処方区分の初期値(入外区分ごと。空なら未選択で開く)。 */
   prescription_category: PrescriptionCategoryDefaults;
+  /** 新規の処方の用量の入力区分(1 回量 / 1 日量)。 */
+  prescription_dose: PrescriptionDoseSettings;
   /** 他科依頼の依頼目的テンプレートの既定(依頼先の診療科 Organization.id → canonical)。 */
   consult_default_templates: Record<string, string>;
   /** 放射線治療の治療中の診察(週次レビュー)の間隔。 */
@@ -121,6 +123,7 @@ export type FacilitySettingsPayload = Partial<{
   medication_schedule: MedicationScheduleSettings;
   document_reminder: DocumentReminderSettings;
   prescription_category: PrescriptionCategoryDefaults;
+  prescription_dose: PrescriptionDoseSettings;
   consult_default_templates: Record<string, string>;
   radiotherapy_review: RadiotherapyReviewSettings;
   receipt_codes: ReceiptCodeSettings;

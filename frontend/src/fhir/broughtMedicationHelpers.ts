@@ -1,6 +1,6 @@
 import { nowFhirDateTime, toDateTimeInputValue, toFhirDateTime, today } from "../lib/dates";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
-import { isAsNeededUsage } from "./medicationScheduleHelpers";
+import { isAsNeededUsage, timesPerDay } from "./medicationScheduleHelpers";
 import { ingredientKey, type ActiveMedication } from "./medicationSafetyHelpers";
 import {
   BROUGHT_CATEGORY,
@@ -210,6 +210,7 @@ function lineDosage(line: BroughtMedicationLineValues): fhir4.Dosage {
     { usage: line.usage, doseCount: "", usageComment: "", supplement: null },
     { medicine: line.medicine, dose: line.dose, unevenDoses: null },
     today(),
+    "single",
   );
   if (!line.usage && line.usageText.trim()) {
     dosage.timing = { code: { text: line.usageText.trim() } };
@@ -387,8 +388,7 @@ export function estimateRemainingDays(
 
 /** 用法コード 4 桁目の 1 日の服用回数。`Z`(不定)などの読めない値は 0。 */
 function dailyTimesOf(usageCode: string): number {
-  const times = Number(usageCode.charAt(3));
-  return Number.isInteger(times) ? times : 0;
+  return timesPerDay(usageCode) ?? 0;
 }
 
 export function validateIdentifyValues(values: BroughtIdentifyValues, name: string): string | null {
@@ -459,7 +459,18 @@ export function buildIdentifiedMedication(
             {
               ...dosage,
               doseAndRate: [
-                { doseQuantity: { ...dosage.doseAndRate[0].doseQuantity, unit } },
+                {
+                  ...dosage.doseAndRate[0],
+                  doseQuantity: { ...dosage.doseAndRate[0].doseQuantity, unit },
+                  ...(dosage.doseAndRate[0].rateRatio
+                    ? {
+                        rateRatio: {
+                          ...dosage.doseAndRate[0].rateRatio,
+                          numerator: { ...dosage.doseAndRate[0].rateRatio.numerator, unit },
+                        },
+                      }
+                    : {}),
+                },
               ],
             },
           ],
@@ -639,6 +650,8 @@ export function buildPrescriptionFormFromBrought(
     startDate: today(),
     comment: "",
     problem: null,
+    // 用量は持参薬の 1 回量を 1 日量に直して入れる(`prescriptionDoseFromBrought`)。
+    doseBasis: "daily",
     rps: rps.length ? rps : [{ usage: null, doseDays: "", doseCount: "", usageComment: "", medicines: [{ ...emptyMedicineLine }] }],
   };
 }

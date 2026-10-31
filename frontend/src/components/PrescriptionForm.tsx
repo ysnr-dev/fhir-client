@@ -6,8 +6,13 @@ import {
   BROUGHT_CATEGORY,
   canBlockSubstitution,
   CATEGORY_OPTIONS,
+  convertDoseField,
   defaultPrescriptionCategory,
   DISPENSE_INSTRUCTION_OPTIONS,
+  DOSE_BASIS_OPTIONS,
+  doseFieldKind,
+  lineDoseAmounts,
+  rpDoseFieldLabel,
   emptyMedicineLine,
   emptyPrescriptionForm,
   emptyRp,
@@ -16,6 +21,7 @@ import {
   prescriptionLineDose,
   SETTING_OPTIONS,
   SUBSTITUTION_BLOCK_OPTIONS,
+  type DoseBasis,
   type MedicineLineValues,
   type PrescriptionFormValues,
   type DispenseInstruction,
@@ -23,7 +29,7 @@ import {
   type RpValues,
   type SubstitutionBlock,
 } from "../fhir/prescriptionHelpers";
-import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
+import { isAsNeededUsage, timesPerDay } from "../fhir/medicationScheduleHelpers";
 import {
   emptySupplement,
   isValidUnevenDose,
@@ -89,6 +95,30 @@ type ModalState =
   | { kind: "medicine"; rpIndex: number; medIndex: number }
   | null;
 
+/**
+ * RP の用量欄が入力区分に従うか(見出しで区分を切り替えられるか)。用法が未選択か、日数を持ち回数の分かる用法で
+ * 不均等でない行があるとき。頓用・外用・回数の分からない用法の RP は見出しを文字で出す。
+ */
+function followsDoseBasis(rp: RpValues): boolean {
+  if (!rp.usage) return true;
+  if (!hasDoseDays(rp.usage.usage_code, rp.usage.basic_usage_category)) return false;
+  return timesPerDay(rp.usage.usage_code) !== null && rp.medicines.some((med) => !med.unevenDoses);
+}
+
+/** 医薬品名の行の右端に添える、もう一方の量(1 回量の欄なら 1 日量、1 日量の欄なら 1 回量)。 */
+function OtherDose({ rp, line, basis }: { rp: RpValues; line: MedicineLineValues; basis: DoseBasis | undefined }) {
+  const kind = doseFieldKind(rp, line, basis);
+  const amounts = lineDoseAmounts(rp, line, basis);
+  const unit = line.medicine?.unit_name ?? "";
+  const text =
+    kind === "single" && amounts?.daily !== undefined
+      ? `1日 ${amounts.daily}${unit}`
+      : kind === "daily" && amounts?.single !== undefined
+        ? `1回 ${amounts.single}${unit}`
+        : "";
+  return text ? <span className="rp-card__dose-other">{text}</span> : null;
+}
+
 function removeButton(onClick: () => void, label: string) {
   return (
     <button
@@ -119,7 +149,9 @@ export function PrescriptionForm({
   // (新規・DO で入外区分が変わったとき)にだけ入れ、入力済み・保存済みの区分は動かさない。
   const categoryDefaults = usePrescriptionCategoryDefaults();
   const [values, setValues] = useState<PrescriptionFormValues>(() => {
-    const base = initialValues ?? emptyPrescriptionForm();
+    const initial = initialValues ?? emptyPrescriptionForm();
+    // 用量の入力区分を持たないのは新規の空のフォームだけ(施設設定の初期値で開く)。
+    const base = { ...initial, doseBasis: initial.doseBasis ?? categoryDefaults.doseBasis };
     if (base.category) return base;
     return {
       ...base,
@@ -150,9 +182,12 @@ export function PrescriptionForm({
   const checkedRps = useMemo(
     () =>
       values.rps.map((rp) => ({
-        medicines: rp.medicines.map((m) => ({ medicine: m.medicine, dose: prescriptionLineDose(rp, m) })),
+        medicines: rp.medicines.map((m) => ({
+          medicine: m.medicine,
+          dose: prescriptionLineDose(rp, m, values.doseBasis),
+        })),
       })),
-    [values.rps],
+    [values.rps, values.doseBasis],
   );
   const medicationAdvisories = useMedicationAdvisories({
     patientId: setMode ? "" : patientId,
@@ -244,6 +279,36 @@ export function PrescriptionForm({
   }
 
 
+  // 入力区分を切り替えたら、用量欄を新しい区分の量に換算する。換算したまま戻したときは、丸めの誤差が
+  // 出ないよう換算前の値に戻す。
+  function handleDoseBasisChange(basis: DoseBasis) {
+    setValues((v) => ({
+      ...v,
+      doseBasis: basis,
+      rps: v.rps.map((rp) => ({
+        ...rp,
+        medicines: rp.medicines.map((med) => {
+          if (med.doseBeforeSwitch && med.dose === med.doseBeforeSwitch.converted) {
+            return { ...med, dose: med.doseBeforeSwitch.dose, doseBeforeSwitch: undefined };
+          }
+          const dose = convertDoseField({ rp, line: med, basis: v.doseBasis }, { rp, line: med, basis });
+          return dose === med.dose ? med : { ...med, dose, doseBeforeSwitch: { dose: med.dose, converted: dose } };
+        }),
+      })),
+    }));
+  }
+
+  // 不均等を付け外しすると用量欄の意味(不均等は 1 日量)が変わるので、量も換算する。
+  function setUneven(rpIndex: number, medIndex: number, unevenDoses: string[] | null) {
+    const rp = values.rps[rpIndex];
+    const med = rp.medicines[medIndex];
+    const dose = convertDoseField(
+      { rp, line: med, basis: values.doseBasis },
+      { rp, line: { ...med, unevenDoses }, basis: values.doseBasis },
+    );
+    updateMedicine(rpIndex, medIndex, { unevenDoses, dose });
+  }
+
   function updateUnevenDoses(rpIndex: number, medIndex: number, unevenDoses: string[]) {
     updateMedicine(rpIndex, medIndex, { unevenDoses, dose: unevenDailyDose(unevenDoses) });
   }
@@ -286,8 +351,21 @@ export function PrescriptionForm({
       doseCount: "",
       supplement: isAsNeededUsage(usage.usage_code) ? null : rp.supplement,
       medicines: rp.medicines.map((med) => {
-        if (!med.unevenDoses) return med;
-        if (!labels) return { ...med, unevenDoses: null };
+        if (!med.unevenDoses) {
+          // 回数の分からない用法との行き来では用量欄の意味(1 回量 / 1 日量)が変わるので換算する。
+          const dose = convertDoseField(
+            { rp, line: med, basis: values.doseBasis },
+            { rp: { usage }, line: med, basis: values.doseBasis },
+          );
+          return dose === med.dose ? med : { ...med, dose };
+        }
+        if (!labels) {
+          const dose = convertDoseField(
+            { rp, line: med, basis: values.doseBasis },
+            { rp: { usage }, line: { ...med, unevenDoses: null }, basis: values.doseBasis },
+          );
+          return { ...med, unevenDoses: null, dose };
+        }
         const unevenDoses = labels.map((_, i) => med.unevenDoses?.[i] ?? "");
         return { ...med, unevenDoses, dose: unevenDailyDose(unevenDoses) };
       }),
@@ -498,7 +576,25 @@ export function PrescriptionForm({
             <thead>
               <tr>
                 <th>医薬品</th>
-                <th>用量</th>
+                <th>
+                  {/* 用量の入力区分(処方全体で 1 つ)は、入力欄の真上のこの見出しで切り替える。 */}
+                  {followsDoseBasis(rp) ? (
+                    <select
+                      className="rp-card__dose-basis-select"
+                      aria-label="用量の入力"
+                      value={values.doseBasis ?? "daily"}
+                      onChange={(e) => handleDoseBasisChange(e.target.value as DoseBasis)}
+                    >
+                      {DOSE_BASIS_OPTIONS.map((o) => (
+                        <option key={o.code} value={o.code}>
+                          {o.display}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    rpDoseFieldLabel(rp, values.doseBasis)
+                  )}
+                </th>
                 <th>単位</th>
                 <th></th>
               </tr>
@@ -533,6 +629,7 @@ export function PrescriptionForm({
                         ) : (
                           <span className="rp-card__usage-value--empty">未選択</span>
                         )}
+                        <OtherDose rp={rp} line={med} basis={values.doseBasis} />
                       </div>
                       <AdvisoryInlineMarks advisories={advisoriesOfScope(session.advisories, rpIndex, medIndex)} />
                       {showSubstitution && (
@@ -565,7 +662,7 @@ export function PrescriptionForm({
                           labels={unevenLabels}
                           doses={med.unevenDoses}
                           onChange={(doses) => updateUnevenDoses(rpIndex, medIndex, doses)}
-                          onRemove={() => updateMedicine(rpIndex, medIndex, { unevenDoses: null })}
+                          onRemove={() => setUneven(rpIndex, medIndex, null)}
                           removeButton={removeButton}
                         />
                       )}
@@ -625,11 +722,7 @@ export function PrescriptionForm({
                               <button
                                 type="button"
                                 className="row-menu__item"
-                                onClick={() =>
-                                  updateMedicine(rpIndex, medIndex, {
-                                    unevenDoses: unevenLabels?.map(() => "") ?? null,
-                                  })
-                                }
+                                onClick={() => setUneven(rpIndex, medIndex, unevenLabels?.map(() => "") ?? null)}
                               >
                                 不均等投与
                               </button>

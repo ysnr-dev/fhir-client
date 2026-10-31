@@ -50,6 +50,7 @@ import {
 import { TransfusionPerformModal } from "./TransfusionPerformModal";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import {
+  doseText,
   groupByRp,
   hasDoseDays,
   prescriptionComment,
@@ -1009,7 +1010,7 @@ export function KarteCardBody({ item }: { item: KarteTimelineItem }) {
                   <span className="karte-rp__medicine-name">{medicine.name}</span>
                   {medicine.dose != null && (
                     <span className="karte-rp__medicine-dose">
-                      {`${medicine.dose}${medicine.unit ?? ""}`}
+                      {doseText(medicine.amounts ?? {}, medicine.unit)}
                       <PotencyMark potency={medicine.potency} />
                     </span>
                   )}

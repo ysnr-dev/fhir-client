@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_VITAL_THRESHOLDS } from "../../fhir/vitalHelpers";
 import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
-import { DEFAULT_PRESCRIPTION_CATEGORY } from "../../fhir/prescriptionHelpers";
+import { DEFAULT_PRESCRIPTION_CATEGORY, DEFAULT_PRESCRIPTION_DOSE } from "../../fhir/prescriptionHelpers";
 import { DEFAULT_MEDICATION_SCHEDULE } from "../../fhir/medicationScheduleHelpers";
 import {
   DEFAULT_MEAL_SCHEDULE,
@@ -114,6 +114,8 @@ export function usePrescriptionCategoryDefaults() {
   const settings = useFacilitySettings();
   return {
     defaults: settings.data?.prescription_category ?? DEFAULT_PRESCRIPTION_CATEGORY,
+    /** 新規の処方の用量の入力区分。 */
+    doseBasis: (settings.data?.prescription_dose ?? DEFAULT_PRESCRIPTION_DOSE).basis,
     /** 設定を読み終えたか。フォームの初期値は初回描画時にしか効かないので、呼び出し側は
      *  これが true になるまでフォームを描かない。 */
     ready: !settings.isLoading,

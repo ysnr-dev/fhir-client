@@ -64,6 +64,16 @@ export function isAsNeededUsage(usageCode: string | undefined): boolean {
   return usageCode?.[2] === "5";
 }
 
+/**
+ * 1 日の服用回数(4 桁目)。`1`〜`9` に続いて `A` = 10 回、`B` = 11 回 … と数える。
+ * `Z`(回数不定)などの読めない値は null。
+ */
+export function timesPerDay(usageCode: string | undefined): number | null {
+  const char = usageCode?.[3];
+  if (!char || !/^[1-9A-Y]$/.test(char)) return null;
+  return parseInt(char, 36);
+}
+
 /** 5〜9 桁目のスロットの位置。 */
 const SLOT_OFFSET = { bedtime: 4, dinner: 5, lunch: 6, breakfast: 7, wake: 8 } as const;
 

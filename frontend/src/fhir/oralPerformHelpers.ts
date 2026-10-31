@@ -16,6 +16,7 @@ import {
   YJ_CODE_SYSTEM,
   groupByRp,
   identifierValue,
+  type DoseAmounts,
 } from "./prescriptionHelpers";
 import { unevenDosesOf } from "./supplementaryUsage";
 import { conceptLabel, referenceIdOfType } from "./shared";
@@ -103,15 +104,14 @@ export interface OralScheduleSettings {
 }
 
 /**
- * 1 回量。処方の内服(頓用以外)の用量は 1 日量なので、不均等投与ならその枠の量、
- * そうでなければ 1 日量 ÷ 1 日の回数(用法コード 4 桁目)。
+ * 1 回量。不均等投与ならその枠の量、そうでなければ処方の 1 回量(`prescriptionDoseOf`。1 日量しか
+ * 持たない明細は 1 日量 ÷ 1 日の回数)。
  *
  * `slotIndex` は 1 日の予定時刻の中での順(0 始まり)。不均等の量は 1 日の中の順に
  * 並んでいる(`unevenTimingLabels` と同じ)ので、この順で引く。
  */
 export function slotDose(
-  usageCode: string | undefined,
-  dailyDose: number | undefined,
+  amounts: DoseAmounts | undefined,
   unevenDoses: string[] | null,
   slotIndex: number | null,
 ): number | undefined {
@@ -119,10 +119,7 @@ export function slotDose(
     const value = Number(unevenDoses[slotIndex]);
     if (value > 0) return value;
   }
-  if (dailyDose == null) return undefined;
-  const times = Number(usageCode?.[3]);
-  if (!Number.isInteger(times) || times < 1) return undefined;
-  return Number((dailyDose / times).toFixed(4));
+  return amounts?.single;
 }
 
 /** その処方の内服の薬剤行。頓用の RP は予定枠を持たないので出さない。 */
@@ -154,12 +151,7 @@ export function oralMedicineLines(
         code: medicine.code,
         yjCode: medicine.yjCode,
         name: medicine.name,
-        dose: slotDose(
-          rp.usageCode,
-          medicine.dose,
-          unevenDosesOf(mr?.dosageInstruction?.[0]),
-          slotIndex,
-        ),
+        dose: slotDose(medicine.amounts, unevenDosesOf(mr?.dosageInstruction?.[0]), slotIndex),
         unit: medicine.unit ?? "",
         skipped: false,
       });
@@ -250,7 +242,7 @@ function buildAdministration(
 ): fhir4.MedicationAdministration {
   const instruction = mr?.dosageInstruction?.[0];
   const dosage: fhir4.MedicationAdministrationDosage = {};
-  // 処方の doseQuantity(1 日量)は写さず、その枠の 1 回量を入れる。
+  // 処方の 1 日量は写さず、その枠の 1 回量を入れる。
   if (line.dose != null) {
     dosage.dose = { value: line.dose, ...(line.unit ? { unit: line.unit } : {}) };
   }

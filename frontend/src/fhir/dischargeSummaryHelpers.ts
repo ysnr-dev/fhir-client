@@ -25,6 +25,7 @@ import {
 } from "./encounterHelpers";
 import { departmentExtension, departmentOf, type DepartmentRef } from "./orderHeader";
 import { practitionerDisplayName } from "./practitionerHelpers";
+import { doseText, prescriptionDoseOf, prescriptionDoseUnitOf } from "./prescriptionHelpers";
 import { LOINC_SYSTEM, orderDay } from "./shared";
 
 // 退院時サマリー(退院時要約)。診療記録と同じ Composition の器で、
@@ -215,12 +216,11 @@ function medicationDisplay(mr: fhir4.MedicationRequest): string {
   const concept = mr.medicationCodeableConcept;
   const name = concept?.coding?.find((c) => c.display)?.display ?? concept?.text ?? "";
   const dosage = mr.dosageInstruction?.[0];
-  const dose = dosage?.doseAndRate?.[0]?.doseQuantity;
   const usage = dosage?.timing?.code?.coding?.find((c) => c.display)?.display ?? "";
   const days = mr.dispenseRequest?.expectedSupplyDuration?.value;
   return [
     name,
-    dose?.value != null ? `${dose.value}${dose.unit ?? ""}` : "",
+    doseText(prescriptionDoseOf(dosage), prescriptionDoseUnitOf(dosage)),
     usage,
     days != null ? `${days}日分` : "",
   ]

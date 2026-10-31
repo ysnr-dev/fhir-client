@@ -209,6 +209,27 @@ RSpec.describe PrescriptionReport do
     expect(captured.call[:rps][0].medicines.map(&:potency)).to eq([true, false])
   end
 
+  it "reads the per-dose and daily doses of an oral medicine for 併記" do
+    oral = medication_request("m1", rp: 1, index: 1, name: "ムコスタ錠", dose: 1, days: 7)
+    dosage = oral["dosageInstruction"][0]
+    dosage["timing"]["code"]["coding"] = [
+      { "system" => described_class::USAGE_CODE_SYSTEM, "code" => "1013044400000000", "display" => "１日３回朝昼夕食後　服用" },
+      { "system" => PrescriptionDose::USAGE_CATEGORY_SYSTEM, "code" => "1", "display" => "内服" }
+    ]
+    dosage["doseAndRate"][0]["rateRatio"] = {
+      "numerator" => { "value" => 3, "unit" => "錠" },
+      "denominator" => { "value" => 1, "unit" => "日", "system" => "http://unitsofmeasure.org", "code" => "d" }
+    }
+    stub_batch([oral])
+    captured = capture_renderer
+
+    described_class.new("o1", gateway: gateway).generate
+
+    medicine = captured.call[:rps][0].medicines[0]
+    expect(medicine.dose).to eq(3)
+    expect(medicine.dose_text).to eq("1回1錠（1日3錠）")
+  end
+
   it "reads supplementary usage codes apart from the usage comment" do
     stub_batch([
       medication_request("m1", rp: 1, index: 1, name: "ワーファリン錠", days: 14, comment: "食後すぐ",

@@ -80,8 +80,8 @@ export function RxVerificationModal({
         medicines: rp.medicines.map((m) => ({ medicine: m.medicine, dose: injectionLineDose(rp, m) })),
       }));
     }
-    return parsePrescriptionForm(serviceRequest, medicationRequests).rps.map((rp) => ({
-      medicines: rp.medicines.map((m) => ({ medicine: m.medicine, dose: prescriptionLineDose(rp, m) })),
+    return parsePrescriptionForm(serviceRequest, medicationRequests, { basis: "daily" }).rps.map((rp) => ({
+      medicines: rp.medicines.map((m) => ({ medicine: m.medicine, dose: prescriptionLineDose(rp, m, "daily") })),
     }));
   }, [serviceRequest, medicationRequests, summary.kind]);
   const advisories = useMedicationAdvisories({

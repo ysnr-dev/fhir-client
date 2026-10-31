@@ -69,6 +69,17 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       expect(items.first.usage_code).to eq("1012040400000000")
     end
 
+    it "sends the daily dose (rateRatio) as the quantity when the dose was ordered per dose" do
+      request = medication_request(code: "610406089", dose: 1, days: 7)
+      request["dosageInstruction"][0]["doseAndRate"][0]["rateRatio"] = {
+        "numerator" => { "value" => 2, "unit" => "錠" },
+        "denominator" => { "value" => 1, "unit" => "日", "system" => "http://unitsofmeasure.org", "code" => "d" }
+      }
+      store.add(request)
+
+      expect(build.items.first.lines.first.quantity).to eq("2")
+    end
+
     it "splits separate RP numbers into separate 剤" do
       store.add(medication_request(code: "1", dose: 1, rp: "1"), medication_request(code: "2", dose: 1, rp: "2"))
 

@@ -3,7 +3,7 @@ import type { Medicine, MedicineUsage } from "../api/masterClient";
 import type { LineDose } from "./drugCheckHelpers";
 import type { InsulinScaleValues } from "./insulinScaleHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { isAsNeededUsage } from "./medicationScheduleHelpers";
+import { isAsNeededUsage, timesPerDay } from "./medicationScheduleHelpers";
 import {
   supplementInstructions,
   supplementLabel,
@@ -83,6 +83,159 @@ export function isPotencyDose(doseAndRate: fhir4.DosageDoseAndRate | undefined):
 const BASIC_USAGE_CATEGORY_ORAL = "内服";
 
 /**
+ * 用量の入力区分(処方全体で 1 つ)。日数を持つ内服の明細は、どちらで入力しても 1 回量を `doseQuantity`、
+ * 1 日量を `doseAndRate.rateRatio`(JP Core の JP_MedicationRatio_DosePerDay)に持つ。区分はヘッダの拡張に
+ * 残し、編集・DO で同じ区分で開くのに使う。
+ */
+export type DoseBasis = "single" | "daily";
+
+export const DOSE_BASIS_EXT_URL = "http://fhir-client.local/StructureDefinition/prescription-dose-basis";
+
+export const DOSE_BASIS_OPTIONS: { code: DoseBasis; display: string }[] = [
+  { code: "single", display: "1回量" },
+  { code: "daily", display: "1日量" },
+];
+
+/** 処方の用量の入力区分。拡張が無い処方は 1 日量で入力したもの。 */
+export function doseBasisOf(sr: fhir4.ServiceRequest | undefined): DoseBasis {
+  return sr?.extension?.find((e) => e.url === DOSE_BASIS_EXT_URL)?.valueCode === "single" ? "single" : "daily";
+}
+
+/** 1 回量・1 日量の換算の丸め(小数第 3 位)。0.1 × 3 の浮動小数の端数もここで落とす。 */
+export function roundDose(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+/**
+ * 明細の用量欄が表す量。頓用は 1 回量、日数を持たないもの(外用など)は全量。日数を持つ内服は
+ * 入力区分に従うが、不均等(各回は別に入れ、用量欄は合計)と回数の分からない用法は 1 日量。
+ */
+export type DoseFieldKind = DoseBasis | "amount";
+
+export function doseFieldKind(
+  rp: Pick<RpValues, "usage">,
+  line: Pick<MedicineLineValues, "unevenDoses">,
+  basis: DoseBasis | undefined,
+): DoseFieldKind {
+  const usageCode = rp.usage?.usage_code;
+  if (isAsNeededUsage(usageCode)) return "single";
+  if (!hasDoseDays(usageCode, rp.usage?.basic_usage_category)) return "amount";
+  if (line.unevenDoses || timesPerDay(usageCode) === null) return "daily";
+  return basis ?? "daily";
+}
+
+/**
+ * RP の用量欄の見出し。行ごとに意味が違う(不均等の行だけ 1 日量など)ときは「用量」。
+ * 用法を選ぶ前は、入れている量の意味が分かるよう入力区分で出す。
+ */
+export function rpDoseFieldLabel(rp: Pick<RpValues, "usage" | "medicines">, basis: DoseBasis | undefined): string {
+  if (!rp.usage) return (basis ?? "daily") === "single" ? "1回量" : "1日量";
+  const kinds = new Set(rp.medicines.map((med) => doseFieldKind(rp, med, basis)));
+  const [kind] = kinds;
+  if (kinds.size !== 1) return "用量";
+  return kind === "single" ? "1回量" : kind === "daily" ? "1日量" : "用量";
+}
+
+/** 1 回量と 1 日量(分からない方は undefined)。日数を持たないもの(外用など)の量は `amount`。 */
+export interface DoseAmounts {
+  single?: number;
+  daily?: number;
+  amount?: number;
+}
+
+function amountsFromField(
+  kind: DoseFieldKind,
+  dose: number,
+  usageCode: string | undefined,
+  uneven: boolean,
+): DoseAmounts {
+  if (kind === "amount") return { amount: dose };
+  const times = isAsNeededUsage(usageCode) ? null : timesPerDay(usageCode);
+  if (kind === "single") return { single: dose, ...(times ? { daily: roundDose(dose * times) } : {}) };
+  return { daily: dose, ...(times && !uneven ? { single: roundDose(dose / times) } : {}) };
+}
+
+/** フォームの明細の 1 回量・1 日量。用量が未入力なら null。 */
+export function lineDoseAmounts(
+  rp: Pick<RpValues, "usage">,
+  line: Pick<MedicineLineValues, "dose" | "unevenDoses">,
+  basis: DoseBasis | undefined,
+): DoseAmounts | null {
+  const dose = Number(line.dose);
+  if (!(dose > 0)) return null;
+  return amountsFromField(doseFieldKind(rp, line, basis), dose, rp.usage?.usage_code, Boolean(line.unevenDoses));
+}
+
+/** 用量欄の量の意味を決めるもの(RP の用法・行の不均等・入力区分)。 */
+export interface DoseFieldContext {
+  rp: Pick<RpValues, "usage">;
+  line: Pick<MedicineLineValues, "dose" | "unevenDoses">;
+  basis: DoseBasis | undefined;
+}
+
+/**
+ * 用量欄の意味が変わるとき(入力区分の切り替え・用法の変更・不均等の付け外し)に、量を新しい意味へ換算する。
+ * 1 回量 ↔ 1 日量の間だけを回数で換算し、頓用・外用が絡むときと回数が分からないときはそのまま残す。
+ */
+export function convertDoseField(from: DoseFieldContext, to: DoseFieldContext): string {
+  const dose = Number(from.line.dose);
+  const fromKind = doseFieldKind(from.rp, from.line, from.basis);
+  const toKind = doseFieldKind(to.rp, to.line, to.basis);
+  if (!(dose > 0) || fromKind === toKind || fromKind === "amount" || toKind === "amount") return from.line.dose;
+  if (isAsNeededUsage(from.rp.usage?.usage_code) || isAsNeededUsage(to.rp.usage?.usage_code)) return from.line.dose;
+  // 1 日量 → 1 回量は新しい用法の回数で割り、1 回量 → 1 日量は元の用法の回数を掛ける。
+  const times = timesPerDay((toKind === "single" ? to : from).rp.usage?.usage_code);
+  if (!times) return from.line.dose;
+  return String(roundDose(toKind === "single" ? dose / times : dose * times));
+}
+
+const DOSE_PER_DAY_DENOMINATOR: fhir4.Quantity = {
+  value: 1,
+  unit: "日",
+  system: "http://unitsofmeasure.org",
+  code: "d",
+};
+
+/**
+ * 保存済みの明細(Dosage)の 1 回量・1 日量。日数を持つ内服は `rateRatio` が 1 日量で `doseQuantity` が 1 回量。
+ * `rateRatio` を持たない日数を持つ内服は、1 日量を `doseQuantity` に入れていた形として読む(1 回量は回数で割る)。
+ */
+export function prescriptionDoseOf(dosage: fhir4.Dosage | undefined): DoseAmounts {
+  const doseAndRate = dosage?.doseAndRate?.[0];
+  const quantity = doseAndRate?.doseQuantity?.value;
+  const perDay = doseAndRate?.rateRatio?.numerator?.value;
+  if (perDay !== undefined) return { daily: perDay, ...(quantity !== undefined ? { single: quantity } : {}) };
+  if (quantity === undefined) return {};
+  const usageCode = codingBySystem(dosage?.timing?.code?.coding, USAGE_CODE_SYSTEM)?.code;
+  const category = codingBySystem(dosage?.timing?.code?.coding, USAGE_CATEGORY_SYSTEM)?.display;
+  if (isAsNeededUsage(usageCode)) return { single: quantity };
+  if (!hasDoseDays(usageCode, category)) return { amount: quantity };
+  return amountsFromField("daily", quantity, usageCode, Boolean(unevenDosesOf(dosage)));
+}
+
+/** 明細の量の単位。 */
+export function prescriptionDoseUnitOf(dosage: fhir4.Dosage | undefined): string | undefined {
+  const doseAndRate = dosage?.doseAndRate?.[0];
+  return doseAndRate?.doseQuantity?.unit ?? doseAndRate?.rateRatio?.numerator?.unit;
+}
+
+/** 量 1 つで扱うときの量。日数を持つ内服は 1 日量、頓用は 1 回量、外用などは全量(調剤数量・請求・抽出の量)。 */
+export function orderedDose(amounts: DoseAmounts): number | undefined {
+  return amounts.daily ?? amounts.single ?? amounts.amount;
+}
+
+/** 1 回量と 1 日量の併記(「1回1錠（1日3錠）」)。力価の印は呼ぶ側で付ける。 */
+export function doseText(amounts: DoseAmounts, unit: string | undefined): string {
+  const u = unit ?? "";
+  if (amounts.single !== undefined && amounts.daily !== undefined) {
+    return `1回${amounts.single}${u}（1日${amounts.daily}${u}）`;
+  }
+  if (amounts.daily !== undefined) return `1日${amounts.daily}${u}`;
+  if (amounts.single !== undefined) return `1回${amounts.single}${u}`;
+  return amounts.amount !== undefined ? `${amounts.amount}${u}` : "";
+}
+
+/**
  * 投与日数で処方する用法か。頓用でない内服だけが日数を持つ。
  *
  * 頓用かどうかは用法コードの 3 桁目で判定する(`isAsNeededUsage`)。用法マスタの基本区分は
@@ -97,27 +250,24 @@ export function hasDoseDays(
 
 /**
  * 薬剤チェックの用量上限と比べる量(`drugCheckHelpers.LineDose`)。
- * - 日数を持つ内服: 用量が 1 日量。1 回量は不均等なら最大の回、そうでなければ 1 日量 ÷ 回数
- *   (用法コード 4 桁目。`Z` などで回数が分からなければ出さない)
+ * - 日数を持つ内服: 入力区分で 1 回量か 1 日量を入れ、もう一方を回数(用法コード 4 桁目)で出す。
+ *   不均等なら 1 回量は最大の回。`Z` などで回数が分からなければ 1 回量は出さない
  * - 頓用: 用量が 1 回量。1 日量は出さない
  * - 外用など: 用量の意味が決まっていないので比べない
  */
 export function prescriptionLineDose(
   rp: Pick<RpValues, "usage">,
   line: Pick<MedicineLineValues, "medicine" | "dose" | "unevenDoses">,
+  basis: DoseBasis | undefined,
 ): LineDose | null {
-  const dose = Number(line.dose);
-  if (!line.medicine || !(dose > 0)) return null;
+  const amounts = lineDoseAmounts(rp, line, basis);
+  if (!line.medicine || !amounts || amounts.amount !== undefined) return null;
   const unit = line.medicine.unit_name ?? "";
-  const usageCode = rp.usage?.usage_code ?? "";
-
-  if (isAsNeededUsage(usageCode)) return { daily: null, single: dose, unit };
-  if (!hasDoseDays(usageCode, rp.usage?.basic_usage_category)) return null;
+  if (isAsNeededUsage(rp.usage?.usage_code)) return { daily: null, single: amounts.single ?? null, unit };
 
   const uneven = (line.unevenDoses ?? []).map(Number).filter((d) => d > 0);
-  const times = Number(usageCode[3]);
-  const single = uneven.length > 0 ? Math.max(...uneven) : times >= 1 ? dose / times : null;
-  return { daily: dose, single, unit };
+  const single = uneven.length > 0 ? Math.max(...uneven) : (amounts.single ?? null);
+  return { daily: amounts.daily ?? null, single, unit };
 }
 
 export type PrescriptionSetting = "inpatient" | "outpatient" | "";
@@ -157,6 +307,13 @@ export function isBroughtPrescription(sr: fhir4.ServiceRequest): boolean {
  * 初期値に入れ替える。登録済みの処方には区分が焼き付いているので、設定を変えても動かない。
  */
 export type PrescriptionCategoryDefaults = Record<Exclude<PrescriptionSetting, "">, string>;
+
+/** 施設設定「処方の用量の入力」。新規の処方フォームが開く入力区分。 */
+export interface PrescriptionDoseSettings {
+  basis: DoseBasis;
+}
+
+export const DEFAULT_PRESCRIPTION_DOSE: PrescriptionDoseSettings = { basis: "daily" };
 
 export const DEFAULT_PRESCRIPTION_CATEGORY: PrescriptionCategoryDefaults = {
   inpatient: "",
@@ -242,6 +399,11 @@ export interface MedicineLineValues {
   insulinScale?: InsulinScaleValues | null;
   /** 用量を力価で入れた行。単位は `medicine.unit_name` に力価の単位(mg など)が入る。 */
   potency?: boolean;
+  /**
+   * 入力区分を切り替えたときの換算前の値(フォーム内だけの値)。切り替えて戻したときに丸めの誤差
+   * (1 → 0.333 → 0.999)を出さず、換算後の値のままなら元の値に戻すのに使う。
+   */
+  doseBeforeSwitch?: { dose: string; converted: string };
 }
 
 /**
@@ -311,6 +473,11 @@ export interface PrescriptionFormValues {
   comment: string;
   // 対象プロブレム(POMR)。null なら特定の問題に紐付かない処方。
   problem: ProblemRef | null;
+  /**
+   * 用量の入力区分。新規の空のフォームだけが未設定で、フォームが施設設定の初期値を入れる。
+   * 組み立て(`buildPrescriptionBundle`)では未設定を 1 日量として扱う。
+   */
+  doseBasis?: DoseBasis;
   rps: RpValues[];
 }
 
@@ -380,11 +547,15 @@ export function medicationCodeableConcept(medicine: Medicine): fhir4.CodeableCon
  * RP の用法と薬剤 1 行から Dosage を組み立てる。処方の MedicationRequest.dosageInstruction と
  * 持参薬の MedicationStatement.dosage が同じ形(JP_MedicationDosage)を使う。
  * 投与日数は Dosage ではなく MedicationRequest.dispenseRequest に置く。
+ *
+ * `basis` は `medLine.dose` が 1 回量か 1 日量か(日数を持つ内服だけが見る)。日数を持つ内服は
+ * 1 回量を `doseQuantity`(不均等・回数不明では持たない)、1 日量を `rateRatio` に入れる。
  */
 export function buildDosage(
   rp: Pick<RpValues, "usage" | "doseCount" | "usageComment" | "supplement">,
   medLine: Pick<MedicineLineValues, "medicine" | "dose" | "unevenDoses" | "potency">,
   startDate: string,
+  basis: DoseBasis = "daily",
 ): fhir4.Dosage {
   const timingCoding: fhir4.Coding[] = [];
   if (rp.usage) {
@@ -405,14 +576,7 @@ export function buildDosage(
     timing: rp.usage
       ? { code: { coding: timingCoding, text: rp.usage.usage_name } }
       : undefined,
-    doseAndRate: medLine.dose
-      ? [
-          {
-            ...(medLine.potency ? { type: POTENCY_DOSE_TYPE } : {}),
-            doseQuantity: { value: Number(medLine.dose), unit: medLine.medicine?.unit_name ?? undefined },
-          },
-        ]
-      : undefined,
+    doseAndRate: medLine.dose ? [buildDoseAndRate(rp, medLine, basis)] : undefined,
   };
 
   const additionalInstruction: fhir4.CodeableConcept[] = [
@@ -439,6 +603,27 @@ export function buildDosage(
   return dosage;
 }
 
+function buildDoseAndRate(
+  rp: Pick<RpValues, "usage">,
+  medLine: Pick<MedicineLineValues, "medicine" | "dose" | "unevenDoses" | "potency">,
+  basis: DoseBasis,
+): fhir4.DosageDoseAndRate {
+  const unit = medLine.medicine?.unit_name ?? undefined;
+  const type = medLine.potency ? { type: POTENCY_DOSE_TYPE } : {};
+  if (!hasDoseDays(rp.usage?.usage_code, rp.usage?.basic_usage_category)) {
+    return { ...type, doseQuantity: { value: Number(medLine.dose), unit } };
+  }
+  const uneven = Boolean(medLine.unevenDoses);
+  const amounts = amountsFromField(uneven ? "daily" : basis, Number(medLine.dose), rp.usage?.usage_code, uneven);
+  return {
+    ...type,
+    ...(amounts.single !== undefined && !uneven ? { doseQuantity: { value: amounts.single, unit } } : {}),
+    ...(amounts.daily !== undefined
+      ? { rateRatio: { numerator: { value: amounts.daily, unit }, denominator: DOSE_PER_DAY_DENOMINATOR } }
+      : {}),
+  };
+}
+
 function buildMedicationRequest(
   rp: RpValues,
   medLine: MedicineLineValues,
@@ -450,8 +635,10 @@ function buildMedicationRequest(
   authoredOn: string,
   serviceRequestReference: string,
   requester: OrderContext,
+  doseBasis: DoseBasis | undefined,
 ): fhir4.MedicationRequest {
-  const dosageInstruction = buildDosage(rp, medLine, startDate);
+  const kind = doseFieldKind(rp, medLine, doseBasis);
+  const dosageInstruction = buildDosage(rp, medLine, startDate, kind === "single" ? "single" : "daily");
 
   const resource: fhir4.MedicationRequest = {
     resourceType: "MedicationRequest",
@@ -560,6 +747,7 @@ function buildPrescriptionTransactionBundle(
         authoredOn,
         serviceRequestReference,
         requester,
+        values.doseBasis,
       );
 
       const fullUrl = medLine.id ? `MedicationRequest/${medLine.id}` : `urn:uuid:${crypto.randomUUID()}`;
@@ -610,6 +798,9 @@ function buildPrescriptionTransactionBundle(
     // 投与開始日。カルテのカードの位置はこの日(部門一覧は交付日=authoredOn で引く)。
     occurrenceDateTime: values.startDate,
     orderDetail,
+    ...(values.doseBasis === "single"
+      ? { extension: [{ url: DOSE_BASIS_EXT_URL, valueCode: "single" }] }
+      : {}),
   };
 
   // 入院のオーダーはその入院に紐付ける。与薬の実施記録(Procedure /
@@ -685,7 +876,7 @@ export function buildPrescriptionDraftOrders(
       if (!line.medicine) return;
       const resource = buildMedicationRequest(
         rp, { ...line, id: undefined }, values.setting, values.startDate, rpIndex + 1, lineIndex + 1,
-        patientId, authoredOn, "", requester,
+        patientId, authoredOn, "", requester, values.doseBasis,
       );
       delete resource.basedOn;
       const draft: fhir4.MedicationRequest = { ...resource, id: prescriptionDraftOrderId(rpIndex, lineIndex), status: "draft" };
@@ -841,7 +1032,10 @@ export interface MedicineLineDisplay {
   yjCode?: string;
   /** 一般名処方(【般】〜)の行。名称に【般】が付くので表示上の区別は不要だが、印刷・集計で使う。 */
   generic?: boolean;
+  /** 量 1 つで扱うときの量(`orderedDose`。日数を持つ内服は 1 日量、頓用は 1 回量、外用などは全量)。 */
   dose?: number;
+  /** 1 回量・1 日量(処方のみ。表示は `doseText`)。 */
+  amounts?: DoseAmounts;
   unit?: string;
   /** 用量が力価(原薬量)。単位の横に「力価」の印を出す。 */
   potency?: boolean;
@@ -904,6 +1098,7 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
     const genericCoding = codingBySystem(coding, GENERAL_ORDER_CODE_SYSTEM);
     const medicineCoding = genericCoding ?? codingBySystem(coding, MEDICINE_CODE_SYSTEM);
     const yjCoding = codingBySystem(coding, YJ_CODE_SYSTEM);
+    const amounts = prescriptionDoseOf(dosage);
 
     group.medicines.push({
       orderInRp,
@@ -911,17 +1106,13 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
       name: medicineCoding?.display ?? mr.medicationCodeableConcept?.text ?? "",
       yjCode: yjCoding?.code ?? undefined,
       generic: genericCoding ? true : undefined,
-      dose: dosage?.doseAndRate?.[0]?.doseQuantity?.value,
-      unit: dosage?.doseAndRate?.[0]?.doseQuantity?.unit,
+      dose: orderedDose(amounts),
+      amounts,
+      unit: prescriptionDoseUnitOf(dosage),
       potency: isPotencyDose(dosage?.doseAndRate?.[0]) || undefined,
       comment: mr.note?.[0]?.text,
       substitutionBlock: substitutionBlockOf(mr) ?? undefined,
-      unevenLabel:
-        unevenLabel(
-          unevenDosesOf(dosage),
-          usageCoding?.code,
-          dosage?.doseAndRate?.[0]?.doseQuantity?.unit,
-        ) || undefined,
+      unevenLabel: unevenLabel(unevenDosesOf(dosage), usageCoding?.code, prescriptionDoseUnitOf(dosage)) || undefined,
     });
   }
 
@@ -944,7 +1135,7 @@ export function prescriptionCategoryOf(sr: fhir4.ServiceRequest): string {
 export function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
   return medicineFromConcept(
     mr.medicationCodeableConcept,
-    mr.dosageInstruction?.[0]?.doseAndRate?.[0]?.doseQuantity?.unit,
+    prescriptionDoseUnitOf(mr.dosageInstruction?.[0]),
   );
 }
 
@@ -1001,9 +1192,13 @@ export function usageFromDosage(dosage: fhir4.Dosage | undefined): MedicineUsage
   };
 }
 
+/**
+ * `basis` を渡すと、その入力区分で用量欄を起こす(調剤登録・処方監査は 1 日量で扱う)。省略は処方の入力区分。
+ */
 export function parsePrescriptionForm(
   sr: fhir4.ServiceRequest,
   mrs: fhir4.MedicationRequest[],
+  { basis = doseBasisOf(sr) }: { basis?: DoseBasis } = {},
 ): PrescriptionFormValues {
   const setting = (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting;
   const category = categoryCoding(sr, PRESCRIPTION_CATEGORY_SYSTEM)?.code ?? "";
@@ -1032,7 +1227,10 @@ export function parsePrescriptionForm(
       rpGroups.set(rpNumber, group);
     }
 
-    const doseValue = dosage?.doseAndRate?.[0]?.doseQuantity?.value;
+    const amounts = prescriptionDoseOf(dosage);
+    const unevenDoses = unevenDosesOf(dosage);
+    const kind = doseFieldKind(group, { unevenDoses }, basis);
+    const doseValue = kind === "single" ? amounts.single : kind === "daily" ? amounts.daily : amounts.amount;
     group.medicinesByOrder.set(orderInRp, {
       id: mr.id,
       medicine: medicineFromCoding(mr),
@@ -1040,7 +1238,7 @@ export function parsePrescriptionForm(
       comment: mr.note?.[0]?.text ?? "",
       showComment: Boolean(mr.note?.[0]?.text),
       substitutionBlock: substitutionBlockOf(mr),
-      unevenDoses: unevenDosesOf(dosage),
+      unevenDoses,
       ...(isPotencyDose(dosage?.doseAndRate?.[0]) ? { potency: true } : {}),
       ...(broughtMedicationIdOf(mr) ? { broughtMedicationId: broughtMedicationIdOf(mr) } : {}),
     });
@@ -1067,6 +1265,7 @@ export function parsePrescriptionForm(
     startDate: orderDay(sr) || today(),
     comment: prescriptionComment(sr),
     problem: prescriptionProblem(sr),
+    doseBasis: basis,
     rps: rps.length ? rps : [{ ...emptyRp, medicines: [{ ...emptyMedicineLine }] }],
   };
 }

@@ -11,6 +11,7 @@ import {
   dispenseInstructionLabel,
   hasDoseDays,
   parsePrescriptionForm,
+  rpDoseFieldLabel,
   prescriptionComment,
   summarizeServiceRequest,
   type MedicineLineValues,
@@ -57,7 +58,7 @@ export function RxDispenseModal({ row, onClose }: Props) {
   // 処方の内容をそのまま初期値にする(調剤は処方どおりに出すのが既定)。力価で出た
   // オーダー(化学療法の内服)は製剤数に直すため、換算マップを読んでから初期値を作る。
   const parsed = useMemo(
-    () => parsePrescriptionForm(row.order, row.medicationRequests),
+    () => parsePrescriptionForm(row.order, row.medicationRequests, { basis: "daily" }),
     [row.order, row.medicationRequests],
   );
   const codes = useMemo(
@@ -250,7 +251,7 @@ function RxDispenseForm({
               <thead>
                 <tr>
                   <th>医薬品</th>
-                  <th>用量</th>
+                  <th>{rpDoseFieldLabel(rp, "daily")}</th>
                   <th>単位</th>
                   <th>薬剤コメント</th>
                 </tr>

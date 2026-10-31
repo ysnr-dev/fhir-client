@@ -80,8 +80,9 @@ class PrescriptionReport
   )
   # substitution_block: 後発品変更不可(MEDICAL_NECESSITY / PATIENT_REQUEST)。変更可なら nil。
   # potency: 用量が力価(原薬量)。
+  # dose: 量 1 つで扱うときの量(日数を持つ内服は 1 日量)。dose_text: 1 回量と 1 日量の併記(「1回1錠（1日3錠）」)。
   MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :potency, :comment, :uneven, :substitution_block,
-                            keyword_init: true)
+                            :dose_text, keyword_init: true)
 
   def initialize(order_id, gateway: FhirGateway.new)
     @order_id = order_id
@@ -192,12 +193,14 @@ class PrescriptionReport
         dispense_instruction: dispense_instruction(mr),
         medicines: []
       )
+      amounts = PrescriptionDose.of(dosage)
       group.medicines << MedicineLine.new(
         order_in_rp: identifier_value(mr, ORDER_IN_RP_SYSTEM).to_i,
         # 一般名処方(【般】〜)は一般名処方コードだけを持つので優先して引き、銘柄はレセ電コードの display。
         name: medicine_name(mr, [GENERAL_ORDER_CODE_SYSTEM, MEDICINE_CODE_SYSTEM]),
-        dose: dosage.dig("doseAndRate", 0, "doseQuantity", "value"),
-        unit: dosage.dig("doseAndRate", 0, "doseQuantity", "unit").to_s,
+        dose: amounts.ordered,
+        unit: amounts.unit.to_s,
+        dose_text: amounts.text,
         potency: coding_by_system(dosage.dig("doseAndRate", 0, "type", "coding"), DOSE_STRENGTH_TYPE_SYSTEM)
           &.dig("code") == "2",
         comment: mr.dig("note", 0, "text").to_s,

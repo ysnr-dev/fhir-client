@@ -4,6 +4,7 @@ import { problemLabel } from "../fhir/conditionHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
+  doseText,
   groupByRp,
   hasDoseDays,
   prescriptionComment,
@@ -92,7 +93,6 @@ export function PrescriptionDetailPanel({
               <tr>
                 <th>医薬品</th>
                 <th>用量</th>
-                <th>単位</th>
                 <th>薬剤コメント</th>
                 <th className="rp-card__medicine-di"></th>
               </tr>
@@ -107,9 +107,8 @@ export function PrescriptionDetailPanel({
                       <div className="prescription-detail__uneven">{`不均等: ${med.unevenLabel}`}</div>
                     )}
                   </td>
-                  <td>{med.dose ?? "-"}</td>
                   <td>
-                    {med.unit ?? "-"}
+                    {med.dose != null ? doseText(med.amounts ?? {}, med.unit) : "-"}
                     <PotencyMark potency={med.potency} />
                   </td>
                   <td>{med.comment || "-"}</td>

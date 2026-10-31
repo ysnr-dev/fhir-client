@@ -2743,6 +2743,22 @@ fieldset.rp-card {
   color: var(--text);
 }
 
+/* 医薬品名の行の右端(用量欄の手前)に、もう一方の量(1 回量なら 1 日量、1 日量なら 1 回量)を小さく添える。
+   行を増やさないよう用量欄の下には置かない。 */
+.rp-card__dose-other {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* 用量列の見出しで用量の入力区分(1回量 / 1日量)を切り替える。見出しの文字と同じ大きさに収める。 */
+.rp-card__medicines--form .rp-card__dose-basis-select {
+  width: 100%;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
 /* 力価の換算行を持つ医薬品は単位を選べる。列幅いっぱいに収め、文字は単位の表示と揃える。 */
 .rp-card__medicines--form .rp-card__unit-select {
   width: 100%;

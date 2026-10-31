@@ -36,7 +36,7 @@ import { parseOrganization } from "./organizationHelpers";
 import { calculateAge, genderLabel, patientNumberOf, prefectureCodeOf } from "./patientHelpers";
 import { practitionerFieldValue } from "./practitionerField";
 import { baseRoleOf, parseDepartmentRoles } from "./practitionerRoleHelpers";
-import { groupByRp, splitPrescriptionDetailBundle, summarizeServiceRequest } from "./prescriptionHelpers";
+import { doseText, groupByRp, splitPrescriptionDetailBundle, summarizeServiceRequest } from "./prescriptionHelpers";
 import {
   BLOOD_PRESSURE,
   DIASTOLIC,
@@ -1191,7 +1191,7 @@ export function prescriptionRpLines(medicationRequests: fhir4.MedicationRequest[
     for (const medicine of rp.medicines) {
       const dose =
         medicine.dose !== undefined
-          ? ` ${medicine.dose}${medicine.unit ?? ""}${medicine.potency ? "(力価)" : ""}`
+          ? ` ${doseText(medicine.amounts ?? {}, medicine.unit)}${medicine.potency ? "(力価)" : ""}`
           : "";
       const uneven = medicine.unevenLabel ? `（${medicine.unevenLabel}）` : "";
       const comment = medicine.comment ? `（${medicine.comment}）` : "";

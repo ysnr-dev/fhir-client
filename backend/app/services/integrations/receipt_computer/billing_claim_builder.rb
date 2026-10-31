@@ -215,7 +215,10 @@ module Integrations
           end
         end
 
-        quantity, unit = PackQuantity.of(code, request.dig("dosageInstruction", 0, "doseAndRate", 0, "doseQuantity"))
+        # 内服は 1 日量(剤の数量 × 日数で請求する)、頓用は 1 回量、外用は全量。
+        amounts = PrescriptionDose.of(request.dig("dosageInstruction", 0))
+        dose = amounts.ordered.nil? ? nil : { "value" => amounts.ordered, "unit" => amounts.unit }
+        quantity, unit = PackQuantity.of(code, dose)
         BillingLine.new(code: code, name: medication_name(request), kind: :medicine, generic: generic,
                         quantity: quantity, unit: unit)
       end

@@ -101,6 +101,10 @@ class FacilitySettings < ApplicationRecord
     "outpatient" => ""
   }.freeze
 
+  # 処方の用量の入力区分(1 回量 single / 1 日量 daily)の初期値。新規の処方フォームが開く区分で、
+  # 登録済みの処方は入力したときの区分で開く。
+  DEFAULT_PRESCRIPTION_DOSE = { "basis" => "daily" }.freeze
+
   # 入外区分ごとに選べる処方区分のコード。表示名は画面側(frontend の CATEGORY_OPTIONS)が
   # 持ち、こちらは初期値として妥当なコードかを見るためだけに並べる。
   PRESCRIPTION_CATEGORY_CODES = {
@@ -356,6 +360,10 @@ class FacilitySettings < ApplicationRecord
       shape: {
         fields: PRESCRIPTION_CATEGORY_CODES.transform_values { |codes| { enum: codes, blank: true } }
       }
+    },
+    "prescription_dose" => {
+      default: DEFAULT_PRESCRIPTION_DOSE,
+      shape: { fields: { "basis" => { enum: %w[single daily] } } }
     },
     "consult_default_templates" => {
       default: DEFAULT_CONSULT_DEFAULT_TEMPLATES,

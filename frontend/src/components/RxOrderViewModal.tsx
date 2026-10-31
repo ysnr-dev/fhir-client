@@ -3,6 +3,7 @@ import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import {
+  doseText,
   groupByRp,
   hasDoseDays,
   prescriptionComment,
@@ -69,7 +70,7 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
                   <span className="karte-rp__medicine-name">{medicine.name}</span>
                   {medicine.dose != null && (
                     <span className="karte-rp__medicine-dose">
-                      {`${medicine.dose}${medicine.unit ?? ""}`}
+                      {doseText(medicine.amounts ?? {}, medicine.unit)}
                       <PotencyMark potency={medicine.potency} />
                     </span>
                   )}

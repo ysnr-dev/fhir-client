@@ -61,7 +61,10 @@ import { locationDisplayName } from "../fhir/locationHelpers";
 import {
   CATEGORY_OPTIONS,
   DEFAULT_PRESCRIPTION_CATEGORY,
+  DEFAULT_PRESCRIPTION_DOSE,
+  DOSE_BASIS_OPTIONS,
   SETTING_OPTIONS,
+  type DoseBasis,
   type PrescriptionCategoryDefaults,
 } from "../fhir/prescriptionHelpers";
 import {
@@ -150,7 +153,7 @@ const FACILITY_SECTIONS = [
   { key: "meal_schedule", label: "食事の提供時刻" },
   { key: "vital_thresholds", label: "バイタルの異常値" },
   { key: "medication_schedule", label: "内服の与薬の時刻" },
-  { key: "prescription_category", label: "処方区分の初期値" },
+  { key: "prescription_category", label: "処方の初期値" },
   { key: "consult_default_templates", label: "他科依頼の既定テンプレート" },
   { key: "document_reminder", label: "文書作成の督促" },
   { key: "nursing_acuity", label: "看護必要度" },
@@ -468,6 +471,10 @@ export function FacilitySettingsPage() {
   );
   const savedCategory = settings.data?.prescription_category ?? DEFAULT_PRESCRIPTION_CATEGORY;
   const prescriptionCategory = categoryDraft ?? savedCategory;
+  // 新規の処方の用量の入力区分(1 回量 / 1 日量)。
+  const [doseBasisDraft, setDoseBasisDraft] = useState<DoseBasis | undefined>(undefined);
+  const prescriptionDoseBasis =
+    doseBasisDraft ?? (settings.data?.prescription_dose ?? DEFAULT_PRESCRIPTION_DOSE).basis;
 
   // 他科依頼の依頼目的テンプレートの既定。依頼先の診療科ごとに 1 つで、未選択の科は保存しない。
   const [consultTemplateDraft, setConsultTemplateDraft] = useState<
@@ -588,6 +595,7 @@ export function FacilitySettingsPage() {
       medication_schedule: medicationSchedule,
       document_reminder: reminder,
       prescription_category: prescriptionCategory,
+      prescription_dose: { basis: prescriptionDoseBasis },
       consult_default_templates: consultTemplates,
       radiotherapy_review: radiotherapyReview,
       receipt_codes: receiptCodes,
@@ -905,7 +913,8 @@ export function FacilitySettingsPage() {
 
           {/* 処方区分の初期値。処方フォームを開いたとき・入外区分を選び直したときに入る値で、
               登録済みの処方には区分が焼き付いているのでここを変えても動かない。選択肢は入外区分で
-              違う(入院は定期・臨時…、外来は院外・院内)ので、区分ごとに 1 つずつ選ぶ。 */}
+              違う(入院は定期・臨時…、外来は院外・院内)ので、区分ごとに 1 つずつ選ぶ。用量の入力
+              (1 回量 / 1 日量)は新規の処方が開く区分で、登録済みの処方は入力したときの区分で開く。 */}
           {section === "prescription_category" && (
             <div className="facility-settings__schedule-body">
               {SETTING_OPTIONS.map((setting) => (
@@ -929,6 +938,19 @@ export function FacilitySettingsPage() {
                   </select>
                 </label>
               ))}
+              <label>
+                用量の入力
+                <select
+                  value={prescriptionDoseBasis}
+                  onChange={(e) => setDoseBasisDraft(e.target.value as DoseBasis)}
+                >
+                  {DOSE_BASIS_OPTIONS.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           )}
 

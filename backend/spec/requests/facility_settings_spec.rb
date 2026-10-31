@@ -478,6 +478,28 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (prescription_dose)" do
+    it "returns daily by default and stores the dose basis" do
+      with_admin_token(nil) { get "/facility_settings" }
+      expect(JSON.parse(response.body)["prescription_dose"]).to eq("basis" => "daily")
+
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { prescription_dose: { basis: "single" } }, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["prescription_dose"]).to eq("basis" => "single")
+    end
+
+    it "rejects an unknown basis" do
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { prescription_dose: { basis: "weekly" } }, as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "PATCH /facility_settings (prescription_category)" do
     it "stores the default category of each setting" do
       with_admin_token(nil) do

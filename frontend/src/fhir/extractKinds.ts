@@ -20,6 +20,7 @@ import { departmentOf, ORDER_TYPE_SYSTEM } from "./orderHeader";
 import { ORDER_KIND_CORE, ORDER_KINDS, type OrderKind } from "./orderKinds";
 import { OUTPATIENT_CLASS_CODE } from "./outpatientEncounterHelpers";
 import { genderLabel } from "./patientHelpers";
+import { doseText, prescriptionDoseOf, prescriptionDoseUnitOf } from "./prescriptionHelpers";
 import { conceptLabel, quantityLabel } from "./shared";
 
 // データ抽出の条件の種類ごとの対応表(docs/data-extract-design.md §2・§3)。種類を足すときは
@@ -332,14 +333,13 @@ export const EXTRACT_KIND_DEFS: { [K in ExtractKind]: ExtractKindDef<RecordOf[K]
     recordDepartment: (record) => departmentOf(record).departmentName,
     detail(record) {
       const dosage = record.dosageInstruction?.[0];
-      const dose = dosage?.doseAndRate?.[0]?.doseQuantity;
       return {
         kind: "処方・注射",
         date: dateTimeLabel(record.authoredOn),
         code: firstCode(record.medicationCodeableConcept),
         name: conceptLabel(record.medicationCodeableConcept),
         status: MEDICATION_REQUEST_STATUS[record.status] ?? record.status,
-        dose: dose?.value != null ? `${dose.value}${dose.unit ?? ""}` : "",
+        dose: doseText(prescriptionDoseOf(dosage), prescriptionDoseUnitOf(dosage)),
         usage: dosage?.text,
         days: record.dispenseRequest?.expectedSupplyDuration?.value ?? "",
         department: departmentOf(record).departmentName,

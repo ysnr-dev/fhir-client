@@ -261,7 +261,9 @@ class RegimenReport
 
   def build_drug(mr, step_name, lookup)
     dose_ext = Array(mr["extension"]).find { |e| e["url"] == REGIMEN_DOSE_EXT_URL }
-    dose = mr.dig("dosageInstruction", 0, "doseAndRate", 0, "doseQuantity") || {}
+    # 内服は 1 日量(レジメンの内服は 1 日量が基準)。注射は doseQuantity の 1 回量。
+    amounts = PrescriptionDose.of(mr.dig("dosageInstruction", 0))
+    dose = { "value" => amounts.ordered, "unit" => amounts.unit }
     medicine_code = coding_by_system(mr.dig("medicationCodeableConcept", "coding"), MEDICINE_CODE_SYSTEM)&.dig("code")
     master = lookup.find(part(dose_ext, "drug", "valueInteger"), medicine_code, step_name)
     dose_unit = dose["unit"].to_s

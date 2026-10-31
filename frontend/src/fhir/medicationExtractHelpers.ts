@@ -7,7 +7,7 @@ import {
   type ExtractPatientRow,
 } from "./extractQueryHelpers";
 import { ORDER_TYPE_SYSTEM, departmentOf } from "./orderHeader";
-import { PRESCRIPTION_CATEGORY_SYSTEM, SETTING_SYSTEM, groupByRp } from "./prescriptionHelpers";
+import { PRESCRIPTION_CATEGORY_SYSTEM, SETTING_SYSTEM, doseText, groupByRp } from "./prescriptionHelpers";
 import { categoryCoding, findSettingDisplay } from "./shared";
 
 // 投薬の抽出(docs/data-extract-design.md §15)。処方・注射のオーダーの薬剤 1 件(MedicationRequest)を 1 行にし、
@@ -52,7 +52,7 @@ export function medicationExtractRows(
     const dosage = request.dosageInstruction?.[0];
     const patientId = request.subject?.reference?.split("/").pop() ?? "";
     const days = rp?.doseDays ? `${rp.doseDays}日` : rp?.doseCount ? `${rp.doseCount}回` : "";
-    const dose = medicine?.unevenLabel || (medicine?.dose != null ? `${medicine.dose}${medicine.unit ?? ""}` : "");
+    const dose = medicine?.unevenLabel || (medicine ? doseText(medicine.amounts ?? {}, medicine.unit) : "");
     const rpLabel = rp?.rpNumber ? `${rp.rpNumber}-${medicine?.orderInRp ?? ""}` : "";
     return {
       ...patientRowOf(patientId, patients.get(patientId)),
