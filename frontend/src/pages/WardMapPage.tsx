@@ -56,7 +56,8 @@ import {
   plannedWardId,
 } from "../fhir/encounterHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
-import { calculateAge, displayName, genderShortLabel } from "../fhir/patientHelpers";
+import { calculateAge, displayName } from "../fhir/patientHelpers";
+import { GenderIcon } from "../components/icons/GenderIcon";
 import type { BedRoomIds } from "../fhir/wardHelpers";
 import {
   buildInitialLayout,
@@ -349,13 +350,19 @@ export function WardMapPage() {
   }
 
   /** ドラッグ札に出す患者名(性別・年齢つき)。入院予定は予定側の患者から引く。 */
-  function dragPatientLabel(item: ViewDragItem): string {
+  function dragPatientLabel(item: ViewDragItem): React.ReactNode {
     const patientId = encounterPatientId(item.encounter) ?? "";
     const patient =
       item.kind === "planned" ? planned.data?.patientsById.get(patientId) : patientsById?.get(patientId);
     if (!patient) return "(患者不明)";
     const age = patient.birthDate ? calculateAge(patient.birthDate) : undefined;
-    return `${displayName(patient)} ${genderShortLabel(patient.gender)}${age != null ? ` ${age}` : ""}`.trim();
+    return (
+      <>
+        {displayName(patient)}
+        <GenderIcon gender={patient.gender} />
+        {age != null && age}
+      </>
+    );
   }
 
   /** ドラッグ札に出す元の場所。 */

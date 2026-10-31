@@ -26,6 +26,9 @@
   --lab-low: #2a78d6;
   /* H の色で塗った地の上の文字。 */
   --lab-high-text: #ffffff;
+  /* 性別の記号の色。男: 青 / 女: 赤紫(検査の H/L と取り違えない色味にする)。 */
+  --gender-male: #1f6fd1;
+  --gender-female: #d02f86;
   /* 「急ぎではないが放置してよくない」ことを表す色。赤(--lab-high)より一段弱い。 */
   --warning: #b7791f;
   /* 取り返しのつかない操作や、見落とすと危ない警告の色。 */
@@ -114,6 +117,8 @@
   --lab-high: #ef5350;
   --lab-low: #3987e5;
   --lab-high-text: #ffffff;
+  --gender-male: #5aa2f5;
+  --gender-female: #f06aae;
   --warning: #e0a33a;
   --danger: #ef5b4f;
   --success: #3fa76c;

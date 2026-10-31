@@ -22998,6 +22998,9 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 .ward-map__drag-ghost-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-weight: 600;
   color: var(--text-h);
 }
@@ -23083,6 +23086,22 @@ button.chemo-calendar__cell[draggable="true"] {
   font-size: 11px;
   font-weight: 400;
   color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.gender-icon {
+  flex: 0 0 auto;
+  vertical-align: -2px;
+}
+
+.gender-icon--male {
+  color: var(--gender-male);
+}
+
+.gender-icon--female {
+  color: var(--gender-female);
 }
 
 .ward-map__bed-meta {
@@ -23436,6 +23455,10 @@ button.chemo-calendar__cell[draggable="true"] {
 .ward-map__workspace-name {
   font-weight: 600;
   color: var(--text-h);
+}
+
+.ward-map__workspace-name .ward-map__bed-age {
+  margin-left: 4px;
 }
 
 .ward-map__workspace-from {

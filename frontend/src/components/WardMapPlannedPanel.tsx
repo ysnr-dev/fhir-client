@@ -4,7 +4,8 @@ import {
   plannedBedName,
   plannedRoomName,
 } from "../fhir/encounterHelpers";
-import { calculateAge, displayName, genderShortLabel, patientNumberOf } from "../fhir/patientHelpers";
+import { calculateAge, displayName, patientNumberOf } from "../fhir/patientHelpers";
+import { GenderIcon } from "./icons/GenderIcon";
 
 // 病棟マップの当日入院予定。カードを掴んで空床へ落とすと入院実施(床を選んだ状態)になる。
 // 掴まずに「入院実施」を押しても同じモーダルが開く(予定の床のまま)。
@@ -67,9 +68,8 @@ function PlannedList({ encounters, patientsById, onPointerDown, onExecute }: Pla
               {patient ? displayName(patient) : "(患者不明)"}
               {patient && (
                 <span className="ward-map__bed-age">
-                  {" "}
-                  {genderShortLabel(patient.gender)}
-                  {age != null ? ` ${age}` : ""}
+                  <GenderIcon gender={patient.gender} />
+                  {age != null && age}
                 </span>
               )}
             </span>

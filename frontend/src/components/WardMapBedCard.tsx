@@ -5,7 +5,8 @@ import {
   encounterAttendingName,
   encounterDepartmentName,
 } from "../fhir/encounterHelpers";
-import { calculateAge, displayName, genderShortLabel, patientNumberOf } from "../fhir/patientHelpers";
+import { calculateAge, displayName, patientNumberOf } from "../fhir/patientHelpers";
+import { GenderIcon } from "./icons/GenderIcon";
 import { bedShortLabel } from "../fhir/wardHelpers";
 import { diffDays } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
@@ -112,8 +113,8 @@ export function WardMapBedCard({
             )}
             {patient && (
               <span className="ward-map__bed-age">
-                {genderShortLabel(patient.gender)}
-                {age != null ? ` ${age}` : ""}
+                <GenderIcon gender={patient.gender} />
+                {age != null && age}
               </span>
             )}
           </div>
