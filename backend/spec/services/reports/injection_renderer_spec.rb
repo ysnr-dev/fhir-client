@@ -61,6 +61,16 @@ RSpec.describe Reports::InjectionRenderer do
     expect(page_texts(pdf).size).to eq(1)
   end
 
+  it "prints the regimen, cycle and day in place of the series label for a regimen day order" do
+    order["extension"] = order["extension"].reject { |e| e["url"] == InjectionReport::SERIES_START_EXT_URL }
+    order["extension"] << { "url" => InjectionReport::REGIMEN_ORDER_EXT_URL, "extension" => [
+      { "url" => "cycle", "valueInteger" => 3 }, { "url" => "day", "valueInteger" => 8 },
+      { "url" => "name", "valueString" => "mFOLFOX6" }, { "url" => "reduction", "valueString" => "好中球減少" }
+    ] }
+    texts = page_texts(render([rp(1, medicines: [["生理食塩液", 1, "袋"]])]))[0].join
+    expect(texts.delete(" \u00A0")).to include("化学療法:mFOLFOX6C3Day8｜減量")
+  end
+
   it "falls back to the authoredOn day when the order has no occurrenceDateTime" do
     order.delete("occurrenceDateTime")
     pdf = render([rp(1, medicines: [["生理食塩液", 1, "袋"]])])

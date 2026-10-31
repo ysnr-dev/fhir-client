@@ -61,7 +61,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 | 検査案内(放射線・内視鏡・生理の前処置説明、患者控え) | 中 | rad C-1 | 項目マスタに `patient_instruction` を足して差し込む |
 | 説明書・パンフレット(印刷だけの文書ライブラリ) | 中 | gap §2.2 | `document_templates.kind = reference`、右ペインから「印刷のみ」 |
 | 患者用パス(クリニカルパスの患者向け日程表) | 中 | pathway E-4 | — |
-| 化学療法の患者向けスケジュール表 | 中 | chemo-regimen E-2 | — |
+| ~~化学療法の患者向けスケジュール表~~ — **対応済み(2026-10-31、chemo-regimen §8.25)** | 中 | chemo-regimen E-2 | `GET /reports/regimens/:id/schedule/pdf` |
 
 ### 2.2 文書・同意書・計画書
 
@@ -76,7 +76,7 @@ backend の帳票ルートは `backend/config/routes.rb` の `namespace :reports
 | 看護計画・看護サマリーの帳票 | 中 | nursing.md 55 行、gap §2.4 | Composition → ThinReports を退院サマリーと共通化 |
 | リハビリテーション実施計画書・リハビリ処方箋 | 中 | rehab-design 214 行、gap §2.8 | — |
 | 褥瘡対策計画書 | 低 | care-team-design 132 行 | 看護プロファイルと看護計画で代えている |
-| 化学療法実施計画書・無菌調製の調製指示書 | 中 | chemo-regimen E-2 / E-3 | — |
+| 化学療法実施計画書(**対応済み、2026-10-31、chemo-regimen §8.25**)・無菌調製の調製指示書 | 中 | chemo-regimen E-2 / E-3 | 計画書は `GET /reports/regimens/:id/plan/pdf?cycle=N` |
 
 ### 2.3 オーダー控え・部門帳票
 

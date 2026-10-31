@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useDeleteRegimenCycle, useUpdateRegimenStatus } from "../api/queries";
+import { regimenPlanPdfUrl, regimenSchedulePdfUrl } from "../api/reportsClient";
 import { adverseEventLabel, adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import {
   canDeleteCycle,
@@ -22,6 +23,7 @@ import { RegimenRevokeModal } from "./RegimenPanels";
 // 暦と同じ左ペインに置くのは、どちらも「その適用を読む」ための面だから。オーダーを
 // 作る操作(次クールの登録)は他の種別と同じく右ペインで開き、ここには入口だけ置く。
 // 状態を変える操作(休止 / 再開 / 完了 / 中止)はフォームを持たないのでここに置く(§7.6 C-1 / C-2)。
+// 帳票(クールごとの実施計画書・患者向けのスケジュール表)は PDF を新しいタブで開く(§8.25)。
 
 interface RegimenDetailViewProps {
   application: RegimenApplication;
@@ -38,6 +40,10 @@ interface RegimenDetailViewProps {
   onOpenAdverseEvents: (cycle: number) => void;
   /** 適用の編集(予定クール数・入外区分・プロブレム・コメント)を右ペインで開く。 */
   onEditHeader: () => void;
+}
+
+function openPdf(url: string) {
+  window.open(url, "_blank", "noopener");
 }
 
 function progressLabel(p: CycleProgress | undefined): string {
@@ -228,6 +234,15 @@ export function RegimenDetailView({
                 {/* 取り消せるのは部門が動き出していないクールだけ。実施・受付・払出が
                     あるクールは日ごとの中止を使う(記録が宙に浮くため)。 */}
                 <td className="rad-item__compact">
+                  <div className="regimen-detail__row-actions">
+                  <button
+                    type="button"
+                    className="rp-card__compact-button"
+                    onClick={() => openPdf(regimenPlanPdfUrl(application.id, cycle))}
+                    title={`第 ${cycle} クールの実施計画書を開く`}
+                  >
+                    計画書
+                  </button>
                   {(active || held) && canDeleteCycle(own) && (
                     <button
                       type="button"
@@ -239,6 +254,7 @@ export function RegimenDetailView({
                       取消
                     </button>
                   )}
+                  </div>
                 </td>
               </tr>
             );
@@ -253,7 +269,7 @@ export function RegimenDetailView({
         </tbody>
       </table>
 
-      {(active || held) && (
+      {(active || held || cycles.length > 0) && (
         <div className="lab-order-item__actions">
           {active && (
             <button
@@ -265,24 +281,34 @@ export function RegimenDetailView({
               第 {next.cycle} クール登録
             </button>
           )}
-          {active ? (
+          {active && (
             <button type="button" onClick={() => handleHold(true)} disabled={updateStatus.isPending}>
               休止
             </button>
-          ) : (
+          )}
+          {held && (
             <button type="button" onClick={() => handleHold(false)} disabled={updateStatus.isPending}>
               再開
             </button>
           )}
-          <button type="button" onClick={onEditHeader}>
-            適用編集
-          </button>
-          <button type="button" onClick={handleComplete} disabled={updateStatus.isPending}>
-            完了
-          </button>
-          <button type="button" onClick={() => setRevoking(true)} disabled={updateStatus.isPending}>
-            レジメン中止
-          </button>
+          {(active || held) && (
+            <>
+              <button type="button" onClick={onEditHeader}>
+                適用編集
+              </button>
+              <button type="button" onClick={handleComplete} disabled={updateStatus.isPending}>
+                完了
+              </button>
+              <button type="button" onClick={() => setRevoking(true)} disabled={updateStatus.isPending}>
+                レジメン中止
+              </button>
+            </>
+          )}
+          {cycles.length > 0 && (
+            <button type="button" onClick={() => openPdf(regimenSchedulePdfUrl(application.id))}>
+              スケジュール表
+            </button>
+          )}
         </div>
       )}
 

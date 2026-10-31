@@ -111,6 +111,18 @@ RSpec.describe Reports::PrescriptionRenderer do
     end
   end
 
+  it "prints the regimen, cycle and day before the order note for a regimen day order" do
+    order["extension"] << { "url" => InjectionReport::REGIMEN_ORDER_EXT_URL, "extension" => [
+      { "url" => "cycle", "valueInteger" => 2 }, { "url" => "day", "valueInteger" => 1 },
+      { "url" => "name", "valueString" => "CapeOX" }
+    ] }
+
+    %i[external internal].each do |key|
+      text = page_texts(render(key, simple_rps)).flatten.join
+      expect(text.delete(" \u00A0")).to include("化学療法:CapeOXC2Day1").and include("処方箋コメント")
+    end
+  end
+
   it "prints the split institution code only on the external layout" do
     external = page_texts(render(:external, simple_rps)).flatten
     internal = page_texts(render(:internal, simple_rps)).flatten

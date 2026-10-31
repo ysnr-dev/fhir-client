@@ -133,7 +133,7 @@ module Reports
         "doctor_name" => @order.dig("requester", "display").to_s,
         "department_name" => department_name,
         "rx_category" => rx_category,
-        "remarks" => @order.dig("note", 0, "text").to_s
+        "remarks" => [regimen_line, @order.dig("note", 0, "text")].compact_blank.join("\n")
       }.merge(hospital_values)
     end
 
@@ -165,6 +165,13 @@ module Reports
         end&.dig("display")
       end
       displays.join(" ")
+    end
+
+    # 化学療法の日オーダー(内服)なら備考の先頭に「化学療法: CapeOX C1 Day1」。院外処方では
+    # 保険薬局がレジメンを確かめる手掛かりになる。
+    def regimen_line
+      label = InjectionMeta.regimen_label(@order)
+      label.present? ? "化学療法: #{label}" : ""
     end
 
     # 自院(保険医療機関)の欄。Organization が引けなくても発行は止めない(空欄で刷る)。

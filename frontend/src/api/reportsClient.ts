@@ -69,6 +69,16 @@ export function injectionLabelPdfUrl(orderId: string): string {
   return `/reports/injection_labels/${encodeURIComponent(orderId)}/pdf`;
 }
 
+/** 化学療法実施計画書(適用 1 件の 1 クールぶん)の PDF の URL。 */
+export function regimenPlanPdfUrl(regimenOrderId: string, cycle: number): string {
+  return `/reports/regimens/${encodeURIComponent(regimenOrderId)}/plan/pdf?cycle=${cycle}`;
+}
+
+/** 患者向けの化学療法スケジュール表(登録済みのクール全部。1 ページ = 1 か月)の PDF の URL。 */
+export function regimenSchedulePdfUrl(regimenOrderId: string): string {
+  return `/reports/regimens/${encodeURIComponent(regimenOrderId)}/schedule/pdf`;
+}
+
 /** 注射箋と注射ラベルを 1 つのタブに並べる画面(pages/InjectionPrintPage)。 */
 export const INJECTION_PRINT_PATH = "/injection-print";
 

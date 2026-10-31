@@ -22339,6 +22339,12 @@ button.chemo-calendar__cell[draggable="true"] {
   gap: 4px;
 }
 
+/* クール一覧の行末(計画書・取消)。 */
+.regimen-detail__row-actions {
+  display: flex;
+  gap: 4px;
+}
+
 .regimen-detail__adverse .regimen-adverse__grade {
   font-weight: 500;
 }

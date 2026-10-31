@@ -75,10 +75,20 @@ module Reports
                           @order.dig("requester", "display").to_s].compact_blank.join(" | "),
         "ward_name" => InjectionMeta.ward_name(@order),
         "rx_category" => InjectionMeta.category_display(@order),
-        "series_label" => InjectionMeta.series_label(@order),
+        "series_label" => regimen_line.presence || InjectionMeta.series_label(@order),
         "remarks" => @order.dig("note", 0, "text").to_s,
         "hospital_name" => (@organization || {})["name"].to_s
       }
+    end
+
+    # 化学療法の日オーダーなら「化学療法: mFOLFOX6 C1 Day1」(減量していれば「｜ 減量」)。
+    # 日オーダーは連日展開を持たないので、連日の表示と同じ欄に置く。
+    def regimen_line
+      label = InjectionMeta.regimen_label(@order)
+      return "" if label.blank?
+
+      reduced = InjectionMeta.regimen_reduction(@order).present? ? " ｜ 減量" : ""
+      "化学療法: #{label}#{reduced}"
     end
   end
 end
