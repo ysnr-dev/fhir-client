@@ -21904,13 +21904,19 @@ button.nursing-worksheet__mark {
 }
 
 /* 化学療法室の予約。投与日とずれた予約は注意の色で日付を出す。 */
-.chemo-calendar__booking .meal-calendar__event-label {
-  border-color: var(--accent);
+.meal-calendar__event.chemo-calendar__booking {
+  align-items: center;
+  gap: 2px;
   color: var(--accent);
 }
 
-.chemo-calendar__booking--off-day .meal-calendar__event-label {
-  border-color: var(--warning);
+.chemo-calendar__booking svg {
+  flex: none;
+  width: 11px;
+  height: 11px;
+}
+
+.meal-calendar__event.chemo-calendar__booking--off-day {
   color: var(--warning);
 }
 

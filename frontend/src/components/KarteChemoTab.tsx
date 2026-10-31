@@ -25,6 +25,7 @@ import { localDay, toDateInput, today, WEEKDAY_LABELS } from "../lib/dates";
 import { useHolidays } from "../api/masterQueries";
 import { calendarWeekday } from "../lib/holidays";
 import { ErrorBanner } from "./ErrorBanner";
+import { ClockIcon } from "./icons/ClockIcon";
 import { RegimenDecisionMark } from "./RegimenDecision";
 import { RegimenDetailView } from "./RegimenDetailView";
 import { RegimenHistoryView } from "./RegimenHistoryView";
@@ -504,9 +505,8 @@ function ChemoDayCell({
             className={`meal-calendar__event chemo-calendar__booking${offDay ? " chemo-calendar__booking--off-day" : ""}`}
             title={`${appointmentScheduleLabel(appointment)} ${appointmentDateTimeLabel(appointment)}`}
           >
-            <span className="meal-calendar__event-label">
-              {offDay ? `予約 ${day.slice(5).replace("-", "/")}` : `${appointmentTimeLabel(appointment)} 予約`}
-            </span>
+            <ClockIcon />
+            {offDay ? day.slice(5).replace("-", "/") : appointmentTimeLabel(appointment)}
           </span>
         );
       })}
