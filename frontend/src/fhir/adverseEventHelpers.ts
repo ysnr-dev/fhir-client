@@ -50,6 +50,8 @@ export interface AdverseEventRecord {
   note: string;
   /** 記録した医療従事者。編集で上書きしないよう読み書きする(§8.14 N-10)。 */
   performer: fhir4.Reference | undefined;
+  /** 元の Observation(カルテのカードの FHIR JSON 表示)。 */
+  observation: fhir4.Observation;
 }
 
 export interface AdverseEventFormValues {
@@ -110,6 +112,7 @@ export function parseAdverseEvent(observation: fhir4.Observation): AdverseEventR
     resolved: observation.effectivePeriod?.end?.slice(0, 10) ?? "",
     note: observation.note?.[0]?.text ?? "",
     performer: observation.performer?.[0],
+    observation,
   };
 }
 
@@ -188,6 +191,21 @@ export function adverseEventsOf(
   return records
     .filter((r) => r.treatmentSrId === treatmentSrId && (cycle === undefined || r.cycle === cycle))
     .sort((a, b) => b.onset.localeCompare(a.onset) || b.grade - a.grade);
+}
+
+/** 原因となった治療(「mFOLFOX6 第 2 クール」「第1コース 左乳房」)。 */
+export function adverseEventTreatmentLabel(record: Pick<AdverseEventRecord, "treatmentName" | "cycle">): string {
+  return `${record.treatmentName}${record.cycle ? ` 第 ${record.cycle} クール` : ""}`;
+}
+
+/** 継続中(回復日が無い)を先に、Grade の高い順、発現日の新しい順。 */
+export function sortAdverseEventsForReview(records: AdverseEventRecord[]): AdverseEventRecord[] {
+  return [...records].sort(
+    (a, b) =>
+      Number(Boolean(a.resolved)) - Number(Boolean(b.resolved)) ||
+      b.grade - a.grade ||
+      b.onset.localeCompare(a.onset),
+  );
 }
 
 /** 「末梢性感覚ニューロパチー G2」。 */

@@ -24,6 +24,7 @@ import {
 } from "../fhir/infectionHelpers";
 import { InfectionForm } from "./InfectionForm";
 import { PatientInfectionSection } from "./PatientInfectionSection";
+import { PatientAdverseEventSection } from "./PatientAdverseEventSection";
 import {
   buildPregnancyObservations,
   parsePregnancyForm,
@@ -73,6 +74,7 @@ const SECTIONS = [
   { key: "coverage", label: "保険・公費" },
   { key: "body", label: "身体情報" },
   { key: "infection", label: "感染症" },
+  { key: "adverse", label: "有害事象" },
   { key: "caution", label: "診療上の注意" },
 ] as const;
 
@@ -221,6 +223,8 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
           onAdd={() => setForm({ kind: "create-infection" })}
           onEdit={(observationId) => setForm({ kind: "edit-infection", observationId })}
         />
+      ) : section === "adverse" ? (
+        <PatientAdverseEventSection patientId={patientId} />
       ) : (
         <CautionSection
           patientId={patientId}

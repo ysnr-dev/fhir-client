@@ -8594,6 +8594,17 @@ body.karte-wide {
   white-space: pre-wrap;
 }
 
+/* 有害事象のカード。Grade と発現〜回復の期間を 1 行に。 */
+.karte-adverse-event__context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* S/O/A/P などの見出し。本文(13px 通常)に埋もれないよう、
    見出し色・太字にしたうえで頭にアクセントの縦線を添える。 */
 .karte-card__section-title {

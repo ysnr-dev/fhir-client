@@ -4,7 +4,13 @@ import { cardTitle } from "../components/karteCardLabels";
 import { problemLabel, summarizeCondition } from "./conditionHelpers";
 import type { TransferKind } from "./documentFormLayout";
 import { groupInjectionByRp, injectionUsageSummary } from "./injectionHelpers";
-import { KARTE_KIND_LABELS, isOrderItem, karteDayLabel, type KarteTimelineItem } from "./karteTimeline";
+import {
+  KARTE_KIND_LABELS,
+  isKarteRecordItem,
+  isOrderItem,
+  karteDayLabel,
+  type KarteTimelineItem,
+} from "./karteTimeline";
 import { observationLineDisplay } from "./labResultHelpers";
 import { orderTransferLines } from "./orderTransferLines";
 import { prescriptionRpLines } from "./populateContext";
@@ -41,10 +47,7 @@ function injectionRpLines(medicationRequests: fhir4.MedicationRequest[]): string
 export function transferKindOfItem(item: KarteTimelineItem): TransferKind | null {
   if (item.kind === "prescription") return "prescription";
   if (item.kind === "injection") return "injection";
-  if (item.kind === "note" || item.kind === "vital" || item.kind === "qr" || item.kind === "pathway-evaluation") {
-    return null;
-  }
-  return "order";
+  return isKarteRecordItem(item) ? null : "order";
 }
 
 export function transferRowOfItem(day: string, item: KarteTimelineItem): TransferRow {

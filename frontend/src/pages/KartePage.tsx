@@ -60,7 +60,7 @@ import {
   filterKarteGroupsByScope,
   isOrderItem,
   mergeDayIndex,
-  pathwayEvaluationDays,
+  preloadedItemDays,
   type KarteCardFilter,
   type KarteScopeFilter,
   type KarteScopeTarget,
@@ -641,14 +641,28 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     () =>
       mergeDayIndex(
         filteredGroups,
-        // パス評価は全部読んであるので、その日付も診療日ペインに最初から並べる(種別で絞り込み中は
-        // 絞り込み後の groups だけで決まるので、評価の日付を足すのは絞り込んでいないときだけ)。
-        cardFilter && cardFilter.kind !== "pathway-evaluation"
-          ? dayIndex.days
-          : [...dayIndex.days, ...pathwayEvaluationDays(feed.pathwayEvaluations, scopeFilter, scopeTarget)],
+        // パス評価・有害事象は全部読んであるので、その日付も診療日ペインに最初から並べる。
+        [
+          ...dayIndex.days,
+          ...preloadedItemDays(
+            { pathwayEvaluations: feed.pathwayEvaluations, adverseEvents: feed.adverseEvents },
+            cardFilter,
+            scopeFilter,
+            scopeTarget,
+          ),
+        ],
         timeline.cutoff,
       ),
-    [filteredGroups, dayIndex.days, timeline.cutoff, cardFilter, feed.pathwayEvaluations, scopeFilter, scopeTarget],
+    [
+      filteredGroups,
+      dayIndex.days,
+      timeline.cutoff,
+      cardFilter,
+      feed.pathwayEvaluations,
+      feed.adverseEvents,
+      scopeFilter,
+      scopeTarget,
+    ],
   );
 
   // 本日のカルテのペインに出す 1 日分。オーダーの本流は開始日が今日以前のものを新しい順に
@@ -806,6 +820,15 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     else if (item.kind === "vital") openForm({ kind: "vital-edit", entryId: item.id });
     // パス評価はパスタブの日めくりでその病日を開く(記載はそこから評価で書き直す)。
     else if (item.kind === "pathway-evaluation") openPathwayDayRef.current(item.evaluation.applyId, item.evaluation.eventId);
+    // 有害事象は治療の側の記録パネル(そのクール・その治療処方の一覧と編集)で直す。
+    else if (item.kind === "adverse-event") {
+      const { record } = item;
+      openForm(
+        record.treatmentType === "radiotherapy"
+          ? { kind: "radiotherapy-adverse", srId: record.treatmentSrId }
+          : { kind: "regimen-adverse", regimenSrId: record.treatmentSrId, cycle: record.cycle ?? 1 },
+      );
+    }
     else if (item.kind === "qr" && documentIdOfResponse(item.response)) {
       // 様式文書は文書の側(右ペインの文書編集)で直す。回答だけを直すと PDF と食い違うため。
       openForm({ kind: "document-edit", documentId: documentIdOfResponse(item.response) as string });
@@ -968,6 +991,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         </TruncatedNotice>
         <ErrorBanner error={feed.errors.responses} />
         <ErrorBanner error={feed.errors.pathwayEvaluations} />
+        <ErrorBanner error={feed.errors.adverseEvents} />
         <ErrorBanner error={conditionsError} />
         <KarteTimeline
           groups={filteredGroups}

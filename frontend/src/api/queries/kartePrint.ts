@@ -24,6 +24,7 @@ import {
   karteVitalParams,
   useKartePathwayEvaluations,
 } from "./karte";
+import { usePatientAdverseEvents } from "./adverseEvent";
 import { readAllTypeHistory } from "./karteCardHistory";
 import { useFacilitySettings } from "./organization";
 
@@ -106,10 +107,11 @@ export function useKartePrintTimeline(patientId: string | undefined, from: strin
     enabled: Boolean(patientId && from && to),
   });
   const pathwayEvaluations = useKartePathwayEvaluations(patientId, null);
+  const adverseEvents = usePatientAdverseEvents(patientId);
   const cardOrder = useFacilitySettings().data?.karte_card_order ?? DEFAULT_KARTE_CARD_ORDER;
 
   const groups = useMemo<KarteDayGroup[]>(() => {
-    if (!source.data || !pathwayEvaluations.data) return [];
+    if (!source.data || !pathwayEvaluations.data || !adverseEvents.data) return [];
     const timeline = buildKarteTimeline({
       noteBundles: source.data.noteBundles,
       prescriptionBundles: source.data.orderBundles,
@@ -117,6 +119,7 @@ export function useKartePrintTimeline(patientId: string | undefined, from: strin
       responseBundles: source.data.responseBundles,
       vitalBundles: source.data.vitalBundles,
       pathwayEvaluations: pathwayEvaluations.data,
+      adverseEvents: adverseEvents.data,
       noteHasNext: false,
       prescriptionHasNext: false,
       responseHasNext: false,
@@ -129,13 +132,13 @@ export function useKartePrintTimeline(patientId: string | undefined, from: strin
         items: sortKarteDayItems(group.items, cardOrder, "asc"),
       }))
       .sort((a, b) => a.day.localeCompare(b.day));
-  }, [source.data, pathwayEvaluations.data, from, to, cardOrder]);
+  }, [source.data, pathwayEvaluations.data, adverseEvents.data, from, to, cardOrder]);
 
   return {
     groups,
     truncated: Boolean(source.data?.truncated),
-    isPending: source.isPending || pathwayEvaluations.isPending,
-    error: source.error ?? pathwayEvaluations.error ?? null,
+    isPending: source.isPending || pathwayEvaluations.isPending || adverseEvents.isPending,
+    error: source.error ?? pathwayEvaluations.error ?? adverseEvents.error ?? null,
   };
 }
 

@@ -32,6 +32,7 @@ import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pa
 import { pathoReportResponseIds } from "./pathoResultHelpers";
 import { pathwayOf } from "./pathwayApplyHelpers";
 import type { PathwayEvaluationCard } from "./pathwayKarteHelpers";
+import { adverseEventLabel, type AdverseEventRecord } from "./adverseEventHelpers";
 import { departmentOf, ORDER_TYPE_SYSTEM } from "./orderHeader";
 import { isPrescriptionServiceRequest, prescriptionProblem } from "./prescriptionHelpers";
 import { categoryCoding } from "./shared";
@@ -201,7 +202,8 @@ export type KarteItemKind =
   | "injection"
   | OrderKind
   | "qr"
-  | "pathway-evaluation";
+  | "pathway-evaluation"
+  | "adverse-event";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   note: "診療記録",
@@ -211,7 +213,16 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   ...ORDER_KIND_LABELS,
   qr: "テンプレート",
   "pathway-evaluation": "パス評価",
+  "adverse-event": "有害事象",
 };
+
+/** オーダーではない記録の種別(カルテ印刷の左段。オーダーのヘッダを持たない)。 */
+const KARTE_RECORD_KINDS = ["note", "vital", "qr", "pathway-evaluation", "adverse-event"] as const;
+type KarteRecordKind = (typeof KARTE_RECORD_KINDS)[number];
+
+export function isKarteRecordItem(item: Pick<KarteTimelineItem, "kind">): boolean {
+  return (KARTE_RECORD_KINDS as readonly KarteItemKind[]).includes(item.kind);
+}
 
 /**
  * オーダーのヘッダ ServiceRequest の種別。buildKarteTimeline の振り分けと同じ順で判定する
@@ -220,7 +231,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
  */
 export function orderKindOf(
   sr: fhir4.ServiceRequest,
-): Exclude<KarteItemKind, "note" | "vital" | "qr" | "pathway-evaluation"> | "nursing-order" | "chemo-regimen" | null {
+): Exclude<KarteItemKind, KarteRecordKind> | "nursing-order" | "chemo-regimen" | null {
   if (isOrderItemRequest(sr)) return null;
   if (isNursingServiceRequest(sr)) return "nursing-order";
   if (isRegimenServiceRequest(sr)) return "chemo-regimen";
@@ -494,6 +505,8 @@ export type KarteTimelineItem = KarteItemBase &
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
     // クリニカルパスのアウトカムの評価のうち、記載(S/O/A/P・自由記載・コメント)のあるもの。
     | { kind: "pathway-evaluation"; evaluation: PathwayEvaluationCard }
+    // 化学療法・放射線治療の有害事象(CTCAE Grade)。
+    | { kind: "adverse-event"; record: AdverseEventRecord }
   );
 
 export interface KarteDayGroup {
@@ -519,6 +532,8 @@ export interface KarteTimelineInput {
    * 加わらず、表示範囲に入った日から出る。
    */
   pathwayEvaluations: PathwayEvaluationCard[];
+  /** 有害事象。パス評価と同じく患者ぶんを全部読んであり、カットオフには加わらない。 */
+  adverseEvents: AdverseEventRecord[];
   noteHasNext: boolean;
   prescriptionHasNext: boolean;
   responseHasNext: boolean;
@@ -677,6 +692,18 @@ function pathwayEvaluationItem(evaluation: PathwayEvaluationCard): KarteTimeline
     dateTime: evaluation.recordedAt,
     label: KARTE_KIND_LABELS["pathway-evaluation"],
     evaluation,
+  };
+}
+
+// 有害事象は発現日に置く(記録した日ではなく「いつ起きたか」で読むもの。回復日はカードの本文に出す)。
+function adverseEventItem(record: AdverseEventRecord): KarteTimelineItem {
+  return {
+    kind: "adverse-event",
+    id: record.id,
+    day: record.onset,
+    dateTime: record.onset,
+    label: adverseEventLabel(record),
+    record,
   };
 }
 
@@ -1211,8 +1238,16 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   );
 
   const pathwayEvaluationItems = input.pathwayEvaluations.map(pathwayEvaluationItem);
+  const adverseEventItems = input.adverseEvents.filter((r) => r.onset).map(adverseEventItem);
 
-  const visible = [...noteItems, ...prescriptionItems, ...qrItems, ...vitalItems, ...pathwayEvaluationItems].filter(
+  const visible = [
+    ...noteItems,
+    ...prescriptionItems,
+    ...qrItems,
+    ...vitalItems,
+    ...pathwayEvaluationItems,
+    ...adverseEventItems,
+  ].filter(
     // 日付未定は先読みで全件持っているので、カットオフで隠さない。
     (item) =>
       item.day === KARTE_UNSCHEDULED_DAY || cutoff === undefined || item.day > cutoff,
@@ -1336,6 +1371,8 @@ function itemDepartmentId(item: KarteTimelineItem): string {
       return vitalEntryDepartment(item.entry).departmentId;
     case "pathway-evaluation":
       return departmentOf(item.evaluation.observation).departmentId;
+    case "adverse-event":
+      return "";
     default:
       return departmentOf(item.serviceRequest).departmentId;
   }
@@ -1359,6 +1396,8 @@ function itemRecorder(item: KarteTimelineItem): { practitionerId: string; name: 
       return null;
     case "pathway-evaluation":
       return fromReference(item.evaluation.observation.performer?.[0]);
+    case "adverse-event":
+      return fromReference(item.record.performer);
     default:
       return fromReference(item.serviceRequest.requester);
   }
@@ -1394,15 +1433,20 @@ export function matchesScopeFilter(
 }
 
 /**
- * パス評価(全件読んである)のうち絞り込みに合うものの記録日。診療日ペインの索引に足す。
+ * 全件読んである情報(パス評価・有害事象)のうち絞り込みに合うものの日付。診療日ペインの索引に足す。
+ * 種別で絞り込み中は、その種別のものだけ。
  */
-export function pathwayEvaluationDays(
-  evaluations: PathwayEvaluationCard[],
+export function preloadedItemDays(
+  preloaded: { pathwayEvaluations: PathwayEvaluationCard[]; adverseEvents: AdverseEventRecord[] },
+  cardFilter: KarteCardFilter | null,
   scope: KarteScopeFilter,
   target: KarteScopeTarget,
 ): string[] {
-  return evaluations
-    .map(pathwayEvaluationItem)
+  return [
+    ...preloaded.pathwayEvaluations.map(pathwayEvaluationItem),
+    ...preloaded.adverseEvents.filter((r) => r.onset).map(adverseEventItem),
+  ]
+    .filter((item) => !cardFilter || item.kind === cardFilter.kind)
     .filter((item) => scope === "all" || matchesScopeFilter(item, scope, target))
     .map((item) => item.day);
 }
@@ -1507,9 +1551,7 @@ export function referencesProblem(
 /** 2 号用紙の段。左「既往症・原因・主要症状・経過等」、右「処方・手術・処置等」。 */
 export type KartePrintColumn = "record" | "order";
 
-const KARTE_RECORD_KINDS = new Set<KarteItemKind>(["note", "vital", "qr", "pathway-evaluation"]);
-
-/** 記録(診療記録・テンプレート・バイタル・パス評価)は左段、処方・注射・部門オーダーは右段。 */
+/** 記録(診療記録・テンプレート・バイタル・パス評価・有害事象)は左段、処方・注射・部門オーダーは右段。 */
 export function kartePrintColumn(item: Pick<KarteTimelineItem, "kind">): KartePrintColumn {
-  return KARTE_RECORD_KINDS.has(item.kind) ? "record" : "order";
+  return isKarteRecordItem(item) ? "record" : "order";
 }

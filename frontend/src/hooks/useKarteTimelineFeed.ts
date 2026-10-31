@@ -7,16 +7,20 @@ import {
   useKartePrescriptionsInfinite,
   useKarteQuestionnaireResponsesInfinite,
   useKarteVitalsInfinite,
+  usePatientAdverseEvents,
   type KarteProblemFilter,
   type KarteScope,
 } from "../api/queries";
+import type { AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import { DEFAULT_KARTE_CARD_ORDER, sortKarteDayGroups } from "../fhir/karteCardOrderHelpers";
 import { buildKarteTimeline, type KarteTimelineResult } from "../fhir/karteTimeline";
 
 // カルテのタイムラインの読み込み。診療記録・処方(オーダー)・テンプレート回答・バイタルを
 // それぞれオフセットページングで読み(docs/features/karte.md「無限スクロール」)、日付未定・先の予定の
-// オーダーとパス評価は先読みして、buildKarteTimeline で診療日ごとにまとめる。
+// オーダーとパス評価・有害事象は先読みして、buildKarteTimeline で診療日ごとにまとめる。
 // カルテ画面(左ペインのカルテタブ)と診療ダッシュボードの「カルテ」カードが同じ hook を使う。
+
+const NO_ADVERSE_EVENTS: AdverseEventRecord[] = [];
 
 export function useKarteTimelineFeed(patientId: string | undefined, problemIds: KarteProblemFilter, scope: KarteScope) {
   const notes = useKarteClinicalNotesInfinite(patientId, problemIds, scope);
@@ -27,6 +31,9 @@ export function useKarteTimelineFeed(patientId: string | undefined, problemIds: 
   const vitals = useKarteVitalsInfinite(patientId, problemIds, scope);
   // 記載のあるパスの評価。患者ぶんを全部読むので、ページングの判定には加わらない。
   const pathwayEvaluations = useKartePathwayEvaluations(patientId, problemIds);
+  // 有害事象も患者ぶんを全部読む。プロブレムを指さないので、プロブレムで絞り込んでいるときは出さない。
+  const adverseEventQuery = usePatientAdverseEvents(patientId);
+  const adverseEvents = problemIds?.length ? NO_ADVERSE_EVENTS : (adverseEventQuery.data ?? NO_ADVERSE_EVENTS);
 
   const facilitySettings = useFacilitySettings();
   const cardOrder = facilitySettings.data?.karte_card_order ?? DEFAULT_KARTE_CARD_ORDER;
@@ -38,6 +45,7 @@ export function useKarteTimelineFeed(patientId: string | undefined, problemIds: 
       responseBundles: responses.data?.pages.map((page) => page.data) ?? [],
       vitalBundles: vitals.data?.pages.map((page) => page.data) ?? [],
       pathwayEvaluations: pathwayEvaluations.data ?? [],
+      adverseEvents,
       noteHasNext: Boolean(notes.hasNextPage),
       prescriptionHasNext: Boolean(prescriptions.hasNextPage),
       responseHasNext: Boolean(responses.hasNextPage),
@@ -52,6 +60,7 @@ export function useKarteTimelineFeed(patientId: string | undefined, problemIds: 
     responses.data,
     vitals.data,
     pathwayEvaluations.data,
+    adverseEvents,
     notes.hasNextPage,
     prescriptions.hasNextPage,
     responses.hasNextPage,
@@ -85,6 +94,7 @@ export function useKarteTimelineFeed(patientId: string | undefined, problemIds: 
   return {
     timeline,
     pathwayEvaluations: pathwayEvaluations.data ?? [],
+    adverseEvents,
     loadMore,
     loadToken,
     isLoading: notes.isPending || prescriptions.isPending || responses.isPending || vitals.isPending,
@@ -99,6 +109,7 @@ export function useKarteTimelineFeed(patientId: string | undefined, problemIds: 
       pendingOrders: pendingOrders.error,
       responses: responses.error,
       pathwayEvaluations: pathwayEvaluations.error,
+      adverseEvents: problemIds?.length ? null : adverseEventQuery.error,
     },
     pendingOrdersTruncated: pendingOrders.truncated,
   };

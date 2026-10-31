@@ -30,6 +30,7 @@ const PLAIN_KINDS: KarteItemKind[] = [
   "injection",
   ...ORDER_KINDS,
   "pathway-evaluation",
+  "adverse-event",
 ];
 
 export function KarteCategoryList({ filter, onSelect }: KarteCategoryListProps) {

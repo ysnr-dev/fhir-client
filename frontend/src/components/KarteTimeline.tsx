@@ -82,6 +82,7 @@ import { RowMenu } from "./RowMenu";
 import { useKarteLinkActions } from "./KarteLinkContext";
 import { InjectionPerformSection } from "./karteCardBodies/InjectionPerformSection";
 import { PathwayEvaluationCardBody } from "./karteCardBodies/PathwayEvaluationCardBody";
+import { AdverseEventCardBody } from "./karteCardBodies/AdverseEventCardBody";
 
 interface KarteTimelineProps {
   groups: KarteDayGroup[];
@@ -514,13 +515,13 @@ const KarteCard = memo(function KarteCard({
               </button>
             ))}
           <RowMenu label={`${cardTitle(item) || karteItemKindLabel(item)} の操作`}>
-            {/* バイタル・パス評価はカードに中身が全部出るので詳細モーダルを持たない。 */}
-            {item.kind !== "vital" && item.kind !== "pathway-evaluation" && (
+            {/* バイタル・パス評価・有害事象はカードに中身が全部出るので詳細モーダルを持たない。 */}
+            {hasDetailModal(item) && (
               <button type="button" className="row-menu__item" onClick={() => onOpenDetail(item)}>
                 詳細表示
               </button>
             )}
-            {linkActions && item.kind !== "vital" && item.kind !== "pathway-evaluation" && (
+            {linkActions && hasDetailModal(item) && (
               <button
                 type="button"
                 className="row-menu__item"
@@ -777,6 +778,11 @@ const KarteCard = memo(function KarteCard({
               <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
                 パス表示
               </button>
+            ) : item.kind === "adverse-event" ? (
+              // 有害事象は治療の側の記録パネルで直す(削除もそこで行う)。
+              <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
+                編集
+              </button>
             ) : (
               <>
                 <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
@@ -915,10 +921,17 @@ function consultReplyId(sr: fhir4.ServiceRequest): string {
   return consultReply(sr).replyId;
 }
 
+type KarteDetailItem = Exclude<
+  KarteTimelineItem,
+  { kind: "vital" } | { kind: "pathway-evaluation" } | { kind: "adverse-event" }
+>;
+
+function hasDetailModal(item: KarteTimelineItem): item is KarteDetailItem {
+  return item.kind !== "vital" && item.kind !== "pathway-evaluation" && item.kind !== "adverse-event";
+}
+
 // 「リンク取得」で貼るリンク。開き方はカードの詳細モーダルと同じ。
-function karteLinkOfItem(
-  item: Exclude<KarteTimelineItem, { kind: "vital" } | { kind: "pathway-evaluation" }>,
-): KarteLink {
+function karteLinkOfItem(item: KarteDetailItem): KarteLink {
   const resourceType =
     item.kind === "note" ? "Composition" : item.kind === "qr" ? "QuestionnaireResponse" : "ServiceRequest";
   return {
@@ -1105,6 +1118,10 @@ export function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 
   if (item.kind === "pathway-evaluation") {
     return <PathwayEvaluationCardBody evaluation={item.evaluation} />;
+  }
+
+  if (item.kind === "adverse-event") {
+    return <AdverseEventCardBody record={item.record} />;
   }
 
   if (!item.questionnaire) {

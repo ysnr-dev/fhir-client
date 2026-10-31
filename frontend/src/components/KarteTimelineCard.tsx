@@ -59,6 +59,7 @@ export function KarteTimelineCard({
         </TruncatedNotice>
         <ErrorBanner error={feed.errors.responses} />
         <ErrorBanner error={feed.errors.pathwayEvaluations} />
+        <ErrorBanner error={feed.errors.adverseEvents} />
         <KarteTimeline
           groups={timeline.groups}
           isLoading={feed.isLoading && timeline.groups.length === 0}

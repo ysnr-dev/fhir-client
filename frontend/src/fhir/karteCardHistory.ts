@@ -1,6 +1,7 @@
 import { localDay } from "../lib/dates";
 import { karteItemKey, orderCardDay, type KarteTimelineItem } from "./karteTimeline";
 import { labOrderItemRequests } from "./labOrderHelpers";
+import { parseAdverseEvent } from "./adverseEventHelpers";
 import { withEvaluationObservation } from "./pathwayKarteHelpers";
 import { VITAL_ENTRY_SYSTEM, groupVitalEntries } from "./vitalHelpers";
 
@@ -20,7 +21,7 @@ export type HistoryCardItem = Exclude<KarteTimelineItem, { kind: "note" }>;
 
 /** カードを作るリソースの集め方。 */
 export interface KarteCardHistoryPlan {
-  /** 本体の 1 リソース(オーダーのヘッダ・テンプレート回答・パス評価)。 */
+  /** 本体の 1 リソース(オーダーのヘッダ・テンプレート回答・パス評価・有害事象)。 */
   main?: { resourceType: string; id: string };
   /** ヘッダの based-on を辿る明細の型。検体検査などの明細は 2 段(ヘッダ → 明細 → 構成項目)。 */
   children?: "ServiceRequest" | "MedicationRequest";
@@ -34,6 +35,7 @@ export function karteCardHistoryPlan(item: HistoryCardItem): KarteCardHistoryPla
   if (item.kind === "pathway-evaluation") {
     return { main: { resourceType: "Observation", id: item.evaluation.observation.id ?? "" } };
   }
+  if (item.kind === "adverse-event") return { main: { resourceType: "Observation", id: item.id } };
   const main = { resourceType: "ServiceRequest", id: item.id };
   if ("medicationRequests" in item) return { main, children: "MedicationRequest" };
   if ("itemRequests" in item) return { main, children: "ServiceRequest" };
@@ -138,6 +140,10 @@ function rebuildItem(
   }
   if (item.kind === "pathway-evaluation") {
     return { ...item, evaluation: withEvaluationObservation(item.evaluation, resource as fhir4.Observation) };
+  }
+  if (item.kind === "adverse-event") {
+    const record = parseAdverseEvent(resource as fhir4.Observation);
+    return record ? { ...item, record, day: record.onset, dateTime: record.onset } : null;
   }
 
   const serviceRequest = resource as fhir4.ServiceRequest;

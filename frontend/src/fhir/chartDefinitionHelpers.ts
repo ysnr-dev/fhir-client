@@ -7,7 +7,7 @@ import {
   interpretationCodeOf,
   parseCodeValueList,
 } from "./labResultHelpers";
-import { adverseEventLabel, type AdverseEventRecord } from "./adverseEventHelpers";
+import { adverseEventLabel, adverseEventTreatmentLabel, type AdverseEventRecord } from "./adverseEventHelpers";
 import {
   BLOOD_PRESSURE,
   BMI,
@@ -1012,7 +1012,7 @@ export function buildAdverseChartEvents(
       detail: [
         `${record.term} Grade ${record.grade}`,
         `${record.onset} 〜 ${record.resolved || "継続中"}`,
-        `${record.treatmentName}${record.cycle ? ` 第 ${record.cycle} クール` : ""}`,
+        adverseEventTreatmentLabel(record),
       ]
         .filter(Boolean)
         .join(" / "),

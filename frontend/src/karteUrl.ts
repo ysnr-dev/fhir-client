@@ -237,9 +237,9 @@ export function parseKarteTab(value: string | null): KarteTabKey {
  * 開く「検査結果表示」(DiagnosticReport)を持つ。検査結果はカルテのカードには
  * ならないが、モーダルの対象としては独立した種別が要る。
  */
-// バイタルはカードに測定値が全部出るので詳細モーダルを持たない。
+// バイタル・パス評価・有害事象はカードに中身が全部出るので詳細モーダルを持たない。
 export type KarteDetailKind =
-  | Exclude<KarteItemKind, "vital" | "pathway-evaluation">
+  | Exclude<KarteItemKind, "vital" | "pathway-evaluation" | "adverse-event">
   | "lab-result"
   | "micro-result"
   | "patho-result"
@@ -487,6 +487,7 @@ const CARD_KINDS: KarteItemKind[] = [
   ...ORDER_KINDS,
   "qr",
   "pathway-evaluation",
+  "adverse-event",
 ];
 
 export function formatKarteCard(filter: KarteCardFilter): string {
