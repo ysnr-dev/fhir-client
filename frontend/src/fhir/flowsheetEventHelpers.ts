@@ -93,6 +93,8 @@ export interface FlowsheetMarkRow {
   label: string;
   /** 全文など。項目列は幅が狭いので title で読ませる。 */
   title: string;
+  /** 行ラベルの頭に添える短い印(化学療法の注射ならレジメン名)。 */
+  tag?: string;
   marks: FlowsheetMark[];
 }
 

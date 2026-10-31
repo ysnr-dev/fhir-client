@@ -14,6 +14,7 @@ import {
 } from "./injectionHelpers";
 import { injectionTaskStatus, injectionTasksByOrderId } from "./injectionTaskHelpers";
 import { isInjectionProcedure } from "./injectionPerformHelpers";
+import { cycleDayLabel, regimenOrderOf } from "./regimenOrderHelpers";
 import { referenceId } from "./shared";
 
 // 経過表(温度板)の注射欄。docs/injection-order-design.md §8-D のバックログ。
@@ -126,6 +127,9 @@ export function buildInjectionRows(data: FlowsheetInjectionData): FlowsheetMarkR
     const status = injectionTaskStatus(taskByOrderId.get(srId));
     const cancelled = status === "cancelled";
     const performs = proceduresByOrderId.get(srId) ?? [];
+    // 化学療法の日オーダーは、行にレジメン名、印にクールと Day を添える(chemo-regimen-design.md §7.6 E-10)。
+    const regimen = regimenOrderOf(order);
+    const regimenLabel = regimen ? `${regimen.name} ${cycleDayLabel(regimen)}` : "";
 
     for (const rp of groupInjectionByRp(mrsByOrderId.get(srId) ?? [])) {
       const key = injectionRowKeyOf(rp);
@@ -136,6 +140,10 @@ export function buildInjectionRows(data: FlowsheetInjectionData): FlowsheetMarkR
       if (!row) {
         row = { key, label, title: [label, usage].filter(Boolean).join("\n"), marks: [] };
         rows.set(key, row);
+      }
+      if (regimen && !(row.tag ?? "").split("・").includes(regimen.name)) {
+        row.tag = [row.tag, regimen.name].filter(Boolean).join("・");
+        row.title = [row.tag, label, usage].filter(Boolean).join("\n");
       }
 
       // 予定。時刻はローカルの HH:mm なので、その日と組んで日時にする。終了が
@@ -158,12 +166,13 @@ export function buildInjectionRows(data: FlowsheetInjectionData): FlowsheetMarkR
           groupId: srId,
           title: [
             `${MARK_LABELS[kind]} ${flowsheetTimeLabel(at)}${end ? `〜${flowsheetTimeLabel(end)}` : ""}`,
+            regimenLabel,
             label,
             usage,
           ]
             .filter(Boolean)
             .join(" "),
-          event: markEvent(kind, at, end, label, srId),
+          event: markEvent(kind, at, end, [regimenLabel, label].filter(Boolean).join(" "), srId),
         });
       }
 
@@ -180,11 +189,12 @@ export function buildInjectionRows(data: FlowsheetInjectionData): FlowsheetMarkR
           groupId: srId,
           title: [
             `${MARK_LABELS[kind]} ${flowsheetTimeLabel(start)}${end ? `〜${flowsheetTimeLabel(end)}` : ""}`,
+            regimenLabel,
             label,
           ]
             .filter(Boolean)
             .join(" "),
-          event: markEvent(kind, start, end, label, srId),
+          event: markEvent(kind, start, end, [regimenLabel, label].filter(Boolean).join(" "), srId),
         });
       }
     }

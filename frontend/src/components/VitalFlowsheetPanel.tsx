@@ -1380,6 +1380,7 @@ function FlowsheetMarkSection({
             colSpan={2}
             title={row.title}
           >
+            {row.tag && <span className="vital-flowsheet__injection-tag">{row.tag}</span>}
             {row.label}
           </th>
           <td className="vital-flowsheet__injection-cell" colSpan={columnCount}>

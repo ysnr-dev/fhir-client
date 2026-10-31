@@ -24,6 +24,7 @@ import {
   nextCycleOf,
   previousCycleOf,
   regimenDayStatusLabel,
+  startedDayOrdersNote,
   type RegimenApplication,
   type RegimenDayOrder,
 } from "../fhir/regimenOrderHelpers";
@@ -144,7 +145,9 @@ export function RegimenDayPanel({
       scope === "following"
         ? `${date} 以降の ${movable.length} 件を ${delta > 0 ? `${delta} 日後` : `${-delta} 日前`}に移動します。`
         : `${date} のオーダーを ${moveTo} に移動します。`;
-    if (!window.confirm(`${text}${bookingNote(movable, "移動後に予約し直してください。")}よろしいですか？`)) return;
+    const started = startedDayOrdersNote(movable);
+    const notes = `${started ? `\n${started}` : ""}${bookingNote(movable, "移動後に予約し直してください。")}`;
+    if (!window.confirm(`${text}${notes}\nよろしいですか？`)) return;
     move.mutate({ targets: movable, deltaDays: delta, patientId, header, orders }, { onSuccess: onSaved });
   }
 
@@ -260,6 +263,7 @@ export function RegimenDayPanel({
             {movable.length < targets.length && (
               <p className="injection-scope__note">実施済のオーダーは動かしません。</p>
             )}
+            <StartedDayOrdersBanner notes={[startedDayOrdersNote(movable)]} />
           </fieldset>
 
           {booking && (
@@ -290,6 +294,21 @@ export function RegimenDayPanel({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** 薬剤部が作業を始めた日オーダーを動かすときの注意(§7.6 D-6)。空の文は出さない。 */
+function StartedDayOrdersBanner({ notes }: { notes: string[] }) {
+  const lines = notes.filter(Boolean);
+  if (lines.length === 0) return null;
+  return (
+    <div className="error-banner" role="alert">
+      {lines.map((line) => (
+        <p key={line} className="error-banner__line error-banner__line--warning">
+          {line}
+        </p>
+      ))}
     </div>
   );
 }
@@ -447,6 +466,13 @@ export function RegimenMoveModal({
       {movableToday.length < todays.length && (
         <p className="injection-scope__note">実施済のオーダーは動かしません。</p>
       )}
+      <StartedDayOrdersBanner
+        notes={[
+          startedDayOrdersNote(movableToday),
+          startedDayOrdersNote(movableFollowing) &&
+            `この日以降すべてを移動する場合: ${startedDayOrdersNote(movableFollowing)}`,
+        ]}
+      />
       <div className="plain-text-modal__actions">
         <button type="button" onClick={onClose} disabled={move.isPending}>
           キャンセル

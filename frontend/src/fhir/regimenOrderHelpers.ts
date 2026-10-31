@@ -14,7 +14,7 @@ import {
   type InjectionFormValues,
   type InjectionRpValues,
 } from "./injectionHelpers";
-import type { InjectionTaskStatus } from "./injectionTaskHelpers";
+import { INJECTION_TASK_STATUS_OPTIONS, type InjectionTaskStatus } from "./injectionTaskHelpers";
 import {
   ORDER_TYPE_SYSTEM,
   REGIMEN_INSTANCE_SYSTEM,
@@ -39,7 +39,7 @@ import {
 } from "./prescriptionHelpers";
 import { isHeaderEntry } from "./provenanceHelpers";
 import { doseUnitSuffix } from "./regimenHelpers";
-import type { RxTaskStatus } from "./rxTaskHelpers";
+import { RX_TASK_STATUS_OPTIONS, type RxTaskStatus } from "./rxTaskHelpers";
 import { usageCommentOf } from "./supplementaryUsage";
 import {
   categoryCoding,
@@ -1306,6 +1306,25 @@ export function buildRegimenMoveBundle(
     return carryRegimenDoses(stampRegimenOrder(bundle.entry ?? [], ref), order.medicationRequests);
   });
   return { resourceType: "Bundle", type: "transaction", entry: entries };
+}
+
+/**
+ * 薬剤部が作業を始めた日オーダー(受付済・照会中・払出済/調剤済)を移動するときの注意文。
+ * 移動しても進捗はそのまま移り、払い出した薬は元の日のために調製されているので、移動の確認で
+ * 必ず見せる(§7.6 D-6)。該当が無ければ空。
+ */
+export function startedDayOrdersNote(orders: RegimenDayOrder[]): string {
+  const counts = new Map<string, number>();
+  for (const order of orders) {
+    if (order.status !== "accepted" && order.status !== "on-hold" && order.status !== "in-progress") continue;
+    const options = order.kind === "injection" ? INJECTION_TASK_STATUS_OPTIONS : RX_TASK_STATUS_OPTIONS;
+    const status = options.find((o) => o.code === order.status)?.display ?? order.status;
+    const label = `${order.kind === "injection" ? "注射" : "処方"}の${status}`;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  if (counts.size === 0) return "";
+  const list = [...counts].map(([label, count]) => `${label} ${count} 件`).join("・");
+  return `薬剤部が作業を始めたオーダーがあります(${list})。進捗はそのまま移るので、薬剤部に日付の変更を伝えてください。`;
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useRegimenHeaders } from "../api/queries";
 import { insulinScaleSummary } from "../fhir/insulinScaleHelpers";
 import { problemLabel } from "../fhir/conditionHelpers";
 import {
@@ -22,7 +23,6 @@ import {
   cycleDayLabel,
   regimenDoseOf,
   regimenOrderOf,
-  type RegimenApplication,
 } from "../fhir/regimenOrderHelpers";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
@@ -35,11 +35,6 @@ interface InjectionDetailPanelProps {
   /** この注射の進捗 Task。無ければ依頼済として出す。 */
   task?: fhir4.Task;
   problemsById?: Map<string, fhir4.Condition>;
-  /**
-   * 化学療法の適用ヘッダ(薬剤部の監査。§7.6 E-1)。渡すと体格と、体表面積あたりの
-   * 逆算を薬剤の行に出す。渡さなければ出さない。
-   */
-  regimenApplication?: RegimenApplication | null;
   children?: ReactNode;
 }
 
@@ -54,10 +49,14 @@ export function InjectionDetailPanel({
   medicationRequests,
   task,
   problemsById,
-  regimenApplication,
   children,
 }: InjectionDetailPanelProps) {
   const regimenRef = regimenOrderOf(serviceRequest);
+  // 化学療法から出たオーダーなら、適用ヘッダから体格を引き、体表面積あたりの逆算を薬剤の行に出す
+  // (薬剤部の監査。chemo-regimen-design.md §7.6 E-1 / E-10)。
+  const regimenSrId = regimenRef?.regimenSrId ?? "";
+  const headers = useRegimenHeaders(regimenSrId ? [regimenSrId] : []);
+  const regimenApplication = headers.data?.get(regimenSrId) ?? null;
   // 減量率は MedicationRequest の拡張にある。RP 番号 + RP 内の順で薬剤の行に当てる。
   const doseByRp = new Map(
     medicationRequests.flatMap((mr) => {

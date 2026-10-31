@@ -63,6 +63,7 @@ import { displayOf, SETTING_OPTIONS } from "../fhir/shared";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
+import { usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { toDateInput, today } from "../lib/dates";
@@ -370,6 +371,8 @@ function RegimenApplyForm({
   const patient = usePatient(patientId).data?.data;
   // アレルギー照合(§7.6 A-4)。薬剤の YJ コードで銘柄・成分の両方を見る。
   const allergies = useActiveAllergies(patientId);
+  // 妊娠・授乳(§7.6 A-6)。レジメンは処方・注射を自前で組むので、各フォームの注意をここで出す。
+  const pregnancy = usePregnancyAdvisory(patientId);
   // 薬剤ごとの警告は投与内容の行に出す。scope はステップと薬剤の位置、drugScope で薬剤 id から引く。
   const { allergyAdvisories, drugScope } = useMemo(() => {
     const result: Advisory[] = [];
@@ -520,8 +523,19 @@ function RegimenApplyForm({
       ...startDateAdvisories(values?.startDate ?? "", lastAdministered),
       ...availability,
       ...allergyAdvisories,
+      ...pregnancy,
     ];
-  }, [checkSummary, weightChange, conflicts, values?.startDate, lastAdministered, availabilityNotice, masterChangedOn, allergyAdvisories]);
+  }, [
+    checkSummary,
+    weightChange,
+    conflicts,
+    values?.startDate,
+    lastAdministered,
+    availabilityNotice,
+    masterChangedOn,
+    allergyAdvisories,
+    pregnancy,
+  ]);
   const session = useAdvisorySession(advisoryInput, mode === "apply" ? "regimen-apply" : "regimen-cycle");
   const [confirming, setConfirming] = useState(false);
 

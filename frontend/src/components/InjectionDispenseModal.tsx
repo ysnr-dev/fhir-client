@@ -20,6 +20,7 @@ import {
 import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
+import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
@@ -84,6 +85,7 @@ function InjectionDispenseForm({
   const rps = groupInjectionByRp(row.medicationRequests);
   const summary = summarizeInjectionServiceRequest(order);
   const comment = injectionComment(order);
+  const regimen = regimenOrderOf(order);
 
   const performer = useMemo(
     () => ({
@@ -147,6 +149,21 @@ function InjectionDispenseForm({
           <dl className="prescription-detail__common">
             <dt>患者 | 注射日 | 区分 | 依頼科</dt>
             <dd>{meta.join(" | ")}</dd>
+            {/* 化学療法の注射は投与量が力価で出ているので、払出の前にレジメンとクールが
+                読めるようにする(調剤登録と同じ。chemo-regimen-design.md §7.6 E-10)。 */}
+            {regimen && (
+              <>
+                <dt>化学療法</dt>
+                <dd>
+                  {`${regimen.name} ${cycleDayLabel(regimen)}`}
+                  {regimen.reduction && (
+                    <span className="injection-worklist__reduced" title={regimen.reduction}>
+                      減量
+                    </span>
+                  )}
+                </dd>
+              </>
+            )}
             <dt>注射コメント</dt>
             <dd>{comment || "-"}</dd>
             <dt>払出者</dt>
