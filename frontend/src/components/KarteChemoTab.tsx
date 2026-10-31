@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
-import { usePatientEncounterEvents, usePatientAdverseEvents, useRegimenApplications, useRegimenDayOrders } from "../api/queries";
+import {
+  useOrderAppointments,
+  usePatientEncounterEvents,
+  usePatientAdverseEvents,
+  useRegimenApplications,
+  useRegimenDayOrders,
+} from "../api/queries";
+import { appointmentDateTimeLabel, appointmentScheduleLabel, appointmentTimeLabel } from "../fhir/appointmentHelpers";
 import type { EncounterEvent } from "../fhir/encounterHelpers";
 import {
   cycleDayLabel,
@@ -14,7 +21,7 @@ import {
   type RegimenApplication,
   type RegimenDayOrder,
 } from "../fhir/regimenOrderHelpers";
-import { toDateInput, today, WEEKDAY_LABELS } from "../lib/dates";
+import { localDay, toDateInput, today, WEEKDAY_LABELS } from "../lib/dates";
 import { useHolidays } from "../api/masterQueries";
 import { calendarWeekday } from "../lib/holidays";
 import { ErrorBanner } from "./ErrorBanner";
@@ -121,6 +128,10 @@ export function KarteChemoTab({
   const own = useMemo(
     () => (orders.data ?? []).filter((o) => o.ref.regimenSrId === selected?.id),
     [orders.data, selected?.id],
+  );
+  // 化学療法室の予約(§7.6 D-5)。投与日パネルと同じく適用の全注射オーダーぶんを 1 検索で引く。
+  const appointments = useOrderAppointments(
+    own.filter((o) => o.kind === "injection").map((o) => o.serviceRequest.id ?? ""),
   );
   // 中止はヘッダの ServiceRequest をそのまま書き換えるので、生のリソースも要る。
   const selectedHeader = applications.data?.headers.find((h) => h.id === selected?.id) ?? null;
@@ -329,6 +340,13 @@ export function KarteChemoTab({
                 orders={day.inMonth ? (byDate.get(day.date) ?? []) : []}
                 position={day.inMonth ? positionOf(day.date) : null}
                 events={day.inMonth ? eventsOn(events.data?.events ?? [], day.date) : []}
+                appointments={
+                  day.inMonth
+                    ? (byDate.get(day.date) ?? [])
+                        .map((o) => appointments.data?.get(o.serviceRequest.id ?? ""))
+                        .filter((a): a is fhir4.Appointment => Boolean(a))
+                    : []
+                }
                 onOpen={selected ? () => onOpenDay(selected.id, day.date) : undefined}
                 dragging={dragFrom === day.date}
                 dropTarget={dragFrom !== null && dragOver === day.date && dragFrom !== day.date}
@@ -390,6 +408,7 @@ function ChemoDayCell({
   orders,
   position,
   events,
+  appointments,
   onOpen,
   dragging,
   dropTarget,
@@ -406,6 +425,8 @@ function ChemoDayCell({
   orders: RegimenDayOrder[];
   position: CyclePosition | null;
   events: EncounterEvent[];
+  /** その日の注射オーダーに紐づく化学療法室の予約。 */
+  appointments: fhir4.Appointment[];
   onOpen?: () => void;
   /** このマスを掴んでいる(元の位置)。 */
   dragging: boolean;
@@ -473,6 +494,22 @@ function ChemoDayCell({
           <span className="meal-calendar__event-label">{event.label}</span>
         </span>
       ))}
+      {/* 予約の日が投与日とずれていたら(枠を投与日に縛る前に取った予約など)、時刻ではなく日付を出す。 */}
+      {appointments.map((appointment) => {
+        const day = localDay(appointment.start);
+        const offDay = day !== date;
+        return (
+          <span
+            key={appointment.id}
+            className={`meal-calendar__event chemo-calendar__booking${offDay ? " chemo-calendar__booking--off-day" : ""}`}
+            title={`${appointmentScheduleLabel(appointment)} ${appointmentDateTimeLabel(appointment)}`}
+          >
+            <span className="meal-calendar__event-label">
+              {offDay ? `予約 ${day.slice(5).replace("-", "/")}` : `${appointmentTimeLabel(appointment)} 予約`}
+            </span>
+          </span>
+        );
+      })}
       {orders.map((order) => (
         <div
           key={order.serviceRequest.id}

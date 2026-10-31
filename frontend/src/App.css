@@ -21903,6 +21903,17 @@ button.nursing-worksheet__mark {
   opacity: 0.7;
 }
 
+/* 化学療法室の予約。投与日とずれた予約は注意の色で日付を出す。 */
+.chemo-calendar__booking .meal-calendar__event-label {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chemo-calendar__booking--off-day .meal-calendar__event-label {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
 /* ドラッグ＆ドロップで投与日を動かす。掴めるマスはカーソルで合図し、掴んでいる間の
    元の位置は薄く、落とせる先は破線で示す(手術カレンダーと同じ見せ方)。 */
 button.chemo-calendar__cell[draggable="true"] {
