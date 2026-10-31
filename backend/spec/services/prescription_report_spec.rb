@@ -199,7 +199,7 @@ RSpec.describe PrescriptionReport do
   it "reads a dose ordered in 力価 from the JP Core 力価区分 (原薬量)" do
     potency = medication_request("m1", rp: 1, index: 1, name: "セフゾン細粒", dose: 150, unit: "mg", days: 5)
     potency["dosageInstruction"][0]["doseAndRate"][0]["type"] = {
-      "coding" => [{ "system" => described_class::DOSE_STRENGTH_TYPE_SYSTEM, "code" => "2", "display" => "原薬量" }]
+      "coding" => [{ "system" => described_class::DOSE_STRENGTH_TYPE_SYSTEMS.first, "code" => "2", "display" => "原薬量" }]
     }
     stub_batch([potency, medication_request("m2", rp: 1, index: 2, name: "ムコスタ錠", days: 5)])
     captured = capture_renderer

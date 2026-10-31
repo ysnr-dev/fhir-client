@@ -149,8 +149,7 @@ class InjectionReport
         name: medicine_name(mr, [MEDICINE_CODE_SYSTEM]),
         dose: dosage.dig("doseAndRate", 0, "doseQuantity", "value"),
         unit: dosage.dig("doseAndRate", 0, "doseQuantity", "unit").to_s,
-        potency: coding_by_system(dosage.dig("doseAndRate", 0, "type", "coding"),
-                                  PrescriptionReport::DOSE_STRENGTH_TYPE_SYSTEM)&.dig("code") == "2",
+        potency: PrescriptionReport.potency?(dosage),
         comment: mr.dig("note", 0, "text").to_s
       )
     end

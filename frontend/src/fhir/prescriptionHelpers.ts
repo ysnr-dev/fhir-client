@@ -70,6 +70,9 @@ export const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
 // JP Core の力価区分(Dosage.doseAndRate.type)。力価で指示した量にだけ「原薬量」を付け、
 // 印の無い量は製剤量(薬価算定単位)として読む。
 export const DOSE_STRENGTH_TYPE_SYSTEM =
+  "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationIngredientStrengthStrengthType";
+/** JP Core に無いこの system の力価の印を読むためだけに使う。書き込みには使わない。 */
+const LEGACY_DOSE_STRENGTH_TYPE_SYSTEM =
   "http://jpfhir.jp/fhir/core/CodeSystem/JP_MedicationIngredientStrengthStrengthType_CS";
 export const POTENCY_DOSE_TYPE: fhir4.CodeableConcept = {
   coding: [{ system: DOSE_STRENGTH_TYPE_SYSTEM, code: "2", display: "原薬量" }],
@@ -77,7 +80,10 @@ export const POTENCY_DOSE_TYPE: fhir4.CodeableConcept = {
 
 /** 量が力価(原薬量)で指示されているか。 */
 export function isPotencyDose(doseAndRate: fhir4.DosageDoseAndRate | undefined): boolean {
-  return codingBySystem(doseAndRate?.type?.coding, DOSE_STRENGTH_TYPE_SYSTEM)?.code === "2";
+  const coding =
+    codingBySystem(doseAndRate?.type?.coding, DOSE_STRENGTH_TYPE_SYSTEM) ??
+    codingBySystem(doseAndRate?.type?.coding, LEGACY_DOSE_STRENGTH_TYPE_SYSTEM);
+  return coding?.code === "2";
 }
 
 const BASIC_USAGE_CATEGORY_ORAL = "内服";
