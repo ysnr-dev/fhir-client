@@ -31,6 +31,8 @@ module Master
           # 経過措置・削除済みの医薬品は、承認と適用で警告に使う(§8.17)。
           "master_medicines.abolished_on AS abolished_on",
           "master_medicines.transitional_measure_on AS transitional_measure_on",
+          # YJ コードの無い薬剤(HOT コードに無い統一名収載品など)の成分判定に使う(§8.23)。
+          "master_medicines.yakka_code AS yakka_code",
           "(SELECT hc.individual_medicine_code FROM master_hot_codes hc " \
           "WHERE hc.receipt_code_1 = master_medicines.medicine_code " \
           "AND hc.individual_medicine_code <> '' LIMIT 1) AS yj_code",

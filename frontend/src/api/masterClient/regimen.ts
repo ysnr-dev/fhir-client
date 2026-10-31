@@ -74,6 +74,8 @@ export interface RegimenDrug {
   resolved_unit_name: string | null;
   dosage_form: string | null;
   yj_code: string | null;
+  /** 薬価基準収載医薬品コード。YJ コードが無いときの成分判定に使う。 */
+  yakka_code: string | null;
   /** 薬価基準からの削除日・経過措置日。入っていれば使い続けられない薬剤。 */
   abolished_on: string | null;
   transitional_measure_on: string | null;

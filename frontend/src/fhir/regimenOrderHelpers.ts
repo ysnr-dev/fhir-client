@@ -749,12 +749,14 @@ function regimenOrderExtension(ref: StampRef): fhir4.Extension {
 
 /**
  * 薬剤 1 件の投与量を MedicationRequest に焼く。レジメンマスタの薬剤 id を一緒に
- * 持たせて、クールをまたいでも取り違えないようにする。
+ * 持たせて、クールをまたいでも取り違えないようにする。体表面積は登録したときの値で、
+ * 累積投与量(mg/m²)をオーダーごとの体格で積算するのに使う(§8.23)。
  */
-function regimenDoseExtension(plan: RegimenDrugPlan): fhir4.Extension {
+function regimenDoseExtension(plan: RegimenDrugPlan, bsa: number | null): fhir4.Extension {
   const parts: fhir4.Extension[] = [
     { url: "drug", valueInteger: plan.drug.id },
     { url: "ratio", valueDecimal: ratioOf(plan) },
+    ...(bsa !== null ? [{ url: "bsa", valueDecimal: bsa }] : []),
   ];
   const amount = Number(plan.amount);
   if (plan.amount.trim() !== "" && Number.isFinite(amount) && amount > 0) {
@@ -785,7 +787,11 @@ export function regimenDoseOf(mr: fhir4.MedicationRequest): (PreviousDose & { dr
  * 日オーダーの MedicationRequest に投与量の拡張を焼く。RP 番号と RP 内の順で薬剤に
  * 引き当てる(`buildCycleEntries` が RP の並びをステップの並びと一致させている)。
  */
-function stampRegimenDrugs(entries: fhir4.BundleEntry[], plans: RegimenStepPlan[]): fhir4.BundleEntry[] {
+function stampRegimenDrugs(
+  entries: fhir4.BundleEntry[],
+  plans: RegimenStepPlan[],
+  bsa: number | null,
+): fhir4.BundleEntry[] {
   return entries.map((entry) => {
     const resource = entry.resource;
     if (resource?.resourceType !== "MedicationRequest") return entry;
@@ -796,7 +802,7 @@ function stampRegimenDrugs(entries: fhir4.BundleEntry[], plans: RegimenStepPlan[
     if (!plan) return entry;
     return {
       ...entry,
-      resource: { ...mr, extension: [...(mr.extension ?? []), regimenDoseExtension(plan)] },
+      resource: { ...mr, extension: [...(mr.extension ?? []), regimenDoseExtension(plan, bsa)] },
     };
   });
 }
@@ -925,6 +931,7 @@ function buildCycleEntries(
     }
   }
 
+  const bsa = bsaOf(values);
   const ref = (day: number): StampRef => ({
     headerReference,
     instanceId,
@@ -956,6 +963,7 @@ function buildCycleEntries(
         ...stampRegimenDrugs(
           stampRegimenOrder(buildInjectionSingleDayEntries(injection, patientId, requester, authoredOn), ref(day)),
           injectionPlans,
+          bsa,
         ),
       );
     }
@@ -973,6 +981,7 @@ function buildCycleEntries(
         ...stampRegimenDrugs(
           stampRegimenOrder(buildPrescriptionBundle(prescription, patientId, requester).entry ?? [], ref(day)),
           oralPlans,
+          bsa,
         ),
       );
     }

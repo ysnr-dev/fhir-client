@@ -14,7 +14,7 @@ module Master
     validates :dosage_form, inclusion: { in: %w[1 4 6] }, allow_blank: true
     validates :renal_index, inclusion: { in: RENAL_INDEXES }, allow_blank: true
     validates :age_from, :age_to, numericality: { only_integer: true, greater_than_or_equal_to: 0 }, allow_nil: true
-    validates :renal_below, :max_single_dose, :max_daily_dose, numericality: { greater_than: 0 }, allow_nil: true
+    validates :renal_below, :max_single_dose, :max_daily_dose, :max_cumulative_dose, numericality: { greater_than: 0 }, allow_nil: true
     validate :consistent_conditions
 
     private
@@ -35,9 +35,13 @@ module Master
         errors.add(:renal_below, "は腎機能の指標とあわせて入力してください")
       end
 
-      has_limit = max_single_dose.present? || max_daily_dose.present?
+      has_order_limit = max_single_dose.present? || max_daily_dose.present?
+      has_limit = has_order_limit || max_cumulative_dose.present?
       errors.add(:dose_unit, "を入力してください") if has_limit && dose_unit.blank?
-      errors.add(:per_kg, "は上限とあわせて指定してください") if per_kg && !has_limit
+      errors.add(:per_kg, "は 1 回量か 1 日量の上限とあわせて指定してください") if per_kg && !has_order_limit
+      if cumulative_per_bsa && max_cumulative_dose.blank?
+        errors.add(:cumulative_per_bsa, "は累積の上限とあわせて指定してください")
+      end
 
       # 条件も上限も無い規則は、その薬を選ぶたびに出るだけになる。
       has_condition = age_from || age_to || renal_index.present?

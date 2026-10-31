@@ -306,6 +306,9 @@ function limitText(rule: DrugDoseRule): string {
   const parts: string[] = [];
   if (rule.max_single_dose !== null) parts.push(`1回 ${trimNumber(rule.max_single_dose)}${unit}`);
   if (rule.max_daily_dose !== null) parts.push(`1日 ${trimNumber(rule.max_daily_dose)}${unit}`);
+  if (rule.max_cumulative_dose !== null) {
+    parts.push(`累積 ${trimNumber(rule.max_cumulative_dose)}${rule.dose_unit ?? ""}${rule.cumulative_per_bsa ? "/m²" : ""}`);
+  }
   return parts.join(" / ");
 }
 
@@ -386,6 +389,8 @@ interface DoseRuleDraft {
   max_daily_dose: string;
   dose_unit: string;
   per_kg: boolean;
+  max_cumulative_dose: string;
+  cumulative_per_bsa: boolean;
   severity: DrugCheckSeverity;
   message: string;
 }
@@ -403,6 +408,8 @@ function toDoseRuleDraft(rule: DrugDoseRule | null): DoseRuleDraft {
     max_daily_dose: trimNumber(rule?.max_daily_dose ?? null),
     dose_unit: rule?.dose_unit ?? "mg",
     per_kg: rule?.per_kg ?? false,
+    max_cumulative_dose: trimNumber(rule?.max_cumulative_dose ?? null),
+    cumulative_per_bsa: rule?.cumulative_per_bsa ?? false,
     severity: rule?.severity ?? "caution",
     message: rule?.message ?? "",
   };
@@ -413,7 +420,9 @@ function numberOrNull(value: string): number | null {
 }
 
 function toDoseRulePayload(draft: DoseRuleDraft): DrugDoseRulePayload {
-  const hasLimit = draft.max_single_dose.trim() !== "" || draft.max_daily_dose.trim() !== "";
+  const hasOrderLimit = draft.max_single_dose.trim() !== "" || draft.max_daily_dose.trim() !== "";
+  const hasCumulative = draft.max_cumulative_dose.trim() !== "";
+  const hasLimit = hasOrderLimit || hasCumulative;
   return {
     code: draft.code.trim(),
     name: draft.name.trim(),
@@ -425,7 +434,9 @@ function toDoseRulePayload(draft: DoseRuleDraft): DrugDoseRulePayload {
     max_single_dose: numberOrNull(draft.max_single_dose),
     max_daily_dose: numberOrNull(draft.max_daily_dose),
     dose_unit: hasLimit ? draft.dose_unit.trim() || null : null,
-    per_kg: hasLimit && draft.per_kg,
+    per_kg: hasOrderLimit && draft.per_kg,
+    max_cumulative_dose: numberOrNull(draft.max_cumulative_dose),
+    cumulative_per_bsa: hasCumulative && draft.cumulative_per_bsa,
     severity: draft.severity,
     message: draft.message.trim() || null,
   };
@@ -573,6 +584,26 @@ function DoseRuleEditModal({ rule, onClose }: { rule: DrugDoseRule | null; onClo
                   onChange={(e) => update({ per_kg: e.target.checked })}
                 />
                 /kg
+              </label>
+            </div>
+            <div className="drug-check__inline">
+              <span>累積</span>
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={draft.max_cumulative_dose}
+                onChange={(e) => update({ max_cumulative_dose: e.target.value })}
+                aria-label="累積投与量の上限"
+              />
+              <span>{draft.dose_unit}</span>
+              <label className="drug-check__check">
+                <input
+                  type="checkbox"
+                  checked={draft.cumulative_per_bsa}
+                  onChange={(e) => update({ cumulative_per_bsa: e.target.checked })}
+                />
+                /m²
               </label>
             </div>
             <label>

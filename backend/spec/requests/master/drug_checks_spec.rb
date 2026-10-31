@@ -50,6 +50,34 @@ RSpec.describe "Master drug checks", type: :request do
       expect(body.first).to include("code" => "1149019", "max_daily_dose" => "180.0", "per_kg" => false)
     end
 
+    it "累積の上限だけの規則を登録できる" do
+      post "/master/drug_dose_rules",
+           params: { code: "4235402", name: "ドキソルビシン", max_cumulative_dose: 500, dose_unit: "mg",
+                     cumulative_per_bsa: true, severity: "contraindicated" },
+           as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(body).to include("max_cumulative_dose" => "500.0", "cumulative_per_bsa" => true)
+    end
+
+    it "体表面積あたりは累積の上限とあわせて指定する" do
+      post "/master/drug_dose_rules",
+           params: { code: "4235402", name: "ドキソルビシン", max_single_dose: 60, dose_unit: "mg",
+                     cumulative_per_bsa: true, severity: "caution" },
+           as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "体重あたりは 1 回量か 1 日量の上限とあわせて指定する" do
+      post "/master/drug_dose_rules",
+           params: { code: "4235402", name: "ドキソルビシン", max_cumulative_dose: 500, dose_unit: "mg",
+                     per_kg: true, severity: "caution" },
+           as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
     it "腎機能の条件は指標としきい値をそろえる" do
       post "/master/drug_dose_rules",
            params: { code: "3969010", name: "メトホルミン", renal_index: "egfr", severity: "contraindicated",

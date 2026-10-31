@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Regimen, RegimenDetail } from "../api/masterClient";
-import { useApplicableRegimens, useMedicineDoseFactors, useRegimen } from "../api/masterQueries";
+import { useApplicableRegimens, useDrugDoseRules, useMedicineDoseFactors, useRegimen } from "../api/masterQueries";
 import {
   useActiveAllergies,
   useBodyMeasures,
@@ -9,6 +9,7 @@ import {
   useRecentLabResults,
   useTreatmentAdverseEvents,
   useRegimenApplications,
+  useRegimenDayOrders,
 } from "../api/queries";
 import { adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import { type Advisory, advisoriesOfScope, advisoryKey, severityOf, unscopedAdvisories } from "../fhir/advisoryHelpers";
@@ -23,6 +24,7 @@ import {
   regimenWeightAdvisory,
   summarizeLabChecks,
 } from "../fhir/regimenCheckHelpers";
+import { checkCumulativeDoses, regimenCumulativeAdvisories } from "../fhir/regimenCumulativeHelpers";
 import { CATEGORY_OPTIONS as INJECTION_CATEGORY_OPTIONS } from "../fhir/injectionHelpers";
 import { withOrderWard } from "../fhir/orderHeader";
 import {
@@ -71,7 +73,13 @@ import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
 import { AdvisoryInlineMarks, AdvisoryNotice } from "./AdvisoryNotice";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
-import { RegimenBodyChange, RegimenInfoView, RegimenLabCheck, RegimenPreviousAdverseEvents } from "./RegimenPreCheck";
+import {
+  RegimenBodyChange,
+  RegimenCumulativeCheck,
+  RegimenInfoView,
+  RegimenLabCheck,
+  RegimenPreviousAdverseEvents,
+} from "./RegimenPreCheck";
 
 // カルテ右ペインの「化学療法」。レジメンを選び、開始日(Day 1)と体格から投与量を
 // 出して、クール単位で注射・処方オーダーに展開して登録する。クールの追加登録も
@@ -373,6 +381,14 @@ function RegimenApplyForm({
   const allergies = useActiveAllergies(patientId);
   // 妊娠・授乳(§7.6 A-6)。レジメンは処方・注射を自前で組むので、各フォームの注意をここで出す。
   const pregnancy = usePregnancyAdvisory(patientId);
+  // 累積投与量(§7.6 A-5)。上限は用量規則に成分で持ち、患者の全適用の日オーダーから積算する。
+  const doseRules = useDrugDoseRules();
+  const applications = useRegimenApplications(patientId);
+  const applicationList = applications.data?.applications;
+  const instanceIds = useMemo(() => (applicationList ?? []).map((a) => a.instanceId), [applicationList]);
+  const dayOrders = useRegimenDayOrders(patientId, instanceIds);
+  const historyPending =
+    doseRules.isPending || applications.isPending || (instanceIds.length > 0 && dayOrders.isPending);
   // 薬剤ごとの警告は投与内容の行に出す。scope はステップと薬剤の位置、drugScope で薬剤 id から引く。
   const { allergyAdvisories, drugScope } = useMemo(() => {
     const result: Advisory[] = [];
@@ -406,7 +422,9 @@ function RegimenApplyForm({
 
   // 体格と換算係数が読めてから初期値を作る(投与量は最初から埋まっている状態で出す)。
   useEffect(() => {
-    if (values || body.isPending || labResults.isPending || !defaultSetting.ready) return;
+    // 累積投与量は登録済みの日オーダーが読めるまで出せないので、読めるまでフォームを出さない
+    // (読み込み中に登録すると上限超過を見落とす)。
+    if (values || body.isPending || labResults.isPending || historyPending || !defaultSetting.ready) return;
     if (codes.length > 0 && factors.isPending) return;
     const height = measures.height ? String(measures.height.value) : "";
     const weight = measures.weight ? String(measures.weight.value) : "";
@@ -469,6 +487,7 @@ function RegimenApplyForm({
     // 検査結果は「読めたか」だけを見る(observations は毎回新しい配列で、依存に入れると
     // 毎レンダリングで効果が走る)。値そのものは values を作る 1 回だけ使う。
     labResults.isPending,
+    historyPending,
   ]);
 
   // 投与前チェックと警告は hook なので、値が揃う前(読み込み中の早期 return)より上で組む。
@@ -491,9 +510,31 @@ function RegimenApplyForm({
   );
   const checkSummary = summarizeLabChecks(checks);
   const weightChange = previousBody ? compareWeight(previousBody.weight, weightValue) : null;
+  const cumulativeChecks = useMemo(
+    () =>
+      values
+        ? checkCumulativeDoses({
+            regimen,
+            steps: values.steps,
+            cycleCount: Number(values.cycleCount) || 1,
+            bsa: bsaOf(values),
+            orders: dayOrders.data ?? [],
+            applications: applicationList ?? [],
+            doseRules: doseRules.data ?? [],
+            patient: {
+              age: patient?.birthDate ? (calculateAge(patient.birthDate) ?? null) : null,
+              weight: null,
+              egfr: renal.egfr ?? null,
+              ccr: renal.ccr,
+            },
+          })
+        : [],
+    [values, regimen, dayOrders.data, applicationList, doseRules.data, patient?.birthDate, renal.egfr, renal.ccr],
+  );
   const advisoryInput = useMemo<Advisory[]>(() => {
     const lab = regimenLabAdvisory(checkSummary);
     const weight = regimenWeightAdvisory(weightChange);
+    const cumulative = regimenCumulativeAdvisories(cumulativeChecks);
     const availability: Advisory[] = [
       ...(availabilityNotice
         ? [
@@ -519,6 +560,7 @@ function RegimenApplyForm({
     return [
       ...(lab ? [lab] : []),
       ...(weight ? [weight] : []),
+      ...cumulative,
       ...conflicts,
       ...startDateAdvisories(values?.startDate ?? "", lastAdministered),
       ...availability,
@@ -528,6 +570,7 @@ function RegimenApplyForm({
   }, [
     checkSummary,
     weightChange,
+    cumulativeChecks,
     conflicts,
     values?.startDate,
     lastAdministered,
@@ -542,7 +585,7 @@ function RegimenApplyForm({
   if (!values) {
     return (
       <>
-        <ErrorBanner error={body.error ?? factors.error} />
+        <ErrorBanner error={body.error ?? factors.error ?? doseRules.error ?? dayOrders.error} />
         <p>読み込み中...</p>
       </>
     );
@@ -736,6 +779,7 @@ function RegimenApplyForm({
 
       <AdvisoryNotice advisories={unscopedAdvisories(session.advisories)} />
       <RegimenLabCheck checks={checks} summary={checkSummary} />
+      <RegimenCumulativeCheck checks={cumulativeChecks} />
       {previousCycle && <RegimenPreviousAdverseEvents cycle={previousCycle.cycle} records={previousAdverse} />}
 
       <fieldset className="regimen-apply__fields">

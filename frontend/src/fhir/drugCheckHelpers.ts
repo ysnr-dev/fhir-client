@@ -11,6 +11,7 @@ import {
 //
 //   相互作用  … 併用禁忌・併用注意。フォームの別の行と、投与中の処方・持参薬が相手
 //   用量規則  … 年齢・腎機能の条件と、1 回量・1 日量の上限(体重あたりも可)
+//               累積の上限はここでは見ない(化学療法の適用で `regimenCheckHelpers` が積算する)
 //
 // 薬はマスタ側で YJ コードの先頭 4〜7 桁で書き、薬剤行の成分キー(YJ 上 7 桁)の前方一致で
 // 当てる。**登録は止めない**(`medicationSafetyHelpers` と同じ)。
@@ -50,7 +51,7 @@ const SEVERITY_LABELS: Record<DrugInteraction["severity"], string> = {
 const RENAL_LABELS: Record<"egfr" | "ccr", string> = { egfr: "eGFR", ccr: "CCr" };
 
 /** マスタのコード(YJ 先頭 4〜7 桁)が成分キーに当たるか。 */
-function codeMatches(key: string, code: string): boolean {
+export function codeMatches(key: string, code: string): boolean {
   return Boolean(code) && key.startsWith(code);
 }
 
@@ -111,11 +112,11 @@ function ageConditionText(rule: DrugDoseRule): string {
 }
 
 /** 規則の条件を患者に当てた結果。当てはまらなければ null(その規則は出さない)。 */
-type ConditionResult =
+export type ConditionResult =
   | { status: "met"; label: string }
   | { status: "unknown"; label: string; missing: string };
 
-function evaluateConditions(rule: DrugDoseRule, patient: PatientFactors): ConditionResult | null {
+export function evaluateConditions(rule: DrugDoseRule, patient: PatientFactors): ConditionResult | null {
   const labels: string[] = [];
   const missing: string[] = [];
 
@@ -213,6 +214,11 @@ function limitWarnings(
   return warnings;
 }
 
+/** 累積の上限だけを持つ規則。1 回のオーダーでは比べるものが無いので、処方・注射のフォームには出さない。 */
+export function isCumulativeOnlyRule(rule: DrugDoseRule): boolean {
+  return rule.max_cumulative_dose !== null && rule.max_single_dose === null && rule.max_daily_dose === null;
+}
+
 function doseRuleWarnings(
   line: CheckedLine,
   key: string,
@@ -226,6 +232,7 @@ function doseRuleWarnings(
   for (const rule of doseRules) {
     if (!codeMatches(key, rule.code)) continue;
     if (rule.dosage_form && rule.dosage_form !== medicine.dosage_form) continue;
+    if (isCumulativeOnlyRule(rule)) continue;
 
     const condition = evaluateConditions(rule, patient);
     if (!condition) continue;

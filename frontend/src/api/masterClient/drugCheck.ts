@@ -33,19 +33,24 @@ export interface DrugDoseRule {
   max_single_dose: string | null;
   max_daily_dose: string | null;
   dose_unit: string | null;
-  // 上限が体重 1 kg あたり。
+  // 1 回量・1 日量の上限が体重 1 kg あたり。
   per_kg: boolean;
+  // 生涯の累積投与量の上限。化学療法の適用・次クール登録でだけ比べる(docs/chemo-regimen-design.md §8.23)。
+  max_cumulative_dose: string | null;
+  // 累積の上限が体表面積 1 m² あたり。
+  cumulative_per_bsa: boolean;
   severity: DrugCheckSeverity;
   message: string | null;
 }
 
 export type DrugDoseRulePayload = Omit<
   DrugDoseRule,
-  "id" | "renal_below" | "max_single_dose" | "max_daily_dose"
+  "id" | "renal_below" | "max_single_dose" | "max_daily_dose" | "max_cumulative_dose"
 > & {
   renal_below: number | null;
   max_single_dose: number | null;
   max_daily_dose: number | null;
+  max_cumulative_dose: number | null;
 };
 
 const INTERACTIONS_PATH = "/master/drug_interactions";

@@ -2,6 +2,7 @@ import type { RegimenDetail } from "../api/masterClient";
 import { adverseEventLabel, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import type { BodyChange, LabCheckSummary, LabCriterionCheck } from "../fhir/regimenCheckHelpers";
 import { LAB_RESULT_STALE_DAYS } from "../fhir/regimenCheckHelpers";
+import type { CumulativeDoseCheck } from "../fhir/regimenCumulativeHelpers";
 import {
   CTCAE_GRADE_OPTIONS,
   REGIMEN_EMETIC_RISK_OPTIONS,
@@ -109,6 +110,76 @@ export function RegimenLabCheck({
                 )}
                 {check.status !== "unknown" && check.note && (
                   <span className="regimen-check__note">{check.note}</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </RegimenFold>
+  );
+}
+
+/**
+ * 累積投与量(§7.6 A-5)。上限を持つ薬剤だけ、登録済み + 今回を上限と並べる。
+ * 上限を超えても登録は止めない(警告で理由を求める)。
+ */
+export function RegimenCumulativeCheck({ checks }: { checks: CumulativeDoseCheck[] }) {
+  if (checks.length === 0) return null;
+  const over = checks.filter((c) => c.status === "over").length;
+  const unknown = checks.filter((c) => c.status === "unknown").length;
+  const notes = [over > 0 ? `上限超過 ${over} 件` : "", unknown > 0 ? `確認できない ${unknown} 件` : ""].filter(
+    Boolean,
+  );
+
+  return (
+    <RegimenFold
+      title="累積投与量"
+      summary={notes.length > 0 ? notes.join(" · ") : "上限内"}
+      summaryClassName={over > 0 ? "regimen-apply__fold-summary--out" : ""}
+      open={over > 0 || unknown > 0}
+    >
+      <table className="master-search__table regimen-check__table">
+        <thead>
+          <tr>
+            <th>医薬品</th>
+            <th>上限</th>
+            <th>登録済み</th>
+            <th>今回</th>
+            <th>合計</th>
+            <th>判定</th>
+          </tr>
+        </thead>
+        <tbody>
+          {checks.map((check) => (
+            <tr key={check.rule.id}>
+              <td>
+                {check.name}
+                <span className="lab-order-item__code">{check.rule.name}</span>
+              </td>
+              <td>
+                {check.limit} {check.unit}
+              </td>
+              <td>
+                {check.registered} {check.unit}
+                <span className="lab-order-item__code">
+                  {check.registeredCount} 回（実施済 {check.administered}）
+                </span>
+              </td>
+              <td>{check.planned !== null ? `${check.planned} ${check.unit}` : "—"}</td>
+              <td>
+                {check.total} {check.unit}
+                {check.limit > 0 && (
+                  <span className="lab-order-item__code">{Math.round((check.total / check.limit) * 100)}%</span>
+                )}
+              </td>
+              <td>
+                {check.status === "over" && <span className="regimen-check__verdict--out">上限超過</span>}
+                {check.status === "ok" && <span className="regimen-check__verdict--ok">上限内</span>}
+                {check.status === "unknown" && <span className="regimen-check__verdict--unknown">確認できない</span>}
+                {check.note && <span className="regimen-check__note">{check.note}</span>}
+                {check.status === "over" && check.rule.message && (
+                  <span className="regimen-check__note">{check.rule.message}</span>
                 )}
               </td>
             </tr>

@@ -74,6 +74,7 @@ interface Advisory {
 | `meal-allergy` | 食物アレルギーの反映 | 食事 | info | `useMealAllergyAdvisories`、食事オーダーの編集 |
 | `regimen-lab` | 適応基準 | レジメン | warning(基準外)/ info(未検・古い) | `regimenLabAdvisory` |
 | `regimen-weight` | 体重の変化 | レジメン | warning | `regimenWeightAdvisory` |
+| `regimen-cumulative` | 累積投与量 | レジメン | warning(上限超過)/ info(確認できない) | `regimenCumulativeAdvisories` |
 | `regimen-conflict` | レジメンの重なり | レジメン | warning(同じレジメンが進行中)/ info(他のレジメン) | `applicationConflictAdvisories` |
 | `regimen-date` | 開始日 | レジメン | info | `startDateAdvisories` |
 | `regimen-availability` | 候補外のレジメン | レジメン | info | 下書き・廃止・有効期間外、適用後のマスタ変更 |
