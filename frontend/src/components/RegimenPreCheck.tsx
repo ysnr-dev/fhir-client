@@ -139,10 +139,10 @@ export function RegimenCumulativeCheck({ checks }: { checks: CumulativeDoseCheck
       summaryClassName={over > 0 ? "regimen-apply__fold-summary--out" : ""}
       open={over > 0 || unknown > 0}
     >
-      <table className="master-search__table regimen-check__table">
+      <table className="master-search__table regimen-cumulative__table">
         <thead>
           <tr>
-            <th>医薬品</th>
+            <th>成分</th>
             <th>上限</th>
             <th>登録済み</th>
             <th>今回</th>
@@ -153,24 +153,21 @@ export function RegimenCumulativeCheck({ checks }: { checks: CumulativeDoseCheck
         <tbody>
           {checks.map((check) => (
             <tr key={check.rule.id}>
-              <td>
-                {check.name}
-                <span className="lab-order-item__code">{check.rule.name}</span>
-              </td>
+              <td title={check.name}>{check.rule.name}</td>
               <td>
                 {check.limit} {check.unit}
               </td>
               <td>
                 {check.registered} {check.unit}
-                <span className="lab-order-item__code">
-                  {check.registeredCount} 回（実施済 {check.administered}）
+                <span className="regimen-cumulative__sub">
+                  {check.registeredCount} 回 · 実施済 {check.administered}
                 </span>
               </td>
               <td>{check.planned !== null ? `${check.planned} ${check.unit}` : "—"}</td>
               <td>
                 {check.total} {check.unit}
                 {check.limit > 0 && (
-                  <span className="lab-order-item__code">{Math.round((check.total / check.limit) * 100)}%</span>
+                  <span className="regimen-cumulative__sub">{Math.round((check.total / check.limit) * 100)}%</span>
                 )}
               </td>
               <td>

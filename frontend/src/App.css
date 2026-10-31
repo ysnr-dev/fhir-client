@@ -22058,6 +22058,22 @@ button.chemo-calendar__cell[draggable="true"] {
   width: 15%;
 }
 
+.regimen-cumulative__table th,
+.regimen-cumulative__table td {
+  font-size: 12px;
+  vertical-align: top;
+}
+
+/* 数値の列は折り返さず、残りの幅を成分名と判定(注記)に回す。 */
+.regimen-cumulative__table td:nth-child(n + 2):nth-child(-n + 5) {
+  white-space: nowrap;
+}
+
+.regimen-cumulative__sub {
+  display: block;
+  color: var(--text);
+}
+
 .regimen-check__verdict--out {
   color: var(--danger);
   font-weight: 600;
