@@ -1,8 +1,6 @@
 import {
   createExamTaskHelpers,
   EXAM_TASK_STATUS_OPTIONS,
-  examTaskActions,
-  type ExamTaskAction,
   type ExamTaskStatus,
 } from "./examTaskHelpers";
 
@@ -11,9 +9,7 @@ import {
 export const ENDOSCOPY_TASK_CODE = { code: "endoscopy-exam", display: "内視鏡" };
 
 export type EndoscopyTaskStatus = ExamTaskStatus;
-export type EndoscopyTaskAction = ExamTaskAction;
 export const ENDOSCOPY_TASK_STATUS_OPTIONS = EXAM_TASK_STATUS_OPTIONS;
-export const endoscopyTaskActions = examTaskActions;
 
 const helpers = createExamTaskHelpers(ENDOSCOPY_TASK_CODE);
 

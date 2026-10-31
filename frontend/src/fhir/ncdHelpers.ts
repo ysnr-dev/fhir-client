@@ -1,4 +1,4 @@
-import { addDays, dateTimeLabel, diffDays, localDay } from "../lib/dates";
+import { addDays, diffDays, localDay } from "../lib/dates";
 import { conceptLabel } from "./shared";
 import { responseAnswer, templateRecordState, type TemplateRecordState } from "./conditionTemplateHelpers";
 import { departmentOf } from "./orderHeader";
@@ -121,13 +121,6 @@ export function ncdRegistrationRows(
 /** 一覧の既定の期間(今日までの 90 日)。 */
 export function defaultNcdFrom(today: string): string {
   return addDays(today, -90);
-}
-
-/** 「2026/08/28 09:00〜11:20」。一覧と詳細で使う。 */
-export function surgeryPeriodLabel(record: SurgeryPerformRecord): string {
-  const start = dateTimeLabel(record.start);
-  const end = record.end ? dateTimeLabel(record.end).slice(11, 16) : "";
-  return end ? `${start}〜${end}` : start;
 }
 
 /** 申込の表示名が無い(削除済み)ときの術式名。 */

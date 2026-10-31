@@ -245,15 +245,6 @@ export function defaultInfectiousReportFrom(today: string): string {
 
 // ---- 初期値変数 ----
 
-/** 初期値式から参照できる変数名(% なし)。 */
-export const INFECTIOUS_POPULATE_VARIABLES = [
-  "notifiableDiseaseName",
-  "notifiableDiseaseClass",
-  "notifiableDiseaseDeadline",
-  "notifiableDueDate",
-  "notifiableDiagnosisDate",
-] as const;
-
 /**
  * 記入の対象の病名。対象プロブレムが届出対象ならそれ、そうでなければ届出対象の病名のうち
  * 開始日が最も新しいもの(conditions は開始日の新しい順)。

@@ -4,22 +4,11 @@ module Master
   class MicroSpecimenType < ApplicationRecord
     self.table_name = "master_micro_specimen_types"
 
-    OFFICIAL = "official".freeze
-    LOCAL = "local".freeze
-    SOURCES = [OFFICIAL, LOCAL].freeze
-
     validates :code, presence: true, uniqueness: true
     validates :name, presence: true
-    validates :source, inclusion: { in: SOURCES }
+    include Master::OfficialSource
 
     before_save :set_search_columns
-
-    scope :official, -> { where(source: OFFICIAL) }
-    scope :local, -> { where(source: LOCAL) }
-
-    def official?
-      source == OFFICIAL
-    end
 
     private
 

@@ -1,8 +1,6 @@
 import {
   createExamTaskHelpers,
   EXAM_TASK_STATUS_OPTIONS,
-  examTaskActions,
-  type ExamTaskAction,
   type ExamTaskStatus,
 } from "./examTaskHelpers";
 
@@ -11,9 +9,7 @@ import {
 export const PHYSIO_TASK_CODE = { code: "physio-exam", display: "生理検査" };
 
 export type PhysioTaskStatus = ExamTaskStatus;
-export type PhysioTaskAction = ExamTaskAction;
 export const PHYSIO_TASK_STATUS_OPTIONS = EXAM_TASK_STATUS_OPTIONS;
-export const physioTaskActions = examTaskActions;
 
 const helpers = createExamTaskHelpers(PHYSIO_TASK_CODE);
 

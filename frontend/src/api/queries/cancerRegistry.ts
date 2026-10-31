@@ -21,8 +21,6 @@ export interface ConditionCandidates {
   truncated: boolean;
 }
 
-export type CancerRegistryCandidates = ConditionCandidates;
-
 /**
  * ICD-10 のトークン(system|code)に当たる病名(開始日が from〜to)。疑い・否定・誤記と看護問題は除く。
  * 院内がん登録・感染症の発生届が共用する。
@@ -81,8 +79,6 @@ export interface TemplateResponses {
   responses: fhir4.QuestionnaireResponse[];
   truncated: boolean;
 }
-
-export type CancerRegistryResponses = TemplateResponses;
 
 /** テンプレート(全版)への回答のうち、候補の患者のもの。 */
 export async function fetchTemplateResponses(

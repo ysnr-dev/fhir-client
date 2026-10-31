@@ -33,12 +33,6 @@ module Master
       errors.add(:end_time, "は開始時刻より後の時刻にしてください")
     end
 
-    def valid_period_is_ordered
-      return if valid_from.blank? || valid_to.blank? || valid_from <= valid_to
-
-      errors.add(:valid_to, "は有効開始日以降の日付にしてください")
-    end
-
     # 同じ手術室・同じ曜日で時間帯が重なる割り当ては入力ミス。1 つの時間帯を
     # 2 つの科に割り当てても、警告のどちらを出せばよいか決められない。
     # 有効期間が重ならないもの(年度で入れ替える運用)は重複と見なさない。

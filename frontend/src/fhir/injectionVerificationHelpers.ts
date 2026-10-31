@@ -33,14 +33,9 @@ export function skipReasonDisplay(code: string): string {
 /** RP バーコードに入れるオーダー id の桁数(backend の Reports::InjectionMeta::ORDER_KEY_LENGTH と同じ)。 */
 const ORDER_KEY_LENGTH = 12;
 
-/** オーダー id(UUID)を縮めた照合用のキー。ラベルの幅に収めるため先頭だけを使う。 */
+/** オーダー id(UUID)を縮めた照合用のキー。ラベルの RP バーコード「INJ-<キー>-<RP 番号>」は backend が刷る。 */
 export function injectionOrderKey(orderId: string): string {
   return orderId.replaceAll("-", "").toUpperCase().slice(0, ORDER_KEY_LENGTH);
-}
-
-/** 「INJ-3F2A9C01B7D4-2」。キーボードウェッジで化けない英大文字・数字・ハイフンだけで組む。 */
-export function injectionRpBarcode(orderId: string, rpNumber: number): string {
-  return `INJ-${injectionOrderKey(orderId)}-${rpNumber}`;
 }
 
 export type ScannedCode =

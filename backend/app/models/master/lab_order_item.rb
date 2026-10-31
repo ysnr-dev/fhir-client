@@ -21,12 +21,6 @@ module Master
 
     private
 
-    def valid_period_is_ordered
-      return if valid_from.blank? || valid_to.blank? || valid_from <= valid_to
-
-      errors.add(:valid_to, "は有効開始日以降の日付にしてください")
-    end
-
     def set_search_columns
       self.search_name = SearchNormalizer.normalize(name)
       self.search_short_name = SearchNormalizer.normalize(short_name)

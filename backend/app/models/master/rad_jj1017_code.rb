@@ -5,25 +5,14 @@ module Master
   class RadJj1017Code < ApplicationRecord
     self.table_name = "master_rad_jj1017_codes"
 
-    OFFICIAL = "official".freeze
-    LOCAL = "local".freeze
-    SOURCES = [OFFICIAL, LOCAL].freeze
-
     validates :element, inclusion: { in: Jj1017Code::ELEMENT_NAMES }
     validates :code, presence: true, uniqueness: { scope: :element }
     validates :name, presence: true
-    validates :source, inclusion: { in: SOURCES }
+    include Master::OfficialSource
     validate :code_format_is_valid
     validate :code_is_within_extension_range, if: -> { source == LOCAL }
 
     before_save :set_search_columns
-
-    scope :official, -> { where(source: OFFICIAL) }
-    scope :local, -> { where(source: LOCAL) }
-
-    def official?
-      source == OFFICIAL
-    end
 
     private
 

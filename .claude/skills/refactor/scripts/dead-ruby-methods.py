@@ -54,7 +54,11 @@ for root in ROOTS:
         with open(f, encoding="utf-8", errors="replace") as fh:
             for line in fh:
                 if DEF_RE.match(line):
-                    continue
+                    # endless def(`def a? = b? && c`)は右辺に呼び出しがあるので、その部分だけ数える。
+                    _, sep, body = line.partition(" = ")
+                    if not sep:
+                        continue
+                    line = body
                 for ident in IDENT_RE.findall(line):
                     refs[ident] = refs.get(ident, 0) + 1
 

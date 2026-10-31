@@ -6,10 +6,122 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 1. クライアントが手元でしている絞り込み・並べ替え・結合のうち、FHIR サーバーに任せた方がよいもの
 2. コメントに残った修正経緯と、過剰な説明
 
-- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回）、2026-10-04（第 3 回）、2026-10-20（第 4 回）、2026-10-24（第 5 回。下の節）
+- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回）、2026-10-04（第 3 回）、2026-10-20（第 4 回）、2026-10-24（第 5 回）、2026-11-01（第 6 回。下の節）
 - 調査範囲: `frontend/src`、`backend/app`、上流 fhir-server の
   `app/lib/fhir/search_definitions/*.rb` と `app/lib/fhir/search_references.rb`
 - 行番号は調査時点のもの。着手時は関数名で探し直すこと。
+
+## 第 6 回（2026-11-01）
+
+第 5 回以降の約 71k 行(101 コミット。処方のチェック・化学療法の帳票と暦・栄養管理／褥瘡対策計画書・待合表示板・
+3 点認証・指導管理料・祝日マスタほか)を含めて全体を洗い、第 5 回の「次の候補 2」(生理・内視鏡の masterClient /
+masterQueries)と、FHIR の出力に触れない残りの「名前だけ違うファイル」を同日実施した。差し引き約 1,950 行減。
+FHIR に書くリソースと `/master` に送る JSON(URL のパラメータの並びも)は変えていない。
+
+### 正しさ
+
+なし。見つけた不具合も無い(backend rspec の `spec/requests/intake/staff_spec.rb:48` が 1 件落ちるのは第 5 回と同じで、
+変更前のツリーでも落ちる)。
+
+### 上流に寄せた
+
+なし。上流 fhir-server は触っていない(未使用メソッド・経緯コメントとも 0 件)。
+
+### コメント整理
+
+スキャンの当たりはすべて業務の意味で使う語(版履歴の「以前はどう書いてあったか」、「修正した本人」、投与量換算の
+導出根拠「要確認」= `needs_review` フラグの説明)だったので、書き換えは無し。
+
+### 未使用の削除
+
+- frontend の参照ゼロの export 11 件: 第 5 回で別名として残した `physioTaskActions` / `PhysioTaskAction` /
+  `PhysioExamTypeNames`(内視鏡も同じ 3 つ)、`CancerRegistryCandidates` / `CancerRegistryResponses`、
+  `INFECTIOUS_POPULATE_VARIABLES`、`surgeryPeriodLabel`、`injectionRpBarcode`(RP バーコードは backend
+  `Reports::InjectionMeta.rp_barcode` だけが組み、frontend は読むだけ。`docs/injection-order-design.md` の記述も直した)。
+- factory 化で呼び元が無くなった部門名の別名 27 件(`searchPhysioExamTypes` … `endoscopyItemLayoutClient`、
+  `PhysioItemSearchResult` などの型 10 件、`PhysioItemFilters` / `PhysioWorklistResult` ほか)。
+  残したのは呼び元のある `PhysioItem` / `EndoscopyItem` / `*ExamType` / `*ExamTypePayload` / `searchEndoscopyItems`(demo-seed)。
+- backend は 0 件。`dead-ruby-methods.py` が挙げた `WaitingBoard::Snapshot#board_call?` は endless def
+  (`def called_by_exam_start? = … && board_call?`)の右辺から呼ばれていた誤検出で、スクリプトを直した(右辺の呼び出しを数える)。
+- 置き場所のずれ: 全マスタ共通の取込 API `importMaster` が `masterClient/endoscopy.ts` にあったのを `core.ts` へ。
+
+### 機械的な重複統合
+
+**オーダー登録・編集パネル(生理・内視鏡・放射線、203 行 × 3、正規化後の差 2〜12 行=コメントだけ)**
+
+- `components/ExamOrderPanels.tsx` の `createExamOrderPanels(config)` に寄せ、部門のファイルは FHIR の組み立て関数
+  (`build*OrderBundle` / `build*OrderUpdateBundle` / `build*OrderWithPerformBundle` / `buildDo*OrderForm` / `empty*OrderForm`)・
+  初期値の hook・更新 mutation・フォーム部品・一覧のクエリキーを渡すだけ(各 28 行)。export 名は変えていないので
+  `KarteRightPane` の対応表はそのまま。処置は編集で予約を新しく作らず回答 id も持たないので乗せていない。
+- オーダー初期値の hook(`use{Physio,Endoscopy,Rad}OrderInitialValues`、45 行 × 3、差 0〜4 行)も
+  `hooks/useExamOrderInitialValues.ts` の `makeExamOrderInitialValuesHook` に。別患者のときの文言(「生理検査」など)は設定。
+- 検証: 開発環境でテスト太郎に生理検査(心電図)を登録 → 病棟・依頼科の拡張と依頼医が付くこと、編集で項目を足して
+  更新 → ヘッダが版 2・明細 2 件になること、削除(`deletePhysioOrderRequest`)で消えること。内視鏡の登録フォームと
+  放射線の DO(10-31 の胸部 X 線を複写、入院の初期値)を表示で確認。
+
+**生理・内視鏡の masterClient / masterQueries(第 5 回の候補 2。差 40 / 7 行)**
+
+- `api/masterClient/examMaster.ts` の `examMasterClient<T, P>(dept)`(検査種別・項目・セット構成・データセット・伝票の
+  API を部門名から組む)と、`api/masterQueries/examMaster.ts` の `examMasterHooks(dept, client)`。検査種別の型は部門から
+  渡す(内視鏡だけ `jed_exam_category`)。URL のパラメータは固定の並び(`name, exam_type_code, active, page, per` など)で
+  組み、空・false・0 は送らない(前と同じ)。
+- 部門のファイルは `physioMasterClient` と hook の別名(`usePhysioItemSearch = hooks.useItemSearch`)を並べるだけ。
+  import 元 20 ファイルは触っていない。
+- 検証: 生理検査の検査種別(名称+有効のみで検索 → `?name=…&active=true&page=1&per=20`、編集モーダルの保存 → PATCH と一覧の
+  読み直し)、内視鏡の検査種別(JED 区分の列と欄、保存)、生理検査の項目マスタ(一覧・選択肢・データセット・詳細
+  `physio_items/57` とセット構成 3 件)、内視鏡オーダー画面の項目選択で `endoscopy_items?item_code=…&per=200` と
+  `endoscopy_set_items?set_item_code=…&per=500` が前と同じ形で出ること。
+
+**生理・内視鏡の `api/queries`(219 行 × 2、差は整形とコメントだけ)**
+
+- `api/queries/examOrder.ts` の `createExamOrderQueries(config)`。部門一覧の検索(`category=…|physio&occurrence=…&based-on:missing=true`
+  + `_include` / `_revinclude`)、進捗の更新(実施済から戻すときの実施記録の削除と所見レポートの guard)、実施登録、
+  オーダー更新(予約の付け替え)、削除をまとめた。クエリキー(`physio-order` / `physio-worklist` …)は部門名から組む。
+- 検証: 生理検査一覧(08-24)と内視鏡一覧(08-24)の検索 URL が前と同じこと、生理検査の「受付」→ 受付済、ケバブの
+  「取消」→ 依頼済に戻ること(Task が v1 accepted → v2 requested)。内視鏡のケバブに取消・中止が出ること。
+
+**backend の concern 2 本**
+
+- `Master::ValidityPeriod` に `valid_period_is_ordered` の本体を移した(18 モデルで同じ 5 行)。`validate` の行は各モデルに
+  残し、検証の登録順(エラー配列の順)を変えていない。開始日の呼び名が違う `RadMaterial`(採用開始日)と
+  `DatasetModel`(運用開始日)は `valid_period_start_label` を上書き。`DatasetModel` は `include Master::ValidityPeriod` を
+  `included do` の外に出した(中で include すると祖先の並びで上書きが効かず、rspec 4 件で見つかった)。
+- `Master::OfficialSource`(`OFFICIAL` / `LOCAL` / `SOURCES`・`source` の検証・`official` / `local` スコープ・`official?`)を
+  細菌 4 本・病理臓器・JJ1017 部品コードの 6 モデルに。定数は `Master::MicroOrganism::OFFICIAL` のまま引ける。
+- 検証: backend rspec 2218 件中 2217 通過(上記の 1 件は前からの失敗)。
+
+- 検証(全体): `tsc -b`・lint(エラー 0、警告 34 件は着手前と同数)・import 循環 0・`dead-exports.cjs` の参照ゼロは
+  `demo-seed` の `preflight` だけ(第 4 回から据え置き)。
+
+### 次の候補(今回やらない)
+
+1. **生理・内視鏡・処置の FHIR に触れる層**(第 5 回の候補 1)。差分を読むと名前だけではない:
+   `*ResultHelpers.ts`(524 行、差 29〜47 行)は内視鏡・処置がロット番号(`withLotNumber` / `lotNumberLabel`)を持ち
+   生理検査が持たない点と、投与経路の選択肢(生理は吸入・動注、内視鏡・処置は外用・直腸内)が違う。
+   `createExamResultHelpers({ dept, routeOptions, lotNumber })` の形にできるが、FHIR の出力(MedicationAdministration の
+   拡張)に触れるので、3 部門 × (実施・即実施) の round-trip で前後の JSON を突き合わせてから。
+   `*OrderHelpers.ts`(857 行、差 41 行)、実施入力モーダル(587 行、差 46〜57 行)、オーダーフォーム(1,529 行、差 112 行)も同様。
+2. **処置のオーダー登録・編集パネルと初期値 hook**(今回の `ExamOrderPanels` に乗せていない)。編集で予約を新しく作る
+   流れと回答 id を処置にも持たせるかは機能の判断なので、持たせるなら乗せる。
+3. **ワークリスト 12 画面の共通部品**(第 2 回の候補 3)。リハビリと栄養指導は 474 行が同じ(正規化後の差 233 行)。
+4. `masterClient` の `if (!res.ok) throw await buildError(res);`(326 か所。今回の factory で 28 か所減)。
+   `examMaster.ts` の `getJson` / `postJson` / `deleteOne` を `core.ts` に上げれば個別のマスタも同じ形にできる。
+5. `dead-exports.cjs` の「export だけ不要」約 1,200 件(第 4 回から据え置き)。
+6. backend の `set_search_columns`(`name` / `short_name` / `name_kana` の 3 列を正規化する同じ 5 行が検査種別 2 本・
+   検体検査項目ほかにある)。列の組み合わせがモデルごとに少しずつ違うので、まとめるなら列名を渡す形。
+
+### 残すと判断したもの
+
+- `ranAt: new Date().toISOString()`(ダッシュボード・データ抽出)。日時の文字列をそのまま `dateTimeLabel` で表示するだけで、
+  先頭 10 文字を日付に使っていない(スキャンの誤検出)。
+- `App.css` の色の直書き 129 行(第 5 回の 144 行から増えていない)。第 3 回の判断のまま。
+- `KarteTimeline.tsx`(33)・`PathwayOrderModal.tsx`(10)・`RegimenPanels.tsx`(7)の種別ごとの分岐。カード本体は分けてあり、
+  残りは種別固有の操作とパス・レジメンの展開先の振り分け。
+- 細菌 2 本(抗菌薬・菌)と病理臓器のコントローラの同じ 15 行(official の行は `frequent` だけ更新できる)。
+  `Master::OfficialLocalRecords` に乗せられるが、既に concern があってその例外として書かれている箇所なので、
+  乗せるときは 3 本まとめて別テーマにする。
+- `clinical_dashboard.rb` と `dashboard.rb` の `roots_for` ほか 16 行。診療ダッシュボードはチームを持たない違いがあり、
+  2 本だけなので concern にしない。
 
 ## 第 5 回（2026-10-24）
 

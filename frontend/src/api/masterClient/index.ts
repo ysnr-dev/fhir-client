@@ -11,6 +11,7 @@ export * from "./lab";
 export * from "./rad";
 export * from "./medicalMaterial";
 export * from "./examItem";
+export * from "./examMaster";
 export * from "./physio";
 export * from "./endoscopy";
 export * from "./postalCode";

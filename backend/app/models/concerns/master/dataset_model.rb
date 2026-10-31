@@ -5,23 +5,22 @@ module Master
   module DatasetModel
     extend ActiveSupport::Concern
 
+    # 今日使えるデータセット(実施入力に展開する対象)。ここで include すると
+    # 取り込み先のクラスでは DatasetModel より後ろに並び、下の valid_period_start_label が優先される。
+    include Master::ValidityPeriod
+
     included do
       validates :dataset_code, presence: true, uniqueness: true
       validates :name, presence: true
       validate :valid_period_is_ordered
-
-      # 今日使えるデータセット(実施入力に展開する対象)。
-      include Master::ValidityPeriod
 
       before_save :set_search_columns
     end
 
     private
 
-    def valid_period_is_ordered
-      return if valid_from.blank? || valid_to.blank? || valid_from <= valid_to
-
-      errors.add(:valid_to, "は運用開始日以降の日付にしてください")
+    def valid_period_start_label
+      "運用開始日"
     end
 
     def set_search_columns

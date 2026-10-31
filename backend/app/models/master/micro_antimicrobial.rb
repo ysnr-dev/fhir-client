@@ -5,23 +5,13 @@ module Master
   class MicroAntimicrobial < ApplicationRecord
     self.table_name = "master_micro_antimicrobials"
 
-    OFFICIAL = "official".freeze
-    LOCAL = "local".freeze
-    SOURCES = [OFFICIAL, LOCAL].freeze
-
     validates :code, presence: true, uniqueness: true
     validates :name, presence: true
-    validates :source, inclusion: { in: SOURCES }
+    include Master::OfficialSource
 
     before_save :set_search_columns
 
-    scope :official, -> { where(source: OFFICIAL) }
-    scope :local, -> { where(source: LOCAL) }
     scope :frequent, -> { where(frequent: true) }
-
-    def official?
-      source == OFFICIAL
-    end
 
     private
 

@@ -270,8 +270,9 @@ InjectionWorklistPage「注射箋発行」<a target="_blank">
   (例 `INJ-3F2A9C01B7D4-2`、Code128B)。3点認証(§6.5)で読み、開いているオーダーと RP を照合する。
   id(UUID)を丸ごと入れると 42 文字でラベルの幅では読める太さにならないので縮める(照合は開いているオーダー 1 件との
   一致だけなので衝突は問題にならない)。キーボードウェッジは US 配列のキーを送り、JIS 配列の端末では
-  記号が化けるので、英大文字・数字・ハイフンだけで組む。規則は backend `Reports::InjectionMeta.rp_barcode` と
-  frontend `injectionRpBarcode`(`fhir/injectionVerificationHelpers.ts`)の 2 か所で同じにする。
+  記号が化けるので、英大文字・数字・ハイフンだけで組む。組むのは backend `Reports::InjectionMeta.rp_barcode` だけで、
+  frontend は読んだ値を `parseScannedCode`(`fhir/injectionVerificationHelpers.ts`)で解き、オーダー id の縮め方
+  (`injectionOrderKey`)を backend と同じにする。
   直下に同じ文字列を刷る(読めないときの目視・手入力用)。
 - **発行が受付を兼ねる**(処方箋と同じ)。PDF エンドポイントは Task に触らず、受付の遷移は
   frontend のリンクが行う。再発行はケバブ。ラベルは進捗を動かさず、どの進捗でも刷れる

@@ -81,3 +81,17 @@ export async function buildError(res: Response): Promise<MasterApiError> {
   }
   return new MasterApiError(message, res.status);
 }
+
+/** マスタ取込(/master/<type>/import)。どのマスタも同じ形で受ける。 */
+export async function importMaster(masterType: MasterType, file: File): Promise<MasterImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  // Content-Type は指定しない（ブラウザが multipart boundary 付きで設定する）
+  const res = await masterFetch(`/master/${masterType}/import`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterImportResult;
+}

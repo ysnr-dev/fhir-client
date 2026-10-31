@@ -23,10 +23,8 @@ module Master
 
     private
 
-    def valid_period_is_ordered
-      return if valid_from.blank? || valid_to.blank? || valid_from <= valid_to
-
-      errors.add(:valid_to, "は採用開始日以降の日付にしてください")
+    def valid_period_start_label
+      "採用開始日"
     end
 
     def set_search_columns
