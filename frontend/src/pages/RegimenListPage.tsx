@@ -4,6 +4,7 @@ import type { RegimenSearchParams, RegimenStatus } from "../api/masterClient";
 import { useRegimenSearch } from "../api/masterQueries";
 import { useSelfDepartments } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { RegimenGuide } from "../components/RegimenGuide";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
 import {
   REGIMEN_PURPOSE_OPTIONS,
@@ -23,6 +24,7 @@ export function RegimenListPage() {
   const [activeOnly, setActiveOnly] = useState(false);
   const [filters, setFilters] = useState<Omit<RegimenSearchParams, "page" | "per">>({});
   const [page, setPage] = useState(1);
+  const [guideOpen, setGuideOpen] = useState(false);
   const { departments } = useSelfDepartments();
 
   const list = useRegimenSearch(filters, page);
@@ -42,7 +44,18 @@ export function RegimenListPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>レジメン</h1>
+        <div className="page__header-title">
+          <h1>レジメン</h1>
+          <button
+            type="button"
+            className="modal__help"
+            onClick={() => setGuideOpen(true)}
+            aria-label="レジメンマスタの使い方"
+            title="レジメンマスタの使い方"
+          >
+            ?
+          </button>
+        </div>
         <div className="page__header-actions">
           <Link to="/regimens/new" className="button">
             レジメン追加
@@ -173,6 +186,7 @@ export function RegimenListPage() {
           次へ
         </button>
       </div>
+      {guideOpen && <RegimenGuide onClose={() => setGuideOpen(false)} />}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useFormularyRankLookup, useMedicineDoseFactors, useRegimen, useRegimenM
 import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { RegimenGuide } from "../components/RegimenGuide";
 import { CtcaeTermSearchModal } from "../components/CtcaeTermSearchModal";
 import { JlacItemSearchModal } from "../components/JlacItemSearchModal";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
@@ -88,6 +89,7 @@ export function RegimenEditorPage() {
     if (serverError) scrollIntoViewVisibly(serverErrorRef.current, "center");
   }, [serverError]);
   const [picker, setPicker] = useState<Picker>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const update = makeFieldUpdater(setDraft);
 
   // 左に目次を置くので、そのぶん本文の幅を既定より広げる。
@@ -212,7 +214,18 @@ export function RegimenEditorPage() {
   return (
     <div className="page regimen-editor">
       <div className="page__header">
-        <h1>{isNew ? "レジメンを追加" : "レジメンを編集"}</h1>
+        <div className="page__header-title">
+          <h1>{isNew ? "レジメンを追加" : "レジメンを編集"}</h1>
+          <button
+            type="button"
+            className="modal__help"
+            onClick={() => setGuideOpen(true)}
+            aria-label="レジメンマスタの使い方"
+            title="レジメンマスタの使い方"
+          >
+            ?
+          </button>
+        </div>
         <div className="page__header-actions">
           <Link to="/regimens" className="button">
             戻る
@@ -854,6 +867,7 @@ export function RegimenEditorPage() {
           onClose={() => setPicker(null)}
         />
       )}
+      {guideOpen && <RegimenGuide onClose={() => setGuideOpen(false)} />}
     </div>
   );
 }
