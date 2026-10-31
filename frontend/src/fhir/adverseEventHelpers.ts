@@ -163,6 +163,16 @@ export function buildAdverseEvent(
   return observation;
 }
 
+/** 記録が指している治療(編集で書き戻すときの宛先)。 */
+export function adverseEventRefOf(record: AdverseEventRecord): AdverseEventRef {
+  return {
+    treatmentSrId: record.treatmentSrId,
+    treatmentType: record.treatmentType,
+    name: record.treatmentName,
+    cycle: record.cycle,
+  };
+}
+
 export function validateAdverseEvent(values: AdverseEventFormValues): string | null {
   if (!values.term.trim()) return "有害事象の用語を入力してください";
   const grade = Number(values.grade);
