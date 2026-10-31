@@ -11,7 +11,7 @@ import {
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
-import { SubstitutionBlockMark } from "./MedicineWarnings";
+import { PotencyMark, SubstitutionBlockMark } from "./MedicineWarnings";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import { RegimenHeldMark } from "./RegimenDecision";
 
@@ -108,7 +108,10 @@ export function PrescriptionDetailPanel({
                     )}
                   </td>
                   <td>{med.dose ?? "-"}</td>
-                  <td>{med.unit ?? "-"}</td>
+                  <td>
+                    {med.unit ?? "-"}
+                    <PotencyMark potency={med.potency} />
+                  </td>
                   <td>{med.comment || "-"}</td>
                   <td className="rp-card__medicine-di">
                     {med.yjCode && (

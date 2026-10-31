@@ -14,6 +14,7 @@ import { rxTaskQueryNotes } from "../fhir/rxDispenseHelpers";
 import { rxTaskStatus, rxTaskStatusDisplay } from "../fhir/rxTaskHelpers";
 import { Modal } from "./Modal";
 import { OrderRxInquiryNotes } from "./RxInquiryHistory";
+import { PotencyMark } from "./MedicineWarnings";
 
 // 処方一覧の「表示」で開くオーダー内容。カルテのカード(KarteTimeline の
 // 処方カード)と同じ組み方で、RP ごとに医薬品と用法を並べる。
@@ -69,6 +70,7 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
                   {medicine.dose != null && (
                     <span className="karte-rp__medicine-dose">
                       {`${medicine.dose}${medicine.unit ?? ""}`}
+                      <PotencyMark potency={medicine.potency} />
                     </span>
                   )}
                   {medicine.substitutionBlock && (

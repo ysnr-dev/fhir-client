@@ -1190,7 +1190,9 @@ export function prescriptionRpLines(medicationRequests: fhir4.MedicationRequest[
     lines.push(`Rp${rp.rpNumber}`);
     for (const medicine of rp.medicines) {
       const dose =
-        medicine.dose !== undefined ? ` ${medicine.dose}${medicine.unit ?? ""}` : "";
+        medicine.dose !== undefined
+          ? ` ${medicine.dose}${medicine.unit ?? ""}${medicine.potency ? "(力価)" : ""}`
+          : "";
       const uneven = medicine.unevenLabel ? `（${medicine.unevenLabel}）` : "";
       const comment = medicine.comment ? `（${medicine.comment}）` : "";
       lines.push(`　${medicine.name}${dose}${uneven}${comment}`);

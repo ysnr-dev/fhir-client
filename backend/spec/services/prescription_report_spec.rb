@@ -196,6 +196,19 @@ RSpec.describe PrescriptionReport do
     expect(rps[1].usage_name).to eq("疼痛時")
   end
 
+  it "reads a dose ordered in 力価 from the JP Core 力価区分 (原薬量)" do
+    potency = medication_request("m1", rp: 1, index: 1, name: "セフゾン細粒", dose: 150, unit: "mg", days: 5)
+    potency["dosageInstruction"][0]["doseAndRate"][0]["type"] = {
+      "coding" => [{ "system" => described_class::DOSE_STRENGTH_TYPE_SYSTEM, "code" => "2", "display" => "原薬量" }]
+    }
+    stub_batch([potency, medication_request("m2", rp: 1, index: 2, name: "ムコスタ錠", days: 5)])
+    captured = capture_renderer
+
+    described_class.new("o1", gateway: gateway).generate
+
+    expect(captured.call[:rps][0].medicines.map(&:potency)).to eq([true, false])
+  end
+
   it "reads supplementary usage codes apart from the usage comment" do
     stub_batch([
       medication_request("m1", rp: 1, index: 1, name: "ワーファリン錠", days: 14, comment: "食後すぐ",

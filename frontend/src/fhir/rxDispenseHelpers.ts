@@ -52,6 +52,7 @@ export function dispenseValuesFromOrder(
           ...med,
           dose: pack ? String(pack.value) : dose > 0 ? "" : med.dose,
           medicine: { ...med.medicine, unit_name: packUnit },
+          potency: med.potency && packUnit === med.medicine.unit_name,
         };
       }),
     })),

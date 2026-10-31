@@ -22,6 +22,13 @@
   頓用なら「投与回数」、頓用でない内服なら「投与日数」を入力します。判定は
   `fhir/medicationScheduleHelpers.ts` の `isAsNeededUsage` と `fhir/prescriptionHelpers.ts` の
   `hasDoseDays` に集約していて、フォーム・調剤登録・カードの表示が同じ関数を通ります。
+- **力価での用量**: 投与量換算マスタ(`master_medicine_dose_conversions`)に力価の行(mg・単位など。
+  全角半角違いの同じ単位と mL は除く)がある医薬品は、単位を薬価算定単位と「mg(力価)」などから選べます。
+  切り替えると入力済みの用量(不均等の各回も)を係数で換算します。力価の量は `doseQuantity` に力価の単位で入れ、
+  `doseAndRate.type` に JP Core の力価区分「2 原薬量」(`JP_MedicationIngredientStrengthStrengthType_CS`)を付けます
+  (レジメンから出る内服の力価も同じ)。カード・詳細・処方一覧・レジメンのタブでは単位の横に「力価」の印、
+  処方箋と文書への転記では「150mg(力価)」と出ます。調剤登録は換算マスタで製剤数に直して初期値にし、
+  レセコン連携も換算マスタで薬価算定単位の数量に直して送ります。
 - **オーダー種別**: ほかのオーダーと同じく `ServiceRequest.category` の先頭にオーダー種別
   `order-type|prescription` を持ち、処方一覧・カルテ・経過表などはこの種別で引きます。続けて入外区分
   (`.../prescription-setting`)と処方区分(`.../prescription-category`)を入れます。

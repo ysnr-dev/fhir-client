@@ -49,10 +49,10 @@ RSpec.describe Reports::PrescriptionRenderer do
     PrescriptionReport::RpGroup.new(
       rp_number: number, usage_name: usage, supplement: supplement, dose_days: days, dose_count: count,
       usage_comment: comment, dispense_instruction: dispense_instruction,
-      medicines: medicines.each_with_index.map do |(name, dose, unit, uneven, block), index|
+      medicines: medicines.each_with_index.map do |(name, dose, unit, uneven, block, potency), index|
         PrescriptionReport::MedicineLine.new(
           order_in_rp: index + 1, name: name, dose: dose, unit: unit, comment: nil, uneven: uneven,
-          substitution_block: block
+          substitution_block: block, potency: potency
         )
       end
     )
@@ -166,6 +166,13 @@ RSpec.describe Reports::PrescriptionRenderer do
     text = page_texts(pdf).flatten.join.gsub(/[[:space:]]/, "")
     expect(text).to include("１日２回朝夕食後毎週月・木曜日7日分")
     expect(text).to include("（朝4錠・夕2錠）")
+  end
+
+  it "writes (力価) after the unit when the dose is ordered in 力価" do
+    pdf = render(:external, [rp(1, medicines: [["セフゾン細粒小児用１０％", 150, "mg", nil, nil, true]])])
+
+    text = page_texts(pdf).flatten.join.gsub(/[[:space:]]/, "")
+    expect(text).to include("150mg(力価)")
   end
 
   it "prints the dispense instruction on its own line after the usage" do

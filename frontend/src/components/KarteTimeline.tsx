@@ -83,6 +83,7 @@ import { useKarteLinkActions } from "./KarteLinkContext";
 import { InjectionPerformSection } from "./karteCardBodies/InjectionPerformSection";
 import { PathwayEvaluationCardBody } from "./karteCardBodies/PathwayEvaluationCardBody";
 import { AdverseEventCardBody } from "./karteCardBodies/AdverseEventCardBody";
+import { PotencyMark } from "./MedicineWarnings";
 
 interface KarteTimelineProps {
   groups: KarteDayGroup[];
@@ -1009,6 +1010,7 @@ export function KarteCardBody({ item }: { item: KarteTimelineItem }) {
                   {medicine.dose != null && (
                     <span className="karte-rp__medicine-dose">
                       {`${medicine.dose}${medicine.unit ?? ""}`}
+                      <PotencyMark potency={medicine.potency} />
                     </span>
                   )}
                   {medicine.substitutionBlock && (

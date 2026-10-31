@@ -77,7 +77,7 @@ module Reports
       @rps.flat_map do |rp|
         lines = [["Rp#{rp.rp_number}", nil]]
         rp.medicines.each do |medicine|
-          dose = medicine.dose.present? ? " #{medicine.dose}#{medicine.unit}" : ""
+          dose = medicine.dose.present? ? " #{medicine.dose}#{medicine.unit}#{'(力価)' if medicine.potency}" : ""
           uneven = medicine.uneven.present? ? "（#{medicine.uneven}）" : ""
           comment = medicine.comment.present? ? "（#{medicine.comment}）" : ""
           block = medicine.substitution_block

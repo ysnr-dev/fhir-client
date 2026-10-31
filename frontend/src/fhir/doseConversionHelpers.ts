@@ -103,3 +103,42 @@ export function toPackQuantity(
   if (!factor) return null;
   return { value: Math.round((dose / factor) * 100) / 100, unit: packUnit };
 }
+
+/** 処方の用量を力価で入れるための単位。`units` は力価の単位 → 1 [薬価算定単位] あたりの力価。 */
+export interface PotencyUnits {
+  packUnit: string;
+  units: Map<string, number>;
+}
+
+/**
+ * 換算行が力価の単位か。全角半角違いの同じ単位(g → ｇ、薬価算定単位が量そのもの)と、
+ * 容量(mL)は力価ではないので外す。
+ */
+export function isPotencyConversion(fromUnit: string, toUnit: string): boolean {
+  const from = fromUnit.normalize("NFKC").trim();
+  return from !== toUnit.normalize("NFKC").trim() && from.toLowerCase() !== ML_UNIT.toLowerCase();
+}
+
+/**
+ * 単位を切り替えたときの用量。薬価算定単位と力価の単位の間を係数で行き来する。
+ * 空・不正な値と、換算できない単位はそのまま返す。
+ */
+export function convertPotencyDose(dose: string, from: string, to: string, potency: PotencyUnits): string {
+  const value = Number(dose);
+  if (dose.trim() === "" || !Number.isFinite(value) || from === to) return dose;
+  const packs = from === potency.packUnit ? value : value / (potency.units.get(from) ?? NaN);
+  const converted = to === potency.packUnit ? packs : packs * (potency.units.get(to) ?? NaN);
+  if (!Number.isFinite(converted)) return dose;
+  return String(Math.round(converted * 1000) / 1000);
+}
+
+/** 単位の選択肢。薬価算定単位を先頭に、力価の単位は「(力価)」を添える。 */
+export function doseUnitOptions(potency: PotencyUnits, current: string | null): { unit: string; label: string }[] {
+  const options = [
+    { unit: potency.packUnit, label: potency.packUnit },
+    ...Array.from(potency.units.keys()).map((unit) => ({ unit, label: `${unit}(力価)` })),
+  ];
+  // 換算マスタに無い単位で保存された行も、そのまま選ばれた状態で開く。
+  if (current && !options.some((o) => o.unit === current)) options.push({ unit: current, label: current });
+  return options;
+}

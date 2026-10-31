@@ -215,10 +215,22 @@ module Integrations
           end
         end
 
-        dose = request.dig("dosageInstruction", 0, "doseAndRate", 0, "doseQuantity")
+        quantity, unit = pack_quantity(code, request.dig("dosageInstruction", 0, "doseAndRate", 0, "doseQuantity"))
         BillingLine.new(code: code, name: medication_name(request), kind: :medicine, generic: generic,
-                        quantity: dose && dose["value"] ? Numbers.format(dose["value"]) : nil,
-                        unit: dose&.dig("unit"))
+                        quantity: quantity, unit: unit)
+      end
+
+      # レセコンへは薬価算定単位の数量で送る。力価(mg など)で指示した量は、投与量換算マスタに
+      # その単位の行があれば製剤数に直す。行が無い単位は薬価算定単位とみなしてそのまま送る。
+      def pack_quantity(code, dose)
+        value = dose&.dig("value")
+        unit = dose&.dig("unit")
+        return [nil, unit] if value.nil?
+
+        conversion = unit.present? && Master::MedicineDoseConversion.find_by(medicine_code: code, from_unit: unit)
+        return [Numbers.format(value), unit] unless conversion && conversion.to_unit != unit
+
+        [Numbers.format((value.to_d / conversion.factor).round(3)), conversion.to_unit]
       end
 
       # 一般名コードに対応する銘柄のうち、薬価が最も低いもの(同額ならコード順)。

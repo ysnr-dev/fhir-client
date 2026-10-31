@@ -38,6 +38,7 @@ import {
   type RpValues,
 } from "./prescriptionHelpers";
 import { isHeaderEntry } from "./provenanceHelpers";
+import { isPotencyConversion } from "./doseConversionHelpers";
 import { doseUnitSuffix } from "./regimenHelpers";
 import { RX_TASK_STATUS_OPTIONS, type RxTaskStatus } from "./rxTaskHelpers";
 import { usageCommentOf } from "./supplementaryUsage";
@@ -719,6 +720,8 @@ function medicineLines(plan: RegimenStepPlan): MedicineLineValues[] {
     // (`doseConversionHelpers`)。換算を持たない薬剤だけ製剤数のまま。
     medicine: medicineOf(d.drug, d.input === "amount" ? d.unit : d.packUnit),
     dose: d.input === "amount" ? d.amount : d.packs,
+    // 内服は量に力価区分を付ける(`buildDosage`)。補液を容量で入れたものは力価ではない。
+    potency: d.input === "amount" && isPotencyConversion(d.unit, d.packUnit),
     comment: planNote(d),
   }));
 }

@@ -1,5 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { MedicineDoseConversionMap } from "../../fhir/doseConversionHelpers";
+import {
+  isPotencyConversion,
+  type MedicineDoseConversionMap,
+  type PotencyUnits,
+} from "../../fhir/doseConversionHelpers";
 import {
   createMedicineDoseConversion,
   deleteMedicineDoseConversion,
@@ -258,6 +262,32 @@ export function useMedicineDoseFactors(medicineCodes: string[]) {
         if (row.to_unit) packUnits.set(row.medicine_code, row.to_unit);
       }
       return { factors, packUnits };
+    },
+    staleTime: Infinity,
+    enabled: codes.length > 0,
+  });
+}
+
+/**
+ * 医薬品コード → 処方の用量を力価で入れるときの単位の選択肢。力価の換算行を持たない
+ * 医薬品は入らない(薬価算定単位だけで入れる)。
+ */
+export function useMedicinePotencyUnits(medicineCodes: string[]) {
+  const codes = Array.from(new Set(medicineCodes)).sort();
+
+  return useQuery({
+    queryKey: ["master", "medicine_dose_conversions", "potency-units", codes],
+    queryFn: async (): Promise<Map<string, PotencyUnits>> => {
+      const result = await searchMedicineDoseConversions({ medicine_code: codes.join(","), per: 100 });
+      const byCode = new Map<string, PotencyUnits>();
+      for (const row of result.items) {
+        const factor = Number(row.factor);
+        if (!(factor > 0) || !isPotencyConversion(row.from_unit, row.to_unit)) continue;
+        const entry = byCode.get(row.medicine_code) ?? { packUnit: row.to_unit, units: new Map<string, number>() };
+        entry.units.set(row.from_unit, factor);
+        byCode.set(row.medicine_code, entry);
+      }
+      return byCode;
     },
     staleTime: Infinity,
     enabled: codes.length > 0,

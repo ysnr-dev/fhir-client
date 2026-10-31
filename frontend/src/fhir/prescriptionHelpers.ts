@@ -67,6 +67,19 @@ export const ORDER_IN_RP_SYSTEM =
 
 export const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
 
+// JP Core の力価区分(Dosage.doseAndRate.type)。力価で指示した量にだけ「原薬量」を付け、
+// 印の無い量は製剤量(薬価算定単位)として読む。
+export const DOSE_STRENGTH_TYPE_SYSTEM =
+  "http://jpfhir.jp/fhir/core/CodeSystem/JP_MedicationIngredientStrengthStrengthType_CS";
+const POTENCY_DOSE_TYPE: fhir4.CodeableConcept = {
+  coding: [{ system: DOSE_STRENGTH_TYPE_SYSTEM, code: "2", display: "原薬量" }],
+};
+
+/** 量が力価(原薬量)で指示されているか。 */
+export function isPotencyDose(doseAndRate: fhir4.DosageDoseAndRate | undefined): boolean {
+  return codingBySystem(doseAndRate?.type?.coding, DOSE_STRENGTH_TYPE_SYSTEM)?.code === "2";
+}
+
 const BASIC_USAGE_CATEGORY_ORAL = "内服";
 
 /**
@@ -227,6 +240,8 @@ export interface MedicineLineValues {
   broughtMedicationId?: string;
   /** インスリンのスケール(注射のみ)。null・未設定ならスケールを持たない。 */
   insulinScale?: InsulinScaleValues | null;
+  /** 用量を力価で入れた行。単位は `medicine.unit_name` に力価の単位(mg など)が入る。 */
+  potency?: boolean;
 }
 
 /**
@@ -368,7 +383,7 @@ export function medicationCodeableConcept(medicine: Medicine): fhir4.CodeableCon
  */
 export function buildDosage(
   rp: Pick<RpValues, "usage" | "doseCount" | "usageComment" | "supplement">,
-  medLine: Pick<MedicineLineValues, "medicine" | "dose" | "unevenDoses">,
+  medLine: Pick<MedicineLineValues, "medicine" | "dose" | "unevenDoses" | "potency">,
   startDate: string,
 ): fhir4.Dosage {
   const timingCoding: fhir4.Coding[] = [];
@@ -391,7 +406,12 @@ export function buildDosage(
       ? { code: { coding: timingCoding, text: rp.usage.usage_name } }
       : undefined,
     doseAndRate: medLine.dose
-      ? [{ doseQuantity: { value: Number(medLine.dose), unit: medLine.medicine?.unit_name ?? undefined } }]
+      ? [
+          {
+            ...(medLine.potency ? { type: POTENCY_DOSE_TYPE } : {}),
+            doseQuantity: { value: Number(medLine.dose), unit: medLine.medicine?.unit_name ?? undefined },
+          },
+        ]
       : undefined,
   };
 
@@ -823,6 +843,8 @@ export interface MedicineLineDisplay {
   generic?: boolean;
   dose?: number;
   unit?: string;
+  /** 用量が力価(原薬量)。単位の横に「力価」の印を出す。 */
+  potency?: boolean;
   comment?: string;
   /** 後発品変更不可。変更可なら undefined。 */
   substitutionBlock?: SubstitutionBlock;
@@ -891,6 +913,7 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
       generic: genericCoding ? true : undefined,
       dose: dosage?.doseAndRate?.[0]?.doseQuantity?.value,
       unit: dosage?.doseAndRate?.[0]?.doseQuantity?.unit,
+      potency: isPotencyDose(dosage?.doseAndRate?.[0]) || undefined,
       comment: mr.note?.[0]?.text,
       substitutionBlock: substitutionBlockOf(mr) ?? undefined,
       unevenLabel:
@@ -1018,6 +1041,7 @@ export function parsePrescriptionForm(
       showComment: Boolean(mr.note?.[0]?.text),
       substitutionBlock: substitutionBlockOf(mr),
       unevenDoses: unevenDosesOf(dosage),
+      ...(isPotencyDose(dosage?.doseAndRate?.[0]) ? { potency: true } : {}),
       ...(broughtMedicationIdOf(mr) ? { broughtMedicationId: broughtMedicationIdOf(mr) } : {}),
     });
   }

@@ -65,6 +65,9 @@ class PrescriptionReport
   DISPENSE_INSTRUCTION_EXT_URL =
     "http://jpfhir.jp/fhir/core/Extension/StructureDefinition/JP_MedicationRequest_DispenseRequest_InstructionForDispense".freeze
   DISPENSE_INSTRUCTION_SYSTEM = "http://jami.jp/CodeSystem/DrugDispensePreparationMethod".freeze
+  # JP Core の力価区分。「2 原薬量」の量は力価で、印刷では単位の後ろに「(力価)」を添える。
+  DOSE_STRENGTH_TYPE_SYSTEM =
+    "http://jpfhir.jp/fhir/core/CodeSystem/JP_MedicationIngredientStrengthStrengthType_CS".freeze
   DISPENSE_INSTRUCTION_LABELS = { "OP" => "一包化", "C" => "粉砕", "SP" => "別包化", "MX" => "混合" }.freeze
   MEDICAL_NECESSITY = "medical-necessity".freeze
   PATIENT_REQUEST = "patient-request".freeze
@@ -76,7 +79,8 @@ class PrescriptionReport
     keyword_init: true
   )
   # substitution_block: 後発品変更不可(MEDICAL_NECESSITY / PATIENT_REQUEST)。変更可なら nil。
-  MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :comment, :uneven, :substitution_block,
+  # potency: 用量が力価(原薬量)。
+  MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :potency, :comment, :uneven, :substitution_block,
                             keyword_init: true)
 
   def initialize(order_id, gateway: FhirGateway.new)
@@ -194,6 +198,8 @@ class PrescriptionReport
         name: medicine_name(mr, [GENERAL_ORDER_CODE_SYSTEM, MEDICINE_CODE_SYSTEM]),
         dose: dosage.dig("doseAndRate", 0, "doseQuantity", "value"),
         unit: dosage.dig("doseAndRate", 0, "doseQuantity", "unit").to_s,
+        potency: coding_by_system(dosage.dig("doseAndRate", 0, "type", "coding"), DOSE_STRENGTH_TYPE_SYSTEM)
+          &.dig("code") == "2",
         comment: mr.dig("note", 0, "text").to_s,
         uneven: supplementary_displays(dosage).select { |code, _| code.start_with?("V") }
                                               .sort_by(&:first).map(&:last).join("・"),

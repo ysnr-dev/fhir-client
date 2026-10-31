@@ -180,6 +180,17 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
 
       expect(build.items.first.lines.first.quantity).to eq("2")
     end
+
+    it "converts a dose ordered in 力価 to the 薬価算定単位 through the dose conversion master" do
+      Master::MedicineDoseConversion.create!(medicine_code: "620004513", from_unit: "mg", factor: 100,
+                                             to_unit: "ｇ", source: "explicit")
+      request = medication_request(code: "620004513", dose: 150, days: 5, name: "セフゾン細粒")
+      request["dosageInstruction"][0]["doseAndRate"][0]["doseQuantity"]["unit"] = "mg"
+      store.add(request)
+
+      line = build.items.first.lines.first
+      expect([line.quantity, line.unit]).to eq(["1.5", "ｇ"])
+    end
   end
 
   describe "実施入力を持たない種別(検体検査など)" do

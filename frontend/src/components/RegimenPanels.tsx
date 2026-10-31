@@ -39,6 +39,7 @@ import { Modal } from "./Modal";
 import { ChemoBookModal } from "./ChemoBookModal";
 import { RegimenCyclePanel } from "./RegimenApplyPanel";
 import { RegimenDecisionFields } from "./RegimenDecision";
+import { PotencyMark } from "./MedicineWarnings";
 
 // カルテ右ペインの、適用済みレジメンに対する操作。
 //   RegimenCycleLoader … 次クールの登録(左ペインの詳細ビューから開く)
@@ -373,7 +374,10 @@ function RegimenOrderBody({ order }: { order: RegimenDayOrder }) {
               <li key={medicine.orderInRp}>
                 <span className="karte-rp__medicine-name">{medicine.name}</span>
                 {medicine.dose != null && (
-                  <span className="karte-rp__medicine-dose">{`${medicine.dose}${medicine.unit ?? ""}`}</span>
+                  <span className="karte-rp__medicine-dose">
+                    {`${medicine.dose}${medicine.unit ?? ""}`}
+                    <PotencyMark potency={medicine.potency} />
+                  </span>
                 )}
                 {medicine.unevenLabel && (
                   <span className="karte-rp__comment">{`（${medicine.unevenLabel}）`}</span>

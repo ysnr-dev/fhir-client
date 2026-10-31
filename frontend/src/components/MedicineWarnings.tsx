@@ -205,6 +205,12 @@ export function FormularyMark({ medicine }: { medicine: Pick<Medicine, "formular
 }
 
 /** 後発品変更不可の印(処方箋の「変更不可」「患者希望」)。変更可なら何も出さない。 */
+/** 用量が力価(原薬量)であることの印。単位の直後に置く。 */
+export function PotencyMark({ potency }: { potency: boolean | undefined }) {
+  if (!potency) return null;
+  return <span className="medicine-caution potency-mark">力価</span>;
+}
+
 export function SubstitutionBlockMark({ block }: { block: SubstitutionBlock | null | undefined }) {
   if (!block) return null;
   return <span className="medicine-caution substitution-mark">{substitutionBlockMark(block)}</span>;

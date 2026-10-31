@@ -2743,6 +2743,13 @@ fieldset.rp-card {
   color: var(--text);
 }
 
+/* 力価の換算行を持つ医薬品は単位を選べる。列幅いっぱいに収め、文字は単位の表示と揃える。 */
+.rp-card__medicines--form .rp-card__unit-select {
+  width: 100%;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
 /* 削除はゴミ箱アイコンのみのアイコンボタンにして、幅を取らないようにする。
    医薬品行の削除と RP 削除の双方で使う。並んだ入力欄と同じ高さの正方形にする。 */
 .rp-card__icon-button {
@@ -22523,6 +22530,11 @@ button.chemo-calendar__cell[draggable="true"] {
 .medicine-caution.formulary-mark {
   border-color: var(--accent-border);
   color: var(--accent);
+}
+
+/* 用量が力価(原薬量)。単位の直後に置くので左の余白を詰める。 */
+.medicine-caution.potency-mark {
+  margin-left: 3px;
 }
 
 /* 後発品変更不可(処方箋の「変更不可」「患者希望」)。 */
