@@ -1,5 +1,5 @@
 import { useLabResultDetail, useMarkResultReviewed, useResultReviewProvenance } from "../api/queries";
-import { isPreliminaryReport } from "../fhir/labResultHelpers";
+import { isReviewableReportStatus } from "../fhir/resultReviewHelpers";
 import { dateTimeLabel } from "../lib/dates";
 import { resourcesOfType } from "../fhir/shared";
 
@@ -9,7 +9,7 @@ import { resourcesOfType } from "../fhir/shared";
 // 「確認する / 確認済み」を出すだけ。確認者と確認日時はツールチップで読む
 // (結果の表示領域を行で消費しない)。
 //
-// 中間報告のうちは出さない。値が変わりうるものを読ませても確認にならないので、
+// 中間報告・下書きのうちは出さない。値が変わりうるものを読ませても確認にならないので、
 // 通知も最終報告になってから作る(resultReviewHelpers)。
 
 /** 確認した後にレポートが更新されていないか。更新されていれば読み直してもらう。 */
@@ -32,7 +32,7 @@ export function ResultReviewAction({ reportId }: { reportId: string }) {
   const markReviewed = useMarkResultReviewed();
 
   const report = reportOf(detail.data?.data);
-  if (!report || isPreliminaryReport(report.status)) return null;
+  if (!report || !isReviewableReportStatus(report.status)) return null;
 
   const latest = review.data ?? null;
   const current = latest ? reviewedAfterUpdate(latest.at, report.meta?.lastUpdated) : false;

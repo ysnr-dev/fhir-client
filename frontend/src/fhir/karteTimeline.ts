@@ -29,7 +29,7 @@ import {
   pathoOrderResponseIds,
 } from "./pathoOrderHelpers";
 import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pathoTaskHelpers";
-import { pathoReportImportance, pathoReportResponseIds } from "./pathoResultHelpers";
+import { isDraftReportStatus, pathoReportImportance, pathoReportResponseIds } from "./pathoResultHelpers";
 import { pathwayOf } from "./pathwayApplyHelpers";
 import type { PathwayEvaluationCard } from "./pathwayKarteHelpers";
 import { adverseEventLabel, type AdverseEventRecord } from "./adverseEventHelpers";
@@ -965,7 +965,9 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       };
     }
     if (isPathoServiceRequest(serviceRequest)) {
-      const report = reportByOrderId.get(serviceRequest.id ?? "");
+      // 下書き(一時保存)は公開前なので、カードではまだレポートが無いものとして扱う。
+      const found = reportByOrderId.get(serviceRequest.id ?? "");
+      const report = found && !isDraftReportStatus(found.status) ? found : undefined;
       return {
         ...base,
         kind: "patho-order" as const,

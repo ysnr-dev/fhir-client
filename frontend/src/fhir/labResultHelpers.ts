@@ -875,6 +875,8 @@ export interface LabResultSummary {
   itemCount: number;
   /** 元になった検体検査オーダーの id。空なら紐付けなし。 */
   orderId: string;
+  /** レポートの status(病理の下書きを一覧で見分けるのに使う)。 */
+  status: string;
 }
 
 /**
@@ -933,6 +935,7 @@ export function summarizeDiagnosticReport(report: fhir4.DiagnosticReport): LabRe
     departmentName: departmentOf(report).departmentName,
     itemCount: report.result?.length ?? 0,
     orderId: labOrderIdFromReport(report),
+    status: report.status ?? "",
   };
 }
 

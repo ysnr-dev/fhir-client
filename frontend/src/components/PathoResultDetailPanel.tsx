@@ -9,6 +9,7 @@ import {
   cytoJudgementDisplay,
   filledInterpreters,
   groupReportImagesByKind,
+  isDraftReportStatus,
   isRevisedReportStatus,
   parsePathoResultForm,
   pathoReportImageRefs,
@@ -23,6 +24,9 @@ import { SchemaImageGallery } from "./SchemaImageGallery";
 
 // 病理診断レポートの内容表示。カルテ画面の病理タブと、カルテカードの詳細モーダル、
 // 部門一覧の双方から使う。操作ボタンと前後移動は呼び出し側が持つ。
+//
+// 下書き(一時保存)は公開前なので、既定では内容を出さない。部門一覧(病理医・技師が書く場所)だけ
+// showDraft で中身を見せる。カルテでは「編集」から続きを書ける。
 
 // 紐付いている病理検査オーダーの 1 行要約。オーダーが削除済みでもレポート自体は
 // 表示できるようにしたいので、引けなかった場合は id だけを見せる。
@@ -51,7 +55,7 @@ function FindingSection({ label, value }: { label: string; value: string }) {
 
 /** 報告区分のバッジ。中間・訂正・追加は目立たせ、最終報告は素の文字で出す。 */
 export function ReportStatusBadge({ status }: { status: string }) {
-  if (status === "preliminary" || isRevisedReportStatus(status)) {
+  if (status === "preliminary" || isRevisedReportStatus(status) || isDraftReportStatus(status)) {
     return <span className="micro-result__badge">{reportStatusDisplay(status)}</span>;
   }
   return <>{reportStatusDisplay(status) || "-"}</>;
@@ -108,7 +112,14 @@ function DiagnosisFieldset({ values }: { values: PathoResultFormValues }) {
   );
 }
 
-export function PathoResultDetailPanel({ reportId }: { reportId: string }) {
+export function PathoResultDetailPanel({
+  reportId,
+  showDraft = false,
+}: {
+  reportId: string;
+  /** 下書きの内容も出す(病理部門一覧)。 */
+  showDraft?: boolean;
+}) {
   const detail = usePathoResultDetail(reportId);
 
   const { report, observations, specimens } = detail.data
@@ -123,6 +134,8 @@ export function PathoResultDetailPanel({ reportId }: { reportId: string }) {
 
       {detail.isLoading ? (
         <p>読み込み中...</p>
+      ) : report && isDraftReportStatus(report.status) && !showDraft ? (
+        <p className="patient-table__empty">作成中のレポート(下書き)です。</p>
       ) : (
         report &&
         values && (

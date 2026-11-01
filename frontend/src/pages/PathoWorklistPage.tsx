@@ -576,7 +576,7 @@ function PathoOrderViewModal({
       {row.reportId && (
         <>
           <h3 className="karte-tabpanel__header">病理診断レポート</h3>
-          <PathoResultDetailPanel reportId={row.reportId} />
+          <PathoResultDetailPanel reportId={row.reportId} showDraft />
         </>
       )}
     </Modal>

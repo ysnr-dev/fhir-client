@@ -9085,6 +9085,15 @@ body.karte-wide {
   border-radius: 4px;
 }
 
+/* 下書き(公開前)の病理レポート。破線の枠と斜体で、公開済みの行と見分ける。 */
+.karte-lab .karte-daylist__date--draft {
+  font-style: italic;
+  color: var(--text);
+  outline: 1px dashed var(--border);
+  outline-offset: -1px;
+  border-radius: 4px;
+}
+
 /* 一覧は沈んだペインの上に直接並ぶので、表全体をカードの濃さで浮かせてから、
    1 行おきの濃淡で横に長い行を追いやすくする(カルテ画面の一覧だけ)。
    縞に面の濃淡そのものを使うと行ごとの差が強すぎるため、地に薄く重ねる。 */

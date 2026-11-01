@@ -11,6 +11,7 @@ import {
   buildPathoResultBundle,
   buildPathoResultUpdateBundle,
   emptyPathoResultForm,
+  isDraftReportStatus,
   pathoReportResponseIds,
   type PathoResultFormValues,
 } from "../fhir/pathoResultHelpers";
@@ -57,8 +58,18 @@ export function KartePathoResultTab({ patientId, view, onViewChange, baseDate }:
   const unreviewed = useUnreviewedReportIds(patientId);
   const deletePathoResult = useDeletePathoResult();
 
-  // view が指すレポートが見つからないとき(削除済み・古いリンク)は最新に落とす。
-  const selected = entries.find((entry) => entry.id === view) ?? latestSummaryOnOrBefore(entries, baseDate) ?? entries[0];
+  // view が指すレポートが見つからないとき(削除済み・古いリンク)は最新に落とす。既定では下書きを選ばない
+  // (内容を出さないので、開いたときに公開済みのレポートが見えるようにする)。
+  const published = entries.filter((entry) => !isDraftReportStatus(entry.status));
+  const draftIds = useMemo(
+    () => new Set(entries.filter((entry) => isDraftReportStatus(entry.status)).map((entry) => entry.id)),
+    [entries],
+  );
+  const selected =
+    entries.find((entry) => entry.id === view) ??
+    latestSummaryOnOrBefore(published, baseDate) ??
+    published[0] ??
+    entries[0];
 
   function closeForm() {
     setForm(null);
@@ -107,6 +118,7 @@ export function KartePathoResultTab({ patientId, view, onViewChange, baseDate }:
         selectedId={selected?.id}
         isLoading={isLoading}
         unreviewedIds={unreviewed.data}
+        draftIds={draftIds}
         onSelect={(reportId) => onViewChange(reportId)}
       />
 

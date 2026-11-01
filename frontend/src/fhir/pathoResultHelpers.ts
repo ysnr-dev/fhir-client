@@ -38,6 +38,9 @@ import {
 // 既にあるため、レポートには重複して持たせない。検体だけは「実際に採れた検体」として
 // 独立 Specimen を作る(オーダーは予定、レポートは実績)。
 //
+// 書きかけは下書き(registered)で一時保存できる(JAHIS 患者安全ガイド 病理編 7.4.3。診断中の割り込みで
+// 入力中の画面を閉じるため)。下書きは臨床側に見せない(カルテのカード・通知は未登録として扱う)。
+//
 // 報告の確定は status で表す。中間報告(preliminary)→ 最終報告(final)→ 確定後の
 // 編集は訂正報告(amended)か追加報告(appended)。確定後の保存では final に戻さず、
 // どちらかを選ばせる(JAHIS 患者安全ガイド 病理編 7.5.3。報告書のステータスで
@@ -90,9 +93,16 @@ export type { CodeOption };
 
 /**
  * 報告区分。未確定のレポートは中間・最終から選び、確定済み(最終・訂正・追加)のレポートを
- * 編集したときは訂正・追加から選ぶ。
+ * 編集したときは訂正・追加から選ぶ。下書き(registered)は「一時保存」で保存したもの。
  */
-export type PathoReportStatus = "preliminary" | "final" | "amended" | "appended";
+export type PathoReportStatus = "registered" | "preliminary" | "final" | "amended" | "appended";
+
+/** 下書き。公開前なので臨床側には出さない。 */
+export const DRAFT_REPORT_STATUS = "registered";
+
+export function isDraftReportStatus(status: string | undefined): boolean {
+  return status === DRAFT_REPORT_STATUS;
+}
 
 export const REPORT_STATUS_OPTIONS: { code: "preliminary" | "final"; display: string }[] = [
   { code: "preliminary", display: "中間報告" },
@@ -106,6 +116,7 @@ export const REVISION_STATUS_OPTIONS: { code: "amended" | "appended"; display: s
 ];
 
 export function reportStatusDisplay(status: string | undefined): string {
+  if (isDraftReportStatus(status)) return "下書き";
   return (
     [...REPORT_STATUS_OPTIONS, ...REVISION_STATUS_OPTIONS].find((o) => o.code === status)?.display ?? ""
   );
@@ -322,7 +333,16 @@ export function groupReportImagesByKind(
 
 /** 確定済みのレポートを編集しているか。報告区分の選択肢が訂正・追加になる。 */
 export function isRevisingConfirmedReport(values: PathoResultFormValues): boolean {
-  return Boolean(values.originalStatus) && values.originalStatus !== "preliminary";
+  const original = values.originalStatus;
+  return Boolean(original) && original !== "preliminary" && !isDraftReportStatus(original);
+}
+
+/**
+ * 一時保存(下書き)できるか。まだ公開していない(新規・下書き)レポートだけ。中間報告以降を下書きに戻すと、
+ * 一度見せた内容が臨床側から消えてしまう。
+ */
+export function canSaveAsDraft(values: PathoResultFormValues): boolean {
+  return !values.originalStatus || isDraftReportStatus(values.originalStatus);
 }
 
 /**
@@ -330,6 +350,7 @@ export function isRevisingConfirmedReport(values: PathoResultFormValues): boolea
  * 万一空なら訂正報告として扱う)。
  */
 export function nextReportStatus(values: PathoResultFormValues): PathoReportStatus {
+  if (values.reportStatus === DRAFT_REPORT_STATUS && canSaveAsDraft(values)) return DRAFT_REPORT_STATUS;
   if (isRevisingConfirmedReport(values)) {
     return values.reportStatus === "appended" ? "appended" : "amended";
   }
@@ -921,8 +942,9 @@ export function parsePathoResultForm(
   values.departmentId = department.departmentId;
   values.departmentName = department.departmentName;
   values.orderId = pathoOrderIdFromReport(report);
-  // 確定済みのレポートは訂正・追加のどちらとして直すかを毎回選ばせる。
-  values.reportStatus = report.status === "preliminary" ? "preliminary" : "";
+  // 確定済みのレポートは訂正・追加のどちらとして直すかを毎回選ばせる。下書きは新規と同じく最終報告を既定にする。
+  values.reportStatus =
+    report.status === "preliminary" ? "preliminary" : isDraftReportStatus(report.status) ? "final" : "";
   values.originalStatus = report.status as PathoReportStatus;
   const interpreters = pathoReportInterpreters(report).slice(0, MAX_PATHO_INTERPRETERS);
   values.interpreters = emptyPathoInterpreters().map((empty, i) => interpreters[i] ?? empty);

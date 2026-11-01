@@ -336,8 +336,8 @@ async function fetchLabResultSummaries(
   // 要約に使う要素だけ返させ、検査項目の参照(result)などの本文は省く。
   // 上流の _elements はトップレベルの JSON キー名の一致で切り出すため、
   // choice 型は基底名(effective)ではなく実際のキー名で指定する。
-  // extension は診療科(ローカル拡張)を、basedOn は元のオーダーを要約に含めるために要る。
-  params.set("_elements", "id,effectiveDateTime,category,extension,basedOn");
+  // extension は診療科(ローカル拡張)を、basedOn は元のオーダーを、status は病理の下書きの見分けに要る。
+  params.set("_elements", "id,status,effectiveDateTime,category,extension,basedOn");
   const { matches, truncated } = await searchAllPages<fhir4.DiagnosticReport>("DiagnosticReport", params, {
     page: LAB_RESULT_ORDER_PAGE,
     maxPages: LAB_RESULT_ORDER_MAX_PAGES,

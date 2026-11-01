@@ -19,6 +19,7 @@ export function SpecimenDateList({
   selectedId,
   isLoading,
   unreviewedIds,
+  draftIds,
   onSelect,
   title = "検体採取日",
 }: {
@@ -27,6 +28,8 @@ export function SpecimenDateList({
   isLoading: boolean;
   /** まだ誰も確認していない結果の id。行の右肩に印を出す。 */
   unreviewedIds?: ReadonlySet<string>;
+  /** 下書き(公開前)の結果の id。行を破線の枠にする。 */
+  draftIds?: ReadonlySet<string>;
   onSelect: (reportId: string) => void;
   /** ペインの見出し。検体の無い検査レポートは「検査日」にする。 */
   title?: string;
@@ -54,14 +57,15 @@ export function SpecimenDateList({
               <ul className="karte-daylist__days">
                 {group.entries.map((entry) => {
                   const unreviewed = unreviewedIds?.has(entry.id) ?? false;
-                  const label = `${karteDayLabel(entry.date)}${unreviewed ? "（未確認）" : ""}`;
+                  const draft = draftIds?.has(entry.id) ?? false;
+                  const label = `${karteDayLabel(entry.date)}${draft ? "（下書き）" : unreviewed ? "（未確認）" : ""}`;
                   return (
                     <li key={entry.id}>
                       <button
                         type="button"
                         className={`karte-daylist__date${
                           entry.id === selectedId ? " karte-daylist__date--selected" : ""
-                        }`}
+                        }${draft ? " karte-daylist__date--draft" : ""}`}
                         aria-current={entry.id === selectedId || undefined}
                         // 行は月日だけなので、年を含む日付は読み上げ・ツールチップで補う。
                         title={label}

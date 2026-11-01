@@ -30,6 +30,8 @@ import {
   REPORT_IMPORTANCE_OPTIONS,
   REPORT_STATUS_OPTIONS,
   REVISION_STATUS_OPTIONS,
+  DRAFT_REPORT_STATUS,
+  canSaveAsDraft,
   emptyPathoResultForm,
   emptyPathoResultSpecimen,
   filledInterpreters,
@@ -74,9 +76,10 @@ const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
 // セクションだけで定義していて画像を規定していないため、持ち方はこのアプリの既定
 // (Binary + 拡張)に合わせている(docs/patho-order-design.md §4.5)。
 //
-// 診断医(最大 3 名)・重要度・確定後の訂正/追加の別は JAHIS 患者安全ガイド 病理編に
-// 合わせたもの(docs/patho-order-design.md §4.8)。新規のレポートはログイン中の医師を
-// 1 人目の診断医にしておく。
+// 診断医(最大 3 名)・重要度・確定後の訂正/追加の別・一時保存(下書き)は JAHIS 患者安全ガイド
+// 病理編に合わせたもの(docs/patho-order-design.md §4.8)。新規のレポートはログイン中の医師を
+// 1 人目の診断医にしておく。一時保存は診断中の割り込みで入力中の画面を閉じるためのもので、
+// 入力途中でも保存できるよう報告日以外は検査しない。
 
 interface PathoResultFormProps {
   /** レポートの患者。診断のテンプレート記入(初期値変数)に使う。 */
@@ -303,6 +306,15 @@ export function PathoResultForm({
     }
     setValidationError(null);
     onSubmit(values);
+  }
+
+  function handleSaveDraft() {
+    if (!values.reportDate) {
+      setValidationError("報告日を入力してください。");
+      return;
+    }
+    setValidationError(null);
+    onSubmit({ ...values, reportStatus: DRAFT_REPORT_STATUS });
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
@@ -637,6 +649,11 @@ export function PathoResultForm({
       </fieldset>
 
       <div className="prescription-form__submit">
+        {canSaveAsDraft(values) && (
+          <button type="button" disabled={submitting} onClick={handleSaveDraft}>
+            一時保存
+          </button>
+        )}
         <button type="submit" disabled={submitting}>
           {submitting ? "送信中..." : submitLabel}
         </button>
