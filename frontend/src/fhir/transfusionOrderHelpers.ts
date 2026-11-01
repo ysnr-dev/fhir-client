@@ -112,16 +112,33 @@ export function urgencyBadgeLabel(priority: string | undefined): string {
 /**
  * 輸血検査区分。
  *
- * type-screen … T&S(タイプ&スクリーン)。血液型と不規則抗体だけ先に調べておき、
- *               実際に出すときは省略法で適合を確認する。輸血する確率が低い待機手術など。
- * crossmatch  … 交差適合試験。製剤を指定して患者血と実際に混ぜる。実際に輸血する前提。
+ * type-screen         … T&S(タイプ&スクリーン)。血液型と不規則抗体だけ先に調べておき、
+ *                       実際に出すときは省略法で適合を確認する。輸血する確率が低い待機手術など。
+ * crossmatch          … 交差適合試験。製剤を指定して患者血と実際に混ぜる。実際に輸血する前提。
+ * computer-crossmatch … コンピュータクロスマッチ。製剤の型を自施設で確認してあり、患者の型が
+ *                       2 回確定・不規則抗体陰性なら試験管の試験を省く。
+ * saline-crossmatch   … 生食法。危機的出血のレベルⅡで、主試験を生食法だけで行う。
+ * no-crossmatch       … 交差試験なし。危機的出血のレベルⅠで、適合血を用意する時間が無い。
  */
-export type TransfusionTestType = "type-screen" | "crossmatch";
+export type TransfusionTestType =
+  | "type-screen"
+  | "crossmatch"
+  | "computer-crossmatch"
+  | "saline-crossmatch"
+  | "no-crossmatch";
 
 export const TEST_TYPE_OPTIONS: { code: TransfusionTestType; display: string }[] = [
   { code: "crossmatch", display: "交差適合試験" },
   { code: "type-screen", display: "T&S(タイプ&スクリーン)" },
+  { code: "computer-crossmatch", display: "コンピュータクロスマッチ" },
+  { code: "saline-crossmatch", display: "生食法" },
+  { code: "no-crossmatch", display: "交差試験なし" },
 ];
+
+/** 出庫時に交差適合試験の結果が要る検査区分か(T&S と交差試験なしは要らない)。 */
+export function crossmatchRequiredFor(testType: string): boolean {
+  return testType === "crossmatch" || testType === "computer-crossmatch" || testType === "saline-crossmatch";
+}
 
 export function testTypeDisplay(code: string): string {
   return displayOf(TEST_TYPE_OPTIONS, code);
@@ -382,8 +399,8 @@ export function isTransfusionServiceRequest(sr: fhir4.ServiceRequest): boolean {
   );
 }
 
-/** ABO / RhD の拡張。ヘッダ(患者の型)と明細(製剤の型)で同じ形。 */
-function bloodTypeExtensions(abo: string, rhd: string): fhir4.Extension[] {
+/** ABO / RhD の拡張。ヘッダ(患者の型)・明細(製剤の型)・出庫のバッグで同じ形。 */
+export function bloodTypeExtensions(abo: string, rhd: string): fhir4.Extension[] {
   const extension: fhir4.Extension[] = [];
   if (abo) {
     const display = abo === UNKNOWN_BLOOD_TYPE ? "不明" : abo;
@@ -698,6 +715,21 @@ export function transfusionOrderConsent(sr: fhir4.ServiceRequest): boolean {
 function codeFromExtension(sr: fhir4.ServiceRequest, url: string, system: string): string {
   const concept = sr.extension?.find((e) => e.url === url)?.valueCodeableConcept;
   return codingBySystem(concept?.coding, system)?.code ?? "";
+}
+
+/** 拡張の列から ABO / RhD を読む(不明や知らない値は空)。出庫のバッグで使う。 */
+export function bloodTypeOfExtensions(extension: fhir4.Extension[] | undefined): {
+  abo: AboBloodType | "";
+  rhd: RhdBloodType | "";
+} {
+  const code = (url: string, system: string) =>
+    codingBySystem(extension?.find((e) => e.url === url)?.valueCodeableConcept?.coding, system)?.code;
+  const abo = code(ABO_EXT_URL, ABO_SYSTEM);
+  const rhd = code(RHD_EXT_URL, RHD_SYSTEM);
+  return {
+    abo: ABO_OPTIONS.some((o) => o.code === abo) ? (abo as AboBloodType) : "",
+    rhd: RHD_OPTIONS.some((o) => o.code === rhd) ? (rhd as RhdBloodType) : "",
+  };
 }
 
 /** 製剤の型(明細の拡張)。 */

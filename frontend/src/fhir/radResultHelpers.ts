@@ -526,10 +526,13 @@ export function splitPerformBundle(bundle: fhir4.Bundle | undefined): {
   procedures: fhir4.Procedure[];
   administrations: fhir4.MedicationAdministration[];
   observations: fhir4.Observation[];
+  /** 出庫記録のバッグ(輸血)。実施記録と同じ検索で届く。 */
+  dispenses: fhir4.MedicationDispense[];
 } {
   const procedures: fhir4.Procedure[] = [];
   const administrations: fhir4.MedicationAdministration[] = [];
   const observations: fhir4.Observation[] = [];
+  const dispenses: fhir4.MedicationDispense[] = [];
   for (const entry of bundle?.entry ?? []) {
     const resource = entry.resource;
     if (resource?.resourceType === "Procedure") procedures.push(resource as fhir4.Procedure);
@@ -537,9 +540,11 @@ export function splitPerformBundle(bundle: fhir4.Bundle | undefined): {
       administrations.push(resource as fhir4.MedicationAdministration);
     } else if (resource?.resourceType === "Observation") {
       observations.push(resource as fhir4.Observation);
+    } else if (resource?.resourceType === "MedicationDispense") {
+      dispenses.push(resource as fhir4.MedicationDispense);
     }
   }
-  return { procedures, administrations, observations };
+  return { procedures, administrations, observations, dispenses };
 }
 
 /** 放射線検査の実施記録か。処方・検体検査の Procedure と振り分ける。 */

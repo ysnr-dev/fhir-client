@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
   useSelfDepartments,
+  useTransfusionPerformDetail,
   useTransfusionWorklist,
   useUpdateTransfusionTaskStatus,
   type TransfusionWorklistRow,
@@ -21,6 +22,9 @@ import {
 import { RowPictograms } from "../components/PatientListRowParts";
 import { TransfusionBloodBadge } from "../components/TransfusionBloodBadge";
 import { TransfusionOrderDetailPanel } from "../components/TransfusionOrderDetailPanel";
+import { TransfusionDispenseModal } from "../components/TransfusionDispenseModal";
+import { splitPerformBundle } from "../fhir/radResultHelpers";
+import { transfusionDispensesByOrderId } from "../fhir/transfusionDispenseHelpers";
 import { TransfusionPerformModal } from "../components/TransfusionPerformModal";
 import {
   TEST_TYPE_OPTIONS,
@@ -90,6 +94,8 @@ export function TransfusionWorklistPage() {
   const [viewingId, setViewingId] = useState<string | null>(null);
   // 実施入力を開いているオーダー。同じ理由で id で覚えておく。
   const [performingId, setPerformingId] = useState<string | null>(null);
+  // 出庫入力を開いているオーダー。
+  const [dispensingId, setDispensingId] = useState<string | null>(null);
 
   // 製剤の列が長くなるので、この画面だけ幅を広げる(病理・検体検査一覧と同じ)。
   useEffect(() => {
@@ -108,6 +114,7 @@ export function TransfusionWorklistPage() {
   const total = worklist.data?.rows.length ?? 0;
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const performing = worklist.data?.rows.find((row) => row.order.id === performingId);
+  const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
 
   const patientIds = useMemo(
     () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
@@ -201,6 +208,7 @@ export function TransfusionWorklistPage() {
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onPerform={() => setPerformingId(row.order.id ?? null)}
+                    onDispense={() => setDispensingId(row.order.id ?? null)}
                     onChangeStatus={(status) => changeStatus(row, status)}
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id, attentionRowClass(row))}
                   />
@@ -232,6 +240,7 @@ export function TransfusionWorklistPage() {
                 pending={updateStatus.isPending}
                 onView={() => setViewingId(selectedRow.order.id ?? null)}
                 onPerform={() => setPerformingId(selectedRow.order.id ?? null)}
+                onDispense={() => setDispensingId(selectedRow.order.id ?? null)}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
               <WorklistMenuItems
@@ -253,6 +262,9 @@ export function TransfusionWorklistPage() {
           patientName={performing.patient ? displayName(performing.patient) : undefined}
           onClose={() => setPerformingId(null)}
         />
+      )}
+      {dispensing && (
+        <TransfusionDispenseModal row={dispensing} onClose={() => setDispensingId(null)} />
       )}
     </div>
   );
@@ -417,6 +429,7 @@ function WorklistRow({
   pending,
   onView,
   onPerform,
+  onDispense,
   onChangeStatus,
   rowProps,
 }: {
@@ -426,6 +439,7 @@ function WorklistRow({
   pending: boolean;
   onView: () => void;
   onPerform: () => void;
+  onDispense: () => void;
   onChangeStatus: (status: TransfusionTaskStatus) => void;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
@@ -494,6 +508,7 @@ function WorklistRow({
           pending={pending}
           onView={onView}
           onPerform={onPerform}
+          onDispense={onDispense}
           onChangeStatus={onChangeStatus}
         />
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(病理一覧と同じ)。 */}
@@ -517,12 +532,14 @@ function WorklistRowButtons({
   pending,
   onView,
   onPerform,
+  onDispense,
   onChangeStatus,
 }: {
   row: TransfusionWorklistRow;
   pending: boolean;
   onView: () => void;
   onPerform: () => void;
+  onDispense: () => void;
   onChangeStatus: (status: TransfusionTaskStatus) => void;
 }) {
   const status = transfusionTaskStatus(row.task);
@@ -535,7 +552,9 @@ function WorklistRowButtons({
             key={action.next}
             type="button"
             disabled={pending}
-            onClick={() => onChangeStatus(action.next)}
+            // 出庫は Task を進めるだけでなく出庫記録(バッグごとの製剤番号・型・期限・交差)を
+            // 入れるので、入力モーダルを開く。
+            onClick={() => (action.next === "in-progress" ? onDispense() : onChangeStatus(action.next))}
           >
             {action.label}
           </button>
@@ -593,13 +612,24 @@ function TransfusionOrderViewModal({
   row: TransfusionWorklistRow;
   onClose: () => void;
 }) {
+  // 出庫記録(ハブとバッグ)。一覧の行は持っていないので開いたときに引く。
+  const perform = useTransfusionPerformDetail(row.order.id);
+  const dispenses = useMemo(() => {
+    const { procedures, dispenses: bags } = splitPerformBundle(perform.data?.data);
+    return transfusionDispensesByOrderId(procedures, bags).get(row.order.id ?? "") ?? [];
+  }, [perform.data, row.order.id]);
   return (
     <Modal
       title={`輸血内容 - ${row.patient ? displayName(row.patient) : ""}`}
       onClose={onClose}
       className="modal--wide"
     >
-      <TransfusionOrderDetailPanel serviceRequest={row.order} itemRequests={row.itemRequests} />
+      <ErrorBanner error={perform.error} />
+      <TransfusionOrderDetailPanel
+        serviceRequest={row.order}
+        itemRequests={row.itemRequests}
+        dispenses={dispenses}
+      />
     </Modal>
   );
 }

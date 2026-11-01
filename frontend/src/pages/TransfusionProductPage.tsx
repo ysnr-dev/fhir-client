@@ -27,6 +27,7 @@ interface Draft {
   unit_label: string;
   default_units: string;
   requires_crossmatch: boolean;
+  requires_irradiation: boolean;
   medicine_code: string;
   valid_from: string;
   valid_to: string;
@@ -43,6 +44,7 @@ const emptyDraft: Draft = {
   unit_label: "単位",
   default_units: "",
   requires_crossmatch: true,
+  requires_irradiation: false,
   medicine_code: "",
   valid_from: "",
   valid_to: "",
@@ -60,6 +62,7 @@ function toPayload(draft: Draft): TransfusionProductPayload {
     unit_label: draft.unit_label,
     default_units: draft.default_units ? Number(draft.default_units) : null,
     requires_crossmatch: draft.requires_crossmatch,
+    requires_irradiation: draft.requires_irradiation,
     medicine_code: draft.medicine_code || null,
     valid_from: draft.valid_from || null,
     valid_to: draft.valid_to || null,
@@ -169,6 +172,9 @@ export function TransfusionProductPage() {
                 {!item.requires_crossmatch && (
                   <span className="dose-conversion__badge">交差不要</span>
                 )}
+                {item.requires_irradiation && (
+                  <span className="dose-conversion__badge">要照射</span>
+                )}
               </td>
               <td className="rad-item__compact">
                 {item.default_units !== null && `${item.default_units}${item.unit_label}`}
@@ -242,6 +248,7 @@ function ProductEditModal({ productId, onClose }: ProductEditModalProps) {
       unit_label: d.unit_label,
       default_units: d.default_units === null ? "" : String(d.default_units),
       requires_crossmatch: d.requires_crossmatch,
+      requires_irradiation: d.requires_irradiation,
       medicine_code: d.medicine_code ?? "",
       valid_from: d.valid_from ?? "",
       valid_to: d.valid_to ?? "",
@@ -402,6 +409,15 @@ function ProductEditModal({ productId, onClose }: ProductEditModalProps) {
             onChange={(e) => setDraft({ ...draft, requires_crossmatch: e.target.checked })}
           />
           交差適合試験が必要な製剤
+        </label>
+        {/* 照射の要否。出庫入力で未照射のバッグを出そうとしたときの警告に使う。 */}
+        <label className="lab-order-item__check">
+          <input
+            type="checkbox"
+            checked={draft.requires_irradiation}
+            onChange={(e) => setDraft({ ...draft, requires_irradiation: e.target.checked })}
+          />
+          放射線照射が必要な製剤
         </label>
 
         <ErrorBanner error={detail.error} />

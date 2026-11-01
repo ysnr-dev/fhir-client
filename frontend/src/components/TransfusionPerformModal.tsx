@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useTransfusionProductOptions } from "../api/masterQueries";
-import { useRegisterTransfusionPerform } from "../api/queries";
+import { useRegisterTransfusionPerform, useTransfusionPerformDetail } from "../api/queries";
+import { splitPerformBundle } from "../fhir/radResultHelpers";
+import { transfusionDispensesByOrderId } from "../fhir/transfusionDispenseHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import {
   REACTION_OPTIONS,
@@ -46,22 +48,65 @@ interface Props {
   onClose: () => void;
 }
 
-export function TransfusionPerformModal({
+export function TransfusionPerformModal({ order, itemRequests, task, patientName, onClose }: Props) {
+  // 出庫記録があれば、払い出したバッグ(製剤番号つき)をそのまま初期行にする。
+  // 読み終わるまで待つのは、初期値が初回描画時にしか効かないため。
+  const perform = useTransfusionPerformDetail(order.id);
+  const dispensed = useMemo(() => {
+    const { procedures, dispenses } = splitPerformBundle(perform.data?.data);
+    return (transfusionDispensesByOrderId(procedures, dispenses).get(order.id ?? "") ?? []).flatMap(
+      (d) => d.bags,
+    );
+  }, [perform.data, order.id]);
+  if (perform.isLoading) {
+    return (
+      <Modal
+        title={`輸血の実施入力${patientName ? ` - ${patientName}` : ""}`}
+        onClose={onClose}
+        className="modal--wide"
+      >
+        <p>読み込み中...</p>
+      </Modal>
+    );
+  }
+  return (
+    <TransfusionPerformForm
+      order={order}
+      itemRequests={itemRequests}
+      task={task}
+      patientName={patientName}
+      initialBags={dispensed.map((bag) => ({
+        productCode: bag.productCode,
+        productName: bag.productName,
+        units: bag.units,
+        unitLabel: bag.unitLabel,
+        lotNumber: bag.lotNumber,
+        startedAt: "",
+        endedAt: "",
+      }))}
+      onClose={onClose}
+    />
+  );
+}
+
+function TransfusionPerformForm({
   order,
   itemRequests,
   task,
   patientName,
+  initialBags,
   onClose,
-}: Props) {
+}: Props & { initialBags: TransfusionBagLine[] }) {
   const register = useRegisterTransfusionPerform();
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const products = useTransfusionProductOptions();
   const productItems = products.data?.items ?? [];
   const summary = summarizeTransfusionOrder(order);
 
-  const [values, setValues] = useState<TransfusionPerformFormValues>(() =>
-    emptyTransfusionPerformForm(itemRequests),
-  );
+  const [values, setValues] = useState<TransfusionPerformFormValues>(() => {
+    const empty = emptyTransfusionPerformForm(itemRequests);
+    return initialBags.length > 0 ? { ...empty, bags: initialBags } : empty;
+  });
   const [validationError, setValidationError] = useState<string | null>(null);
 
   function update<K extends keyof TransfusionPerformFormValues>(

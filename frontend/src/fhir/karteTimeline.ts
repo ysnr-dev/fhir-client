@@ -104,6 +104,10 @@ import {
   type TransfusionPerformDisplay,
 } from "./transfusionResultHelpers";
 import {
+  transfusionDispensesByOrderId,
+  type TransfusionDispenseDisplay,
+} from "./transfusionDispenseHelpers";
+import {
   isRadiotherapyServiceRequest,
   radiotherapyConsultRequest,
 } from "./radiotherapyOrderHelpers";
@@ -437,6 +441,8 @@ export type KarteTimelineItem = KarteItemBase &
         task: fhir4.Task | undefined;
         /** 実施記録。未実施なら空。 */
         performs: TransfusionPerformDisplay[];
+        /** 出庫記録。出庫前なら空。 */
+        dispenses: TransfusionDispenseDisplay[];
       }
     // リハビリ。食事と同じ期間継続型で明細は持たないが、進捗 Task と実施記録は持つ。
     // 1 オーダーに実施が何十件も積み上がるので、カードは先頭数件と件数だけを出す。
@@ -853,6 +859,11 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     administrations,
     pickByType<fhir4.Observation>(prescriptionResources, "Observation"),
   );
+  // 出庫記録はハブの category が別(procedure-category)なので、実施記録とは別に振り分ける。
+  const transfusionDispenseByOrderId = transfusionDispensesByOrderId(
+    procedures,
+    pickByType<fhir4.MedicationDispense>(prescriptionResources, "MedicationDispense"),
+  );
   const treatmentTaskByOrderId = treatmentTasksByOrderId(tasks);
   const surgeryTaskByOrderId = surgeryTasksByOrderId(tasks);
   // 手術は出血量などの測定値も持つので、放射線と同じく Observation も渡す。
@@ -1079,6 +1090,11 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         performs:
           status === "completed"
             ? (transfusionPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
+            : [],
+        // 出庫記録は出庫取消で消すので、出庫済以降だけ出す(中止でも出したものは残す)。
+        dispenses:
+          status === "in-progress" || status === "completed" || status === "cancelled"
+            ? (transfusionDispenseByOrderId.get(serviceRequest.id ?? "") ?? [])
             : [],
       };
     }

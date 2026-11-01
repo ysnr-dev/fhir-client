@@ -1,4 +1,5 @@
 import { TransfusionBloodBadge } from "../TransfusionBloodBadge";
+import type { TransfusionDispenseDisplay } from "../../fhir/transfusionDispenseHelpers";
 import type { TransfusionPerformDisplay } from "../../fhir/transfusionResultHelpers";
 import {
   isDifferentFromPatient,
@@ -23,10 +24,12 @@ export function TransfusionOrderCardBody({
   serviceRequest,
   itemRequests,
   performs,
+  dispenses = [],
 }: {
   serviceRequest: fhir4.ServiceRequest;
   itemRequests: fhir4.ServiceRequest[];
   performs: TransfusionPerformDisplay[];
+  dispenses?: TransfusionDispenseDisplay[];
 }) {
   const products = transfusionOrderProducts(itemRequests, serviceRequest);
   const comment = transfusionOrderComment(serviceRequest);
@@ -67,6 +70,27 @@ export function TransfusionOrderCardBody({
         </ul>
         {comment && <p className="karte-perform__note">{comment}</p>}
       </div>
+      {/* 出庫記録。どのバッグを出したか(製剤番号・型・期限・照射・交差)は実施の前に確かめるもの。 */}
+      {dispenses.map((dispense) => (
+        <section className="karte-perform" key={dispense.id}>
+          <div className="karte-perform__head">
+            <span className="karte-perform__title">出庫</span>
+            {dispense.dispensedAt && <span className="karte-perform__meta">{dispense.dispensedAt}</span>}
+            {dispense.dispenserName && (
+              <span className="karte-perform__meta">{dispense.dispenserName}</span>
+            )}
+          </div>
+          <div className="karte-perform__row">
+            <span className="karte-perform__label">バッグ:</span>
+            <span className="karte-perform__values">
+              {dispense.bags.map((bag) => (
+                <span key={bag.id}>{bag.label}</span>
+              ))}
+            </span>
+          </div>
+          {dispense.comment && <p className="karte-perform__note">{dispense.comment}</p>}
+        </section>
+      ))}
       {performs.map((perform) => (
         <section className="karte-perform" key={perform.id}>
           <div className="karte-perform__head">

@@ -60,8 +60,11 @@
   ←basedOn── 明細 ServiceRequest ×N = 製剤 1 種類ぶん(code = 製剤、quantity = 単位数、
                                          extension[transfusion-abo/rhd] = その製剤を出す型)
   ←focus──── Task            (進捗: transfusion)
-  ←basedOn── Procedure       (実施記録ハブ) ←partOf── MedicationAdministration ×N
-                                            ←partOf── Observation(副作用)
+  ←basedOn── Procedure       (出庫記録ハブ、category = procedure-category|transfusion-dispense)
+                               ←partOf── MedicationDispense ×N = 払い出したバッグ 1 本
+  ←basedOn── Procedure       (実施記録ハブ、category = order-type|transfusion)
+                               ←partOf── MedicationAdministration ×N
+                               ←partOf── Observation(副作用)
 ```
 
 ### 2.1 なぜ明細を独立した ServiceRequest にするか
@@ -94,6 +97,12 @@
 | `StructureDefinition/transfusion-rhd` | ヘッダ = 患者の RhD、明細 = 製剤の RhD(valueCodeableConcept) |
 | `StructureDefinition/transfusion-consent` | ヘッダ。輸血同意書の確認済フラグ(valueBoolean) |
 | `StructureDefinition/transfusion-lot-number` | MedicationAdministration。製剤番号(valueString) |
+| `CodeSystem/procedure-category` の値 `transfusion-dispense` | 出庫記録ハブ Procedure の `category`。実施記録(order-type)と別の体系 |
+| `IdSystem/blood-product-number` | MedicationDispense の `identifier`。製剤番号(献血番号) |
+| `StructureDefinition/transfusion-expiry` | MedicationDispense。バッグの有効期限(valueDate) |
+| `StructureDefinition/transfusion-irradiated` | MedicationDispense。照射済か(valueBoolean) |
+| `StructureDefinition/transfusion-crossmatch` / `CodeSystem/transfusion-crossmatch` | MedicationDispense。交差適合試験の結果(compatible / incompatible / omitted) |
+| `CodeSystem/transfusion-dispense-performer` | MedicationDispense.performer.function(dispenser = 出庫者 / crossmatch = 適合試験者) |
 | `CodeSystem/transfusion-reaction` | 副作用 Observation の `code` と値 |
 
 再利用: `CodeSystem/prescription-setting`(入外区分)、依頼科・病棟の拡張
@@ -210,6 +219,35 @@ MedicationAdministration に直接付ける。既存のコードベースは処�
 ［導出］「副作用なし」も記録する。輸血では観察したうえで無かったことが記録として要る
 ので、Observation が無い = 未観察、値が none = 観察して無かった、を区別する。
 
+### 2.7.1 出庫記録は MedicationDispense(2026-11-01)
+
+［事実］JAHIS 患者安全ガイド(輸血編)7.3〜7.4 は、割付・払出でバッグごとに患者の型・依頼の型・
+製剤種・有効期限・不規則抗体・照射・交差適合試験の結果を確かめ、不適合のバッグを出庫させないことを
+求める。それまでの出庫はボタン 1 つで、何を出したかを記録していなかった。
+
+［提案］出庫で**バッグごとに `MedicationDispense`** を作る(注射の払出と同じ器)。製剤番号は
+`identifier`(`blood-product-number`)、バッグの血液型は明細と同じ `transfusion-abo/rhd` の拡張、
+有効期限・照射・交差適合試験の結果はローカル拡張、対応する依頼の製剤明細は `supportingInformation`。
+出庫者と適合試験者は `performer.function` で分ける。
+
+［事実］上流の `MedicationDispense` はオーダー(ServiceRequest)を直接参照できない
+(`authorizingPrescription` は MedicationRequest 専用)。［提案］実施記録と同じ**ハブ + 子**の形にし、
+出庫記録ハブの `Procedure`(`basedOn` = オーダー)に `partOf` でぶら下げる。実施記録と同じ検索
+(`Procedure?based-on=` + `_revinclude=MedicationDispense:part-of`。上流に `part-of` を追加)で
+引ける。ハブの `category` は実施記録(`order-type|transfusion`)と別の体系(`procedure-category`)にして、
+実施記録を数える処理(看護必要度・医事)が出庫を実施と取り違えないようにする。
+
+［提案］出庫入力は一覧の「出庫」から開くモーダル(`TransfusionDispenseModal`)。日赤の製剤ラベルの
+バーコード(ISBT 128。献血番号 `=`、製品 `=<`、血液型 `=%`、有効期限 `&>`。`fhir/isbt128.ts`)を 1 つの
+読み取り欄で受け、選択中のバッグに入れる。割付のチェック(`dispenseAdvisories`)は警告の器に載せる:
+①患者の型との適合 ②依頼の型との一致 ③依頼の製剤との一致 ④有効期限と投与予定日 ⑤不規則抗体陽性
+(抗原陰性血の確認) と、照射(製剤マスタ `requires_irradiation`)、交差適合試験の結果(未入力・不適合)、
+血液型の 2 回確定、不規則抗体の有効期限。不適合のバッグは確認を要する警告で、医師と協議のうえ出す
+ときは理由を残す(止めはしない。ガイド 7.4.3-2 の「協議の上で行う場合はこの限りでない」)。
+
+［提案］出庫取消は記録ごと消す(実施取消と同じ)。中止では消さない(出したバッグは返却の対象。
+返却・廃棄の記録は段階 D)。実施入力は出庫記録があればそのバッグ(製剤番号つき)を初期行にする。
+
 ### 2.8 進捗 Task の 5 状態
 
 ```
@@ -246,6 +284,7 @@ cancelled (中止)
 | `unit_label` | 単位の呼び方。既定「単位」(血小板は「単位」、自己血は「mL」もある) |
 | `default_units` | 既定の単位数。RBC なら 2 など、入力の初期値 |
 | `requires_crossmatch` | 交差適合試験が要る製剤か。FFP・PLT は不要が既定 |
+| `requires_irradiation` | 放射線照射が要る製剤か。出庫入力で未照射のバッグに警告を出す。既定は不要 |
 | `valid_from` / `valid_to` / `display_order` / `note` | 他マスタと同じ |
 | `search_name` / `search_kana` | `SearchNormalizer` で正規化した検索用 |
 
@@ -260,6 +299,7 @@ cancelled (中止)
 | カルテカード | タイムライン | 血液型バッジ + 検査区分 + 製剤(略称 × 単位数)+ 進捗バッジ + 実施情報 |
 | 詳細モーダル | カードから | 明細と実施記録の全項目 |
 | 輸血部門一覧 | 部門業務 > 輸血 | 投与予定日 1 日ぶん。受付/出庫/実施の操作 |
+| 出庫入力 | 部門一覧の「出庫」 | バッグごとの製剤番号・血液型・有効期限・照射・交差適合試験(バーコード入力可)、割付の警告 |
 | 実施入力 | 部門一覧の「実施」 | 開始/終了時刻・実施者・バッグごとの製剤番号・副作用 |
 
 ---

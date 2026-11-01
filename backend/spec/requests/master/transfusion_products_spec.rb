@@ -80,6 +80,7 @@ RSpec.describe "Master::TransfusionProducts", type: :request do
 
       expect(body["category"]).to eq("rbc")
       expect(body["requires_crossmatch"]).to be(true)
+      expect(body["requires_irradiation"]).to be(false)
       expect(body["unit_label"]).to eq("単位")
     end
 

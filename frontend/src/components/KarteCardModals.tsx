@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import { useMemo, type ComponentType, type ReactNode } from "react";
 import {
   useClinicalNote,
   useLabOrderDetail,
@@ -82,6 +82,8 @@ import { EndoscopyOrderDetailPanel } from "./EndoscopyOrderDetailPanel";
 import { TreatmentOrderDetailPanel } from "./TreatmentOrderDetailPanel";
 import { SurgeryOrderDetailPanel } from "./SurgeryOrderDetailPanel";
 import { TransfusionOrderDetailPanel } from "./TransfusionOrderDetailPanel";
+import { transfusionDispensesByOrderId } from "../fhir/transfusionDispenseHelpers";
+import { splitPerformBundle } from "../fhir/radResultHelpers";
 import { RehabOrderDetailPanel } from "./RehabOrderDetailPanel";
 import { NutritionGuidanceOrderDetailPanel } from "./NutritionGuidanceOrderDetailPanel";
 import { MedicalManagementOrderDetailPanel } from "./MedicalManagementOrderDetailPanel";
@@ -1153,6 +1155,12 @@ function TransfusionOrderDetail({
   const requests = serviceRequestsOf(detail.data?.data);
   const serviceRequest = requests.find((request) => request.id === srId);
   const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+  // 出庫記録(ハブとバッグ)は実施記録と同じ検索で届く。
+  const perform = useTransfusionPerformDetail(srId);
+  const dispenses = useMemo(() => {
+    const { procedures, dispenses: bags } = splitPerformBundle(perform.data?.data);
+    return transfusionDispensesByOrderId(procedures, bags).get(srId) ?? [];
+  }, [perform.data, srId]);
 
   return (
     <>
@@ -1166,6 +1174,7 @@ function TransfusionOrderDetail({
           serviceRequest={serviceRequest}
           itemRequests={transfusionOrderItemRequests(requests, srId)}
           problemsById={problemsById}
+          dispenses={dispenses}
         />
       ) : (
         !detail.error && <NotFound label="輸血オーダー" />

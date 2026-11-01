@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_01_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_01_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -2724,6 +2724,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_090000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "medicine_code"
+    t.boolean "requires_irradiation", default: false, null: false
     t.index ["category"], name: "index_master_transfusion_products_on_category"
     t.index ["item_code"], name: "index_master_transfusion_products_on_item_code", unique: true
   end

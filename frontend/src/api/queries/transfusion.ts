@@ -17,6 +17,7 @@ import {
   OBSERVATION_SYSTEM,
   REACTION_CODE,
 } from "../../fhir/transfusionResultHelpers";
+import { buildTransfusionDispenseDeleteEntries } from "../../fhir/transfusionDispenseHelpers";
 import {
   DEFAULT_TRANSFUSION_SETTINGS,
   type TransfusionReactionHistory,
@@ -209,24 +210,59 @@ export function useTransfusionWorklist(date: string) {
 
 // ---- 輸血の実施記録 ----
 
-export const useTransfusionPerformDetail = makePerformDetailHook("transfusion-perform", { observations: true });
+/** 実施記録と出庫記録(ハブとバッグ)。 */
+export const useTransfusionPerformDetail = makePerformDetailHook("transfusion-perform", {
+  observations: true,
+  dispenses: true,
+});
+
+/** 出庫済から戻す(出庫取消)か。出庫記録を消す。 */
+function cancelsDispense(task: fhir4.Task | undefined, status: TransfusionTaskStatus): boolean {
+  return transfusionTaskStatus(task) === "in-progress" && status === "accepted";
+}
 
 /**
- * 受付・出庫・中止などの進捗を書き込む。実施済から戻す(実施取消)ときは、実施記録も
- * 同じ transaction で消す(理由は transfusionResultHelpers の buildTransfusionPerformDeleteEntries を参照)。
+ * 受付・出庫・中止などの進捗を書き込む。実施済から戻す(実施取消)ときは実施記録を、
+ * 出庫済から戻す(出庫取消)ときは出庫記録を、同じ transaction で消す
+ * (理由は transfusionResultHelpers の buildTransfusionPerformDeleteEntries を参照)。
  */
 export const useUpdateTransfusionTaskStatus = makeUpdateTaskStatusHook<TransfusionTaskStatus>(
   buildTransfusionTaskUpdate,
   "transfusion-worklist",
   {
     cancelPerform: {
-      cancels: cancelsPerform(transfusionTaskStatus),
-      entries: (order) =>
-        performCancelEntries(order.id ?? "", { observations: true }, buildTransfusionPerformDeleteEntries),
+      cancels: (task, status) =>
+        cancelsPerform(transfusionTaskStatus)(task, status) || cancelsDispense(task, status),
+      entries: (order, task, status) =>
+        performCancelEntries(
+          order.id ?? "",
+          { observations: true, dispenses: true },
+          (procedures, administrations, observations, dispenses) => [
+            ...(cancelsPerform(transfusionTaskStatus)(task, status)
+              ? buildTransfusionPerformDeleteEntries(procedures, administrations, observations)
+              : []),
+            ...(cancelsDispense(task, status)
+              ? buildTransfusionDispenseDeleteEntries(procedures, dispenses)
+              : []),
+          ],
+        ),
     },
     invalidate: invalidateTransfusion,
   },
 );
+
+/**
+ * 輸血の出庫登録。出庫記録一式(ハブ・バッグ)と Task の出庫済を 1 つの transaction で書き込む。
+ * Bundle の組み立ては transfusionDispenseHelpers を参照。
+ */
+export function useRegisterTransfusionDispense() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateTransfusion(queryClient),
+  });
+}
 
 /**
  * 輸血の実施登録。実施記録一式と Task の実施済を 1 つの transaction で書き込む。
@@ -246,6 +282,7 @@ function invalidateTransfusion(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "transfusion-worklist"] });
   // カルテのオーダーカードも進捗と実施情報を出しているので読み直させる。
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
-  // 取消では実施記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
+  // 取消では実施記録・出庫記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["MedicationDispense"] });
 }

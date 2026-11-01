@@ -2,6 +2,7 @@ import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
+import type { TransfusionDispenseDisplay } from "../fhir/transfusionDispenseHelpers";
 import {
   summarizeTransfusionOrder,
   transfusionOrderComment,
@@ -17,12 +18,15 @@ interface TransfusionOrderDetailPanelProps {
   /** オーダーにぶら下がる製剤明細。 */
   itemRequests: fhir4.ServiceRequest[];
   problemsById?: Map<string, fhir4.Condition>;
+  /** 出庫記録。読めていなければ出さない。 */
+  dispenses?: TransfusionDispenseDisplay[];
 }
 
 export function TransfusionOrderDetailPanel({
   serviceRequest,
   itemRequests,
   problemsById,
+  dispenses = [],
 }: TransfusionOrderDetailPanelProps) {
   const summary = summarizeTransfusionOrder(serviceRequest);
   const products = transfusionOrderProducts(itemRequests, serviceRequest);
@@ -100,6 +104,54 @@ export function TransfusionOrderDetailPanel({
         </table>
         {products.length === 0 && <p className="patient-table__empty">製剤がありません。</p>}
       </fieldset>
+
+      {dispenses.map((dispense) => (
+        <fieldset className="rp-card" key={dispense.id}>
+          <legend>出庫</legend>
+          <dl className="prescription-detail__common">
+            <dt>出庫日時</dt>
+            <dd>{dispense.dispensedAt || "-"}</dd>
+            <dt>出庫者</dt>
+            <dd>{dispense.dispenserName || "-"}</dd>
+            <dt>適合試験者</dt>
+            <dd>{dispense.crossmatchPerformerName || "-"}</dd>
+            <dt>出庫コメント</dt>
+            <dd>{dispense.comment || "-"}</dd>
+          </dl>
+          <table className="rp-card__medicines">
+            <thead>
+              <tr>
+                <th>№</th>
+                <th>製剤</th>
+                <th>製剤番号</th>
+                <th>血液型</th>
+                <th>有効期限</th>
+                <th>照射</th>
+                <th>交差適合試験</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dispense.bags.map((bag, index) => (
+                <tr key={bag.id || index}>
+                  <td>{index + 1}</td>
+                  <td>
+                    {bag.productName}
+                    {bag.units && ` / ${bag.units}${bag.unitLabel}`}
+                  </td>
+                  <td>{bag.lotNumber || "-"}</td>
+                  <td>
+                    <TransfusionBloodBadge abo={bag.abo} rhd={bag.rhd} />
+                    {!bag.abo && !bag.rhd && "-"}
+                  </td>
+                  <td>{bag.expiry || "-"}</td>
+                  <td>{bag.irradiated ? "照射済" : "未照射"}</td>
+                  <td>{bag.crossmatchDisplay || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </fieldset>
+      ))}
     </div>
   );
 }

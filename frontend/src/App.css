@@ -18463,6 +18463,23 @@ button.meal-calendar__cell:hover {
   flex: 1 1 100%;
 }
 
+/* 出庫入力のバッグの属性(型・有効期限・交差適合試験)。製剤名より狭く、1 行に並べる。 */
+.transfusion-dispense__field {
+  flex: 0 0 110px;
+}
+
+.transfusion-dispense__field--date {
+  flex: 0 0 150px;
+}
+
+.transfusion-dispense__check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  padding-bottom: 6px;
+}
+
 /* 輸血同意書の確認。他の入力より重い意味を持つので、枠で囲って大きく出す。
    セレクタを .prescription-form から書くのは、.prescription-form label の
    縦積み(flex-direction: column)より詳細度を上げて打ち消すため

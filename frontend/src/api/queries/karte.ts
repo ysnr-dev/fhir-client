@@ -168,6 +168,8 @@ export function appendKarteOrderIncludes(params: URLSearchParams): void {
   // 入ってくるので、その子を :iterate で 1 段先まで展開してもらう。
   params.append("_revinclude:iterate", "MedicationAdministration:part-of");
   params.append("_revinclude:iterate", "Observation:part-of");
+  // 輸血の出庫記録(ハブの Procedure は上の _revinclude で入る)にぶら下がるバッグ。
+  params.append("_revinclude:iterate", "MedicationDispense:part-of");
 }
 
 /** カルテに出すテンプレート回答の検索の基本条件。 */

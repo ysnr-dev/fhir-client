@@ -89,6 +89,8 @@ interface Advisory {
 | `antibody-screen` | 不規則抗体の検査 | 輸血 | warning | `antibodyScreenAdvisory` |
 | `blood-type-different` | 異型適合血 | 輸血 | info | `differentBloodTypeAdvisories` |
 | `transfusion-reaction-history` | 輸血副作用歴 | 輸血 | info | `reactionHistoryAdvisory` |
+| `dispense-blood-type` / `dispense-requested-type` / `dispense-product` / `dispense-expiry` / `dispense-irradiation` / `dispense-crossmatch` | 出庫: 患者の型との適合 / 依頼の型との一致 / 依頼の製剤との一致 / 有効期限 / 照射 / 交差適合試験 | 輸血 | warning | `dispenseAdvisories`(出庫入力) |
+| `antibody-positive` | 不規則抗体陽性 | 輸血 | warning | `dispenseAdvisories` |
 | `cds-critical` / `cds-warning` / `cds-info` | 判断支援(重要 / 注意 / 情報) | 外部 | warning / info / info | `cdsCardAdvisories` |
 
 ### 2.2 既存の判定との対応

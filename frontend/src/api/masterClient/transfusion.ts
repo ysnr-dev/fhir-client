@@ -20,6 +20,8 @@ export interface TransfusionProduct {
   default_units: number | null;
   /** 交差適合試験が要る製剤か。オーダー画面の検査区分の初期選択に使う。 */
   requires_crossmatch: boolean;
+  /** 放射線照射が要る製剤か。出庫入力で未照射のバッグに警告を出す。 */
+  requires_irradiation: boolean;
   /** 医事会計へ送るレセプト電算の医薬品コード。自己血のように薬価収載が無いものは空。 */
   medicine_code: string | null;
   valid_from: string | null;
@@ -37,6 +39,7 @@ export interface TransfusionProductPayload {
   unit_label?: string;
   default_units?: number | null;
   requires_crossmatch?: boolean;
+  requires_irradiation?: boolean;
   medicine_code?: string | null;
   valid_from?: string | null;
   valid_to?: string | null;

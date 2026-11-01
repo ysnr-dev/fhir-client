@@ -133,7 +133,11 @@ interface UpdateTaskStatusOptions<S> {
    */
   cancelPerform?: {
     cancels: (task: fhir4.Task | undefined, status: S) => boolean;
-    entries: (order: fhir4.ServiceRequest) => Promise<fhir4.BundleEntry[]>;
+    entries: (
+      order: fhir4.ServiceRequest,
+      task: fhir4.Task | undefined,
+      status: S,
+    ) => Promise<fhir4.BundleEntry[]>;
   };
   /** 読み直しの指示。省略時は部門一覧・検索キャッシュ(取消があれば実施記録も)。 */
   invalidate?: (queryClient: QueryClient) => void;
@@ -169,7 +173,7 @@ export function makeUpdateTaskStatusHook<S extends fhir4.Task["status"]>(
         const taskEntry = taskBundleEntry(buildUpdate(task, order, status));
         const performEntries =
           options.cancelPerform && options.cancelPerform.cancels(task, status)
-            ? await options.cancelPerform.entries(order)
+            ? await options.cancelPerform.entries(order, task, status)
             : [];
         return postBundle({
           resourceType: "Bundle",
@@ -202,17 +206,25 @@ export function makeUpdateTaskStatusHook<S extends fhir4.Task["status"]>(
  * 取消で消す対象は一覧が持っている行の情報からではなく、その場で引き直す。取消は稀な
  * 操作で、一覧を開いた後に別の端末で登録された実施記録も残さず消したいため。
  */
-function performSearchParams(orderId: string, options: { observations: boolean }): URLSearchParams {
+/** 実施記録の検索に何を連れてくるか。 */
+export interface PerformSearchOptions {
+  observations: boolean;
+  /** 出庫記録のバッグ(輸血の MedicationDispense)。 */
+  dispenses?: boolean;
+}
+
+function performSearchParams(orderId: string, options: PerformSearchOptions): URLSearchParams {
   const params = new URLSearchParams();
   params.set("based-on", `ServiceRequest/${orderId}`);
   params.set("_count", "100");
   params.append("_revinclude", "MedicationAdministration:part-of");
   if (options.observations) params.append("_revinclude", "Observation:part-of");
+  if (options.dispenses) params.append("_revinclude", "MedicationDispense:part-of");
   return params;
 }
 
 /** 実施記録(Procedure 一式)。カルテカードの FHIR JSON 表示と読影の入力モーダルが使う。 */
-export function makePerformDetailHook(kind: string, options: { observations: boolean }) {
+export function makePerformDetailHook(kind: string, options: PerformSearchOptions) {
   return function usePerformDetail(orderId: string | undefined) {
     return useQuery({
       queryKey: ["Procedure", "search", kind, orderId],
@@ -226,11 +238,12 @@ export function makePerformDetailHook(kind: string, options: { observations: boo
 /** 実施の取消で片付ける実施記録を引き直し、削除エントリにする。 */
 export async function performCancelEntries(
   orderId: string,
-  options: { observations: boolean },
+  options: PerformSearchOptions,
   build: (
     procedures: fhir4.Procedure[],
     administrations: fhir4.MedicationAdministration[],
     observations: fhir4.Observation[],
+    dispenses: fhir4.MedicationDispense[],
   ) => fhir4.BundleEntry[],
 ): Promise<fhir4.BundleEntry[]> {
   const { data: bundle } = await searchResource<fhir4.Resource>(
@@ -238,7 +251,7 @@ export async function performCancelEntries(
     performSearchParams(orderId, options),
   );
   const performed = splitPerformBundle(bundle);
-  return build(performed.procedures, performed.administrations, performed.observations);
+  return build(performed.procedures, performed.administrations, performed.observations, performed.dispenses);
 }
 
 /** 実施済から戻す(= 取消)か。 */

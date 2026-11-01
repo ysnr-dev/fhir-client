@@ -20,6 +20,7 @@ export type AdvisoryContext =
   | "endoscopy"
   | "meal-order"
   | "transfusion-order"
+  | "transfusion-dispense"
   | "medical-management"
   | "regimen-apply"
   | "regimen-cycle";

@@ -363,6 +363,16 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   `searchAllPages` と手書きのページング(部門一覧・外来・入院)が、件数からの推測をやめて `next` の有無で
   続きを判定する。上限で切れた結果の扱いは `docs/refactoring-plan.md` 第 3 回の「上限で切れた読み込み」。
 
+## 2026-11-01 に対応済み
+
+### `MedicationDispense.part-of` 検索と `_revinclude=MedicationDispense:part-of`
+
+輸血の出庫記録(`docs/transfusion-order-design.md` §2.7.1)で、払い出したバッグ(MedicationDispense)を
+出庫記録ハブの Procedure に `partOf` でぶら下げる。MedicationAdministration の `part-of` と同じ定義
+(jsonb 包含。migration 無し)を `search_definitions/medication_dispense.rb` と `search_references.rb` に足した。
+**client の輸血(出庫記録の表示・出庫取消・実施入力の初期行)が依存**: 上流が旧版だと `_revinclude` が黙って
+落ち、出庫記録のバッグが出ない(出庫取消ではバッグが消えずハブだけ消える)。本番は fhir-server を先にデプロイ。
+
 ## 2026-09-27 に対応済み
 
 ### `Encounter.appointment` 検索と `_include` / `_revinclude`
