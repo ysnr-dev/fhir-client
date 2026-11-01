@@ -49,13 +49,15 @@ export interface PathoTaskAction {
  * 今のステータスから移れる先。
  *
  * 「取消」は 1 つ前に戻す訂正、「中止」は検査そのものの取りやめ(検体検査・放射線と
- * 同じ区別)。検体受領と検査完了はこの一覧のボタンが唯一の入口なので主ボタンにする。
+ * 同じ区別)。受付はラベルを全部読んで照合する病理受付の画面で行う(一覧の主ボタンはその画面を開く)。
+ * ラベルの無い古いオーダーなどのために、照合しない「受付済にする」をケバブに残す(検体検査の
+ * 「受付済にする」と同じ扱い)。検査完了はこの一覧のボタンが唯一の入口なので主ボタンにする。
  */
 export function pathoTaskActions(status: PathoTaskStatus): PathoTaskAction[] {
   switch (status) {
     case "requested":
       return [
-        { label: "受付", next: "accepted" },
+        { label: "受付済にする", next: "accepted", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];
     case "accepted":

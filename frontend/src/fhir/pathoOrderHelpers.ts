@@ -684,18 +684,21 @@ export function buildPathoOrderUpdateBundle(
   /** 元のオーダーが参照していた記入内容の回答 id。外れたら同じ transaction で消す。 */
   originalResponseIds: string[] = [],
 ): fhir4.Bundle {
-  return withVersionLock(
-    buildPathoOrderTransactionBundle(
-      values,
-      patientId,
-      requester,
-      registrationAuthoredOn(original),
-      original.id,
-      originalItemIds,
-      originalResponseIds,
-    ),
-    original,
+  const bundle = buildPathoOrderTransactionBundle(
+    values,
+    patientId,
+    requester,
+    registrationAuthoredOn(original),
+    original.id,
+    originalItemIds,
+    originalResponseIds,
   );
+  // ヘッダはフォームから組み直すので、受付で振った病理受付番号などの identifier は元の値を引き継ぐ。
+  if (original.identifier?.length) {
+    const header = bundle.entry?.find((entry) => entry.request?.url === `ServiceRequest/${original.id}`);
+    if (header?.resource) (header.resource as fhir4.ServiceRequest).identifier = original.identifier;
+  }
+  return withVersionLock(bundle, original);
 }
 
 /**

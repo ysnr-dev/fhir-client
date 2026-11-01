@@ -17,6 +17,7 @@ import {
   summarizePathoOrder,
 } from "../fhir/pathoOrderHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
+import { pathoAccessionNumber } from "../fhir/pathoReceptionHelpers";
 import { schemaAnnotatedLines } from "../fhir/questionnaireResponseHelpers";
 import { ResponseSchemaImages, SchemaImageGallery } from "./SchemaImageGallery";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
@@ -54,6 +55,8 @@ export function PathoOrderDetailPanel({
         <dl className="prescription-detail__common">
           <dt>検査区分</dt>
           <dd>{summary.examCategoryDisplay || "-"}</dd>
+          <dt>病理受付番号</dt>
+          <dd>{pathoAccessionNumber(serviceRequest) || "未受付"}</dd>
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
           <dt>採取(予定)日時</dt>

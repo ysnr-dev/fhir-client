@@ -1,4 +1,5 @@
 import { dateTimeLabel } from "../../lib/dates";
+import { pathoAccessionNumber } from "../../fhir/pathoReceptionHelpers";
 import {
   organLabel,
   pathoCollectedDateTime,
@@ -64,6 +65,12 @@ export function PathoOrderCardBody({
           <div className="karte-rp__detail karte-rp__detail--indent">
             <span className="karte-rp__detail-label">採取:</span>
             <span>{`${dateTimeLabel(collectedAt)} 容器 計${pathoContainerTotal(specimens)}`}</span>
+          </div>
+        )}
+        {pathoAccessionNumber(serviceRequest) && (
+          <div className="karte-rp__detail karte-rp__detail--indent">
+            <span className="karte-rp__detail-label">病理受付番号:</span>
+            <span>{pathoAccessionNumber(serviceRequest)}</span>
           </div>
         )}
         {clinicalInfo && (

@@ -934,6 +934,8 @@ button:disabled {
 .oral-exam input:not([type="checkbox"]),
 .pathway-preview__field select,
 .pathway-preview__field input,
+.lab-arrival__scan input,
+.patho-worklist__lookup input,
 .rx-verification__field select,
 .rx-verification__field textarea,
 .karte-print-form input[type="date"],
@@ -17783,6 +17785,70 @@ button.meal-calendar__cell:hover {
   align-items: center;
   align-self: flex-end;
   gap: 6px;
+}
+
+/* 病理部門一覧の番号での呼び出し。絞り込みの下に 1 行で置く。 */
+.patho-worklist__lookup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.patho-worklist__lookup input {
+  width: 16em;
+}
+
+.patho-worklist__lookup-message {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* 区分の列に添える病理受付番号。 */
+.patho-worklist__accession {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 病理受付。照合中のオーダーと容器の表。 */
+.patho-reception__order {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+}
+
+.patho-reception__containers {
+  margin-top: 8px;
+}
+
+.patho-reception__row--read td {
+  color: var(--success);
+  font-weight: 600;
+}
+
+/* 未読取・ラベル未発行。表の文字と同じ位置・大きさのまま薄く出す。 */
+.patho-reception__pending {
+  color: var(--text);
+}
+
+.patho-reception__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.patho-reception__count {
+  margin-right: auto;
+  font-weight: 600;
+}
+
+/* 誤ったラベルの警告。読み取り欄のすぐ下で目に付くよう大きくする。 */
+.patho-reception__alert .error-banner__line {
+  font-size: 16px;
+  font-weight: 700;
 }
 
 /* 病理部門一覧の検体の列に添える容器の総数と採取の有無。 */

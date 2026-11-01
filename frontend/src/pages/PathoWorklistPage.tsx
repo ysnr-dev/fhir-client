@@ -1,4 +1,5 @@
-import { today } from "../lib/dates";
+import { localDay, today } from "../lib/dates";
+import { readResource } from "../api/fhirClient";
 import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
@@ -8,6 +9,8 @@ import {
   usePathoWorklist,
   useUpdatePathoTaskStatus,
   type PathoWorklistRow,
+  findPathoOrderIdByNumber,
+  useReceivePathoOrder,
 } from "../api/queries";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -44,6 +47,7 @@ import {
   type PathoTaskStatus,
 } from "../fhir/pathoTaskHelpers";
 import { reportStatusDisplay } from "../fhir/pathoResultHelpers";
+import { pathoAccessionNumber } from "../fhir/pathoReceptionHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
 import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
@@ -100,6 +104,7 @@ export function PathoWorklistPage() {
   const worklist = usePathoWorklist(date);
   const departments = useSelfDepartments();
   const updateStatus = useUpdatePathoTaskStatus();
+  const receive = useReceivePathoOrder();
 
   const rows = useMemo(
     () => (worklist.data?.rows ?? []).filter((row) => matchesFilters(row, filters)),
@@ -122,7 +127,37 @@ export function PathoWorklistPage() {
   const selectedMenuActions = selectedRow ? secondaryActionsOf(selectedRow) : [];
 
   function changeStatus(row: PathoWorklistRow, status: PathoTaskStatus) {
+    // 照合しない受付(ケバブの「受付済にする」)でも病理受付番号は振る。
+    if (status === "accepted" && pathoTaskStatus(row.task) === "requested") {
+      receive.mutate({ order: row.order, task: row.task, containers: [] });
+      return;
+    }
     updateStatus.mutate({ order: row.order, task: row.task, status });
+  }
+
+  // 番号(容器のラベル番号か病理受付番号)でオーダーを呼び出す。採取日を合わせて内容を開く。
+  const [lookup, setLookup] = useState("");
+  const [lookupMessage, setLookupMessage] = useState<string | null>(null);
+  async function handleLookup(e: FormEvent) {
+    e.preventDefault();
+    const value = lookup.trim();
+    if (!value) return;
+    setLookupMessage(null);
+    try {
+      const orderId = await findPathoOrderIdByNumber(value);
+      if (!orderId) {
+        setLookupMessage("この番号のオーダーは見つかりません");
+        return;
+      }
+      const { data: order } = await readResource<fhir4.ServiceRequest>("ServiceRequest", orderId);
+      const day = localDay(order.occurrenceDateTime ?? order.authoredOn);
+      if (day) setDate(day);
+      setFilters(emptyFilters);
+      setViewingId(orderId);
+      setLookup("");
+    } catch {
+      setLookupMessage("呼び出せませんでした(通信エラー)");
+    }
   }
 
   // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う(検体検査一覧と同じ考え方)。
@@ -162,6 +197,22 @@ export function PathoWorklistPage() {
       <ErrorBanner error={worklist.error} />
       <ErrorBanner error={departments.error} />
       <ErrorBanner error={updateStatus.error} />
+      <ErrorBanner error={receive.error} />
+
+      <form className="patho-worklist__lookup" onSubmit={(e) => void handleLookup(e)}>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={lookup}
+          onChange={(e) => setLookup(e.target.value)}
+          placeholder="ラベル番号・病理受付番号"
+          aria-label="番号で呼び出し"
+        />
+        <button type="submit" disabled={!lookup.trim()}>
+          呼出
+        </button>
+        {lookupMessage && <span className="patho-worklist__lookup-message">{lookupMessage}</span>}
+      </form>
 
       {worklist.data?.truncated && (
         <p className="error-banner__line error-banner__line--error" role="status">
@@ -197,7 +248,7 @@ export function PathoWorklistPage() {
                     key={row.order.id}
                     row={row}
                     pictograms={pictograms}
-                    pending={updateStatus.isPending}
+                    pending={updateStatus.isPending || receive.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onEnterReport={() => setEnteringId(row.order.id ?? null)}
                     onChangeStatus={(status) => changeStatus(row, status)}
@@ -228,14 +279,14 @@ export function PathoWorklistPage() {
             <>
               <WorklistRowButtons
                 row={selectedRow}
-                pending={updateStatus.isPending}
+                pending={updateStatus.isPending || receive.isPending}
                 onView={() => setViewingId(selectedRow.order.id ?? null)}
                 onEnterReport={() => setEnteringId(selectedRow.order.id ?? null)}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
               <WorklistMenuItems
                 actions={selectedMenuActions}
-                pending={updateStatus.isPending}
+                pending={updateStatus.isPending || receive.isPending}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
             </>
@@ -437,7 +488,12 @@ function WorklistRow({
         )}
       </td>
       <PatientProfileCells patient={patient} />
-      <td className="lab-worklist__compact">{summary.examCategoryDisplay || "-"}</td>
+      <td className="lab-worklist__compact">
+        {summary.examCategoryDisplay || "-"}
+        {pathoAccessionNumber(order) && (
+          <div className="patho-worklist__accession">{`No.${pathoAccessionNumber(order)}`}</div>
+        )}
+      </td>
       <td className="lab-worklist__content">
         {/* 受付で揃っているかを見る数(容器の総数)と、受付前なら採取が記録されたか。 */}
         {specimens.length > 0 ? (
@@ -517,6 +573,12 @@ function WorklistRowButtons({
   const status = pathoTaskStatus(row.task);
   return (
     <>
+      {/* 受付は容器のラベルを全部読んで照合してから(病理受付の画面)。 */}
+      {status === "requested" && (
+        <Link className="button" to={`/patho-reception?order=${encodeURIComponent(row.order.id ?? "")}`}>
+          受付
+        </Link>
+      )}
       {pathoTaskActions(status)
         .filter((action) => !action.secondary)
         .map((action) => (

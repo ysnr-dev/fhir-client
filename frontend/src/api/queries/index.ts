@@ -45,6 +45,7 @@ export * from "./nursingProfile";
 export * from "./surgery";
 export * from "./anesthesia";
 export * from "./patho";
+export * from "./pathoReception";
 export * from "./transfusion";
 export * from "./regimen";
 export * from "./adverseEvent";

@@ -75,6 +75,7 @@ import { MicroAntimicrobialPage } from "./pages/MicroAntimicrobialPage";
 import { MicroSusceptibilityMethodPage } from "./pages/MicroSusceptibilityMethodPage";
 import { MicroSpecimenTypePage } from "./pages/MicroSpecimenTypePage";
 import { PathoWorklistPage } from "./pages/PathoWorklistPage";
+import { PathoReceptionPage } from "./pages/PathoReceptionPage";
 import { TransfusionWorklistPage } from "./pages/TransfusionWorklistPage";
 import { ChemoRoomWorklistPage } from "./pages/ChemoRoomWorklistPage";
 import {
@@ -393,6 +394,7 @@ function App() {
           <Route path="/lab-result-imports" element={<LabResultImportPage />} />
           <Route path="/lab-result-imports/:id" element={<LabResultImportDetailPage />} />
           <Route path="/patho-worklist" element={<PathoWorklistPage />} />
+          <Route path="/patho-reception" element={<PathoReceptionPage />} />
           <Route path="/transfusion-worklist" element={<TransfusionWorklistPage />} />
           <Route path="/rehab-worklist" element={<RehabWorklistPage />} />
           <Route path="/meal-worklist" element={<MealWorklistPage />} />

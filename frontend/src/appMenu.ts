@@ -97,7 +97,14 @@ export const APP_MENU: AppMenuEntry[] = [
           { label: "検査結果取込", to: "/lab-result-imports" },
         ],
       },
-      { label: "病理部門", items: [{ label: "病理検査一覧", to: "/patho-worklist" }] },
+      {
+        label: "病理部門",
+        items: [
+          { label: "病理検査一覧", to: "/patho-worklist" },
+          // 届いた容器のラベルを全部読んで照合してから受け付ける(docs/patho-order-design.md §4.11)。
+          { label: "病理受付", to: "/patho-reception" },
+        ],
+      },
       {
         label: "放射線部門",
         items: [
