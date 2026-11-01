@@ -2,15 +2,19 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
+  useExplanationRows,
   useFollowUpOrderCandidates,
   useFollowUpRows,
+  useReopenExplanation,
   useReopenFollowUp,
   useResolveFollowUp,
   useStaleResultRows,
+  type ExplanationStatusFilter,
   type FollowUpStatusFilter,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { ResultExplanationModal } from "../components/ResultExplanationModal";
 import { PatientKana } from "../components/PatientRowCells";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { notificationRows, type NotificationRow } from "../components/notifications/notificationRegistry";
@@ -24,6 +28,8 @@ import {
   type FollowUpRow,
 } from "../fhir/followUpHelpers";
 import { displayName, patientNumberOf } from "../fhir/patientHelpers";
+import { EXPLANATION_OVERDUE_DAYS, type ExplanationRow } from "../fhir/resultExplanationHelpers";
+import { REVIEW_REPORT_KIND_LABEL } from "../fhir/resultReviewHelpers";
 import { dateTimeSecondsLabel, diffDays, localDay, today } from "../lib/dates";
 import { KARTE_TAB_PARAM } from "../karteUrl";
 import { useReturnLinkState } from "../returnTo";
@@ -32,14 +38,17 @@ import { useReturnLinkState } from "../returnTo";
 //
 //   フォロー推奨   … 検査レポートの「6 か月後に再検」のような推奨を期限の近い順に並べ、対応を記録する
 //   未確認の結果   … 通知日から一定の日数が経っても確認されていない検査結果の通知
+//   患者説明       … 確定した病理診断レポートのうち、患者への説明を記録していないもの
 //
-// どちらも既定は自分あて。宛先の決まらないもの(オーダーに紐付かない結果)は外すと出る。
+// どれも既定は自分あて。宛先の決まらないもの(オーダーに紐付かない結果)は外すと出る。
+// 外せばチームの医師・看護師や医療安全の担当が施設全体の未説明を確かめられる。
 
-type Tab = "follow-up" | "stale";
+type Tab = "follow-up" | "stale" | "explanation";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "follow-up", label: "フォロー推奨" },
   { key: "stale", label: "未確認の結果" },
+  { key: "explanation", label: "患者説明" },
 ];
 
 export function ResultFollowupPage() {
@@ -91,7 +100,13 @@ export function ResultFollowupPage() {
         ))}
       </div>
 
-      {tab === "follow-up" ? <FollowUpTab ownerId={ownerId} /> : <StaleResultTab ownerId={ownerId} />}
+      {tab === "follow-up" ? (
+        <FollowUpTab ownerId={ownerId} />
+      ) : tab === "stale" ? (
+        <StaleResultTab ownerId={ownerId} />
+      ) : (
+        <ExplanationTab ownerId={ownerId} />
+      )}
     </div>
   );
 }
@@ -402,5 +417,142 @@ function StaleResultRow({
         )}
       </td>
     </tr>
+  );
+}
+
+// ---- 患者説明 ----
+
+function explanationKarteLink(row: ExplanationRow): string | null {
+  if (!row.patientId) return null;
+  const params = new URLSearchParams();
+  params.set(KARTE_TAB_PARAM, row.kind);
+  if (row.reportId) params.set("view", row.reportId);
+  return `/patients/${row.patientId}/karte?${params.toString()}`;
+}
+
+function ExplanationTab({ ownerId }: { ownerId: string | null }) {
+  const [status, setStatus] = useState<ExplanationStatusFilter>("requested");
+  const [importantOnly, setImportantOnly] = useState(false);
+  const query = useExplanationRows(status, ownerId);
+  const reopen = useReopenExplanation();
+  const [recording, setRecording] = useState<ExplanationRow | null>(null);
+  const linkState = useReturnLinkState();
+  const open = status === "requested";
+  const rows = (query.data?.rows ?? []).filter((row) => !importantOnly || row.importance);
+
+  return (
+    <>
+      <div className="notification__actions-bar result-followup__filters">
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value as ExplanationStatusFilter)}
+          aria-label="状態"
+        >
+          <option value="requested">未説明</option>
+          <option value="completed">記録済</option>
+        </select>
+        <label className="notification__filter">
+          <input
+            type="checkbox"
+            checked={importantOnly}
+            onChange={(event) => setImportantOnly(event.target.checked)}
+          />
+          重要度ありのみ
+        </label>
+      </div>
+
+      <ErrorBanner error={query.error} />
+      <ErrorBanner error={reopen.error} />
+      <TruncatedNotice show={query.data?.truncated} />
+
+      <div className="notification__table-wrap">
+        <table className="master-search__table notification">
+          <thead>
+            <tr>
+              <th className="notification__compact">{open ? "報告日" : "記録日"}</th>
+              {open && <th className="notification__compact">経過</th>}
+              <th className="notification__compact">患者番号</th>
+              <th>氏名</th>
+              <th className="notification__compact">種別</th>
+              <th className="notification__compact">対象日</th>
+              <th className="notification__content">内容</th>
+              {open ? (
+                <th>宛先</th>
+              ) : (
+                <>
+                  <th className="notification__compact">対応</th>
+                  <th className="notification__compact">説明日</th>
+                  <th>記録者</th>
+                </>
+              )}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const karteLink = explanationKarteLink(row);
+              return (
+                <tr key={row.task.id}>
+                  <td className="notification__compact">{open ? row.issuedOn : row.recordedOn}</td>
+                  {open && (
+                    <td className="notification__compact">
+                      <span className={row.daysSince >= EXPLANATION_OVERDUE_DAYS ? "notification__overdue" : undefined}>
+                        {row.daysSince} 日
+                      </span>
+                    </td>
+                  )}
+                  <PatientCells patient={row.patient} patientId={row.patientId} />
+                  <td className="notification__compact">{REVIEW_REPORT_KIND_LABEL[row.kind]}</td>
+                  <td className="notification__compact">{row.date}</td>
+                  <td className="notification__content">
+                    {[row.importance, row.statusLabel].filter(Boolean).map((flag) => (
+                      <span key={flag} className="micro-result__badge notification__review-flag">
+                        {flag}
+                      </span>
+                    ))}
+                    {row.summary}
+                    {row.memo && <div className="result-followup__memo">{row.memo}</div>}
+                  </td>
+                  {open ? (
+                    <td>{row.ownerName || "(宛先なし)"}</td>
+                  ) : (
+                    <>
+                      <td className="notification__compact">{row.resolution}</td>
+                      <td className="notification__compact">{row.explainedOn || "-"}</td>
+                      <td>{row.recordedBy}</td>
+                    </>
+                  )}
+                  <td className="master-search__actions notification__actions">
+                    {karteLink && (
+                      <Link className="button" to={karteLink} state={linkState}>
+                        カルテ
+                      </Link>
+                    )}
+                    {open ? (
+                      <button type="button" onClick={() => setRecording(row)}>
+                        記録
+                      </button>
+                    ) : (
+                      <button type="button" disabled={reopen.isPending} onClick={() => reopen.mutate(row)}>
+                        未説明に戻す
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {!query.isLoading && rows.length === 0 && (
+              <tr>
+                <td colSpan={12} className="master-search__empty">
+                  {open ? "未説明の検査結果はありません" : "記録済みの患者説明はありません"}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {recording && <ResultExplanationModal row={recording} onClose={() => setRecording(null)} />}
+    </>
   );
 }

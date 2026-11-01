@@ -4,9 +4,11 @@ import {
   buildNotificationTask,
   notificationTaskEntry,
   taskInputOf,
+  taskInputsOf,
   taskOwnerName,
   taskPatientId,
   type NotificationRowBase,
+  type NotificationSeverity,
 } from "./notificationHelpers";
 
 // 検査結果の確認(既読)の通知。
@@ -24,6 +26,9 @@ import {
 // 同じ結果に緊急の通知(検体検査の緊急異常値・検査レポートの重要所見)が未確認で出ている間は、
 // この通知を作らない(urgentAwareReviewTaskEntries)。宛先が同じ依頼医で、2 回確認させる
 // ことになるため。緊急の通知を確認するときに、最終報告なら既読の来歴も一緒に残す。
+//
+// 強度は既定でお知らせ。病理の重要度(悪性・悪性疑い)のように、読むのが遅れると害が出る結果は
+// 呼び出し側がアラートにする(緊急の通知を別に作らず、この通知の強度を上げる)。
 
 export const RESULT_REVIEW_TASK_CODE = { code: "result-review", display: "検査結果確認" };
 
@@ -51,6 +56,7 @@ export const REVIEW_REPORT_KIND_LABEL: Record<ReviewReportKind, string> = {
 const KIND_INPUT = "種別";
 const DATE_INPUT = "対象日";
 const SUMMARY_INPUT = "内容";
+const FLAG_INPUT = "印";
 
 export interface ResultReviewTaskInput {
   /** 焦点。同じ transaction 内で作るレポートは urn:uuid、更新は DiagnosticReport/{id}。 */
@@ -65,6 +71,10 @@ export interface ResultReviewTaskInput {
   summary: string;
   /** 元になったオーダー。オーダー側から未確認を引けるようにする。 */
   basedOn?: fhir4.Reference[];
+  /** 通知の強度。既定はお知らせ。 */
+  severity?: NotificationSeverity;
+  /** 内容の前に添える印(「悪性」「追加報告」など)。 */
+  flags?: string[];
 }
 
 export function buildResultReviewTask(
@@ -75,17 +85,18 @@ export function buildResultReviewTask(
   return buildNotificationTask(
     {
       code: RESULT_REVIEW_TASK_CODE,
-      // 結果を読むのは診療の通常の仕事で、急がせる種類の通知ではない。
-      severity: "info",
+      // 結果を読むのは診療の通常の仕事で、既定では急がせる種類の通知ではない。
+      severity: input.severity ?? "info",
       focusReference: input.reportReference,
       patientId: input.patientId,
       owner: input.owner,
       basedOn: input.basedOn,
-      description: [kindLabel, input.date, input.summary].filter(Boolean).join(" "),
+      description: [kindLabel, input.date, ...(input.flags ?? []), input.summary].filter(Boolean).join(" "),
       input: [
         { type: { text: KIND_INPUT }, valueString: input.kind },
         { type: { text: DATE_INPUT }, valueDate: input.date },
         { type: { text: SUMMARY_INPUT }, valueString: input.summary },
+        ...(input.flags ?? []).map((flag) => ({ type: { text: FLAG_INPUT }, valueString: flag })),
       ],
     },
     existing,
@@ -148,6 +159,7 @@ export interface ResultReviewRow extends NotificationRowBase {
   kind: ReviewReportKind;
   date: string;
   summary: string;
+  flags: string[];
 }
 
 export function resultReviewRowOf(
@@ -165,5 +177,6 @@ export function resultReviewRowOf(
     kind,
     date: taskInputOf(task, DATE_INPUT)?.valueDate ?? "",
     summary: taskInputOf(task, SUMMARY_INPUT)?.valueString ?? "",
+    flags: taskInputsOf(task, FLAG_INPUT).flatMap((input) => (input.valueString ? [input.valueString] : [])),
   };
 }

@@ -8,7 +8,21 @@ import {
   type FollowUpResolutionInput,
   type FollowUpRow,
 } from "../../fhir/followUpHelpers";
-import { splitNotificationBundle } from "../../fhir/notificationHelpers";
+import {
+  buildCompletedNotificationTask,
+  completeNotificationEntry,
+  splitNotificationBundle,
+} from "../../fhir/notificationHelpers";
+import { buildReviewProvenance, reviewProvenanceEntry } from "../../fhir/provenanceHelpers";
+import {
+  explanationRowOf,
+  RESULT_EXPLANATION_TASK_CODE,
+  recordExplanationEntry,
+  reopenExplanationEntry,
+  type ExplanationRecordInput,
+  type ExplanationRow,
+} from "../../fhir/resultExplanationHelpers";
+import { RESULT_REVIEW_NOTE, RESULT_REVIEW_TASK_CODE } from "../../fhir/resultReviewHelpers";
 import { EXAM_REPORT_CONFIGS, EXAM_REPORT_KIND_OF_ORDER } from "../../fhir/examReportHelpers";
 import { departmentOrderKindOf, ORDER_KIND_CORE, ORDER_KIND_LABELS, type OrderKind } from "../../fhir/orderKinds";
 import { isOrderItemRequest, labOrderItemRequests } from "../../fhir/labOrderHelpers";
@@ -17,14 +31,16 @@ import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import { addDays, localDay, today } from "../../lib/dates";
 import { postBundle, searchResource } from "../fhirClient";
 import { NOTIFICATION_TASK_KEY, searchAllPages } from "./core";
+import { fetchReportTasks } from "./notification";
 import { useOrderEnterer } from "./provenance";
 
-// 検査結果フォロー(docs/result-followup-design.md)。フォロー推奨の台帳と、確認されないまま
-// 日数が経った検査結果の通知を引く。どちらも Task なので、通知の書き込みで一緒に読み直す
-// (キーを NOTIFICATION_TASK_KEY の下に置く)。
+// 検査結果フォロー(docs/result-followup-design.md)。フォロー推奨の台帳、確認されないまま
+// 日数が経った検査結果の通知、患者説明の台帳を引く。どれも Task なので、通知の書き込みで一緒に
+// 読み直す(キーを NOTIFICATION_TASK_KEY の下に置く)。
 
 const FOLLOW_UP_KEY = [...NOTIFICATION_TASK_KEY, "followup"];
 const STALE_KEY = [...NOTIFICATION_TASK_KEY, "stale"];
+const EXPLANATION_KEY = [...NOTIFICATION_TASK_KEY, "explanation"];
 
 const FOLLOW_UP_PAGE = 500;
 /** 未対応は件数と期限順の並べ替えに全件が要る(医師 1 人あたり数十件の想定)。 */
@@ -223,5 +239,104 @@ export function useStaleResultCount(codes: string, days: number, ownerId: string
       return data.total ?? 0;
     },
     staleTime: 60_000,
+  });
+}
+
+// ---- 患者説明 ----
+
+export type ExplanationStatusFilter = "requested" | "completed";
+
+/** 未説明は経過日数の色分けと件数に全件が要る(医師 1 人あたり数十件の想定)。 */
+const EXPLANATION_OPEN_MAX_PAGES = 4;
+const EXPLANATION_DONE_MAX_PAGES = 1;
+
+/**
+ * 患者説明の台帳。未説明は台帳に載った古い順(上流の並べ替えは最終更新)、説明済は記録の新しい順。
+ */
+export function useExplanationRows(status: ExplanationStatusFilter, ownerId: string | null | undefined) {
+  return useQuery({
+    queryKey: [...EXPLANATION_KEY, status, ownerId ?? "all"],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("code", `${TASK_CODE_SYSTEM}|${RESULT_EXPLANATION_TASK_CODE.code}`);
+      params.set("status", status);
+      if (ownerId) params.set("owner", `Practitioner/${ownerId}`);
+      params.set("_include", "Task:subject");
+      params.set("_sort", status === "requested" ? "modified" : "-modified");
+      const result = await searchAllPages<fhir4.Task>("Task", params, {
+        page: FOLLOW_UP_PAGE,
+        maxPages: status === "requested" ? EXPLANATION_OPEN_MAX_PAGES : EXPLANATION_DONE_MAX_PAGES,
+        complete: status === "requested",
+      });
+      const patients = new Map<string, fhir4.Patient>();
+      for (const bundle of result.bundles) {
+        for (const [id, patient] of splitNotificationBundle(bundle).patients) patients.set(id, patient);
+      }
+      const rows = result.matches.map((task) =>
+        explanationRowOf(task, patients.get(task.for?.reference?.split("/").pop() ?? "")),
+      );
+      return { rows, truncated: result.truncated };
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** レポートの患者説明の台帳。カルテの検査結果タブで説明を記録・表示する。無ければ null。 */
+export function useReportExplanation(reportId: string | undefined) {
+  return useQuery({
+    queryKey: [...EXPLANATION_KEY, "report", reportId],
+    queryFn: async () => {
+      const task = (await fetchReportTasks(reportId ?? "", [RESULT_EXPLANATION_TASK_CODE.code])).get(
+        RESULT_EXPLANATION_TASK_CODE.code,
+      );
+      return task && task.status !== "cancelled" ? explanationRowOf(task, undefined) : null;
+    },
+    enabled: Boolean(reportId),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * 患者への説明を記録する。説明したなら結果も読んでいるので、検査結果確認が未確認なら
+ * 既読の来歴と通知の完了も同じ transaction で残す。
+ */
+export function useRecordExplanation() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+  return useMutation({
+    mutationFn: async ({ row, input }: { row: ExplanationRow; input: ExplanationRecordInput }) => {
+      if (!enterer) throw new Error("医療従事者に紐付いたアカウントでログインしてください");
+      const review = row.reportId
+        ? (await fetchReportTasks(row.reportId, [RESULT_REVIEW_TASK_CODE.code])).get(RESULT_REVIEW_TASK_CODE.code)
+        : undefined;
+      const reviewEntries =
+        review?.status === "requested"
+          ? [
+              reviewProvenanceEntry(buildReviewProvenance(`DiagnosticReport/${row.reportId}`, enterer)),
+              completeNotificationEntry(buildCompletedNotificationTask(review, enterer, RESULT_REVIEW_NOTE)),
+            ]
+          : [];
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [recordExplanationEntry(row.task, enterer, input), ...reviewEntries],
+      });
+    },
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Provenance"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+    },
+  });
+}
+
+/** 説明の記録を取り消して未説明に戻す。 */
+export function useReopenExplanation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (row: ExplanationRow) =>
+      postBundle({ resourceType: "Bundle", type: "transaction", entry: [reopenExplanationEntry(row.task)] }),
+    retry: false,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY }),
   });
 }

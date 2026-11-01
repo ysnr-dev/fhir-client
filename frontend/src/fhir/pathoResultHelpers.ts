@@ -39,9 +39,12 @@ import {
 // 独立 Specimen を作る(オーダーは予定、レポートは実績)。
 //
 // 報告の確定は status で表す。中間報告(preliminary)→ 最終報告(final)→ 確定後の
-// 修正は amended。amended への遷移は build 側が自動で行う(診療記録
-// clinicalNoteHelpers と同じ規約。確定した記録を編集したのに final のままだと、
-// 後から見て「一度も直していない最終報告」と区別が付かなくなるため)。
+// 編集は訂正報告(amended)か追加報告(appended)。確定後の保存では final に戻さず、
+// どちらかを選ばせる(JAHIS 患者安全ガイド 病理編 7.5.3。報告書のステータスで
+// 追加診断と訂正診断を見分けられるようにする)。
+//
+// 診断医は resultsInterpreter に最大 3 名(同ガイド 7.4.3)、重要度(悪性・悪性疑い)は
+// 拡張 patho-report-importance に持つ(同 7.5.3)。
 
 // ---- コードシステム ----
 
@@ -67,6 +70,10 @@ const REPORT_IMAGE_KIND_SYSTEM = "http://fhir-client.local/CodeSystem/patho-repo
 // (docs/patho-order-design.md §4.7)。診断 Observation の valueString にはその平文が入る。
 export const DIAGNOSIS_RESPONSE_EXT_URL =
   "http://fhir-client.local/StructureDefinition/patho-diagnosis-response";
+// 重要度(悪性・悪性疑い)。検査結果確認の通知をアラートにし、カルテで目立たせる。
+const REPORT_IMPORTANCE_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/patho-report-importance";
+const REPORT_IMPORTANCE_SYSTEM = "http://fhir-client.local/CodeSystem/patho-report-importance";
 // 推定病変(細胞診の診断 Observation の component)。
 const RESULT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/patho-result-item";
 const CODE_ESTIMATED_LESION = "estimated-lesion";
@@ -82,19 +89,53 @@ const SPECIMEN_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Spec
 export type { CodeOption };
 
 /**
- * 報告区分。preliminary/final はユーザーが選び、確定後の編集保存で amended に遷移する
- * (遷移は build 側が行うので、フォームの選択肢は中間・最終の 2 つ)。
+ * 報告区分。未確定のレポートは中間・最終から選び、確定済み(最終・訂正・追加)のレポートを
+ * 編集したときは訂正・追加から選ぶ。
  */
-export type PathoReportStatus = "preliminary" | "final" | "amended";
+export type PathoReportStatus = "preliminary" | "final" | "amended" | "appended";
 
 export const REPORT_STATUS_OPTIONS: { code: "preliminary" | "final"; display: string }[] = [
   { code: "preliminary", display: "中間報告" },
   { code: "final", display: "最終報告" },
 ];
 
+/** 確定済みのレポートを直すときの報告区分。 */
+export const REVISION_STATUS_OPTIONS: { code: "amended" | "appended"; display: string }[] = [
+  { code: "amended", display: "訂正報告" },
+  { code: "appended", display: "追加報告" },
+];
+
 export function reportStatusDisplay(status: string | undefined): string {
-  if (status === "amended") return "修正報告";
-  return REPORT_STATUS_OPTIONS.find((o) => o.code === status)?.display ?? "";
+  return (
+    [...REPORT_STATUS_OPTIONS, ...REVISION_STATUS_OPTIONS].find((o) => o.code === status)?.display ?? ""
+  );
+}
+
+/** 確定後に直した報告(訂正・追加)か。カードと内容表示で目立たせる。 */
+export function isRevisedReportStatus(status: string | undefined): boolean {
+  return status === "amended" || status === "appended";
+}
+
+/** 診断医の上限(JAHIS 患者安全ガイド 病理編 7.4.3「最大 3 名程度」)。 */
+export const MAX_PATHO_INTERPRETERS = 3;
+
+/** 重要度。空は指定なし。 */
+export type PathoReportImportance = "" | "suspicious" | "malignant";
+
+export const REPORT_IMPORTANCE_OPTIONS: { code: Exclude<PathoReportImportance, "">; display: string }[] = [
+  { code: "suspicious", display: "悪性疑い" },
+  { code: "malignant", display: "悪性" },
+];
+
+export function reportImportanceDisplay(code: string | undefined): string {
+  return REPORT_IMPORTANCE_OPTIONS.find((o) => o.code === code)?.display ?? "";
+}
+
+/** 細胞診の判定から決まる重要度。判定を選んだときの初期値にする。 */
+export function importanceForCytoJudgement(judgement: string): PathoReportImportance {
+  if (judgement === "malignant") return "malignant";
+  if (judgement === "suspicious") return "suspicious";
+  return "";
 }
 
 /** 細胞診の判定。 */
@@ -124,6 +165,12 @@ export function reportImageKindDisplay(code: string): string {
 
 // ---- フォーム値 ----
 
+/** 診断医 1 名。空の欄は practitionerId が空。 */
+export interface PathoInterpreterValues {
+  practitionerId: string;
+  name: string;
+}
+
 /** レポートに載せる検体 1 件。臓器・検体タイプはオーダーからの転記。 */
 export interface PathoResultSpecimenValues {
   /** 保存済み Specimen の id。新規は undefined。 */
@@ -151,8 +198,15 @@ export interface PathoResultFormValues {
    * 「オーダー 1 件 ↔ レポート 1 件」で持つ(検体検査・細菌検査と同じ)。
    */
   orderId: string;
-  /** 報告区分。中間のまま保存して、後の編集で最終化できる。 */
-  reportStatus: "preliminary" | "final";
+  /**
+   * 報告区分。中間のまま保存して、後の編集で最終化できる。確定済みのレポートの編集では
+   * 訂正・追加を選ぶ(読み込み直後は空で、選ぶまで保存させない)。
+   */
+  reportStatus: PathoReportStatus | "";
+  /** 診断医(MAX_PATHO_INTERPRETERS 欄。先頭が主たる診断医)。 */
+  interpreters: PathoInterpreterValues[];
+  /** 重要度。 */
+  importance: PathoReportImportance;
   /** 検査区分。診断欄の形(組織診=自由文 / 細胞診=判定+推定病変)を決める。 */
   examCategory: PathoExamCategory;
   /** 検体(オーダーから転記。実採取日だけ結果側で入れ直す)。 */
@@ -216,6 +270,8 @@ export function emptyPathoResultForm(
     departmentName: "",
     orderId: "",
     reportStatus: "final",
+    interpreters: emptyPathoInterpreters(),
+    importance: "",
     examCategory: "N000",
     specimens: [],
     gross: "",
@@ -227,6 +283,13 @@ export function emptyPathoResultForm(
     procedureStep: "",
     images: [],
   };
+}
+
+/** 診断医の欄(MAX_PATHO_INTERPRETERS 欄)。first を渡すと先頭に入れる。 */
+export function emptyPathoInterpreters(first?: PathoInterpreterValues): PathoInterpreterValues[] {
+  return Array.from({ length: MAX_PATHO_INTERPRETERS }, (_, i) =>
+    i === 0 && first ? first : { practitionerId: "", name: "" },
+  );
 }
 
 /** 画像のキャプション。説明があれば「種別: 説明」、無ければ種別だけ。 */
@@ -257,18 +320,25 @@ export function groupReportImagesByKind(
   });
 }
 
-/**
- * 保存後のレポート status。確定(final)・修正済(amended)のレポートを編集保存したら
- * amended に遷移させる(診療記録 clinicalNoteHelpers と同じ規約)。
- */
-export function nextReportStatus(values: PathoResultFormValues): PathoReportStatus {
-  const original = values.originalStatus;
-  return original && original !== "preliminary" ? "amended" : values.reportStatus;
+/** 確定済みのレポートを編集しているか。報告区分の選択肢が訂正・追加になる。 */
+export function isRevisingConfirmedReport(values: PathoResultFormValues): boolean {
+  return Boolean(values.originalStatus) && values.originalStatus !== "preliminary";
 }
 
-/** 保存すると修正報告になるか(フォームで注意書きを出すために使う)。 */
-export function willBecomeAmended(values: PathoResultFormValues): boolean {
-  return nextReportStatus(values) === "amended";
+/**
+ * 保存後のレポート status。確定済みのレポートは final に戻さない(選び忘れは画面で止めるが、
+ * 万一空なら訂正報告として扱う)。
+ */
+export function nextReportStatus(values: PathoResultFormValues): PathoReportStatus {
+  if (isRevisingConfirmedReport(values)) {
+    return values.reportStatus === "appended" ? "appended" : "amended";
+  }
+  return values.reportStatus === "preliminary" ? "preliminary" : "final";
+}
+
+/** 入力済みの診断医(空欄を除き、欄の順)。 */
+export function filledInterpreters(values: PathoResultFormValues): PathoInterpreterValues[] {
+  return values.interpreters.filter((interpreter) => interpreter.practitionerId);
 }
 
 // ---- FHIR リソースの組み立て ----
@@ -276,7 +346,7 @@ export function willBecomeAmended(values: PathoResultFormValues): boolean {
 interface ObservationContext {
   patientId: string;
   effective: string;
-  status: PathoReportStatus;
+  status: fhir4.Observation["status"];
   specimenReferences: fhir4.Reference[];
 }
 
@@ -554,7 +624,8 @@ function buildPathoResultTransactionBundle(
   const ctx: ObservationContext = {
     patientId,
     effective,
-    status,
+    // Observation.status に appended は無い。追加報告で書き直した所見は確定後の変更なので amended にする。
+    status: status === "appended" ? "amended" : status,
     specimenReferences,
   };
 
@@ -613,12 +684,31 @@ function buildPathoResultTransactionBundle(
       ...(diagnosisResponse
         ? [{ url: DIAGNOSIS_RESPONSE_EXT_URL, valueReference: { reference: diagnosisResponse } }]
         : []),
+      ...(values.importance
+        ? [
+            {
+              url: REPORT_IMPORTANCE_EXT_URL,
+              valueCoding: {
+                system: REPORT_IMPORTANCE_SYSTEM,
+                code: values.importance,
+                display: reportImportanceDisplay(values.importance),
+              },
+            },
+          ]
+        : []),
     ],
     // 元になった病理検査オーダー。オーダーの明細ではなくヘッダを指す。
     basedOn: values.orderId ? [{ reference: `ServiceRequest/${values.orderId}` }] : undefined,
     specimen: specimenReferences.length > 0 ? specimenReferences : undefined,
     result: resultReferences,
   };
+  const interpreters = filledInterpreters(values);
+  if (interpreters.length > 0) {
+    report.resultsInterpreter = interpreters.map((interpreter) => ({
+      reference: `Practitioner/${interpreter.practitionerId}`,
+      display: interpreter.name || undefined,
+    }));
+  }
   if (reportId) report.id = reportId;
 
   const removedObservationEntries: fhir4.BundleEntry[] = (originalObservationIds ?? [])
@@ -782,6 +872,20 @@ export function reportExamCategory(report: fhir4.DiagnosticReport): PathoExamCat
   return categoryCoding(report, REPORT_CATEGORY_SYSTEM)?.code === "CP" ? "N004" : "N000";
 }
 
+/** レポートの重要度。指定なしは空。 */
+export function pathoReportImportance(report: fhir4.DiagnosticReport | undefined): PathoReportImportance {
+  const code = report?.extension?.find((e) => e.url === REPORT_IMPORTANCE_EXT_URL)?.valueCoding?.code;
+  return code === "malignant" || code === "suspicious" ? code : "";
+}
+
+/** レポートの診断医(保存した順)。 */
+export function pathoReportInterpreters(report: fhir4.DiagnosticReport): PathoInterpreterValues[] {
+  return (report.resultsInterpreter ?? []).flatMap((reference) => {
+    const practitionerId = reference.reference?.match(/^Practitioner\/(.+)$/)?.[1];
+    return practitionerId ? [{ practitionerId, name: reference.display ?? "" }] : [];
+  });
+}
+
 /** レポートに添えられた画像。拡張の並び順(=登録順)をそのまま返す。 */
 export function pathoReportImages(
   report: fhir4.DiagnosticReport,
@@ -817,9 +921,12 @@ export function parsePathoResultForm(
   values.departmentId = department.departmentId;
   values.departmentName = department.departmentName;
   values.orderId = pathoOrderIdFromReport(report);
-  // 修正報告は最終報告として編集を続ける(次の保存でまた amended になる)。
-  values.reportStatus = report.status === "preliminary" ? "preliminary" : "final";
+  // 確定済みのレポートは訂正・追加のどちらとして直すかを毎回選ばせる。
+  values.reportStatus = report.status === "preliminary" ? "preliminary" : "";
   values.originalStatus = report.status as PathoReportStatus;
+  const interpreters = pathoReportInterpreters(report).slice(0, MAX_PATHO_INTERPRETERS);
+  values.interpreters = emptyPathoInterpreters().map((empty, i) => interpreters[i] ?? empty);
+  values.importance = pathoReportImportance(report);
   values.examCategory = reportExamCategory(report);
   values.specimens = specimens.map(parseSpecimen);
   values.images = pathoReportImages(report);

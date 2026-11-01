@@ -143,7 +143,7 @@
 - **自己血採血**(新規、中): 輸血オーダーの検査区分に `autologous-collection`、採血 `Procedure`(採血量)、採取製剤を `MedicationDispense` で台帳化して払出候補に。ラベルは検体ラベルの `.tlf` 流用。
 - **不規則抗体陽性の警告・T&S 選択時の血液型検査の自動併発**(拡張、中): `transfusion-order-design.md` §7 既載。
 - **病理の標本番号採番と標本ラベル**(拡張、高): 検体検査と同じ上流 `Specimen` 台帳 + `accessionIdentifier`、ラベル(枚数・枝番・染色名)の `.tlf` 1 枚。`patho-order-design.md` §8-1 既載。
-- **病理の診断医・ブロック数・細胞診の Screener**(拡張、中〜高): `DiagnosticReport.performer` / `resultsInterpreter`、`Observation.performer` + `function`、ブロック数は `Specimen.container` 数。
+- **病理の診断医・ブロック数・細胞診の Screener**(拡張、中〜高): `DiagnosticReport.performer` / `resultsInterpreter`、`Observation.performer` + `function`、ブロック数は `Specimen.container` 数。**診断医(最大 3 名、`resultsInterpreter`)は対応済み(2026-11-01、`patho-order-design.md` §4.8)。ブロック数・Screener は残り**。
 - **内視鏡 ⇄ 病理の相互参照**(拡張、高): 所見レポートに「病理オーダー」ボタン、`ServiceRequest.supportingInfo` に元レポート、`DiagnosticReport?based-on` で逆引きして `ExamReportDetailPanel` に「関連病理」区画。婦人科細胞診の最終月経・妊娠出産回数はテンプレート初期値変数で。
 - **検体検査オーダーの運用チェック**(拡張、中〜高): 同日既発行項目の重複警告(`lab-backlog.md` C-1 既載)、依頼可能曜日・外注締切、採血場所、負荷検査、項目ごとの注意文。項目マスタに `notice` / `available_weekdays` / `collection_site` を列追加。
 - **検体ラベルの病棟一括発行**(拡張、高): 病棟 × 採取日で一括、科ごとの一括、区切りラベル、細菌・病理・輸血のラベル、発行済み一覧(`lab-label-design.md` §7-7 既載)。`ServiceRequest?order-ward=&occurrence=` で集めて複数 id を渡す経路。

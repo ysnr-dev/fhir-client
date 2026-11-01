@@ -8,7 +8,24 @@ import {
   pathoOrderLabel,
   pathoOrderResponseIds,
 } from "../../fhir/pathoOrderHelpers";
-import { buildPathoResultDeleteBundle, pathoReportResponseIds } from "../../fhir/pathoResultHelpers";
+import {
+  buildPathoResultDeleteBundle,
+  isRevisedReportStatus,
+  pathoReportImportance,
+  pathoReportResponseIds,
+  reportImportanceDisplay,
+  reportStatusDisplay,
+} from "../../fhir/pathoResultHelpers";
+import { buildCancelledNotificationTask, notificationTaskEntry } from "../../fhir/notificationHelpers";
+import {
+  isReviewableReportStatus,
+  RESULT_REVIEW_TASK_CODE,
+  resultReviewTaskEntries,
+} from "../../fhir/resultReviewHelpers";
+import {
+  RESULT_EXPLANATION_TASK_CODE,
+  resultExplanationEntries,
+} from "../../fhir/resultExplanationHelpers";
 import { buildPathoTaskUpdate, pathoTasksByOrderId, type PathoTaskStatus } from "../../fhir/pathoTaskHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { postBundle, readResource } from "../fhirClient";
@@ -21,7 +38,7 @@ import {
   useResultSummariesQuery,
 } from "./labResult";
 import { pathoReviewSummary } from "./micro";
-import { withResultReviewTask } from "./notification";
+import { fetchOrderRequester, fetchReportTasks } from "./notification";
 import {
   comparePatientNumber,
   deleteOrderWithItems,
@@ -206,13 +223,70 @@ export function usePathoResultDetail(reportId: string | undefined) {
   return useLabResultDetail(reportId);
 }
 
+/**
+ * レポート保存の Bundle に通知と台帳を足す。宛先(依頼医)と既存の 2 つはここで引く。
+ *
+ * - 検査結果確認: 確定(最終・訂正・追加報告)したとき。重要度(悪性・悪性疑い)があればアラートにし、
+ *   重要度と訂正・追加の別を印として添える
+ * - 患者説明: 確定したときに台帳へ載せる。確定後に直したら説明済みでも未説明に戻す
+ */
+async function withPathoReportTasks(bundle: fhir4.Bundle): Promise<fhir4.Bundle> {
+  const entry = bundle.entry ?? [];
+  const reportEntry = entry.find((e) => e.resource?.resourceType === "DiagnosticReport");
+  const report = reportEntry?.resource as fhir4.DiagnosticReport | undefined;
+  const reference = report?.id ? `DiagnosticReport/${report.id}` : reportEntry?.fullUrl;
+  if (!report || !reference || !isReviewableReportStatus(report.status)) return bundle;
+
+  const patientId = report.subject?.reference?.split("/").pop() ?? "";
+  const orderReference = report.basedOn?.[0]?.reference;
+  const orderId = orderReference?.split("/").pop();
+  const [owner, tasks] = await Promise.all([
+    orderId ? fetchOrderRequester(orderId) : Promise.resolve(undefined),
+    report.id
+      ? fetchReportTasks(report.id, [RESULT_REVIEW_TASK_CODE.code, RESULT_EXPLANATION_TASK_CODE.code])
+      : Promise.resolve(new Map<string, fhir4.Task>()),
+  ]);
+
+  const date = report.effectiveDateTime?.slice(0, 10) ?? "";
+  const summary = pathoReviewSummary(report);
+  const basedOn = orderReference ? [{ reference: orderReference }] : undefined;
+  const importance = reportImportanceDisplay(pathoReportImportance(report));
+  const statusLabel = isRevisedReportStatus(report.status) ? reportStatusDisplay(report.status) : "";
+
+  return {
+    ...bundle,
+    entry: [
+      ...entry,
+      ...resultReviewTaskEntries(
+        {
+          reportReference: reference,
+          patientId,
+          owner,
+          kind: "patho",
+          date,
+          summary,
+          basedOn,
+          severity: importance ? "alert" : "info",
+          flags: [importance, statusLabel].filter(Boolean),
+        },
+        true,
+        tasks.get(RESULT_REVIEW_TASK_CODE.code),
+      ),
+      ...resultExplanationEntries(
+        { reportReference: reference, patientId, owner, kind: "patho", date, summary, importance, statusLabel, basedOn },
+        true,
+        tasks.get(RESULT_EXPLANATION_TASK_CODE.code),
+      ),
+    ],
+  };
+}
+
 // 病理レポートを保存・削除するとオーダーの紐付け状況が変わるため、
 // 病理オーダーの候補(["ServiceRequest", "search"] 配下)も無効化する。
 export function useCreatePathoResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (bundle: fhir4.Bundle) =>
-      postBundle(await withResultReviewTask(bundle, "patho", pathoReviewSummary)),
+    mutationFn: async (bundle: fhir4.Bundle) => postBundle(await withPathoReportTasks(bundle)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
@@ -225,8 +299,7 @@ export function useCreatePathoResult() {
 export function useUpdatePathoResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (bundle: fhir4.Bundle) =>
-      postBundle(await withResultReviewTask(bundle, "patho", pathoReviewSummary)),
+    mutationFn: async (bundle: fhir4.Bundle) => postBundle(await withPathoReportTasks(bundle)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
@@ -237,23 +310,29 @@ export function useUpdatePathoResult() {
   });
 }
 
+/**
+ * レポートの削除。所見・検体・テンプレート回答を消し、未確認の検査結果確認と未説明の患者説明を
+ * 取り下げる(削除したレポートを指す通知・台帳が残らないようにする)。
+ */
 export function useDeletePathoResult() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (reportId: string) => {
       // 削除対象の Observation / Specimen は DiagnosticReport の参照から辿る。
-      const { data: report } = await readResource<fhir4.DiagnosticReport>(
-        "DiagnosticReport",
+      const [{ data: report }, tasks] = await Promise.all([
+        readResource<fhir4.DiagnosticReport>("DiagnosticReport", reportId),
+        fetchReportTasks(reportId, [RESULT_REVIEW_TASK_CODE.code, RESULT_EXPLANATION_TASK_CODE.code]),
+      ]);
+      const deleteBundle = buildPathoResultDeleteBundle(
         reportId,
+        observationIdsFromReport(report),
+        specimenIdsFromReport(report),
+        pathoReportResponseIds([report]),
       );
-      return postBundle(
-        buildPathoResultDeleteBundle(
-          reportId,
-          observationIdsFromReport(report),
-          specimenIdsFromReport(report),
-          pathoReportResponseIds([report]),
-        ),
-      );
+      const cancelEntries = Array.from(tasks.values())
+        .filter((task) => task.status === "requested")
+        .map((task) => notificationTaskEntry(buildCancelledNotificationTask(task), task.id));
+      return postBundle({ ...deleteBundle, entry: [...(deleteBundle.entry ?? []), ...cancelEntries] });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });

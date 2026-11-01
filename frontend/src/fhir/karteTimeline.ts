@@ -29,7 +29,7 @@ import {
   pathoOrderResponseIds,
 } from "./pathoOrderHelpers";
 import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pathoTaskHelpers";
-import { pathoReportResponseIds } from "./pathoResultHelpers";
+import { pathoReportImportance, pathoReportResponseIds } from "./pathoResultHelpers";
 import { pathwayOf } from "./pathwayApplyHelpers";
 import type { PathwayEvaluationCard } from "./pathwayKarteHelpers";
 import { adverseEventLabel, type AdverseEventRecord } from "./adverseEventHelpers";
@@ -344,8 +344,10 @@ export type KarteTimelineItem = KarteItemBase &
         itemRequests: fhir4.ServiceRequest[];
         /** このオーダーを元に登録された病理レポートの id。空ならレポートはまだ無い。 */
         reportId: string;
-        /** レポートの報告区分。"preliminary" なら中間、"amended" なら修正のバッジを出す。 */
+        /** レポートの報告区分。中間・訂正・追加のときにバッジを出す。 */
         reportStatus: string;
+        /** レポートの重要度(悪性・悪性疑い)。指定なしは空。 */
+        reportImportance: string;
         /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
         status: PathoTaskStatus;
       }
@@ -806,8 +808,8 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
 
   // オーダー id → そのオーダーを元にした検査結果(検体検査・細菌検査・病理・読影・生理検査・内視鏡の所見)の id と status
   // (DiagnosticReport.basedOn。カードの「検査結果表示」を出せるかの判定と、
-  // 中間報告・訂正報告のバッジに使う)。
-  const reportByOrderId = new Map<string, { id: string; status: string }>();
+  // 中間報告・訂正報告と病理の重要度のバッジに使う)。
+  const reportByOrderId = new Map<string, fhir4.DiagnosticReport & { id: string; status: string }>();
   for (const report of pickByType<fhir4.DiagnosticReport>(
     prescriptionResources,
     "DiagnosticReport",
@@ -815,7 +817,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     for (const basedOn of report.basedOn ?? []) {
       const srId = basedOn.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
       if (srId && report.id) {
-        reportByOrderId.set(srId, { id: report.id, status: report.status ?? "" });
+        reportByOrderId.set(srId, { ...report, id: report.id, status: report.status ?? "" });
       }
     }
   }
@@ -971,6 +973,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         itemRequests: pathoOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
         reportId: report?.id ?? "",
         reportStatus: report?.status ?? "",
+        reportImportance: pathoReportImportance(report),
         status: pathoTaskStatus(pathoTaskByOrderId.get(serviceRequest.id ?? "")),
       };
     }

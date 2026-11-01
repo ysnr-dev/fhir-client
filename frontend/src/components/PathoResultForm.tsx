@@ -9,8 +9,10 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import { useCurrentPractitioner } from "../api/authQueries";
 import type { LabOrderCandidate } from "../api/queries";
-import { usePathoOrderDetail, useSelfDepartments } from "../api/queries";
+import { useDoctorOptions, usePathoOrderDetail, useSelfDepartments } from "../api/queries";
+import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { fetchSchema } from "../api/masterClient";
 import { serviceRequestsOf } from "../fhir/labOrderHelpers";
 import { SETTING_OPTIONS, type LabResultSetting } from "../fhir/labResultHelpers";
@@ -25,12 +27,19 @@ import {
 import {
   CYTO_JUDGEMENT_OPTIONS,
   REPORT_IMAGE_KIND_OPTIONS,
+  REPORT_IMPORTANCE_OPTIONS,
   REPORT_STATUS_OPTIONS,
+  REVISION_STATUS_OPTIONS,
   emptyPathoResultForm,
   emptyPathoResultSpecimen,
+  filledInterpreters,
+  importanceForCytoJudgement,
+  isRevisingConfirmedReport,
+  nextReportStatus,
   pathoReportImageRefs,
   resultSpecimenLabel,
-  willBecomeAmended,
+  type PathoInterpreterValues,
+  type PathoReportImportance,
   type PathoReportImageValues,
   type PathoResultFormValues,
   type PathoResultSpecimenValues,
@@ -64,6 +73,10 @@ const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
 // 臓器図を台紙に描くこともできる(切り出し図の想定)。規約 20-004 はレポートを本文
 // セクションだけで定義していて画像を規定していないため、持ち方はこのアプリの既定
 // (Binary + 拡張)に合わせている(docs/patho-order-design.md §4.5)。
+//
+// 診断医(最大 3 名)・重要度・確定後の訂正/追加の別は JAHIS 患者安全ガイド 病理編に
+// 合わせたもの(docs/patho-order-design.md §4.8)。新規のレポートはログイン中の医師を
+// 1 人目の診断医にしておく。
 
 interface PathoResultFormProps {
   /** レポートの患者。診断のテンプレート記入(初期値変数)に使う。 */
@@ -103,8 +116,30 @@ export function PathoResultForm({
   const [diagnosisTemplateOpen, setDiagnosisTemplateOpen] = useState(false);
 
   const { departments } = useSelfDepartments();
+  const { doctors } = useDoctorOptions();
+  const { practitionerId } = useCurrentPractitioner();
   const update = makeFieldUpdater(setValues);
   const isCytology = isCytologyCategory(values.examCategory);
+  const revising = isRevisingConfirmedReport(values);
+
+  // 新規のレポートは、ログイン中の利用者が医師ならその人を 1 人目の診断医にする(一度だけ)。
+  const interpreterDefaulted = useRef(Boolean(initialValues?.originalStatus));
+  useEffect(() => {
+    if (interpreterDefaulted.current || !practitionerId || doctors.length === 0) return;
+    interpreterDefaulted.current = true;
+    const self = doctors.find((doctor) => doctor.id === practitionerId);
+    if (!self) return;
+    setValues((v) =>
+      v.interpreters.some((interpreter) => interpreter.practitionerId)
+        ? v
+        : {
+            ...v,
+            interpreters: v.interpreters.map((interpreter, i) =>
+              i === 0 ? { practitionerId: practitionerId, name: practitionerDisplayName(self) } : interpreter,
+            ),
+          },
+    );
+  }, [doctors, practitionerId]);
 
   // 画面上でオーダーを選び直したときだけ、オーダーの検体と検査区分を転記する
   // (初期表示時の紐付け済みオーダーで、保存済みの内容を上書きしないようにする)。
@@ -148,6 +183,23 @@ export function PathoResultForm({
         : {}),
     }));
     setExpandingOrderId(orderId);
+  }
+
+  function handleInterpreterChange(index: number, practitionerIdValue: string) {
+    const doctor = doctors.find((d) => d.id === practitionerIdValue);
+    const next: PathoInterpreterValues = {
+      practitionerId: practitionerIdValue,
+      name: doctor ? practitionerDisplayName(doctor) : "",
+    };
+    setValues((v) => ({
+      ...v,
+      interpreters: v.interpreters.map((interpreter, i) => (i === index ? next : interpreter)),
+    }));
+  }
+
+  // 細胞診の判定は重要度の初期値になる(悪性・悪性疑い)。判定の後で重要度を直すこともできる。
+  function handleCytoJudgementChange(cytoJudgement: string) {
+    setValues((v) => ({ ...v, cytoJudgement, importance: importanceForCytoJudgement(cytoJudgement) }));
   }
 
   function handleDepartmentChange(departmentId: string) {
@@ -225,16 +277,27 @@ export function PathoResultForm({
       setValidationError("報告日を入力してください。");
       return;
     }
+    if (revising && !values.reportStatus) {
+      setValidationError("報告区分(訂正報告・追加報告)を選んでください。");
+      return;
+    }
+    const interpreterIds = filledInterpreters(values).map((interpreter) => interpreter.practitionerId);
+    if (new Set(interpreterIds).size !== interpreterIds.length) {
+      setValidationError("同じ診断医が重複しています。");
+      return;
+    }
     // 診断は規約でレポートに必須のセクション。ただし中間報告は診断が固まる前の
-    // 途中経過なので、最終報告のときだけ required にする。
-    if (values.reportStatus === "final") {
+    // 途中経過なので、確定する(最終・訂正・追加報告)ときだけ required にする。
+    // 診断医も確定する報告には必須(誰が診断したかを残す)。
+    if (nextReportStatus(values) !== "preliminary") {
+      const hint = revising ? "" : "(まだなら報告区分を中間報告にしてください)";
       const hasDiagnosis = isCytology ? Boolean(values.cytoJudgement) : Boolean(values.diagnosis.trim());
       if (!hasDiagnosis) {
-        setValidationError(
-          isCytology
-            ? "最終報告には判定が必要です(まだなら報告区分を中間報告にしてください)。"
-            : "最終報告には診断が必要です(まだなら報告区分を中間報告にしてください)。",
-        );
+        setValidationError(isCytology ? `確定する報告には判定が必要です${hint}。` : `確定する報告には診断が必要です${hint}。`);
+        return;
+      }
+      if (interpreterIds.length === 0) {
+        setValidationError(`確定する報告には診断医が必要です${hint}。`);
         return;
       }
     }
@@ -318,19 +381,40 @@ export function PathoResultForm({
               update("reportStatus", e.target.value as PathoResultFormValues["reportStatus"])
             }
           >
-            {REPORT_STATUS_OPTIONS.map((o) => (
+            {/* 確定済みのレポートは訂正か追加かを毎回選ぶ(既定を置かない)。 */}
+            {revising && (
+              <option value="" disabled hidden>
+                選択
+              </option>
+            )}
+            {(revising ? REVISION_STATUS_OPTIONS : REPORT_STATUS_OPTIONS).map((o) => (
               <option key={o.code} value={o.code}>
                 {o.display}
               </option>
             ))}
           </select>
         </label>
-        {/* 確定済みのレポートを直すと修正報告になることを、保存前に知らせる。 */}
-        {willBecomeAmended(values) && (
-          <p className="lab-result-form__notice">
-            確定済みのレポートです。保存すると修正報告になります。
-          </p>
-        )}
+        {values.interpreters.map((interpreter, index) => (
+          <label key={index}>
+            {`診断医${index + 1}`}
+            <select
+              value={interpreter.practitionerId}
+              onChange={(e) => handleInterpreterChange(index, e.target.value)}
+            >
+              <option value="">なし</option>
+              {doctors.map((doctor) => (
+                <option key={doctor.id} value={doctor.id}>
+                  {practitionerDisplayName(doctor)}
+                </option>
+              ))}
+              {/* 退職などで医師の一覧から外れた診断医も、保存済みの名前で残す。 */}
+              {interpreter.practitionerId &&
+                !doctors.some((doctor) => doctor.id === interpreter.practitionerId) && (
+                  <option value={interpreter.practitionerId}>{interpreter.name || "(氏名なし)"}</option>
+                )}
+            </select>
+          </label>
+        ))}
         {!fixedOrderId && (
           <label>
             病理検査オーダー
@@ -428,13 +512,27 @@ export function PathoResultForm({
 
       <fieldset>
         <legend>診断</legend>
+        <label>
+          重要度
+          <select
+            value={values.importance}
+            onChange={(e) => update("importance", e.target.value as PathoReportImportance)}
+          >
+            <option value="">なし</option>
+            {REPORT_IMPORTANCE_OPTIONS.map((o) => (
+              <option key={o.code} value={o.code}>
+                {o.display}
+              </option>
+            ))}
+          </select>
+        </label>
         {isCytology ? (
           <>
             <label>
               判定
               <select
                 value={values.cytoJudgement}
-                onChange={(e) => update("cytoJudgement", e.target.value)}
+                onChange={(e) => handleCytoJudgementChange(e.target.value)}
               >
                 <option value="">選択してください</option>
                 {CYTO_JUDGEMENT_OPTIONS.map((o) => (

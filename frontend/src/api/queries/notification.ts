@@ -146,7 +146,7 @@ export async function fetchOrderRequester(orderId: string): Promise<fhir4.Refere
 /**
  * 結果保存の Bundle に、検査結果確認の通知を足す。
  *
- * 細菌検査・病理は Bundle を組み立ててから保存フックに渡す作りなので、宛先(依頼医)と
+ * 細菌検査は Bundle を組み立ててから保存フックに渡す作りなので、宛先(依頼医)と
  * 既にある通知はここで引く。中間報告のうちは通知しない(検体検査と同じ)。
  */
 export async function withResultReviewTask(

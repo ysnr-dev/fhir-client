@@ -24,6 +24,7 @@ import { KarteLinkMenu } from "./KarteLinkMenu";
 import { PathoResultDetailPanel } from "./PathoResultDetailPanel";
 import { PathoResultForm } from "./PathoResultForm";
 import { ResultReviewAction } from "./ResultReviewAction";
+import { ResultExplanationAction } from "./ResultExplanationAction";
 import { SpecimenDateList } from "./SpecimenDateList";
 import { withVersionLock } from "../fhir/shared";
 import { latestSummaryOnOrBefore } from "../fhir/labResultHelpers";
@@ -113,8 +114,13 @@ export function KartePathoResultTab({ patientId, view, onViewChange, baseDate }:
         <div className="karte-tabpanel__header">
           <h3>病理診断レポート</h3>
           <div className="karte-tabpanel__actions">
-            {/* 確認は結果に記録を残す操作なので、登録・編集のボタンから離して左端に置く。 */}
-            {selected && <ResultReviewAction reportId={selected.id} />}
+            {/* 確認と患者説明は結果に記録を残す操作なので、登録・編集のボタンから離して左端に置く。 */}
+            {selected && (
+              <div className="result-review-group">
+                <ResultReviewAction reportId={selected.id} />
+                <ResultExplanationAction reportId={selected.id} />
+              </div>
+            )}
             <button type="button" onClick={() => setForm({ kind: "create" })}>
               新規登録
             </button>

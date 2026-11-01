@@ -8,7 +8,7 @@
 | 種別(`Task.code`) | 強度 | 焦点(`focus`) | 宛先(`owner`) | 操作 |
 |---|---|---|---|---|
 | `lab-panic` 緊急異常値 | アラート | 検査結果(`DiagnosticReport`) | オーダーの依頼医 | 確認 |
-| `result-review` 検査結果確認 | お知らせ | 検査結果(`DiagnosticReport`) | オーダーの依頼医 | 確認 |
+| `result-review` 検査結果確認 | お知らせ(病理の重要度が悪性・悪性疑いならアラート) | 検査結果(`DiagnosticReport`) | オーダーの依頼医 | 確認 |
 | `pathway-variance` パスのバリアンス | 注意 | パスの評価(`Observation`) | 入院の主治医 | 確認 |
 | `rad-critical-finding` / `physio-critical-finding` / `endoscopy-critical-finding` 重要所見 | アラート | 読影レポート・所見レポート(`DiagnosticReport`) | オーダーの依頼医 | 確認 |
 | `order-approval` オーダー承認 | お知らせ | 来歴(`Provenance`) | 指示医師(研修医の活動は指導医ごとに 1 件) | 承認 |
@@ -37,6 +37,8 @@
   種別ごとの固定値ではなく通知 1 件ごとの属性なので、同じ種別でも状況によって変えられます
   (対応表は `fhir/notificationHelpers.ts`)。オーダーの至急区分(通常・至急・事後・緊急)も同じ
   `priority` を使いますが、あちらは別の対応表です。
+- **患者説明**(`result-explanation`、確定した病理診断レポートを患者に説明したかを依頼医あてに追う台帳)も同じ Task の作法で
+  作り、通知レジストリには登録しません。検査結果フォローの「患者説明」タブとカルテで追います(`docs/features/lab.md`)。
 - **フォロー推奨**(`followup-recommendation`、検査レポートの推奨を依頼医あてに追う台帳)は同じ Task の作法で作りますが、
   対応表には登録せず、ベルと通知一覧には出しません。期限が数か月先になることが多いためで、診療業務 > 検査結果フォローで
   追います(`docs/features/lab.md`「フォロー推奨と未確認の結果」)。

@@ -7,9 +7,12 @@ import {
 } from "../fhir/pathoOrderHelpers";
 import {
   cytoJudgementDisplay,
+  filledInterpreters,
   groupReportImagesByKind,
+  isRevisedReportStatus,
   parsePathoResultForm,
   pathoReportImageRefs,
+  reportImportanceDisplay,
   reportStatusDisplay,
   resultSpecimenLabel,
   splitPathoResultDetailBundle,
@@ -46,21 +49,41 @@ function FindingSection({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** 報告区分のバッジ。中間・修正は目立たせ、最終報告は素の文字で出す。 */
+/** 報告区分のバッジ。中間・訂正・追加は目立たせ、最終報告は素の文字で出す。 */
 export function ReportStatusBadge({ status }: { status: string }) {
-  if (status === "preliminary" || status === "amended") {
+  if (status === "preliminary" || isRevisedReportStatus(status)) {
     return <span className="micro-result__badge">{reportStatusDisplay(status)}</span>;
   }
   return <>{reportStatusDisplay(status) || "-"}</>;
 }
 
+/** 重要度(悪性・悪性疑い)の印。指定なしは何も出さない。 */
+export function PathoImportanceBadge({ importance }: { importance: string }) {
+  const label = reportImportanceDisplay(importance);
+  if (!label) return null;
+  return (
+    <span className={`patho-importance${importance === "malignant" ? " patho-importance--malignant" : ""}`}>
+      {label}
+    </span>
+  );
+}
+
 function DiagnosisFieldset({ values }: { values: PathoResultFormValues }) {
   // 診断は規約でレポートに必須のセクションなので、未入力でも枠は残す。
+  // 重要度は見落とすと危ないので、診断の頭に出す。
   if (isCytologyCategory(values.examCategory)) {
     return (
       <fieldset>
         <legend>診断</legend>
         <dl className="prescription-detail__common">
+          {values.importance && (
+            <>
+              <dt>重要度</dt>
+              <dd>
+                <PathoImportanceBadge importance={values.importance} />
+              </dd>
+            </>
+          )}
           <dt>判定</dt>
           <dd>{cytoJudgementDisplay(values.cytoJudgement) || "-"}</dd>
           <dt>推定病変</dt>
@@ -72,6 +95,14 @@ function DiagnosisFieldset({ values }: { values: PathoResultFormValues }) {
   return (
     <fieldset>
       <legend>診断</legend>
+      {values.importance && (
+        <dl className="prescription-detail__common">
+          <dt>重要度</dt>
+          <dd>
+            <PathoImportanceBadge importance={values.importance} />
+          </dd>
+        </dl>
+      )}
       <p className="patho-result__text">{values.diagnosis || "-"}</p>
     </fieldset>
   );
@@ -114,6 +145,12 @@ export function PathoResultDetailPanel({ reportId }: { reportId: string }) {
                 <dt>報告区分</dt>
                 <dd>
                   <ReportStatusBadge status={report.status} />
+                </dd>
+                <dt>診断医</dt>
+                <dd>
+                  {filledInterpreters(values)
+                    .map((interpreter) => interpreter.name || "(氏名なし)")
+                    .join("、") || "-"}
                 </dd>
                 <dt>病理検査オーダー</dt>
                 <dd>{values.orderId ? orderLabel : "紐付けなし"}</dd>

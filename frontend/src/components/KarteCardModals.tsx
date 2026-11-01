@@ -76,6 +76,7 @@ import { QuestionnaireResponseDetailPanel } from "./QuestionnaireResponseDetailP
 import { RadOrderDetailPanel } from "./RadOrderDetailPanel";
 import { ExamReportDetailPanel } from "./ExamReportDetailPanel";
 import { ResultReviewAction } from "./ResultReviewAction";
+import { ResultExplanationAction } from "./ResultExplanationAction";
 import { PhysioOrderDetailPanel } from "./PhysioOrderDetailPanel";
 import { EndoscopyOrderDetailPanel } from "./EndoscopyOrderDetailPanel";
 import { TreatmentOrderDetailPanel } from "./TreatmentOrderDetailPanel";
@@ -819,7 +820,15 @@ function PathoResultDetail({ patientId, reportId }: { patientId: string; reportI
       ) : mismatch ? (
         <p className="patient-table__empty">指定された病理レポートは別の患者のものです。</p>
       ) : report ? (
-        <PathoResultDetailPanel reportId={reportId} />
+        <>
+          <div className="karte-tabpanel__actions exam-report-detail__review">
+            <div className="result-review-group">
+              <ResultReviewAction reportId={reportId} />
+              <ResultExplanationAction reportId={reportId} />
+            </div>
+          </div>
+          <PathoResultDetailPanel reportId={reportId} />
+        </>
       ) : (
         !detail.error && <NotFound label="病理レポート" />
       )}

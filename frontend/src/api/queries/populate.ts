@@ -173,7 +173,7 @@ export function usePopulateSources(
   const pathoParams = new URLSearchParams();
   pathoParams.set("patient", `Patient/${patientId}`);
   pathoParams.set("category", "SP,CP");
-  pathoParams.set("status", "final,amended");
+  pathoParams.set("status", "final,amended,appended");
   pathoParams.set("_count", "1");
   pathoParams.set("_sort", "-date");
   pathoParams.append("_include", "DiagnosticReport:result");

@@ -85,6 +85,8 @@ import { InjectionPerformSection } from "./karteCardBodies/InjectionPerformSecti
 import { PathwayEvaluationCardBody } from "./karteCardBodies/PathwayEvaluationCardBody";
 import { AdverseEventCardBody } from "./karteCardBodies/AdverseEventCardBody";
 import { PotencyMark } from "./MedicineWarnings";
+import { PathoImportanceBadge } from "./PathoResultDetailPanel";
+import { isRevisedReportStatus, reportStatusDisplay } from "../fhir/pathoResultHelpers";
 
 interface KarteTimelineProps {
   groups: KarteDayGroup[];
@@ -426,13 +428,14 @@ const KarteCard = memo(function KarteCard({
           {item.kind === "micro-order" && item.reportStatus === "preliminary" && (
             <span className="micro-result__badge">結果:中間報告</span>
           )}
-          {/* 病理は中間報告と、確定後に直した修正報告をカードで見分けられるようにする。 */}
+          {/* 病理は重要度(悪性・悪性疑い)と、中間報告・確定後に直した訂正/追加報告をカードで見分けられるようにする。 */}
+          {item.kind === "patho-order" && <PathoImportanceBadge importance={item.reportImportance} />}
           {item.kind === "patho-order" && item.reportStatus === "preliminary" && (
             <span className="micro-result__badge">結果:中間報告</span>
           )}
-          {item.kind === "patho-order" && item.reportStatus === "amended" && (
+          {item.kind === "patho-order" && isRevisedReportStatus(item.reportStatus) && (
             <span className="micro-result__badge micro-result__badge--muted">
-              結果:修正報告
+              {`結果:${reportStatusDisplay(item.reportStatus)}`}
             </span>
           )}
           {/* 検査レポートは暫定報告と、確定後に直した訂正報告をカードで見分けられるようにする。 */}

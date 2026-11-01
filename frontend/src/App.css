@@ -2923,6 +2923,30 @@ fieldset.rp-card {
   color: var(--lab-high);
 }
 
+/* 確認と患者説明を並べるとき。群ごと左端に寄せ、中の .result-review の左寄せは群の中だけで効く。 */
+.result-review-group {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 病理診断レポートの重要度。悪性は塗り、悪性疑いは枠だけにして強さを分ける。 */
+.patho-importance {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--lab-high);
+  color: var(--lab-high);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.patho-importance--malignant {
+  background: var(--lab-high);
+  color: var(--lab-high-text);
+}
+
 .lab-result-detail__actions {
   display: flex;
   justify-content: flex-end;
@@ -3083,6 +3107,10 @@ fieldset.rp-card {
 /* 検査結果確認の内容。種別の後ろに要約を続けて読ませる。 */
 .notification__review-kind {
   margin-right: 12px;
+}
+
+.notification__review-flag {
+  margin-right: 8px;
 }
 
 /* 文書作成の督促の期限超過。強度(行の色)は変えず、内容欄で目に付くようにする。 */
@@ -29402,6 +29430,8 @@ input.nursing-picker__search {
 
 /* 検査結果フォロー(pages/ResultFollowupPage)。期限の近いものは赤(超過)より一段弱い色で示す。 */
 .result-followup__filters {
+  display: flex;
+  gap: 16px;
   margin: 8px 0;
 }
 
