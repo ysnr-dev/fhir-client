@@ -18,6 +18,7 @@ import {
   type TransfusionOrderSummary,
   type TransfusionProductValues,
 } from "./transfusionOrderHelpers";
+import { ANTIGEN_SYSTEM, antibodyLabel, antigenDisplay } from "./transfusionProfileHelpers";
 import { buildTransfusionTaskUpdate } from "./transfusionTaskHelpers";
 
 // 輸血の出庫記録(払出)。JAHIS 患者安全ガイド(輸血編)7.3〜7.4 の「割付・払出」に当たる。
@@ -44,6 +45,8 @@ export const BLOOD_PRODUCT_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/bl
 const EXPIRY_EXT_URL = "http://fhir-client.local/StructureDefinition/transfusion-expiry";
 const IRRADIATED_EXT_URL = "http://fhir-client.local/StructureDefinition/transfusion-irradiated";
 const CROSSMATCH_EXT_URL = "http://fhir-client.local/StructureDefinition/transfusion-crossmatch";
+/** 抗原陰性を確認した抗原(不規則抗体のある患者に出すバッグ)。 */
+const ANTIGEN_NEGATIVE_EXT_URL = "http://fhir-client.local/StructureDefinition/transfusion-antigen-negative";
 export const CROSSMATCH_SYSTEM = "http://fhir-client.local/CodeSystem/transfusion-crossmatch";
 
 /** 払出に関わった人の役割(MedicationDispense.performer.function)。 */
@@ -81,6 +84,8 @@ export interface TransfusionDispenseBag {
   expiry: string;
   irradiated: boolean;
   crossmatch: CrossmatchResult | "";
+  /** 抗原陰性を確認した抗原(ANTIGEN_OPTIONS の code)。不規則抗体のある患者に出すとき。 */
+  antigenNegative: string[];
   /** 対応する依頼の製剤明細(ServiceRequest.id)。依頼との突き合わせに使う。 */
   orderedItemId: string;
 }
@@ -108,6 +113,7 @@ export function emptyDispenseBag(): TransfusionDispenseBag {
     expiry: "",
     irradiated: false,
     crossmatch: "",
+    antigenNegative: [],
     orderedItemId: "",
   };
 }
@@ -172,6 +178,10 @@ export interface DispenseCheckContext {
   }[];
   /** 不規則抗体スクリーニングの最新の結果(陽性なら抗原陰性血の確認を求める)。 */
   antibodyScreen: string;
+  /** 同定した不規則抗体の特異性(ANTIGEN_OPTIONS の code)。バッグの抗原陰性と突き合わせる。 */
+  antibodies: string[];
+  /** この患者の自己血(採血済みで未出庫)の製剤番号。自己血のバッグは本人のものに限る。 */
+  autologousUnits: string[];
 }
 
 /** 検査結果の表記から陽性かどうか。 */
@@ -240,9 +250,35 @@ export function dispenseAdvisories(
     }
   }
 
-  // ⑤ 不規則抗体のある患者。抗原陰性血かどうかはバッグ側に情報が無いので、確認を求める。
-  if (isPositive(context.antibodyScreen)) {
-    warn("antibody-positive", [context.antibodyScreen], `不規則抗体が陽性です（${context.antibodyScreen}）。抗原陰性血を確認してください`);
+  // ⑤ 不規則抗体のある患者。同定した抗体の抗原について、バッグで陰性を確認しているか。
+  const antibodies = context.antibodies.filter((code) => code !== "other");
+  if (antibodies.length > 0) {
+    for (const [index, bag] of bags.entries()) {
+      if (!bag.productCode) continue;
+      const category = context.productItems.find((i) => i.item_code === bag.productCode)?.category;
+      if (category !== "rbc") continue;
+      const missing = antibodies.filter((code) => !bag.antigenNegative.includes(code));
+      if (missing.length > 0) {
+        warn(
+          "antibody-positive",
+          [index, ...missing],
+          `バッグ${index + 1}: ${missing.map(antibodyLabel).join("、")} に対する抗原陰性が未確認です`,
+        );
+      }
+    }
+  } else if (isPositive(context.antibodyScreen)) {
+    warn("antibody-positive", [context.antibodyScreen], `不規則抗体が陽性です（${context.antibodyScreen}）。抗体を同定し、抗原陰性血を確認してください`);
+  }
+
+  // ⑥ 自己血は本人のものだけ。採血記録に無い製剤番号は出さない。
+  for (const [index, bag] of bags.entries()) {
+    if (!bag.productCode) continue;
+    const category = context.productItems.find((i) => i.item_code === bag.productCode)?.category;
+    if (category !== "auto") continue;
+    const lot = bag.lotNumber.trim();
+    if (!lot || !context.autologousUnits.includes(lot)) {
+      warn("autologous-mismatch", [index, lot], `バッグ${index + 1}: 製剤番号 ${lot || "(未入力)"} はこの患者の自己血の採血記録にありません`);
+    }
   }
 
   return list;
@@ -339,6 +375,15 @@ function buildBagDispense(
   const extension: fhir4.Extension[] = bloodTypeExtensions(bag.abo, bag.rhd);
   if (bag.expiry) extension.push({ url: EXPIRY_EXT_URL, valueDate: bag.expiry });
   extension.push({ url: IRRADIATED_EXT_URL, valueBoolean: bag.irradiated });
+  if (bag.antigenNegative.length > 0) {
+    extension.push({
+      url: ANTIGEN_NEGATIVE_EXT_URL,
+      valueCodeableConcept: {
+        coding: bag.antigenNegative.map((code) => ({ system: ANTIGEN_SYSTEM, code, display: antigenDisplay(code) })),
+        text: bag.antigenNegative.map((code) => `${antigenDisplay(code)}(-)`).join(" "),
+      },
+    });
+  }
   if (bag.crossmatch) {
     extension.push({
       url: CROSSMATCH_EXT_URL,
@@ -429,6 +474,8 @@ export interface TransfusionDispensedBag {
   irradiated: boolean;
   crossmatch: string;
   crossmatchDisplay: string;
+  /** 抗原陰性を確認した抗原。 */
+  antigenNegative: string[];
   orderedItemId: string;
   /** 「RBC-LR / 2単位 No.… 期限 … 照射済 交差 適合」の 1 行表示(カード用。型は含めない)。 */
   label: string;
@@ -466,6 +513,11 @@ export function parseDispensedBag(dispense: fhir4.MedicationDispense): Transfusi
     irradiated: dispense.extension?.find((e) => e.url === IRRADIATED_EXT_URL)?.valueBoolean === true,
     crossmatch,
     crossmatchDisplay: crossmatchDisplay(crossmatch),
+    antigenNegative:
+      dispense.extension
+        ?.find((e) => e.url === ANTIGEN_NEGATIVE_EXT_URL)
+        ?.valueCodeableConcept?.coding?.map((c) => c.code ?? "")
+        .filter(Boolean) ?? [],
     orderedItemId: referenceIdOfType(dispense.supportingInformation?.[0]?.reference, "ServiceRequest"),
   };
   return { ...bag, label: dispensedBagLabel(bag) };
@@ -479,6 +531,7 @@ function dispensedBagLabel(bag: Omit<TransfusionDispensedBag, "label">): string 
     bag.expiry && `期限 ${bag.expiry}`,
     bag.irradiated ? "照射済" : "",
     bag.crossmatchDisplay && `交差 ${bag.crossmatchDisplay}`,
+    bag.antigenNegative.length > 0 && bag.antigenNegative.map((c) => `${antigenDisplay(c)}(-)`).join(" "),
   ]
     .filter(Boolean)
     .join(" ");

@@ -38,6 +38,7 @@ import {
   type BloodTypeFormValues,
 } from "../fhir/bloodTypeHelpers";
 import { BloodTypeForm } from "./BloodTypeForm";
+import { IrregularAntibodyForm, TransplantBloodTypeForm } from "./TransfusionProfileForms";
 import { PatientBodySection } from "./PatientBodySection";
 import type { PatientCaution } from "../api/masterClient";
 import { buildFlag, parseFlagForm, type FlagFormValues } from "../fhir/flagHelpers";
@@ -87,6 +88,8 @@ type Mode =
   | { kind: "edit-patient" }
   | { kind: "edit-blood-type" }
   | { kind: "edit-pregnancy" }
+  | { kind: "edit-antibody" }
+  | { kind: "edit-transplant" }
   | { kind: "create-infection" }
   | { kind: "edit-infection"; observationId: string };
 
@@ -100,6 +103,8 @@ type FormMode =
       | { kind: "edit-patient" }
       | { kind: "edit-blood-type" }
       | { kind: "edit-pregnancy" }
+      | { kind: "edit-antibody" }
+      | { kind: "edit-transplant" }
       | { kind: "create-infection" }
       | { kind: "edit-infection" }
     >
@@ -113,6 +118,8 @@ const MODE_TITLES: Record<Mode["kind"], string> = {
   "edit-patient": "患者情報の編集",
   "edit-blood-type": "血液型の申告",
   "edit-pregnancy": "妊娠・授乳",
+  "edit-antibody": "不規則抗体の特異性",
+  "edit-transplant": "造血幹細胞移植後の血液型",
   "create-infection": "感染症の登録",
   "edit-infection": "感染症の編集",
 };
@@ -170,6 +177,10 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
           <BloodTypeEditForm patientId={patientId} onSaved={backToList} />
         ) : mode.kind === "edit-pregnancy" ? (
           <PregnancyEditForm patientId={patientId} onSaved={backToList} />
+        ) : mode.kind === "edit-antibody" ? (
+          <IrregularAntibodyForm patientId={patientId} onSaved={backToList} />
+        ) : mode.kind === "edit-transplant" ? (
+          <TransplantBloodTypeForm patientId={patientId} onSaved={backToList} />
         ) : mode.kind === "create-infection" ? (
           <InfectionEditForm patientId={patientId} onSaved={backToList} />
         ) : mode.kind === "edit-infection" ? (
@@ -215,6 +226,8 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
           patientId={patientId}
           onEditBloodType={() => setForm({ kind: "edit-blood-type" })}
           onEditPregnancy={() => setForm({ kind: "edit-pregnancy" })}
+          onEditAntibody={() => setForm({ kind: "edit-antibody" })}
+          onEditTransplant={() => setForm({ kind: "edit-transplant" })}
         />
       ) : section === "infection" ? (
         <PatientInfectionSection

@@ -12,6 +12,14 @@ import {
   responseWithDocumentDeleteBundle,
 } from "../../fhir/documentFormQuestionnaire";
 import { bloodTypeLabSearchCodes, summarizeBloodType } from "../../fhir/bloodTypeHelpers";
+import { MANUAL_CATEGORY } from "../../fhir/infectionHelpers";
+import {
+  IRREGULAR_ANTIBODY_CODE,
+  PROFILE_CODE_SYSTEM,
+  TRANSPLANT_CODE,
+  summarizeIrregularAntibody,
+  summarizeTransplantBloodType,
+} from "../../fhir/transfusionProfileHelpers";
 import { referenceId } from "../../fhir/shared";
 import {
   HAS_LAB_MAPPED_TYPES,
@@ -374,6 +382,63 @@ export function useSaveBloodType() {
       };
       return postBundle(bundle);
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+    },
+  });
+}
+
+// ---- 輸血に関わる手入力の属性(不規則抗体の特異性・移植後の血液型) ----
+
+/**
+ * 不規則抗体の特異性と造血幹細胞移植後の血液型(fhir/transfusionProfileHelpers.ts)。
+ * どちらも手入力(category=exam)の Observation で、1 回の検索で引く。
+ */
+export function useTransfusionProfile(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", MANUAL_CATEGORY);
+  params.set(
+    "code",
+    [IRREGULAR_ANTIBODY_CODE.code, TRANSPLANT_CODE.code].map((code) => `${PROFILE_CODE_SYSTEM}|${code}`).join(","),
+  );
+  params.set("_count", "20");
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["Observation", "search", patientId, "transfusion-profile"],
+    queryFn: () => searchResource<fhir4.Observation>("Observation", params),
+    enabled: Boolean(patientId),
+    staleTime: 30 * 1000,
+  });
+
+  const observations = useMemo(
+    () => resourcesOfType<fhir4.Observation>(query.data?.data, "Observation"),
+    [query.data],
+  );
+  const antibody = useMemo(() => summarizeIrregularAntibody(observations), [observations]);
+  const transplant = useMemo(() => summarizeTransplantBloodType(observations), [observations]);
+
+  return { ...query, observations, antibody, transplant };
+}
+
+/** 手入力の Observation 1 件の保存(新規は POST、id があれば PUT。血液型の申告と同じ transaction)。 */
+export function useSaveProfileObservation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (observation: fhir4.Observation) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          {
+            resource: observation,
+            request: observation.id
+              ? { method: "PUT", url: `Observation/${observation.id}` }
+              : { method: "POST", url: "Observation" },
+          },
+        ],
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
     },

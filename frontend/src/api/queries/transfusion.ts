@@ -18,6 +18,7 @@ import {
   REACTION_CODE,
 } from "../../fhir/transfusionResultHelpers";
 import { buildTransfusionDispenseDeleteEntries } from "../../fhir/transfusionDispenseHelpers";
+import { autologousUnitsOf } from "../../fhir/autologousHelpers";
 import {
   DEFAULT_TRANSFUSION_SETTINGS,
   type TransfusionReactionHistory,
@@ -121,6 +122,46 @@ export function useTransfusionLocationOptions() {
     ...query,
     locations: sortLocations(resourcesOfType<fhir4.Location>(query.data?.data, "Location")),
   };
+}
+
+/**
+ * 患者の自己血(採血済みで未出庫)。採血記録のハブ(Procedure)を _include で連れてくる。
+ * 出庫入力の候補と、本人の血かの突き合わせに使う。
+ */
+export function useAutologousUnits(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("status", "preparation");
+  params.set("_include", "MedicationDispense:part-of");
+  params.set("_count", "100");
+
+  const query = useQuery({
+    queryKey: ["MedicationDispense", "search", patientId, "autologous"],
+    queryFn: () => searchResource<fhir4.Resource>("MedicationDispense", params),
+    enabled: Boolean(patientId),
+    staleTime: 30 * 1000,
+  });
+
+  const units = useMemo(
+    () =>
+      autologousUnitsOf(
+        resourcesOfType<fhir4.Procedure>(query.data?.data, "Procedure"),
+        resourcesOfType<fhir4.MedicationDispense>(query.data?.data, "MedicationDispense"),
+      ),
+    [query.data],
+  );
+
+  return { ...query, units };
+}
+
+/** 自己血の採血登録(ハブ + 採った血 1 本)。 */
+export function useRegisterAutologousCollection() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateTransfusion(queryClient),
+  });
 }
 
 export function useTransfusionSettings(): TransfusionSettings {

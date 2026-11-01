@@ -213,6 +213,25 @@ export interface PatientBloodTypeForOrder {
   /** 検査で確定した ABO。確定していなければ空。 */
   abo: AboBloodType | "";
   rhd: RhdBloodType | "";
+  /**
+   * 造血幹細胞移植後に輸血に使う型(fhir/transfusionProfileHelpers.ts)。ABO 不適合移植の
+   * 前後で患者の型が変わるので、赤血球と血漿・血小板で別に持ち、あれば患者の型より優先する。
+   */
+  transplant?: {
+    rbc: { abo: AboBloodType | ""; rhd: RhdBloodType | "" };
+    plasma: { abo: AboBloodType | ""; rhd: RhdBloodType | "" };
+  };
+}
+
+/** 製剤区分に対して突き合わせる患者の型。移植後の指定があればそれ、無ければ患者の型。 */
+export function patientTypeForCategory(
+  patient: PatientBloodTypeForOrder,
+  category: string | undefined,
+): { abo: AboBloodType | ""; rhd: RhdBloodType | "" } {
+  if (!patient.transplant) return { abo: patient.abo, rhd: patient.rhd };
+  const override =
+    category === "rbc" ? patient.transplant.rbc : category === "ffp" || category === "plt" ? patient.transplant.plasma : null;
+  return override?.abo ? override : { abo: patient.abo, rhd: patient.rhd };
 }
 
 /** 製剤区分に血液型の指定が要るか。アルブミンなどの「その他」には要らない。 */
@@ -231,18 +250,19 @@ export function compatibleAbo(
 ): AboBloodType[] {
   const all = ABO_OPTIONS.map((o) => o.code);
   if (!productNeedsBloodType(category)) return all;
-  if (!patient.abo) {
+  const type = patientTypeForCategory(patient, category);
+  if (!type.abo) {
     const fallback = UNKNOWN_DEFAULT_ABO[category as TransfusionProductCategory];
     return fallback ? [fallback] : all;
   }
   switch (category) {
     case "rbc":
-      return RBC_COMPATIBLE[patient.abo];
+      return RBC_COMPATIBLE[type.abo];
     case "ffp":
     case "plt":
-      return PLASMA_COMPATIBLE[patient.abo];
+      return PLASMA_COMPATIBLE[type.abo];
     case "auto":
-      return [patient.abo];
+      return [type.abo];
     default:
       return all;
   }
@@ -259,7 +279,7 @@ export function compatibleRhd(
 ): RhdBloodType[] {
   const all = RHD_OPTIONS.map((o) => o.code);
   if (!productNeedsBloodType(category) || category === "ffp") return all;
-  if (patient.rhd === "negative" && level !== 1) return ["negative"];
+  if (patientTypeForCategory(patient, category).rhd === "negative" && level !== 1) return ["negative"];
   return all;
 }
 
@@ -273,10 +293,11 @@ export function defaultProductBloodType(
   level: number,
 ): { abo: AboBloodType | ""; rhd: RhdBloodType | "" } {
   if (!productNeedsBloodType(category)) return { abo: "", rhd: "" };
+  const type = patientTypeForCategory(patient, category);
   const abos = compatibleAbo(patient, category);
   const rhds = compatibleRhd(patient, category, level);
-  const abo = patient.abo && abos.includes(patient.abo) ? patient.abo : abos.length === 1 ? abos[0] : "";
-  const rhd = patient.rhd && rhds.includes(patient.rhd) ? patient.rhd : rhds.includes("positive") ? "positive" : (rhds[0] ?? "");
+  const abo = type.abo && abos.includes(type.abo) ? type.abo : abos.length === 1 ? abos[0] : "";
+  const rhd = type.rhd && rhds.includes(type.rhd) ? type.rhd : rhds.includes("positive") ? "positive" : (rhds[0] ?? "");
   return { abo, rhd };
 }
 

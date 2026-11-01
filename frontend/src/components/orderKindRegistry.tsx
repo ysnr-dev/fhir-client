@@ -261,6 +261,7 @@ export const ORDER_KIND_DEFS: { [K in OrderKind]: OrderKindDef<K> } = {
         itemRequests={item.itemRequests}
         performs={item.performs}
         dispenses={item.dispenses}
+        collections={item.collections}
       />
     ),
   },

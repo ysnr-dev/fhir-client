@@ -279,6 +279,30 @@ JAHIS 患者安全ガイド(輸血編)7.5.3 に合わせた実施入力の拡張
 - **遅発性副作用の追記**: 実施済みのカードのケバブ「副作用追記」で、実施記録を取り消さずに副作用の
   Observation(`transfusion-reaction-timing` = delayed、発症日時)を 1 件足す(`TransfusionReactionModal`)。
 
+### 2.9 自己血・不規則抗体の特異性・移植後の血液型・輸血関連情報カード(2026-11-01)
+
+JAHIS 患者安全ガイド(輸血編)7.1.3-3・7.3.3-1 ⑤・7.7・7.8 に合わせた残り(段階 E)。
+
+- **不規則抗体の特異性**(`fhir/transfusionProfileHelpers.ts`): スクリーニングの陽性・陰性は検査結果から
+  読むが、同定した抗体(抗 E など)は結果項目に無いので、プロファイルタブの「身体」で手入力する
+  (`category=exam` の Observation `transfusion-profile|irregular-antibody`、抗体は `component`)。出庫入力では
+  赤血球のバッグに「抗原陰性」の確認欄(同じ抗原の一覧)が出て、確認していない抗原があれば警告する
+  (`MedicationDispense` の拡張 `transfusion-antigen-negative`)。同定していない陽性は従来どおり確認を求める。
+- **造血幹細胞移植後の血液型**(同): 移植日・ドナーの型・移植後に輸血に使う型(赤血球と血漿・血小板で別)を
+  手入力する(`transfusion-profile|transplant-blood-type`)。あればオーダーと出庫の適合表(`compatibleAbo` /
+  `compatibleRhd`)で患者の型より優先し、オーダー画面に「移植後」の印と案内(表示のみ)を出す。
+- **自己血(貯血式)**(`fhir/autologousHelpers.ts`): 自己血の製剤を含むオーダーに、一覧の「採血」から採った血を
+  1 本ずつ記録する(採血記録ハブ `Procedure`(category `procedure-category|autologous-collection`)+
+  `MedicationDispense`(status = preparation、製剤番号・型・有効期限))。有効期限は採血日 + 製剤マスタの
+  `shelf_life_days` で決めて手では変えられず、使用予定日が期限より後なら警告する。採血ラベル
+  (患者・型・製剤番号のバーコード・採血日・使用予定日・有効期限・署名欄)は `GET /reports/autologous_labels/:procedure_id/pdf`
+  (`lib/report_layouts/autologous_label.tlf`)。出庫入力では自己血のバッグを本人の採血記録から選び、記録に無い
+  製剤番号は警告する(本人の血かの照合)。
+- **輸血関連情報カード**: プロファイルタブの「輸血カード」から `GET /reports/transfusion_cards/:patient_id/pdf`
+  (`TransfusionCardReport`、`lib/report_layouts/transfusion_card.tlf`)。血液型(検査結果の 2 回一致と申告)・
+  不規則抗体(スクリーニングと特異性)・移植後の型・輸血歴(実施済みのバッグ)・副作用歴を A4 1 枚にまとめる。
+  検査結果の検索コードは画面と同じく結果項目マスタの JLAC11 から作る。
+
 ### 2.8 進捗 Task の 5 状態
 
 ```
@@ -316,6 +340,7 @@ cancelled (中止)
 | `default_units` | 既定の単位数。RBC なら 2 など、入力の初期値 |
 | `requires_crossmatch` | 交差適合試験が要る製剤か。FFP・PLT は不要が既定 |
 | `requires_irradiation` | 放射線照射が要る製剤か。出庫入力で未照射のバッグに警告を出す。既定は不要 |
+| `shelf_life_days` | 有効日数(採血日からの日数)。自己血の有効期限の算出に使う |
 | `valid_from` / `valid_to` / `display_order` / `note` | 他マスタと同じ |
 | `search_name` / `search_kana` | `SearchNormalizer` で正規化した検索用 |
 
@@ -333,6 +358,8 @@ cancelled (中止)
 | 出庫入力 | 部門一覧の「出庫」 | バッグごとの製剤番号・血液型・有効期限・照射・交差適合試験(バーコード入力可)、割付の警告 |
 | 照合 | 実施入力の前段(施設設定で有効なとき) | 患者番号と製剤ラベルの読み取り、確認者の選択 |
 | 副作用追記 | カルテカードのケバブ(実施済) | 遅発性副作用の発症日時・症状・内容 |
+| 採血(自己血) | 部門一覧の「採血」(自己血の製剤を含むオーダー) | 採血日時・採血量・製剤番号・有効期限(自動)、採血ラベル |
+| 不規則抗体の特異性 / 移植後の血液型 | プロファイルタブ「身体」 | 手入力。輸血カードの印刷もここから |
 | 実施入力 | 部門一覧の「実施」とカルテカード | 開始/終了時刻・実施者・確認者・バッグごとの製剤番号と実施/未実施/返却・観察・副作用(症状項目) |
 
 ---

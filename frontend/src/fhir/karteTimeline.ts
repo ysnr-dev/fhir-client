@@ -107,6 +107,7 @@ import {
   transfusionDispensesByOrderId,
   type TransfusionDispenseDisplay,
 } from "./transfusionDispenseHelpers";
+import { autologousUnitsByOrderId, type AutologousUnit } from "./autologousHelpers";
 import {
   isRadiotherapyServiceRequest,
   radiotherapyConsultRequest,
@@ -443,6 +444,8 @@ export type KarteTimelineItem = KarteItemBase &
         performs: TransfusionPerformDisplay[];
         /** 出庫記録。出庫前なら空。 */
         dispenses: TransfusionDispenseDisplay[];
+        /** 自己血の採血記録。 */
+        collections: AutologousUnit[];
       }
     // リハビリ。食事と同じ期間継続型で明細は持たないが、進捗 Task と実施記録は持つ。
     // 1 オーダーに実施が何十件も積み上がるので、カードは先頭数件と件数だけを出す。
@@ -864,6 +867,10 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     procedures,
     pickByType<fhir4.MedicationDispense>(prescriptionResources, "MedicationDispense"),
   );
+  const autologousByOrderId = autologousUnitsByOrderId(
+    procedures,
+    pickByType<fhir4.MedicationDispense>(prescriptionResources, "MedicationDispense"),
+  );
   const treatmentTaskByOrderId = treatmentTasksByOrderId(tasks);
   const surgeryTaskByOrderId = surgeryTasksByOrderId(tasks);
   // 手術は出血量などの測定値も持つので、放射線と同じく Observation も渡す。
@@ -1096,6 +1103,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
           status === "in-progress" || status === "completed" || status === "cancelled"
             ? (transfusionDispenseByOrderId.get(serviceRequest.id ?? "") ?? [])
             : [],
+        collections: autologousByOrderId.get(serviceRequest.id ?? "") ?? [],
       };
     }
     if (isRehabServiceRequest(serviceRequest)) {

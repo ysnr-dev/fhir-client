@@ -51,6 +51,16 @@ export function labLabelPdfUrl(orderId: string): string {
   return `/reports/lab_labels/${encodeURIComponent(orderId)}/pdf`;
 }
 
+/** 輸血関連情報カード(患者 1 人ぶん。血液型・不規則抗体・移植後の型・輸血歴・副作用歴)PDF の URL。 */
+export function transfusionCardPdfUrl(patientId: string): string {
+  return `/reports/transfusion_cards/${encodeURIComponent(patientId)}/pdf`;
+}
+
+/** 自己血の採血ラベル PDF の URL(採血記録 1 件 = 1 枚)。 */
+export function autologousLabelPdfUrl(procedureId: string): string {
+  return `/reports/autologous_labels/${encodeURIComponent(procedureId)}/pdf`;
+}
+
 /** 病理検査オーダー 1 件ぶんの検体ラベル PDF の URL(1 ページ = 容器 1 つ)。 */
 export function pathoLabelPdfUrl(orderId: string): string {
   return `/reports/patho_labels/${encodeURIComponent(orderId)}/pdf`;

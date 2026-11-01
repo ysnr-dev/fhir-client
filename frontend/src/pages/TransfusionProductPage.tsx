@@ -28,6 +28,7 @@ interface Draft {
   default_units: string;
   requires_crossmatch: boolean;
   requires_irradiation: boolean;
+  shelf_life_days: string;
   medicine_code: string;
   valid_from: string;
   valid_to: string;
@@ -45,6 +46,7 @@ const emptyDraft: Draft = {
   default_units: "",
   requires_crossmatch: true,
   requires_irradiation: false,
+  shelf_life_days: "",
   medicine_code: "",
   valid_from: "",
   valid_to: "",
@@ -63,6 +65,7 @@ function toPayload(draft: Draft): TransfusionProductPayload {
     default_units: draft.default_units ? Number(draft.default_units) : null,
     requires_crossmatch: draft.requires_crossmatch,
     requires_irradiation: draft.requires_irradiation,
+    shelf_life_days: draft.shelf_life_days ? Number(draft.shelf_life_days) : null,
     medicine_code: draft.medicine_code || null,
     valid_from: draft.valid_from || null,
     valid_to: draft.valid_to || null,
@@ -249,6 +252,7 @@ function ProductEditModal({ productId, onClose }: ProductEditModalProps) {
       default_units: d.default_units === null ? "" : String(d.default_units),
       requires_crossmatch: d.requires_crossmatch,
       requires_irradiation: d.requires_irradiation,
+      shelf_life_days: d.shelf_life_days === null ? "" : String(d.shelf_life_days),
       medicine_code: d.medicine_code ?? "",
       valid_from: d.valid_from ?? "",
       valid_to: d.valid_to ?? "",
@@ -353,6 +357,15 @@ function ProductEditModal({ productId, onClose }: ProductEditModalProps) {
               min={1}
               value={draft.default_units}
               onChange={(e) => setDraft({ ...draft, default_units: e.target.value })}
+            />
+          </label>
+          <label>
+            有効日数
+            <input
+              type="number"
+              min={1}
+              value={draft.shelf_life_days}
+              onChange={(e) => setDraft({ ...draft, shelf_life_days: e.target.value })}
             />
           </label>
           <label>

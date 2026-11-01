@@ -1,0 +1,422 @@
+{
+ "version": "0.11.0",
+ "title": "自己血採血ラベル",
+ "report": {
+  "paper-type": "user",
+  "width": 170.1,
+  "height": 113.4,
+  "orientation": "portrait",
+  "margin": [
+   0,
+   0,
+   0,
+   0
+  ]
+ },
+ "state": {
+  "layout-guides": []
+ },
+ "items": [
+  {
+   "id": "barcode_img",
+   "type": "image-block",
+   "display": true,
+   "description": "",
+   "x": 8,
+   "y": 4,
+   "width": 114,
+   "height": 24,
+   "style": {
+    "position-x": "center",
+    "position-y": "middle"
+   }
+  },
+  {
+   "id": "autologous",
+   "type": "text",
+   "display": true,
+   "description": "",
+   "x": 128,
+   "y": 6,
+   "width": 36,
+   "height": 14,
+   "texts": [
+    "自己血"
+   ],
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 11,
+    "font-style": [
+     "bold"
+    ],
+    "color": "#000000",
+    "text-align": "left",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": ""
+   }
+  },
+  {
+   "id": "label_number",
+   "type": "text-block",
+   "display": true,
+   "description": "",
+   "x": 8,
+   "y": 29,
+   "width": 114,
+   "height": 8,
+   "value": "",
+   "multiple-line": false,
+   "format": {
+    "base": "",
+    "type": ""
+   },
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 7,
+    "font-style": [],
+    "color": "#000000",
+    "text-align": "center",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": "",
+    "overflow": "truncate",
+    "word-wrap": "break-word"
+   }
+  },
+  {
+   "id": "pt_id",
+   "type": "text-block",
+   "display": true,
+   "description": "",
+   "x": 5,
+   "y": 39,
+   "width": 40,
+   "height": 12,
+   "value": "",
+   "multiple-line": false,
+   "format": {
+    "base": "",
+    "type": ""
+   },
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 10,
+    "font-style": [
+     "bold"
+    ],
+    "color": "#000000",
+    "text-align": "left",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": "",
+    "overflow": "truncate",
+    "word-wrap": "break-word"
+   }
+  },
+  {
+   "id": "pt_name",
+   "type": "text-block",
+   "display": true,
+   "description": "",
+   "x": 48,
+   "y": 39,
+   "width": 117,
+   "height": 12,
+   "value": "",
+   "multiple-line": false,
+   "format": {
+    "base": "",
+    "type": ""
+   },
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 10,
+    "font-style": [
+     "bold"
+    ],
+    "color": "#000000",
+    "text-align": "left",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": "",
+    "overflow": "truncate",
+    "word-wrap": "break-word"
+   }
+  },
+  {
+   "id": "pt_kana",
+   "type": "text-block",
+   "display": true,
+   "description": "",
+   "x": 5,
+   "y": 51,
+   "width": 72,
+   "height": 10,
+   "value": "",
+   "multiple-line": false,
+   "format": {
+    "base": "",
+    "type": ""
+   },
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 8,
+    "font-style": [],
+    "color": "#000000",
+    "text-align": "left",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": "",
+    "overflow": "truncate",
+    "word-wrap": "break-word"
+   }
+  },
+  {
+   "id": "pt_birthdate",
+   "type": "text-block",
+   "display": true,
+   "description": "",
+   "x": 80,
+   "y": 51,
+   "width": 52,
+   "height": 10,
+   "value": "",
+   "multiple-line": false,
+   "format": {
+    "base": "",
+    "type": ""
+   },
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 8,
+    "font-style": [],
+    "color": "#000000",
+    "text-align": "left",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": "",
+    "overflow": "truncate",
+    "word-wrap": "break-word"
+   }
+  },
+  {
+   "id": "pt_gender",
+   "type": "text-block",
+   "display": true,
+   "description": "",
+   "x": 135,
+   "y": 51,
+   "width": 30,
+   "height": 10,
+   "value": "",
+   "multiple-line": false,
+   "format": {
+    "base": "",
+    "type": ""
+   },
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 8,
+    "font-style": [],
+    "color": "#000000",
+    "text-align": "right",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": "",
+    "overflow": "truncate",
+    "word-wrap": "break-word"
+   }
+  },
+  {
+   "id": "blood_type",
+   "type": "text-block",
+   "display": true,
+   "description": "",
+   "x": 5,
+   "y": 62,
+   "width": 60,
+   "height": 11,
+   "value": "",
+   "multiple-line": false,
+   "format": {
+    "base": "",
+    "type": ""
+   },
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 10,
+    "font-style": [
+     "bold"
+    ],
+    "color": "#000000",
+    "text-align": "left",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": "",
+    "overflow": "truncate",
+    "word-wrap": "break-word"
+   }
+  },
+  {
+   "id": "product_line",
+   "type": "text-block",
+   "display": true,
+   "description": "",
+   "x": 66,
+   "y": 62,
+   "width": 99,
+   "height": 11,
+   "value": "",
+   "multiple-line": false,
+   "format": {
+    "base": "",
+    "type": ""
+   },
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 8,
+    "font-style": [],
+    "color": "#000000",
+    "text-align": "left",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": "",
+    "overflow": "truncate",
+    "word-wrap": "break-word"
+   }
+  },
+  {
+   "id": "collected_line",
+   "type": "text-block",
+   "display": true,
+   "description": "",
+   "x": 5,
+   "y": 74,
+   "width": 160,
+   "height": 10,
+   "value": "",
+   "multiple-line": false,
+   "format": {
+    "base": "",
+    "type": ""
+   },
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 8,
+    "font-style": [],
+    "color": "#000000",
+    "text-align": "left",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": "",
+    "overflow": "truncate",
+    "word-wrap": "break-word"
+   }
+  },
+  {
+   "id": "dates_line",
+   "type": "text-block",
+   "display": true,
+   "description": "",
+   "x": 5,
+   "y": 85,
+   "width": 160,
+   "height": 10,
+   "value": "",
+   "multiple-line": false,
+   "format": {
+    "base": "",
+    "type": ""
+   },
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 8,
+    "font-style": [
+     "bold"
+    ],
+    "color": "#000000",
+    "text-align": "left",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": "",
+    "overflow": "truncate",
+    "word-wrap": "break-word"
+   }
+  },
+  {
+   "id": "",
+   "type": "text",
+   "display": true,
+   "description": "",
+   "x": 5,
+   "y": 97,
+   "width": 40,
+   "height": 10,
+   "texts": [
+    "本人署名"
+   ],
+   "style": {
+    "font-family": [
+     "IPAGothic"
+    ],
+    "font-size": 8,
+    "font-style": [],
+    "color": "#000000",
+    "text-align": "left",
+    "vertical-align": "top",
+    "letter-spacing": "",
+    "line-height": "",
+    "line-height-ratio": ""
+   }
+  },
+  {
+   "id": "",
+   "type": "line",
+   "display": true,
+   "description": "",
+   "x1": 45,
+   "y1": 107,
+   "x2": 165,
+   "y2": 107,
+   "style": {
+    "border-color": "#000000",
+    "border-width": 0.75,
+    "border-style": "solid"
+   }
+  }
+ ]
+}

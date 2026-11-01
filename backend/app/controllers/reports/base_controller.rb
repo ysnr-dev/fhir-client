@@ -29,6 +29,14 @@ module Reports
       render json: { error: "order_not_found" }, status: :not_found
     end
 
+    rescue_from TransfusionCardReport::NotFound do
+      render json: { error: "patient_not_found" }, status: :not_found
+    end
+
+    rescue_from AutologousLabelReport::NotFound do
+      render json: { error: "collection_not_found" }, status: :not_found
+    end
+
     rescue_from PathoLabelReport::NotPathoOrder do
       render json: { error: "not_patho_order" }, status: :unprocessable_content
     end

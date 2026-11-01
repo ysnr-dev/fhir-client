@@ -1,4 +1,12 @@
-import { useBloodType, useBodyMeasures, usePatient, usePregnancy, useRecentLabResults } from "../api/queries";
+import {
+  useBloodType,
+  useBodyMeasures,
+  usePatient,
+  usePregnancy,
+  useRecentLabResults,
+  useTransfusionProfile,
+} from "../api/queries";
+import { transfusionCardPdfUrl } from "../api/reportsClient";
 import { bloodTypeUnconfirmedLabel, labComponentLabel } from "../fhir/bloodTypeHelpers";
 import {
   measurementLabel,
@@ -23,12 +31,18 @@ export function PatientBodySection({
   patientId,
   onEditBloodType,
   onEditPregnancy,
+  onEditAntibody,
+  onEditTransplant,
 }: {
   patientId: string;
   onEditBloodType: () => void;
   onEditPregnancy: () => void;
+  onEditAntibody: () => void;
+  onEditTransplant: () => void;
 }) {
   const { summary, isLoading, error } = useBloodType(patientId);
+  // 輸血に関わる手入力の属性(不規則抗体の特異性・移植後の血液型)。
+  const profile = useTransfusionProfile(patientId);
   const unconfirmed = bloodTypeUnconfirmedLabel(summary);
   const pregnancy = usePregnancy(patientId);
   const pregnancySummary = summarizePregnancy(pregnancy.observations);
@@ -53,13 +67,23 @@ export function PatientBodySection({
           <button type="button" onClick={onEditBloodType}>
             {summary?.manual ? "申告編集" : "申告登録"}
           </button>
+          <button type="button" onClick={onEditAntibody}>
+            {profile.antibody ? "抗体編集" : "抗体登録"}
+          </button>
+          <button type="button" onClick={onEditTransplant}>
+            {profile.transplant ? "移植編集" : "移植登録"}
+          </button>
+          {/* 輸血関連情報カード(血液型・不規則抗体・移植後の型・輸血歴・副作用歴)。 */}
+          <a className="button" href={transfusionCardPdfUrl(patientId)} target="_blank" rel="noopener">
+            輸血カード
+          </a>
           <button type="button" onClick={onEditPregnancy}>
             {pregnancySummary ? "妊娠・授乳編集" : "妊娠・授乳登録"}
           </button>
         </div>
       </div>
 
-      <ErrorBanner error={error ?? pregnancy.error ?? bodyMeasures.error ?? renalResults.error} />
+      <ErrorBanner error={error ?? pregnancy.error ?? bodyMeasures.error ?? renalResults.error ?? profile.error} />
 
       {isLoading ? (
         <p>読み込み中...</p>
@@ -92,6 +116,20 @@ export function PatientBodySection({
                 <dd>
                   {summary.antibodyScreen
                     ? `${summary.antibodyScreen.value} ${summary.antibodyScreen.date}`
+                    : "-"}
+                </dd>
+                <dt>抗体の特異性</dt>
+                <dd>
+                  {profile.antibody
+                    ? [profile.antibody.label, profile.antibody.effectiveDate].filter(Boolean).join(" ")
+                    : "-"}
+                </dd>
+                <dt>移植後の型</dt>
+                <dd>
+                  {profile.transplant
+                    ? `赤血球 ${bloodTypeLabel(profile.transplant.rbcAbo, profile.transplant.rbcRhd) || "-"} / 血漿・血小板 ${
+                        bloodTypeLabel(profile.transplant.plasmaAbo, profile.transplant.plasmaRhd) || "-"
+                      }（移植 ${profile.transplant.transplantDate || "日付不明"}）`
                     : "-"}
                 </dd>
                 <dt>申告</dt>

@@ -22,7 +22,9 @@ import {
 import { RowPictograms } from "../components/PatientListRowParts";
 import { TransfusionBloodBadge } from "../components/TransfusionBloodBadge";
 import { TransfusionOrderDetailPanel } from "../components/TransfusionOrderDetailPanel";
+import { AutologousCollectionModal } from "../components/AutologousCollectionModal";
 import { TransfusionDispenseModal } from "../components/TransfusionDispenseModal";
+import { useTransfusionProductOptions } from "../api/masterQueries";
 import { splitPerformBundle } from "../fhir/radResultHelpers";
 import { transfusionDispensesByOrderId } from "../fhir/transfusionDispenseHelpers";
 import { TransfusionPerformModal } from "../components/TransfusionPerformModal";
@@ -96,6 +98,14 @@ export function TransfusionWorklistPage() {
   const [performingId, setPerformingId] = useState<string | null>(null);
   // 出庫入力を開いているオーダー。
   const [dispensingId, setDispensingId] = useState<string | null>(null);
+  // 自己血の採血を開いているオーダー。
+  const [collectingId, setCollectingId] = useState<string | null>(null);
+  // 自己血の製剤コード(採血のボタンを出す行の判定)。
+  const products = useTransfusionProductOptions();
+  const autoCodes = useMemo(
+    () => new Set((products.data?.items ?? []).filter((i) => i.category === "auto").map((i) => i.item_code)),
+    [products.data],
+  );
 
   // 製剤の列が長くなるので、この画面だけ幅を広げる(病理・検体検査一覧と同じ)。
   useEffect(() => {
@@ -115,6 +125,7 @@ export function TransfusionWorklistPage() {
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const performing = worklist.data?.rows.find((row) => row.order.id === performingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
+  const collecting = worklist.data?.rows.find((row) => row.order.id === collectingId);
 
   const patientIds = useMemo(
     () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
@@ -209,6 +220,8 @@ export function TransfusionWorklistPage() {
                     onView={() => setViewingId(row.order.id ?? null)}
                     onPerform={() => setPerformingId(row.order.id ?? null)}
                     onDispense={() => setDispensingId(row.order.id ?? null)}
+                    onCollect={() => setCollectingId(row.order.id ?? null)}
+                    canCollect={canCollect(row, autoCodes)}
                     onChangeStatus={(status) => changeStatus(row, status)}
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id, attentionRowClass(row))}
                   />
@@ -241,6 +254,8 @@ export function TransfusionWorklistPage() {
                 onView={() => setViewingId(selectedRow.order.id ?? null)}
                 onPerform={() => setPerformingId(selectedRow.order.id ?? null)}
                 onDispense={() => setDispensingId(selectedRow.order.id ?? null)}
+                onCollect={() => setCollectingId(selectedRow.order.id ?? null)}
+                canCollect={canCollect(selectedRow, autoCodes)}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
               <WorklistMenuItems
@@ -265,6 +280,9 @@ export function TransfusionWorklistPage() {
       )}
       {dispensing && (
         <TransfusionDispenseModal row={dispensing} onClose={() => setDispensingId(null)} />
+      )}
+      {collecting && (
+        <AutologousCollectionModal row={collecting} onClose={() => setCollectingId(null)} />
       )}
     </div>
   );
@@ -414,6 +432,13 @@ function secondaryActionsOf(row: TransfusionWorklistRow) {
   );
 }
 
+/** 自己血の製剤を含み、まだ出庫していないオーダー。採血(貯血)の入力を出す。 */
+function canCollect(row: TransfusionWorklistRow, autoCodes: Set<string>): boolean {
+  const status = transfusionTaskStatus(row.task);
+  if (status !== "requested" && status !== "accepted") return false;
+  return transfusionOrderProducts(row.itemRequests, row.order).some((p) => autoCodes.has(p.productCode));
+}
+
 // 至急と、同意書が未取得のものを目立たせる。中止した行はもう出さないので警告しない。
 function attentionRowClass(row: TransfusionWorklistRow): string | undefined {
   const summary = summarizeTransfusionOrder(row.order);
@@ -430,6 +455,8 @@ function WorklistRow({
   onView,
   onPerform,
   onDispense,
+  onCollect,
+  canCollect,
   onChangeStatus,
   rowProps,
 }: {
@@ -440,6 +467,8 @@ function WorklistRow({
   onView: () => void;
   onPerform: () => void;
   onDispense: () => void;
+  onCollect: () => void;
+  canCollect: boolean;
   onChangeStatus: (status: TransfusionTaskStatus) => void;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
@@ -509,6 +538,8 @@ function WorklistRow({
           onView={onView}
           onPerform={onPerform}
           onDispense={onDispense}
+          onCollect={onCollect}
+          canCollect={canCollect}
           onChangeStatus={onChangeStatus}
         />
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(病理一覧と同じ)。 */}
@@ -533,6 +564,8 @@ function WorklistRowButtons({
   onView,
   onPerform,
   onDispense,
+  onCollect,
+  canCollect,
   onChangeStatus,
 }: {
   row: TransfusionWorklistRow;
@@ -540,11 +573,19 @@ function WorklistRowButtons({
   onView: () => void;
   onPerform: () => void;
   onDispense: () => void;
+  onCollect: () => void;
+  canCollect: boolean;
   onChangeStatus: (status: TransfusionTaskStatus) => void;
 }) {
   const status = transfusionTaskStatus(row.task);
   return (
     <>
+      {/* 自己血の採血(貯血)。出庫の前に採った血を 1 本ずつ記録する。 */}
+      {canCollect && (
+        <button type="button" onClick={onCollect}>
+          採血
+        </button>
+      )}
       {transfusionTaskActions(status)
         .filter((action) => !action.secondary)
         .map((action) => (

@@ -4,9 +4,14 @@ import {
   useActiveFlags,
   useBloodType,
   useTransfusionLocationOptions,
+  useTransfusionProfile,
   useTransfusionReactionHistory,
   useTransfusionSettings,
 } from "../api/queries";
+import {
+  transplantAdvisory,
+  type TransplantBloodTypeSummary,
+} from "../fhir/transfusionProfileHelpers";
 import type { Advisory } from "../fhir/advisoryHelpers";
 import {
   bloodTypeUnconfirmedLabel,
@@ -97,10 +102,25 @@ interface TransfusionOrderFormProps {
   hideSubmit?: boolean;
 }
 
-/** 検査で確定した型だけを、製剤の型を決める材料にする。 */
-function patientForOrder(summary: BloodTypeSummary | null): PatientBloodTypeForOrder {
-  if (!summary?.tested) return { abo: "", rhd: "" };
-  return { abo: summary.abo as AboBloodType, rhd: summary.rhd as RhdBloodType };
+/**
+ * 検査で確定した型だけを、製剤の型を決める材料にする。造血幹細胞移植後の患者は、
+ * 登録した「輸血に使う型」(赤血球と血漿・血小板で別)を患者の型より優先する。
+ */
+function patientForOrder(
+  summary: BloodTypeSummary | null,
+  transplant: TransplantBloodTypeSummary | null,
+): PatientBloodTypeForOrder {
+  const base: PatientBloodTypeForOrder = summary?.tested
+    ? { abo: summary.abo as AboBloodType, rhd: summary.rhd as RhdBloodType }
+    : { abo: "", rhd: "" };
+  if (!transplant) return base;
+  return {
+    ...base,
+    transplant: {
+      rbc: { abo: transplant.rbcAbo, rhd: transplant.rbcRhd },
+      plasma: { abo: transplant.plasmaAbo, rhd: transplant.plasmaRhd },
+    },
+  };
 }
 
 export function TransfusionOrderForm({
@@ -133,7 +153,11 @@ export function TransfusionOrderForm({
   const settings = useTransfusionSettings();
   const bloodType = useBloodType(setMode ? undefined : patientId);
   const patientBloodType = bloodType.summary;
-  const patient = useMemo(() => patientForOrder(patientBloodType), [patientBloodType]);
+  const profile = useTransfusionProfile(setMode ? undefined : patientId);
+  const patient = useMemo(
+    () => patientForOrder(patientBloodType, profile.transplant),
+    [patientBloodType, profile.transplant],
+  );
   const level = urgencyLevelOf(values.priority);
   const prefilled = useRef(false);
   // 先頭のチップで選んだ「出す型」。製剤を足したときの既定にも使う。
@@ -232,6 +256,8 @@ export function TransfusionOrderForm({
       if (antibody) list.push(antibody);
     }
     list.push(...differentBloodTypeAdvisories(values.products, patient));
+    const transplant = transplantAdvisory(profile.transplant);
+    if (transplant) list.push(transplant);
     const history = reactionHistoryAdvisory(reactions.history);
     if (history) list.push(history);
     return list;
@@ -244,6 +270,7 @@ export function TransfusionOrderForm({
     values.products,
     settings,
     patient,
+    profile.transplant,
     reactions.history,
   ]);
   const session = useAdvisorySession(advisoryInput, "transfusion-order", !setMode);
@@ -479,6 +506,7 @@ export function TransfusionOrderForm({
           {/* 患者の型(検査で確定した型だけをオーダーに写す。確定していなければ「不明」)。 */}
           <p className="transfusion-order__patient-blood-type">
             患者: <TransfusionBloodBadge abo={values.patientAbo} rhd={values.patientRhd} />
+            {profile.transplant && <span className="dose-conversion__badge">移植後</span>}
             {unconfirmed && (
               <span
                 className={`blood-type__unconfirmed${

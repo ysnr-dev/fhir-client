@@ -18485,12 +18485,14 @@ button.meal-calendar__cell:hover {
   white-space: nowrap;
 }
 
-/* 副作用の症状項目。選択中は副作用「あり」と同じ注意色。 */
+/* 副作用の症状項目・抗体の特異性・抗原陰性のチップの並び。選択中の輪郭(box-shadow 2px)が
+   親の overflow で切れないよう、その分の余白を内側に取る。 */
 .transfusion-perform__symptoms {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin: 8px 0;
+  padding: 2px;
 }
 
 .transfusion-chip--symptom {

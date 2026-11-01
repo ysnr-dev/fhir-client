@@ -2,11 +2,15 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useTransfusionProductOptions } from "../api/masterQueries";
 import {
+  useAutologousUnits,
   useBloodType,
   useRegisterTransfusionDispense,
+  useTransfusionProfile,
   useTransfusionSettings,
   type TransfusionWorklistRow,
 } from "../api/queries";
+import type { AutologousUnit } from "../fhir/autologousHelpers";
+import { ANTIGEN_OPTIONS, antibodyLabel } from "../fhir/transfusionProfileHelpers";
 import type { Advisory } from "../fhir/advisoryHelpers";
 import { parseIsbt128 } from "../fhir/isbt128";
 import { displayName } from "../fhir/patientHelpers";
@@ -73,6 +77,10 @@ export function TransfusionDispenseModal({ row, onClose }: Props) {
   const settings = useTransfusionSettings();
   const patientId = order.subject?.reference?.split("/").pop();
   const bloodType = useBloodType(patientId);
+  // 不規則抗体の特異性(抗原陰性血の確認)と移植後の型、採血済みの自己血(本人の血かの照合)。
+  const profile = useTransfusionProfile(patientId);
+  const antibodies = useMemo(() => profile.antibody?.antibodies ?? [], [profile.antibody]);
+  const autologous = useAutologousUnits(patientId);
   const summary = summarizeTransfusionOrder(order);
   const ordered = useMemo(() => transfusionOrderProducts(itemRequests, order), [itemRequests, order]);
 
@@ -85,8 +93,18 @@ export function TransfusionDispenseModal({ row, onClose }: Props) {
   const [scanError, setScanError] = useState<string | null>(null);
 
   const patientType = useMemo(
-    () => patientTypeForDispense(bloodType.summary, summary),
-    [bloodType.summary, summary],
+    () => ({
+      ...patientTypeForDispense(bloodType.summary, summary),
+      ...(profile.transplant
+        ? {
+            transplant: {
+              rbc: { abo: profile.transplant.rbcAbo, rhd: profile.transplant.rbcRhd },
+              plasma: { abo: profile.transplant.plasmaAbo, rhd: profile.transplant.plasmaRhd },
+            },
+          }
+        : {}),
+    }),
+    [bloodType.summary, summary, profile.transplant],
   );
   const advisoryInput = useMemo<Advisory[]>(() => {
     const list = dispenseAdvisories(values.bags, {
@@ -103,6 +121,8 @@ export function TransfusionDispenseModal({ row, onClose }: Props) {
       })),
       productItems,
       antibodyScreen: bloodType.summary?.antibodyScreen?.value ?? "",
+      antibodies,
+      autologousUnits: autologous.units.map((unit) => unit.lotNumber),
     });
     if (!bloodType.isLoading) {
       const unconfirmed = bloodTypeUnconfirmedAdvisory(bloodType.summary);
@@ -111,7 +131,7 @@ export function TransfusionDispenseModal({ row, onClose }: Props) {
       if (antibody) list.push(antibody);
     }
     return list;
-  }, [values.bags, patientType, summary, order.occurrenceDateTime, ordered, productItems, bloodType, settings]);
+  }, [values.bags, patientType, summary, order.occurrenceDateTime, ordered, productItems, bloodType, settings, antibodies, autologous.units]);
   const session = useAdvisorySession(advisoryInput, "transfusion-dispense");
   const [confirmSubmit, setConfirmSubmit] = useState<(() => void) | null>(null);
 
@@ -127,6 +147,19 @@ export function TransfusionDispenseModal({ row, onClose }: Props) {
       ...prev,
       bags: prev.bags.map((bag, i) => (i === index ? { ...bag, ...patch } : bag)),
     }));
+  }
+
+  /** 採血済みの自己血を選んだら、製剤番号・型・有効期限・量をその行に写す。 */
+  function handleAutologousSelect(index: number, unit: AutologousUnit) {
+    updateBag(index, {
+      productCode: unit.productCode || values.bags[index]?.productCode || "",
+      productName: unit.productName || values.bags[index]?.productName || "",
+      lotNumber: unit.lotNumber,
+      abo: unit.abo as TransfusionDispenseBag["abo"],
+      rhd: unit.rhd as TransfusionDispenseBag["rhd"],
+      expiry: unit.expiry,
+      units: unit.volume.replace(/[^\d.]/g, "") || values.bags[index]?.units || "",
+    });
   }
 
   /** 製剤を選び直したときは、コード・名称・単位の呼び方をまとめて入れ替える。 */
@@ -236,6 +269,7 @@ export function TransfusionDispenseModal({ row, onClose }: Props) {
         <ErrorBanner error={register.error} />
         <ErrorBanner error={products.error} />
         <ErrorBanner error={bloodType.error} />
+        <ErrorBanner error={profile.error ?? autologous.error} />
         <AdvisoryNotice advisories={session.advisories} />
 
         {/* 誰の何型の輸血で、何を依頼されたか。割付の突き合わせの相手なので入力欄より先に出す。 */}
@@ -346,6 +380,9 @@ export function TransfusionDispenseModal({ row, onClose }: Props) {
                 bag={bag}
                 productItems={productItems}
                 crossmatchNeeded={crossmatchNeeded}
+                antibodies={antibodies}
+                autologousUnits={autologous.units}
+                onAutologousSelect={(unit) => handleAutologousSelect(index, unit)}
                 onProductChange={(code) => handleProductChange(index, code)}
                 onChange={(patch) => updateBag(index, patch)}
                 onRemove={() => removeBag(index)}
@@ -398,20 +435,30 @@ function DispenseBagCard({
   bag,
   productItems,
   crossmatchNeeded,
+  antibodies,
+  autologousUnits,
+  onAutologousSelect,
   onProductChange,
   onChange,
   onRemove,
 }: {
   index: number;
   bag: TransfusionDispenseBag;
-  productItems: { item_code: string; name: string; unit_label: string }[];
+  productItems: { item_code: string; name: string; unit_label: string; category: string }[];
   crossmatchNeeded: boolean;
+  /** 患者の不規則抗体の特異性。あれば赤血球のバッグに抗原陰性の確認欄を出す。 */
+  antibodies: string[];
+  /** 採血済みの自己血。自己血のバッグはここから選ぶ。 */
+  autologousUnits: AutologousUnit[];
+  onAutologousSelect: (unit: AutologousUnit) => void;
   onProductChange: (code: string) => void;
   onChange: (patch: Partial<TransfusionDispenseBag>) => void;
   onRemove: () => void;
 }) {
   const missing =
     bag.productCode && !productItems.some((i) => i.item_code === bag.productCode);
+  const category = productItems.find((i) => i.item_code === bag.productCode)?.category;
+  const relevantAntibodies = category === "rbc" ? antibodies.filter((c) => c !== "other") : [];
 
   return (
     <li className="transfusion-order__product">
@@ -454,6 +501,27 @@ function DispenseBagCard({
         />
       </label>
       <span className="transfusion-order__product-unit-label">{bag.unitLabel}</span>
+
+      {/* 自己血は本人の採血記録から選ぶ(製剤番号・型・有効期限が写る)。 */}
+      {category === "auto" && (
+        <label className="transfusion-order__product-name">
+          採血済みの自己血
+          <select
+            value={autologousUnits.find((u) => u.lotNumber === bag.lotNumber)?.dispenseId ?? ""}
+            onChange={(e) => {
+              const unit = autologousUnits.find((u) => u.dispenseId === e.target.value);
+              if (unit) onAutologousSelect(unit);
+            }}
+          >
+            <option value="">選択してください</option>
+            {autologousUnits.map((unit) => (
+              <option key={unit.dispenseId} value={unit.dispenseId}>
+                {unit.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label className="transfusion-order__product-note">
         製剤番号 *
@@ -512,6 +580,38 @@ function DispenseBagCard({
         />
         照射済
       </label>
+
+      {/* 不規則抗体のある患者に出す赤血球。同定した抗体の抗原について陰性を確認した印。 */}
+      {relevantAntibodies.length > 0 && (
+        <div className="transfusion-order__blood-type transfusion-order__product-blood-type">
+          <span className="transfusion-order__blood-type-label">抗原陰性</span>
+          <div className="transfusion-order__chips" role="group" aria-label={`バッグ${index + 1}の抗原陰性`}>
+            {ANTIGEN_OPTIONS.filter((o) => relevantAntibodies.includes(o.code)).map((option) => {
+              const selected = bag.antigenNegative.includes(option.code);
+              return (
+                <button
+                  key={option.code}
+                  type="button"
+                  aria-pressed={selected}
+                  title={antibodyLabel(option.code)}
+                  className={`transfusion-chip transfusion-chip--symptom${
+                    selected ? " transfusion-chip--selected transfusion-chip--rhd-positive" : ""
+                  }`}
+                  onClick={() =>
+                    onChange({
+                      antigenNegative: selected
+                        ? bag.antigenNegative.filter((c) => c !== option.code)
+                        : [...bag.antigenNegative, option.code],
+                    })
+                  }
+                >
+                  {option.display}(-)
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </li>
   );
 }

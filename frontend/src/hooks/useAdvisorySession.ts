@@ -22,6 +22,7 @@ export type AdvisoryContext =
   | "transfusion-order"
   | "transfusion-dispense"
   | "transfusion-perform"
+  | "autologous-collection"
   | "medical-management"
   | "regimen-apply"
   | "regimen-cycle";

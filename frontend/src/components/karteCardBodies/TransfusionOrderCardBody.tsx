@@ -1,4 +1,5 @@
 import { TransfusionBloodBadge } from "../TransfusionBloodBadge";
+import type { AutologousUnit } from "../../fhir/autologousHelpers";
 import type { TransfusionDispenseDisplay } from "../../fhir/transfusionDispenseHelpers";
 import type { TransfusionPerformDisplay } from "../../fhir/transfusionResultHelpers";
 import {
@@ -27,11 +28,13 @@ export function TransfusionOrderCardBody({
   itemRequests,
   performs,
   dispenses = [],
+  collections = [],
 }: {
   serviceRequest: fhir4.ServiceRequest;
   itemRequests: fhir4.ServiceRequest[];
   performs: TransfusionPerformDisplay[];
   dispenses?: TransfusionDispenseDisplay[];
+  collections?: AutologousUnit[];
 }) {
   const products = transfusionOrderProducts(itemRequests, serviceRequest);
   const comment = transfusionOrderComment(serviceRequest);
@@ -65,6 +68,22 @@ export function TransfusionOrderCardBody({
         </ul>
         {comment && <p className="karte-perform__note">{comment}</p>}
       </div>
+      {/* 自己血の採血記録。 */}
+      {collections.length > 0 && (
+        <section className="karte-perform">
+          <div className="karte-perform__head">
+            <span className="karte-perform__title">採血</span>
+          </div>
+          <div className="karte-perform__row">
+            <span className="karte-perform__label">自己血:</span>
+            <span className="karte-perform__values">
+              {collections.map((unit) => (
+                <span key={unit.dispenseId}>{unit.label}</span>
+              ))}
+            </span>
+          </div>
+        </section>
+      )}
       {/* 出庫記録。どのバッグを出したか(製剤番号・期限・照射・交差)は実施の前に確かめるもの。
           バッグの型は詳細で読む(カードの血液型は依頼した製剤の型だけにする)。 */}
       {dispenses.map((dispense) => (

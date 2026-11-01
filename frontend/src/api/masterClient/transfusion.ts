@@ -22,6 +22,8 @@ export interface TransfusionProduct {
   requires_crossmatch: boolean;
   /** 放射線照射が要る製剤か。出庫入力で未照射のバッグに警告を出す。 */
   requires_irradiation: boolean;
+  /** 有効日数(採血日からの日数)。自己血の有効期限の算出に使う。 */
+  shelf_life_days: number | null;
   /** 医事会計へ送るレセプト電算の医薬品コード。自己血のように薬価収載が無いものは空。 */
   medicine_code: string | null;
   valid_from: string | null;
@@ -40,6 +42,7 @@ export interface TransfusionProductPayload {
   default_units?: number | null;
   requires_crossmatch?: boolean;
   requires_irradiation?: boolean;
+  shelf_life_days?: number | null;
   medicine_code?: string | null;
   valid_from?: string | null;
   valid_to?: string | null;
