@@ -51,6 +51,11 @@ export function labLabelPdfUrl(orderId: string): string {
   return `/reports/lab_labels/${encodeURIComponent(orderId)}/pdf`;
 }
 
+/** 病理検査オーダー 1 件ぶんの検体ラベル PDF の URL(1 ページ = 容器 1 つ)。 */
+export function pathoLabelPdfUrl(orderId: string): string {
+  return `/reports/patho_labels/${encodeURIComponent(orderId)}/pdf`;
+}
+
 /**
  * 処方オーダー 1 件ぶんの処方箋 PDF の URL。院外処方は様式第2号、それ以外は院内の
  * 簡易様式で、どちらで刷るかはオーダーの区分から backend が決める。

@@ -155,6 +155,8 @@ Rails.application.routes.draw do
     get "questionnaire_responses/:id/pdf", to: "questionnaire_response_pdfs#show"
     # 検体ラベル(オーダー 1 件ぶん。1 ページ = 採取管 1 本)
     get "lab_labels/:order_id/pdf", to: "lab_label_pdfs#show"
+    # 病理の検体ラベル(オーダー 1 件ぶん。1 ページ = 容器 1 つ)
+    get "patho_labels/:order_id/pdf", to: "patho_label_pdfs#show"
     # 処方箋(オーダー 1 件ぶん。院外は様式第2号、それ以外は院内の簡易様式)
     get "prescriptions/:order_id/pdf", to: "prescription_pdfs#show"
     # 注射箋(注射指示票)・注射ラベル。処方箋と同じくオーダー id だけを受け取る。

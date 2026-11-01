@@ -18,6 +18,7 @@ import {
   specimenTypeCodeOf,
 } from "../fhir/labSpecimenHelpers";
 import { labTaskStatus } from "../fhir/labTaskHelpers";
+import { isPathoContainerSpecimen } from "../fhir/pathoOrderHelpers";
 import { displayName } from "../fhir/patientHelpers";
 
 // 検体到着確認(docs/lab-arrival-design.md §4-1)。検体ラベルのバーコードを
@@ -106,6 +107,11 @@ export function LabArrivalPage() {
     const specimen = await fetchLabelSpecimenByNumber(number);
     if (!specimen) {
       pushEntry({ number, kind: "error", message: "この番号の発行記録がありません", warnings: [] });
+      return;
+    }
+    // 病理の容器も同じ番号の体系で刷るので、取り違えて読んだら検体検査の到着にしない。
+    if (isPathoContainerSpecimen(specimen)) {
+      pushEntry({ number, kind: "error", message: "病理検査の検体です(病理の受付で読んでください)", warnings: [] });
       return;
     }
 

@@ -2,6 +2,7 @@ import { today } from "../lib/dates";
 import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
+import { pathoLabelPdfUrl } from "../api/reportsClient";
 import {
   useSelfDepartments,
   usePathoWorklist,
@@ -478,14 +479,20 @@ function WorklistRow({
           onEnterReport={onEnterReport}
           onChangeStatus={onChangeStatus}
         />
-        {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。 */}
-        {secondaryActions.length > 0 && (
+        {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。
+            ラベルは病棟・外来が採取時に刷るものなので、部門では刷り直しだけをここに置く。 */}
+        {(secondaryActions.length > 0 || status !== "cancelled") && (
           <RowMenu label="この検査の操作" escapesClipping>
             <WorklistMenuItems
               actions={secondaryActions}
               pending={pending}
               onChangeStatus={onChangeStatus}
             />
+            {status !== "cancelled" && (
+              <a className="row-menu__item" href={pathoLabelPdfUrl(order.id ?? "")} target="_blank" rel="noopener">
+                ラベル発行
+              </a>
+            )}
           </RowMenu>
         )}
       </td>

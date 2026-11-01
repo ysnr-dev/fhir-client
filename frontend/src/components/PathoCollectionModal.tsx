@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useRecordPathoCollection } from "../api/queries";
+import { pathoLabelPdfUrl } from "../api/reportsClient";
 import {
   LATERALITY_OPTIONS,
   isPositiveCount,
@@ -18,7 +19,8 @@ import { PathoOrganSearchModal } from "./PathoOrganSearchModal";
 //
 // 依頼時の検体個数・容器数は採取するまで分からない仮の値のことが多く、直さずにラベルを出して搬送すると
 // 受付で数が合わない(JAHIS 患者安全ガイド 病理編 7.1.2)。採取した場で検体ごとの個数・容器数と、
-// 採取臓器・左右を直し、採取日時を残す。
+// 採取臓器・左右を直し、採取日時を残す。直した容器数でそのまま検体ラベルを刷る(同 7.1.3「検体数／容器数を
+// 入力(修正)した場合には、検体ラベルが連動して印刷される」)。
 
 export function PathoCollectionModal({
   serviceRequest,
@@ -35,6 +37,7 @@ export function PathoCollectionModal({
   );
   const [organSearchIndex, setOrganSearchIndex] = useState<number | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [printLabel, setPrintLabel] = useState(true);
   const record = useRecordPathoCollection();
 
   function update(index: number, patch: Partial<PathoSpecimenValues>) {
@@ -55,9 +58,19 @@ export function PathoCollectionModal({
       return;
     }
     setValidationError(null);
+    // ポップアップブロックを避けるため、クリックの同期処理でラベルのタブを先に開き、保存できたら PDF に差し替える
+    // (保存前に刷ると、直す前の容器数でラベルができてしまう)。
+    const labelTab = printLabel ? window.open("", "_blank") : null;
+    if (labelTab) labelTab.opener = null;
     record.mutate(
       { header: serviceRequest, itemRequests, specimens, collectedDateTime: toFhirDateTime(collectedAt) },
-      { onSuccess: onClose },
+      {
+        onSuccess: () => {
+          labelTab?.location.replace(pathoLabelPdfUrl(serviceRequest.id ?? ""));
+          onClose();
+        },
+        onError: () => labelTab?.close(),
+      },
     );
   }
 
@@ -74,6 +87,10 @@ export function PathoCollectionModal({
           <label>
             採取日時
             <input type="datetime-local" value={collectedAt} onChange={(e) => setCollectedAt(e.target.value)} />
+          </label>
+          <label className="patho-collection__print">
+            <input type="checkbox" checked={printLabel} onChange={(e) => setPrintLabel(e.target.checked)} />
+            ラベル発行
           </label>
         </fieldset>
         <fieldset className="rp-card">

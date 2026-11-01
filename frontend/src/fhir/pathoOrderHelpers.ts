@@ -233,6 +233,17 @@ export function emptyPathoSpecimen(examCategory: string = "N000"): PathoSpecimen
 }
 
 /**
+ * 病理の容器の台帳(backend の PathoLabelReport が作る Specimen)の identifier。値は「検体明細の id:容器の順番」。
+ * 番号(accessionIdentifier)は検体検査の採取管と同じ採番を使うので、どちらの台帳かはこれで見分ける。
+ */
+export const PATHO_CONTAINER_SYSTEM = "http://fhir-client.local/IdSystem/patho-container";
+
+/** 病理の容器の台帳の Specimen か。 */
+export function isPathoContainerSpecimen(specimen: fhir4.Specimen): boolean {
+  return Boolean(specimen.identifier?.some((identifier) => identifier.system === PATHO_CONTAINER_SYSTEM));
+}
+
+/**
  * 1 以上の整数か(容器数・検体個数の入力の検査)。セットに保存した古いフォーム値は
  * この項目を持たないので、undefined も受ける。
  */

@@ -7,7 +7,7 @@ import {
   useDeleteQuestionnaireResponse,
   useDeleteVitalEntry,
 } from "../api/queries";
-import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
+import { pathoLabelPdfUrl, questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import { fetchBinaryBlob, readResource } from "../api/fhirClient";
 import { documentIdOfResponse } from "../fhir/documentFormQuestionnaire";
 import { parsePatientFile } from "../fhir/patientFileHelpers";
@@ -577,6 +577,17 @@ const KarteCard = memo(function KarteCard({
               <button type="button" className="row-menu__item" onClick={() => setPathoCollectionOpen(true)}>
                 {pathoCollectedDateTime(pathoOrderSpecimens(item.itemRequests)) ? "採取修正" : "採取"}
               </button>
+            )}
+            {/* 病理の検体ラベル(容器ごと)。採取で容器数を直すと、採取の画面からも刷り直す。 */}
+            {item.kind === "patho-order" && item.status !== "cancelled" && (
+              <a
+                className="row-menu__item"
+                href={pathoLabelPdfUrl(item.serviceRequest.id ?? "")}
+                target="_blank"
+                rel="noopener"
+              >
+                ラベル発行
+              </a>
             )}
             {examReport && (
               <button
