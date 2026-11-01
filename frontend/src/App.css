@@ -825,6 +825,16 @@ button {
   height: var(--control-height);
 }
 
+/* 必須の select の未選択時は、見出しの option(value="")を入力欄の placeholder と同じく薄く出し、
+   選択肢の 1 つに見せない。見出しは disabled hidden にして一覧には出さない。 */
+select.select--placeholder:has(> option[value=""]:checked) {
+  color: var(--text);
+}
+
+select.select--placeholder > option {
+  color: CanvasText;
+}
+
 .button,
 button {
   font: inherit;
