@@ -371,7 +371,7 @@ JLAC の識別コードが「負荷後 60 分」を別項目として持つの�
 ラベル発行済みの `Specimen` が既にあるので、そこへ書き足す形になる。病棟採血なら看護
 ワークシート(`pages/NursingWorklistPage.tsx`。**いま検体検査への参照が無い**)にその日の採血予定を
 出し、そこから実施入力へ飛べるようにする。注射の同じ課題
-(`docs/injection-order-design.md` §8 C)と並べて扱うとよい。
+(`docs/injection-order-design.md` §8 D)と並べて扱うとよい。
 
 ### C-4. 同一検体の複数本採取
 

@@ -50,7 +50,7 @@
 ### 1.2 何が困るか
 
 - **注射**: `authoredOn` を施行日に転用しているので「いつ指示したか」が残らない。連日オーダーの
-  束ね表示(`docs/injection-order-design.md` §8 D)で「オーダーした日に本体を置く」ができない。
+  束ね表示(`docs/injection-order-design.md` §8 E)で「オーダーした日に本体を置く」ができない。
 - **処方**: **投与開始日を持つ場所が無い**。入院の処方区分は 定期 / 継続 / 臨時 / 退院 / 緊急
   (`prescriptionHelpers.ts:64`)で、このうち定期・継続・退院は処方日と投与開始日が一致しないのが
   普通(定期処方は病棟の定期処方日にまとめて入力し、投与は次サイクルの初日から)。医師は
@@ -202,7 +202,7 @@ Provenance
    Procedure と `_revinclude` を重ねている。入力者は詳細モーダルを開いたときだけ見えればよい
    情報なので、**一覧では引かない**設計にする。
 4. **削除時に取り残される**。オーダーを削除しても Provenance が残る(Task と同じ問題。
-   `docs/injection-order-design.md` §8 D に既出)。
+   `docs/injection-order-design.md` §8 E に既出)。
 5. **患者コンパートメントに入らない**(`target` が 0..* なので上流の判定対象外)。システムスコープで
    読む前提で、fhir-client は Backend Services トークンなので実害は無い。
 6. **バージョン付き参照は引けない**(上流は参照を文字列一致で照合する)。POST は通るが警告が返る。
@@ -313,7 +313,7 @@ Provenance
   取り込み範囲が穴になることを併せて見ておく。
 - 同じ場所に載せるもの: 麻薬・向精神薬・生物由来製剤の印(`master_medicines.narcotic_category` /
   `biological_product_flag`。注射 §8 A)、造影剤(`contrast_medium_category`)。
-- 看護ワークシートへの注射予定の表示(注射 §8 C、化学療法 §7.6 E-4)も種別をまたぐが、これは
+- 看護ワークシートへの注射予定の表示(注射 §8 D、化学療法 §7.6 E-4)も種別をまたぐが、これは
   看護指示側の設計(`docs/nursing-order-design.md`)で扱う。
 
 ### 3.1 投与量の単位が混在するようになった(2026-09-07 に対応済み)
@@ -364,7 +364,7 @@ Provenance
 ### 4.3 調剤結果を読み戻す画面が無い
 
 `MedicationDispense` は登録するだけで、**表示・訂正・削除の画面が無い**(注射の払出も同じ。
-`docs/injection-order-design.md` §8 C)。プロキシは §4.1 で通したので、あとは処方詳細
+`docs/injection-order-design.md` §8 D)。プロキシは §4.1 で通したので、あとは処方詳細
 (`RxOrderViewModal` / `PrescriptionDetailPanel`)に調剤内容(代替調剤・数量・調剤者)を出す。
 
 ### 4.4 RP 単位の頻用薬・約束処方マスタが無い
