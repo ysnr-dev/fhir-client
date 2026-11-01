@@ -17908,6 +17908,11 @@ button.meal-calendar__cell:hover {
 /* 長文の入力欄(臨床経過・所見、レポートの所見・診断・追加染色)。fieldset が flex なので
    label 単体だと内容幅(20桁ぶん)で止まってしまう。1 行占有させて、中の textarea を
    枠いっぱいに広げる(給食部門への指示 .meal-comment と同じ手)。 */
+/* フォロー推奨のチェックは 1 行を占め、内容・期限はその下の行に並べる。 */
+.patho-result__follow-up-check {
+  flex-basis: 100%;
+}
+
 .patho-long-text {
   flex: 1 1 100%;
 }

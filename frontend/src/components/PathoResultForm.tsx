@@ -289,6 +289,10 @@ export function PathoResultForm({
       setValidationError("同じ診断医が重複しています。");
       return;
     }
+    if (values.followUp && (!values.followUpText.trim() || !values.followUpDue)) {
+      setValidationError("フォロー推奨の内容と期限を入力してください。");
+      return;
+    }
     // 診断は規約でレポートに必須のセクション。ただし中間報告は診断が固まる前の
     // 途中経過なので、確定する(最終・訂正・追加報告)ときだけ required にする。
     // 診断医も確定する報告には必須(誰が診断したかを残す)。
@@ -575,6 +579,38 @@ export function PathoResultForm({
             onOpenTemplate={() => setDiagnosisTemplateOpen(true)}
             onClearTemplate={() => update("diagnosisTemplate", null)}
           />
+        )}
+      </fieldset>
+
+      <fieldset>
+        <legend>フォロー推奨</legend>
+        <label className="exam-report-form__critical patho-result__follow-up-check">
+          <input
+            type="checkbox"
+            checked={values.followUp}
+            onChange={(e) => update("followUp", e.target.checked)}
+          />
+          フォロー推奨あり
+        </label>
+        {values.followUp && (
+          <>
+            <label className="exam-report-form__critical-text">
+              内容
+              <input
+                type="text"
+                value={values.followUpText}
+                onChange={(e) => update("followUpText", e.target.value)}
+              />
+            </label>
+            <label>
+              期限
+              <input
+                type="date"
+                value={values.followUpDue}
+                onChange={(e) => update("followUpDue", e.target.value)}
+              />
+            </label>
+          </>
         )}
       </fieldset>
 

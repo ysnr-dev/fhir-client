@@ -48,6 +48,9 @@ import {
 //
 // 診断医は resultsInterpreter に最大 3 名(同ガイド 7.4.3)、重要度(悪性・悪性疑い)は
 // 拡張 patho-report-importance に持つ(同 7.5.3)。
+//
+// フォロー推奨(再生検・追加検査・他科受診など)は拡張 patho-follow-up に持ち、確定すると依頼医あての
+// 台帳に載る(followUpHelpers。読影・所見レポートと同じ仕組み。docs/result-followup-design.md)。
 
 // ---- コードシステム ----
 
@@ -77,6 +80,8 @@ export const DIAGNOSIS_RESPONSE_EXT_URL =
 const REPORT_IMPORTANCE_EXT_URL =
   "http://fhir-client.local/StructureDefinition/patho-report-importance";
 const REPORT_IMPORTANCE_SYSTEM = "http://fhir-client.local/CodeSystem/patho-report-importance";
+// フォロー推奨。子拡張 recommendation(valueString)と due(valueDate)。読影レポートの rad-follow-up と同じ形。
+const REPORT_FOLLOW_UP_EXT_URL = "http://fhir-client.local/StructureDefinition/patho-follow-up";
 // 推定病変(細胞診の診断 Observation の component)。
 const RESULT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/patho-result-item";
 const CODE_ESTIMATED_LESION = "estimated-lesion";
@@ -218,6 +223,11 @@ export interface PathoResultFormValues {
   interpreters: PathoInterpreterValues[];
   /** 重要度。 */
   importance: PathoReportImportance;
+  /** フォロー推奨あり。内容と期限がそろったときだけ保存する。 */
+  followUp: boolean;
+  followUpText: string;
+  /** 期限(YYYY-MM-DD)。 */
+  followUpDue: string;
   /** 検査区分。診断欄の形(組織診=自由文 / 細胞診=判定+推定病変)を決める。 */
   examCategory: PathoExamCategory;
   /** 検体(オーダーから転記。実採取日だけ結果側で入れ直す)。 */
@@ -283,6 +293,9 @@ export function emptyPathoResultForm(
     reportStatus: "final",
     interpreters: emptyPathoInterpreters(),
     importance: "",
+    followUp: false,
+    followUpText: "",
+    followUpDue: "",
     examCategory: "N000",
     specimens: [],
     gross: "",
@@ -717,6 +730,17 @@ function buildPathoResultTransactionBundle(
             },
           ]
         : []),
+      ...(values.followUp && values.followUpText.trim() && values.followUpDue
+        ? [
+            {
+              url: REPORT_FOLLOW_UP_EXT_URL,
+              extension: [
+                { url: "recommendation", valueString: values.followUpText.trim() },
+                { url: "due", valueDate: values.followUpDue },
+              ],
+            },
+          ]
+        : []),
     ],
     // 元になった病理検査オーダー。オーダーの明細ではなくヘッダを指す。
     basedOn: values.orderId ? [{ reference: `ServiceRequest/${values.orderId}` }] : undefined,
@@ -899,6 +923,21 @@ export function pathoReportImportance(report: fhir4.DiagnosticReport | undefined
   return code === "malignant" || code === "suspicious" ? code : "";
 }
 
+export interface PathoFollowUp {
+  recommendation: string;
+  /** 期限(YYYY-MM-DD)。 */
+  dueDate: string;
+}
+
+/** フォロー推奨。無ければ推奨・期限とも空。 */
+export function pathoFollowUpOf(report: fhir4.DiagnosticReport): PathoFollowUp {
+  const extension = report.extension?.find((e) => e.url === REPORT_FOLLOW_UP_EXT_URL);
+  return {
+    recommendation: extension?.extension?.find((e) => e.url === "recommendation")?.valueString ?? "",
+    dueDate: extension?.extension?.find((e) => e.url === "due")?.valueDate ?? "",
+  };
+}
+
 /** レポートの診断医(保存した順)。 */
 export function pathoReportInterpreters(report: fhir4.DiagnosticReport): PathoInterpreterValues[] {
   return (report.resultsInterpreter ?? []).flatMap((reference) => {
@@ -949,6 +988,10 @@ export function parsePathoResultForm(
   const interpreters = pathoReportInterpreters(report).slice(0, MAX_PATHO_INTERPRETERS);
   values.interpreters = emptyPathoInterpreters().map((empty, i) => interpreters[i] ?? empty);
   values.importance = pathoReportImportance(report);
+  const followUp = pathoFollowUpOf(report);
+  values.followUp = Boolean(followUp.recommendation);
+  values.followUpText = followUp.recommendation;
+  values.followUpDue = followUp.dueDate;
   values.examCategory = reportExamCategory(report);
   values.specimens = specimens.map(parseSpecimen);
   values.images = pathoReportImages(report);

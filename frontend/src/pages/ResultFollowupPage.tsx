@@ -114,7 +114,7 @@ export function ResultFollowupPage() {
 function reportKarteLink(row: FollowUpRow): string | null {
   if (!row.patientId) return null;
   const params = new URLSearchParams();
-  if (row.config) params.set(KARTE_TAB_PARAM, row.config.tabKey);
+  if (row.tabKey) params.set(KARTE_TAB_PARAM, row.tabKey);
   if (row.reportId) params.set("view", row.reportId);
   return `/patients/${row.patientId}/karte?${params.toString()}`;
 }
@@ -200,7 +200,7 @@ function FollowUpTab({ ownerId }: { ownerId: string | null }) {
                   </td>
                   <PatientCells patient={row.patient} patientId={row.patientId} />
                   <td className="notification__compact">{row.date}</td>
-                  <td className="notification__compact">{row.config?.labels.order ?? ""}</td>
+                  <td className="notification__compact">{row.kindLabel}</td>
                   <td>{row.exam}</td>
                   <td className="notification__content">
                     {row.recommendation}

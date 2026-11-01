@@ -13,12 +13,14 @@ import {
 import {
   buildPathoResultDeleteBundle,
   isRevisedReportStatus,
+  pathoFollowUpOf,
   pathoReportImportance,
   pathoReportResponseIds,
   reportImportanceDisplay,
   reportStatusDisplay,
 } from "../../fhir/pathoResultHelpers";
 import { buildCancelledNotificationTask, notificationTaskEntry } from "../../fhir/notificationHelpers";
+import { FOLLOW_UP_TASK_CODE, followUpEntries } from "../../fhir/followUpHelpers";
 import {
   isReviewableReportStatus,
   RESULT_REVIEW_TASK_CODE,
@@ -246,12 +248,20 @@ export function usePathoResultDetail(reportId: string | undefined) {
   return useLabResultDetail(reportId);
 }
 
+/** 病理レポートに紐付く通知・台帳(検査結果確認・患者説明・フォロー推奨)。 */
+const PATHO_REPORT_TASK_CODES = [
+  RESULT_REVIEW_TASK_CODE.code,
+  RESULT_EXPLANATION_TASK_CODE.code,
+  FOLLOW_UP_TASK_CODE.code,
+];
+
 /**
- * レポート保存の Bundle に通知と台帳を足す。宛先(依頼医)と既存の 2 つはここで引く。
+ * レポート保存の Bundle に通知と台帳を足す。宛先(依頼医)と既存の通知・台帳はここで引く。
  *
  * - 検査結果確認: 確定(最終・訂正・追加報告)したとき。重要度(悪性・悪性疑い)があればアラートにし、
  *   重要度と訂正・追加の別を印として添える
  * - 患者説明: 確定したときに台帳へ載せる。確定後に直したら説明済みでも未説明に戻す
+ * - フォロー推奨: 確定したときに台帳へ載せる。推奨か期限を変えたら未対応に戻し、外したら未対応のものを取り下げる
  */
 async function withPathoReportTasks(bundle: fhir4.Bundle): Promise<fhir4.Bundle> {
   const entry = bundle.entry ?? [];
@@ -266,7 +276,7 @@ async function withPathoReportTasks(bundle: fhir4.Bundle): Promise<fhir4.Bundle>
   const [owner, tasks] = await Promise.all([
     orderId ? fetchOrderRequester(orderId) : Promise.resolve(undefined),
     report.id
-      ? fetchReportTasks(report.id, [RESULT_REVIEW_TASK_CODE.code, RESULT_EXPLANATION_TASK_CODE.code])
+      ? fetchReportTasks(report.id, PATHO_REPORT_TASK_CODES)
       : Promise.resolve(new Map<string, fhir4.Task>()),
   ]);
 
@@ -275,6 +285,7 @@ async function withPathoReportTasks(bundle: fhir4.Bundle): Promise<fhir4.Bundle>
   const basedOn = orderReference ? [{ reference: orderReference }] : undefined;
   const importance = reportImportanceDisplay(pathoReportImportance(report));
   const statusLabel = isRevisedReportStatus(report.status) ? reportStatusDisplay(report.status) : "";
+  const followUp = pathoFollowUpOf(report);
 
   return {
     ...bundle,
@@ -299,6 +310,21 @@ async function withPathoReportTasks(bundle: fhir4.Bundle): Promise<fhir4.Bundle>
         { reportReference: reference, patientId, owner, kind: "patho", date, summary, importance, statusLabel, basedOn },
         true,
         tasks.get(RESULT_EXPLANATION_TASK_CODE.code),
+      ),
+      ...followUpEntries(
+        {
+          reportReference: reference,
+          patientId,
+          owner,
+          kind: "patho",
+          date,
+          exam: summary,
+          recommendation: followUp.recommendation,
+          dueDate: followUp.dueDate,
+          basedOn,
+        },
+        true,
+        tasks.get(FOLLOW_UP_TASK_CODE.code),
       ),
     ],
   };
@@ -334,8 +360,8 @@ export function useUpdatePathoResult() {
 }
 
 /**
- * レポートの削除。所見・検体・テンプレート回答を消し、未確認の検査結果確認と未説明の患者説明を
- * 取り下げる(削除したレポートを指す通知・台帳が残らないようにする)。
+ * レポートの削除。所見・検体・テンプレート回答を消し、未確認の検査結果確認・未説明の患者説明・
+ * 未対応のフォロー推奨を取り下げる(削除したレポートを指す通知・台帳が残らないようにする)。
  */
 export function useDeletePathoResult() {
   const queryClient = useQueryClient();
@@ -344,7 +370,7 @@ export function useDeletePathoResult() {
       // 削除対象の Observation / Specimen は DiagnosticReport の参照から辿る。
       const [{ data: report }, tasks] = await Promise.all([
         readResource<fhir4.DiagnosticReport>("DiagnosticReport", reportId),
-        fetchReportTasks(reportId, [RESULT_REVIEW_TASK_CODE.code, RESULT_EXPLANATION_TASK_CODE.code]),
+        fetchReportTasks(reportId, PATHO_REPORT_TASK_CODES),
       ]);
       const deleteBundle = buildPathoResultDeleteBundle(
         reportId,

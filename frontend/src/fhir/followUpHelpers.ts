@@ -1,12 +1,11 @@
 import { diffDays, localDay, nowFhirDateTime, today } from "../lib/dates";
-import {
-  EXAM_REPORT_KINDS,
-  examReportConfigByKind,
-  type ExamReportConfig,
-  type ExamReportKind,
-} from "./examReportHelpers";
+import { EXAM_REPORT_KINDS, examReportConfigByKind } from "./examReportHelpers";
 import { LAB_PANIC_TASK_CODE } from "./labPanicHelpers";
-import { RESULT_REVIEW_TASK_CODE } from "./resultReviewHelpers";
+import {
+  RESULT_REVIEW_TASK_CODE,
+  REVIEW_REPORT_KIND_LABEL,
+  type ReviewReportKind,
+} from "./resultReviewHelpers";
 import { TASK_CODE_SYSTEM } from "./taskHelpers";
 import {
   buildCancelledNotificationTask,
@@ -21,7 +20,7 @@ import {
   type NotificationRowBase,
 } from "./notificationHelpers";
 
-// 検査レポートのフォロー推奨(docs/result-followup-design.md)。
+// 検査レポート(読影・所見)と病理診断レポートのフォロー推奨(docs/result-followup-design.md)。
 //
 //   DiagnosticReport(推奨と期限を拡張に持つ) ← focus ── Task(フォロー推奨) ── owner → 依頼医
 //                                                          └ output → 対応区分・対応オーダー
@@ -63,7 +62,7 @@ export interface FollowUpTaskInput {
   patientId: string;
   /** 宛先(依頼医)。 */
   owner?: fhir4.Reference;
-  kind: ExamReportKind;
+  kind: ReviewReportKind;
   /** 検査日(YYYY-MM-DD)。 */
   date: string;
   exam: string;
@@ -203,7 +202,10 @@ export function reopenFollowUpEntry(task: fhir4.Task): fhir4.BundleEntry {
 
 export interface FollowUpRow extends NotificationRowBase {
   reportId: string;
-  config: ExamReportConfig | undefined;
+  /** 種別の表示(「放射線検査」「病理検査」など)。 */
+  kindLabel: string;
+  /** カルテで開く「検査結果」配下のタブ。 */
+  tabKey: string;
   date: string;
   exam: string;
   recommendation: string;
@@ -219,6 +221,17 @@ export interface FollowUpRow extends NotificationRowBase {
   orderLabel: string;
 }
 
+/**
+ * 種別の表示とカルテのタブ。検査レポートのタブは ExamReportConfig.tabKey、病理はタブのキーと種別が同じ
+ * (resultReviewHelpers の ReviewReportKind)。
+ */
+function followUpKindOf(kind: string): { kindLabel: string; tabKey: string } {
+  const config = examReportConfigByKind(kind);
+  if (config) return { kindLabel: config.labels.order, tabKey: config.tabKey };
+  const label = REVIEW_REPORT_KIND_LABEL[kind as ReviewReportKind];
+  return label ? { kindLabel: label, tabKey: kind } : { kindLabel: "", tabKey: "" };
+}
+
 export function followUpRowOf(task: fhir4.Task, patient: fhir4.Patient | undefined): FollowUpRow {
   const dueDate = followUpDueOf(task);
   const resolution = (task.output ?? []).find((o) => o.type?.text === RESOLUTION_OUTPUT);
@@ -231,7 +244,7 @@ export function followUpRowOf(task: fhir4.Task, patient: fhir4.Patient | undefin
     authoredOn: task.authoredOn ?? "",
     ownerName: taskOwnerName(task),
     reportId: task.focus?.reference?.match(/^DiagnosticReport\/(.+)$/)?.[1] ?? "",
-    config: examReportConfigByKind(taskInputOf(task, KIND_INPUT)?.valueString ?? ""),
+    ...followUpKindOf(taskInputOf(task, KIND_INPUT)?.valueString ?? ""),
     date: taskInputOf(task, DATE_INPUT)?.valueDate ?? "",
     exam: taskInputOf(task, EXAM_INPUT)?.valueString ?? "",
     recommendation: taskInputOf(task, RECOMMENDATION_INPUT)?.valueString ?? task.description ?? "",
