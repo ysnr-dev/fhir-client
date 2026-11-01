@@ -582,10 +582,13 @@ export function InjectionForm({
         <label>
           入外区分
           <select
+            className="select--placeholder"
             value={values.setting}
             onChange={(e) => handleSettingChange(e.target.value as PrescriptionSetting)}
           >
-            <option value="">選択してください</option>
+            <option value="" disabled hidden>
+              選択
+            </option>
             {SETTING_OPTIONS.map((o) => (
               <option key={o.code} value={o.code}>
                 {o.display}
@@ -595,8 +598,14 @@ export function InjectionForm({
         </label>
         <label>
           注射区分
-          <select value={values.category} onChange={(e) => update("category", e.target.value)}>
-            <option value="">選択してください</option>
+          <select
+            className="select--placeholder"
+            value={values.category}
+            onChange={(e) => update("category", e.target.value)}
+          >
+            <option value="" disabled hidden>
+              選択
+            </option>
             {values.setting &&
               CATEGORY_OPTIONS[values.setting].map((o) => (
                 <option key={o.code} value={o.code}>
