@@ -271,6 +271,10 @@ GEM
       nokogiri
       roo (>= 2.0.0, < 3)
       spreadsheet (> 0.9.0)
+    rqrcode (3.2.0)
+      chunky_png (~> 1.0)
+      rqrcode_core (~> 2.0)
+    rqrcode_core (2.1.0)
     rspec-core (3.13.6)
       rspec-support (~> 3.13.0)
     rspec-expectations (3.13.5)
@@ -345,6 +349,7 @@ DEPENDENCIES
   rails (~> 8.1.0)
   roo (~> 2.10)
   roo-xls (~> 1.2)
+  rqrcode (~> 3.0)
   rspec-rails (~> 8.0)
   thinreports (~> 0.15)
   tzinfo-data

@@ -164,6 +164,22 @@ RSpec.describe PrescriptionReport do
     end
   end
 
+  it "selects the QR layout for external prescriptions when the facility setting is on" do
+    FacilitySettings.current.update!(prescription_print: { "external_qr" => true })
+    {
+      %w[outpatient external] => :external_qr,
+      %w[outpatient internal] => :internal
+    }.each do |(setting, category), expected|
+      stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)],
+                 order_body: build_order(setting: setting, category: category))
+      captured = capture_renderer
+
+      described_class.new("o1", gateway: gateway).generate
+
+      expect(captured.call[:layout_path]).to eq(described_class::LAYOUTS.dig(expected, :path))
+    end
+  end
+
   it "falls back to the internal layout when the category is missing" do
     stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)],
                order_body: order.merge("category" => order["category"].first(1)))

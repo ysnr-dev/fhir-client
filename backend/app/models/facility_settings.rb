@@ -105,6 +105,10 @@ class FacilitySettings < ApplicationRecord
   # 登録済みの処方は入力したときの区分で開く。
   DEFAULT_PRESCRIPTION_DOSE = { "basis" => "daily" }.freeze
 
+  # 処方箋の印刷。external_qr は院外処方箋(様式第2号)に JAHIS 院外処方箋2次元シンボル記録条件規約の
+  # QR コードを添えるか(A4 横のレイアウトに切り替わる。docs/prescription-report-design.md §7)。
+  DEFAULT_PRESCRIPTION_PRINT = { "external_qr" => false }.freeze
+
   # 処方のチェック。days_limits は処方区分ごとの投与日数の上限(0 は上限なし)。
   # unset_adoption_as_not_adopted は、採用区分を決めていない薬を採用外として扱うか
   # (採用薬だけを登録する運用のとき真にする)。
@@ -386,6 +390,10 @@ class FacilitySettings < ApplicationRecord
           "unset_adoption_as_not_adopted" => :boolean
         }
       }
+    },
+    "prescription_print" => {
+      default: DEFAULT_PRESCRIPTION_PRINT,
+      shape: { fields: { "external_qr" => :boolean } }
     },
     "consult_default_templates" => {
       default: DEFAULT_CONSULT_DEFAULT_TEMPLATES,

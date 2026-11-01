@@ -216,6 +216,37 @@ RSpec.describe Reports::PrescriptionRenderer do
     end
   end
 
+  context "with the QR layout" do
+    # 院外(QR 付き)は A4 横の左半分が様式第2号、右半分に JAHIS の QR コード。
+    it "renders the form on A4 landscape with a QR image" do
+      pdf = render(:external_qr, simple_rps)
+
+      expect(pdf).to start_with("%PDF-")
+      expect(pdf).to include("/MediaBox [0 0 841.89 595.28]")
+      expect(pdf.scan("/Subtype /Image").size).to eq(1)
+      text = page_texts(pdf).flatten.join
+      expect(text).to include("【般】ファモチジン散２％").and include("1234567")
+      # 分割していないときは添え書きを出さない
+      expect(text).not_to include("1 / 1")
+    end
+
+    it "spreads a split QR code over the slots of the pages in order" do
+      rps = (1..40).map do |i|
+        rp(i, medicines: [["とても長い名前の医薬品その#{i}錠１００ｍｇ", 3, "錠"]])
+      end
+      pdf = render(:external_qr, rps)
+      pages = page_texts(pdf)
+
+      symbols = Reports::PrescriptionQrSymbols.new(
+        Reports::PrescriptionQrData.new(order: order, patient: patient, organization: organization, rps: rps).lines
+      ).chunks.size
+      expect(symbols).to be > 1
+      expect(pdf.scan("/Subtype /Image").size).to eq(symbols)
+      expect(pages[0].join.gsub(/[[:space:]]/, "")).to include("1/#{symbols}")
+      expect(pages.flatten.join.gsub(/[[:space:]]/, "")).to include("#{symbols}/#{symbols}")
+    end
+  end
+
   it "renders with blank institution fields when the organization is unknown" do
     pdf = render(:external, simple_rps, organization: nil)
 

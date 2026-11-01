@@ -337,6 +337,13 @@ export const DEFAULT_PRESCRIPTION_CHECK: PrescriptionCheckSettings = {
   unset_adoption_as_not_adopted: false,
 };
 
+/** 施設設定「処方箋の印刷」。external_qr は院外処方箋に JAHIS の QR コードを添えるか(A4 横になる)。 */
+export interface PrescriptionPrintSettings {
+  external_qr: boolean;
+}
+
+export const DEFAULT_PRESCRIPTION_PRINT: PrescriptionPrintSettings = { external_qr: false };
+
 export const DEFAULT_PRESCRIPTION_CATEGORY: PrescriptionCategoryDefaults = {
   inpatient: "",
   outpatient: "",

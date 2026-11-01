@@ -1,3 +1,5 @@
+require "stringio"
+
 module Reports
   # 処方箋を ThinReports レイアウトへ流し込んで PDF を生成する
   # (docs/prescription-report-design.md)。院外(様式第2号)と院内(簡易様式)は
@@ -11,6 +13,10 @@ module Reports
   # 行数がレイアウトの枠を超えるときは同じレイアウトで続紙を起こす。折り返しを
   # ThinReports 任せにすると 1 ページに入る行数が読めなくなるので、折り返しは
   # ここで済ませて(wrap)、枠の行数(lines_per_page)との対応を決定的にする。
+  #
+  # QR コードの枠(image-block qr_1, qr_2, …)を持つレイアウトでは、JAHIS の記録 CSV を
+  # QR コードにして枠に置く。シンボルが分割されたときは 1 ページ目の枠から順に埋め、
+  # 枠が足りなければ続紙の枠に送る。
   class PrescriptionRenderer
     # 後発品変更不可の欄。様式第2号は薬品の行の左に「変更不可」「患者希望」の列を持ち、
     # 該当する薬品の 1 行目に「レ」を刷る。列の無いレイアウト(院内)は薬品名の後ろに書く。
@@ -38,9 +44,14 @@ module Reports
       @max_cols = max_cols
     end
 
+    # レイアウトの QR コードの枠が足りない(連結の上限まで分割しても入らない)。
+    class QrOverflow < StandardError; end
+
     def render
-      text_ids, _image_ids, all_ids = layout_item_ids
+      text_ids, image_ids, all_ids = layout_item_ids
       columns = SUBSTITUTION_COLUMNS.values.all? { |id| text_ids.include?(id) }
+      qr_slots = image_ids.grep(/\Aqr_\d+\z/).sort_by { |id| id.delete_prefix("qr_").to_i }
+      qr_pngs = qr_slots.any? ? qr_symbol_pngs : []
       # 行は [文字列, 後発品変更不可] の組。折り返した継続行には印を付けない。
       rows = rp_lines(columns:).flat_map do |line, block|
         wrap(line).each_with_index.map { |chunk, i| [chunk, i.zero? ? block : nil] }
@@ -62,12 +73,39 @@ module Reports
           if all_ids.include?("continued")
             index < pages.size - 1 ? page.item("continued").show : page.item("continued").hide
           end
+          place_qr_symbols(page, qr_slots, qr_pngs, index, text_ids)
         end
       end
+      if qr_pngs.size > qr_slots.size * pages.size
+        raise QrOverflow, "#{qr_pngs.size} QR symbols for #{qr_slots.size * pages.size} slots"
+      end
+
       report.generate
     end
 
     private
+
+    # JAHIS の記録 CSV を QR コードの画像にする(分割されれば複数)。
+    def qr_symbol_pngs
+      data = PrescriptionQrData.new(order: @order, patient: @patient, organization: @organization, rps: @rps)
+      PrescriptionQrSymbols.new(data.lines).pngs
+    end
+
+    # このページぶんのシンボルを枠に置く。余った枠は空のまま(画像を置かない)。
+    # 添え書き(qr_label_n)は分割されたときだけ「n / 総数」。
+    def place_qr_symbols(page, slots, pngs, page_index, text_ids)
+      slots.each_with_index do |slot, i|
+        symbol_index = page_index * slots.size + i
+        png = pngs[symbol_index]
+        next unless png
+
+        page.item(slot).src(StringIO.new(png))
+        label = "#{slot.sub('qr_', 'qr_label_')}"
+        next unless text_ids.include?(label)
+
+        page.item(label).value(pngs.size > 1 ? "#{symbol_index + 1} / #{pngs.size}" : "")
+      end
+    end
 
     # RP 1 件を「Rp 見出し → 薬品 → 用法 → 調剤指示」の順の行にする。カルテの紹介状に流し込む
     # 処方文字列(frontend の populateContext.ts formatPrescriptions)と同じ並び。
@@ -130,31 +168,12 @@ module Reports
         "pt_kana" => PatientMeta.display_kana(@patient),
         "pt_gender" => PatientMeta.gender_label(@patient),
         "pt_birthdate" => PatientMeta.format_date(@patient["birthDate"]),
-        "issue_date" => PatientMeta.format_date(issue_date),
-        "doctor_name" => @order.dig("requester", "display").to_s,
-        "department_name" => department_name,
+        "issue_date" => PatientMeta.format_date(PrescriptionMeta.issue_date(@order)),
+        "doctor_name" => PrescriptionMeta.doctor_name(@order),
+        "department_name" => PrescriptionMeta.department_name(@order),
         "rx_category" => rx_category,
-        "remarks" => [regimen_line, @order.dig("note", 0, "text")].compact_blank.join("\n")
+        "remarks" => PrescriptionMeta.remark_lines(@order).join("\n")
       }.merge(hospital_values)
-    end
-
-    # 交付年月日は登録日時(authoredOn)の日付。オーダー開始日(投与開始日 = occurrenceDateTime)
-    # ではない。発行操作の日でもないので、再発行しても同じ日付が刷られる
-    # (docs/prescription-report-design.md)。化学療法レジメンの日オーダーは数クール分を先に
-    # 登録し、投与日に渡すので投与開始日にする(frontend の summarizeServiceRequest と同じ)。
-    def issue_date
-      if @order.dig("requisition", "system") == PrescriptionReport::REGIMEN_INSTANCE_SYSTEM
-        @order["occurrenceDateTime"].to_s.first(10)
-      else
-        @order["authoredOn"].to_s.first(10)
-      end
-    end
-
-    def department_name
-      extension = Array(@order["extension"]).find do |ext|
-        ext["url"] == PrescriptionReport::ORDER_DEPARTMENT_EXT_URL
-      end
-      extension&.dig("valueReference", "display").to_s
     end
 
     # 「外来 院内」「入院 定期」のような区分表示(院内レイアウト用)。
@@ -168,13 +187,6 @@ module Reports
       displays.join(" ")
     end
 
-    # 化学療法の日オーダー(内服)なら備考の先頭に「化学療法: CapeOX C1 Day1」。院外処方では
-    # 保険薬局がレジメンを確かめる手掛かりになる。
-    def regimen_line
-      label = InjectionMeta.regimen_label(@order)
-      label.present? ? "化学療法: #{label}" : ""
-    end
-
     # 自院(保険医療機関)の欄。Organization が引けなくても発行は止めない(空欄で刷る)。
     def hospital_values
       org = @organization || {}
@@ -184,26 +196,9 @@ module Reports
       {
         "hospital_name" => org["name"].to_s,
         "hospital_address" => address_text,
-        "hospital_tel" => telecom_value(org, "phone"),
-        "hospital_fax" => telecom_value(org, "fax")
-      }.merge(institution_number_values(org))
-    end
-
-    def telecom_value(org, system)
-      Array(org["telecom"]).find { |t| t["system"] == system }&.dig("value").to_s
-    end
-
-    # 保険医療機関コード(10 桁 = 都道府県 2 + 点数表 1 + 医療機関コード 7)を
-    # 様式の 3 つの枠に分ける。10 桁でない値はコード欄にそのまま刷る。
-    def institution_number_values(org)
-      number = Array(org["identifier"]).find do |identifier|
-        identifier["system"] == PrescriptionReport::INSTITUTION_NO_SYSTEM
-      end&.dig("value").to_s
-      if number.match?(/\A\d{10}\z/)
-        { "pref_no" => number[0, 2], "table_no" => number[2, 1], "inst_no" => number[3, 7] }
-      else
-        { "pref_no" => "", "table_no" => "", "inst_no" => number }
-      end
+        "hospital_tel" => PrescriptionMeta.telecom_value(org, "phone"),
+        "hospital_fax" => PrescriptionMeta.telecom_value(org, "fax")
+      }.merge(PrescriptionMeta.institution_number(org).transform_keys(&:to_s))
     end
 
     # レイアウト内のアイテム ID を種類別に列挙する(LabLabelRenderer と同じ理由:

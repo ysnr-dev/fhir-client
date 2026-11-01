@@ -61,6 +61,10 @@ module Reports
       render json: { error: "brought_medication_order" }, status: :unprocessable_content
     end
 
+    rescue_from Reports::PrescriptionQrSymbols::TooLarge, Reports::PrescriptionRenderer::QrOverflow do
+      render json: { error: "prescription_qr_too_large" }, status: :unprocessable_content
+    end
+
     rescue_from InjectionReport::NotFound do
       render json: { error: "order_not_found" }, status: :not_found
     end

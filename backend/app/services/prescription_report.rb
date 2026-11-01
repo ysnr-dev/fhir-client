@@ -26,9 +26,16 @@ class PrescriptionReport
   # (docs/report-mappings/lab-label-01.md と同じ理由)。
   # lines_per_page / max_cols(半角換算)は各レイアウトの処方欄の寸法と対
   # (docs/report-mappings/prescription-01.md)。
+  # external_qr は様式第2号を左半分に置いた A4 横で、右半分に JAHIS の QR コードを刷る
+  # (施設設定 prescription_print.external_qr で切り替える)。
   LAYOUTS = {
     external: {
       path: Rails.root.join("lib/report_layouts/prescription_external.tlf").freeze,
+      lines_per_page: 13,
+      max_cols: 68
+    },
+    external_qr: {
+      path: Rails.root.join("lib/report_layouts/prescription_external_qr.tlf").freeze,
       lines_per_page: 13,
       max_cols: 68
     },
@@ -83,16 +90,26 @@ class PrescriptionReport
   PATIENT_REQUEST = "patient-request".freeze
 
   # RP 1 つぶん。同じ RP 番号の明細(MedicationRequest)をまとめたもの。
+  # usage_code: 用法コード(16 桁)。usage_category_code: 用法の基本区分コード(1 内服 / 2 外用 / 3 注射 / 4 注入)。
+  # supplement_codes: 補足用法(I/W/D/C)の [コード, 表示] の配列。dispense_codes: 調剤指示のコード(OP/C/SP/MX)。
+  # いずれも QR コードの記録に使う(紙には supplement / dispense_instruction の表示を刷る)。
   RpGroup = Struct.new(
     :rp_number, :usage_name, :supplement, :dose_days, :dose_count, :usage_comment, :dispense_instruction,
-    :medicines,
+    :medicines, :usage_code, :usage_category_code, :supplement_codes, :dispense_codes,
     keyword_init: true
-  )
+  ) do
+    def supplement_codes = self[:supplement_codes] || []
+    def dispense_codes = self[:dispense_codes] || []
+  end
   # substitution_block: 後発品変更不可(MEDICAL_NECESSITY / PATIENT_REQUEST)。変更可なら nil。
   # potency: 用量が力価(原薬量)。
   # dose: 量 1 つで扱うときの量(日数を持つ内服は 1 日量)。dose_text: 1 回量と 1 日量の併記(「1回1錠（1日3錠）」)。
+  # code / general: 薬品コードと、それが一般名処方コードか(QR コードの記録用)。single: 1 回量。
+  # uneven_codes: 不均等(V)の [コード, 表示] の配列。
   MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :potency, :comment, :uneven, :substitution_block,
-                            :dose_text, keyword_init: true)
+                            :dose_text, :code, :general, :single, :uneven_codes, keyword_init: true) do
+    def uneven_codes = self[:uneven_codes] || []
+  end
 
   def initialize(order_id, gateway: FhirGateway.new)
     @order_id = order_id
@@ -109,7 +126,7 @@ class PrescriptionReport
     rps = build_rps(medication_requests)
     raise NoMedication, "order #{order_id} has no medication requests" if rps.empty?
 
-    layout = LAYOUTS.fetch(external?(order) ? :external : :internal)
+    layout = LAYOUTS.fetch(layout_key(order))
     Reports::PrescriptionRenderer.new(
       layout_path: layout[:path],
       order:, patient:, organization:, rps:,
@@ -133,6 +150,13 @@ class PrescriptionReport
     setting = category_code(order, SETTING_SYSTEM)
     category = category_code(order, PRESCRIPTION_CATEGORY_SYSTEM)
     setting == "outpatient" && category == "external"
+  end
+
+  # 院外は施設設定で QR コード付き(A4 横)に切り替わる。
+  def layout_key(order)
+    return :internal unless external?(order)
+
+    FacilitySettings.prescription_print["external_qr"] ? :external_qr : :external
   end
 
   # category の並び順には依存せず、system で引く。
@@ -192,29 +216,40 @@ class PrescriptionReport
     medication_requests.each do |mr|
       rp_number = identifier_value(mr, RP_NUMBER_SYSTEM).to_i
       dosage = mr.dig("dosageInstruction", 0) || {}
+      usage_coding = coding_by_system(dosage.dig("timing", "code", "coding"), USAGE_CODE_SYSTEM)
       group = groups[rp_number] ||= RpGroup.new(
         rp_number: rp_number,
-        usage_name: coding_by_system(dosage.dig("timing", "code", "coding"),
-                                     USAGE_CODE_SYSTEM)&.dig("display").to_s,
+        usage_name: usage_coding&.dig("display").to_s,
+        usage_code: usage_coding&.dig("code").to_s,
+        usage_category_code: coding_by_system(dosage.dig("timing", "code", "coding"),
+                                              PrescriptionDose::USAGE_CATEGORY_SYSTEM)&.dig("code").to_s,
         dose_days: mr.dig("dispenseRequest", "expectedSupplyDuration", "value"),
         supplement: supplement_label(dosage),
+        supplement_codes: supplementary_displays(dosage).reject { |code, _| code.start_with?("V") },
         dose_count: dosage.dig("timing", "repeat", "count"),
         usage_comment: usage_comment(dosage),
         dispense_instruction: dispense_instruction(mr),
+        dispense_codes: dispense_codes(mr),
         medicines: []
       )
       amounts = PrescriptionDose.of(dosage)
+      general = coding_by_system(mr.dig("medicationCodeableConcept", "coding"), GENERAL_ORDER_CODE_SYSTEM)
+      uneven_codes = supplementary_displays(dosage).select { |code, _| code.start_with?("V") }.sort_by(&:first)
       group.medicines << MedicineLine.new(
         order_in_rp: identifier_value(mr, ORDER_IN_RP_SYSTEM).to_i,
         # 一般名処方(【般】〜)は一般名処方コードだけを持つので優先して引き、銘柄はレセ電コードの display。
         name: medicine_name(mr, [GENERAL_ORDER_CODE_SYSTEM, MEDICINE_CODE_SYSTEM]),
+        code: (general || coding_by_system(mr.dig("medicationCodeableConcept", "coding"), MEDICINE_CODE_SYSTEM))
+                &.dig("code").to_s,
+        general: general.present?,
         dose: amounts.ordered,
+        single: amounts.single,
         unit: amounts.unit.to_s,
         dose_text: amounts.text,
         potency: self.class.potency?(dosage),
         comment: mr.dig("note", 0, "text").to_s,
-        uneven: supplementary_displays(dosage).select { |code, _| code.start_with?("V") }
-                                              .sort_by(&:first).map(&:last).join("・"),
+        uneven: uneven_codes.map(&:last).join("・"),
+        uneven_codes: uneven_codes,
         substitution_block: substitution_block(mr)
       )
     end
@@ -226,12 +261,17 @@ class PrescriptionReport
 
   # 「一包化・粉砕」のような表示。RP 内の明細は同じ値を持つので、最初の明細から取る。
   def dispense_instruction(medication_request)
+    DISPENSE_INSTRUCTION_LABELS.slice(*dispense_codes(medication_request)).values.join("・")
+  end
+
+  # 調剤指示のコード(選択肢の並び順)。
+  def dispense_codes(medication_request)
     codes = Array(medication_request.dig("dispenseRequest", "extension")).filter_map do |ext|
       next unless ext["url"] == DISPENSE_INSTRUCTION_EXT_URL
 
       coding_by_system(ext.dig("valueCodeableConcept", "coding"), DISPENSE_INSTRUCTION_SYSTEM)&.dig("code")
     end
-    DISPENSE_INSTRUCTION_LABELS.select { |code, _| codes.include?(code) }.values.join("・")
+    DISPENSE_INSTRUCTION_LABELS.keys & codes
   end
 
   def substitution_block(medication_request)

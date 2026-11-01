@@ -550,6 +550,21 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (prescription_print)" do
+    it "defaults to no QR code and stores the switch" do
+      with_admin_token(nil) { get "/facility_settings" }
+      expect(JSON.parse(response.body)["prescription_print"]).to eq("external_qr" => false)
+
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { prescription_print: { external_qr: true } }, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["prescription_print"]).to eq("external_qr" => true)
+      expect(FacilitySettings.prescription_print).to eq("external_qr" => true)
+    end
+  end
+
   describe "PATCH /facility_settings (prescription_category)" do
     it "stores the default category of each setting" do
       with_admin_token(nil) do

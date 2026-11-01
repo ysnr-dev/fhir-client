@@ -6,6 +6,7 @@
 | ファイル | 帳票 |
 |---|---|
 | `backend/lib/report_layouts/prescription_external.tlf` | 院外処方箋(様式第2号、2024年12月改定、A5) |
+| `backend/lib/report_layouts/prescription_external_qr.tlf` | 院外処方箋 QR コード付き(A4 横。左半分が様式第2号、右半分に QR コード) |
 | `backend/lib/report_layouts/prescription_internal.tlf` | 院内処方箋(簡易様式、A5) |
 
 検体ラベルと同じく `report_layouts`(DB)には登録しない。国の様式と院内の定型で
@@ -16,6 +17,9 @@
 差し替えるときは ThinReports Basic Editor で `.tlf` を編集してコミットし、backend を
 デプロイし直す。用紙は A5 実寸(419.53 × 595.28 pt)のユーザー定義
 (user 用紙は landscape にすると幅・高さが入れ替わるため portrait のまま)。
+QR コード付きは A4 横実寸(841.89 × 595.28 pt)で、様式の項目は院外と同じ座標に置き、
+右半分(x ≥ 436)に見出しと QR コードの枠を足したもの。様式を直すときは院外を直してから
+同じ項目をこちらにも写す。
 
 ## プレースホルダー
 
@@ -44,6 +48,8 @@
 | `pref_no` / `table_no` / `inst_no` | text-block | ○ | − | 保険医療機関コード 10 桁の 2+1+7 分割 |
 | `page_no` | text-block | ○ | ○ | 「n / m」 |
 | `continued` | text(静的) | ○ | ○ | 「（次頁に続く）」。最終ページ以外で show |
+| `qr_1`〜`qr_6` | image-block | QR 付きのみ | − | 処方内容の QR コード(120 × 120 pt)。分割されたシンボルを 1 から順に置き、余った枠は空 |
+| `qr_label_1`〜`qr_label_6` | text-block | QR 付きのみ | − | 分割されたときの「n / 総数」。単独のシンボルでは空 |
 
 ## 処方欄の寸法と行数・桁数の対応
 
@@ -52,7 +58,7 @@
 
 | レイアウト | 処方欄(rx_content) | 行送り | lines_per_page | max_cols(半角) |
 |---|---|---|---|---|
-| external | 幅 312.5 × 高さ 164 pt、9pt | 12pt | 13 | 68 |
+| external / external_qr | 幅 312.5 × 高さ 164 pt、9pt | 12pt | 13 | 68 |
 | internal | 幅 373.5 × 高さ 330 pt、9pt | 12pt | 27 | 82 |
 
 処方欄の寸法や行送り(style の line-height。thinreports は line-height-ratio ではなく

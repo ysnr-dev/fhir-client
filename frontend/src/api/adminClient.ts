@@ -23,6 +23,7 @@ import type {
   PrescriptionCategoryDefaults,
   PrescriptionCheckSettings,
   PrescriptionDoseSettings,
+  PrescriptionPrintSettings,
 } from "../fhir/prescriptionHelpers";
 import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
 import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
@@ -83,6 +84,8 @@ export interface FacilitySettings {
   prescription_dose: PrescriptionDoseSettings;
   /** 処方のチェック(処方区分ごとの日数の上限・採用区分が未設定の薬の扱い)。 */
   prescription_check: PrescriptionCheckSettings;
+  /** 処方箋の印刷(院外処方箋に QR コードを添えるか)。 */
+  prescription_print: PrescriptionPrintSettings;
   /** 他科依頼の依頼目的テンプレートの既定(依頼先の診療科 Organization.id → canonical)。 */
   consult_default_templates: Record<string, string>;
   /** 放射線治療の治療中の診察(週次レビュー)の間隔。 */
@@ -134,6 +137,7 @@ export type FacilitySettingsPayload = Partial<{
   prescription_category: PrescriptionCategoryDefaults;
   prescription_dose: PrescriptionDoseSettings;
   prescription_check: PrescriptionCheckSettings;
+  prescription_print: PrescriptionPrintSettings;
   consult_default_templates: Record<string, string>;
   radiotherapy_review: RadiotherapyReviewSettings;
   receipt_codes: ReceiptCodeSettings;

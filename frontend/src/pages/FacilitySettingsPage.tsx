@@ -63,11 +63,13 @@ import {
   DEFAULT_PRESCRIPTION_CATEGORY,
   DEFAULT_PRESCRIPTION_CHECK,
   DEFAULT_PRESCRIPTION_DOSE,
+  DEFAULT_PRESCRIPTION_PRINT,
   DOSE_BASIS_OPTIONS,
   SETTING_OPTIONS,
   type DoseBasis,
   type PrescriptionCategoryDefaults,
   type PrescriptionCheckSettings,
+  type PrescriptionPrintSettings,
 } from "../fhir/prescriptionHelpers";
 import {
   DEFAULT_RADIOTHERAPY_REVIEW,
@@ -161,6 +163,7 @@ const FACILITY_SECTIONS = [
   { key: "medication_schedule", label: "内服の与薬の時刻" },
   { key: "prescription_category", label: "処方の初期値" },
   { key: "prescription_check", label: "処方のチェック" },
+  { key: "prescription_print", label: "処方箋の印刷" },
   { key: "consult_default_templates", label: "他科依頼の既定テンプレート" },
   { key: "document_reminder", label: "文書作成の督促" },
   { key: "nursing_acuity", label: "看護必要度" },
@@ -416,6 +419,12 @@ export function FacilitySettingsPage() {
   // 早期警告スコア(NEWS2)。有効にするとバイタルの保存で算出し、区分が下限以上なら主治医に通知する。
   const [earlyWarningDraft, setEarlyWarningDraft] = useState<EarlyWarningSettings | undefined>(undefined);
 
+  // 処方箋の印刷。院外処方箋に JAHIS の QR コードを添えるか(A4 横のレイアウトになる)。
+  const [prescriptionPrintDraft, setPrescriptionPrintDraft] = useState<PrescriptionPrintSettings | undefined>(
+    undefined,
+  );
+  const prescriptionPrint = prescriptionPrintDraft ?? settings.data?.prescription_print ?? DEFAULT_PRESCRIPTION_PRINT;
+
   // 処方監査。監査済になるまで調剤登録・払出登録を止めるか。
   const [rxVerificationDraft, setRxVerificationDraft] = useState<RxVerificationSettings | undefined>(undefined);
   const rxVerification = rxVerificationDraft ?? settings.data?.rx_verification ?? DEFAULT_RX_VERIFICATION;
@@ -620,6 +629,7 @@ export function FacilitySettingsPage() {
       prescription_category: prescriptionCategory,
       prescription_dose: { basis: prescriptionDoseBasis },
       prescription_check: prescriptionCheck,
+      prescription_print: prescriptionPrint,
       consult_default_templates: consultTemplates,
       radiotherapy_review: radiotherapyReview,
       receipt_codes: receiptCodes,
@@ -1637,6 +1647,19 @@ export function FacilitySettingsPage() {
                   onChange={(e) => setEarlyWarningDraft({ ...earlyWarning, show_qsofa: e.target.checked })}
                 />
                 qSOFA を併記する
+              </label>
+            </div>
+          )}
+
+          {section === "prescription_print" && (
+            <div className="facility-settings__schedule-body">
+              <label className="connection-settings-form__checkbox">
+                <input
+                  type="checkbox"
+                  checked={prescriptionPrint.external_qr}
+                  onChange={(e) => setPrescriptionPrintDraft({ ...prescriptionPrint, external_qr: e.target.checked })}
+                />
+                院外処方箋にQRコードを印字する
               </label>
             </div>
           )}
