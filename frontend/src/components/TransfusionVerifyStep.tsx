@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   VERIFICATION_SKIP_REASON_OPTIONS,
   applyTransfusionScan,
+  normalizeScanCode,
   patientVerifyLabel,
   type TransfusionBagLine,
   type TransfusionScanState,
@@ -42,11 +43,12 @@ export function TransfusionVerifyStep({
   const [reasonText, setReasonText] = useState("");
 
   const bagNumbers = bags.map((bag) => bag.lotNumber.trim()).filter(Boolean);
+  const matched = (number: string) => scan.bagNumbers.includes(normalizeScanCode(number));
   const canComplete =
     scan.patient === "matched" &&
     practitionerName !== null &&
     bagNumbers.length > 0 &&
-    bagNumbers.every((number) => scan.bagNumbers.includes(number));
+    bagNumbers.every(matched);
   const canSkip = reasonCode !== "" && (reasonCode !== "other" || reasonText.trim() !== "");
 
   function handleScan(value: string) {
@@ -101,7 +103,7 @@ export function TransfusionVerifyStep({
                 {bag.lotNumber && ` No.${bag.lotNumber}`}
               </td>
               <td>
-                {bag.lotNumber && scan.bagNumbers.includes(bag.lotNumber.trim()) ? (
+                {bag.lotNumber && matched(bag.lotNumber) ? (
                   <State kind="ok" />
                 ) : (
                   <State kind="none">未読取</State>

@@ -328,31 +328,38 @@ export const EMPTY_TRANSFUSION_SCAN: TransfusionScanState = {
   message: null,
 };
 
+/** 読み取った値・製剤番号・患者番号を同じ形(NFKC・空白除去・大文字)に揃えて比べる。 */
+export function normalizeScanCode(code: string): string {
+  return code.normalize("NFKC").trim().toUpperCase();
+}
+
 function patientCodesOf(patient: fhir4.Patient): Set<string> {
   const codes = (patient.identifier ?? []).map((i) => i.value ?? "").filter(Boolean);
   if (patient.id) codes.push(patient.id);
-  return new Set(codes.map((code) => code.normalize("NFKC").trim().toUpperCase()));
+  return new Set(codes.map(normalizeScanCode));
 }
 
 /**
- * 1 回の読み取りを照合して次の状態を返す。製剤ラベルの献血番号(ISBT 128 の `=`)は
- * 入力中のバッグの製剤番号と、それ以外は患者番号(リストバンド)と突き合わせる。
+ * 1 回の読み取りを照合して次の状態を返す。製剤ラベルの献血番号(ISBT 128 の `=`)か、
+ * 入力中のバッグの製剤番号と同じ文字列ならバッグと、それ以外は患者番号(リストバンド)と
+ * 突き合わせる。一致した製剤番号は正規化した形で持つ。
  */
 export function applyTransfusionScan(
   state: TransfusionScanState,
   raw: string,
   context: { patient: fhir4.Patient | undefined; bagNumbers: string[] },
 ): TransfusionScanState {
-  const value = raw.normalize("NFKC").trim().toUpperCase();
+  const value = normalizeScanCode(raw);
   if (!value) return state;
+  const bagNumbers = context.bagNumbers.map(normalizeScanCode);
   const field = parseIsbt128(value);
-  if (field?.kind === "din" || (!field && context.bagNumbers.includes(value))) {
+  if (field?.kind === "din" || (!field && bagNumbers.includes(value))) {
     const number = field?.kind === "din" ? field.value : value;
-    if (!context.bagNumbers.includes(number)) {
+    if (!bagNumbers.includes(number)) {
       return { ...state, message: { text: `製剤番号 ${number} はこの輸血のバッグにありません。`, error: true } };
     }
-    const bagNumbers = state.bagNumbers.includes(number) ? state.bagNumbers : [...state.bagNumbers, number];
-    return { ...state, bagNumbers, message: { text: `バッグ ${number} 一致`, error: false } };
+    const matched = state.bagNumbers.includes(number) ? state.bagNumbers : [...state.bagNumbers, number];
+    return { ...state, bagNumbers: matched, message: { text: `バッグ ${number} 一致`, error: false } };
   }
   if (field) {
     return { ...state, message: { text: "製剤ラベルの献血番号を読んでください。", error: true } };
