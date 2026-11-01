@@ -3140,14 +3140,15 @@ fieldset.rp-card {
   font-size: 12px;
 }
 
-/* 「カルテ」(リンク)と「確認 / 承認」(ボタン)の大きさを揃える。td の display は変えない
+/* 「カルテ」(リンク)と「確認 / 承認」(ボタン)の大きさを揃える。幅は下限だけ揃え、
+   長いラベルはその分だけ広げる。td の display は変えない
    (table-cell でなくなると行の縦位置と罫線が崩れる)。 */
 .notification__actions .button,
 .notification__actions button {
   box-sizing: border-box;
-  width: 5.5em;
+  min-width: 5.5em;
   margin-left: 8px;
-  padding: 4px 0;
+  padding: 4px 0.5em;
   font-size: 13px;
   justify-content: center;
   vertical-align: middle;
