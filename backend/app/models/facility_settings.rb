@@ -161,7 +161,8 @@ class FacilitySettings < ApplicationRecord
   DEFAULT_EARLY_WARNING = { "enabled" => false, "notify_band" => "medium", "show_qsofa" => true }.freeze
   # 輸血オーダー。不規則抗体スクリーニングの有効日数(投与予定日を含む)。輸血療法の実施に関する
   # 指針は 3 日以内の検体を求める。
-  DEFAULT_TRANSFUSION = { "antibody_screen_valid_days" => 3 }.freeze
+  # verification_enabled は実施入力の前に患者とバッグの照合(リストバンド・製剤ラベル)を出すか。
+  DEFAULT_TRANSFUSION = { "antibody_screen_valid_days" => 3, "verification_enabled" => false }.freeze
   # 警告(判断支援)の種別ごとの重さの調整(docs/advisory-design.md §3.4)。種別 → default(実装の既定)/
   # info(表示のみに下げる)/ off(出さない)。上げることはできない。種別の一覧は frontend(ADVISORY_KINDS)が持つ。
   ADVISORY_SEVERITY_OVERRIDES = %w[default info off].freeze
@@ -507,7 +508,7 @@ class FacilitySettings < ApplicationRecord
     },
     "transfusion" => {
       default: DEFAULT_TRANSFUSION,
-      shape: { fields: { "antibody_screen_valid_days" => DAYS } }
+      shape: { fields: { "antibody_screen_valid_days" => DAYS, "verification_enabled" => :boolean } }
     },
     "karte_card_order" => {
       default: DEFAULT_KARTE_CARD_ORDER,

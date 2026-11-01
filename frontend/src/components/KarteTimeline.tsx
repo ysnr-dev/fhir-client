@@ -48,6 +48,7 @@ import {
   canRestoreInjection,
 } from "../fhir/injectionTaskHelpers";
 import { TransfusionPerformModal } from "./TransfusionPerformModal";
+import { TransfusionReactionModal } from "./TransfusionReactionModal";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import {
   doseText,
@@ -323,6 +324,8 @@ const KarteCard = memo(function KarteCard({
   const [chartOpen, setChartOpen] = useState(false);
   // 輸血の実施入力。投与するのは病棟なので、部門一覧だけでなくここからも開ける。
   const [performOpen, setPerformOpen] = useState(false);
+  // 輸血の副作用の追記(実施後に分かった遅発性副作用)。
+  const [reactionOpen, setReactionOpen] = useState(false);
   // 検査レポート(読影・生理検査・内視鏡の所見)の登録・編集。部門一覧と同じモーダルを開く。
   const [examReportOpen, setExamReportOpen] = useState(false);
   // 病理検査の採取の記録(検体個数・容器数の修正と採取日時)。部門が受け付けるまで開ける。
@@ -736,6 +739,16 @@ const KarteCard = memo(function KarteCard({
                 実施入力
               </button>
             )}
+            {/* 輸血後 24 時間以降に出る遅発性副作用は、実施記録を取り消さずに後から足す。 */}
+            {item.kind === "transfusion-order" && item.status === "completed" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => setReactionOpen(true)}
+              >
+                副作用追記
+              </button>
+            )}
             {/* どのカードも修正のたびに版が残るので、いつ何が直されたかを辿れるようにする。 */}
             <button
               type="button"
@@ -914,6 +927,12 @@ const KarteCard = memo(function KarteCard({
           itemRequests={item.itemRequests}
           task={item.task}
           onClose={() => setPerformOpen(false)}
+        />
+      )}
+      {reactionOpen && item.kind === "transfusion-order" && (
+        <TransfusionReactionModal
+          orderId={item.serviceRequest.id ?? ""}
+          onClose={() => setReactionOpen(false)}
         />
       )}
     </article>

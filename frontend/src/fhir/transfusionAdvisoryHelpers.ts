@@ -20,9 +20,14 @@ import {
 export interface TransfusionSettings {
   /** 不規則抗体スクリーニングの有効日数(投与予定日を含む)。 */
   antibody_screen_valid_days: number;
+  /** 実施入力の前に患者とバッグの照合(リストバンド・製剤ラベルの読み取り)を出すか。 */
+  verification_enabled: boolean;
 }
 
-export const DEFAULT_TRANSFUSION_SETTINGS: TransfusionSettings = { antibody_screen_valid_days: 3 };
+export const DEFAULT_TRANSFUSION_SETTINGS: TransfusionSettings = {
+  antibody_screen_valid_days: 3,
+  verification_enabled: false,
+};
 
 /** 注意区分マスタの「輸血拒否」のコード(db/seed_data/patient_cautions.csv)。 */
 const NO_TRANSFUSION_CAUTION_CODE = "no-transfusion";

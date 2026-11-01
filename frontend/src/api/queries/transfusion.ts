@@ -28,7 +28,7 @@ import { sortLocations } from "../../fhir/locationHelpers";
 import { localDay } from "../../lib/dates";
 import { useFacilitySettings } from "./organization";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
-import { postBundle, searchResource } from "../fhirClient";
+import { createResource, postBundle, searchResource } from "../fhirClient";
 import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
 import {
   cancelsPerform,
@@ -274,6 +274,21 @@ export function useRegisterTransfusionPerform() {
   return useMutation({
     mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
     onSuccess: () => invalidateTransfusion(queryClient),
+  });
+}
+
+/**
+ * 実施済みの輸血への副作用の追記(遅発性副作用)。実施記録のハブにぶら下がる Observation を 1 件足す。
+ */
+export function useAddTransfusionReaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (observation: fhir4.Observation) => createResource(observation),
+    onSuccess: () => {
+      invalidateTransfusion(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+    },
   });
 }
 

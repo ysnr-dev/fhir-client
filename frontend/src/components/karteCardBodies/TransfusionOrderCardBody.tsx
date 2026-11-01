@@ -14,8 +14,11 @@ const TRANSFUSION_PERFORM_ROWS: {
   of: (perform: TransfusionPerformDisplay) => string[];
 }[] = [
   { label: "バッグ", of: (perform) => perform.bags },
+  { label: "未実施", of: (perform) => perform.notGivenBags },
+  { label: "観察", of: (perform) => perform.observations },
   // 副作用は「なし」も記録として意味があるので、値があれば必ず出す。
   { label: "副作用", of: (perform) => (perform.reaction ? [perform.reaction] : []) },
+  { label: "遅発性副作用", of: (perform) => perform.delayedReactions },
 ];
 
 // 輸血は製剤の一覧が本文。検査区分と同意書の状態はタイトルに出るのでここには出さない。
@@ -93,6 +96,12 @@ export function TransfusionOrderCardBody({
             )}
             {perform.performerName && (
               <span className="karte-perform__meta">{perform.performerName}</span>
+            )}
+            {perform.confirmerName && (
+              <span className="karte-perform__meta">確認 {perform.confirmerName}</span>
+            )}
+            {perform.verification && (
+              <span className="karte-perform__meta">{perform.verification}</span>
             )}
             {/* 実施記録があるのに輸血まで至っていない例外(途中で中止など)。 */}
             {perform.statusNote && (

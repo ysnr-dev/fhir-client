@@ -1690,6 +1690,16 @@ export function FacilitySettingsPage() {
                   <span className="facility-settings__unit">日以内(投与予定日を含む)</span>
                 </span>
               </label>
+              <label className="connection-settings-form__checkbox">
+                <input
+                  type="checkbox"
+                  checked={transfusion.verification_enabled}
+                  onChange={(e) =>
+                    setTransfusionDraft({ ...transfusion, verification_enabled: e.target.checked })
+                  }
+                />
+                実施入力の前に患者とバッグを照合する
+              </label>
             </div>
           )}
 

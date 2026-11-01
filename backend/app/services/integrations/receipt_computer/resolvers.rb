@@ -192,7 +192,8 @@ module Integrations
         AUTOLOGOUS = "auto".freeze
 
         def call(record, _order)
-          bags = record.administrations
+          # 入れなかったバッグ(未実施・返却)は status が not-done で残るので数えない。
+          bags = record.administrations.select { |bag| bag["status"] == "completed" }
           return skip(LABEL, LABEL, "実施記録に製剤がありません") if bags.empty?
 
           codes = bags.filter_map { |b| Coding.code_of(b["medicationCodeableConcept"], Coding::TRANSFUSION_PRODUCT) }.uniq

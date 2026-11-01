@@ -62,9 +62,11 @@
   ←focus──── Task            (進捗: transfusion)
   ←basedOn── Procedure       (出庫記録ハブ、category = procedure-category|transfusion-dispense)
                                ←partOf── MedicationDispense ×N = 払い出したバッグ 1 本
-  ←basedOn── Procedure       (実施記録ハブ、category = order-type|transfusion)
-                               ←partOf── MedicationAdministration ×N
-                               ←partOf── Observation(副作用)
+  ←basedOn── Procedure       (実施記録ハブ、category = order-type|transfusion、
+                               performer = 実施者 / 確認者、extension = 照合の結果)
+                               ←partOf── MedicationAdministration ×N(入れなかったバッグは not-done)
+                               ←partOf── Observation(副作用。症状は component、遅発性は後から追記)
+                               ←partOf── Observation(投与前・5 分後・15 分後・終了時のバイタル)
 ```
 
 ### 2.1 なぜ明細を独立した ServiceRequest にするか
@@ -103,6 +105,12 @@
 | `StructureDefinition/transfusion-irradiated` | MedicationDispense。照射済か(valueBoolean) |
 | `StructureDefinition/transfusion-crossmatch` / `CodeSystem/transfusion-crossmatch` | MedicationDispense。交差適合試験の結果(compatible / incompatible / omitted) |
 | `CodeSystem/transfusion-dispense-performer` | MedicationDispense.performer.function(dispenser = 出庫者 / crossmatch = 適合試験者) |
+| `CodeSystem/transfusion-performer` | 実施記録 Procedure.performer.function(performer = 実施者 / verifier = 確認者) |
+| `StructureDefinition/transfusion-verification` / `CodeSystem/transfusion-verification-skip-reason` | 実施記録。投与時の照合の結果(status・patient・bag・reason・at) |
+| `CodeSystem/transfusion-bag-outcome` | MedicationAdministration.statusReason。入れなかったバッグの扱い(not-given = 未実施 / returned = 返却) |
+| `CodeSystem/transfusion-reaction-symptom` | 副作用 Observation の component。日本輸血・細胞治療学会の症状項目 |
+| `StructureDefinition/transfusion-reaction-timing` | 副作用 Observation。immediate(輸血中〜直後)/ delayed(遅発性、実施後の追記) |
+| `StructureDefinition/transfusion-observation-point` | バイタル Observation。観察の時点(before / 5min / 15min / end) |
 | `CodeSystem/transfusion-reaction` | 副作用 Observation の `code` と値 |
 
 再利用: `CodeSystem/prescription-setting`(入外区分)、依頼科・病棟の拡張
@@ -248,6 +256,29 @@ MedicationAdministration に直接付ける。既存のコードベースは処�
 ［提案］出庫取消は記録ごと消す(実施取消と同じ)。中止では消さない(出したバッグは返却の対象。
 返却・廃棄の記録は段階 D)。実施入力は出庫記録があればそのバッグ(製剤番号つき)を初期行にする。
 
+### 2.7.2 投与時の照合・確認者・観察・入れなかったバッグ(2026-11-01)
+
+JAHIS 患者安全ガイド(輸血編)7.5.3 に合わせた実施入力の拡張(`fhir/transfusionResultHelpers.ts`)。
+
+- **照合**: 施設設定 `transfusion.verification_enabled` で、実施入力の前に患者番号(リストバンド)と
+  製剤ラベルの献血番号(ISBT 128)を読む段(`TransfusionVerifyStep`。注射の 3 点認証と同じ作り)を出す。
+  実施するバッグ全部と患者が一致したら入力へ、できなければ理由を選んでスキップ。結果はハブの拡張
+  `transfusion-verification` に残し、カードに「照合済」「照合スキップ(理由)」と出す。
+- **確認者**: 読み合わせの相手を医療従事者から選び、`Procedure.performer` に `function` = verifier で
+  実施者(performer)と並べる。
+- **出庫記録との突き合わせ**: 出庫したバッグが初期行に入る(製剤番号・型つき)。出庫記録に無い製剤番号、
+  有効期限切れ、未照射、交差不適合、患者の型との不適合、出庫したのに入力に無いバッグは警告の器に出す
+  (`transfusion-perform` の文脈。確認を要する警告は理由を残して通す)。
+- **入れなかったバッグ**: 消さずに「未実施」「返却」で残す。`MedicationAdministration.status` = not-done、
+  理由は `statusReason`。医事(保存血液輸血の手技・製剤)とロット管理は completed だけを投与として数える。
+- **観察**: 投与前・5 分後・15 分後・終了時の血圧・脈拍・体温・SpO2・呼吸数。ふつうのバイタル
+  (`category` = vital-signs、`buildVitalObservations`)として書くので経過表にもそのまま載り、
+  `partOf` と `transfusion-observation-point` でこの輸血の観察だと分かる。空の時点は作らない。
+- **副作用の症状項目**: 「あり」なら日本輸血・細胞治療学会ヘモビジランス委員会の症状項目(17 項目)から
+  選び、`component` に並べる。自由記述は `note`。副作用歴は依頼時と実施時の両方に警告(表示のみ)で出す。
+- **遅発性副作用の追記**: 実施済みのカードのケバブ「副作用追記」で、実施記録を取り消さずに副作用の
+  Observation(`transfusion-reaction-timing` = delayed、発症日時)を 1 件足す(`TransfusionReactionModal`)。
+
 ### 2.8 進捗 Task の 5 状態
 
 ```
@@ -300,7 +331,9 @@ cancelled (中止)
 | 詳細モーダル | カードから | 明細と実施記録の全項目 |
 | 輸血部門一覧 | 部門業務 > 輸血 | 投与予定日 1 日ぶん。受付/出庫/実施の操作 |
 | 出庫入力 | 部門一覧の「出庫」 | バッグごとの製剤番号・血液型・有効期限・照射・交差適合試験(バーコード入力可)、割付の警告 |
-| 実施入力 | 部門一覧の「実施」 | 開始/終了時刻・実施者・バッグごとの製剤番号・副作用 |
+| 照合 | 実施入力の前段(施設設定で有効なとき) | 患者番号と製剤ラベルの読み取り、確認者の選択 |
+| 副作用追記 | カルテカードのケバブ(実施済) | 遅発性副作用の発症日時・症状・内容 |
+| 実施入力 | 部門一覧の「実施」とカルテカード | 開始/終了時刻・実施者・確認者・バッグごとの製剤番号と実施/未実施/返却・観察・副作用(症状項目) |
 
 ---
 

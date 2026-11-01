@@ -18472,6 +18472,33 @@ button.meal-calendar__cell:hover {
   flex: 0 0 150px;
 }
 
+/* 実施入力の観察(投与前・5 分後・15 分後・終了時)。数値の欄は短くする。 */
+.transfusion-perform__observations input[type="number"] {
+  width: 64px;
+}
+
+.transfusion-perform__observations input[type="datetime-local"] {
+  width: 170px;
+}
+
+.transfusion-perform__bp {
+  white-space: nowrap;
+}
+
+/* 副作用の症状項目。選択中は副作用「あり」と同じ注意色。 */
+.transfusion-perform__symptoms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.transfusion-chip--symptom {
+  font-size: 13px;
+  font-weight: normal;
+  padding: 4px 10px;
+}
+
 .transfusion-dispense__check {
   display: flex;
   align-items: center;

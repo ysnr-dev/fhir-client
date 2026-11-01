@@ -1213,8 +1213,12 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     };
   }).filter((item): item is KarteTimelineItem => item !== null);
 
+  // 実施記録(輸血の観察)にぶら下がるバイタルは、その実施記録のカードに出すのでバイタルの
+  // カードにはしない(経過表には他のバイタルと同じく載る)。
   const vitalEntries = groupVitalEntries(
-    pickByType<fhir4.Observation>(vitalResources, "Observation"),
+    pickByType<fhir4.Observation>(vitalResources, "Observation").filter(
+      (observation) => !observation.partOf?.length,
+    ),
   );
   const vitalItems: KarteTimelineItem[] = vitalEntries.map((entry) => ({
     kind: "vital",

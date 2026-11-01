@@ -71,6 +71,8 @@ export function lotRecordRows(
     bundles.flatMap((b) => resourcesOfType<fhir4.Procedure>(b, "Procedure")).map((p) => [p.id ?? "", p]),
   );
   return administrations
+    // 輸血で入れなかったバッグ(未実施・返却)は not-done で残る。投与していないので一覧に出さない。
+    .filter((administration) => administration.status !== "not-done")
     .map((administration) => {
       const patientId = referenceIdOfType(administration.subject?.reference, "Patient");
       const patient = patients.get(patientId);
