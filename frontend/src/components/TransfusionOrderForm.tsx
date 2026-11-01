@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTransfusionProductOptions } from "../api/masterQueries";
-import { useBloodType, usePretransfusionResults } from "../api/queries";
-import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
+import { useBloodType } from "../api/queries";
+import type { LabBloodTypeComponent } from "../fhir/bloodTypeHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import {
@@ -12,6 +12,7 @@ import {
   bloodTypeLabel,
   emptyTransfusionOrderForm,
   emptyTransfusionProduct,
+  rhdDisplay,
   type AboBloodType,
   type RhdBloodType,
   type TransfusionOrderFormValues,
@@ -38,8 +39,9 @@ import { ProblemSelect } from "./ProblemSelect";
 //
 // 血液型は「何型を出すか」を医師が明示して選ぶ。日本赤十字社の製剤ラベルと同じ色を
 // 選択中の型に付けて、取り違えに気付きやすくする(docs/transfusion-order-design.md §2.5)。
-// 隣に並ぶ検体検査の結果(ABO/RhD/不規則抗体)は参照で、オーダーには保存しない。
-// 自動で選択に入れないのは、確認そのものが形骸化しないようにするため。
+// 初期値に入るのは検査で確定した型(異なる日の 2 検体で一致)だけで、申告のままの型や
+// 1 回だけの検査結果は隣に参照として並べるに留める(fhir/bloodTypeHelpers.ts)。
+// 検査結果への参照はオーダーに保存しない。
 
 interface TransfusionOrderFormProps {
   patientId: string;
@@ -87,18 +89,16 @@ export function TransfusionOrderForm({
     })),
   );
   const products = useTransfusionProductOptions();
-  const pretransfusion = usePretransfusionResults(patientId);
-  // 患者に登録された血液型(プロファイルタブ)。新規オーダーの初期値と、
-  // 選んだ型との食い違いの警告に使う。
-  const patientBloodType = summarizeBloodType(useBloodType(patientId).observations);
+  // 患者の血液型(検査結果と申告)。新規オーダーの初期値と、選んだ型との食い違いの警告に使う。
+  const patientBloodType = useBloodType(patientId).summary;
   const prefilled = useRef(false);
 
   const patientAbo = patientBloodType?.abo ?? "";
   const patientRhd = patientBloodType?.rhd ?? "";
   const patientTested = patientBloodType?.tested ?? false;
 
-  // 検査で確定した型だけを初期値にする。申告のままの型を黙って入れると、
-  // その型で製剤が払い出されうるため(申告値は下の一覧で読ませるに留める)。
+  // 検査で確定した型(2 回一致)だけを初期値にする。申告のままの型や 1 回だけの検査結果を
+  // 黙って入れると、その型で製剤が払い出されうるため(下の一覧で読ませるに留める)。
   // DO で型が写っている場合は上書きしない。一度入れたら追わない
   // (医師が外した型を書き戻さない)。
   useEffect(() => {
@@ -273,35 +273,72 @@ export function TransfusionOrderForm({
           </div>
         </div>
 
-        {/* 患者に登録された血液型。オーダーの型と食い違うときだけ注意を出す。 */}
-        {patientBloodType && (
+        {/* 患者の型(検査結果を優先)と食い違うときだけ注意を出す。 */}
+        {patientBloodType && bloodTypeLabel(patientBloodType.abo, patientBloodType.rhd) && (
           <p
             className={`transfusion-order__patient-blood-type${
               bloodTypeMismatch ? " transfusion-order__patient-blood-type--mismatch" : ""
             }`}
           >
-            患者登録: {bloodTypeLabel(patientBloodType.abo, patientBloodType.rhd) || "未登録"}
-            {patientBloodType.sourceLabel && `（${patientBloodType.sourceLabel}）`}
+            患者: {bloodTypeLabel(patientBloodType.abo, patientBloodType.rhd)}（
+            {patientBloodType.sourceLabel}）
             {bloodTypeMismatch && " — 選択した型と異なります"}
           </p>
         )}
 
-        {/* 検体検査の結果。選んだ型と見比べられるよう、選択欄のすぐ下に置く。 */}
-        <ul className="transfusion-order__pretest">
-          {(setMode ? [] : (pretransfusion.data ?? [])).map((result) => (
-            <li key={result.label} className="transfusion-order__pretest-item">
-              <span className="transfusion-order__pretest-label">{result.label}</span>
-              {result.value ? (
-                <>
-                  <span className="transfusion-order__pretest-value">{result.value}</span>
-                  <span className="transfusion-order__pretest-date">{result.date}</span>
-                </>
-              ) : (
-                <span className="transfusion-order__pretest-missing">未検査</span>
+        {/* 検査結果と申告。選んだ型と見比べられるよう、選択欄のすぐ下に表で置く。 */}
+        {!setMode && (
+          <table className="transfusion-order__pretest">
+            <thead>
+              <tr>
+                <th>項目</th>
+                <th>結果</th>
+                <th>検査日</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <PretestRow
+                label="ABO血液型"
+                component={patientBloodType?.lab.abo ?? null}
+                format={(value) => `${value}型`}
+              />
+              <PretestRow
+                label="RhD血液型"
+                component={patientBloodType?.lab.rhd ?? null}
+                format={(value) => `RhD${rhdDisplay(value)}`}
+              />
+              <tr>
+                <th scope="row">不規則抗体</th>
+                {patientBloodType?.antibodyScreen ? (
+                  <>
+                    <td className="transfusion-order__pretest-value">
+                      {patientBloodType.antibodyScreen.value}
+                    </td>
+                    <td>{patientBloodType.antibodyScreen.date}</td>
+                    <td></td>
+                  </>
+                ) : (
+                  <>
+                    <td className="transfusion-order__pretest-missing">未検査</td>
+                    <td></td>
+                    <td></td>
+                  </>
+                )}
+              </tr>
+              {patientBloodType?.manual && (
+                <tr>
+                  <th scope="row">申告</th>
+                  <td className="transfusion-order__pretest-value">
+                    {bloodTypeLabel(patientBloodType.manual.abo, patientBloodType.manual.rhd)}
+                  </td>
+                  <td>{patientBloodType.manual.effectiveDate}</td>
+                  <td>{patientBloodType.manual.sourceLabel}</td>
+                </tr>
               )}
-            </li>
-          ))}
-        </ul>
+            </tbody>
+          </table>
+        )}
       </fieldset>
 
       <fieldset>
@@ -454,6 +491,49 @@ export function TransfusionOrderForm({
 }
 
 // 製剤 1 行。製剤マスタから選び、単位数を入れる。
+/**
+ * 検査結果の血液型 1 行。2 回一致で確定、1 回だけ・食い違いは印を付ける。
+ * 検査結果が無ければ「未検査」を目立たせる(輸血前検査が無いまま出すのは例外なので)。
+ */
+function PretestRow({
+  label,
+  component,
+  format,
+}: {
+  label: string;
+  component: LabBloodTypeComponent | null;
+  format: (value: string) => string;
+}) {
+  return (
+    <tr>
+      <th scope="row">{label}</th>
+      {component ? (
+        <>
+          <td className="transfusion-order__pretest-value">
+            {component.value ? format(component.value) : component.raw}
+          </td>
+          <td>{component.dates.join("、")}</td>
+          <td>
+            {component.conflict ? (
+              <span className="blood-type__unconfirmed blood-type__unconfirmed--conflict">
+                不一致
+              </span>
+            ) : (
+              !component.confirmed && <span className="blood-type__unconfirmed">1回</span>
+            )}
+          </td>
+        </>
+      ) : (
+        <>
+          <td className="transfusion-order__pretest-missing">未検査</td>
+          <td></td>
+          <td></td>
+        </>
+      )}
+    </tr>
+  );
+}
+
 function ProductCard({
   index,
   product,

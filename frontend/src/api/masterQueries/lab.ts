@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ANTIBODY_SCREEN_RESULT_ITEM_CODES, BLOOD_TYPE_ANALYTES } from "../../fhir/bloodTypeHelpers";
 import { jlac11AliasKey } from "../../fhir/labResultHelpers";
 import {
   createLabContainer,
@@ -220,6 +221,25 @@ export function useLabResultItemsByJlac11Codes(codes: string[]) {
     queryFn: () => searchLabResultItems({ jlac11_prefix: prefixes.join(","), per: 500 }),
     staleTime: Infinity,
     enabled: prefixes.length > 0,
+  });
+}
+
+/**
+ * 血液型(ABO / RhD)と不規則抗体スクリーニングの結果項目。患者の血液型を検査結果から
+ * 読むときの検索コードに使う(fhir/bloodTypeHelpers.ts)。血液型は JLAC11 の分析物、
+ * 不規則抗体は結果項目コードで引く。
+ */
+export function useBloodTypeResultItems() {
+  return useQuery({
+    queryKey: [...LAB_RESULT_ITEMS_KEY, "blood_type"],
+    queryFn: async () => {
+      const [typed, antibody] = await Promise.all([
+        searchLabResultItems({ jlac11_prefix: Object.values(BLOOD_TYPE_ANALYTES).join(","), per: 500 }),
+        searchLabResultItems({ result_item_code: ANTIBODY_SCREEN_RESULT_ITEM_CODES.join(","), per: 500 }),
+      ]);
+      return [...typed.items, ...antibody.items];
+    },
+    staleTime: Infinity,
   });
 }
 

@@ -35,7 +35,6 @@ import { PregnancyForm } from "./PregnancyForm";
 import {
   buildBloodTypeObservations,
   parseBloodTypeForm,
-  summarizeBloodType,
   type BloodTypeFormValues,
 } from "../fhir/bloodTypeHelpers";
 import { BloodTypeForm } from "./BloodTypeForm";
@@ -112,7 +111,7 @@ const MODE_TITLES: Record<Mode["kind"], string> = {
   create: "注意の登録",
   edit: "注意の編集",
   "edit-patient": "患者情報の編集",
-  "edit-blood-type": "血液型",
+  "edit-blood-type": "血液型の申告",
   "edit-pregnancy": "妊娠・授乳",
   "create-infection": "感染症の登録",
   "edit-infection": "感染症の編集",
@@ -456,15 +455,14 @@ function PatientEditForm({ patientId, onSaved }: { patientId: string; onSaved: (
 }
 
 /**
- * 血液型の登録・編集。ABO と RhD は別リソースなので、保存は transaction で
- * まとめて送る(useSaveBloodType)。既に登録があればその id を引き継いで
+ * 血液型の申告(本人・家族の申告 / 他院からの情報)の登録・編集。検査で確定した型は
+ * 検査結果から読むので、ここでは扱わない。ABO と RhD は別リソースなので、保存は
+ * transaction でまとめて送る(useSaveBloodType)。既に登録があればその id を引き継いで
  * 更新し、履歴を増やさない(「いつ確認したか」は確認日で持つ)。
  */
 function BloodTypeEditForm({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
-  const { observations, isLoading, error } = useBloodType(patientId);
+  const { observations, summary, isLoading, error } = useBloodType(patientId);
   const saveBloodType = useSaveBloodType();
-
-  const summary = summarizeBloodType(observations);
 
   function handleSubmit(values: BloodTypeFormValues) {
     saveBloodType.mutate(

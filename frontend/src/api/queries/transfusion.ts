@@ -13,8 +13,8 @@ import {
 } from "../../fhir/transfusionTaskHelpers";
 import { buildTransfusionPerformDeleteEntries } from "../../fhir/transfusionResultHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
-import { postBundle, searchResource } from "../fhirClient";
-import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
+import { postBundle } from "../fhirClient";
+import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES } from "./core";
 import {
   cancelsPerform,
   comparePatientNumber,
@@ -49,93 +49,6 @@ export function useDeleteTransfusionOrder() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
       invalidateOrderDependents(queryClient);
     },
-  });
-}
-
-// ---- 輸血の事前検査(血液型・不規則抗体)の参照 ----
-//
-// 輸血オーダー画面に読み取り専用で並べるためだけの検索。オーダーには参照を保存せず
-// (正本は検査結果側。docs/transfusion-order-design.md §2.5)、書く医師が取り違えに
-// 気付けるようにするのが目的。
-//
-// LOINC コードで直接引くのは、この 3 項目が「どの検査オーダーで出したか」に関係なく
-// 患者に 1 つ定まる値だから(検査結果の一覧から探させると、輸血のたびに医師が
-// 過去の検体検査を辿ることになる)。
-
-/** ABO 血液型 / RhD 血液型 / 不規則抗体スクリーニング の LOINC。 */
-export const PRETRANSFUSION_LOINC = {
-  abo: "883-9",
-  rhd: "10331-7",
-  antibodyScreen: "890-4",
-} as const;
-
-export interface PretransfusionResult {
-  /** 表示名(ABO血液型 など)。 */
-  label: string;
-  /** 結果の表示。まだ検査されていなければ空。 */
-  value: string;
-  /** 検査日 "YYYY-MM-DD"。 */
-  date: string;
-}
-
-const PRETRANSFUSION_LABELS: { code: string; label: string }[] = [
-  { code: PRETRANSFUSION_LOINC.abo, label: "ABO血液型" },
-  { code: PRETRANSFUSION_LOINC.rhd, label: "RhD血液型" },
-  { code: PRETRANSFUSION_LOINC.antibodyScreen, label: "不規則抗体" },
-];
-
-const LOINC_SYSTEM = "http://loinc.org";
-
-/** Observation の値を 1 行の文字列にする(型・単位を問わず読める形にする)。 */
-function observationValueText(observation: fhir4.Observation): string {
-  if (observation.valueQuantity) {
-    const { value, unit } = observation.valueQuantity;
-    return value == null ? "" : `${value}${unit ?? ""}`;
-  }
-  if (observation.valueCodeableConcept) {
-    const concept = observation.valueCodeableConcept;
-    return concept.text ?? concept.coding?.find((c) => c.display)?.display ?? "";
-  }
-  if (observation.valueString) return observation.valueString;
-  return "";
-}
-
-/**
- * 輸血前の検査結果(血液型・不規則抗体)。項目ごとに最新の 1 件だけを返す。
- * 検査されていない項目も「未検査」として出したいので、行そのものは常に 3 つ返す。
- */
-export function usePretransfusionResults(patientId: string | undefined) {
-  return useQuery({
-    queryKey: ["Observation", "search", "pretransfusion", patientId],
-    queryFn: async (): Promise<PretransfusionResult[]> => {
-      const params = new URLSearchParams();
-      params.set("patient", `Patient/${patientId}`);
-      // コードはカンマ区切りで OR になる。3 項目を 1 検索でまとめて引く。
-      params.set(
-        "code",
-        PRETRANSFUSION_LABELS.map(({ code }) => `${LOINC_SYSTEM}|${code}`).join(","),
-      );
-      params.set("_count", "50");
-      params.set("_sort", "-date");
-
-      const { data } = await searchResource<fhir4.Observation>("Observation", params);
-      const observations = resourcesOfType<fhir4.Observation>(data, "Observation");
-
-      return PRETRANSFUSION_LABELS.map(({ code, label }) => {
-        // _sort=-date で新しい順に並んでいるので、最初に見つかったものが最新。
-        const latest = observations.find((observation) =>
-          observation.code?.coding?.some((c) => c.system === LOINC_SYSTEM && c.code === code),
-        );
-        return {
-          label,
-          value: latest ? observationValueText(latest) : "",
-          date: (latest?.effectiveDateTime ?? latest?.issued ?? "").slice(0, 10),
-        };
-      });
-    },
-    enabled: Boolean(patientId),
-    // オーダー画面を開くたびに引き直す必要は無い(血液型は変わらない)。
-    staleTime: 5 * 60_000,
   });
 }
 

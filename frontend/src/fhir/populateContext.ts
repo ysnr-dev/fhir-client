@@ -15,7 +15,7 @@ import { summarizeBodyMeasures } from "./bodyMeasureHelpers";
 import { mealNutritionTarget } from "./mealNutritionTarget";
 import { mealOrderOneLine } from "./mealOrderHelpers";
 import { bloodTypeLabel } from "./transfusionOrderHelpers";
-import { summarizeBloodType } from "./bloodTypeHelpers";
+import type { BloodTypeSummary } from "./bloodTypeHelpers";
 import { cancerPopulateValues, type CancerPopulateSources } from "./cancerRegistryHelpers";
 import { infectiousDiseaseValues } from "./infectiousDiseaseReportHelpers";
 import { conditionCategoryOf, ICD10_SYSTEM, isActiveCondition, summarizeCondition } from "./conditionHelpers";
@@ -68,8 +68,8 @@ export interface PopulateSources {
   labs: PopulateLabRow[];
   /** 活動中のアレルギー。 */
   allergies: fhir4.AllergyIntolerance[];
-  /** 血液型(ABO / RhD)の Observation。 */
-  bloodType: fhir4.Observation[];
+  /** 血液型(ABO / RhD)のまとめ。無ければ null。 */
+  bloodType: BloodTypeSummary | null;
   /** 感染症の一覧(summarizeInfections の結果。陽性以外も含む)。 */
   infections: InfectionRow[];
   /** 有効な診療上の注意。 */
@@ -1237,8 +1237,7 @@ export function formatAllergies(allergies: fhir4.AllergyIntolerance[]): string {
     .join("、");
 }
 
-export function formatBloodType(observations: fhir4.Observation[]): string {
-  const summary = summarizeBloodType(observations);
+export function formatBloodType(summary: BloodTypeSummary | null): string {
   if (!summary) return "";
   const label = bloodTypeLabel(summary.abo, summary.rhd);
   if (!label) return "";

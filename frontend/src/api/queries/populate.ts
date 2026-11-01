@@ -401,7 +401,7 @@ export function usePopulateSources(
       prescriptionDetail: rxDetail.data?.data,
       labs,
       allergies: resourcesOfType<fhir4.AllergyIntolerance>(allergies.data?.data, "AllergyIntolerance"),
-      bloodType: resourcesOfType<fhir4.Observation>(bloodType.data?.data, "Observation"),
+      bloodType: bloodType.summary,
       infections: summarizeInfections(
         resourcesOfType<fhir4.Observation>(manualInfections.data?.data, "Observation"),
         resourcesOfType<fhir4.Observation>(labInfections.data?.data, "Observation"),
@@ -468,7 +468,7 @@ export function usePopulateSources(
     rxDetail.data,
     labs,
     allergies.data,
-    bloodType.data,
+    bloodType.summary,
     manualInfections.data,
     labInfections.data,
     flags.data,

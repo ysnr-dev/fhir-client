@@ -11,6 +11,7 @@ import {
   documentIdOfResponse,
   responseWithDocumentDeleteBundle,
 } from "../../fhir/documentFormQuestionnaire";
+import { bloodTypeLabSearchCodes, summarizeBloodType } from "../../fhir/bloodTypeHelpers";
 import { referenceId } from "../../fhir/shared";
 import {
   HAS_LAB_MAPPED_TYPES,
@@ -39,6 +40,7 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
+import { useBloodTypeResultItems } from "../masterQueries/lab";
 import { hasRelation, NOTIFICATION_TASK_KEY, resourcesOfType, saveWithImages, searchAllPages } from "./core";
 
 // ---- 診療上の注意(Flag) ----
@@ -290,8 +292,13 @@ export function useUpdateFlag() {
 // ---- 血液型(ABO / RhD の Observation) ----
 
 /**
- * 患者の血液型。ABO と RhD を LOINC のコード 2 つで 1 回の検索にまとめる
- * (`code` はカンマ区切りで OR になる)。件数が少ないのでページングはしない。
+ * 患者の血液型。手入力(LOINC 883-9 / 10331-7)と検体検査の結果の 2 経路を読み、
+ * まとめ(`summary`)を返す。`observations` は手入力分で、編集フォームが使う。
+ *
+ * 検査結果は上流のコード検索が完全一致なので、施設の結果項目マスタから血液型・不規則抗体の
+ * 項目を引いてから、その結果項目コードと JLAC11 で検索する(`bloodTypeLabSearchCodes`)。
+ * 血液型は何年も前に 1 度だけ検査していることが多く、新しい順に件数で切る読み方では
+ * 取りこぼすため。
  */
 export function useBloodType(patientId: string | undefined) {
   const params = new URLSearchParams();
@@ -307,10 +314,44 @@ export function useBloodType(patientId: string | undefined) {
     staleTime: 30 * 1000,
   });
 
-  const observations =
-    resourcesOfType<fhir4.Observation>(query.data?.data, "Observation");
+  const items = useBloodTypeResultItems();
+  const labItems = useMemo(() => items.data ?? [], [items.data]);
+  const codes = useMemo(() => bloodTypeLabSearchCodes(labItems), [labItems]);
 
-  return { ...query, observations };
+  const labParams = new URLSearchParams();
+  if (patientId) labParams.set("subject", `Patient/${patientId}`);
+  labParams.set("category", "laboratory");
+  labParams.set("code", codes.join(","));
+  labParams.set("_count", "100");
+  labParams.set("_sort", "-date");
+
+  const lab = useQuery({
+    queryKey: ["Observation", "search", patientId, "blood-type-lab", codes],
+    queryFn: () => searchResource<fhir4.Observation>("Observation", labParams),
+    enabled: Boolean(patientId) && items.isSuccess && codes.length > 0,
+    staleTime: 30 * 1000,
+  });
+
+  const observations = useMemo(
+    () => resourcesOfType<fhir4.Observation>(query.data?.data, "Observation"),
+    [query.data],
+  );
+  const labObservations = useMemo(
+    () => resourcesOfType<fhir4.Observation>(lab.data?.data, "Observation"),
+    [lab.data],
+  );
+  const summary = useMemo(
+    () => summarizeBloodType(observations, labObservations, labItems),
+    [observations, labObservations, labItems],
+  );
+
+  return {
+    ...query,
+    observations,
+    summary,
+    isLoading: query.isLoading || items.isLoading || lab.isLoading,
+    error: query.error ?? items.error ?? lab.error,
+  };
 }
 
 /**

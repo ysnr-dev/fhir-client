@@ -1,5 +1,5 @@
 import { useBloodType, useBodyMeasures, usePatient, usePregnancy, useRecentLabResults } from "../api/queries";
-import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
+import { bloodTypeUnconfirmedLabel, labComponentLabel } from "../fhir/bloodTypeHelpers";
 import {
   measurementLabel,
   summarizeBodyMeasures,
@@ -7,7 +7,7 @@ import {
 } from "../fhir/bodyMeasureHelpers";
 import { calculateAge } from "../fhir/patientHelpers";
 import { summarizePregnancy } from "../fhir/pregnancyHelpers";
-import { bloodTypeLabel } from "../fhir/transfusionOrderHelpers";
+import { bloodTypeLabel, rhdDisplay } from "../fhir/transfusionOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 
 /**
@@ -28,8 +28,8 @@ export function PatientBodySection({
   onEditBloodType: () => void;
   onEditPregnancy: () => void;
 }) {
-  const { observations, isLoading, error } = useBloodType(patientId);
-  const summary = summarizeBloodType(observations);
+  const { summary, isLoading, error } = useBloodType(patientId);
+  const unconfirmed = bloodTypeUnconfirmedLabel(summary);
   const pregnancy = usePregnancy(patientId);
   const pregnancySummary = summarizePregnancy(pregnancy.observations);
 
@@ -51,7 +51,7 @@ export function PatientBodySection({
         <h3>身体</h3>
         <div className="karte-tabpanel__actions">
           <button type="button" onClick={onEditBloodType}>
-            {summary ? "血液型編集" : "血液型登録"}
+            {summary?.manual ? "申告編集" : "申告登録"}
           </button>
           <button type="button" onClick={onEditPregnancy}>
             {pregnancySummary ? "妊娠・授乳編集" : "妊娠・授乳登録"}
@@ -74,14 +74,38 @@ export function PatientBodySection({
                   <span className="blood-type__value">
                     {bloodTypeLabel(summary.abo, summary.rhd) || "-"}
                   </span>
-                  {!summary.tested && (
-                    <span className="blood-type__unconfirmed">検査未確定</span>
+                  {unconfirmed && (
+                    <span
+                      className={`blood-type__unconfirmed${
+                        summary.labStatus === "conflict" ? " blood-type__unconfirmed--conflict" : ""
+                      }`}
+                    >
+                      {unconfirmed}
+                    </span>
                   )}
                 </dd>
-                <dt>情報源</dt>
-                <dd>{summary.sourceLabel || "-"}</dd>
-                <dt>確認日</dt>
-                <dd>{summary.effectiveDate || "-"}</dd>
+                <dt>ABO 検査</dt>
+                <dd>{labComponentLabel(summary.lab.abo, (value) => `${value}型`) || "-"}</dd>
+                <dt>RhD 検査</dt>
+                <dd>{labComponentLabel(summary.lab.rhd, (value) => `RhD${rhdDisplay(value)}`) || "-"}</dd>
+                <dt>不規則抗体</dt>
+                <dd>
+                  {summary.antibodyScreen
+                    ? `${summary.antibodyScreen.value} ${summary.antibodyScreen.date}`
+                    : "-"}
+                </dd>
+                <dt>申告</dt>
+                <dd>
+                  {summary.manual
+                    ? [
+                        bloodTypeLabel(summary.manual.abo, summary.manual.rhd),
+                        summary.manual.sourceLabel,
+                        summary.manual.effectiveDate,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")
+                    : "-"}
+                </dd>
                 <dt>備考</dt>
                 <dd>{summary.note || "-"}</dd>
               </dl>

@@ -14,7 +14,7 @@ import {
   useEarlyWarningSettings,
   useLatestEarlyWarning,
 } from "../api/queries";
-import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
+import { bloodTypeUnconfirmedLabel } from "../fhir/bloodTypeHelpers";
 import { dateTimeLabel } from "../lib/dates";
 import {
   bandAtLeast,
@@ -360,18 +360,27 @@ function AllergyPictograms({ patientId, size, portal }: PictogramProps) {
  * 確認日は帯には出さない(行を増やさないため)。詳細はプロファイルタブで読む。
  */
 function BloodType({ patientId }: { patientId: string | undefined }) {
-  const { observations } = useBloodType(patientId);
-  const summary = summarizeBloodType(observations);
+  const { summary } = useBloodType(patientId);
 
   const label = summary ? bloodTypeLabel(summary.abo, summary.rhd) : "";
   if (!label) return null;
+
+  const unconfirmed = bloodTypeUnconfirmedLabel(summary);
 
   return (
     <span className="patient-header__item">
       <span className="patient-header__label">血液型</span>
       <span className="patient-header__value patient-header__value--blood-type">
         {label}
-        {!summary?.tested && <span className="blood-type__unconfirmed">検査未確定</span>}
+        {unconfirmed && (
+          <span
+            className={`blood-type__unconfirmed${
+              summary?.labStatus === "conflict" ? " blood-type__unconfirmed--conflict" : ""
+            }`}
+          >
+            {unconfirmed}
+          </span>
+        )}
       </span>
     </span>
   );

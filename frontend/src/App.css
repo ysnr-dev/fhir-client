@@ -756,6 +756,12 @@
   font-size: 11px;
 }
 
+/* 検査結果どうしが食い違っている型。未確定より強く出す(出してはいけない型かもしれない)。 */
+.blood-type__unconfirmed--conflict {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 /* プロファイルの区画切替。左ペインは幅が狭いので伝票の切替より詰める。 */
 .karte-profile__tabs .order-select__tab {
   font-size: 13px;
@@ -18272,36 +18278,42 @@ button.meal-calendar__cell:hover {
   color: #45162e;
 }
 
-/* 輸血前検査(血液型・不規則抗体)の参照表示。入力欄ではないので、値を読むだけの
-   詰まった並びにして、入力フィールドと見た目で区別する。 */
+/* 輸血前検査(血液型・不規則抗体)と申告の参照表示。入力欄ではないので、値を読むだけの
+   詰まった表にして、入力フィールドと見た目で区別する。 */
 .transfusion-order__pretest {
   flex: 1 1 100%;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 20px;
-}
-
-.transfusion-order__pretest-item {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
+  margin: 4px 0 0;
+  border-collapse: collapse;
   font-size: 13px;
 }
 
-.transfusion-order__pretest-label {
+.transfusion-order__pretest th,
+.transfusion-order__pretest td {
+  padding: 3px 12px 3px 0;
+  text-align: left;
+  vertical-align: baseline;
+  border-bottom: 1px solid var(--border);
+}
+
+.transfusion-order__pretest thead th {
+  font-weight: normal;
+  font-size: 12px;
   color: var(--text);
+}
+
+.transfusion-order__pretest tbody th {
+  font-weight: normal;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .transfusion-order__pretest-value {
   font-weight: 600;
+  white-space: nowrap;
 }
 
-.transfusion-order__pretest-date {
-  font-size: 12px;
-  color: var(--text);
+.transfusion-order__pretest .blood-type__unconfirmed {
+  margin-left: 0;
 }
 
 /* 未検査は「値が無い」ことを目立たせる。輸血前検査が無いまま出すのは例外なので、
