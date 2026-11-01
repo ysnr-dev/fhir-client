@@ -1,6 +1,9 @@
 import { problemLabel } from "../fhir/conditionHelpers";
+import { dateTimeLabel } from "../lib/dates";
 import {
   organLabel,
+  pathoCollectedDateTime,
+  pathoContainerTotal,
   pathoOrderClinicalInfo,
   pathoOrderClinicalInfoTemplate,
   pathoOrderComment,
@@ -55,6 +58,8 @@ export function PathoOrderDetailPanel({
           <dd>{problemText}</dd>
           <dt>採取(予定)日時</dt>
           <dd>{serviceRequest.occurrenceDateTime?.slice(0, 16).replace("T", " ") || "-"}</dd>
+          <dt>採取日時</dt>
+          <dd>{dateTimeLabel(pathoCollectedDateTime(specimens)) || "未記録"}</dd>
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>至急区分</dt>
@@ -93,6 +98,8 @@ export function PathoOrderDetailPanel({
               <th>臓器・検査材料</th>
               <th>検体タイプ</th>
               <th>採取法</th>
+              <th>検体個数</th>
+              <th>容器数</th>
               <th>補足</th>
             </tr>
           </thead>
@@ -103,12 +110,18 @@ export function PathoOrderDetailPanel({
                 <td>{organLabel(specimen) || "-"}</td>
                 <td>{specimen.typeName || specimenTypeDisplay(specimen.typeCode) || "-"}</td>
                 <td>{specimen.methodName || "-"}</td>
+                <td>{specimen.pieceCount || "-"}</td>
+                <td>{specimen.containerCount}</td>
                 <td>{specimen.note || "-"}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        {specimens.length === 0 && <p className="patient-table__empty">検体がありません。</p>}
+        {specimens.length === 0 ? (
+          <p className="patient-table__empty">検体がありません。</p>
+        ) : (
+          <p className="patho-order__container-total">{`容器 計${pathoContainerTotal(specimens)}`}</p>
+        )}
       </fieldset>
 
       {/* シェーマ(JAHIS AP-031)。無いオーダーの方が多いので、あるときだけ枠を出す。 */}

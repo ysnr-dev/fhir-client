@@ -17,6 +17,7 @@ import {
   pathoSchemaImageRefs,
   type PathoOrderPriority,
   type PathoSpecimenValues,
+  isPositiveCount,
 } from "../fhir/pathoOrderHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import {
@@ -158,6 +159,15 @@ export function PathoOrderForm({
     const missing = values.specimens.findIndex((specimen) => !specimen.organCode);
     if (missing >= 0) {
       setValidationError(`検体${missing + 1}の臓器・検査材料を選択してください。`);
+      return;
+    }
+    const badCount = values.specimens.findIndex(
+      (specimen) =>
+        !isPositiveCount(specimen.containerCount ?? "1") ||
+        Boolean(specimen.pieceCount?.trim() && !isPositiveCount(specimen.pieceCount)),
+    );
+    if (badCount >= 0) {
+      setValidationError(`検体${badCount + 1}の検体個数・容器数は 1 以上の整数で入力してください。`);
       return;
     }
     setValidationError(null);
@@ -645,6 +655,28 @@ function SpecimenCard({
             </option>
           ))}
         </select>
+      </label>
+
+      <label className="patho-order__count">
+        検体個数
+        <input
+          type="number"
+          min={1}
+          inputMode="numeric"
+          value={specimen.pieceCount ?? ""}
+          onChange={(e) => onChange({ pieceCount: e.target.value })}
+        />
+      </label>
+
+      <label className="patho-order__count">
+        容器数
+        <input
+          type="number"
+          min={1}
+          inputMode="numeric"
+          value={specimen.containerCount ?? "1"}
+          onChange={(e) => onChange({ containerCount: e.target.value })}
+        />
       </label>
 
       <label className="patho-order__note">

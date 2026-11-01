@@ -17767,6 +17767,29 @@ button.meal-calendar__cell:hover {
   white-space: pre-wrap;
 }
 
+/* 検体個数・容器数。数字が 2〜3 桁入れば足りる幅にする。 */
+.patho-order__count input,
+.patho-collection__count {
+  width: 6em;
+}
+
+.patho-collection__organ {
+  margin-right: 8px;
+}
+
+/* 病理部門一覧の検体の列に添える容器の総数と採取の有無。 */
+.patho-worklist__containers {
+  margin: 0 8px;
+  font-weight: 600;
+}
+
+/* 検体の表の下に添える容器の総数。表の右端に寄せる。 */
+.patho-order__container-total {
+  margin: 6px 0 0;
+  text-align: right;
+  font-size: 13px;
+}
+
 /* 病理レポートに添える画像。種別・説明の行を縦に積み、追加ボタンを下に置く。 */
 .patho-result__images {
   flex: 1 1 100%;

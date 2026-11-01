@@ -1,12 +1,14 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { observationIdsFromReport, specimenIdsFromReport } from "../../fhir/labResultHelpers";
 import {
+  buildPathoCollectionBundle,
   buildPathoOrderDeleteBundle,
   isPathoServiceRequest,
   PATHO_ORDER_TYPE,
   pathoOrderItemRequests,
   pathoOrderLabel,
   pathoOrderResponseIds,
+  type PathoSpecimenValues,
 } from "../../fhir/pathoOrderHelpers";
 import {
   buildPathoResultDeleteBundle,
@@ -49,6 +51,27 @@ import {
 import { invalidateOrderDependents } from "./orderDelete";
 
 // ---- 病理検査オーダー ----
+
+/**
+ * 採取の記録(検体ごとの個数・容器数・左右・臓器の修正と採取日時)。検体明細だけを書き換える。
+ * オーダーの編集ではなく実施の記録なので、代行入力の来歴は付けない。
+ */
+export function useRecordPathoCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      header: fhir4.ServiceRequest;
+      itemRequests: fhir4.ServiceRequest[];
+      specimens: PathoSpecimenValues[];
+      collectedDateTime: string;
+    }) =>
+      postBundle(
+        buildPathoCollectionBundle(input.header, input.itemRequests, input.specimens, input.collectedDateTime),
+      ),
+    retry: false,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] }),
+  });
+}
 
 // 病理オーダーもヘッダと検体明細が別リソースなので、検体検査・細菌検査と同じ形で
 // 1 リクエストにまとめて取る。

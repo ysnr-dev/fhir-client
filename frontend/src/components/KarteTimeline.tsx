@@ -86,6 +86,8 @@ import { PathwayEvaluationCardBody } from "./karteCardBodies/PathwayEvaluationCa
 import { AdverseEventCardBody } from "./karteCardBodies/AdverseEventCardBody";
 import { PotencyMark } from "./MedicineWarnings";
 import { PathoImportanceBadge } from "./PathoResultDetailPanel";
+import { PathoCollectionModal } from "./PathoCollectionModal";
+import { canRecordPathoCollection, pathoCollectedDateTime, pathoOrderSpecimens } from "../fhir/pathoOrderHelpers";
 import { isRevisedReportStatus, reportStatusDisplay } from "../fhir/pathoResultHelpers";
 
 interface KarteTimelineProps {
@@ -323,6 +325,8 @@ const KarteCard = memo(function KarteCard({
   const [performOpen, setPerformOpen] = useState(false);
   // 検査レポート(読影・生理検査・内視鏡の所見)の登録・編集。部門一覧と同じモーダルを開く。
   const [examReportOpen, setExamReportOpen] = useState(false);
+  // 病理検査の採取の記録(検体個数・容器数の修正と採取日時)。部門が受け付けるまで開ける。
+  const [pathoCollectionOpen, setPathoCollectionOpen] = useState(false);
   const examReport =
     item.kind === "rad-order" || item.kind === "physio-order" || item.kind === "endoscopy-order"
       ? {
@@ -567,6 +571,11 @@ const KarteCard = memo(function KarteCard({
                 onClick={() => onOpenDetail({ kind: "patho-result", id: item.reportId })}
               >
                 レポート表示
+              </button>
+            )}
+            {item.kind === "patho-order" && canRecordPathoCollection(item.status) && (
+              <button type="button" className="row-menu__item" onClick={() => setPathoCollectionOpen(true)}>
+                {pathoCollectedDateTime(pathoOrderSpecimens(item.itemRequests)) ? "採取修正" : "採取"}
               </button>
             )}
             {examReport && (
@@ -872,6 +881,13 @@ const KarteCard = memo(function KarteCard({
         ))}
       {chartOpen && item.kind === "surgery-order" && (
         <AnesthesiaChartModal orderId={item.id} onClose={() => setChartOpen(false)} />
+      )}
+      {pathoCollectionOpen && item.kind === "patho-order" && (
+        <PathoCollectionModal
+          serviceRequest={item.serviceRequest}
+          itemRequests={item.itemRequests}
+          onClose={() => setPathoCollectionOpen(false)}
+        />
       )}
       {examReportOpen && examReport && (
         <ExamReportEntryModal

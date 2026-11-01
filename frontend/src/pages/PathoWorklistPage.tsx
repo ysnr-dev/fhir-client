@@ -27,6 +27,9 @@ import {
 import { RowPictograms } from "../components/PatientListRowParts";
 import {
   EXAM_CATEGORY_OPTIONS,
+  canRecordPathoCollection,
+  pathoCollectedDateTime,
+  pathoContainerTotal,
   pathoOrderSpecimens,
   specimenSummary,
   summarizePathoOrder,
@@ -435,8 +438,15 @@ function WorklistRow({
       <PatientProfileCells patient={patient} />
       <td className="lab-worklist__compact">{summary.examCategoryDisplay || "-"}</td>
       <td className="lab-worklist__content">
+        {/* 受付で揃っているかを見る数(容器の総数)と、受付前なら採取が記録されたか。 */}
         {specimens.length > 0 ? (
-          specimenSummary(specimens)
+          <>
+            {specimenSummary(specimens)}
+            <span className="patho-worklist__containers">{`容器 計${pathoContainerTotal(specimens)}`}</span>
+            {canRecordPathoCollection(status) && !pathoCollectedDateTime(specimens) && (
+              <span className="order-select__muted">未採取</span>
+            )}
+          </>
         ) : (
           <span className="order-select__muted">検体なし</span>
         )}

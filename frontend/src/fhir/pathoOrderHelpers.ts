@@ -96,6 +96,14 @@ const ITEM_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/patho-order-item-n
 const SPECIMEN_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Specimen_Common";
 const CONTAINED_SPECIMEN_ID = "specimen";
 
+// 検体を入れた容器の数(HL7 v2 SPM-26 Number of Specimen Containers に当たる)。JAHIS 患者安全ガイド
+// 病理編 7.1.3「病理オーダ毎に検体数／容器数を管理する」。FHIR の Specimen.container は容器ごとの
+// 識別子を持つ要素で、数だけを持てないので拡張にする。1 検体が複数の容器に分かれることがある。
+const CONTAINER_COUNT_EXT_URL = "http://fhir-client.local/StructureDefinition/patho-container-count";
+// 検体個数(生検の個数など)。Specimen.collection.quantity に UCUM の {piece} で持つ。
+const UCUM_SYSTEM = "http://unitsofmeasure.org";
+const PIECE_UNIT = { unit: "個", system: UCUM_SYSTEM, code: "{piece}" };
+
 export type PathoOrderPriority = "routine" | "urgent";
 
 /**
@@ -160,6 +168,12 @@ export interface PathoSpecimenValues {
   methodName: string;
   /** 部位の詳細・肉眼的性状などの補足(自由文)。 */
   note: string;
+  /** 検体個数("3" など)。採取するまで分からないことが多いので空を許す。 */
+  pieceCount: string;
+  /** 容器数(1 以上)。 */
+  containerCount: string;
+  /** 実際に採取した日時(FHIR dateTime)。採取を記録するまでは空。 */
+  collectedDateTime: string;
 }
 
 export interface PathoOrderFormValues {
@@ -212,7 +226,44 @@ export function emptyPathoSpecimen(examCategory: string = "N000"): PathoSpecimen
     methodCode: "",
     methodName: "",
     note: "",
+    pieceCount: "",
+    containerCount: "1",
+    collectedDateTime: "",
   };
+}
+
+/**
+ * 1 以上の整数か(容器数・検体個数の入力の検査)。セットに保存した古いフォーム値は
+ * この項目を持たないので、undefined も受ける。
+ */
+export function isPositiveCount(value: string | undefined): boolean {
+  return /^[1-9]\d*$/.test((value ?? "").trim());
+}
+
+/** 検体個数・容器数の表示(「3個・容器2」)。個数が未定なら容器数だけ。 */
+export function specimenCountLabel(specimen: PathoSpecimenValues): string {
+  return [specimen.pieceCount && `${specimen.pieceCount}個`, `容器${specimen.containerCount || "1"}`]
+    .filter(Boolean)
+    .join("・");
+}
+
+/** オーダーの容器の総数(検体ラベルの「容器番号/総容器数」の分母)。 */
+export function pathoContainerTotal(specimens: PathoSpecimenValues[]): number {
+  return specimens.reduce((sum, specimen) => sum + (Number(specimen.containerCount) || 1), 0);
+}
+
+/**
+ * 採取を記録した日時。全検体に記録があればその最も遅いもの、1 件でも無ければ空
+ * (採取の記録はオーダー単位で行うので、通常は全検体が同じ値になる)。
+ */
+export function pathoCollectedDateTime(specimens: PathoSpecimenValues[]): string {
+  if (specimens.length === 0 || specimens.some((specimen) => !specimen.collectedDateTime)) return "";
+  return specimens.map((specimen) => specimen.collectedDateTime).sort().at(-1) ?? "";
+}
+
+/** 採取を記録できるか(部門の進捗)。部門が受け付けた後は、採取の内容を病理部門が直す。 */
+export function canRecordPathoCollection(taskStatus: string): boolean {
+  return taskStatus === "requested";
 }
 
 export function emptyPathoOrderForm(
@@ -328,7 +379,17 @@ function buildSpecimenResource(
       text: specimen.methodName || undefined,
     };
   }
-  if (collection.bodySite || collection.method) resource.collection = collection;
+  if (isPositiveCount(specimen.pieceCount)) {
+    collection.quantity = { value: Number(specimen.pieceCount), ...PIECE_UNIT };
+  }
+  if (specimen.collectedDateTime) collection.collectedDateTime = specimen.collectedDateTime;
+  if (Object.keys(collection).length > 0) resource.collection = collection;
+  resource.extension = [
+    {
+      url: CONTAINER_COUNT_EXT_URL,
+      valueInteger: isPositiveCount(specimen.containerCount) ? Number(specimen.containerCount) : 1,
+    },
+  ];
 
   return resource;
 }
@@ -626,6 +687,36 @@ export function buildPathoOrderUpdateBundle(
   );
 }
 
+/**
+ * 採取の記録(JAHIS 患者安全ガイド 病理編 7.1.3「検体採取時に検体数／容器数、採取臓器名、方向情報を
+ * 入力(修正)できる」)。検体明細だけを書き換える(ヘッダを組み直すと依頼医・診療科が採取した人の
+ * ものに替わるため)。specimens は検体明細の id を持つこと。明細は読んだ版で If-Match を付ける。
+ */
+export function buildPathoCollectionBundle(
+  header: fhir4.ServiceRequest,
+  itemRequests: fhir4.ServiceRequest[],
+  specimens: PathoSpecimenValues[],
+  collectedDateTime: string,
+): fhir4.Bundle {
+  const patientId = header.subject?.reference?.split("/").pop() ?? "";
+  const headerReference = `ServiceRequest/${header.id}`;
+  const byId = new Map(itemRequests.map((request) => [request.id ?? "", request]));
+  const entry: fhir4.BundleEntry[] = specimens.flatMap((specimen, index) => {
+    const original = byId.get(specimen.id);
+    if (!original?.id) return [];
+    const resource = buildSpecimenRequest(
+      { ...specimen, collectedDateTime },
+      itemNumber(original, ITEM_NUMBER_SYSTEM) || index + 1,
+      patientId,
+      original.authoredOn ?? header.authoredOn ?? "",
+      original.occurrenceDateTime ?? header.occurrenceDateTime ?? "",
+      headerReference,
+    );
+    return [{ fullUrl: `ServiceRequest/${original.id}`, resource, request: { method: "PUT" as const, url: `ServiceRequest/${original.id}` } }];
+  });
+  return withVersionLock({ resourceType: "Bundle", type: "transaction", entry }, ...itemRequests);
+}
+
 /** オーダーとその明細・テンプレート記入内容をまとめて消す Bundle。
  *  シェーマの Binary は消さない(旧版が参照しているため。schemaImage.ts を参照)。 */
 export function buildPathoOrderDeleteBundle(
@@ -658,7 +749,8 @@ export function buildDoPathoOrderForm(
     ...values,
     setting,
     collectionDateTime: "",
-    specimens: values.specimens.map((specimen) => ({ ...specimen, id: "" })),
+    // 採取の記録は元のオーダーのもの。個数・容器数は予定として引き継ぐ。
+    specimens: values.specimens.map((specimen) => ({ ...specimen, id: "", collectedDateTime: "" })),
     // テンプレートの記入内容とシェーマは引き継がない。同じ回答・画像を 2 つの
     // オーダーが指すと、片方を消したときにもう片方が壊れるため(複写後に改めて
     // 記入・作図する)。文言だけは clinicalInfo に残るので下書きとして使える。
@@ -708,6 +800,12 @@ function parseSpecimenRequest(request: fhir4.ServiceRequest): PathoSpecimenValue
     methodCode: method?.code ?? "",
     methodName: method?.display ?? "",
     note: request.note?.[0]?.text ?? "",
+    pieceCount: contained?.collection?.quantity?.value ? String(contained.collection.quantity.value) : "",
+    // 容器数を持たない(この項目を入れる前の)オーダーは 1 容器とみなす。
+    containerCount: String(
+      contained?.extension?.find((e) => e.url === CONTAINER_COUNT_EXT_URL)?.valueInteger ?? 1,
+    ),
+    collectedDateTime: contained?.collection?.collectedDateTime ?? "",
   };
 }
 

@@ -1,11 +1,15 @@
+import { dateTimeLabel } from "../../lib/dates";
 import {
   organLabel,
+  pathoCollectedDateTime,
+  pathoContainerTotal,
   pathoOrderClinicalInfo,
   pathoOrderClinicalInfoTemplate,
   pathoOrderComment,
   pathoOrderSchemas,
   pathoOrderSpecimens,
   pathoSchemaImageRefs,
+  specimenCountLabel,
   specimenTypeDisplay,
 } from "../../fhir/pathoOrderHelpers";
 import {
@@ -29,6 +33,7 @@ export function PathoOrderCardBody({
   const clinicalInfo = schemaAnnotatedLines(pathoOrderClinicalInfo(serviceRequest)).join("\n");
   const clinicalInfoResponseId = pathoOrderClinicalInfoTemplate(serviceRequest)?.responseId ?? "";
   const schemas = pathoOrderSchemas(serviceRequest);
+  const collectedAt = pathoCollectedDateTime(specimens);
 
   if (specimens.length === 0) return <p className="karte-card__empty">検体がありません。</p>;
 
@@ -40,6 +45,7 @@ export function PathoOrderCardBody({
             const detail = [
               specimen.typeName || specimenTypeDisplay(specimen.typeCode),
               specimen.methodName,
+              specimenCountLabel(specimen),
             ]
               .filter(Boolean)
               .join("・");
@@ -53,6 +59,13 @@ export function PathoOrderCardBody({
             );
           })}
         </ul>
+        {/* 採取を記録したら、採取日時と容器の総数(搬送・受付で揃っているかを見る数)を出す。 */}
+        {collectedAt && (
+          <div className="karte-rp__detail karte-rp__detail--indent">
+            <span className="karte-rp__detail-label">採取:</span>
+            <span>{`${dateTimeLabel(collectedAt)} 容器 計${pathoContainerTotal(specimens)}`}</span>
+          </div>
+        )}
         {clinicalInfo && (
           <div className="karte-rp__detail karte-rp__detail--indent">
             <span className="karte-rp__detail-label">臨床経過:</span>
