@@ -430,7 +430,7 @@ export interface TransfusionDispensedBag {
   crossmatch: string;
   crossmatchDisplay: string;
   orderedItemId: string;
-  /** 「RBC-LR / 2単位 O型 RhD＋ No.… 期限 … 照射済 適合」の 1 行表示。 */
+  /** 「RBC-LR / 2単位 No.… 期限 … 照射済 交差 適合」の 1 行表示(カード用。型は含めない)。 */
   label: string;
 }
 
@@ -475,7 +475,6 @@ function dispensedBagLabel(bag: Omit<TransfusionDispensedBag, "label">): string 
   const amount = bag.units ? `${bag.productName} / ${bag.units}${bag.unitLabel}` : bag.productName;
   return [
     amount,
-    bloodTypeLabel(bag.abo, bag.rhd),
     bag.lotNumber && `No.${bag.lotNumber}`,
     bag.expiry && `期限 ${bag.expiry}`,
     bag.irradiated ? "照射済" : "",

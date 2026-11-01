@@ -2,7 +2,6 @@ import { TransfusionBloodBadge } from "../TransfusionBloodBadge";
 import type { TransfusionDispenseDisplay } from "../../fhir/transfusionDispenseHelpers";
 import type { TransfusionPerformDisplay } from "../../fhir/transfusionResultHelpers";
 import {
-  isDifferentFromPatient,
   productLabel,
   summarizeTransfusionOrder,
   transfusionOrderComment,
@@ -34,19 +33,16 @@ export function TransfusionOrderCardBody({
   const products = transfusionOrderProducts(itemRequests, serviceRequest);
   const comment = transfusionOrderComment(serviceRequest);
   const summary = summarizeTransfusionOrder(serviceRequest);
-  const patient = { abo: summary.aboBloodType, rhd: summary.rhdBloodType };
 
   if (products.length === 0) return <p className="karte-card__empty">製剤がありません。</p>;
 
   return (
     <>
       <div className="karte-rp">
-        {/* 患者の型と緊急度・使用場所はカードで真っ先に確かめるものなので、製剤より先に出す。 */}
-        {(summary.bloodTypeDisplay || summary.urgencyBadge || summary.locationName) && (
+        {/* 緊急度・使用場所はカードで真っ先に確かめるものなので、製剤より先に出す。
+            血液型は依頼した製剤の型だけを製剤の行に出す(患者の型は患者帯と詳細で読む)。 */}
+        {(summary.urgencyBadge || summary.locationName || summary.purpose) && (
           <div className="karte-rp__head">
-            {summary.bloodTypeDisplay && (
-              <TransfusionBloodBadge abo={summary.aboBloodType} rhd={summary.rhdBloodType} />
-            )}
             {summary.urgencyBadge && (
               <span className="dose-conversion__badge">{summary.urgencyBadge}</span>
             )}
@@ -59,18 +55,15 @@ export function TransfusionOrderCardBody({
             <li key={product.id || index}>
               <span className="karte-rp__number">{index + 1}</span>
               <span className="karte-rp__medicine-name">{productLabel({ ...product, abo: "", rhd: "" })}</span>
-              {/* 製剤の型は患者の型と違いうる(異型適合)ので製剤ごとに色付きで出す。 */}
               <TransfusionBloodBadge abo={product.abo} rhd={product.rhd} />
-              {isDifferentFromPatient(product, patient) && (
-                <span className="blood-type__unconfirmed">異型</span>
-              )}
               {product.note && <span>{product.note}</span>}
             </li>
           ))}
         </ul>
         {comment && <p className="karte-perform__note">{comment}</p>}
       </div>
-      {/* 出庫記録。どのバッグを出したか(製剤番号・型・期限・照射・交差)は実施の前に確かめるもの。 */}
+      {/* 出庫記録。どのバッグを出したか(製剤番号・期限・照射・交差)は実施の前に確かめるもの。
+          バッグの型は詳細で読む(カードの血液型は依頼した製剤の型だけにする)。 */}
       {dispenses.map((dispense) => (
         <section className="karte-perform" key={dispense.id}>
           <div className="karte-perform__head">
