@@ -118,6 +118,10 @@ import {
   type InjectionVerificationSettings,
 } from "../fhir/injectionVerificationHelpers";
 import {
+  DEFAULT_TRANSFUSION_SETTINGS,
+  type TransfusionSettings,
+} from "../fhir/transfusionAdvisoryHelpers";
+import {
   DEFAULT_KARTE_CARD_ORDER,
   KARTE_CARD_ORDER_MODE_LABELS,
   resolveKarteCardKinds,
@@ -170,6 +174,7 @@ const FACILITY_SECTIONS = [
   { key: "early_warning", label: "早期警告スコア(NEWS2)" },
   { key: "rx_verification", label: "処方監査" },
   { key: "injection_verification", label: "注射の3点認証" },
+  { key: "transfusion", label: "輸血オーダー" },
   { key: "receipt_codes", label: "医事会計のレセプト電算コード" },
   { key: "water_balance", label: "水分出納の対象項目" },
   { key: "bulk_vital_entry", label: "経過表一括入力の列" },
@@ -422,6 +427,10 @@ export function FacilitySettingsPage() {
   const injectionVerification =
     injectionVerificationDraft ?? settings.data?.injection_verification ?? DEFAULT_INJECTION_VERIFICATION;
 
+  // 輸血オーダー。不規則抗体スクリーニングの有効日数(投与予定日を含む)。
+  const [transfusionDraft, setTransfusionDraft] = useState<TransfusionSettings | undefined>(undefined);
+  const transfusion = transfusionDraft ?? settings.data?.transfusion ?? DEFAULT_TRANSFUSION_SETTINGS;
+
   // Web 問診。既定の質問票(並べた順に答えてもらう)と、診療科ごとの質問票、予約の無いリンクの有効時間。
   const [intakeDraft, setIntakeDraft] = useState<IntakeSettings | undefined>(undefined);
   const intake = intakeDraft ?? settings.data?.intake ?? EMPTY_INTAKE_SETTINGS;
@@ -626,6 +635,7 @@ export function FacilitySettingsPage() {
       early_warning: earlyWarning,
       rx_verification: rxVerification,
       injection_verification: injectionVerification,
+      transfusion,
       intake,
       karte_card_order: { ...cardOrder, kinds: cardKinds },
     });
@@ -1655,6 +1665,30 @@ export function FacilitySettingsPage() {
                   onChange={(e) => setInjectionVerificationDraft({ ...injectionVerification, enabled: e.target.checked })}
                 />
                 注射の実施入力の前に患者・実施者・薬剤を照合する
+              </label>
+            </div>
+          )}
+
+          {section === "transfusion" && (
+            <div className="facility-settings__schedule-body">
+              <label>
+                不規則抗体スクリーニングの有効日数
+                <span className="facility-settings__times">
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={transfusion.antibody_screen_valid_days}
+                    onChange={(e) =>
+                      setTransfusionDraft({
+                        ...transfusion,
+                        antibody_screen_valid_days: Number(e.target.value),
+                      })
+                    }
+                    aria-label="不規則抗体スクリーニングの有効日数"
+                  />
+                  <span className="facility-settings__unit">日以内(投与予定日を含む)</span>
+                </span>
               </label>
             </div>
           )}

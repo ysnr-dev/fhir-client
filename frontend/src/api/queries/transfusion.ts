@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   buildTransfusionOrderDeleteBundle,
@@ -11,10 +12,23 @@ import {
   transfusionTaskStatus,
   type TransfusionTaskStatus,
 } from "../../fhir/transfusionTaskHelpers";
-import { buildTransfusionPerformDeleteEntries } from "../../fhir/transfusionResultHelpers";
+import {
+  buildTransfusionPerformDeleteEntries,
+  OBSERVATION_SYSTEM,
+  REACTION_CODE,
+} from "../../fhir/transfusionResultHelpers";
+import {
+  DEFAULT_TRANSFUSION_SETTINGS,
+  type TransfusionReactionHistory,
+  type TransfusionSettings,
+} from "../../fhir/transfusionAdvisoryHelpers";
+import { WARD_TYPE_CODE } from "../../fhir/wardHelpers";
+import { sortLocations } from "../../fhir/locationHelpers";
+import { localDay } from "../../lib/dates";
+import { useFacilitySettings } from "./organization";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
-import { postBundle } from "../fhirClient";
-import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES } from "./core";
+import { postBundle, searchResource } from "../fhirClient";
+import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
 import {
   cancelsPerform,
   comparePatientNumber,
@@ -50,6 +64,67 @@ export function useDeleteTransfusionOrder() {
       invalidateOrderDependents(queryClient);
     },
   });
+}
+
+// ---- オーダー画面の参照(副作用歴・使用場所・施設設定) ----
+
+/**
+ * 過去の輸血で副作用「あり」と記録した Observation。オーダー画面の警告に出す。
+ * 実施記録の Observation は code が輸血副作用で値が なし / あり なので、値で絞る。
+ */
+export function useTransfusionReactionHistory(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("code", `${OBSERVATION_SYSTEM}|${REACTION_CODE.code}`);
+  params.set("_count", "50");
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["Observation", "search", patientId, "transfusion-reaction"],
+    queryFn: () => searchResource<fhir4.Observation>("Observation", params),
+    enabled: Boolean(patientId),
+    staleTime: 60 * 1000,
+  });
+
+  const history = useMemo<TransfusionReactionHistory[]>(
+    () =>
+      resourcesOfType<fhir4.Observation>(query.data?.data, "Observation")
+        .filter((o) => o.valueCodeableConcept?.coding?.some((c) => c.code === "present"))
+        .map((o) => ({
+          date: localDay(o.effectiveDateTime),
+          note: o.note?.[0]?.text ?? "",
+        })),
+    [query.data],
+  );
+
+  return { ...query, history };
+}
+
+/**
+ * 使用場所の候補。製剤を届ける先なので、病棟(HU)と手術室・救急・検査処置室を並べる
+ * (外来の診察室には届けない)。
+ */
+export function useTransfusionLocationOptions() {
+  const params = new URLSearchParams();
+  params.set("status", "active");
+  params.set("type", [WARD_TYPE_CODE, "SU", "ER", "DX"].join(","));
+  params.set("_count", "200");
+
+  const query = useQuery({
+    queryKey: ["Location", "search", "transfusion-options"],
+    queryFn: () => searchResource<fhir4.Location>("Location", params),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  return {
+    ...query,
+    locations: sortLocations(resourcesOfType<fhir4.Location>(query.data?.data, "Location")),
+  };
+}
+
+export function useTransfusionSettings(): TransfusionSettings {
+  const settings = useFacilitySettings();
+  return settings.data?.transfusion ?? DEFAULT_TRANSFUSION_SETTINGS;
 }
 
 // ---- 輸血一覧(部門ワークリスト) ----

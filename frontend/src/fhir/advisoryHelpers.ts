@@ -55,13 +55,18 @@ export const ADVISORY_KINDS = [
   "regimen-date",
   "regimen-availability",
   "management-fee-limit",
+  "transfusion-refusal",
+  "blood-type-unconfirmed",
+  "antibody-screen",
+  "blood-type-different",
+  "transfusion-reaction-history",
   "cds-critical",
   "cds-warning",
   "cds-info",
 ] as const;
 export type AdvisoryKind = (typeof ADVISORY_KINDS)[number];
 
-export const ADVISORY_GROUPS = ["薬剤", "放射線", "患者状態", "食事", "レジメン", "医学管理", "外部"] as const;
+export const ADVISORY_GROUPS = ["薬剤", "放射線", "患者状態", "食事", "レジメン", "医学管理", "輸血", "外部"] as const;
 export type AdvisoryGroup = (typeof ADVISORY_GROUPS)[number];
 
 export interface AdvisoryKindDef {
@@ -99,6 +104,11 @@ export const ADVISORY_KIND_DEFS: Record<AdvisoryKind, AdvisoryKindDef> = {
   "regimen-date": { label: "開始日", group: "レジメン", defaultSeverity: "info" },
   "regimen-availability": { label: "候補外のレジメン", group: "レジメン", defaultSeverity: "info" },
   "management-fee-limit": { label: "算定回数の上限", group: "医学管理", defaultSeverity: "info" },
+  "transfusion-refusal": { label: "輸血拒否", group: "輸血", defaultSeverity: "warning" },
+  "blood-type-unconfirmed": { label: "血液型の未確定", group: "輸血", defaultSeverity: "warning" },
+  "antibody-screen": { label: "不規則抗体の検査", group: "輸血", defaultSeverity: "warning" },
+  "blood-type-different": { label: "異型適合血", group: "輸血", defaultSeverity: "info" },
+  "transfusion-reaction-history": { label: "輸血副作用歴", group: "輸血", defaultSeverity: "info" },
   "cds-critical": { label: "判断支援(重要)", group: "外部", defaultSeverity: "warning" },
   "cds-warning": { label: "判断支援(注意)", group: "外部", defaultSeverity: "info" },
   "cds-info": { label: "判断支援(情報)", group: "外部", defaultSeverity: "info" },

@@ -1,4 +1,4 @@
-import { bloodTypeLabel } from "../fhir/transfusionOrderHelpers";
+import { UNKNOWN_BLOOD_TYPE, bloodTypeLabel } from "../fhir/transfusionOrderHelpers";
 
 // オーダーに載っている血液型の読み取り専用表示。カード・詳細パネル・部門一覧で
 // 同じ見た目にするためにここへ出す。
@@ -11,9 +11,11 @@ export function TransfusionBloodBadge({ abo, rhd }: { abo: string; rhd: string }
   if (!label) return null;
 
   // ABO が無く RhD だけのオーダーもありうるので、色は ABO があるときだけ付ける。
-  const className = abo
-    ? `transfusion-blood-badge transfusion-blood-badge--${abo.toLowerCase()}`
-    : "transfusion-blood-badge";
+  // 「不明」(危機的出血で型が確定していない)は区分色を持たない。
+  const className =
+    abo && abo !== UNKNOWN_BLOOD_TYPE
+      ? `transfusion-blood-badge transfusion-blood-badge--${abo.toLowerCase()}`
+      : "transfusion-blood-badge";
 
   return <span className={className}>{label}</span>;
 }

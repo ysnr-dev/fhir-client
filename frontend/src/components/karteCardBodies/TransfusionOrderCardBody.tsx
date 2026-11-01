@@ -1,6 +1,7 @@
 import { TransfusionBloodBadge } from "../TransfusionBloodBadge";
 import type { TransfusionPerformDisplay } from "../../fhir/transfusionResultHelpers";
 import {
+  isDifferentFromPatient,
   productLabel,
   summarizeTransfusionOrder,
   transfusionOrderComment,
@@ -27,26 +28,39 @@ export function TransfusionOrderCardBody({
   itemRequests: fhir4.ServiceRequest[];
   performs: TransfusionPerformDisplay[];
 }) {
-  const products = transfusionOrderProducts(itemRequests);
+  const products = transfusionOrderProducts(itemRequests, serviceRequest);
   const comment = transfusionOrderComment(serviceRequest);
   const summary = summarizeTransfusionOrder(serviceRequest);
+  const patient = { abo: summary.aboBloodType, rhd: summary.rhdBloodType };
 
   if (products.length === 0) return <p className="karte-card__empty">製剤がありません。</p>;
 
   return (
     <>
       <div className="karte-rp">
-        {/* 血液型はカードで真っ先に確かめるものなので、製剤より先に色付きで出す。 */}
-        {summary.bloodTypeDisplay && (
+        {/* 患者の型と緊急度・使用場所はカードで真っ先に確かめるものなので、製剤より先に出す。 */}
+        {(summary.bloodTypeDisplay || summary.urgencyBadge || summary.locationName) && (
           <div className="karte-rp__head">
-            <TransfusionBloodBadge abo={summary.aboBloodType} rhd={summary.rhdBloodType} />
+            {summary.bloodTypeDisplay && (
+              <TransfusionBloodBadge abo={summary.aboBloodType} rhd={summary.rhdBloodType} />
+            )}
+            {summary.urgencyBadge && (
+              <span className="dose-conversion__badge">{summary.urgencyBadge}</span>
+            )}
+            {summary.locationName && <span>{summary.locationName}</span>}
+            {summary.purpose && <span>{summary.purpose}</span>}
           </div>
         )}
         <ul className="karte-rp__medicines">
           {products.map((product, index) => (
             <li key={product.id || index}>
               <span className="karte-rp__number">{index + 1}</span>
-              <span className="karte-rp__medicine-name">{productLabel(product)}</span>
+              <span className="karte-rp__medicine-name">{productLabel({ ...product, abo: "", rhd: "" })}</span>
+              {/* 製剤の型は患者の型と違いうる(異型適合)ので製剤ごとに色付きで出す。 */}
+              <TransfusionBloodBadge abo={product.abo} rhd={product.rhd} />
+              {isDifferentFromPatient(product, patient) && (
+                <span className="blood-type__unconfirmed">異型</span>
+              )}
               {product.note && <span>{product.note}</span>}
             </li>
           ))}

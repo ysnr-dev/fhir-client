@@ -434,7 +434,7 @@ function WorklistRow({
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
   const summary = summarizeTransfusionOrder(order);
-  const products = transfusionOrderProducts(row.itemRequests);
+  const products = transfusionOrderProducts(row.itemRequests, order);
   const requester = orderRequester(order);
   const status = transfusionTaskStatus(row.task);
   const secondaryActions = secondaryActionsOf(row);
@@ -476,7 +476,7 @@ function WorklistRow({
       <td className="lab-worklist__compact">{scheduledTime(order) || "-"}</td>
       <td className="lab-worklist__compact">
         {summary.settingDisplay || "-"}
-        {summary.urgent && <span className="dose-conversion__badge">至急</span>}
+        {summary.urgencyBadge && <span className="dose-conversion__badge">{summary.urgencyBadge}</span>}
         {/* 同意なしで出庫すると事故になるので、行の警告色だけでなく理由も出す。 */}
         {!summary.consentConfirmed && <span className="dose-conversion__badge">同意書未</span>}
       </td>

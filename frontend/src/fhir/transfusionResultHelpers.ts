@@ -44,11 +44,11 @@ const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Pro
 const LOT_NUMBER_EXT_URL = "http://fhir-client.local/StructureDefinition/transfusion-lot-number";
 
 /** 実施記録の Observation の code。手術の surgery-observation と同じ役割。 */
-const OBSERVATION_SYSTEM = "http://fhir-client.local/CodeSystem/transfusion-observation";
+export const OBSERVATION_SYSTEM = "http://fhir-client.local/CodeSystem/transfusion-observation";
 /** 副作用の値(なし / あり)。code の体系とは別に持つ。 */
 const REACTION_SYSTEM = "http://fhir-client.local/CodeSystem/transfusion-reaction";
 
-const REACTION_CODE = { code: "reaction", display: "輸血副作用" };
+export const REACTION_CODE = { code: "reaction", display: "輸血副作用" };
 
 /**
  * 副作用の有無。「未観察」を選択肢に置かないのは、観察していないことを

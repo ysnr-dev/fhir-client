@@ -1,19 +1,45 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTransfusionProductOptions } from "../api/masterQueries";
-import { useBloodType } from "../api/queries";
-import type { LabBloodTypeComponent } from "../fhir/bloodTypeHelpers";
+import {
+  useActiveFlags,
+  useBloodType,
+  useTransfusionLocationOptions,
+  useTransfusionReactionHistory,
+  useTransfusionSettings,
+} from "../api/queries";
+import type { Advisory } from "../fhir/advisoryHelpers";
+import {
+  bloodTypeUnconfirmedLabel,
+  type BloodTypeSummary,
+  type LabBloodTypeComponent,
+} from "../fhir/bloodTypeHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
+import { locationDisplayName } from "../fhir/locationHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import {
+  antibodyScreenAdvisory,
+  bloodTypeUnconfirmedAdvisory,
+  differentBloodTypeAdvisories,
+  reactionHistoryAdvisory,
+  transfusionRefusalAdvisory,
+} from "../fhir/transfusionAdvisoryHelpers";
+import {
   ABO_OPTIONS,
-  PRIORITY_OPTIONS,
   RHD_OPTIONS,
   TEST_TYPE_OPTIONS,
+  TRANSFUSION_PRIORITY_OPTIONS,
+  UNKNOWN_BLOOD_TYPE,
   bloodTypeLabel,
+  compatibleAbo,
+  compatibleRhd,
+  defaultProductBloodType,
   emptyTransfusionOrderForm,
   emptyTransfusionProduct,
+  productNeedsBloodType,
   rhdDisplay,
+  urgencyLevelOf,
   type AboBloodType,
+  type PatientBloodTypeForOrder,
   type RhdBloodType,
   type TransfusionOrderFormValues,
   type TransfusionOrderPriority,
@@ -21,11 +47,15 @@ import {
   type TransfusionTestType,
 } from "../fhir/transfusionOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
+import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
+import { AdvisoryNotice } from "./AdvisoryNotice";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
+import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
 
 // 輸血オーダーの入力フォーム。病理検査と同じく明細(製剤)を可変リストで持つ。
 //
@@ -37,11 +67,15 @@ import { ProblemSelect } from "./ProblemSelect";
 // 製剤マスタに「交差適合試験が要るか」を持たせてあるので、交差適合試験の要らない
 // 製剤(血漿・血小板)だけを選んだときは T&S を既定にする。
 //
-// 血液型は「何型を出すか」を医師が明示して選ぶ。日本赤十字社の製剤ラベルと同じ色を
-// 選択中の型に付けて、取り違えに気付きやすくする(docs/transfusion-order-design.md §2.5)。
-// 初期値に入るのは検査で確定した型(異なる日の 2 検体で一致)だけで、申告のままの型や
-// 1 回だけの検査結果は隣に参照として並べるに留める(fhir/bloodTypeHelpers.ts)。
-// 検査結果への参照はオーダーに保存しない。
+// 血液型(docs/transfusion-order-design.md §2.5):
+// - 患者の型は検査結果(2 回一致)から読み、医師は手で入れない。確定していなければ
+//   ヘッダに「不明」を明示して保存する。
+// - 製剤の型は製剤ごとに持つ。患者の型・製剤区分・緊急度から既定を入れ、適合する型だけを
+//   選ばせる(型が不明なら赤血球は O、血漿・血小板は AB)。選ぶのは先頭の「血液型」のチップで、
+//   選んだ型は適合するすべての製剤に入る(製剤ごとに違う型になる場合はカードの型を読む)。
+//   日本赤十字社の製剤ラベルと同じ色を選択中の型に付けて、取り違えに気付きやすくする。
+// 輸血拒否・血液型の未確定・不規則抗体の期限・異型適合・副作用歴は警告の器
+// (fhir/transfusionAdvisoryHelpers.ts)で先頭に出す。
 
 interface TransfusionOrderFormProps {
   patientId: string;
@@ -51,8 +85,8 @@ interface TransfusionOrderFormProps {
   submitError?: unknown;
   submitLabel?: string;
   /**
-   * 患者に登録された血液型を初期値に入れる。新規登録のときだけ真にする
-   * (編集で空欄のまま保存しようとしているオーダーに、後から型を書き足さない)。
+   * 患者の血液型から製剤の型の既定を入れる。新規登録のときだけ真にする
+   * (編集では保存済みの製剤の型を書き換えない)。
    */
   prefillBloodType?: boolean;
   /** オーダーセットの適用日。外から投与予定日をまとめて入れるときに渡す(時刻は保つ)。 */
@@ -61,6 +95,12 @@ interface TransfusionOrderFormProps {
   setMode?: boolean;
   /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
   hideSubmit?: boolean;
+}
+
+/** 検査で確定した型だけを、製剤の型を決める材料にする。 */
+function patientForOrder(summary: BloodTypeSummary | null): PatientBloodTypeForOrder {
+  if (!summary?.tested) return { abo: "", rhd: "" };
+  return { abo: summary.abo as AboBloodType, rhd: summary.rhd as RhdBloodType };
 }
 
 export function TransfusionOrderForm({
@@ -89,43 +129,126 @@ export function TransfusionOrderForm({
     })),
   );
   const products = useTransfusionProductOptions();
-  // 患者の血液型(検査結果と申告)。新規オーダーの初期値と、選んだ型との食い違いの警告に使う。
-  const patientBloodType = useBloodType(patientId).summary;
+  const locations = useTransfusionLocationOptions();
+  const settings = useTransfusionSettings();
+  const bloodType = useBloodType(setMode ? undefined : patientId);
+  const patientBloodType = bloodType.summary;
+  const patient = useMemo(() => patientForOrder(patientBloodType), [patientBloodType]);
+  const level = urgencyLevelOf(values.priority);
   const prefilled = useRef(false);
+  // 先頭のチップで選んだ「出す型」。製剤を足したときの既定にも使う。
+  const [requested, setRequested] = useState<{ abo: AboBloodType | ""; rhd: RhdBloodType | "" }>(
+    () => commonProductType(initialValues?.products ?? []),
+  );
 
-  const patientAbo = patientBloodType?.abo ?? "";
-  const patientRhd = patientBloodType?.rhd ?? "";
-  const patientTested = patientBloodType?.tested ?? false;
+  const productItems = useMemo(() => products.data?.items ?? [], [products.data]);
+  const categoryOf = (code: string) => productItems.find((i) => i.item_code === code)?.category;
+  const update = makeFieldUpdater(setValues);
 
-  // 検査で確定した型(2 回一致)だけを初期値にする。申告のままの型や 1 回だけの検査結果を
-  // 黙って入れると、その型で製剤が払い出されうるため(下の一覧で読ませるに留める)。
-  // DO で型が写っている場合は上書きしない。一度入れたら追わない
-  // (医師が外した型を書き戻さない)。
+  // 患者の型(確定していなければ「不明」)をヘッダに写す。検査結果が変わっても追う
+  // (オーダー時点の型を焼き付けるのが目的なので、保存時点の最新を入れる)。
+  useEffect(() => {
+    if (setMode || bloodType.isLoading) return;
+    const abo = patient.abo || UNKNOWN_BLOOD_TYPE;
+    const rhd = patient.rhd || UNKNOWN_BLOOD_TYPE;
+    setValues((v) =>
+      v.patientAbo === abo && v.patientRhd === rhd ? v : { ...v, patientAbo: abo, patientRhd: rhd },
+    );
+  }, [setMode, bloodType.isLoading, patient.abo, patient.rhd]);
+
+  // 新規登録では、型の入っていない製剤に既定の型を入れる。一度入れたら追わない
+  // (医師が変えた型を書き戻さない)。製剤マスタと患者の型の両方が読めてから行う。
   useEffect(() => {
     if (!prefillBloodType || setMode || prefilled.current) return;
-    if (!patientTested || (!patientAbo && !patientRhd)) return;
-
+    if (bloodType.isLoading || productItems.length === 0) return;
     prefilled.current = true;
-    setValues((v) =>
-      v.aboBloodType || v.rhdBloodType
-        ? v
-        : {
-            ...v,
-            aboBloodType: (patientAbo as AboBloodType) || "",
-            rhdBloodType: (patientRhd as RhdBloodType) || "",
-          },
-    );
-  }, [prefillBloodType, setMode, patientTested, patientAbo, patientRhd]);
+    setRequested((r) => (r.abo || r.rhd ? r : { abo: patient.abo, rhd: patient.rhd }));
+    setValues((v) => ({
+      ...v,
+      products: v.products.map((product) =>
+        product.productCode && !product.abo && !product.rhd
+          ? {
+              ...product,
+              ...defaultProductBloodType(
+                patient,
+                productItems.find((i) => i.item_code === product.productCode)?.category,
+                level,
+              ),
+            }
+          : product,
+      ),
+    }));
+  }, [prefillBloodType, setMode, bloodType.isLoading, productItems, patient, level]);
 
-  // 患者の血液型と食い違う型を選んでいるか。取り違えは重大なので、
-  // 選択を妨げずに気付かせる(意図して別の型を出すこともあるため)。
-  const bloodTypeMismatch =
-    patientBloodType &&
-    ((patientBloodType.abo && values.aboBloodType && patientBloodType.abo !== values.aboBloodType) ||
-      (patientBloodType.rhd && values.rhdBloodType && patientBloodType.rhd !== values.rhdBloodType));
+  /** 型の要る製剤(選択済み)。先頭のチップで選べる型は、これら全部に適合するものだけ。 */
+  const typedProducts = values.products.filter(
+    (product) => product.productCode && productNeedsBloodType(categoryOf(product.productCode)),
+  );
+  const allowedAbo = ABO_OPTIONS.map((o) => o.code).filter((abo) =>
+    typedProducts.every((product) => compatibleAbo(patient, categoryOf(product.productCode)).includes(abo)),
+  );
+  const allowedRhd = RHD_OPTIONS.map((o) => o.code).filter((rhd) =>
+    typedProducts.every((product) =>
+      compatibleRhd(patient, categoryOf(product.productCode), level).includes(rhd),
+    ),
+  );
 
-  const productItems = products.data?.items ?? [];
-  const update = makeFieldUpdater(setValues);
+  /** 先頭のチップで型を選ぶ。適合する製剤すべてに入れる(適合しない製剤は今の型のまま)。 */
+  function selectRequested(patch: { abo?: AboBloodType | ""; rhd?: RhdBloodType | "" }) {
+    setRequested((r) => ({ ...r, ...patch }));
+    setValues((v) => ({
+      ...v,
+      products: v.products.map((product) => {
+        if (!product.productCode) return product;
+        const category = categoryOf(product.productCode);
+        if (!productNeedsBloodType(category)) return product;
+        const next = { ...product };
+        if (patch.abo !== undefined && (!patch.abo || compatibleAbo(patient, category).includes(patch.abo))) {
+          next.abo = patch.abo;
+        }
+        if (
+          patch.rhd !== undefined &&
+          (!patch.rhd || compatibleRhd(patient, category, level).includes(patch.rhd))
+        ) {
+          next.rhd = patch.rhd;
+        }
+        return next;
+      }),
+    }));
+  }
+
+  // ---- 警告 ----
+  const flags = useActiveFlags(setMode ? undefined : patientId);
+  const reactions = useTransfusionReactionHistory(setMode ? undefined : patientId);
+  const advisoryInput = useMemo<Advisory[]>(() => {
+    if (setMode) return [];
+    const list: Advisory[] = [];
+    const refusal = transfusionRefusalAdvisory(flags.flags);
+    if (refusal) list.push(refusal);
+    if (!bloodType.isLoading) {
+      const unconfirmed = bloodTypeUnconfirmedAdvisory(patientBloodType);
+      if (unconfirmed) list.push(unconfirmed);
+      const antibody = antibodyScreenAdvisory(patientBloodType, values.scheduledDateTime, settings);
+      if (antibody) list.push(antibody);
+    }
+    list.push(...differentBloodTypeAdvisories(values.products, patient));
+    const history = reactionHistoryAdvisory(reactions.history);
+    if (history) list.push(history);
+    return list;
+  }, [
+    setMode,
+    flags.flags,
+    bloodType.isLoading,
+    patientBloodType,
+    values.scheduledDateTime,
+    values.products,
+    settings,
+    patient,
+    reactions.history,
+  ]);
+  const session = useAdvisorySession(advisoryInput, "transfusion-order", !setMode);
+  /** 確認を要する警告の理由を選んだあとに行う登録。 */
+  const [confirmSubmit, setConfirmSubmit] = useState<(() => void) | null>(null);
 
   function updateProduct(index: number, patch: Partial<TransfusionProductValues>) {
     setValues((v) => ({
@@ -135,7 +258,7 @@ export function TransfusionOrderForm({
   }
 
   /**
-   * 製剤を選んだときは、マスタの既定単位数・単位の呼び方・略称をその行に写す。
+   * 製剤を選んだときは、マスタの既定単位数・単位の呼び方・略称と、既定の血液型をその行に写す。
    * 単位数を手で入れたあとに製剤を選び直したときも既定値で上書きする(製剤が変われば
    * 適切な単位数も変わるため)。
    */
@@ -159,10 +282,52 @@ export function TransfusionOrderForm({
         abbreviation: item.abbreviation ?? "",
         units: item.default_units === null ? "" : String(item.default_units),
         unitLabel: item.unit_label,
+        ...(setMode
+          ? { abo: "", rhd: "" }
+          : requestedOrDefault(item.category, urgencyLevelOf(v.priority))),
       };
       const nextProducts = v.products.map((product, i) => (i === index ? next : product));
       return { ...v, products: nextProducts, testType: defaultTestType(nextProducts, v.testType) };
     });
+  }
+
+  /** 製剤を足したときの型。先頭で選んだ型が適合すればそれ、でなければ区分ごとの既定。 */
+  function requestedOrDefault(category: string | undefined, nextLevel: number) {
+    const fallback = defaultProductBloodType(patient, category, nextLevel);
+    if (!productNeedsBloodType(category)) return fallback;
+    return {
+      abo: requested.abo && compatibleAbo(patient, category).includes(requested.abo) ? requested.abo : fallback.abo,
+      rhd:
+        requested.rhd && compatibleRhd(patient, category, nextLevel).includes(requested.rhd)
+          ? requested.rhd
+          : fallback.rhd,
+    };
+  }
+
+  /**
+   * 緊急度を変えると選べる型が変わる(レベルⅠなら RhD 陰性の患者に陽性も可)。
+   * 選べなくなった型は既定に戻す。選べたままの型は医師の選択として保つ。
+   */
+  function handlePriorityChange(priority: TransfusionOrderPriority) {
+    const nextLevel = urgencyLevelOf(priority);
+    setValues((v) => ({
+      ...v,
+      priority,
+      products: setMode
+        ? v.products
+        : v.products.map((product) => {
+            if (!product.productCode) return product;
+            const category = categoryOf(product.productCode);
+            const abos = compatibleAbo(patient, category);
+            const rhds = compatibleRhd(patient, category, nextLevel);
+            const ok =
+              (!product.abo || abos.includes(product.abo)) &&
+              (!product.rhd || rhds.includes(product.rhd));
+            return ok
+              ? product
+              : { ...product, ...defaultProductBloodType(patient, category, nextLevel) };
+          }),
+    }));
   }
 
   /**
@@ -193,14 +358,30 @@ export function TransfusionOrderForm({
     }));
   }
 
+  function handleLocationChange(id: string) {
+    const location = locations.locations.find((l) => l.id === id);
+    setValues((v) => ({
+      ...v,
+      locationId: id,
+      locationName: location ? locationDisplayName(location) : id ? v.locationName : "",
+    }));
+  }
+
   function validate(): string | null {
     const filled = values.products.filter((product) => product.productCode);
     if (filled.length === 0) return "製剤を 1 つ以上選んでください。";
     if (filled.some((product) => !(Number(product.units) > 0))) {
       return "製剤の単位数を入れてください。";
     }
-    // セットの内容としての入力では日時と同意の確認を持たない(適用時に入れる)。
+    // セットの内容としての入力では日時・同意の確認・血液型を持たない(適用時に入れる)。
     if (setMode) return null;
+    const untyped = values.products.findIndex(
+      (product) =>
+        product.productCode &&
+        productNeedsBloodType(categoryOf(product.productCode)) &&
+        !product.abo,
+    );
+    if (untyped >= 0) return "血液型を選んでください。";
     if (!values.scheduledDateTime) return "投与予定日時を入れてください。";
     // 同意書は輸血の必須要件。未確認のまま出せてしまうと確認そのものが形骸化する。
     if (!values.consentConfirmed) return "輸血同意書の確認にチェックを入れてください。";
@@ -212,9 +393,23 @@ export function TransfusionOrderForm({
     const error = validate();
     setValidationError(error);
     if (error) return;
+    if (session.blocked.length > 0) {
+      setValidationError(session.blocked.map((advisory) => advisory.message).join(" / "));
+      return;
+    }
 
-    onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
+    const submit = () =>
+      onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
+    // 確認を要する警告があれば理由を選んでから登録する。
+    if (session.pending.length > 0) {
+      setConfirmSubmit(() => submit);
+      return;
+    }
+    session.confirm([]);
+    submit();
   }
+
+  const unconfirmed = bloodTypeUnconfirmedLabel(patientBloodType);
 
   return (
     <form className="prescription-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
@@ -225,69 +420,79 @@ export function TransfusionOrderForm({
       )}
       <ErrorBanner error={submitError} />
       <ErrorBanner error={products.error} />
+      <AdvisoryNotice advisories={session.advisories} />
 
-      <fieldset>
-        <legend>血液型</legend>
-        {/* 選択中の型は日赤の製剤ラベルと同じ色で塗る。オーダーを読む人が
-            文字を読まずに型を掴めるようにするため。 */}
-        <div className="transfusion-order__blood-type">
-          <span className="transfusion-order__blood-type-label">ABO</span>
-          <div className="transfusion-order__chips" role="group" aria-label="ABO血液型">
-            {ABO_OPTIONS.map((option) => {
-              const selected = values.aboBloodType === option.code;
-              return (
-                <button
-                  key={option.code}
-                  type="button"
-                  aria-pressed={selected}
-                  className={`transfusion-chip transfusion-chip--abo-${option.code.toLowerCase()}${
-                    selected ? " transfusion-chip--selected" : ""
-                  }`}
-                  // もう一度押したら選択を外せる(取り違えて選んだときに戻せる)。
-                  onClick={() => update("aboBloodType", selected ? "" : (option.code as AboBloodType))}
-                >
-                  {option.display}
-                </button>
-              );
-            })}
+      {!setMode && (
+        <fieldset>
+          <legend>血液型</legend>
+          {/* 出す型。選択中の型は日赤の製剤ラベルと同じ色で塗る。オーダーを読む人が
+              文字を読まずに型を掴めるようにするため。患者の型に適合しない型は押せない。 */}
+          <div className="transfusion-order__blood-type">
+            <span className="transfusion-order__blood-type-label">ABO</span>
+            <div className="transfusion-order__chips" role="group" aria-label="ABO血液型">
+              {ABO_OPTIONS.map((option) => {
+                const selected = requested.abo === option.code;
+                const allowed = allowedAbo.includes(option.code);
+                return (
+                  <button
+                    key={option.code}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={!allowed}
+                    title={allowed ? undefined : "患者の型に適合しません"}
+                    className={`transfusion-chip transfusion-chip--abo-${option.code.toLowerCase()}${
+                      selected ? " transfusion-chip--selected" : ""
+                    }`}
+                    // もう一度押したら選択を外せる(取り違えて選んだときに戻せる)。
+                    onClick={() => selectRequested({ abo: selected ? "" : option.code })}
+                  >
+                    {option.display}
+                  </button>
+                );
+              })}
+            </div>
+
+            <span className="transfusion-order__blood-type-label">RhD</span>
+            <div className="transfusion-order__chips" role="group" aria-label="RhD血液型">
+              {RHD_OPTIONS.map((option) => {
+                const selected = requested.rhd === option.code;
+                const allowed = allowedRhd.includes(option.code);
+                return (
+                  <button
+                    key={option.code}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={!allowed}
+                    title={allowed ? undefined : "患者の型に適合しません"}
+                    className={`transfusion-chip transfusion-chip--rhd-${option.code}${
+                      selected ? " transfusion-chip--selected" : ""
+                    }`}
+                    onClick={() => selectRequested({ rhd: selected ? "" : option.code })}
+                  >
+                    {option.display}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <span className="transfusion-order__blood-type-label">RhD</span>
-          <div className="transfusion-order__chips" role="group" aria-label="RhD血液型">
-            {RHD_OPTIONS.map((option) => {
-              const selected = values.rhdBloodType === option.code;
-              return (
-                <button
-                  key={option.code}
-                  type="button"
-                  aria-pressed={selected}
-                  className={`transfusion-chip transfusion-chip--rhd-${option.code}${
-                    selected ? " transfusion-chip--selected" : ""
-                  }`}
-                  onClick={() => update("rhdBloodType", selected ? "" : (option.code as RhdBloodType))}
-                >
-                  {option.display}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 患者の型(検査結果を優先)と食い違うときだけ注意を出す。 */}
-        {patientBloodType && bloodTypeLabel(patientBloodType.abo, patientBloodType.rhd) && (
-          <p
-            className={`transfusion-order__patient-blood-type${
-              bloodTypeMismatch ? " transfusion-order__patient-blood-type--mismatch" : ""
-            }`}
-          >
-            患者: {bloodTypeLabel(patientBloodType.abo, patientBloodType.rhd)}（
-            {patientBloodType.sourceLabel}）
-            {bloodTypeMismatch && " — 選択した型と異なります"}
+          {/* 患者の型(検査で確定した型だけをオーダーに写す。確定していなければ「不明」)。 */}
+          <p className="transfusion-order__patient-blood-type">
+            患者: <TransfusionBloodBadge abo={values.patientAbo} rhd={values.patientRhd} />
+            {unconfirmed && (
+              <span
+                className={`blood-type__unconfirmed${
+                  patientBloodType?.labStatus === "conflict"
+                    ? " blood-type__unconfirmed--conflict"
+                    : ""
+                }`}
+              >
+                {unconfirmed}
+              </span>
+            )}
           </p>
-        )}
 
-        {/* 検査結果と申告。選んだ型と見比べられるよう、選択欄のすぐ下に表で置く。 */}
-        {!setMode && (
+          {/* 検査結果と申告。製剤の型と見比べられるよう、表で置く。 */}
           <table className="transfusion-order__pretest">
             <thead>
               <tr>
@@ -338,8 +543,8 @@ export function TransfusionOrderForm({
               )}
             </tbody>
           </table>
-        )}
-      </fieldset>
+        </fieldset>
+      )}
 
       <fieldset>
         <legend>依頼共通</legend>
@@ -381,12 +586,12 @@ export function TransfusionOrderForm({
           </select>
         </label>
         <label>
-          至急区分
+          緊急度
           <select
             value={values.priority}
-            onChange={(e) => update("priority", e.target.value as TransfusionOrderPriority)}
+            onChange={(e) => handlePriorityChange(e.target.value as TransfusionOrderPriority)}
           >
-            {PRIORITY_OPTIONS.map((o) => (
+            {TRANSFUSION_PRIORITY_OPTIONS.map((o) => (
               <option key={o.code} value={o.code}>
                 {o.display}
               </option>
@@ -399,6 +604,38 @@ export function TransfusionOrderForm({
             type="datetime-local"
             value={values.scheduledDateTime}
             onChange={(e) => update("scheduledDateTime", e.target.value)}
+          />
+        </label>
+        {!setMode && (
+          <label>
+            使用場所
+            <select
+              value={values.locationId}
+              onChange={(e) => handleLocationChange(e.target.value)}
+            >
+              <option value="">未指定</option>
+              {locations.locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {locationDisplayName(location)}
+                </option>
+              ))}
+              {/* 一覧に無い場所(無効にした病棟など)でも、保存済みの選択を失わせない。 */}
+              {values.locationId &&
+                !locations.locations.some((l) => l.id === values.locationId) && (
+                  <option value={values.locationId}>
+                    {values.locationName || values.locationId}
+                  </option>
+                )}
+            </select>
+          </label>
+        )}
+        <label>
+          使用目的
+          <input
+            type="text"
+            value={values.purpose}
+            onChange={(e) => update("purpose", e.target.value)}
+            placeholder="術中出血・貧血 など"
           />
         </label>
         {commentOpen ? (
@@ -440,19 +677,31 @@ export function TransfusionOrderForm({
       <fieldset>
         <legend>製剤 *</legend>
         <ul className="transfusion-order__products">
-          {values.products.map((product, index) => (
-            <ProductCard
-              // 製剤は並べ替えず、追加・削除しかしないので index を鍵にしてよい。
-              key={index}
-              index={index}
-              product={product}
-              productItems={productItems}
-              removable={values.products.length > 1}
-              onProductChange={(code) => handleProductChange(index, code)}
-              onChange={(patch) => updateProduct(index, patch)}
-              onRemove={() => removeProduct(index)}
-            />
-          ))}
+          {values.products.map((product, index) => {
+            const category = categoryOf(product.productCode);
+            return (
+              <ProductCard
+                // 製剤は並べ替えず、追加・削除しかしないので index を鍵にしてよい。
+                key={index}
+                index={index}
+                product={product}
+                productItems={productItems}
+                removable={values.products.length > 1}
+                bloodType={
+                  setMode || !productNeedsBloodType(category)
+                    ? null
+                    : {
+                        different: Boolean(
+                          patient.abo && product.abo && product.abo !== patient.abo,
+                        ),
+                      }
+                }
+                onProductChange={(code) => handleProductChange(index, code)}
+                onChange={(patch) => updateProduct(index, patch)}
+                onRemove={() => removeProduct(index)}
+              />
+            );
+          })}
           <li className="transfusion-order__product-add">
             <button type="button" onClick={addProduct}>
               ＋製剤追加
@@ -463,34 +712,47 @@ export function TransfusionOrderForm({
 
       {/* 輸血同意書。未確認のまま出せると確認そのものが形骸化するので必須にする。
           未チェックのうちは枠を注意色にして、見落としたまま登録を押させない。 */}
-      <fieldset>
-        <legend>同意</legend>
-        <label
-          className={`transfusion-order__consent${
-            values.consentConfirmed ? " transfusion-order__consent--done" : ""
-          }`}
-        >
-          <input
-            type="checkbox"
-            checked={values.consentConfirmed}
-            onChange={(e) => update("consentConfirmed", e.target.checked)}
-          />
-          <span className="transfusion-order__consent-text">輸血同意書を取得済み *</span>
-        </label>
-      </fieldset>
+      {!setMode && (
+        <fieldset>
+          <legend>同意</legend>
+          <label
+            className={`transfusion-order__consent${
+              values.consentConfirmed ? " transfusion-order__consent--done" : ""
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={values.consentConfirmed}
+              onChange={(e) => update("consentConfirmed", e.target.checked)}
+            />
+            <span className="transfusion-order__consent-text">輸血同意書を取得済み *</span>
+          </label>
+        </fieldset>
+      )}
 
       {!hideSubmit && (
         <div className="prescription-form__actions">
           <button type="submit" disabled={submitting}>
-            {submitting ? "保存中..." : submitLabel}
+            {submitting ? "送信中..." : submitLabel}
           </button>
         </div>
+      )}
+      {confirmSubmit && (
+        <AdvisoryConfirmModal
+          advisories={session.pending}
+          submitting={submitting}
+          onConfirm={(overrides) => {
+            session.confirm(overrides);
+            setConfirmSubmit(null);
+            confirmSubmit();
+          }}
+          onCancel={() => setConfirmSubmit(null)}
+        />
       )}
     </form>
   );
 }
 
-// 製剤 1 行。製剤マスタから選び、単位数を入れる。
 /**
  * 検査結果の血液型 1 行。2 回一致で確定、1 回だけ・食い違いは印を付ける。
  * 検査結果が無ければ「未検査」を目立たせる(輸血前検査が無いまま出すのは例外なので)。
@@ -534,11 +796,30 @@ function PretestRow({
   );
 }
 
+/** 製剤の血液型の表示。null なら型を出さない(区分「その他」・セットの内容)。 */
+interface ProductBloodTypeChoice {
+  /** 患者の型と違う型を選んでいる(異型適合)。 */
+  different: boolean;
+}
+
+/** 製剤すべてが同じ型なら、その型。製剤ごとに違う(または無い)なら空。 */
+function commonProductType(products: TransfusionProductValues[]): {
+  abo: AboBloodType | "";
+  rhd: RhdBloodType | "";
+} {
+  const typed = products.filter((product) => product.productCode && (product.abo || product.rhd));
+  if (typed.length === 0) return { abo: "", rhd: "" };
+  const abo = typed.every((p) => p.abo === typed[0].abo) ? typed[0].abo : "";
+  const rhd = typed.every((p) => p.rhd === typed[0].rhd) ? typed[0].rhd : "";
+  return { abo, rhd };
+}
+
 function ProductCard({
   index,
   product,
   productItems,
   removable,
+  bloodType,
   onProductChange,
   onChange,
   onRemove,
@@ -547,6 +828,7 @@ function ProductCard({
   product: TransfusionProductValues;
   productItems: { item_code: string; name: string; unit_label: string }[];
   removable: boolean;
+  bloodType: ProductBloodTypeChoice | null;
   onProductChange: (code: string) => void;
   onChange: (patch: Partial<TransfusionProductValues>) => void;
   onRemove: () => void;
@@ -557,7 +839,17 @@ function ProductCard({
   return (
     <li className="transfusion-order__product">
       <div className="transfusion-order__product-head">
-        <span className="transfusion-order__product-number">製剤{index + 1}</span>
+        <span className="transfusion-order__product-number">
+          製剤{index + 1}
+          {/* 出す型。先頭のチップで選んだ型が入る(区分ごとに適合する型が違えば製剤ごとに変わる)。 */}
+          {bloodType && product.productCode && (
+            <>
+              {" "}
+              <TransfusionBloodBadge abo={product.abo} rhd={product.rhd} />
+              {bloodType.different && <span className="blood-type__unconfirmed">異型</span>}
+            </>
+          )}
+        </span>
         {removable && (
           <button
             type="button"

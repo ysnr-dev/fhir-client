@@ -49,8 +49,11 @@ export function TransfusionOrderCreatePanel({
         : {
             ...emptyTransfusionOrderForm(defaultSetting.setting),
             problem: defaultProblem ?? null,
+            // 使用場所の初期値は入院病棟(製剤を届ける先)。外来は医師が選ぶ。
+            locationId: defaultSetting.wardId,
+            locationName: defaultSetting.wardName,
           },
-    [source.initialValues, defaultProblem, defaultSetting.setting],
+    [source.initialValues, defaultProblem, defaultSetting.setting, defaultSetting.wardId, defaultSetting.wardName],
   );
 
   function handleSubmit(values: TransfusionOrderFormValues) {

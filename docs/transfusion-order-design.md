@@ -53,10 +53,12 @@
 
 ```text
 ヘッダ ServiceRequest  (category: order-type|transfusion)
-  code = 輸血検査区分 / occurrenceDateTime = 投与予定日時
-  extension[transfusion-abo] = ABO 血液型 / extension[transfusion-rhd] = RhD 血液型
+  code = 輸血検査区分 / occurrenceDateTime = 投与予定日時 / priority = 緊急度
+  locationReference = 使用場所 / reasonCode.text = 使用目的
+  extension[transfusion-abo] = 患者の ABO 血液型(不明は unknown) / extension[transfusion-rhd] = 患者の RhD
   extension[transfusion-consent] = 同意書確認済(valueBoolean)
-  ←basedOn── 明細 ServiceRequest ×N = 製剤 1 種類ぶん(code = 製剤、quantity = 単位数)
+  ←basedOn── 明細 ServiceRequest ×N = 製剤 1 種類ぶん(code = 製剤、quantity = 単位数、
+                                         extension[transfusion-abo/rhd] = その製剤を出す型)
   ←focus──── Task            (進捗: transfusion)
   ←basedOn── Procedure       (実施記録ハブ) ←partOf── MedicationAdministration ×N
                                             ←partOf── Observation(副作用)
@@ -86,10 +88,10 @@
 | `CodeSystem/transfusion-product` | 明細の `code.coding`。製剤マスタの独自コード |
 | `CodeSystem/task-code` の値 `transfusion` | 進捗 Task の `code` |
 | `IdSystem/transfusion-order-item-number` | 明細 `identifier`。画面で並べた順 |
-| `CodeSystem/transfusion-abo` | ABO 血液型(A / B / O / AB) |
-| `CodeSystem/transfusion-rhd` | RhD 血液型(positive / negative) |
-| `StructureDefinition/transfusion-abo` | ヘッダ。ABO 血液型(valueCodeableConcept) |
-| `StructureDefinition/transfusion-rhd` | ヘッダ。RhD 血液型(valueCodeableConcept) |
+| `CodeSystem/transfusion-abo` | ABO 血液型(A / B / O / AB。ヘッダだけ unknown = 不明) |
+| `CodeSystem/transfusion-rhd` | RhD 血液型(positive / negative。ヘッダだけ unknown) |
+| `StructureDefinition/transfusion-abo` | ヘッダ = オーダー時点の患者の ABO、明細 = その製剤を出す ABO(valueCodeableConcept) |
+| `StructureDefinition/transfusion-rhd` | ヘッダ = 患者の RhD、明細 = 製剤の RhD(valueCodeableConcept) |
 | `StructureDefinition/transfusion-consent` | ヘッダ。輸血同意書の確認済フラグ(valueBoolean) |
 | `StructureDefinition/transfusion-lot-number` | MedicationAdministration。製剤番号(valueString) |
 | `CodeSystem/transfusion-reaction` | 副作用 Observation の `code` と値 |
@@ -105,6 +107,20 @@
 
 ［提案］病理の検査区分(組織診/細胞診)と同じ位置づけなので、同じくヘッダの `code` に
 置く。1 オーダーに 1 つだけ選ぶ軸であり、部門一覧の絞り込み軸にもなる。
+
+### 2.3.1 緊急度は priority
+
+［事実］JAHIS 患者安全ガイド(輸血編)付録 1-3 の危機的出血の 3 段階(レベルⅠ = 心停止が切迫・準備 10 分・
+交差試験なし / レベルⅡ = 昇圧剤が要る・30 分・生食法 / レベルⅢ = 循環は安定・60 分)。
+
+［提案］FHIR の `priority` に stat / asap / urgent を当て、緊急でない依頼は routine。部門一覧・カードは
+「緊急Ⅰ〜Ⅲ」のバッジ。至急区分(routine / urgent)で登録した古いオーダーはレベルⅢとして読む。
+
+### 2.3.2 使用場所と使用目的
+
+［提案］使用場所は `locationReference`(病棟 HU・手術室 SU・救急 ER・検査処置室 DX の Location)。
+ガイド 7.2.2-3 の「別部署に払い出された」事例への対策で、入院中は入院病棟が初期値。
+使用目的は `reasonCode.text` の自由記述(登録病名の参照 `reasonReference` とは別)。
 
 ### 2.4 日付軸
 
@@ -135,11 +151,25 @@ RhD はこれから」という状態がありうるため。
 ［提案］検査結果から選択欄へ自動で入れることはしない。自動で入ると医師の確認そのものが
 形骸化するため、医師が選び、その隣に検査結果が並んで見比べられる形にとどめる。
 
-［追記 2026-11-01］新規オーダーの初期値には、**検体検査の結果で確定した型(異なる日の 2 検体で
-一致)だけ**を入れる(`fhir/bloodTypeHelpers.ts`、`docs/features/patient-profile.md`「血液型」)。
-申告のままの型や 1 回だけの検査結果は初期値にせず、参照として並べるにとどめる。検査結果が
-食い違うときは「不一致」の印を赤で出す。JAHIS 患者安全ガイド(輸血編)7.2.3 との残りの差
-(緊急度・型を製剤ごとに持つ・適合しない型を選ばせない)は `docs/transfusion-backlog.md` §7.2。
+［追記 2026-11-01］JAHIS 患者安全ガイド(輸血編)7.2.3 に寄せ、血液型は 2 か所に分けた
+(`docs/transfusion-backlog.md` §7.2)。
+
+- **ヘッダ = オーダー時点の患者の血液型**。検体検査の結果で確定した型(異なる日の 2 検体で一致、
+  `fhir/bloodTypeHelpers.ts`)だけを写し、確定していなければ `unknown`(不明)を明示する。医師は手で
+  入れない。申告のままの型や 1 回だけの検査結果は参照として並べるにとどめ、警告「血液型の未確定」を出す。
+- **明細 = その製剤を出す血液型**。患者の型・製剤区分・緊急度から既定を入れ、適合する型だけを
+  選ばせる(`compatibleAbo` / `compatibleRhd`)。選ぶのはフォーム先頭の「血液型」のチップ(従来と同じ
+  見た目)で、選んだ型は適合するすべての製剤に入る。押せるのは選択中の製剤すべてに適合する型だけで、
+  区分ごとに適合する型が違う(型が不明で赤血球と血漿を一緒に出すなど)ときは製剤カードの型を読む。赤血球は抗原(A → A/O、AB → 全部、O → O)、血漿・血小板は
+  抗体(A → A/AB、O → 全部、AB → AB)で決まり、型が不明なら赤血球は O・血漿と血小板は AB だけ
+  (指針の異型適合血)。RhD 陰性の患者には陰性だけ(レベルⅠは陽性も可)、血漿は RhD を問わない。
+  自己血は本人の型だけ、区分「その他」(アルブミンなど)は型を持たない。
+- 患者の型と違う型を選んだ製剤には「異型」の印を付け、警告(表示のみ)にも出す。
+- 製剤の型を持たない古い明細は、ヘッダの型(当時は「何型を出すか」)を製剤の型として読む。
+
+依頼時の警告(`fhir/transfusionAdvisoryHelpers.ts`、警告の器 `docs/advisory-design.md`): 輸血拒否の注意区分、
+血液型の未確定(未検査 / 1 回 / 不一致)、不規則抗体スクリーニングの未検査と有効期間外(施設設定
+`transfusion.antibody_screen_valid_days`、既定 3 日、投与予定日を含む)、異型適合血、輸血副作用歴。
 
 ### 2.5.1 血液型の色
 

@@ -18202,6 +18202,22 @@ button.meal-calendar__cell:hover {
   border-color: var(--text);
 }
 
+/* 患者の型に適合しない型。押せないことが分かる程度に薄くし、位置は動かさない
+   (どの型が外れたかを並びで読めるようにする)。 */
+.transfusion-chip:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.transfusion-chip:disabled:hover {
+  border-color: var(--border);
+}
+
+/* 製剤カードの中の型の選択。カードの 1 行を使い切る。 */
+.transfusion-order__product-blood-type {
+  flex: 1 1 100%;
+}
+
 /* 選択中。ラベル色は明暗テーマのどちらでも同じ色で出す(見慣れた色そのものに
    意味があるため)ので、文字色の方をそれぞれの背景に合わせて固定する。 */
 .transfusion-chip--selected {

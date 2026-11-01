@@ -35,6 +35,7 @@ import type { AdvisorySeveritySettings } from "../fhir/advisoryHelpers";
 import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
 import type { RxVerificationSettings } from "../fhir/rxVerificationHelpers";
 import type { InjectionVerificationSettings } from "../fhir/injectionVerificationHelpers";
+import type { TransfusionSettings } from "../fhir/transfusionAdvisoryHelpers";
 import type { IntakeSettings } from "../fhir/intakeHelpers";
 import type { KarteCardOrderSettings } from "../fhir/karteCardOrderHelpers";
 
@@ -118,6 +119,8 @@ export interface FacilitySettings {
   rx_verification: RxVerificationSettings;
   /** 注射の3点認証(実施入力の前に照合を出すか)。 */
   injection_verification: InjectionVerificationSettings;
+  /** 輸血オーダー(不規則抗体スクリーニングの有効日数)。 */
+  transfusion: TransfusionSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -149,6 +152,7 @@ export type FacilitySettingsPayload = Partial<{
   advisory_severity: AdvisorySeveritySettings;
   rx_verification: RxVerificationSettings;
   injection_verification: InjectionVerificationSettings;
+  transfusion: TransfusionSettings;
 }>;
 
 export interface ConnectionTestResult {

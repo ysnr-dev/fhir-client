@@ -84,6 +84,11 @@ interface Advisory {
 | `regimen-conflict` | レジメンの重なり | レジメン | warning(同じレジメンが進行中)/ info(他のレジメン) | `applicationConflictAdvisories` |
 | `regimen-date` | 開始日 | レジメン | info | `startDateAdvisories` |
 | `regimen-availability` | 候補外のレジメン | レジメン | info | 下書き・廃止・有効期間外、適用後のマスタ変更 |
+| `transfusion-refusal` | 輸血拒否 | 輸血 | warning | `transfusionRefusalAdvisory` |
+| `blood-type-unconfirmed` | 血液型の未確定 | 輸血 | warning | `bloodTypeUnconfirmedAdvisory` |
+| `antibody-screen` | 不規則抗体の検査 | 輸血 | warning | `antibodyScreenAdvisory` |
+| `blood-type-different` | 異型適合血 | 輸血 | info | `differentBloodTypeAdvisories` |
+| `transfusion-reaction-history` | 輸血副作用歴 | 輸血 | info | `reactionHistoryAdvisory` |
 | `cds-critical` / `cds-warning` / `cds-info` | 判断支援(重要 / 注意 / 情報) | 外部 | warning / info / info | `cdsCardAdvisories` |
 
 ### 2.2 既存の判定との対応

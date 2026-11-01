@@ -14,13 +14,9 @@ import {
   displayOf,
   itemNumber,
   orderComment,
-  PRIORITY_OPTIONS,
   registrationAuthoredOn,
-  priorityDisplay,
   withVersionLock,
 } from "./shared";
-
-export { PRIORITY_OPTIONS };
 
 // 輸血オーダー。病理検査と同じくヘッダは ServiceRequest で、その下に製剤を並べる。
 //
@@ -38,11 +34,17 @@ export { PRIORITY_OPTIONS };
 //   occurrence が部門一覧の日付軸とカルテカードの置き場所を兼ねる(上流は occurrenceDateTime
 //   しか索引しないので Period は使わない)。
 //   実際に投与した時間帯は実施記録の Procedure.performedPeriod で持つ。
+// - 緊急度は priority。危機的出血の 3 段階(準備時間 10 / 30 / 60 分)を stat / asap / urgent に
+//   当て、緊急でない依頼は routine。
+// - 使用場所は locationReference(病棟・手術室・救急など)、使用目的は reasonCode.text。
 // - 輸血同意書の確認済フラグはローカル拡張。臨床病名は他オーダーと同じく登録病名
 //   からの参照(reasonReference)。
 //
-// 血液型はオーダーに載せる。輸血は「何型を出すか」が依頼の中身そのもので、
-// 製剤の払い出しはこの型で行われるため(docs/transfusion-order-design.md §2.5)。
+// 血液型は 2 か所に載せる(docs/transfusion-order-design.md §2.5)。
+// - ヘッダの拡張 = **オーダー時点の患者の血液型**。検査で確定した型だけを写し、確定して
+//   いなければ「不明」を明示する(空欄と区別する)。医師は手で入れない。
+// - 明細の拡張 = **その製剤を何型で出すか**。患者の型・製剤区分・緊急度から既定を決め、
+//   適合する型だけを選ばせる(危機的出血で型が不明なら赤血球は O、血漿・血小板は AB)。
 // 検体検査の結果(ABO/RhD/不規則抗体)は画面に参照として並べるだけで、そちらへの
 // 参照は保存しない。正本は検査結果側にあり、オーダーに焼き付けると結果の修正・削除
 // との整合をオーダー側で面倒みることになるため。
@@ -71,7 +73,41 @@ const RHD_EXT_URL = "http://fhir-client.local/StructureDefinition/transfusion-rh
 /** 明細の並び順 = 画面で並べた順。 */
 const ITEM_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/transfusion-order-item-number";
 
-export type TransfusionOrderPriority = "routine" | "urgent";
+/**
+ * 緊急度。危機的出血への対応(JAHIS 患者安全ガイド 輸血編 付録 1-3)の 3 段階を FHIR の
+ * priority に当てる。レベルⅠ = 心停止が切迫(準備 10 分、交差試験なしで払出)、
+ * レベルⅡ = 昇圧剤が要る(30 分、生食法)、レベルⅢ = 出血しているが循環は安定(60 分)。
+ */
+export type TransfusionOrderPriority = "routine" | "urgent" | "asap" | "stat";
+
+export const TRANSFUSION_PRIORITY_OPTIONS: {
+  code: TransfusionOrderPriority;
+  display: string;
+  /** 緊急度のレベル。0 = 緊急でない。 */
+  level: 0 | 1 | 2 | 3;
+}[] = [
+  { code: "routine", display: "通常", level: 0 },
+  { code: "urgent", display: "レベルⅢ(準備 60 分)", level: 3 },
+  { code: "asap", display: "レベルⅡ(準備 30 分)", level: 2 },
+  { code: "stat", display: "レベルⅠ(準備 10 分)", level: 1 },
+];
+
+export function transfusionPriorityDisplay(code: string | undefined): string {
+  return displayOf(TRANSFUSION_PRIORITY_OPTIONS, code);
+}
+
+/** 緊急度のレベル(1〜3)。緊急でなければ 0。 */
+export function urgencyLevelOf(priority: string | undefined): 0 | 1 | 2 | 3 {
+  return TRANSFUSION_PRIORITY_OPTIONS.find((o) => o.code === priority)?.level ?? 0;
+}
+
+const LEVEL_NUMERALS = ["", "Ⅰ", "Ⅱ", "Ⅲ"] as const;
+
+/** バッジ用の短い表記(「緊急Ⅰ」)。緊急でなければ空。 */
+export function urgencyBadgeLabel(priority: string | undefined): string {
+  const level = urgencyLevelOf(priority);
+  return level ? `緊急${LEVEL_NUMERALS[level]}` : "";
+}
 
 /**
  * 輸血検査区分。
@@ -113,10 +149,127 @@ export function rhdDisplay(code: string): string {
   return displayOf(RHD_OPTIONS, code);
 }
 
-/** 「A型 RhD＋」の 1 行表示。カード・詳細で使う(未選択なら空)。 */
+/**
+ * 患者の血液型が確定していないことを明示する値。ヘッダの拡張にだけ使う
+ * (空欄 = 書いていない、と区別するため。危機的出血の依頼で「不明」は依頼の中身そのもの)。
+ */
+export const UNKNOWN_BLOOD_TYPE = "unknown";
+export type PatientAboBloodType = AboBloodType | typeof UNKNOWN_BLOOD_TYPE;
+export type PatientRhdBloodType = RhdBloodType | typeof UNKNOWN_BLOOD_TYPE;
+
+/** 「A型 RhD＋」の 1 行表示。カード・詳細で使う(未選択なら空)。不明は「不明」。 */
 export function bloodTypeLabel(abo: string, rhd: string): string {
   if (!abo && !rhd) return "";
-  return [abo && `${abo}型`, rhd && `RhD${rhdDisplay(rhd)}`].filter(Boolean).join(" ");
+  if (abo === UNKNOWN_BLOOD_TYPE) return "不明";
+  return [abo && `${abo}型`, rhd && rhd !== UNKNOWN_BLOOD_TYPE && `RhD${rhdDisplay(rhd)}`]
+    .filter(Boolean)
+    .join(" ");
+}
+
+// ---- 製剤の血液型の適合 ----
+
+/** 製剤区分(製剤マスタの category)。 */
+export type TransfusionProductCategory = "rbc" | "ffp" | "plt" | "auto" | "other";
+
+/** 患者の型から決まる、製剤として出せる ABO。赤血球は抗原で、血漿・血小板は抗体で適合が決まる。 */
+const RBC_COMPATIBLE: Record<AboBloodType, AboBloodType[]> = {
+  A: ["A", "O"],
+  B: ["B", "O"],
+  AB: ["AB", "A", "B", "O"],
+  O: ["O"],
+};
+const PLASMA_COMPATIBLE: Record<AboBloodType, AboBloodType[]> = {
+  A: ["A", "AB"],
+  B: ["B", "AB"],
+  AB: ["AB"],
+  O: ["O", "A", "B", "AB"],
+};
+
+/** 患者の型が確定していないときに出す型(危機的出血の指針: 赤血球は O、血漿・血小板は AB)。 */
+const UNKNOWN_DEFAULT_ABO: Partial<Record<TransfusionProductCategory, AboBloodType>> = {
+  rbc: "O",
+  ffp: "AB",
+  plt: "AB",
+};
+
+export interface PatientBloodTypeForOrder {
+  /** 検査で確定した ABO。確定していなければ空。 */
+  abo: AboBloodType | "";
+  rhd: RhdBloodType | "";
+}
+
+/** 製剤区分に血液型の指定が要るか。アルブミンなどの「その他」には要らない。 */
+export function productNeedsBloodType(category: string | undefined): boolean {
+  return category !== "other";
+}
+
+/**
+ * その製剤で選べる ABO。患者の型が確定していなければ、赤血球は O、血漿・血小板は AB だけ
+ * (指針の異型適合血)。自己血は本人の型だけ。区分が分からない製剤(マスタから消えたもの)は
+ * 制限しない。
+ */
+export function compatibleAbo(
+  patient: PatientBloodTypeForOrder,
+  category: string | undefined,
+): AboBloodType[] {
+  const all = ABO_OPTIONS.map((o) => o.code);
+  if (!productNeedsBloodType(category)) return all;
+  if (!patient.abo) {
+    const fallback = UNKNOWN_DEFAULT_ABO[category as TransfusionProductCategory];
+    return fallback ? [fallback] : all;
+  }
+  switch (category) {
+    case "rbc":
+      return RBC_COMPATIBLE[patient.abo];
+    case "ffp":
+    case "plt":
+      return PLASMA_COMPATIBLE[patient.abo];
+    case "auto":
+      return [patient.abo];
+    default:
+      return all;
+  }
+}
+
+/**
+ * その製剤で選べる RhD。陰性の患者には陰性だけ(レベルⅠの危機的出血では陽性も可)。
+ * 血漿は RhD を問わない。型が確定していなければ両方(既定は陽性。在庫のある型で出す)。
+ */
+export function compatibleRhd(
+  patient: PatientBloodTypeForOrder,
+  category: string | undefined,
+  level: number,
+): RhdBloodType[] {
+  const all = RHD_OPTIONS.map((o) => o.code);
+  if (!productNeedsBloodType(category) || category === "ffp") return all;
+  if (patient.rhd === "negative" && level !== 1) return ["negative"];
+  return all;
+}
+
+/**
+ * 製剤の血液型の既定。患者の型が確定していれば同じ型、していなければ指針の異型適合血。
+ * 選べる型に入らないときは空(医師に選ばせる)。
+ */
+export function defaultProductBloodType(
+  patient: PatientBloodTypeForOrder,
+  category: string | undefined,
+  level: number,
+): { abo: AboBloodType | ""; rhd: RhdBloodType | "" } {
+  if (!productNeedsBloodType(category)) return { abo: "", rhd: "" };
+  const abos = compatibleAbo(patient, category);
+  const rhds = compatibleRhd(patient, category, level);
+  const abo = patient.abo && abos.includes(patient.abo) ? patient.abo : abos.length === 1 ? abos[0] : "";
+  const rhd = patient.rhd && rhds.includes(patient.rhd) ? patient.rhd : rhds.includes("positive") ? "positive" : (rhds[0] ?? "");
+  return { abo, rhd };
+}
+
+/** 製剤の型が患者の型と違う(異型適合)。取り違えではなく意図した選択だが、カードで印を付ける。 */
+export function isDifferentFromPatient(
+  product: { abo: string; rhd: string },
+  patient: { abo: string; rhd: string },
+): boolean {
+  if (!patient.abo || patient.abo === UNKNOWN_BLOOD_TYPE) return false;
+  return Boolean(product.abo) && product.abo !== patient.abo;
 }
 
 // ---- フォームの値 ----
@@ -134,6 +287,9 @@ export interface TransfusionProductValues {
   units: string;
   /** 単位の呼び方(単位 / mL / 本)。製剤マスタから写す。 */
   unitLabel: string;
+  /** この製剤を出す ABO 血液型。区分「その他」は空。 */
+  abo: AboBloodType | "";
+  rhd: RhdBloodType | "";
   note: string;
 }
 
@@ -141,12 +297,19 @@ export interface TransfusionOrderFormValues {
   setting: PrescriptionSetting;
   priority: TransfusionOrderPriority;
   testType: TransfusionTestType;
-  /** ABO 血液型。未確定のうちは空。 */
-  aboBloodType: AboBloodType | "";
-  /** RhD 血液型。未確定のうちは空。 */
-  rhdBloodType: RhdBloodType | "";
+  /**
+   * オーダー時点の患者の血液型。検査で確定した型を写し、確定していなければ「不明」。
+   * 画面では入力させず、患者の血液型(fhir/bloodTypeHelpers.ts)から入れる。
+   */
+  patientAbo: PatientAboBloodType | "";
+  patientRhd: PatientRhdBloodType | "";
   /** 投与予定日時。datetime-local の入力形式(YYYY-MM-DDTHH:mm)。 */
   scheduledDateTime: string;
+  /** 使用場所(Location.id)。病棟・手術室・救急など、製剤を届ける先。 */
+  locationId: string;
+  locationName: string;
+  /** 使用目的(術中出血、貧血 など)。 */
+  purpose: string;
   /** 輸血同意書を確認済か。 */
   consentConfirmed: boolean;
   comment: string;
@@ -162,6 +325,8 @@ export function emptyTransfusionProduct(): TransfusionProductValues {
     abbreviation: "",
     units: "",
     unitLabel: "単位",
+    abo: "",
+    rhd: "",
     note: "",
   };
 }
@@ -173,9 +338,12 @@ export function emptyTransfusionOrderForm(
     setting,
     priority: "routine",
     testType: "crossmatch",
-    aboBloodType: "",
-    rhdBloodType: "",
+    patientAbo: "",
+    patientRhd: "",
     scheduledDateTime: "",
+    locationId: "",
+    locationName: "",
+    purpose: "",
     consentConfirmed: false,
     comment: "",
     problem: null,
@@ -193,7 +361,9 @@ export function emptyTransfusionOrderForm(
 export function productLabel(product: TransfusionProductValues): string {
   const name = product.abbreviation || product.productName;
   if (!name) return "";
-  return product.units ? `${name} / ${product.units}${product.unitLabel}` : name;
+  const amount = product.units ? `${name} / ${product.units}${product.unitLabel}` : name;
+  const type = bloodTypeLabel(product.abo, product.rhd);
+  return type ? `${amount} ${type}` : amount;
 }
 
 /** 製剤を 1 行に並べたラベル(「RBC-LR / 2単位, FFP-LR / 4単位」)。 */
@@ -212,7 +382,33 @@ export function isTransfusionServiceRequest(sr: fhir4.ServiceRequest): boolean {
   );
 }
 
-// 製剤明細の ServiceRequest。製剤(code)と単位数(quantityQuantity)を持つ。
+/** ABO / RhD の拡張。ヘッダ(患者の型)と明細(製剤の型)で同じ形。 */
+function bloodTypeExtensions(abo: string, rhd: string): fhir4.Extension[] {
+  const extension: fhir4.Extension[] = [];
+  if (abo) {
+    const display = abo === UNKNOWN_BLOOD_TYPE ? "不明" : abo;
+    extension.push({
+      url: ABO_EXT_URL,
+      valueCodeableConcept: {
+        coding: [{ system: ABO_SYSTEM, code: abo, display }],
+        text: abo === UNKNOWN_BLOOD_TYPE ? "不明" : `${abo}型`,
+      },
+    });
+  }
+  if (rhd) {
+    const display = rhd === UNKNOWN_BLOOD_TYPE ? "不明" : rhdDisplay(rhd);
+    extension.push({
+      url: RHD_EXT_URL,
+      valueCodeableConcept: {
+        coding: [{ system: RHD_SYSTEM, code: rhd, display }],
+        text: rhd === UNKNOWN_BLOOD_TYPE ? "RhD不明" : `RhD${display}`,
+      },
+    });
+  }
+  return extension;
+}
+
+// 製剤明細の ServiceRequest。製剤(code)・単位数(quantityQuantity)・出す血液型(拡張)を持つ。
 function buildProductRequest(
   product: TransfusionProductValues,
   sequence: number,
@@ -246,6 +442,8 @@ function buildProductRequest(
     resource.quantityQuantity = { value: units, unit: product.unitLabel || "単位" };
   }
   if (product.note.trim()) resource.note = [{ text: product.note.trim() }];
+  const bloodType = bloodTypeExtensions(product.abo, product.rhd);
+  if (bloodType.length > 0) resource.extension = bloodType;
 
   return resource;
 }
@@ -309,28 +507,18 @@ function buildTransfusionOrderServiceRequest(
       },
     ];
   }
+  if (values.purpose.trim()) resource.reasonCode = [{ text: values.purpose.trim() }];
+  if (values.locationId) {
+    resource.locationReference = [
+      {
+        reference: `Location/${values.locationId}`,
+        ...(values.locationName ? { display: values.locationName } : {}),
+      },
+    ];
+  }
   applyOrderContext(resource, requester);
 
-  const extension: fhir4.Extension[] = [];
-  if (values.aboBloodType) {
-    extension.push({
-      url: ABO_EXT_URL,
-      valueCodeableConcept: {
-        coding: [{ system: ABO_SYSTEM, code: values.aboBloodType, display: values.aboBloodType }],
-        text: `${values.aboBloodType}型`,
-      },
-    });
-  }
-  if (values.rhdBloodType) {
-    const display = rhdDisplay(values.rhdBloodType);
-    extension.push({
-      url: RHD_EXT_URL,
-      valueCodeableConcept: {
-        coding: [{ system: RHD_SYSTEM, code: values.rhdBloodType, display }],
-        text: `RhD${display}`,
-      },
-    });
-  }
+  const extension: fhir4.Extension[] = bloodTypeExtensions(values.patientAbo, values.patientRhd);
   if (values.consentConfirmed) extension.push({ url: CONSENT_EXT_URL, valueBoolean: true });
   if (extension.length > 0) {
     // applyOrderContext が入れた拡張(診療科・病棟)を消さないように後ろへ足す。
@@ -459,8 +647,10 @@ export function buildDoTransfusionOrderForm(
     ...values,
     setting,
     scheduledDateTime: "",
-    // 血液型は患者の属性なのでそのまま引き継ぐ。同意書の確認は輸血ごとに
-    // 取り直すものなので引き継がない。
+    // 患者の血液型はいまの検査結果から入れ直す(DO 元の時点の型を引き継がない)。
+    // 製剤の型は同じ患者なので引き継ぐ。同意書の確認は輸血ごとに取り直すものなので引き継がない。
+    patientAbo: "",
+    patientRhd: "",
     consentConfirmed: false,
     products: values.products.map((product) => ({ ...product, id: "" })),
   };
@@ -470,19 +660,28 @@ export function buildDoTransfusionOrderForm(
 
 export interface TransfusionOrderSummary {
   settingDisplay: string;
+  /** 緊急度の表示(通常 / レベルⅠ〜Ⅲ)。 */
   priorityDisplay: string;
+  /** 緊急度のレベル(1〜3)。緊急でなければ 0。 */
+  urgencyLevel: number;
+  /** バッジ用の短い表記(「緊急Ⅰ」)。緊急でなければ空。 */
+  urgencyBadge: string;
   /** 輸血検査区分の表示(交差適合試験・T&S)。カードの見出しに出す。 */
   testTypeDisplay: string;
   testType: string;
-  /** 至急のオーダーはカードで目立たせるため、区分そのものも返す。 */
+  /** 緊急のオーダーはカードで目立たせるため、区分そのものも返す。 */
   urgent: boolean;
   /** 同意書の確認済フラグ。未確認はカードで注意を出す。 */
   consentConfirmed: boolean;
-  /** ABO 血液型。カードで色付きに出すのでコードそのものを返す。 */
+  /** オーダー時点の患者の ABO 血液型(不明は unknown)。カードで色付きに出すのでコードそのものを返す。 */
   aboBloodType: string;
   rhdBloodType: string;
-  /** 「A型 RhD＋」の 1 行表示。未選択なら空。 */
+  /** 「A型 RhD＋」の 1 行表示。書いていなければ空。 */
   bloodTypeDisplay: string;
+  /** 使用場所の表示名。 */
+  locationName: string;
+  /** 使用目的。 */
+  purpose: string;
 }
 
 export function transfusionOrderTestType(sr: fhir4.ServiceRequest): TransfusionTestType {
@@ -501,36 +700,74 @@ function codeFromExtension(sr: fhir4.ServiceRequest, url: string, system: string
   return codingBySystem(concept?.coding, system)?.code ?? "";
 }
 
-export function transfusionOrderAbo(sr: fhir4.ServiceRequest): AboBloodType | "" {
+/** 製剤の型(明細の拡張)。 */
+function productAbo(sr: fhir4.ServiceRequest): AboBloodType | "" {
   const code = codeFromExtension(sr, ABO_EXT_URL, ABO_SYSTEM);
   return ABO_OPTIONS.some((o) => o.code === code) ? (code as AboBloodType) : "";
 }
 
-export function transfusionOrderRhd(sr: fhir4.ServiceRequest): RhdBloodType | "" {
+function productRhd(sr: fhir4.ServiceRequest): RhdBloodType | "" {
   const code = codeFromExtension(sr, RHD_EXT_URL, RHD_SYSTEM);
   return RHD_OPTIONS.some((o) => o.code === code) ? (code as RhdBloodType) : "";
+}
+
+/** オーダー時点の患者の ABO(ヘッダの拡張)。不明は unknown。 */
+export function transfusionOrderAbo(sr: fhir4.ServiceRequest): PatientAboBloodType | "" {
+  const code = codeFromExtension(sr, ABO_EXT_URL, ABO_SYSTEM);
+  if (code === UNKNOWN_BLOOD_TYPE) return UNKNOWN_BLOOD_TYPE;
+  return ABO_OPTIONS.some((o) => o.code === code) ? (code as AboBloodType) : "";
+}
+
+export function transfusionOrderRhd(sr: fhir4.ServiceRequest): PatientRhdBloodType | "" {
+  const code = codeFromExtension(sr, RHD_EXT_URL, RHD_SYSTEM);
+  if (code === UNKNOWN_BLOOD_TYPE) return UNKNOWN_BLOOD_TYPE;
+  return RHD_OPTIONS.some((o) => o.code === code) ? (code as RhdBloodType) : "";
+}
+
+export function transfusionOrderLocationName(sr: fhir4.ServiceRequest): string {
+  return sr.locationReference?.[0]?.display ?? "";
+}
+
+export function transfusionOrderLocationId(sr: fhir4.ServiceRequest): string {
+  return sr.locationReference?.[0]?.reference?.split("/").pop() ?? "";
+}
+
+export function transfusionOrderPurpose(sr: fhir4.ServiceRequest): string {
+  return sr.reasonCode?.[0]?.text ?? "";
 }
 
 export function summarizeTransfusionOrder(sr: fhir4.ServiceRequest): TransfusionOrderSummary {
   const testType = transfusionOrderTestType(sr);
   const abo = transfusionOrderAbo(sr);
   const rhd = transfusionOrderRhd(sr);
+  const urgencyLevel = urgencyLevelOf(sr.priority);
   return {
     settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
-    priorityDisplay: priorityDisplay(sr.priority),
+    priorityDisplay: transfusionPriorityDisplay(sr.priority),
+    urgencyLevel,
+    urgencyBadge: urgencyBadgeLabel(sr.priority),
     testTypeDisplay: testTypeDisplay(testType),
     testType,
-    urgent: sr.priority === "urgent",
+    urgent: urgencyLevel > 0,
     consentConfirmed: transfusionOrderConsent(sr),
     aboBloodType: abo,
     rhdBloodType: rhd,
     bloodTypeDisplay: bloodTypeLabel(abo, rhd),
+    locationName: transfusionOrderLocationName(sr),
+    purpose: transfusionOrderPurpose(sr),
   };
 }
 
-function parseProductRequest(request: fhir4.ServiceRequest): TransfusionProductValues {
+function parseProductRequest(
+  request: fhir4.ServiceRequest,
+  header: fhir4.ServiceRequest | undefined,
+): TransfusionProductValues {
   const coding = codingBySystem(request.code?.coding, PRODUCT_SYSTEM);
   const quantity = request.quantityQuantity;
+  // 製剤の型を明細に持つ前のオーダーは、ヘッダの型(当時は「何型を出すか」)を製剤の型として読む。
+  const headerAbo = header ? transfusionOrderAbo(header) : "";
+  const headerRhd = header ? transfusionOrderRhd(header) : "";
+  const hasOwnType = Boolean(productAbo(request) || productRhd(request));
 
   return {
     id: request.id ?? "",
@@ -541,6 +778,8 @@ function parseProductRequest(request: fhir4.ServiceRequest): TransfusionProductV
     abbreviation: "",
     units: quantity?.value == null ? "" : String(quantity.value),
     unitLabel: quantity?.unit ?? "単位",
+    abo: hasOwnType ? productAbo(request) : headerAbo === UNKNOWN_BLOOD_TYPE ? "" : headerAbo,
+    rhd: hasOwnType ? productRhd(request) : headerRhd === UNKNOWN_BLOOD_TYPE ? "" : headerRhd,
     note: request.note?.[0]?.text ?? "",
   };
 }
@@ -548,13 +787,15 @@ function parseProductRequest(request: fhir4.ServiceRequest): TransfusionProductV
 /**
  * オーダーの製剤明細。itemRequests には、そのオーダーにぶら下がる明細を渡す
  * (`_revinclude:iterate=ServiceRequest:based-on` で取得)。画面で並べた順に並べる。
+ * `header` を渡すと、製剤の型を持たない古い明細にヘッダの型を補う。
  */
 export function transfusionOrderProducts(
   itemRequests: fhir4.ServiceRequest[],
+  header?: fhir4.ServiceRequest,
 ): TransfusionProductValues[] {
   return [...itemRequests]
     .sort((a, b) => itemNumber(a, ITEM_NUMBER_SYSTEM) - itemNumber(b, ITEM_NUMBER_SYSTEM))
-    .map(parseProductRequest);
+    .map((request) => parseProductRequest(request, header));
 }
 
 /** ServiceRequest の一覧から、指定のオーダーにぶら下がる明細だけを取り出す。
@@ -575,15 +816,21 @@ export function parseTransfusionOrderForm(
   sr: fhir4.ServiceRequest,
   itemRequests: fhir4.ServiceRequest[] = [],
 ): TransfusionOrderFormValues {
-  const products = transfusionOrderProducts(itemRequests);
+  const products = transfusionOrderProducts(itemRequests, sr);
+  const priority = TRANSFUSION_PRIORITY_OPTIONS.some((o) => o.code === sr.priority)
+    ? (sr.priority as TransfusionOrderPriority)
+    : "routine";
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
-    priority: (sr.priority === "urgent" ? "urgent" : "routine") as TransfusionOrderPriority,
+    priority,
     testType: transfusionOrderTestType(sr),
-    aboBloodType: transfusionOrderAbo(sr),
-    rhdBloodType: transfusionOrderRhd(sr),
+    patientAbo: transfusionOrderAbo(sr),
+    patientRhd: transfusionOrderRhd(sr),
     // datetime-local の入力値に合わせて分までに丸める。
     scheduledDateTime: sr.occurrenceDateTime?.slice(0, 16) ?? "",
+    locationId: transfusionOrderLocationId(sr),
+    locationName: transfusionOrderLocationName(sr),
+    purpose: transfusionOrderPurpose(sr),
     consentConfirmed: transfusionOrderConsent(sr),
     comment: transfusionOrderComment(sr),
     problem: transfusionOrderProblem(sr),

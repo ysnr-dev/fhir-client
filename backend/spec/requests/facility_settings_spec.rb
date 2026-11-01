@@ -380,6 +380,24 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (transfusion)" do
+    it "既定は不規則抗体スクリーニングの有効日数 3 日" do
+      get "/facility_settings"
+      expect(JSON.parse(response.body)["transfusion"]).to eq("antibody_screen_valid_days" => 3)
+    end
+
+    it "有効日数を保存できる" do
+      patch "/facility_settings", params: { transfusion: { antibody_screen_valid_days: 7 } }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["transfusion"]).to eq("antibody_screen_valid_days" => 7)
+    end
+
+    it "負の日数は弾く" do
+      patch "/facility_settings", params: { transfusion: { antibody_screen_valid_days: -1 } }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "PATCH /facility_settings (injection_verification)" do
     it "既定は無効で、有効にでき、真偽値でなければ 422" do
       with_admin_token(nil) { get "/facility_settings" }

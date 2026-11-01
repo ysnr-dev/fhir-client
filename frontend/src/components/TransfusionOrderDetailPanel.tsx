@@ -25,7 +25,7 @@ export function TransfusionOrderDetailPanel({
   problemsById,
 }: TransfusionOrderDetailPanelProps) {
   const summary = summarizeTransfusionOrder(serviceRequest);
-  const products = transfusionOrderProducts(itemRequests);
+  const products = transfusionOrderProducts(itemRequests, serviceRequest);
   const comment = transfusionOrderComment(serviceRequest);
 
   const problem = transfusionOrderProblem(serviceRequest);
@@ -39,7 +39,7 @@ export function TransfusionOrderDetailPanel({
         <dl className="prescription-detail__common">
           <dt>輸血検査区分</dt>
           <dd>{summary.testTypeDisplay || "-"}</dd>
-          <dt>血液型</dt>
+          <dt>患者血液型</dt>
           <dd>
             {summary.bloodTypeDisplay ? (
               <TransfusionBloodBadge abo={summary.aboBloodType} rhd={summary.rhdBloodType} />
@@ -53,8 +53,12 @@ export function TransfusionOrderDetailPanel({
           <dd>{serviceRequest.occurrenceDateTime?.slice(0, 16).replace("T", " ") || "-"}</dd>
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
-          <dt>至急区分</dt>
+          <dt>緊急度</dt>
           <dd>{summary.priorityDisplay || "-"}</dd>
+          <dt>使用場所</dt>
+          <dd>{summary.locationName || "-"}</dd>
+          <dt>使用目的</dt>
+          <dd>{summary.purpose || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
           <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
           {/* 同意書は輸血の必須要件。取得済でないオーダーは例外なので明示する。 */}
@@ -75,6 +79,7 @@ export function TransfusionOrderDetailPanel({
               <th>№</th>
               <th>製剤</th>
               <th>単位数</th>
+              <th>血液型</th>
               <th>備考</th>
             </tr>
           </thead>
@@ -84,6 +89,10 @@ export function TransfusionOrderDetailPanel({
                 <td>{index + 1}</td>
                 <td>{product.productName || "-"}</td>
                 <td>{product.units ? `${product.units}${product.unitLabel}` : "-"}</td>
+                <td>
+                  <TransfusionBloodBadge abo={product.abo} rhd={product.rhd} />
+                  {!product.abo && !product.rhd && "-"}
+                </td>
                 <td>{product.note || "-"}</td>
               </tr>
             ))}

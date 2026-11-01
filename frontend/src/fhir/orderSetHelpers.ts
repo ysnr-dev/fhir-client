@@ -317,10 +317,13 @@ export function sanitizeValuesForSet(orderType: OrderSetOrderType, values: unkno
         ...v,
         problem: null,
         scheduledDateTime: "",
-        aboBloodType: "",
-        rhdBloodType: "",
+        // 患者の型・製剤の型・使用場所は患者が決まってから入れる。
+        patientAbo: "",
+        patientRhd: "",
+        locationId: "",
+        locationName: "",
         consentConfirmed: false,
-        products: v.products.map((product) => ({ ...product, id: "" })),
+        products: v.products.map((product) => ({ ...product, id: "", abo: "", rhd: "" })),
       } satisfies TransfusionOrderFormValues;
     }
     case "rehab-order": {
