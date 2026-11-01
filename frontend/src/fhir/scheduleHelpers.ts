@@ -179,7 +179,7 @@ export function slotTime(slot: fhir4.Slot): string {
  * (Procedure.performer)側で持つ
  * (docs/rehab-order-design.md / docs/nutrition-guidance-order-design.md §6)。
  */
-export type ScheduleType = "consultation" | "exam" | "rehab" | "nutrition-guidance" | "chemo";
+export type ScheduleType = "consultation" | "exam" | "rehab" | "nutrition-guidance" | "chemo" | "autologous";
 
 export const SCHEDULE_TYPE_OPTIONS: { code: ScheduleType; label: string }[] = [
   { code: "consultation", label: "診察予約" },
@@ -188,6 +188,8 @@ export const SCHEDULE_TYPE_OPTIONS: { code: ScheduleType; label: string }[] = [
   { code: "nutrition-guidance", label: "栄養指導予約" },
   // 外来化学療法室。リハ・栄養指導と同じで「同じ時間帯に複数の患者・定員あり・部屋が actor」。
   { code: "chemo", label: "化学療法予約" },
+  // 自己血の採血予定。枠は作らず(日付と時刻だけ)、Appointment の種別としてだけ使う。
+  { code: "autologous", label: "自己血採血" },
 ];
 
 export function scheduleTypeLabel(type: ScheduleType): string {
@@ -206,6 +208,7 @@ export function scheduleTypeOf(schedule: fhir4.Schedule): ScheduleType {
   if (code === "rehab") return "rehab";
   if (code === "nutrition-guidance") return "nutrition-guidance";
   if (code === "chemo") return "chemo";
+  if (code === "autologous") return "autologous";
   return "consultation";
 }
 

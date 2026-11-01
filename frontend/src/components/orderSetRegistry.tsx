@@ -740,7 +740,8 @@ const transfusionOrder = defineOrderSetType<TransfusionOrderFormValues, []>("tra
       patientId,
       withOrderWard(requester, values.setting, defaultSetting),
     ),
-    invalidate: [],
+    // 自己血の採血予定(Appointment)を同梱することがある。
+    invalidate: [["Appointment"]],
   }),
 });
 

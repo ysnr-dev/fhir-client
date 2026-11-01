@@ -13,6 +13,7 @@ import {
   type TransplantBloodTypeSummary,
 } from "../fhir/transfusionProfileHelpers";
 import type { Advisory } from "../fhir/advisoryHelpers";
+import { firstCollectionExpiryAdvisory } from "../fhir/autologousPlanHelpers";
 import {
   bloodTypeUnconfirmedLabel,
   type BloodTypeSummary,
@@ -58,6 +59,7 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
 import { AdvisoryNotice } from "./AdvisoryNotice";
+import { CollectionPlanFieldset } from "./CollectionPlanFieldset";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
@@ -169,6 +171,12 @@ export function TransfusionOrderForm({
   const categoryOf = (code: string) => productItems.find((i) => i.item_code === code)?.category;
   const update = makeFieldUpdater(setValues);
 
+  // 自己血(貯血式)の製剤。選んでいるときだけ採血予定の欄を出す(セットの内容では持たない)。
+  const autoProducts = values.products.filter((product) => categoryOf(product.productCode) === "auto");
+  const autoItem = productItems.find((i) => i.item_code === autoProducts[0]?.productCode);
+  const autoVolume = autoProducts.reduce((sum, product) => sum + (Number(product.units) || 0), 0);
+  const showCollections = !setMode && autoProducts.length > 0;
+
   // 患者の型(確定していなければ「不明」)をヘッダに写す。検査結果が変わっても追う
   // (オーダー時点の型を焼き付けるのが目的なので、保存時点の最新を入れる)。
   useEffect(() => {
@@ -260,6 +268,14 @@ export function TransfusionOrderForm({
     if (transplant) list.push(transplant);
     const history = reactionHistoryAdvisory(reactions.history);
     if (history) list.push(history);
+    if (showCollections) {
+      const expiry = firstCollectionExpiryAdvisory(
+        values.collections,
+        autoItem?.shelf_life_days,
+        values.scheduledDateTime,
+      );
+      if (expiry) list.push(expiry);
+    }
     return list;
   }, [
     setMode,
@@ -268,6 +284,9 @@ export function TransfusionOrderForm({
     patientBloodType,
     values.scheduledDateTime,
     values.products,
+    values.collections,
+    showCollections,
+    autoItem?.shelf_life_days,
     settings,
     patient,
     profile.transplant,
@@ -410,6 +429,12 @@ export function TransfusionOrderForm({
     );
     if (untyped >= 0) return "血液型を選んでください。";
     if (!values.scheduledDateTime) return "投与予定日時を入れてください。";
+    if (showCollections) {
+      if (values.collections.some((line) => !line.plannedAt)) return "採血予定の日時を入れてください。";
+      if (values.collections.some((line) => line.status === "booked" && line.plannedAt >= values.scheduledDateTime)) {
+        return "採血予定は投与予定日時より前にしてください。";
+      }
+    }
     // 同意書は輸血の必須要件。未確認のまま出せてしまうと確認そのものが形骸化する。
     if (!values.consentConfirmed) return "輸血同意書の確認にチェックを入れてください。";
     return null;
@@ -737,6 +762,18 @@ export function TransfusionOrderForm({
           </li>
         </ul>
       </fieldset>
+
+      {showCollections && (
+        <CollectionPlanFieldset
+          // 自己血の製剤を選び直したら既定値(回数・1 回量)を引き直す。
+          key={autoItem?.item_code ?? ""}
+          lines={values.collections}
+          onChange={(collections) => update("collections", collections)}
+          scheduledDateTime={values.scheduledDateTime}
+          orderedVolume={autoItem?.unit_label === "mL" ? autoVolume : 0}
+          defaultVolume={autoItem?.default_units}
+        />
+      )}
 
       {/* 輸血同意書。未確認のまま出せると確認そのものが形骸化するので必須にする。
           未チェックのうちは枠を注意色にして、見落としたまま登録を押させない。 */}

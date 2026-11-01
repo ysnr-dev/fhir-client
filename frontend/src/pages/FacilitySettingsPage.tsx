@@ -1700,6 +1700,22 @@ export function FacilitySettingsPage() {
                 />
                 実施入力の前に患者とバッグを照合する
               </label>
+              <label>
+                自己血の採血前の Hb の下限
+                <span className="facility-settings__times">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    value={transfusion.autologous_hb_min}
+                    onChange={(e) =>
+                      setTransfusionDraft({ ...transfusion, autologous_hb_min: Number(e.target.value) })
+                    }
+                    aria-label="自己血の採血前の Hb の下限"
+                  />
+                  <span className="facility-settings__unit">g/dL</span>
+                </span>
+              </label>
             </div>
           )}
 

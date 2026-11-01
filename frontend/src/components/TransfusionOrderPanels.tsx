@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCreatePrescription, useUpdatePrescription } from "../api/queries";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { orderRequester, withOrderWard } from "../fhir/orderHeader";
@@ -33,6 +34,7 @@ export function TransfusionOrderCreatePanel({
   onSaved,
 }: TransfusionOrderCreatePanelProps) {
   const createTransfusionOrder = useCreatePrescription();
+  const queryClient = useQueryClient();
   const source = useTransfusionOrderInitialValues(sourceSrId, patientId);
   // 入外区分の初期値は入院中なら「入院」。DO でも DO 元ではなくいまの状態に合わせる。
   const defaultSetting = useDefaultOrderSetting(patientId);
@@ -60,7 +62,11 @@ export function TransfusionOrderCreatePanel({
     // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。
     const attribution = withOrderWard(requester, values.setting, defaultSetting);
     createTransfusionOrder.mutate(buildTransfusionOrderBundle(values, patientId, attribution), {
-      onSuccess: onSaved,
+      onSuccess: () => {
+        // 自己血の採血予定は Appointment なので、予約タブも読み直させる。
+        queryClient.invalidateQueries({ queryKey: ["Appointment"] });
+        onSaved();
+      },
     });
   }
 
@@ -96,7 +102,8 @@ export function TransfusionOrderEditPanel({
   onSaved,
 }: TransfusionOrderEditPanelProps) {
   const updateTransfusionOrder = useUpdatePrescription();
-  const { serviceRequest, itemIds, initialValues, ready, patientMismatch, error } =
+  const queryClient = useQueryClient();
+  const { serviceRequest, itemIds, appointments, initialValues, ready, patientMismatch, error } =
     useTransfusionOrderInitialValues(srId, patientId);
 
   function handleSubmit(values: TransfusionOrderFormValues) {
@@ -111,8 +118,14 @@ export function TransfusionOrderEditPanel({
         serviceRequest,
         itemIds,
         orderRequester(serviceRequest),
+        appointments,
       ),
-      { onSuccess: onSaved },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ["Appointment"] });
+          onSaved();
+        },
+      },
     );
   }
 

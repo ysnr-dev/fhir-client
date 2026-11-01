@@ -1,5 +1,10 @@
 import { toFhirDateTime } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
+import {
+  collectionPlanEntries,
+  parseCollectionPlan,
+  type CollectionPlanLine,
+} from "./autologousPlanHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { labOrderItemRequests } from "./labOrderHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
@@ -353,6 +358,8 @@ export interface TransfusionOrderFormValues {
   comment: string;
   problem: ProblemRef | null;
   products: TransfusionProductValues[];
+  /** 自己血の採血予定(fhir/autologousPlanHelpers.ts)。自己血の製剤を含むときだけ使う。 */
+  collections: CollectionPlanLine[];
 }
 
 export function emptyTransfusionProduct(): TransfusionProductValues {
@@ -386,6 +393,7 @@ export function emptyTransfusionOrderForm(
     comment: "",
     problem: null,
     products: [emptyTransfusionProduct()],
+    collections: [],
   };
 }
 
@@ -577,6 +585,7 @@ function buildTransfusionOrderTransactionBundle(
   authoredOn: string,
   serviceRequestId?: string,
   originalItemIds: string[] = [],
+  originalAppointments: fhir4.Appointment[] = [],
 ): fhir4.Bundle {
   const headerReference = serviceRequestId
     ? `ServiceRequest/${serviceRequestId}`
@@ -625,6 +634,9 @@ function buildTransfusionOrderTransactionBundle(
     if (!kept.has(id)) entries.push({ request: { method: "DELETE", url: `ServiceRequest/${id}` } });
   }
 
+  // 自己血の採血予定。新しい予定は POST、残した予定は PUT、外した予定は取消。
+  entries.push(...collectionPlanEntries(values.collections, patientId, headerReference, originalAppointments));
+
   return { resourceType: "Bundle", type: "transaction", entry: entries };
 }
 
@@ -644,6 +656,8 @@ export function buildTransfusionOrderUpdateBundle(
   /** 元の製剤明細の id。外されたものを DELETE するために使う。 */
   originalItemIds: string[],
   requester: OrderContext,
+  /** 元の採血予定。外されたものを取り消し、残したものは版を引き継いで PUT する。 */
+  originalAppointments: fhir4.Appointment[] = [],
 ): fhir4.Bundle {
   return withVersionLock(
     buildTransfusionOrderTransactionBundle(
@@ -653,20 +667,23 @@ export function buildTransfusionOrderUpdateBundle(
       registrationAuthoredOn(original),
       original.id,
       originalItemIds,
+      originalAppointments,
     ),
     original,
   );
 }
 
-/** オーダーとその明細をまとめて消す Bundle。 */
+/** オーダーとその明細をまとめて消す Bundle。残っている採血予定の取消も同梱する。 */
 export function buildTransfusionOrderDeleteBundle(
   serviceRequestId: string,
   itemIds: string[],
+  appointmentEntries: fhir4.BundleEntry[] = [],
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",
     type: "transaction",
     entry: [
+      ...appointmentEntries,
       { request: { method: "DELETE", url: `ServiceRequest/${serviceRequestId}` } },
       ...itemIds.map((id) => ({
         request: { method: "DELETE" as const, url: `ServiceRequest/${id}` },
@@ -691,6 +708,8 @@ export function buildDoTransfusionOrderForm(
     patientRhd: "",
     consentConfirmed: false,
     products: values.products.map((product) => ({ ...product, id: "" })),
+    // 採血予定は手術日から逆算するものなので、DO 元の予定は引き継がない。
+    collections: [],
   };
 }
 
@@ -868,6 +887,7 @@ export const transfusionOrderProblem = orderProblem;
 export function parseTransfusionOrderForm(
   sr: fhir4.ServiceRequest,
   itemRequests: fhir4.ServiceRequest[] = [],
+  appointments: fhir4.Appointment[] = [],
 ): TransfusionOrderFormValues {
   const products = transfusionOrderProducts(itemRequests, sr);
   const priority = TRANSFUSION_PRIORITY_OPTIONS.some((o) => o.code === sr.priority)
@@ -889,5 +909,6 @@ export function parseTransfusionOrderForm(
     problem: transfusionOrderProblem(sr),
     // 製剤が 1 件も無いオーダー(壊れたデータ)でも入力欄が出るように 1 行は残す。
     products: products.length > 0 ? products : [emptyTransfusionProduct()],
+    collections: parseCollectionPlan(appointments),
   };
 }

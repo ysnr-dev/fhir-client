@@ -18463,6 +18463,53 @@ button.meal-calendar__cell:hover {
   flex: 1 1 100%;
 }
 
+/* 自己血の採血予定(オーダーの入力欄・詳細・採血の画面・一覧)。 */
+.collection-plan__proposal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  flex: 1 1 100%;
+}
+
+.collection-plan__proposal input[type="number"] {
+  width: 6em;
+}
+
+.collection-plan__table {
+  flex: 1 1 100%;
+  /* 列を均等にせず、日時の入力欄の幅に合わせる。 */
+  table-layout: auto;
+}
+
+.collection-plan__table th,
+.collection-plan__table td {
+  white-space: nowrap;
+}
+
+.collection-plan__table input[type="number"] {
+  width: 6em;
+}
+
+.collection-plan__table input[type="datetime-local"] {
+  width: 13em;
+}
+
+.collection-plan__foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 100%;
+}
+
+.autologous-plan__row--selected td {
+  background: var(--surface-sunken);
+}
+
+.transfusion-worklist__axis {
+  flex: 1 1 100%;
+}
+
 /* 出庫入力のバッグの属性(型・有効期限・交差適合試験)。製剤名より狭く、1 行に並べる。 */
 .transfusion-dispense__field {
   flex: 0 0 110px;

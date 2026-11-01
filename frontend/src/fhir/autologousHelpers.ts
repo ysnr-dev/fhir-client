@@ -1,5 +1,6 @@
 import { localDay, toFhirDateTime } from "../lib/dates";
 import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
+import { COLLECTION_APPOINTMENT_EXT_URL, fulfillAppointmentEntry } from "./autologousPlanHelpers";
 import { conceptLabel, referenceIdOfType } from "./shared";
 import {
   BLOOD_PRODUCT_NUMBER_SYSTEM,
@@ -24,6 +25,9 @@ import {
 // 出せる(本人の血かの照合)。有効期限は採血日に製剤マスタの有効日数を足して決め、手では
 // 変えられない(ラベルの記載誤りの事例への対策)。使用予定日(オーダーの投与予定日)が有効期限より
 // 後なら警告する。
+//
+// 採血予定(autologousPlanHelpers.ts の Appointment)に沿って採ったときは、ハブが予定を拡張で指し、
+// 同じ transaction で予定を fulfilled にする。予定に無い採血(臨時)はハブだけ。
 
 export const COLLECTION_CATEGORY = { code: "autologous-collection", display: "自己血採血" };
 const COLLECTED_VOLUME_UNIT = "mL";
@@ -79,6 +83,7 @@ function buildCollectionHub(
   values: AutologousCollectionFormValues,
   subject: fhir4.Reference,
   orderReference: string,
+  appointment?: fhir4.Appointment,
 ): fhir4.Procedure {
   const procedure: fhir4.Procedure = {
     resourceType: "Procedure",
@@ -95,6 +100,11 @@ function buildCollectionHub(
     ];
   }
   if (values.comment.trim()) procedure.note = [{ text: values.comment.trim() }];
+  if (appointment?.id) {
+    procedure.extension = [
+      { url: COLLECTION_APPOINTMENT_EXT_URL, valueReference: { reference: `Appointment/${appointment.id}` } },
+    ];
+  }
   return procedure;
 }
 
@@ -129,10 +139,14 @@ function buildCollectedUnit(
   return unit;
 }
 
-/** 採血登録の transaction Bundle(ハブ + 採った血 1 本)。進捗の Task は動かさない。 */
+/**
+ * 採血登録の transaction Bundle(ハブ + 採った血 1 本)。進捗の Task は動かさない。
+ * 予定に沿った採血なら、その予定を採血済み(fulfilled)にする PUT も同梱する。
+ */
 export function buildAutologousCollectionBundle(
   values: AutologousCollectionFormValues,
   order: fhir4.ServiceRequest,
+  appointment?: fhir4.Appointment,
 ): fhir4.Bundle {
   const subject = order.subject ?? {};
   const hubReference = `urn:uuid:${crypto.randomUUID()}`;
@@ -142,7 +156,7 @@ export function buildAutologousCollectionBundle(
     entry: [
       {
         fullUrl: hubReference,
-        resource: buildCollectionHub(values, subject, `ServiceRequest/${order.id ?? ""}`),
+        resource: buildCollectionHub(values, subject, `ServiceRequest/${order.id ?? ""}`, appointment),
         request: { method: "POST", url: "Procedure" },
       },
       {
@@ -150,8 +164,22 @@ export function buildAutologousCollectionBundle(
         resource: buildCollectedUnit(values, subject, hubReference),
         request: { method: "POST", url: "MedicationDispense" },
       },
+      ...(appointment?.id ? [fulfillAppointmentEntry(appointment)] : []),
     ],
   };
+}
+
+/** 採血記録が沿った予定(Appointment)の id。臨時の採血は空。 */
+export function collectionAppointmentId(hub: fhir4.Procedure): string {
+  return referenceIdOfType(
+    hub.extension?.find((e) => e.url === COLLECTION_APPOINTMENT_EXT_URL)?.valueReference?.reference,
+    "Appointment",
+  );
+}
+
+/** 採った血の量(mL)の合計。 */
+export function collectedVolumeTotal(units: AutologousUnit[]): number {
+  return units.reduce((sum, unit) => sum + (parseFloat(unit.volume) || 0), 0);
 }
 
 export function isAutologousCollectionProcedure(procedure: fhir4.Procedure): boolean {

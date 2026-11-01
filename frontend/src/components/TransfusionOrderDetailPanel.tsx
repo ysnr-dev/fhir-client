@@ -1,5 +1,6 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
+import { AutologousPlanTable } from "./AutologousPlanTable";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
 import type { TransfusionDispenseDisplay } from "../fhir/transfusionDispenseHelpers";
@@ -20,6 +21,8 @@ interface TransfusionOrderDetailPanelProps {
   problemsById?: Map<string, fhir4.Condition>;
   /** 出庫記録。読めていなければ出さない。 */
   dispenses?: TransfusionDispenseDisplay[];
+  /** 自己血の採血予定。自己血を含まないオーダーは空。 */
+  appointments?: fhir4.Appointment[];
 }
 
 export function TransfusionOrderDetailPanel({
@@ -27,6 +30,7 @@ export function TransfusionOrderDetailPanel({
   itemRequests,
   problemsById,
   dispenses = [],
+  appointments = [],
 }: TransfusionOrderDetailPanelProps) {
   const summary = summarizeTransfusionOrder(serviceRequest);
   const products = transfusionOrderProducts(itemRequests, serviceRequest);
@@ -104,6 +108,13 @@ export function TransfusionOrderDetailPanel({
         </table>
         {products.length === 0 && <p className="patient-table__empty">製剤がありません。</p>}
       </fieldset>
+
+      {appointments.length > 0 && (
+        <fieldset className="rp-card">
+          <legend>採血予定</legend>
+          <AutologousPlanTable appointments={appointments} />
+        </fieldset>
+      )}
 
       {dispenses.map((dispense) => (
         <fieldset className="rp-card" key={dispense.id}>

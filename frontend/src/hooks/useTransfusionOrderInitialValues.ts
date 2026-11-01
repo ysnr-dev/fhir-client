@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useTransfusionOrderDetail } from "../api/queries";
+import { resourcesOfType, useTransfusionOrderDetail } from "../api/queries";
 import { serviceRequestsOf } from "../fhir/labOrderHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import {
@@ -14,17 +14,20 @@ import { useEditSnapshot } from "./useEditSnapshot";
 export function useTransfusionOrderInitialValues(srId: string | undefined, patientId?: string) {
   const detail = useEditSnapshot(useTransfusionOrderDetail(srId), srId);
 
-  const { serviceRequest, itemRequests } = useMemo(() => {
+  const { serviceRequest, itemRequests, appointments } = useMemo(() => {
     const requests = serviceRequestsOf(detail.data?.data);
     return {
       serviceRequest: requests.find((request) => request.id === srId),
       itemRequests: srId ? transfusionOrderItemRequests(requests, srId) : [],
+      // 自己血の採血予定。ヘッダと一緒に _revinclude で届く。
+      appointments: resourcesOfType<fhir4.Appointment>(detail.data?.data, "Appointment"),
     };
   }, [detail.data, srId]);
 
   const initialValues = useMemo(
-    () => (serviceRequest ? parseTransfusionOrderForm(serviceRequest, itemRequests) : undefined),
-    [itemRequests, serviceRequest],
+    () =>
+      serviceRequest ? parseTransfusionOrderForm(serviceRequest, itemRequests, appointments) : undefined,
+    [appointments, itemRequests, serviceRequest],
   );
 
   const patientMismatch = isPatientMismatch(patientId, serviceRequest?.subject);
@@ -33,6 +36,8 @@ export function useTransfusionOrderInitialValues(srId: string | undefined, patie
     serviceRequest,
     /** 更新時に、外された製剤明細を消すために渡す元の明細 id。 */
     itemIds: itemRequests.map((request) => request.id).filter((id): id is string => Boolean(id)),
+    /** 更新時に、外された採血予定を取り消すために渡す元の予定。 */
+    appointments,
     initialValues: patientMismatch ? undefined : initialValues,
     ready: !detail.isLoading,
     patientMismatch,

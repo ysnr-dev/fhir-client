@@ -16,6 +16,7 @@ import {
   useSurgeryUnscheduledList,
   useSurgeryWorklist,
   useTransfusionWorklist,
+  useAutologousWorklist,
   useTreatmentWorklist,
 } from "../../api/queries";
 import { BROUGHT_MED_REVIEW_STATUS_OPTIONS } from "../../fhir/broughtMedTaskHelpers";
@@ -114,14 +115,25 @@ function PathoCard({ date }: DateProps) {
 
 function TransfusionCard({ date }: DateProps) {
   const query = useTransfusionWorklist(date);
+  // 自己血の採血予定はその日の投与とは別の軸なので、件数を添える。
+  const collections = useAutologousWorklist(date);
+  const planned = collections.data?.rows ?? [];
   return (
     <WorklistCounts
       kind="transfusion"
       isPending={query.isPending}
-      error={query.error}
+      error={query.error ?? collections.error}
       statuses={query.data?.rows.map((row) => transfusionTaskStatus(row.task))}
       options={TRANSFUSION_TASK_STATUS_OPTIONS}
-      truncated={query.data?.truncated}
+      truncated={query.data?.truncated || collections.data?.truncated}
+      extra={
+        planned.length > 0
+          ? [
+              { label: "採血予定", count: planned.length },
+              { label: "未採血", count: planned.filter((r) => r.appointment.status === "booked").length },
+            ]
+          : undefined
+      }
     />
   );
 }

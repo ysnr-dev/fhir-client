@@ -324,6 +324,8 @@ export function sanitizeValuesForSet(orderType: OrderSetOrderType, values: unkno
         locationName: "",
         consentConfirmed: false,
         products: v.products.map((product) => ({ ...product, id: "", abo: "", rhd: "" })),
+        // 採血予定は患者の手術日から逆算するもの。
+        collections: [],
       } satisfies TransfusionOrderFormValues;
     }
     case "rehab-order": {

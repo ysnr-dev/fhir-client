@@ -25,9 +25,11 @@ export const WEIGHT_LOINC = "29463-7";
  */
 export const CREATININE_ANALYTE = "C3002";
 export const CYSTATIN_C_ANALYTE = "C3003";
+/** 血色素量(Hb)。自己血の採血前の確認に使う。 */
+export const HEMOGLOBIN_ANALYTE = "B1004";
 const ANALYTE_LENGTH = 5;
 
-function analyteOf(observation: fhir4.Observation): string {
+export function analyteOf(observation: fhir4.Observation): string {
   const jlac = observation.code?.coding?.find((c) => c.system === JLAC11_SYSTEM)?.code ?? "";
   return jlac.length >= ANALYTE_LENGTH ? jlac.slice(0, ANALYTE_LENGTH) : "";
 }
@@ -179,4 +181,14 @@ export function summarizeRenal(
   const { egfr, reason } = calculateEgfr(creatinine.value, patient.age, patient.gender);
   const { ccr, reason: ccrReason } = calculateCreatinineClearance(creatinine.value, patient);
   return { creatinine, cystatinC, egfr, egfrUnavailable: reason, ccr, ccrUnavailable: ccrReason };
+}
+
+/**
+ * 直近の Hb。検体検査の結果(新しい順)から分析物 B1004 を引く。無ければ null。
+ * 測定法によって g/L で報告されることがあるので g/dL に揃える(下限との比較のため)。
+ */
+export function latestHemoglobin(observations: fhir4.Observation[]): Measurement | null {
+  const hb = measurementOf(newestFirst(observations).find((o) => analyteOf(o) === HEMOGLOBIN_ANALYTE));
+  if (hb && hb.unit === "g/L") return { ...hb, value: Math.round(hb.value) / 10, unit: "g/dL" };
+  return hb;
 }

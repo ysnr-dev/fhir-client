@@ -3,10 +3,12 @@ import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } fro
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
+  useAutologousWorklist,
   useSelfDepartments,
   useTransfusionPerformDetail,
   useTransfusionWorklist,
   useUpdateTransfusionTaskStatus,
+  type AutologousWorklistRow,
   type TransfusionWorklistRow,
 } from "../api/queries";
 import { DateStepper } from "../components/DateStepper";
@@ -25,6 +27,7 @@ import { TransfusionOrderDetailPanel } from "../components/TransfusionOrderDetai
 import { AutologousCollectionModal } from "../components/AutologousCollectionModal";
 import { TransfusionDispenseModal } from "../components/TransfusionDispenseModal";
 import { useTransfusionProductOptions } from "../api/masterQueries";
+import { collectionPlanStatusClass, collectionPlanStatusLabel, plannedVolumeOf } from "../fhir/autologousPlanHelpers";
 import { splitPerformBundle } from "../fhir/radResultHelpers";
 import { transfusionDispensesByOrderId } from "../fhir/transfusionDispenseHelpers";
 import { TransfusionPerformModal } from "../components/TransfusionPerformModal";
@@ -70,6 +73,11 @@ import {
 //
 // 投与予定日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
 // (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
+//
+// 日付の軸は「投与予定日 | 採血予定日」で切り替える。採血予定日は自己血の採血予定(Appointment)を
+// 日付で引いた一覧で、1 行 = 予定 1 件。輸血部門(採血室)がその日に採る患者を追う。
+
+type DateAxis = "occurrence" | "collection";
 
 interface Filters {
   testType: string;
@@ -98,8 +106,9 @@ export function TransfusionWorklistPage() {
   const [performingId, setPerformingId] = useState<string | null>(null);
   // 出庫入力を開いているオーダー。
   const [dispensingId, setDispensingId] = useState<string | null>(null);
-  // 自己血の採血を開いているオーダー。
-  const [collectingId, setCollectingId] = useState<string | null>(null);
+  // 自己血の採血を開いているオーダーと、選んでおく採血予定。
+  const [collecting, setCollecting] = useState<{ orderId: string; appointmentId?: string } | null>(null);
+  const [axis, setAxis] = useState<DateAxis>("occurrence");
   // 自己血の製剤コード(採血のボタンを出す行の判定)。
   const products = useTransfusionProductOptions();
   const autoCodes = useMemo(
@@ -114,6 +123,7 @@ export function TransfusionWorklistPage() {
   }, []);
 
   const worklist = useTransfusionWorklist(date);
+  const collections = useAutologousWorklist(date, axis === "collection");
   const departments = useSelfDepartments();
   const updateStatus = useUpdateTransfusionTaskStatus();
 
@@ -122,10 +132,15 @@ export function TransfusionWorklistPage() {
     [worklist.data, filters],
   );
   const total = worklist.data?.rows.length ?? 0;
-  const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
+  const viewingRow =
+    worklist.data?.rows.find((row) => row.order.id === viewingId) ??
+    collections.data?.rows.find((r) => r.row.order.id === viewingId)?.row;
   const performing = worklist.data?.rows.find((row) => row.order.id === performingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
-  const collecting = worklist.data?.rows.find((row) => row.order.id === collectingId);
+  // 採血のモーダルは両方の軸から開くので、どちらの行からでも引けるようにする。
+  const collectingRow =
+    worklist.data?.rows.find((row) => row.order.id === collecting?.orderId) ??
+    collections.data?.rows.find((r) => r.row.order.id === collecting?.orderId)?.row;
 
   const patientIds = useMemo(
     () => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
@@ -170,24 +185,34 @@ export function TransfusionWorklistPage() {
 
       <FilterForm
         date={date}
+        axis={axis}
         filters={filters}
         wards={wardOptions}
         departments={departments.departments}
         onDateChange={handleDateChange}
+        onAxisChange={setAxis}
         onChange={setFilters}
       />
 
       <ErrorBanner error={worklist.error} />
+      <ErrorBanner error={collections.error} />
       <ErrorBanner error={departments.error} />
       <ErrorBanner error={updateStatus.error} />
 
-      {worklist.data?.truncated && (
+      {(axis === "occurrence" ? worklist.data?.truncated : collections.data?.truncated) && (
         <p className="error-banner__line error-banner__line--error" role="status">
           この日のオーダーが多いため、一部のみ表示しています。
         </p>
       )}
 
-      {worklist.isLoading ? (
+      {axis === "collection" ? (
+        <AutologousWorklistTable
+          rows={collections.data?.rows ?? []}
+          loading={collections.isLoading}
+          onView={(row) => setViewingId(row.order.id ?? null)}
+          onCollect={(r) => setCollecting({ orderId: r.row.order.id ?? "", appointmentId: r.appointment.id })}
+        />
+      ) : worklist.isLoading ? (
         <p>読み込み中...</p>
       ) : (
         <>
@@ -220,7 +245,7 @@ export function TransfusionWorklistPage() {
                     onView={() => setViewingId(row.order.id ?? null)}
                     onPerform={() => setPerformingId(row.order.id ?? null)}
                     onDispense={() => setDispensingId(row.order.id ?? null)}
-                    onCollect={() => setCollectingId(row.order.id ?? null)}
+                    onCollect={() => setCollecting({ orderId: row.order.id ?? "" })}
                     canCollect={canCollect(row, autoCodes)}
                     onChangeStatus={(status) => changeStatus(row, status)}
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id, attentionRowClass(row))}
@@ -254,7 +279,7 @@ export function TransfusionWorklistPage() {
                 onView={() => setViewingId(selectedRow.order.id ?? null)}
                 onPerform={() => setPerformingId(selectedRow.order.id ?? null)}
                 onDispense={() => setDispensingId(selectedRow.order.id ?? null)}
-                onCollect={() => setCollectingId(selectedRow.order.id ?? null)}
+                onCollect={() => setCollecting({ orderId: selectedRow.order.id ?? "" })}
                 canCollect={canCollect(selectedRow, autoCodes)}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
@@ -268,7 +293,7 @@ export function TransfusionWorklistPage() {
           onClose={drawer.close}
         />
       )}
-      {viewing && <TransfusionOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
+      {viewingRow && <TransfusionOrderViewModal row={viewingRow} onClose={() => setViewingId(null)} />}
       {performing && (
         <TransfusionPerformModal
           order={performing.order}
@@ -281,8 +306,12 @@ export function TransfusionWorklistPage() {
       {dispensing && (
         <TransfusionDispenseModal row={dispensing} onClose={() => setDispensingId(null)} />
       )}
-      {collecting && (
-        <AutologousCollectionModal row={collecting} onClose={() => setCollectingId(null)} />
+      {collecting && collectingRow && (
+        <AutologousCollectionModal
+          row={collectingRow}
+          appointmentId={collecting.appointmentId}
+          onClose={() => setCollecting(null)}
+        />
       )}
     </div>
   );
@@ -314,19 +343,23 @@ function matchesFilters(row: TransfusionWorklistRow, filters: Filters): boolean 
 
 interface FilterFormProps {
   date: string;
+  axis: DateAxis;
   filters: Filters;
   wards: { id: string; name: string }[];
   departments: fhir4.Organization[];
   onDateChange: (value: string) => void;
+  onAxisChange: (axis: DateAxis) => void;
   onChange: (filters: Filters) => void;
 }
 
 function FilterForm({
   date,
+  axis,
   filters,
   wards,
   departments,
   onDateChange,
+  onAxisChange,
   onChange,
 }: FilterFormProps) {
   // 絞り込みは選んだ瞬間に効かせるので、Enter での送信は何もしない。
@@ -336,10 +369,31 @@ function FilterForm({
 
   return (
     <form className="patient-search-form" onSubmit={handleSubmit}>
+      <div className="order-select__tabs transfusion-worklist__axis" role="tablist" aria-label="日付の軸">
+        {(
+          [
+            ["occurrence", "投与予定日"],
+            ["collection", "採血予定日"],
+          ] as const
+        ).map(([code, label]) => (
+          <button
+            key={code}
+            type="button"
+            role="tab"
+            aria-selected={axis === code}
+            className={`order-select__tab${axis === code ? " is-active" : ""}`}
+            onClick={() => onAxisChange(code)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <label>
-        投与予定日
+        {axis === "collection" ? "採血予定日" : "投与予定日"}
         <DateStepper value={date} onChange={onDateChange} />
       </label>
+      {axis === "occurrence" && (
+        <>
       <label>
         輸血検査区分
         <select
@@ -415,6 +469,8 @@ function FilterForm({
           クリア
         </button>
       </div>
+        </>
+      )}
     </form>
   );
 }
@@ -430,6 +486,11 @@ function secondaryActionsOf(row: TransfusionWorklistRow) {
   return transfusionTaskActions(transfusionTaskStatus(row.task)).filter(
     (action) => action.secondary,
   );
+}
+
+/** まだ採血していない採血予定の数。 */
+function pendingCollections(row: TransfusionWorklistRow): number {
+  return row.appointments.filter((a) => a.status === "booked").length;
 }
 
 /** 自己血の製剤を含み、まだ出庫していないオーダー。採血(貯血)の入力を出す。 */
@@ -522,6 +583,10 @@ function WorklistRow({
         {summary.urgencyBadge && <span className="dose-conversion__badge">{summary.urgencyBadge}</span>}
         {/* 同意なしで出庫すると事故になるので、行の警告色だけでなく理由も出す。 */}
         {!summary.consentConfirmed && <span className="dose-conversion__badge">同意書未</span>}
+        {/* 自己血の採血がまだ残っている(予定どおり採れているかを一覧で追う)。 */}
+        {pendingCollections(row) > 0 && (
+          <span className="dose-conversion__badge">採血 未{pendingCollections(row)}</span>
+        )}
       </td>
       {/* オーダー登録時の入院病棟。病棟を持たないオーダー(外来など)は "-"。 */}
       <td className="lab-worklist__compact">{wardOf(order).wardName || "-"}</td>
@@ -670,7 +735,117 @@ function TransfusionOrderViewModal({
         serviceRequest={row.order}
         itemRequests={row.itemRequests}
         dispenses={dispenses}
+        appointments={row.appointments}
       />
     </Modal>
+  );
+}
+
+// 採血予定日の一覧。1 行 = 採血予定 1 件。採血室がその日に採る患者と量を追い、
+// 「採血」でその予定を選んだ状態の採血入力を開く。
+function AutologousWorklistTable({
+  rows,
+  loading,
+  onView,
+  onCollect,
+}: {
+  rows: AutologousWorklistRow[];
+  loading: boolean;
+  onView: (row: TransfusionWorklistRow) => void;
+  onCollect: (row: AutologousWorklistRow) => void;
+}) {
+  const returnLinkState = useReturnLinkState();
+  if (loading) return <p>読み込み中...</p>;
+  return (
+    <>
+      <div className="lab-worklist-wrap sticky-table-wrap">
+        <table className="lab-worklist sticky-table">
+          <thead>
+            <tr>
+              <th className="sticky-table__fix-1">患者番号</th>
+              <th className="sticky-table__fix-2">患者氏名</th>
+              <PatientProfileHeadCells />
+              <th className="lab-worklist__compact">血液型</th>
+              <th className="lab-worklist__compact">予定時刻</th>
+              <th className="lab-worklist__content">製剤</th>
+              <th className="lab-worklist__compact">予定量</th>
+              <th className="lab-worklist__compact">累計</th>
+              <th className="lab-worklist__compact">使用予定</th>
+              <th>依頼科 | 依頼医師</th>
+              <th className="lab-worklist__compact">状態</th>
+              <th className="lab-worklist__actions sticky-table__fix-actions"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const { order, patient } = r.row;
+              const summary = summarizeTransfusionOrder(order);
+              const products = transfusionOrderProducts(r.row.itemRequests, order);
+              const start = r.appointment.start ?? "";
+              const planned = plannedVolumeOf(r.appointment);
+              const status = r.appointment.status ?? "booked";
+              const taskStatus = transfusionTaskStatus(r.row.task);
+              return (
+                <tr key={r.appointment.id}>
+                  <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
+                  <td className="sticky-table__fix-2">
+                    {patient ? (
+                      <>
+                        <Link to={`/patients/${patient.id}/karte`} state={returnLinkState}>
+                          {displayName(patient)}
+                        </Link>
+                        <PatientKana patient={patient} />
+                      </>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <PatientProfileCells patient={patient} />
+                  <td className="lab-worklist__compact">
+                    {summary.bloodTypeDisplay ? (
+                      <TransfusionBloodBadge abo={summary.aboBloodType} rhd={summary.rhdBloodType} />
+                    ) : (
+                      <span className="order-select__muted">未指定</span>
+                    )}
+                  </td>
+                  <td className="lab-worklist__compact">{start.length > 10 ? start.slice(11, 16) : "-"}</td>
+                  <td className="lab-worklist__content">
+                    {products.length > 0 ? productSummary(products) : <span className="order-select__muted">製剤なし</span>}
+                  </td>
+                  <td className="lab-worklist__compact">{planned ? `${planned} mL` : "-"}</td>
+                  <td className="lab-worklist__compact">{r.collectedVolume} mL</td>
+                  <td className="lab-worklist__compact">{(order.occurrenceDateTime ?? "").slice(0, 10) || "-"}</td>
+                  <td>{orderContextSummary(orderRequester(order)) || "-"}</td>
+                  <td className="lab-worklist__compact">
+                    <span className={`lab-worklist__status lab-worklist__status--${collectionPlanStatusClass(status)}`}>
+                      {collectionPlanStatusLabel(status)}
+                    </span>
+                  </td>
+                  <td className="lab-worklist__actions sticky-table__fix-actions">
+                    {/* 中止・実施済みのオーダーの予定からは採血できない。 */}
+                    {status === "booked" && (taskStatus === "requested" || taskStatus === "accepted") && (
+                      <button type="button" onClick={() => onCollect(r)}>
+                        採血
+                      </button>
+                    )}
+                    <button type="button" onClick={() => onView(r.row)}>
+                      表示
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={13} className="master-search__empty">
+                  この採血予定日の自己血の採血予定はありません
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="order-select__muted lab-worklist__count">{rows.length} 件</p>
+    </>
   );
 }

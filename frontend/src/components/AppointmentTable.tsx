@@ -4,6 +4,7 @@ import {
   appointmentScheduleLabel,
   appointmentStatusLabel,
   isActiveAppointment,
+  isAutologousAppointment,
   isExamAppointment,
   isChemoAppointment,
   isRehabAppointment,
@@ -55,22 +56,28 @@ export function AppointmentTable({
           // 化学療法の予約も投与日のオーダーにぶら下がるが、日時変更・取消は投与日パネル
           // (オーダーと一緒に動かす面)で行うので、ここからは動かさない。
           const chemo = isChemoAppointment(appointment);
+          // 自己血の採血予定は輸血オーダーの一部(手術日から逆算した日程)なので、
+          // 日時変更・取消はオーダーの編集・削除で行う。
+          const autologous = isAutologousAppointment(appointment);
           // 検査予約は放射線オーダーとひとかたまりなので、ここからは動かさない。
           // 日時変更はオーダーの編集(撮影日時と一緒に動かす)、取消はオーダーの削除
           // (予約だけ消えてオーダーが残る事故を防ぐ)でだけ行う。
-          const exam = !rehab && !nutritionGuidance && !chemo && isExamAppointment(appointment);
+          const exam =
+            !rehab && !nutritionGuidance && !chemo && !autologous && isExamAppointment(appointment);
 
           return (
             <tr key={appointment.id}>
               <td>{appointmentDateTimeLabel(appointment)}</td>
               <td>
-                {appointmentScheduleLabel(appointment)}
+                {/* 採血予定は枠を持たない(種別の印だけ出す)。 */}
+                {!autologous && appointmentScheduleLabel(appointment)}
                 {exam && <span className="dose-conversion__badge">検査</span>}
                 {rehab && <span className="dose-conversion__badge">リハビリ</span>}
                 {nutritionGuidance && (
                   <span className="dose-conversion__badge">栄養指導</span>
                 )}
                 {chemo && <span className="dose-conversion__badge">化学療法</span>}
+                {autologous && <span className="dose-conversion__badge">自己血採血</span>}
               </td>
               <td>{appointmentActorDisplay(appointment, "Practitioner") || "-"}</td>
               <td>{appointmentActorDisplay(appointment, "Location") || "-"}</td>
@@ -82,6 +89,10 @@ export function AppointmentTable({
                       // 予約は投与日のオーダーと一組なので、入口を投与日パネルに一本化する。
                       <span className="row-menu__item row-menu__item--muted">
                         日時変更・取消は化学療法タブの投与日から
+                      </span>
+                    ) : autologous ? (
+                      <span className="row-menu__item row-menu__item--muted">
+                        日時変更・取消は輸血オーダーから
                       </span>
                     ) : exam ? (
                       // 検査予約(オーダーにぶら下がる予約)の日時はオーダーの実施日時と

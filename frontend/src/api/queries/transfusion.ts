@@ -18,7 +18,15 @@ import {
   REACTION_CODE,
 } from "../../fhir/transfusionResultHelpers";
 import { buildTransfusionDispenseDeleteEntries } from "../../fhir/transfusionDispenseHelpers";
-import { autologousUnitsOf } from "../../fhir/autologousHelpers";
+import {
+  autologousUnitsByOrderId,
+  autologousUnitsOf,
+  collectedVolumeTotal,
+} from "../../fhir/autologousHelpers";
+import { AUTOLOGOUS_SERVICE_TYPE } from "../../fhir/autologousPlanHelpers";
+import { appointmentOrderId, isAutologousAppointment } from "../../fhir/appointmentHelpers";
+import { SERVICE_TYPE_SYSTEM as SCHEDULE_SERVICE_TYPE_SYSTEM } from "../../fhir/scheduleHelpers";
+import { fetchOrderAppointmentCancelEntries } from "./appointment";
 import {
   DEFAULT_TRANSFUSION_SETTINGS,
   type TransfusionReactionHistory,
@@ -30,7 +38,7 @@ import { localDay } from "../../lib/dates";
 import { useFacilitySettings } from "./organization";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { createResource, postBundle, searchResource } from "../fhirClient";
-import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
+import { makeOrderDetailHook, resourcesOfType } from "./core";
 import {
   cancelsPerform,
   comparePatientNumber,
@@ -46,14 +54,22 @@ import { invalidateOrderDependents } from "./orderDelete";
 // ---- 輸血オーダー ----
 
 // 輸血オーダーもヘッダと製剤明細が別リソースなので、病理・検体検査と同じ形で
-// 1 リクエストにまとめて取る。
-export const useTransfusionOrderDetail = makeOrderDetailHook("transfusion-order", ORDER_ITEM_REVINCLUDES);
+// 1 リクエストにまとめて取る。自己血の採血予定(Appointment)もヘッダにぶら下がるので一緒に添える。
+export const useTransfusionOrderDetail = makeOrderDetailHook("transfusion-order", {
+  iterate: ["ServiceRequest:based-on"],
+  direct: ["Appointment:based-on"],
+});
 
-/** useDeleteTransfusionOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+/**
+ * useDeleteTransfusionOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。
+ * 残っている自己血の採血予定は同じ transaction で取り消す。
+ */
 export const deleteTransfusionOrderRequest = (srId: string) =>
   deleteOrderWithItems(srId, {
     itemsOf: transfusionOrderItemRequests,
-    build: ({ srId, itemIds }) => buildTransfusionOrderDeleteBundle(srId, itemIds),
+    withAppointment: true,
+    build: ({ srId, itemIds, appointmentEntries }) =>
+      buildTransfusionOrderDeleteBundle(srId, itemIds, appointmentEntries),
   });
 
 export function useDeleteTransfusionOrder() {
@@ -63,6 +79,7 @@ export function useDeleteTransfusionOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      queryClient.invalidateQueries({ queryKey: ["Appointment"] });
       invalidateOrderDependents(queryClient);
     },
   });
@@ -169,6 +186,28 @@ export function useTransfusionSettings(): TransfusionSettings {
   return settings.data?.transfusion ?? DEFAULT_TRANSFUSION_SETTINGS;
 }
 
+/** オーダーの自己血の採血予定(取消したものも含め、予定日時の順)。詳細と採血の画面で使う。 */
+export function useAutologousAppointments(orderId: string | undefined) {
+  const params = new URLSearchParams();
+  if (orderId) params.set("based-on", `ServiceRequest/${orderId}`);
+  params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|${AUTOLOGOUS_SERVICE_TYPE.code}`);
+  params.set("_sort", "date");
+  params.set("_count", "100");
+
+  const query = useQuery({
+    queryKey: ["Appointment", "order", orderId, "autologous"],
+    queryFn: () => searchResource<fhir4.Appointment>("Appointment", params),
+    enabled: Boolean(orderId),
+  });
+
+  const appointments = useMemo(
+    () => resourcesOfType<fhir4.Appointment>(query.data?.data, "Appointment").filter(isAutologousAppointment),
+    [query.data],
+  );
+
+  return { ...query, appointments };
+}
+
 // ---- 輸血一覧(部門ワークリスト) ----
 //
 // 投与予定日で 1 日ぶんの輸血オーダーを読む。画面の作りは病理検査一覧と同じで、
@@ -185,6 +224,8 @@ export interface TransfusionWorklistRow {
   patient?: fhir4.Patient;
   /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
   task?: fhir4.Task;
+  /** 自己血の採血予定(取消したものを除く)。自己血を含まないオーダーは空。 */
+  appointments: fhir4.Appointment[];
 }
 
 export interface TransfusionWorklistResult {
@@ -196,6 +237,7 @@ export interface TransfusionWorklistResult {
 async function fetchTransfusionWorklist(date: string): Promise<TransfusionWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
+  const appointments: fhir4.Appointment[] = [];
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
     (page) => {
@@ -205,12 +247,17 @@ async function fetchTransfusionWorklist(date: string): Promise<TransfusionWorkli
         page,
         "occurrence",
       );
-      // 製剤明細と進捗も同じ応答に添えてもらう。
+      // 製剤明細と進捗、自己血の採血予定も同じ応答に添えてもらう。
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
       params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "Appointment:based-on");
       return params;
     },
     (resource) => {
+      if (resource.resourceType === "Appointment") {
+        appointments.push(resource as fhir4.Appointment);
+        return false;
+      }
       if (resource.resourceType !== "ServiceRequest") return false;
       const request = resource as fhir4.ServiceRequest;
       // 検索にヒットしたヘッダと、添えられた明細を分ける。
@@ -224,12 +271,14 @@ async function fetchTransfusionWorklist(date: string): Promise<TransfusionWorkli
   );
 
   const taskByOrderId = transfusionTasksByOrderId(tasks);
+  const appointmentsByOrderId = autologousAppointmentsByOrderId(appointments);
 
   const rows = orders.map((order) => ({
     order,
     itemRequests: transfusionOrderItemRequests(items, order.id ?? ""),
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: taskByOrderId.get(order.id ?? ""),
+    appointments: appointmentsByOrderId.get(order.id ?? "") ?? [],
   }));
 
   // 輸血オーダーは投与予定時刻を持つが、日単位の一覧では患者番号順が扱いやすい
@@ -245,6 +294,105 @@ export function useTransfusionWorklist(date: string) {
     queryKey: ["ServiceRequest", "transfusion-worklist", date],
     queryFn: () => fetchTransfusionWorklist(date),
     enabled: Boolean(date),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** 自己血の採血予定(取消したものを除く)をオーダー id ごとに、予定日時の順でまとめる。 */
+function autologousAppointmentsByOrderId(appointments: fhir4.Appointment[]): Map<string, fhir4.Appointment[]> {
+  const byOrderId = new Map<string, fhir4.Appointment[]>();
+  for (const appointment of appointments) {
+    if (!isAutologousAppointment(appointment)) continue;
+    if (appointment.status === "cancelled" || appointment.status === "entered-in-error") continue;
+    const orderId = appointmentOrderId(appointment);
+    if (!orderId) continue;
+    const list = byOrderId.get(orderId) ?? [];
+    list.push(appointment);
+    byOrderId.set(orderId, list);
+  }
+  for (const list of byOrderId.values()) list.sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""));
+  return byOrderId;
+}
+
+// ---- 自己血の採血予定日の一覧 ----
+//
+// 輸血一覧の日付の軸を「採血予定日」に切り替えたときの行。採血予定(Appointment)を日付で引き、
+// その予定がぶら下がるオーダーを _id で引き直す(予定はオーダーより少ないので 2 往復で済む)。
+// 採血済みの合計はオーダーの採血記録(Procedure + MedicationDispense)から足す。
+
+/** 採血予定の 1 行 = 予定 1 件。 */
+export interface AutologousWorklistRow {
+  appointment: fhir4.Appointment;
+  row: TransfusionWorklistRow;
+  /** これまでに採った量(mL)の合計。 */
+  collectedVolume: number;
+}
+
+async function fetchAutologousWorklist(
+  date: string,
+): Promise<{ rows: AutologousWorklistRow[]; truncated: boolean }> {
+  const params = new URLSearchParams();
+  params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|${AUTOLOGOUS_SERVICE_TYPE.code}`);
+  params.set("date", date);
+  params.set("_sort", "date");
+  params.set("_count", "200");
+  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
+  const appointments = resourcesOfType<fhir4.Appointment>(bundle, "Appointment").filter(
+    (a) => a.status !== "entered-in-error",
+  );
+  const truncated = (bundle.link ?? []).some((link) => link.relation === "next");
+  const orderIds = Array.from(new Set(appointments.map(appointmentOrderId).filter(Boolean)));
+  if (orderIds.length === 0) return { rows: [], truncated };
+
+  const orderParams = new URLSearchParams();
+  orderParams.set("_id", orderIds.join(","));
+  orderParams.set("_include", "ServiceRequest:subject");
+  // 製剤明細・進捗・採血記録(ハブと採った血)を同じ応答に添えてもらう。
+  orderParams.set("_revinclude:iterate", "ServiceRequest:based-on");
+  orderParams.append("_revinclude", "Task:focus");
+  orderParams.append("_revinclude", "Procedure:based-on");
+  orderParams.append("_revinclude:iterate", "MedicationDispense:part-of");
+  orderParams.set("_count", "500");
+  const { data: orderBundle } = await searchResource<fhir4.Resource>("ServiceRequest", orderParams);
+
+  const requests = resourcesOfType<fhir4.ServiceRequest>(orderBundle, "ServiceRequest");
+  const patientsById = new Map(
+    resourcesOfType<fhir4.Patient>(orderBundle, "Patient").map((patient) => [patient.id ?? "", patient]),
+  );
+  const taskByOrderId = transfusionTasksByOrderId(resourcesOfType<fhir4.Task>(orderBundle, "Task"));
+  const unitsByOrderId = autologousUnitsByOrderId(
+    resourcesOfType<fhir4.Procedure>(orderBundle, "Procedure"),
+    resourcesOfType<fhir4.MedicationDispense>(orderBundle, "MedicationDispense"),
+  );
+  const appointmentsByOrderId = autologousAppointmentsByOrderId(appointments);
+
+  const rows = appointments.flatMap((appointment) => {
+    const orderId = appointmentOrderId(appointment);
+    const order = requests.find((request) => request.id === orderId);
+    if (!order) return [];
+    return [
+      {
+        appointment,
+        row: {
+          order,
+          itemRequests: transfusionOrderItemRequests(requests, orderId),
+          patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+          task: taskByOrderId.get(orderId),
+          appointments: appointmentsByOrderId.get(orderId) ?? [],
+        },
+        collectedVolume: collectedVolumeTotal(unitsByOrderId.get(orderId) ?? []),
+      },
+    ];
+  });
+  return { rows, truncated };
+}
+
+/** 採血予定日 1 日ぶんの自己血の採血予定。日付が未選択の間は読みに行かない。 */
+export function useAutologousWorklist(date: string, enabled = true) {
+  return useQuery({
+    queryKey: ["Appointment", "autologous-worklist", date],
+    queryFn: () => fetchAutologousWorklist(date),
+    enabled: Boolean(date) && enabled,
     placeholderData: keepPreviousData,
   });
 }
@@ -273,20 +421,27 @@ export const useUpdateTransfusionTaskStatus = makeUpdateTaskStatusHook<Transfusi
   {
     cancelPerform: {
       cancels: (task, status) =>
-        cancelsPerform(transfusionTaskStatus)(task, status) || cancelsDispense(task, status),
-      entries: (order, task, status) =>
-        performCancelEntries(
-          order.id ?? "",
-          { observations: true, dispenses: true },
-          (procedures, administrations, observations, dispenses) => [
-            ...(cancelsPerform(transfusionTaskStatus)(task, status)
-              ? buildTransfusionPerformDeleteEntries(procedures, administrations, observations)
-              : []),
-            ...(cancelsDispense(task, status)
-              ? buildTransfusionDispenseDeleteEntries(procedures, dispenses)
-              : []),
-          ],
-        ),
+        cancelsPerform(transfusionTaskStatus)(task, status) ||
+        cancelsDispense(task, status) ||
+        status === "cancelled",
+      entries: async (order, task, status) => [
+        ...(cancelsPerform(transfusionTaskStatus)(task, status) || cancelsDispense(task, status)
+          ? await performCancelEntries(
+              order.id ?? "",
+              { observations: true, dispenses: true },
+              (procedures, administrations, observations, dispenses) => [
+                ...(cancelsPerform(transfusionTaskStatus)(task, status)
+                  ? buildTransfusionPerformDeleteEntries(procedures, administrations, observations)
+                  : []),
+                ...(cancelsDispense(task, status)
+                  ? buildTransfusionDispenseDeleteEntries(procedures, dispenses)
+                  : []),
+              ],
+            )
+          : []),
+        // 中止では、残っている自己血の採血予定も取り消す。
+        ...(status === "cancelled" ? await fetchOrderAppointmentCancelEntries(order.id ?? "") : []),
+      ],
     },
     invalidate: invalidateTransfusion,
   },
@@ -341,4 +496,6 @@ function invalidateTransfusion(queryClient: ReturnType<typeof useQueryClient>) {
   // 取消では実施記録・出庫記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
   queryClient.invalidateQueries({ queryKey: ["MedicationDispense"] });
+  // 採血登録と中止で自己血の採血予定(Appointment)が動く。
+  queryClient.invalidateQueries({ queryKey: ["Appointment"] });
 }

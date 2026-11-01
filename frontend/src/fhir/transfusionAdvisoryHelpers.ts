@@ -22,12 +22,37 @@ export interface TransfusionSettings {
   antibody_screen_valid_days: number;
   /** 実施入力の前に患者とバッグの照合(リストバンド・製剤ラベルの読み取り)を出すか。 */
   verification_enabled: boolean;
+  /** 自己血の採血前の Hb の下限(g/dL)。 */
+  autologous_hb_min: number;
 }
 
 export const DEFAULT_TRANSFUSION_SETTINGS: TransfusionSettings = {
   antibody_screen_valid_days: 3,
   verification_enabled: false,
+  autologous_hb_min: 11,
 };
+
+/** 自己血の採血前の Hb。下限を下回る・未検査なら警告(指針の採血基準は Hb 11 g/dL 以上)。 */
+export function autologousHbAdvisory(
+  hb: { value: number; unit: string; date: string } | null,
+  settings: TransfusionSettings,
+): Advisory | null {
+  if (!hb) {
+    return {
+      key: advisoryKey("autologous-hb", "missing"),
+      kind: "autologous-hb",
+      severity: severityOf("autologous-hb", true),
+      message: "採血前の Hb が未検査です",
+    };
+  }
+  if (hb.value >= settings.autologous_hb_min) return null;
+  return {
+    key: advisoryKey("autologous-hb", hb.value, hb.date),
+    kind: "autologous-hb",
+    severity: severityOf("autologous-hb", true),
+    message: `Hb ${hb.value} ${hb.unit}（${hb.date}）が下限 ${settings.autologous_hb_min} g/dL を下回っています`,
+  };
+}
 
 /** 注意区分マスタの「輸血拒否」のコード(db/seed_data/patient_cautions.csv)。 */
 const NO_TRANSFUSION_CAUTION_CODE = "no-transfusion";

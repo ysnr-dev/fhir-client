@@ -586,6 +586,11 @@ export function isNutritionGuidanceAppointment(appointment: fhir4.Appointment): 
   return serviceTypeCode(appointment) === "nutrition-guidance";
 }
 
+/** 自己血の採血予定か(fhir/autologousPlanHelpers.ts)。枠は持たず、輸血オーダーにぶら下がる。 */
+export function isAutologousAppointment(appointment: fhir4.Appointment): boolean {
+  return serviceTypeCode(appointment) === "autologous";
+}
+
 /**
  * オーダーに紐づく予約(検査予約)か。予約タブでの操作の出し分けに使う。
  *

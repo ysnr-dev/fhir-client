@@ -1155,6 +1155,8 @@ function TransfusionOrderDetail({
   const requests = serviceRequestsOf(detail.data?.data);
   const serviceRequest = requests.find((request) => request.id === srId);
   const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+  // 自己血の採血予定はヘッダと一緒に届く。
+  const appointments = resourcesOfType<fhir4.Appointment>(detail.data?.data, "Appointment");
   // 出庫記録(ハブとバッグ)は実施記録と同じ検索で届く。
   const perform = useTransfusionPerformDetail(srId);
   const dispenses = useMemo(() => {
@@ -1175,6 +1177,7 @@ function TransfusionOrderDetail({
           itemRequests={transfusionOrderItemRequests(requests, srId)}
           problemsById={problemsById}
           dispenses={dispenses}
+          appointments={appointments}
         />
       ) : (
         !detail.error && <NotFound label="輸血オーダー" />
