@@ -27,7 +27,7 @@ SUSHI や QA でエラーが出たとき、または新しいプロファイル�
 
 ## 親プロファイルの選び方
 
-JP Core の定義にアプリの出力が乗らないものは、FHIR 基本定義から派生させて `known-issues.md` に理由を書いてある。
+JP Core の定義にアプリの出力が乗らないものは、FHIR 基本定義から派生させている。
 JP Core 親に付け替えるとエラーが大量に出るので、アプリ側が変わらない限り触らない。
 
 - Observation 全般、MedicationRequest / Dispense / Administration / Statement、看護行為の Procedure、
