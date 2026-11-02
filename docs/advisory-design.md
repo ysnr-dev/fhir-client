@@ -253,7 +253,7 @@ seed(`db/seed_data/advisory_override_reasons.csv`): 対応済み / 該当しな�
 | `basis` | string | 根拠(ガイドライン名か URL) |
 
 `Master::AdvisoryRulesController`(`/master/advisory_rules`、`?enabled=true`・`?context=` で絞れる。コードは更新で変えない)。
-seed(`db/seed_data/advisory_rules.csv`、出す場所は「|」区切り)に記入例 2 件(ビグアナイドと腎機能、糖尿病の HbA1c 未検査)を**無効**で入れる。
+seed(`db/seed_data/advisory_rules.csv`、出す場所は「|」区切り)に記入例 7 件(ビグアナイドと腎機能、糖尿病の HbA1c 未検査、NSAIDs と腎機能、高齢者のベンゾジアゼピン系、ワルファリンと NSAIDs、高カリウムとスピロノラクトン、造影検査と腎機能)を**無効**で入れる。
 
 ### 3.5 パス
 
