@@ -35,6 +35,22 @@ RSpec.describe "Admin::AdvisoryStats", type: :request do
     ])
   end
 
+  it "breaks facility rules down by rule code" do
+    event("s1", "facility-rule|egfr-low", "fired", "2026-10-02T10:00:00+09:00", kind: "facility-rule")
+    event("s1", "facility-rule|egfr-low", "overridden", "2026-10-02T10:00:00+09:00", kind: "facility-rule", reason: "monitored")
+    event("s2", "facility-rule|hba1c-due", "fired", "2026-10-03T10:00:00+09:00", kind: "facility-rule")
+    event("s3", "a", "fired", "2026-10-04T10:00:00+09:00")
+
+    with_admin_token(nil) { get "/admin/advisory_stats", params: { from: "2026-10", to: "2026-10" } }
+
+    body = response.parsed_body
+    expect(body["rows"].map { |row| [row["kind"], row["fired"]] }).to eq([["allergy", 1], ["facility-rule", 2]])
+    expect(body["rule_rows"]).to eq([
+      { "rule_code" => "egfr-low", "month" => "2026-10", "fired" => 1, "overridden" => 1, "reasons" => { "monitored" => 1 } },
+      { "rule_code" => "hba1c-due", "month" => "2026-10", "fired" => 1, "overridden" => 0, "reasons" => {} }
+    ])
+  end
+
   it "defaults to the last six months and rejects an inverted or too long range" do
     with_admin_token(nil) { get "/admin/advisory_stats" }
     expect(response).to have_http_status(:ok)

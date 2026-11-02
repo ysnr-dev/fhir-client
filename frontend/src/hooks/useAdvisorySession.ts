@@ -3,6 +3,7 @@ import { recordAdvisoryEvents, type AdvisoryEventPayload } from "../api/advisory
 import { useFacilitySettings } from "../api/queries";
 import {
   type Advisory,
+  type AdvisoryContext,
   type AdvisoryOverride,
   applySeverityOverrides,
   overrideReasonText,
@@ -10,22 +11,8 @@ import {
 import { clearStagedAdvisoryOverrides, stageAdvisoryOverrides } from "../lib/advisoryOverrideStage";
 import { nowFhirDateTime } from "../lib/dates";
 
-/** 警告を出すフォーム。台帳の context。 */
-export type AdvisoryContext =
-  | "prescription"
-  | "injection"
-  | "rad-order"
-  | "radiotherapy"
-  | "physio"
-  | "endoscopy"
-  | "meal-order"
-  | "transfusion-order"
-  | "transfusion-dispense"
-  | "transfusion-perform"
-  | "autologous-collection"
-  | "medical-management"
-  | "regimen-apply"
-  | "regimen-cycle";
+/** 警告を出す場面(台帳の context)。一覧は `ADVISORY_CONTEXTS`。 */
+export type { AdvisoryContext };
 
 export interface AdvisorySession {
   /** 施設設定(種別ごとの調整)を当てたあとの警告。画面はこれを描く。 */
@@ -86,7 +73,9 @@ export function useAdvisorySession(
 
   useEffect(
     () => () => {
-      clearStagedAdvisoryOverrides();
+      // 来歴に載せる準備をしたのがこのセッションのときだけ片付ける(患者帯のように確認の無い
+      // セッションが外れても、開いているフォームの準備を消さない)。
+      if (submitted.current) clearStagedAdvisoryOverrides();
       if (submitted.current || seen.current.size === 0) return;
       recordAdvisoryEvents({ context: contextRef.current, session_id: sessionId.current, events: firedEvents() });
     },

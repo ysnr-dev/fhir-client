@@ -46,6 +46,7 @@ import {
 } from "../fhir/transfusionResultHelpers";
 import { VITAL_MEASURES, type VitalFormValues } from "../fhir/vitalHelpers";
 import { localDay, today } from "../lib/dates";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
 import { AdvisoryNotice } from "./AdvisoryNotice";
@@ -236,7 +237,9 @@ function TransfusionPerformForm({
     if (history) list.push(history);
     return list;
   }, [values.bags, values.startedAt, dispensed, productItems, patientType, summary.urgencyLevel, reactions.history]);
-  const session = useAdvisorySession(advisoryInput, "transfusion-perform");
+  const ruleAdvisories = useAdvisoryRuleAdvisories(patientId ?? "", "transfusion-perform");
+  const sessionInput = useMemo(() => [...advisoryInput, ...ruleAdvisories], [advisoryInput, ruleAdvisories]);
+  const session = useAdvisorySession(sessionInput, "transfusion-perform");
 
   function update<K extends keyof TransfusionPerformFormValues>(
     key: K,

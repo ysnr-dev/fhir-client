@@ -6,7 +6,7 @@ import { collectLabCodes, populateLabRow } from "../../fhir/populateLab";
 import type { PatientCaution } from "../masterClient";
 import { usePatientCautions } from "../masterQueries";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../../fhir/infectionHelpers";
-import { usesVariables, type PopulateSources } from "../../fhir/populateContext";
+import { RENAL_POPULATE_VARIABLES, usesVariables, type PopulateSources } from "../../fhir/populateContext";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { PRESCRIPTION_ORDER_TYPE } from "../../fhir/prescriptionHelpers";
 import { REGIMEN_ORDER_TYPE } from "../../fhir/regimenOrderHelpers";
@@ -33,6 +33,7 @@ import {
   useBodyMeasures,
   useLabInfectionResults,
   useManualInfections,
+  useRecentLabResults,
 } from "./patientProfile";
 import { usePractitioner, usePractitionerRoles } from "./practitioner";
 import { resourcesOfType, setOrderPeriod } from "./core";
@@ -84,6 +85,7 @@ export function usePopulateSources(
   const sequence = useMemo(() => usesVariables(expressions ?? [], ["responseSequence"]), [expressions]);
   const admissionAnswers = useMemo(() => usesVariables(expressions ?? [], ["admissionAnswers"]), [expressions]);
   const mealDiet = useMemo(() => usesVariables(expressions ?? [], ["mealDiet"]), [expressions]);
+  const renal = useMemo(() => usesVariables(expressions ?? [], RENAL_POPULATE_VARIABLES), [expressions]);
   // 記入を始めた日で固定する(日付をまたいで開きっぱなしでも値がぶれないように)。
   const [today] = useState(todayString);
 
@@ -163,10 +165,13 @@ export function usePopulateSources(
       labQueries
         .map((q) => q.data)
         .filter((obs): obs is fhir4.Observation => Boolean(obs))
-        .map(populateLabRow),
+        .map((obs) => populateLabRow(obs, today)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [labUpdatedKey],
   );
+
+  // ---- 腎機能(%egfr / %ccr を参照するときだけ。処方のチェックと同じ直近の検査結果) ----
+  const recentLabs = useRecentLabResults(renal ? patientId : undefined);
 
   // ---- 腫瘍・病理(式が参照するときだけ) ----
   const cancerEnabled = Boolean(patientId && cancer);
@@ -383,7 +388,8 @@ export function usePopulateSources(
     oralQueries.some((q) => q.isLoading) ||
     visitQueries.some((q) => q.isLoading) ||
     admissionResponses.isLoading ||
-    mealOrders.isLoading;
+    mealOrders.isLoading ||
+    recentLabs.isLoading;
 
   const author = practitioner.data?.data;
   const authorRoles = practitionerRoles.data?.data;
@@ -458,6 +464,7 @@ export function usePopulateSources(
       mealOrders: mealDiet
         ? resourcesOfType<fhir4.ServiceRequest>(mealOrders.data?.data, "ServiceRequest").filter(isMealServiceRequest)
         : undefined,
+      recentLabs: renal ? resourcesOfType<fhir4.Observation>(recentLabs.data?.data, "Observation") : undefined,
     };
   }, [
     today,
@@ -498,6 +505,8 @@ export function usePopulateSources(
     surgeryAdmissions.data,
     admissionAnswers,
     admissionResponses.data,
+    renal,
+    recentLabs.data,
     mealDiet,
     mealOrders.data,
   ]);
@@ -513,6 +522,7 @@ export function usePopulateSources(
       visitQueries.find((q) => q.error)?.error ??
       admissionResponses.error ??
       mealOrders.error ??
+      recentLabs.error ??
       null,
     sources,
   };

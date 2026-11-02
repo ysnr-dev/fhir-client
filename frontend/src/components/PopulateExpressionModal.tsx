@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { LabResultItem } from "../api/masterClient";
 import { useLabResultItem } from "../api/masterQueries";
-import { POPULATE_EXPRESSION_OPTIONS } from "../fhir/populateContext";
+import { POPULATE_EXPRESSION_OPTIONS, type PopulateExpressionOption } from "../fhir/populateContext";
 import {
   CONDITION_OPERATOR_LABELS,
   CONDITION_OPERATORS,
@@ -32,20 +32,26 @@ interface PopulateExpressionModalProps {
   onSelect?: (expression: string) => void;
   /** 文書テンプレートのプレースホルダー({{名前}})を出し、コピーできるようにする。 */
   placeholder?: boolean;
-  /** 変数と比較から条件式を組み立てる(様式のチェック項目)。 */
+  /** 変数と比較から条件式を組み立てる(様式のチェック項目・施設の規則)。 */
   condition?: boolean;
+  /** 一覧の末尾に足す変数(施設の規則の %orderItems など)。 */
+  extraOptions?: readonly PopulateExpressionOption[];
+  /** 見出し。省略時は用途から決める。 */
+  title?: string;
   onClose: () => void;
 }
 
 const LAB_OPTION_INDEX = POPULATE_EXPRESSION_OPTIONS.findIndex((option) => option.parameterized === "lab");
 
 // 分類ごとの変数(一覧の並び順のまま)。
-const OPTION_GROUPS = POPULATE_EXPRESSION_OPTIONS.reduce<{ group: string; indexes: number[] }[]>((groups, option, index) => {
-  const last = groups[groups.length - 1];
-  if (last?.group === option.group) last.indexes.push(index);
-  else groups.push({ group: option.group, indexes: [index] });
-  return groups;
-}, []);
+function optionGroupsOf(options: readonly PopulateExpressionOption[]) {
+  return options.reduce<{ group: string; indexes: number[] }[]>((groups, option, index) => {
+    const last = groups[groups.length - 1];
+    if (last?.group === option.group) last.indexes.push(index);
+    else groups.push({ group: option.group, indexes: [index] });
+    return groups;
+  }, []);
+}
 
 // 選んだ結果項目のデータ型と単位に合わせたサンプル値。
 function labSample(item: Pick<LabResultItem, "data_type" | "display_unit"> | undefined, attr: LabAttr): string {
@@ -59,6 +65,8 @@ function labSample(item: Pick<LabResultItem, "data_type" | "display_unit"> | und
       return numeric ? unit : "";
     case "date":
       return "2026-09-05";
+    case "daysAgo":
+      return "56";
     case "text":
       return numeric ? `${value} ${unit}` : value;
     case "interpretation":
@@ -71,18 +79,25 @@ export function PopulateExpressionModal({
   onSelect,
   placeholder = false,
   condition = false,
+  extraOptions,
+  title,
   onClose,
 }: PopulateExpressionModalProps) {
+  const options = useMemo(
+    () => (extraOptions?.length ? [...POPULATE_EXPRESSION_OPTIONS, ...extraOptions] : POPULATE_EXPRESSION_OPTIONS),
+    [extraOptions],
+  );
+  const optionGroups = useMemo(() => optionGroupsOf(options), [options]);
   const currentCondition = condition ? parseConditionExpression(currentExpression) : null;
   const currentBase = condition ? currentCondition?.base : currentExpression;
   const currentLab = parseLabExpression(currentBase);
   const currentIndex = currentLab
     ? LAB_OPTION_INDEX
-    : POPULATE_EXPRESSION_OPTIONS.findIndex((option) => option.expression === currentBase);
+    : options.findIndex((option) => option.expression === currentBase);
   const [selectedIndex, setSelectedIndex] = useState(() => Math.max(0, currentIndex));
   // 分類は閉じて開く。設定済みの式があればその分類だけ開いておく。
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(
-    () => new Set(currentIndex >= 0 ? [POPULATE_EXPRESSION_OPTIONS[currentIndex].group] : []),
+    () => new Set(currentIndex >= 0 ? [options[currentIndex].group] : []),
   );
   const [operator, setOperator] = useState<ConditionOperator>(currentCondition?.operator ?? "exists");
   const [operand, setOperand] = useState(currentCondition?.operand ?? "");
@@ -95,7 +110,7 @@ export function PopulateExpressionModal({
   const currentLabItem = useLabResultItem(labItem || !labCode ? null : labCode);
   const selectedLabItem = labItem ?? currentLabItem.data ?? undefined;
 
-  const selected = POPULATE_EXPRESSION_OPTIONS[selectedIndex];
+  const selected = options[selectedIndex];
   const isLab = selected.parameterized === "lab";
   const baseExpression = isLab ? (labCode ? labExpression(labCode, labAttr) : "") : selected.expression;
   const expression = condition ? conditionExpression({ base: baseExpression, operator, operand }) : baseExpression;
@@ -123,13 +138,13 @@ export function PopulateExpressionModal({
 
   return (
     <Modal
-      title={placeholder ? "プレースホルダーの変数" : condition ? "初期値の条件" : "初期値式の変数"}
+      title={title ?? (placeholder ? "プレースホルダーの変数" : condition ? "初期値の条件" : "初期値式の変数")}
       onClose={onClose}
       className="modal--populate-expression"
     >
       <div className="populate-expression">
         <ul className="populate-expression__list">
-          {OPTION_GROUPS.map(({ group, indexes }) => {
+          {optionGroups.map(({ group, indexes }) => {
             const open = openGroups.has(group);
             return (
               <li key={group}>
@@ -145,7 +160,7 @@ export function PopulateExpressionModal({
                 {open && (
                   <ul className="populate-expression__options">
                     {indexes.map((index) => {
-                      const option = POPULATE_EXPRESSION_OPTIONS[index];
+                      const option = options[index];
                       return (
                         <li key={index}>
                           <button

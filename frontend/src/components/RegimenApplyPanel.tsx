@@ -62,6 +62,7 @@ import {
   type RegimenDrugPlan,
 } from "../fhir/regimenOrderHelpers";
 import { displayOf, SETTING_OPTIONS } from "../fhir/shared";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
@@ -582,7 +583,9 @@ function RegimenApplyForm({
     allergyAdvisories,
     pregnancy,
   ]);
-  const session = useAdvisorySession(advisoryInput, mode === "apply" ? "regimen-apply" : "regimen-cycle");
+  const ruleAdvisories = useAdvisoryRuleAdvisories(patientId, mode === "apply" ? "regimen-apply" : "regimen-cycle");
+  const sessionInput = useMemo(() => [...advisoryInput, ...ruleAdvisories], [advisoryInput, ruleAdvisories]);
+  const session = useAdvisorySession(sessionInput, mode === "apply" ? "regimen-apply" : "regimen-cycle");
   const [confirming, setConfirming] = useState(false);
 
   if (!values) {

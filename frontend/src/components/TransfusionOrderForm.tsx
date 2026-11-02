@@ -53,6 +53,7 @@ import {
   type TransfusionTestType,
 } from "../fhir/transfusionOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
@@ -292,7 +293,9 @@ export function TransfusionOrderForm({
     profile.transplant,
     reactions.history,
   ]);
-  const session = useAdvisorySession(advisoryInput, "transfusion-order", !setMode);
+  const ruleAdvisories = useAdvisoryRuleAdvisories(setMode ? "" : patientId, "transfusion-order");
+  const sessionInput = useMemo(() => [...advisoryInput, ...ruleAdvisories], [advisoryInput, ruleAdvisories]);
+  const session = useAdvisorySession(sessionInput, "transfusion-order", !setMode);
   /** 確認を要する警告の理由を選んだあとに行う登録。 */
   const [confirmSubmit, setConfirmSubmit] = useState<(() => void) | null>(null);
 

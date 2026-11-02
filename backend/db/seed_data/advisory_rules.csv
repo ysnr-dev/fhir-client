@@ -1,0 +1,3 @@
+code,name,enabled,display_order,severity,contexts,expression,message,detail,basis
+biguanide-renal,ビグアナイドと腎機能,false,10,warning,prescription|injection,%egfr < 30 and %orderItems.exists(code.startsWith('3962')),eGFR 30 未満でビグアナイド系製剤が含まれています,乳酸アシドーシスのリスク。eGFR 30 未満は禁忌。,メトホルミンの適正使用に関する Recommendation(日本糖尿病学会)
+diabetes-hba1c-due,糖尿病の HbA1c 未検査,false,20,info,patient-view|prescription,"%diagnosisIcd10.exists($this.startsWith('E11')) and (%labs.where(code='160010010').empty() or %labs.where(code='160010010').daysAgo > 180)",2 型糖尿病で HbA1c が 180 日以上ありません,,

@@ -11,7 +11,7 @@
 import type { PatientCaution } from "../api/masterClient";
 import { dateTimeLabel, diffDays, toWareki } from "../lib/dates";
 import { summarizeAllergy } from "./allergyHelpers";
-import { summarizeBodyMeasures } from "./bodyMeasureHelpers";
+import { summarizeBodyMeasures, summarizeRenal } from "./bodyMeasureHelpers";
 import { mealNutritionTarget } from "./mealNutritionTarget";
 import { mealOrderOneLine } from "./mealOrderHelpers";
 import { bloodTypeLabel } from "./transfusionOrderHelpers";
@@ -102,7 +102,12 @@ export interface PopulateSources {
   admissionResponses?: fhir4.QuestionnaireResponse[];
   /** 今日の時点で続いている食事オーダー(新しい順)。式が %mealDiet を参照するときだけ揃う。 */
   mealOrders?: fhir4.ServiceRequest[];
+  /** 直近の検体検査の結果(新しい順)。式が %egfr / %ccr を参照するときだけ揃う。 */
+  recentLabs?: fhir4.Observation[];
 }
+
+/** 腎機能の変数。参照するときだけ直近の検体検査の結果を読む。 */
+export const RENAL_POPULATE_VARIABLES = ["egfr", "ccr"] as const;
 
 /** 式が変数のどれかを参照しているか(%名前 の後ろに名前の続きが無いもの)。 */
 export function usesVariables(expressions: Iterable<string | undefined>, names: readonly string[]): boolean {
@@ -276,6 +281,22 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     expression: "%bmi",
     description: `最新の身長と体重から求めた BMI(小数 1 桁)を入れます。身長・体重のどちらかが無ければ入りません。${NUMBER_NOTE}`,
     sample: "21.9",
+  },
+  {
+    group: "体格・バイタル",
+    variable: "egfr",
+    label: "eGFR",
+    expression: "%egfr",
+    description: `直近のクレアチニンと年齢・性別から求めた eGFR(mL/min/1.73m²、日本腎臓学会の式)を入れます。クレアチニンが無ければ入りません。${NUMBER_NOTE}`,
+    sample: "61.3",
+  },
+  {
+    group: "体格・バイタル",
+    variable: "ccr",
+    label: "クレアチニンクリアランス",
+    expression: "%ccr",
+    description: `直近のクレアチニンと年齢・性別・体重から求めた CCr(mL/min、Cockcroft-Gault の式)を入れます。体重かクレアチニンが無ければ入りません。${NUMBER_NOTE}`,
+    sample: "72.5",
   },
   {
     group: "体格・バイタル",
@@ -1395,6 +1416,9 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
   const age = patient.birthDate ? calculateAge(patient.birthDate, new Date(`${today}T00:00:00`)) : undefined;
   const gender = genderLabel(patient.gender);
   const target = mealNutritionTarget(body, age);
+  const renal = sources.recentLabs
+    ? summarizeRenal(sources.recentLabs, { age, gender: patient.gender, weight: body.weight?.value ?? null })
+    : null;
 
   return {
     patient,
@@ -1407,6 +1431,8 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     bodyHeight: body.height?.value,
     bodyWeight: body.weight?.value,
     bmi: body.bmi ?? undefined,
+    egfr: renal?.egfr ?? undefined,
+    ccr: renal?.ccr ?? undefined,
     vitals: formatVitals(sources.vitals),
     ...latestVitalValues(sources.vitals),
     allergies: formatAllergies(sources.allergies),

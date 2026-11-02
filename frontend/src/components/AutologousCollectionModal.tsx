@@ -29,6 +29,7 @@ import { splitPerformBundle } from "../fhir/radResultHelpers";
 import { autologousHbAdvisory } from "../fhir/transfusionAdvisoryHelpers";
 import { transfusionOrderProducts, type AboBloodType, type RhdBloodType } from "../fhir/transfusionOrderHelpers";
 import { localDay, nowDateTimeInput } from "../lib/dates";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { AdvisoryNotice } from "./AdvisoryNotice";
 import { AutologousPlanTable, plannedTotalOf } from "./AutologousPlanTable";
@@ -130,7 +131,9 @@ export function AutologousCollectionModal({ row, appointmentId, onClose }: Props
     }
     return list;
   }, [expiry, order.occurrenceDateTime, labs.isLoading, hb, settings]);
-  const session = useAdvisorySession(advisoryInput, "autologous-collection");
+  const ruleAdvisories = useAdvisoryRuleAdvisories(patientId ?? "", "autologous-collection");
+  const sessionInput = useMemo(() => [...advisoryInput, ...ruleAdvisories], [advisoryInput, ruleAdvisories]);
+  const session = useAdvisorySession(sessionInput, "autologous-collection");
 
   const collectedVolume = collectedVolumeTotal(collected);
   const plannedVolume = plannedTotalOf(plan.appointments);

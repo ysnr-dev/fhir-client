@@ -50,6 +50,7 @@ import {
 } from "./PatientPictograms";
 import { PathwayNameLinks } from "./PathwayNameLinks";
 import { PictogramPopover } from "./PictogramPopover";
+import { AdvisoryRulePictogram } from "./AdvisoryRulePictogram";
 import { CdsPictogram } from "./CdsPictogram";
 
 interface PatientHeaderProps {
@@ -137,8 +138,8 @@ interface PictogramProps {
   /** true なら吹き出しを body 直下に出す(PictogramPopover を参照)。 */
   portal?: boolean;
   /**
-   * 外部の判断支援(CDS Hooks)のカードも出す。カルテだけ true にする。一覧の患者ドロワーの帯で
-   * 外部のサービスを患者ごとに呼ばないため、既定は出さない。
+   * 施設の規則と外部の判断支援(CDS Hooks)のカードも出す。カルテだけ true にする。一覧の患者ドロワーの帯で
+   * 規則の評価や外部のサービスの呼び出しを患者ごとに走らせないため、既定は出さない。
    */
   cds?: boolean;
 }
@@ -156,6 +157,7 @@ export function PatientPictogramStrip(props: PictogramProps) {
       <ChemotherapyPictogram {...props} />
       <EarlyWarningPictogram {...props} />
       <IntakePictogram {...props} />
+      {props.cds && <AdvisoryRulePictogram {...props} />}
       {props.cds && <CdsPictogram {...props} />}
     </>
   );

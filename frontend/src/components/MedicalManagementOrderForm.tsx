@@ -14,6 +14,7 @@ import {
   type MedicalManagementOrderFormValues,
 } from "../fhir/medicalManagementOrderHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
@@ -84,7 +85,9 @@ export function MedicalManagementOrderForm({
     () => medicalManagementLimitAdvisories(values.lines, history, limits),
     [values.lines, history, limits],
   );
-  const session = useAdvisorySession(limitAdvisories, "medical-management", !setMode);
+  const ruleAdvisories = useAdvisoryRuleAdvisories(setMode ? "" : patientId, "medical-management");
+  const sessionInput = useMemo(() => [...limitAdvisories, ...ruleAdvisories], [limitAdvisories, ruleAdvisories]);
+  const session = useAdvisorySession(sessionInput, "medical-management", !setMode);
 
   // マスタから外れた(無効にした・入外区分が合わない)項目でも、保存済みなら行として残す。
   const orphanLines = values.lines.filter(

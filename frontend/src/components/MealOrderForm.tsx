@@ -40,6 +40,7 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { type Advisory, advisoryKey, severityOf } from "../fhir/advisoryHelpers";
 import { summarizeAllergy } from "../fhir/allergyHelpers";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { AdvisoryNotice } from "./AdvisoryNotice";
 import { ErrorBanner } from "./ErrorBanner";
@@ -192,7 +193,9 @@ export function MealOrderForm({
       },
     ];
   }, [allergyMismatch]);
-  const session = useAdvisorySession(advisoryInput, "meal-order", !setMode && Boolean(patientId));
+  const ruleAdvisories = useAdvisoryRuleAdvisories(setMode ? "" : patientId, "meal-order");
+  const sessionInput = useMemo(() => [...advisoryInput, ...ruleAdvisories], [advisoryInput, ruleAdvisories]);
+  const session = useAdvisorySession(sessionInput, "meal-order", !setMode && Boolean(patientId));
   // 身長・体重と栄養量の目安。食種選択の表に出し、選んだ食種の成分帯の印にも使う(雛形では患者が無いので引かない)。
   const nutrition = useMealNutritionTarget(setMode ? undefined : patientId || undefined);
   useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, startDate: date })));

@@ -19,6 +19,7 @@ import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { SmartAppsPage } from "./pages/SmartAppsPage";
 import { CdsServicesPage } from "./pages/CdsServicesPage";
 import { AdvisoryOverrideReasonPage } from "./pages/AdvisoryMasterPages";
+import { AdvisoryRulePage } from "./pages/AdvisoryRulePage";
 import { PharmacistInterventionTypePage } from "./pages/PharmacistInterventionTypePage";
 import { HolidayPage } from "./pages/HolidayPage";
 import { AdvisoryReviewPage } from "./pages/AdvisoryReviewPage";
@@ -406,6 +407,7 @@ function App() {
           <Route path="/radiotherapy-devices" element={<RadiotherapyDevicePage />} />
           <Route path="/radiotherapy-stop-reasons" element={<RadiotherapyStopReasonPage />} />
           <Route path="/advisory-override-reasons" element={<AdvisoryOverrideReasonPage />} />
+          <Route path="/advisory-rules" element={<AdvisoryRulePage />} />
           <Route path="/pharmacist-intervention-types" element={<PharmacistInterventionTypePage />} />
           <Route path="/holidays" element={<HolidayPage />} />
           <Route

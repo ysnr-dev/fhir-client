@@ -6,6 +6,47 @@
 // 種別を知らずに描く。種別を足すときは `ADVISORY_KINDS` に 1 行足し、`ADVISORY_KIND_DEFS` を埋める。
 
 /** 重さ。info = 表示のみ、warning = 確認を要する(登録時に理由が必須)、block = 止める。 */
+/**
+ * 警告を出す場面。台帳(advisory_events)の context で、施設の規則の「出す場所」の選択肢にもなる。
+ * patient-view はカルテを開いたとき(患者帯のピクトグラム)で、確認は求めない。
+ */
+export const ADVISORY_CONTEXTS = [
+  "patient-view",
+  "prescription",
+  "injection",
+  "rad-order",
+  "radiotherapy",
+  "physio",
+  "endoscopy",
+  "meal-order",
+  "transfusion-order",
+  "transfusion-dispense",
+  "transfusion-perform",
+  "autologous-collection",
+  "medical-management",
+  "regimen-apply",
+  "regimen-cycle",
+] as const;
+export type AdvisoryContext = (typeof ADVISORY_CONTEXTS)[number];
+
+export const ADVISORY_CONTEXT_LABELS: Record<AdvisoryContext, string> = {
+  "patient-view": "カルテを開いたとき",
+  prescription: "処方",
+  injection: "注射",
+  "rad-order": "放射線",
+  radiotherapy: "放射線治療",
+  physio: "生理検査",
+  endoscopy: "内視鏡",
+  "meal-order": "食事",
+  "transfusion-order": "輸血の依頼",
+  "transfusion-dispense": "輸血の出庫",
+  "transfusion-perform": "輸血の実施",
+  "autologous-collection": "自己血の採血",
+  "medical-management": "指導・管理料",
+  "regimen-apply": "レジメンの適用",
+  "regimen-cycle": "レジメンのクール登録",
+};
+
 export const ADVISORY_SEVERITIES = ["info", "warning", "block"] as const;
 export type AdvisorySeverity = (typeof ADVISORY_SEVERITIES)[number];
 
@@ -76,10 +117,11 @@ export const ADVISORY_KINDS = [
   "cds-critical",
   "cds-warning",
   "cds-info",
+  "facility-rule",
 ] as const;
 export type AdvisoryKind = (typeof ADVISORY_KINDS)[number];
 
-export const ADVISORY_GROUPS = ["薬剤", "放射線", "患者状態", "食事", "レジメン", "医学管理", "輸血", "外部"] as const;
+export const ADVISORY_GROUPS = ["薬剤", "放射線", "患者状態", "食事", "レジメン", "医学管理", "輸血", "外部", "施設"] as const;
 export type AdvisoryGroup = (typeof ADVISORY_GROUPS)[number];
 
 export interface AdvisoryKindDef {
@@ -138,6 +180,8 @@ export const ADVISORY_KIND_DEFS: Record<AdvisoryKind, AdvisoryKindDef> = {
   "cds-critical": { label: "判断支援(重要)", group: "外部", defaultSeverity: "warning" },
   "cds-warning": { label: "判断支援(注意)", group: "外部", defaultSeverity: "info" },
   "cds-info": { label: "判断支援(情報)", group: "外部", defaultSeverity: "info" },
+  // 施設が条件式で定義する規則(fhir/advisoryRuleHelpers.ts)。規則ごとの重さはマスタが決める。
+  "facility-rule": { label: "施設の規則", group: "施設", defaultSeverity: "warning" },
 };
 
 export function advisoryKindLabel(kind: AdvisoryKind): string {

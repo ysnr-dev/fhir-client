@@ -5,9 +5,13 @@ module Admin
     DEFAULT_MONTHS = 6
     # occurred_at は timestamp without time zone(UTC)なので、日本時間に直してから月で切る。
     MONTH = Arel.sql("to_char(occurred_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM')")
+    # 施設の規則の警告は key が「facility-rule|<規則のコード>」なので、2 つ目の要素で規則ごとに分ける。
+    FACILITY_RULE_KIND = "facility-rule"
+    RULE_CODE = Arel.sql("split_part(advisory_key, '|', 2)")
 
     # GET /admin/advisory_stats?from=YYYY-MM&to=YYYY-MM
-    #   → { from, to, rows: [{ kind, month, fired, overridden, reasons: { code => n } }] }
+    #   → { from, to, rows: [{ kind, month, fired, overridden, reasons: { code => n } }],
+    #       rule_rows: [{ rule_code, month, fired, overridden, reasons }] }(施設の規則の内訳)
     def show
       to_month = parse_month(params[:to]) || FacilityClock.today.beginning_of_month
       from_month = parse_month(params[:from]) || (to_month << (DEFAULT_MONTHS - 1))
@@ -18,21 +22,27 @@ module Admin
 
       range = FacilityClock::ZONE.local(from_month.year, from_month.month, 1)...FacilityClock::ZONE.local(to_month.year, to_month.month, 1).next_month
       scope = AdvisoryEvent.where(occurred_at: range)
-      counts = scope.group(:kind, MONTH, :outcome).count
-      reasons = scope.where(outcome: "overridden").where.not(reason_code: nil).group(:kind, MONTH, :reason_code).count
-
-      rows = Hash.new { |hash, key| hash[key] = { kind: key[0], month: key[1], fired: 0, overridden: 0, reasons: {} } }
-      counts.each { |(kind, month, outcome), count| rows[[kind, month]][outcome.to_sym] = count }
-      reasons.each { |(kind, month, code), count| rows[[kind, month]][:reasons][code] = count }
 
       render json: {
         from: from_month.strftime("%Y-%m"),
         to: to_month.strftime("%Y-%m"),
-        rows: rows.values.sort_by { |row| [row[:kind], row[:month]] }
+        rows: tally(scope, :kind, :kind),
+        rule_rows: tally(scope.where(kind: FACILITY_RULE_KIND), RULE_CODE, :rule_code)
       }
     end
 
     private
+
+    # group_column × 月の発火数・無視数と無視理由の内訳。label は返す行のキー名。
+    def tally(scope, group_column, label)
+      counts = scope.group(group_column, MONTH, :outcome).count
+      reasons = scope.where(outcome: "overridden").where.not(reason_code: nil).group(group_column, MONTH, :reason_code).count
+
+      rows = Hash.new { |hash, key| hash[key] = { label => key[0], month: key[1], fired: 0, overridden: 0, reasons: {} } }
+      counts.each { |(group, month, outcome), count| rows[[group, month]][outcome.to_sym] = count }
+      reasons.each { |(group, month, code), count| rows[[group, month]][:reasons][code] = count }
+      rows.values.sort_by { |row| [row[label], row[:month]] }
+    end
 
     def parse_month(value)
       return nil unless value.to_s.match?(/\A\d{4}-\d{2}\z/)

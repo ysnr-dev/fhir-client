@@ -2,6 +2,7 @@ import { makeFieldUpdater } from "../lib/form";
 import { diffDays } from "../lib/dates";
 import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { searchMedicineDoseConversions, type Medicine } from "../api/masterClient";
+import { advisoryOrderItemsOf } from "../fhir/advisoryRuleHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   CATEGORY_OPTIONS,
@@ -60,6 +61,7 @@ import { FormularyMark, MedicineCautionMarks, useMedicationAdvisories } from "./
 import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
 import { AdvisoryInlineMarks, AdvisoryNotice } from "./AdvisoryNotice";
 import { advisoriesOfScope, unscopedAdvisories } from "../fhir/advisoryHelpers";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
@@ -196,7 +198,12 @@ export function InjectionForm({
     departmentId: orderContext.departmentId,
   });
   const pregnancy = usePregnancyAdvisory(setMode ? "" : patientId);
-  const advisoryInput = useMemo(() => [...medicationAdvisories, ...pregnancy], [medicationAdvisories, pregnancy]);
+  const orderItems = useMemo(() => advisoryOrderItemsOf(checkedRps), [checkedRps]);
+  const ruleAdvisories = useAdvisoryRuleAdvisories(setMode ? "" : patientId, "injection", orderItems);
+  const advisoryInput = useMemo(
+    () => [...medicationAdvisories, ...pregnancy, ...ruleAdvisories],
+    [medicationAdvisories, pregnancy, ruleAdvisories],
+  );
   const session = useAdvisorySession(advisoryInput, "injection", !setMode);
   const [confirming, setConfirming] = useState(false);
 

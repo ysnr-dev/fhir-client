@@ -53,6 +53,7 @@ import { useValidationError } from "../hooks/useValidationError";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { AdvisoryNotice } from "./AdvisoryNotice";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { useInfectionAdvisory } from "../hooks/usePatientStateAdvisories";
 import { ProblemSelect } from "./ProblemSelect";
@@ -438,7 +439,9 @@ export function PhysioOrderForm({
 
   // 検査室の感染対策に要る感染症。表示のみなので確認は挟まず、発火だけ台帳に残す。
   const infection = useInfectionAdvisory(setMode ? "" : patientId);
-  const session = useAdvisorySession(infection, "physio", !setMode);
+  const ruleAdvisories = useAdvisoryRuleAdvisories(setMode ? "" : patientId, "physio");
+  const sessionInput = useMemo(() => [...infection, ...ruleAdvisories], [infection, ruleAdvisories]);
+  const session = useAdvisorySession(sessionInput, "physio", !setMode);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();

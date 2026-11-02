@@ -1666,6 +1666,33 @@ simple_csv_masters.each do |model, file, columns|
   puts "#{model.table_name}: seeded #{loaded} rows"
 end
 
+# 施設の規則(docs/advisory-design.md §3.6)。記入例なので無効で入れる。出す場所は「|」区切り。既存行は上書きしない。
+advisory_rules_csv = Rails.root.join("db/seed_data/advisory_rules.csv")
+if File.exist?(advisory_rules_csv)
+  loaded = 0
+  CSV.foreach(advisory_rules_csv, headers: true) do |row|
+    code = row["code"].to_s.strip
+    next if code.blank? || Master::AdvisoryRule.exists?(code: code)
+
+    Master::AdvisoryRule.create!(
+      code: code,
+      name: row["name"],
+      enabled: row["enabled"].to_s.strip == "true",
+      display_order: row["display_order"].to_s.strip.presence&.to_i,
+      severity: row["severity"],
+      contexts: row["contexts"].to_s.split("|").map(&:strip).reject(&:empty?),
+      expression: row["expression"],
+      message: row["message"],
+      detail: row["detail"].to_s.strip.presence,
+      basis: row["basis"].to_s.strip.presence
+    )
+    loaded += 1
+  end
+  puts "master_advisory_rules: seeded #{loaded} rows"
+else
+  puts "master_advisory_rules: #{advisory_rules_csv} not found, skipped"
+end
+
 radiotherapy_protocols_json = Rails.root.join("db/seed_data/radiotherapy_protocols.json")
 if File.exist?(radiotherapy_protocols_json)
   loaded = 0

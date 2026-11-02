@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_01_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_03_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -404,6 +404,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_130000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_master_advisory_override_reasons_on_code", unique: true
+  end
+
+  create_table "master_advisory_rules", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.boolean "enabled", default: true, null: false
+    t.integer "display_order"
+    t.string "severity", default: "info", null: false
+    t.jsonb "contexts", default: [], null: false
+    t.text "expression", null: false
+    t.string "message", null: false
+    t.text "detail"
+    t.string "basis"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_advisory_rules_on_code", unique: true
   end
 
   create_table "master_clinical_note_titles", force: :cascade do |t|

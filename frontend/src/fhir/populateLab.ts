@@ -8,14 +8,16 @@
 // 取得は参照されたコードだけ(コードごとに最新 1 件)なので、記入前にテンプレートの式を
 // 走査してコードを集める(collectLabCodes)。上流の code 検索は完全一致で、施設コードを持たない
 // 旧結果(JLAC11 だけのもの)は拾わない。
+import { diffDays } from "../lib/dates";
 import { labResultItemCodeOf, observationLineDisplay } from "./labResultHelpers";
 
-export const LAB_ATTRS = ["value", "unit", "date", "text", "interpretation"] as const;
+export const LAB_ATTRS = ["value", "unit", "date", "daysAgo", "text", "interpretation"] as const;
 export type LabAttr = (typeof LAB_ATTRS)[number];
 export const LAB_ATTR_LABELS: Record<LabAttr, string> = {
   value: "値",
   unit: "単位",
   date: "採取日",
+  daysAgo: "採取からの日数",
   text: "値と単位",
   interpretation: "判定",
 };
@@ -29,6 +31,8 @@ export interface PopulateLabRow {
   unit: string;
   /** 検体採取日(YYYY-MM-DD)。 */
   date: string;
+  /** 採取日から記入日(today)までの日数。採取日が無ければ null。 */
+  daysAgo: number | null;
   /** H / L / HH / LL。基準値内は空。 */
   interpretation: string;
   /** 「7.2 %」のように値と単位をつないだもの。 */
@@ -40,7 +44,7 @@ export function labExpression(code: string, attr: LabAttr): string {
 }
 
 // Word のオートコレクトで引用符が ‘’ に変わっていても拾う(評価時には straightenQuotes が直す)。
-const LAB_REFERENCE = /%labs\.where\(\s*code\s*=\s*['‘’]([0-9A-Za-z_-]+)['‘’]\s*\)(?:\.(value|unit|date|text|interpretation))?/g;
+const LAB_REFERENCE = /%labs\.where\(\s*code\s*=\s*['‘’]([0-9A-Za-z_-]+)['‘’]\s*\)(?:\.(value|unit|date|daysAgo|text|interpretation))?/g;
 
 /** 式が変数モーダルの出す形そのものなら、コードと属性を返す。 */
 export function parseLabExpression(expression: string | undefined): { code: string; attr: LabAttr } | null {
@@ -60,16 +64,18 @@ export function collectLabCodes(expressions: Iterable<string | undefined>): stri
   return [...codes].sort();
 }
 
-export function populateLabRow(obs: fhir4.Observation): PopulateLabRow {
+export function populateLabRow(obs: fhir4.Observation, today: string): PopulateLabRow {
   const line = observationLineDisplay(obs);
   const quantity = obs.valueQuantity?.value;
   const value = typeof quantity === "number" ? quantity : line.value;
+  const date = obs.effectiveDateTime?.slice(0, 10) ?? "";
   return {
     code: labResultItemCodeOf(obs),
     name: line.name,
     value,
     unit: line.unit,
-    date: obs.effectiveDateTime?.slice(0, 10) ?? "",
+    date,
+    daysAgo: date ? diffDays(date, today) : null,
     interpretation: line.interpretation,
     text: [line.value, line.unit].filter(Boolean).join(" "),
   };

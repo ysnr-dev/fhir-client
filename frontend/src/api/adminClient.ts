@@ -885,10 +885,16 @@ export interface AdvisoryStatRow {
   reasons: Record<string, number>;
 }
 
+/** 施設の規則(kind facility-rule)の規則ごとの内訳。 */
+export interface AdvisoryRuleStatRow extends Omit<AdvisoryStatRow, "kind"> {
+  rule_code: string;
+}
+
 export interface AdvisoryStats {
   from: string;
   to: string;
   rows: AdvisoryStatRow[];
+  rule_rows: AdvisoryRuleStatRow[];
 }
 
 export async function fetchAdvisoryStats(range: { from: string; to: string }): Promise<AdvisoryStats> {

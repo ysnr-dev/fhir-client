@@ -326,9 +326,10 @@ Rails.application.routes.draw do
     resources :radiotherapy_devices, only: %i[index show create update destroy]
     resources :radiotherapy_stop_reasons, only: %i[index show create update destroy]
 
-    # 警告(判断支援)の確認理由マスタと、発火・無視の台帳(docs/advisory-design.md)。
+    # 警告(判断支援)の確認理由マスタ、発火・無視の台帳、施設の規則(docs/advisory-design.md)。
     resources :advisory_override_reasons, only: %i[index show create update destroy]
     resources :advisory_events, only: :create
+    resources :advisory_rules, only: %i[index show create update destroy]
     # 処方監査の介入種別(docs/rx-verification-design.md §4.1)。
     resources :pharmacist_intervention_types, only: %i[index show create update destroy]
     # 祝日・休診日。国民の祝日は内閣府 CSV の取込で入れ替え、休診日は画面から登録する。

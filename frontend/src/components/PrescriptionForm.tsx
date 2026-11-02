@@ -1,6 +1,7 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
+import { advisoryOrderItemsOf } from "../fhir/advisoryRuleHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   BROUGHT_CATEGORY,
@@ -58,6 +59,7 @@ import { useAdvisoryOverrideReasons, useMedicineDoseUnits } from "../api/masterQ
 import { switchDoseUnit } from "../fhir/doseConversionHelpers";
 import { type Advisory, advisoriesOfScope, unscopedAdvisories } from "../fhir/advisoryHelpers";
 import { cdsCardAdvisories, cdsCardOfAdvisory, overrideReasonsOf } from "../fhir/cdsCardHelpers";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
 import { useOrderContext } from "../hooks/useOrderContext";
@@ -206,7 +208,12 @@ export function PrescriptionForm({
   });
   // 催奇形性・乳汁移行の判断に要るので、妊娠中・授乳中は入力欄の前に出す。
   const pregnancy = usePregnancyAdvisory(setMode ? "" : patientId);
-  const advisoryInput = useMemo(() => [...medicationAdvisories, ...pregnancy], [medicationAdvisories, pregnancy]);
+  const orderItems = useMemo(() => advisoryOrderItemsOf(checkedRps), [checkedRps]);
+  const ruleAdvisories = useAdvisoryRuleAdvisories(setMode ? "" : patientId, "prescription", orderItems);
+  const advisoryInput = useMemo(
+    () => [...medicationAdvisories, ...pregnancy, ...ruleAdvisories],
+    [medicationAdvisories, pregnancy, ruleAdvisories],
+  );
   const session = useAdvisorySession(advisoryInput, "prescription", !setMode);
   const masterReasons = useAdvisoryOverrideReasons();
   const feedback = useSendCdsFeedback();

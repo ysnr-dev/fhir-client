@@ -41,6 +41,7 @@ import {
   type RhdBloodType,
 } from "../fhir/transfusionOrderHelpers";
 import { nowDateTimeInput } from "../lib/dates";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
 import { AdvisoryNotice } from "./AdvisoryNotice";
@@ -132,7 +133,9 @@ export function TransfusionDispenseModal({ row, onClose }: Props) {
     }
     return list;
   }, [values.bags, patientType, summary, order.occurrenceDateTime, ordered, productItems, bloodType, settings, antibodies, autologous.units]);
-  const session = useAdvisorySession(advisoryInput, "transfusion-dispense");
+  const ruleAdvisories = useAdvisoryRuleAdvisories(patientId ?? "", "transfusion-dispense");
+  const sessionInput = useMemo(() => [...advisoryInput, ...ruleAdvisories], [advisoryInput, ruleAdvisories]);
+  const session = useAdvisorySession(sessionInput, "transfusion-dispense");
   const [confirmSubmit, setConfirmSubmit] = useState<(() => void) | null>(null);
 
   function update<K extends keyof TransfusionDispenseFormValues>(

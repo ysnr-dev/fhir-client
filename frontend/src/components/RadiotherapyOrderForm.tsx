@@ -44,6 +44,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { AdvisoryNotice } from "./AdvisoryNotice";
 import { RadiotherapyHistory, useRadiotherapyAdvisories } from "./RadiotherapyPreCheck";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { renderJj1017CodeOptions } from "./radItemOptions";
 import { TrashIcon } from "./icons/TrashIcon";
@@ -176,7 +177,9 @@ export function RadiotherapyOrderForm({
     volumes: values.volumes,
     excludeSrId: editingSrId,
   });
-  const session = useAdvisorySession(advisoryInput, "radiotherapy", !setMode);
+  const ruleAdvisories = useAdvisoryRuleAdvisories(setMode ? "" : patientId, "radiotherapy");
+  const sessionInput = useMemo(() => [...advisoryInput, ...ruleAdvisories], [advisoryInput, ruleAdvisories]);
+  const session = useAdvisorySession(sessionInput, "radiotherapy", !setMode);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();

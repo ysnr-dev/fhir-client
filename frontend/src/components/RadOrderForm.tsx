@@ -55,6 +55,7 @@ import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
 import { AdvisoryNotice } from "./AdvisoryNotice";
+import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { useInfectionAdvisory, usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
 import { useRadSafetyAdvisories } from "../hooks/useRadSafetyAdvisories";
@@ -447,7 +448,9 @@ export function RadOrderForm({
   const infection = useInfectionAdvisory(setMode ? "" : patientId);
   const radSafety = useRadSafetyAdvisories(setMode ? "" : patientId, values.items);
   const advisoryInput = useMemo(() => [...radSafety, ...pregnancy, ...infection], [radSafety, pregnancy, infection]);
-  const session = useAdvisorySession(advisoryInput, "rad-order", !setMode);
+  const ruleAdvisories = useAdvisoryRuleAdvisories(setMode ? "" : patientId, "rad-order");
+  const sessionInput = useMemo(() => [...advisoryInput, ...ruleAdvisories], [advisoryInput, ruleAdvisories]);
+  const session = useAdvisorySession(sessionInput, "rad-order", !setMode);
   /** 確認を要する警告の理由を選んだあとに行う登録。 */
   const [confirmSubmit, setConfirmSubmit] = useState<(() => void) | null>(null);
 
