@@ -3,8 +3,9 @@ module Master
   class PathwayOatUnit < ApplicationRecord
     self.table_name = "master_pathway_oat_units"
 
-    # アウトカム大分類(BOM): G 患者目標 / H 患者状態
-    CATEGORIES = %w[G H].freeze
+    # アウトカム大分類(BOM): G 患者目標 / H 患者状態 / K 知識・教育・理解 / F 生活動作・日常動作・リハビリ
+    # (G は ePath の実装ガイドの例、K・F は BOM Ver.2 の配布ファイルの大分類)
+    CATEGORIES = %w[G H K F].freeze
     # コード体系: BOM(Basic Outcome Master) / 施設ローカル
     CODE_SYSTEMS = %w[bom local].freeze
     UUID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i

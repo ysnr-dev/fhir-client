@@ -7,7 +7,7 @@ export type PathwaySetting = "inpatient" | "outpatient";
 /** アウトカム・観察項目のコード体系。BOM(Basic Outcome Master)か施設ローカルか。 */
 export type PathwayCodeSystem = "bom" | "local";
 /** アウトカム大分類(BOM): G 患者目標 / H 患者状態。 */
-export type PathwayOutcomeCategory = "G" | "H";
+export type PathwayOutcomeCategory = "G" | "H" | "K" | "F";
 /** ePath のタスク分類(大)。 */
 export type PathwayTaskCategoryLv1 = "TP" | "EX" | "ML" | "NO" | "NC" | "EG" | "AL" | "MD";
 

@@ -126,7 +126,7 @@ master_pathway_events           … 病日・イベント(= action + Event PlanD
 master_pathway_oat_units        … OAT ユニット(event_id で結ぶ)
   unit_key       uuid。(pathway_code, unit_key) で一意
   name           アウトカム名
-  category       G 患者目標 / H 患者状態
+  category       G 患者目標 / H 患者状態 / K 知識・教育・理解 / F 生活動作・リハビリ(K・F は BOM Ver.2 の大分類)
   code_system    bom | local、code   アウトカムコード
   critical       重要アウトカム
 master_pathway_assessments      … 観察項目(unit_id で結ぶ)
@@ -184,7 +184,7 @@ master_pathway_oat_units + subcategory_code / subcategory_name(BOM 中分類。B
 - ［決定］アウトカムの取込は、観察項目コードを持つ行から **OAT の組**(`master_bom_pairs`)も同じ transaction で入れ替える。
   `GET /master/bom_outcomes/:code/assessments` が組の観察項目を(マスタの行があればその分類・MEDIS を添えて)返す。
 - ［決定］編集画面では、コード体系に BOM を選んだアウトカム・観察項目のコード欄に「選択」を出し(`BomSearchModal`)、選ぶと
-  コード・名称(空のときだけ)・分類を埋める。アウトカムは大分類(G/H)を区分に、中分類を `subcategory_*` に写す。観察項目は
+  コード・名称(空のときだけ)・分類を埋める。アウトカムは大分類(H/K/F)を区分に、中分類を `subcategory_*` に写す。観察項目は
   MEDIS 看護観察の対応があれば `nursing_observation_manage_no` にも結ぶ(評価入力で表現タイプを借りる)。
   **取り込んでいない施設には「選択」を出さない**(`useBomAvailability`。コードは手入力のまま)。
 - ［決定］**アウトカムを選んだとき、OAT ユニットに名前の付いた観察項目が無ければ、そのアウトカムの観察項目の候補を

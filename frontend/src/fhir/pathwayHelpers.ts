@@ -30,6 +30,8 @@ export const PATHWAY_SETTING_OPTIONS: { code: PathwaySetting; display: string }[
 export const OUTCOME_CATEGORY_OPTIONS: { code: PathwayOutcomeCategory; display: string }[] = [
   { code: "G", display: "患者目標" },
   { code: "H", display: "患者状態" },
+  { code: "K", display: "知識・教育・理解" },
+  { code: "F", display: "生活動作・リハビリ" },
 ];
 
 export const CODE_SYSTEM_OPTIONS: { code: PathwayCodeSystem; display: string }[] = [

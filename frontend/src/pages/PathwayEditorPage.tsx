@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { Disease, PathwaySetting, PathwayStatus } from "../api/masterClient";
+import type { Disease, PathwayOutcomeCategory, PathwaySetting, PathwayStatus } from "../api/masterClient";
 import { useBomAvailability, usePathway, usePathwayMutations } from "../api/masterQueries";
 import { BomOutcomeAssessmentsModal, BomSearchModal } from "../components/BomSearchModal";
 import type { BomOutcome } from "../api/masterClient";
@@ -33,6 +33,7 @@ import {
   addPhaseDraft,
   copyEventDraft,
   draftFromPathway,
+  OUTCOME_CATEGORY_OPTIONS,
   emptyAssessmentDraft,
   emptyEventDraft,
   emptyPathwayDraft,
@@ -786,8 +787,10 @@ export function PathwayEditorPage() {
             const event = draft.events.find((e) => e.key === p.eventKey);
             const unit = event?.oatUnits.find((u) => u.key === p.unitKey);
             if (!event || !unit) return;
-            // 名称が空なら BOM の名称を入れる。区分(G/H)は大分類から、中分類はそのまま写す。
-            const category = item.category_code === "G" || item.category_code === "H" ? item.category_code : unit.category;
+            // 名称が空なら BOM の名称を入れる。区分は大分類から、中分類はそのまま写す。
+            const category = OUTCOME_CATEGORY_OPTIONS.some((o) => o.code === item.category_code)
+              ? (item.category_code as PathwayOutcomeCategory)
+              : unit.category;
             const patch: Partial<PathwayOatUnitDraft> = {
               codeSystem: "bom",
               code: item.outcome_code,
