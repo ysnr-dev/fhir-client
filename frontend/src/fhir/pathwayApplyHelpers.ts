@@ -109,6 +109,11 @@ export const PATHWAY_PHASE_EXT_URL = "http://fhir-client.local/StructureDefiniti
 export const PATHWAY_PHASE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/pathway-phase";
 /** フェーズの最初の病日に残す、分岐を選んだときの記録(目安の写しとコメント)。 */
 export const PATHWAY_PHASE_NOTE_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-phase-note";
+/**
+ * 適用した施設パスの版(valueString)。instantiatesUri はコードだけにして(承認の取り消しの件数が
+ * この URI で数える)、版は別の拡張で持つ。ePath の施設パスバージョンに写す。
+ */
+export const PATHWAY_VERSION_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-version";
 
 export type PathwayLevel = "apply" | "event" | "oat-unit" | "assessment";
 
@@ -383,6 +388,7 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
       ...(pathway.scheduled_days !== null
         ? [{ url: PATHWAY_EXT.scheduledDays, valueInteger: pathway.scheduled_days }]
         : []),
+      ...(pathway.version ? [{ url: PATHWAY_VERSION_EXT_URL, valueString: pathway.version }] : []),
     ],
   };
   entry.push({ fullUrl: applyUrl, resource: apply, request: { method: "POST", url: "CarePlan" } });
@@ -869,6 +875,8 @@ export interface PathwayOatUnitRecord {
 
 export interface PathwayEventRecord {
   id: string;
+  /** ePath の病日の識別子(event-id の値)。総合評価の Goal・Observation の識別子に使う。 */
+  eventId: string;
   elapsedDays: number;
   pathStep: number;
   pathStepName: string;
@@ -888,6 +896,8 @@ export interface PathwayApplicationRecord {
   title: string;
   status: string;
   pathwayCode: string;
+  /** 適用した施設パスの版(拡張 pathway-version)。 */
+  pathwayVersion: string;
   periodStart: string;
   periodEnd: string;
   encounterId: string;
@@ -900,6 +910,10 @@ export interface PathwayApplicationRecord {
 export function pathwayCodeOf(carePlan: fhir4.CarePlan): string {
   const uri = carePlan.instantiatesUri?.find((u) => u.startsWith(pathwayInstantiatesUri("")));
   return uri ? uri.slice(pathwayInstantiatesUri("").length) : "";
+}
+
+export function pathwayVersionOf(carePlan: fhir4.CarePlan): string {
+  return carePlan.extension?.find((e) => e.url === PATHWAY_VERSION_EXT_URL)?.valueString ?? "";
 }
 
 /** partOf の参照先 id(Type/id の id だけ)。 */
@@ -1242,6 +1256,7 @@ export function parsePathwayApplication(
     .filter((cp) => pathwayLevelOf(cp) === "event" && cp.id)
     .map((carePlan) => ({
       id: carePlan.id as string,
+      eventId: identifierValue(carePlan, PATHWAY_EVENT_ID_SYSTEM),
       elapsedDays: intExtension(carePlan, PATHWAY_EXT.eventElapsedDays) ?? 0,
       pathStep: intExtension(carePlan, PATHWAY_EXT.pathStep) ?? 1,
       pathStepName: extensionOf(carePlan, PATHWAY_EXT.pathStepName)?.valueString ?? "",
@@ -1260,6 +1275,7 @@ export function parsePathwayApplication(
     title: apply.title ?? "",
     status: apply.status,
     pathwayCode: pathwayCodeOf(apply),
+    pathwayVersion: pathwayVersionOf(apply),
     periodStart: apply.period?.start ?? "",
     periodEnd: apply.period?.end ?? "",
     encounterId: apply.encounter?.reference?.split("/").pop() ?? "",

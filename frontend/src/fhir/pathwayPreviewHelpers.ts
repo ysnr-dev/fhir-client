@@ -75,6 +75,7 @@ export function buildPathwayPreview(
       const eventId = `preview-event-${event.key}`;
       events.push({
         id: eventId,
+        eventId: "",
         elapsedDays: day,
         pathStep: event.pathStep,
         pathStepName: event.pathStepName.trim(),
@@ -143,6 +144,7 @@ export function buildPathwayPreview(
     title: draft.name.trim(),
     status: "active",
     pathwayCode: draft.pathwayCode,
+    pathwayVersion: draft.version.trim(),
     periodStart: events[0]?.date ?? startDate,
     periodEnd: "",
     encounterId: "",

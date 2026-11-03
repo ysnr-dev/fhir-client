@@ -7,8 +7,10 @@ import {
   ACHIEVEMENT_OPTIONS,
   assessmentCandidate,
   assessmentInputSpec,
+  buildPathwayDayAssessmentBundle,
   buildPathwayEvaluationBundle,
   evaluationValuesOf,
+  hasEvaluationWriting,
   type Achievement,
   type PathwayEvaluationState,
 } from "../fhir/pathwayEvaluationHelpers";
@@ -23,9 +25,10 @@ import { ErrorBanner } from "./ErrorBanner";
 import { ObservationInput } from "./NursingPerformModal";
 
 // パスタブの「日めくり」。1 病日(分けた日はステップごと)をめくりながら、その日のアウトカムを縦に並べて
-// まとめて記録する。達成状態・観察項目の実績・タスクの実施はここで入れ、記載(SOAP・自由記載)は
-// アウトカムごとの評価モーダルで書く。記録は変えたアウトカムの分だけを 1 transaction にまとめる。
-// 設計は docs/clinical-pathway-design.md §6(日めくり)。
+// まとめて記録する。達成状態・観察項目の実績・タスクの実施と、病日の総合評価はここで入れ、記載(SOAP・自由記載)は
+// アウトカムごとの評価モーダルで書く。記録は変えたアウトカム・病日の分だけを 1 transaction にまとめる。
+// 未達成にしたアウトカムに記載が無ければ、記録の前に件数を出して確かめる(ePath の「バリアンス記録を促す」)。
+// 設計は docs/clinical-pathway-design.md §6(日めくり)・§7.12。
 
 /** アウトカム 1 件ぶんの入力中の値(達成状態・実績・タスクの実施)。 */
 interface UnitDraft {
@@ -90,6 +93,10 @@ export function PathwayDayView({
   const orderContext = useOrderContext();
   // 入力中の値はアウトカムごとに持ち、病日をめくっても残す(記録で全部まとめて送る)。
   const [drafts, setDrafts] = useState<Map<string, UnitDraft>>(new Map());
+  // 病日の総合評価の入力中の値(病日 CarePlan の id → 本文)。
+  const [dayDrafts, setDayDrafts] = useState<Map<string, string>>(new Map());
+  // 記載の無いバリアンスを確かめている最中(該当するアウトカムの id)。
+  const [confirmUnwritten, setConfirmUnwritten] = useState<string[] | null>(null);
 
   const manageNos = useMemo(
     () =>
@@ -111,6 +118,10 @@ export function PathwayDayView({
     const initial = initialOf(id);
     return initial && !sameDraft(draft, initial);
   }).map(([id]) => id);
+  const dirtyDayIds = [...dayDrafts]
+    .filter(([id, text]) => text.trim() !== (evaluation?.days.get(id)?.text ?? "").trim())
+    .map(([id]) => id);
+  const dirtyCount = dirtyUnitIds.length + dirtyDayIds.length;
 
   if (!event) return <p className="order-set__empty">病日がありません。</p>;
   const todayIndex = events.findIndex((e) => e.date === today);
@@ -121,6 +132,7 @@ export function PathwayDayView({
   }
 
   function patchDraft(unitId: string, patch: (draft: UnitDraft) => UnitDraft) {
+    setConfirmUnwritten(null);
     setDrafts((prev) => {
       const next = new Map(prev);
       const current = prev.get(unitId) ?? initialOf(unitId);
@@ -131,9 +143,38 @@ export function PathwayDayView({
     });
   }
 
+  const performer =
+    practitionerId && practitioner ? { practitionerId, display: practitionerDisplayName(practitioner) } : null;
+
+  /** 未達成にしたうち、記載(S/O/A/P・自由記載・コメント)の無いアウトカム。 */
+  function unwrittenVariances(): string[] {
+    return dirtyUnitIds.filter(
+      (id) => drafts.get(id)?.achievement === "2" && !hasEvaluationWriting(evaluation?.units.get(id)),
+    );
+  }
+
   function handleRecord() {
+    const unwritten = unwrittenVariances();
+    if (unwritten.length > 0 && !confirmUnwritten) {
+      setConfirmUnwritten(unwritten);
+      return;
+    }
+    submit();
+  }
+
+  function submit(after?: () => void) {
     const specs = new Map<string, ReturnType<typeof assessmentInputSpec>>();
     const entry: fhir4.BundleEntry[] = [];
+    for (const dayId of dirtyDayIds) {
+      const dayEvent = events.find((e) => e.id === dayId);
+      if (!dayEvent) continue;
+      const bundle = buildPathwayDayAssessmentBundle(
+        { patientId, event: dayEvent, existing: evaluation?.days.get(dayId), performer, department: orderContext },
+        dayDrafts.get(dayId) ?? "",
+        nowFhirDateTime(),
+      );
+      entry.push(...(bundle.entry ?? []));
+    }
     for (const unitId of dirtyUnitIds) {
       const unitEvent = events.find((e) => e.units.some((u) => u.id === unitId));
       const unit = unitEvent?.units.find((u) => u.id === unitId);
@@ -150,10 +191,7 @@ export function PathwayDayView({
           specs,
           procedures,
           existing: evaluation,
-          performer:
-            practitionerId && practitioner
-              ? { practitionerId, display: practitionerDisplayName(practitioner) }
-              : null,
+          performer,
           department: orderContext,
           variance: variance.noticeFor(unitEvent),
         },
@@ -167,12 +205,28 @@ export function PathwayDayView({
       );
       entry.push(...(bundle.entry ?? []));
     }
-    if (entry.length === 0) {
+    const reset = () => {
       setDrafts(new Map());
+      setDayDrafts(new Map());
+      setConfirmUnwritten(null);
+    };
+    if (entry.length === 0) {
+      reset();
       return;
     }
-    record.mutate({ resourceType: "Bundle", type: "transaction", entry }, { onSuccess: () => setDrafts(new Map()) });
+    record.mutate(
+      { resourceType: "Bundle", type: "transaction", entry },
+      {
+        onSuccess: () => {
+          reset();
+          after?.();
+        },
+      },
+    );
   }
+
+  const savedDay = evaluation?.days.get(event.id);
+  const dayText = dayDrafts.get(event.id) ?? savedDay?.text ?? "";
 
   return (
     <div className="pathway-day">
@@ -203,13 +257,31 @@ export function PathwayDayView({
         )}
       </div>
 
+      {/* 病日ごとの医師の総合評価(ePath の compAssessment)。病日に 1 件で、書き直すと上書き。 */}
+      <section className="pathway-day__unit pathway-day__assessment">
+        <header className="pathway-day__unit-head">
+          <h4>総合評価</h4>
+          {savedDay && (
+            <span className="pathway-day__date">
+              {savedDay.performerName} {savedDay.recordedAt.slice(0, 16).replace("T", " ")}
+            </span>
+          )}
+        </header>
+        <textarea
+          rows={2}
+          aria-label="総合評価"
+          value={dayText}
+          onChange={(e) => {
+            const value = e.target.value;
+            setDayDrafts((prev) => new Map(prev).set(event.id, value));
+          }}
+        />
+      </section>
+
       {event.units.map((unit) => {
         const draft = draftOf(unit.id);
         const dirty = dirtyUnitIds.includes(unit.id);
-        const written = evaluation?.units.get(unit.id);
-        const hasWriting = Boolean(
-          written && (written.freeText || Object.values(written.soap).some(Boolean) || written.comment),
-        );
+        const hasWriting = hasEvaluationWriting(evaluation?.units.get(unit.id));
         const tasks = unit.assessments.flatMap((a) => a.tasks);
         const named = unit.assessments.filter((a) => a.name);
         return (
@@ -347,9 +419,32 @@ export function PathwayDayView({
         );
       })}
 
+      {confirmUnwritten && confirmUnwritten.length > 0 && (
+        <div className="error-banner pathway-day__confirm" role="alert">
+          <p className="error-banner__line error-banner__line--warning">
+            {`記載なしのバリアンスが ${confirmUnwritten.length} 件あります`}
+          </p>
+          <div className="lab-order-item__actions">
+            <button type="button" className="rp-card__compact-button" onClick={() => submit()} disabled={record.isPending}>
+              このまま記録
+            </button>
+            <button
+              type="button"
+              className="rp-card__compact-button"
+              onClick={() => submit(() => onOpenEvaluation(confirmUnwritten[0]))}
+              disabled={record.isPending}
+            >
+              記載を書く
+            </button>
+            <button type="button" className="rp-card__compact-button" onClick={() => setConfirmUnwritten(null)}>
+              取消
+            </button>
+          </div>
+        </div>
+      )}
       <div className="lab-order-item__actions pathway-day__actions">
-        <button type="button" onClick={handleRecord} disabled={record.isPending || dirtyUnitIds.length === 0 || !variance.ready}>
-          {record.isPending ? "送信中..." : dirtyUnitIds.length > 0 ? `記録(${dirtyUnitIds.length} 件)` : "記録"}
+        <button type="button" onClick={handleRecord} disabled={record.isPending || dirtyCount === 0 || !variance.ready}>
+          {record.isPending ? "送信中..." : dirtyCount > 0 ? `記録(${dirtyCount} 件)` : "記録"}
         </button>
       </div>
     </div>

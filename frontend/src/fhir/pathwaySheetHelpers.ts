@@ -1,5 +1,11 @@
 import type { PathwayApplicationRecord, PathwayEventRecord } from "./pathwayApplyHelpers";
-import { achievementLabel, resultValueLabel, type Achievement, type PathwayEvaluationState } from "./pathwayEvaluationHelpers";
+import {
+  achievementLabel,
+  hasEvaluationWriting,
+  resultValueLabel,
+  type Achievement,
+  type PathwayEvaluationState,
+} from "./pathwayEvaluationHelpers";
 import { TASK_CATEGORY_LV1_OPTIONS } from "./pathwayHelpers";
 import { isNursingServiceRequest } from "./nursingOrderHelpers";
 import { orderPerformedOn, type OrderProgress } from "./orderProgressHelpers";
@@ -66,6 +72,8 @@ export interface SheetUnitCell {
   /** 評価済みなら達成状態(1 達成 / 2 未達成 / 3 未評価)。 */
   achievement: Achievement | "";
   achievementLabel: string;
+  /** 記載(S/O/A/P・自由記載・コメント)があるか。 */
+  written: boolean;
 }
 
 export interface SheetAssessmentCell {
@@ -144,12 +152,14 @@ export function buildPathwaySheet(
         unitRows.set(unitKey, group);
       }
       group.row.critical = group.row.critical || unit.critical;
-      const achievement = evaluation?.units.get(unit.id)?.achievement ?? "";
+      const unitEvaluation = evaluation?.units.get(unit.id);
+      const achievement = unitEvaluation?.achievement ?? "";
       group.row.cells.set(event.id, {
         unitId: unit.id,
         unplanned: unit.unplanned,
         achievement,
         achievementLabel: achievementLabel(achievement),
+        written: hasEvaluationWriting(unitEvaluation),
       });
 
       for (const assessment of unit.assessments) {
@@ -307,6 +317,8 @@ export interface SheetProgress {
   counts: Record<SheetIssue, number>;
   /** 区分ごとに、該当するセルを持つ行の key。 */
   rowKeys: Record<SheetIssue, Set<string>>;
+  /** バリアンスのうち記載(S/O/A/P・自由記載・コメント)の無いセルの数。 */
+  unwrittenVariance: number;
 }
 
 /**
@@ -324,6 +336,7 @@ export function sheetProgress(
   const counts: Record<SheetIssue, number> = { pending: 0, variance: 0, undone: 0 };
   const rowKeys: Record<SheetIssue, Set<string>> = { pending: new Set(), variance: new Set(), undone: new Set() };
   const dateOf = new Map(sheet.days.map((d) => [d.eventId, d.date]));
+  let unwrittenVariance = 0;
   for (const row of sheet.rows) {
     for (const [eventId, cell] of row.cells) {
       const date = dateOf.get(eventId) ?? "";
@@ -332,6 +345,7 @@ export function sheetProgress(
         if (achievement === "2") {
           counts.variance++;
           rowKeys.variance.add(row.key);
+          if (!(cell as SheetUnitCell).written) unwrittenVariance++;
         } else if ((!achievement || achievement === "3") && date <= today) {
           counts.pending++;
           rowKeys.pending.add(row.key);
@@ -344,7 +358,7 @@ export function sheetProgress(
       }
     }
   }
-  return { counts, rowKeys };
+  return { counts, rowKeys, unwrittenVariance };
 }
 
 /**

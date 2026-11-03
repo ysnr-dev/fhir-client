@@ -294,6 +294,9 @@ export interface PathwayDraft {
   scheduledDays: string;
   adaptiveCriteria: string;
   protocolBase: string;
+  standardPathCode: string;
+  standardPathName: string;
+  templateVersion: string;
   status: PathwayStatus;
   approvedOn: string;
   approvedBy: string;
@@ -306,6 +309,32 @@ export interface PathwayDraft {
   /** 先頭が開始フェーズ。必ず 1 つ以上ある。 */
   phases: PathwayPhaseDraft[];
   events: PathwayEventDraft[];
+}
+
+/** 標準クリニカルパスコード: 医療機関コード(10)-分類(2)+連番(5)-派生(5)。ひな型は医療機関コードが 0000000000。 */
+export const STANDARD_PATH_CODE_FORMAT = /^\d{10}-[0-9A-Za-z]{7}-[0-9A-Za-z]{5}$/;
+/** 版(施設パス版・ひな型版)は X または X.Y(JAHIS ePath 実装ガイド 6.1)。 */
+export const PATHWAY_VERSION_FORMAT = /^\d+(\.\d+)?$/;
+
+/**
+ * JAMI・JSCP 合同委員会が定めた標準クリニカルパスコード(第 1 版、ePath プロジェクトの 8 パス)。
+ * 編集画面の候補に出す。施設で使うときは医療機関コードを自院の 10 桁に差し替える。
+ */
+export const STANDARD_PATHWAY_CODES: ReadonlyArray<{ code: string; name: string }> = [
+  { code: "0000000000-0000001-00000", name: "経皮的冠動脈形成術" },
+  { code: "0000000000-0000002-00000", name: "胸腔鏡視下肺切除術" },
+  { code: "0000000000-0000003-00000", name: "ロボット支援前立腺切除術" },
+  { code: "0000000000-0000004-00000", name: "経尿道的膀胱腫瘍切除術" },
+  { code: "0000000000-0000005-00000", name: "THA" },
+  { code: "0000000000-0000006-00000", name: "カテーテルアブレーション" },
+  { code: "0000000000-0000007-00000", name: "胃 ESD" },
+  { code: "0000000000-0000008-00000", name: "腹腔鏡下大腸切除術" },
+];
+
+/** 標準クリニカルパスコードの連番・派生の部分が同じひな型の名称(医療機関コードは問わない)。 */
+export function standardPathwayNameOf(code: string): string {
+  const suffix = code.trim().slice(10);
+  return STANDARD_PATHWAY_CODES.find((c) => c.code.slice(10) === suffix)?.name ?? "";
 }
 
 /** OAT ユニット・観察項目・タスクの識別子。適用後データまで持ち越すので画面で採る。 */
@@ -330,6 +359,9 @@ export function emptyPathwayDraft(): PathwayDraft {
     scheduledDays: "",
     adaptiveCriteria: "",
     protocolBase: "",
+    standardPathCode: "",
+    standardPathName: "",
+    templateVersion: "",
     status: "draft",
     approvedOn: "",
     approvedBy: "",
@@ -423,6 +455,9 @@ export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
     scheduledDays: inputText(detail.scheduled_days),
     adaptiveCriteria: inputText(detail.adaptive_criteria),
     protocolBase: inputText(detail.protocol_base),
+    standardPathCode: inputText(detail.standard_path_code),
+    standardPathName: inputText(detail.standard_path_name),
+    templateVersion: inputText(detail.template_version),
     status: detail.status,
     approvedOn: inputText(detail.approved_on),
     approvedBy: inputText(detail.approved_by),
@@ -561,6 +596,9 @@ export function payloadFromDraft(draft: PathwayDraft): PathwayPayload {
     scheduled_days: numOrNull(draft.scheduledDays),
     adaptive_criteria: textOrNull(draft.adaptiveCriteria),
     protocol_base: textOrNull(draft.protocolBase),
+    standard_path_code: textOrNull(draft.standardPathCode),
+    standard_path_name: textOrNull(draft.standardPathName),
+    template_version: textOrNull(draft.templateVersion),
     status: draft.status,
     valid_from: textOrNull(draft.validFrom),
     valid_to: textOrNull(draft.validTo),
@@ -812,6 +850,15 @@ export function templateSummary(template: PathwayTaskTemplate): string {
  */
 export function validatePathwayDraft(draft: PathwayDraft): string | null {
   if (!draft.name.trim()) return "パス名を入力してください";
+  if (draft.standardPathCode.trim() && !STANDARD_PATH_CODE_FORMAT.test(draft.standardPathCode.trim())) {
+    return "標準クリニカルパスコードは 0000000000-0000001-00000 の形式で入力してください";
+  }
+  if (draft.templateVersion.trim() && !PATHWAY_VERSION_FORMAT.test(draft.templateVersion.trim())) {
+    return "ひな型版は X または X.Y の形式で入力してください";
+  }
+  if (draft.status === "approved" && !PATHWAY_VERSION_FORMAT.test(draft.version.trim())) {
+    return "版は X または X.Y の形式で入力してください(承認するパスは版を揃える)";
+  }
   const scheduled = numOrNull(draft.scheduledDays);
   if (draft.scheduledDays.trim() !== "" && (scheduled === null || !Number.isInteger(scheduled) || scheduled <= 0)) {
     return "パス予定日数は 1 以上の整数で入力してください";

@@ -34,8 +34,8 @@ module Master
 
     PATHWAY_ATTRS = %i[
       pathway_code name short_name name_kana version department_code department_name setting
-      scheduled_days adaptive_criteria protocol_base status approved_on approved_by
-      valid_from valid_to display_order note copied_from_code
+      scheduled_days adaptive_criteria protocol_base standard_path_code standard_path_name template_version
+      status approved_on approved_by valid_from valid_to display_order note copied_from_code
     ].freeze
 
     INDICATION_ATTRS = %w[management_number name icd10].freeze
@@ -244,6 +244,10 @@ module Master
       messages = []
       messages << "適応基準がありません" if record.adaptive_criteria.blank?
       messages << "パス予定日数がありません" if record.scheduled_days.blank?
+      # 適用後データに施設パス版として写すので、承認するものは X.Y の形式に揃える。
+      unless record.version.to_s.match?(Master::Pathway::VERSION_FORMAT)
+        messages << "版は X または X.Y の形式で入力してください"
+      end
       return messages + ["病日がありません"] if events.empty?
 
       messages += phase_invalid_messages(tree)
@@ -358,6 +362,18 @@ module Master
 
     def event_label(event)
       event.title.presence || "病日 #{event.event_key}"
+    end
+
+    # 複製は改訂版なので、版のマイナーを 1 つ上げる(「1」→「1.1」、「1.1」→「1.2」。形式が違えば「1」)。
+    def prepare_copy(target, source)
+      target.version = next_version(source.version)
+    end
+
+    def next_version(version)
+      return "1" unless version.to_s.match?(Master::Pathway::VERSION_FORMAT)
+
+      major, minor = version.split(".")
+      "#{major}.#{minor.to_i + 1}"
     end
 
     # 子を階層ごとにまとめて写す(1 階層 1 回の INSERT)。親の id は写した先の id に付け替える。

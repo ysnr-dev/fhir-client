@@ -95,6 +95,7 @@ module Master
       target.valid_from = nil
       target.valid_to = nil
       target.display_order = nil
+      prepare_copy(target, @record)
       model_class.transaction do
         target.save!
         copy_children(@record, target)
@@ -172,6 +173,9 @@ module Master
     def application_search
       nil
     end
+
+    # 複製した本体に include 先が手を入れる(版の繰り上げなど)。既定では何もしない。
+    def prepare_copy(_target, _source); end
 
     # 上流の適用の件数。確認できなければ nil。未対応の検索パラメータが黙殺されて
     # 全件が数えられないように strict で問い合わせる。

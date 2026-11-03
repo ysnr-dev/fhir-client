@@ -169,6 +169,10 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
 
   const tasks = unit.assessments.flatMap((a) => a.tasks);
   const hasProperValue = unit.assessments.some((a) => a.name && a.properValue);
+  // 未達成(バリアンス)なのに記載が無い。止めはしないが、記録の前に気づけるように出す。
+  const varianceUnwritten =
+    values.achievement === "2" &&
+    !(values.mode === "free" ? values.freeText.trim() : SOAP_ITEMS.some((i) => values.soap[i.code].trim()));
 
   return (
     <div className="pathway-evaluate">
@@ -361,6 +365,11 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
       </fieldset>
 
       <div className="lab-order-item__actions">
+        {varianceUnwritten && (
+          <span className="pathway-evaluate__notice" role="status">
+            バリアンスの記載がありません
+          </span>
+        )}
         <button type="button" onClick={handleSave} disabled={record.isPending || !variance.ready}>
           {record.isPending ? "送信中..." : "記録"}
         </button>

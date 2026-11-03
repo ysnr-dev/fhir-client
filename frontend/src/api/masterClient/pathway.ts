@@ -27,6 +27,10 @@ export interface Pathway {
   adaptive_criteria: string | null;
   /** 元にしたひな型パスの URL。 */
   protocol_base: string | null;
+  /** 元ひな型の標準クリニカルパスコード(医療機関コード-分類+連番-派生)・名称・ひな型版(X.Y)。 */
+  standard_path_code: string | null;
+  standard_path_name: string | null;
+  template_version: string | null;
   status: PathwayStatus;
   approved_on: string | null;
   approved_by: string | null;
@@ -219,6 +223,9 @@ export interface PathwayPayload {
   scheduled_days?: number | null;
   adaptive_criteria?: string | null;
   protocol_base?: string | null;
+  standard_path_code?: string | null;
+  standard_path_name?: string | null;
+  template_version?: string | null;
   status?: PathwayStatus;
   valid_from?: string | null;
   valid_to?: string | null;

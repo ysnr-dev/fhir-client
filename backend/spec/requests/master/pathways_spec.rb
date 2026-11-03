@@ -131,7 +131,8 @@ RSpec.describe "Master::Pathways", type: :request do
       create_pathway("000012", "既存")
 
       post "/master/pathways", params: {
-        name: "PCI(2泊3日)", scheduled_days: 3, adaptive_criteria: "待機的 PCI", status: "approved",
+        name: "PCI(2泊3日)", scheduled_days: 3, adaptive_criteria: "待機的 PCI", status: "approved", version: "1",
+        standard_path_code: "0000000000-0000001-00000", standard_path_name: "経皮的冠動脈形成術", template_version: "0",
         indications: [{ management_number: "20058911", name: "狭心症" }],
         events: event_params,
       }, as: :json
@@ -139,6 +140,9 @@ RSpec.describe "Master::Pathways", type: :request do
       expect(response).to have_http_status(:created)
       expect(body["pathway_code"]).to eq("000013")
       expect(body["approved_on"]).to eq(FacilityClock.today.to_s)
+      expect(body["standard_path_code"]).to eq("0000000000-0000001-00000")
+      expect(body["standard_path_name"]).to eq("経皮的冠動脈形成術")
+      expect(body["template_version"]).to eq("0")
       events = body["events"]
       expect(events.map { |e| e["display_order"] }).to eq([1, 2])
       unit = events[0]["oat_units"][0]
@@ -268,6 +272,20 @@ RSpec.describe "Master::Pathways", type: :request do
       expect(body["event_count"]).to eq(1)
     end
 
+    it "標準クリニカルパスコード・ひな型版は形式を検証し、下書きでも弾く" do
+      post "/master/pathways", params: { name: "x", standard_path_code: "0000002" }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("0000000000-0000001-00000 の形式")
+
+      post "/master/pathways", params: { name: "x", template_version: "v1" }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("X または X.Y の形式")
+
+      post "/master/pathways", params: { name: "x", standard_path_code: "1312233334-0000002-00001", template_version: "1.2" },
+                               as: :json
+      expect(response).to have_http_status(:created)
+    end
+
     it "有効終了日が有効開始日より前なら登録できない" do
       post "/master/pathways", params: { name: "期間おかしい", valid_from: "2026-08-01", valid_to: "2026-07-01" }
 
@@ -334,7 +352,7 @@ RSpec.describe "Master::Pathways", type: :request do
 
   describe "承認の記録" do
     it "承認したときに承認日をサーバーが入れる" do
-      pathway = create_pathway("000001", "PCI", adaptive_criteria: "待機的", scheduled_days: 3)
+      pathway = create_pathway("000001", "PCI", adaptive_criteria: "待機的", scheduled_days: 3, version: "2.1")
       create_event("000001", elapsed_days: 1).then do |event|
         Master::PathwayOatUnit.create!(pathway_code: "000001", event_id: event.id, unit_key: UNIT_KEY, name: "x")
       end
@@ -415,7 +433,15 @@ RSpec.describe "Master::Pathways", type: :request do
 
       post "/master/pathways", params: { name: "空", status: "approved" }, as: :json
       expect(response).to have_http_status(:unprocessable_content)
-      expect(body["errors"]).to include("適応基準がありません", "パス予定日数がありません", "病日がありません")
+      expect(body["errors"]).to include("適応基準がありません", "パス予定日数がありません", "病日がありません",
+                                        "版は X または X.Y の形式で入力してください")
+
+      post "/master/pathways", params: {
+        name: "版の形式", status: "approved", adaptive_criteria: "a", scheduled_days: 1, version: "v1",
+        events: [{ elapsed_days: 1, oat_units: [{ name: "x" }] }],
+      }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"]).to include("版は X または X.Y の形式で入力してください")
 
       post "/master/pathways", params: {
         name: "ユニットなし", status: "approved", adaptive_criteria: "a", scheduled_days: 1,
@@ -445,7 +471,7 @@ RSpec.describe "Master::Pathways", type: :request do
 
     def branching_params(**overrides)
       {
-        name: "分岐あり", adaptive_criteria: "a", scheduled_days: 4,
+        name: "分岐あり", adaptive_criteria: "a", scheduled_days: 4, version: "1",
         phases: [
           { phase_key: PHASE_A, name: "周術期",
             branches: [{ to_phase_key: PHASE_B, criteria: "発熱なし" }, { to_phase_key: PHASE_C, criteria: "縫合不全の疑い" }] },
@@ -536,7 +562,7 @@ RSpec.describe "Master::Pathways", type: :request do
 
     it "フェーズが 1 つなら病日が飛んでいても承認できる" do
       post "/master/pathways", params: {
-        name: "PCI", status: "approved", adaptive_criteria: "a", scheduled_days: 5,
+        name: "PCI", status: "approved", adaptive_criteria: "a", scheduled_days: 5, version: "1",
         events: [{ elapsed_days: 1, oat_units: [{ name: "x" }] }, { elapsed_days: 5, oat_units: [{ name: "x" }] }],
       }, as: :json
 
@@ -566,7 +592,8 @@ RSpec.describe "Master::Pathways", type: :request do
   describe "POST /master/pathways/:id/copy" do
     it "新しいコードで全部写し、uuid を引き継ぎ、承認は引き継がず下書きになる" do
       create_pathway("000001", "PCI", status: "approved", approved_on: FacilityClock.today, approved_by: "p1",
-                                     adaptive_criteria: "a", scheduled_days: 3, valid_from: "2026-01-01")
+                                     adaptive_criteria: "a", scheduled_days: 3, valid_from: "2026-01-01", version: "1",
+                                     standard_path_code: "0000000000-0000001-00000", template_version: "0")
       Master::PathwayIndication.create!(pathway_code: "000001", management_number: "20058911", name: "狭心症")
       event = create_event("000001", elapsed_days: 1, title: "入院日")
       unit = Master::PathwayOatUnit.create!(pathway_code: "000001", event_id: event.id, unit_key: UNIT_KEY, name: "x")
@@ -585,6 +612,9 @@ RSpec.describe "Master::Pathways", type: :request do
       expect(body["copied_from_code"]).to eq("000001")
       expect(body["valid_from"]).to be_nil
       expect(body["adaptive_criteria"]).to eq("a")
+      expect(body["version"]).to eq("1.1")
+      expect(body["standard_path_code"]).to eq("0000000000-0000001-00000")
+      expect(body["template_version"]).to eq("0")
       expect(body["indications"].size).to eq(1)
       copied_unit = body["events"][0]["oat_units"][0]
       expect(copied_unit["unit_key"]).to eq(UNIT_KEY)

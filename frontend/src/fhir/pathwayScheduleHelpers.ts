@@ -48,9 +48,10 @@ function eventLabel(event: PathwayEventRecord): string {
   return `病日 ${event.elapsedDays}${step}`;
 }
 
-/** 病日に評価(アウトカムの Goal・評価・観察項目の実績)が 1 つでもあるか。 */
+/** 病日に評価(アウトカムの Goal・評価・観察項目の実績・病日の総合評価)が 1 つでもあるか。 */
 function eventHasEvaluation(event: PathwayEventRecord, evaluation: PathwayEvaluationState | null): boolean {
   if (!evaluation) return false;
+  if (evaluation.days.has(event.id)) return true;
   return event.units.some((unit) => {
     const state = evaluation.units.get(unit.id);
     return Boolean(state?.goal || state?.observation) || unit.assessments.some((a) => evaluation.results.has(a.id));

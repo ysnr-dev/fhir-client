@@ -11,6 +11,10 @@ module Master
     STATUSES = %w[draft approved retired].freeze
     # 入院 / 外来
     SETTINGS = %w[inpatient outpatient].freeze
+    # 標準クリニカルパスコード: 医療機関コード(10)-分類(2)+連番(5)-派生(5)。連番・派生は英数字。
+    STANDARD_PATH_CODE_FORMAT = /\A\d{10}-[0-9A-Za-z]{7}-[0-9A-Za-z]{5}\z/
+    # 版(施設パス版・ひな型版)は X または X.Y。
+    VERSION_FORMAT = /\A\d+(\.\d+)?\z/
 
     has_many :indications, -> { in_display_order },
              class_name: "Master::PathwayIndication", primary_key: :pathway_code, foreign_key: :pathway_code
@@ -27,6 +31,11 @@ module Master
     validates :status, inclusion: { in: STATUSES }
     validates :setting, inclusion: { in: SETTINGS }
     validates :scheduled_days, numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
+    validates :standard_path_code, format: { with: STANDARD_PATH_CODE_FORMAT,
+                                             message: "は 0000000000-0000001-00000 の形式で入力してください" },
+                                   allow_blank: true
+    validates :template_version, format: { with: VERSION_FORMAT, message: "は X または X.Y の形式で入力してください" },
+                                 allow_blank: true
     validate :valid_period_is_ordered
 
     # 今日適用できるパス(有効期間内)。

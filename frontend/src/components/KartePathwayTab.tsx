@@ -41,6 +41,7 @@ import { currentPhaseKeyOf, nextPhasesOf } from "../fhir/pathwayApplyHelpers";
 import { PathwayCancelPanel } from "./PathwayCancelPanel";
 import { PathwayNextPhaseModal } from "./PathwayNextPhaseModal";
 import { PathwayClosePanel } from "./PathwayClosePanel";
+import { PathwayDayAssessmentPanel } from "./PathwayDayAssessmentPanel";
 import { PathwayDayView } from "./PathwayDayView";
 import { PathwayEvaluatePanel } from "./PathwayEvaluatePanel";
 import { PathwayOrderModal } from "./PathwayOrderModal";
@@ -115,6 +116,8 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
   // 全画面では右ペインが隠れるので、評価入力はモーダルで開く(開いている OAT ユニット)。
   const [modalUnitId, setModalUnitId] = useState<string | null>(null);
   const [modalTaskId, setModalTaskId] = useState<string | null>(null);
+  // 病日の総合評価(オーバービューの最下段のセルから開く)。
+  const [modalEventId, setModalEventId] = useState<string | null>(null);
   // オーダーを結んだタスクの詳細。看護指示だけは詳細ではなく実施入力を開く(指示簿と同じ画面)。
   const [modalOrder, setModalOrder] = useState<{
     order: fhir4.ServiceRequest;
@@ -443,7 +446,12 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
       ) : (
         <>
           <div className="chemo-calendar__summary pathway-sheet__summary">
-            <span className="pathway-sheet__name">{application.title}</span>
+            <span
+              className="pathway-sheet__name"
+              title={application.pathwayVersion ? `版 ${application.pathwayVersion}` : undefined}
+            >
+              {application.title}
+            </span>
             <span>入院 {application.periodStart}</span>
             <span>
               {todayEvent
@@ -464,7 +472,13 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                   aria-pressed={issue === key}
                   className={`pathway-sheet__issue pathway-sheet__issue--${key}${issue === key ? " pathway-sheet__issue--active" : ""}`}
                   disabled={progress.counts[key] === 0 && issue !== key}
-                  title={issue === key ? "絞り込みを解除" : undefined}
+                  title={
+                    issue === key
+                      ? "絞り込みを解除"
+                      : key === "variance" && progress.unwrittenVariance > 0
+                        ? `うち記載なし ${progress.unwrittenVariance}`
+                        : undefined
+                  }
                   onClick={() => setIssue(issue === key ? null : key)}
                 >
                   {`${ISSUE_LABELS[key]} ${progress.counts[key]}`}
@@ -692,11 +706,57 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                   </tr>
                   );
                 })}
+                {/* 病日ごとの医師の総合評価。絞り込み中は出さない(行を絞る道具なので)。 */}
+                {!issue && (
+                  <tr className="pathway-sheet__row pathway-sheet__row--day-assessment">
+                    <th scope="row" className="pathway-sheet__label-col">
+                      <span className="pathway-sheet__label" title="総合評価">
+                        総合評価
+                      </span>
+                    </th>
+                    {sheet.days.map((day) => {
+                      const text = evaluation?.days.get(day.eventId)?.text ?? "";
+                      return (
+                        <td key={day.eventId} className={`pathway-sheet__cell${dayClasses(day.date)}`}>
+                          <button
+                            type="button"
+                            className="pathway-sheet__cell-button"
+                            title={text ? text.slice(0, 40) : undefined}
+                            onClick={() => setModalEventId(day.eventId)}
+                          >
+                            {text ? (
+                              <span className="pathway-sheet__value pathway-sheet__value--written">●</span>
+                            ) : (
+                              <span className="pathway-sheet__planned">○</span>
+                            )}
+                          </button>
+                        </td>
+                      );
+                    })}
+                    <td className="pathway-sheet__filler" />
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
           )}
         </>
+      )}
+
+      {/* 病日の総合評価。シートに重ねて開く。 */}
+      {modalEventId && application && (
+        <Modal
+          title="クリニカルパス(総合評価)"
+          className="modal--wide pathway-evaluate-modal"
+          onClose={() => setModalEventId(null)}
+        >
+          <PathwayDayAssessmentPanel
+            patientId={patientId}
+            applyId={application.id}
+            eventId={modalEventId}
+            onSaved={() => setModalEventId(null)}
+          />
+        </Modal>
       )}
 
       {/* 評価入力。シートに重ねて開く(全画面でも通常でも同じ)。 */}

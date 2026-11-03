@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_03_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_03_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -2140,6 +2140,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_150000) do
     t.string "search_short_name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "standard_path_code"
+    t.string "standard_path_name"
+    t.string "template_version"
     t.index ["copied_from_code"], name: "index_master_pathways_on_copied_from_code"
     t.index ["department_code"], name: "index_master_pathways_on_department_code"
     t.index ["pathway_code"], name: "index_master_pathways_on_pathway_code", unique: true

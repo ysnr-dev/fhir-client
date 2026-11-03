@@ -6,7 +6,7 @@ import {
   type ExtractOutput,
   type ExtractPatientRow,
 } from "./extractQueryHelpers";
-import { PATHWAY_APPLY_ID_SYSTEM, PATHWAY_EXT, pathwayCodeOf } from "./pathwayApplyHelpers";
+import { PATHWAY_APPLY_ID_SYSTEM, PATHWAY_EXT, pathwayCodeOf, pathwayVersionOf } from "./pathwayApplyHelpers";
 import {
   PATHWAY_APPLY_GOAL_ID_SYSTEM,
   PATHWAY_CLOSING_TYPE_EXT,
@@ -44,7 +44,7 @@ const PATHWAY_FIXED_HEADERS = [
   "バリアンス",
   "未評価",
 ];
-const PATHWAY_VALUE_HEADERS = ["パス", "パスコード", "バリアンスの内容", "中止理由", "総合評価"];
+const PATHWAY_VALUE_HEADERS = ["パス", "パスコード", "版", "バリアンスの内容", "中止理由", "総合評価"];
 
 function achievementOf(goal: fhir4.Goal): string {
   return goal.achievementStatus?.coding?.find((c) => c.system === ACHIEVEMENT_SYSTEM)?.code ?? "";
@@ -124,6 +124,7 @@ export function pathwayExtractRows(
       values: [
         application.title ?? "",
         pathwayCodeOf(application),
+        pathwayVersionOf(application),
         variances.map((g) => `${g.statusDate ?? ""} ${g.description?.text ?? ""}`.trim()).join("、"),
         closed ? close.reason : "",
         closed ? close.comment : "",

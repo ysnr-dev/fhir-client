@@ -55,7 +55,8 @@ type EvaluationContent = Pick<
 /** 評価の Observation そのものから読める部分(判定・記載・記録者)。 */
 function evaluationContent(observation: fhir4.Observation): EvaluationContent {
   const soap: PathwayEvaluationCard["soap"] = [];
-  let freeText = "";
+  // 病日の総合評価は本文を valueString に持つ(アウトカムの自由記載は component)。
+  let freeText = observation.valueString?.trim() ?? "";
   for (const component of observation.component ?? []) {
     const code = component.code?.coding?.find((c) => c.system === EVALUATION_ITEM_SYSTEM)?.code;
     const text = component.valueString?.trim() ?? "";
@@ -101,10 +102,14 @@ export function buildPathwayEvaluationCards(
     const content = evaluationContent(observation);
     if (content.soap.length === 0 && !content.freeText && !content.comment) continue;
 
-    const unit = byId.get(refId(observation.basedOn?.[0]?.reference));
-    if (!unit || levelOf(unit) !== "oat-unit") continue;
-    const apply = byId.get(refId(unit.partOf?.[0]?.reference));
-    const event = byId.get(refId(unit.partOf?.at(-1)?.reference));
+    const target = byId.get(refId(observation.basedOn?.[0]?.reference));
+    if (!target) continue;
+    const level = levelOf(target);
+    if (level !== "oat-unit" && level !== "event") continue;
+    // 病日の総合評価は病日の CarePlan を指し、アウトカムの評価は OAT ユニットを指す(祖先は partOf に全部ある)。
+    const unit = level === "oat-unit" ? target : null;
+    const event = unit ? byId.get(refId(unit.partOf?.at(-1)?.reference)) : target;
+    const apply = byId.get(refId((unit ?? target).partOf?.[0]?.reference));
     if (!apply || !event) continue;
 
     const elapsedDays = event.extension?.find((e) => e.url === PATHWAY_EXT.eventElapsedDays)?.valueInteger ?? 0;
@@ -118,7 +123,7 @@ export function buildPathwayEvaluationCards(
       eventId: event.id ?? "",
       eventLabel: `病日 ${elapsedDays} ${eventDayStepLabel(elapsedDays, event.title, pathStep, pathStepName)}`,
       eventDate: event.period?.start ?? "",
-      unitName: unit.title ?? observation.code?.text ?? "",
+      unitName: unit ? (unit.title ?? observation.code?.text ?? "") : "総合評価",
     });
   }
   return cards;

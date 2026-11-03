@@ -21913,6 +21913,31 @@ button.nursing-worksheet__mark {
   justify-content: flex-end;
 }
 
+/* 病日の総合評価(日めくりの先頭)。 */
+.pathway-day__assessment textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+/* 記載なしのバリアンスの確認(記録の直前)。 */
+.pathway-day__confirm .lab-order-item__actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+/* 評価モーダルの「バリアンスの記載がありません」。 */
+.pathway-evaluate__notice {
+  align-self: center;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+/* オーバービュー最下段の総合評価の印(記載あり)。 */
+.pathway-sheet__value--written {
+  color: var(--accent);
+}
+
 /* 観察項目の実績値の候補(その日の経過表の値)。押すと入力欄に入る。 */
 .pathway-evaluate__rows td.pathway-day__candidate-cell {
   width: 1%;

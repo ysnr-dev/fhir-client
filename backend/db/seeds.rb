@@ -1518,6 +1518,9 @@ if pathway_files.any?
         scheduled_days: data["scheduled_days"],
         adaptive_criteria: data["adaptive_criteria"].presence,
         protocol_base: data["protocol_base"].presence,
+        standard_path_code: data["standard_path_code"].presence,
+        standard_path_name: data["standard_path_name"].presence,
+        template_version: data["template_version"].presence,
         status: "draft",
         note: data["note"].presence
       )

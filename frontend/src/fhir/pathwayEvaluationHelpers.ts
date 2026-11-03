@@ -9,8 +9,11 @@ import {
 import {
   PATHWAY_MARKER_CODE,
   PATHWAY_MARKER_SYSTEM,
+  pathwayLevelOf,
+  type PathwayEventRecord,
   type PathwayOatUnitRecord,
 } from "./pathwayApplyHelpers";
+import { eventDayStepLabel } from "./pathwayHelpers";
 import { NURSING_OBSERVATION_RESULT_SYSTEM, nursingVitalCodeOf } from "./nursingPerformHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { buildBloodPressureComponents } from "./vitalHelpers";
@@ -26,6 +29,7 @@ import { LOINC_SYSTEM } from "./shared";
 //   Observation(評価)           code = judgement、value = 達成状態、component = S/O/A/P、basedOn → CarePlan(OAT ユニット)
 //   Observation(観察項目の実績) code = 観察項目のコード、value = 実績値、basedOn → CarePlan(観察項目)
 //   Procedure(タスク)           status = completed(実施)/ preparation(未実施)、performedDateTime、performer
+//   Observation(病日の総合評価)  code = comp-assessment、valueString = 本文、basedOn → CarePlan(病日)。病日に 1 件(上書き)
 //
 // ［決定］評価・実績の Observation は Goal に contained せず独立のリソースにする(検索で読める。
 // EP12 出力で contained に畳む)。category の先頭にパスの印を置き、患者 + category の 1 回の検索で
@@ -35,6 +39,7 @@ const ID_SYSTEM_BASE = "http://e-path.jp/fhir/ePath/IdSystem";
 export const PATHWAY_OUTCOME_GOAL_ID_SYSTEM = `${ID_SYSTEM_BASE}/outcome-goal-id`;
 export const PATHWAY_EVALUATION_ID_SYSTEM = `${ID_SYSTEM_BASE}/observation-evaluation-id`;
 export const PATHWAY_RESULT_ID_SYSTEM = `${ID_SYSTEM_BASE}/observation-result-id`;
+export const PATHWAY_DAY_ASSESSMENT_ID_SYSTEM = `${ID_SYSTEM_BASE}/observation-comp-assessment-id`;
 
 const CS_BASE = "http://e-path.jp/fhir/ePath/CodeSystem";
 export const EVALUATION_ITEM_SYSTEM = `${CS_BASE}/EPathEvaluationItemCS`;
@@ -120,11 +125,36 @@ export interface UnitEvaluation {
   performerName: string;
 }
 
+/** 病日ごとの医師の総合評価(ePath の compAssessment)。病日に 1 件。 */
+export interface DayAssessment {
+  observation: fhir4.Observation;
+  text: string;
+  recordedAt: string;
+  performerName: string;
+}
+
 export interface PathwayEvaluationState {
   /** OAT ユニット CarePlan の id → 評価。 */
   units: Map<string, UnitEvaluation>;
   /** 観察項目 CarePlan の id → 実績の Observation。 */
   results: Map<string, fhir4.Observation>;
+  /** 病日 CarePlan の id → 総合評価。 */
+  days: Map<string, DayAssessment>;
+}
+
+/** 記載(S/O/A/P・自由記載・コメント)があるか。バリアンスの記載の有無の判定に使う。 */
+export function hasEvaluationWriting(
+  evaluation: Pick<UnitEvaluation, "soap" | "freeText" | "comment"> | undefined,
+): boolean {
+  return Boolean(
+    evaluation && (evaluation.freeText.trim() || Object.values(evaluation.soap).some((t) => t.trim()) || evaluation.comment.trim()),
+  );
+}
+
+function isDayAssessmentObservation(observation: fhir4.Observation): boolean {
+  return Boolean(
+    observation.code?.coding?.some((c) => c.system === EVALUATION_ITEM_SYSTEM && c.code === FREE_TEXT_CODE),
+  );
 }
 
 /**
@@ -134,22 +164,37 @@ export interface PathwayEvaluationState {
 export function buildEvaluationState(
   observations: fhir4.Observation[],
   goals: Map<string, fhir4.Goal>,
-  unitCarePlans: fhir4.CarePlan[],
+  carePlans: fhir4.CarePlan[],
 ): PathwayEvaluationState {
   const units = new Map<string, UnitEvaluation>();
   const results = new Map<string, fhir4.Observation>();
+  const days = new Map<string, DayAssessment>();
   const evaluations = new Map<string, fhir4.Observation>();
   for (const observation of observations) {
     if (!isPathwayObservation(observation)) continue;
+    const target = basedOnId(observation);
+    if (!target) continue;
+    if (isDayAssessmentObservation(observation)) {
+      days.set(target, {
+        observation,
+        text: observation.valueString ?? "",
+        recordedAt: observation.effectiveDateTime ?? "",
+        performerName: observation.performer?.[0]?.display ?? "",
+      });
+      continue;
+    }
     const isEvaluation = observation.code?.coding?.some(
       (c) => c.system === EVALUATION_ITEM_SYSTEM && c.code === "judgement",
     );
-    const target = basedOnId(observation);
-    if (!target) continue;
     (isEvaluation ? evaluations : results).set(target, observation);
   }
-  for (const unit of unitCarePlans) {
-    if (!unit.id) continue;
+  // 総合評価は病日の CarePlan を指すものだけ(OAT ユニットを指す古い記録は無いが、階層で確かめる)。
+  for (const [id] of days) {
+    const carePlan = carePlans.find((cp) => cp.id === id);
+    if (carePlan && pathwayLevelOf(carePlan) !== "event") days.delete(id);
+  }
+  for (const unit of carePlans) {
+    if (!unit.id || pathwayLevelOf(unit) !== "oat-unit") continue;
     const goalId = unit.goal?.[0]?.reference?.split("/").pop();
     const goal = goalId ? (goals.get(goalId) ?? null) : null;
     const observation = evaluations.get(unit.id) ?? null;
@@ -185,7 +230,7 @@ export function buildEvaluationState(
       performerName: observation?.performer?.[0]?.display ?? "",
     });
   }
-  return { units, results };
+  return { units, results, days };
 }
 
 export function resultValueLabel(observation: fhir4.Observation | undefined): string {
@@ -602,6 +647,54 @@ export function buildPathwayEvaluationBundle(
     }
   }
 
+  return { resourceType: "Bundle", type: "transaction", entry };
+}
+
+export interface PathwayDayAssessmentContext {
+  patientId: string;
+  event: PathwayEventRecord;
+  existing: DayAssessment | undefined;
+  performer: PathwayEvaluationContext["performer"];
+  department?: DepartmentRef;
+}
+
+/**
+ * 病日ごとの医師の総合評価(ePath の compAssessment、病日に 1 件)。本文が入っていれば Observation を
+ * POST / PUT(上書き)、空にしたら DELETE。病日の CarePlan には触れない(読みは basedOn の逆引きで足りる)。
+ * 変わっていなければ entry は空。
+ */
+export function buildPathwayDayAssessmentBundle(
+  ctx: PathwayDayAssessmentContext,
+  text: string,
+  recordedAt: string,
+): fhir4.Bundle {
+  const { event, existing } = ctx;
+  const body = text.trim();
+  const entry: fhir4.BundleEntry[] = [];
+  if (!body) {
+    if (existing?.observation.id) entry.push({ request: { method: "DELETE", url: `Observation/${existing.observation.id}` } });
+    return { resourceType: "Bundle", type: "transaction", entry };
+  }
+  if (existing && existing.text.trim() === body) return { resourceType: "Bundle", type: "transaction", entry };
+  const label = `病日 ${event.elapsedDays} ${eventDayStepLabel(event.elapsedDays, event.title, event.pathStep, event.pathStepName)}`;
+  const observation: fhir4.Observation = {
+    ...(existing?.observation ?? {}),
+    resourceType: "Observation",
+    identifier: [{ system: PATHWAY_DAY_ASSESSMENT_ID_SYSTEM, value: event.eventId || event.id }],
+    status: "final",
+    category: [pathwayObservationCategory()],
+    code: { coding: [{ system: EVALUATION_ITEM_SYSTEM, code: FREE_TEXT_CODE, display: "総合評価" }], text: label },
+    subject: { reference: `Patient/${ctx.patientId}` },
+    effectiveDateTime: recordedAt || nowFhirDateTime(),
+    performer: performerRef(ctx.performer),
+    basedOn: [{ reference: `CarePlan/${event.id}` }],
+    valueString: body,
+  };
+  if (!existing && ctx.department?.departmentId) {
+    observation.extension = [departmentExtension(ctx.department.departmentId, ctx.department.departmentName)];
+  }
+  if (existing?.observation.id) entry.push(put(observation));
+  else entry.push({ resource: observation, request: { method: "POST", url: "Observation" } });
   return { resourceType: "Bundle", type: "transaction", entry };
 }
 

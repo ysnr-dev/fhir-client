@@ -51,6 +51,8 @@ import {
   removeOutcomeOccurrence,
   removeTaskOccurrence,
   splitEventDraft,
+  standardPathwayNameOf,
+  STANDARD_PATHWAY_CODES,
   validatePathwayDraft,
   type PathwayDraft,
   type PathwayEventDraft,
@@ -169,6 +171,13 @@ export function PathwayEditorPage() {
     });
   }
   const selectedDepartmentId = departments.find((d) => departmentCode(d) === draft.departmentCode)?.id ?? "";
+
+  // 標準クリニカルパスコードを候補から選んだら、名称が空か前の候補のままなら名称も入れる。
+  function handleStandardCodeChange(code: string) {
+    const name = standardPathwayNameOf(code);
+    const keepName = draft.standardPathName && draft.standardPathName !== standardPathwayNameOf(draft.standardPathCode);
+    setDraft({ ...draft, standardPathCode: code, standardPathName: keepName ? draft.standardPathName : name });
+  }
 
   // ---- 病日の更新 ----
 
@@ -427,6 +436,41 @@ export function PathwayEditorPage() {
                     className="regimen-editor__name"
                     value={draft.protocolBase}
                     onChange={(e) => update("protocolBase", e.target.value)}
+                  />
+                </label>
+                <label>
+                  標準クリニカルパスコード
+                  <input
+                    type="text"
+                    className="regimen-editor__name"
+                    list="pathway-standard-codes"
+                    value={draft.standardPathCode}
+                    onChange={(e) => handleStandardCodeChange(e.target.value)}
+                  />
+                  <datalist id="pathway-standard-codes">
+                    {STANDARD_PATHWAY_CODES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </datalist>
+                </label>
+                <label>
+                  標準クリニカルパス名称
+                  <input
+                    type="text"
+                    className="regimen-editor__name"
+                    value={draft.standardPathName}
+                    onChange={(e) => update("standardPathName", e.target.value)}
+                  />
+                </label>
+                <label>
+                  ひな型版
+                  <input
+                    type="text"
+                    className="regimen-editor__unit-input"
+                    value={draft.templateVersion}
+                    onChange={(e) => update("templateVersion", e.target.value)}
                   />
                 </label>
               </div>

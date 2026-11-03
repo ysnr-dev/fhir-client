@@ -23,7 +23,7 @@ import { KARTE_NOTE_TYPE_SEARCH } from "../../fhir/clinicalNoteHelpers";
 import { compareKarteDaysDesc, orderCardDay } from "../../fhir/karteTimeline";
 import { PATHWAY_MARKER_CODE, PATHWAY_MARKER_SYSTEM } from "../../fhir/pathwayApplyHelpers";
 import { buildPathwayEvaluationCards, type PathwayEvaluationCard } from "../../fhir/pathwayKarteHelpers";
-import { EVALUATION_ITEM_SYSTEM } from "../../fhir/pathwayEvaluationHelpers";
+import { EVALUATION_ITEM_SYSTEM, FREE_TEXT_CODE } from "../../fhir/pathwayEvaluationHelpers";
 import { today } from "../../lib/dates";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { NURSING_ORDER_TYPE } from "../../fhir/nursingOrderHelpers";
@@ -399,7 +399,8 @@ export function useKartePathwayEvaluations(
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
-      params.set("code", `${EVALUATION_ITEM_SYSTEM}|judgement`);
+      // アウトカムの評価(判定)と病日の総合評価の両方(カンマ OR)。
+      params.set("code", `${EVALUATION_ITEM_SYSTEM}|judgement,${EVALUATION_ITEM_SYSTEM}|${FREE_TEXT_CODE}`);
       params.set("_include", "Observation:based-on");
       params.set("_include:iterate", "CarePlan:part-of");
       params.set("_count", "500");

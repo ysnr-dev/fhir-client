@@ -1,6 +1,6 @@
 # クリニカルパスの設計
 
-**状態: 第 1 段階(施設パス定義マスタ)・第 2 段階(患者への適用・パスシート・日次評価・終了中止・予定外)実装済(2026-09-13)。ePath 形式の入出力(第 3 段階)は未実装(§8)。不足機能の洗い出しは `docs/clinical-pathway-backlog.md`。**
+**状態: 第 1 段階(施設パス定義マスタ)・第 2 段階(患者への適用・パスシート・日次評価・終了中止・予定外)実装済(2026-09-13)。ePath 形式の入出力(第 3 段階)は未実装(§8)。不足機能の洗い出しは `docs/clinical-pathway-backlog.md`(JAHIS ePath 実装ガイドとの突合は同 §H。2026-11-03 に標準パスコード・版・病日の総合評価・バリアンスの記載の促しを足した。§7.12)。**
 本文中の区別は他の設計書と同じ(［事実］/［導出］/［決定］/［提案］)。
 
 基本仕様は JAMI・JSCP 合同委員会の ePath(ePath R4 実装ガイド v1.0.1、https://e-path.jp/fhir/ePath/260219/)の概念に準ずる。
@@ -111,6 +111,10 @@ master_pathways                 … 本体(= ePath 施設パス PlanDefinition E
   scheduled_days パス予定日数
   adaptive_criteria  適応基準(承認時必須)
   protocol_base  元ひな型パスの URL(任意)
+  standard_path_code / standard_path_name / template_version
+                 元ひな型の標準クリニカルパスコード(医療機関コード 10 桁-分類 2 桁+連番 5 桁-派生 5 桁)・名称・ひな型版(X.Y)。任意。
+                 形式は保存時に検証する(JAHIS ePath 実装ガイド 第 4 章 No.1)
+  version        施設パス版。承認するときだけ X / X.Y の形式を求め、複製はマイナーを +1 する(「1」→「1.1」。形式外なら「1」)
   status         draft | approved | retired、approved_on、approved_by、copied_from_code
   valid_from / valid_to / display_order / note / search_*
 master_pathway_indications      … 対象病名(= goal.addresses)。病名管理番号 + 表示用の名称・ICD10
@@ -215,6 +219,7 @@ master_pathway_events          + phase_key(NOT NULL)。一意性は (pathway_cod
 | `scheduled_days` | ext ScheduledDays |
 | `department_code` / `department_name` | ext ClinicalDepartment |
 | `protocol_base` | ext ProtocolBase |
+| `standard_path_code` / `standard_path_name` / `template_version` | パス識別情報の 1 番目の code(標準クリニカルパスコード、医療機関コードは自院に差し替え)・displayName、templateVersion(JAMI XML)。`pathway_code` は 2 番目の LOCAL の code |
 | `indications`(管理番号 / ICD10) | goal.addresses(MEDIS master-disease-keyNumber / ICD10-2013-full) |
 | `events.elapsed_days` / `path_step` | action.id = "病日[-ステップ]"、Event の ext EventElapsedDays / PathStep |
 | `events.title` | action.title、Event の name |
@@ -540,8 +545,10 @@ CarePlan(適用)                 partOf 無し = 木の根
 | OAT ユニット | `…/IdSystem/oat-unit-id` | `….{unit_key}[-{リピート番号}]` |
 | 観察項目 | `…/IdSystem/assessment-id` | `….{assessment_key}` |
 | タスク | `…/IdSystem/task-id` | `….{task_key}` |
+| 病日の総合評価 | `…/IdSystem/observation-comp-assessment-id` | 病日の識別子と同じ値(§7.12) |
 
 `unit_key` / `assessment_key` / `task_key` は定義マスタの uuid(§3)。定義を直しても同じアウトカムを追える。
+適用の CarePlan にはローカル拡張 `pathway-version`(valueString = 適用した時点の `version`)を焼く(§7.12)。
 
 ### 7.2 病日 → 実日付
 
@@ -761,6 +768,38 @@ Task  code = task-code|pathway-variance、priority = urgent(注意)、status req
   フェーズへ進み直すときは手で直す)。
 - 適用の木は 1 ページ(500 件)を超えうるので、`usePathwayApplicationTree` は total から残りのページも読む。
 
+### 7.12 JAHIS ePath 実装ガイドで足したもの(2026-11-03)
+
+`docs/clinical-pathway-backlog.md` §H の G-1・G-2・G-4・G-7。
+
+- **適用した版**(G-2): 適用の CarePlan に拡張 `pathway-version`(valueString)。`instantiatesUri` はコードだけのまま
+  (承認の取り消しの件数がこの URI で数える)。パスタブの見出しのパス名のツールチップ(「版 1.1」)とデータ抽出「パス」の列「版」に出す。
+  版の無い古い適用は空。
+- **病日ごとの医師の総合評価**(G-4、ePath の compAssessment 1..1): 実装は `fhir/pathwayEvaluationHelpers.ts` の
+  `buildPathwayDayAssessmentBundle`、`components/PathwayDayView.tsx`、`components/PathwayDayAssessmentPanel.tsx`。
+
+  ```text
+  Observation(総合評価)  identifier observation-comp-assessment-id = 病日の識別子、code = EPathEvaluationItemCS|comp-assessment、
+                        valueString = 本文、category[0] = パスの印、basedOn → CarePlan(病日)、effectiveDateTime、performer、
+                        拡張 order-department(初回のみ)
+  ```
+  - ［決定］**病日の Goal は作らない**。総合評価は達成状態を持たない自由文で、読みは `basedOn` の逆引き(`usePathwayObservations` の
+    患者ぶんの検索に乗る)で足りる。EP12 出力で Goal が要れば組む。
+  - ［決定］**病日に 1 件、書き直しは上書き(PUT)、空にして記録したら DELETE**。アウトカムの自由記載(component の `comp-assessment`)
+    とは、Observation の `code` が `comp-assessment` か `judgement` かで見分ける(`buildEvaluationState` が `days` に振り分ける)。
+  - 日めくりは病日の見出しの下に「総合評価」の欄を置き、「記録(n 件)」に含める(件数はアウトカムと病日の合計)。
+    オーバービューは最下段に「総合評価」の行(● 記載あり・○ なし。ツールチップに冒頭 40 字、押すと「クリニカルパス(総合評価)」のモーダル)。
+    絞り込み中は行を出さない。進み具合の件数には足さない。分けた病日(ステップ)は CarePlan が別なのでステップごとに 1 件。
+  - カルテには「パス評価」のカードとして見出し「総合評価」で出す(`useKartePathwayEvaluations` が `judgement` と
+    `comp-assessment` をカンマ OR で引き、`buildPathwayEvaluationCards` が病日の CarePlan を指すものを扱う)。
+  - 総合評価のある病日は「評価の記録があります」として日程の変更・適用の取り消しを止める(`eventHasEvaluation`)。
+  - テンプレート差し込みは付けていない(欄は 1 つの textarea)。
+- **バリアンスの記載の促し**(G-7、ガイド No.19): 日めくりの「記録」で、未達成にしたアウトカムに記載(S/O/A/P・自由記載・コメント)が
+  無ければ「記載なしのバリアンスが n 件あります」を記録ボタンの上に出し、「このまま記録」「記載を書く」(記録してから最初の該当
+  アウトカムの評価モーダルを開く)「取消」から選ぶ。入力を変えると確認は消える。評価モーダルでは未達成 + 記載なしのとき記録ボタンの
+  横に「バリアンスの記載がありません」(止めない)。オーバービューの「バリアンス n」のツールチップに「うち記載なし m」
+  (`sheetProgress.unwrittenVariance`、`SheetUnitCell.written`)。
+
 ## 8. 実装の段階
 
 - **第 1 段階(実装済)**: 施設パス定義マスタ(backend・API・spec・seed・一覧・編集・雛形モーダル)。
@@ -781,8 +820,19 @@ Task  code = task-code|pathway-variance、priority = urgent(注意)、status req
     backend の `FhirProxyController::ALLOWED_RESOURCE_TYPES` にも追加済み(2026-09-12)。
 - **第 3 段階(提案)**: ePath 形式の出力(EP02 Bundle = 定義、EP12 Bundle = 適用後データ)。§4 の対応表の逆変換(§7 が書かない `activity.outcomeReference` もここで組み立てる)。
   ひな型パス(EP01)の取込(`protocol_base` に URL を残す)。許容経過日数条件・BOM 中分類の UI(パスステップの UI は §3.1 で実装済み)。
+  JAHIS ePath 実装ガイドの主題は JAMI 標準(JAMISDP04)の XML メッセージなので、FHIR の Bundle とは別に XML 出力も候補
+  (`docs/clinical-pathway-backlog.md` §H の G-9。前提の標準パスコード・版・総合評価は §7.12 で済み)。
 
 ## 9. 実装したもの
+
+- JAHIS 実装ガイドの突合(§7.12、2026-11-03): backend `db/migrate/20261103170000_add_standard_path_code_to_master_pathways.rb`、
+  `app/models/master/pathway.rb`(形式の検証)、`pathways_controller.rb`(permit・承認時の版の形式・複製の版の繰り上げ `prepare_copy`)、
+  `concerns/master/versioned_master.rb`(`prepare_copy` のフック)、`db/seeds.rb`、spec。frontend `fhir/pathwayHelpers.ts`
+  (`STANDARD_PATHWAY_CODES` / 形式の検証)、`pages/PathwayEditorPage.tsx`(3 欄)、`fhir/pathwayApplyHelpers.ts`(`PATHWAY_VERSION_EXT_URL`、
+  `PathwayEventRecord.eventId`)、`fhir/pathwayEvaluationHelpers.ts`(`days`・`hasEvaluationWriting`・`buildPathwayDayAssessmentBundle`)、
+  `components/PathwayDayView.tsx`、`components/PathwayDayAssessmentPanel.tsx`(新規)、`components/KartePathwayTab.tsx`、
+  `components/PathwayEvaluatePanel.tsx`、`fhir/pathwaySheetHelpers.ts`、`fhir/pathwayKarteHelpers.ts`、`api/queries/karte.ts`、
+  `fhir/pathwayScheduleHelpers.ts`、`fhir/pathwayExtractHelpers.ts`。
 
 - backend: `db/migrate/20260912100000〜100500`(6 テーブル)、`app/models/master/pathway*.rb`(6 モデル)、
   `app/controllers/master/pathways_controller.rb`(index / show / create / update / copy / destroy)、`config/routes.rb`、
