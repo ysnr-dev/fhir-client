@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
+import { useReassignTeamNotification } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientKana } from "../components/PatientRowCells";
 import {
   useCompleteNotificationRows,
+  useNotificationOwners,
   useNotificationRows,
 } from "../components/notifications/notificationQueries";
 import {
@@ -14,7 +16,10 @@ import {
 import {
   NOTIFICATION_SEVERITIES,
   NOTIFICATION_SEVERITY_LABEL,
+  isClaimedBy,
+  isTeamOwnedNotification,
   notificationSeverityOf,
+  notificationTeamIdOf,
   type NotificationSeverity,
 } from "../fhir/notificationHelpers";
 import { displayName, patientNumberOf } from "../fhir/patientHelpers";
@@ -31,8 +36,11 @@ import { useReturnLinkState } from "../returnTo";
 // 数えるので、2 つのセレクトは互いに独立した軸として読める。並びは通知日時の新しい順で、
 // 強度では並べ替えない(いつ届いたかが分からなくなるため)。
 //
-// 既定は自分あてだけ。宛先の決まらない通知(オーダーに紐付かない検査結果など)は
-// 「すべて」に切り替えると出る(検査室が電話連絡する運用ならこちらを見る)。
+// 既定は自分あてだけ(自分がメンバーのチームあてを含む)。宛先の決まらない通知(オーダーに
+// 紐付かない検査結果など)は「すべて」に切り替えると出る(検査室が電話連絡する運用ならこちらを見る)。
+//
+// チームあての通知はメンバーなら誰でも対応でき、「引受」で自分あてにすると他のメンバーの一覧から
+// 消える。「戻す」でチームあてに戻す。
 //
 // 内容の確認はカルテで行う(種別ごとの詳細表示をここに複製しない)。ここから直接
 // 対応済みにするのは、内容を既に把握している場合の近道。
@@ -43,7 +51,9 @@ export function NotificationPage() {
   const [kindCode, setKindCode] = useState("");
   const [severity, setSeverity] = useState<NotificationSeverity | "">("");
   const notifications = useNotificationRows(mine ? practitionerId : undefined);
+  const { teamIds } = useNotificationOwners(practitionerId);
   const complete = useCompleteNotificationRows();
+  const reassign = useReassignTeamNotification();
   const linkState = useReturnLinkState();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [polling, setPolling] = useNotificationPolling();
@@ -87,7 +97,7 @@ export function NotificationPage() {
   // 読み直しで消えた行(対応済み)は選択から外す。
   const selected = rows.filter((row) => selectedIds.has(row.row.task.id ?? ""));
   // 自分が対応できないもの(他人あての承認)は一括操作の対象にしない。
-  const actionable = rows.filter((row) => canAct(row, practitionerId));
+  const actionable = rows.filter((row) => canAct(row, practitionerId, teamIds));
 
   function toggle(id: string) {
     setSelectedIds((prev) => {
@@ -173,6 +183,7 @@ export function NotificationPage() {
 
       <ErrorBanner error={notifications.error} />
       <ErrorBanner error={complete.error} />
+      <ErrorBanner error={reassign.error} />
 
       {!practitionerId && (
         <p className="order-select__muted">
@@ -210,11 +221,14 @@ export function NotificationPage() {
                 key={entry.row.task.id}
                 entry={entry}
                 checked={selectedIds.has(entry.row.task.id ?? "")}
-                actionable={canAct(entry, practitionerId)}
-                pending={complete.isPending}
+                actionable={canAct(entry, practitionerId, teamIds)}
+                claimable={isTeamMemberRow(entry, teamIds) && isTeamOwnedNotification(entry.row.task)}
+                returnable={isClaimedBy(entry.row.task, practitionerId)}
+                pending={complete.isPending || reassign.isPending}
                 linkState={linkState}
                 onToggle={() => toggle(entry.row.task.id ?? "")}
                 onComplete={() => completeRows([entry])}
+                onReassign={(action) => reassign.mutate({ task: entry.row.task, action })}
               />
             ))}
             {!notifications.isLoading && rows.length === 0 && (
@@ -231,7 +245,14 @@ export function NotificationPage() {
   );
 }
 
-function canAct(entry: NotificationRow, practitionerId: string | null): boolean {
+/** 宛先のチームのメンバーか(チームあてでない通知は false)。 */
+function isTeamMemberRow(entry: NotificationRow, teamIds: Set<string>): boolean {
+  const teamId = notificationTeamIdOf(entry.row.task);
+  return Boolean(teamId && teamIds.has(teamId));
+}
+
+function canAct(entry: NotificationRow, practitionerId: string | null, teamIds: Set<string>): boolean {
+  if (isTeamOwnedNotification(entry.row.task) && !isTeamMemberRow(entry, teamIds)) return false;
   return entry.kind.canAct ? entry.kind.canAct(entry.row, practitionerId) : true;
 }
 
@@ -239,20 +260,26 @@ interface NotificationTableRowProps {
   entry: NotificationRow;
   checked: boolean;
   actionable: boolean;
+  claimable: boolean;
+  returnable: boolean;
   pending: boolean;
   linkState: ReturnType<typeof useReturnLinkState>;
   onToggle: () => void;
   onComplete: () => void;
+  onReassign: (action: "claim" | "return") => void;
 }
 
 function NotificationTableRow({
   entry,
   checked,
   actionable,
+  claimable,
+  returnable,
   pending,
   linkState,
   onToggle,
   onComplete,
+  onReassign,
 }: NotificationTableRowProps) {
   const { kind, row } = entry;
   const karteLink = kind.karteLink(row);
@@ -298,6 +325,16 @@ function NotificationTableRow({
         {actionable && (
           <button type="button" disabled={pending} onClick={onComplete}>
             {kind.action.label}
+          </button>
+        )}
+        {claimable && (
+          <button type="button" disabled={pending} onClick={() => onReassign("claim")} title="自分あてにする">
+            引受
+          </button>
+        )}
+        {returnable && (
+          <button type="button" disabled={pending} onClick={() => onReassign("return")} title="チームあてに戻す">
+            戻す
           </button>
         )}
       </td>

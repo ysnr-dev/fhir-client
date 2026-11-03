@@ -56,7 +56,15 @@ ServiceRequest (category: order-type|team-request)
   extension[team-request-last-round-date] = valueDate(最後の回診の日)
   ←focus── Task (task-code|team-request)  requested(依頼済) → accepted(介入中) → completed(終了) / cancelled(却下)
             却下の理由は Task.statusReason.text。executionPeriod は受付で start、終了で end
+            owner = CareTeam(依頼先のチーム。メンバーが引受けると Practitioner、元のチームは extension[notification-team])
+            description = 依頼目的、input「希望日」= 希望日(通知の一覧に出す写し)
 ```
+
+- **［設計］** 進捗 Task は依頼の登録と同じ transaction で作る。依頼済のあいだはチームあての通知としてメンバー全員のベルと
+  通知一覧に出て、誰か 1 人が受付・却下(または回診記録)すると全員の一覧から消える(`docs/features/notifications.md`)。
+  編集で依頼先・依頼目的・希望日が変われば Task に写し直し、依頼先が変われば引受けを外して新しいチームあてにする。
+  削除では依頼済の Task も一緒に消す。この仕組みより前に登録した依頼は Task が無く、チームが最初に触ったときに作る
+  (宛先はそのとき依頼先のチームになる)。
 
 - **［設計］** 他科依頼との違いは「回答で完了しない」こと。回診記録は何度書いても介入中のままで、終了はチームが明示する。
   依頼済のまま回診記録を書くと介入中になる(回診したということは受けたということ)。
@@ -89,7 +97,7 @@ ServiceRequest (category: order-type|team-request)
   `CareTeam?participant=Practitioner/{me}`)。他の絞り込み(入外・病棟・依頼元の科・ステータス・至急・回診予定)は画面側。
 - **［設計］** 列: 患者、依頼日(至急)、チーム、依頼目的、入外、病棟、依頼科 | 依頼医師、最終回診、次回回診(今日以前は赤)、ステータス
   (却下は理由を吹き出し)。操作: 受付 / 終了 / 回診記録 / 表示。ケバブ: 次回回診日・受付取消・却下(理由必須)・終了取消・却下戻し。
-- 通知 Task は作らない(宛先が Practitioner 1 人に固定で、チームあてにできない。§8)。一覧が受信箱。
+- **［設計］** 依頼済の依頼はチームあての通知としてもベルに出る(§2)。一覧からの受付・受付取消も通知を出し入れする。
 
 ## 5. スクリーニング = データ抽出の保存条件の持ち主「チーム」
 
@@ -142,8 +150,7 @@ ServiceRequest (category: order-type|team-request)
 
 ## 8. 申し送り
 
-- 通知 Task の宛先は Practitioner 1 人に固定(`notificationParams`)。チームあての通知(新しい依頼・次回回診日の期限)を出すなら、
-  メンバーごとに Task を作るか、owner に CareTeam を許してベルの検索を変える。
+- 次回回診日の期限はチームあての通知にしていない(一覧の「回診予定のみ」で追う)。出すなら依頼の進捗 Task とは別の種別にする。
 - 回診記録の一覧は患者の記録を引いて手元で絞る。依頼の数が多い患者でも有限だが、上流に event の検索が付けば置き換える。
 - 創ごとのチャートは持たない(テンプレートの回答を Observation にしているので、部位で分けられない)。創ごとに追うなら
   創 = Condition(bodySite)+ Observation の構造化に進む。

@@ -3,12 +3,16 @@ import { TASK_CODE_SYSTEM } from "./taskHelpers";
 
 // 通知(Task)の共通層。
 //
-//   通知の対象 ← focus ── Task(通知) ── owner → 宛先の医療従事者
+//   通知の対象 ← focus ── Task(通知) ── owner → 宛先の医療従事者 / チーム(CareTeam)
 //
 // 「緊急異常値を見てほしい」「代行入力を承認してほしい」のように、**宛先を決めて相手に
 // 何かしてもらう**ものを 1 つの器にまとめる。種別は Task.code で分け、
 // components/notifications/notificationRegistry.tsx に登録する。1 通知 = 1 宛先で、
-// 複数人に届けるなら Task を複数作る。
+// 複数人に個別に届けるなら Task を複数作る。
+//
+// 宛先がチームの通知は、メンバー全員の一覧に同じ 1 件が出て、誰か 1 人が対応すれば全員の
+// 一覧から消える。メンバーは「引受」で宛先を自分に移し(元のチームは拡張に残す)、
+// 「戻す」でチームあてに戻せる。
 //
 // 部門進捗の Task(taskHelpers の createTaskHelpers)とは別物。あちらは「オーダーを部門が
 // 処理する進捗」で焦点が ServiceRequest・宛先を持たない。code の system だけ共有する。
@@ -69,6 +73,71 @@ export function notificationSeverityOf(task: fhir4.Task): NotificationSeverity {
   if (task.priority === "stat" || task.priority === "asap") return "alert";
   if (task.priority === "urgent") return "caution";
   return "info";
+}
+
+/** 引受けた通知の、元の宛先のチーム。戻すときに owner へ書き戻す。 */
+export const NOTIFICATION_TEAM_EXT_URL = "http://fhir-client.local/StructureDefinition/notification-team";
+
+const CARE_TEAM_PREFIX = "CareTeam/";
+
+/** 宛先がチームのままの通知か。 */
+export function isTeamOwnedNotification(task: fhir4.Task): boolean {
+  return Boolean(task.owner?.reference?.startsWith(CARE_TEAM_PREFIX));
+}
+
+/** 通知のチーム。チームあてならその宛先、引受け済みなら元のチーム。チームと関係ない通知は undefined。 */
+export function notificationTeamOf(task: fhir4.Task): fhir4.Reference | undefined {
+  if (isTeamOwnedNotification(task)) return task.owner;
+  return task.extension?.find((e) => e.url === NOTIFICATION_TEAM_EXT_URL)?.valueReference;
+}
+
+/** 通知のチームの id。 */
+export function notificationTeamIdOf(task: fhir4.Task): string | undefined {
+  const reference = notificationTeamOf(task)?.reference;
+  return reference?.startsWith(CARE_TEAM_PREFIX) ? reference.slice(CARE_TEAM_PREFIX.length) : undefined;
+}
+
+/** チームあての通知を、そのメンバーが引受けたか(宛先が自分で、元のチームを持つ)。 */
+export function isClaimedBy(task: fhir4.Task, practitionerId: string | null | undefined): boolean {
+  return Boolean(
+    practitionerId &&
+      task.owner?.reference === `Practitioner/${practitionerId}` &&
+      task.extension?.some((e) => e.url === NOTIFICATION_TEAM_EXT_URL),
+  );
+}
+
+function withoutTeamExtension(task: fhir4.Task): fhir4.Task {
+  const next = { ...task };
+  const rest = (task.extension ?? []).filter((e) => e.url !== NOTIFICATION_TEAM_EXT_URL);
+  if (rest.length > 0) next.extension = rest;
+  else delete next.extension;
+  return next;
+}
+
+/** チームあての通知を引受けた Task。宛先を自分にし、元のチームを拡張に残す。未対応のまま。 */
+export function buildClaimedNotificationTask(
+  task: fhir4.Task,
+  actor: { practitionerId: string; display: string },
+): fhir4.Task {
+  return {
+    ...task,
+    owner: { reference: `Practitioner/${actor.practitionerId}`, display: actor.display },
+    extension: [
+      ...(task.extension ?? []).filter((e) => e.url !== NOTIFICATION_TEAM_EXT_URL),
+      { url: NOTIFICATION_TEAM_EXT_URL, valueReference: task.owner },
+    ],
+    lastModified: latestOf(nowFhirDateTime(), task.authoredOn),
+  };
+}
+
+/** 引受けた通知をチームあてに戻した Task。 */
+export function buildReturnedNotificationTask(task: fhir4.Task): fhir4.Task {
+  const team = task.extension?.find((e) => e.url === NOTIFICATION_TEAM_EXT_URL)?.valueReference;
+  return {
+    ...withoutTeamExtension(task),
+    ...(team ? { owner: team } : {}),
+    lastModified: latestOf(nowFhirDateTime(), task.authoredOn),
+  };
 }
 
 export interface NotificationTaskCode {
@@ -137,6 +206,10 @@ export function buildNotificationTask(
   else delete task.input;
   if (input.owner?.reference) task.owner = input.owner;
   else delete task.owner;
+  // 出し直しは渡された宛先に届け直す(前の引受けは持ち越さない)。
+  const rest = (task.extension ?? []).filter((e) => e.url !== NOTIFICATION_TEAM_EXT_URL);
+  if (rest.length > 0) task.extension = rest;
+  else delete task.extension;
   if (input.requester?.reference) task.requester = input.requester;
   else delete task.requester;
   if (input.basedOn?.length) task.basedOn = input.basedOn;
@@ -232,7 +305,11 @@ export function taskPatientId(task: fhir4.Task): string {
  * (この codebase は表示時に Practitioner を引き直さない)。宛先なしは空文字。
  */
 export function taskOwnerName(task: fhir4.Task): string {
-  return task.owner?.display ?? (task.owner?.reference ? "(氏名なし)" : "");
+  const name = task.owner?.display ?? (task.owner?.reference ? "(氏名なし)" : "");
+  if (isTeamOwnedNotification(task)) return name;
+  // 引受け済みのチームあては、引受けた人に元のチームを添える。
+  const team = notificationTeamOf(task)?.display;
+  return team ? `${name}(${team})` : name;
 }
 
 /** input から 1 件の値を読む。type.text をキー名として使う。 */

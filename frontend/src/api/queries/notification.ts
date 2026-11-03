@@ -3,7 +3,9 @@ import { buildReviewProvenance, latestReview, provenancesOf, reviewProvenanceEnt
 import { LAB_PANIC_NOTE, LAB_PANIC_TASK_CODE } from "../../fhir/labPanicHelpers";
 import {
   ALERT_PRIORITY_PARAM,
+  buildClaimedNotificationTask,
   buildCompletedNotificationTask,
+  buildReturnedNotificationTask,
   completeNotificationEntry,
   hasTaskCode,
   splitNotificationBundle,
@@ -192,15 +194,25 @@ export async function withResultReviewTask(
 }
 
 /**
- * 一覧・件数に共通の検索条件。codes は種別の `system|code` をカンマで並べたもの(OR)。
- * 宛先を指定すると自分あてだけに絞る。
+ * 通知の宛先の絞り込み。自分(`Practitioner/…`)と自分がメンバーのチーム(`CareTeam/…`)を並べる。
+ * null は絞らない(全員あて)。
  */
-function notificationParams(codes: string, ownerId?: string | null): URLSearchParams {
+export type NotificationOwners = string[] | null;
+
+/**
+ * 一覧・件数に共通の検索条件。codes は種別の `system|code` をカンマで並べたもの(OR)。
+ * 宛先を渡すとそのどれかあてに絞る(カンマ区切りは OR)。
+ */
+function notificationParams(codes: string, owners: NotificationOwners): URLSearchParams {
   const params = new URLSearchParams();
   params.set("code", codes);
   params.set("status", "requested");
-  if (ownerId) params.set("owner", `Practitioner/${ownerId}`);
+  if (owners?.length) params.set("owner", owners.join(","));
   return params;
+}
+
+function ownersKey(owners: NotificationOwners): string {
+  return owners?.length ? owners.join(",") : "all";
 }
 
 /**
@@ -212,20 +224,22 @@ function notificationParams(codes: string, ownerId?: string | null): URLSearchPa
 export function useNotifications<Row>(
   codes: string,
   toRows: (tasks: fhir4.Task[], patients: Map<string, fhir4.Patient>) => Row[],
-  ownerId?: string | null,
+  owners: NotificationOwners,
+  enabled = true,
 ) {
-  const params = notificationParams(codes, ownerId);
+  const params = notificationParams(codes, owners);
   params.set("_include", "Task:subject");
   params.set("_sort", "-authored-on");
   params.set("_count", String(WORKLIST_PAGE));
 
   return useQuery({
-    queryKey: [...NOTIFICATION_TASK_KEY, "list", ownerId ?? "all"],
+    queryKey: [...NOTIFICATION_TASK_KEY, "list", ownersKey(owners)],
     queryFn: () => searchResource<fhir4.Resource>("Task", params),
     select: (result) => {
       const { tasks, patients } = splitNotificationBundle(result.data);
       return toRows(tasks, patients);
     },
+    enabled,
     staleTime: 60_000,
   });
 }
@@ -247,16 +261,17 @@ const LATEST_NOTIFICATION_COUNT = 5;
  */
 export function useNotificationCounts<Row>(
   codes: string,
-  ownerId: string | null | undefined,
+  owners: NotificationOwners,
   polling: boolean,
   toRows: (tasks: fhir4.Task[], patients: Map<string, fhir4.Patient>) => Row[],
+  enabled = true,
 ) {
-  const params = notificationParams(codes, ownerId);
+  const params = notificationParams(codes, owners);
   params.set("_include", "Task:subject");
   params.set("_sort", "-_lastUpdated");
   params.set("_count", String(LATEST_NOTIFICATION_COUNT));
   const all = useQuery({
-    queryKey: [...NOTIFICATION_TASK_KEY, "count", ownerId ?? "all", "latest"],
+    queryKey: [...NOTIFICATION_TASK_KEY, "count", ownersKey(owners), "latest"],
     queryFn: () => searchResource<fhir4.Resource>("Task", params),
     select: (result) => {
       const { tasks, patients } = splitNotificationBundle(result.data);
@@ -266,8 +281,9 @@ export function useNotificationCounts<Row>(
     refetchInterval: polling ? 60_000 : false,
     // 上流が落ちているときにヘッダーで再試行を繰り返さない(件数を出さないだけにする)。
     retry: false,
+    enabled,
   });
-  const alert = useNotificationCount(codes, ownerId, polling, ALERT_PRIORITY_PARAM);
+  const alert = useNotificationCount(codes, owners, polling, ALERT_PRIORITY_PARAM, enabled);
 
   return {
     total: all.data?.total ?? 0,
@@ -284,21 +300,23 @@ export function useNotificationCounts<Row>(
 
 function useNotificationCount(
   codes: string,
-  ownerId: string | null | undefined,
+  owners: NotificationOwners,
   polling: boolean,
   priority: string,
+  enabled: boolean,
 ) {
-  const params = notificationParams(codes, ownerId);
+  const params = notificationParams(codes, owners);
   params.set("priority", priority);
   params.set("_summary", "count");
 
   return useQuery({
-    queryKey: [...NOTIFICATION_TASK_KEY, "count", ownerId ?? "all", priority],
+    queryKey: [...NOTIFICATION_TASK_KEY, "count", ownersKey(owners), priority],
     queryFn: () => searchResource<fhir4.Resource>("Task", params),
     select: (result) => result.data.total ?? 0,
     staleTime: 60_000,
     refetchInterval: polling ? 60_000 : false,
     retry: false,
+    enabled,
   });
 }
 
@@ -324,5 +342,24 @@ export function useCompleteNotifications<Row>(
       queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
       queryClient.invalidateQueries({ queryKey: ["Provenance"] });
     },
+  });
+}
+
+/**
+ * チームあての通知を引受ける(宛先を自分にする)・チームあてに戻す。読んだ版で書くので、
+ * 先に別のメンバーが引受け・対応していれば 412 になる。
+ */
+export function useReassignTeamNotification() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+  return useMutation({
+    mutationFn: ({ task, action }: { task: fhir4.Task; action: "claim" | "return" }) => {
+      if (!enterer) throw new Error("医療従事者に紐付いたアカウントでログインしてください");
+      const next =
+        action === "claim" ? buildClaimedNotificationTask(task, enterer) : buildReturnedNotificationTask(task);
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry: [completeNotificationEntry(next)] });
+    },
+    retry: false,
+    onSettled: () => queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY }),
   });
 }

@@ -15,6 +15,7 @@ import {
 } from "./shared";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
 import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
+import { buildTeamRequestTaskUpdate, withTeamRequestTaskContent } from "./teamRequestTaskHelpers";
 
 // チーム依頼(docs/care-team-design.md §2)。NST・ICT・褥瘡対策・緩和ケアなどのチームへの介入依頼。
 //
@@ -162,7 +163,10 @@ function pushPurposeTemplateEntry(
   return { reference, keptResponseId: responseId ?? "" };
 }
 
-/** 新規登録。ヘッダ 1 件の POST。進捗 Task はチームが最初に触ったときに作る。 */
+/**
+ * 新規登録。ヘッダ 1 件の POST と、依頼済の進捗 Task(宛先 = 依頼先のチーム)を同じ transaction で作る。
+ * Task がチームあての通知になる(teamRequestTaskHelpers)。
+ */
 export function buildTeamRequestBundle(
   values: TeamRequestFormValues,
   patientId: string,
@@ -170,20 +174,27 @@ export function buildTeamRequestBundle(
 ): fhir4.Bundle {
   const entries: fhir4.BundleEntry[] = [];
   const template = pushPurposeTemplateEntry(entries, values.purposeTemplate);
+  const fullUrl = `urn:uuid:${crypto.randomUUID()}`;
+  const order = buildTeamRequestServiceRequest(values, patientId, requester, template.reference, registrationAuthoredOn());
+  entries.push({ fullUrl, resource: order, request: { method: "POST", url: "ServiceRequest" } });
   entries.push({
     fullUrl: `urn:uuid:${crypto.randomUUID()}`,
-    resource: buildTeamRequestServiceRequest(values, patientId, requester, template.reference, registrationAuthoredOn()),
-    request: { method: "POST", url: "ServiceRequest" },
+    resource: buildTeamRequestTaskUpdate(undefined, order, "requested", undefined, fullUrl),
+    request: { method: "POST", url: "Task" },
   });
   return transactionBundle(entries);
 }
 
-/** 更新。status・次回回診日・最後の回診記録は編集フォームの管理外なので、既存の値を引き継ぐ。 */
+/**
+ * 更新。status・次回回診日・最後の回診記録は編集フォームの管理外なので、既存の値を引き継ぐ。
+ * 進捗 Task があれば、依頼先のチーム・依頼目的・希望日を写し直す。
+ */
 export function buildTeamRequestUpdateBundle(
   values: TeamRequestFormValues,
   patientId: string,
   existing: fhir4.ServiceRequest,
   requester: OrderAttribution,
+  task?: fhir4.Task,
 ): fhir4.Bundle {
   const serviceRequestId = existing.id ?? "";
   const entries: fhir4.BundleEntry[] = [];
@@ -202,6 +213,12 @@ export function buildTeamRequestUpdateBundle(
   );
   if (kept.length > 0) resource.extension = [...(resource.extension ?? []), ...kept];
   entries.push({ resource, request: { method: "PUT", url: `ServiceRequest/${serviceRequestId}` } });
+  if (task?.id) {
+    entries.push({
+      resource: withTeamRequestTaskContent(task, resource),
+      request: { method: "PUT", url: `Task/${task.id}` },
+    });
+  }
   for (const id of teamRequestResponseIds([existing])) {
     if (id !== template.keptResponseId) {
       entries.push({ request: { method: "DELETE", url: `QuestionnaireResponse/${id}` } });
@@ -210,11 +227,13 @@ export function buildTeamRequestUpdateBundle(
   return withVersionLock(transactionBundle(entries), existing);
 }
 
-export function buildTeamRequestDeleteBundle(sr: fhir4.ServiceRequest): fhir4.Bundle {
+/** 削除。依頼済の進捗 Task(チームあての通知)も一緒に消す。 */
+export function buildTeamRequestDeleteBundle(sr: fhir4.ServiceRequest, task?: fhir4.Task): fhir4.Bundle {
   return transactionBundle([
     ...teamRequestResponseIds([sr]).map((id) => ({
       request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
     })),
+    ...(task?.id ? [{ request: { method: "DELETE" as const, url: `Task/${task.id}` } }] : []),
     { request: { method: "DELETE", url: `ServiceRequest/${sr.id}` } },
   ]);
 }

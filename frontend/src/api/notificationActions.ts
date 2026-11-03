@@ -24,6 +24,12 @@ import {
   isReviewableReportStatus,
 } from "../fhir/resultReviewHelpers";
 import { TASK_CODE_SYSTEM } from "../fhir/taskHelpers";
+import { buildTeamRequestStatusEntry } from "../fhir/teamRequestHelpers";
+import {
+  buildTeamRequestTaskUpdate,
+  teamRequestOrderStatusFor,
+  type TeamRequestNotificationRow,
+} from "../fhir/teamRequestTaskHelpers";
 import { searchResource } from "./fhirClient";
 import { resourcesOfType } from "./queries/core";
 import { fetchNoteTasks } from "./queries/countersign";
@@ -182,4 +188,26 @@ async function fetchOpenReviewTasks(reportIds: string[]): Promise<fhir4.Task[]> 
   params.set("_count", "100");
   const { data } = await searchResource<fhir4.Task>("Task", params);
   return resourcesOfType<fhir4.Task>(data, "Task");
+}
+
+/**
+ * 通知一覧からチーム依頼を受付ける。チーム依頼一覧の「受付」と同じく、進捗 Task と
+ * ServiceRequest.status を 1 つの transaction で書く(依頼は読み直して最新の版で書く)。
+ */
+export async function teamRequestAcceptEntries(rows: TeamRequestNotificationRow[]): Promise<fhir4.BundleEntry[]> {
+  const ids = rows.map((row) => row.orderId).filter(Boolean);
+  if (ids.length === 0) return [];
+  const params = new URLSearchParams();
+  params.set("_id", ids.join(","));
+  params.set("_count", String(ids.length));
+  const { data } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+  const orders = new Map(resourcesOfType<fhir4.ServiceRequest>(data, "ServiceRequest").map((sr) => [sr.id, sr]));
+  return rows.flatMap((row) => {
+    const order = orders.get(row.orderId);
+    if (!order) return [];
+    return [
+      { resource: buildTeamRequestTaskUpdate(row.task, order, "accepted"), request: { method: "PUT" as const, url: `Task/${row.task.id}` } },
+      buildTeamRequestStatusEntry(order, teamRequestOrderStatusFor("accepted")),
+    ];
+  });
 }

@@ -78,11 +78,11 @@ interface TeamRequestEditPanelProps {
 
 export function TeamRequestEditPanel({ patientId, srId, onSaved }: TeamRequestEditPanelProps) {
   const update = useUpdateTeamRequest();
-  const { serviceRequest, initialValues, ready, patientMismatch, error } = useTeamRequestInitialValues(srId, patientId);
+  const { serviceRequest, task, initialValues, ready, patientMismatch, error } = useTeamRequestInitialValues(srId, patientId);
 
   function handleSubmit(values: TeamRequestFormValues) {
     if (!serviceRequest || patientMismatch) return;
-    update.mutate(buildTeamRequestUpdateBundle(values, patientId, serviceRequest, orderRequester(serviceRequest)), {
+    update.mutate(buildTeamRequestUpdateBundle(values, patientId, serviceRequest, orderRequester(serviceRequest), task), {
       onSuccess: onSaved,
     });
   }

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
   NOTIFICATION_SEVERITY_LABEL,
+  isClaimedBy,
   notificationSeverityOf,
 } from "../../fhir/notificationHelpers";
 import { displayName } from "../../fhir/patientHelpers";
@@ -27,7 +28,8 @@ function lastUpdatedOf(entry: NotificationRow): number {
  * 新しく届いた通知(作成・出し直し)を画面の隅にトーストで出す。
  *
  * ベルの検索が返す「更新の新しい順の数件」を見て、前回までに見た最も新しい更新日時より
- * 後のものだけを新着とする。開いた直後の 1 回目と宛先が替わった直後は基準を取るだけで出さない。
+ * 後のものだけを新着とする(自分が引受けたチームあての通知は除く)。開いた直後の 1 回目と宛先が
+ * 替わった直後は基準を取るだけで出さない。
  * 新着を知るのはベルの件数を読み直したときなので、自動更新を切っている間は画面の移動・
  * ウィンドウへの復帰・通知が増減する書き込みのあとに出る。
  */
@@ -50,7 +52,10 @@ export function NotificationToasts({
       if (base) setToasts([]);
       return;
     }
-    const arrived = latest.filter((entry) => lastUpdatedOf(entry) > base.time);
+    // 自分が引受けたチームあての通知は、引受けで更新日時が進むだけなので新着にしない。
+    const arrived = latest.filter(
+      (entry) => lastUpdatedOf(entry) > base.time && !isClaimedBy(entry.row.task, ownerId),
+    );
     if (arrived.length === 0) return;
     watermark.current = { ownerId, time: Math.max(base.time, newest) };
     setToasts((current) => {

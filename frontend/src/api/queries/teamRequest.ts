@@ -17,7 +17,7 @@ import {
   type TeamRequestTaskStatus,
 } from "../../fhir/teamRequestTaskHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
-import { WORKLIST_PAGE, resourcesOfType } from "./core";
+import { NOTIFICATION_TASK_KEY, WORKLIST_PAGE, resourcesOfType } from "./core";
 import { staleObservationEntries } from "./micro";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import { fetchWorklistBundles, taskBundleEntry } from "./worklist";
@@ -48,6 +48,7 @@ export function useUpdateTeamRequest() {
     mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       invalidateProvenance(queryClient);
     },
@@ -70,7 +71,7 @@ export const deleteTeamRequestRequest = async (srId: string) => {
   if (status === "accepted" || status === "completed") {
     throw new Error("受付済・終了したチーム依頼は削除できません。先にチーム依頼一覧で受付を取り消してください。");
   }
-  return postOrderDeleteBundle(buildTeamRequestDeleteBundle(order));
+  return postOrderDeleteBundle(buildTeamRequestDeleteBundle(order, task));
 };
 
 export function useDeleteTeamRequest() {
@@ -170,6 +171,8 @@ export function useTeamActiveRequestPatientIds(teamId: string | undefined) {
 }
 
 export function invalidateTeamRequest(queryClient: QueryClient) {
+  // 依頼済の進捗 Task はチームあての通知なので、ベルと通知一覧も読み直す。
+  queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "team-request-worklist"] });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "team-request-active-patients"] });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });

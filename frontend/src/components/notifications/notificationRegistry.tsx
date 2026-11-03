@@ -20,6 +20,7 @@ import {
 import {
   buildCompletedNotificationTask,
   completeNotificationEntry,
+  isTeamOwnedNotification,
   notificationCodeOf,
   type NotificationRowBase,
 } from "../../fhir/notificationHelpers";
@@ -137,6 +138,13 @@ import {
   type MealAllergyCheckRow,
 } from "../../fhir/mealAllergyTaskHelpers";
 import { MealAllergyCheckNotificationCells } from "./MealAllergyCheckNotificationCells";
+import {
+  TEAM_REQUEST_TASK_CODE,
+  teamRequestNotificationRowOf,
+  type TeamRequestNotificationRow,
+} from "../../fhir/teamRequestTaskHelpers";
+import { teamRequestAcceptEntries } from "../../api/notificationActions";
+import { TeamRequestNotificationCells } from "./TeamRequestNotificationCells";
 
 // 通知の種別ごとの振る舞いをまとめた対応表。通知そのものの形は notificationHelpers、
 // ここは「一覧でどう見せて、どう対応済みにするか」だけを持つ。
@@ -157,7 +165,10 @@ export interface NotificationKindDef<Row extends NotificationRowBase = Notificat
   karteLink(row: Row): string | null;
   /** 操作ボタンの文言と、対応済みにしたとき note に残す文。 */
   action: { label: string; noteText: string };
-  /** 対応できる人。省略すると誰でも(緊急異常値は見た人が確認する)。 */
+  /**
+   * 対応できる人。省略すると誰でも(緊急異常値は見た人が確認する)。宛先がチームのままの
+   * 通知は、これに加えてそのチームのメンバーであることを一覧が確かめる。
+   */
   canAct?(row: Row, practitionerId: string | null): boolean;
   /**
    * 対応済みにする transaction entry。省略すると Task を completed にする PUT だけ。
@@ -475,6 +486,27 @@ const antimicrobialNotificationKind = defineNotificationKind<AntimicrobialNotifi
   canAct: () => false,
 });
 
+const teamRequestKind = defineNotificationKind<TeamRequestNotificationRow>({
+  code: TEAM_REQUEST_TASK_CODE.code,
+  label: TEAM_REQUEST_TASK_CODE.display,
+  toRow: teamRequestNotificationRowOf,
+  Cells: TeamRequestNotificationCells,
+  // 依頼の詳細モーダルを開いた状態のカルテ(回診記録・却下はチーム依頼一覧で行う)。
+  karteLink: (row) => {
+    if (!row.patientId || !row.orderId) return null;
+    const params = new URLSearchParams();
+    params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind: "team-request", id: row.orderId }));
+    return `/patients/${row.patientId}/karte?${params.toString()}`;
+  },
+  // 受付で依頼済でなくなり、メンバー全員の一覧から消える。
+  action: { label: "受付", noteText: "" },
+  // チームあてのままならメンバー誰でも、引受け済みなら引受けた人だけ。
+  canAct: (row, practitionerId) =>
+    isTeamOwnedNotification(row.task) ||
+    Boolean(practitionerId && row.task.owner?.reference === `Practitioner/${practitionerId}`),
+  actionEntries: (rows) => teamRequestAcceptEntries(rows),
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
@@ -494,6 +526,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   mealAllergyCheckKind,
   ewsAlertKind,
   antimicrobialNotificationKind,
+  teamRequestKind,
 ];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */
