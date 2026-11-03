@@ -160,25 +160,37 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
 JAHIS ePath 実装ガイド 第 4 章 No.12「アウトカム・観察項目に BOM を採用できること」(`docs/clinical-pathway-backlog.md` §H の G-3)。
 
 ```text
-master_bom_outcomes     manage_no / category_code・category_name(大分類 G・H)/ subcategory_code・subcategory_name(中分類)/
+master_bom_outcomes     manage_no / category_code・category_name(大分類 G・H・K・F)/ subcategory_code・subcategory_name(中分類)/
                         outcome_code(unique)/ outcome_name / display_order / search_name
 master_bom_assessments  manage_no / category_code・category_name(観察項目分類)/ assessment_code(unique)/ name / name2 /
                         medis_manage_no・medis_name(MEDIS 看護観察の対応)/ display_order / search_name
+master_bom_pairs        outcome_code / assessment_code / assessment_name(OAT の組。アウトカムに属する観察項目の候補)
 master_pathway_oat_units + subcategory_code / subcategory_name(BOM 中分類。BOM のアウトカムを選んだときに入る)
 ```
 
 - ［事実］BOM(Basic Outcome Master®)は日本クリニカルパス学会の知財で、配布ファイルは同梱しない(CTCAE と同じ扱い)。
   施設が学会から取得して「マスタ取込」の「BOM アウトカム」「BOM 観察項目」で取り込む(`MasterImport::BomOutcomeImporter` /
   `BomAssessmentImporter`、`/master/bom_outcomes/import` / `/master/bom_assessments/import`)。
-- ［決定］**列は見出しの名前で引く**(`BomSheetImporter`。Excel .xlsx / .xls と CSV(UTF-8 / Shift_JIS)を受け、見出しの行を探す)。
-  配布ファイルの列順・列名は版で変わりうるので列番号で決め打ちしない。見出しの候補は実装ガイドの表 6-5-2-1-2-2 /
-  表 6-5-2-1-2-1-2 の列名(管理番号・大分類コード・中分類コード・アウトカムコード・アウトカム名称 / 観察項目管理番号・
-  観察項目分類コード・観察項目コード・観察項目名称 1・2・MEDIS 観察名称管理番号 1(コード)・MEDIS 観察名称)と表記ゆれ。
-  必須はコードと名称の 2 列だけで、無ければどの見出しが要るかを示して 422。全件洗い替え、同じコードは先の行を残す。
+- ［事実］配布ファイル(BOM Ver.2.2.xlsx)は 1 冊に、本体「BOM Ver2.1+」(1 行 = アウトカム × 観察項目の組、2,800 行。
+  管理番号・大分類・中分類・アウトカムコード・名称・観察項目コード・名称・観察名称管理番号 1〜5(コード))、「観察項目マスター」
+  (観察項目管理番号・分類・コード・名称・観察名称管理番号 1〜5)、版の追加・修正分「Others_アウトカム / 観察項目 / 組み合わせ(2.2)」の
+  シートを持つ。空欄は「－」。本体に無い 2.2 の新規(アウトカム 1・観察項目 14)は Others のシートにしか無い。
+- ［決定］**列は見出しの名前で引き、必須の見出しを持つシートをすべて読んで合わせる**(`BomSheetImporter`。Excel .xlsx / .xls と
+  CSV(UTF-8 / Shift_JIS)を受け、見出しの行を探す。「－」は空)。配布ファイルの列順・列名は版で変わりうるので列番号で決め打ちしない。
+  同じコードは**見出しの合う列が多いシートの行**を残す(観察項目は本体の組み合わせシートにも載るが、分類と MEDIS を持つ
+  「観察項目マスター」の行を優先する。同じ数ならブックの並び順)。必須はコードと名称の 2 列だけで、無ければどの見出しが要るかを
+  示して 422。全件洗い替え。見出しの候補は実装ガイドの表 6-5-2-1-2-2 / 表 6-5-2-1-2-1-2 と配布ファイルの列名と表記ゆれ
+  (「観察名称管理番号1（コード）」= MEDIS 看護観察の管理番号。複数列あるが評価入力で借りるのは 1 つなので 1 列目だけ持つ)。
+- ［決定］アウトカムの取込は、観察項目コードを持つ行から **OAT の組**(`master_bom_pairs`)も同じ transaction で入れ替える。
+  `GET /master/bom_outcomes/:code/assessments` が組の観察項目を(マスタの行があればその分類・MEDIS を添えて)返す。
 - ［決定］編集画面では、コード体系に BOM を選んだアウトカム・観察項目のコード欄に「選択」を出し(`BomSearchModal`)、選ぶと
   コード・名称(空のときだけ)・分類を埋める。アウトカムは大分類(G/H)を区分に、中分類を `subcategory_*` に写す。観察項目は
   MEDIS 看護観察の対応があれば `nursing_observation_manage_no` にも結ぶ(評価入力で表現タイプを借りる)。
   **取り込んでいない施設には「選択」を出さない**(`useBomAvailability`。コードは手入力のまま)。
+- ［決定］**アウトカムを選んだとき、OAT ユニットに名前の付いた観察項目が無ければ、そのアウトカムの観察項目の候補を
+  チェックで選んで入れるモーダル**(`BomOutcomeAssessmentsModal`)を続けて開く。BOM は 1 つのアウトカムに数十の観察項目を
+  候補に持つ(「疼痛がない」で 11、「循環動態が安定している」で 66)ので全部は入れず、施設が使うものを選ぶ。
+  観察項目を既に書いてあるユニットでは開かない(1 件ずつ「選択」で足す)。
 - 適用時は中分類を OAT ユニットの CarePlan.category に `EPathBOMOutcomeSubCategoryCS` で写す(大分類とコードの間)。
 
 ### 3.1 日をまたぐアウトカム・継続するタスク・同じ病日の分割

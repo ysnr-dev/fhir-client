@@ -438,6 +438,7 @@ Rails.application.routes.draw do
     # BOM(Basic Outcome Master)のアウトカム・観察項目。検索専用(取込で全件洗い替え)。
     resources :bom_outcomes, only: %i[index] do
       collection { post :import }
+      member { get :assessments }
     end
     resources :bom_assessments, only: %i[index] do
       collection { post :import }

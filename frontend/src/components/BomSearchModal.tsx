@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { BomAssessment, BomOutcome } from "../api/masterClient";
-import { useBomAssessmentSearch, useBomOutcomeSearch } from "../api/masterQueries";
+import { useBomAssessmentSearch, useBomOutcomeAssessments, useBomOutcomeSearch } from "../api/masterQueries";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
@@ -10,6 +10,91 @@ import { Modal } from "./Modal";
 type Props =
   | { kind: "outcome"; onSelect: (item: BomOutcome) => void; onClose: () => void }
   | { kind: "assessment"; onSelect: (item: BomAssessment) => void; onClose: () => void };
+
+/**
+ * 選んだ BOM アウトカムに属する観察項目(OAT の組)をチェックで選んで、まとめて OAT ユニットに入れる。
+ * BOM は 1 つのアウトカムに数十の観察項目を候補として持つので、全部は入れず施設が使うものを選ぶ。
+ */
+export function BomOutcomeAssessmentsModal({
+  outcome,
+  onAdd,
+  onClose,
+}: {
+  outcome: BomOutcome;
+  onAdd: (items: BomAssessment[]) => void;
+  onClose: () => void;
+}) {
+  const assessments = useBomOutcomeAssessments(outcome.outcome_code);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const items = assessments.data ?? [];
+
+  function toggle(code: string) {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
+
+  return (
+    <Modal title={`BOM 観察項目の選択（${outcome.outcome_name}）`} onClose={onClose} className="modal--wide">
+      <ErrorBanner error={assessments.error} />
+      {assessments.isPending ? (
+        <p>読み込み中...</p>
+      ) : (
+        <table className="master-search__table">
+          <thead>
+            <tr>
+              <th />
+              <th>コード</th>
+              <th>名称</th>
+              <th>分類</th>
+              <th>MEDIS 看護観察</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.assessment_code}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={checked.has(item.assessment_code)}
+                    onChange={() => toggle(item.assessment_code)}
+                    aria-label={item.name}
+                  />
+                </td>
+                <td>{item.assessment_code}</td>
+                <td>{item.name}</td>
+                <td>
+                  {item.category_name}
+                  {item.category_code && <span className="lab-order-item__code">{item.category_code}</span>}
+                </td>
+                <td>{item.medis_manage_no && <span className="lab-order-item__code">{item.medis_manage_no}</span>}</td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={5} className="master-search__empty">
+                  このアウトカムに観察項目はありません
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
+      <div className="lab-order-item__actions">
+        <button
+          type="button"
+          onClick={() => onAdd(items.filter((i) => checked.has(i.assessment_code)))}
+          disabled={checked.size === 0}
+        >
+          {checked.size > 0 ? `追加(${checked.size} 件)` : "追加"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
 export function BomSearchModal(props: Props) {
   const [name, setName] = useState("");

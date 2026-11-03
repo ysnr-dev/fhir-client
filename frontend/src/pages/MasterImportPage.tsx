@@ -78,14 +78,14 @@ const MASTER_OPTIONS: MasterOption[] = [
     type: "bom_outcomes",
     label: "BOM アウトカム（クリニカルパス）",
     formatHint:
-      "日本クリニカルパス学会 Basic Outcome Master のアウトカムマスター .xlsx / .csv（見出しの行に「アウトカムコード」「アウトカム名称」。大分類・中分類・管理番号は見出しがあれば読む。全件を入れ替える）",
+      "日本クリニカルパス学会 Basic Outcome Master の配布ファイル BOM Ver.*.xlsx（見出しに「アウトカムコード」「アウトカム名称」を持つシートをすべて読む。本体と Others の追加分をまとめ、アウトカムと観察項目の組も取り込む。全件を入れ替える）",
     accept: ".xlsx,.xls,.csv",
   },
   {
     type: "bom_assessments",
     label: "BOM 観察項目（クリニカルパス）",
     formatHint:
-      "Basic Outcome Master の観察項目マスター .xlsx / .csv（見出しの行に「観察項目コード」「観察項目名称1」。分類・MEDIS 観察名称管理番号は見出しがあれば読む。全件を入れ替える）",
+      "同じ BOM Ver.*.xlsx（見出しに「観察項目コード」「観察項目名称」を持つシートをすべて読む。「観察項目マスター」の分類・観察名称管理番号(MEDIS)を優先し、Others の追加分をまとめる。全件を入れ替える）",
     accept: ".xlsx,.xls,.csv",
   },
   {

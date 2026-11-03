@@ -56,6 +56,13 @@ export async function searchBomOutcomes(params: BomSearchParams): Promise<Master
   return (await res.json()) as MasterSearchResult<BomOutcome>;
 }
 
+/** アウトカムに属する観察項目(BOM の OAT の組)。マスタに無いコードは名称だけ。 */
+export async function fetchBomOutcomeAssessments(outcomeCode: string): Promise<BomAssessment[]> {
+  const res = await masterFetch(`/master/bom_outcomes/${encodeURIComponent(outcomeCode)}/assessments`);
+  if (!res.ok) throw await buildError(res);
+  return ((await res.json()) as { items: BomAssessment[] }).items;
+}
+
 export async function searchBomAssessments(params: BomSearchParams): Promise<MasterSearchResult<BomAssessment>> {
   const res = await masterFetch(`/master/bom_assessments?${query(params)}`);
   if (!res.ok) throw await buildError(res);

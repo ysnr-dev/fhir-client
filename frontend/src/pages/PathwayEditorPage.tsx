@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Disease, PathwaySetting, PathwayStatus } from "../api/masterClient";
 import { useBomAvailability, usePathway, usePathwayMutations } from "../api/masterQueries";
-import { BomSearchModal } from "../components/BomSearchModal";
+import { BomOutcomeAssessmentsModal, BomSearchModal } from "../components/BomSearchModal";
+import type { BomOutcome } from "../api/masterClient";
 import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -32,6 +33,7 @@ import {
   addPhaseDraft,
   copyEventDraft,
   draftFromPathway,
+  emptyAssessmentDraft,
   emptyEventDraft,
   emptyPathwayDraft,
   eventDayOf,
@@ -79,6 +81,7 @@ type Picker =
   | { kind: "disease" }
   | { kind: "nursing"; eventKey: number; unitKey: number; assessmentKey: number }
   | { kind: "bom-outcome"; eventKey: number; unitKey: number }
+  | { kind: "bom-outcome-assessments"; eventKey: number; unitKey: number; outcome: BomOutcome }
   | { kind: "bom-assessment"; eventKey: number; unitKey: number; assessmentKey: number }
   | { kind: "template"; eventKey: number; unitKey: number; taskKey: number }
   | { kind: "branch"; phaseKey: string }
@@ -785,13 +788,46 @@ export function PathwayEditorPage() {
             if (!event || !unit) return;
             // 名称が空なら BOM の名称を入れる。区分(G/H)は大分類から、中分類はそのまま写す。
             const category = item.category_code === "G" || item.category_code === "H" ? item.category_code : unit.category;
-            updateUnit(event.key, unit.key, {
+            const patch: Partial<PathwayOatUnitDraft> = {
               codeSystem: "bom",
               code: item.outcome_code,
               name: unit.name.trim() || item.outcome_name,
               category,
               subcategoryCode: item.subcategory_code ?? "",
               subcategoryName: item.subcategory_name ?? "",
+            };
+            updateUnit(event.key, unit.key, patch);
+            // 観察項目をまだ書いていなければ、BOM の OAT の組(アウトカムに属する観察項目)から選んで入れる。
+            if (!unit.assessments.some((a) => a.name.trim())) {
+              setPicker({ kind: "bom-outcome-assessments", eventKey: event.key, unitKey: unit.key, outcome: item });
+            }
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {picker?.kind === "bom-outcome-assessments" && (
+        <BomOutcomeAssessmentsModal
+          outcome={picker.outcome}
+          onAdd={(items) => {
+            const p = picker;
+            setPicker(null);
+            const event = draft.events.find((e) => e.key === p.eventKey);
+            const unit = event?.oatUnits.find((u) => u.key === p.unitKey);
+            if (!event || !unit) return;
+            updateUnit(event.key, unit.key, {
+              assessments: [
+                // 名前の無い空の行は、選んだ観察項目で置き換える。
+                ...unit.assessments.filter((a) => a.name.trim()),
+                ...items.map((a) => ({
+                  ...emptyAssessmentDraft(),
+                  name: a.name,
+                  categoryCode: a.category_code ?? "",
+                  categoryName: a.category_name ?? "",
+                  codeSystem: "bom" as const,
+                  code: a.assessment_code,
+                  nursingObservationManageNo: a.medis_manage_no ?? "",
+                })),
+              ],
             });
           }}
           onClose={() => setPicker(null)}

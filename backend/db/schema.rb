@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_03_190000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_03_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -468,6 +468,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_190000) do
     t.index ["category_code"], name: "index_master_bom_outcomes_on_category_code"
     t.index ["outcome_code"], name: "index_master_bom_outcomes_on_outcome_code", unique: true
     t.index ["search_name"], name: "index_master_bom_outcomes_on_search_name", opclass: :gin_trgm_ops, using: :gin
+  end
+
+  create_table "master_bom_pairs", force: :cascade do |t|
+    t.string "outcome_code", null: false
+    t.string "assessment_code", null: false
+    t.string "assessment_name"
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["outcome_code", "assessment_code"], name: "index_master_bom_pairs_on_outcome_code_and_assessment_code", unique: true
   end
 
   create_table "master_clinical_note_titles", force: :cascade do |t|

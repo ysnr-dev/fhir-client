@@ -1,5 +1,10 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { searchBomAssessments, searchBomOutcomes, type BomSearchParams } from "../masterClient";
+import {
+  fetchBomOutcomeAssessments,
+  searchBomAssessments,
+  searchBomOutcomes,
+  type BomSearchParams,
+} from "../masterClient";
 import { MASTER_SEARCH_PER } from "./medicine";
 
 export function useBomOutcomeSearch(filters: Omit<BomSearchParams, "page" | "per">, page: number, enabled: boolean) {
@@ -21,6 +26,16 @@ export function useBomAssessmentSearch(
     queryFn: () => searchBomAssessments({ ...filters, page, per: MASTER_SEARCH_PER }),
     placeholderData: keepPreviousData,
     enabled,
+  });
+}
+
+/** アウトカムに属する観察項目(BOM の OAT の組)。 */
+export function useBomOutcomeAssessments(outcomeCode: string) {
+  return useQuery({
+    queryKey: ["master", "bom_outcomes", outcomeCode, "assessments"],
+    queryFn: () => fetchBomOutcomeAssessments(outcomeCode),
+    staleTime: Infinity,
+    enabled: Boolean(outcomeCode),
   });
 }
 
