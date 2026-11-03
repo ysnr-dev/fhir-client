@@ -83,6 +83,9 @@ docker compose exec frontend node scripts/import-cycles.cjs src/api/queries
   日時を書くときは `nowFhirDateTime()` / `toFhirDateTime()`(オフセット付き)、読むときは `localDay()`。
   backend の `Date.current` も UTC なので使わず、`FacilityClock.today`(日本時間)か画面から渡した日付を使う。
 - 色はテーマ変数(`index.css` の `:root` / `:root[data-theme="dark"]`)を使い、直書きしない。
+- 入力部品(input・select・textarea)の枠・背景・文字色・角丸は `App.css` の全体の既定(`:where()`)に任せる。
+  画面のスタイルには幅・文字の大きさなど既定との差分だけを書き、画面ごとに部品の見た目を一から書かない。
+  部品を足したらライトとダークの両方で画面を見る(既定から外れた指定は片方のテーマで崩れやすい)。
 - コメントには現状の意図だけを書く。修正経緯や過去との比較(「〜に変更」「以前は〜」など)は残さない。
 - フォームには項目ラベルと入力欄だけを置く。説明文・補足文・注意書きは書かない。
 - ボタンの名称はできるだけ単語で書く(「登録」「取消」「実施」など。「〜を取り消す」のような文にしない)。

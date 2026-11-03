@@ -979,6 +979,35 @@
   --control-height: var(--control-height-lg);
 }
 
+/* 入力部品(input・select・textarea)の既定の見た目。全画面に当たるので、新しい画面に置いた部品も
+   素の見た目(ブラウザ既定)にならない。:where() で詳細度を 0 にしてあり、画面ごとの指定はどれもこれに勝つ。
+   画面側には幅・文字の大きさなど既定との差分だけを書き、枠・背景・文字色は書かない(CLAUDE.md)。 */
+:where(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="image"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+    select,
+    textarea
+  ) {
+  font: inherit;
+  font-size: 15px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* 1 行の部品は高さ(--control-height)で縦を決めるので、上下の余白は持たない(低い部品で文字が欠けないように)。 */
+:where(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="image"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+    select
+  ) {
+  padding: 0 8px;
+}
+
+:where(textarea) {
+  padding: 6px 8px;
+  resize: vertical;
+}
+
 /* 入力部品の高さは --control-height で固定する(index.css)。チェックボックス等の
    小さな部品と複数行のテキストエリアは対象外。ボタンは上下の余白を持たず、
    inline-flex の縦中央揃えで文字を置く。 */
@@ -1072,47 +1101,6 @@ button:disabled {
   gap: 4px;
   font-size: 13px;
   color: var(--text);
-}
-
-/* 入力欄の見た目。モーダルの中(.walk-in__fields = 当日受付・入院登録・入院予定)も
-   画面の検索フォームと同じ枠・余白に揃える。 */
-.patient-search-form input,
-.patient-search-form select,
-.patient-form input,
-.patient-form select,
-.patient-fields__row input,
-.patient-fields__row select,
-.walk-in__fields input,
-.walk-in__fields select,
-.walk-in__fields textarea,
-/* 一覧表の中に置く入力欄(感染症の検査項目の種類など)。フォームの外なので
-   上のセレクタでは当たらず、素の見た目のまま残ってしまう。 */
-.master-search__table select,
-.master-search__table input,
-.bulk-vital select,
-.bulk-vital input,
-.supervisor-groups select,
-.dpc-coding select,
-.dpc-coding input,
-.nursing-assignment select,
-.oral-exam select,
-.oral-exam input:not([type="checkbox"]),
-.pathway-preview__field select,
-.pathway-preview__field input,
-.lab-arrival__scan input,
-.patho-worklist__lookup input,
-.rx-verification__field select,
-.rx-verification__field textarea,
-.karte-print-form input[type="date"],
-.injection-scan__date input[type="date"],
-.barcode-scan-field {
-  font: inherit;
-  font-size: 15px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text-h);
 }
 
 .patient-search-form__actions {
@@ -20759,8 +20747,7 @@ button.nursing-worksheet__mark {
   font-size: 13px;
 }
 
-.pathway-event__head input,
-.pathway-event__head select {
+.pathway-event__head input {
   font: inherit;
   font-size: 14px;
   padding: 4px 8px;
@@ -20786,7 +20773,7 @@ button.nursing-worksheet__mark {
 
 .pathway-event__major select {
   width: 200px;
-  color: var(--text);
+  font-size: 14px;
 }
 
 .pathway-event__major-name input {
@@ -21972,14 +21959,7 @@ button.nursing-worksheet__mark {
 .pathway-day__assessment textarea {
   width: 100%;
   box-sizing: border-box;
-  font: inherit;
   font-size: 14px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  resize: vertical;
 }
 
 /* オーバービュー最下段の総合評価の行。アウトカムの行と同じ地色で、観察項目・タスクの行と見分ける。 */
