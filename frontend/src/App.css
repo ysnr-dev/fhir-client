@@ -880,6 +880,74 @@
   font-weight: 600;
 }
 
+.advisory-rule__maintenance {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.advisory-rule__maintenance > legend {
+  padding: 0 4px;
+}
+
+.advisory-rule__maintenance .lab-order-item__fields {
+  margin-bottom: 0;
+}
+
+.advisory-rule__lab-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* 定期検査・検診の状態(プロファイルの区画)。 */
+.maintenance-state {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.maintenance-state--never,
+.maintenance-state--overdue {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.maintenance-state--ok {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.maintenance-state--deferred {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.maintenance-state--exempt {
+  opacity: 0.7;
+}
+
+.maintenance-flag__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.maintenance-flag__fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.maintenance-flag__fields input[type="text"] {
+  min-width: 280px;
+}
+
 .patient-caution__pictogram,
 .patient-caution__pictogram-field {
   display: inline-flex;

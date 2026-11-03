@@ -1,7 +1,7 @@
 # 警告(判断支援)の共通の器とガバナンス
 
 `docs/functional-gap-backlog.md` §5.3 候補 #3(§2.1「警告を無視した理由」、§2.3「患者状態チェックの器」の一部を含む)。
-**状態: 実装済み(2026-10-19)。施設が条件式で足す規則(§2.9)は 2026-11-03。止める(block)種別はまだ無い。**
+**状態: 実装済み(2026-10-19)。施設が条件式で足す規則(§2.9)と定期検査・検診(§2.10)は 2026-11-03。止める(block)種別はまだ無い。**
 フォームの中で出す警告(薬剤・放射線・レジメン・患者状態・外部の判断支援)を 1 つの型 `Advisory` と 1 つの表示部品に寄せ、
 「確認を要する」警告を無視して登録するときは理由(マスタ)を必須にして来歴 `Provenance` と backend の台帳に残す。
 管理画面「警告の集計と設定」で種別 × 月の発火数・無視率・主な理由を見て、種別ごとの重さを施設が下げられる(「表示のみ」「出さない」)。
@@ -196,6 +196,31 @@ interface Advisory {
   患者帯の評価はカルテだけ(`PatientHeader` の `cds` と同じ。一覧の患者ドロワーでは患者ごとに走らせない)。
   患者帯は `useAdvisorySession(…, "patient-view")` で施設設定を当て、カルテを離れたときに発火を台帳に送る(確認は無いので無視は記録しない)。
 - **試す**: 規則の編集モーダルで患者番号を入れると、その患者で式を評価して「該当 / 該当なし / 式の誤り(メッセージ)」を出す(`%orderItems` は空)。
+  定期項目を持つ規則は「該当(期限超過、最終 2026-09-05)」のように期限の状態も添える。
+
+### 2.10 定期検査・検診(`fhir/healthMaintenanceHelpers.ts`、`api/queries/healthMaintenance.ts`、`components/HealthMaintenanceSection.tsx`)
+
+バックログ §5.3 の Health Maintenance。ユーザー決定(2026-11-03): 施設の規則の表にプリセットとして載せ、期限の専用画面と延期を足す。
+
+- **規則**: 施設の規則に任意の **定期項目** `maintenance = {kind, code, name, interval_days}` を持たせる。持つ規則では **条件式は対象の患者を選ぶ式**
+  (「ワルファリン内服中」「2 型糖尿病」)で、期限の判定は式に書かない。`kind` は最終実施日を引くリソース:
+  `lab`(Observation、結果項目マスタの施設コード。`%labs` と同じ引き方)/ `procedure`(Procedure、`code=` の token。「体系|コード」も可)/
+  `immunization`(Immunization、`vaccine-code=`)。どれも `patient` + `_sort=-date` + `_count=1` で 1 件だけ引く(`fetchLastMaintenanceDate`)。
+- **状態**(`maintenanceStatusOf`): 有効な延期・対象外の Flag があれば、終了日なし → `exempt`(対象外)、終了日が今日以降 → `deferred`(延期中)。
+  終了日を過ぎた延期は無いものとして扱う。Flag が無ければ、記録なし → `never`、最終実施日 + 間隔 < 今日 → `overdue`、それ以外 → `ok`。
+- **警告**: `evaluateAdvisoryRules` は定期項目を持つ規則について、式が真で状態が `never` / `overdue` のときだけ警告にする。補足の先頭に
+  「<項目> の最終実施 <日>(期限 <日>)」か「<項目> の記録がありません」を足す。key・種別・台帳は他の施設の規則と同じ(`facility-rule|<コード>`)。
+  材料(`useMaintenanceRecords`)が揃うまでは評価しない(`useAdvisoryRuleEvaluation` の env が null)。
+- **延期・対象外**: `Flag {status: active, category: flag-category|health-maintenance, code: advisory-rule|<規則コード>(display 規則名、text 理由),
+  period: {start 今日, end 延期の期限(対象外は無し)}, author}`(`buildMaintenanceFlag`)。解除は Flag を終了(`endFlag`、読み直した版で PUT)。
+  **診療上の注意の一覧・患者帯・`%cautions` からはこの区分を除く**(`excludeHealthMaintenanceFlags` が `category:not=health-maintenance` を足す。
+  上流の Flag は `category` の token 検索と `:not` に対応)。
+- **区画**: カルテのプロファイルタブ「定期検査」。有効で定期項目を持つ規則(出す場所は問わない)のうち式がこの患者で真になるものを並べ、
+  状態・項目と間隔・最終実施日・期限・延期の期限と理由を出す。延期(期限日の初期値は今日 + 間隔)・対象外は理由任意のモーダル、
+  延期中・対象外の行は「解除」。督促 Task は作らない(受信箱を自動生成の通知で埋めない)。
+- **変数**: 対象の式のために `%activeMedicationCodes`(投与中の処方薬の成分コード = YJ 上 7 桁の配列、持参薬を含まない)をテンプレートの変数に足した。
+- seed の記入例: 糖尿病の HbA1c(180 日)、ワルファリン内服中の PT-INR(90 日)、ビグアナイド内服中のクレアチニン(180 日)、糖尿病の尿アルブミン/クレアチニン比(365 日)。
+  予防接種・実施記録の例はコード体系が施設ごとなので入れない。
 
 ## 3. backend
 
@@ -251,8 +276,9 @@ seed(`db/seed_data/advisory_override_reasons.csv`): 対応済み / 該当しな�
 | `expression` | text | 条件式 |
 | `message` / `detail` | string / text | 文言 / 補足 |
 | `basis` | string | 根拠(ガイドライン名か URL) |
+| `maintenance` | jsonb(任意) | 定期項目 `{kind, code, name, interval_days}`(§2.10)。`kind` は `MAINTENANCE_KINDS`、`code` 必須、`interval_days` は 1 以上の整数。null で外す |
 
-`Master::AdvisoryRulesController`(`/master/advisory_rules`、`?enabled=true`・`?context=` で絞れる。コードは更新で変えない)。
+`Master::AdvisoryRulesController`(`/master/advisory_rules`、`?enabled=true`・`?context=`・`?maintenance=true` で絞れる。コードは更新で変えない)。
 seed(`db/seed_data/advisory_rules.csv`、出す場所は「|」区切り)に記入例 7 件(ビグアナイドと腎機能、糖尿病の HbA1c 未検査、NSAIDs と腎機能、高齢者のベンゾジアゼピン系、ワルファリンと NSAIDs、高カリウムとスピロノラクトン、造影検査と腎機能)を**無効**で入れる。
 
 ### 3.5 パス
@@ -267,7 +293,8 @@ seed(`db/seed_data/advisory_rules.csv`、出す場所は「|」区切り)に記�
   種別「施設の規則」の下に規則ごとの行(既定の列は規則の重さ、重さの列は規則マスタへのリンク。台帳にだけ残る削除済みの規則は「(削除済み)」)。
 - **警告の確認理由マスタ**(`/advisory-override-reasons`、マスタメンテ > 警告): `SimpleMasterPage`(放射線治療の 4 マスタと共用)。
 - **警告の規則マスタ**(`/advisory-rules`、マスタメンテ > 警告): 一覧(コード・名称・重さ・出す場所・有効・表示順)と編集モーダル
-  (出す場所はチェックボックス、条件式は「変数」で変数一覧のモーダル(条件の組み立て)を開いて ` and ` でつなぐ、「試す」)。
+  (出す場所はチェックボックス、条件式は「変数」で変数一覧のモーダル(条件の組み立て)を開いて ` and ` でつなぐ、定期項目(種類・項目または
+  コードと項目名・間隔)、「試す」)。検査項目は結果項目の検索モーダルから選ぶ。
 
 ## 5. 運用
 
@@ -286,6 +313,10 @@ seed(`db/seed_data/advisory_rules.csv`、出す場所は「|」区切り)に記�
   `admin/advisory_stats_spec.rb`(規則ごとの内訳)。ブラウザ(糖尿 太郎): 「試す」で該当 / 該当なし / 式の誤り、カルテの患者帯に
   「施設の規則 1 件」、処方の DO で確認(ビグアナイド)と表示のみ(HbA1c)が並び、理由を選んで登録 → 来歴 override(医師ログイン時)、
   台帳に prescription と patient-view の行、集計の `rule_rows` に規則ごとの件数。検証の処方・台帳の行は片付け、seed の 2 件は無効に戻した。
+- 定期検査・検診(2026-11-03): `master/advisory_rules_spec.rb`(定期項目の保存・`?maintenance=true`・null で外す・不正な定期項目の 422)。
+  ブラウザ(糖尿 太郎・テスト 太郎、医師ログイン): 区画に HbA1c の行(期限内、最終 2026-09-07・期限 2027-03-06)、延期 → 「延期中 〜2027-05-02 理由」と
+  Flag(category health-maintenance、author 医師)、`category:not` で注意の一覧から除かれること、解除 → 期限内。間隔を 30 日に下げて期限超過 →
+  患者帯に「施設の規則 1 件」(補足に最終実施日と期限)、対象外 → 帯から消える、解除。規則マスタの定期項目の欄と「試す」。間隔は 180 日に戻した。
 
 ## 7. 残課題
 
@@ -295,9 +326,10 @@ seed(`db/seed_data/advisory_rules.csv`、出す場所は「|」区切り)に記�
 4. `order_reference` の埋め戻し(登録の応答からオーダー id を取って台帳を更新する)。
 5. 無視率の推移をダッシュボードのタイルに出す。
 6. 注射・部門オーダーへの CDS(order-select / order-sign)の展開(`cds-hooks-design.md` §7)。
-7. 施設の規則: 止める重さ(block)は付けられない(1 の block 種別と合わせて考える)。Health Maintenance(バックログ §5.3)は
-   この表の規則のプリセット(ワルファリン → PT-INR など)と期限の専用画面として載せる。患者帯の規則の吹き出しに「確認した」の記録は無い。
+7. 施設の規則: 止める重さ(block)は付けられない(1 の block 種別と合わせて考える)。患者帯の規則の吹き出しに「確認した」の記録は無い。
    部門オーダーの項目(撮影項目・検査項目)を式で参照する変数は無い(処方・注射の薬剤だけ)。
+8. 定期検査・検診: 期限が近い(未超過)項目の予告、患者をまたいだ期限超過の一覧(データ抽出)、延期の期限切れの自動終了は無い。
+   予防接種の既定のコード体系を決めていない(施設がコードを書く)。
 
 ## 8. 主なファイル
 
@@ -311,6 +343,7 @@ seed(`db/seed_data/advisory_rules.csv`、出す場所は「|」区切り)に記�
 | frontend | `hooks/usePatientStateAdvisories.ts`、`hooks/useRadSafetyAdvisories.ts`、`components/RadiotherapyPreCheck.tsx`、`components/MealAllergyNotice.tsx` | 患者の記録から警告を組む hook |
 | frontend | `pages/AdvisoryReviewPage.tsx`、`pages/AdvisoryMasterPages.tsx`、`pages/AdvisoryRulePage.tsx` | 管理画面・マスタ画面 |
 | frontend | `fhir/advisoryRuleHelpers.ts`、`hooks/useAdvisoryRuleAdvisories.ts`、`components/AdvisoryRulePictogram.tsx` | 施設の規則の評価・患者帯 |
+| frontend | `fhir/healthMaintenanceHelpers.ts`、`api/queries/healthMaintenance.ts`、`components/HealthMaintenanceSection.tsx` | 定期検査・検診の状態・材料・区画 |
 | backend | `app/models/master/advisory_override_reason.rb`、`app/models/advisory_event.rb`、`app/models/facility_settings.rb` | マスタ・台帳・施設設定 |
 | backend | `app/controllers/master/advisory_{override_reasons,events,rules}_controller.rb`、`app/controllers/admin/advisory_stats_controller.rb` | API |
 | backend | `app/models/master/advisory_rule.rb`、`db/seed_data/advisory_rules.csv` | 施設の規則のマスタ |

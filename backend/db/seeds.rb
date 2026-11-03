@@ -1666,7 +1666,8 @@ simple_csv_masters.each do |model, file, columns|
   puts "#{model.table_name}: seeded #{loaded} rows"
 end
 
-# 施設の規則(docs/advisory-design.md §3.6)。記入例なので無効で入れる。出す場所は「|」区切り。既存行は上書きしない。
+# 施設の規則(docs/advisory-design.md §3.6)。記入例なので無効で入れる。出す場所は「|」区切り、
+# 定期項目(maintenance)は JSON。既存行は上書きしない。
 advisory_rules_csv = Rails.root.join("db/seed_data/advisory_rules.csv")
 if File.exist?(advisory_rules_csv)
   loaded = 0
@@ -1684,7 +1685,8 @@ if File.exist?(advisory_rules_csv)
       expression: row["expression"],
       message: row["message"],
       detail: row["detail"].to_s.strip.presence,
-      basis: row["basis"].to_s.strip.presence
+      basis: row["basis"].to_s.strip.presence,
+      maintenance: row["maintenance"].to_s.strip.presence && JSON.parse(row["maintenance"])
     )
     loaded += 1
   end

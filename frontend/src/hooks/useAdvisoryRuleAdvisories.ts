@@ -1,9 +1,10 @@
 import { useMemo } from "react";
-import { usePatient, usePopulateSources } from "../api/queries";
+import { useMaintenanceRecords, usePatient, usePopulateSources } from "../api/queries";
 import { useAdvisoryRules } from "../api/masterQueries";
 import type { Advisory, AdvisoryContext } from "../fhir/advisoryHelpers";
 import {
   type AdvisoryOrderItem,
+  type AdvisoryRule,
   evaluateAdvisoryRules,
   rulesForContext,
 } from "../fhir/advisoryRuleHelpers";
@@ -39,6 +40,28 @@ export function useAdvisoryRuleEnv(
   return { env, error: populate.error };
 }
 
+/** 規則の評価に要るもの。式の環境と、定期項目を持つ規則の材料(最終実施日・延期の Flag)。 */
+export type AdvisoryRuleInput = Pick<AdvisoryRule, "code" | "expression" | "maintenance">;
+
+/**
+ * 規則の集まりを評価する材料をまとめて読む。env は式の環境と定期項目の材料の両方が揃うまで null。
+ * rules は呼び出し側で useMemo する。
+ */
+export function useAdvisoryRuleEvaluation(
+  patientId: string,
+  rules: readonly AdvisoryRuleInput[],
+  orderItems?: readonly AdvisoryOrderItem[],
+) {
+  const expressions = useMemo(() => rules.map((rule) => rule.expression), [rules]);
+  const { env, error } = useAdvisoryRuleEnv(patientId, expressions, orderItems);
+  const maintenance = useMaintenanceRecords(patientId, rules);
+  return {
+    env: env && !maintenance.isLoading ? env : null,
+    records: maintenance.records,
+    error: error ?? maintenance.error,
+  };
+}
+
 /**
  * 施設の規則(docs/advisory-design.md §2.9)のうち、この場面に出すもので真になったものの警告。
  * 患者が決まらない画面(オーダーセットの内容入力)は patientId を空で呼ぶ。
@@ -51,10 +74,9 @@ export function useAdvisoryRuleAdvisories(
 ): Advisory[] {
   const allRules = useAdvisoryRules();
   const rules = useMemo(() => rulesForContext(allRules, context), [allRules, context]);
-  const expressions = useMemo(() => rules.map((rule) => rule.expression), [rules]);
-  const { env } = useAdvisoryRuleEnv(patientId, expressions, orderItems);
+  const { env, records } = useAdvisoryRuleEvaluation(patientId, rules, orderItems);
   return useMemo(
-    () => (env ? evaluateAdvisoryRules(rules, env.patient, env.env) : NO_ADVISORIES),
-    [env, rules],
+    () => (env ? evaluateAdvisoryRules(rules, env.patient, env.env, records) : NO_ADVISORIES),
+    [env, rules, records],
   );
 }

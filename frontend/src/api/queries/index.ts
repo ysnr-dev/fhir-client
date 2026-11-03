@@ -24,6 +24,7 @@ export * from "./micro";
 export * from "./dischargeSummary";
 export * from "./broughtMedication";
 export * from "./patientProfile";
+export * from "./healthMaintenance";
 export * from "./populate";
 export * from "./karte";
 export * from "./earlyWarning";

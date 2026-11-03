@@ -400,7 +400,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
 | 3 | 警告(判断支援)の共通の器とガバナンス(無視理由・発火率・無視率) — **対応済み(2026-10-19、`docs/advisory-design.md`。止める種別はまだ無い)** | 拡張 | 高 | 中 | §5.3 |
 | 4 | アレルギー「無し(確認済)」の明示(NKDA) | 拡張 | 高 | 小 | §5.3 |
 | 5 | 医療計算スコアの同梱と自動充填 | 拡張 | 中〜高 | 小 | §5.3 |
-| 6 | Health Maintenance(患者単位の定期検査・検診の期限) | 新規 | 中〜高 | 中 | §5.3 |
+| 6 | Health Maintenance(患者単位の定期検査・検診の期限) — **対応済み(2026-11-03、`docs/advisory-design.md` §2.10。施設の規則の定期項目とプロファイルの「定期検査」区画、延期・対象外。期限が近い項目の予告と患者横断の一覧は残り)** | 新規 | 中〜高 | 中 | §5.3 |
 | 7 | SMART on FHIR アプリ起動(外部アプリの埋め込み) — **対応済み(2026-10-18、`docs/smart-app-launch-design.md`。CDS Hooks の patient-view も `docs/cds-hooks-design.md` で対応済み。患者なし起動は残り)** | 新規 | 中〜高 | 中(上流) | §5.3 |
 | 8 | 記録の出自表示(複写・テンプレート・AI 由来の色分け) | 拡張 | 中 | 中 | §5.4 |
 | 9 | 申し送り(ハンドオフ)の器と自動下書き | 新規 | 中 | 中 | §5.4 |
@@ -457,15 +457,12 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
     海外では MDCalc on FHIR のように患者の値を自動で埋め、結果を記録に書き戻す。
   - ［当たり］seed に Questionnaire(テンプレートカテゴリ「スコア」)を同梱。`populateContext` に「病名コードの有無」を返す汎用の変数を足し(「コードを指定して直近の検査値」は `%labs` で対応済み)、
     病名・検査値から初期値を埋める。結果は既存の Observation 生成で時系列に乗せる。根拠の弱い予測スコア(再入院の LACE など)は入れない。
-- **Health Maintenance(患者単位の定期検査・検診の期限)**(新規、中〜高)
-  - ［対応物］データ抽出の指標(集団単位)、Flag、`%` 変数。施設の規則(`advisory-design.md` §2.9、2026-11-03)で
-    「病名があり検査が n 日以上無ければ患者帯に表示」は書ける(`%labs.….daysAgo`)。期限の一覧・延期の記録は無い。
-  - ［不足］年齢・性・病名・薬剤から定期項目の期限を出し、期限超過を患者帯・プロファイルに出す。規則の表は施設の規則(`master_advisory_rules`)の
-    プリセットとして載せ、期限の専用画面と延期を足す方針(2026-11-03 決定)。
-    例: ワルファリン → PT-INR、メトホルミン → eGFR、ステロイド長期 → 骨密度、糖尿病 → 眼底・尿アルブミン、年齢 → がん検診・肺炎球菌ワクチン。
-  - ［当たり］backend `health_maintenance_rules`(条件: 年齢範囲・性・病名コード・薬剤 YJ の前方一致 → 項目コード・間隔・根拠)。
-    画面側は `Observation` / `Procedure` / `Immunization` を項目コードで `_count=1` 引いて最終実施日を出す。患者ごとの延期・対象外は理由つきの `Flag`(category `health-maintenance`)。
-    督促 Task は作らず画面表示だけから始める(受信箱を自動生成の通知で埋めない)。
+- **Health Maintenance(患者単位の定期検査・検診の期限)**(新規、中〜高)— **対応済み(2026-11-03、`docs/advisory-design.md` §2.10)**
+  - 施設の規則(`master_advisory_rules`)に定期項目(検査項目 / 実施記録 / 予防接種のコードと間隔)を持たせ、条件式で対象の患者を選ぶ。
+    最終実施日は `Observation` / `Procedure` / `Immunization` を `_count=1` で引く。カルテのプロファイルタブ「定期検査」に状態・期限を出し、
+    延期・対象外は理由つきの `Flag`(category `health-maintenance`)。記録なし・期限超過は患者帯と登録フォームの警告。督促 Task は作らない。
+  - 残り: 期限が近い項目の予告、患者をまたいだ期限超過の一覧(データ抽出)、予防接種の既定のコード体系、骨密度・眼底のように項目コードが
+    施設で決まる例のプリセット。
 - **SMART on FHIR アプリ起動**(新規、中〜高・上流)
   - ［対応物］上流の OAuth クライアント管理(Backend Services と対話型 launch の登録、`features/admin-integration.md`)。外部アプリをカルテに埋め込む機能は無い。
   - ［不足］EHR launch(`launch` パラメータ、`launch/patient` scope)で患者・利用者の文脈を渡し、外部アプリ(計算ツール・PHR ビューア・AI 記録製品・院内開発の小画面)を

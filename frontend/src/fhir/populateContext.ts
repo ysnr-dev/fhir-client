@@ -1016,6 +1016,15 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
   },
   {
     group: "処方・検査",
+    variable: "activeMedicationCodes",
+    label: "投与中の処方薬の成分コード",
+    expression: "%activeMedicationCodes",
+    description:
+      "今日の時点で投与期間中の処方の薬剤の成分コード(YJ コードの上 7 桁)を薬剤ごとに並べます。チェック項目の条件や施設の規則で「で始まる」と組み合わせ、薬効分類(上 4 桁)や成分の有無を判定するのに使います。中止した処方・注射・持参薬は含みません。",
+    sample: "3332001、3962002",
+  },
+  {
+    group: "処方・検査",
     variable: "prescriptions",
     label: "最新の処方",
     expression: "%prescriptions",
@@ -1233,6 +1242,11 @@ export function prescriptionRpLines(medicationRequests: fhir4.MedicationRequest[
 }
 
 // 投与中の処方薬を 1 行ずつ。同じ薬が複数の処方にあれば、投与終了日の遅い方だけ残す。
+/** %activeMedicationCodes。投与中の処方薬の成分コード(重複なし)。持参薬は %activeMedications と同じく含めない。 */
+export function activeMedicationCodes(medications: ActiveMedication[]): string[] {
+  return [...new Set(medications.filter((m) => !m.brought && m.ingredient).map((m) => m.ingredient))];
+}
+
 export function formatActiveMedications(medications: ActiveMedication[]): string {
   const latestEnd = new Map<string, string>();
   for (const medication of medications) {
@@ -1445,6 +1459,7 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     diagnosisIcd10: diagnosisIcd10Codes(sources.conditions),
     pastHistory: formatPastHistory(sources.allConditions),
     activeMedications: formatActiveMedications(sources.activeMedications),
+    activeMedicationCodes: activeMedicationCodes(sources.activeMedications),
     labResults: formatLabResults(sources.labDetail),
     labs: sources.labs,
     prescriptions: formatPrescriptions(sources.prescriptionDetail),

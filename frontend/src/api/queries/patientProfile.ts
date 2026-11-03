@@ -20,6 +20,7 @@ import {
   summarizeIrregularAntibody,
   summarizeTransplantBloodType,
 } from "../../fhir/transfusionProfileHelpers";
+import { excludeHealthMaintenanceFlags } from "../../fhir/healthMaintenanceHelpers";
 import { referenceId } from "../../fhir/shared";
 import {
   HAS_LAB_MAPPED_TYPES,
@@ -67,6 +68,8 @@ export function useFlagSearch(
   const params = new URLSearchParams();
   if (patientId) params.set("patient", `Patient/${patientId}`);
   if (activeOnly) params.set("status", "active");
+  // 定期検査・検診の延期・対象外は注意ではないので、一覧と帯から除く(プロファイルの「定期検査」区画で見る)。
+  excludeHealthMaintenanceFlags(params);
   params.set("_count", String(FLAG_COUNT));
   params.set("_offset", String(offset));
   // 一覧に出しているのは期間なので、開始日の新しい順に並べる。
@@ -97,6 +100,7 @@ export function useActiveFlags(patientId: string | undefined) {
   const params = new URLSearchParams();
   if (patientId) params.set("patient", `Patient/${patientId}`);
   params.set("status", "active");
+  excludeHealthMaintenanceFlags(params);
   params.set("_count", "100");
   params.set("_sort", "-date");
 
@@ -181,7 +185,10 @@ export function useFlagsForPatients(patientIds: string[]) {
         key.split(","),
         PATIENT_CHUNK,
         "patient",
-        (params) => params.set("status", "active"),
+        (params) => {
+          params.set("status", "active");
+          excludeHealthMaintenanceFlags(params);
+        },
         (flag) => referenceId(flag.subject?.reference),
       ),
     enabled: key.length > 0,

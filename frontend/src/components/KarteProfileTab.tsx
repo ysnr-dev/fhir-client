@@ -25,6 +25,7 @@ import {
 import { InfectionForm } from "./InfectionForm";
 import { PatientInfectionSection } from "./PatientInfectionSection";
 import { PatientAdverseEventSection } from "./PatientAdverseEventSection";
+import { HealthMaintenanceSection } from "./HealthMaintenanceSection";
 import {
   buildPregnancyObservations,
   parsePregnancyForm,
@@ -75,6 +76,7 @@ const SECTIONS = [
   { key: "body", label: "身体情報" },
   { key: "infection", label: "感染症" },
   { key: "adverse", label: "有害事象" },
+  { key: "maintenance", label: "定期検査" },
   { key: "caution", label: "診療上の注意" },
 ] as const;
 
@@ -237,6 +239,8 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
         />
       ) : section === "adverse" ? (
         <PatientAdverseEventSection patientId={patientId} />
+      ) : section === "maintenance" ? (
+        <HealthMaintenanceSection patientId={patientId} />
       ) : (
         <CautionSection
           patientId={patientId}

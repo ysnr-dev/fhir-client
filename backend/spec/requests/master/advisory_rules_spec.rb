@@ -49,6 +49,35 @@ RSpec.describe "Master::AdvisoryRules", type: :request do
     expect(record.contexts).to eq(["patient-view"])
   end
 
+  it "stores a maintenance item, filters by it and clears it with null" do
+    maintenance = { kind: "lab", code: "160012010-03", name: "PT-INR", interval_days: "90" }
+    with_admin_token(nil) { post "/master/advisory_rules", params: payload.merge(maintenance: maintenance), as: :json }
+    expect(response).to have_http_status(:created)
+    expect(response.parsed_body["maintenance"]).to eq(
+      "kind" => "lab", "code" => "160012010-03", "name" => "PT-INR", "interval_days" => 90
+    )
+    rule("plain")
+
+    with_admin_token(nil) { get "/master/advisory_rules", params: { maintenance: "true" } }
+    expect(response.parsed_body["items"].map { |i| i["code"] }).to eq(%w[egfr-low])
+
+    with_admin_token(nil) { patch "/master/advisory_rules/egfr-low", params: { maintenance: nil }, as: :json }
+    expect(response).to have_http_status(:ok)
+    expect(Master::AdvisoryRule.find_by(code: "egfr-low").maintenance).to be_nil
+  end
+
+  it "rejects a maintenance item without a known kind, a code or a positive interval" do
+    [
+      { kind: "visit", code: "x", interval_days: 30 },
+      { kind: "lab", code: "", interval_days: 30 },
+      { kind: "lab", code: "x", interval_days: 0 },
+      { kind: "lab", code: "x" }
+    ].each do |maintenance|
+      with_admin_token(nil) { post "/master/advisory_rules", params: payload.merge(maintenance: maintenance), as: :json }
+      expect(response).to have_http_status(:unprocessable_content), maintenance.inspect
+    end
+  end
+
   it "rejects block severity, unknown or empty contexts and a bad code" do
     [
       payload.merge(severity: "block"),

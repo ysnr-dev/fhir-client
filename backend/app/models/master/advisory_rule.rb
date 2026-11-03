@@ -1,6 +1,7 @@
 module Master
   # 施設が条件式(FHIRPath)で定義する警告の規則(docs/advisory-design.md §2.9・§3.6)。
   # 式はフロントエンドが患者の文脈(テンプレートの % 変数)で評価し、真のとき警告の器に「施設の規則」として出す。
+  # maintenance を持つ規則は定期検査・検診の規則(§2.10)で、式は対象の患者を選び、項目の最終実施日と間隔から期限を出す。
   class AdvisoryRule < ApplicationRecord
     self.table_name = "master_advisory_rules"
 
@@ -15,10 +16,18 @@ module Master
       regimen-apply regimen-cycle
     ].freeze
 
+    # 定期項目の最終実施日を引くリソース。lab は Observation(結果項目コード)、procedure は Procedure、
+    # immunization は Immunization。正はフロントエンドの healthMaintenanceHelpers.ts の MAINTENANCE_KINDS。
+    MAINTENANCE_KINDS = %w[lab procedure immunization].freeze
+    MAINTENANCE_KEYS = %w[kind code name interval_days].freeze
+
     validates :code, presence: true, uniqueness: true, format: { with: /\A[a-z0-9][a-z0-9-]*\z/ }
     validates :name, :expression, :message, presence: true
     validates :severity, inclusion: { in: SEVERITIES }
     validate :contexts_known
+    validate :maintenance_shape
+
+    before_validation :normalize_maintenance
 
     private
 
@@ -27,6 +36,30 @@ module Master
       unless values.is_a?(Array) && values.any? && values.all? { |value| CONTEXTS.include?(value) }
         errors.add(:contexts, "は出す場所を 1 つ以上、既知の値で指定してください")
       end
+    end
+
+    def normalize_maintenance
+      return if maintenance.nil?
+
+      unless maintenance.is_a?(Hash)
+        self.maintenance = {}
+        return
+      end
+      value = maintenance.stringify_keys.slice(*MAINTENANCE_KEYS)
+      value["code"] = value["code"].to_s.strip
+      value["name"] = value["name"].to_s.strip.presence
+      value["interval_days"] = Integer(value["interval_days"].to_s, exception: false)
+      self.maintenance = value.compact
+    end
+
+    def maintenance_shape
+      return if maintenance.nil?
+
+      valid = maintenance.is_a?(Hash) &&
+        MAINTENANCE_KINDS.include?(maintenance["kind"]) &&
+        maintenance["code"].present? &&
+        maintenance["interval_days"].is_a?(Integer) && maintenance["interval_days"].positive?
+      errors.add(:maintenance, "は種類・コード・1 以上の間隔(日)を指定してください") unless valid
     end
   end
 end

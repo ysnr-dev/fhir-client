@@ -12,6 +12,13 @@ import {
   severityOf,
 } from "./advisoryHelpers";
 import type { CheckedRp } from "./drugCheckHelpers";
+import {
+  type AdvisoryRuleMaintenance,
+  type MaintenanceRecords,
+  maintenanceIsDue,
+  maintenanceStatusOf,
+  maintenanceStatusText,
+} from "./healthMaintenanceHelpers";
 import { ingredientKey } from "./medicationSafetyHelpers";
 import type { PopulateExpressionOption } from "./populateContext";
 
@@ -36,6 +43,8 @@ export interface AdvisoryRule {
   detail: string | null;
   /** 根拠(ガイドライン名か URL)。 */
   basis: string | null;
+  /** 定期項目(healthMaintenanceHelpers.ts)。持つ規則は式が対象を選び、項目の期限で警告する。 */
+  maintenance: AdvisoryRuleMaintenance | null;
 }
 
 /** %orderItems の 1 要素。入力中の処方・注射の薬剤 1 行。 */
@@ -79,11 +88,16 @@ export function advisoryOrderItemsOf(rps: readonly CheckedRp[]): AdvisoryOrderIt
   );
 }
 
+/** 表示順(無いものは末尾)。 */
+export function sortAdvisoryRules(rules: readonly AdvisoryRule[]): AdvisoryRule[] {
+  return [...rules].sort(
+    (a, b) => (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER),
+  );
+}
+
 /** その場面で評価する規則(有効で、出す場所に含まれるもの)。表示順。 */
 export function rulesForContext(rules: readonly AdvisoryRule[], context: AdvisoryContext): AdvisoryRule[] {
-  return rules
-    .filter((rule) => rule.enabled && rule.contexts.includes(context))
-    .sort((a, b) => (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER));
+  return sortAdvisoryRules(rules.filter((rule) => rule.enabled && rule.contexts.includes(context)));
 }
 
 export type AdvisoryRuleResult = { matched: boolean; error?: undefined } | { matched: false; error: string };
@@ -109,23 +123,36 @@ function ruleSource(rule: AdvisoryRule): Advisory["source"] {
   return { label: basis ? `${rule.name}(${basis})` : rule.name };
 }
 
-/** 規則を評価し、真になったものを警告にする。式の誤りは出さずに console へ残す。 */
+/**
+ * 規則を評価し、真になったものを警告にする。式の誤りは出さずに console へ残す。
+ * 定期項目を持つ規則は、式が真(対象の患者)で、項目が記録なし・期限超過のときだけ出す
+ * (延期中・対象外・期限内は出さない)。材料(records)がまだ無い規則は出さない。
+ */
 export function evaluateAdvisoryRules(
   rules: readonly AdvisoryRule[],
   base: fhir4.Patient,
   env: Record<string, unknown>,
+  records?: MaintenanceRecords,
 ): Advisory[] {
   return rules.flatMap((rule) => {
     const result = evaluateAdvisoryRule(rule.expression, base, env);
     if (result.error) console.warn(`施設の規則「${rule.name}」の評価に失敗しました:`, result.error);
     if (!result.matched) return [];
+    let detail = rule.detail ?? undefined;
+    if (rule.maintenance) {
+      const record = records?.get(rule.code);
+      if (!record) return [];
+      const status = maintenanceStatusOf(rule.maintenance, record);
+      if (!maintenanceIsDue(status)) return [];
+      detail = [maintenanceStatusText(rule.maintenance, status), rule.detail].filter(Boolean).join(" ");
+    }
     return [
       {
         key: advisoryKey(ADVISORY_RULE_KIND, rule.code),
         kind: ADVISORY_RULE_KIND,
         severity: severityOf(ADVISORY_RULE_KIND, rule.severity === "warning"),
         message: rule.message,
-        detail: rule.detail ?? undefined,
+        detail,
         source: ruleSource(rule),
       },
     ];
