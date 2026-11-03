@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Disease, PathwayOutcomeCategory, PathwaySetting, PathwayStatus } from "../api/masterClient";
 import { useBomAvailability, usePathway, usePathwayMutations } from "../api/masterQueries";
+import { useSelfOrganization } from "../api/queries";
+import { buildFacilityPathwayXml, facilityPathwayXmlFileName } from "../fhir/epathMessageHelpers";
+import { organizationInstitutionNumber } from "../fhir/organizationHelpers";
+import { downloadBlob } from "../lib/download";
 import { BomOutcomeAssessmentsModal, BomSearchModal } from "../components/BomSearchModal";
 import type { BomOutcome } from "../api/masterClient";
 import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
@@ -99,6 +103,17 @@ export function PathwayEditorPage() {
   const navigate = useNavigate();
   const isNew = pathwayId === undefined;
   const detail = usePathway(isNew ? null : pathwayId);
+  const { organization: selfOrganization } = useSelfOrganization();
+
+  // ePath メッセージ(施設パス、状態区分 02)。保存済みの内容から組む(入力中の draft は含めない)。
+  function exportFacilityXml() {
+    if (!detail.data || !selfOrganization) return;
+    const xml = buildFacilityPathwayXml({
+      pathway: detail.data,
+      facility: { id: organizationInstitutionNumber(selfOrganization), name: selfOrganization.name ?? "" },
+    });
+    downloadBlob(new Blob([xml], { type: "application/xml" }), facilityPathwayXmlFileName(detail.data));
+  }
   const mutations = usePathwayMutations();
   const { departments } = useSelfDepartments();
   const bomAvailable = useBomAvailability(true);
@@ -318,6 +333,11 @@ export function PathwayEditorPage() {
           <button type="button" onClick={() => setPreviewOpen(true)}>
             プレビュー
           </button>
+          {!isNew && (
+            <button type="button" onClick={exportFacilityXml} disabled={!detail.data || !selfOrganization}>
+              ePath 出力
+            </button>
+          )}
           <Link to="/pathways" className="button">
             戻る
           </Link>

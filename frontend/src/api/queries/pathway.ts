@@ -510,9 +510,10 @@ export const PATHWAY_TREE_KEY_PREFIX: string[] = ["CarePlan", "search", "pathway
 /** 適用の木の検索の 1 ページ(上流の _count の上限)。 */
 const PATHWAY_TREE_PAGE = 500;
 
-export function usePathwayApplicationTree(applyId: string | undefined) {
+/** 適用の木を 1 回で読む(パスタブと ePath 出力が使う)。 */
+export async function fetchPathwayApplicationTree(applyId: string): Promise<PathwayApplicationTree> {
   const params = new URLSearchParams();
-  if (applyId) params.set("part-of", `CarePlan/${applyId}`);
+  params.set("part-of", `CarePlan/${applyId}`);
   params.append("_revinclude", "Procedure:based-on");
   params.append("_include:iterate", "Procedure:based-on");
   // OAT ユニットの Goal(評価)と観察項目の Goal(適正値)も同じ応答で揃える。
@@ -522,57 +523,59 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
   params.append("_revinclude:iterate", "Task:focus,Procedure:based-on");
   params.set("_count", String(PATHWAY_TREE_PAGE));
 
+  const [{ data: apply }, { data: bundle }] = await Promise.all([
+    readResource<fhir4.CarePlan>("CarePlan", applyId),
+    searchResource<fhir4.Resource>("CarePlan", params),
+  ]);
+  // フェーズを重ねた長いパスは木の CarePlan が 1 ページ(500 件)を超えるので、残りのページも読む。
+  const pageCount = Math.ceil((bundle.total ?? 0) / PATHWAY_TREE_PAGE);
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(pageCount - 1, 0) }, (_, i) => {
+      const pageParams = new URLSearchParams(params);
+      pageParams.set("_offset", String((i + 1) * PATHWAY_TREE_PAGE));
+      return searchResource<fhir4.Resource>("CarePlan", pageParams).then((r) => r.data);
+    }),
+  );
+  const resources = [bundle, ...rest]
+    .flatMap((page) => page.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is fhir4.Resource => Boolean(r));
+  const orders = new Map<string, fhir4.ServiceRequest>();
+  const goals = new Map<string, fhir4.Goal>();
+  const carePlans = new Map<string, fhir4.CarePlan>();
+  const procedures = new Map<string, fhir4.Procedure>();
+  const tasks: fhir4.Task[] = [];
+  // オーダーの実施記録。パスのタスク(CarePlan を basedOn で指す Procedure)とは分けて持つ。
+  const performs: fhir4.Procedure[] = [];
+  for (const r of resources) {
+    if (!r.id) continue;
+    if (r.resourceType === "Task") tasks.push(r as fhir4.Task);
+    if (r.resourceType === "ServiceRequest") orders.set(r.id, r as fhir4.ServiceRequest);
+    if (r.resourceType === "Goal") goals.set(r.id, r as fhir4.Goal);
+    if (r.resourceType === "CarePlan") carePlans.set(r.id, r as fhir4.CarePlan);
+    if (r.resourceType === "Procedure") {
+      const procedure = r as fhir4.Procedure;
+      if (procedure.basedOn?.some((ref) => ref.reference?.startsWith("CarePlan/"))) procedures.set(r.id, procedure);
+      else performs.push(procedure);
+    }
+  }
+  if (apply.id) carePlans.set(apply.id, apply);
+  const tree = [...carePlans.values(), ...procedures.values()].filter((r) => r.id !== apply.id);
+  return {
+    application: parsePathwayApplication([apply, ...tree], goals),
+    orders,
+    goals,
+    carePlans,
+    procedures,
+    orderProgress: orderProgressByOrderId(orders.values(), tasks, performs),
+    performs,
+  };
+}
+
+export function usePathwayApplicationTree(applyId: string | undefined) {
   return useQuery({
     queryKey: PATHWAY_TREE_KEY_PREFIX.concat(applyId ?? ""),
-    queryFn: async (): Promise<PathwayApplicationTree> => {
-      const [{ data: apply }, { data: bundle }] = await Promise.all([
-        readResource<fhir4.CarePlan>("CarePlan", applyId as string),
-        searchResource<fhir4.Resource>("CarePlan", params),
-      ]);
-      // フェーズを重ねた長いパスは木の CarePlan が 1 ページ(500 件)を超えるので、残りのページも読む。
-      const pageCount = Math.ceil((bundle.total ?? 0) / PATHWAY_TREE_PAGE);
-      const rest = await Promise.all(
-        Array.from({ length: Math.max(pageCount - 1, 0) }, (_, i) => {
-          const pageParams = new URLSearchParams(params);
-          pageParams.set("_offset", String((i + 1) * PATHWAY_TREE_PAGE));
-          return searchResource<fhir4.Resource>("CarePlan", pageParams).then((r) => r.data);
-        }),
-      );
-      const resources = [bundle, ...rest]
-        .flatMap((page) => page.entry ?? [])
-        .map((e) => e.resource)
-        .filter((r): r is fhir4.Resource => Boolean(r));
-      const orders = new Map<string, fhir4.ServiceRequest>();
-      const goals = new Map<string, fhir4.Goal>();
-      const carePlans = new Map<string, fhir4.CarePlan>();
-      const procedures = new Map<string, fhir4.Procedure>();
-      const tasks: fhir4.Task[] = [];
-      // オーダーの実施記録。パスのタスク(CarePlan を basedOn で指す Procedure)とは分けて持つ。
-      const performs: fhir4.Procedure[] = [];
-      for (const r of resources) {
-        if (!r.id) continue;
-        if (r.resourceType === "Task") tasks.push(r as fhir4.Task);
-        if (r.resourceType === "ServiceRequest") orders.set(r.id, r as fhir4.ServiceRequest);
-        if (r.resourceType === "Goal") goals.set(r.id, r as fhir4.Goal);
-        if (r.resourceType === "CarePlan") carePlans.set(r.id, r as fhir4.CarePlan);
-        if (r.resourceType === "Procedure") {
-          const procedure = r as fhir4.Procedure;
-          if (procedure.basedOn?.some((ref) => ref.reference?.startsWith("CarePlan/"))) procedures.set(r.id, procedure);
-          else performs.push(procedure);
-        }
-      }
-      if (apply.id) carePlans.set(apply.id, apply);
-      const tree = [...carePlans.values(), ...procedures.values()].filter((r) => r.id !== apply.id);
-      return {
-        application: parsePathwayApplication([apply, ...tree], goals),
-        orders,
-        goals,
-        carePlans,
-        procedures,
-        orderProgress: orderProgressByOrderId(orders.values(), tasks, performs),
-        performs,
-      };
-    },
+    queryFn: () => fetchPathwayApplicationTree(applyId as string),
     enabled: Boolean(applyId),
   });
 }

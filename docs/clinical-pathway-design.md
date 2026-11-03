@@ -867,6 +867,43 @@ JAHIS ePath 実装ガイド 6.4(7)〜(13)の majorEvent(`docs/clinical-pathway-b
   **時刻を先に**「10:30 内視鏡的…」と出し、収まらない名前の側を省略する。全文はすぐ出るツールチップ(`icon-tooltip` の
   `data-tooltip`。ネイティブの title は出るまでが遅い)で、セルの左端から下に出す。サンプルは 900001(手術当日 術前)・900002(入院日 治療後)・900003(手術当日 術前)で、どれも手術・内視鏡のタスクに結んである。
 
+### 7.14 ePath メッセージ(JAMI 標準 XML)の出力(2026-11-03)
+
+JAHIS ePath 実装ガイド Ver.1.0 第 6 章の要素順・記述例に合わせた XML(JAMI 標準 JAMISDP04 の `ePathMessage`)を出す。
+`docs/clinical-pathway-backlog.md` §H の G-9。組み立ては `fhir/epathMessageHelpers.ts`(純粋関数)、材料集めは `api/queries/epathExport.ts`。
+
+- **施設パス(状態区分 02)**: 定義の編集画面の見出し「ePath 出力」(保存済みのパスだけ。入力中の draft は含めない)。
+  `buildFacilityPathwayXml(PathwayDetail, 自院)`。ファイル名 `ePath_{パスコード}_v{版}.xml`。
+- **適用後パスデータ(12)**: パスタブのケバブ「ePath 出力」(進行中でも終了・中止でも)。適用の木(`fetchPathwayApplicationTree`)・
+  評価と実績の Observation・適用の Goal・患者・入院 Encounter とその診療科・病名(`CarePlan.addresses`)・記録者の PractitionerRole
+  (職種)・看護指示の実施記録を読んで `buildAppliedPathwayXml` で組み、DOMParser で整形式を確かめてからダウンロードする。
+  ファイル名 `ePath_{パスコード}_{患者番号}_{開始日}.xml`。
+- ［決定］**backend は FHIR を持たないので frontend で組む**。押したときに読む(画面の状態に依存しない)。
+- 変換の決め事:
+  - パス識別: 1 番目は標準クリニカルパスコード(医療機関コードを自院の 10 桁に差し替え。OID 1.2.392.200250.2.2.50.10)、
+    2 番目は `pathway_code`(LOCAL)。標準コードの無いパスはローカルだけ。ひな型版は `template_version`(無ければ 0)、
+    施設パス版は適用に焼いた `pathway-version`(無ければ定義の `version`)。
+  - 患者: 患者番号を 10 桁左 0 埋め、氏名は漢字(IDE)とカナ(SYL)、性別 M / F / UN、生年月日 YYYYMMDD。
+  - 入院: 診療科は Encounter.serviceProvider の SS-MIX2 コード(無ければ定義の診療科)。病名は MEDIS 管理番号 → ICD10 の順。
+    **入院日は Encounter が入院中・退院済みのときだけ Encounter の開始日、入院予定なら病日 1 の日付**(予定の日付は予定にすぎない)。
+    死亡有無は退院区分 `exp`。主要イベントは §7.13(名前・病日・日付・実施の開始〜終了)。
+  - 適用基本情報: 適用の識別子、適応基準(confirmed = 確認区分)、実施期間(終了・中止なら high)、予定日数、終了区分(終了・中止のとき)。
+  - 病日: `eventElapsedDays`、`eventName` は見出し(分けた病日はステップ名を続ける「手術当日術前」)。
+  - OAT ユニット: 識別子は適用の識別子の値、発生時状態区分は予定外 → 12 / それ以外 → 02。アウトカムは BOM 大分類・中分類・コード
+    (BOM 以外はローカルコード、無ければ `unit_key`)、クリティカル・インディケータ。
+  - 観察項目: ePath の assessment は task を 0..1 しか持てないので、**タスクが複数の観察項目は同じ観察項目をタスクごとに繰り返す**。
+    観察項目に結ばないタスクは「観察項目なし」(`ZZZZZZZZZZ`、LOCAL)で包む。適正値は `properValue`。
+  - 観察項目実施: 実績の Observation があるときだけ。評価状況は観察項目ごとの達成を記録していない(G-6)ので、アウトカムが達成なら 1、
+    それ以外は 3。観察結果は value / unit(2 数値は「a:b」)/ datetime。
+  - タスク: 分類は中分類(無ければ大分類)、コードはローカルのタスクコード(無ければ結んだオーダーのコード、それも無ければ `task_key`)、
+    予定日、実施状況は**パスシートと同じ判定**(チェックリストは Procedure、オーダーを結んだタスクはオーダーの実施記録・進捗、
+    看護指示はその日の実施記録)。実施日時と実施者はオーダーの実施記録の本体から。
+  - 評価: Goal の達成状態、未達成なら S/O/A/P(自由記載は P)、記録者。記録の無いアウトカムは `judgement` を出さない。
+  - 総合評価: 病日に 1 件(§7.12)。無い病日は「評価なし」+ 記録者「記載なし / 指定なし」(ガイドの固定値)。
+  - 職種: 記録者の PractitionerRole(所属ロール)の職種の表示名。無ければ「指定なし」。
+  - 本システムの拡張(フェーズ・表示順・版・主要イベントの参照・オーダー雛形)は出さない。
+- 日時は FHIR の dateTime(オフセット付き)の書かれた時刻をそのまま `YYYYMMDDHHMMSS` にする。
+
 ## 8. 実装の段階
 
 - **第 1 段階(実装済)**: 施設パス定義マスタ(backend・API・spec・seed・一覧・編集・雛形モーダル)。
@@ -887,11 +924,12 @@ JAHIS ePath 実装ガイド 6.4(7)〜(13)の majorEvent(`docs/clinical-pathway-b
     backend の `FhirProxyController::ALLOWED_RESOURCE_TYPES` にも追加済み(2026-09-12)。
 - **第 3 段階(提案)**: ePath 形式の出力(EP02 Bundle = 定義、EP12 Bundle = 適用後データ)。§4 の対応表の逆変換(§7 が書かない `activity.outcomeReference` もここで組み立てる)。
   ひな型パス(EP01)の取込(`protocol_base` に URL を残す)。許容経過日数条件・BOM 中分類の UI(パスステップの UI は §3.1 で実装済み)。
-  JAHIS ePath 実装ガイドの主題は JAMI 標準(JAMISDP04)の XML メッセージなので、FHIR の Bundle とは別に XML 出力も候補
-  (`docs/clinical-pathway-backlog.md` §H の G-9。前提の標準パスコード・版・総合評価は §7.12 で済み)。
+  JAMI 標準(JAMISDP04)の XML メッセージの出力は §7.14 で実装済み(2026-11-03)。
 
 ## 9. 実装したもの
 
+- ePath メッセージの出力(§7.14、2026-11-03): frontend `fhir/epathMessageHelpers.ts`(新規)、`api/queries/epathExport.ts`(新規)、
+  `api/queries/pathway.ts`(`fetchPathwayApplicationTree` に切り出し)、`components/KartePathwayTab.tsx`(ケバブ)、`pages/PathwayEditorPage.tsx`(見出し)。
 - 主要イベント(§7.13、2026-11-03): backend `db/migrate/20261103210000_add_major_event_name_to_master_pathway_events.rb`、
   `pathways_controller.rb`(EVENT_ATTRS)、`db/seeds.rb`、`db/seed_data/pathways/900001〜900003.json`、spec。frontend
   `fhir/pathwayMajorEventHelpers.ts`(新規)、`fhir/pathwayApplyHelpers.ts`(`PATHWAY_MAJOR_EVENT_EXT_URL`)、`fhir/pathwayHelpers.ts`、

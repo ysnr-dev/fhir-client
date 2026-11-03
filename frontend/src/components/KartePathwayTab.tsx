@@ -51,6 +51,8 @@ import { PathwayTaskPanel } from "./PathwayTaskPanel";
 import { PathwayUnplannedPanel } from "./PathwayUnplannedPanel";
 import { PathwaySeriesLink } from "./PathwaySeriesLink";
 import { RowMenu } from "./RowMenu";
+import { useExportAppliedPathwayXml, useSelfOrganization } from "../api/queries";
+import { organizationInstitutionNumber } from "../fhir/organizationHelpers";
 
 // カルテ画面の「パス」タブ。適用したクリニカルパスを、紙のパスシートと同じ
 // 病日 × OAT ユニットのシートで見る。列は病日(今日の列を強調)、行は OAT ユニットを
@@ -137,6 +139,9 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
   const nursingPerformsOfDay = useNursingPerformsOn(nursingPerform?.date ?? "", nursingPerform ? [patientId] : []);
   // 詳細に出す対象プロブレムの名前。カルテのカードから開く詳細と同じものを渡す。
   const { conditions } = useKarteConditions(patientId);
+  // ePath メッセージ(JAMI の XML)の出力。自院の医療機関コードと名称を添える。
+  const { organization: selfOrganization } = useSelfOrganization();
+  const exportXml = useExportAppliedPathwayXml();
   const problemsById = useMemo(
     () => new Map(conditions.filter((c) => c.id).map((c) => [c.id as string, c])),
     [conditions],
@@ -394,31 +399,51 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
             >
               <ActionIcon name="close" />
             </button>
-            {application.status === "active" && (
-              <RowMenu label="パスの操作" escapesClipping>
-                <button
-                  type="button"
-                  className="row-menu__item row-menu__item--danger"
-                  onClick={() => setCancelOpen(true)}
-                >
-                  適用の取り消し
-                </button>
-                {phaseCancellable && (
+            <RowMenu label="パスの操作" escapesClipping>
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={exportXml.isPending || !selfOrganization}
+                onClick={() =>
+                  selfOrganization &&
+                  exportXml.mutate({
+                    applyId: application.id,
+                    patientId,
+                    facility: {
+                      id: organizationInstitutionNumber(selfOrganization),
+                      name: selfOrganization.name ?? "",
+                    },
+                  })
+                }
+              >
+                ePath 出力
+              </button>
+              {application.status === "active" && (
+                <>
                   <button
                     type="button"
                     className="row-menu__item row-menu__item--danger"
-                    onClick={() => setPhaseCancelOpen(true)}
+                    onClick={() => setCancelOpen(true)}
                   >
-                    フェーズの取り消し
+                    適用の取り消し
                   </button>
-                )}
-              </RowMenu>
-            )}
+                  {phaseCancellable && (
+                    <button
+                      type="button"
+                      className="row-menu__item row-menu__item--danger"
+                      onClick={() => setPhaseCancelOpen(true)}
+                    >
+                      フェーズの取り消し
+                    </button>
+                  )}
+                </>
+              )}
+            </RowMenu>
           </span>
         )}
       </div>
 
-      <ErrorBanner error={applications.error ?? tree.error ?? observations.error} />
+      <ErrorBanner error={applications.error ?? tree.error ?? observations.error ?? exportXml.error} />
 
       {list.length > 1 && (
         <div className="chemo-calendar__regimens" role="tablist" aria-label="適用したパス">
