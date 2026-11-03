@@ -20759,7 +20759,8 @@ button.nursing-worksheet__mark {
   font-size: 13px;
 }
 
-.pathway-event__head input {
+.pathway-event__head input,
+.pathway-event__head select {
   font: inherit;
   font-size: 14px;
   padding: 4px 8px;
@@ -20783,7 +20784,12 @@ button.nursing-worksheet__mark {
   width: 120px;
 }
 
-.pathway-event__major input {
+.pathway-event__major select {
+  width: 200px;
+  color: var(--text);
+}
+
+.pathway-event__major-name input {
   width: 200px;
 }
 

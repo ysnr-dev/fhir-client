@@ -467,6 +467,7 @@
       "path_step": 1,
       "title": "手術当日",
       "major_event_name": "腹腔鏡下胆嚢摘出術",
+      "major_event_task_key": "45229f48-27c8-4a9f-b94b-561a3c4ec278",
       "path_step_name": "術前",
       "oat_units": [
         {

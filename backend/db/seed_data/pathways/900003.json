@@ -430,7 +430,8 @@
       "elapsed_days": 2,
       "path_step": 1,
       "title": "手術当日",
-      "major_event_name": "鼠径ヘルニア根治術",
+      "major_event_name": "鼠径ヘルニア手術",
+      "major_event_task_key": "2ec80f53-1fbb-5b8a-9ca5-697a93311bda",
       "path_step_name": "術前",
       "oat_units": [
         {

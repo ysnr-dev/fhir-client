@@ -123,6 +123,7 @@ master_pathway_events           … 病日・イベント(= action + Event PlanD
   path_step      パスステップ(既定 1。同じ病日を術前・術後などに分けたときの順番。§3.1)、path_step_name
   title          入院日 / 手術当日 / 退院日 …(空なら病日から導出して表示)
   major_event_name 主要イベント(手術・内視鏡治療・放射線治療などの名前。任意。§7.13)
+  major_event_task_key 主要イベントにするタスク(その病日の TPOP / EXEN / TPRT のタスクの task_key)。空なら名前だけの自由入力
   allowable_condition_type / allowable_days / allowable_range_low / allowable_range_high   許容経過日数条件(列のみ)
 master_pathway_oat_units        … OAT ユニット(event_id で結ぶ)
   unit_key       uuid。(pathway_code, unit_key) で一意
@@ -846,19 +847,25 @@ Task  code = task-code|pathway-variance、priority = urgent(注意)、status req
 JAHIS ePath 実装ガイド 6.4(7)〜(13)の majorEvent(`docs/clinical-pathway-backlog.md` §H の G-8)。手術・内視鏡治療・放射線治療など、
 入院の中心になる出来事の名前・病日・日付・開始終了時刻。実装は `fhir/pathwayMajorEventHelpers.ts`。
 
-- ［決定］**名前は定義の病日に持つ**(`master_pathway_events.major_event_name`)。分けた病日はステップごと(ESD を「治療前」に置くなど、
-  そのイベントのタスクがあるステップ)。適用時に病日の CarePlan へ拡張 `pathway-major-event`(valueString)で写す。
-- ［決定］**日時は保存しない。その病日のタスクに結んだオーダーの実施記録から読む**(`pathwayMajorEvents`)。読むタスクの中分類は
-  手術(TPOP)→ 内視鏡(EXEN)→ 放射線治療(TPRT)の順で、最初に実施記録が見つかったもの。実施記録は本体の Procedure
-  (partOf を持たないもの。取り消し・未実施は除く)で、開始は `performedPeriod.start`(手術の入室)か `performedDateTime`(内視鏡の実施)、
-  終了は `performedPeriod.end`(手術の退室)。実施記録が無いうちは名前だけ。日付の予定はその病日の日付。
-  ［導出］実施を直せば表示も追随する(パス側に写した時刻が古くなることが無い)。
+- ［決定］**主要イベントは、その病日のタスクから選ぶ**(`major_event_task_key`)。選べるのは手術(TPOP)・内視鏡(EXEN)・
+  放射線治療(TPRT)のタスク(`majorEventCandidates`)。選ぶと名前の既定が雛形の明細の名称になる(手術は術式名、内視鏡は項目名。
+  雛形の `items[0].name`、無ければタスク名。`majorEventNameOfTask`)。名前は手で直せる。該当するタスクの無い病日(内科の検査入院など)は
+  **自由入力**(名前だけ、タスクに結ばない)。分けた病日はステップごと(ESD を「治療前」に置くなど)。
+  サーバーは選んだタスクがその病日に無ければ下書きでも 422(画面はタスクを消したら結びを外して送る)。
+- 適用時に病日の CarePlan へ拡張 `pathway-major-event`(valueString = 名前)と `pathway-major-event-task`(valueReference →
+  選んだタスクの Procedure。同じ transaction の fullUrl を先に決めて指す)を写す。
+- ［決定］**日時は保存しない。選んだタスクに結んだオーダーの実施記録から読む**(`pathwayMajorEvents`)。名前とタスクが結んで
+  あるので、同じ病日に別の内視鏡があっても取り違えない。実施記録は本体の Procedure(partOf を持たないもの。取り消し・未実施は除く)で、
+  開始は `performedPeriod.start`(手術の入室)か `performedDateTime`(内視鏡の実施)、終了は `performedPeriod.end`(手術の退室)。
+  同じオーダーに複数あれば最初のもの。実施記録が無いうちと自由入力は名前だけ。日付の予定はその病日の日付。
+  ［導出］実施を直せば表示も追随する(パス側に写した時刻が古くなることが無い)。コード(手術の K コード・内視鏡の項目コード)は
+  結んだオーダーの ServiceRequest.code から出力時に引ける。
 - ［決定］IG の Procedure MajorEvent は作らない。実施記録そのものが手術・内視鏡の Procedure なので、EP12 / XML の出力で組み立てる。
 - 表示: 「腹腔鏡下胆嚢摘出術 10:05〜11:40」。オーバービューは見出しの**専用の段**(日付・ステップの段の下。列は病日、分けた日はステップごと)に、
   日めくりは見出しの日付の横に出す。［決定］病日番号のセルに足すと、その列だけ高くなって段がずれて見えるので、主要イベントのある
   パスだけ段を 1 つ足す。［決定］**幅は列幅で止める**(止めないと長い名前に押されてその列だけ広がる)。オーバービューでは
   **時刻を先に**「10:30 内視鏡的…」と出し、収まらない名前の側を省略する。全文はすぐ出るツールチップ(`icon-tooltip` の
-  `data-tooltip`。ネイティブの title は出るまでが遅い)で、セルの左端から下に出す。サンプルは 900001(手術当日 術前)・900002(入院日 治療後)・900003(手術当日 術前)。
+  `data-tooltip`。ネイティブの title は出るまでが遅い)で、セルの左端から下に出す。サンプルは 900001(手術当日 術前)・900002(入院日 治療後)・900003(手術当日 術前)で、どれも手術・内視鏡のタスクに結んである。
 
 ## 8. 実装の段階
 

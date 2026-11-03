@@ -117,6 +117,9 @@ export const PATHWAY_PHASE_NOTE_EXT_URL = "http://fhir-client.local/StructureDef
 export const PATHWAY_VERSION_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-version";
 /** 病日の主要イベントの名前(valueString)。ePath の majorEvent の eventName に写す(§7.13)。 */
 export const PATHWAY_MAJOR_EVENT_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-major-event";
+/** 主要イベントにしたタスクの Procedure(valueReference)。実施の日時はそのタスクのオーダーから読む。 */
+export const PATHWAY_MAJOR_EVENT_TASK_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/pathway-major-event-task";
 
 export type PathwayLevel = "apply" | "event" | "oat-unit" | "assessment";
 
@@ -538,9 +541,13 @@ function appendEventEntries(
     eventDates.set(event.elapsed_days, date);
     const eventUrl = `urn:uuid:${crypto.randomUUID()}`;
     const eventId = eventIdValue(applyId, event.elapsed_days, event.path_step);
+    // 主要イベントのタスクの Procedure は病日の CarePlan から指すので、fullUrl を先に決めておく。
+    const majorEventTaskUrl = event.major_event_task_key ? `urn:uuid:${crypto.randomUUID()}` : undefined;
+    let majorEventTaskPlaced = false;
     entry.push({
       fullUrl: eventUrl,
       resource: buildEventCarePlan(event, {
+        majorEventTaskUrl,
         eventId,
         applyUrl,
         patientId,
@@ -595,8 +602,10 @@ function appendEventEntries(
         });
 
         for (const [taskIndex, task] of row.tasks.entries()) {
+          const isMajorEventTask = !majorEventTaskPlaced && task.task_key === event.major_event_task_key;
+          if (isMajorEventTask) majorEventTaskPlaced = true;
           entry.push({
-            fullUrl: `urn:uuid:${crypto.randomUUID()}`,
+            fullUrl: isMajorEventTask && majorEventTaskUrl ? majorEventTaskUrl : `urn:uuid:${crypto.randomUUID()}`,
             resource: buildTaskProcedure(task, {
               taskId: taskIdValue(assessmentId, task.task_key),
               assessmentUrl,
@@ -626,6 +635,8 @@ function buildEventCarePlan(
     date: string;
     pathway: PathwayDetail;
     phaseNote?: string;
+    /** 主要イベントにしたタスクの Procedure の fullUrl。 */
+    majorEventTaskUrl?: string;
   },
 ): fhir4.CarePlan {
   const extension: fhir4.Extension[] = [
@@ -650,6 +661,9 @@ function buildEventCarePlan(
   }
   if (ctx.phaseNote) extension.push({ url: PATHWAY_PHASE_NOTE_EXT_URL, valueString: ctx.phaseNote });
   if (event.major_event_name) extension.push({ url: PATHWAY_MAJOR_EVENT_EXT_URL, valueString: event.major_event_name });
+  if (ctx.majorEventTaskUrl) {
+    extension.push({ url: PATHWAY_MAJOR_EVENT_TASK_EXT_URL, valueReference: { reference: ctx.majorEventTaskUrl } });
+  }
   return {
     resourceType: "CarePlan",
     identifier: [{ system: PATHWAY_EVENT_ID_SYSTEM, value: ctx.eventId }],
@@ -895,6 +909,8 @@ export interface PathwayEventRecord {
   phaseNote: string;
   /** 主要イベント(手術・内視鏡治療など)の名前。無ければ空。 */
   majorEventName: string;
+  /** 主要イベントにしたタスクの Procedure の id。自由入力なら空。 */
+  majorEventTaskId: string;
   units: PathwayOatUnitRecord[];
 }
 
@@ -1274,6 +1290,8 @@ export function parsePathwayApplication(
       phaseName: extensionOf(carePlan, PATHWAY_PHASE_EXT_URL)?.valueCoding?.display ?? "",
       phaseNote: extensionOf(carePlan, PATHWAY_PHASE_NOTE_EXT_URL)?.valueString ?? "",
       majorEventName: extensionOf(carePlan, PATHWAY_MAJOR_EVENT_EXT_URL)?.valueString ?? "",
+      majorEventTaskId:
+        extensionOf(carePlan, PATHWAY_MAJOR_EVENT_TASK_EXT_URL)?.valueReference?.reference?.split("/").pop() ?? "",
       units: unitsByEvent.get(carePlan.id as string) ?? [],
     }))
     .sort((a, b) => a.elapsedDays - b.elapsedDays || a.pathStep - b.pathStep);

@@ -1,12 +1,9 @@
 import type { PathwayApplicationRecord } from "./pathwayApplyHelpers";
 
 // 病日の主要イベント(手術・内視鏡治療・放射線治療など。JAHIS ePath 実装ガイド 6.4 majorEvent)。
-// 名前は定義の病日から適用の病日の CarePlan に写したもの、日時はその病日のタスクに結んだオーダーの
-// 実施記録(手術は入室〜退室、内視鏡は実施時刻)から読む。React に依存しない。
-// 設計は docs/clinical-pathway-design.md §7.13。
-
-/** 主要イベントの日時を読むタスクの分類(中分類)。並びは優先順(同じ病日に複数あれば先のもの)。 */
-export const MAJOR_EVENT_TASK_LV2 = ["TPOP", "EXEN", "TPRT"] as const;
+// 名前は定義の病日から適用の病日の CarePlan に写したもの、日時は主要イベントに選んだタスクに結んだ
+// オーダーの実施記録(手術は入室〜退室、内視鏡は実施時刻)から読む。自由入力(タスクに結ばない)は名前だけ。
+// React に依存しない。設計は docs/clinical-pathway-design.md §7.13。
 
 export interface PathwayMajorEvent {
   /** 病日 CarePlan の id。 */
@@ -50,16 +47,13 @@ export function pathwayMajorEvents(
   const result = new Map<string, PathwayMajorEvent>();
   for (const event of application.events) {
     if (!event.majorEventName) continue;
-    const tasks = event.units.flatMap((u) => u.assessments.flatMap((a) => a.tasks));
-    let record: fhir4.Procedure | undefined;
-    for (const lv2 of MAJOR_EVENT_TASK_LV2) {
-      const records = tasks
-        .filter((t) => t.categoryLv2 === lv2)
-        .flatMap((t) => t.orderIds.flatMap((id) => hubs.get(id) ?? []))
-        .sort((a, b) => startOf(a).localeCompare(startOf(b)));
-      record = records[0];
-      if (record) break;
-    }
+    const task = event.majorEventTaskId
+      ? event.units.flatMap((u) => u.assessments.flatMap((a) => a.tasks)).find((t) => t.id === event.majorEventTaskId)
+      : undefined;
+    // 同じオーダーに実施が複数あれば最初のもの(手術の再入室などは最初の入室を開始とする)。
+    const record = (task?.orderIds ?? [])
+      .flatMap((id) => hubs.get(id) ?? [])
+      .sort((a, b) => startOf(a).localeCompare(startOf(b)))[0];
     result.set(event.id, {
       eventId: event.id,
       name: event.majorEventName,

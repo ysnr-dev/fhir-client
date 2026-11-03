@@ -389,7 +389,8 @@
       "elapsed_days": 1,
       "path_step": 2,
       "title": "入院日",
-      "major_event_name": "内視鏡的大腸ポリープ切除術(EMR)",
+      "major_event_name": "内視鏡的大腸ポリープ・粘膜切除術(長径2cm未満)",
+      "major_event_task_key": "d4a58ab1-ea7a-5b42-8479-10210c60065e",
       "path_step_name": "治療後",
       "oat_units": [
         {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PathwayCodeSystem, PathwayOutcomeCategory, PathwayTaskCategoryLv1 } from "../api/masterClient";
 import {
   ASSESSMENT_CATEGORY_SUGGESTIONS,
@@ -9,6 +10,8 @@ import {
   emptyTaskDraft,
   emptyOatUnitDraft,
   eventDayOf,
+  majorEventCandidates,
+  majorEventNameOfTask,
   taskCategoryLv2Options,
   templateSummary,
   type PathwayAssessmentDraft,
@@ -103,14 +106,7 @@ export function PathwayEventCard({
             placeholder={day !== null && day !== 0 ? defaultDayLabel(day) : undefined}
           />
         </label>
-        <label className="pathway-event__major">
-          主要イベント
-          <input
-            type="text"
-            value={event.majorEventName}
-            onChange={(e) => onChange({ majorEventName: e.target.value })}
-          />
-        </label>
+        <PathwayMajorEventField event={event} onChange={onChange} />
         <label className="pathway-event__note">
           備考
           <input type="text" value={event.note} onChange={(e) => onChange({ note: e.target.value })} />
@@ -569,5 +565,67 @@ function PathwayOatUnitCard({
         </div>
       </div>
     </div>
+  );
+}
+
+/** 選択肢の値: 自由入力(タスクに結ばず名前だけ)。 */
+const MAJOR_EVENT_FREE = "__free";
+
+/**
+ * 主要イベント。その病日の手術・内視鏡・放射線治療のタスクから選ぶと、名前が雛形の術式・項目の名称で入り、
+ * 適用後は実施の日時もそのタスクのオーダーから読む。タスクが無い病日は自由入力(名前だけ)。
+ */
+function PathwayMajorEventField({
+  event,
+  onChange,
+}: {
+  event: PathwayEventDraft;
+  onChange: (patch: Partial<PathwayEventDraft>) => void;
+}) {
+  const candidates = majorEventCandidates(event);
+  const linked = candidates.find((t) => t.taskKey === event.majorEventTaskKey);
+  // 自由入力を選んだ直後は名前が空なので、選んだ状態を手元で持つ。
+  const [freeChosen, setFreeChosen] = useState(false);
+  const value = linked ? linked.taskKey : event.majorEventName || freeChosen ? MAJOR_EVENT_FREE : "";
+
+  function select(next: string) {
+    setFreeChosen(next === MAJOR_EVENT_FREE);
+    if (next === "") {
+      onChange({ majorEventTaskKey: "", majorEventName: "" });
+      return;
+    }
+    if (next === MAJOR_EVENT_FREE) {
+      onChange({ majorEventTaskKey: "" });
+      return;
+    }
+    const task = candidates.find((t) => t.taskKey === next);
+    if (task) onChange({ majorEventTaskKey: task.taskKey, majorEventName: majorEventNameOfTask(task) });
+  }
+
+  return (
+    <>
+      <label className="pathway-event__major">
+        主要イベント
+        <select value={value} onChange={(e) => select(e.target.value)}>
+          <option value="">なし</option>
+          {candidates.map((t) => (
+            <option key={t.taskKey} value={t.taskKey}>
+              {t.name || "(名称未入力)"}
+            </option>
+          ))}
+          <option value={MAJOR_EVENT_FREE}>自由入力</option>
+        </select>
+      </label>
+      {value !== "" && (
+        <label className="pathway-event__major-name">
+          主要イベント名
+          <input
+            type="text"
+            value={event.majorEventName}
+            onChange={(e) => onChange({ majorEventName: e.target.value })}
+          />
+        </label>
+      )}
+    </>
   );
 }

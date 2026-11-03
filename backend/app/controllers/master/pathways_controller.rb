@@ -41,8 +41,8 @@ module Master
     INDICATION_ATTRS = %w[management_number name icd10].freeze
     PHASE_ATTRS = %w[phase_key name note].freeze
     BRANCH_ATTRS = %w[to_phase_key criteria].freeze
-    EVENT_ATTRS = %w[phase_key elapsed_days path_step path_step_name title major_event_name allowable_condition_type
-                     allowable_days allowable_range_low allowable_range_high note].freeze
+    EVENT_ATTRS = %w[phase_key elapsed_days path_step path_step_name title major_event_name major_event_task_key
+                     allowable_condition_type allowable_days allowable_range_low allowable_range_high note].freeze
     UNIT_ATTRS = %w[unit_key name category subcategory_code subcategory_name code_system code critical note].freeze
     ASSESSMENT_ATTRS = %w[assessment_key name category_code category_name code_system code proper_value
                           nursing_observation_manage_no note].freeze
@@ -221,6 +221,7 @@ module Master
     def always_invalid_messages(tree)
       duplicated = tree.events.group_by { |e| [e.phase_key, e.event_key] }.select { |_, v| v.size > 1 }.keys
       messages = duplicated.map { |_, k| "病日 #{k} が重複しています" }
+      messages += major_event_invalid_messages(tree)
       keys = tree.phases.map(&:phase_key)
       messages << "病日が結ぶフェーズがありません" if tree.events.any? { |e| keys.exclude?(e.phase_key) }
       tree.phases.each do |phase|
@@ -235,6 +236,17 @@ module Master
         end
       end
       messages
+    end
+
+    # 主要イベントに選んだタスクは、その病日(ステップ)に置いたタスクでなければならない。
+    def major_event_invalid_messages(tree)
+      tree.events.filter_map do |event|
+        key = event.major_event_task_key
+        next if key.blank?
+
+        task_keys = (tree.units_by_event[event.id] || []).flat_map { |unit| (tree.tasks_by_unit[unit.id] || []).map(&:task_key) }
+        "#{event_label(event)} の主要イベントのタスクがその病日にありません" if task_keys.exclude?(key)
+      end
     end
 
     # 承認するときだけ求める完全性。ここを通ったパスは、患者に適用したときに

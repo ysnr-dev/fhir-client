@@ -278,6 +278,8 @@ export interface PathwayEventDraft {
   title: string;
   /** 主要イベント(手術・内視鏡治療など)の名前。 */
   majorEventName: string;
+  /** 主要イベントにするタスクの task_key。空なら名前だけの自由入力。 */
+  majorEventTaskKey: string;
   note: string;
   oatUnits: PathwayOatUnitDraft[];
 }
@@ -344,6 +346,23 @@ export function standardPathwayNameOf(code: string): string {
   return STANDARD_PATHWAY_CODES.find((c) => c.code.slice(10) === suffix)?.name ?? "";
 }
 
+/** 主要イベントに選べるタスクの分類(中分類): 手術・内視鏡・放射線治療。 */
+export const MAJOR_EVENT_TASK_LV2 = ["TPOP", "EXEN", "TPRT"];
+
+/** 病日の中で主要イベントに選べるタスク(OAT ユニットをまたいで、識別子が重なれば先のもの)。 */
+export function majorEventCandidates(event: PathwayEventDraft): PathwayTaskDraft[] {
+  const seen = new Set<string>();
+  return event.oatUnits
+    .flatMap((u) => u.tasks)
+    .filter((t) => MAJOR_EVENT_TASK_LV2.includes(t.categoryLv2) && !seen.has(t.taskKey) && seen.add(t.taskKey));
+}
+
+/** タスクを主要イベントにしたときの名前の既定。雛形の明細(術式・内視鏡の項目)の名称、無ければタスク名。 */
+export function majorEventNameOfTask(task: PathwayTaskDraft): string {
+  const items = (task.template?.values as { items?: { name?: string }[] } | undefined)?.items;
+  return items?.[0]?.name?.trim() || task.name.trim();
+}
+
 /** OAT ユニット・観察項目・タスクの識別子。適用後データまで持ち越すので画面で採る。 */
 export function newPathwayUuid(): string {
   return crypto.randomUUID();
@@ -392,6 +411,7 @@ export function emptyEventDraft(elapsedDays: number, phaseKey = ""): PathwayEven
     pathStepName: "",
     title: "",
     majorEventName: "",
+    majorEventTaskKey: "",
     note: "",
     oatUnits: [],
   };
@@ -491,6 +511,7 @@ export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
       pathStepName: inputText(e.path_step_name),
       title: inputText(e.title),
       majorEventName: inputText(e.major_event_name),
+      majorEventTaskKey: inputText(e.major_event_task_key),
       note: inputText(e.note),
       oatUnits: e.oat_units.map((u) => ({
         key: newDraftKey(),
@@ -560,6 +581,10 @@ function eventPayload(event: PathwayEventDraft): PathwayEventPayload {
     path_step_name: textOrNull(event.pathStepName),
     title: textOrNull(event.title),
     major_event_name: textOrNull(event.majorEventName),
+    // 選んだタスクを消したら結びも外す(サーバーはその病日に無いタスクを弾く)。
+    major_event_task_key: majorEventCandidates(event).some((t) => t.taskKey === event.majorEventTaskKey)
+      ? event.majorEventTaskKey
+      : null,
     note: textOrNull(event.note),
     oat_units: event.oatUnits.map((u) => ({
       unit_key: u.unitKey,

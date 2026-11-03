@@ -133,6 +133,8 @@ export interface PathwayEvent {
   title: string | null;
   /** 主要イベント(手術・内視鏡治療など)の名前。JAHIS ePath 実装ガイドの majorEvent。 */
   major_event_name: string | null;
+  /** 主要イベントにするタスク(その病日の手術・内視鏡・放射線治療のタスクの task_key)。空なら名前だけの自由入力。 */
+  major_event_task_key: string | null;
   /** ePath の action.id(病日[-パスステップ])。API が導出して添える。 */
   event_key: string;
   allowable_condition_type: string | null;
@@ -214,6 +216,7 @@ export interface PathwayEventPayload {
   path_step_name?: string | null;
   title?: string | null;
   major_event_name?: string | null;
+  major_event_task_key?: string | null;
   note?: string | null;
   oat_units: PathwayOatUnitPayload[];
 }

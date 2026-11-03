@@ -42,6 +42,10 @@ RSpec.describe "Master::Pathways", type: :request do
     ]
   end
 
+  def deep_dup_events(events)
+    JSON.parse(JSON.generate(events), symbolize_names: true)
+  end
+
   describe "GET /master/pathways" do
     before do
       create_pathway("000001", "PCI(2泊3日)", name_kana: "ピーシーアイ", department_code: "01", status: "approved",
@@ -159,6 +163,20 @@ RSpec.describe "Master::Pathways", type: :request do
       expect(tasks[1]["assessment_key"]).to be_nil
       expect(tasks[1]["order_values"]).to eq({ "rps" => [{ "medicines" => [{ "code" => "1" }] }] })
       expect(events[1]["oat_units"][0]["unit_key"]).to match(/\A[0-9a-f-]{36}\z/)
+    end
+
+    it "主要イベントのタスクはその病日のタスクを指す(無ければ下書きでも保存しない)" do
+      params = { name: "主要イベント", events: deep_dup_events(event_params) }
+      params[:events][0][:major_event_name] = "感冒様症状の観察"
+      params[:events][0][:major_event_task_key] = TASK_KEY
+      post "/master/pathways", params: params, as: :json
+      expect(response).to have_http_status(:created)
+      expect(body["events"][0]["major_event_task_key"]).to eq(TASK_KEY)
+
+      params[:events][1][:major_event_task_key] = TASK_KEY
+      post "/master/pathways", params: params, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"]).to include("手術当日 の主要イベントのタスクがその病日にありません")
     end
 
     it "自動採番はサンプルの 9000xx 帯を数えない" do
