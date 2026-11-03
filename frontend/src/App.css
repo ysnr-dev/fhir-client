@@ -21913,11 +21913,41 @@ button.nursing-worksheet__mark {
   justify-content: flex-end;
 }
 
-/* 病日の総合評価(日めくりの先頭)。 */
+/* 病日の総合評価(日めくりの先頭)。他の記載欄(regimen-editor__texts の textarea)と同じ見た目。 */
+.pathway-day__assessment {
+  border-left-color: var(--accent);
+}
+
+.pathway-day__assessment .pathway-day__unit-head {
+  margin-bottom: 4px;
+}
+
 .pathway-day__assessment textarea {
   width: 100%;
   box-sizing: border-box;
-  font-size: 13px;
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+}
+
+/* オーバービュー最下段の総合評価の行。アウトカムの行と同じ地色で、観察項目・タスクの行と見分ける。 */
+.pathway-sheet__row--day-assessment th.pathway-sheet__label-col {
+  font-weight: 600;
+  background: var(--surface-panel);
+}
+
+:root[data-theme="dark"] .pathway-sheet__row--day-assessment th.pathway-sheet__label-col {
+  background: var(--surface-card);
+}
+
+.pathway-sheet__row--day-assessment td {
+  background: var(--surface-stripe);
+  border-top: 2px solid var(--border);
 }
 
 /* 記載なしのバリアンスの確認(記録の直前)。 */
