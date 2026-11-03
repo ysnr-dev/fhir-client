@@ -25,7 +25,7 @@ RSpec.describe "Master::Pathways", type: :request do
       { elapsed_days: 1, title: "入院日",
         oat_units: [
           { unit_key: UNIT_KEY, name: "身体的準備ができている", category: "H", code_system: "bom", code: "O00470",
-            critical: true,
+            subcategory_code: "H001", subcategory_name: "準備", critical: true,
             assessments: [
               { assessment_key: ASSESSMENT_KEY, name: "感冒症状がない", category_code: "34", category_name: "呼吸",
                 code_system: "bom", code: "3400063200", proper_value: "なし" },
@@ -148,6 +148,7 @@ RSpec.describe "Master::Pathways", type: :request do
       unit = events[0]["oat_units"][0]
       expect(unit["unit_key"]).to eq(UNIT_KEY)
       expect(unit["critical"]).to be(true)
+      expect(unit["subcategory_code"]).to eq("H001")
       expect(unit["assessments"][0]["assessment_key"]).to eq(ASSESSMENT_KEY)
       tasks = unit["tasks"]
       expect(tasks.map { |t| t["display_order"] }).to eq([1, 2])

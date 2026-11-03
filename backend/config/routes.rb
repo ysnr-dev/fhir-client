@@ -435,6 +435,13 @@ Rails.application.routes.draw do
     resources :jfagy_drugs, only: %i[index] do
       collection { post :import }
     end
+    # BOM(Basic Outcome Master)のアウトカム・観察項目。検索専用(取込で全件洗い替え)。
+    resources :bom_outcomes, only: %i[index] do
+      collection { post :import }
+    end
+    resources :bom_assessments, only: %i[index] do
+      collection { post :import }
+    end
     # CTCAE(有害事象共通用語規準)v5.0 日本語訳 JCOG 版。検索専用(取込で全件洗い替え)。
     resources :ctcae_terms, only: %i[index] do
       collection do

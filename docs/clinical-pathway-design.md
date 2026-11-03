@@ -155,6 +155,32 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
 - ［決定］サンプルは CSV でなく **JSON 1 ファイル = 1 パス**(`db/seed_data/pathways/900001.json`、API の payload と同じ形)。
   4 階層と jsonb を CSV で表すのは無理がある。レジメンと同じく下書きで入れ、既存コードは上書きしない。
 
+### 3.3 BOM マスタ(2026-11-03)
+
+JAHIS ePath 実装ガイド 第 4 章 No.12「アウトカム・観察項目に BOM を採用できること」(`docs/clinical-pathway-backlog.md` §H の G-3)。
+
+```text
+master_bom_outcomes     manage_no / category_code・category_name(大分類 G・H)/ subcategory_code・subcategory_name(中分類)/
+                        outcome_code(unique)/ outcome_name / display_order / search_name
+master_bom_assessments  manage_no / category_code・category_name(観察項目分類)/ assessment_code(unique)/ name / name2 /
+                        medis_manage_no・medis_name(MEDIS 看護観察の対応)/ display_order / search_name
+master_pathway_oat_units + subcategory_code / subcategory_name(BOM 中分類。BOM のアウトカムを選んだときに入る)
+```
+
+- ［事実］BOM(Basic Outcome Master®)は日本クリニカルパス学会の知財で、配布ファイルは同梱しない(CTCAE と同じ扱い)。
+  施設が学会から取得して「マスタ取込」の「BOM アウトカム」「BOM 観察項目」で取り込む(`MasterImport::BomOutcomeImporter` /
+  `BomAssessmentImporter`、`/master/bom_outcomes/import` / `/master/bom_assessments/import`)。
+- ［決定］**列は見出しの名前で引く**(`BomSheetImporter`。Excel .xlsx / .xls と CSV(UTF-8 / Shift_JIS)を受け、見出しの行を探す)。
+  配布ファイルの列順・列名は版で変わりうるので列番号で決め打ちしない。見出しの候補は実装ガイドの表 6-5-2-1-2-2 /
+  表 6-5-2-1-2-1-2 の列名(管理番号・大分類コード・中分類コード・アウトカムコード・アウトカム名称 / 観察項目管理番号・
+  観察項目分類コード・観察項目コード・観察項目名称 1・2・MEDIS 観察名称管理番号 1(コード)・MEDIS 観察名称)と表記ゆれ。
+  必須はコードと名称の 2 列だけで、無ければどの見出しが要るかを示して 422。全件洗い替え、同じコードは先の行を残す。
+- ［決定］編集画面では、コード体系に BOM を選んだアウトカム・観察項目のコード欄に「選択」を出し(`BomSearchModal`)、選ぶと
+  コード・名称(空のときだけ)・分類を埋める。アウトカムは大分類(G/H)を区分に、中分類を `subcategory_*` に写す。観察項目は
+  MEDIS 看護観察の対応があれば `nursing_observation_manage_no` にも結ぶ(評価入力で表現タイプを借りる)。
+  **取り込んでいない施設には「選択」を出さない**(`useBomAvailability`。コードは手入力のまま)。
+- 適用時は中分類を OAT ユニットの CarePlan.category に `EPathBOMOutcomeSubCategoryCS` で写す(大分類とコードの間)。
+
 ### 3.1 日をまたぐアウトカム・継続するタスク・同じ病日の分割
 
 2026-09-13 に追加(`docs/clinical-pathway-backlog.md` §C)。
@@ -227,6 +253,7 @@ master_pathway_events          + phase_key(NOT NULL)。一意性は (pathway_cod
 | `events.allowable_*` | Event の ext AllowableElapsedDaysCondition* |
 | `oat_units.unit_key` / `name` | Event.action.id / title |
 | `oat_units.category` / `code_system` / `code` | action.code(BOM 大分類 / BOM アウトカムコード or ローカル) |
+| `oat_units.subcategory_code` / `subcategory_name` | action.code(BOM 中分類 `EPathBOMOutcomeSubCategoryCS`)。JAMI XML の subcategory |
 | `oat_units.critical` | ext CriticalIndicator(Y / N) |
 | `assessments.assessment_key` / `name` | action.action.id / title |
 | `assessments.category_code` / `code` | action.action.code(BOM 観察分類 / BOM 観察項目コード or ローカル)。空 → ZZZZZZZZZZ |
@@ -825,6 +852,11 @@ Task  code = task-code|pathway-variance、priority = urgent(注意)、status req
 
 ## 9. 実装したもの
 
+- BOM マスタ(§3.3、2026-11-03): backend `db/migrate/20261103190000_create_master_bom_masters.rb`、`app/models/master/bom_outcome.rb` /
+  `bom_assessment.rb`、`app/services/master_import/bom_sheet_importer.rb` / `bom_outcome_importer.rb` / `bom_assessment_importer.rb`、
+  `app/controllers/master/bom_outcomes_controller.rb` / `bom_assessments_controller.rb`、`config/routes.rb`、`spec/requests/master/bom_masters_spec.rb`
+  と `spec/fixtures/files/bom_*_sample.csv`。frontend `api/masterClient/bom.ts`、`api/masterQueries/bom.ts`、`components/BomSearchModal.tsx`(新規)、
+  `pages/MasterImportPage.tsx`、`components/PathwayEventCard.tsx`、`pages/PathwayEditorPage.tsx`、`fhir/pathwayHelpers.ts`、`fhir/pathwayApplyHelpers.ts`。
 - JAHIS 実装ガイドの突合(§7.12、2026-11-03): backend `db/migrate/20261103170000_add_standard_path_code_to_master_pathways.rb`、
   `app/models/master/pathway.rb`(形式の検証)、`pathways_controller.rb`(permit・承認時の版の形式・複製の版の繰り上げ `prepare_copy`)、
   `concerns/master/versioned_master.rb`(`prepare_copy` のフック)、`db/seeds.rb`、spec。frontend `fhir/pathwayHelpers.ts`

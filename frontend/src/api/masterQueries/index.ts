@@ -5,6 +5,7 @@ export * from "./drugCheck";
 export * from "./jlac";
 export * from "./disease";
 export * from "./jfagy";
+export * from "./bom";
 export * from "./ctcae";
 export * from "./dpc";
 export * from "./lab";

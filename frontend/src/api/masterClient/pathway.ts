@@ -91,6 +91,9 @@ export interface PathwayOatUnit {
   display_order: number | null;
   name: string;
   category: PathwayOutcomeCategory | null;
+  /** BOM 中分類(H013 循環 など)。BOM のアウトカムを選んだときに入る。 */
+  subcategory_code: string | null;
+  subcategory_name: string | null;
   code_system: PathwayCodeSystem | null;
   code: string | null;
   critical: boolean;
@@ -180,6 +183,8 @@ export interface PathwayOatUnitPayload {
   unit_key: string;
   name: string;
   category?: PathwayOutcomeCategory | null;
+  subcategory_code?: string | null;
+  subcategory_name?: string | null;
   code_system?: PathwayCodeSystem | null;
   code?: string | null;
   critical: boolean;

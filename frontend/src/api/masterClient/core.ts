@@ -27,6 +27,8 @@ export type MasterType =
   | "nursing_units"
   | "postal_codes"
   | "ctcae_terms"
+  | "bom_outcomes"
+  | "bom_assessments"
   | "dpc_tables"
   | "dpc_stem7_codes"
   | "nursing_acuity_codes"

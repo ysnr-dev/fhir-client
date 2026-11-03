@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Disease, PathwaySetting, PathwayStatus } from "../api/masterClient";
-import { usePathway, usePathwayMutations } from "../api/masterQueries";
+import { useBomAvailability, usePathway, usePathwayMutations } from "../api/masterQueries";
+import { BomSearchModal } from "../components/BomSearchModal";
 import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -77,6 +78,8 @@ import { scrollIntoViewVisibly } from "../lib/scroll";
 type Picker =
   | { kind: "disease" }
   | { kind: "nursing"; eventKey: number; unitKey: number; assessmentKey: number }
+  | { kind: "bom-outcome"; eventKey: number; unitKey: number }
+  | { kind: "bom-assessment"; eventKey: number; unitKey: number; assessmentKey: number }
   | { kind: "template"; eventKey: number; unitKey: number; taskKey: number }
   | { kind: "branch"; phaseKey: string }
   | null;
@@ -94,6 +97,7 @@ export function PathwayEditorPage() {
   const detail = usePathway(isNew ? null : pathwayId);
   const mutations = usePathwayMutations();
   const { departments } = useSelfDepartments();
+  const bomAvailable = useBomAvailability(true);
   const { practitioners } = usePractitionerOptions();
 
   const [draft, setDraft] = useState<PathwayDraft>(emptyPathwayDraft);
@@ -618,6 +622,11 @@ export function PathwayEditorPage() {
                         onPickNursingObservation={(unitKey, assessmentKey) =>
                           setPicker({ kind: "nursing", eventKey: event.key, unitKey, assessmentKey })
                         }
+                        bomAvailable={bomAvailable}
+                        onPickBomOutcome={(unitKey) => setPicker({ kind: "bom-outcome", eventKey: event.key, unitKey })}
+                        onPickBomAssessment={(unitKey, assessmentKey) =>
+                          setPicker({ kind: "bom-assessment", eventKey: event.key, unitKey, assessmentKey })
+                        }
                         onEditTemplate={(unitKey, taskKey) =>
                           setPicker({ kind: "template", eventKey: event.key, unitKey, taskKey })
                         }
@@ -758,6 +767,58 @@ export function PathwayEditorPage() {
               assessments: unit.assessments.map((a) =>
                 a.key === p.assessmentKey
                   ? { ...a, nursingObservationManageNo: item.manageNo, name: a.name.trim() || display }
+                  : a,
+              ),
+            });
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {picker?.kind === "bom-outcome" && (
+        <BomSearchModal
+          kind="outcome"
+          onSelect={(item) => {
+            const p = picker;
+            setPicker(null);
+            const event = draft.events.find((e) => e.key === p.eventKey);
+            const unit = event?.oatUnits.find((u) => u.key === p.unitKey);
+            if (!event || !unit) return;
+            // 名称が空なら BOM の名称を入れる。区分(G/H)は大分類から、中分類はそのまま写す。
+            const category = item.category_code === "G" || item.category_code === "H" ? item.category_code : unit.category;
+            updateUnit(event.key, unit.key, {
+              codeSystem: "bom",
+              code: item.outcome_code,
+              name: unit.name.trim() || item.outcome_name,
+              category,
+              subcategoryCode: item.subcategory_code ?? "",
+              subcategoryName: item.subcategory_name ?? "",
+            });
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {picker?.kind === "bom-assessment" && (
+        <BomSearchModal
+          kind="assessment"
+          onSelect={(item) => {
+            const p = picker;
+            setPicker(null);
+            const event = draft.events.find((e) => e.key === p.eventKey);
+            const unit = event?.oatUnits.find((u) => u.key === p.unitKey);
+            if (!event || !unit) return;
+            updateUnit(event.key, unit.key, {
+              assessments: unit.assessments.map((a) =>
+                a.key === p.assessmentKey
+                  ? {
+                      ...a,
+                      codeSystem: "bom",
+                      code: item.assessment_code,
+                      name: a.name.trim() || item.name,
+                      categoryCode: item.category_code ?? a.categoryCode,
+                      categoryName: item.category_name ?? a.categoryName,
+                      // MEDIS 看護観察の対応があれば結ぶ(評価入力で表現タイプを借りる)。
+                      nursingObservationManageNo: a.nursingObservationManageNo || item.medis_manage_no || "",
+                    }
                   : a,
               ),
             });

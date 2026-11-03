@@ -73,6 +73,7 @@ const CS_BASE = "http://e-path.jp/fhir/ePath/CodeSystem";
 
 export const PATHWAY_CODE_SYSTEM = {
   bomOutcomeCategory: `${CS_BASE}/EPathBOMOutcomeCategoryCS`,
+  bomOutcomeSubcategory: `${CS_BASE}/EPathBOMOutcomeSubCategoryCS`,
   bomOutcomeCode: `${CS_BASE}/EPathBOMOutcomeCodeCS`,
   localOutcomeCategory: `${CS_BASE}/EPathLocalOutcomeCategoryCS`,
   localOutcomeCode: `${CS_BASE}/EPathLocalOutcomeCodeCS`,
@@ -293,6 +294,8 @@ function outcomeCategories(unit: PathwayOatUnit): fhir4.CodeableConcept[] {
   return [
     // 区分(G 患者目標 / H 患者状態)は BOM の大分類。ローカルコードのパスでも意味は同じ。
     codingOf(unit.category ? PATHWAY_CODE_SYSTEM.bomOutcomeCategory : undefined, unit.category, null),
+    // BOM 中分類(BOM のアウトカムを選んだときだけ入る)。
+    bom ? codingOf(PATHWAY_CODE_SYSTEM.bomOutcomeSubcategory, unit.subcategory_code, unit.subcategory_name) : null,
     unit.code ? codingOf(codeSystem, unit.code, unit.name) : null,
     // コード体系を選んでいないアウトカムは分類だけ(名称は title に入る)。
     unit.code_system && !unit.code ? codingOf(categorySystem, unit.category, null) : null,

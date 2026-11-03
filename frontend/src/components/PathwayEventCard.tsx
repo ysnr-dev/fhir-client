@@ -39,6 +39,10 @@ interface EventCardProps {
   onSplit: () => void;
   onRemove: () => void;
   onPickNursingObservation: (unitKey: number, assessmentKey: number) => void;
+  /** BOM のアウトカム・観察項目の選択(取り込んである施設だけ)。 */
+  bomAvailable: { outcomes: boolean; assessments: boolean };
+  onPickBomOutcome: (unitKey: number) => void;
+  onPickBomAssessment: (unitKey: number, assessmentKey: number) => void;
   onEditTemplate: (unitKey: number, taskKey: number) => void;
   /** 目次からの移動先。 */
   anchorId: string;
@@ -54,6 +58,9 @@ export function PathwayEventCard({
   onSplit,
   onRemove,
   onPickNursingObservation,
+  bomAvailable,
+  onPickBomOutcome,
+  onPickBomAssessment,
   onEditTemplate,
   anchorId,
 }: EventCardProps) {
@@ -126,6 +133,9 @@ export function PathwayEventCard({
           onMove={(delta) => onChange({ oatUnits: moveItem(event.oatUnits, index, delta) })}
           onRemove={() => onChange({ oatUnits: event.oatUnits.filter((u) => u.key !== unit.key) })}
           onPickNursingObservation={(assessmentKey) => onPickNursingObservation(unit.key, assessmentKey)}
+          bomAvailable={bomAvailable}
+          onPickBomOutcome={() => onPickBomOutcome(unit.key)}
+          onPickBomAssessment={(assessmentKey) => onPickBomAssessment(unit.key, assessmentKey)}
           onEditTemplate={(taskKey) => onEditTemplate(unit.key, taskKey)}
         />
       ))}
@@ -148,6 +158,9 @@ interface UnitCardProps {
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
   onPickNursingObservation: (assessmentKey: number) => void;
+  bomAvailable: { outcomes: boolean; assessments: boolean };
+  onPickBomOutcome: () => void;
+  onPickBomAssessment: (assessmentKey: number) => void;
   onEditTemplate: (taskKey: number) => void;
 }
 
@@ -160,6 +173,9 @@ function PathwayOatUnitCard({
   onMove,
   onRemove,
   onPickNursingObservation,
+  bomAvailable,
+  onPickBomOutcome,
+  onPickBomAssessment,
   onEditTemplate,
 }: UnitCardProps) {
   function updateAssessment(key: number, patch: Partial<PathwayAssessmentDraft>) {
@@ -237,6 +253,16 @@ function PathwayOatUnitCard({
               onChange={(e) => onChange({ code: e.target.value })}
               disabled={!unit.codeSystem}
             />
+            {unit.codeSystem === "bom" && bomAvailable.outcomes && (
+              <button type="button" onClick={onPickBomOutcome}>
+                選択
+              </button>
+            )}
+            {unit.codeSystem === "bom" && unit.subcategoryCode && (
+              <span className="lab-order-item__code" title={`BOM 中分類 ${unit.subcategoryCode}`}>
+                {unit.subcategoryName || unit.subcategoryCode}
+              </span>
+            )}
           </span>
         </label>
         <div className="pathway-unit__tools">
@@ -329,6 +355,11 @@ function PathwayOatUnitCard({
                           onChange={(e) => updateAssessment(a.key, { code: e.target.value })}
                           disabled={!a.codeSystem}
                         />
+                        {a.codeSystem === "bom" && bomAvailable.assessments && (
+                          <button type="button" onClick={() => onPickBomAssessment(a.key)}>
+                            選択
+                          </button>
+                        )}
                       </span>
                     </td>
                     <td>

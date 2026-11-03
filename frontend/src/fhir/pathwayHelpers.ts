@@ -238,6 +238,9 @@ export interface PathwayOatUnitDraft {
   unitKey: string;
   name: string;
   category: PathwayOutcomeCategory | "";
+  /** BOM 中分類(コード体系が BOM のときだけ)。 */
+  subcategoryCode: string;
+  subcategoryName: string;
   codeSystem: PathwayCodeSystem | "";
   code: string;
   critical: boolean;
@@ -395,6 +398,8 @@ export function emptyOatUnitDraft(): PathwayOatUnitDraft {
     unitKey: newPathwayUuid(),
     name: "",
     category: "",
+    subcategoryCode: "",
+    subcategoryName: "",
     codeSystem: "",
     code: "",
     critical: false,
@@ -486,6 +491,8 @@ export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
         unitKey: u.unit_key,
         name: u.name,
         category: u.category ?? "",
+        subcategoryCode: inputText(u.subcategory_code),
+        subcategoryName: inputText(u.subcategory_name),
         codeSystem: u.code_system ?? "",
         code: inputText(u.code),
         critical: u.critical,
@@ -551,6 +558,8 @@ function eventPayload(event: PathwayEventDraft): PathwayEventPayload {
       unit_key: u.unitKey,
       name: u.name.trim(),
       category: u.category || null,
+      subcategory_code: textOrNull(u.subcategoryCode),
+      subcategory_name: textOrNull(u.subcategoryName),
       code_system: u.codeSystem || null,
       code: textOrNull(u.code),
       critical: u.critical,
@@ -788,7 +797,15 @@ export function propagateSeries(events: PathwayEventDraft[], sourceEventKey: num
       const next: PathwayOatUnitDraft = {
         ...unit,
         ...(su
-          ? { name: su.name, category: su.category, codeSystem: su.codeSystem, code: su.code, critical: su.critical }
+          ? {
+              name: su.name,
+              category: su.category,
+              subcategoryCode: su.subcategoryCode,
+              subcategoryName: su.subcategoryName,
+              codeSystem: su.codeSystem,
+              code: su.code,
+              critical: su.critical,
+            }
           : {}),
         assessments: unit.assessments.map((a) => {
           const sa = assessments.get(a.assessmentKey);

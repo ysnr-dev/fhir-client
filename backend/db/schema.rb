@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_03_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_03_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -433,6 +433,41 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_170000) do
     t.datetime "updated_at", null: false
     t.jsonb "maintenance"
     t.index ["code"], name: "index_master_advisory_rules_on_code", unique: true
+  end
+
+  create_table "master_bom_assessments", force: :cascade do |t|
+    t.string "manage_no"
+    t.string "category_code"
+    t.string "category_name"
+    t.string "assessment_code", null: false
+    t.string "name", null: false
+    t.string "name2"
+    t.string "medis_manage_no"
+    t.string "medis_name"
+    t.integer "display_order"
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["assessment_code"], name: "index_master_bom_assessments_on_assessment_code", unique: true
+    t.index ["category_code"], name: "index_master_bom_assessments_on_category_code"
+    t.index ["search_name"], name: "index_master_bom_assessments_on_search_name", opclass: :gin_trgm_ops, using: :gin
+  end
+
+  create_table "master_bom_outcomes", force: :cascade do |t|
+    t.string "manage_no"
+    t.string "category_code"
+    t.string "category_name"
+    t.string "subcategory_code"
+    t.string "subcategory_name"
+    t.string "outcome_code", null: false
+    t.string "outcome_name", null: false
+    t.integer "display_order"
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category_code"], name: "index_master_bom_outcomes_on_category_code"
+    t.index ["outcome_code"], name: "index_master_bom_outcomes_on_outcome_code", unique: true
+    t.index ["search_name"], name: "index_master_bom_outcomes_on_search_name", opclass: :gin_trgm_ops, using: :gin
   end
 
   create_table "master_clinical_note_titles", force: :cascade do |t|
@@ -2065,6 +2100,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_170000) do
     t.text "note"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "subcategory_code"
+    t.string "subcategory_name"
     t.index ["event_id", "unit_key"], name: "index_master_pathway_oat_units_on_event_id_and_unit_key", unique: true
     t.index ["event_id"], name: "index_master_pathway_oat_units_on_event_id"
     t.index ["pathway_code", "unit_key"], name: "index_master_pathway_oat_units_on_pathway_code_and_unit_key"
