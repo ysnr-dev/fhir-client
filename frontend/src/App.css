@@ -27720,8 +27720,38 @@ input.nursing-picker__search {
 }
 
 /* 未完了記録一覧(担当者 × 種別の件数)。 */
-.record-deficiency th {
-  white-space: nowrap;
+/* 担当者の列は固定し、所属科は氏名の下に小さく添える(列を分けると横に長くなる)。
+   表は中身の幅で左に詰める(画面幅に広げると件数の列の間が空いて行を目で追いにくい)。 */
+.lab-worklist.record-deficiency {
+  --sticky-fix-1-w: 160px;
+  width: auto;
+}
+
+.record-deficiency__department {
+  display: block;
+  font-size: 11px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 種別の列。見出しは 6 文字で折り返し、長い種別名だけ 2 行にする。 */
+.lab-worklist.record-deficiency th.record-deficiency__kind {
+  white-space: normal;
+  width: 7em;
+  min-width: 7em;
+  font-size: 12px;
+  line-height: 1.3;
+  vertical-align: bottom;
+  padding: 6px 8px;
+}
+
+.lab-worklist.record-deficiency td.record-deficiency__kind-cell {
+  padding: 6px 8px;
+}
+
+.lab-worklist.record-deficiency .record-deficiency__group-start {
+  border-left: 1px solid var(--border);
 }
 
 .record-deficiency__count {

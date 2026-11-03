@@ -65,6 +65,8 @@ export function RecordDeficiencyPage() {
     [allRows, departmentId, ownerMap],
   );
   const total = sumDeficiencyRows(rows);
+  // 表示中の行に 1 件も無い種別の列は出さない(13 種別すべてを並べると横に長くなりすぎる)。
+  const kinds = RECORD_DEFICIENCY_KINDS.filter((kind) => total.cells.has(kind.code));
 
   return (
     <div className="page">
@@ -112,22 +114,22 @@ export function RecordDeficiencyPage() {
             <thead>
               <tr>
                 <th className="sticky-table__fix-1">担当者</th>
-                <th className="lab-worklist__compact">所属科</th>
-                <th className="lab-worklist__compact record-deficiency__count">合計</th>
-                <th className="lab-worklist__compact record-deficiency__count">最長</th>
-                {RECORD_DEFICIENCY_KINDS.map((kind) => (
-                  <th key={kind.code} className="lab-worklist__compact record-deficiency__count" title={kind.group}>
+                <th className="record-deficiency__count">合計</th>
+                <th className="record-deficiency__count">最長</th>
+                {kinds.map((kind, i) => (
+                  <th key={kind.code} className={kindCellClass(kinds, i, "record-deficiency__kind")} title={kind.group}>
                     {kind.label}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              <DeficiencyLine row={total} name="合計" departments="" summary />
+              <DeficiencyLine row={total} kinds={kinds} name="合計" departments="" summary />
               {rows.map((row) => (
                 <DeficiencyLine
                   key={row.ownerId || "none"}
                   row={row}
+                  kinds={kinds}
                   name={ownerName(row.ownerId, ownerMap?.get(row.ownerId))}
                   departments={ownerMap?.get(row.ownerId)?.departments.map((d) => d.name).join("、") ?? ""}
                   mine={Boolean(practitionerId) && row.ownerId === practitionerId}
@@ -156,8 +158,15 @@ function ownerName(ownerId: string, owner: DeficiencyOwner | undefined): string 
   return owner?.name || ownerId;
 }
 
+/** 種別の列。分類(記録・結果・照会・届出)の変わり目に区切りの罫線を引く。 */
+function kindCellClass(kinds: readonly RecordDeficiencyKind[], index: number, base: string): string {
+  const groupStart = index === 0 || kinds[index - 1].group !== kinds[index].group;
+  return `${base} record-deficiency__count${groupStart ? " record-deficiency__group-start" : ""}`;
+}
+
 function DeficiencyLine({
   row,
+  kinds,
   name,
   departments,
   summary = false,
@@ -165,6 +174,7 @@ function DeficiencyLine({
   onOpen,
 }: {
   row: DeficiencyOwnerRow;
+  kinds: readonly RecordDeficiencyKind[];
   name: string;
   departments: string;
   summary?: boolean;
@@ -176,15 +186,17 @@ function DeficiencyLine({
     .join(" ");
   return (
     <tr className={className || undefined}>
-      <td className="sticky-table__fix-1">{name}</td>
-      <td className="lab-worklist__compact">{departments}</td>
-      <td className="lab-worklist__compact record-deficiency__count">
+      <td className="sticky-table__fix-1" title={departments ? `${name}(${departments})` : name}>
+        {name}
+        {departments && <span className="record-deficiency__department">{departments}</span>}
+      </td>
+      <td className="record-deficiency__count">
         <strong>{row.total}</strong>
         {row.overdue > 0 && <span className="record-deficiency__overdue">超過 {row.overdue}</span>}
       </td>
-      <td className="lab-worklist__compact record-deficiency__count">{row.total > 0 ? `${row.oldestDays} 日` : ""}</td>
-      {RECORD_DEFICIENCY_KINDS.map((kind) => (
-        <td key={kind.code} className="lab-worklist__compact record-deficiency__count">
+      <td className="record-deficiency__count">{row.total > 0 ? `${row.oldestDays} 日` : ""}</td>
+      {kinds.map((kind, i) => (
+        <td key={kind.code} className={kindCellClass(kinds, i, "record-deficiency__kind-cell")}>
           <CellButton cell={row.cells.get(kind.code)} onClick={onOpen ? () => onOpen(kind) : undefined} />
         </td>
       ))}
