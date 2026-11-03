@@ -48,13 +48,15 @@ RSpec.describe "Intake::Staff", type: :request do
     it "診療科の質問票が設定されていればそちらを使い、発行し直すと前のリンクは無効になる" do
       FacilitySettings.current.update!(settings: { "intake" => { "questionnaires" => [questionnaire_url],
                                                                  "by_department" => { "01" => ["http://fhir-client.local/Questionnaire/intake-internal-01"] } } })
-      with_admin_token(nil) do
-        post "/intake/links", params: { appointment_id: "apt-1" }, as: :json
-        first = IntakeLink.last
-        post "/intake/links", params: { appointment_id: "apt-1" }, as: :json
-        expect(body["questionnaire_urls"]).to eq(["http://fhir-client.local/Questionnaire/intake-internal-01"])
-        expect(first.reload.revoked_at).to be_present
-        expect(IntakeLink.active.where(appointment_fhir_id: "apt-1").count).to eq(1)
+      travel_to Time.zone.parse("2026-10-16 10:00:00 +09:00") do
+        with_admin_token(nil) do
+          post "/intake/links", params: { appointment_id: "apt-1" }, as: :json
+          first = IntakeLink.last
+          post "/intake/links", params: { appointment_id: "apt-1" }, as: :json
+          expect(body["questionnaire_urls"]).to eq(["http://fhir-client.local/Questionnaire/intake-internal-01"])
+          expect(first.reload.revoked_at).to be_present
+          expect(IntakeLink.active.where(appointment_fhir_id: "apt-1").count).to eq(1)
+        end
       end
     end
 
