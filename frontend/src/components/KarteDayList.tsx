@@ -6,6 +6,8 @@ import {
   karteItemKey,
   type KarteDayEntry,
 } from "../fhir/karteTimeline";
+import type { KarteImportantDay } from "../api/masterClient";
+import { KarteImportantDayMark } from "./KarteImportantDayMark";
 
 // カルテ左端のペインの「診療日」表示。タイムラインの読み込み状況に関係なく、
 // データが存在する全診療日(インデックス)を並べる。日付は年ごとにまとめ、行には
@@ -24,9 +26,18 @@ interface KarteDayListProps {
   loadingKey: string | null;
   /** タイムラインの先頭に見えている日(日付なしは "no-date")。 */
   currentKey: string | null;
+  /** 重要日(診療日 → 設定)。日付の右に重要度の印を出す。 */
+  importantDays?: ReadonlyMap<string, KarteImportantDay>;
 }
 
-export function KarteDayList({ entries, onSelect, onLoadDay, loadingKey, currentKey }: KarteDayListProps) {
+export function KarteDayList({
+  entries,
+  onSelect,
+  onLoadDay,
+  loadingKey,
+  currentKey,
+  importantDays,
+}: KarteDayListProps) {
   // ツリービューのイメージに合わせて既定は閉じた状態。
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -82,6 +93,9 @@ export function KarteDayList({ entries, onSelect, onLoadDay, loadingKey, current
                     >
                       {karteDayShortLabel(entry.day)}
                     </button>
+                    {importantDays?.get(entry.day) && (
+                      <KarteImportantDayMark entry={importantDays.get(entry.day) as KarteImportantDay} />
+                    )}
                   </div>
                   {isOpen &&
                     (entry.items === null ? (

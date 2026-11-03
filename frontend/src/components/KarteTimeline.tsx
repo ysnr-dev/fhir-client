@@ -81,6 +81,9 @@ import { PlainTextModal } from "./PlainTextModal";
 import { RichTextView } from "./RichTextView";
 import { ResponseSchemaImages, SchemaImageGallery } from "./SchemaImageGallery";
 import { RowMenu } from "./RowMenu";
+import { KarteImportantDayMark } from "./KarteImportantDayMark";
+import type { KarteImportantDay } from "../api/masterClient";
+import { isDateOnly } from "../lib/dates";
 import { useKarteLinkActions } from "./KarteLinkContext";
 import { InjectionPerformSection } from "./karteCardBodies/InjectionPerformSection";
 import { PathwayEvaluationCardBody } from "./karteCardBodies/PathwayEvaluationCardBody";
@@ -118,6 +121,10 @@ interface KarteTimelineProps {
   highlightKey: string | null;
   /** 表示するものが無いときの文言。プロブレムで絞り込んでいるときに差し替える。 */
   emptyMessage?: string;
+  /** 重要日(診療日 → 設定)。日付見出しに印と理由を出す。 */
+  importantDays?: ReadonlyMap<string, KarteImportantDay>;
+  /** 日付見出しのケバブ「重要日設定」。渡さなければケバブを出さない。 */
+  onSetImportantDay?: (day: string) => void;
 }
 
 // 診療日パネルからのスクロール先を引くための目印。キーは診療日 or karteItemKey。
@@ -140,6 +147,8 @@ export function KarteTimeline({
   selectedProblemIds,
   highlightKey,
   emptyMessage,
+  importantDays,
+  onSetImportantDay,
 }: KarteTimelineProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [sentinelVisible, setSentinelVisible] = useState(false);
@@ -185,7 +194,26 @@ export function KarteTimeline({
               key={dayKey}
               {...{ [KARTE_TARGET_ATTR]: dayKey }}
             >
-              <h3 className="karte-group__date">{karteDayHeadingLabel(group.day)}</h3>
+              <div className="karte-group__heading">
+                <h3 className="karte-group__date">{karteDayHeadingLabel(group.day)}</h3>
+                {importantDays?.get(group.day) && (
+                  <KarteImportantDayNote entry={importantDays.get(group.day) as KarteImportantDay} />
+                )}
+                {/* 重要日は実際の日付にだけ付ける(日付未定・日付なしには付けない)。 */}
+                {onSetImportantDay && isDateOnly(group.day) && (
+                  <div className="karte-group__menu">
+                    <RowMenu label={`${karteDayHeadingLabel(group.day)} の操作`}>
+                      <button
+                        type="button"
+                        className="row-menu__item"
+                        onClick={() => onSetImportantDay(group.day)}
+                      >
+                        重要日設定
+                      </button>
+                    </RowMenu>
+                  </div>
+                )}
+              </div>
               {group.items.map((item) => {
                 const key = karteItemKey(item);
                 return (
@@ -215,6 +243,16 @@ export function KarteTimeline({
         {isFetchingMore && <p>読み込み中...</p>}
       </div>
     </div>
+  );
+}
+
+// 日付見出しの重要日。印の右に理由を添える。
+function KarteImportantDayNote({ entry }: { entry: KarteImportantDay }) {
+  return (
+    <span className="karte-group__important">
+      <KarteImportantDayMark entry={entry} />
+      {entry.comment && <span className="karte-group__important-comment">{entry.comment}</span>}
+    </span>
   );
 }
 

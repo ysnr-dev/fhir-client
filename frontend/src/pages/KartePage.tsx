@@ -42,6 +42,8 @@ import { KarteLinkContext, type KarteLinkActions } from "../components/KarteLink
 import { KarteRightPane, type KartePaneState } from "../components/KarteRightPane";
 import { KarteSplitter } from "../components/KarteSplitter";
 import { KarteTodayPane } from "../components/KarteTodayPane";
+import { KarteImportantDayModal } from "../components/KarteImportantDayModal";
+import { useKarteImportantDays } from "../api/masterQueries";
 import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
 import {
@@ -176,6 +178,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   );
   /** 一時終了かどうかの選択に出す未実施の検査オーダー。null なら選択を出していない。 */
   const [pendingExamOrders, setPendingExamOrders] = useState<string[] | null>(null);
+  // 重要日設定のモーダルを開いている診療日(YYYY-MM-DD)。
+  const [importantDayTarget, setImportantDayTarget] = useState<string | null>(null);
+  // 重要日はタイムラインの日付見出しと診療日ペインの両方に出す(本日のカルテのペインには出さない)。
+  const importantDays = useKarteImportantDays(patientId);
   const startExam = useStartOutpatientExam();
   const boardInUse = useWaitingBoardInUse();
   const [callPromptOpen, setCallPromptOpen] = useState(false);
@@ -961,6 +967,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         onLoadDay={handleLoadDay}
         loadingKey={pendingDay?.key ?? null}
         currentKey={currentDayKey}
+        importantDays={importantDays.data}
         mode={effectiveSidePaneMode}
         onModeChange={selectSidePaneMode}
         filter={cardFilter}
@@ -1021,6 +1028,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
                     ? "自分が記録した診療情報がありません。"
                     : undefined
           }
+          importantDays={importantDays.data}
+          onSetImportantDay={setImportantDayTarget}
         />
       </div>
       </div>
@@ -1236,6 +1245,15 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
               finishExamNow();
             }}
             onCancel={() => setPendingExamOrders(null)}
+          />
+        )}
+        {importantDayTarget && (
+          <KarteImportantDayModal
+            patientId={patientId}
+            day={importantDayTarget}
+            current={importantDays.data?.get(importantDayTarget)}
+            setByName={scopeTarget.practitionerName || null}
+            onClose={() => setImportantDayTarget(null)}
           />
         )}
         {/* 診察終了の直後だけ出す。閉じたら(送っても送らなくても)外来患者一覧へ。 */}

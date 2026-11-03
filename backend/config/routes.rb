@@ -505,6 +505,8 @@ Rails.application.routes.draw do
     resource :home_layout, only: %i[show update destroy]
     # カルテ右ペインの頻用メニュー。ログイン中の医療従事者につき 1 つ(docs/features/karte.md)。
     resource :karte_pane_favorite, only: %i[show update]
+    # カルテの重要日。患者と診療日につき 1 つ、利用者の間で共有する(docs/features/karte.md)。
+    resources :karte_important_days, only: %i[index update destroy], param: :day
     # 看護の業務分担(日・勤務帯ごとの受け持ち)。病棟 × 日 × 勤務帯をまとめて置き換える。
     resources :nursing_assignments, only: %i[index] do
       collection { put :replace }

@@ -2,6 +2,7 @@ import { KarteCategoryList } from "./KarteCategoryList";
 import { KarteDayList } from "./KarteDayList";
 import { RowMenu } from "./RowMenu";
 import type { KarteCardFilter, KarteDayEntry, KarteScopeFilter } from "../fhir/karteTimeline";
+import type { KarteImportantDay } from "../api/masterClient";
 import type { KarteSidePaneMode } from "../karteLayout";
 
 // カルテ左端のペイン。「診療日」(日付から探す)と「カテゴリ」(情報の種別で絞り込む)を
@@ -17,6 +18,8 @@ interface KarteSidePaneProps {
   loadingKey: string | null;
   /** タイムラインの先頭に見えている日(KarteDayList 参照)。 */
   currentKey: string | null;
+  /** 重要日(KarteDayList 参照)。 */
+  importantDays?: ReadonlyMap<string, KarteImportantDay>;
   mode: KarteSidePaneMode;
   onModeChange: (mode: KarteSidePaneMode) => void;
   filter: KarteCardFilter | null;
@@ -47,6 +50,7 @@ export function KarteSidePane({
   onLoadDay,
   loadingKey,
   currentKey,
+  importantDays,
   mode,
   onModeChange,
   filter,
@@ -107,6 +111,7 @@ export function KarteSidePane({
           onLoadDay={onLoadDay}
           loadingKey={loadingKey}
           currentKey={currentKey}
+          importantDays={importantDays}
         />
       ) : (
         <KarteCategoryList filter={filter} onSelect={onFilterChange} />

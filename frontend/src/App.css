@@ -7852,7 +7852,7 @@ body.karte-wide {
 }
 
 /* 日付は見出しに出しているので、中の診療日の見出しは省く。 */
-.karte-today .karte-group__date {
+.karte-today .karte-group__heading {
   display: none;
 }
 
@@ -8694,16 +8694,91 @@ body.karte-wide {
     box-shadow 0.5s ease;
 }
 
-/* 日付見出しはスクロール中もグループ上端に貼り付くので、
+/* 日付見出し(日付・重要日・ケバブ)はスクロール中もグループ上端に貼り付くので、
    下のカードが透けないようグループと同じ濃さで塗る。 */
-.karte-group__date {
+.karte-group__heading {
   position: sticky;
   top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 8px;
   padding: 4px 0;
+  background: var(--surface-panel);
+}
+
+.karte-group__date {
+  margin: 0;
   font-size: 14px;
   color: var(--text-h);
-  background: var(--surface-panel);
+}
+
+/* 重要日の印と理由。日付の横に 1 行で出し、長い理由は省略する。 */
+.karte-group__important {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.karte-group__important-comment {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ケバブは右端に固定する(重要日が無くても位置が変わらないように)。
+   大きさはカードのケバブ(.karte-card__actions)と揃える。 */
+.karte-group__menu {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.karte-group__menu .row-menu__trigger {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  font-size: 15px;
+}
+
+/* 重要日の印(旗)。重要度は色で分ける(高: 危険色 / 中: 注意色 / 低: アクセント色。低は輪郭だけの旗)。 */
+.karte-important-mark {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.karte-important-mark--high {
+  color: var(--danger);
+}
+
+.karte-important-mark--medium {
+  color: var(--warning);
+}
+
+.karte-important-mark--low {
+  color: var(--accent);
+}
+
+.modal--karte-important {
+  width: min(480px, 94vw);
+}
+
+.karte-important-form {
+  margin-bottom: 12px;
+}
+
+.karte-important-form select {
+  width: 6em;
+}
+
+.karte-important-form__comment {
+  flex: 1 1 100%;
 }
 
 .karte-timeline__sentinel {
