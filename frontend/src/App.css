@@ -20783,6 +20783,10 @@ button.nursing-worksheet__mark {
   width: 120px;
 }
 
+.pathway-event__major input {
+  width: 200px;
+}
+
 .pathway-event__note {
   flex: 1 1 auto;
   min-width: 0;
@@ -21411,6 +21415,43 @@ button.nursing-worksheet__mark {
   font-weight: normal;
   font-size: 11px;
   color: var(--text);
+}
+
+/* 病日の主要イベント(手術・内視鏡治療など)。見出しの専用の段に、長ければ省略して出す(全文はツールチップ)。
+   幅を列幅で止める。止めないと長い名前に押されてその列だけ広がり、列幅が揃わなくなる。 */
+.pathway-sheet__table th.pathway-sheet__day-major {
+  width: var(--pathway-sheet-col-w);
+  min-width: var(--pathway-sheet-col-w);
+  max-width: var(--pathway-sheet-col-w);
+}
+
+.pathway-sheet__major {
+  display: block;
+  width: var(--pathway-sheet-col-w);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.pathway-sheet__major-time {
+  margin-right: 4px;
+}
+
+/* 主要イベントのツールチップはセルの左端から出す(既定の右寄せだと左の列で行の見出し列に重なる)。 */
+.pathway-sheet__day-major.icon-tooltip[data-tooltip]::after {
+  left: 0;
+  right: auto;
+}
+
+.pathway-day__major {
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--accent);
 }
 
 .pathway-sheet__phase {

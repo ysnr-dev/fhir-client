@@ -115,6 +115,8 @@ export const PATHWAY_PHASE_NOTE_EXT_URL = "http://fhir-client.local/StructureDef
  * この URI で数える)、版は別の拡張で持つ。ePath の施設パスバージョンに写す。
  */
 export const PATHWAY_VERSION_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-version";
+/** 病日の主要イベントの名前(valueString)。ePath の majorEvent の eventName に写す(§7.13)。 */
+export const PATHWAY_MAJOR_EVENT_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-major-event";
 
 export type PathwayLevel = "apply" | "event" | "oat-unit" | "assessment";
 
@@ -647,6 +649,7 @@ function buildEventCarePlan(
     });
   }
   if (ctx.phaseNote) extension.push({ url: PATHWAY_PHASE_NOTE_EXT_URL, valueString: ctx.phaseNote });
+  if (event.major_event_name) extension.push({ url: PATHWAY_MAJOR_EVENT_EXT_URL, valueString: event.major_event_name });
   return {
     resourceType: "CarePlan",
     identifier: [{ system: PATHWAY_EVENT_ID_SYSTEM, value: ctx.eventId }],
@@ -890,6 +893,8 @@ export interface PathwayEventRecord {
   phaseName: string;
   /** 分岐を選んだときの記録(フェーズの最初の病日だけ)。 */
   phaseNote: string;
+  /** 主要イベント(手術・内視鏡治療など)の名前。無ければ空。 */
+  majorEventName: string;
   units: PathwayOatUnitRecord[];
 }
 
@@ -1268,6 +1273,7 @@ export function parsePathwayApplication(
       phaseKey: extensionOf(carePlan, PATHWAY_PHASE_EXT_URL)?.valueCoding?.code ?? "",
       phaseName: extensionOf(carePlan, PATHWAY_PHASE_EXT_URL)?.valueCoding?.display ?? "",
       phaseNote: extensionOf(carePlan, PATHWAY_PHASE_NOTE_EXT_URL)?.valueString ?? "",
+      majorEventName: extensionOf(carePlan, PATHWAY_MAJOR_EVENT_EXT_URL)?.valueString ?? "",
       units: unitsByEvent.get(carePlan.id as string) ?? [],
     }))
     .sort((a, b) => a.elapsedDays - b.elapsedDays || a.pathStep - b.pathStep);

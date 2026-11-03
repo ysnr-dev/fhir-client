@@ -500,6 +500,8 @@ export interface PathwayApplicationTree {
   procedures: Map<string, fhir4.Procedure>;
   /** オーダーのヘッダの id → 進み具合(進捗の Task から。カルテのカードと同じ判定)。 */
   orderProgress: Map<string, OrderProgress>;
+  /** オーダーの実施記録(オーダーを basedOn で指す Procedure)。主要イベントの日時を読むのに使う。 */
+  performs: fhir4.Procedure[];
 }
 
 /** 適用の木の検索のキーの先頭。オーダーの実施入力などを閉じたときに読み直させるのに使う。 */
@@ -568,6 +570,7 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
         carePlans,
         procedures,
         orderProgress: orderProgressByOrderId(orders.values(), tasks, performs),
+        performs,
       };
     },
     enabled: Boolean(applyId),

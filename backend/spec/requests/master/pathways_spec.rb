@@ -37,7 +37,7 @@ RSpec.describe "Master::Pathways", type: :request do
                 order_schema_version: 1 },
             ] },
         ] },
-      { elapsed_days: 2, title: "手術当日",
+      { elapsed_days: 2, title: "手術当日", major_event_name: "経皮的冠動脈形成術",
         oat_units: [{ name: "疼痛がコントロールできる", category: "G", assessments: [], tasks: [] }] },
     ]
   end
@@ -145,6 +145,7 @@ RSpec.describe "Master::Pathways", type: :request do
       expect(body["template_version"]).to eq("0")
       events = body["events"]
       expect(events.map { |e| e["display_order"] }).to eq([1, 2])
+      expect(events.map { |e| e["major_event_name"] }).to eq([nil, "経皮的冠動脈形成術"])
       unit = events[0]["oat_units"][0]
       expect(unit["unit_key"]).to eq(UNIT_KEY)
       expect(unit["critical"]).to be(true)

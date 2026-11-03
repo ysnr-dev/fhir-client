@@ -30,6 +30,7 @@ import {
   type SheetUnitCell,
 } from "../fhir/pathwaySheetHelpers";
 import { pathStepLabel } from "../fhir/pathwayHelpers";
+import { majorEventLabel, majorEventTimeLabel, pathwayMajorEvents } from "../fhir/pathwayMajorEventHelpers";
 import { orderStartDate } from "../fhir/pathwayScheduleHelpers";
 import { formatPathwaySheetView, parsePathwaySheetView, type PathwaySheetView } from "../karteUrl";
 import { today } from "../lib/dates";
@@ -181,6 +182,13 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
       ? buildEvaluationState(observations.data, tree.data.goals, [...tree.data.carePlans.values()])
       : null;
   const sheet = application ? buildPathwaySheet(application, evaluation) : null;
+  // 病日の主要イベント(手術・内視鏡治療など)。日時はオーダーの実施記録から読む。
+  const majorEvents = useMemo(
+    () => (application ? pathwayMajorEvents(application, tree.data?.performs ?? []) : new Map()),
+    [application, tree.data?.performs],
+  );
+  // 主要イベントは見出しの専用の段に出す(病日のセルに足すとその列だけ高くなり、段がずれて見づらい)。
+  const headerRows = sheet ? 2 + (sheet.split ? 1 : 0) + (majorEvents.size > 0 ? 1 : 0) : 2;
   const todayDate = today();
   // 看護指示を結んだタスクは、その日の実施記録で実施を出す(pathwayTaskPerformedOn)。
   const nursingPerforms = useNursingPerformsOf(patientId);
@@ -503,6 +511,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
               performDates={performDates}
               eventId={dayEventId}
               today={todayDate}
+              majorEvents={majorEvents}
               onEventChange={(eventId) => updateView({ mode: "day", eventId })}
               onOpenEvaluation={(unitId) => setModalUnitId(unitId)}
               onOpenTask={(task, date) => openTask(task.orderIds, task.id, date)}
@@ -531,7 +540,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                   </tr>
                 )}
                 <tr>
-                  <th className="pathway-sheet__label-col" rowSpan={sheet.split ? 3 : 2} />
+                  <th className="pathway-sheet__label-col" rowSpan={headerRows} />
                   {sheet.dayGroups.map((group) => (
                     <th
                       key={group.days[0].eventId}
@@ -542,7 +551,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                       <span className="pathway-sheet__day-title">{group.title}</span>
                     </th>
                   ))}
-                  <th className="pathway-sheet__filler" rowSpan={sheet.split ? 3 : 2} />
+                  <th className="pathway-sheet__filler" rowSpan={headerRows} />
                 </tr>
                 <tr>
                   {sheet.dayGroups.map((group) => (
@@ -566,6 +575,32 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                           className={`pathway-sheet__day pathway-sheet__day-step${dayClasses(day.date)}`}
                         >
                           {group && group.days.length > 1 ? pathStepLabel(day.pathStep, day.pathStepName) : ""}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                )}
+                {/* 主要イベント(手術・内視鏡治療など)のあるパスだけ、その段を出す。列は病日(分けた日はステップ)ごと。 */}
+                {majorEvents.size > 0 && (
+                  <tr>
+                    {sheet.days.map((day) => {
+                      const major = majorEvents.get(day.eventId);
+                      return (
+                        <th
+                          key={day.eventId}
+                          // 省略した全文はすぐ出るツールチップで読む(ネイティブの title は出るまでが遅い)。
+                          className={`pathway-sheet__day pathway-sheet__day-major${major ? " icon-tooltip" : ""}${dayClasses(day.date)}`}
+                          data-tooltip={major ? `主要イベント: ${majorEventLabel(major)}` : undefined}
+                        >
+                          {/* 列が狭いと省略されるので、時刻を先に出して名前の側を省略する。 */}
+                          {major && (
+                            <span className="pathway-sheet__major">
+                              {majorEventTimeLabel(major) && (
+                                <span className="pathway-sheet__major-time">{majorEventTimeLabel(major)}</span>
+                              )}
+                              {major.name}
+                            </span>
+                          )}
                         </th>
                       );
                     })}

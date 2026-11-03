@@ -1552,7 +1552,7 @@ if pathway_files.any?
           phase_key: event_data["phase_key"].presence || phase_keys.first,
           elapsed_days: event_data["elapsed_days"], path_step: event_data["path_step"] || 1,
           path_step_name: event_data["path_step_name"].presence, title: event_data["title"].presence,
-          note: event_data["note"].presence
+          major_event_name: event_data["major_event_name"].presence, note: event_data["note"].presence
         )
         Array(event_data["oat_units"]).each_with_index do |unit_data, unit_index|
           unit = Master::PathwayOatUnit.create!(

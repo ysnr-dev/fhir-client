@@ -103,6 +103,14 @@ export function PathwayEventCard({
             placeholder={day !== null && day !== 0 ? defaultDayLabel(day) : undefined}
           />
         </label>
+        <label className="pathway-event__major">
+          主要イベント
+          <input
+            type="text"
+            value={event.majorEventName}
+            onChange={(e) => onChange({ majorEventName: e.target.value })}
+          />
+        </label>
         <label className="pathway-event__note">
           備考
           <input type="text" value={event.note} onChange={(e) => onChange({ note: e.target.value })} />

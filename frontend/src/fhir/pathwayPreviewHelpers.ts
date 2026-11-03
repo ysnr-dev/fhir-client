@@ -84,6 +84,7 @@ export function buildPathwayPreview(
         phaseKey: phase.phaseKey,
         phaseName: multiPhase ? phaseLabelOf(draft.phases, phase.phaseKey) : "",
         phaseNote: "",
+        majorEventName: event.majorEventName.trim(),
         units: event.oatUnits.map((unit): PathwayOatUnitRecord => {
           const unitId = `${eventId}-unit-${unit.key}`;
           const assessmentKeys = new Set(unit.assessments.map((a) => a.assessmentKey));

@@ -276,6 +276,8 @@ export interface PathwayEventDraft {
   pathStep: number;
   pathStepName: string;
   title: string;
+  /** 主要イベント(手術・内視鏡治療など)の名前。 */
+  majorEventName: string;
   note: string;
   oatUnits: PathwayOatUnitDraft[];
 }
@@ -389,6 +391,7 @@ export function emptyEventDraft(elapsedDays: number, phaseKey = ""): PathwayEven
     pathStep: 1,
     pathStepName: "",
     title: "",
+    majorEventName: "",
     note: "",
     oatUnits: [],
   };
@@ -487,6 +490,7 @@ export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
       pathStep: e.path_step,
       pathStepName: inputText(e.path_step_name),
       title: inputText(e.title),
+      majorEventName: inputText(e.major_event_name),
       note: inputText(e.note),
       oatUnits: e.oat_units.map((u) => ({
         key: newDraftKey(),
@@ -555,6 +559,7 @@ function eventPayload(event: PathwayEventDraft): PathwayEventPayload {
     path_step: event.pathStep,
     path_step_name: textOrNull(event.pathStepName),
     title: textOrNull(event.title),
+    major_event_name: textOrNull(event.majorEventName),
     note: textOrNull(event.note),
     oat_units: event.oatUnits.map((u) => ({
       unit_key: u.unitKey,

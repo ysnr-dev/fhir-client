@@ -17,6 +17,7 @@ import {
 import { eventDayStepLabel, taskCategoryLabel } from "../fhir/pathwayHelpers";
 import type { OrderProgress } from "../fhir/orderProgressHelpers";
 import { isOrderDrivenTask, pathwayTaskPerformedOn } from "../fhir/pathwaySheetHelpers";
+import { majorEventLabel, type PathwayMajorEvent } from "../fhir/pathwayMajorEventHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { nowFhirDateTime } from "../lib/dates";
 import { usePathwayVarianceNotice } from "../hooks/usePathwayVarianceNotice";
@@ -49,6 +50,8 @@ interface PathwayDayViewProps {
   performDates: Map<string, Set<string>>;
   eventId: string;
   today: string;
+  /** 病日 CarePlan の id → 主要イベント(見出しに出す)。 */
+  majorEvents: Map<string, PathwayMajorEvent>;
   onEventChange: (eventId: string) => void;
   /** 記載(SOAP・自由記載)を評価モーダルで開く。 */
   onOpenEvaluation: (unitId: string) => void;
@@ -77,6 +80,7 @@ export function PathwayDayView({
   performDates,
   eventId,
   today,
+  majorEvents,
   onEventChange,
   onOpenEvaluation,
   onOpenTask,
@@ -241,6 +245,11 @@ export function PathwayDayView({
           <strong>{`病日 ${event.elapsedDays}`}</strong>
           <span>{eventDayStepLabel(event.elapsedDays, event.title, event.pathStep, event.pathStepName)}</span>
           <span className="pathway-day__date">{event.date}</span>
+          {majorEvents.get(event.id) && (
+            <span className="pathway-day__major icon-tooltip" data-tooltip="主要イベント">
+              {majorEventLabel(majorEvents.get(event.id) as PathwayMajorEvent)}
+            </span>
+          )}
           {isToday && <span className="pathway-day__today">今日</span>}
         </div>
         <button

@@ -122,6 +122,7 @@ master_pathway_events           … 病日・イベント(= action + Event PlanD
   elapsed_days   病日(入院日 = 1、入院前日 = -1、0 は不可)。(pathway_code, elapsed_days, path_step) で一意
   path_step      パスステップ(既定 1。同じ病日を術前・術後などに分けたときの順番。§3.1)、path_step_name
   title          入院日 / 手術当日 / 退院日 …(空なら病日から導出して表示)
+  major_event_name 主要イベント(手術・内視鏡治療・放射線治療などの名前。任意。§7.13)
   allowable_condition_type / allowable_days / allowable_range_low / allowable_range_high   許容経過日数条件(列のみ)
 master_pathway_oat_units        … OAT ユニット(event_id で結ぶ)
   unit_key       uuid。(pathway_code, unit_key) で一意
@@ -261,6 +262,7 @@ master_pathway_events          + phase_key(NOT NULL)。一意性は (pathway_cod
 | `indications`(管理番号 / ICD10) | goal.addresses(MEDIS master-disease-keyNumber / ICD10-2013-full) |
 | `events.elapsed_days` / `path_step` | action.id = "病日[-ステップ]"、Event の ext EventElapsedDays / PathStep |
 | `events.title` | action.title、Event の name |
+| `events.major_event_name` | JAMI XML の admission/majorEvent/eventName(日時は実施記録から。§7.13) |
 | `setting` | Event の ext InpatientOutpatientType(I / O)に写す |
 | `events.allowable_*` | Event の ext AllowableElapsedDaysCondition* |
 | `oat_units.unit_key` / `name` | Event.action.id / title |
@@ -839,6 +841,25 @@ Task  code = task-code|pathway-variance、priority = urgent(注意)、status req
   横に「バリアンスの記載がありません」(止めない)。オーバービューの「バリアンス n」のツールチップに「うち記載なし m」
   (`sheetProgress.unwrittenVariance`、`SheetUnitCell.written`)。
 
+### 7.13 主要イベント(2026-11-03)
+
+JAHIS ePath 実装ガイド 6.4(7)〜(13)の majorEvent(`docs/clinical-pathway-backlog.md` §H の G-8)。手術・内視鏡治療・放射線治療など、
+入院の中心になる出来事の名前・病日・日付・開始終了時刻。実装は `fhir/pathwayMajorEventHelpers.ts`。
+
+- ［決定］**名前は定義の病日に持つ**(`master_pathway_events.major_event_name`)。分けた病日はステップごと(ESD を「治療前」に置くなど、
+  そのイベントのタスクがあるステップ)。適用時に病日の CarePlan へ拡張 `pathway-major-event`(valueString)で写す。
+- ［決定］**日時は保存しない。その病日のタスクに結んだオーダーの実施記録から読む**(`pathwayMajorEvents`)。読むタスクの中分類は
+  手術(TPOP)→ 内視鏡(EXEN)→ 放射線治療(TPRT)の順で、最初に実施記録が見つかったもの。実施記録は本体の Procedure
+  (partOf を持たないもの。取り消し・未実施は除く)で、開始は `performedPeriod.start`(手術の入室)か `performedDateTime`(内視鏡の実施)、
+  終了は `performedPeriod.end`(手術の退室)。実施記録が無いうちは名前だけ。日付の予定はその病日の日付。
+  ［導出］実施を直せば表示も追随する(パス側に写した時刻が古くなることが無い)。
+- ［決定］IG の Procedure MajorEvent は作らない。実施記録そのものが手術・内視鏡の Procedure なので、EP12 / XML の出力で組み立てる。
+- 表示: 「腹腔鏡下胆嚢摘出術 10:05〜11:40」。オーバービューは見出しの**専用の段**(日付・ステップの段の下。列は病日、分けた日はステップごと)に、
+  日めくりは見出しの日付の横に出す。［決定］病日番号のセルに足すと、その列だけ高くなって段がずれて見えるので、主要イベントのある
+  パスだけ段を 1 つ足す。［決定］**幅は列幅で止める**(止めないと長い名前に押されてその列だけ広がる)。オーバービューでは
+  **時刻を先に**「10:30 内視鏡的…」と出し、収まらない名前の側を省略する。全文はすぐ出るツールチップ(`icon-tooltip` の
+  `data-tooltip`。ネイティブの title は出るまでが遅い)で、セルの左端から下に出す。サンプルは 900001(手術当日 術前)・900002(入院日 治療後)・900003(手術当日 術前)。
+
 ## 8. 実装の段階
 
 - **第 1 段階(実装済)**: 施設パス定義マスタ(backend・API・spec・seed・一覧・編集・雛形モーダル)。
@@ -864,6 +885,11 @@ Task  code = task-code|pathway-variance、priority = urgent(注意)、status req
 
 ## 9. 実装したもの
 
+- 主要イベント(§7.13、2026-11-03): backend `db/migrate/20261103210000_add_major_event_name_to_master_pathway_events.rb`、
+  `pathways_controller.rb`(EVENT_ATTRS)、`db/seeds.rb`、`db/seed_data/pathways/900001〜900003.json`、spec。frontend
+  `fhir/pathwayMajorEventHelpers.ts`(新規)、`fhir/pathwayApplyHelpers.ts`(`PATHWAY_MAJOR_EVENT_EXT_URL`)、`fhir/pathwayHelpers.ts`、
+  `fhir/pathwayPreviewHelpers.ts`、`api/queries/pathway.ts`(木の読みで実施記録を返す)、`components/PathwayEventCard.tsx`、
+  `components/KartePathwayTab.tsx`、`components/PathwayDayView.tsx`、`App.css`。
 - BOM マスタ(§3.3、2026-11-03): backend `db/migrate/20261103190000_create_master_bom_masters.rb`、`app/models/master/bom_outcome.rb` /
   `bom_assessment.rb`、`app/services/master_import/bom_sheet_importer.rb` / `bom_outcome_importer.rb` / `bom_assessment_importer.rb`、
   `app/controllers/master/bom_outcomes_controller.rb` / `bom_assessments_controller.rb`、`config/routes.rb`、`spec/requests/master/bom_masters_spec.rb`

@@ -466,6 +466,7 @@
       "elapsed_days": 2,
       "path_step": 1,
       "title": "手術当日",
+      "major_event_name": "腹腔鏡下胆嚢摘出術",
       "path_step_name": "術前",
       "oat_units": [
         {

@@ -41,8 +41,8 @@ module Master
     INDICATION_ATTRS = %w[management_number name icd10].freeze
     PHASE_ATTRS = %w[phase_key name note].freeze
     BRANCH_ATTRS = %w[to_phase_key criteria].freeze
-    EVENT_ATTRS = %w[phase_key elapsed_days path_step path_step_name title allowable_condition_type allowable_days
-                     allowable_range_low allowable_range_high note].freeze
+    EVENT_ATTRS = %w[phase_key elapsed_days path_step path_step_name title major_event_name allowable_condition_type
+                     allowable_days allowable_range_low allowable_range_high note].freeze
     UNIT_ATTRS = %w[unit_key name category subcategory_code subcategory_name code_system code critical note].freeze
     ASSESSMENT_ATTRS = %w[assessment_key name category_code category_name code_system code proper_value
                           nursing_observation_manage_no note].freeze
