@@ -134,6 +134,7 @@ master_pathway_oat_units        … OAT ユニット(event_id で結ぶ)
 master_pathway_assessments      … 観察項目(unit_id で結ぶ)
   assessment_key uuid
   name / category_code / category_name / code_system / code / proper_value(適正値)
+  proper_low / proper_high / proper_values   適正値を構造化した基準(数値の下限・上限、列挙の許容値の配列。§7.15)
   nursing_observation_manage_no   MEDIS 看護観察の管理番号(任意)
 master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id は任意)
   task_key       uuid
@@ -649,8 +650,8 @@ Procedure(タスク)            status completed(実施)/ preparation(未実施)
   体重・血圧)は看護観察の管理番号から LOINC を引き(`nursingVitalCodeOf`)、手入力のバイタルと看護観察の記録のどちらからも読む。
   収縮期・拡張期の単独項目(31001848 / 31001849)は血圧の内訳から読む。それ以外の看護観察は同じ管理番号の記録から読む。
   読みは経過表と同じ `useVitalFlowsheet`(その日だけ)。候補は入力を助けるだけで、パスの実績は押して記録したときに作る。
-- 記録者はログイン本人(`useCurrentPractitioner`)。ePath の Goal AssessmentExecution の達成状態(観察項目ごとの達成)は書かない
-  (実績値から導ける。EP12 出力で必要なら組む)。
+- 記録者はログイン本人(`useCurrentPractitioner`)。ePath の Goal AssessmentExecution の達成状態(観察項目ごとの達成)は、
+  基準(§7.15)のある観察項目だけ実績値から導いて適正値の Goal に書く。
 
 ### 7.5 パスの終了・中止
 
@@ -713,7 +714,9 @@ CarePlan(観察項目).goal → Goal  identifier assessment-goal-id = 観察項�
   `target.detail[x]`(「観察項目の評価基準となる適正値」)だけ。
 - ［決定］**適正値の Goal は適用の時点で作る**。アウトカムの Goal(§7.4)は評価で生まれる記録だが、適正値は計画の一部で、
   実績値からは導けない。適正値の無い観察項目には作らない。「観察項目なし」で包んだだけの観察項目にも作らない。
-- ［決定］**この Goal には達成状態を書かない**。観察項目ごとの達成は実績値から導ける(EP12 出力で必要なら組む)。
+- ［決定］構造化した基準(§7.15)は target を分けて持つ。数値は `detailRange`(low / high の片方だけでもよい)、列挙は許容値ごとに
+  `detailCodeableConcept.text`。1 番目の target の `detailString` は表示用の文言(空なら基準から作る「60〜100回/分」「－・±」)。
+- ［決定］観察項目ごとの達成状態は、基準のある観察項目だけ評価のときに実績値から導いて `achievementStatus` に書く(§7.15)。
 - 参照は CarePlan → Goal の一方向で、同じ transaction の中で Goal を先に積む。読みはシートの木の検索に既にある
   `_include=CarePlan:goal` でアウトカムの Goal と一緒に届き、`parsePathwayApplication` が観察項目の `properValue` に入れる。
 - 予定外の追加(§7.6)の観察項目は名称だけなので、適正値を持たない。
@@ -893,8 +896,8 @@ JAHIS ePath 実装ガイド Ver.1.0 第 6 章の要素順・記述例に合わ�
     (BOM 以外はローカルコード、無ければ `unit_key`)、クリティカル・インディケータ。
   - 観察項目: ePath の assessment は task を 0..1 しか持てないので、**タスクが複数の観察項目は同じ観察項目をタスクごとに繰り返す**。
     観察項目に結ばないタスクは「観察項目なし」(`ZZZZZZZZZZ`、LOCAL)で包む。適正値は `properValue`。
-  - 観察項目実施: 実績の Observation があるときだけ。評価状況は観察項目ごとの達成を記録していない(G-6)ので、アウトカムが達成なら 1、
-    それ以外は 3。観察結果は value / unit(2 数値は「a:b」)/ datetime。
+  - 観察項目実施: 実績の Observation があるときだけ。評価状況は適正値の Goal に書いた観察項目ごとの達成状態(§7.15)。
+    基準の無い観察項目はアウトカムが達成なら 1、それ以外は 3。観察結果は value / unit(2 数値は「a:b」)/ datetime。
   - タスク: 分類は中分類(無ければ大分類)、コードはローカルのタスクコード(無ければ結んだオーダーのコード、それも無ければ `task_key`)、
     予定日、実施状況は**パスシートと同じ判定**(チェックリストは Procedure、オーダーを結んだタスクはオーダーの実施記録・進捗、
     看護指示はその日の実施記録)。実施日時と実施者はオーダーの実施記録の本体から。
@@ -903,6 +906,31 @@ JAHIS ePath 実装ガイド Ver.1.0 第 6 章の要素順・記述例に合わ�
   - 職種: 記録者の PractitionerRole(所属ロール)の職種の表示名。無ければ「指定なし」。
   - 本システムの拡張(フェーズ・表示順・版・主要イベントの参照・オーダー雛形)は出さない。
 - 日時は FHIR の dateTime(オフセット付き)の書かれた時刻をそのまま `YYYYMMDDHHMMSS` にする。
+
+### 7.15 適正値による自動判定(2026-11-03)
+
+JAHIS ePath 実装ガイド 第 4 章 No.9・17・18(`docs/clinical-pathway-backlog.md` §H の G-6)。観察項目の適正値を構造化した基準にし、
+実績値を当てて観察項目ごとの達成 / 未達成を出し、アウトカムの達成状態を提案する。判定の関数は `fhir/pathwayEvaluationHelpers.ts`
+(`judgeProperValue` / `judgeAssessment` / `proposeAchievement`)、基準の型は `fhir/pathwayHelpers.ts`(`PathwayProperCriteria`)。
+
+- **定義**: 観察項目に `proper_low` / `proper_high`(数値、片方だけでもよい、両端を含む)と `proper_values`(列挙の許容値の配列)。
+  `proper_value`(文字列)は表示用に残す。backend は下限 ≤ 上限と配列の形だけ検証する。
+- **編集画面**: 適正値の欄の下に、結んだ看護観察(MEDIS)の表現タイプに応じた入力を出す。数値型は「下限 〜 上限」+ 単位、
+  列挙型はマスタの選択肢をチェックボックスで。看護観察を結んでいない観察項目は文言だけ(基準は持たない)。
+  ［決定］基準を直したとき、表示用の文言が空か「基準から作った文言」のままなら新しい文言(「60〜100回/分」「95%以上」「－・±」)に揃え、
+  手で書いた文言(「37.5℃未満」)は残す。
+- **適用**: 適正値の Goal(§7.7)の target に `detailRange` / `detailCodeableConcept` で写す。文言が空なら基準から作って `detailString` に入れる。
+  定義を直しても適用済みの基準は変わらない。
+- **評価入力(日めくり・評価モーダル)**: 実績値の横に ○(範囲内)/ ✕(範囲外)を出す。判定は数値型・文字の値を数値の範囲に、
+  列挙型・文字の値を許容値に当てる(2 数値・血圧は判定しない)。値が空か基準が無ければ印を出さない。
+  ［決定］**達成状態は提案するだけで確定しない**。達成状態をまだ選んでいない(記録済みでもない)アウトカムに限り、1 つでも ✕ なら「未達成」、
+  基準のある観察項目が全部そろって ○ なら「達成」を入れ、横に「提案」の印を出す。人がラジオを選んだ時点で提案は止まる。
+  記録済みの達成状態は提案で上書きしない。
+- **記録**: 基準のある観察項目は、実績値を当てた 1 / 2 を適正値の Goal の `achievementStatus` に書く(変わったときだけ PUT、`statusDate` = 記録日)。
+  値を消した・判定できないときは `achievementStatus` を消す(= ePath の 3 未評価)。アウトカムの達成状態(人の判断)とは独立。
+- **シート**: 記録済みの実績値のうち範囲外(2)のセルを赤で出す。
+- **ePath 出力(§7.14)**: 観察項目実施の評価状況にこの達成状態を使う。基準の無い観察項目は従来どおり(アウトカム達成なら 1、それ以外 3)。
+- 予定外の観察項目(§7.6)は名称だけなので基準を持たない。seed の 900001〜900005 はバイタル(体温・脈拍数・収縮期血圧・SpO2)に基準を同梱。
 
 ## 8. 実装の段階
 
@@ -928,6 +956,12 @@ JAHIS ePath 実装ガイド Ver.1.0 第 6 章の要素順・記述例に合わ�
 
 ## 9. 実装したもの
 
+- 適正値による自動判定(§7.15、2026-11-03): backend migration `20261104100000`(proper_low / proper_high / proper_values)、
+  `models/master/pathway_assessment.rb`(検証)、`pathways_controller.rb`(ASSESSMENT_ATTRS)、seed JSON 900001〜900005。
+  frontend `fhir/pathwayHelpers.ts`(基準の型・文言)、`fhir/pathwayApplyHelpers.ts`(Goal の target・読み戻し)、
+  `fhir/pathwayEvaluationHelpers.ts`(判定・提案・Goal の achievementStatus)、`fhir/pathwaySheetHelpers.ts`、`fhir/epathMessageHelpers.ts`、
+  `components/PathwayEventCard.tsx`(基準の入力)、`pages/PathwayEditorPage.tsx`、`components/PathwayEvaluatePanel.tsx`(判定の印・提案)、
+  `components/PathwayDayView.tsx`、`components/KartePathwayTab.tsx`(範囲外の赤)。
 - ePath メッセージの出力(§7.14、2026-11-03): frontend `fhir/epathMessageHelpers.ts`(新規)、`api/queries/epathExport.ts`(新規)、
   `api/queries/pathway.ts`(`fetchPathwayApplicationTree` に切り出し)、`components/KartePathwayTab.tsx`(ケバブ)、`pages/PathwayEditorPage.tsx`(見出し)。
 - 主要イベント(§7.13、2026-11-03): backend `db/migrate/20261103210000_add_major_event_name_to_master_pathway_events.rb`、

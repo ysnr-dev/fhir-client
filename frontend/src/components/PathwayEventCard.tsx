@@ -1,17 +1,25 @@
 import { useState } from "react";
-import type { PathwayCodeSystem, PathwayOutcomeCategory, PathwayTaskCategoryLv1 } from "../api/masterClient";
+import type {
+  NursingObservation,
+  PathwayCodeSystem,
+  PathwayOutcomeCategory,
+  PathwayTaskCategoryLv1,
+} from "../api/masterClient";
+import { nursingObservationInputSpec } from "../fhir/nursingPerformHelpers";
 import {
   ASSESSMENT_CATEGORY_SUGGESTIONS,
   CODE_SYSTEM_OPTIONS,
   OUTCOME_CATEGORY_OPTIONS,
   TASK_CATEGORY_LV1_OPTIONS,
   defaultDayLabel,
+  draftProperCriteria,
   emptyAssessmentDraft,
   emptyTaskDraft,
   emptyOatUnitDraft,
   eventDayOf,
   majorEventCandidates,
   majorEventNameOfTask,
+  properCriteriaLabel,
   taskCategoryLv2Options,
   templateSummary,
   type PathwayAssessmentDraft,
@@ -42,6 +50,8 @@ interface EventCardProps {
   onSplit: () => void;
   onRemove: () => void;
   onPickNursingObservation: (unitKey: number, assessmentKey: number) => void;
+  /** 結んだ看護観察のマスタ(管理番号 → マスタ)。表現タイプで適正値の基準の入力欄を決める。 */
+  nursingMasters: Map<string, NursingObservation> | undefined;
   /** BOM のアウトカム・観察項目の選択(取り込んである施設だけ)。 */
   bomAvailable: { outcomes: boolean; assessments: boolean };
   onPickBomOutcome: (unitKey: number) => void;
@@ -61,6 +71,7 @@ export function PathwayEventCard({
   onSplit,
   onRemove,
   onPickNursingObservation,
+  nursingMasters,
   bomAvailable,
   onPickBomOutcome,
   onPickBomAssessment,
@@ -137,6 +148,7 @@ export function PathwayEventCard({
           onMove={(delta) => onChange({ oatUnits: moveItem(event.oatUnits, index, delta) })}
           onRemove={() => onChange({ oatUnits: event.oatUnits.filter((u) => u.key !== unit.key) })}
           onPickNursingObservation={(assessmentKey) => onPickNursingObservation(unit.key, assessmentKey)}
+          nursingMasters={nursingMasters}
           bomAvailable={bomAvailable}
           onPickBomOutcome={() => onPickBomOutcome(unit.key)}
           onPickBomAssessment={(assessmentKey) => onPickBomAssessment(unit.key, assessmentKey)}
@@ -162,6 +174,7 @@ interface UnitCardProps {
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
   onPickNursingObservation: (assessmentKey: number) => void;
+  nursingMasters: Map<string, NursingObservation> | undefined;
   bomAvailable: { outcomes: boolean; assessments: boolean };
   onPickBomOutcome: () => void;
   onPickBomAssessment: (assessmentKey: number) => void;
@@ -177,6 +190,7 @@ function PathwayOatUnitCard({
   onMove,
   onRemove,
   onPickNursingObservation,
+  nursingMasters,
   bomAvailable,
   onPickBomOutcome,
   onPickBomAssessment,
@@ -184,6 +198,24 @@ function PathwayOatUnitCard({
 }: UnitCardProps) {
   function updateAssessment(key: number, patch: Partial<PathwayAssessmentDraft>) {
     onChange({ assessments: unit.assessments.map((a) => (a.key === key ? { ...a, ...patch } : a)) });
+  }
+
+  /**
+   * 適正値の基準(下限・上限・許容値)を直す。表示用の適正値が空か、基準から作った文言のままなら、
+   * 新しい基準の文言に揃える(手で書いた文言は残す)。
+   */
+  function updateCriteria(
+    a: PathwayAssessmentDraft,
+    patch: Partial<Pick<PathwayAssessmentDraft, "properLow" | "properHigh" | "properValues">>,
+    unit: string,
+  ) {
+    const next = { ...a, ...patch };
+    const previousLabel = properCriteriaLabel(draftProperCriteria(a), unit);
+    const properValue =
+      a.properValue.trim() === "" || a.properValue === previousLabel
+        ? properCriteriaLabel(draftProperCriteria(next), unit)
+        : a.properValue;
+    updateAssessment(a.key, { ...patch, properValue });
   }
 
   function removeAssessment(assessment: PathwayAssessmentDraft) {
@@ -367,11 +399,66 @@ function PathwayOatUnitCard({
                       </span>
                     </td>
                     <td>
-                      <input
-                        type="text"
-                        value={a.properValue}
-                        onChange={(e) => updateAssessment(a.key, { properValue: e.target.value })}
-                      />
+                      {(() => {
+                        const master = a.nursingObservationManageNo
+                          ? nursingMasters?.get(a.nursingObservationManageNo)
+                          : undefined;
+                        const spec = nursingObservationInputSpec(master);
+                        const unitLabel = spec.kind === "number" ? spec.unit : "";
+                        return (
+                          <div className="pathway-rows__proper">
+                            <input
+                              type="text"
+                              value={a.properValue}
+                              onChange={(e) => updateAssessment(a.key, { properValue: e.target.value })}
+                            />
+                            {spec.kind === "number" && (
+                              <span className="pathway-rows__range">
+                                <input
+                                  type="number"
+                                  step={spec.mask.step}
+                                  value={a.properLow}
+                                  aria-label="下限"
+                                  onChange={(e) => updateCriteria(a, { properLow: e.target.value }, unitLabel)}
+                                />
+                                〜
+                                <input
+                                  type="number"
+                                  step={spec.mask.step}
+                                  value={a.properHigh}
+                                  aria-label="上限"
+                                  onChange={(e) => updateCriteria(a, { properHigh: e.target.value }, unitLabel)}
+                                />
+                                {spec.unit}
+                              </span>
+                            )}
+                            {spec.kind === "enum" && (
+                              <span className="pathway-rows__values">
+                                {spec.options.map((option) => (
+                                  <label key={option} className="pathway-apply__check">
+                                    <input
+                                      type="checkbox"
+                                      checked={a.properValues.includes(option)}
+                                      onChange={(e) =>
+                                        updateCriteria(
+                                          a,
+                                          {
+                                            properValues: e.target.checked
+                                              ? spec.options.filter((o) => o === option || a.properValues.includes(o))
+                                              : a.properValues.filter((o) => o !== option),
+                                          },
+                                          "",
+                                        )
+                                      }
+                                    />
+                                    {option}
+                                  </label>
+                                ))}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td>
                       <span className="pathway-unit__code">

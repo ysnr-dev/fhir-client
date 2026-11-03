@@ -8,8 +8,10 @@ import type {
 } from "./pathwayApplyHelpers";
 import { pathwayEventDate, phaseEventDate } from "./pathwayApplyHelpers";
 import {
+  draftProperCriteria,
   eventDayOf,
   phaseLabelOf,
+  properCriteriaLabel,
   sortEventsByDay,
   type PathwayDraft,
   type PathwayPhaseDraft,
@@ -95,10 +97,13 @@ export function buildPathwayPreview(
             ...unit.assessments.map((a) => ({
               key: a.assessmentKey,
               name: a.name.trim(),
-              properValue: a.properValue.trim(),
+              properValue: a.properValue.trim() || properCriteriaLabel(draftProperCriteria(a)),
+              properCriteria: draftProperCriteria(a),
               tasks: unit.tasks.filter((t) => t.assessmentKey === a.assessmentKey),
             })),
-            ...(looseTasks.length > 0 ? [{ key: "", name: "", properValue: "", tasks: looseTasks }] : []),
+            ...(looseTasks.length > 0
+              ? [{ key: "", name: "", properValue: "", properCriteria: null, tasks: looseTasks }]
+              : []),
           ].map((row, index) => {
             const assessmentId = `${unitId}-assessment-${index}`;
             return {
@@ -108,6 +113,8 @@ export function buildPathwayPreview(
               codings: [],
               nursingObservationManageNo: "",
               properValue: row.properValue,
+              properCriteria: row.properCriteria,
+              properGoalId: "",
               tasks: row.tasks.map((task) => {
                 const id = `${assessmentId}-task-${task.key}`;
                 tasks.set(id, task);

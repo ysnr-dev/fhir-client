@@ -1,4 +1,5 @@
 import type {
+  PathwayAssessment,
   PathwayCodeSystem,
   PathwayDetail,
   PathwayEventPayload,
@@ -231,8 +232,53 @@ export interface PathwayAssessmentDraft {
   codeSystem: PathwayCodeSystem | "";
   code: string;
   properValue: string;
+  /** 適正値の基準(数値の下限・上限は入力中の文字列、列挙は許容値)。 */
+  properLow: string;
+  properHigh: string;
+  properValues: string[];
   nursingObservationManageNo: string;
   note: string;
+}
+
+/**
+ * 観察項目の適正値を構造化した基準。数値なら下限・上限(片方だけでもよい、両端を含む)、
+ * 列挙なら許容する値。実績値から観察項目ごとの達成 / 未達成を導く(設計 §7.15)。
+ */
+export type PathwayProperCriteria =
+  | { kind: "range"; low: number | null; high: number | null }
+  | { kind: "values"; values: string[] };
+
+export function properCriteriaOf(
+  assessment: Pick<PathwayAssessment, "proper_low" | "proper_high" | "proper_values">,
+): PathwayProperCriteria | null {
+  const values = (assessment.proper_values ?? []).filter((v) => v.trim());
+  if (values.length > 0) return { kind: "values", values };
+  const low = assessment.proper_low ?? null;
+  const high = assessment.proper_high ?? null;
+  if (low === null && high === null) return null;
+  return { kind: "range", low, high };
+}
+
+/** 基準から作る適正値の表示(「60〜100/分」「95%以上」「なし・軽度」)。基準が無ければ空。 */
+export function properCriteriaLabel(criteria: PathwayProperCriteria | null, unit = ""): string {
+  if (!criteria) return "";
+  if (criteria.kind === "values") return criteria.values.join("・");
+  const { low, high } = criteria;
+  if (low !== null && high !== null) return `${low}〜${high}${unit}`;
+  if (low !== null) return `${low}${unit}以上`;
+  if (high !== null) return `${high}${unit}以下`;
+  return "";
+}
+
+/** 入力中の基準(draft)を構造化した基準にする。 */
+export function draftProperCriteria(
+  draft: Pick<PathwayAssessmentDraft, "properLow" | "properHigh" | "properValues">,
+): PathwayProperCriteria | null {
+  return properCriteriaOf({
+    proper_low: numOrNull(draft.properLow),
+    proper_high: numOrNull(draft.properHigh),
+    proper_values: draft.properValues,
+  });
 }
 
 export interface PathwayOatUnitDraft {
@@ -444,6 +490,9 @@ export function emptyAssessmentDraft(): PathwayAssessmentDraft {
     codeSystem: "",
     code: "",
     properValue: "",
+    properLow: "",
+    properHigh: "",
+    properValues: [],
     nursingObservationManageNo: "",
     note: "",
   };
@@ -533,6 +582,9 @@ export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
           codeSystem: a.code_system ?? "",
           code: inputText(a.code),
           properValue: inputText(a.proper_value),
+          properLow: a.proper_low === null || a.proper_low === undefined ? "" : String(a.proper_low),
+          properHigh: a.proper_high === null || a.proper_high === undefined ? "" : String(a.proper_high),
+          properValues: a.proper_values ?? [],
           nursingObservationManageNo: inputText(a.nursing_observation_manage_no),
           note: inputText(a.note),
         })),
@@ -604,6 +656,9 @@ function eventPayload(event: PathwayEventDraft): PathwayEventPayload {
         code_system: a.codeSystem || null,
         code: textOrNull(a.code),
         proper_value: textOrNull(a.properValue),
+        proper_low: numOrNull(a.properLow),
+        proper_high: numOrNull(a.properHigh),
+        proper_values: a.properValues.length > 0 ? a.properValues : null,
         nursing_observation_manage_no: textOrNull(a.nursingObservationManageNo),
         note: textOrNull(a.note),
       })),

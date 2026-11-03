@@ -389,8 +389,9 @@ function assessmentExecution(
 ): string {
   const result = input.evaluation.results.get(assessment.id);
   if (!result) return "";
-  // 観察項目ごとの達成は記録していない(G-6)。アウトカムが達成なら達成、それ以外は未評価として出す。
-  const status = achievementOf(unitEvaluation) === "1" ? "1" : "3";
+  // 観察項目ごとの達成状態は実績値を基準に当てて適正値の Goal に書いてある。基準の無い観察項目は
+  // アウトカムが達成なら達成、それ以外は未評価として出す。
+  const status = input.evaluation.assessments.get(assessment.id) ?? (achievementOf(unitEvaluation) === "1" ? "1" : "3");
   const { value, unit } = observationResult(result);
   return el("execution", [
     text("status", status),

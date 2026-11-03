@@ -21058,6 +21058,37 @@ button.nursing-worksheet__mark {
   width: 100%;
 }
 
+/* 観察項目の適正値。表示用の文言の下に、看護観察の表現タイプに応じた基準(数値は下限〜上限、列挙は許容値)。 */
+.pathway-rows__proper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pathway-rows__range {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.pathway-rows .pathway-rows__range input[type="number"] {
+  width: 64px;
+}
+
+.pathway-rows__values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  max-width: 240px;
+  white-space: normal;
+}
+
+.pathway-rows__values .pathway-apply__check {
+  margin-bottom: 0;
+  font-size: 12px;
+}
+
 /* ↑↓(文字)とゴミ箱(SVG)を並べる操作列。既定のベースライン揃えだと、SVG を持つ
    ボタンのベースラインが図形の下端になって 2px ほど上に浮くので、中央で揃える。 */
 .pathway-rows__tools {
@@ -21993,6 +22024,35 @@ button.nursing-worksheet__mark {
 /* オーバービュー最下段の総合評価の印(記載あり)。 */
 .pathway-sheet__value--written {
   color: var(--accent);
+}
+
+/* 実績値を適正値の基準に当てた結果。範囲外(未達成)の値を赤く出す。 */
+.pathway-sheet__value--2 {
+  color: var(--danger);
+}
+
+/* 評価入力の実績値の横に出す判定(○ 範囲内 / ✕ 範囲外)。 */
+.pathway-evaluate__judge {
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+.pathway-evaluate__judge--1 {
+  color: var(--accent);
+}
+
+.pathway-evaluate__judge--2 {
+  color: var(--danger);
+}
+
+/* 実績値から入れた達成状態の印。人が選ぶと消える。 */
+.pathway-evaluate__proposed {
+  align-self: center;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--text);
 }
 
 /* 観察項目の実績値の候補(その日の経過表の値)。押すと入力欄に入る。 */

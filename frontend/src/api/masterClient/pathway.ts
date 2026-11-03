@@ -81,6 +81,11 @@ export interface PathwayAssessment {
   code_system: PathwayCodeSystem | null;
   code: string | null;
   proper_value: string | null;
+  /** 適正値の基準(数値)。下限・上限のどちらかだけでもよい。 */
+  proper_low: number | null;
+  proper_high: number | null;
+  /** 適正値の基準(列挙)。許容する値。 */
+  proper_values: string[] | null;
   nursing_observation_manage_no: string | null;
   note: string | null;
 }
@@ -179,6 +184,9 @@ export interface PathwayAssessmentPayload {
   code_system?: PathwayCodeSystem | null;
   code?: string | null;
   proper_value?: string | null;
+  proper_low?: number | null;
+  proper_high?: number | null;
+  proper_values?: string[] | null;
   nursing_observation_manage_no?: string | null;
   note?: string | null;
 }

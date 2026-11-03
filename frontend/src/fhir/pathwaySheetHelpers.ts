@@ -82,6 +82,8 @@ export interface SheetAssessmentCell {
   properValue: string;
   /** 記録済みの実績値の表示。無ければ空。 */
   value: string;
+  /** 実績値を適正値の基準に当てた達成状態(記録済みのもの)。判定していなければ空。 */
+  achievement: Achievement | "";
 }
 
 export interface PathwaySheet {
@@ -186,6 +188,7 @@ export function buildPathwaySheet(
             assessmentId: assessment.id,
             properValue: assessment.properValue,
             value: resultValueLabel(evaluation?.results.get(assessment.id)),
+            achievement: evaluation?.assessments.get(assessment.id) ?? "",
           });
         }
         for (const task of assessment.tasks) {

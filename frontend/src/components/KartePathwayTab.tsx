@@ -530,6 +530,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
               application={application}
               carePlans={tree.data?.carePlans ?? new Map()}
               procedures={tree.data?.procedures ?? new Map()}
+              goals={tree.data?.goals ?? new Map()}
               orders={orders ?? new Map()}
               orderProgress={orderProgress ?? new Map()}
               evaluation={evaluation}
@@ -723,7 +724,13 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                             <span className="pathway-sheet__cell-static">
                               <PathwaySeriesLink fromPrev={fromPrev} toNext={toNext}>
                                 {assessment.value ? (
-                                  <span className="pathway-sheet__value">{assessment.value}</span>
+                                  <span
+                                    className={`pathway-sheet__value${
+                                      assessment.achievement ? ` pathway-sheet__value--${assessment.achievement}` : ""
+                                    }`}
+                                  >
+                                    {assessment.value}
+                                  </span>
                                 ) : (
                                   <span className="pathway-sheet__planned">○</span>
                                 )}

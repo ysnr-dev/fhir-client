@@ -9,11 +9,13 @@ import {
 import {
   PATHWAY_MARKER_CODE,
   PATHWAY_MARKER_SYSTEM,
+  isAssessmentGoal,
   pathwayLevelOf,
+  type PathwayAssessmentRecord,
   type PathwayEventRecord,
   type PathwayOatUnitRecord,
 } from "./pathwayApplyHelpers";
-import { eventDayStepLabel } from "./pathwayHelpers";
+import { eventDayStepLabel, type PathwayProperCriteria } from "./pathwayHelpers";
 import { NURSING_OBSERVATION_RESULT_SYSTEM, nursingVitalCodeOf } from "./nursingPerformHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { buildBloodPressureComponents } from "./vitalHelpers";
@@ -30,6 +32,8 @@ import { LOINC_SYSTEM } from "./shared";
 //   Observation(観察項目の実績) code = 観察項目のコード、value = 実績値、basedOn → CarePlan(観察項目)
 //   Procedure(タスク)           status = completed(実施)/ preparation(未実施)、performedDateTime、performer
 //   Observation(病日の総合評価)  code = comp-assessment、valueString = 本文、basedOn → CarePlan(病日)。病日に 1 件(上書き)
+//   Goal(観察項目の適正値)       achievementStatus = 実績値を基準(下限・上限・許容値)に当てた 1 達成 / 2 未達成。
+//                              基準か実績値が無ければ書かない(= ePath の 3 未評価)
 //
 // ［決定］評価・実績の Observation は Goal に contained せず独立のリソースにする(検索で読める。
 // EP12 出力で contained に畳む)。category の先頭にパスの印を置き、患者 + category の 1 回の検索で
@@ -138,6 +142,8 @@ export interface PathwayEvaluationState {
   units: Map<string, UnitEvaluation>;
   /** 観察項目 CarePlan の id → 実績の Observation。 */
   results: Map<string, fhir4.Observation>;
+  /** 観察項目 CarePlan の id → 記録済みの達成状態(適正値の Goal の achievementStatus)。無ければ未評価。 */
+  assessments: Map<string, Achievement>;
   /** 病日 CarePlan の id → 総合評価。 */
   days: Map<string, DayAssessment>;
 }
@@ -168,6 +174,7 @@ export function buildEvaluationState(
 ): PathwayEvaluationState {
   const units = new Map<string, UnitEvaluation>();
   const results = new Map<string, fhir4.Observation>();
+  const assessments = new Map<string, Achievement>();
   const days = new Map<string, DayAssessment>();
   const evaluations = new Map<string, fhir4.Observation>();
   for (const observation of observations) {
@@ -192,6 +199,14 @@ export function buildEvaluationState(
   for (const [id] of days) {
     const carePlan = carePlans.find((cp) => cp.id === id);
     if (carePlan && pathwayLevelOf(carePlan) !== "event") days.delete(id);
+  }
+  for (const assessment of carePlans) {
+    if (!assessment.id || pathwayLevelOf(assessment) !== "assessment") continue;
+    const goal = (assessment.goal ?? [])
+      .map((ref) => goals.get(ref.reference?.split("/").pop() ?? ""))
+      .find((g) => isAssessmentGoal(g));
+    const code = goal?.achievementStatus?.coding?.find((c) => c.system === ACHIEVEMENT_SYSTEM)?.code;
+    if (code === "1" || code === "2") assessments.set(assessment.id, code);
   }
   for (const unit of carePlans) {
     if (!unit.id || pathwayLevelOf(unit) !== "oat-unit") continue;
@@ -230,7 +245,61 @@ export function buildEvaluationState(
       performerName: observation?.performer?.[0]?.display ?? "",
     });
   }
-  return { units, results, days };
+  return { units, results, assessments, days };
+}
+
+// ---- 適正値による判定 ----
+
+/**
+ * 実績値を観察項目の基準に当てた達成 / 未達成。基準が無い・値が入っていない・基準の種類と表現タイプが
+ * 合わない(範囲の基準に文字の値など)ときは null(判定しない)。数値の範囲は両端を含む。
+ */
+export function judgeProperValue(
+  criteria: PathwayProperCriteria | null,
+  spec: NursingObservationInputSpec,
+  input: [string, string],
+): Achievement | null {
+  if (!criteria) return null;
+  const [a] = input;
+  if (criteria.kind === "values") {
+    if (spec.kind !== "enum" && spec.kind !== "text") return null;
+    const value = a.trim();
+    return value ? (criteria.values.includes(value) ? "1" : "2") : null;
+  }
+  if (spec.kind !== "number" && spec.kind !== "text") return null;
+  const value = numberOf(a);
+  if (value === null) return null;
+  const ok = (criteria.low === null || value >= criteria.low) && (criteria.high === null || value <= criteria.high);
+  return ok ? "1" : "2";
+}
+
+export function judgeAssessment(
+  assessment: Pick<PathwayAssessmentRecord, "properCriteria">,
+  spec: NursingObservationInputSpec,
+  input: [string, string] | undefined,
+): Achievement | null {
+  return judgeProperValue(assessment.properCriteria, spec, input ?? ["", ""]);
+}
+
+/**
+ * 観察項目の判定からアウトカムの達成状態を提案する。1 つでも未達成なら未達成、基準のある観察項目が
+ * 全部そろって達成なら達成、それ以外(基準が無い・値が足りない)は提案しない(空)。確定は人がする。
+ */
+export function proposeAchievement(
+  unit: PathwayOatUnitRecord,
+  specs: Map<string, NursingObservationInputSpec>,
+  results: Map<string, [string, string]>,
+): Achievement | "" {
+  let judged = 0;
+  let pending = 0;
+  for (const assessment of unit.assessments) {
+    if (!assessment.properCriteria) continue;
+    const status = judgeAssessment(assessment, specs.get(assessment.id) ?? { kind: "text" }, results.get(assessment.id));
+    if (status === "2") return "2";
+    if (status === "1") judged += 1;
+    else pending += 1;
+  }
+  return judged > 0 && pending === 0 ? "1" : "";
 }
 
 export function resultValueLabel(observation: fhir4.Observation | undefined): string {
@@ -429,6 +498,8 @@ export interface PathwayEvaluationContext {
   specs: Map<string, NursingObservationInputSpec>;
   /** タスク Procedure の id → 保存済みの Procedure(status と実施日時を書き換える)。 */
   procedures: Map<string, fhir4.Procedure>;
+  /** 木に含めた Goal(id → Goal)。観察項目の適正値の Goal に達成状態を書くのに使う。 */
+  goals?: Map<string, fhir4.Goal>;
   existing: PathwayEvaluationState | null;
   performer: { practitionerId: string; display: string } | null;
   /** 記録した診療科。評価の Observation に入れ、カルテのカードに出す。 */
@@ -634,6 +705,29 @@ export function buildPathwayEvaluationBundle(
     }
     if (previous?.id) entry.push(put(observation));
     else entry.push({ resource: observation, request: { method: "POST", url: "Observation" } });
+  }
+
+  // 観察項目ごとの達成状態(実績値を基準に当てた結果)。適正値の Goal に書き、変わったときだけ PUT。
+  // 判定できない(基準や値が無い)ときは消す(= 未評価)。
+  for (const assessment of unit.assessments) {
+    const goal = assessment.properGoalId ? ctx.goals?.get(assessment.properGoalId) : undefined;
+    if (!goal?.id) continue;
+    const spec = ctx.specs.get(assessment.id) ?? { kind: "text" };
+    const judged = resultValue(spec, values.results.get(assessment.id) ?? ["", ""])
+      ? judgeAssessment(assessment, spec, values.results.get(assessment.id))
+      : null;
+    const previous = ctx.existing?.assessments.get(assessment.id) ?? null;
+    if (judged === previous) continue;
+    const next: fhir4.Goal = { ...goal, statusDate: recordedAt.slice(0, 10) };
+    if (judged) {
+      next.achievementStatus = {
+        coding: [{ system: ACHIEVEMENT_SYSTEM, code: judged, display: achievementLabel(judged) }],
+      };
+    } else {
+      delete next.achievementStatus;
+      delete next.statusDate;
+    }
+    entry.push(put(next));
   }
 
   // タスクの実施 / 未実施。

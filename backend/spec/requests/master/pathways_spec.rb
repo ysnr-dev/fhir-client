@@ -232,6 +232,31 @@ RSpec.describe "Master::Pathways", type: :request do
       expect(Master::Pathway.count).to eq(0)
     end
 
+    it "観察項目の適正値の基準(下限・上限・許容値)を保存して返す" do
+      post "/master/pathways", params: {
+        name: "基準", events: [{ elapsed_days: 1, oat_units: [{ name: "a", assessments: [
+          { name: "体温", proper_value: "37.5℃未満", proper_high: 37.4 },
+          { name: "脈拍数", proper_low: 60, proper_high: 100 },
+          { name: "嘔気", proper_value: "なし", proper_values: %w[なし] },
+        ] }] }],
+      }, as: :json
+
+      expect(response).to have_http_status(:created)
+      rows = body["events"][0]["oat_units"][0]["assessments"]
+      expect(rows.map { |a| [a["proper_low"], a["proper_high"], a["proper_values"]] })
+        .to eq([[nil, 37.4, nil], [60.0, 100.0, nil], [nil, nil, ["なし"]]])
+    end
+
+    it "下限が上限を超える基準は登録できない" do
+      post "/master/pathways", params: {
+        name: "基準", events: [{ elapsed_days: 1, oat_units: [{ name: "a", assessments: [
+          { name: "脈拍数", proper_low: 100, proper_high: 60 },
+        ] }] }],
+      }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("上限以下")
+    end
+
     it "同じ識別子を別の病日に置ける(日をまたぐアウトカム・継続するタスク)" do
       unit = ->(day) {
         { elapsed_days: day, oat_units: [

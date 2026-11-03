@@ -10,6 +10,7 @@ import type {
 import { addDays } from "../lib/dates";
 import { DEFAULT_MEAL_TIMING, previousMealPoint, type MealOrderFormValues, type MealTiming } from "./mealOrderHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM, type NursingOrderFormValues } from "./nursingOrderHelpers";
+import { properCriteriaLabel, properCriteriaOf, type PathwayProperCriteria } from "./pathwayHelpers";
 import { isHeaderEntry } from "./provenanceHelpers";
 
 // クリニカルパスの患者への適用(適用後パスデータ)の FHIR 構造。ePath(ePath R4 実装ガイド)の
@@ -704,45 +705,77 @@ function buildOatUnitCarePlan(
 }
 
 /**
- * 観察項目の適正値(評価基準)を持つ Goal。適正値の無い観察項目には作らない。
+ * 観察項目の適正値(評価基準)を持つ Goal。適正値も基準も無い観察項目には作らない。
  *
  * ［決定］適正値は ePath の Goal AssessmentExecution の target.detailString に置く。CarePlan
  * (観察項目)には適正値の要素が無く、IG が適正値を持たせているのはこの Goal だけ。適正値は
  * 評価で生まれる記録ではなく計画の一部なので、アウトカムの Goal と違って適用の時点で作る。
- * 観察項目ごとの達成状態(achievementStatus)はここには書かない(実績値から導ける)。
+ * 構造化した基準は target を分けて置く(数値は detailRange、列挙は許容値ごとに detailCodeableConcept)。
+ * 観察項目ごとの達成状態(achievementStatus)は評価で実績値から導いて書く(pathwayEvaluationHelpers)。
  */
 export function buildAssessmentGoal(
-  assessment: Pick<PathwayAssessment, "name" | "code_system" | "code" | "proper_value">,
+  assessment: Pick<
+    PathwayAssessment,
+    "name" | "code_system" | "code" | "proper_value" | "proper_low" | "proper_high" | "proper_values"
+  >,
   ctx: { assessmentId: string; patientId: string },
 ): fhir4.Goal | null {
-  const properValue = assessment.proper_value?.trim();
+  const criteria = properCriteriaOf(assessment);
+  const properValue = assessment.proper_value?.trim() || properCriteriaLabel(criteria);
   if (!properValue) return null;
   const codeSystem =
     assessment.code_system === "bom" ? PATHWAY_CODE_SYSTEM.bomAssessmentCode : PATHWAY_CODE_SYSTEM.localAssessmentCode;
+  const measure: fhir4.CodeableConcept = {
+    ...(assessment.code_system && assessment.code
+      ? { coding: [{ system: codeSystem, code: assessment.code, display: assessment.name }] }
+      : {}),
+    text: assessment.name,
+  };
+  const target: fhir4.GoalTarget[] = [{ measure, detailString: properValue }];
+  if (criteria?.kind === "range") {
+    target.push({
+      measure,
+      detailRange: {
+        ...(criteria.low !== null ? { low: { value: criteria.low } } : {}),
+        ...(criteria.high !== null ? { high: { value: criteria.high } } : {}),
+      },
+    });
+  }
+  if (criteria?.kind === "values") {
+    for (const value of criteria.values) target.push({ measure, detailCodeableConcept: { text: value } });
+  }
   return {
     resourceType: "Goal",
     identifier: [{ system: PATHWAY_ASSESSMENT_GOAL_ID_SYSTEM, value: ctx.assessmentId }],
     lifecycleStatus: "active",
     description: { text: assessment.name },
     subject: { reference: `Patient/${ctx.patientId}` },
-    target: [
-      {
-        measure: {
-          ...(assessment.code_system && assessment.code
-            ? { coding: [{ system: codeSystem, code: assessment.code, display: assessment.name }] }
-            : {}),
-          text: assessment.name,
-        },
-        detailString: properValue,
-      },
-    ],
+    target,
   };
+}
+
+export function isAssessmentGoal(goal: fhir4.Goal | undefined): goal is fhir4.Goal {
+  return Boolean(goal?.identifier?.some((id) => id.system === PATHWAY_ASSESSMENT_GOAL_ID_SYSTEM));
 }
 
 /** 観察項目の Goal から適正値を読む。 */
 export function assessmentGoalProperValue(goal: fhir4.Goal | undefined): string {
-  if (!goal?.identifier?.some((id) => id.system === PATHWAY_ASSESSMENT_GOAL_ID_SYSTEM)) return "";
+  if (!isAssessmentGoal(goal)) return "";
   return goal.target?.find((t) => t.detailString)?.detailString ?? "";
+}
+
+/** 観察項目の Goal から構造化した基準(detailRange / detailCodeableConcept)を読む。 */
+export function assessmentGoalCriteria(goal: fhir4.Goal | undefined): PathwayProperCriteria | null {
+  if (!isAssessmentGoal(goal)) return null;
+  const values = (goal.target ?? [])
+    .map((t) => t.detailCodeableConcept?.text ?? t.detailCodeableConcept?.coding?.[0]?.display ?? "")
+    .filter(Boolean);
+  if (values.length > 0) return { kind: "values", values };
+  const range = goal.target?.find((t) => t.detailRange)?.detailRange;
+  if (!range) return null;
+  const low = range.low?.value ?? null;
+  const high = range.high?.value ?? null;
+  return low === null && high === null ? null : { kind: "range", low, high };
 }
 
 function buildAssessmentCarePlan(
@@ -879,6 +912,10 @@ export interface PathwayAssessmentRecord {
   nursingObservationManageNo: string;
   /** 適正値(評価基準)。観察項目の Goal の target.detailString。無ければ空。 */
   properValue: string;
+  /** 構造化した基準(数値の範囲か許容値)。無ければ null(実績値から達成を導かない)。 */
+  properCriteria: PathwayProperCriteria | null;
+  /** 適正値の Goal の id。無ければ空(達成状態を書く先が無い)。 */
+  properGoalId: string;
   tasks: PathwayTaskRecord[];
 }
 
@@ -1242,16 +1279,18 @@ export function parsePathwayApplication(
       .flatMap((c) => c.coding ?? [])
       .filter((c) => c.system !== PATHWAY_MARKER_SYSTEM && c.system !== PATHWAY_LEVEL_SYSTEM);
     const rows = assessmentsByUnit.get(unitId) ?? [];
+    const properGoal = (carePlan.goal ?? [])
+      .map((ref) => goals.get(ref.reference?.split("/").pop() ?? ""))
+      .find((goal) => isAssessmentGoal(goal));
     rows.push({
       id: carePlan.id,
       assessmentKey: assessmentId.split(".").pop() ?? "",
       name: carePlan.title ?? "",
       codings: codings.filter((c) => c.system !== NURSING_OBSERVATION_CODE_SYSTEM),
       nursingObservationManageNo: codings.find((c) => c.system === NURSING_OBSERVATION_CODE_SYSTEM)?.code ?? "",
-      properValue:
-        (carePlan.goal ?? [])
-          .map((ref) => assessmentGoalProperValue(goals.get(ref.reference?.split("/").pop() ?? "")))
-          .find(Boolean) ?? "",
+      properValue: assessmentGoalProperValue(properGoal),
+      properCriteria: assessmentGoalCriteria(properGoal),
+      properGoalId: properGoal?.id ?? "",
       tasks: tasksByAssessment.get(carePlan.id) ?? [],
     });
     assessmentsByUnit.set(unitId, rows);

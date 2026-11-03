@@ -16,6 +16,8 @@ import {
   buildEvaluationState,
   buildPathwayEvaluationBundle,
   evaluationValuesOf,
+  judgeAssessment,
+  proposeAchievement,
   type Achievement,
   type EvaluationField,
   type EvaluationMode,
@@ -65,6 +67,8 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
   // テンプレート記入を開いている欄(S/O/A/P か自由記載)。
   const [templateTarget, setTemplateTarget] = useState<EvaluationField | null>(null);
+  // 達成状態を人が選んだか。選ぶまでは実績値を基準に当てた提案を入れる(記録済みの達成状態は提案で変えない)。
+  const [achievementTouched, setAchievementTouched] = useState(false);
 
   const found = useMemo(() => {
     const application = tree.data?.application;
@@ -103,7 +107,9 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
     if (!found || !evaluation) return;
     const key = `${unitId}:${observations.dataUpdatedAt}:${tree.dataUpdatedAt}`;
     if (loadedFor === key) return;
-    setValues(evaluationValuesOf(found.unit, evaluation));
+    const loaded = evaluationValuesOf(found.unit, evaluation);
+    setValues(loaded);
+    setAchievementTouched(Boolean(loaded.achievement));
     setLoadedFor(key);
   }, [found, evaluation, unitId, loadedFor, observations.dataUpdatedAt, tree.dataUpdatedAt]);
 
@@ -115,6 +121,15 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
 
   function update<K extends keyof PathwayEvaluationValues>(key: K, value: PathwayEvaluationValues[K]) {
     setValues((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
+  /** 実績値を直す。達成状態を選んでいなければ、基準に当てた提案を達成状態に入れる。 */
+  function updateResults(results: Map<string, [string, string]>) {
+    setValues((prev) => {
+      if (!prev) return prev;
+      const achievement = achievementTouched ? prev.achievement : proposeAchievement(unit, specs, results);
+      return { ...prev, results, achievement };
+    });
   }
 
   /** テンプレートの紐付けを外す(書いた文言は残して直接入力に戻す)。 */
@@ -150,6 +165,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
         unitCarePlan,
         specs,
         procedures: tree.data?.procedures ?? new Map(),
+        goals: tree.data?.goals,
         existing: evaluation,
         performer:
           practitionerId && practitioner
@@ -218,8 +234,15 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
                           const current: [string, string] = [...(next.get(assessment.id) ?? ["", ""])] as [string, string];
                           current[index] = value;
                           next.set(assessment.id, current);
-                          update("results", next);
+                          updateResults(next);
                         }}
+                      />
+                      <AssessmentJudgeMark
+                        status={judgeAssessment(
+                          assessment,
+                          specs.get(assessment.id) ?? { kind: "text" },
+                          values.results.get(assessment.id),
+                        )}
                       />
                     </td>
                     <td className="pathway-day__candidate-cell">
@@ -236,7 +259,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
                             onClick={() => {
                               const next = new Map(values.results);
                               next.set(assessment.id, candidate.values);
-                              update("results", next);
+                              updateResults(next);
                             }}
                           >
                             {candidate.label}
@@ -298,11 +321,15 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
                 name="pathway-achievement"
                 value={option.code}
                 checked={values.achievement === option.code}
-                onChange={() => update("achievement", option.code as Achievement)}
+                onChange={() => {
+                  setAchievementTouched(true);
+                  update("achievement", option.code as Achievement);
+                }}
               />
               {option.display}
             </label>
           ))}
+          {!achievementTouched && values.achievement && <span className="pathway-evaluate__proposed">提案</span>}
         </div>
         <div className="pathway-evaluate__mode" role="radiogroup" aria-label="記載形式">
           <label className="pathway-apply__check">
@@ -386,5 +413,19 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
         />
       )}
     </div>
+  );
+}
+
+/** 実績値を適正値の基準に当てた結果(○ 達成 / ✕ 未達成)。判定していなければ出さない。 */
+export function AssessmentJudgeMark({ status }: { status: Achievement | null }) {
+  if (status !== "1" && status !== "2") return null;
+  return (
+    <span
+      className={`pathway-evaluate__judge pathway-evaluate__judge--${status}`}
+      title={status === "1" ? "適正値の範囲内" : "適正値の範囲外"}
+      aria-label={status === "1" ? "適正値の範囲内" : "適正値の範囲外"}
+    >
+      {status === "1" ? "○" : "✕"}
+    </span>
   );
 }

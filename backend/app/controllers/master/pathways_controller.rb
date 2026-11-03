@@ -45,7 +45,7 @@ module Master
                      allowable_condition_type allowable_days allowable_range_low allowable_range_high note].freeze
     UNIT_ATTRS = %w[unit_key name category subcategory_code subcategory_name code_system code critical note].freeze
     ASSESSMENT_ATTRS = %w[assessment_key name category_code category_name code_system code proper_value
-                          nursing_observation_manage_no note].freeze
+                          proper_low proper_high proper_values nursing_observation_manage_no note].freeze
     TASK_ATTRS = %w[task_key name category_lv1 category_lv2 code order_type order_label order_values
                     order_schema_version note].freeze
 

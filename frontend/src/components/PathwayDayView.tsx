@@ -11,6 +11,8 @@ import {
   buildPathwayEvaluationBundle,
   evaluationValuesOf,
   hasEvaluationWriting,
+  judgeAssessment,
+  proposeAchievement,
   type Achievement,
   type PathwayEvaluationState,
 } from "../fhir/pathwayEvaluationHelpers";
@@ -24,6 +26,7 @@ import { usePathwayVarianceNotice } from "../hooks/usePathwayVarianceNotice";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { ObservationInput } from "./NursingPerformModal";
+import { AssessmentJudgeMark } from "./PathwayEvaluatePanel";
 
 // パスタブの「日めくり」。1 病日(分けた日はステップごと)をめくりながら、その日のアウトカムを縦に並べて
 // まとめて記録する。達成状態・観察項目の実績・タスクの実施と、病日の総合評価はここで入れ、記載(SOAP・自由記載)は
@@ -34,6 +37,8 @@ import { ObservationInput } from "./NursingPerformModal";
 /** アウトカム 1 件ぶんの入力中の値(達成状態・実績・タスクの実施)。 */
 interface UnitDraft {
   achievement: Achievement | "";
+  /** 達成状態を人が選んでいない(実績値を基準に当てた提案を入れてよい)。 */
+  achievementAuto: boolean;
   results: Map<string, [string, string]>;
   tasksDone: Map<string, boolean>;
 }
@@ -43,6 +48,8 @@ interface PathwayDayViewProps {
   application: PathwayApplicationRecord;
   carePlans: Map<string, fhir4.CarePlan>;
   procedures: Map<string, fhir4.Procedure>;
+  /** 木に含めた Goal(観察項目の達成状態を書く先)。 */
+  goals: Map<string, fhir4.Goal>;
   orders: Map<string, fhir4.ServiceRequest>;
   /** オーダーのヘッダの id → 進み具合(進捗の Task から)。 */
   orderProgress: Map<string, OrderProgress>;
@@ -74,6 +81,7 @@ export function PathwayDayView({
   application,
   carePlans,
   procedures,
+  goals,
   orders,
   orderProgress,
   evaluation,
@@ -116,8 +124,27 @@ export function PathwayDayView({
     const unit = events.flatMap((e) => e.units).find((u) => u.id === unitId);
     if (!unit) return null;
     const values = evaluationValuesOf(unit, evaluation);
-    return { achievement: values.achievement, results: values.results, tasksDone: values.tasksDone };
+    return {
+      achievement: values.achievement,
+      achievementAuto: !values.achievement,
+      results: values.results,
+      tasksDone: values.tasksDone,
+    };
   };
+
+  function specsOf(unitId: string): Map<string, ReturnType<typeof assessmentInputSpec>> {
+    const unit = events.flatMap((e) => e.units).find((u) => u.id === unitId);
+    const specs = new Map<string, ReturnType<typeof assessmentInputSpec>>();
+    for (const a of unit?.assessments ?? []) specs.set(a.id, assessmentInputSpec(a.nursingObservationManageNo, masters.data));
+    return specs;
+  }
+
+  /** 実績値を直したあと、達成状態を選んでいなければ基準に当てた提案を入れる。 */
+  function withProposal(unitId: string, draft: UnitDraft): UnitDraft {
+    if (!draft.achievementAuto) return draft;
+    const unit = events.flatMap((e) => e.units).find((u) => u.id === unitId);
+    return unit ? { ...draft, achievement: proposeAchievement(unit, specsOf(unitId), draft.results) } : draft;
+  }
   const dirtyUnitIds = [...drafts].filter(([id, draft]) => {
     const initial = initialOf(id);
     return initial && !sameDraft(draft, initial);
@@ -132,7 +159,10 @@ export function PathwayDayView({
   const isToday = event.date === today;
 
   function draftOf(unitId: string): UnitDraft {
-    return drafts.get(unitId) ?? initialOf(unitId) ?? { achievement: "", results: new Map(), tasksDone: new Map() };
+    return (
+      drafts.get(unitId) ??
+      initialOf(unitId) ?? { achievement: "", achievementAuto: true, results: new Map(), tasksDone: new Map() }
+    );
   }
 
   function patchDraft(unitId: string, patch: (draft: UnitDraft) => UnitDraft) {
@@ -194,6 +224,7 @@ export function PathwayDayView({
           unitCarePlan,
           specs,
           procedures,
+          goals,
           existing: evaluation,
           performer,
           department: orderContext,
@@ -312,11 +343,14 @@ export function PathwayDayView({
                       type="radio"
                       name={`pathway-day-${unit.id}`}
                       checked={draft.achievement === option.code}
-                      onChange={() => patchDraft(unit.id, (d) => ({ ...d, achievement: option.code as Achievement }))}
+                      onChange={() =>
+                        patchDraft(unit.id, (d) => ({ ...d, achievement: option.code as Achievement, achievementAuto: false }))
+                      }
                     />
                     {option.display}
                   </label>
                 ))}
+                {draft.achievementAuto && draft.achievement && <span className="pathway-evaluate__proposed">提案</span>}
               </div>
               <button
                 type="button"
@@ -355,10 +389,11 @@ export function PathwayDayView({
                                 ];
                                 current[i] = value;
                                 d.results.set(assessment.id, current);
-                                return d;
+                                return withProposal(unit.id, d);
                               })
                             }
                           />
+                          <AssessmentJudgeMark status={judgeAssessment(assessment, spec, values)} />
                         </td>
                         <td className="pathway-day__candidate-cell">
                           {candidate && (
@@ -368,7 +403,7 @@ export function PathwayDayView({
                               onClick={() =>
                                 patchDraft(unit.id, (d) => {
                                   d.results.set(assessment.id, candidate.values);
-                                  return d;
+                                  return withProposal(unit.id, d);
                                 })
                               }
                             >

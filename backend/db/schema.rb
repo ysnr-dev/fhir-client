@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_03_220000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_04_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -2063,6 +2063,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_220000) do
     t.text "note"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.float "proper_low"
+    t.float "proper_high"
+    t.jsonb "proper_values"
     t.index ["pathway_code", "assessment_key"], name: "idx_on_pathway_code_assessment_key_c4770a6564"
     t.index ["unit_id", "assessment_key"], name: "index_master_pathway_assessments_on_unit_id_and_assessment_key", unique: true
     t.index ["unit_id"], name: "index_master_pathway_assessments_on_unit_id"

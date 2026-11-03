@@ -42,6 +42,7 @@
               "code_system": "bom",
               "code": "1900027300",
               "proper_value": "93%以上",
+              "proper_low": 93,
               "nursing_observation_manage_no": "31000001"
             },
             {
@@ -95,6 +96,7 @@
               "code_system": "bom",
               "code": "1900032700",
               "proper_value": "38.0℃未満",
+              "proper_high": 37.9,
               "nursing_observation_manage_no": "31001368"
             },
             {
@@ -105,6 +107,8 @@
               "code_system": "bom",
               "code": "1900034300",
               "proper_value": "60〜100/分",
+              "proper_low": 60,
+              "proper_high": 100,
               "nursing_observation_manage_no": "31001390"
             }
           ],
@@ -555,6 +559,7 @@
               "code_system": "bom",
               "code": "1900027300",
               "proper_value": "93%以上",
+              "proper_low": 93,
               "nursing_observation_manage_no": "31000001"
             },
             {
@@ -608,6 +613,7 @@
               "code_system": "bom",
               "code": "1900032700",
               "proper_value": "38.0℃未満",
+              "proper_high": 37.9,
               "nursing_observation_manage_no": "31001368"
             },
             {
@@ -618,6 +624,8 @@
               "code_system": "bom",
               "code": "1900034300",
               "proper_value": "60〜100/分",
+              "proper_low": 60,
+              "proper_high": 100,
               "nursing_observation_manage_no": "31001390"
             }
           ],
@@ -778,6 +786,7 @@
               "code_system": "bom",
               "code": "1900027300",
               "proper_value": "93%以上",
+              "proper_low": 93,
               "nursing_observation_manage_no": "31000001"
             },
             {
@@ -831,6 +840,7 @@
               "code_system": "bom",
               "code": "1900032700",
               "proper_value": "38.0℃未満",
+              "proper_high": 37.9,
               "nursing_observation_manage_no": "31001368"
             },
             {
@@ -841,6 +851,8 @@
               "code_system": "bom",
               "code": "1900034300",
               "proper_value": "60〜100/分",
+              "proper_low": 60,
+              "proper_high": 100,
               "nursing_observation_manage_no": "31001390"
             }
           ],
@@ -1031,6 +1043,7 @@
               "code_system": "bom",
               "code": "1900032700",
               "proper_value": "37.5℃未満",
+              "proper_high": 37.4,
               "nursing_observation_manage_no": "31001368"
             },
             {
@@ -1041,6 +1054,8 @@
               "code_system": "bom",
               "code": "1900034300",
               "proper_value": "60〜100/分",
+              "proper_low": 60,
+              "proper_high": 100,
               "nursing_observation_manage_no": "31001390"
             }
           ],
@@ -1330,6 +1345,7 @@
               "code_system": "bom",
               "code": "1900032700",
               "proper_value": "37.5℃未満",
+              "proper_high": 37.4,
               "nursing_observation_manage_no": "31001368"
             },
             {
@@ -1340,6 +1356,8 @@
               "code_system": "bom",
               "code": "1900034300",
               "proper_value": "60〜100/分",
+              "proper_low": 60,
+              "proper_high": 100,
               "nursing_observation_manage_no": "31001390"
             }
           ],
@@ -1530,6 +1548,7 @@
               "code_system": "bom",
               "code": "1900032700",
               "proper_value": "37.5℃未満",
+              "proper_high": 37.4,
               "nursing_observation_manage_no": "31001368"
             },
             {
@@ -1540,6 +1559,8 @@
               "code_system": "bom",
               "code": "1900034300",
               "proper_value": "60〜100/分",
+              "proper_low": 60,
+              "proper_high": 100,
               "nursing_observation_manage_no": "31001390"
             }
           ],
@@ -1737,6 +1758,7 @@
               "code_system": "bom",
               "code": "1900032700",
               "proper_value": "37.5℃未満",
+              "proper_high": 37.4,
               "nursing_observation_manage_no": "31001368"
             },
             {
@@ -1747,6 +1769,8 @@
               "code_system": "bom",
               "code": "1900034300",
               "proper_value": "60〜100/分",
+              "proper_low": 60,
+              "proper_high": 100,
               "nursing_observation_manage_no": "31001390"
             }
           ],

@@ -490,6 +490,7 @@
               "code_system": "bom",
               "code": "1900032700",
               "proper_value": "37.5℃未満",
+              "proper_high": 37.4,
               "nursing_observation_manage_no": "31001368"
             },
             {
@@ -500,6 +501,8 @@
               "code_system": "bom",
               "code": "1900034300",
               "proper_value": "60〜100/分",
+              "proper_low": 60,
+              "proper_high": 100,
               "nursing_observation_manage_no": "31001390"
             },
             {
@@ -510,6 +513,8 @@
               "code_system": "bom",
               "code": "1900030700",
               "proper_value": "90〜160mmHg",
+              "proper_low": 90,
+              "proper_high": 160,
               "nursing_observation_manage_no": "31001848"
             },
             {
@@ -520,6 +525,7 @@
               "code_system": "bom",
               "code": "1900027300",
               "proper_value": "95%以上",
+              "proper_low": 95,
               "nursing_observation_manage_no": "31000001"
             }
           ],
@@ -736,6 +742,7 @@
               "code_system": "bom",
               "code": "1900032700",
               "proper_value": "37.5℃未満",
+              "proper_high": 37.4,
               "nursing_observation_manage_no": "31001368"
             },
             {
@@ -746,6 +753,8 @@
               "code_system": "bom",
               "code": "1900034300",
               "proper_value": "60〜100/分",
+              "proper_low": 60,
+              "proper_high": 100,
               "nursing_observation_manage_no": "31001390"
             },
             {
@@ -756,6 +765,8 @@
               "code_system": "bom",
               "code": "1900030700",
               "proper_value": "90〜160mmHg",
+              "proper_low": 90,
+              "proper_high": 160,
               "nursing_observation_manage_no": "31001848"
             },
             {
@@ -766,6 +777,7 @@
               "code_system": "bom",
               "code": "1900027300",
               "proper_value": "95%以上",
+              "proper_low": 95,
               "nursing_observation_manage_no": "31000001"
             },
             {

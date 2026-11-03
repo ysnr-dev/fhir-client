@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Disease, PathwayOutcomeCategory, PathwaySetting, PathwayStatus } from "../api/masterClient";
-import { useBomAvailability, usePathway, usePathwayMutations } from "../api/masterQueries";
+import {
+  useBomAvailability,
+  useNursingObservationsByManageNos,
+  usePathway,
+  usePathwayMutations,
+} from "../api/masterQueries";
 import { useSelfOrganization } from "../api/queries";
 import { buildFacilityPathwayXml, facilityPathwayXmlFileName } from "../fhir/epathMessageHelpers";
 import { organizationInstitutionNumber } from "../fhir/organizationHelpers";
@@ -312,6 +317,15 @@ export function PathwayEditorPage() {
   const templateTask = picker?.kind === "template" ? findTask(picker) : null;
   const overview = overviewRows(draft);
   const seriesLabels = outcomeSeriesLabels(draft.events);
+  // 観察項目が結ぶ看護観察のマスタ(表現タイプで適正値の基準の入力欄を決める)。
+  const linkedManageNos = useMemo(
+    () =>
+      draft.events.flatMap((e) =>
+        e.oatUnits.flatMap((u) => u.assessments.map((a) => a.nursingObservationManageNo).filter(Boolean)),
+      ),
+    [draft.events],
+  );
+  const nursingMasters = useNursingObservationsByManageNos(linkedManageNos);
   const multiPhase = draft.phases.length > 1;
   const branchPhase = picker?.kind === "branch" ? draft.phases.find((p) => p.phaseKey === picker.phaseKey) : undefined;
   // 雛形の中身まで比べるので、病日が変わったときだけ計算する。
@@ -646,6 +660,7 @@ export function PathwayEditorPage() {
                         onPickNursingObservation={(unitKey, assessmentKey) =>
                           setPicker({ kind: "nursing", eventKey: event.key, unitKey, assessmentKey })
                         }
+                        nursingMasters={nursingMasters.data}
                         bomAvailable={bomAvailable}
                         onPickBomOutcome={(unitKey) => setPicker({ kind: "bom-outcome", eventKey: event.key, unitKey })}
                         onPickBomAssessment={(unitKey, assessmentKey) =>
