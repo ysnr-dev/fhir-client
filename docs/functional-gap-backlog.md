@@ -611,6 +611,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
   - ［当たり］`Device` + `Procedure.focalDevice`、患者プロファイルに「体内デバイス」区画、`LotManagementPage` に逆引きのタブ、`radSafetyHelpers` が Device を読む。
 - **退院カルテの量的・質的点検と疾病統計**(新規、高、中)
   - ［対応物］入退院文書の作成状況(`/admission-documents`)、退院サマリー督促 Task、DPC 様式 1、データ抽出。
+    未完了記録一覧(下書きの診療記録・承認待ち・差戻し・作成待ちの文書・未確認の結果を担当者 × 種別で数える画面、2026-11-03、`docs/features/notifications.md`「未完了記録一覧」)。
   - ［不足］診療録管理体制加算の点検業務: 退院後 N 日の点検キュー、量的点検(必須文書の有無を機械判定)、質的点検票(チェックリスト)、
     指摘 → 医師への Task → 是正の往復、点検率・差戻し率、ICD 大分類別の退院患者疾病統計(月次)。
   - ［当たり］点検票は `QuestionnaireResponse`(`encounter` 付き)、指摘は通知レジストリに 1 要素、統計は `Condition`(退院時主病名)× `Encounter` のデータ抽出プリセット。

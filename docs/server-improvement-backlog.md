@@ -594,6 +594,10 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   （`backend/app/services/questionnaire_response_report.rb`）。
 - **バリデーションエラーの日本語化**: OperationOutcome の diagnostics が英語のため、
   クライアントが issue.code から日本語文言を組み立てている（`frontend/src/fhir/outcome.ts`）。
+- **Task の担当者ごとの件数**: 未完了記録一覧(`docs/features/notifications.md`「未完了記録一覧」)は、担当者 × 種別の件数を出すために
+  未対応の Task と下書きの診療記録(Composition)を `_elements` で全件読んで画面で数えている(500 件 × 20 ページまで)。`owner` と `code` で群ごとの件数を返す
+  集計(例: `$count-by` のような操作)があれば読み込みが件数ぶんで済む。フォロー推奨の「期限を過ぎたものだけ」も
+  `restriction.period` が検索できないので画面で落としている(`Task` に `restriction-period` の検索パラメータがあれば上流で絞れる)。
 
 ### L-3. 海外 EHR との照合で出た上流の要望(2026-10-18)
 

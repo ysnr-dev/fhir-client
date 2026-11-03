@@ -10,6 +10,7 @@ import { InpatientCard } from "./InpatientCard";
 import { CountersignsCard, DocumentsDueCard, NotificationCard } from "./NotificationCards";
 import { NursingSummaryApprovalsCard } from "./NursingSummaryApprovalsCard";
 import { OutpatientCard } from "./OutpatientCard";
+import { RecordDeficiencyCard } from "./RecordDeficiencyCard";
 import { ResultFollowupCard } from "./ResultFollowupCard";
 import { InfectiousReportsCard } from "./InfectiousReportsCard";
 import { ShortcutsCard } from "./ShortcutsCard";
@@ -31,6 +32,7 @@ const HOME_CARD_COMPONENTS: { [K in HomeCardKind]: ComponentType<HomeCardProps<K
   wardStatus: WardStatusCard,
   countersigns: CountersignsCard,
   documentsDue: DocumentsDueCard,
+  recordDeficiencies: RecordDeficiencyCard,
   resultFollowup: ResultFollowupCard,
   infectiousReports: InfectiousReportsCard,
   nursingSummaryApprovals: NursingSummaryApprovalsCard,

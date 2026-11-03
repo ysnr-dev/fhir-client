@@ -25,6 +25,7 @@ export * from "./dischargeSummary";
 export * from "./broughtMedication";
 export * from "./patientProfile";
 export * from "./healthMaintenance";
+export * from "./recordDeficiency";
 export * from "./populate";
 export * from "./karte";
 export * from "./earlyWarning";

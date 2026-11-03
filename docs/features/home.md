@@ -51,6 +51,7 @@
 | 他科依頼 | 依頼先の科 | `useConsultWorklist("open", 科)` | `/consult-worklist` |
 | カウンターサイン待ち | – | 通知と同じ検索結果をカルテ承認・オーダー承認で絞る | `/countersigns` |
 | 期限のある書類 | – | 通知と同じ検索結果を文書作成で絞り、期限超過の件数を添える | `/admission-documents` |
+| 未完了記録 | – | `useRecordDeficiencyItems`(自分あての Task と自分が記載者の下書き)。未完了・期限超過・最長日数と種別ごとの件数([notifications.md](notifications.md)「未完了記録一覧」) | `/record-deficiencies` |
 | 検査結果フォロー | – | `useFollowUpRows`(自分あての未対応。期限超過・14 日以内の内訳)+ `useStaleResultCount`(7 日以上未確認の結果) | `/result-followup` |
 | 看護指示 | 病棟 | `useNursingWorklist`。未処理は有効な指示のうち指示受け待ち | `/nursing-worklist?ward=` |
 | 看護サマリー承認待ち | 病棟 | `useWardNursingSummaries`(直近 30 日)。承認者なしの確定済みと、自分が承認できる数 | `/nursing-summary-approvals?ward=` |

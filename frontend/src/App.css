@@ -27719,6 +27719,50 @@ input.nursing-picker__search {
   color: var(--lab-high);
 }
 
+/* 未完了記録一覧(担当者 × 種別の件数)。 */
+.record-deficiency th {
+  white-space: nowrap;
+}
+
+.record-deficiency__count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-deficiency__overdue {
+  display: block;
+  font-size: 11px;
+  color: var(--lab-high);
+}
+
+/* 件数のボタン。全体共通の button の見た目(枠・背景)のまま、カード内の補助ボタンの大きさにする。 */
+.record-deficiency__cell {
+  --control-height: 26px;
+  min-width: 40px;
+  justify-content: flex-end;
+  padding: 0 8px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-deficiency__total td {
+  font-weight: 600;
+  border-bottom: 2px solid var(--border);
+}
+
+.record-deficiency__mine td {
+  background: var(--accent-bg);
+}
+
+.modal--record-deficiency {
+  width: min(960px, calc(100vw - 32px));
+}
+
+.modal--record-deficiency .record-deficiency__description {
+  white-space: normal;
+  min-width: 240px;
+}
+
 .admission-documents__cell--overdue {
   border-color: var(--lab-high);
 }

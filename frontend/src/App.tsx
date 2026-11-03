@@ -96,6 +96,7 @@ import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
 import { TeamWorklistPage } from "./pages/TeamWorklistPage";
 import { NotificationPage } from "./pages/NotificationPage";
 import { CountersignListPage } from "./pages/CountersignListPage";
+import { RecordDeficiencyPage } from "./pages/RecordDeficiencyPage";
 import { SupervisorGroupPage } from "./pages/SupervisorGroupPage";
 import { CareTeamPage } from "./pages/CareTeamPage";
 import { OrderSetPage } from "./pages/OrderSetPage";
@@ -419,6 +420,7 @@ function App() {
           <Route path="/team-worklist" element={<TeamWorklistPage />} />
           <Route path="/notifications" element={<NotificationPage />} />
           <Route path="/countersigns" element={<CountersignListPage />} />
+          <Route path="/record-deficiencies" element={<RecordDeficiencyPage />} />
           <Route path="/supervisor-groups" element={<SupervisorGroupPage />} />
           <Route path="/care-teams" element={<CareTeamPage />} />
           {/* 掲示板(院内のお知らせ)。ホームのカードは今日掲載中だけ、ここは全件。 */}

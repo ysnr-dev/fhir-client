@@ -60,6 +60,9 @@ export const APP_MENU: AppMenuEntry[] = [
       { label: "感染症発生届", to: "/infectious-disease-reports" },
       // 研修医・学生の記録とオーダーのカウンターサイン(指導医向け。docs/countersign-design.md)。
       { label: "カルテ承認", to: "/countersigns" },
+      // 下書きの診療記録・承認待ち・差戻し・作成待ちの文書・未確認の結果などを担当者 × 種別で数える
+      // (docs/features/notifications.md「未完了記録一覧」)。
+      { label: "未完了記録一覧", to: "/record-deficiencies" },
       // 入院診療計画書・退院時サマリー・看護サマリーの作成状況と期限(docs/bed-management-design.md §4)。
       { label: "入退院文書", to: "/admission-documents" },
       // よく出すオーダーのひとまとめ(オーダーセット)。出すのは診療科の医師なので部門業務ではなく

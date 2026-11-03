@@ -20,6 +20,7 @@ export type HomeCardKind =
   | "wardStatus"
   | "countersigns"
   | "documentsDue"
+  | "recordDeficiencies"
   | "resultFollowup"
   | "infectiousReports"
   | "nursingSummaryApprovals"
@@ -46,6 +47,7 @@ export interface HomeCardSettingsMap {
   wardStatus: { wardId: string };
   countersigns: Record<never, never>;
   documentsDue: Record<never, never>;
+  recordDeficiencies: Record<never, never>;
   resultFollowup: Record<never, never>;
   infectiousReports: Record<never, never>;
   nursingSummaryApprovals: { wardId: string };
@@ -147,6 +149,7 @@ export const HOME_CARD_KINDS: { [K in HomeCardKind]: HomeCardDef<K> } = {
   },
   countersigns: { label: "カウンターサイン待ち", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
   documentsDue: { label: "期限のある書類", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
+  recordDeficiencies: { label: "未完了記録", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
   resultFollowup: { label: "検査結果フォロー", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
   infectiousReports: { label: "感染症発生届", group: "診療", defaultSettings: NONE, multiple: false, fields: [] },
   nursing: {
