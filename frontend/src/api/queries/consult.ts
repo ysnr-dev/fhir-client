@@ -15,7 +15,7 @@ import {
   type ConsultTaskStatus,
 } from "../../fhir/consultTaskHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
-import { WORKLIST_PAGE } from "./core";
+import { appendDetailRevincludes, type DetailSearchOptions, detailKeySuffix, WORKLIST_PAGE } from "./core";
 import { staleObservationEntries } from "./micro";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import { fetchWorklistBundles, taskBundleEntry } from "./worklist";
@@ -31,17 +31,18 @@ import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete"
 // 書き込みの入口は useUpdateConsultTaskStatus と useSaveConsultReply の 2 つだけ。
 // Task と status が食い違わないよう、どちらも 1 つの transaction で両方を書く。
 
-export function useConsultOrderDetail(srId: string | undefined) {
+export function useConsultOrderDetail(srId: string | undefined, options?: DetailSearchOptions) {
   const params = new URLSearchParams();
   if (srId) {
     params.set("_id", srId);
     // 進捗を詳細パネル・回答モーダルで使うので同時に取る。
     params.set("_revinclude", "Task:focus");
   }
+  appendDetailRevincludes(params, options);
 
   // Task が混ざって返るので、要素の型は Resource で受ける。
   return useQuery({
-    queryKey: ["ServiceRequest", "detail", "consult-order", srId],
+    queryKey: ["ServiceRequest", "detail", "consult-order", srId, ...detailKeySuffix(options)],
     queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", params),
     enabled: Boolean(srId),
   });

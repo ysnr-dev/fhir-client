@@ -17,7 +17,14 @@ import {
   type TeamRequestTaskStatus,
 } from "../../fhir/teamRequestTaskHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
-import { NOTIFICATION_TASK_KEY, WORKLIST_PAGE, resourcesOfType } from "./core";
+import {
+  appendDetailRevincludes,
+  type DetailSearchOptions,
+  detailKeySuffix,
+  NOTIFICATION_TASK_KEY,
+  WORKLIST_PAGE,
+  resourcesOfType,
+} from "./core";
 import { staleObservationEntries } from "./micro";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import { fetchWorklistBundles, taskBundleEntry } from "./worklist";
@@ -28,14 +35,15 @@ import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete"
 // 他科依頼(consult.ts)と同じ「ヘッダ 1 本 + 進捗 Task」で、進捗の変更で ServiceRequest.status も一緒に動かす。
 // 書き込みの入口は useUpdateTeamRequestTaskStatus・useSaveTeamRound・useSetTeamRequestNextRound の 3 つだけ。
 
-export function useTeamRequestDetail(srId: string | undefined) {
+export function useTeamRequestDetail(srId: string | undefined, options?: DetailSearchOptions) {
   const params = new URLSearchParams();
   if (srId) {
     params.set("_id", srId);
     params.set("_revinclude", "Task:focus");
   }
+  appendDetailRevincludes(params, options);
   return useQuery({
-    queryKey: ["ServiceRequest", "detail", "team-request", srId],
+    queryKey: ["ServiceRequest", "detail", "team-request", srId, ...detailKeySuffix(options)],
     queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", params),
     enabled: Boolean(srId),
   });

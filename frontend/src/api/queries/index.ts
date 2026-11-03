@@ -83,6 +83,7 @@ export * from "./careTeam";
 export * from "./teamRequest";
 export * from "./pressureUlcer";
 export * from "./karteCardHistory";
+export * from "./karteCardResources";
 export * from "./kartePrint";
 export * from "./oralExam";
 export * from "./documentForms";

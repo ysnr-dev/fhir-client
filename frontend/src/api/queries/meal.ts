@@ -25,7 +25,15 @@ import {
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import { today } from "../../lib/dates";
 import { postBundle, searchResource } from "../fhirClient";
-import { NOTIFICATION_TASK_KEY, resourcesOfType, searchAllPages, setOrderPeriod } from "./core";
+import {
+  appendDetailRevincludes,
+  type DetailSearchOptions,
+  detailKeySuffix,
+  NOTIFICATION_TASK_KEY,
+  resourcesOfType,
+  searchAllPages,
+  setOrderPeriod,
+} from "./core";
 import { useCreatePrescription } from "./labResult";
 import { useFacilitySettings } from "./organization";
 import { invalidateProvenance, useOrderEnterer, useWithOrderProvenance } from "./provenance";
@@ -35,12 +43,13 @@ import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete"
 //
 // 明細も進捗 Task も持たないので、どの問い合わせも ServiceRequest 1 本で済む。
 
-export function useMealOrderDetail(srId: string | undefined) {
+export function useMealOrderDetail(srId: string | undefined, options?: DetailSearchOptions) {
   const params = new URLSearchParams();
   if (srId) params.set("_id", srId);
+  appendDetailRevincludes(params, options);
 
   return useQuery({
-    queryKey: ["ServiceRequest", "detail", "meal-order", srId],
+    queryKey: ["ServiceRequest", "detail", "meal-order", srId, ...detailKeySuffix(options)],
     queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", params),
     enabled: Boolean(srId),
   });

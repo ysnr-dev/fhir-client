@@ -348,7 +348,7 @@ const KarteCard = memo(function KarteCard({
     (item.kind === "injection" || item.kind === "prescription") && item.serviceRequest
       ? regimenOrderOf(item.serviceRequest)
       : null;
-  // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
+  // 平文表示・FHIRリソース表示はモーダルで開く(カルテの読み位置を動かさない)。
   // 詳細表示は URL に載せるので親に任せる。
   const [plainTextOpen, setPlainTextOpen] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
@@ -846,7 +846,7 @@ const KarteCard = memo(function KarteCard({
               </button>
             )}
             <button type="button" className="row-menu__item" onClick={() => setJsonOpen(true)}>
-              FHIR JSON 表示
+              FHIRリソース表示
             </button>
             {/* パス評価の記載はパスタブの評価で書き直す(カードからはその病日の日めくりを開く)。
                 評価はアウトカムの記録なので、カードからは消させない。 */}
@@ -978,7 +978,7 @@ const KarteCard = memo(function KarteCard({
 });
 
 // DO・PDF は 1 行に並ぶので、アイコンに短いラベルを添えて幅を詰める。
-// それ以外の操作(詳細表示・FHIR JSON 表示・編集・削除)はケバブメニューに畳む。
+// それ以外の操作(詳細表示・FHIRリソース表示・編集・削除)はケバブメニューに畳む。
 
 // DO は「前回と同じ処方を起こす」操作なので、複写(2 枚重ね)のアイコンで表す。
 function CopyIcon() {

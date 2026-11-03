@@ -33,6 +33,7 @@ import {
   useLabResultDetail,
   usePrescriptionDetail,
   useQuestionnaireResponseWithQuestionnaire,
+  useKarteCardResources,
 } from "../api/queries";
 import { karteItemKindLabel, type KarteTimelineItem } from "../fhir/karteTimeline";
 import { isOrderKind, ORDER_KIND_LABELS, ORDER_KINDS, type OrderKind } from "../fhir/orderKinds";
@@ -917,230 +918,6 @@ function QuestionnaireResponseDetail({ patientId, qrId }: { patientId: string; q
   );
 }
 
-// FHIR JSON はタイムラインに読み込み済みのカードからしか開かないので、
-// 手元のリソースをそのまま出す(処方だけは Bundle で見せたいので引き直す)。
-export function KarteCardJsonModal({
-  item,
-  onClose,
-}: {
-  item: KarteTimelineItem;
-  onClose: () => void;
-}) {
-  return (
-    <Modal
-      title={`FHIR JSON(${karteItemKindLabel(item)})`}
-      onClose={onClose}
-      className="modal--wide"
-    >
-      {item.kind === "prescription" || item.kind === "injection" ? (
-        <PrescriptionJson srId={item.id} />
-      ) : isOrderKind(item.kind) ? (
-        <OrderJson kind={item.kind} srId={item.id} />
-      ) : (
-        <FhirJsonView resource={jsonResource(item)} />
-      )}
-    </Modal>
-  );
-}
-
-// 放射線・生理検査・内視鏡は同じ形(オーダー + 実施記録)なので、設定と hook を渡して共用する。
-function RadOrderJson({ srId }: { srId: string }) {
-  return (
-    <ExamOrderJson
-      config={EXAM_REPORT_CONFIGS.rad}
-      useOrderDetail={useRadOrderDetail}
-      usePerformDetail={useRadPerformDetail}
-      srId={srId}
-    />
-  );
-}
-
-function PhysioOrderJson({ srId }: { srId: string }) {
-  return (
-    <ExamOrderJson
-      config={EXAM_REPORT_CONFIGS.physio}
-      useOrderDetail={usePhysioOrderDetail}
-      usePerformDetail={usePhysioPerformDetail}
-      srId={srId}
-    />
-  );
-}
-
-function EndoscopyOrderJson({ srId }: { srId: string }) {
-  return (
-    <ExamOrderJson
-      config={EXAM_REPORT_CONFIGS.endoscopy}
-      useOrderDetail={useEndoscopyOrderDetail}
-      usePerformDetail={useEndoscopyPerformDetail}
-      srId={srId}
-    />
-  );
-}
-
-// 部門オーダーの FHIR JSON。ヘッダと明細・実施記録をまとめて見せる。
-const ORDER_JSONS: Record<OrderKind, ComponentType<{ srId: string }>> = {
-  "lab-order": LabOrderJson,
-  "micro-order": MicroOrderJson,
-  "patho-order": PathoOrderJson,
-  "rad-order": RadOrderJson,
-  "physio-order": PhysioOrderJson,
-  "endoscopy-order": EndoscopyOrderJson,
-  "treatment-order": TreatmentOrderJson,
-  "surgery-order": SurgeryOrderJson,
-  "meal-order": MealOrderJson,
-  "transfusion-order": TransfusionOrderJson,
-  "rehab-order": RehabOrderJson,
-  "radiotherapy-order": RadiotherapyOrderJson,
-  "nutrition-guidance-order": NutritionGuidanceOrderJson,
-  "medical-management-order": MedicalManagementOrderJson,
-  "medication-guidance-order": MedicationGuidanceOrderJson,
-  "consult-order": ConsultOrderJson,
-  "team-request": TeamRequestJson,
-};
-
-function OrderJson({ kind, srId }: { kind: OrderKind; srId: string }) {
-  const Json = ORDER_JSONS[kind];
-  return <Json srId={srId} />;
-}
-
-// オーダー系以外でモーダルにそのまま出すリソース。バイタルは 1 回の測定が項目ごとの
-// Observation に分かれるので、束ねたものを collection Bundle にして全項目を見せる。
-function jsonResource(item: KarteTimelineItem): fhir4.Resource {
-  if (item.kind === "note") return item.note;
-  if (item.kind === "vital") {
-    const bundle: fhir4.Bundle = {
-      resourceType: "Bundle",
-      type: "collection",
-      entry: item.entry.observations.map((observation) => ({ resource: observation })),
-    };
-    return bundle;
-  }
-  if (item.kind === "qr") return item.response;
-  if (item.kind === "pathway-evaluation") return item.evaluation.observation;
-  if (item.kind === "adverse-event") return item.record.observation;
-  return item.serviceRequest;
-}
-
-// 処方は ServiceRequest と MedicationRequest をまとめた Bundle で見せたいので、
-// 処方内容ページと同じ検索を実行する(モーダルを開いたときだけ走る)。
-function PrescriptionJson({ srId }: { srId: string }) {
-  const detail = usePrescriptionDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-function LabOrderJson({ srId }: { srId: string }) {
-  const detail = useLabOrderDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-function MicroOrderJson({ srId }: { srId: string }) {
-  const detail = useMicroOrderDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-// 放射線検査・生理検査・内視鏡もオーダーのヘッダと明細をまとめた Bundle で見せる。実施記録
-// (Procedure 一式)とレポートはオーダーとは別リソースなので、あるときは別の見出しで続けて出す
-// (1 つの Bundle に混ぜると、依頼した内容・実際に行ったこと・読んだ結果の境目が読めなくなる)。
-function ExamOrderJson({
-  config,
-  useOrderDetail,
-  usePerformDetail,
-  srId,
-}: {
-  config: ExamReportConfig;
-  useOrderDetail: typeof useRadOrderDetail;
-  usePerformDetail: typeof useRadPerformDetail;
-  srId: string;
-}) {
-  const detail = useOrderDetail(srId);
-  const perform = usePerformDetail(srId);
-  const report = useExamReportByOrder(config, srId);
-  const performBundle = perform.data?.data;
-  const reportBundle = report.data?.data;
-  const hasPerform = (performBundle?.entry?.length ?? 0) > 0;
-  const hasReport = (reportBundle?.entry?.length ?? 0) > 0;
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      <ErrorBanner error={perform.error ?? report.error} />
-      {detail.isLoading ? (
-        <p>読み込み中...</p>
-      ) : hasPerform || hasReport ? (
-        <>
-          <section className="karte-json__section">
-            <h3 className="karte-json__section-title">オーダー</h3>
-            <FhirJsonView resource={detail.data?.data} />
-          </section>
-          {hasPerform && (
-            <section className="karte-json__section">
-              <h3 className="karte-json__section-title">実施記録</h3>
-              <FhirJsonView resource={performBundle} />
-            </section>
-          )}
-          {hasReport && (
-            <section className="karte-json__section">
-              <h3 className="karte-json__section-title">{config.labels.report}</h3>
-              <FhirJsonView resource={reportBundle} />
-            </section>
-          )}
-        </>
-      ) : (
-        <FhirJsonView resource={detail.data?.data} />
-      )}
-    </>
-  );
-}
-
-function TreatmentOrderJson({ srId }: { srId: string }) {
-  const detail = useTreatmentOrderDetail(srId);
-  const perform = useTreatmentPerformDetail(srId);
-  const performBundle = perform.data?.data;
-  const hasPerform = (performBundle?.entry?.length ?? 0) > 0;
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      <ErrorBanner error={perform.error} />
-      {detail.isLoading ? (
-        <p>読み込み中...</p>
-      ) : hasPerform ? (
-        <>
-          <section className="karte-json__section">
-            <h3 className="karte-json__section-title">オーダー</h3>
-            <FhirJsonView resource={detail.data?.data} />
-          </section>
-          <section className="karte-json__section">
-            <h3 className="karte-json__section-title">実施記録</h3>
-            <FhirJsonView resource={performBundle} />
-          </section>
-        </>
-      ) : (
-        <FhirJsonView resource={detail.data?.data} />
-      )}
-    </>
-  );
-}
-
-// 食事オーダーは実施記録を持たないので、オーダーの ServiceRequest 1 本だけを出す。
 // 輸血のカードから開く内容表示。製剤明細もヘッダと一緒に取れるので、病理と同じ形。
 function TransfusionOrderDetail({
   patientId,
@@ -1181,48 +958,6 @@ function TransfusionOrderDetail({
         />
       ) : (
         !detail.error && <NotFound label="輸血オーダー" />
-      )}
-    </>
-  );
-}
-
-function PathoOrderJson({ srId }: { srId: string }) {
-  const detail = usePathoOrderDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-// 輸血は手術と同じく実施記録が別リソースなので、あればオーダーと並べて出す。
-function TransfusionOrderJson({ srId }: { srId: string }) {
-  const detail = useTransfusionOrderDetail(srId);
-  const perform = useTransfusionPerformDetail(srId);
-  const performBundle = perform.data?.data;
-  const hasPerform = (performBundle?.entry?.length ?? 0) > 0;
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      <ErrorBanner error={perform.error} />
-      {detail.isLoading ? (
-        <p>読み込み中...</p>
-      ) : hasPerform ? (
-        <>
-          <section className="karte-json__section">
-            <h3 className="karte-json__section-title">オーダー</h3>
-            <FhirJsonView resource={detail.data?.data} />
-          </section>
-          <section className="karte-json__section">
-            <h3 className="karte-json__section-title">実施記録</h3>
-            <FhirJsonView resource={performBundle} />
-          </section>
-        </>
-      ) : (
-        <FhirJsonView resource={detail.data?.data} />
       )}
     </>
   );
@@ -1301,17 +1036,6 @@ function RadiotherapyOrderDetail({
   );
 }
 
-function RadiotherapyOrderJson({ srId }: { srId: string }) {
-  const detail = useRadiotherapyOrderDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
 // チーム依頼も明細を持たないヘッダ 1 件。進捗は同じ検索に _revinclude で届く。
 function TeamRequestDetail({
   patientId,
@@ -1343,113 +1067,278 @@ function TeamRequestDetail({
   );
 }
 
-function TeamRequestJson({ srId }: { srId: string }) {
-  const detail = useTeamRequestDetail(srId);
-
+// カードの FHIRリソース表示。カードの記録を引き直し、記録を指す来歴(Provenance)と Task も
+// 同じ Bundle に添えてもらう(DetailSearchOptions の audit)。
+export function KarteCardJsonModal({
+  item,
+  onClose,
+}: {
+  item: KarteTimelineItem;
+  onClose: () => void;
+}) {
   return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-function ConsultOrderJson({ srId }: { srId: string }) {
-  const detail = useConsultOrderDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-// リハビリはオーダーの検索に進捗 Task と実施 Procedure を _revinclude で添えてある
-// ので、他部門のように実施記録を別に引かなくてよい。
-function RehabOrderJson({ srId }: { srId: string }) {
-  const detail = useRehabOrderDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-// 栄養指導もリハビリと同じく進捗 Task と実施 Procedure が _revinclude で届く。
-function NutritionGuidanceOrderJson({ srId }: { srId: string }) {
-  const detail = useNutritionGuidanceOrderDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-function MedicalManagementOrderJson({ srId }: { srId: string }) {
-  const detail = useMedicalManagementOrderDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-function MedicationGuidanceOrderJson({ srId }: { srId: string }) {
-  const detail = useMedicationGuidanceOrderDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-function MealOrderJson({ srId }: { srId: string }) {
-  const detail = useMealOrderDetail(srId);
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
-    </>
-  );
-}
-
-function SurgeryOrderJson({ srId }: { srId: string }) {
-  const detail = useSurgeryOrderDetail(srId);
-  const perform = useSurgeryPerformDetail(srId);
-  const performBundle = perform.data?.data;
-  const hasPerform = (performBundle?.entry?.length ?? 0) > 0;
-
-  return (
-    <>
-      <ErrorBanner error={detail.error} />
-      <ErrorBanner error={perform.error} />
-      {detail.isLoading ? (
-        <p>読み込み中...</p>
-      ) : hasPerform ? (
-        <>
-          <section className="karte-json__section">
-            <h3 className="karte-json__section-title">オーダー</h3>
-            <FhirJsonView resource={detail.data?.data} />
-          </section>
-          <section className="karte-json__section">
-            <h3 className="karte-json__section-title">実施記録</h3>
-            <FhirJsonView resource={performBundle} />
-          </section>
-        </>
+    <Modal
+      title={`FHIRリソース(${karteItemKindLabel(item)})`}
+      onClose={onClose}
+      className="modal--wide"
+    >
+      {item.kind === "prescription" || item.kind === "injection" ? (
+        <PrescriptionJson srId={item.id} />
+      ) : isOrderKind(item.kind) ? (
+        <OrderJson kind={item.kind} srId={item.id} />
       ) : (
-        <FhirJsonView resource={detail.data?.data} />
+        <RecordJson {...recordRef(item)} />
+      )}
+    </Modal>
+  );
+}
+
+const AUDIT = { audit: true };
+
+interface JsonSection {
+  title: string;
+  resource: fhir4.Resource | undefined;
+  /** 中身の無い Bundle なら節ごと出さない(まだ無いことがある実施記録・レポート)。 */
+  optional?: boolean;
+}
+
+/** 詳細の検索 1 本(useXxxDetail の結果)。 */
+interface BundleQuery {
+  data?: { data: fhir4.Bundle };
+  isLoading: boolean;
+  error: unknown;
+}
+
+function isEmptyBundle(resource: fhir4.Resource): boolean {
+  return resource.resourceType === "Bundle" && !(resource as fhir4.Bundle).entry?.length;
+}
+
+function KarteJsonSections({
+  sections,
+  loading,
+  errors,
+}: {
+  sections: JsonSection[];
+  loading: boolean;
+  errors: unknown[];
+}) {
+  const shown = sections.filter(
+    (section): section is JsonSection & { resource: fhir4.Resource } =>
+      section.resource !== undefined && !(section.optional && isEmptyBundle(section.resource)),
+  );
+
+  return (
+    <>
+      {errors.map((error, index) => (
+        <ErrorBanner key={index} error={error} />
+      ))}
+      {loading ? (
+        <p>読み込み中...</p>
+      ) : shown.length === 1 ? (
+        <FhirJsonView resource={shown[0].resource} />
+      ) : (
+        shown.map((section) => (
+          <section key={section.title} className="karte-json__section">
+            <h3 className="karte-json__section-title">{section.title}</h3>
+            <FhirJsonView resource={section.resource} />
+          </section>
+        ))
       )}
     </>
   );
 }
 
+// オーダーのヘッダと明細は 1 つの Bundle で見せる。実施記録(Procedure 一式)とレポートは
+// オーダーとは別リソースなので、あるときは別の見出しで続けて出す(1 つの Bundle に混ぜると、
+// 依頼した内容・実際に行ったこと・読んだ結果の境目が読めなくなる)。
+function OrderBundleJson({
+  order,
+  perform,
+  report,
+}: {
+  order: BundleQuery;
+  perform?: BundleQuery;
+  report?: { title: string; query: BundleQuery };
+}) {
+  return (
+    <KarteJsonSections
+      loading={order.isLoading || Boolean(perform?.isLoading) || Boolean(report?.query.isLoading)}
+      errors={[order.error, perform?.error, report?.query.error]}
+      sections={[
+        { title: "オーダー", resource: order.data?.data },
+        { title: "実施記録", resource: perform?.data?.data, optional: true },
+        { title: report?.title ?? "レポート", resource: report?.query.data?.data, optional: true },
+      ]}
+    />
+  );
+}
+
+// オーダー系以外のカードの記録。バイタルは 1 回の測定が項目ごとの Observation に分かれるので、
+// 束ねた全項目を引く。
+function recordRef(item: KarteTimelineItem): { type: fhir4.FhirResource["resourceType"]; ids: string[] } {
+  const ids = (resources: fhir4.Resource[]) => resources.flatMap((resource) => (resource.id ? [resource.id] : []));
+  if (item.kind === "note") return { type: "Composition", ids: ids([item.note]) };
+  if (item.kind === "vital") return { type: "Observation", ids: ids(item.entry.observations) };
+  if (item.kind === "qr") return { type: "QuestionnaireResponse", ids: ids([item.response]) };
+  if (item.kind === "pathway-evaluation") return { type: "Observation", ids: ids([item.evaluation.observation]) };
+  if (item.kind === "adverse-event") return { type: "Observation", ids: ids([item.record.observation]) };
+  return { type: "ServiceRequest", ids: ids([item.serviceRequest]) };
+}
+
+function RecordJson({ type, ids }: { type: fhir4.FhirResource["resourceType"]; ids: string[] }) {
+  const query = useKarteCardResources(type, ids);
+  return (
+    <KarteJsonSections
+      loading={query.isLoading}
+      errors={[query.error]}
+      sections={[{ title: "記録", resource: query.data?.data }]}
+    />
+  );
+}
+
+type SrIdProps = { srId: string };
+
+// 処方・注射は ServiceRequest と MedicationRequest をまとめた Bundle(処方内容ページと同じ検索)。
+function PrescriptionJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={usePrescriptionDetail(srId, AUDIT)} />;
+}
+
+// 放射線・生理検査・内視鏡は同じ形(オーダー + 実施記録 + レポート)。
+function ExamOrderJson({
+  config,
+  order,
+  perform,
+  srId,
+}: {
+  config: ExamReportConfig;
+  order: BundleQuery;
+  perform: BundleQuery;
+  srId: string;
+}) {
+  const report = useExamReportByOrder(config, srId, AUDIT);
+  return <OrderBundleJson order={order} perform={perform} report={{ title: config.labels.report, query: report }} />;
+}
+
+function RadOrderJson({ srId }: SrIdProps) {
+  return (
+    <ExamOrderJson
+      config={EXAM_REPORT_CONFIGS.rad}
+      order={useRadOrderDetail(srId, AUDIT)}
+      perform={useRadPerformDetail(srId, AUDIT)}
+      srId={srId}
+    />
+  );
+}
+
+function PhysioOrderJson({ srId }: SrIdProps) {
+  return (
+    <ExamOrderJson
+      config={EXAM_REPORT_CONFIGS.physio}
+      order={usePhysioOrderDetail(srId, AUDIT)}
+      perform={usePhysioPerformDetail(srId, AUDIT)}
+      srId={srId}
+    />
+  );
+}
+
+function EndoscopyOrderJson({ srId }: SrIdProps) {
+  return (
+    <ExamOrderJson
+      config={EXAM_REPORT_CONFIGS.endoscopy}
+      order={useEndoscopyOrderDetail(srId, AUDIT)}
+      perform={useEndoscopyPerformDetail(srId, AUDIT)}
+      srId={srId}
+    />
+  );
+}
+
+// 処置・手術・輸血は実施記録が別リソースなので、あればオーダーと並べて出す。
+function TreatmentOrderJson({ srId }: SrIdProps) {
+  return (
+    <OrderBundleJson order={useTreatmentOrderDetail(srId, AUDIT)} perform={useTreatmentPerformDetail(srId, AUDIT)} />
+  );
+}
+
+function SurgeryOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useSurgeryOrderDetail(srId, AUDIT)} perform={useSurgeryPerformDetail(srId, AUDIT)} />;
+}
+
+function TransfusionOrderJson({ srId }: SrIdProps) {
+  return (
+    <OrderBundleJson
+      order={useTransfusionOrderDetail(srId, AUDIT)}
+      perform={useTransfusionPerformDetail(srId, AUDIT)}
+    />
+  );
+}
+
+function LabOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useLabOrderDetail(srId, AUDIT)} />;
+}
+
+function MicroOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useMicroOrderDetail(srId, AUDIT)} />;
+}
+
+function PathoOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={usePathoOrderDetail(srId, AUDIT)} />;
+}
+
+function MealOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useMealOrderDetail(srId, AUDIT)} />;
+}
+
+// リハビリ・栄養指導・放射線治療・チーム依頼は、進捗 Task(と実施 Procedure)がオーダーの
+// 検索に _revinclude で届くので、実施記録を別に引かなくてよい。
+function RehabOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useRehabOrderDetail(srId, AUDIT)} />;
+}
+
+function NutritionGuidanceOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useNutritionGuidanceOrderDetail(srId, AUDIT)} />;
+}
+
+function RadiotherapyOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useRadiotherapyOrderDetail(srId, AUDIT)} />;
+}
+
+function TeamRequestJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useTeamRequestDetail(srId, AUDIT)} />;
+}
+
+function MedicalManagementOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useMedicalManagementOrderDetail(srId, AUDIT)} />;
+}
+
+function MedicationGuidanceOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useMedicationGuidanceOrderDetail(srId, AUDIT)} />;
+}
+
+function ConsultOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useConsultOrderDetail(srId, AUDIT)} />;
+}
+
+const ORDER_JSONS: Record<OrderKind, ComponentType<SrIdProps>> = {
+  "lab-order": LabOrderJson,
+  "micro-order": MicroOrderJson,
+  "patho-order": PathoOrderJson,
+  "rad-order": RadOrderJson,
+  "physio-order": PhysioOrderJson,
+  "endoscopy-order": EndoscopyOrderJson,
+  "treatment-order": TreatmentOrderJson,
+  "surgery-order": SurgeryOrderJson,
+  "meal-order": MealOrderJson,
+  "transfusion-order": TransfusionOrderJson,
+  "rehab-order": RehabOrderJson,
+  "radiotherapy-order": RadiotherapyOrderJson,
+  "nutrition-guidance-order": NutritionGuidanceOrderJson,
+  "medical-management-order": MedicalManagementOrderJson,
+  "medication-guidance-order": MedicationGuidanceOrderJson,
+  "consult-order": ConsultOrderJson,
+  "team-request": TeamRequestJson,
+};
+
+function OrderJson({ kind, srId }: { kind: OrderKind } & SrIdProps) {
+  const Json = ORDER_JSONS[kind];
+  return <Json srId={srId} />;
+}

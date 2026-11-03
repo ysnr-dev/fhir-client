@@ -36,6 +36,24 @@ export async function saveWithImages<T extends fhir4.Resource & { id?: string }>
   return { data: saved.resource, etag: saved.etag };
 }
 
+/** 詳細の検索に足すもの。 */
+export interface DetailSearchOptions {
+  /**
+   * 記録を指す来歴(Provenance)と Task も同じ応答に添える(カルテカードの FHIRリソース表示)。
+   * 承認待ちの通知は来歴を focus にするので、:iterate で来歴の先まで辿る。
+   */
+  audit?: boolean;
+}
+
+export function appendDetailRevincludes(params: URLSearchParams, options: DetailSearchOptions | undefined) {
+  if (options?.audit) params.append("_revinclude:iterate", "Provenance:target,Task:focus,Task:based-on");
+}
+
+/** 来歴・Task を添えた応答は別のキャッシュにする(添えない詳細の利用者に余分を返さない)。 */
+export function detailKeySuffix(options: DetailSearchOptions | undefined): string[] {
+  return options?.audit ? ["audit"] : [];
+}
+
 /**
  * オーダー 1 件の詳細を引く hook を作る。ヘッダを `_id` で引き、明細(基づく先を持つ
  * ServiceRequest)や進捗・実施記録は `_revinclude` で同じ応答に添えてもらう。
@@ -45,14 +63,15 @@ export function makeOrderDetailHook<T extends fhir4.Resource = fhir4.ServiceRequ
   kind: string,
   revincludes: { iterate?: string[]; direct?: string[] },
 ) {
-  return function useOrderDetail(srId: string | undefined) {
+  return function useOrderDetail(srId: string | undefined, options?: DetailSearchOptions) {
     const params = new URLSearchParams();
     if (srId) params.set("_id", srId);
     for (const target of revincludes.iterate ?? []) params.append("_revinclude:iterate", target);
     for (const target of revincludes.direct ?? []) params.append("_revinclude", target);
+    appendDetailRevincludes(params, options);
 
     return useQuery({
-      queryKey: ["ServiceRequest", "detail", kind, srId],
+      queryKey: ["ServiceRequest", "detail", kind, srId, ...detailKeySuffix(options)],
       queryFn: () => searchResource<T>("ServiceRequest", params),
       enabled: Boolean(srId),
     });

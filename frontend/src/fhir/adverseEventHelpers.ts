@@ -50,7 +50,7 @@ export interface AdverseEventRecord {
   note: string;
   /** 記録した医療従事者。編集で上書きしないよう読み書きする(§8.14 N-10)。 */
   performer: fhir4.Reference | undefined;
-  /** 元の Observation(カルテのカードの FHIR JSON 表示)。 */
+  /** 元の Observation(カルテのカードの FHIRリソース表示)。 */
   observation: fhir4.Observation;
 }
 

@@ -216,8 +216,7 @@ function ownersKey(owners: NotificationOwners): string {
 }
 
 /**
- * 未対応の通知。患者は `_include=Task:subject` で同じ応答に添える(上流の
- * `_include=Task:focus` は ServiceRequest しか返さないので、対象は id だけ持って
+ * 未対応の通知。患者は `_include=Task:subject` で同じ応答に添える(対象は id だけ持って
  * カルテへ渡す)。種別の絞り込みは取得済みの行に対して画面側で行う
  * (種別ごとの件数を選択肢に出すので、サーバーで絞ると他の種別の件数が消える)。
  */

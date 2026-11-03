@@ -493,7 +493,7 @@ function invalidateTransfusion(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "transfusion-worklist"] });
   // カルテのオーダーカードも進捗と実施情報を出しているので読み直させる。
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
-  // 取消では実施記録・出庫記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
+  // 取消では実施記録・出庫記録も消しているので、FHIRリソース表示の実施記録も引き直させる。
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
   queryClient.invalidateQueries({ queryKey: ["MedicationDispense"] });
   // 採血登録と中止で自己血の採血予定(Appointment)が動く。

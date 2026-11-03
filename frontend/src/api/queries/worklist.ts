@@ -3,7 +3,14 @@ import { splitPerformBundle } from "../../fhir/radResultHelpers";
 import { buildExamScheduleBundle, isActiveAppointment, type SlotSelection } from "../../fhir/appointmentHelpers";
 import { postBundle, searchResource } from "../fhirClient";
 import { buildCancelEntriesOf, invalidateAppointments } from "./appointment";
-import { hasNextPage, resourcesOfType, WORKLIST_PAGE } from "./core";
+import {
+  appendDetailRevincludes,
+  type DetailSearchOptions,
+  detailKeySuffix,
+  hasNextPage,
+  resourcesOfType,
+  WORKLIST_PAGE,
+} from "./core";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import { postOrderDeleteBundle } from "./orderDelete";
 
@@ -189,7 +196,7 @@ export function makeUpdateTaskStatusHook<S extends fhir4.Task["status"]>(
         queryClient.invalidateQueries({ queryKey: ["ServiceRequest", worklistKey] });
         // カルテのオーダーカード側の表示にも効くよう、検索キャッシュも読み直させる。
         queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
-        // 取消では実施記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
+        // 取消では実施記録も消しているので、FHIRリソース表示の実施記録も引き直させる。
         if (options.cancelPerform) {
           queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
         }
@@ -223,13 +230,16 @@ function performSearchParams(orderId: string, options: PerformSearchOptions): UR
   return params;
 }
 
-/** 実施記録(Procedure 一式)。カルテカードの FHIR JSON 表示と読影の入力モーダルが使う。 */
+/** 実施記録(Procedure 一式)。カルテカードの FHIRリソース表示と読影の入力モーダルが使う。 */
 export function makePerformDetailHook(kind: string, options: PerformSearchOptions) {
-  return function usePerformDetail(orderId: string | undefined) {
+  return function usePerformDetail(orderId: string | undefined, detail?: DetailSearchOptions) {
     return useQuery({
-      queryKey: ["Procedure", "search", kind, orderId],
-      queryFn: () =>
-        searchResource<fhir4.Resource>("Procedure", performSearchParams(orderId ?? "", options)),
+      queryKey: ["Procedure", "search", kind, orderId, ...detailKeySuffix(detail)],
+      queryFn: () => {
+        const params = performSearchParams(orderId ?? "", options);
+        appendDetailRevincludes(params, detail);
+        return searchResource<fhir4.Resource>("Procedure", params);
+      },
       enabled: Boolean(orderId),
     });
   };

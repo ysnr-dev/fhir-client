@@ -382,7 +382,7 @@ function invalidateSurgery(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "surgery-unscheduled"] });
   // カルテのオーダーカードも進捗と実施情報を出しているので読み直させる。
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
-  // 取消では実施記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
+  // 取消では実施記録も消しているので、FHIRリソース表示の実施記録も引き直させる。
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
 }
 

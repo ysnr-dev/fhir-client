@@ -3824,7 +3824,7 @@ fieldset.rp-card {
   margin: 12px 0 0;
 }
 
-/* FHIR JSON モーダルで、オーダーと実施記録のように別々の Bundle を続けて出すときの
+/* FHIRリソース表示のモーダルで、オーダーと実施記録のように別々の Bundle を続けて出すときの
    区切り。どこまでがどちらの JSON かを見出しで示す。 */
 .karte-json__section + .karte-json__section {
   margin-top: 20px;

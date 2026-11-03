@@ -33,7 +33,15 @@ import {
 } from "../../fhir/outpatientOrderProgressHelpers";
 import { createResource, postBundle, searchResource } from "../fhirClient";
 import { invalidateAppointments, orderAppointmentCancelEntries } from "./appointment";
-import { hasNextPage, makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
+import {
+  appendDetailRevincludes,
+  type DetailSearchOptions,
+  detailKeySuffix,
+  hasNextPage,
+  makeOrderDetailHook,
+  ORDER_ITEM_REVINCLUDES,
+  resourcesOfType,
+} from "./core";
 import { makePerformDetailHook, taskBundleEntry } from "./worklist";
 import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
 
@@ -444,15 +452,16 @@ export function useWalkInCheckIn() {
   });
 }
 
-export function usePrescriptionDetail(srId: string | undefined) {
+export function usePrescriptionDetail(srId: string | undefined, options?: DetailSearchOptions) {
   const params = new URLSearchParams();
   if (srId) params.set("_id", srId);
   params.append("_revinclude", "MedicationRequest:based-on");
   // 注射の詳細に進捗(依頼済・中止…)を出すため、Task も同じ応答で受け取る。
   params.append("_revinclude", "Task:focus");
+  appendDetailRevincludes(params, options);
 
   return useQuery({
-    queryKey: ["ServiceRequest", "detail", srId],
+    queryKey: ["ServiceRequest", "detail", srId, ...detailKeySuffix(options)],
     queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", params),
     enabled: Boolean(srId),
   });

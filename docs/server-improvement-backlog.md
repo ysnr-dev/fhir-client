@@ -373,6 +373,17 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 **client の輸血(出庫記録の表示・出庫取消・実施入力の初期行)が依存**: 上流が旧版だと `_revinclude` が黙って
 落ち、出庫記録のバッグが出ない(出庫取消ではバッグが消えずハブだけ消える)。本番は fhir-server を先にデプロイ。
 
+## 2026-11-03 に対応済み
+
+### `Task.focus` の `_include` / `_revinclude` 対象を ServiceRequest 以外へ(旧・C-13)
+
+`search_references.rb` の Task `focus` の targets に、通知が指す記録の型(Provenance・DiagnosticReport・
+Observation・Composition・Encounter など)を足した(migration 無し。`focus_reference` 列は既に索引済み)。
+カルテカードの FHIRリソース表示が `_revinclude:iterate=Provenance:target,Task:focus` で、記録の来歴と
+その来歴を `focus` にする承認待ちの通知を同じ Bundle に添える。上流が旧版でも検索は失敗せず、
+来歴・記録を指す Task が Bundle に入らないだけ(必須依存ではない)。通知一覧はまだ対象を id だけ持って
+カルテへ渡しており、`_include=Task:focus` で対象を添える形には寄せていない。
+
 ## 2026-09-27 に対応済み
 
 ### `Encounter.appointment` 検索と `_include` / `_revinclude`
@@ -454,11 +465,6 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   （`patientNameSearchValue`）。医療従事者検索には変換が無い。
 - **望ましいサーバー機能**: `name_text` の索引時にひらがな→カタカナ・半角→全角に正規化し、検索値も同じ正規化を通す。
   空白の有無（「ヤマダタロウ」）も吸収できる。
-
-### C-13. `Task.focus` の `_include` 対象を ServiceRequest 以外へ
-
-- **現状**: `_include=Task:focus` は ServiceRequest しか返さないので、通知一覧は対象（DiagnosticReport /
-  Provenance / Encounter）を id だけ持ってカルテへ渡す。
 
 ### C-14. MedicationStatement の `dateAsserted` の索引と `_sort`
 

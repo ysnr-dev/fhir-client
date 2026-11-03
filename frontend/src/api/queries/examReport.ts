@@ -19,7 +19,13 @@ import {
   urgentNotificationOpenAfter,
 } from "../../fhir/resultReviewHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
-import { NOTIFICATION_TASK_KEY, resourcesOfType } from "./core";
+import {
+  appendDetailRevincludes,
+  type DetailSearchOptions,
+  detailKeySuffix,
+  NOTIFICATION_TASK_KEY,
+  resourcesOfType,
+} from "./core";
 import {
   fetchOrderCandidates,
   useLabResultDetail,
@@ -68,14 +74,19 @@ export function examReportDeleteGuard(config: ExamReportConfig) {
 }
 
 /** オーダーに付いたレポート(所見の Observation を添える)。入力モーダルが使う。 */
-export function useExamReportByOrder(config: ExamReportConfig, orderId: string | undefined) {
+export function useExamReportByOrder(
+  config: ExamReportConfig,
+  orderId: string | undefined,
+  options?: DetailSearchOptions,
+) {
   const params = new URLSearchParams();
   if (orderId) params.set("based-on", `ServiceRequest/${orderId}`);
   params.append("_include", "DiagnosticReport:result");
   params.set("_count", "10");
+  appendDetailRevincludes(params, options);
 
   return useQuery({
-    queryKey: ["DiagnosticReport", "detail", `${config.kind}-order`, orderId],
+    queryKey: ["DiagnosticReport", "detail", `${config.kind}-order`, orderId, ...detailKeySuffix(options)],
     queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", params),
     enabled: Boolean(orderId),
   });
