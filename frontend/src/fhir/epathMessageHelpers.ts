@@ -15,7 +15,7 @@ import {
   type PathwayTaskRecord,
 } from "./pathwayApplyHelpers";
 import { pathwayCloseValuesOf } from "./pathwayCloseHelpers";
-import type { PathwayEvaluationState, UnitEvaluation } from "./pathwayEvaluationHelpers";
+import { judgeProperValue, resultInputOf, type PathwayEvaluationState, type UnitEvaluation } from "./pathwayEvaluationHelpers";
 import { eventDayStepLabel, pathStepLabel } from "./pathwayHelpers";
 import type { PathwayMajorEvent } from "./pathwayMajorEventHelpers";
 import { patientNumberOf } from "./patientHelpers";
@@ -387,17 +387,20 @@ function assessmentExecution(
   unitEvaluation: UnitEvaluation | undefined,
   input: AppliedPathwayXmlInput,
 ): string {
-  const result = input.evaluation.results.get(assessment.id);
-  if (!result) return "";
-  // 観察項目ごとの達成状態は実績値を基準に当てて適正値の Goal に書いてある。基準の無い観察項目は
-  // アウトカムが達成なら達成、それ以外は未評価として出す。
-  const status = input.evaluation.assessments.get(assessment.id) ?? (achievementOf(unitEvaluation) === "1" ? "1" : "3");
-  const { value, unit } = observationResult(result);
-  return el("execution", [
-    text("status", status),
-    author(authorOf(result.performer?.[0], result.effectiveDateTime ?? "", input.jobOf)),
-    value ? el("observationResult", "", { value, unit, datetime: epathDateTime(result.effectiveDateTime) }) : "",
-  ]);
+  // 実績は記録ごとに残る(§7.16)ので、記録順に execution を繰り返す。評価状況は基準(§7.15)があればその値を当てた判定、
+  // 無ければアウトカムが達成なら達成、それ以外は未評価。
+  const fallback = achievementOf(unitEvaluation) === "1" ? "1" : "3";
+  return (input.evaluation.resultHistory.get(assessment.id) ?? [])
+    .map((result) => {
+      const judged = judgeProperValue(assessment.properCriteria, { kind: "text" }, resultInputOf(result));
+      const { value, unit } = observationResult(result);
+      return el("execution", [
+        text("status", judged ?? fallback),
+        author(authorOf(result.performer?.[0], result.effectiveDateTime ?? "", input.jobOf)),
+        value ? el("observationResult", "", { value, unit, datetime: epathDateTime(result.effectiveDateTime) }) : "",
+      ]);
+    })
+    .join("");
 }
 
 function taskOfApplication(task: PathwayTaskRecord, date: string, input: AppliedPathwayXmlInput): string {

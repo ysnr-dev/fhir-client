@@ -21607,6 +21607,33 @@ button.nursing-worksheet__mark {
   color: var(--text);
 }
 
+/* 同じ日に 2 回以上評価したときの回数(達成状態の右に小さく)。 */
+.pathway-sheet__count {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--text);
+}
+
+/* 評価モーダルの履歴(記録ごとの日時・達成状態・記録者・記載の冒頭)。 */
+.pathway-evaluate__history {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.pathway-evaluate__history td {
+  padding: 2px 8px 2px 0;
+  vertical-align: top;
+}
+
+.pathway-evaluate__history .pathway-evaluate__history-text {
+  color: var(--text);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* セルは丸ごと押せる(評価入力を右ペインに開く)。見た目は表のセルのまま。 */
 .pathway-sheet__cell-button {
   display: block;

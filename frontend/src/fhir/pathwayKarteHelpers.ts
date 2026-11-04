@@ -8,6 +8,7 @@ import {
   EVALUATION_ITEM_SYSTEM,
   FREE_TEXT_CODE,
   achievementLabel,
+  recordNoOf,
   type Achievement,
 } from "./pathwayEvaluationHelpers";
 import { eventDayStepLabel } from "./pathwayHelpers";
@@ -87,10 +88,16 @@ export function withEvaluationObservation(
   return { ...card, ...evaluationContent(observation) };
 }
 
+function writingKey(content: EvaluationContent): string {
+  return JSON.stringify([content.soap, content.freeText, content.comment]);
+}
+
 /**
  * 評価の Observation(判定)と、その OAT ユニット・祖先(病日・適用)の CarePlan からカードを組む。
  * ［決定］記載の無い評価(達成状態だけ)は出さない。達成状態の推移はパスタブで読むもので、カルテに
  * 1 件ずつ並べると診療記録が埋もれるため。
+ * ［決定］同じ OAT ユニットの直前の記録と記載が同じ評価も出さない(達成状態だけ記録し直したときにカードが重ならない。
+ * 記録ごとの Observation は残す。設計 §7.16)。
  */
 export function buildPathwayEvaluationCards(
   observations: fhir4.Observation[],
@@ -98,9 +105,22 @@ export function buildPathwayEvaluationCards(
 ): PathwayEvaluationCard[] {
   const byId = new Map(carePlans.filter((cp) => cp.id).map((cp) => [cp.id as string, cp]));
   const cards: PathwayEvaluationCard[] = [];
-  for (const observation of observations) {
+  // 同じ対象(basedOn)の評価を記録順に並べ、直前の記録と記載を比べる。
+  const ordered = [...observations].sort(
+    (a, b) =>
+      refId(a.basedOn?.[0]?.reference).localeCompare(refId(b.basedOn?.[0]?.reference)) ||
+      recordNoOf(a) - recordNoOf(b) ||
+      (a.effectiveDateTime ?? "").localeCompare(b.effectiveDateTime ?? ""),
+  );
+  const previousWriting = new Map<string, string>();
+  for (const observation of ordered) {
     const content = evaluationContent(observation);
+    const targetId = refId(observation.basedOn?.[0]?.reference);
+    const key = writingKey(content);
+    const sameAsPrevious = previousWriting.get(targetId) === key;
+    previousWriting.set(targetId, key);
     if (content.soap.length === 0 && !content.freeText && !content.comment) continue;
+    if (sameAsPrevious) continue;
 
     const target = byId.get(refId(observation.basedOn?.[0]?.reference));
     if (!target) continue;

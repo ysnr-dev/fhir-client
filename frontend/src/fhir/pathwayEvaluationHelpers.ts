@@ -38,6 +38,8 @@ import { LOINC_SYSTEM } from "./shared";
 // ［決定］評価・実績の Observation は Goal に contained せず独立のリソースにする(検索で読める。
 // EP12 出力で contained に畳む)。category の先頭にパスの印を置き、患者 + category の 1 回の検索で
 // 全部引く。
+// ［決定］記録のたびに評価・実績の Observation を新しく作り(識別子の末尾が記録番号)、既存の Observation には
+// PUT も DELETE もしない(1 日に複数回の評価を全部残す。設計 §7.16)。Goal は最新を指す。
 
 const ID_SYSTEM_BASE = "http://e-path.jp/fhir/ePath/IdSystem";
 export const PATHWAY_OUTCOME_GOAL_ID_SYSTEM = `${ID_SYSTEM_BASE}/outcome-goal-id`;
@@ -114,9 +116,11 @@ function basedOnId(resource: { basedOn?: fhir4.Reference[] }): string {
 
 // ---- 読み出し ----
 
-export interface UnitEvaluation {
-  goal: fhir4.Goal | null;
+/** 評価の記録 1 回ぶん(評価 Observation 1 件から読めるもの)。 */
+export interface EvaluationRecord {
   observation: fhir4.Observation | null;
+  /** 記録番号(識別子の末尾。無印は 1)。 */
+  recordNo: number;
   achievement: Achievement | "";
   /** 記載形式。自由記載(総合評価)の component があれば free。 */
   mode: EvaluationMode;
@@ -127,6 +131,12 @@ export interface UnitEvaluation {
   comment: string;
   recordedAt: string;
   performerName: string;
+}
+
+/** OAT ユニットの評価。項目は最新の記録のもので、history に全部の記録を古い順に持つ。 */
+export interface UnitEvaluation extends EvaluationRecord {
+  goal: fhir4.Goal | null;
+  history: EvaluationRecord[];
 }
 
 /** 病日ごとの医師の総合評価(ePath の compAssessment)。病日に 1 件。 */
@@ -140,8 +150,10 @@ export interface DayAssessment {
 export interface PathwayEvaluationState {
   /** OAT ユニット CarePlan の id → 評価。 */
   units: Map<string, UnitEvaluation>;
-  /** 観察項目 CarePlan の id → 実績の Observation。 */
+  /** 観察項目 CarePlan の id → 最新の実績の Observation。 */
   results: Map<string, fhir4.Observation>;
+  /** 観察項目 CarePlan の id → 実績の Observation を記録順(古い順)に全部。 */
+  resultHistory: Map<string, fhir4.Observation[]>;
   /** 観察項目 CarePlan の id → 記録済みの達成状態(適正値の Goal の achievementStatus)。無ければ未評価。 */
   assessments: Map<string, Achievement>;
   /** 病日 CarePlan の id → 総合評価。 */
@@ -163,9 +175,67 @@ function isDayAssessmentObservation(observation: fhir4.Observation): boolean {
   );
 }
 
+/** 評価・実績の Observation の記録番号(識別子の末尾の数字。無印は 1 回目)。 */
+export function recordNoOf(observation: fhir4.Observation): number {
+  const value =
+    observation.identifier?.find((i) => i.system === PATHWAY_EVALUATION_ID_SYSTEM || i.system === PATHWAY_RESULT_ID_SYSTEM)
+      ?.value ?? "";
+  const match = /\.(\d+)$/.exec(value);
+  return match ? Number(match[1]) : 1;
+}
+
+/** 記録順(記録番号 → 記録日時)。 */
+function byRecordOrder(a: fhir4.Observation, b: fhir4.Observation): number {
+  return recordNoOf(a) - recordNoOf(b) || (a.effectiveDateTime ?? "").localeCompare(b.effectiveDateTime ?? "");
+}
+
+function evaluationRecordOf(observation: fhir4.Observation | null): EvaluationRecord {
+  const soap = { S: "", O: "", A: "", P: "" } as Record<"S" | "O" | "A" | "P", string>;
+  const templates = emptyTemplates();
+  let freeText = "";
+  let mode: EvaluationMode = "soap";
+  for (const component of observation?.component ?? []) {
+    const code = component.code?.coding?.find((c) => c.system === EVALUATION_ITEM_SYSTEM)?.code;
+    const responseId = templateRefOf(component).split("/").pop() ?? "";
+    if (code === "S" || code === "O" || code === "A" || code === "P") {
+      soap[code] = component.valueString ?? "";
+      if (responseId) templates[code] = { responseId, draft: null };
+    }
+    if (code === FREE_TEXT_CODE) {
+      freeText = component.valueString ?? "";
+      mode = "free";
+      if (responseId) templates.free = { responseId, draft: null };
+    }
+  }
+  return {
+    observation,
+    recordNo: observation ? recordNoOf(observation) : 0,
+    achievement: (observation?.valueCodeableConcept?.coding?.find((c) => c.system === ACHIEVEMENT_SYSTEM)?.code ??
+      "") as Achievement | "",
+    mode,
+    soap,
+    freeText,
+    templates,
+    comment: observation?.note?.[0]?.text ?? "",
+    recordedAt: observation?.effectiveDateTime ?? "",
+    performerName: observation?.performer?.[0]?.display ?? "",
+  };
+}
+
+/** 次の記録番号(その OAT ユニットの評価・実績の記録番号の最大 + 1)。 */
+export function nextRecordNo(unit: PathwayOatUnitRecord, state: PathwayEvaluationState | null): number {
+  let max = 0;
+  for (const record of state?.units.get(unit.id)?.history ?? []) max = Math.max(max, record.recordNo);
+  for (const assessment of unit.assessments) {
+    for (const result of state?.resultHistory.get(assessment.id) ?? []) max = Math.max(max, recordNoOf(result));
+  }
+  return max + 1;
+}
+
 /**
  * 患者のパス関連 Observation(評価と実績)と、木に含めた Goal から評価の状態を組む。
  * Goal は CarePlan(OAT ユニット).goal で結ばれるので、unit → goal は CarePlan 側から引く。
+ * 評価・実績は記録順に並べ、最新を表に出す。
  */
 export function buildEvaluationState(
   observations: fhir4.Observation[],
@@ -174,9 +244,10 @@ export function buildEvaluationState(
 ): PathwayEvaluationState {
   const units = new Map<string, UnitEvaluation>();
   const results = new Map<string, fhir4.Observation>();
+  const resultHistory = new Map<string, fhir4.Observation[]>();
   const assessments = new Map<string, Achievement>();
   const days = new Map<string, DayAssessment>();
-  const evaluations = new Map<string, fhir4.Observation>();
+  const evaluations = new Map<string, fhir4.Observation[]>();
   for (const observation of observations) {
     if (!isPathwayObservation(observation)) continue;
     const target = basedOnId(observation);
@@ -193,7 +264,12 @@ export function buildEvaluationState(
     const isEvaluation = observation.code?.coding?.some(
       (c) => c.system === EVALUATION_ITEM_SYSTEM && c.code === "judgement",
     );
-    (isEvaluation ? evaluations : results).set(target, observation);
+    const bucket = isEvaluation ? evaluations : resultHistory;
+    bucket.set(target, [...(bucket.get(target) ?? []), observation]);
+  }
+  for (const [id, history] of resultHistory) {
+    history.sort(byRecordOrder);
+    results.set(id, history[history.length - 1]);
   }
   // 総合評価は病日の CarePlan を指すものだけ(OAT ユニットを指す古い記録は無いが、階層で確かめる)。
   for (const [id] of days) {
@@ -212,40 +288,14 @@ export function buildEvaluationState(
     if (!unit.id || pathwayLevelOf(unit) !== "oat-unit") continue;
     const goalId = unit.goal?.[0]?.reference?.split("/").pop();
     const goal = goalId ? (goals.get(goalId) ?? null) : null;
-    const observation = evaluations.get(unit.id) ?? null;
+    const history = (evaluations.get(unit.id) ?? []).sort(byRecordOrder).map(evaluationRecordOf);
+    const latest = evaluationRecordOf(history[history.length - 1]?.observation ?? null);
+    // 達成状態は Goal が正(評価 Observation が無い古い記録でも読める)。
     const achievement = (goal?.achievementStatus?.coding?.find((c) => c.system === ACHIEVEMENT_SYSTEM)?.code ??
       "") as Achievement | "";
-    const soap = { S: "", O: "", A: "", P: "" } as Record<"S" | "O" | "A" | "P", string>;
-    const templates = emptyTemplates();
-    let freeText = "";
-    let mode: EvaluationMode = "soap";
-    for (const component of observation?.component ?? []) {
-      const code = component.code?.coding?.find((c) => c.system === EVALUATION_ITEM_SYSTEM)?.code;
-      const responseId = templateRefOf(component).split("/").pop() ?? "";
-      if (code === "S" || code === "O" || code === "A" || code === "P") {
-        soap[code] = component.valueString ?? "";
-        if (responseId) templates[code] = { responseId, draft: null };
-      }
-      if (code === FREE_TEXT_CODE) {
-        freeText = component.valueString ?? "";
-        mode = "free";
-        if (responseId) templates.free = { responseId, draft: null };
-      }
-    }
-    units.set(unit.id, {
-      goal,
-      observation,
-      achievement,
-      mode,
-      soap,
-      freeText,
-      templates,
-      comment: observation?.note?.[0]?.text ?? "",
-      recordedAt: observation?.effectiveDateTime ?? "",
-      performerName: observation?.performer?.[0]?.display ?? "",
-    });
+    units.set(unit.id, { ...latest, achievement, goal, history });
   }
-  return { units, results, assessments, days };
+  return { units, results, resultHistory, assessments, days };
 }
 
 // ---- 適正値による判定 ----
@@ -430,7 +480,8 @@ export function evaluationValuesOf(
     comment: evaluation?.comment ?? "",
     results,
     tasksDone,
-    recordedAt: evaluation?.recordedAt || nowFhirDateTime(),
+    // 記録は毎回新しい 1 件なので、日時は前の記録を引き継がず今にする。
+    recordedAt: nowFhirDateTime(),
   };
 }
 
@@ -519,9 +570,10 @@ function performerRef(performer: PathwayEvaluationContext["performer"]): fhir4.R
 }
 
 /**
- * 1 病日 × 1 OAT ユニットの評価を 1 transaction にまとめる。初回は Goal と評価 Observation を
- * POST し、OAT ユニットの CarePlan に goal を足す(PUT)。2 回目以降は同じ id へ PUT。
- * 観察項目の実績は値が入っているものだけ(消したら削除)。タスクは状態が変わったものだけ PUT。
+ * 1 病日 × 1 OAT ユニットの評価を 1 transaction にまとめる。評価 Observation は記録のたびに新しく POST し
+ * (識別子の末尾が記録番号)、Goal は初回に POST して OAT ユニットの CarePlan に goal を足し(PUT)、以後は
+ * 最新の達成状態と評価への参照を PUT で重ねる。観察項目の実績は値が入っていて前回と変わったものだけ POST
+ * (消しても前の記録は残す)。タスクは状態が変わったものだけ PUT。
  */
 export function buildPathwayEvaluationBundle(
   ctx: PathwayEvaluationContext,
@@ -533,6 +585,7 @@ export function buildPathwayEvaluationBundle(
   const subject = { reference: `Patient/${patientId}` };
   const performer = performerRef(ctx.performer);
   const recordedAt = values.recordedAt || nowFhirDateTime();
+  const recordNo = nextRecordNo(unit, ctx.existing);
 
   // 記載欄(S/O/A/P か自由記載)。選んでいる形式のぶんだけ書く。
   const written: { field: EvaluationField; code: string; text: string }[] =
@@ -547,48 +600,31 @@ export function buildPathwayEvaluationBundle(
 
   // テンプレートから書いた欄の回答(QuestionnaireResponse)を同じ transaction に積む。
   // 先に単独で保存すると「評価を保存しなかったときに回答だけが残る」ため(オーダーと同じ作り)。
+  // 前の記録の回答は書き換えも削除もしない(前の評価がそれを指している)。再編集したら新しい回答を POST し、
+  // 再編集していなければ同じ回答を新しい評価からも指す。
   const templateRefs = new Map<EvaluationField, string>();
-  const keptResponseIds = new Set<string>();
   if (hasEvaluation) {
     for (const item of written) {
       const binding = values.templates[item.field];
       if (!binding) continue;
       const { responseId, draft } = binding;
       if (!draft) {
-        // 再編集していない保存済みの回答 → 参照だけ引き継ぐ。
-        if (responseId) {
-          templateRefs.set(item.field, `QuestionnaireResponse/${responseId}`);
-          keptResponseIds.add(responseId);
-        }
+        if (responseId) templateRefs.set(item.field, `QuestionnaireResponse/${responseId}`);
         continue;
       }
-      const reference = responseId
-        ? `QuestionnaireResponse/${responseId}`
-        : `urn:uuid:${crypto.randomUUID()}`;
-      if (responseId) {
-        entry.push({ resource: { ...draft.response, id: responseId }, request: { method: "PUT", url: reference } });
-        keptResponseIds.add(responseId);
-      } else {
-        entry.push({ fullUrl: reference, resource: draft.response, request: { method: "POST", url: "QuestionnaireResponse" } });
-      }
+      const reference = `urn:uuid:${crypto.randomUUID()}`;
+      const { id: _previousId, ...response } = draft.response;
+      entry.push({ fullUrl: reference, resource: response, request: { method: "POST", url: "QuestionnaireResponse" } });
       entry.push(...draft.imageEntries);
       templateRefs.set(item.field, reference);
     }
   }
 
-  // 参照が外れた回答(テンプレートを解除した・形式を切り替えた)は一緒に消す。
-  for (const component of existing?.observation?.component ?? []) {
-    const previous = templateRefOf(component).split("/").pop() ?? "";
-    if (previous && !keptResponseIds.has(previous)) {
-      entry.push({ request: { method: "DELETE", url: `QuestionnaireResponse/${previous}` } });
-    }
-  }
   let evaluationRef: string | null = existing?.observation?.id ? `Observation/${existing.observation.id}` : null;
   if (hasEvaluation) {
     const observation: fhir4.Observation = {
-      ...(existing?.observation ?? {}),
       resourceType: "Observation",
-      identifier: [{ system: PATHWAY_EVALUATION_ID_SYSTEM, value: unit.unitId }],
+      identifier: [{ system: PATHWAY_EVALUATION_ID_SYSTEM, value: `${unit.unitId}.${recordNo}` }],
       status: "final",
       category: [pathwayObservationCategory()],
       code: { coding: [{ system: EVALUATION_ITEM_SYSTEM, code: "judgement", display: "評価" }], text: unit.name },
@@ -619,20 +655,14 @@ export function buildPathwayEvaluationBundle(
       }),
       note: values.comment.trim() ? [{ text: values.comment.trim(), time: recordedAt }] : undefined,
     };
-    // 記録済みの評価は保存済みの拡張(診療科)をそのまま引き継ぐので、初回だけ入れる。
-    if (!existing?.observation && ctx.department?.departmentId) {
+    if (ctx.department?.departmentId) {
       observation.extension = [departmentExtension(ctx.department.departmentId, ctx.department.departmentName)];
     }
-    if (!values.achievement) delete observation.valueCodeableConcept;
     if (observation.component?.length === 0) delete observation.component;
     if (!observation.note) delete observation.note;
-    if (existing?.observation?.id) {
-      entry.push(put(observation));
-    } else {
-      const url = `urn:uuid:${crypto.randomUUID()}`;
-      evaluationRef = url;
-      entry.push({ fullUrl: url, resource: observation, request: { method: "POST", url: "Observation" } });
-    }
+    const url = `urn:uuid:${crypto.randomUUID()}`;
+    evaluationRef = url;
+    entry.push({ fullUrl: url, resource: observation, request: { method: "POST", url: "Observation" } });
 
     const goal: fhir4.Goal = {
       ...(existing?.goal ?? {}),
@@ -650,8 +680,13 @@ export function buildPathwayEvaluationBundle(
       description: { text: unit.name },
       subject,
       statusDate: recordedAt.slice(0, 10),
-      ...(evaluationRef ? { outcomeReference: [{ reference: evaluationRef }] } : {}),
+      // 評価の記録を全部指す(末尾が最新)。
+      outcomeReference: [
+        ...(existing?.goal?.outcomeReference ?? []).filter((ref) => ref.reference !== evaluationRef),
+        ...(evaluationRef ? [{ reference: evaluationRef }] : []),
+      ],
     };
+    if (goal.outcomeReference?.length === 0) delete goal.outcomeReference;
     if (!values.achievement) delete goal.achievementStatus;
     if (existing?.goal?.id) {
       entry.push(put(goal));
@@ -676,20 +711,18 @@ export function buildPathwayEvaluationBundle(
     );
   }
 
-  // 観察項目の実績。
+  // 観察項目の実績。値が入っていて前回の最新と違うものだけ新しく記録する(空にしても前の記録は消さない)。
   for (const assessment of unit.assessments) {
     if (!assessment.name) continue;
     const spec = ctx.specs.get(assessment.id) ?? { kind: "text" };
-    const previous = ctx.existing?.results.get(assessment.id);
-    const value = resultValue(spec, values.results.get(assessment.id) ?? ["", ""]);
-    if (!value) {
-      if (previous?.id) entry.push({ request: { method: "DELETE", url: `Observation/${previous.id}` } });
-      continue;
-    }
+    const input = values.results.get(assessment.id) ?? ["", ""];
+    const value = resultValue(spec, input);
+    if (!value) continue;
+    const previous = resultInputOf(ctx.existing?.results.get(assessment.id));
+    if (previous[0] === input[0].trim() && previous[1] === input[1].trim()) continue;
     const observation: fhir4.Observation = {
-      ...(previous ?? {}),
       resourceType: "Observation",
-      identifier: [{ system: PATHWAY_RESULT_ID_SYSTEM, value: `${unit.unitId}.${assessment.assessmentKey}` }],
+      identifier: [{ system: PATHWAY_RESULT_ID_SYSTEM, value: `${unit.unitId}.${assessment.assessmentKey}.${recordNo}` }],
       status: "final",
       category: [pathwayObservationCategory()],
       code: { ...(assessment.codings.length > 0 ? { coding: assessment.codings } : {}), text: assessment.name },
@@ -699,12 +732,7 @@ export function buildPathwayEvaluationBundle(
       basedOn: [{ reference: `CarePlan/${assessment.id}` }],
       ...value,
     };
-    // 表現タイプが変わったときに前の値の形が残らないようにする。
-    for (const key of ["valueQuantity", "valueString", "valueCodeableConcept", "component"] as const) {
-      if (!(key in value)) delete (observation as unknown as Record<string, unknown>)[key];
-    }
-    if (previous?.id) entry.push(put(observation));
-    else entry.push({ resource: observation, request: { method: "POST", url: "Observation" } });
+    entry.push({ resource: observation, request: { method: "POST", url: "Observation" } });
   }
 
   // 観察項目ごとの達成状態(実績値を基準に当てた結果)。適正値の Goal に書き、変わったときだけ PUT。

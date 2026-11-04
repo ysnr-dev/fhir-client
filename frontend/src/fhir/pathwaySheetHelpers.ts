@@ -74,6 +74,11 @@ export interface SheetUnitCell {
   achievementLabel: string;
   /** 記載(S/O/A/P・自由記載・コメント)があるか。 */
   written: boolean;
+  /** 評価を記録した回数(同じ日の再評価を全部残す。設計 §7.16)。 */
+  recordCount: number;
+  /** 最新の記録の日時と記録者(ツールチップ用)。 */
+  recordedAt: string;
+  performerName: string;
 }
 
 export interface SheetAssessmentCell {
@@ -162,6 +167,9 @@ export function buildPathwaySheet(
         achievement,
         achievementLabel: achievementLabel(achievement),
         written: hasEvaluationWriting(unitEvaluation),
+        recordCount: unitEvaluation?.history.length ?? 0,
+        recordedAt: unitEvaluation?.recordedAt ?? "",
+        performerName: unitEvaluation?.performerName ?? "",
       });
 
       for (const assessment of unit.assessments) {

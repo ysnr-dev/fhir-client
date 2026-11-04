@@ -632,8 +632,8 @@ Procedure(タスク)            status completed(実施)/ preparation(未実施)
   `Observation?patient=X&category=care-plan-type|clinical-pathway` の 1 回で全部引ける(category の先頭にパスの印を置く。
   上流は category の先頭しか索引しない)。EP12 出力で contained に畳む(第 3 段階)。
 - ［決定］Goal は「評価したとき」に作る(適用時には作らない)。初回は Goal と評価 Observation を POST し、OAT ユニットの
-  CarePlan に goal を足す PUT を同じ transaction に入れる。2 回目以降は同じ id へ PUT(識別子が同じなので二重にならない)。
-- ［決定］観察項目の実績は**値が入っているものだけ**記録し、消したら DELETE。表現タイプは看護観察(MEDIS)に結んだ観察項目なら
+  CarePlan に goal を足す PUT を同じ transaction に入れる。2 回目以降は評価 Observation を新しく POST し、Goal を最新で PUT する(§7.16)。
+- ［決定］観察項目の実績は**値が入っていて前回と変わったものだけ**記録し、消しても前の記録は残す(§7.16)。表現タイプは看護観察(MEDIS)に結んだ観察項目なら
   マスタの表現タイプ(数値 / 列挙 / 文字 / 2 数値 / 血圧)、それ以外は文字。入力欄は看護の実施入力と同じ `ObservationInput`。
   看護観察の管理番号は適用時に観察項目の CarePlan.category へ MEDIS の体系で写しておく。
 - ［決定］タスクは状態が変わったものだけ PUT。実施にすると performedDateTime と performer が入り、戻すと消える。
@@ -896,8 +896,8 @@ JAHIS ePath 実装ガイド Ver.1.0 第 6 章の要素順・記述例に合わ�
     (BOM 以外はローカルコード、無ければ `unit_key`)、クリティカル・インディケータ。
   - 観察項目: ePath の assessment は task を 0..1 しか持てないので、**タスクが複数の観察項目は同じ観察項目をタスクごとに繰り返す**。
     観察項目に結ばないタスクは「観察項目なし」(`ZZZZZZZZZZ`、LOCAL)で包む。適正値は `properValue`。
-  - 観察項目実施: 実績の Observation があるときだけ。評価状況は適正値の Goal に書いた観察項目ごとの達成状態(§7.15)。
-    基準の無い観察項目はアウトカムが達成なら 1、それ以外は 3。観察結果は value / unit(2 数値は「a:b」)/ datetime。
+  - 観察項目実施: 実績の Observation を記録順に 1 件ずつ `execution` で繰り返す(§7.16)。評価状況は基準(§7.15)があればその値を当てた判定、
+    基準の無い観察項目はアウトカムが達成なら 1、それ以外は 3。観察結果は value / unit(2 数値は「a:b」)/ datetime。評価(judgement)は最新。
   - タスク: 分類は中分類(無ければ大分類)、コードはローカルのタスクコード(無ければ結んだオーダーのコード、それも無ければ `task_key`)、
     予定日、実施状況は**パスシートと同じ判定**(チェックリストは Procedure、オーダーを結んだタスクはオーダーの実施記録・進捗、
     看護指示はその日の実施記録)。実施日時と実施者はオーダーの実施記録の本体から。
@@ -932,6 +932,39 @@ JAHIS ePath 実装ガイド 第 4 章 No.9・17・18(`docs/clinical-pathway-back
 - **ePath 出力(§7.14)**: 観察項目実施の評価状況にこの達成状態を使う。基準の無い観察項目は従来どおり(アウトカム達成なら 1、それ以外 3)。
 - 予定外の観察項目(§7.6)は名称だけなので基準を持たない。seed の 900001〜900005 はバイタル(体温・脈拍数・収縮期血圧・SpO2)に基準を同梱。
 
+### 7.16 1 日複数回の評価の保持(2026-11-03)
+
+JAHIS ePath 実装ガイド 第 4 章 No.15(`docs/clinical-pathway-backlog.md` §H の G-5)。同じアウトカムを 1 日に何度評価しても全部残す。
+ガイドの XML は同日の再評価を観察項目実施 `execution` 0..*(出現順が時系列)で表し、アウトカムの評価 `judgement` は 0..1(最新)なので、
+OAT ユニットを繰り返す(RepeatNo)のではなく **評価・実績の Observation を記録ごとに増やし、Goal は最新を指す**。backend の変更は無い。
+
+```text
+Goal(アウトカム)             1 件のまま。achievementStatus / lifecycleStatus / statusDate = 最新の記録、
+                            outcomeReference → 評価 Observation を記録順に全部(末尾が最新)
+Observation(評価)            記録ごとに 1 件 POST。identifier observation-evaluation-id = {OAT ユニット識別子}.{記録番号}
+Observation(観察項目の実績)   記録ごとに、値が前回の最新と変わった観察項目だけ POST。identifier observation-result-id = {OAT ユニット識別子}.{assessment_key}.{記録番号}
+Observation(病日の総合評価)   病日に 1 件(上書き)のまま(ePath で 1..1)
+```
+
+- ［決定］**「記録」を押すたびに新しい記録番号**(その OAT ユニットの評価・実績の識別子にある番号の最大 + 1。`nextRecordNo`)。
+  同じ transaction の評価と実績は同じ番号・同じ記録日時。番号の無い既存データは 1 回目として読む(`recordNoOf`)ので移行しない。
+- ［決定］**既存の Observation には PUT も DELETE もしない**。値を空にして記録しても前の実績は消えない(測定の記録は取り消さない。直すときは
+  正しい値をもう一度記録する。最新が画面に出る)。
+- ［決定］実績は前回の最新と値が同じなら書かない(達成状態だけ記録し直したときに実績を増やさない)。評価 Observation は達成状態・記載・
+  コメントのどれかがあれば毎回書く(同じ値の再評価も「その時刻に評価した」記録として残す)。日めくりは変えたアウトカムだけ送る判定のまま。
+- ［決定］テンプレートの回答(QuestionnaireResponse)は消さない・上書きしない。再編集したら新しい回答を POST して新しい評価だけが指し、
+  再編集していなければ同じ回答を新しい評価からも指す(複数の評価が同じ回答を共有してよい)。
+- 記録日時の既定は常に「今」(前の記録の時刻を引き継がない)。記録者・診療科は毎回ログイン本人のもの。
+- バリアンスの通知(§7.10)は「前回の最新の達成状態 → 今回」の変化で決めるので変わらない。focus は新しい評価 Observation。
+- 読み(`buildEvaluationState`): OAT ユニットごとに評価を記録番号順(同じなら記録日時順)に並べ、`UnitEvaluation.history` に全部(古い順)、
+  表の項目は最新。達成状態は Goal が正。実績は `results`(最新)と `resultHistory`(全部)。`usePathwayObservations` は全ページ読む
+  (`searchAllPages`、`complete`)。
+- 画面: 評価モーダルの「アウトカム評価」の下に履歴(回数・日時・達成状態・記録者・記載の冒頭、新しい順)。シートのセルは 2 回以上なら
+  達成状態の横に「×n」、ツールチップに「n 回目 HH:MM 記録者」。
+- ［決定］カルテのカード(§6)は記載のある評価を記録ごとに出すが、**同じ OAT ユニットの直前の記録と記載が同じなら出さない**
+  (達成状態だけ記録し直したときにカードが重ならない)。
+- データ抽出・クラスタ(Goal を数える)、日程の変更の blocker(評価の有無)は変わらない。ePath 出力は §7.14。
+
 ## 8. 実装の段階
 
 - **第 1 段階(実装済)**: 施設パス定義マスタ(backend・API・spec・seed・一覧・編集・雛形モーダル)。
@@ -956,6 +989,9 @@ JAHIS ePath 実装ガイド 第 4 章 No.9・17・18(`docs/clinical-pathway-back
 
 ## 9. 実装したもの
 
+- 1 日複数回の評価の保持(§7.16、2026-11-03): frontend `fhir/pathwayEvaluationHelpers.ts`(記録番号・履歴・POST だけの記録)、
+  `api/queries/pathway.ts`(全ページ読み)、`components/PathwayEvaluatePanel.tsx`(履歴)、`fhir/pathwaySheetHelpers.ts`・
+  `components/KartePathwayTab.tsx`(回数)、`fhir/pathwayKarteHelpers.ts`(同じ記載を畳む)、`fhir/epathMessageHelpers.ts`(execution の繰り返し)。
 - 適正値による自動判定(§7.15、2026-11-03): backend migration `20261104100000`(proper_low / proper_high / proper_values)、
   `models/master/pathway_assessment.rb`(検証)、`pathways_controller.rb`(ASSESSMENT_ATTRS)、seed JSON 900001〜900005。
   frontend `fhir/pathwayHelpers.ts`(基準の型・文言)、`fhir/pathwayApplyHelpers.ts`(Goal の target・読み戻し)、

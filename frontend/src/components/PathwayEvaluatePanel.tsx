@@ -11,6 +11,7 @@ import { useCurrentPractitioner } from "../api/authQueries";
 import {
   ACHIEVEMENT_OPTIONS,
   SOAP_ITEMS,
+  achievementLabel,
   assessmentCandidate,
   assessmentInputSpec,
   buildEvaluationState,
@@ -185,6 +186,8 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
 
   const tasks = unit.assessments.flatMap((a) => a.tasks);
   const hasProperValue = unit.assessments.some((a) => a.name && a.properValue);
+  // これまでの記録(新しい順)。同じ日の再評価を全部残す(設計 §7.16)。
+  const history = [...(evaluation?.units.get(unit.id)?.history ?? [])].reverse();
   // 未達成(バリアンス)なのに記載が無い。止めはしないが、記録の前に気づけるように出す。
   const varianceUnwritten =
     values.achievement === "2" &&
@@ -389,6 +392,31 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
             />
           </label>
         </div>
+        {history.length > 0 && (
+          <table className="pathway-evaluate__history" aria-label="履歴">
+            <tbody>
+              {history.map((record) => {
+                const writing =
+                  record.mode === "free"
+                    ? record.freeText
+                    : SOAP_ITEMS.map((i) => record.soap[i.code])
+                        .filter(Boolean)
+                        .join(" / ");
+                return (
+                  <tr key={record.observation?.id ?? record.recordNo}>
+                    <td>{record.recordNo} 回目</td>
+                    <td>{record.recordedAt.slice(0, 16).replace("T", " ")}</td>
+                    <td>{achievementLabel(record.achievement)}</td>
+                    <td>{record.performerName}</td>
+                    <td className="pathway-evaluate__history-text" title={writing || record.comment}>
+                      {writing || record.comment}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </fieldset>
 
       <div className="lab-order-item__actions">

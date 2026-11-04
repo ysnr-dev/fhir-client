@@ -695,8 +695,12 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                       const openCellTask = (task: SheetTaskCell) => openTask(task.orderIds, task.procedureId, day.date);
                       if (row.kind === "unit") {
                         const unit = cell as SheetUnitCell;
+                        const recordTitle =
+                          unit.recordCount > 1
+                            ? `${unit.recordCount} 回目 ${unit.recordedAt.slice(11, 16)} ${unit.performerName}`.trim()
+                            : undefined;
                         return (
-                          <td key={day.eventId} className={`${classes} pathway-sheet__cell--unit`}>
+                          <td key={day.eventId} className={`${classes} pathway-sheet__cell--unit`} title={recordTitle}>
                             <button type="button" className="pathway-sheet__cell-button" onClick={openUnit}>
                               <PathwaySeriesLink fromPrev={fromPrev} toNext={toNext}>
                                 <span
@@ -705,6 +709,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                                   }`}
                                 >
                                   {unit.achievementLabel || "未評価"}
+                                  {unit.recordCount > 1 && <span className="pathway-sheet__count">×{unit.recordCount}</span>}
                                 </span>
                                 {unit.unplanned && <span className="pathway-sheet__unplanned">予定外</span>}
                               </PathwaySeriesLink>

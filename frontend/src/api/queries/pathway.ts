@@ -25,7 +25,7 @@ import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
 import { invalidateAppointments } from "./appointment";
 import { deleteConsultOrderRequest, invalidateConsult } from "./consult";
-import { NOTIFICATION_TASK_KEY, resourcesOfType } from "./core";
+import { NOTIFICATION_TASK_KEY, resourcesOfType, searchAllPages } from "./core";
 import { deleteEndoscopyOrderRequest } from "./endoscopy";
 import { deleteLabOrderRequest } from "./lab";
 import { deleteMealOrderRequest } from "./meal";
@@ -588,16 +588,12 @@ export function usePathwayObservations(patientId: string | undefined) {
   const params = new URLSearchParams();
   if (patientId) params.set("patient", `Patient/${patientId}`);
   params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
-  params.set("_count", "500");
 
   return useQuery({
     queryKey: ["Observation", "search", "pathway", patientId],
-    queryFn: async () => {
-      const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
-      return (
-        resourcesOfType<fhir4.Observation>(bundle, "Observation")
-      );
-    },
+    // 評価・実績は記録のたびに増える(設計 §7.16)ので全ページ読む。欠けると最新の判定や記録番号を誤るので complete。
+    queryFn: async () =>
+      (await searchAllPages<fhir4.Observation>("Observation", params, { page: 500, maxPages: 20, complete: true })).matches,
     enabled: Boolean(patientId),
   });
 }
