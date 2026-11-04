@@ -104,6 +104,27 @@ services:
     depends_on:
       - backend
 
+  # SS-MIX2 標準化ストレージへの書き出し(docs/ssmix2-export-design.md)。同じ agent のバイナリを
+  # アダプタを変えて 2 つ目のプロセスとして動かす。出力先は backend/tmp/ssmix2 で、
+  # 施設設定「SS-MIX2 標準化ストレージ」の出力先には /ssmix2/<医療施設ID> と書く。
+  #   SSMIX2_INBOUND_TOKEN=<トークン> docker compose --profile agent up -d --build agent-ssmix2
+  agent-ssmix2:
+    profiles: ["agent"]
+    build: ../fhir-client-agent
+    restart: unless-stopped
+    environment:
+      AGENT_ADAPTER: ssmix2-storage
+      KARTE_SSMIX2_URL: http://backend:3001/integrations/ssmix2/messages
+      SSMIX2_POLL_INTERVAL: 5s
+      SSMIX2_ALLOWED_ROOT: /ssmix2
+      # 管理画面「外部システム連携 > SS-MIX2 標準化ストレージ」で発行したトークンを入れる。
+      KARTE_INBOUND_TOKEN: ${SSMIX2_INBOUND_TOKEN:-}
+    volumes:
+      - ./backend/tmp/ssmix2:/ssmix2
+    stop_grace_period: 30s
+    depends_on:
+      - backend
+
   # 日レセ検証環境(別リポジトリ weborca-dev)。agent の接続先で、これも通常の開発では
   # 要らないので profile で切ってある。隣に weborca-dev を clone してあること。
   #   docker compose --profile orca up -d --build orca

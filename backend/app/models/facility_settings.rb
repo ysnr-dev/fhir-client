@@ -322,6 +322,20 @@ class FacilitySettings < ApplicationRecord
     }
   }.freeze
 
+  # SS-MIX2 標準化ストレージへの出力(docs/ssmix2-export-design.md)。enabled で中継の書き込みを記録し始め、
+  # 院内エージェントが取りに来て root_path(エージェントが解釈する絶対パス)の下に HL7 ファイルを置く。
+  # facility_id は医療施設 ID 10 桁(SS-MIX ヘッダー用)、patient_id_digits は患者 ID の前ゼロの桁数、
+  # sending_application は MSH-3。出力先と施設 ID は有効にするときだけ必須。
+  DEFAULT_SSMIX2 = {
+    "enabled" => false,
+    "root_path" => "",
+    "facility_id" => "",
+    "patient_id_digits" => 6,
+    "sending_application" => "fhir-client"
+  }.freeze
+  SSMIX2_FACILITY_ID = { pattern: /\A(\d{10})?\z/, label: "医療施設 ID(10 桁、空可)" }.freeze
+  SSMIX2_ROOT_PATH = { pattern: /\A[^\r\n]{0,500}\z/, label: "出力先のパス" }.freeze
+  SSMIX2_APPLICATION = { pattern: /\A[ -~]{1,40}\z/, label: "送信アプリケーション名(半角英数 40 文字以内)" }.freeze
   # 設定項目の表。ここに 1 項目足せば、検証・既定値・読み書き・管理 API がすべて付く。
   #
   #   default: 保存されていないときに返す値
@@ -528,6 +542,26 @@ class FacilitySettings < ApplicationRecord
         }
       }
     },
+    "ssmix2" => {
+      default: DEFAULT_SSMIX2,
+      shape: {
+        fields: {
+          "enabled" => :boolean,
+          "root_path" => SSMIX2_ROOT_PATH,
+          "facility_id" => SSMIX2_FACILITY_ID,
+          "patient_id_digits" => { integer: { min: 1, max: 15, unit: "桁" } },
+          "sending_application" => SSMIX2_APPLICATION
+        }
+      },
+      check: lambda { |value|
+        next unless value.is_a?(Hash) && value["enabled"] == true
+
+        messages = []
+        messages << "出力先を指定してください" if value["root_path"].to_s.strip.empty?
+        messages << "医療施設 ID を指定してください" if value["facility_id"].to_s.empty?
+        messages
+      }
+    },
     "dpc_coefficients" => {
       default: DEFAULT_DPC_COEFFICIENTS,
       shape: { map: DPC_COEFFICIENT, keys: :any },
@@ -539,6 +573,8 @@ class FacilitySettings < ApplicationRecord
   }.freeze
 
   validate :settings_shape
+  # SS-MIX2 出力はプロセス内に設定を短く持つので、保存したら読み直させる。
+  after_commit { Ssmix2::Settings.reset_cache! }
 
   # 項目ごとの読み書き。保存値そのもの(nursing_schedule)、既定値で埋めた読み出し用
   # (nursing_schedule_with_defaults)、単一行を引く近道(FacilitySettings.nursing_schedule)。

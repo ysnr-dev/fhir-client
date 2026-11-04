@@ -56,6 +56,14 @@ module Integrations
         description: "患者・保険・受付を取り込み、病名と診療行為(会計)を送る",
         sections: %i[connection inbound_token code_mappings],
         adapters: { "orca" => "Integrations::Orca::Adapter" }
+      ),
+      # SS-MIX2 標準化ストレージ(docs/ssmix2-export-design.md)。院内エージェントがメッセージを取りに来る
+      # ときの受信トークンだけをここで発行する。出力の有効・無効と出力先は施設設定(ssmix2)が持つ。
+      Definition.new(
+        key: "ssmix2_storage",
+        label: "SS-MIX2 標準化ストレージ",
+        description: "院内エージェントが標準化ストレージへ書き出すための受信トークン",
+        sections: %i[inbound_token]
       )
     ].freeze
 

@@ -11,7 +11,7 @@ backend/   Rails 8 API-only (port 3001)
   app/controllers/fhir_proxy_controller.rb  /fhir/* を上流へ中継(FhirGateway)。FHIR リソースは自前 DB に保存しない
   app/controllers/master/                   /master/* 国内マスタ(JSON REST, snake_case, {error}/{errors} 形式)
   app/controllers/{admin,auth,reports,imaging,integrations}/
-  app/services/                             FhirGateway, マスタ取込(master_import), 帳票(ThinReports), DICOM, レセコン連携
+  app/services/                             FhirGateway, マスタ取込(master_import), 帳票(ThinReports), DICOM, レセコン連携, SS-MIX2 出力(ssmix2)
   lib/report_layouts/                       帳票レイアウト(.tlf)
   db/seed_data/                             seed 同梱のマスタ CSV
 frontend/  Vite + React 19 + TypeScript (port 5173)

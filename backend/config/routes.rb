@@ -97,6 +97,14 @@ Rails.application.routes.draw do
       post "events", to: "events#create"
     end
 
+    # SS-MIX2 標準化ストレージ出力(docs/ssmix2-export-design.md)。messages はエージェントが
+    # 発行済みトークンで取りに来る受け口、status は施設設定画面が見る(ログイン認証)。
+    scope "ssmix2", module: "ssmix2", as: "ssmix2" do
+      get "messages", to: "messages#index"
+      post "messages/ack", to: "messages#ack"
+      resource :status, only: :show, controller: "status"
+    end
+
     # CDS Hooks(docs/cds-hooks-design.md)。カルテを開いたときの patient-view、処方フォームの order-select / order-sign、カードの無視の feedback。
     scope "cds", module: "cds", as: "cds" do
       post "patient_view", to: "hooks#patient_view"

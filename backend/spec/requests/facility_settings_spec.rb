@@ -767,6 +767,46 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (ssmix2)" do
+    it "is disabled by default" do
+      get "/facility_settings"
+
+      expect(JSON.parse(response.body)["ssmix2"]).to eq(
+        "enabled" => false, "root_path" => "", "facility_id" => "", "patient_id_digits" => 6,
+        "sending_application" => "fhir-client"
+      )
+    end
+
+    it "stores the settings" do
+      with_admin_token(nil) do
+        patch "/facility_settings",
+              params: { ssmix2: { enabled: true, root_path: "\\\\nas\\ssmix2", facility_id: "2219999998",
+                                  patient_id_digits: "8", sending_application: "HIS01" } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["ssmix2"]).to eq(
+        "enabled" => true, "root_path" => "\\\\nas\\ssmix2", "facility_id" => "2219999998",
+        "patient_id_digits" => 8, "sending_application" => "HIS01"
+      )
+    end
+
+    it "requires the root path and the facility id only when enabled" do
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { ssmix2: { enabled: false, root_path: "", facility_id: "" } }, as: :json
+        expect(response).to have_http_status(:ok)
+
+        patch "/facility_settings", params: { ssmix2: { enabled: true, root_path: "", facility_id: "" } }, as: :json
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(JSON.parse(response.body)["errors"]).to include(a_string_matching(/出力先/), a_string_matching(/医療施設 ID/))
+
+        patch "/facility_settings", params: { ssmix2: { facility_id: "12345" } }, as: :json
+        expect(response).to have_http_status(:unprocessable_content)
+      end
+    end
+  end
+
   # 設定は settings(jsonb)1 列にまとめて入るので、1 項目の保存が他の項目を
   # 消していないことを見る。
   describe "PATCH /facility_settings (渡した項目だけ差し替える)" do

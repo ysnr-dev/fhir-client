@@ -19894,6 +19894,32 @@ button.nursing-worksheet__mark {
   gap: 8px;
 }
 
+/* SS-MIX2 の出力先。UNC パスが長くなるので欄を広く取る。 */
+.facility-settings__path {
+  width: min(100%, 480px);
+}
+
+/* SS-MIX2 出力の状態。項目の下に小さく並べる。 */
+.ssmix2-status {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.ssmix2-status dd {
+  margin: 0;
+}
+
+.ssmix2-status__failures {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 13px;
+  color: var(--danger);
+}
+
 .nursing-order-form__dates {
   display: flex;
   gap: 12px;

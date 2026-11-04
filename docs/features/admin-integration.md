@@ -142,6 +142,11 @@ backend が discovery（`GET {URL}/cds-services`、5 分キャッシュ）で読
 システムを足すときは定義に 1 要素加えます。API で繋ぐなら、あわせてアダプタを 1 つ書いて
 `adapters` に登録します。
 
+今ある定義は `receipt_computer`（医事会計。接続・受信トークン・コード対応表）と `ssmix2_storage`
+（SS-MIX2 標準化ストレージ。受信トークンだけ）です。SS-MIX2 の有効・無効と出力先は施設設定（`ssmix2`、
+[features/facility.md](facility.md)）が持ち、ここでは院内エージェントに配るトークンだけを発行します。
+一覧の状態は接続を持たないので「無効」のままですが、エージェントの認可はトークンの有無だけを見ます。
+
 ## レセコン連携
 
 レセコンは「外部システム連携」のひとつとして繋ぎます。カルテ側のコードに製品名は
@@ -179,6 +184,11 @@ backend が discovery（`GET {URL}/cds-services`、5 分キャッシュ）で読
 
 - カルテ > 患者情報 > 保険・公費 の「医事会計から再取込」(患者 1 人)
 - `bin/rails integrations:receipt:resync`(取り込み済みの患者を洗い直す)
+
+同じエージェントのバイナリは、`AGENT_ADAPTER=ssmix2-storage` で起動すると向きが逆になり、
+`GET /integrations/ssmix2/messages` で SS-MIX2 のメッセージを取りに来て標準化ストレージへ書き、
+`POST /integrations/ssmix2/messages/ack` で結果を返します（`docs/ssmix2-export-design.md`）。
+日レセ連携と同じ院内サーバーで動かすときは 2 つ目のプロセスとして起動します。
 
 ### 画面
 

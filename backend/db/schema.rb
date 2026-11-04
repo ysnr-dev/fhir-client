@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_04_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_05_100100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -3039,6 +3039,53 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_04_100000) do
     t.index ["client_id"], name: "index_smart_apps_on_client_id", unique: true
   end
 
+  create_table "ssmix2_messages", force: :cascade do |t|
+    t.bigint "ssmix2_transaction_id"
+    t.string "patient_id", null: false
+    t.string "service_date", null: false
+    t.string "data_kind", null: false
+    t.string "order_no", null: false
+    t.string "process", null: false
+    t.string "department_code", default: "-", null: false
+    t.string "transaction_at", null: false
+    t.binary "body", null: false
+    t.text "warnings", default: [], null: false, array: true
+    t.string "status", default: "pending", null: false
+    t.datetime "leased_at"
+    t.integer "attempts", default: 0, null: false
+    t.text "error"
+    t.datetime "written_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["patient_id", "service_date", "data_kind", "order_no", "transaction_at"], name: "index_ssmix2_messages_on_file_name", unique: true
+    t.index ["ssmix2_transaction_id"], name: "index_ssmix2_messages_on_ssmix2_transaction_id"
+    t.index ["status", "id"], name: "index_ssmix2_messages_on_status_and_id"
+  end
+
+  create_table "ssmix2_order_numbers", force: :cascade do |t|
+    t.string "resource_ref", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["resource_ref"], name: "index_ssmix2_order_numbers_on_resource_ref", unique: true
+  end
+
+  create_table "ssmix2_transactions", force: :cascade do |t|
+    t.datetime "occurred_at", null: false
+    t.string "actor_practitioner_id"
+    t.string "method", null: false
+    t.string "path", default: "", null: false
+    t.jsonb "request", default: {}, null: false
+    t.jsonb "response"
+    t.string "status", default: "pending", null: false
+    t.text "error"
+    t.integer "attempts", default: 0, null: false
+    t.datetime "leased_at"
+    t.datetime "processed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["status", "occurred_at"], name: "index_ssmix2_transactions_on_status_and_occurred_at"
+  end
+
   create_table "supervisor_group_members", force: :cascade do |t|
     t.bigint "supervisor_group_id", null: false
     t.string "practitioner_fhir_id", null: false
@@ -3087,5 +3134,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_04_100000) do
   add_foreign_key "document_template_pages", "document_templates", on_delete: :cascade
   add_foreign_key "document_templates", "file_categories", on_delete: :nullify
   add_foreign_key "master_formulary_entries", "master_formulary_groups", column: "formulary_group_id", on_delete: :cascade
+  add_foreign_key "ssmix2_messages", "ssmix2_transactions", on_delete: :nullify
   add_foreign_key "supervisor_group_members", "supervisor_groups", on_delete: :cascade
 end

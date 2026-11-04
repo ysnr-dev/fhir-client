@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   useBedWardIndex,
   useFacilitySettings,
@@ -115,6 +116,9 @@ import {
   type EarlyWarningSettings,
 } from "../fhir/earlyWarningHelpers";
 import { DEFAULT_RX_VERIFICATION, type RxVerificationSettings } from "../fhir/rxVerificationHelpers";
+import { DEFAULT_SSMIX2, ssmix2SettingsValid, type Ssmix2Settings } from "../fhir/ssmix2Helpers";
+import { useSsmix2Status } from "../api/queries/ssmix2";
+import { formatDateTime } from "../lib/dates";
 import {
   DEFAULT_INJECTION_VERIFICATION,
   type InjectionVerificationSettings,
@@ -183,6 +187,7 @@ const FACILITY_SECTIONS = [
   { key: "bulk_vital_entry", label: "経過表一括入力の列" },
   { key: "dpc_coefficients", label: "DPC の医療機関別係数" },
   { key: "nursing_profile", label: "看護プロファイルの区画" },
+  { key: "ssmix2", label: "SS-MIX2 標準化ストレージ" },
 ] as const;
 
 type FacilitySectionKey = (typeof FACILITY_SECTIONS)[number]["key"];
@@ -440,6 +445,12 @@ export function FacilitySettingsPage() {
   const [transfusionDraft, setTransfusionDraft] = useState<TransfusionSettings | undefined>(undefined);
   const transfusion = transfusionDraft ?? settings.data?.transfusion ?? DEFAULT_TRANSFUSION_SETTINGS;
 
+  // SS-MIX2 標準化ストレージへの出力。有効にすると中継の書き込みが記録され、院内エージェントが出力先へ書く。
+  const [ssmix2Draft, setSsmix2Draft] = useState<Ssmix2Settings | undefined>(undefined);
+  const ssmix2 = ssmix2Draft ?? settings.data?.ssmix2 ?? DEFAULT_SSMIX2;
+  const ssmix2Valid = ssmix2SettingsValid(ssmix2);
+  const ssmix2Status = useSsmix2Status(section === "ssmix2");
+
   // Web 問診。既定の質問票(並べた順に答えてもらう)と、診療科ごとの質問票、予約の無いリンクの有効時間。
   const [intakeDraft, setIntakeDraft] = useState<IntakeSettings | undefined>(undefined);
   const intake = intakeDraft ?? settings.data?.intake ?? EMPTY_INTAKE_SETTINGS;
@@ -617,7 +628,7 @@ export function FacilitySettingsPage() {
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
     if (!prescriptionCheckValid) return;
     if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid || !infectiousReportValid || !ncdValid) return;
-    if (!reviewValid || !receiptCodesOk || !coefficientsValid || !intakeValid) return;
+    if (!reviewValid || !receiptCodesOk || !coefficientsValid || !intakeValid || !ssmix2Valid) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
@@ -647,6 +658,7 @@ export function FacilitySettingsPage() {
       injection_verification: injectionVerification,
       transfusion,
       intake,
+      ssmix2,
       karte_card_order: { ...cardOrder, kinds: cardKinds },
     });
   }
@@ -1661,6 +1673,90 @@ export function FacilitySettingsPage() {
                 />
                 院外処方箋にQRコードを印字する
               </label>
+            </div>
+          )}
+
+          {section === "ssmix2" && (
+            <div className="facility-settings__schedule-body">
+              <label className="connection-settings-form__checkbox">
+                <input
+                  type="checkbox"
+                  checked={ssmix2.enabled}
+                  onChange={(e) => setSsmix2Draft({ ...ssmix2, enabled: e.target.checked })}
+                />
+                標準化ストレージへ出力する
+              </label>
+              <label>
+                出力先
+                <input
+                  type="text"
+                  className="facility-settings__path"
+                  value={ssmix2.root_path}
+                  onChange={(e) => setSsmix2Draft({ ...ssmix2, root_path: e.target.value })}
+                  aria-invalid={ssmix2.enabled && ssmix2.root_path.trim().length === 0}
+                />
+              </label>
+              <label>
+                医療施設 ID
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={ssmix2.facility_id}
+                  onChange={(e) => setSsmix2Draft({ ...ssmix2, facility_id: e.target.value.replace(/\D/g, "") })}
+                  aria-invalid={ssmix2.enabled && ssmix2.facility_id.length !== 10}
+                />
+              </label>
+              <label>
+                患者 ID の桁数
+                <span className="facility-settings__times">
+                  <input
+                    type="number"
+                    min={1}
+                    max={15}
+                    step={1}
+                    value={ssmix2.patient_id_digits}
+                    onChange={(e) => setSsmix2Draft({ ...ssmix2, patient_id_digits: Number(e.target.value) })}
+                    aria-label="患者 ID の桁数"
+                  />
+                  <span className="facility-settings__unit">桁</span>
+                </span>
+              </label>
+              <label>
+                送信アプリケーション名
+                <input
+                  type="text"
+                  maxLength={40}
+                  value={ssmix2.sending_application}
+                  onChange={(e) => setSsmix2Draft({ ...ssmix2, sending_application: e.target.value })}
+                />
+              </label>
+              <Link to="/external-systems/ssmix2_storage">受信トークン</Link>
+              {ssmix2Status.data && (
+                <dl className="ssmix2-status">
+                  <dt>未出力</dt>
+                  <dd>{ssmix2Status.data.pending} 件</dd>
+                  <dt>失敗</dt>
+                  <dd>{ssmix2Status.data.failed} 件</dd>
+                  <dt>本日の出力</dt>
+                  <dd>{ssmix2Status.data.written_today} 件</dd>
+                  <dt>落とした字</dt>
+                  <dd>{ssmix2Status.data.warnings_today} 件</dd>
+                  <dt>最終出力</dt>
+                  <dd>{ssmix2Status.data.last_written_at ? formatDateTime(ssmix2Status.data.last_written_at) : "-"}</dd>
+                  <dt>最終ポーリング</dt>
+                  <dd>{ssmix2Status.data.last_polled_at ? formatDateTime(ssmix2Status.data.last_polled_at) : "-"}</dd>
+                </dl>
+              )}
+              {ssmix2Status.data && ssmix2Status.data.recent_failures.length > 0 && (
+                <ul className="ssmix2-status__failures">
+                  {ssmix2Status.data.recent_failures.map((failure) => (
+                    <li key={`${failure.kind}-${failure.id}`}>
+                      {formatDateTime(failure.occurred_at)} {failure.data_kind ?? "transaction"} {failure.patient_id ?? ""} {failure.error}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 

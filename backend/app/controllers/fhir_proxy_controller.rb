@@ -62,6 +62,7 @@ class FhirProxyController < ApplicationController
       headers: forwarded_request_headers
     )
 
+    record_for_ssmix2(path, upstream)
     forward_response_headers(upstream)
     render body: upstream.body, status: upstream.status,
            content_type: upstream.headers["content-type"] || FHIR_CONTENT_TYPE
@@ -73,6 +74,23 @@ class FhirProxyController < ApplicationController
   end
 
   private
+
+  # 上流へ書けた transaction を SS-MIX2 出力の控えに残す(docs/ssmix2-export-design.md §4)。
+  # 施設設定で無効なら何もしない。記録に失敗しても中継の応答は変えない。
+  def record_for_ssmix2(path, upstream)
+    return if request.get? || request.head?
+
+    Ssmix2::Recorder.record(
+      method: request.method_symbol,
+      path: "/#{path}",
+      status: upstream.status,
+      request_body: request.raw_post.presence,
+      response_body: upstream.body,
+      actor: current_user_payload&.dig(:practitioner_id)
+    )
+  rescue StandardError => e
+    Rails.logger.error("[ssmix2] 中継の記録に失敗しました: #{e.class}: #{e.message}")
+  end
 
   # transaction/batch Bundle を root (/fhir) へ POST するリクエスト。
   def bundle_post?(path)

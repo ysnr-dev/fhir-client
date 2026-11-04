@@ -12,6 +12,14 @@ RSpec.describe Integrations::ExternalSystems do
       expect(definition.option_fields("orca").map { |field| field[:key] }).to eq(%w[api_prefix])
     end
 
+    it "declares the SS-MIX2 storage as a token-only system for the agent" do
+      definition = described_class.find!("ssmix2_storage")
+
+      expect(definition.sections).to eq(%i[inbound_token])
+      expect(definition.system_types).to be_empty
+      expect(definition.fields).to be_empty
+    end
+
     it "has no definition for a key that is not registered" do
       expect(described_class.find("unknown_system")).to be_nil
       expect { described_class.find!("unknown_system") }.to raise_error(ActiveRecord::RecordNotFound)

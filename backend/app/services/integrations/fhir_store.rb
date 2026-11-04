@@ -7,6 +7,8 @@ module Integrations
   class FhirStore
     class NotFound < StandardError; end
     class UpstreamError < StandardError; end
+    # 上流のレート制限(429)。呼び出し側が「失敗」ではなく「後で」と扱えるよう区別する。
+    class RateLimited < UpstreamError; end
     # 条件に複数当たって更新先を決められない。人手で直すしかないので区別する。
     class AmbiguousMatch < StandardError; end
 
@@ -74,16 +76,19 @@ module Integrations
       )
       raise AmbiguousMatch, "#{resource_type} の更新先が一意に決まりません" if response.status == 412
 
+      record_for_ssmix2(:put, "/#{resource_type}", resource, response)
       parse!(response)
     end
 
     def put(resource_type, id, resource)
-      parse!(gateway.forward(
+      response = gateway.forward(
         method: :put,
         path: "/#{resource_type}/#{id}",
         body: resource.to_json,
         headers: { "Content-Type" => JSON_TYPE }
-      ))
+      )
+      record_for_ssmix2(:put, "/#{resource_type}/#{id}", resource, response)
+      parse!(response)
     end
 
     # 複数の書き込みを 1 つの transaction Bundle で送る。entries は Bundle.entry の配列
@@ -98,6 +103,7 @@ module Integrations
       )
       raise AmbiguousMatch, "更新先が一意に決まりません: #{response.body.to_s.first(300)}" if response.status == 412
 
+      record_for_ssmix2(:post, "/", { "resourceType" => "Bundle", "type" => "transaction", "entry" => entries }, response)
       parse!(response)
     end
 
@@ -105,9 +111,17 @@ module Integrations
 
     attr_reader :gateway
 
+    # backend 自身の書き込み(レセコン連携の患者取込など)も SS-MIX2 出力の控えに残す。
+    # 操作者はいないので actor は付けない。
+    def record_for_ssmix2(method, path, request, response)
+      ::Ssmix2::Recorder.record(method: method, path: path, status: response.status,
+                              request_body: request, response_body: response.body)
+    end
+
     def parse!(response)
       unless response.status.between?(200, 299)
-        raise UpstreamError, "上流が HTTP #{response.status} を返しました: #{response.body.to_s.first(300)}"
+        error = response.status == 429 ? RateLimited : UpstreamError
+        raise error, "上流が HTTP #{response.status} を返しました: #{response.body.to_s.first(300)}"
       end
 
       body = response.body.to_s

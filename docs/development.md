@@ -41,6 +41,7 @@ docker compose down -v       # DBデータも含めて削除
 | profile | サービス | 中身 |
 | --- | --- | --- |
 | `agent` | `agent` | 院内エージェント(別リポジトリ `../fhir-client-agent`)。レセコンの通知をカルテへ中継する |
+| `agent` | `agent-ssmix2` | 同じエージェントを `ssmix2-storage` で起動したもの。SS-MIX2 のメッセージを取りに来て `backend/tmp/ssmix2` に書く(施設設定の出力先には `/ssmix2/<医療施設ID>` と書く) |
 | `orca` | `orca` | 日レセ検証環境(別リポジトリ `../weborca-dev`)。`http://localhost:8000/` |
 
 隣にそれぞれのリポジトリを clone したうえで、profile を指定して起動します(`--profile "*"` で全部)。
@@ -51,6 +52,7 @@ docker compose --profile "*" up -d --build
 ```
 
 - `RECEIPT_INBOUND_TOKEN` は管理画面「外部システム連携 > 医事会計」で発行した受信トークン。未設定だとエージェントが起動時に落ちます。`.env` に書く代わりにコマンドの前に置いて渡すこともできます
+- `SSMIX2_INBOUND_TOKEN` は「外部システム連携 > SS-MIX2 標準化ストレージ」で発行した受信トークン(`agent-ssmix2` 用)。SS-MIX2 だけ動かすなら `docker compose --profile agent up -d --build agent-ssmix2`
 - 日レセは `weborca-dev` 側の compose と**同じコンテナ名 `weborca`・同じボリューム**を使うので、片方だけ動かします。向こうで起動していたら先に `cd ../weborca-dev && docker compose down`(`stop` だけだとコンテナが残り、名前の衝突で起動できません)
 - 別プロジェクトが作ったボリュームを指すため、起動のたびに `volume "weborca-dev_pg_data" already exists but was created for project "weborca-dev"` という警告が出ますが無視して構いません
 - 停止時も profile を付けます(付けないと `agent` / `orca` が残ります)

@@ -88,3 +88,4 @@ export * from "./karteCardResources";
 export * from "./kartePrint";
 export * from "./oralExam";
 export * from "./documentForms";
+export * from "./ssmix2";
