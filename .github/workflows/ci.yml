@@ -41,7 +41,7 @@ jobs:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # .ruby-version はリポジトリ直下にあり、backend/ からは setup-ruby が見つけられない
       - id: ruby
@@ -68,7 +68,7 @@ jobs:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - id: ruby
         run: echo "version=$(cat ../.ruby-version)" >> "$GITHUB_OUTPUT"
@@ -93,9 +93,9 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: npm
