@@ -52,6 +52,7 @@ module Ssmix2
     # 外来受付(appointmentHelpers.ts)。
     APPOINTMENT_CHECKED_IN_AT_EXT_URL = "http://fhir-client.local/StructureDefinition/appointment-checked-in-at".freeze
     # 入退院の予定(encounterHelpers.ts)。退院予定・転科転棟予定は Encounter のローカル拡張。
+    LEAVE_EXT_URL = "http://fhir-client.local/StructureDefinition/encounter-leave".freeze
     DISCHARGE_PLAN_EXT_URL = "http://fhir-client.local/StructureDefinition/encounter-discharge-plan".freeze
     TRANSFER_PLAN_EXT_URL = "http://fhir-client.local/StructureDefinition/encounter-transfer-plan".freeze
     # 実施記録(injectionPerformHelpers.ts・oralPerformHelpers.ts・radResultHelpers.ts など)。

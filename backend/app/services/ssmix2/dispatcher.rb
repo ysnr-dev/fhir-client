@@ -136,7 +136,8 @@ module Ssmix2
         when "Encounter"
           next [] if w.method == "DELETE"
 
-          [Messages::EncounterAdt, Messages::EncounterPlanAdt, Messages::EncounterAttendingAdt].map { |b| Plan.new(builder: b, written: w) }
+          [Messages::EncounterAdt, Messages::EncounterPlanAdt, Messages::EncounterAttendingAdt, Messages::EncounterLeaveAdt]
+            .map { |b| Plan.new(builder: b, written: w) }
         when "Appointment" then w.method == "DELETE" ? [] : [Plan.new(builder: Messages::AppointmentA04, written: w)]
         when "AllergyIntolerance" then [Plan.new(builder: Messages::AdtA60, written: w)]
         when "Condition" then [Plan.new(builder: Messages::PprZd1, written: w)]

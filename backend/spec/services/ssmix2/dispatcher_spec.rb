@@ -40,7 +40,8 @@ RSpec.describe Ssmix2::Dispatcher do
 
     encounter = { "resourceType" => "Encounter", "id" => "e1", "status" => "planned" }
     plans = described_class.plan(ssmix2_transaction(method: "POST", path: "/Encounter", request: encounter, response: encounter))
-    expect(plans.map(&:builder)).to eq([Ssmix2::Messages::EncounterAdt, Ssmix2::Messages::EncounterPlanAdt, Ssmix2::Messages::EncounterAttendingAdt])
+    expect(plans.map(&:builder)).to eq([Ssmix2::Messages::EncounterAdt, Ssmix2::Messages::EncounterPlanAdt, Ssmix2::Messages::EncounterAttendingAdt,
+                                         Ssmix2::Messages::EncounterLeaveAdt])
   end
 
   it "re-plans the hub when only a child procedure is written" do

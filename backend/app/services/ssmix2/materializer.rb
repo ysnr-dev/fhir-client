@@ -29,8 +29,10 @@ module Ssmix2
 
     def process(transaction)
       seed_written(transaction)
-      results = Dispatcher.plan(transaction).filter_map do |plan|
-        plan.builder.new(context: context, transaction: transaction, written: plan.written).build
+      # builder は 1 件(Result)か、1 回の書き込みから複数の事象を起こすときは配列を返す。
+      results = Dispatcher.plan(transaction).flat_map do |plan|
+        built = plan.builder.new(context: context, transaction: transaction, written: plan.written).build
+        built.is_a?(Array) ? built.compact : [built].compact
       end
       store(transaction, results)
     rescue Integrations::FhirStore::RateLimited

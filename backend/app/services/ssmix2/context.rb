@@ -6,6 +6,7 @@ module Ssmix2
       @store = store
       @cache = cache
       @admissions = {}
+      @control_numbers = Hash.new(0)
     end
 
     # "Patient/123" のような参照か、種別と id で引く。無ければ nil。
@@ -66,6 +67,11 @@ module Ssmix2
       found = @store.read_or_nil("#{type}/#{id}/_history", version)
       @cache.put(key, found) if found
       found
+    end
+
+    # MSH-10 の連番。同じ transaction から起こすメッセージ(builder が別でも)で重ならないよう、ここで数える。
+    def next_control_number(transaction_id)
+      @control_numbers[transaction_id] += 1
     end
 
     # 患者の現在の入院(in-progress の IMP)。無ければ nil。

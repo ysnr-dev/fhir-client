@@ -49,8 +49,7 @@ module Ssmix2
 
       # MSH-10。transaction の id と連番で一意にする(20 桁以内)。
       def control_id
-        @control_count = (@control_count || 0) + 1
-        format("%d%03d", transaction.id, @control_count)
+        format("%d%03d", transaction.id, context.next_control_number(transaction.id))
       end
 
       # EVN。EVN-2 記録日時、EVN-5 操作者、EVN-6 事象発生日時(転棟・外出泊のときだけ)、EVN-7 事象施設。

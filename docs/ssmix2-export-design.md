@@ -4,7 +4,7 @@
 患者 ID / 診療日 / データ種別のフォルダに置く形式)へも書き出す。状態: **第 2 段階まで実装済み**(第 1 段階:
 患者基本・入退院・転棟・外来受付・アレルギー・病名・処方・注射・検体検査オーダー・検体検査結果。第 2 段階:
 処方・注射の実施、食事オーダー、放射線・内視鏡・生理のオーダー、放射線・内視鏡の実施、生理検査結果、
-入院予定・退院予定・転科転棟予定・担当医変更、トランザクションストレージ)。
+入院予定・退院予定・転科転棟予定・担当医変更・外出泊、トランザクションストレージ)。
 仕様の原典は日本医療情報学会「SS-MIX2 標準化ストレージ仕様書 Ver.1.2j」「同 構成の説明と
 構築ガイドライン Ver.1.2j」「同 コード表」(2026-08 版、`backend/tmp/docs/ssmix2/` に PDF)。
 
@@ -156,6 +156,10 @@ frontend と同じ約束(ServiceRequest.category の `http://fhir-client.local/C
 | 移動せずに転科転棟予定が消えた | ADT^A26(PV2-1 移動先) | ADT-41 | 同上 | 同上 | DEL |
 | 在院中の Encounter の主治医(participant ATND)が変わった | ADT^A54(PV1-7 新しい主治医) | ADT-01 | `-` | `Encounter/{id}#A54` | INS |
 | 主治医が外れた | ADT^A55(PV1-7 外れた主治医) | ADT-01 | `-` | 同上 | DEL |
+| 在院中の Encounter に外出泊(拡張 `encounter-leave`)が付いた・開始や理由が変わった | ADT^A21(EVN-3/6 外出日時、PV2-47 予定帰院日時) | ADT-31 | EVN-6 外出日 | `Encounter/{id}#A21@<外出泊 id>` | INS |
+| 外出泊が消えた | ADT^A52 | ADT-31 | 同上 | 同上 | DEL |
+| 外出泊の終了が書き込みの時点以前になった(帰院) | ADT^A22(EVN-3/6 帰院日時) | ADT-32 | EVN-6 帰院日 | `Encounter/{id}#A22@<外出泊 id>` | INS |
+| 帰院済みの終了が消えた・未来に戻った、帰院済みの外出泊が消えた | ADT^A53 | ADT-32 | 帰院日 | 同上 | DEL |
 | 食事 ServiceRequest(order-type `meal`)作成・更新・取消 | OMD^O03(TQ1-3 `TID&１日３回&HL70335`、TQ1-7/8 `YYYYMMDDHH`、ODS-1 T 食種 / D 主食、欠食は時間帯付き NPO、AL1 食物アレルギー) | OMD | ORC-9 オーダー日 | ヘッダーの番号 | INS / DEL |
 | 処方・注射の実施(ハブ Procedure + partOf の MedicationAdministration)作成・更新・削除 | RAS^O17(RDE と同じ ORC/RXE/TQ1/RXR/RXC の後ろに薬剤ごとの RXA、ORC-3 に実施の番号) | OMP-11 / OMP-12 | RXA-3 実施日 | **実施(Procedure)の番号**(同じオーダーの実施が 1 日に何度もあるため) | INS / DEL |
 | 放射線・内視鏡・生理の ServiceRequest 作成・更新・取消 | OMG^O19(ORC NW/CA + 親 PA + 明細ごとの子 CH。OBR-4 は放射線が JJ1017、他はローカル) | OMG-01 / 02 / 03 | ORC-9 オーダー日 | ヘッダーの番号(子は明細の番号、ORC-8 / OBR-29 で親を指す) | INS / DEL(取消は NW/CA の制御レコードのみ) |
@@ -226,6 +230,10 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
   (physicalType 付きの location から)、PV1-10 診療科(A14 / A15)、PV1-44 は空。PV2-8 入院予定日・転科転棟予定日、
   PV2-9 退院予定日、取消の PV2-1 に予定していた所在。実施で予定が消えたとき(planned → in-progress、退院、転棟)は
   取消を起こさない。担当医変更(ADT^A54 / A55)は PV1-7 だけで ROL は使わない。
+- 外出泊(ADT^A21 / A52 / A22 / A53、`EncounterLeaveAdt`): 前の版と外出泊ごとに id で突き合わせる(id の無い古い
+  外出泊は開始日時で)。1 回の書き込みで複数の事象が起きる(帰院後にまとめて登録すると A21 と A22)ので、builder は
+  Result の配列を返し、Materializer が平らにする。EVN-3 予定日時と EVN-6 事象日時は外出なら開始、帰院なら終了、
+  PV2-47 は終了(予定帰院日時)。外出泊の理由は SS-MIX2 に置き場が無く(EVN-4 は表 0062 のコード)出さない。
 
 ### 5.4 組み立ての実行(`Materializer`)とメッセージの表
 
@@ -404,6 +412,10 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
 - 入院予定(status=planned)から入院実施(in-progress)への更新は A01(前版が planned でも入院実施)。planned の
   entered-in-error は入院取消(A11)ではなく入院予定の取消(A27)。
 - 食事のデータ種別はガイドライン表 3.1-2 どおり `OMD`(枝番なし)。
+- 外出泊の終了は登録時の予定帰院日時と、帰院の操作で入る実際の帰院日時を同じ子拡張 `end` で持ち、区別する印が無い。
+  そこで終了が書き込みの時点(transaction の記録日時)以前なら帰院済みとみなして A22 を起こす。予定どおりの時刻で
+  帰院を記録し `end` が変わらなかったときは A22 が出ない(予定の時刻が過ぎたあとに別の書き込みがあったときに出る)。
+- MSH-10 の連番は Context が transaction ごとに数える(同じ transaction から複数の builder・事象のメッセージが出ても重ならない)。
 - 生理検査の結果は所見レポート(`examReportHelpers.ts` の DiagnosticReport)から起こし、心電図の計測値のような
   数値の OBX は持たない(カルテに構造化した計測値が無い)。
 
@@ -417,8 +429,8 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
 5. 残りの第 1 段階の builder(入退院・転棟・外来受付、A60、PPR、RDE 処方・注射、OML、OUL)。
 6. 状態 API と画面の状態表示、docs(`features/facility.md`・`features/admin-integration.md`・`development.md`)。
 7. 第 2 段階: RAS(処方・注射の実施)/ OMD(食事)/ OMG(放射線・内視鏡・生理のオーダー)/ OMI(放射線・内視鏡の実施)/
-   ORU(生理検査結果)/ A14・A27・A16・A25・A15・A26(入退院・転科転棟の予定)/ A54・A55(担当医)、エージェントの
-   トランザクションストレージ。
+   ORU(生理検査結果)/ A14・A27・A16・A25・A15・A26(入退院・転科転棟の予定)/ A54・A55(担当医)/
+   A21・A52・A22・A53(外出泊)、エージェントのトランザクションストレージ。
 
 ## 11. 検証
 
