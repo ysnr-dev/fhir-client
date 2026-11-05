@@ -253,6 +253,15 @@ export function plainAnswerText(answer: fhir4.QuestionnaireResponseItemAnswer): 
 // 平文にできないシェーマ画像の存在を示す印。画像そのものを併せて描くカルテの
 // カードでは、この印を取り除いてから行を出す。
 export const SCHEMA_IMAGE_NOTE = "(シェーマ画像あり)";
+// 様式文書の「画像」項目(口腔診査の歯式図など)は、画像の data URL を valueString に持つ。
+// 平文にはできないので、シェーマ画像と同じく存在だけ示し、カルテのカードでは実物を出す。
+const IMAGE_VALUE_NOTE = "(画像あり)";
+const IMAGE_DATA_URL = /^data:image\/(?:png|jpe?g|gif|webp);base64,/;
+
+function imageValueOf(item: fhir4.QuestionnaireResponseItem): string | null {
+  const value = item.answer?.find((answer) => IMAGE_DATA_URL.test(answer.valueString ?? ""))?.valueString;
+  return value ?? null;
+}
 
 export interface SchemaImageRef {
   /** 繰り返し項目でも重複しない描画用のキー。 */
@@ -265,7 +274,8 @@ export interface SchemaImageRef {
   dataUrl: string | null;
 }
 
-// 回答に含まれる描き込み済みシェーマ画像(合成済み PNG の Binary)を列挙する。
+// 回答に含まれる描き込み済みシェーマ画像(合成済み PNG の Binary)と、様式文書の画像項目
+// (data URL の値)を列挙する。
 // 元テンプレートは要らない — 描き込み画像は元画像を含んだ合成結果だけを持つため。
 //
 // imageEntries を渡すと、まだ保存していない記入内容(TemplateDraft)にも使える。
@@ -291,7 +301,8 @@ export function schemaImageRefs(
       const key = `${path}${item.linkId}#${index}`;
       const attachment = annotationOf(item);
       const binaryId = binaryIdFromAttachment(attachment);
-      const dataUrl = attachment?.url ? (pendingByPlaceholder.get(attachment.url) ?? null) : null;
+      const pending = attachment?.url ? pendingByPlaceholder.get(attachment.url) : undefined;
+      const dataUrl = pending ?? imageValueOf(item);
       if (binaryId || dataUrl) {
         refs.push({ key, label: item.text ?? item.linkId, binaryId, dataUrl });
       }
@@ -307,7 +318,7 @@ export function schemaImageRefs(
 export function schemaAnnotatedLines(text: string): string[] {
   return text
     .split("\n")
-    .map((line) => line.replace(SCHEMA_IMAGE_NOTE, "").trimEnd())
+    .map((line) => line.replace(SCHEMA_IMAGE_NOTE, "").replace(IMAGE_VALUE_NOTE, "").trimEnd())
     .filter((line) => line.trim() && !/[:：]$/.test(line.trim()));
 }
 
@@ -340,7 +351,9 @@ export function questionnaireResponsePlainText(
       // シェーマ画像への描き込みは平文にできないため存在だけ示す。
       const annotationNote = annotationOf(item) ? SCHEMA_IMAGE_NOTE : "";
       // choice 配下に条件付きグループがある場合は answer と item の両方を持つ。
-      if (item.answer?.length) {
+      if (imageValueOf(item)) {
+        lines.push(`${indent}${label}: ${IMAGE_VALUE_NOTE}`);
+      } else if (item.answer?.length) {
         const unit = units.get(item.linkId);
         const values = item.answer
           .map((answer) => (unit ? `${plainAnswerText(answer)} ${unit}` : plainAnswerText(answer)))
