@@ -15,6 +15,7 @@ import { ExternalCodeMappingPage } from "./pages/ExternalCodeMappingPage";
 import { ExternalSystemListPage } from "./pages/ExternalSystemListPage";
 import { ExternalSystemSettingsPage } from "./pages/ExternalSystemSettingsPage";
 import { FacilitySettingsPage } from "./pages/FacilitySettingsPage";
+import { Ssmix2OutputPage } from "./pages/Ssmix2OutputPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { SmartAppsPage } from "./pages/SmartAppsPage";
 import { CdsServicesPage } from "./pages/CdsServicesPage";
@@ -524,6 +525,7 @@ function App() {
           <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />
           <Route path="/questionnaires/:questionnaireId/preview" element={<QuestionnairePreviewPage />} />
           <Route path="/facility-settings" element={<FacilitySettingsPage />} />
+          <Route path="/ssmix2-output" element={<Ssmix2OutputPage />} />
           {/* 管理画面は AdminGate で包む。/settings も対象にするのは、
               これまで ADMIN_TOKEN ヘッダーを送っておらず、本番で
               ADMIN_TOKEN を設定すると 401 で開けなくなっていたため。 */}

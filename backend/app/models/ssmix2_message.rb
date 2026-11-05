@@ -1,7 +1,8 @@
 # 院内エージェントに渡す SS-MIX2 のメッセージ 1 件(docs/ssmix2-export-design.md §5.4)。
 # ヘッダー項目(ファイル名とフォルダを決める値)と、CP50221 に変換した電文の本体を持つ。
 class Ssmix2Message < ApplicationRecord
-  STATUSES = %w[pending leased written failed].freeze
+  # discarded は失敗を画面で破棄したもの(書かずに諦めた)。
+  STATUSES = %w[pending leased written failed discarded].freeze
   PROCESSES = %w[INS DEL].freeze
   # エージェントが取ったまま結果を返さないとき、配り直すまでの時間。
   LEASE = 5.minutes
@@ -23,6 +24,25 @@ class Ssmix2Message < ApplicationRecord
 
   def self.purge_written!
     where(status: "written").where(written_at: ...RETENTION.ago).delete_all
+    where(status: "discarded").where(updated_at: ...RETENTION.ago).delete_all
+  end
+
+  # 画面からの再実行。試行回数を数え直して、次のポーリングで配り直す。
+  def self.retry!(ids)
+    where(id: ids, status: "failed").update_all(status: "pending", attempts: 0, error: nil, leased_at: nil, updated_at: Time.current)
+  end
+
+  def self.discard!(ids)
+    where(id: ids, status: "failed").update_all(status: "discarded", updated_at: Time.current)
+  end
+
+  # 画面(SS-MIX2 出力の確認)に出す 1 件。本体の電文は返さない。
+  def summary_json
+    {
+      id: id, created_at: created_at, updated_at: updated_at, patient_id: patient_id, service_date: service_date,
+      data_kind: data_kind, order_no: order_no, process: process, status: status, attempts: attempts,
+      file_stem: file_stem, error: error, warnings: warnings
+    }
   end
 
   # ファイル名(拡張子なし、コンディションフラグ除く)。エージェントは末尾にフラグを足す。

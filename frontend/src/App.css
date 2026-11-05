@@ -19913,6 +19913,42 @@ button.nursing-worksheet__mark {
   margin: 0;
 }
 
+.ssmix2-status__links {
+  display: flex;
+  gap: 16px;
+}
+
+.ssmix2-output__actions {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.ssmix2-output__table-wrap {
+  overflow-x: auto;
+}
+
+.ssmix2-output__table th,
+.ssmix2-output__nowrap {
+  white-space: nowrap;
+}
+
+.ssmix2-output__target {
+  word-break: break-all;
+}
+
+.ssmix2-output__error {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--danger);
+  word-break: break-all;
+}
+
+.ssmix2-output__warnings {
+  margin: 0;
+  padding-left: 16px;
+}
+
 .ssmix2-status__failures {
   margin: 4px 0 0;
   padding-left: 16px;

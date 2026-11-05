@@ -1731,7 +1731,10 @@ export function FacilitySettingsPage() {
                   onChange={(e) => setSsmix2Draft({ ...ssmix2, sending_application: e.target.value })}
                 />
               </label>
-              <Link to="/external-systems/ssmix2_storage">受信トークン</Link>
+              <span className="ssmix2-status__links">
+                <Link to="/external-systems/ssmix2_storage">受信トークン</Link>
+                <Link to="/ssmix2-output">出力の確認</Link>
+              </span>
               {ssmix2Status.data && (
                 <dl className="ssmix2-status">
                   <dt>未出力</dt>
@@ -1740,7 +1743,7 @@ export function FacilitySettingsPage() {
                   <dd>{ssmix2Status.data.failed} 件</dd>
                   <dt>本日の出力</dt>
                   <dd>{ssmix2Status.data.written_today} 件</dd>
-                  <dt>落とした字</dt>
+                  <dt>本日の警告</dt>
                   <dd>{ssmix2Status.data.warnings_today} 件</dd>
                   <dt>最終出力</dt>
                   <dd>{ssmix2Status.data.last_written_at ? formatDateTime(ssmix2Status.data.last_written_at) : "-"}</dd>

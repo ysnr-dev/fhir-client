@@ -2,7 +2,8 @@
 # request は送られた Bundle かリソース、response は transaction-response か作成・更新後のリソース
 # (DELETE は nil)。院内エージェントのポーリングで HL7 に起こされ、done / skipped / failed になる。
 class Ssmix2Transaction < ApplicationRecord
-  STATUSES = %w[pending building done skipped failed].freeze
+  # discarded は失敗を画面で破棄したもの(メッセージに起こさずに諦めた)。
+  STATUSES = %w[pending building done skipped failed discarded].freeze
   METHODS = %w[POST PUT DELETE].freeze
   # 組み立てに失敗した transaction を諦めるまでの回数。
   MAX_ATTEMPTS = 5
@@ -23,6 +24,27 @@ class Ssmix2Transaction < ApplicationRecord
   end
 
   def self.purge_processed!
-    where(status: %w[done skipped]).where(processed_at: ...RETENTION.ago).delete_all
+    where(status: %w[done skipped discarded]).where(processed_at: ...RETENTION.ago).delete_all
+  end
+
+  # 画面からの再実行。試行回数を数え直して、次のポーリングで組み立て直す。
+  def self.retry!(ids)
+    where(id: ids, status: "failed").update_all(status: "pending", attempts: 0, error: nil, leased_at: nil,
+                                               processed_at: nil, updated_at: Time.current)
+  end
+
+  def self.discard!(ids)
+    now = Time.current
+    where(id: ids, status: "failed").update_all(status: "discarded", processed_at: now, updated_at: now)
+  end
+
+  # 書き込みに含まれるリソースの種別(画面の表示用)。
+  def resource_types
+    body = request.is_a?(Hash) ? request : {}
+    if body["resourceType"] == "Bundle"
+      Array(body["entry"]).filter_map { |entry| entry.dig("resource", "resourceType") || entry.dig("request", "url").to_s.split(%r{[/?]}).first.presence }.uniq
+    else
+      [body["resourceType"].presence || path.to_s.delete_prefix("/").split("/").first].compact
+    end
   end
 end

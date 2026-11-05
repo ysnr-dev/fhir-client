@@ -68,7 +68,7 @@ API の認可はトークンの有無だけを見る)。
 
 テーブル `ssmix2_transactions`: `occurred_at(6)`、`actor_practitioner_id`、`method`、`path`、
 `request jsonb`(送られた Bundle かリソース)、`response jsonb`(transaction-response か作成・更新後の
-リソース。DELETE は null)、`status`(pending / building / done / skipped / failed)、`error`、
+リソース。DELETE は null)、`status`(pending / building / done / skipped / failed / discarded)、`error`、
 `attempts`、`leased_at`、`processed_at`。index `[status, occurred_at]`。
 
 `Ssmix2::Recorder.record(method:, path:, request_body:, response_body:, actor:)`:
@@ -249,8 +249,8 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
   `data_kind`、`order_no`、`process`(INS / DEL)、`department_code`、`transaction_at`
   (`YYYYMMDDHHMMSSFFF`。INSERT 時刻に、同じ患者 ID・診療日・データ種別・オーダ No の中で 1 ms ずつ
   ずらして一意にする)、`body binary`(CP50221 のバイト列)、`warnings text[]`、
-  `status`(pending / leased / written / failed)、`leased_at`、`attempts`、`error`、`written_at`。
-  index `[status, id]`。written は 14 日で purge、failed は手で片付けるまで残す。
+  `status`(pending / leased / written / failed / discarded)、`leased_at`、`attempts`、`error`、`written_at`。
+  index `[status, id]`。written と discarded は 14 日で purge、failed は「SS-MIX2 出力の確認」で再実行か破棄するまで残す。
 
 ## 6. エージェント向け API と状態 API
 
@@ -278,6 +278,14 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
   `Integrations::Receipt::BaseController` は継承しない)。施設設定画面が表示に使う:
   `{ pending, failed, written_today, warnings_today, last_written_at, last_polled_at, recent_failures: [...] }`。
   `last_polled_at` はプロセス内に置く。
+- `GET /integrations/ssmix2/failures` — 諦めた(failed)行の一覧(ログイン認証)。
+  `{ transactions: [{ id, occurred_at, failed_at, method, path, resource_types, attempts, error }], messages: [{ id, file_stem, … }] }`。
+  組み立ての失敗は transaction、書き込みの失敗はメッセージに残る。
+- `POST /integrations/ssmix2/failures/retry` `{ transaction_ids, message_ids }` — failed の行を pending に戻し、
+  `attempts` を 0 に数え直す(次のポーリングで組み立て直す・配り直す)。返すのは戻した件数 `{ transactions, messages }`。
+- `POST /integrations/ssmix2/failures/discard` `{ transaction_ids, message_ids }` — failed の行を `discarded` にする
+  (出力しないと決めたもの。失敗の件数に数えず、保持期間 14 日で purge する)。
+- `GET /integrations/ssmix2/warnings` — warning の付いたメッセージを新しい順に 200 件まで(`truncated` 付き)。
 
 ## 7. エージェント(`fhir-client-agent`)のアダプタ `ssmix2-storage`
 
@@ -334,6 +342,8 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
 - 項目の下に状態(未出力・失敗・本日の出力・落とした字の件数・最終出力・最終ポーリング)を小さく出し、
   失敗の先頭数件を一覧に出す(`useSsmix2Status`、`GET /integrations/ssmix2/status`、画面を開いて
   いるときだけ 30 秒ごと)。トークンは「外部システム連携」の該当行で発行する(リンクのみ)。
+- 区画の「出力の確認」で `pages/Ssmix2OutputPage.tsx`(`/ssmix2-output`)を開く。「失敗」タブは組み立て・書き込みの
+  失敗を並べて選んだ行を再実行・破棄し、「警告」タブは warning の付いたメッセージを内容ごとに並べる。
 
 ## 9. 決め事と、その理由
 
