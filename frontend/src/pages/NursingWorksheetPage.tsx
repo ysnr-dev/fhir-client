@@ -15,6 +15,7 @@ import {
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { InjectionPerformModal } from "../components/InjectionPerformModal";
+import { MicroCollectionModal } from "../components/MicroCollectionModal";
 import { NursingPerformModal } from "../components/NursingPerformModal";
 import { OralPerformModal } from "../components/OralPerformModal";
 import { PathwayWardTasks } from "../components/PathwayWardTasks";
@@ -488,6 +489,15 @@ export function NursingWorksheetPage() {
           onClose={() => setPerformingKey(null)}
         />
       )}
+      {performing?.microCollection && (
+        <MicroCollectionModal
+          serviceRequest={performing.microCollection.order}
+          itemRequests={performing.microCollection.itemRequests}
+          // 看護指示と同じく、見ている日の予定の時刻(無ければいまの時刻)。
+          defaultCollectedAt={`${date}T${performing.time || nowDateTimeInput().slice(11, 16)}`}
+          onClose={() => setPerformingKey(null)}
+        />
+      )}
       {performing?.oral && (
         <OralPerformModal
           order={performing.oral.order}
@@ -507,11 +517,11 @@ function patientRowKey(patientId: string): string {
 }
 
 /**
- * 行から実施入力を開けるか(看護指示・注射・内服の未実施の予定)。検体・検査・処置は部門の画面で入れ、
- * 済みの予定の取消・訂正は経過表から行う。
+ * 行から実施入力を開けるか(看護指示・注射・内服と、細菌検査の採取の未実施の予定)。そのほかの検体・検査・
+ * 処置は部門の画面で入れ、済みの予定の取消・訂正は経過表(細菌検査の採取はカルテのカード)から行う。
  */
 function canPerform(item: WorksheetItem): boolean {
-  return !item.done && Boolean(item.nursingOrder || item.injection || item.oral);
+  return !item.done && Boolean(item.nursingOrder || item.injection || item.oral || item.microCollection);
 }
 
 /** 予定 1 件の印。実施入力を開ける予定はボタン、それ以外は吹き出しで内容と状態を見せるだけ。 */

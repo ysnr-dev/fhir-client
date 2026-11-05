@@ -11,7 +11,8 @@ module Reports
   #   specimen_label ... 「喀出痰 右 耳」(検体 + 採取部位)
   #   container_no ... 「容器 1/2」(オーダー通しの容器番号 / 容器の総数)
   #   specimen_detail ... 検体の容器は「吸引 塗抹/培養」(採取方法 + 項目の略称)、ボトルは項目名
-  #   order_date ... 「予定 2026/11/05 10:00」(採取予定日時。未定ならオーダーの検査日)
+  #   order_date ... 採取を記録していれば「採取 2026/11/06 10:15」、まだなら採取予定日時で
+  #                  「予定 2026/11/05 10:00」(時刻が未定ならオーダーの検査日)
   #   label_number ... 番号の目視文字列、barcode_img ... バーコード画像(image-block)
   #   urgent ... 至急表示(id 付きの text。通常オーダーでは hide する)
   class MicroLabelRenderer
@@ -52,16 +53,22 @@ module Reports
         "specimen_label" => label.specimen,
         "container_no" => "容器 #{label.container_number}/#{label.container_total}",
         "specimen_detail" => label.detail,
-        "order_date" => "予定 #{planned_label(label.planned)}",
+        "order_date" => date_label(label),
         "label_number" => label.number.to_s
       }
     end
 
-    # 検体の採取予定日時。時刻まで決めていなければ日付だけ(オーダーの検査日を写したもの)。
-    def planned_label(planned)
-      value = planned.presence || OrderDates.order_day(@order)
-      date = PatientMeta.format_date(value[0, 10])
-      value.length > 10 ? "#{date} #{value[11, 5]}" : date
+    def date_label(label)
+      return "採取 #{date_time(label.collected)}" if label.collected.present?
+
+      "予定 #{date_time(label.planned.presence || OrderDates.order_day(@order))}"
+    end
+
+    # 時刻を持つ値は日本時間で「YYYY/MM/DD HH:MM」、日付だけならその日付(オーダーの検査日を写したもの)。
+    def date_time(value)
+      return PatientMeta.format_date(value[0, 10]) if value.length <= 10
+
+      Time.zone.parse(value).in_time_zone(FacilityClock::ZONE).strftime("%Y/%m/%d %H:%M")
     end
 
     def urgent?

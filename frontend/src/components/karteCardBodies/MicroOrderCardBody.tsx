@@ -1,4 +1,5 @@
 import {
+  microCollectionLabel,
   microOrderComment,
   microOrderContents,
   organismSummary,
@@ -22,6 +23,7 @@ export function MicroOrderCardBody({
   const details = [
     { label: "目的菌", value: organismSummary(specimen.organisms) },
     { label: "疑い病名", value: specimen.reasonName },
+    { label: "採取", value: microCollectionLabel(specimen) },
   ].filter((detail) => detail.value);
 
   return (

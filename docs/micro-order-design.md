@@ -268,7 +268,8 @@ contained Specimen（JP_Specimen_Common）:
 | `type` | 検体種別。`.../CodeSystem/janis-specimen-type` |
 | `collection.bodySite` | 採取部位（`.../CodeSystem/micro-collection-site`）＋左右（`.../CodeSystem/micro-laterality`）、`text` は「右 耳」形式（放射線bodySiteと同じ組み方） |
 | `collection.method` | 採取方法（`.../CodeSystem/micro-collection-method`） |
-| `status` | 付けない（未採取のため。検体検査と同じ判断） |
+| `collection.collectedDateTime` / `collector` | 採取の記録（採取日時・採取者）。採取するまで無い（§7.7） |
+| `status` | 付けない（検体検査と同じ判断） |
 
 検査項目明細 ServiceRequest:
 
@@ -385,7 +386,30 @@ contained Specimen（JP_Specimen_Common）:
   取り下げた容器のラベルは記録しない(到着を書くと取り下げが解けるため)。到着の取消は受付済 → 依頼済に戻す
   (結果が付いていれば検体は届いているので戻さない)。
 - **一覧の表示**: `_revinclude=Specimen:request` で台帳を添え、「表示」に容器ごとの未発行 / 発行済 / 到着済と番号を出す。
-- 結果登録はラベルの Specimen を参照しない(結果側が自分で Specimen を持つまま)。採取記録(採取日時・採取者)と合わせて扱う。
+- 結果登録はラベルの Specimen を参照しない(結果側が自分で Specimen を持つまま)。
+
+### 7.7 採取の記録(実装済み、2026-11-06)
+
+培養の結果は採った時刻と部位で読み方が変わる(血液培養の 2 セットが別の穿刺か、採取から到着までの時間、汚染菌か起炎菌か)。
+病理の採取(`docs/patho-order-design.md` §4.9)と同じく、採取した場で記録する。
+
+- **持ち方**: 検体グループ明細の contained Specimen の `collection.collectedDateTime`(採取日時)と `collection.collector`
+  (採取者。Practitioner 参照 + 表示名)。予定(`ServiceRequest.occurrenceDateTime`)とは別に持つ。採取部位・左右・採取方法は
+  同じ `collection.bodySite` / `method` をその場で直す。ラベルの台帳(§7.6)には書かない(ラベルの無い検体も記録するため、
+  オーダー側に一本化)。
+- **書き込み**(`buildMicroCollectionBundle`、`useRecordMicroCollection`): 検体グループ明細だけを `If-Match` 付きで PUT する
+  (ヘッダを組み直すと依頼医・診療科が記録した人のものに替わるため。病理と同じ)。代行入力の来歴は付けない。
+- **採取者**: 記録したログインユーザー(医療従事者のとき)。［決定］入力欄は置かない(採った人が記録する運用)。記録済みを直すときは
+  最初の採取者のまま。
+- **記録できる間**: 依頼済・受付済(`canRecordMicroCollection`)。病理と違い受付後も書き足せる(容器の数には関わらないので、
+  受付後に直しても照合が崩れない)。
+- **入口**: カルテの細菌検査カードのメニュー「採取」/「採取修正」、看護ワークシートの細菌検査の印(未済のとき。初期値は見ている日の
+  予定の時刻)。モーダル(`MicroCollectionModal`)の「ラベル発行」(既定でオン)で保存後にラベルを開く(病理と同じく、クリック時に
+  空のタブを開いて保存後に差し替える)。
+- **表示**: カードの「採取: 11/6 10:15 児玉 義憲」、オーダー内容の採取日時・採取者、ラベルの「採取 2026/11/06 10:15」
+  (未記録なら「予定」)、看護ワークシートの「採取済」(到着より前の段階)。
+- **結果との接続**: 結果登録でオーダーを選ぶ(部門一覧から開く)と、採取を記録していればその日を検体採取日に写す。
+- DO では採取の記録を引き継がない。オーダーの編集はフォーム値に持ち回って記録を保つ。
 
 ---
 

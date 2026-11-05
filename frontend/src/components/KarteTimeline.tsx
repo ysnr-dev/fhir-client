@@ -98,8 +98,10 @@ import { PathwayEvaluationCardBody } from "./karteCardBodies/PathwayEvaluationCa
 import { AdverseEventCardBody } from "./karteCardBodies/AdverseEventCardBody";
 import { PotencyMark } from "./MedicineWarnings";
 import { PathoImportanceBadge } from "./PathoResultDetailPanel";
+import { MicroCollectionModal } from "./MicroCollectionModal";
 import { PathoCollectionModal } from "./PathoCollectionModal";
 import { canRecordPathoCollection, pathoCollectedDateTime, pathoOrderSpecimens } from "../fhir/pathoOrderHelpers";
+import { canRecordMicroCollection, microOrderContents } from "../fhir/microOrderHelpers";
 import { isRevisedReportStatus, reportStatusDisplay } from "../fhir/pathoResultHelpers";
 
 interface KarteTimelineProps {
@@ -380,6 +382,7 @@ const KarteCard = memo(function KarteCard({
   const [examReportOpen, setExamReportOpen] = useState(false);
   // 病理検査の採取の記録(検体個数・容器数の修正と採取日時)。部門が受け付けるまで開ける。
   const [pathoCollectionOpen, setPathoCollectionOpen] = useState(false);
+  const [microCollectionOpen, setMicroCollectionOpen] = useState(false);
   const examReport =
     item.kind === "rad-order" || item.kind === "physio-order" || item.kind === "endoscopy-order"
       ? {
@@ -647,6 +650,11 @@ const KarteCard = memo(function KarteCard({
               >
                 ラベル発行
               </a>
+            )}
+            {item.kind === "micro-order" && canRecordMicroCollection(item.status) && (
+              <button type="button" className="row-menu__item" onClick={() => setMicroCollectionOpen(true)}>
+                {microOrderContents(item.itemRequests).specimen.collectedDateTime ? "採取修正" : "採取"}
+              </button>
             )}
             {/* 細菌検査の検体ラベル(容器ごと)。病棟が採取のときに刷り、検査室が到着確認で読む。 */}
             {item.kind === "micro-order" && item.status !== "cancelled" && (
@@ -984,6 +992,13 @@ const KarteCard = memo(function KarteCard({
         ))}
       {chartOpen && item.kind === "surgery-order" && (
         <AnesthesiaChartModal orderId={item.id} onClose={() => setChartOpen(false)} />
+      )}
+      {microCollectionOpen && item.kind === "micro-order" && (
+        <MicroCollectionModal
+          serviceRequest={item.serviceRequest}
+          itemRequests={item.itemRequests}
+          onClose={() => setMicroCollectionOpen(false)}
+        />
       )}
       {pathoCollectionOpen && item.kind === "patho-order" && (
         <PathoCollectionModal

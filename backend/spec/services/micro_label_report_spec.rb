@@ -209,6 +209,18 @@ RSpec.describe MicroLabelReport do
     expect { described_class.new("o1", gateway: gateway).generate }.to raise_error(described_class::NoLabelTarget)
   end
 
+  it "carries the recorded collection time to the label" do
+    collected = group
+    collected["contained"][0]["collection"]["collectedDateTime"] = "2026-11-06T10:15:00+09:00"
+    stub_search([collected])
+    stub_batch
+    labels = capture_labels
+
+    described_class.new("o1", gateway: gateway).generate
+
+    expect(labels.call.map(&:collected)).to eq(["2026-11-06T10:15:00+09:00"])
+  end
+
   it "renders a PDF with the bundled layout" do
     stub_search([group(occurrence: "2026-11-05T10:00:00+09:00"),
                  item("i8", code: "8", name: "血液培養（好気ボトル）", number: 2)])

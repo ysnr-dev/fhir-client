@@ -13,6 +13,7 @@ import {
 } from "../fhir/microOrderHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { orderDay } from "../fhir/shared";
+import { dateTimeLabel } from "../lib/dates";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 細菌検査オーダーの内容表示。カルテ画面の詳細モーダルから使う
@@ -77,6 +78,10 @@ export function MicroOrderDetailPanel({
           <dd>{specimen.methodName || "-"}</dd>
           <dt>採取予定日時</dt>
           <dd>{specimen.collectionDateTime.replace("T", " ") || "-"}</dd>
+          <dt>採取日時</dt>
+          <dd>{dateTimeLabel(specimen.collectedDateTime) || "-"}</dd>
+          <dt>採取者</dt>
+          <dd>{specimen.collectorName || "-"}</dd>
           <dt>疑い病名</dt>
           <dd>{specimen.reasonName || "-"}</dd>
           <dt>目的菌</dt>

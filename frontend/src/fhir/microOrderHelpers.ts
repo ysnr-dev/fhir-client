@@ -42,7 +42,8 @@ import {
 // - ヘッダの occurrenceDateTime は検査日(採取予定日)。カルテのカードの位置と部門の
 //   日付軸はこれ。authoredOn は登録日時で、フォームでは入力しない(shared.ts を参照)。
 // - 検体グループの occurrenceDateTime は採取予定日時(時刻付き)。未定ならヘッダの検査日を
-//   写す。Specimen.collection.collectedDateTime は「実際に採取した日時」で意味が違うため使わない。
+//   写す。実際に採取した日時と採取者は、採取の記録(buildMicroCollectionBundle)が
+//   Specimen.collection.collectedDateTime / collector に書く(docs/micro-order-design.md §7.7)。
 // - 目的菌は orderDetail(オーダーの追加指示そのもの)。JANIS 感染症病原体コード。
 // - 疑い病名は放射線の依頼病名と同じ形: 登録病名から選んだなら
 //   reasonReference(Condition)、フリーテキストなら reasonCode.text。
@@ -125,6 +126,11 @@ export interface MicroSpecimenValues {
   methodName: string;
   /** 採取予定日時("YYYY-MM-DDTHH:mm")。空なら未定。 */
   collectionDateTime: string;
+  /** 採取した日時(FHIR の dateTime、オフセット付き)。採取を記録するまで空。 */
+  collectedDateTime: string;
+  /** 採取した人(Practitioner の id と表示名)。記録した人が医療従事者でなければ空。 */
+  collectorId: string;
+  collectorName: string;
   /** 目的菌(複数)。 */
   organisms: MicroOrganismRef[];
   /**
@@ -165,6 +171,9 @@ export function emptyMicroSpecimen(): MicroSpecimenValues {
     methodCode: "",
     methodName: "",
     collectionDateTime: "",
+    collectedDateTime: "",
+    collectorId: "",
+    collectorName: "",
     organisms: [],
     reasonConditionId: "",
     reasonName: "",
@@ -278,7 +287,14 @@ function buildSpecimenResource(
       text: specimen.methodName || undefined,
     };
   }
-  if (collection.bodySite || collection.method) resource.collection = collection;
+  if (specimen.collectedDateTime) collection.collectedDateTime = specimen.collectedDateTime;
+  if (specimen.collectorId) {
+    collection.collector = {
+      reference: `Practitioner/${specimen.collectorId}`,
+      display: specimen.collectorName || undefined,
+    };
+  }
+  if (Object.keys(collection).length > 0) resource.collection = collection;
 
   return resource;
 }
@@ -532,6 +548,62 @@ export function buildMicroOrderUpdateBundle(
   );
 }
 
+// ---- 採取の記録 ----
+
+/**
+ * 採取を記録できるか(部門の進捗)。検体が届いた後も、病棟が記録し忘れた採取は書き足せる。
+ * 報告済・中止のオーダーには書かない。
+ */
+export function canRecordMicroCollection(taskStatus: string): boolean {
+  return taskStatus === "requested" || taskStatus === "accepted";
+}
+
+/** 「11/6 10:15 児玉 義憲」。採取を記録していなければ空。 */
+export function microCollectionLabel(specimen: MicroSpecimenValues): string {
+  if (!specimen.collectedDateTime) return "";
+  const at = new Date(specimen.collectedDateTime);
+  const time = Number.isNaN(at.getTime())
+    ? specimen.collectedDateTime
+    : at.toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return [time, specimen.collectorName].filter(Boolean).join(" ");
+}
+
+/**
+ * 採取の記録。検体グループ明細だけを If-Match 付きで PUT する(ヘッダを組み直すと依頼医・診療科が
+ * 記録した人のものに替わるため。病理の buildPathoCollectionBundle と同じ)。specimen には
+ * 採取した日時・採取者と、その場で直した採取部位・左右・採取方法を入れて渡す。
+ */
+export function buildMicroCollectionBundle(
+  header: fhir4.ServiceRequest,
+  itemRequests: fhir4.ServiceRequest[],
+  specimen: MicroSpecimenValues,
+): fhir4.Bundle {
+  const original = itemRequests.find((request) => request.id === specimen.id);
+  if (!original?.id) throw new Error("検体の明細が見つかりません");
+  const resource = buildSpecimenGroupRequest(
+    specimen,
+    itemNumber(original, ITEM_NUMBER_SYSTEM) || 1,
+    header.subject?.reference?.split("/").pop() ?? "",
+    original.authoredOn ?? header.authoredOn ?? "",
+    header.occurrenceDateTime ?? "",
+    `ServiceRequest/${header.id}`,
+  );
+  return withVersionLock(
+    {
+      resourceType: "Bundle",
+      type: "transaction",
+      entry: [
+        {
+          fullUrl: `ServiceRequest/${original.id}`,
+          resource,
+          request: { method: "PUT", url: `ServiceRequest/${original.id}` },
+        },
+      ],
+    },
+    original,
+  );
+}
+
 /** オーダーとその明細をまとめて消す Bundle。 */
 export function buildMicroOrderDeleteBundle(
   serviceRequestId: string,
@@ -560,7 +632,14 @@ export function buildDoMicroOrderForm(
     ...values,
     setting,
     startDate: today(),
-    specimen: { ...values.specimen, id: "", collectionDateTime: "" },
+    specimen: {
+      ...values.specimen,
+      id: "",
+      collectionDateTime: "",
+      collectedDateTime: "",
+      collectorId: "",
+      collectorName: "",
+    },
     items: values.items.map((item) => ({ ...item, id: "" })),
   };
 }
@@ -610,6 +689,9 @@ function parseSpecimenGroupRequest(request: fhir4.ServiceRequest): MicroSpecimen
     // datetime-local の入力値に合わせて分までに丸める。日付だけ(未定でヘッダの検査日を
     // 写したもの)は採取予定日時としては未入力なので空にする。
     collectionDateTime: collectionDateTimeInput(request.occurrenceDateTime),
+    collectedDateTime: contained?.collection?.collectedDateTime ?? "",
+    collectorId: contained?.collection?.collector?.reference?.match(/^Practitioner\/(.+)$/)?.[1] ?? "",
+    collectorName: contained?.collection?.collector?.display ?? "",
     organisms: (request.orderDetail ?? []).flatMap((detail) => {
       const coding = codingBySystem(detail.coding, ORGANISM_SYSTEM);
       return coding?.code ? [{ code: coding.code, name: coding.display ?? detail.text ?? "" }] : [];

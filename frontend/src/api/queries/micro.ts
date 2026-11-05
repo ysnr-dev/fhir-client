@@ -2,10 +2,12 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { excludeNursingProblems } from "../../fhir/conditionHelpers";
 import { observationIdsFromReport, specimenIdsFromReport } from "../../fhir/labResultHelpers";
 import {
+  buildMicroCollectionBundle,
   buildMicroOrderDeleteBundle,
   isMicroServiceRequest,
   MICRO_ORDER_TYPE,
   microOrderItemRequests,
+  type MicroSpecimenValues,
 } from "../../fhir/microOrderHelpers";
 import { buildMicroResultDeleteBundle, microOrderIdFromReport } from "../../fhir/microResultHelpers";
 import { microContainersByOrderId } from "../../fhir/microContainerHelpers";
@@ -616,6 +618,23 @@ export async function fetchMicroArrivalContext(orderId: string): Promise<MicroAr
     containers: microContainersByOrderId(resourcesOfType<fhir4.Specimen>(bundle, "Specimen")).get(orderId) ?? [],
     reportStatus: report?.status ?? "",
   };
+}
+
+/**
+ * 採取の記録(組み立ては buildMicroCollectionBundle)。カルテのカード・部門一覧・看護ワークシートの
+ * どれから記録しても読み直されるよう、ServiceRequest の検索をまとめて無効にする。
+ */
+export function useRecordMicroCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      header: fhir4.ServiceRequest;
+      itemRequests: fhir4.ServiceRequest[];
+      specimen: MicroSpecimenValues;
+    }) => postBundle(buildMicroCollectionBundle(input.header, input.itemRequests, input.specimen)),
+    retry: false,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] }),
+  });
 }
 
 /** 受付・中止などの進捗を書き込む(組み立ては makeUpdateTaskStatusHook を参照)。 */

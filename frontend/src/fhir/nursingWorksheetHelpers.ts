@@ -25,6 +25,7 @@ import { groupByRp, isPrescriptionServiceRequest, SETTING_SYSTEM } from "./presc
 import { rxTaskStatus, rxTasksByOrderId } from "./rxTaskHelpers";
 import { categoryCoding, conceptLabel, orderDay, referenceId } from "./shared";
 import { labelSpecimensByOrderId, specimenArrived } from "./labSpecimenHelpers";
+import { microOrderContents, microOrderItemRequests } from "./microOrderHelpers";
 
 // 看護ワークシート(病棟の患者の 1 日)。看護指示・注射・内服・検体採取・検査や処置の予定を
 // 1 日の時刻順の行に並べ、患者ごと・勤務帯ごとに読めるようにする。
@@ -98,6 +99,11 @@ export interface WorksheetItem {
     order: fhir4.ServiceRequest;
     medicationRequests: fhir4.MedicationRequest[];
     slotAt: string;
+  };
+  /** 細菌検査の採取の記録(MicroCollectionModal)。 */
+  microCollection?: {
+    order: fhir4.ServiceRequest;
+    itemRequests: fhir4.ServiceRequest[];
   };
 }
 
@@ -325,12 +331,15 @@ export function dayOrderWorksheetItems(data: {
     const names = [...new Set(itemNamesByHeader.get(id) ?? [])];
     const headerName = conceptLabel(order.code);
 
+    // 細菌検査の明細(採取の記録と、その入力を開くのに使う)。
+    const microItems = type.code === "micro" ? microOrderItemRequests(data.items, id) : undefined;
     let done = performedOrderIds.has(id) || task?.status === "completed";
     let status = done ? "実施済" : departmentTaskLabel(task);
     if (type.kind === "specimen" && !done) {
       // 病棟の仕事は採って出すところまで。検査室に届いていれば済、ラベルだけなら採取待ち。
       // 細菌検査はラベルの無い検体を検査室が直接受け付けることがあるので、受付済も到着とみなす。
       // 刷り直しで取り下げたラベルは容器に数えない。
+      // 細菌検査は病棟が採取を記録するので、記録したら病棟の分は済。
       const specimens = (specimensByOrderId.get(id) ?? []).filter((s) => s.status !== "entered-in-error");
       if (type.code === "micro" && task?.status === "accepted") {
         done = true;
@@ -338,6 +347,9 @@ export function dayOrderWorksheetItems(data: {
       } else if (specimens.length > 0 && specimens.every(specimenArrived)) {
         done = true;
         status = "到着済";
+      } else if (microItems && microOrderContents(microItems).specimen.collectedDateTime) {
+        done = true;
+        status = "採取済";
       } else if (specimens.length > 0) {
         status = "ラベル済";
       }
@@ -352,6 +364,7 @@ export function dayOrderWorksheetItems(data: {
       detail: names.join("、") || headerName,
       done,
       status,
+      ...(microItems ? { microCollection: { order, itemRequests: microItems } } : {}),
     });
   }
   return items;

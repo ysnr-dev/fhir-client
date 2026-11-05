@@ -11,6 +11,7 @@ import {
 import type { MicroAntimicrobial, MicroSpecimenType } from "../api/masterClient";
 import { microOrderContents, microOrderItemRequests } from "../fhir/microOrderHelpers";
 import { serviceRequestsOf } from "../fhir/labOrderHelpers";
+import { localDay } from "../lib/dates";
 import { SETTING_OPTIONS, type LabResultSetting } from "../fhir/labResultHelpers";
 import {
   CAUSATIVE_OPTIONS,
@@ -123,11 +124,14 @@ export function MicroResultForm({
     const contents = microOrderContents(
       microOrderItemRequests(serviceRequests, expandingOrderId),
     );
-    if (contents.specimen.typeCode) {
+    // 材料と、採取を記録してあればその日を検体採取日に写す。
+    const collectedDay = localDay(contents.specimen.collectedDateTime);
+    if (contents.specimen.typeCode || collectedDay) {
       setValues((v) => ({
         ...v,
-        specimenTypeCode: contents.specimen.typeCode,
-        specimenTypeName: contents.specimen.typeName,
+        specimenTypeCode: contents.specimen.typeCode || v.specimenTypeCode,
+        specimenTypeName: contents.specimen.typeCode ? contents.specimen.typeName : v.specimenTypeName,
+        specimenDate: collectedDay || v.specimenDate,
       }));
     }
   }, [expandingOrderId, orderDetail.isLoading, orderDetail.data]);

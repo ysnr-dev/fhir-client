@@ -34,7 +34,7 @@ class MicroLabelReport
   # ラベル 1 枚(容器 1 つ)ぶん。
   # key は台帳の容器の識別子、bottle は別容器の検査項目(検体の容器なら nil)。
   Label = Struct.new(
-    :key, :group_id, :type, :specimen, :detail, :bottle, :planned, :container_number, :container_total, :number,
+    :key, :group_id, :type, :specimen, :detail, :bottle, :planned, :collected, :container_number, :container_total, :number,
     keyword_init: true
   )
 
@@ -119,8 +119,12 @@ class MicroLabelReport
                  .sort_by { |item| item_number(item) }
       bottles, shared = own.partition { |item| masters[item_code(item)]&.separate_container }
 
-      planned = group["occurrenceDateTime"].to_s
-      base = { group_id: group["id"], type: specimen["type"], specimen: specimen_label(specimen), planned: planned }
+      base = {
+        group_id: group["id"], type: specimen["type"], specimen: specimen_label(specimen),
+        planned: group["occurrenceDateTime"].to_s,
+        # 採取を記録していれば(docs/micro-order-design.md §7.7)、その日時を刷る。
+        collected: specimen.dig("collection", "collectedDateTime").to_s
+      }
       result = []
       if shared.any? || bottles.empty?
         names = shared.map { |item| item_short_name(item, masters) }.join("/")

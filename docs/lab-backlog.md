@@ -367,6 +367,9 @@ JLAC の識別コードが「負荷後 60 分」を別項目として持つの�
 `Specimen.collection.collectedDateTime` は結果登録時に「検体採取日」として書くだけで
 (`fhir/labResultHelpers.ts:257`)、採取者(`collection.collector`)は持っていない。
 
+細菌検査は採取の記録を入れた(`docs/micro-order-design.md` §7.7。オーダーの contained Specimen に書き、
+看護ワークシートから開ける)。検体検査も同じ部品で足せる。
+
 **［提案］** 採血の実施入力を足し、`Specimen.collection` に採取者・採取日時を記録する。
 ラベル発行済みの `Specimen` が既にあるので、そこへ書き足す形になる。病棟採血なら看護
 ワークシート(`pages/NursingWorklistPage.tsx`。**いま検体検査への参照が無い**)にその日の採血予定を
