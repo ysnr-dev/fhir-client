@@ -1,8 +1,10 @@
 # SS-MIX2 標準化ストレージ出力の設計
 
 診療データを上流 FHIR サーバーへ書くたびに、SS-MIX2 標準化ストレージ(HL7 v2.5 のファイルを
-患者 ID / 診療日 / データ種別のフォルダに置く形式)へも書き出す。状態: **第 1 段階まで実装済み**(患者基本・
-入退院・転棟・外来受付・アレルギー・病名・処方・注射・検体検査オーダー・検体検査結果)。第 2 段階は未着手。
+患者 ID / 診療日 / データ種別のフォルダに置く形式)へも書き出す。状態: **第 2 段階まで実装済み**(第 1 段階:
+患者基本・入退院・転棟・外来受付・アレルギー・病名・処方・注射・検体検査オーダー・検体検査結果。第 2 段階:
+処方・注射の実施、食事オーダー、放射線・内視鏡・生理のオーダー、放射線・内視鏡の実施、生理検査結果、
+入院予定・退院予定・転科転棟予定・担当医変更、トランザクションストレージ)。
 仕様の原典は日本医療情報学会「SS-MIX2 標準化ストレージ仕様書 Ver.1.2j」「同 構成の説明と
 構築ガイドライン Ver.1.2j」「同 コード表」(2026-08 版、`backend/tmp/docs/ssmix2/` に PDF)。
 
@@ -146,13 +148,25 @@ frontend と同じ約束(ServiceRequest.category の `http://fhir-client.local/C
 | 注射 作成・更新・取消 | RDE^O11(RXE-2 `00^一般^99I02`、RXC に成分、RXR 経路・装置、TQ1-7/8 開始終了) | OMP-02 | 同上 | 同上 | INS / DEL |
 | 検体検査オーダー(SR + Specimen) | OML^O33(SPM / ORC / OBR / OBX は依頼項目を OBX-11 `O`) | OML-01 | ORC-9 | ヘッダーの番号 | INS / DEL |
 | 検体検査結果(DiagnosticReport + Observation) | OUL^R22(SPM-17 採取日、OBX-2 NM/ST/CWE、OBX-11 F/C/P、OBR-22 報告日時) | OML-11 | SPM-17 採取日 | 元オーダーの番号(basedOn 無しは DiagnosticReport で採番) | INS(訂正報告も INS。前の有効ファイルは過去履歴 2 になる) |
+| Encounter(IMP)status=planned の作成・更新(入院予定) | ADT^A14 | ADT-21 | PV2-8 入院予定日(未定は `-`) | `Encounter/{id}#A14` | INS |
+| planned → cancelled / entered-in-error(入院予定の取消) | ADT^A27 | ADT-21 | 同上 | 同上 | DEL |
+| 在院中の Encounter に退院予定(拡張 `encounter-discharge-plan`)が付いた・変わった | ADT^A16 | ADT-51 | PV2-9 退院予定日 | `Encounter/{id}#A16` | INS |
+| 在院中のまま退院予定が消えた(退院実施で消えたときは起こさない) | ADT^A25 | ADT-51 | 同上 | 同上 | DEL |
+| 在院中の Encounter に転科転棟予定(拡張 `encounter-transfer-plan`)が付いた・変わった | ADT^A15(PV1-10 移動先の診療科) | ADT-41 | PV2-8 予定日 | `Encounter/{id}#A15` | INS |
+| 移動せずに転科転棟予定が消えた | ADT^A26(PV2-1 移動先) | ADT-41 | 同上 | 同上 | DEL |
+| 在院中の Encounter の主治医(participant ATND)が変わった | ADT^A54(PV1-7 新しい主治医) | ADT-01 | `-` | `Encounter/{id}#A54` | INS |
+| 主治医が外れた | ADT^A55(PV1-7 外れた主治医) | ADT-01 | `-` | 同上 | DEL |
+| 食事 ServiceRequest(order-type `meal`)作成・更新・取消 | OMD^O03(TQ1-3 `TID&１日３回&HL70335`、TQ1-7/8 `YYYYMMDDHH`、ODS-1 T 食種 / D 主食、欠食は時間帯付き NPO、AL1 食物アレルギー) | OMD | ORC-9 オーダー日 | ヘッダーの番号 | INS / DEL |
+| 処方・注射の実施(ハブ Procedure + partOf の MedicationAdministration)作成・更新・削除 | RAS^O17(RDE と同じ ORC/RXE/TQ1/RXR/RXC の後ろに薬剤ごとの RXA、ORC-3 に実施の番号) | OMP-11 / OMP-12 | RXA-3 実施日 | **実施(Procedure)の番号**(同じオーダーの実施が 1 日に何度もあるため) | INS / DEL |
+| 放射線・内視鏡・生理の ServiceRequest 作成・更新・取消 | OMG^O19(ORC NW/CA + 親 PA + 明細ごとの子 CH。OBR-4 は放射線が JJ1017、他はローカル) | OMG-01 / 02 / 03 | ORC-9 オーダー日 | ヘッダーの番号(子は明細の番号、ORC-8 / OBR-29 で親を指す) | INS / DEL(取消は NW/CA の制御レコードのみ) |
+| 放射線・内視鏡の実施(ハブ Procedure)作成・更新・削除 | OMI^Z23(OBR-7 実施日時、OBR-25 F、子ごとの ZE1 手技、最初の子に実施した手技・使用物品(造影剤 HOT9・器材)・被曝線量の OBX、IPC 受付番号とモダリティ) | OMG-11 / 12 | OBR-7 実施日 | ヘッダーの番号(ORC-3 / OBR-3 / IPC-1 に実施の番号) | INS / DEL |
+| 生理検査の所見レポート(DiagnosticReport、category order-type `physio`)作成・更新 | ORU^R01(OBR-4 検査項目、OBR-7 検査日時、OBR-25 F/C/P、所見と判定を OBX の TX) | OMG-13 | OBR-7 検査日 | 元オーダーの番号 | INS(訂正も INS) / DEL |
 
-第 2 段階(Dispatcher に 1 行 + builder 1 クラスずつ足す): MedicationAdministration → RAS^O17
-(OMP-11 / OMP-12)、食事 ServiceRequest → OMD^O03(対応は `docs/meal-order-design.md` と
-`frontend/src/fhir/mealOrderHelpers.ts` 冒頭に整理済み)、放射線・内視鏡・生理のオーダー →
-OMG^O19(OMG-01 / 02 / 03、JJ1017・LENDO)、実施 → OMI^Z23(OMG-11 / 12)、生理結果 → ORU^R01
-(OMG-13)、入院予定 ADT^A14 / 退院予定 ADT^A16、担当医変更 ADT^A54、トランザクションストレージ
-(`TR_<タイムスタンプ>_<処理系統>.DAT`)。
+実施記録は「ハブの Procedure(basedOn オーダー)+ partOf の子」で揃っている(`frontend/src/fhir/*PerformHelpers.ts`、
+`radResultHelpers.ts`)。Dispatcher は transaction Bundle の `urn:uuid` 参照を採番後の参照に置き換えるので、同じ
+transaction で書かれた親子を辿れる。MedicationAdministration だけが書かれた transaction(ロット番号の後入れなど)は
+partOf のハブを読み直して RAS を組み直す。放射線・内視鏡の読影・所見レポートに対応する SS-MIX2 のメッセージは無い
+(実施通知 OMI^Z23 まで)。
 
 Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_history/{vid-1}` を読む
 (vid は transaction-response の `response.location` `{type}/{id}/_history/{vid}` から。vid=1 と
@@ -186,6 +200,32 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
 - SPM / OBR / OBX: SPM-4 `JLAC10 材料コード^名称^JC10`、SPM-17 採取日(日付のみ)、OBR-4 検査セット
   (ローカル `99O03`)、OBR-22 報告日時(issued)、OBR-25 状態、OBX-3 `JLAC10^名称^JC10^ローカル^略称^99X03`、
   OBX-5/6/7/8 値・単位・基準値・異常フラグ(HL70078)、OBX-11 F / C / P、OBX-14 検査日。
+- RXA(RAS^O17、`MedicationSegments` を RDE と共有): RXA-1 `0`、RXA-2 `1`、RXA-3/4 実施開始・終了
+  (MedicationAdministration の effective、無ければハブの performed)、RXA-5 薬剤(RXE-2 と同じ HOT9 / ローカル)、
+  RXA-6/7 実施量と単位(MR9P)、RXA-9 コメント(`99IC7`)、RXA-10 実施者、RXA-11 実施場所(LA2。入院は
+  `病棟^病室^ベッド^^^N`、外来は `診療科^^^^^C`)、RXA-12 速度、RXA-15 ロット番号(拡張 `medication-lot-number`)、
+  RXA-18 実施しなかった理由(`99ZRS`)、RXA-20 完了状態(HL70322: completed CP / stopped PA / not-done NA)、
+  RXA-22 記録日時。ORC-9 は実施の記録日時(仕様書 3.3.7 の「実施情報では実施更新日時」)。
+- ODS / TQ1(OMD^O03): TQ1-3 `TID&１日３回&HL70335`、TQ1-7/8 `YYYYMMDDHH`(08 / 12 / 18)、TQ1-9 `R^ルーチン^HL70485`、
+  ODS-1 `T` に食種(`99ZMD`。食止めの食種は `NPO^食止め^SSMIXTF01` にローカルを併記)と ODS-4 に副食形態・塩分、
+  欠食は `ODS|T|<時間帯>|NPO^食止め^SSMIXTF01`、主食は ODS-1 `D` に食事ごと(ODS-2 `1^朝食^99ZMT` / `3^昼食` / `5^夕食`)、
+  コメントは NTE、食物アレルギーは AL1(`FA^食物アレルギー^HL70127`、アレルゲンは J-FAGY をローカル `99ZAL` で)。
+- OMG^O19 / OMI^Z23(`ExamOrderSegments` を共有): 親子レコード(付録 2)。ORC-1 NW/CA → PA → 明細ごとの CH、
+  CH の ORC-2 は明細(ServiceRequest)の番号、ORC-8 / OBR-29 に親の番号。OBR-4 は放射線が親 JJ1017-16P
+  (16M の先頭 3 桁 + 0 埋め)にモダリティのローカル(`99ZRM`)併記、子 `JJ1017-32^名称^JJ1017^項目コード^名称^99ZRI`。
+  内視鏡・生理は検査種別(`99ZEE` / `99ZPE`)と項目(`99ZEI` / `99ZPI`)のローカル(標準コードが無い)。
+  TQ1-7 予定日時(`YYYYMMDDHHMM`)、TQ1-9 優先度(省略せず R / S)。実施(OMI)は OBR-7/8 実施日時、OBR-22 記録日時、
+  OBR-25 F、ORC-5 CM、ZE1(`1|RS|手技(明細の JJ1017 / ローカル)|||||実施者||使用物品`)、実施した手技(Procedure.code の
+  レセ電算コード、`99ZRP` / `99ZEP`)は 2 本目以降の ZE1、使用物品は造影剤(`HOT9^名称^HOT9^数量^単位&名称&MR9P`)と
+  器材(`99ZRM`、数量)、被曝線量は OBX NM(`99ZRD`)、IPC は受付番号 = 実施の番号、検査インスタンス UID は無いので `""`、
+  モダリティは JJ1017 のモダリティ → DICOM(`Codes::JJ1017_MODALITY_TO_DICOM`、内視鏡は ES)。
+- ORU^R01(生理検査結果): ORC-1 SC、ORC-5 CM / A(preliminary)、OBR-4 明細が 1 項目ならその項目、複数なら検査種別、
+  OBR-7 検査日時(effectiveDateTime)、OBR-22 issued、OBR-25 F / C / P、OBX は所見(Observation `physio-report-item`
+  の findings)と判定(conclusion)を TX で、OBX-14 検査日時。
+- 入退院の予定(ADT^A14 / A27 / A16 / A25 / A15 / A26): PV1 は入院予定でも `I`、PV1-3 は予定の病棟^病室^ベッド
+  (physicalType 付きの location から)、PV1-10 診療科(A14 / A15)、PV1-44 は空。PV2-8 入院予定日・転科転棟予定日、
+  PV2-9 退院予定日、取消の PV2-1 に予定していた所在。実施で予定が消えたとき(planned → in-progress、退院、転棟)は
+  取消を起こさない。担当医変更(ADT^A54 / A55)は PV1-7 だけで ROL は使わない。
 
 ### 5.4 組み立ての実行(`Materializer`)とメッセージの表
 
@@ -267,6 +307,12 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
     出力先を `./backend/tmp/ssmix2:/ssmix2` に bind mount)。トークンは `.env` の `SSMIX2_INBOUND_TOKEN`。
   - Windows 機で動かすときは `root_path` に UNC か `D:\ssmix2` を書く(解釈するのはエージェント)。
   - README の「対応している連携」「設定」に追記。
+- トランザクションストレージ(構築ガイドライン 3.3、`internal/adapter/ssmix2/transaction.go`): `SSMIX2_TRANSACTION_DIR`
+  を置いたときだけ、標準化ストレージに置いたメッセージを `<dir>/<発生年>/TR_<書き始めた日時 YYYYMMDDHHMMSSFFF>_<処理系統番号>.DAT`
+  に追記する。1 件は `#SSMIX,2.00,<医療施設 ID>,<患者 ID>,<診療日>,<データ種別>,<オーダ No>,<処理区分>,<診療科>,<トランザクション日時>`
+  + `<EOH>`(0x1E 0x0D)+ HL7 + `<EOM>`(0x1C 0x0D)。日付が変わるか 100MB に達したら次のファイル。配り直しで既に
+  あったメッセージは追記しない(発生順の記録を二重にしない)。処理系統番号は `SSMIX2_TRANSACTION_LINE_NO`(既定 `0001`)。
+  開発環境の compose では `/ssmix2/transaction`(`backend/tmp/ssmix2/transaction`)。
 
 ## 8. 画面
 
@@ -351,6 +397,15 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
 - 年だけ・年月だけの FHIR の日付は、その精度のまま(`YYYY` / `YYYYMM`)書く。
 - 診療科コードは Organization に SS-MIX2 のコードが無いと `-`(ファイル名)と名称だけのローカル(ORC-17)になり、
   warning に残る。
+- 単体の POST(`/Patient` など)のパスは種別だけなので、`split_reference` は先頭の `/` を落として種別と id の 2 要素が
+  揃うときだけ参照とみなす(POST を取り落とさない)。
+- 処方・注射の実施のファイルのオーダ No は実施(Procedure)で採番する(ガイドライン表 3.1-3「同一日に複数回のデータが
+  存在し得る場合は発生順序を識別できる番号」)。ORC-2 はオーダーの番号のままで、ORC-3 に実施の番号を書く。
+- 入院予定(status=planned)から入院実施(in-progress)への更新は A01(前版が planned でも入院実施)。planned の
+  entered-in-error は入院取消(A11)ではなく入院予定の取消(A27)。
+- 食事のデータ種別はガイドライン表 3.1-2 どおり `OMD`(枝番なし)。
+- 生理検査の結果は所見レポート(`examReportHelpers.ts` の DiagnosticReport)から起こし、心電図の計測値のような
+  数値の OBX は持たない(カルテに構造化した計測値が無い)。
 
 ## 10. 実装順
 
@@ -361,7 +416,9 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
 4. エージェントのアダプタ、compose の `agent-ssmix2`、開発環境で `backend/tmp/ssmix2` にファイルができることを確認。
 5. 残りの第 1 段階の builder(入退院・転棟・外来受付、A60、PPR、RDE 処方・注射、OML、OUL)。
 6. 状態 API と画面の状態表示、docs(`features/facility.md`・`features/admin-integration.md`・`development.md`)。
-7. 第 2 段階(RAS / OMD / OMG / OMI / ORU / A14 / A16 / A54、トランザクションストレージ)。
+7. 第 2 段階: RAS(処方・注射の実施)/ OMD(食事)/ OMG(放射線・内視鏡・生理のオーダー)/ OMI(放射線・内視鏡の実施)/
+   ORU(生理検査結果)/ A14・A27・A16・A25・A15・A26(入退院・転科転棟の予定)/ A54・A55(担当医)、エージェントの
+   トランザクションストレージ。
 
 ## 11. 検証
 

@@ -51,6 +51,38 @@ module Ssmix2
     JFAGY_YCM_PREFIX = "Y".freeze
     # 外来受付(appointmentHelpers.ts)。
     APPOINTMENT_CHECKED_IN_AT_EXT_URL = "http://fhir-client.local/StructureDefinition/appointment-checked-in-at".freeze
+    # 入退院の予定(encounterHelpers.ts)。退院予定・転科転棟予定は Encounter のローカル拡張。
+    DISCHARGE_PLAN_EXT_URL = "http://fhir-client.local/StructureDefinition/encounter-discharge-plan".freeze
+    TRANSFER_PLAN_EXT_URL = "http://fhir-client.local/StructureDefinition/encounter-transfer-plan".freeze
+    # 実施記録(injectionPerformHelpers.ts・oralPerformHelpers.ts・radResultHelpers.ts など)。
+    # 実施 1 回を Procedure のハブにし、薬剤の MedicationAdministration・追加の手技・被曝線量を partOf でぶら下げる。
+    MEDICATION_LOT_NUMBER_EXT_URL = "http://fhir-client.local/StructureDefinition/medication-lot-number".freeze
+    RAD_PROCEDURE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/rad-procedure-code".freeze
+    ENDOSCOPY_PROCEDURE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/endoscopy-procedure-code".freeze
+    PHYSIO_PROCEDURE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/physio-procedure-code".freeze
+    RAD_MATERIAL_SYSTEM = "http://fhir-client.local/CodeSystem/rad-material".freeze
+    MEDICAL_MATERIAL_SYSTEM = "http://fhir-client.local/CodeSystem/medical-material".freeze
+    RAD_DOSE_SYSTEM = "http://fhir-client.local/CodeSystem/rad-dose".freeze
+    MATERIAL_QUANTITY_EXT_URLS = %w[rad physio endoscopy].map { |k| "http://fhir-client.local/StructureDefinition/#{k}-material-quantity" }.freeze
+    # 放射線・内視鏡・生理のオーダー(radOrderHelpers.ts・endoscopyOrderHelpers.ts・physioOrderHelpers.ts)。
+    RAD_ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/rad-order-item".freeze
+    JJ1017_32_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-32".freeze
+    JJ1017_16M_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-16m".freeze
+    JJ1017_MODALITY_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-modality".freeze
+    ENDOSCOPY_ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/endoscopy-order-item".freeze
+    ENDOSCOPY_EXAM_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/endoscopy-exam-type".freeze
+    PHYSIO_ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/physio-order-item".freeze
+    PHYSIO_EXAM_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/physio-exam-type".freeze
+    # 生理検査の所見レポート(examReportHelpers.ts)。種別は category の order-type、所見は result の Observation。
+    PHYSIO_REPORT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/physio-report-item".freeze
+    # 食事オーダー(mealOrderHelpers.ts)。
+    MEAL_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/meal-type".freeze
+    MEAL_STAPLE_FOOD_SYSTEM = "http://fhir-client.local/CodeSystem/meal-staple-food".freeze
+    MEAL_SIDE_DISH_FORM_SYSTEM = "http://fhir-client.local/CodeSystem/meal-side-dish-form".freeze
+    MEAL_ORDER_END_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-order-end".freeze
+    MEAL_TIMING_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-timing".freeze
+    MEAL_SKIPPED_TIMING_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-skipped-timing".freeze
+    MEAL_SALT_LIMIT_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-salt-limit".freeze
 
     Name = Struct.new(:family_kanji, :given_kanji, :family_kana, :given_kana, keyword_init: true)
 
@@ -58,7 +90,7 @@ module Ssmix2
 
     # "Patient/123" / "urn:uuid:…" / 絶対 URL から種別と id を取る。
     def split_reference(reference)
-      text = reference.to_s
+      text = reference.to_s.sub(%r{\A/+}, "")
       return [nil, nil] if text.empty? || text.start_with?("urn:")
 
       parts = text.split("/")
@@ -129,13 +161,32 @@ module Ssmix2
       Array(resource&.dig("extension")).find { |e| e["url"] == url }
     end
 
-    # category の中から system のコードを取る。
+    # category の中から system のコードを取る。category は配列(ServiceRequest)でも 1 つ(Procedure)でもよい。
     def category_code(resource, system)
-      Array(resource&.dig("category")).each do |concept|
+      category_coding(resource, system)&.dig("code")
+    end
+
+    def category_coding(resource, system)
+      concepts = resource&.dig("category")
+      concepts = [concepts] if concepts.is_a?(Hash)
+      Array(concepts).each do |concept|
         found = coding(concept, system)
-        return found["code"] if found
+        return found if found
       end
       nil
+    end
+
+    # 参照の配列から種別の合う最初の参照("Practitioner/1" など)を取る。
+    def reference_of_type(references, type)
+      Array(references).map { |r| r.is_a?(Hash) ? r["reference"] : r }.find { |r| r.to_s.start_with?("#{type}/") }
+    end
+
+    # 子拡張の値。拡張 url の下にある url == child の value* を返す。
+    def extension_child(extension, child)
+      found = Array(extension&.dig("extension")).find { |e| e["url"] == child }
+      return nil if found.nil?
+
+      found.find { |k, _| k.start_with?("value") }&.last
     end
 
     def order_type(service_request) = category_code(service_request, ORDER_TYPE_SYSTEM)

@@ -41,7 +41,7 @@ module Ssmix2
     end
 
     def seed_written(transaction)
-      Dispatcher.written_resources(transaction).each do |written|
+      Dispatcher.written_resources(transaction, all: true).each do |written|
         context.seed(written.resource) if written.method != "DELETE"
       end
     end

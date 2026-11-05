@@ -117,6 +117,9 @@ services:
       KARTE_SSMIX2_URL: http://backend:3001/integrations/ssmix2/messages
       SSMIX2_POLL_INTERVAL: 5s
       SSMIX2_ALLOWED_ROOT: /ssmix2
+      SSMIX2_TRANSACTION_DIR: /ssmix2/transaction
+      # トランザクションデータファイル名の日時は OS の時刻なので、日本時間に合わせる。
+      TZ: Asia/Tokyo
       # 管理画面「外部システム連携 > SS-MIX2 標準化ストレージ」で発行したトークンを入れる。
       KARTE_INBOUND_TOKEN: ${SSMIX2_INBOUND_TOKEN:-}
     volumes:

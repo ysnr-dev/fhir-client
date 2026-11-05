@@ -17,7 +17,9 @@ RSpec.describe Ssmix2::Messages::AppointmentA04 do
     allow(store).to receive(:read_or_nil).with("Appointment/ap1/_history", version - 1).and_return(previous) if version && version > 1
     transaction = ssmix2_transaction(method: method, path: "/Appointment/ap1", request: resource, response: resource)
     written = Ssmix2::Dispatcher::Written.new(method: method, type: "Appointment", id: "ap1", version: version, resource: resource)
-    described_class.new(context: context, transaction: transaction, written: written).build
+    # 前の版はキャッシュされるので、組み立てごとに Context を作り直す。
+    fresh = Ssmix2::Context.new(store: store, cache: Ssmix2::ResourceCache.new)
+    described_class.new(context: fresh, transaction: transaction, written: written).build
   end
 
   it "sends ADT^A04 with the department and the time of reception" do

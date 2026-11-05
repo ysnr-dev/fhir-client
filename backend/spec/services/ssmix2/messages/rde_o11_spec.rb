@@ -2,7 +2,7 @@ require "rails_helper"
 require "support/ssmix2_helpers"
 
 RSpec.describe Ssmix2::Messages::RdeO11 do
-  F = Ssmix2::Fhir
+  F = Ssmix2::Fhir unless defined?(F)
   let(:header) do
     { "resourceType" => "ServiceRequest", "id" => "sr1", "status" => "active", "subject" => { "reference" => "Patient/p1" },
       "category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "prescription" }] },

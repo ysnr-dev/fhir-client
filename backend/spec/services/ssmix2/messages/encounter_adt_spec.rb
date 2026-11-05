@@ -41,6 +41,19 @@ RSpec.describe Ssmix2::Messages::EncounterAdt do
     expect(pv1[44]).to eq("20261101160000")
   end
 
+  it "sends ADT^A01 when a planned admission is carried out and nothing when a plan is marked entered-in-error" do
+    planned = ssmix2_admission(status: "planned")
+    result = build(ssmix2_admission, method: "PUT", version: 2, previous: planned)
+    expect(result.data_kind).to eq("ADT-22")
+    expect(segment(result, "MSH")).to include("|ADT^A01^ADT_A01|")
+
+    allow(store).to receive(:read_or_nil).with("Encounter/enc2/_history", 1).and_return(planned.merge("id" => "enc2"))
+    erroneous = ssmix2_admission(id: "enc2", status: "entered-in-error")
+    transaction = ssmix2_transaction(method: "PUT", path: "/Encounter/enc2", request: erroneous, response: erroneous)
+    written = Ssmix2::Dispatcher::Written.new(method: "PUT", type: "Encounter", id: "enc2", version: 2, resource: erroneous)
+    expect(described_class.new(context: context, transaction: transaction, written: written).build).to be_nil
+  end
+
   it "sends ADT^A03 when the encounter finishes, and ADT^A13 (DEL) when the discharge is undone" do
     admitted = ssmix2_admission
     discharged = ssmix2_admission(status: "finished", finish: "2026-11-04T10:00:00+09:00")

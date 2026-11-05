@@ -54,11 +54,18 @@ module Ssmix2
             .each { |resource| seed(resource) }
     end
 
-    # 版を指定して読む(Encounter の前の版)。無ければ nil。
+    # 版を指定して読む(Encounter の前の版)。無ければ nil。版は変わらないので、同じ transaction の
+    # 複数の builder が同じ前版を読んでも上流には 1 回しか行かない。
     def vread(type, id, version)
       return nil if version.to_i < 1
 
-      @store.read_or_nil("#{type}/#{id}/_history", version)
+      key = "#{type}/#{id}/_history/#{version}"
+      cached = @cache.fetch(key)
+      return cached unless cached.nil?
+
+      found = @store.read_or_nil("#{type}/#{id}/_history", version)
+      @cache.put(key, found) if found
+      found
     end
 
     # 患者の現在の入院(in-progress の IMP)。無ければ nil。

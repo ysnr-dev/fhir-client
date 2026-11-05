@@ -57,7 +57,7 @@ module Ssmix2
       end
 
       def seed_transaction_resources(type)
-        Dispatcher.written_resources(transaction).each { |w| context.seed(w.resource) if w.type == type && w.resource }
+        Dispatcher.written_resources(transaction, all: true).each { |w| context.seed(w.resource) if w.type == type && w.resource }
       end
 
       def group_by_specimen(observations, specimens)

@@ -48,6 +48,33 @@ module Ssmix2
     # 異常フラグ(使用者定義表 0078)。FHIR の v3 ObservationInterpretation と同じ記号。
     ABNORMAL_FLAGS = %w[H L HH LL N A AA].freeze
 
+    # 実施(Procedure / MedicationAdministration)の進捗 → RXA-20 完了状態(HL7 表 0322)。
+    ADMINISTRATION_COMPLETION = { "completed" => "CP", "stopped" => "PA", "not-done" => "NA", "entered-in-error" => "NA" }.freeze
+
+    # 食事のタイミング(mealOrderHelpers.ts の MEAL_TIMING_OPTIONS)→ ODS-2 サービス時間帯のローカルコードと TQ1-7/8 の時刻。
+    MEAL_TIMINGS = {
+      "breakfast" => { code: "1", name: "朝食", hour: "08" },
+      "lunch" => { code: "3", name: "昼食", hour: "12" },
+      "dinner" => { code: "5", name: "夕食", hour: "18" }
+    }.freeze
+    MEAL_TIMING_SYSTEM = "99ZMT".freeze
+    # 食止めの食種(SS-MIX2 仕様策定 TF 定義表 01)。
+    MEAL_FASTING_CWE = %w[NPO 食止め SSMIXTF01].freeze
+
+    # JJ1017 のモダリティ(16M の 1 桁目、rad_jj1017_codes.csv)→ DICOM のモダリティ(IPC-5)。
+    JJ1017_MODALITY_TO_DICOM = {
+      "1" => "CR", "2" => "RF", "3" => "XA", "4" => "CR", "5" => "CR", "6" => "CT", "7" => "MR", "8" => "NM", "9" => "US",
+      "A" => "RTIMAGE", "B" => "RTIMAGE", "F" => "MG", "G" => "CR", "H" => "IO"
+    }.freeze
+    # JJ1017-16P。親オーダーの検査種別はモダリティ + 手技大分類の 3 桁を残して 0 で埋める(付録 2)。
+    JJ1017_16P_LENGTH = 16
+
+    # 内視鏡の実施通知の IPC-5。
+    ENDOSCOPY_DICOM_MODALITY = "ES".freeze
+
+    # オーダーの優先度(TQ1-9、使用者定義表 0485)。
+    PRIORITY = { "urgent" => "S", "stat" => "S", "asap" => "A" }.freeze
+
     module_function
 
     def gender(fhir_gender) = GENDER.fetch(fhir_gender.to_s, "U")
@@ -107,6 +134,27 @@ module Ssmix2
     end
 
     def result_status(fhir_status) = RESULT_STATUS.fetch(fhir_status.to_s, "F")
+
+    def administration_completion(status) = ADMINISTRATION_COMPLETION.fetch(status.to_s, "CP")
+
+    def meal_timing(code) = MEAL_TIMINGS[code.to_s]
+
+    def meal_timing_cwe(code)
+      timing = meal_timing(code)
+      timing ? Hl7::Types.cwe(timing[:code], timing[:name], MEAL_TIMING_SYSTEM) : ""
+    end
+
+    # TQ1-9。省略せず、指定が無ければ R。
+    def priority_cwe(fhir_priority) = Hl7::Types.cwe(PRIORITY.fetch(fhir_priority.to_s, "R"), "", "HL70485")
+
+    def jj1017_16p(jj1017_16m)
+      code = jj1017_16m.to_s
+      return nil if code.length < 3
+
+      code[0, 3].ljust(JJ1017_16P_LENGTH, "0")
+    end
+
+    def dicom_modality(jj1017_modality) = JJ1017_MODALITY_TO_DICOM.fetch(jj1017_modality.to_s, "OT")
 
     def abnormal_flag(interpretation_code)
       code = interpretation_code.to_s

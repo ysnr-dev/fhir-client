@@ -187,7 +187,9 @@ backend が discovery（`GET {URL}/cds-services`、5 分キャッシュ）で読
 
 同じエージェントのバイナリは、`AGENT_ADAPTER=ssmix2-storage` で起動すると向きが逆になり、
 `GET /integrations/ssmix2/messages` で SS-MIX2 のメッセージを取りに来て標準化ストレージへ書き、
-`POST /integrations/ssmix2/messages/ack` で結果を返します（`docs/ssmix2-export-design.md`）。
+`POST /integrations/ssmix2/messages/ack` で結果を返します（`docs/ssmix2-export-design.md`）。エージェントに
+`SSMIX2_TRANSACTION_DIR` を置くと、書いたメッセージをトランザクションストレージ（`TR_<日時>_<処理系統番号>.DAT`）
+にも追記します。
 日レセ連携と同じ院内サーバーで動かすときは 2 つ目のプロセスとして起動します。
 
 ### 画面

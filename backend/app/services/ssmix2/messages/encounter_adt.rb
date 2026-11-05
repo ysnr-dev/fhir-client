@@ -2,6 +2,7 @@ module Ssmix2
   module Messages
     # 入院(Encounter、class=IMP)の書き込みから、入院実施(ADT^A01)・退院実施(ADT^A03)・転科転棟(ADT^A02)・
     # 入院取消(ADT^A11)・退院取消(ADT^A13)のどれかを起こす。どの事象かは前の版との比較で決める。
+    # 予定(入院予定・退院予定・転科転棟予定)は EncounterPlanAdt、担当医の変更は EncounterAttendingAdt。
     class EncounterAdt < Base
       Event = Struct.new(:code, :structure, :data_kind, :process, :service_date, :occurred, :order_ref, keyword_init: true)
 
@@ -9,7 +10,7 @@ module Ssmix2
         encounter = written.resource
         return nil if encounter.nil? || encounter.dig("class", "code") != "IMP"
 
-        event = classify(encounter, previous_version(encounter))
+        event = classify(encounter, previous_version("Encounter", encounter))
         return nil if event.nil?
 
         patient = patient_of(encounter.dig("subject", "reference"))
@@ -23,19 +24,14 @@ module Ssmix2
 
       private
 
-      def previous_version(encounter)
-        return nil if written.method == "POST" || written.version.nil? || written.version <= 1
-
-        context.vread("Encounter", encounter["id"], written.version - 1)
-      end
-
       def classify(encounter, previous)
         status = encounter["status"]
         ref = "Encounter/#{encounter['id']}"
         start = Hl7::Stamp.day(encounter.dig("period", "start"))
         case status
         when "entered-in-error"
-          return nil if previous && previous["status"] == "entered-in-error"
+          # 入院予定の誤登録は予定の取消(EncounterPlanAdt)。
+          return nil if previous.nil? || %w[entered-in-error planned cancelled].include?(previous["status"])
 
           event("A11", "ADT_A09", "ADT-22", "DEL", start, nil, "#{ref}#A01")
         when "finished"
@@ -43,7 +39,7 @@ module Ssmix2
 
           event("A03", "ADT_A03", "ADT-52", "INS", Hl7::Stamp.day(encounter.dig("period", "end")), nil, "#{ref}#A03")
         when "in-progress"
-          if previous.nil?
+          if previous.nil? || previous["status"] == "planned"
             event("A01", "ADT_A01", "ADT-22", "INS", start, nil, "#{ref}#A01")
           elsif previous["status"] == "finished"
             event("A13", "ADT_A01", "ADT-52", "DEL", Hl7::Stamp.day(previous.dig("period", "end")), nil, "#{ref}#A03")

@@ -113,6 +113,135 @@ module Ssmix2
         encounter.dig("class", "code") == "IMP"
       end
 
+      # PV2。extra は PV2-n(1 始まり)→ 値。入退院・転科転棟の予定(PV2-8 / PV2-9)と予定の取消(PV2-1)で使う。
+      # 書く値が無ければ(日付未定の入院予定)セグメントごと省く。
+      def pv2(extra)
+        return if extra.values.all?(&:blank?)
+
+        fields = Array.new(42, "")
+        extra.each { |index, value| fields[index - 1] = value }
+        builder.add("PV2", *fields)
+      end
+
+      # 入院予定の所在。予定の Encounter は病棟・病室・ベッドを physicalType 付きで並べる(実施前は床が決まらない)。
+      def planned_location(encounter)
+        by_type = Array(encounter["location"]).each_with_object({}) do |entry, found|
+          type = Fhir.coding(entry["physicalType"], Fhir::PHYSICAL_TYPE_SYSTEM)&.dig("code")
+          found[type] ||= context.by_reference(entry.dig("location", "reference")) if type
+        end
+        return "" if by_type.empty?
+
+        Hl7::Types.pl_inpatient(location_code(by_type["wa"]), location_code(by_type["ro"]), location_code(by_type["bd"]))
+      end
+
+      # TQ1。extra は TQ1-n(1 始まり)→ 値。TQ1-1 は 1、TQ1-9 は省略しない(放射線・生理の規約)。
+      def tq1(extra)
+        fields = Array.new(14, "")
+        fields[0] = "1"
+        extra.each { |index, value| fields[index - 1] = value }
+        builder.add("TQ1", *fields)
+      end
+
+      # AL1。アレルギーの参照(AllergyIntolerance)の配列から患者の禁忌を並べる(給食オーダー)。
+      def al1(allergy_references)
+        allergy_references.each_with_index do |reference, index|
+          allergy = context.by_reference(reference)
+          next if allergy.nil?
+
+          coding = Fhir.first_coding(allergy["code"])
+          builder.add("AL1", (index + 1).to_s, Codes.allergen_type_cwe(Array(allergy["category"]).first),
+                      coding ? Hl7::Types.cwe(coding["code"], coding["display"] || Fhir.display_of(allergy["code"]), "99ZAL") : Hl7::Types.cwe("", Fhir.display_of(allergy["code"]), "99ZAL"),
+                      Codes.allergy_severity_cwe(allergy["criticality"]))
+        end
+      end
+
+      # オーダーの入外区分と、入院なら在院中の入院(PV1 に使う)。encounter 参照があればそれを優先する。
+      def encounter_for(resource, inpatient)
+        reference = resource&.dig("encounter", "reference")
+        return context.by_reference(reference) if reference.present?
+
+        inpatient ? :current : nil
+      end
+
+      # 実施者(Procedure.performer / MedicationAdministration.performer)の XCN。
+      def performer_xcn(resource)
+        reference = Array(resource&.dig("performer")).map { |p| p.dig("actor", "reference") }.find { |r| r.to_s.start_with?("Practitioner/") }
+        reference ? practitioner_xcn(reference) : ""
+      end
+
+      # オーダーの明細(basedOn でヘッダーを指す ServiceRequest)。同じ transaction で書かれた分を上流の分に重ねる。
+      # パネル・セットの構成項目も含めて返す。
+      def item_requests_of(header, item_system)
+        found = context.search("ServiceRequest", { "based-on" => "ServiceRequest/#{header['id']}", "_count" => 200 })
+        by_id = found.select { |sr| Fhir.coding(sr["code"], item_system) }.index_by { |sr| sr["id"] }
+        Dispatcher.written_resources(transaction).each do |w|
+          next unless w.type == "ServiceRequest" && w.method != "DELETE" && w.resource && w.id != header["id"]
+          next unless Fhir.coding(w.resource["code"], item_system)
+
+          by_id[w.id] = w.resource
+        end
+        by_id.values
+      end
+
+      # 明細のうちヘッダー直下のもの(セットと単項目)。
+      def top_level_items(header, items)
+        top = items.select { |sr| Array(sr["basedOn"]).any? { |b| b["reference"] == "ServiceRequest/#{header['id']}" } }
+        top.empty? ? items : top
+      end
+
+      # セットを構成項目に展開した末端の項目。
+      def leaf_items(group, items)
+        group.flat_map do |sr|
+          children = items.select { |c| Array(c["basedOn"]).any? { |b| b["reference"] == "ServiceRequest/#{sr['id']}" } }
+          children.any? ? leaf_items(children, items) : [sr]
+        end
+      end
+
+      # 明細の並び(オーダー内の項目番号)。
+      def item_number(sr)
+        Array(sr["identifier"]).find { |i| i["system"].to_s.end_with?("-order-item-number") }&.dig("value").to_i
+      end
+
+      # 書き込みの前の版。POST と初版は nil。
+      def previous_version(type, resource)
+        return nil if written.method == "POST" || written.version.nil? || written.version <= 1
+
+        context.vread(type, resource["id"], written.version - 1)
+      end
+
+      # ハブ(実施の Procedure)に partOf でぶら下がるリソース。同じ transaction で書かれた分を上流の分に重ね、
+      # ハブの削除では同じ transaction で消された分の最後の中身を使う。
+      def part_of_resources(type, hub_reference)
+        in_transaction = Dispatcher.written_resources(transaction, all: true).select { |w| w.type == type }
+        if written.method == "DELETE"
+          return in_transaction.select { |w| w.method == "DELETE" }
+                               .filter_map { |w| context.last_version(type, w.id) }
+                               .select { |r| part_of?(r, hub_reference) }
+        end
+
+        found = written.method == "POST" ? [] : context.search(type, { "part-of" => hub_reference, "_count" => 200 })
+        by_id = found.index_by { |r| r["id"] }
+        in_transaction.each do |w|
+          if w.method == "DELETE"
+            by_id.delete(w.id)
+          elsif w.resource && part_of?(w.resource, hub_reference)
+            by_id[w.id] = w.resource
+          end
+        end
+        by_id.values.reject { |r| r["status"] == "entered-in-error" }
+      end
+
+      def part_of?(resource, reference)
+        Array(resource["partOf"]).any? { |p| p["reference"] == reference }
+      end
+
+      def number(value)
+        return "" if value.nil?
+
+        float = value.to_f
+        float == float.to_i ? float.to_i.to_s : float.to_s
+      end
+
       # 病棟・病室・ベッドの Location はコード identifier を持たないので、name(無ければ id)を使う。
       def inpatient_location(encounter)
         bed_reference = Array(encounter["location"]).first&.dig("location", "reference")
