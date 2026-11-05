@@ -169,6 +169,8 @@ Rails.application.routes.draw do
     get "lab_labels/:order_id/pdf", to: "lab_label_pdfs#show"
     # 病理の検体ラベル(オーダー 1 件ぶん。1 ページ = 容器 1 つ)
     get "patho_labels/:order_id/pdf", to: "patho_label_pdfs#show"
+    # 細菌検査の検体ラベル(オーダー 1 件ぶん。1 ページ = 容器 1 つ)
+    get "micro_labels/:order_id/pdf", to: "micro_label_pdfs#show"
     # 輸血関連情報カード(患者 1 人ぶん)と自己血の採血ラベル(採血記録 1 件 = 1 枚)
     get "transfusion_cards/:patient_id/pdf", to: "transfusion_card_pdfs#show"
     get "autologous_labels/:procedure_id/pdf", to: "autologous_label_pdfs#show"

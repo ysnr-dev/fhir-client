@@ -132,6 +132,7 @@ short_name
 display_order
 valid_from / valid_to   -- 有効期間（date、検体検査・放射線と同じ）
 receipt_code        -- レセ電算コード（任意、将来の会計連携用）
+separate_container  -- boolean。検体と別の容器で出す（血液培養のボトル）。ラベルは1項目=容器1つ（§7.6）
 note
 search_name
 ```
@@ -343,7 +344,7 @@ contained Specimen（JP_Specimen_Common）:
 | 状態 | 意味 | 進め方 |
 |---|---|---|
 | requested 依頼済 | 検査室はまだ検体を受け取っていない(Task が無いときも) | — |
-| accepted 受付済 | 検体が検査室に届いた。中間報告の間もここ | 一覧の「受付」/ 中間報告の保存 |
+| accepted 受付済 | 検体が検査室に届いた。中間報告の間もここ | 全容器の到着確認 / 一覧の「受付」/ 中間報告の保存 |
 | completed 報告済 | 最終報告まで終わった | 最終報告の保存 |
 | cancelled 中止 | 検査の取りやめ | 一覧のケバブ |
 
@@ -353,13 +354,38 @@ contained Specimen（JP_Specimen_Common）:
   オーダーと Task は保存の直前に `ServiceRequest?_id=&_revinclude=Task:focus` で読み直す(1 リクエスト)。
 - ［決定］**中間報告は Task の状態にしない**。報告区分は `DiagnosticReport.status` が正本で、Task に二重に持つと食い違う。
   一覧の「結果」列とカードのバッジで見せる。
-- ［決定］ラベル・到着確認は持たないので、**受付が検体の到着を兼ねる**(看護ワークシートの採取は受付済で「到着済」)。
+- ［決定］受付済は**検体が検査室に届いた**こと。検体到着確認で全容器を読むと受付済になり(§7.6)、ラベルの無い検体は
+  一覧の「受付」で直接進める(看護ワークシートの採取は受付済で「到着済」)。
 - Task が無いまま結果があるオーダー(この仕組みの前に登録したもの)は、表示だけ報告区分から読む(`microOrderStatus`)。
   データの補正はしない。
 - 一覧(`pages/MicroWorklistPage.tsx`、`useMicroWorklist`)は検査日(ヘッダの `occurrence`)で読み、`_revinclude` で明細・Task・
   結果を添える。「未完了(14日)」は `occurrence=ge…&le…` で 14 日ぶんを読み、依頼済・受付済だけを古い順に残す。
 - カルテのカード(`karteTimeline.ts` の `status`)、オーダーの進み具合(`orderProgressHelpers.ts` の `TASK_KINDS`)、
   ホームの部門カード(`homeSections.ts` の `micro`)に載せた。
+
+### 7.6 検体ラベルと到着確認(実装済み、2026-11-06)
+
+検体検査・病理と同じく、容器 1 つの台帳を上流の Specimen に持つ(`docs/lab-arrival-design.md` §6-1、`docs/patho-order-design.md` §4.10)。
+
+- **容器の単位**: 検体の容器 1 つと、**検体と別の容器で出す検査項目 1 項目ずつ**(血液培養の好気・嫌気ボトル)。どの項目が別容器かは
+  検査項目マスタの `separate_container`(画面の「別容器」。seed では項目 8・9)。検体の容器は、別容器でない項目があるか、
+  項目が 1 つも無いときだけ作る(ボトルだけの血液培養に余分なラベルを刷らない)。並びは検体の容器 → ボトルの順(明細の順)。
+- **台帳**: Specimen 1 件 = 容器 1 つ。`identifier`(`IdSystem/micro-container`)= 検体の容器なら検体グループ明細の id、
+  ボトルならその検査項目明細の id で、conditional create の鍵。`accessionIdentifier` = ラベル番号(検体検査と同じ
+  `IdSystem/lab-label-number` の採番)。`request` = [ヘッダ, 検体グループ明細]。`type` は検体の写し、ボトルは
+  `container[0].description` に項目名(到着確認がオーダーを読めなくても何の容器か出せるように)。
+- **発行**(`MicroLabelReport`、`GET /reports/micro_labels/:order_id/pdf`、レイアウト `docs/report-mappings/micro-label-01.md`):
+  発行のたびにいまの容器と台帳を突き合わせ、無い容器を作り、当たらない容器を `entered-in-error` にする(戻したら復帰、番号は同じ)。
+  別容器の判定にマスタを引くので、マスタで項目の「別容器」を変えると次の発行から容器の組み方が変わる。
+- **入口**: カルテの細菌検査カードのメニュー(病棟が採取のときに刷る)、細菌検査一覧の依頼済の行のボタン(持ち込みの検体)と
+  受付済・報告済のケバブ(刷り直し)。中止には出さない。［決定］発行は進捗を動かさない(検体検査は発行が受付を兼ねるが、
+  細菌検査の受付済は検体の到着なので)。
+- **到着確認**: 検体検査と同じ検体到着確認の画面で読む(`LabArrivalPage` が台帳の識別子で振り分ける)。いまのオーダー内容から組んだ
+  容器(`microContainers`、backend と同じ規則)が全部到着したら、依頼済の Task を受付済へ(管の到着と同じ transaction)。
+  取り下げた容器のラベルは記録しない(到着を書くと取り下げが解けるため)。到着の取消は受付済 → 依頼済に戻す
+  (結果が付いていれば検体は届いているので戻さない)。
+- **一覧の表示**: `_revinclude=Specimen:request` で台帳を添え、「表示」に容器ごとの未発行 / 発行済 / 到着済と番号を出す。
+- 結果登録はラベルの Specimen を参照しない(結果側が自分で Specimen を持つまま)。採取記録(採取日時・採取者)と合わせて扱う。
 
 ---
 
@@ -374,8 +400,8 @@ contained Specimen（JP_Specimen_Common）:
    として追加済み（感受性測定法の `master_micro_susceptibility_methods` も同時に追加）。
    前投与抗菌薬の構造化（YJ→JANIS対応列）は引き続き未着手。
 5. **JANIS提出ファイル生成**: 検査部門送信ファイルの生成は結果側実装後の課題。
-6. **容器・ラベル**: 採取容器（滅菌容器・血培ボトル等）のマスタとラベル発行は未設計。
-   検体検査の `master_lab_containers` と同型で追加できる。
+6. **容器・ラベル**: ラベル発行と到着確認は実装済み(§7.6)。容器の種類(滅菌容器・スピッツなど)のマスタは持たず、
+   ラベルに容器名は刷らない。要るなら検体検査の `master_lab_containers` と同型で足す。
 7. **会計連携**: `receipt_code` 列のみ用意。対応付け運用は未設計（放射線と同じ状態）。
 8. **JANISコード表の版管理**: 配布ファイルの改版（病原体コードVer6.1→…）への追従は
    全置換取込で対応するが、廃止コードが過去オーダーに残る問題は「オーダー時点の写し」

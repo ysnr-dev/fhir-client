@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_05_100100) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_06_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1785,6 +1785,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_05_100100) do
     t.string "search_name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "separate_container", default: false, null: false
     t.index ["item_code"], name: "index_master_micro_order_items_on_item_code", unique: true
   end
 

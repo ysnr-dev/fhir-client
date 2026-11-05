@@ -13,7 +13,7 @@ import {
   LAB_LABEL_NUMBER_SYSTEM,
   labelSpecimensByOrderId,
 } from "../../fhir/labSpecimenHelpers";
-import { buildLabTaskUpdate, labTasksByOrderId, type LabTaskStatus } from "../../fhir/labTaskHelpers";
+import { labTasksByOrderId } from "../../fhir/labTaskHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { buildRxTaskUpdate, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
 import { DEFAULT_IDENTIFIER_SYSTEM } from "../../fhir/patientHelpers";
@@ -276,9 +276,11 @@ export async function fetchLabelSpecimens(orderId: string): Promise<fhir4.Specim
 }
 
 /**
- * 検体到着の記録・取消。管の Specimen(receivedTime)と、必要ならオーダーの進捗
- * (Task)を 1 つの transaction で書き込む(「最後の管の到着」と「実施済への遷移」が
- * 片方だけ成功する事態を避けるため)。
+ * 検体到着の記録・取消。管・容器の Specimen(receivedTime)と、必要ならオーダーの進捗
+ * (Task)を 1 つの transaction で書き込む(「最後の管の到着」と「進捗の遷移」が
+ * 片方だけ成功する事態を避けるため)。task は呼び出し側が種別ごとの組み立て
+ * (buildLabTaskUpdate / buildMicroTaskUpdate)で作って渡す。specimen を省くと進捗だけを書く
+ * (二重スキャンで、前回取りこぼした進捗を回収するとき)。
  */
 export function useUpdateLabArrival() {
   const queryClient = useQueryClient();
@@ -288,25 +290,21 @@ export function useUpdateLabArrival() {
       specimen,
       cancel,
       recorder,
-      taskUpdate,
+      task,
     }: {
-      specimen: fhir4.Specimen;
+      specimen?: fhir4.Specimen;
       cancel?: boolean;
       recorder?: ArrivalRecorder;
-      taskUpdate?: {
-        order: fhir4.ServiceRequest;
-        task: fhir4.Task | undefined;
-        status: LabTaskStatus;
-      };
+      task?: fhir4.Task;
     }) => {
-      const resource = cancel
-        ? buildSpecimenArrivalCancel(specimen)
-        : buildSpecimenArrival(specimen, recorder);
-      const entries: fhir4.BundleEntry[] = [
-        { resource, request: { method: "PUT", url: `Specimen/${specimen.id}` } },
-      ];
-      if (taskUpdate) {
-        const task = buildLabTaskUpdate(taskUpdate.task, taskUpdate.order, taskUpdate.status);
+      const entries: fhir4.BundleEntry[] = [];
+      if (specimen) {
+        const resource = cancel
+          ? buildSpecimenArrivalCancel(specimen)
+          : buildSpecimenArrival(specimen, recorder);
+        entries.push({ resource, request: { method: "PUT", url: `Specimen/${specimen.id}` } });
+      }
+      if (task) {
         entries.push({
           resource: task,
           request: task.id
@@ -318,6 +316,7 @@ export function useUpdateLabArrival() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "lab-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "micro-worklist"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
   });

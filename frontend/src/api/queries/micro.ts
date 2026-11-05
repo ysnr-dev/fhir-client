@@ -8,6 +8,7 @@ import {
   microOrderItemRequests,
 } from "../../fhir/microOrderHelpers";
 import { buildMicroResultDeleteBundle, microOrderIdFromReport } from "../../fhir/microResultHelpers";
+import { microContainersByOrderId } from "../../fhir/microContainerHelpers";
 import {
   buildMicroTaskUpdate,
   microTasksByOrderId,
@@ -483,6 +484,8 @@ export interface MicroWorklistRow {
   reportId: string;
   /** 結果の報告区分(preliminary / final)。 */
   reportStatus: string;
+  /** 容器の台帳(ラベル発行が作った Specimen。取り下げたものは除く)。 */
+  containers: fhir4.Specimen[];
 }
 
 export interface MicroWorklistResult {
@@ -500,6 +503,7 @@ export interface MicroWorklistRange {
 async function fetchMicroWorklist(range: MicroWorklistRange): Promise<MicroWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
+  const specimens: fhir4.Specimen[] = [];
   // オーダー id → そのオーダーを元にした細菌検査結果(id と報告区分)。
   const reportByOrderId = new Map<string, { id: string; status: string }>();
 
@@ -511,14 +515,17 @@ async function fetchMicroWorklist(range: MicroWorklistRange): Promise<MicroWorkl
         params.append("occurrence", `ge${range.from}`);
         params.append("occurrence", `le${range.to}`);
       }
-      // 明細・進捗・結果も同じ応答に添えてもらう。
+      // 明細・進捗・結果・容器も同じ応答に添えてもらう。
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
       params.append("_revinclude", "Task:focus");
       params.append("_revinclude", "DiagnosticReport:based-on");
+      params.append("_revinclude", "Specimen:request");
       return params;
     },
     (resource) => {
-      if (resource.resourceType === "DiagnosticReport") {
+      if (resource.resourceType === "Specimen") {
+        specimens.push(resource as fhir4.Specimen);
+      } else if (resource.resourceType === "DiagnosticReport") {
         const report = resource as fhir4.DiagnosticReport;
         const orderId = microOrderIdFromReport(report);
         if (orderId && report.id) reportByOrderId.set(orderId, { id: report.id, status: report.status });
@@ -536,6 +543,7 @@ async function fetchMicroWorklist(range: MicroWorklistRange): Promise<MicroWorkl
   );
 
   const taskByOrderId = microTasksByOrderId(tasks);
+  const containersByOrderId = microContainersByOrderId(specimens);
 
   const rows = orders.map((order) => {
     const report = reportByOrderId.get(order.id ?? "");
@@ -546,6 +554,7 @@ async function fetchMicroWorklist(range: MicroWorklistRange): Promise<MicroWorkl
       task: taskByOrderId.get(order.id ?? ""),
       reportId: report?.id ?? "",
       reportStatus: report?.status ?? "",
+      containers: containersByOrderId.get(order.id ?? "") ?? [],
     };
   });
 
@@ -567,6 +576,46 @@ export function useMicroWorklist(range: MicroWorklistRange) {
     enabled: Boolean(range.from && range.to),
     placeholderData: keepPreviousData,
   });
+}
+
+/** 検体到着確認のための 1 オーダーぶんの文脈(検体検査の fetchLabArrivalContext と同じ形)。 */
+export interface MicroArrivalContext {
+  order: fhir4.ServiceRequest;
+  itemRequests: fhir4.ServiceRequest[];
+  patient?: fhir4.Patient;
+  task?: fhir4.Task;
+  /** 容器の台帳(取り下げたものは除く)。到着の揃い判定に使う。 */
+  containers: fhir4.Specimen[];
+  /** 紐付く結果の報告区分。空なら結果がまだ無い。 */
+  reportStatus: string;
+}
+
+export async function fetchMicroArrivalContext(orderId: string): Promise<MicroArrivalContext | null> {
+  const params = new URLSearchParams();
+  params.set("_id", orderId);
+  params.set("_count", "100");
+  params.set("_revinclude:iterate", "ServiceRequest:based-on");
+  params.append("_revinclude", "Task:focus");
+  params.append("_revinclude", "Specimen:request");
+  params.append("_revinclude", "DiagnosticReport:based-on");
+  params.set("_include", "ServiceRequest:subject");
+
+  const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+  const resources = (bundle.entry ?? []).flatMap((entry) => (entry.resource ? [entry.resource] : []));
+  const order = resources.find(
+    (r): r is fhir4.ServiceRequest => r.resourceType === "ServiceRequest" && r.id === orderId,
+  );
+  if (!order) return null;
+
+  const report = resources.find((r): r is fhir4.DiagnosticReport => r.resourceType === "DiagnosticReport");
+  return {
+    order,
+    itemRequests: microOrderItemRequests(resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest"), orderId),
+    patient: resourcesOfType<fhir4.Patient>(bundle, "Patient")[0],
+    task: microTasksByOrderId(resourcesOfType<fhir4.Task>(bundle, "Task")).get(orderId),
+    containers: microContainersByOrderId(resourcesOfType<fhir4.Specimen>(bundle, "Specimen")).get(orderId) ?? [],
+    reportStatus: report?.status ?? "",
+  };
 }
 
 /** 受付・中止などの進捗を書き込む(組み立ては makeUpdateTaskStatusHook を参照)。 */

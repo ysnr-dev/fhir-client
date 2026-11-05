@@ -87,6 +87,7 @@ function OrderItemTab() {
             <th className="rad-code__compact">コード</th>
             <th>名称</th>
             <th>略称</th>
+            <th className="rad-code__compact">別容器</th>
             <th>有効期間</th>
             <th>備考</th>
           </tr>
@@ -97,6 +98,7 @@ function OrderItemTab() {
               <td className="rad-code__compact">{item.item_code}</td>
               <td>{item.name}</td>
               <td>{item.short_name}</td>
+              <td className="rad-code__compact">{item.separate_container ? "○" : ""}</td>
               <td>
                 {item.valid_from || item.valid_to
                   ? `${item.valid_from ?? ""} 〜 ${item.valid_to ?? ""}`
@@ -107,7 +109,7 @@ function OrderItemTab() {
           ))}
           {list.data && list.data.items.length === 0 && (
             <tr>
-              <td colSpan={5} className="master-search__empty">
+              <td colSpan={6} className="master-search__empty">
                 検査項目がありません
               </td>
             </tr>
@@ -140,6 +142,7 @@ function OrderItemEditModal({
     valid_to: item?.valid_to ?? "",
     receipt_code: item?.receipt_code ?? "",
     note: item?.note ?? "",
+    separate_container: item?.separate_container ?? false,
   });
 
   async function handleSubmit(e: FormEvent) {
@@ -154,6 +157,7 @@ function OrderItemEditModal({
       valid_to: draft.valid_to || null,
       receipt_code: draft.receipt_code || null,
       note: draft.note || null,
+      separate_container: draft.separate_container,
     };
     if (item === null) {
       await mutations.create.mutateAsync({ ...payload, item_code: draft.item_code });
@@ -241,6 +245,14 @@ function OrderItemEditModal({
               value={draft.note}
               onChange={(e) => setDraft({ ...draft, note: e.target.value })}
             />
+          </label>
+          <label className="dose-conversion__checkbox">
+            <input
+              type="checkbox"
+              checked={draft.separate_container}
+              onChange={(e) => setDraft({ ...draft, separate_container: e.target.checked })}
+            />
+            別容器
           </label>
         </div>
 

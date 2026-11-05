@@ -30,8 +30,8 @@ function tubeOf(specimens: fhir4.Specimen[], group: LabSpecimenGroup): fhir4.Spe
   return specimens.find((s) => specimenTypeCodeOf(s) === group.specimenCode);
 }
 
-/** 管(検体グループ)の状況。台帳は上流の Specimen(labSpecimenHelpers を参照)。 */
-function TubeBadge({ specimen }: { specimen?: fhir4.Specimen }) {
+/** 管・容器の状況。台帳は上流の Specimen(labSpecimenHelpers を参照)。細菌検査の容器でも使う。 */
+export function TubeBadge({ specimen }: { specimen?: fhir4.Specimen }) {
   if (!specimen) return <span className="lab-worklist__tube lab-worklist__tube--none">未発行</span>;
   if (!specimenArrived(specimen)) {
     return <span className="lab-worklist__tube lab-worklist__tube--issued">発行済</span>;

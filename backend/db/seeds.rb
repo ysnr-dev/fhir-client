@@ -309,7 +309,8 @@ end
       item_code: row["item_code"].to_s.strip,
       name: row["name"].to_s.strip,
       short_name: row["short_name"].to_s.strip.presence,
-      display_order: row["display_order"].to_s.strip.presence&.to_i
+      display_order: row["display_order"].to_s.strip.presence&.to_i,
+      separate_container: row["separate_container"].to_s.strip == "1"
     }
   }],
   "micro_collection_sites" => [Master::MicroCollectionSite, :code, lambda { |row|

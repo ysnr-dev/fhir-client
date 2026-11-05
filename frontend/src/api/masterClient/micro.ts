@@ -51,6 +51,8 @@ export interface MicroOrderItem {
   valid_to: string | null;
   receipt_code: string | null;
   note: string | null;
+  /** 検体と別の容器で出す(血液培養のボトル)。ラベルは 1 項目 = 容器 1 つで刷る。 */
+  separate_container: boolean;
 }
 
 export interface MicroOrderItemPayload {
@@ -62,6 +64,7 @@ export interface MicroOrderItemPayload {
   valid_to?: string | null;
   receipt_code?: string | null;
   note?: string | null;
+  separate_container?: boolean;
 }
 
 // 採取部位。laterality_applicable が true の部位だけ左右を入力できる。

@@ -7,7 +7,12 @@ import {
   useDeleteQuestionnaireResponse,
   useDeleteVitalEntry,
 } from "../api/queries";
-import { pathoLabelPdfUrl, questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
+import {
+  microLabelPdfUrl,
+  pathoLabelPdfUrl,
+  questionnaireResponsePdfUrl,
+  useReportLayoutStatus,
+} from "../api/reportsClient";
 import { fetchBinaryBlob, readResource } from "../api/fhirClient";
 import { documentIdOfResponse } from "../fhir/documentFormQuestionnaire";
 import { parsePatientFile } from "../fhir/patientFileHelpers";
@@ -637,6 +642,17 @@ const KarteCard = memo(function KarteCard({
               <a
                 className="row-menu__item"
                 href={pathoLabelPdfUrl(item.serviceRequest.id ?? "")}
+                target="_blank"
+                rel="noopener"
+              >
+                ラベル発行
+              </a>
+            )}
+            {/* 細菌検査の検体ラベル(容器ごと)。病棟が採取のときに刷り、検査室が到着確認で読む。 */}
+            {item.kind === "micro-order" && item.status !== "cancelled" && (
+              <a
+                className="row-menu__item"
+                href={microLabelPdfUrl(item.serviceRequest.id ?? "")}
                 target="_blank"
                 rel="noopener"
               >

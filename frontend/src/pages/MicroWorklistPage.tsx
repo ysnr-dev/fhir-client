@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
+import { separateContainerCodes, useMicroOrderItems } from "../api/masterQueries";
 import {
   useSelfDepartments,
   useMicroWorklist,
   useUpdateMicroTaskStatus,
   type MicroWorklistRow,
 } from "../api/queries";
+import { microLabelPdfUrl } from "../api/reportsClient";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { TubeBadge } from "../components/LabOrderViewModal";
 import { Modal } from "../components/Modal";
 import { MicroOrderDetailPanel } from "../components/MicroOrderDetailPanel";
 import { MicroResultDetailPanel } from "../components/MicroResultDetailPanel";
@@ -17,6 +20,8 @@ import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfile
 import { RowMenu } from "../components/RowMenu";
 import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "../components/PatientRowCells";
 import { RowPictograms } from "../components/PatientListRowParts";
+import { labelNumberOf } from "../fhir/labSpecimenHelpers";
+import { microContainers } from "../fhir/microContainerHelpers";
 import { microOrderContents, specimenLabel, summarizeMicroOrder } from "../fhir/microOrderHelpers";
 import { reportStatusDisplay } from "../fhir/microResultHelpers";
 import {
@@ -37,8 +42,9 @@ import { addDays, diffDays, localDay, today } from "../lib/dates";
 // 細菌検査一覧(部門ワークリスト)。検査日を決めて、その日に検体が出る検査を並べる。
 // 作りは病理検査一覧(PathoWorklistPage)に合わせてある。
 //
-// 1 行 = オーダー 1 件(1 検体)。ラベルを持たないので、受付(検体の到着)はこの一覧の
-// ボタンで直接進める。結果は受付済のオーダーから書き、最終報告で報告済になる
+// 1 行 = オーダー 1 件(1 検体)。検体ラベル(容器ごと)は病棟が採取のときにカルテから刷り、
+// 検体到着確認で全容器を読むと受付済になる。ラベルの無い検体(持ち込みなど)は、ここで
+// 刷るか「受付」で直接進める。結果は受付済のオーダーから書き、最終報告で報告済になる
 // (fhir/microTaskHelpers.ts)。
 //
 // 培養は結果まで数日かかるので、「未完了」にすると選んだ日までの数日ぶんを読み、
@@ -219,6 +225,7 @@ export function MicroWorklistPage() {
             <>
               <WorklistRowButtons row={selectedRow} pending={updateStatus.isPending} {...handlers(selectedRow)} />
               <WorklistMenuItems
+                row={selectedRow}
                 actions={secondaryActionsOf(selectedRow)}
                 pending={updateStatus.isPending}
                 onChangeStatus={handlers(selectedRow).onChangeStatus}
@@ -365,6 +372,16 @@ function secondaryActionsOf(row: MicroWorklistRow) {
   return microTaskActions(rowStatus(row)).filter((action) => action.secondary);
 }
 
+/**
+ * ラベルの刷り方。依頼済は行のボタン(ラベルの無い検体が持ち込まれたときに刷る)、受付済・報告済は
+ * 刷り直しなのでケバブ。中止には出さない。同じ容器には同じ番号が刷られる。
+ */
+function labelPlacement(row: MicroWorklistRow): "button" | "menu" | null {
+  const status = rowStatus(row);
+  if (status === "cancelled") return null;
+  return status === "requested" ? "button" : "menu";
+}
+
 function urgentRowClass(row: MicroWorklistRow): string | undefined {
   return summarizeMicroOrder(row.order).urgent ? "lab-worklist__row--urgent" : undefined;
 }
@@ -449,9 +466,10 @@ function WorklistRow({
       <td className="lab-worklist__actions sticky-table__fix-actions">
         <WorklistRowButtons row={row} pending={pending} {...handlers} />
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。 */}
-        {secondaryActions.length > 0 && (
+        {(secondaryActions.length > 0 || labelPlacement(row) === "menu") && (
           <RowMenu label="この検査の操作" escapesClipping>
             <WorklistMenuItems
+              row={row}
               actions={secondaryActions}
               pending={pending}
               onChangeStatus={handlers.onChangeStatus}
@@ -481,6 +499,11 @@ function WorklistRowButtons({
             {action.label}
           </button>
         ))}
+      {labelPlacement(row) === "button" && (
+        <a className="button" href={microLabelPdfUrl(row.order.id ?? "")} target="_blank" rel="noopener">
+          ラベル発行
+        </a>
+      )}
       {/* 結果は検体が届いてから書く。既に書いてあれば同じボタンから直す
           (中間報告を最終報告に切り替えるのもここ)。 */}
       {canEnterMicroResult(status) && (
@@ -499,16 +522,23 @@ function WorklistRowButtons({
 
 /** 行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */
 function WorklistMenuItems({
+  row,
   actions,
   pending,
   onChangeStatus,
 }: {
+  row: MicroWorklistRow;
   actions: MicroTaskAction[];
   pending: boolean;
   onChangeStatus: (status: MicroTaskStatus) => void;
 }) {
   return (
     <>
+      {labelPlacement(row) === "menu" && (
+        <a className="row-menu__item" href={microLabelPdfUrl(row.order.id ?? "")} target="_blank" rel="noopener">
+          ラベル発行
+        </a>
+      )}
       {actions.map((action) => (
         <button
           key={action.next}
@@ -525,8 +555,15 @@ function WorklistMenuItems({
 }
 
 // 「表示」で開くオーダー内容。カルテの詳細モーダルと同じパネルを使い、結果が既にあれば
-// その内容も続けて見せる(部門では依頼と結果を並べて読むため)。
+// その内容も続けて見せる(部門では依頼と結果を並べて読むため)。部門の画面なので、
+// 容器ごとの発行・到着とラベルの番号も添える(到着が記録されない容器の問い合わせはこの番号で行う)。
 function MicroOrderViewModal({ row, onClose }: { row: MicroWorklistRow; onClose: () => void }) {
+  const masterItems = useMicroOrderItems();
+  const containers = microContainers(
+    row.itemRequests,
+    separateContainerCodes(masterItems.data?.items),
+    row.containers,
+  );
   return (
     <Modal
       title={`細菌検査内容 - ${row.patient ? displayName(row.patient) : ""}`}
@@ -534,6 +571,26 @@ function MicroOrderViewModal({ row, onClose }: { row: MicroWorklistRow; onClose:
       className="modal--wide"
     >
       <MicroOrderDetailPanel serviceRequest={row.order} itemRequests={row.itemRequests} />
+      {masterItems.data && containers.length > 0 && (
+        <>
+          <h3 className="karte-tabpanel__header">容器</h3>
+          <div className="lab-order-view">
+            {containers.map((container, index) => {
+              const number = container.specimen ? labelNumberOf(container.specimen) : "";
+              return (
+                <div className="karte-rp" key={container.key}>
+                  <div className="karte-rp__head">
+                    <span className="karte-rp__number">{`容器${index + 1}`}</span>
+                    <TubeBadge specimen={container.specimen} />
+                    <span className="karte-order__group-name">{container.label}</span>
+                    {number && <span className="lab-order-view__number">{`採取番号 ${number}`}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
       {row.reportId && (
         <>
           <h3 className="karte-tabpanel__header">細菌検査結果</h3>

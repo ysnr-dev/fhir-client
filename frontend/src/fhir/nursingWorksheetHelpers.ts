@@ -329,8 +329,9 @@ export function dayOrderWorksheetItems(data: {
     let status = done ? "実施済" : departmentTaskLabel(task);
     if (type.kind === "specimen" && !done) {
       // 病棟の仕事は採って出すところまで。検査室に届いていれば済、ラベルだけなら採取待ち。
-      // 細菌検査はラベルを持たず、検査室の受付が検体の到着。
-      const specimens = specimensByOrderId.get(id) ?? [];
+      // 細菌検査はラベルの無い検体を検査室が直接受け付けることがあるので、受付済も到着とみなす。
+      // 刷り直しで取り下げたラベルは容器に数えない。
+      const specimens = (specimensByOrderId.get(id) ?? []).filter((s) => s.status !== "entered-in-error");
       if (type.code === "micro" && task?.status === "accepted") {
         done = true;
         status = "到着済";

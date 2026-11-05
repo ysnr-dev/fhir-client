@@ -45,6 +45,18 @@ module Reports
       render json: { error: "no_label_target" }, status: :unprocessable_content
     end
 
+    rescue_from MicroLabelReport::NotFound do
+      render json: { error: "order_not_found" }, status: :not_found
+    end
+
+    rescue_from MicroLabelReport::NotMicroOrder do
+      render json: { error: "not_micro_order" }, status: :unprocessable_content
+    end
+
+    rescue_from MicroLabelReport::NoLabelTarget do
+      render json: { error: "no_label_target" }, status: :unprocessable_content
+    end
+
     rescue_from PrescriptionReport::NotFound do
       render json: { error: "order_not_found" }, status: :not_found
     end
@@ -126,7 +138,7 @@ module Reports
     end
 
     rescue_from QuestionnaireResponseReport::UpstreamError, LabLabelReport::UpstreamError,
-                PathoLabelReport::UpstreamError,
+                PathoLabelReport::UpstreamError, MicroLabelReport::UpstreamError,
                 PrescriptionReport::UpstreamError, InjectionReport::UpstreamError,
                 LabResultReport::UpstreamError, RegimenReport::UpstreamError,
                 RegimenMasterReport::UpstreamError,

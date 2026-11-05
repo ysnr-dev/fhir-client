@@ -20,6 +20,7 @@ import {
   type MicroAntimicrobialPayload,
   type MicroCollectionMethodPayload,
   type MicroCollectionSitePayload,
+  type MicroOrderItem,
   type MicroOrderItemPayload,
   type MicroOrganismPayload,
   type MicroSpecimenTypePayload,
@@ -133,12 +134,20 @@ export function useMicroSpecimenTypeMutations() {
   };
 }
 
+/** 検査項目の一覧。到着確認のようにスキャンの処理中に確実に読みたいところは fetchQuery で使う。 */
+export const microOrderItemsQuery = {
+  queryKey: [...MICRO_ORDER_ITEMS_KEY, "list"],
+  staleTime: Infinity,
+  queryFn: fetchMicroOrderItems,
+};
+
 export function useMicroOrderItems() {
-  return useQuery({
-    queryKey: [...MICRO_ORDER_ITEMS_KEY, "list"],
-    staleTime: Infinity,
-    queryFn: fetchMicroOrderItems,
-  });
+  return useQuery(microOrderItemsQuery);
+}
+
+/** 検体と別の容器で出す検査項目(血液培養のボトル)の項目コード。容器の組み立てに使う。 */
+export function separateContainerCodes(items: MicroOrderItem[] | undefined): ReadonlySet<string> {
+  return new Set((items ?? []).filter((item) => item.separate_container).map((item) => item.item_code));
 }
 
 export function useMicroOrderItemMutations() {
