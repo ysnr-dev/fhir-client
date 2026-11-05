@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react
 import { Link, useSearchParams } from "react-router-dom";
 import {
   useCancelAdmission,
+  useCancelTransfer,
   useInpatientEncounters,
   usePlannedAdmissions,
   useUpdateEncounter,
@@ -67,6 +68,7 @@ import {
   encounterNurseNames,
   encounterPatientId,
   encounterTransferPlan,
+  lastTransfer,
   occupiedBedIds as occupiedBedIdSet,
   plannedAdmissionDate,
   plannedBedName,
@@ -326,6 +328,7 @@ export function InpatientListPage() {
   const inpatients = useInpatientEncounters(tab === "discharged" ? dischargedDate : date);
   const planned = usePlannedAdmissions();
   const cancelAdmission = useCancelAdmission();
+  const cancelTransfer = useCancelTransfer();
   // 未指示受けの件数(入院患者タブだけ)。病棟の指示簿一覧と同じキャッシュに乗る。
   const nursingPending = useNursingPendingCounts(
     tab === "current" ? date : "",
@@ -627,6 +630,19 @@ export function InpatientListPage() {
     cancelAdmission.mutate(row.encounter);
   }
 
+  function handleCancelTransfer(row: InpatientRow) {
+    const transfer = row.encounter ? lastTransfer(row.encounter) : undefined;
+    if (!row.encounter || !transfer) return;
+    const label = row.patient ? displayName(row.patient) : "この患者";
+    // 移ったあとに元の床へ別の患者を入れていることがある。止めはしないが確認のときに知らせる。
+    const taken = transfer.fromBedId ? occupiedBedIds.has(transfer.fromBedId) : false;
+    const message = `${label} の ${transfer.date} の移動(${transfer.fromLabel} → ${transfer.toLabel})を取り消して ${transfer.fromLabel} に戻します。${
+      taken ? `${transfer.fromLabel} には別の患者が入院しています。` : ""
+    }よろしいですか?`;
+    if (!window.confirm(message)) return;
+    cancelTransfer.mutate(row.encounter);
+  }
+
   function handleCancelPlan(row: PlannedRow) {
     const label = row.patient ? displayName(row.patient) : "この患者";
     if (!window.confirm(`${label} の入院予定を取り消します。よろしいですか?`)) return;
@@ -648,8 +664,10 @@ export function InpatientListPage() {
     return {
       onDischarge: () => setDischargeTarget(row),
       onCancelAdmission: () => handleCancelAdmission(row),
+      onCancelTransfer:
+        row.encounter && lastTransfer(row.encounter) ? () => handleCancelTransfer(row) : undefined,
       onRowAction: (kind: RowAction["kind"]) => setRowAction({ kind, row }),
-      cancelling: cancelAdmission.isPending,
+      cancelling: cancelAdmission.isPending || cancelTransfer.isPending,
     };
   }
 
@@ -980,7 +998,7 @@ export function InpatientListPage() {
       <ErrorBanner
         error={wardOptions.error ?? grid.error ?? inpatients.error ?? planned.error}
       />
-      <ErrorBanner error={cancelAdmission.error ?? updateEncounter.error} />
+      <ErrorBanner error={cancelAdmission.error ?? cancelTransfer.error ?? updateEncounter.error} />
       <ErrorBanner error={nursingPending.error} />
       <ErrorBanner error={activePathways.error ?? dpcRecords.error} />
 
@@ -1134,6 +1152,8 @@ export function InpatientListPage() {
 interface InpatientMenuActions {
   onDischarge: () => void;
   onCancelAdmission: () => void;
+  /** 直前の移動を取り消す。移動していない入院では undefined(項目を出さない)。 */
+  onCancelTransfer?: () => void;
   onRowAction: (kind: RowAction["kind"]) => void;
   cancelling: boolean;
 }
@@ -1380,6 +1400,7 @@ function DpcCell({
 function InpatientMenuItems({
   onDischarge,
   onCancelAdmission,
+  onCancelTransfer,
   onRowAction,
   cancelling,
 }: InpatientMenuActions) {
@@ -1392,6 +1413,16 @@ function InpatientMenuItems({
       >
         転室・転床
       </button>
+      {onCancelTransfer && (
+        <button
+          type="button"
+          className="row-menu__item row-menu__item--danger"
+          onClick={onCancelTransfer}
+          disabled={cancelling}
+        >
+          移動取消
+        </button>
+      )}
       <button
         type="button"
         className="row-menu__item"

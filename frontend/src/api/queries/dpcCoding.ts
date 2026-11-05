@@ -9,6 +9,7 @@ import {
   buildCompletedDpcRecodingDueEntries,
   cancelDpcRecodingDueEntries,
   DPC_RECODING_DUE_TASK_CODE,
+  isDpcRecodingDueForTransfer,
 } from "../../fhir/dpcRecodingDueHelpers";
 import { ADMISSION_CLASS_CODE, DISCHARGED_STATUS } from "../../fhir/encounterHelpers";
 import { addDays, addMonths, localDay } from "../../lib/dates";
@@ -95,9 +96,20 @@ export function useDpcRecodingDueTasks(encounterId: string | undefined) {
   });
 }
 
-/** 入院取消で、その入院の未対応の再判定の督促を取り下げる entry。 */
-export async function dpcRecodingDueCancelEntries(encounterId: string): Promise<fhir4.BundleEntry[]> {
-  return cancelDpcRecodingDueEntries(await fetchDpcRecodingDueTasks(encounterId));
+/**
+ * その入院の未対応の再判定の督促を取り下げる entry。入院取消は全部、移動の取消は
+ * transferDate の転棟で出した分だけ。
+ */
+export async function dpcRecodingDueCancelEntries(
+  encounterId: string,
+  transferDate?: string,
+): Promise<fhir4.BundleEntry[]> {
+  const tasks = await fetchDpcRecodingDueTasks(encounterId);
+  return cancelDpcRecodingDueEntries(
+    transferDate === undefined
+      ? tasks
+      : tasks.filter((task) => isDpcRecodingDueForTransfer(task, transferDate)),
+  );
 }
 
 /** 決定の取消(entered-in-error)。読んだ版のまま書き換えるので If-Match が付く。 */

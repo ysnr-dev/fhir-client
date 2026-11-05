@@ -72,7 +72,12 @@ export function buildCompletedDpcRecodingDueEntries(
     .map((task) => completeNotificationEntry(buildCompletedNotificationTask(task, actor, DPC_RECODING_DUE_NOTE)));
 }
 
-/** 未対応の督促を取り下げる entry(入院取消)。 */
+/** その日の転棟で出した督促か。移動の取消で、取り消した転棟の督促だけを取り下げるのに使う。 */
+export function isDpcRecodingDueForTransfer(task: fhir4.Task, date: string): boolean {
+  return taskInputOf(task, TRANSFER_DATE_INPUT)?.valueDate === date;
+}
+
+/** 未対応の督促を取り下げる entry(入院取消・移動の取消)。 */
 export function cancelDpcRecodingDueEntries(tasks: fhir4.Task[]): fhir4.BundleEntry[] {
   return tasks
     .filter((task) => task.id && task.status === "requested")

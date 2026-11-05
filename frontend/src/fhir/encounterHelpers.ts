@@ -920,6 +920,13 @@ export function validateTransferExecute(
 }
 
 /**
+ * 移動で診療科も変えたとき、移る前の診療科を移動先の location に残す拡張。
+ * 移動の取消(buildTransferCancelledEncounter)で科を戻すのに使う。
+ */
+export const LOCATION_PRIOR_DEPARTMENT_EXTENSION_URL =
+  "http://fhir-client.local/StructureDefinition/encounter-location-prior-department";
+
+/**
  * 転科・転棟の実施。移動先の床へ移し(転室・転床と同じ組み方)、指定があれば
  * 診療科も移す。済んだ予定は残さない。
  */
@@ -929,13 +936,61 @@ export function buildTransferExecutedEncounter(
   date: string,
 ): fhir4.Encounter {
   const moved = buildBedTransferEncounter(encounter, target.bedId, target.bedLabel, date);
-  if (target.departmentId) {
-    moved.serviceProvider = {
-      reference: `Organization/${target.departmentId}`,
-      display: target.departmentName,
-    };
+  const nextDepartment = `Organization/${target.departmentId}`;
+  if (target.departmentId && encounter.serviceProvider?.reference !== nextDepartment) {
+    if (encounter.serviceProvider && moved.location?.[0]) {
+      moved.location[0] = {
+        ...moved.location[0],
+        extension: [
+          { url: LOCATION_PRIOR_DEPARTMENT_EXTENSION_URL, valueReference: encounter.serviceProvider },
+        ],
+      };
+    }
+    moved.serviceProvider = { reference: nextDepartment, display: target.departmentName };
   }
   return buildTransferPlanEncounter(moved, null);
+}
+
+/** 取り消せる直前の移動。移動先(いまの床)と移動前の床、移動日。移動していなければ undefined。 */
+export interface LastTransfer {
+  date: string;
+  toLabel: string;
+  fromBedId: string | undefined;
+  fromLabel: string;
+}
+
+export function lastTransfer(encounter: fhir4.Encounter): LastTransfer | undefined {
+  const [current, before] = encounter.location ?? [];
+  if (!current || !before) return undefined;
+  return {
+    date: current.period?.start?.slice(0, 10) ?? "",
+    toLabel: current.location?.display ?? "-",
+    fromBedId: referenceId(before.location?.reference),
+    fromLabel: before.location?.display ?? "-",
+  };
+}
+
+/**
+ * 直前の移動(転室・転床、転科・転棟の実施)の取り消し。移動先を外して移動前の床を
+ * 割り当て中に戻し、移動で診療科も変えていれば元の科に戻す。誤って移したときの
+ * ための操作なので、移った記録は残さない。
+ */
+export function buildTransferCancelledEncounter(encounter: fhir4.Encounter): fhir4.Encounter {
+  const [cancelled, before, ...rest] = encounter.location ?? [];
+  if (!cancelled || !before) return encounter;
+  const beforePeriod = { ...before.period };
+  delete beforePeriod.end;
+  const restored: fhir4.EncounterLocation = { ...before, status: "active" };
+  if (Object.keys(beforePeriod).length > 0) restored.period = beforePeriod;
+  else delete restored.period;
+  const priorDepartment = cancelled.extension?.find(
+    (e) => e.url === LOCATION_PRIOR_DEPARTMENT_EXTENSION_URL,
+  )?.valueReference;
+  return {
+    ...encounter,
+    location: [restored, ...rest],
+    ...(priorDepartment ? { serviceProvider: priorDepartment } : {}),
+  };
 }
 
 export function encounterTransferPlan(encounter: fhir4.Encounter): TransferPlan | undefined {

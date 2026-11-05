@@ -115,6 +115,8 @@ code   : general（一般室） / private（個室） / special（特別室）
 | 入院取消（誤登録） | `status` = `entered-in-error`（退院ではないので `period.end` は付けない） |
 | 患者氏名・生年月日・性別 | `subject`（表示は `_include` で引いた Patient から）。カナは列を分けず「氏名（カナ）」と併記する |
 | 病室・ベッド | `location[0].location` = **ベッドの Location**（病室・病棟は `partOf` で辿れる） |
+| 転室・転床、転科・転棟の実施 | 移動先を `location[0]`（`period.start` = 移動日）に足し、それまでの床は `status` = `completed` + `period.end` で後ろに残す。転科で診療科も変えたときは、移る前の科を移動先の `location[0]` のローカル拡張 `http://fhir-client.local/StructureDefinition/encounter-location-prior-department`（`valueReference`）に残す |
+| 移動取消 | 先頭の移動先を外し、1 つ前の床を `active` に戻して `period.end` を消す。移る前の科の拡張があれば `serviceProvider` をその科に戻す |
 | 診療科 | `serviceProvider` = 診療科の Organization |
 | 主治医 | `participant` の種別 `ATND`（v3-ParticipationType の attender） |
 | 担当看護師（複数可） | `participant` の種別 `nurse`（ローカル CodeSystem `http://fhir-client.local/CodeSystem/encounter-participant-role`。看護師を表すコードが ParticipationType に無いため） |
@@ -169,6 +171,9 @@ date=le<選択日>   選択日までに入院している
   あるので登録自体は止めません。
 - 入院中の行の操作メニュー（⋮）に **退院** と **入院取消** があります。退院は退院日を聞く
   （既定は今日。入院日より前の日付は弾きます）、入院取消は誤登録向けで確認だけです。
+- 一度でも移った入院には同じメニューに **移動取消** が出ます。直前の 1 回の移動（転室・転床、転科・転棟の実施）を
+  誤操作として取り消し、移動前の床と診療科に戻します（確認だけ）。移動前の床に別の患者が入院していれば確認の
+  文で知らせますが止めません。その転棟で出した DPC 再判定の督促も取り下げます。さらに前の移動は 1 回ずつ戻します。
 - 同じメニューの **担当者変更** で、入院の主治医と担当看護師を差し替えます（participant の ATND と
   担当看護師だけを入れ替え、ほかの participant は残します）。選択肢は所属ロールの職種で絞り、主治医は
   医師・歯科医師、担当看護師は看護師・保健師・助産師です。いま担当に入っているのに職種が合わない人は、

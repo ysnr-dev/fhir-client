@@ -136,8 +136,9 @@ frontend と同じ約束(ServiceRequest.category の `http://fhir-client.local/C
 | Patient POST / PUT | ADT^A08 | ADT-00 | `-` | ALL9 | INS |
 | Encounter(IMP)作成 in-progress | ADT^A01 | ADT-22 | PV1-44 入院日 | Encounter の番号 | INS |
 | Encounter 更新 finished + period.end | ADT^A03 | ADT-52 | PV1-45 退院日 | 同上 | INS |
-| Encounter 更新 location が増えた(転室・転床・転棟) | ADT^A02 | ADT-42 | EVN-6 転棟日 | 同上 + 当日連番 | INS |
-| Encounter 更新 serviceProvider が変わった(転科) | ADT^A02 | ADT-42 | 同上 | 同上 | INS |
+| Encounter 更新 location が増えた(転室・転床・転棟) | ADT^A02 | ADT-42 | EVN-6 転棟日 | `Encounter/{id}#A02@<床の件数>@<移動先の床>@<移動日>` | INS |
+| Encounter 更新 serviceProvider が変わった(床を移さない転科) | ADT^A02 | ADT-42 | 同上 | `Encounter/{id}#A02@<書き込み時刻>` | INS |
+| Encounter 更新 先頭の移動先が外れて 1 つ前の床が先頭に戻った(移動取消) | ADT^A12(EVN-6 取り消した移動の日時、PV1-3 戻った床、PV1-6 取り消した移動先) | ADT-42 | EVN-6 | 取り消した A02 と同じ | DEL |
 | Encounter entered-in-error(入院取消) | ADT^A11 | ADT-22 | 入院日 | 同上 | DEL |
 | Encounter finished → in-progress で period.end 消失(退院取消) | ADT^A13 | ADT-52 | 退院日 | 同上 | DEL |
 | Appointment checked-in(外来受付) | ADT^A04 | ADT-12 | PV1-44 受付日 | Appointment の番号 | INS |
@@ -389,8 +390,10 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
 
 ## 9.6 実装の補足(設計から変えたところ)
 
-- 入退院のオーダ No は事象ごとに採番する(`Encounter/{id}#A01`、`#A03`、`#A02@<日時>`)。取消(A11 / A13)は
-  取り消す事象と同じ番号を使い、同日複数の転棟は別の番号になる(ガイドライン表 3.1-3)。
+- 入退院のオーダ No は事象ごとに採番する(`Encounter/{id}#A01`、`#A03`、`#A02@<床の件数>@<移動先の床>@<移動日>`)。取消
+  (A11 / A13 / A12)は取り消す事象と同じ番号を使い、同日複数の転棟は別の番号になる(ガイドライン表 3.1-3)。
+  転科転棟の番号を移動後の床の件数・移動先の床・移動日から採るのは、取消の書き込みから取り消す A02 の番号を引き直せるようにするため。
+  床を移さない転科(serviceProvider だけの変更)は移動の記録が無いので書き込み時刻で採り、取消は起こさない。
 - MedicationRequest だけが書かれた transaction(監査・調剤での更新)は、basedOn のヘッダーを読み直して
   オーダー 1 件として組み直す(`Dispatcher.medication_header_plans`)。
 - 注射の RXE-2 は仕様書の例に合わせ `00^一般^99I02`、RXE-3/5 は mL の成分の合計、成分は RXC(先頭 B、以降 A)。
@@ -434,6 +437,7 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
 7. 第 2 段階: RAS(処方・注射の実施)/ OMD(食事)/ OMG(放射線・内視鏡・生理のオーダー)/ OMI(放射線・内視鏡の実施)/
    ORU(生理検査結果)/ A14・A27・A16・A25・A15・A26(入退院・転科転棟の予定)/ A54・A55(担当医)/
    A21・A52・A22・A53(外出泊)、エージェントのトランザクションストレージ。
+8. A12(移動取消。入院患者一覧の「移動取消」で起こす)。
 
 ## 11. 検証
 

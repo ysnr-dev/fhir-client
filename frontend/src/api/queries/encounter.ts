@@ -7,10 +7,12 @@ import {
   buildCancelledEncounter,
   buildDischargedEncounter,
   buildEncounterUpdateBundle,
+  buildTransferCancelledEncounter,
   DISCHARGED_STATUS,
   encounterBedId,
   type EncounterEvent,
   encounterEvents,
+  lastTransfer,
   latestEncounterByBed,
   PLANNED_STATUS,
   sortPlannedAdmissions,
@@ -316,6 +318,26 @@ export function useCancelAdmission() {
           encounter.id ? await dpcRecodingDueCancelEntries(encounter.id) : [],
         ),
       ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Encounter"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+    },
+  });
+}
+
+export function useCancelTransfer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    // 取り消した転棟で出した DPC 再判定の督促も取り下げる。
+    mutationFn: async (encounter: fhir4.Encounter) => {
+      const date = lastTransfer(encounter)?.date;
+      return postBundle(
+        buildEncounterUpdateBundle(
+          buildTransferCancelledEncounter(encounter),
+          encounter.id && date ? await dpcRecodingDueCancelEntries(encounter.id, date) : [],
+        ),
+      );
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Encounter"] });
       queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });

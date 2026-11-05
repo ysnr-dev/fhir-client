@@ -4,11 +4,13 @@ require "support/ssmix2_helpers"
 RSpec.describe Ssmix2::Messages::EncounterAdt do
   let(:resources) do
     { "Patient/p1" => ssmix2_patient, "Practitioner/doc1" => ssmix2_doctor, "Organization/dept1" => ssmix2_department,
+      "Organization/dept2" => ssmix2_department(id: "dept2", code: "10", name: "外科"),
       "Location/bed1" => ssmix2_location("bed1", "1", "bd", part_of: "room1"),
       "Location/room1" => ssmix2_location("room1", "302", "ro", part_of: "ward1"),
       "Location/ward1" => ssmix2_location("ward1", "32", "wa"),
       "Location/bed2" => ssmix2_location("bed2", "2", "bd", part_of: "room2"),
-      "Location/room2" => ssmix2_location("room2", "305", "ro", part_of: "ward1") }
+      "Location/room2" => ssmix2_location("room2", "305", "ro", part_of: "ward1"),
+      "Location/bed3" => ssmix2_location("bed3", "3", "bd", part_of: "room2") }
   end
   let(:store) { ssmix2_store(resources) }
   let(:context) { Ssmix2::Context.new(store: store, cache: Ssmix2::ResourceCache.new) }
@@ -87,6 +89,45 @@ RSpec.describe Ssmix2::Messages::EncounterAdt do
     pv1 = segment(result, "PV1").split("|")
     expect(pv1[3]).to eq("32^305^2^^^N")
     expect(pv1[6]).to eq("32^302^1^^^N")
+  end
+
+  it "sends ADT^A12 (DEL) with the A02's order number when the last move is undone, and restores the department" do
+    before_move = ssmix2_admission
+    moved = ssmix2_admission(bed: "bed2", department: "dept2")
+    moved["location"][0]["period"] = { "start" => "2026-11-03" }
+    moved["location"] << { "location" => { "reference" => "Location/bed1" }, "status" => "completed",
+                           "period" => { "end" => "2026-11-03" } }
+    a02 = build(moved, method: "PUT", version: 2, previous: before_move)
+    expect(segment(a02, "MSH")).to include("|ADT^A02^ADT_A02|")
+
+    undone = build(before_move, method: "PUT", version: 3, previous: moved)
+
+    expect(undone.data_kind).to eq("ADT-42")
+    expect(undone.process).to eq("DEL")
+    expect(undone.service_date).to eq("20261103")
+    expect(undone.order_no).to eq(a02.order_no)
+    expect(undone.department_code).to eq("01")
+    expect(segment(undone, "MSH")).to include("|ADT^A12^ADT_A09|")
+    expect(segment(undone, "EVN").split("|")[6]).to eq("20261103")
+    pv1 = segment(undone, "PV1").split("|")
+    expect(pv1[3]).to eq("32^302^1^^^N")
+    expect(pv1[6]).to eq("32^305^2^^^N")
+    expect(pv1[10]).to eq("01")
+  end
+
+  it "gives a new move to another bed after an undo its own order number" do
+    before_move = ssmix2_admission
+    to_bed2 = ssmix2_admission(bed: "bed2")
+    to_bed2["location"][0]["period"] = { "start" => "2026-11-03" }
+    to_bed2["location"] << { "location" => { "reference" => "Location/bed1" }, "status" => "completed" }
+    to_bed3 = ssmix2_admission(bed: "bed3")
+    to_bed3["location"][0]["period"] = { "start" => "2026-11-03" }
+    to_bed3["location"] << { "location" => { "reference" => "Location/bed1" }, "status" => "completed" }
+
+    first = build(to_bed2, method: "PUT", version: 2, previous: before_move)
+    again = build(to_bed3, method: "PUT", version: 4, previous: before_move)
+
+    expect(again.order_no).not_to eq(first.order_no)
   end
 
   it "sends ADT^A11 (DEL) for an admission entered in error and the same order number as the A01" do
