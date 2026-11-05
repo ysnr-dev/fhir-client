@@ -77,6 +77,10 @@ services:
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
     autoDeployTrigger: checksPass
+    envVars:
+      # rootDir の外にある .node-version に頼らず明示する(.node-version と揃える)
+      - key: NODE_VERSION
+        value: 26.13.0
     routes:
       # トランザクション Bundle は末尾セグメントの無い /fhir ちょうどに POST される
       # (postBundle → fetch("/fhir"))。/fhir/* だけだとこれが SPA フォールバックに
