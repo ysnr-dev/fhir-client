@@ -18,6 +18,7 @@ import {
   medicationGuidanceTaskStatusDisplay,
   medicationGuidanceTasksByOrderId,
 } from "./medicationGuidanceTaskHelpers";
+import { microTaskStatus, microTaskStatusDisplay, microTasksByOrderId } from "./microTaskHelpers";
 import { pathoTaskStatus, pathoTaskStatusDisplay, pathoTasksByOrderId } from "./pathoTaskHelpers";
 import { physioTaskStatus, physioTaskStatusDisplay, physioTasksByOrderId } from "./physioTaskHelpers";
 import { radTaskStatus, radTaskStatusDisplay, radTasksByOrderId } from "./radTaskHelpers";
@@ -44,7 +45,7 @@ import {
 // ［事実］部門が受ける種別(注射・検査・処置・手術・輸血・リハビリ・栄養指導・他科依頼)と看護指示は、
 // 進み具合を ServiceRequest の status ではなく、focus でオーダーを指す進捗の Task に持つ
 // (「ServiceRequest ← focus ── Task」。オーダーそのものは実施しても active のまま)。
-// Task で進み具合を持たない種別(処方・食事・細菌検査・化学療法)は ServiceRequest の status で出す。
+// Task で進み具合を持たない種別(処方・食事・化学療法)は ServiceRequest の status で出す。
 // リハビリ・栄養指導は 1 つのオーダーの期間中に実施を何度も積み上げ、Task は受付済のまま動かないので、
 // 実施記録(オーダーを basedOn で指す Procedure)の日付も持つ。React に依存しない。
 
@@ -95,6 +96,7 @@ function taskKind<S extends string>(
 const TASK_KINDS: Partial<Record<string, TaskKind>> = {
   injection: taskKind(injectionTasksByOrderId, injectionTaskStatus, injectionTaskStatusDisplay),
   "lab-order": taskKind(labTasksByOrderId, labTaskStatus, labTaskStatusDisplay),
+  "micro-order": taskKind(microTasksByOrderId, microTaskStatus, microTaskStatusDisplay),
   "patho-order": taskKind(pathoTasksByOrderId, pathoTaskStatus, pathoTaskStatusDisplay),
   "rad-order": taskKind(radTasksByOrderId, radTaskStatus, radTaskStatusDisplay),
   "physio-order": taskKind(physioTasksByOrderId, physioTaskStatus, physioTaskStatusDisplay),

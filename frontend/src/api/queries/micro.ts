@@ -1,8 +1,22 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { excludeNursingProblems } from "../../fhir/conditionHelpers";
 import { observationIdsFromReport, specimenIdsFromReport } from "../../fhir/labResultHelpers";
-import { buildMicroOrderDeleteBundle, microOrderItemRequests } from "../../fhir/microOrderHelpers";
-import { buildMicroResultDeleteBundle } from "../../fhir/microResultHelpers";
+import {
+  buildMicroOrderDeleteBundle,
+  isMicroServiceRequest,
+  MICRO_ORDER_TYPE,
+  microOrderItemRequests,
+} from "../../fhir/microOrderHelpers";
+import { buildMicroResultDeleteBundle, microOrderIdFromReport } from "../../fhir/microResultHelpers";
+import {
+  buildMicroTaskUpdate,
+  microTasksByOrderId,
+  microTaskStatus,
+  microTaskStatusForReport,
+  type MicroTaskStatus,
+} from "../../fhir/microTaskHelpers";
+import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
+import { localDay } from "../../lib/dates";
 import { transactionBundle } from "../../fhir/shared";
 import {
   createResource,
@@ -25,8 +39,18 @@ import {
 import { useLabResultDetail } from "./labResult";
 import { withResultReviewTask } from "./notification";
 import { fetchDerivedObservationRefs } from "./patientProfile";
-import { deleteOrderWithItems } from "./worklist";
+import {
+  comparePatientNumber,
+  deleteOrderWithItems,
+  fetchWorklistBundles,
+  makeUpdateTaskStatusHook,
+  taskBundleEntry,
+  worklistParams,
+} from "./worklist";
 import { invalidateOrderDependents } from "./orderDelete";
+
+/** 細菌検査一覧のキャッシュのキー(["ServiceRequest", MICRO_WORKLIST_KEY, …])。 */
+const MICRO_WORKLIST_KEY = "micro-worklist";
 
 // ---- 細菌検査結果 ----
 
@@ -37,14 +61,22 @@ export function useMicroResultDetail(reportId: string | undefined) {
 
 // 細菌検査結果を保存・削除するとオーダーの紐付け状況が変わるため、
 // 細菌検査オーダーの候補(["ServiceRequest", "search"] 配下)も無効化する。
+// 保存では、結果の報告区分に合わせて部門の進捗(Task)も同じ transaction で進める
+// (最終報告で報告済。fhir/microTaskHelpers.ts の microTaskStatusForReport)。
+async function saveMicroResult(bundle: fhir4.Bundle) {
+  return postBundle(
+    await withMicroTaskProgress(await withResultReviewTask(bundle, "micro", microReviewSummary)),
+  );
+}
+
 export function useCreateMicroResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (bundle: fhir4.Bundle) =>
-      postBundle(await withResultReviewTask(bundle, "micro", microReviewSummary)),
+    mutationFn: saveMicroResult,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", MICRO_WORKLIST_KEY] });
       queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
@@ -53,15 +85,47 @@ export function useCreateMicroResult() {
 export function useUpdateMicroResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (bundle: fhir4.Bundle) =>
-      postBundle(await withResultReviewTask(bundle, "micro", microReviewSummary)),
+    mutationFn: saveMicroResult,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", MICRO_WORKLIST_KEY] });
       queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
+}
+
+/** Bundle の細菌検査結果が紐付くオーダーの進捗を、報告区分に合わせて書き足す。 */
+async function withMicroTaskProgress(bundle: fhir4.Bundle): Promise<fhir4.Bundle> {
+  const report = bundle.entry?.find((e) => e.resource?.resourceType === "DiagnosticReport")
+    ?.resource as fhir4.DiagnosticReport | undefined;
+  const orderId = microOrderIdFromReport(report);
+  if (!report || !orderId) return bundle;
+  const taskEntry = await microTaskEntryForReport(orderId, report.status);
+  return taskEntry ? { ...bundle, entry: [...(bundle.entry ?? []), taskEntry] } : bundle;
+}
+
+/**
+ * 結果の保存・削除に合わせた進捗の書き込み(変えなくてよければ undefined)。reportStatus は
+ * 結果を消すとき null。オーダーと Task はその場で読み直す(読んだ Task の版は postBundle が
+ * ifMatch に添える)。
+ */
+async function microTaskEntryForReport(
+  orderId: string,
+  reportStatus: string | null,
+): Promise<fhir4.BundleEntry | undefined> {
+  const params = new URLSearchParams();
+  params.set("_id", orderId);
+  params.set("_revinclude", "Task:focus");
+  const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+  const order = resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest").find(
+    (request) => request.id === orderId,
+  );
+  if (!order) return undefined;
+  const task = microTasksByOrderId(resourcesOfType<fhir4.Task>(bundle, "Task")).get(orderId);
+  const next = microTaskStatusForReport(microTaskStatus(task), reportStatus);
+  return next ? taskBundleEntry(buildMicroTaskUpdate(task, order, next)) : undefined;
 }
 
 /** 細菌検査の通知に出す要約。検体が何かで「どの検査の結果か」が分かる。 */
@@ -86,17 +150,22 @@ export function useDeleteMicroResult() {
         "DiagnosticReport",
         reportId,
       );
+      const deleteBundle = buildMicroResultDeleteBundle(
+        reportId,
+        observationIdsFromReport(report),
+        specimenIdsFromReport(report),
+      );
+      // 報告済のオーダーは、結果が無くなるので受付済に戻す。
+      const orderId = microOrderIdFromReport(report);
+      const taskEntry = orderId ? await microTaskEntryForReport(orderId, null) : undefined;
       return postBundle(
-        buildMicroResultDeleteBundle(
-          reportId,
-          observationIdsFromReport(report),
-          specimenIdsFromReport(report),
-        ),
+        taskEntry ? { ...deleteBundle, entry: [...(deleteBundle.entry ?? []), taskEntry] } : deleteBundle,
       );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", MICRO_WORKLIST_KEY] });
     },
   });
 }
@@ -394,3 +463,114 @@ export function useDeleteMicroOrder() {
     },
   });
 }
+
+// ---- 細菌検査一覧(部門ワークリスト) ----
+//
+// 検査日(採取予定日)の範囲で細菌検査オーダーを読む。1 日ぶんの表示に加えて、培養に日数が
+// かかる検査を追いかけるため、数日ぶんをまとめて読んで未完了だけを残す使い方もする。
+// 入外区分・病棟・診療科・進捗での絞り込みは画面側で行う(理由は api/queries/rad.ts の
+// 「放射線検査一覧」の節)。
+
+/** 細菌検査一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
+export interface MicroWorklistRow {
+  order: fhir4.ServiceRequest;
+  /** 明細(検体グループ・検査項目)。 */
+  itemRequests: fhir4.ServiceRequest[];
+  patient?: fhir4.Patient;
+  /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
+  task?: fhir4.Task;
+  /** このオーダーを元に登録済みの細菌検査結果の id。空なら結果はまだ無い。 */
+  reportId: string;
+  /** 結果の報告区分(preliminary / final)。 */
+  reportStatus: string;
+}
+
+export interface MicroWorklistResult {
+  rows: MicroWorklistRow[];
+  /** 上限まで読んでも読み切れなかった。 */
+  truncated: boolean;
+}
+
+/** 読む検査日の範囲(両端を含む "YYYY-MM-DD")。1 日なら from と to が同じ。 */
+export interface MicroWorklistRange {
+  from: string;
+  to: string;
+}
+
+async function fetchMicroWorklist(range: MicroWorklistRange): Promise<MicroWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+  const items: fhir4.ServiceRequest[] = [];
+  // オーダー id → そのオーダーを元にした細菌検査結果(id と報告区分)。
+  const reportByOrderId = new Map<string, { id: string; status: string }>();
+
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => {
+      const params = worklistParams(`${ORDER_TYPE_SYSTEM}|${MICRO_ORDER_TYPE.code}`, range.from, page);
+      if (range.to !== range.from) {
+        params.delete("occurrence");
+        params.append("occurrence", `ge${range.from}`);
+        params.append("occurrence", `le${range.to}`);
+      }
+      // 明細・進捗・結果も同じ応答に添えてもらう。
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "DiagnosticReport:based-on");
+      return params;
+    },
+    (resource) => {
+      if (resource.resourceType === "DiagnosticReport") {
+        const report = resource as fhir4.DiagnosticReport;
+        const orderId = microOrderIdFromReport(report);
+        if (orderId && report.id) reportByOrderId.set(orderId, { id: report.id, status: report.status });
+      } else if (resource.resourceType === "ServiceRequest") {
+        const request = resource as fhir4.ServiceRequest;
+        // 検索にヒットしたヘッダと、添えられた明細を分ける。
+        if (isMicroServiceRequest(request) && !request.basedOn?.length) {
+          orders.push(request);
+          return true;
+        }
+        items.push(request);
+      }
+      return false;
+    },
+  );
+
+  const taskByOrderId = microTasksByOrderId(tasks);
+
+  const rows = orders.map((order) => {
+    const report = reportByOrderId.get(order.id ?? "");
+    return {
+      order,
+      itemRequests: microOrderItemRequests(items, order.id ?? ""),
+      patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+      task: taskByOrderId.get(order.id ?? ""),
+      reportId: report?.id ?? "",
+      reportStatus: report?.status ?? "",
+    };
+  });
+
+  // 数日ぶんを読んだときは古い検査日から(長く待っている検体が上に来る)、同じ日は患者番号順。
+  rows.sort(
+    (a, b) =>
+      localDay(a.order.occurrenceDateTime).localeCompare(localDay(b.order.occurrenceDateTime)) ||
+      comparePatientNumber(a, b),
+  );
+
+  return { rows, truncated };
+}
+
+/** 検査日の範囲の細菌検査オーダー。日付が未選択の間は読みに行かない。 */
+export function useMicroWorklist(range: MicroWorklistRange) {
+  return useQuery({
+    queryKey: ["ServiceRequest", MICRO_WORKLIST_KEY, range.from, range.to],
+    queryFn: () => fetchMicroWorklist(range),
+    enabled: Boolean(range.from && range.to),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** 受付・中止などの進捗を書き込む(組み立ては makeUpdateTaskStatusHook を参照)。 */
+export const useUpdateMicroTaskStatus = makeUpdateTaskStatusHook<MicroTaskStatus>(
+  buildMicroTaskUpdate,
+  MICRO_WORKLIST_KEY,
+);

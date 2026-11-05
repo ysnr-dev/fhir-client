@@ -8,6 +8,7 @@ import { appointmentActorId } from "./appointmentHelpers";
 /** 部門ワークリスト件数のカード。職種→部門の対応は HOME_WORKLISTS 1 か所で持つ。 */
 export type HomeWorklistKey =
   | "lab"
+  | "micro"
   | "physio"
   | "patho"
   | "transfusion"
@@ -37,6 +38,7 @@ const REHAB_ROLE_CODES = ["physio", "occupational", "speech"] as const;
 
 export const HOME_WORKLISTS: Record<HomeWorklistKey, HomeWorklistDef> = {
   lab: { label: "検体検査", path: "/lab-worklist", roleCodes: LAB_ROLE_CODES },
+  micro: { label: "細菌検査", path: "/micro-worklist", roleCodes: LAB_ROLE_CODES },
   physio: { label: "生理検査", path: "/physio-worklist", roleCodes: LAB_ROLE_CODES },
   patho: { label: "病理検査", path: "/patho-worklist", roleCodes: LAB_ROLE_CODES },
   transfusion: { label: "輸血", path: "/transfusion-worklist", roleCodes: LAB_ROLE_CODES },

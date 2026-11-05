@@ -35,6 +35,7 @@ import { nutritionGuidanceTaskStatusDisplay } from "../fhir/nutritionGuidanceTas
 import type { OrderKind } from "../fhir/orderKinds";
 import { summarizePathoOrder } from "../fhir/pathoOrderHelpers";
 import { pathoTaskStatusDisplay } from "../fhir/pathoTaskHelpers";
+import { microTaskStatusDisplay } from "../fhir/microTaskHelpers";
 import { physioOrderTime, summarizePhysioOrder } from "../fhir/physioOrderHelpers";
 import { physioTaskStatusDisplay } from "../fhir/physioTaskHelpers";
 import { radOrderTime, summarizeRadOrder } from "../fhir/radOrderHelpers";
@@ -112,6 +113,7 @@ export const ORDER_KIND_DEFS: { [K in OrderKind]: OrderKindDef<K> } = {
   },
   "micro-order": {
     title: (item) => settingAndUrgency(summarizeMicroOrder(item.serviceRequest)),
+    status: (item) => ({ code: item.status, label: microTaskStatusDisplay(item.status) }),
     doable: true,
     Body: ({ item }) => (
       <MicroOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />

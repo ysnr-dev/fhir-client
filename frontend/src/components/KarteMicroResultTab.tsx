@@ -26,6 +26,8 @@ import { ResultReviewAction } from "./ResultReviewAction";
 import { SpecimenDateList } from "./SpecimenDateList";
 import { withVersionLock } from "../fhir/shared";
 import { latestSummaryOnOrBefore } from "../fhir/labResultHelpers";
+import { orderRequester } from "../fhir/orderHeader";
+import { localDay } from "../lib/dates";
 
 // カルテ画面の「細菌検査」タブ(検査結果配下)。「検体検査」タブと同じ構成で、左端の
 // ペインに検体採取日を新しい順で並べ、その右に選択した細菌検査結果の内容を表示する。
@@ -87,9 +89,9 @@ export function KarteMicroResultTab({ patientId, view, onViewChange, baseDate }:
           </div>
         </div>
         {form.kind === "create" ? (
-          <CreateForm patientId={patientId} onSaved={handleCreated} />
+          <MicroResultCreateForm patientId={patientId} onSaved={handleCreated} />
         ) : (
-          <EditForm patientId={patientId} reportId={form.reportId} onSaved={closeForm} />
+          <MicroResultEditForm patientId={patientId} reportId={form.reportId} onSaved={closeForm} />
         )}
       </div>
     );
@@ -163,22 +165,41 @@ export function KarteMicroResultTab({ patientId, view, onViewChange, baseDate }:
   );
 }
 
-function CreateForm({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
+/** 細菌検査結果の新規登録フォーム。カルテタブと部門一覧の双方から使う。 */
+export function MicroResultCreateForm({
+  patientId,
+  onSaved,
+  fixedOrder,
+}: {
+  patientId: string;
+  onSaved: () => void;
+  /** 部門一覧の行から開いたときの紐付け先オーダー(ヘッダ)。 */
+  fixedOrder?: fhir4.ServiceRequest;
+}) {
   const createMicroResult = useCreateMicroResult();
   const orders = useMicroOrderCandidates(patientId);
   const requester = useOrderContext();
   // 入院中なら入外区分を「入院」で開く(検体検査結果と同じ)。
   const defaultSetting = useDefaultOrderSetting(patientId);
 
-  // 診療科の既定はヘッダーで選んでいる依頼科(検体検査結果と同じ)。
-  const initialValues = useMemo(
-    () => ({
+  // 診療科の既定はヘッダーで選んでいる依頼科(検体検査結果と同じ)。部門一覧から開いたときは
+  // オーダーの依頼科・検査日を採る(オーダーを選んだときと同じく依頼科を採用する)。
+  const initialValues = useMemo(() => {
+    const values = {
       ...emptyMicroResultForm(defaultSetting.setting),
       departmentId: requester.departmentId,
       departmentName: requester.departmentName,
-    }),
-    [requester.departmentId, requester.departmentName, defaultSetting.setting],
-  );
+    };
+    if (!fixedOrder) return values;
+    const orderDepartment = orderRequester(fixedOrder);
+    return {
+      ...values,
+      orderId: fixedOrder.id ?? "",
+      departmentId: orderDepartment.departmentId,
+      departmentName: orderDepartment.departmentName,
+      specimenDate: localDay(fixedOrder.occurrenceDateTime) || values.specimenDate,
+    };
+  }, [requester.departmentId, requester.departmentName, defaultSetting.setting, fixedOrder]);
 
   function handleSubmit(values: MicroResultFormValues) {
     createMicroResult.mutate(buildMicroResultBundle(values, patientId), { onSuccess: onSaved });
@@ -200,20 +221,25 @@ function CreateForm({ patientId, onSaved }: { patientId: string; onSaved: () => 
           submitError={createMicroResult.error}
           orderCandidates={orders.candidates}
           orderCandidatesLoading={orders.isLoading}
+          fixedOrderId={fixedOrder?.id}
         />
       )}
     </>
   );
 }
 
-function EditForm({
+/** 細菌検査結果の編集フォーム。カルテタブと部門一覧の双方から使う。 */
+export function MicroResultEditForm({
   patientId,
   reportId,
   onSaved,
+  fixedOrderId,
 }: {
   patientId: string;
   reportId: string;
   onSaved: () => void;
+  /** 部門一覧の行から開いたときの紐付け先オーダー。選び直させない。 */
+  fixedOrderId?: string;
 }) {
   const updateMicroResult = useUpdateMicroResult();
   const { report, observations, specimens, initialValues, ready, patientMismatch, error } =
@@ -252,6 +278,7 @@ function EditForm({
             submitLabel="更新"
             orderCandidates={orders.candidates}
             orderCandidatesLoading={orders.isLoading}
+            fixedOrderId={fixedOrderId}
           />
         )
       )}

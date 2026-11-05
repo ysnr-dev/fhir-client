@@ -335,6 +335,32 @@ contained Specimen（JP_Specimen_Common）:
   詳細モーダル → FHIR 構造（ヘッダ+GP+項目3件、orderDetail・reasonCode を上流で確認）→
   DO（全項目複写）→ 削除（明細まで連鎖、孤児なしを上流で確認）。
 
+### 7.5 進捗(Task)と細菌検査一覧(実装済み、2026-11-05)
+
+検体検査・病理と同じく、オーダーはそのままにして進捗を Task(`task-code|micro-exam`、`focus` = ヘッダ)で持つ
+(`fhir/microTaskHelpers.ts`、`createTaskHelpers` の共通実装)。Task は最初の受付・中止か結果の保存で作る。
+
+| 状態 | 意味 | 進め方 |
+|---|---|---|
+| requested 依頼済 | 検査室はまだ検体を受け取っていない(Task が無いときも) | — |
+| accepted 受付済 | 検体が検査室に届いた。中間報告の間もここ | 一覧の「受付」/ 中間報告の保存 |
+| completed 報告済 | 最終報告まで終わった | 最終報告の保存 |
+| cancelled 中止 | 検査の取りやめ | 一覧のケバブ |
+
+- ［決定］**報告済は手で進めない**。培養に日数がかかり部門の手が離れるのは最終報告なので、結果の保存
+  (`useCreate/UpdateMicroResult`)が報告区分に合わせて Task を同じ transaction で書く(`microTaskStatusForReport`)。
+  最終報告 → 報告済、中間報告 → 受付済、結果の削除 → 報告済から受付済。中止したオーダーは動かさない。
+  オーダーと Task は保存の直前に `ServiceRequest?_id=&_revinclude=Task:focus` で読み直す(1 リクエスト)。
+- ［決定］**中間報告は Task の状態にしない**。報告区分は `DiagnosticReport.status` が正本で、Task に二重に持つと食い違う。
+  一覧の「結果」列とカードのバッジで見せる。
+- ［決定］ラベル・到着確認は持たないので、**受付が検体の到着を兼ねる**(看護ワークシートの採取は受付済で「到着済」)。
+- Task が無いまま結果があるオーダー(この仕組みの前に登録したもの)は、表示だけ報告区分から読む(`microOrderStatus`)。
+  データの補正はしない。
+- 一覧(`pages/MicroWorklistPage.tsx`、`useMicroWorklist`)は検査日(ヘッダの `occurrence`)で読み、`_revinclude` で明細・Task・
+  結果を添える。「未完了(14日)」は `occurrence=ge…&le…` で 14 日ぶんを読み、依頼済・受付済だけを古い順に残す。
+- カルテのカード(`karteTimeline.ts` の `status`)、オーダーの進み具合(`orderProgressHelpers.ts` の `TASK_KINDS`)、
+  ホームの部門カード(`homeSections.ts` の `micro`)に載せた。
+
 ---
 
 ## 8. 未決事項・次フェーズへの申し送り

@@ -53,6 +53,8 @@ interface MicroResultFormProps {
   /** 紐付けられる細菌検査オーダー(結果が未登録のもの)。 */
   orderCandidates: LabOrderCandidate[];
   orderCandidatesLoading: boolean;
+  /** 部門一覧の行から開いたときの紐付け先オーダー。選び直させない。 */
+  fixedOrderId?: string;
 }
 
 type ModalState =
@@ -91,6 +93,7 @@ export function MicroResultForm({
   submitLabel = "登録",
   orderCandidates,
   orderCandidatesLoading,
+  fixedOrderId,
 }: MicroResultFormProps) {
   const [values, setValues] = useState<MicroResultFormValues>(
     initialValues ?? emptyMicroResultForm,
@@ -106,7 +109,10 @@ export function MicroResultForm({
 
   // 画面上でオーダーを選び直したときだけ、オーダーの検体(材料)を転記する
   // (初期表示時の紐付け済みオーダーで、保存済みの材料を上書きしないようにする)。
-  const [expandingOrderId, setExpandingOrderId] = useState("");
+  const [expandingOrderId, setExpandingOrderId] = useState(
+    // 部門一覧から「そのオーダーの結果」を新規で書くときは、開いた時点で転記する。
+    fixedOrderId && !initialValues?.specimenTypeCode ? fixedOrderId : "",
+  );
   const orderDetail = useMicroOrderDetail(expandingOrderId || undefined);
 
   useEffect(() => {
@@ -408,30 +414,32 @@ export function MicroResultForm({
           元になった細菌検査オーダー。紐付けはオーダー単位で、すでに結果が登録されている
           オーダーは候補に出ない(編集中の結果自身が紐付けているオーダーだけは残る)。
         */}
-        <label className="lab-result-form__order">
-          細菌検査オーダー
-          <select
-            value={values.orderId}
-            onChange={(e) => handleOrderChange(e.target.value)}
-            disabled={orderCandidatesLoading}
-          >
-            <option value="">紐付けなし</option>
-            {orderCandidatesLoading && values.orderId && (
-              <option value={values.orderId}>読み込み中...</option>
-            )}
-            {orderCandidates.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.label}
-              </option>
-            ))}
-            {/* 紐付け先のオーダーが削除されている場合に、選択が空へ化けないようにする。 */}
-            {!orderCandidatesLoading &&
-              values.orderId &&
-              !orderCandidates.some((candidate) => candidate.id === values.orderId) && (
-                <option value={values.orderId}>(削除済みのオーダー)</option>
+        {!fixedOrderId && (
+          <label className="lab-result-form__order">
+            細菌検査オーダー
+            <select
+              value={values.orderId}
+              onChange={(e) => handleOrderChange(e.target.value)}
+              disabled={orderCandidatesLoading}
+            >
+              <option value="">紐付けなし</option>
+              {orderCandidatesLoading && values.orderId && (
+                <option value={values.orderId}>読み込み中...</option>
               )}
-          </select>
-        </label>
+              {orderCandidates.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.label}
+                </option>
+              ))}
+              {/* 紐付け先のオーダーが削除されている場合に、選択が空へ化けないようにする。 */}
+              {!orderCandidatesLoading &&
+                values.orderId &&
+                !orderCandidates.some((candidate) => candidate.id === values.orderId) && (
+                  <option value={values.orderId}>(削除済みのオーダー)</option>
+                )}
+            </select>
+          </label>
+        )}
         {expandingOrderId && <p className="lab-result-form__notice">オーダーの検体を転記中...</p>}
         <label>
           材料

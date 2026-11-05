@@ -49,6 +49,8 @@ DiagnosticReport (category = v2-0074 "MB" + 入外区分(lab-result-setting)、
 - **報告区分**: 細菌検査は培養に日数がかかるため、塗抹のみの時点で中間報告
   (preliminary)として保存し、後の編集で最終報告(final)へ切り替える。一覧・
   詳細・カルテカードに「中間」バッジを出す。
+- **部門の進捗**: 保存の Bundle に、紐付くオーダーの進捗 Task(`micro-exam`)を報告区分に合わせて
+  書き足す(最終報告で報告済、中間報告で受付済、削除で報告済から受付済)。`docs/micro-order-design.md` §7.5。
 - **profile**: DiagnosticReport / Observation の JP_*_LabResult は検体検査用
   プロファイルなので付けない。Specimen のみ JP_Specimen_Common(上流の
   JASPEHR 検証は subject/status 等で通ることを確認済み)。

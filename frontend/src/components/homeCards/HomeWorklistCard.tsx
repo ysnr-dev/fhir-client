@@ -7,6 +7,7 @@ import {
   useMedicationGuidanceWorklist,
   useNutritionGuidanceWorklist,
   usePathoWorklist,
+  useMicroWorklist,
   usePhysioWorklist,
   useRadWorklist,
   useRadiotherapyWorklist,
@@ -34,6 +35,7 @@ import {
   nutritionGuidanceTaskStatus,
 } from "../../fhir/nutritionGuidanceTaskHelpers";
 import { PATHO_TASK_STATUS_OPTIONS, pathoTaskStatus } from "../../fhir/pathoTaskHelpers";
+import { MICRO_TASK_STATUS_OPTIONS, microOrderStatus } from "../../fhir/microTaskHelpers";
 import { PHYSIO_TASK_STATUS_OPTIONS, physioTaskStatus } from "../../fhir/physioTaskHelpers";
 import { RAD_TASK_STATUS_OPTIONS, radTaskStatus } from "../../fhir/radTaskHelpers";
 import {
@@ -80,6 +82,20 @@ function LabCard({ date }: DateProps) {
       error={query.error}
       statuses={query.data?.rows.map((row) => labTaskStatus(row.task))}
       options={LAB_TASK_STATUS_OPTIONS}
+      truncated={query.data?.truncated}
+    />
+  );
+}
+
+function MicroCard({ date }: DateProps) {
+  const query = useMicroWorklist({ from: date, to: date });
+  return (
+    <WorklistCounts
+      kind="micro"
+      isPending={query.isPending}
+      error={query.error}
+      statuses={query.data?.rows.map((row) => microOrderStatus(row.task, row.reportStatus))}
+      options={MICRO_TASK_STATUS_OPTIONS}
       truncated={query.data?.truncated}
     />
   );
@@ -349,6 +365,7 @@ function SurgeryCard({ date }: DateProps) {
 const WORKLIST_CARDS: Record<HomeWorklistKey, ComponentType<DateProps>> = {
   lab: LabCard,
   physio: PhysioCard,
+  micro: MicroCard,
   patho: PathoCard,
   transfusion: TransfusionCard,
   rad: RadCard,

@@ -23,6 +23,7 @@ import {
 } from "./labOrderHelpers";
 import { labTaskStatus, labTasksByOrderId, type LabTaskStatus } from "./labTaskHelpers";
 import { isMicroServiceRequest, microOrderItemRequests } from "./microOrderHelpers";
+import { microOrderStatus, microTasksByOrderId, type MicroTaskStatus } from "./microTaskHelpers";
 import {
   isPathoServiceRequest,
   pathoOrderItemRequests,
@@ -340,6 +341,8 @@ export type KarteTimelineItem = KarteItemBase &
         reportId: string;
         /** 結果の報告区分。"preliminary" なら中間報告のバッジを出す。 */
         reportStatus: string;
+        /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
+        status: MicroTaskStatus;
       }
     // 病理検査は明細が検体で、進捗(Task)と病理レポートの両方を持つ。
     | {
@@ -859,6 +862,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const tasks = pickByType<fhir4.Task>(prescriptionResources, "Task");
   const labTaskByOrderId = labTasksByOrderId(tasks);
   const pathoTaskByOrderId = pathoTasksByOrderId(tasks);
+  const microTaskByOrderId = microTasksByOrderId(tasks);
   // 放射線検査は実施記録(Procedure 一式)も「実施情報」の出力に使う。
   const radTaskByOrderId = radTasksByOrderId(tasks);
   const procedures = pickByType<fhir4.Procedure>(prescriptionResources, "Procedure");
@@ -1003,6 +1007,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         itemRequests: microOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
         reportId: report?.id ?? "",
         reportStatus: report?.status ?? "",
+        status: microOrderStatus(microTaskByOrderId.get(serviceRequest.id ?? ""), report?.status ?? ""),
       };
     }
     if (isPathoServiceRequest(serviceRequest)) {
