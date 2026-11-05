@@ -452,8 +452,11 @@ docker compose exec frontend npx tsc -b && docker compose exec frontend npm run 
 ```
 
 builder ごとの spec は FHIR の fixture(`spec/fixtures/ssmix2/`)→ 期待する電文の比較で、仕様書付録 1 の
-サンプルに近い形にする。OUL^R22 を既存の `LabImport::Hl7Parser` で読み戻す往復テストは、同パーサーの
-受理条件(JAHIS 前提)を確認してから入れる。
+サンプルに近い形にする。OUL^R22 は受信側の検査結果取込と同じ経路で読み戻す往復テストも持つ
+(`spec/services/ssmix2/messages/oul_r22_spec.rb`)。ファイルと同じ CP50221 のバイト列にして `LabImport::TextDecoder` で
+復号し、`LabImport::Hl7Parser` の中間表現で患者・検体(群ごとの SPM)・オーダ番号・報告区分・値(NM / CWE / ST)・
+基準値・異常フラグ・コメントが FHIR の値と一致すること、区切り文字のエスケープと改行(`\.br\`)・CP932 の拡張文字が
+往復で崩れないことを確かめる。
 
 通し(開発環境):
 

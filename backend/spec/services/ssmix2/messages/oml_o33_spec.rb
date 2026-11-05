@@ -2,7 +2,7 @@ require "rails_helper"
 require "support/ssmix2_helpers"
 
 RSpec.describe Ssmix2::Messages::OmlO33 do
-  F = Ssmix2::Fhir unless const_defined?(:F)
+  F = Ssmix2::Fhir unless defined?(F)
   let(:header) do
     { "resourceType" => "ServiceRequest", "id" => "lab1", "status" => "active", "priority" => "urgent",
       "subject" => { "reference" => "Patient/p1" },
