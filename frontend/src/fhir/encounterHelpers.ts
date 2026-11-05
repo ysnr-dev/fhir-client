@@ -733,6 +733,10 @@ export function buildBedTransferEncounter(
 // 各外出泊は id(子拡張 `id`)を持ち、食事オーダー側がこの id で結び付く(取消で戻す先を
 // 突き止めるため。配列の位置は削除で動くので使わない)。id を持たない外出泊は、次に
 // その入院の外出泊を書き換えるときに採番される。
+//
+// 終了(`end`)は登録時には帰院予定で、帰院実施で実際に戻った日時に置き換わる。予定と実際を
+// 見分けるため、帰院実施で子拡張 `returned`(valueBoolean true)を立てる。登録時は false を書く
+// (子拡張が無い外出泊は、この印を持つ前に書かれたもの)。
 
 export const ENCOUNTER_LEAVE_EXTENSION_URL =
   "http://fhir-client.local/StructureDefinition/encounter-leave";
@@ -742,9 +746,11 @@ export interface LeaveValues {
   id: string;
   /** 外出泊開始日時(YYYY-MM-DDTHH:mm)。日付だけのこともある。 */
   start: string;
-  /** 外出泊終了(帰院)日時。未定なら空。 */
+  /** 外出泊終了(帰院)日時。未定なら空。帰院前は予定、帰院後は実際に戻った日時。 */
   end: string;
   reason: string;
+  /** 帰院実施済みか。 */
+  returned: boolean;
 }
 
 export function validateLeaveForm(values: LeaveValues): string | null {
@@ -766,6 +772,7 @@ function buildLeaveExtension(values: LeaveValues): fhir4.Extension {
   ];
   if (values.end) children.push({ url: "end", valueDateTime: encounterDateTime(values.end) });
   if (values.reason.trim()) children.push({ url: "reason", valueString: values.reason.trim() });
+  children.push({ url: "returned", valueBoolean: values.returned });
   return { url: ENCOUNTER_LEAVE_EXTENSION_URL, extension: children };
 }
 
@@ -807,10 +814,7 @@ export function validateLeaveReturn(leave: LeaveValues, returnAt: string): strin
   return null;
 }
 
-/**
- * 帰院。id の外出泊の終了を、実際に戻った日時で確定する。外出泊が終わったことは
- * 終了そのもので表すので、別の目印は持たない。
- */
+/** 帰院。id の外出泊の終了を実際に戻った日時で確定し、帰院済みの印を立てる。 */
 export function buildLeaveReturnedEncounter(
   encounter: fhir4.Encounter,
   leaveId: string,
@@ -819,7 +823,7 @@ export function buildLeaveReturnedEncounter(
   return withLeaves(
     encounter,
     leavesWithIds(encounter).map((leave) =>
-      leave.id === leaveId ? { ...leave, end: returnAt } : leave,
+      leave.id === leaveId ? { ...leave, end: returnAt, returned: true } : leave,
     ),
   );
 }
@@ -839,6 +843,7 @@ export function encounterLeaves(encounter: fhir4.Encounter): LeaveValues[] {
       start: leaveInputValue(e.extension?.find((c) => c.url === "start")),
       end: leaveInputValue(e.extension?.find((c) => c.url === "end")),
       reason: e.extension?.find((c) => c.url === "reason")?.valueString ?? "",
+      returned: e.extension?.find((c) => c.url === "returned")?.valueBoolean === true,
     }));
 }
 

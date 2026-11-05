@@ -3,12 +3,11 @@ module Ssmix2
     # 外出泊。外出泊実施(ADT^A21 / 取消 A52、データ種別 ADT-31)と外出泊帰院実施(ADT^A22 / 取消 A53、ADT-32)。
     # 外出泊は入院の Encounter のローカル拡張(encounter-leave。子拡張 id / start / end / reason)で、1 回ごとに 1 件。
     # 前の版と外出泊ごとに突き合わせ、付いた・変わった外出泊は A21、消えた外出泊は A52 を起こす。
-    # 終了(end)は登録時には予定帰院日時(PV2-47)で、帰院の操作で実際に戻った日時に置き換わる。予定と実際を
-    # 区別する印は無いので、終了が書き込みの時点より前(帰院済み)になったら A22、帰院済みの終了が消えるか
-    # 未来に戻ったら A53 とする。1 回の書き込みで複数の外出泊が動くことがあるので、事象ごとに別のメッセージ
-    # (ファイル)にして配列で返す。
+    # 終了(end)は帰院前は予定帰院日時(PV2-47)で、帰院実施で実際に戻った日時に置き換わり、子拡張 returned が
+    # true になる。帰院済みになった(または帰院済みの終了が変わった)ら A22、帰院済みでなくなったら A53。
+    # 1 回の書き込みで複数の外出泊が動くことがあるので、事象ごとに別のメッセージ(ファイル)にして配列で返す。
     class EncounterLeaveAdt < Base
-      Leave = Struct.new(:id, :start, :end_at, :reason, keyword_init: true)
+      Leave = Struct.new(:id, :start, :end_at, :reason, :returned, keyword_init: true)
       Event = Struct.new(:code, :structure, :data_kind, :process, :at, :leave, keyword_init: true)
 
       def build
@@ -30,7 +29,8 @@ module Ssmix2
       def leaves_of(encounter)
         Array(encounter&.dig("extension")).select { |e| e["url"] == Fhir::LEAVE_EXT_URL }.map do |e|
           Leave.new(id: Fhir.extension_child(e, "id").to_s, start: Fhir.extension_child(e, "start"),
-                    end_at: Fhir.extension_child(e, "end"), reason: Fhir.extension_child(e, "reason"))
+                    end_at: Fhir.extension_child(e, "end"), reason: Fhir.extension_child(e, "reason"),
+                    returned: Fhir.extension_child(e, "returned"))
         end
       end
 
@@ -43,7 +43,7 @@ module Ssmix2
           matched << old if old
           leave = Leave.new(**leave.to_h, id: leave.id.presence || old&.id.presence || "start-#{leave.start}")
           events << event("A21", "ADT_A21", "ADT-31", "INS", leave.start, leave) if old.nil? || old.start != leave.start || old.reason != leave.reason
-          if returned?(leave) && (old.nil? || old.end_at != leave.end_at)
+          if returned?(leave) && (old.nil? || !returned?(old) || old.end_at != leave.end_at)
             events << event("A22", "ADT_A21", "ADT-32", "INS", leave.end_at, leave)
           elsif !returned?(leave) && old && returned?(old)
             events << event("A53", "ADT_A52", "ADT-32", "DEL", old.end_at, Leave.new(**leave.to_h, end_at: old.end_at))
@@ -57,8 +57,11 @@ module Ssmix2
         events
       end
 
-      # 帰院済みか。終了が書き込みの時点(transaction の記録日時)以前なら、予定ではなく実際に戻った日時。
+      # 帰院済みか。印(returned)があればそれに従う。印を持つ前に書かれた外出泊は、終了が書き込みの時点
+      # (transaction の記録日時)以前なら実際に戻った日時とみなす。
       def returned?(leave)
+        return leave.returned == true && leave.end_at.present? unless leave.returned.nil?
+
         at = Hl7::Stamp.coerce(leave.end_at)
         return false if at.nil?
 

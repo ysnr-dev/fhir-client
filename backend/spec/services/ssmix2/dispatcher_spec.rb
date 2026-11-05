@@ -51,6 +51,15 @@ RSpec.describe Ssmix2::Dispatcher do
                                                                  [Ssmix2::Messages::RasO17, "hub1"], [Ssmix2::Messages::OmiZ23, "hub1"]])
   end
 
+  it "takes the version of a PUT entry from the etag when the response has no location" do
+    encounter = { "resourceType" => "Encounter", "id" => "e1", "status" => "in-progress" }
+    request = { "resourceType" => "Bundle", "type" => "transaction",
+                "entry" => [{ "resource" => encounter, "request" => { "method" => "PUT", "url" => "Encounter/e1" } }] }
+    response = { "resourceType" => "Bundle", "type" => "transaction-response", "entry" => [{ "response" => { "status" => "200 OK", "etag" => 'W/"6"' } }] }
+    written = described_class.written_resources(ssmix2_transaction(method: "POST", path: "/", request: request, response: response)).sole
+    expect([written.id, written.version]).to eq(["e1", 6])
+  end
+
   it "treats Procedure and MedicationAdministration writes as relevant" do
     expect(described_class.relevant?("POST", "/Procedure", { "resourceType" => "Procedure" })).to be(true)
     expect(described_class.relevant?("DELETE", "/MedicationAdministration/1", nil)).to be(true)

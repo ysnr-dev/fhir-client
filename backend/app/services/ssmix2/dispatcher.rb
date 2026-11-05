@@ -92,7 +92,9 @@ module Ssmix2
       type, id = Fhir.split_reference(response_entry&.dig("response", "location"))
       type ||= entry_type(entry)
       id ||= resource&.dig("id") || entry.dig("request", "url").to_s.split("/")[1]
-      version = response_entry&.dig("response", "location").to_s[%r{_history/(\d+)}, 1]
+      # 版は location(POST)か etag(PUT は location を返さず W/"6" だけのことがある)から取る。
+      version = response_entry&.dig("response", "location").to_s[%r{_history/(\d+)}, 1] ||
+                response_entry&.dig("response", "etag").to_s[/\d+/]
       resource = resolve_urns(resource.merge("id" => id), urns) if resource && id
       Written.new(method: method, type: type, id: id, version: version&.to_i, resource: resource)
     end

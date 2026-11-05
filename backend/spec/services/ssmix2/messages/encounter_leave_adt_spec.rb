@@ -14,10 +14,12 @@ RSpec.describe Ssmix2::Messages::EncounterLeaveAdt do
 
   before { ssmix2_enable! }
 
-  def leave(id:, start:, finish: nil, reason: nil)
+  # returned を省くと印を持つ前に書かれた外出泊(終了の日時で帰院済みかを判断する)。
+  def leave(id:, start:, finish: nil, reason: nil, returned: nil)
     children = [{ "url" => "id", "valueString" => id }, { "url" => "start", "valueDateTime" => start }]
     children << { "url" => "end", "valueDateTime" => finish } if finish
     children << { "url" => "reason", "valueString" => reason } if reason
+    children << { "url" => "returned", "valueBoolean" => returned } unless returned.nil?
     { "url" => F::LEAVE_EXT_URL, "extension" => children }
   end
 
@@ -84,6 +86,23 @@ RSpec.describe Ssmix2::Messages::EncounterLeaveAdt do
     expect(results.map { |r| [segment(r, "MSH").split("|")[8], r.process] }).to eq([["ADT^A21^ADT_A21", "INS"], ["ADT^A52^ADT_A52", "DEL"]])
     expect(results[0].order_no).not_to eq(first.order_no)
     expect(results[1].order_no).to eq(first.order_no)
+  end
+
+  it "uses the returned flag: a return at the planned time is A22, a planned end in the past is not" do
+    planned = leave(id: "lv5", start: "2026-11-02T10:00:00+09:00", finish: "2026-11-03T17:00:00+09:00", returned: false)
+    expect(build(with_leaves(planned), previous: ssmix2_admission).map { |r| segment(r, "MSH").split("|")[8] }).to eq(%w[ADT^A21^ADT_A21])
+
+    returned = leave(id: "lv5", start: "2026-11-02T10:00:00+09:00", finish: "2026-11-03T17:00:00+09:00", returned: true)
+    result = build(with_leaves(returned), previous: with_leaves(planned), version: 3).sole
+    expect(segment(result, "MSH")).to include("|ADT^A22^ADT_A21|")
+    expect(result.service_date).to eq("20261103")
+
+    future = leave(id: "lv6", start: "2026-11-02T10:00:00+09:00", finish: "2026-11-06T17:00:00+09:00", returned: true)
+    expect(build(with_leaves(future), previous: ssmix2_admission).map { |r| segment(r, "MSH").split("|")[8] }).to eq(%w[ADT^A21^ADT_A21 ADT^A22^ADT_A21])
+
+    undone = build(with_leaves(planned), previous: with_leaves(returned), version: 4).sole
+    expect(segment(undone, "MSH")).to include("|ADT^A53^ADT_A52|")
+    expect(undone.order_no).to eq(result.order_no)
   end
 
   it "stays silent for unchanged leaves, plans and outpatient encounters, and matches a leave without an id by its start" do

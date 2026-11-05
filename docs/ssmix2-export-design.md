@@ -158,8 +158,8 @@ frontend と同じ約束(ServiceRequest.category の `http://fhir-client.local/C
 | 主治医が外れた | ADT^A55(PV1-7 外れた主治医) | ADT-01 | `-` | 同上 | DEL |
 | 在院中の Encounter に外出泊(拡張 `encounter-leave`)が付いた・開始や理由が変わった | ADT^A21(EVN-3/6 外出日時、PV2-47 予定帰院日時) | ADT-31 | EVN-6 外出日 | `Encounter/{id}#A21@<外出泊 id>` | INS |
 | 外出泊が消えた | ADT^A52 | ADT-31 | 同上 | 同上 | DEL |
-| 外出泊の終了が書き込みの時点以前になった(帰院) | ADT^A22(EVN-3/6 帰院日時) | ADT-32 | EVN-6 帰院日 | `Encounter/{id}#A22@<外出泊 id>` | INS |
-| 帰院済みの終了が消えた・未来に戻った、帰院済みの外出泊が消えた | ADT^A53 | ADT-32 | 帰院日 | 同上 | DEL |
+| 外出泊が帰院済み(子拡張 `returned` true)になった・帰院日時が変わった | ADT^A22(EVN-3/6 帰院日時) | ADT-32 | EVN-6 帰院日 | `Encounter/{id}#A22@<外出泊 id>` | INS |
+| 帰院済みでなくなった、帰院済みの外出泊が消えた | ADT^A53 | ADT-32 | 帰院日 | 同上 | DEL |
 | 食事 ServiceRequest(order-type `meal`)作成・更新・取消 | OMD^O03(TQ1-3 `TID&１日３回&HL70335`、TQ1-7/8 `YYYYMMDDHH`、ODS-1 T 食種 / D 主食、欠食は時間帯付き NPO、AL1 食物アレルギー) | OMD | ORC-9 オーダー日 | ヘッダーの番号 | INS / DEL |
 | 処方・注射の実施(ハブ Procedure + partOf の MedicationAdministration)作成・更新・削除 | RAS^O17(RDE と同じ ORC/RXE/TQ1/RXR/RXC の後ろに薬剤ごとの RXA、ORC-3 に実施の番号) | OMP-11 / OMP-12 | RXA-3 実施日 | **実施(Procedure)の番号**(同じオーダーの実施が 1 日に何度もあるため) | INS / DEL |
 | 放射線・内視鏡・生理の ServiceRequest 作成・更新・取消 | OMG^O19(ORC NW/CA + 親 PA + 明細ごとの子 CH。OBR-4 は放射線が JJ1017、他はローカル) | OMG-01 / 02 / 03 | ORC-9 オーダー日 | ヘッダーの番号(子は明細の番号、ORC-8 / OBR-29 で親を指す) | INS / DEL(取消は NW/CA の制御レコードのみ) |
@@ -412,9 +412,12 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
 - 入院予定(status=planned)から入院実施(in-progress)への更新は A01(前版が planned でも入院実施)。planned の
   entered-in-error は入院取消(A11)ではなく入院予定の取消(A27)。
 - 食事のデータ種別はガイドライン表 3.1-2 どおり `OMD`(枝番なし)。
-- 外出泊の終了は登録時の予定帰院日時と、帰院の操作で入る実際の帰院日時を同じ子拡張 `end` で持ち、区別する印が無い。
-  そこで終了が書き込みの時点(transaction の記録日時)以前なら帰院済みとみなして A22 を起こす。予定どおりの時刻で
-  帰院を記録し `end` が変わらなかったときは A22 が出ない(予定の時刻が過ぎたあとに別の書き込みがあったときに出る)。
+- 外出泊の終了(子拡張 `end`)は帰院前は予定帰院日時、帰院実施のあとは実際の帰院日時。帰院実施は子拡張 `returned`
+  (valueBoolean)を true にし、登録時は false を書く(`frontend/src/fhir/encounterHelpers.ts`)。帰院済みかはこの印で
+  決め、予定どおりの時刻で帰院しても A22 が出る。印を持たない(書き始める前に登録した)外出泊だけは、終了が書き込みの
+  時点(transaction の記録日時)以前なら帰院済みとみなす。
+- transaction Bundle の PUT の応答は `location` を返さず `etag`(`W/"6"`)だけのことがあるので、書いたリソースの版は
+  `location` の `_history/<版>` か `etag` から取る(版が取れないと前の版と比べられず、全部が新規の事象になる)。
 - MSH-10 の連番は Context が transaction ごとに数える(同じ transaction から複数の builder・事象のメッセージが出ても重ならない)。
 - 生理検査の結果は所見レポート(`examReportHelpers.ts` の DiagnosticReport)から起こし、心電図の計測値のような
   数値の OBX は持たない(カルテに構造化した計測値が無い)。

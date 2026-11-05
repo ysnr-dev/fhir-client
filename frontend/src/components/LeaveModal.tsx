@@ -43,6 +43,7 @@ export function LeaveModal({
     start: nowDateTimeInput(),
     end: "",
     reason: "",
+    returned: false,
   }));
   const [syncMeals, setSyncMeals] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -130,6 +131,7 @@ export function LeaveModal({
               <li key={leave.id || `${leave.start}-${index}`}>
                 <span>
                   {dateTimeLabel(leave.start)} 〜 {leave.end ? dateTimeLabel(leave.end) : "未定"}
+                  {leave.returned && "（帰院済）"}
                   {leave.reason && `（${leave.reason}）`}
                 </span>
                 <button type="button" onClick={() => handleRemove(leave)} disabled={save.isPending}>

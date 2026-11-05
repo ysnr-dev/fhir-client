@@ -265,6 +265,7 @@ export function LeaveTable({
   // 実施はこのタブでいちばん使う操作なので、ケバブに畳まずカルテの左に
   // 独立したボタンでも出す(ケバブにも残す)。
   function rowButtons(row: LeaveRow) {
+    if (row.leave.returned) return null;
     return (
       <button type="button" className="button" onClick={() => setReturnTarget(row)}>
         帰院実施
@@ -277,7 +278,7 @@ export function LeaveTable({
   function menuItems(row: LeaveRow, inDrawer = false) {
     return (
       <>
-        {!inDrawer && (
+        {!inDrawer && !row.leave.returned && (
           <button
             type="button"
             className="row-menu__item"
@@ -325,7 +326,10 @@ export function LeaveTable({
                   pictograms={pictograms}
                 />
                 <td>{dateTimeLabel(row.leave.start)}</td>
-                <td>{row.leave.end ? dateTimeLabel(row.leave.end) : "未定"}</td>
+                <td>
+                  {row.leave.end ? dateTimeLabel(row.leave.end) : "未定"}
+                  {row.leave.returned && "（帰院済）"}
+                </td>
                 <td className="inpatient__note">{row.leave.reason || "-"}</td>
                 <td className="patient-table__actions inpatient__col-actions">
                   {rowButtons(row)}
