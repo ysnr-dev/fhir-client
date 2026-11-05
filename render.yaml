@@ -11,7 +11,11 @@ services:
     dockerfilePath: ./backend/Dockerfile.production
     dockerContext: ./backend
     healthCheckPath: /up
-    autoDeploy: true
+    # main に入ったコミットのうち GitHub の CI が通ったものだけをデプロイする
+    autoDeployTrigger: checksPass
+    # rootDir が無いので、backend 以外の変更で作り直さないよう対象を絞る
+    buildFilter:
+      paths: ["backend/**"]
     envVars:
       # Neon の接続文字列(?sslmode=require 付き)。ダッシュボードで設定する。
       - key: DATABASE_URL
@@ -72,7 +76,7 @@ services:
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
-    autoDeploy: true
+    autoDeployTrigger: checksPass
     routes:
       # トランザクション Bundle は末尾セグメントの無い /fhir ちょうどに POST される
       # (postBundle → fetch("/fhir"))。/fhir/* だけだとこれが SPA フォールバックに
