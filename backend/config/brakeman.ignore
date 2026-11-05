@@ -1,0 +1,394 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "Mass Assignment",
+      "warning_code": 70,
+      "fingerprint": "64437d51dd327cb401a444251203adf378348e731741940964cdd014dfcf5e72",
+      "check_name": "MassAssignment",
+      "message": "Specify exact keys allowed for mass assignment instead of using `permit!` which allows any keys",
+      "file": "app/controllers/admin/external_systems_controller.rb",
+      "line": 79,
+      "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
+      "code": "params.require(:options).permit!",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Admin::ExternalSystemsController",
+        "method": "options_params"
+      },
+      "user_input": null,
+      "confidence": "Medium",
+      "cwe_id": [
+        915
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "0a503b6378451da2911ad31c2de65cb48a579fe9235e52e3730888a6dc81e172",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/concerns/master/exam_item_actions.rb",
+      "line": 110,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "scope.where((item_search_columns.map do\n \"#{column} LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")}\"\n end << \"#{items_table}.exam_type_code IN (SELECT exam_type_code FROM #{exam_type_model.table_name} WHERE search_name LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")} OR search_short_name LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")} OR search_kana LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")})\").join(\" OR \"))",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::ExamItemActions",
+        "method": "keyword_match"
+      },
+      "user_input": "items_table",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "dba8e517799954c264e9055ffd8f5ab365e3ec74c623fd6ec4cb88df7e7e90b6",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/concerns/master/exam_item_actions.rb",
+      "line": 121,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "scope.joins(\"LEFT JOIN master_medical_procedures ON master_medical_procedures.procedure_code = #{items_table}.receipt_code\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::ExamItemActions",
+        "method": "with_receipt_name"
+      },
+      "user_input": "items_table",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "0ad3c5da1aa2aed312226831616a90a8bd924f950b7795dec97ea9976fe6e1a9",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/concerns/master/exam_item_actions.rb",
+      "line": 139,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "set_item_model.where(:set_item_code => code).joins(\"LEFT JOIN #{items_table} ON #{items_table}.item_code = #{set_item_model.table_name}.member_item_code\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::ExamItemActions",
+        "method": "set_items_for"
+      },
+      "user_input": "items_table",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "caba64a942e7685472f32b581578cfac11fe8348cbf918409c672f88c8379dc4",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/concerns/master/item_layout_actions.rb",
+      "line": 70,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "cell_model.where(:layout_id => layout_id).joins(\"LEFT JOIN #{item_model.table_name} ON #{item_model.table_name}.#{item_code_column} = #{cell_model.table_name}.#{item_code_column}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::ItemLayoutActions",
+        "method": "cells_for"
+      },
+      "user_input": "item_code_column",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "a266c6108d599acd34608f0179bacc61408e8526aa48daed94701a9a45ab98dd",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/concerns/master/versioned_master.rb",
+      "line": 223,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "model_class.where(\"#{column} ~ '^[0-9]+$'\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::VersionedMaster",
+        "method": "next_code"
+      },
+      "user_input": "column",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "b471d899ca023d74d0f546c952f132f30755982fee05402f4ccca41d05cc9aae",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/concerns/master/versioned_master.rb",
+      "line": 225,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"#{column}::bigint\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::VersionedMaster",
+        "method": "next_code"
+      },
+      "user_input": "column",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "9f83dddc721ecda9fda4719004c2ee6f4024f009224c2ffbbb65d7003066ec7a",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/master/base_controller.rb",
+      "line": 115,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "scope.where(\"(#{(Master::SearchNormalizer.tokenize(query).map do\n pattern = ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")\n\"(search_name LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")} OR search_kana LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")})\"\n end.join(\" AND \") or \"FALSE\")}) OR (#{\"exchange_code IN (SELECT target_code FROM master_disease_indexes WHERE disease_modifier_category = #{ActiveRecord::Base.connection.quote(index_category)} AND search_term LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(Master::SearchNormalizer.normalize(query))}%\")})\"})\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::BaseController",
+        "method": "flexible_name_or_index_match"
+      },
+      "user_input": "Master::SearchNormalizer.tokenize(query).map do\n pattern = ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")\n\"(search_name LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")} OR search_kana LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")})\"\n end.join(\" AND \")",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "a3b4ae427f6caee1655f576ba122c4d639119162a91c165642b1c5593273a42e",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/master/base_controller.rb",
+      "line": 130,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"(#{columns.map do\n \"#{c} LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(Master::SearchNormalizer.normalize(query))}%\")}\"\n end.join(\" OR \")}) DESC NULLS LAST\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::BaseController",
+        "method": "flexible_name_match"
+      },
+      "user_input": "columns.map do\n \"#{c} LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(Master::SearchNormalizer.normalize(query))}%\")}\"\n end.join(\" OR \")",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "Mass Assignment",
+      "warning_code": 70,
+      "fingerprint": "d701376f22a3508758432321e1732e3c4d361d5fac0fe912ca028503c48b1201",
+      "check_name": "MassAssignment",
+      "message": "Specify exact keys allowed for mass assignment instead of using `permit!` which allows any keys",
+      "file": "app/controllers/master/dpc_codings_controller.rb",
+      "line": 19,
+      "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
+      "code": "params[:inputs].permit!",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::DpcCodingsController",
+        "method": "create"
+      },
+      "user_input": null,
+      "confidence": "Medium",
+      "cwe_id": [
+        915
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "Mass Assignment",
+      "warning_code": 70,
+      "fingerprint": "6aaca683afbafb4505c878cad0bd2857d775e68b396e4ab8bc92848049645745",
+      "check_name": "MassAssignment",
+      "message": "Specify exact keys allowed for mass assignment instead of using `permit!` which allows any keys",
+      "file": "app/controllers/master/dpc_codings_controller.rb",
+      "line": 20,
+      "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
+      "code": "params[:overrides].permit!",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::DpcCodingsController",
+        "method": "create"
+      },
+      "user_input": null,
+      "confidence": "Medium",
+      "cwe_id": [
+        915
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "3181692526c1c2198a2537e932c4821123678a32b463520e96648789e4fecc2a",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/master/medicines_controller.rb",
+      "line": 142,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "scope.where(\"LEFT(master_medicines.#{code_column}, 4) IN (?)\", flexible_name_match(Master::MedicineType.all, query, [\"search_name\"]).pluck(:code))",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::MedicinesController",
+        "method": "filter_by_yakko_name"
+      },
+      "user_input": "code_column",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "cd5ba7d5247ae5e22261025b6326e3f5190860b66a617148fe3a2af08336f1bf",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/master/rad_items_controller.rb",
+      "line": 125,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "scope.where(([\"search_name\", \"search_short_name\", \"search_kana\"].map do\n \"#{:BRAKEMAN_SAFE_LITERAL} LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")}\"\n end << \"#{Master::RadItem.element_column(:BRAKEMAN_SAFE_LITERAL)} IN (SELECT code FROM master_rad_jj1017_codes WHERE element = #{ActiveRecord::Base.connection.quote(:BRAKEMAN_SAFE_LITERAL)} AND search_name LIKE #{ActiveRecord::Base.connection.quote(\"%#{sanitize_like(token)}%\")})\").join(\" OR \"))",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::RadItemsController",
+        "method": "keyword_match"
+      },
+      "user_input": "Master::RadItem.element_column(:BRAKEMAN_SAFE_LITERAL)",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "Mass Assignment",
+      "warning_code": 105,
+      "fingerprint": "82b128b1a6eb1cf377c63e3d4758b7058e96edcebffdea6ed55fc2f86956cd2d",
+      "check_name": "PermitAttributes",
+      "message": "Potentially dangerous key allowed for mass assignment",
+      "file": "app/controllers/master/supervisor_group_members_controller.rb",
+      "line": 11,
+      "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
+      "code": "params.permit(:supervisor_group_id, :practitioner_fhir_id, :display_name, :role)",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Master::SupervisorGroupMembersController",
+        "method": "record_params"
+      },
+      "user_input": ":role",
+      "confidence": "Medium",
+      "cwe_id": [
+        915
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "Format Validation",
+      "warning_code": 30,
+      "fingerprint": "ddd0f6328d880fe5dd4839095c04ed9bb357a8364f0deebd1c65fb36f821914b",
+      "check_name": "ValidationRegex",
+      "message": "Insufficient validation for `image` using `/\\Adata:image\\/(png|jpeg);base64,/`. Use `\\A` and `\\z` as anchors",
+      "file": "app/models/master/schema.rb",
+      "line": 14,
+      "link": "https://brakemanscanner.org/docs/warning_types/format_validation/",
+      "code": ":image, { :presence => true, :format => ({ :with => /\\Adata:image\\/(png|jpeg);base64,/, :message => \"\\u306FPNG/JPEG\\u306EdataURL\\u5F62\\u5F0F\\u3067\\u6307\\u5B9A\\u3057\\u3066\\u304F\\u3060\\u3055\\u3044\" }) }",
+      "render_path": null,
+      "location": {
+        "type": "model",
+        "model": "Master::Schema"
+      },
+      "user_input": null,
+      "confidence": "High",
+      "cwe_id": [
+        777
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "Format Validation",
+      "warning_code": 30,
+      "fingerprint": "a78c5a92895d3616c02d4223f8982d0406da63487149bb0a095f1c888f2c4d9c",
+      "check_name": "ValidationRegex",
+      "message": "Insufficient validation for `thumbnail` using `/\\Adata:image\\/(png|jpeg);base64,/`. Use `\\A` and `\\z` as anchors",
+      "file": "app/models/master/schema.rb",
+      "line": 15,
+      "link": "https://brakemanscanner.org/docs/warning_types/format_validation/",
+      "code": ":thumbnail, { :presence => true, :format => ({ :with => /\\Adata:image\\/(png|jpeg);base64,/, :message => \"\\u306FPNG/JPEG\\u306EdataURL\\u5F62\\u5F0F\\u3067\\u6307\\u5B9A\\u3057\\u3066\\u304F\\u3060\\u3055\\u3044\" }) }",
+      "render_path": null,
+      "location": {
+        "type": "model",
+        "model": "Master::Schema"
+      },
+      "user_input": null,
+      "confidence": "High",
+      "cwe_id": [
+        777
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "66b17c2a44ed277bc101821bd92acef5a0462dcc8eadab6feb70ca58b6c4c9fe",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/services/lab_import/item_resolver.rb",
+      "line": 121,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "active_items.where(\"master_lab_result_items.#{column} LIKE ANY (ARRAY[?])\", prefixes.map do\n \"#{sanitize_like(prefix)}%\"\n end)",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "LabImport::ItemResolver",
+        "method": "prefix_scope"
+      },
+      "user_input": "column",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "CI 導入時点で既にあった警告。未精査"
+    }
+  ],
+  "brakeman_version": "8.1.0"
+}

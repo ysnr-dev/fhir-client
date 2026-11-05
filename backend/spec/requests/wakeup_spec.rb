@@ -40,12 +40,15 @@ RSpec.describe "Wakeup", type: :request do
   # 設定行が引けなくても(DB が寝ている等)、起こす宛先だけは env から返す。
   it "falls back to the env base URL when the settings row cannot be read" do
     allow(FhirConnectionSettings).to receive(:effective).and_raise(ActiveRecord::ConnectionNotEstablished)
+    allow(ENV).to receive(:[]).and_call_original
+    allow(ENV).to receive(:[]).with("FHIR_SERVER_PUBLIC_BASE_URL").and_return(nil)
+    allow(ENV).to receive(:[]).with("FHIR_SERVER_BASE_URL").and_return("http://fhir.internal:3000")
 
     get "/wakeup"
 
     expect(response).to have_http_status(:ok)
     expect(response.parsed_body)
-      .to eq("backend" => "ready", "upstream" => "waking", "upstream_probe_url" => probe_url)
+      .to eq("backend" => "ready", "upstream" => "waking", "upstream_probe_url" => "http://fhir.internal:3000/up")
     expect(a_request(:get, up_url)).not_to have_been_made
   end
 

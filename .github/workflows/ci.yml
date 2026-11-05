@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      RAILS_ENV: test
+      DATABASE_HOST: localhost
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # .ruby-version はリポジトリ直下にあり、backend/ からは setup-ruby が見つけられない
+      - id: ruby
+        run: echo "version=$(cat ../.ruby-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ steps.ruby.outputs.version }}
+          working-directory: backend
+          bundler-cache: true
+
+      # db:prepare は新規の DB に seed まで入れてしまい、spec の前提が崩れる
+      - name: Prepare database
+        run: bin/rails db:create db:schema:load
+
+      - name: Run RSpec
+        run: bundle exec rspec
+
+  security:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: ruby
+        run: echo "version=$(cat ../.ruby-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ steps.ruby.outputs.version }}
+          working-directory: backend
+          bundler-cache: true
+
+      - name: Audit gem dependencies for known CVEs
+        run: bundle exec bundler-audit check --update
+
+      - name: Static security analysis (brakeman)
+        run: bundle exec brakeman -q --no-pager --force
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      # tsc -b と vite build
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint

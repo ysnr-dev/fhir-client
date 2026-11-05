@@ -1,0 +1,44 @@
+version: 2
+
+updates:
+  - package-ecosystem: bundler
+    directory: /backend
+    schedule:
+      interval: monthly
+      timezone: Asia/Tokyo
+    # Gemfile の版指定(rails "~> 8.1.0" など)は書き換えず、lock の中だけで上げる
+    versioning-strategy: lockfile-only
+    open-pull-requests-limit: 5
+    groups:
+      bundler-minor-patch:
+        update-types: [minor, patch]
+      bundler-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: monthly
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    groups:
+      # 版を揃えて動かす必要があるもの
+      cornerstone:
+        patterns: ["@cornerstonejs/*"]
+      tiptap:
+        patterns: ["@tiptap/*"]
+      npm-minor-patch:
+        update-types: [minor, patch]
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      timezone: Asia/Tokyo
+    groups:
+      actions:
+        patterns: ["*"]

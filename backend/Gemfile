@@ -63,6 +63,10 @@ group :development, :test do
   gem "webmock"
   # 生成した帳票 PDF からテキストを抽出して検証する(prawn 公式のテスト用 gem)
   gem "pdf-inspector", require: "pdf/inspector"
+
+  # CI のセキュリティ検査(.github/workflows/ci.yml)
+  gem "bundler-audit", require: false
+  gem "brakeman", require: false
 end
 
 group :development do
