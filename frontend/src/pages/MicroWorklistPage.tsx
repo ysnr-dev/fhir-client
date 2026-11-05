@@ -32,7 +32,7 @@ import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
 import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import { useRowPictogramSources, type RowPictogramSources } from "../hooks/useRowPictogramSources";
-import { addDays, diffDays, localDay, shortDate, today } from "../lib/dates";
+import { addDays, diffDays, localDay, today } from "../lib/dates";
 
 // 細菌検査一覧(部門ワークリスト)。検査日を決めて、その日に検体が出る検査を並べる。
 // 作りは病理検査一覧(PathoWorklistPage)に合わせてある。
@@ -172,6 +172,7 @@ export function MicroWorklistPage() {
                   <th className="sticky-table__fix-2">患者氏名</th>
                   <PatientProfileHeadCells />
                   <th className="lab-worklist__compact">検査日</th>
+                  <th className="lab-worklist__compact">日数</th>
                   <th className="lab-worklist__content">検体・検査項目</th>
                   <th className="lab-worklist__compact">入外</th>
                   <th className="lab-worklist__compact">病棟</th>
@@ -194,7 +195,7 @@ export function MicroWorklistPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="master-search__empty">
+                    <td colSpan={13} className="master-search__empty">
                       {loaded.length === 0
                         ? pendingOnly
                           ? "未完了の細菌検査オーダーはありません"
@@ -418,10 +419,8 @@ function WorklistRow({
         )}
       </td>
       <PatientProfileCells patient={patient} />
-      <td className="lab-worklist__compact">
-        {day ? shortDate(day) : "-"}
-        {elapsed > 1 && <div className="order-select__muted">{`${elapsed}日目`}</div>}
-      </td>
+      <td className="lab-worklist__compact">{day || "-"}</td>
+      <td className="lab-worklist__compact">{elapsed > 0 ? `${elapsed} 日目` : "-"}</td>
       <td className="lab-worklist__content">
         {specimenLabel(specimen) || <span className="order-select__muted">検体なし</span>}
         {items.length > 0 && (
