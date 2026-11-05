@@ -9,7 +9,7 @@ import { dateTimeLabel, nowFhirDateTime } from "../lib/dates";
 import { applyTheme, resolveTheme } from "../theme";
 
 // カルテ印刷の別タブ。カルテの「カルテ印刷」タブから期間と履歴の有無を受け取り、
-// 2 号用紙を A4 で描いてブラウザの印刷(PDF 保存を含む)に渡す。
+// 2 号用紙を A4 で描いてブラウザの印刷(PDF 保存を含む)に渡す。履歴ありでは削除した記録も並べる。
 
 export function KartePrintPage() {
   const { patientId } = useParams<{ patientId: string }>();
@@ -25,7 +25,7 @@ export function KartePrintPage() {
   }, []);
 
   const patient = usePatient(patientId);
-  const timeline = useKartePrintTimeline(patientId, from, to);
+  const timeline = useKartePrintTimeline(patientId, from, to, withHistory);
   const items = useMemo(() => timeline.groups.flatMap((group) => group.items), [timeline.groups]);
   const history = useKartePrintHistory(items, withHistory && !timeline.isPending);
   // 印刷日時は開いた時点で固定する(読み込みのたびに変わらないように)。
@@ -66,7 +66,12 @@ export function KartePrintPage() {
       <ErrorBanner error={error} />
       <TruncatedNotice show={timeline.truncated} />
       {ready && (
-        <KartePrintDocument header={header} groups={timeline.groups} history={withHistory ? history.data : undefined} />
+        <KartePrintDocument
+          header={header}
+          groups={timeline.groups}
+          history={withHistory ? history.data : undefined}
+          deletions={timeline.deletions}
+        />
       )}
     </div>
   );

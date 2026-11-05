@@ -29054,6 +29054,25 @@ input.nursing-picker__search {
   font-size: 8pt;
 }
 
+/* 削除した記録。紙のカルテの二重線と同じく、内容は読める形で消す。白黒でも分かるよう色に頼らない。 */
+.karte-print__deleted-mark {
+  font-size: 8pt;
+  font-weight: 600;
+  padding: 0 4px;
+  border: 2px solid var(--text-h);
+}
+
+.karte-print__deletion {
+  font-size: 8pt;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.karte-print__card--deleted .karte-print__card-head .karte-print__title,
+.karte-print__card--deleted .karte-print__card-body {
+  text-decoration: line-through double;
+}
+
 /* 紙の段は画面のカードより狭いので、用法名などの折らない指定も段の幅で折り返す。 */
 .karte-print .karte-rp__usage > span {
   white-space: normal;
@@ -31195,4 +31214,17 @@ input.nursing-picker__search {
 .regimen-decision__comment {
   color: var(--text);
   opacity: 0.8;
+}
+
+/* カルテのカードの削除確認(理由の入力)。 */
+.modal--karte-delete {
+  width: min(480px, 94vw);
+}
+
+.karte-delete-form {
+  margin-bottom: 12px;
+}
+
+.karte-delete-form__reason {
+  flex: 1 1 100%;
 }

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { KartePrintHistory } from "../api/queries";
 import { clinicalNoteAttestation } from "../fhir/clinicalNoteHelpers";
+import type { DeleteRecord } from "../fhir/provenanceHelpers";
 import {
   karteDayHeadingLabel,
   karteItemKey,
@@ -19,12 +20,16 @@ import { VersionDiffView } from "./VersionDiffView";
 // 処方・注射・部門オーダー(処方・手術・処置等)を並べる。カードの本文は画面と同じ描き方
 // (KarteCardBody)なので、文字の装飾・本文の画像・シェーマもそのまま印字される。
 // 見出し(患者・期間)は表の thead に置き、ブラウザがページごとに繰り返す。
+// 削除した記録(履歴ありのときだけ並ぶ)は、紙のカルテの二重線と同じく内容を読める形で
+// 取り消し線を引き、誰が・いつ・なぜ消したかを添える。
 
 interface KartePrintDocumentProps {
   header: ReactNode;
   groups: KarteDayGroup[];
   /** 履歴を印刷しないときは undefined。 */
   history: KartePrintHistory | undefined;
+  /** 削除したカード(キー → 削除の記録)。 */
+  deletions: Map<string, DeleteRecord>;
 }
 
 // 履歴の版を描くときのプロブレムの名前は、版に保存してある表示名を使う(印刷では引き直さない)。
@@ -33,7 +38,7 @@ const NO_PROBLEMS = new Map<string, fhir4.Condition>();
 // 差分で、変わった行の前後に残す行数。
 const DIFF_CONTEXT = 1;
 
-export function KartePrintDocument({ header, groups, history }: KartePrintDocumentProps) {
+export function KartePrintDocument({ header, groups, history, deletions }: KartePrintDocumentProps) {
   return (
     <table className="karte-print__sheet">
       <thead>
@@ -56,7 +61,7 @@ export function KartePrintDocument({ header, groups, history }: KartePrintDocume
           </tr>
         ) : (
           groups.map((group) => (
-            <KartePrintDay key={group.day} group={group} history={history} />
+            <KartePrintDay key={group.day} group={group} history={history} deletions={deletions} />
           ))
         )}
       </tbody>
@@ -64,7 +69,15 @@ export function KartePrintDocument({ header, groups, history }: KartePrintDocume
   );
 }
 
-function KartePrintDay({ group, history }: { group: KarteDayGroup; history: KartePrintHistory | undefined }) {
+function KartePrintDay({
+  group,
+  history,
+  deletions,
+}: {
+  group: KarteDayGroup;
+  history: KartePrintHistory | undefined;
+  deletions: Map<string, DeleteRecord>;
+}) {
   const records = group.items.filter((item) => kartePrintColumn(item) === "record");
   const orders = group.items.filter((item) => kartePrintColumn(item) === "order");
   return (
@@ -75,12 +88,22 @@ function KartePrintDay({ group, history }: { group: KarteDayGroup; history: Kart
       <tr className="karte-print__row">
         <td>
           {records.map((item) => (
-            <KartePrintCard key={karteItemKey(item)} item={item} history={history} />
+            <KartePrintCard
+              key={karteItemKey(item)}
+              item={item}
+              history={history}
+              deletion={deletions.get(karteItemKey(item))}
+            />
           ))}
         </td>
         <td>
           {orders.map((item) => (
-            <KartePrintCard key={karteItemKey(item)} item={item} history={history} />
+            <KartePrintCard
+              key={karteItemKey(item)}
+              item={item}
+              history={history}
+              deletion={deletions.get(karteItemKey(item))}
+            />
           ))}
         </td>
       </tr>
@@ -88,17 +111,36 @@ function KartePrintDay({ group, history }: { group: KarteDayGroup; history: Kart
   );
 }
 
-function KartePrintCard({ item, history }: { item: KarteTimelineItem; history: KartePrintHistory | undefined }) {
-  const status = cardStatus(item);
+function KartePrintCard({
+  item,
+  history,
+  deletion,
+}: {
+  item: KarteTimelineItem;
+  history: KartePrintHistory | undefined;
+  deletion: DeleteRecord | undefined;
+}) {
+  // 削除したオーダーは進捗(Task)も一緒に消えているので、進捗は出さない。
+  const status = deletion ? undefined : cardStatus(item);
   const meta = [status?.label, cardMeta(item)].filter(Boolean).join(" | ");
   return (
-    <section className="karte-print__card">
+    <section className={`karte-print__card${deletion ? " karte-print__card--deleted" : ""}`}>
       <div className="karte-print__card-head">
+        {deletion && <span className="karte-print__deleted-mark">削除</span>}
         <span className="karte-print__kind">{karteItemKindLabel(item)}</span>
         {cardTitle(item) && <span className="karte-print__title">{cardTitle(item)}</span>}
         {meta && <span className="karte-print__meta">{meta}</span>}
       </div>
-      <KarteCardBody item={item} />
+      {deletion && (
+        <div className="karte-print__deletion">
+          {[`${dateTimeLabel(deletion.at)} 削除`, deletion.name, deletion.reason && `理由: ${deletion.reason}`]
+            .filter(Boolean)
+            .join(" ")}
+        </div>
+      )}
+      <div className="karte-print__card-body">
+        <KarteCardBody item={item} />
+      </div>
       {history && <KartePrintCardHistory item={item} history={history} />}
     </section>
   );

@@ -576,6 +576,29 @@ export function karteItemKey(item: Pick<KarteTimelineItem, "kind" | "id">): stri
   return `${item.kind}:${item.id}`;
 }
 
+/**
+ * カードを消すと削除される本体の参照。削除の理由をリクエストへ渡す相手(lib/deleteReasonStage)と、
+ * カルテ印刷で削除の来歴を引く相手に使う。
+ */
+export function karteItemMainReferences(item: KarteTimelineItem): string[] {
+  switch (item.kind) {
+    case "note":
+      return [`Composition/${item.id}`];
+    case "qr":
+      return [`QuestionnaireResponse/${item.id}`];
+    case "vital":
+      return item.entry.observations.flatMap((observation) =>
+        observation.id ? [`Observation/${observation.id}`] : [],
+      );
+    case "pathway-evaluation":
+      return item.evaluation.observation.id ? [`Observation/${item.evaluation.observation.id}`] : [];
+    case "adverse-event":
+      return [`Observation/${item.id}`];
+    default:
+      return [`ServiceRequest/${item.id}`];
+  }
+}
+
 function dedupeById<T extends fhir4.Resource>(resources: T[]): T[] {
   const byId = new Map<string, T>();
   for (const resource of resources) {

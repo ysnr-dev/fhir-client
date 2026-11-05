@@ -19,6 +19,7 @@ class FhirProxyController < ApplicationController
   # Encounter.location でベッドの Location を指す。
   # Provenance はオーダーの来歴(誰が代行入力し、誰の指示で、誰が承認したか)。読み出しは
   # オーダーと一緒の _revinclude=Provenance:target が主で、書き込みは登録の transaction に混ぜる。
+  # 削除の来歴(誰が・なぜ消したか)は中継自身が削除の transaction に足す(FhirDeleteProvenance)。
   # Flag は患者の診療上の注意(転倒リスク・体内金属・DNAR など)。患者帯のピクトグラムと
   # カルテのプロファイルタブが患者ごとに引く。
   # MedicationDispense は調剤・払出の結果。書き込みは登録の transaction に混ぜるが、
@@ -54,15 +55,19 @@ class FhirProxyController < ApplicationController
       return render_outcome(:not_found, "not-supported", "Resource type not supported: #{resource_type}")
     end
 
+    return relay_single_delete(path) if single_delete?(path)
+
+    body = request.raw_post.presence
+    body = bundle_with_delete_provenance(body) if bundle_post?(path)
     upstream = FhirGateway.new.forward(
       method: request.method_symbol,
       path: "/#{path}",
       query: request.query_string,
-      body: request.raw_post.presence,
+      body: body,
       headers: forwarded_request_headers
     )
 
-    record_for_ssmix2(path, upstream)
+    record_for_ssmix2(path, upstream, request_body: body)
     forward_response_headers(upstream)
     render body: upstream.body, status: upstream.status,
            content_type: upstream.headers["content-type"] || FHIR_CONTENT_TYPE
@@ -75,16 +80,53 @@ class FhirProxyController < ApplicationController
 
   private
 
+  # 診療記録の単体削除(DELETE /Type/id)。削除の来歴を同じ transaction で書くため、
+  # 上流へは transaction として送り、成功なら単体削除と同じ 204 を返す。
+  def single_delete?(path)
+    request.delete? && request.query_string.blank? && FhirDeleteProvenance.recorded_reference?(path)
+  end
+
+  def relay_single_delete(path)
+    bundle = delete_provenance.transaction_for(path, if_match: request.headers["If-Match"])
+    upstream = FhirGateway.new.forward(
+      method: :post, path: "/", body: bundle.to_json, headers: { "Content-Type" => FHIR_CONTENT_TYPE }
+    )
+    unless upstream.status.to_i.between?(200, 299)
+      return render body: upstream.body, status: upstream.status,
+                    content_type: upstream.headers["content-type"] || FHIR_CONTENT_TYPE
+    end
+
+    record_for_ssmix2(path, upstream, request_body: nil, status: 204)
+    head :no_content
+  end
+
+  # transaction の削除に来歴を添えた本文。JSON でない・対象の削除が無いときは元のまま。
+  def bundle_with_delete_provenance(body)
+    return body if body.blank?
+
+    bundle = JSON.parse(body)
+    with_provenance = delete_provenance.bundle_with_provenance(bundle)
+    with_provenance ? with_provenance.to_json : body
+  rescue JSON::ParserError
+    body
+  end
+
+  def delete_provenance
+    @delete_provenance ||= FhirDeleteProvenance.new(
+      actor: current_user_payload, reason: request.headers[FhirDeleteProvenance::REASON_HEADER]
+    )
+  end
+
   # 上流へ書けた transaction を SS-MIX2 出力の控えに残す(docs/ssmix2-export-design.md §4)。
   # 施設設定で無効なら何もしない。記録に失敗しても中継の応答は変えない。
-  def record_for_ssmix2(path, upstream)
+  def record_for_ssmix2(path, upstream, request_body:, status: upstream.status)
     return if request.get? || request.head?
 
     Ssmix2::Recorder.record(
       method: request.method_symbol,
       path: "/#{path}",
-      status: upstream.status,
-      request_body: request.raw_post.presence,
+      status: status,
+      request_body: request_body,
       response_body: upstream.body,
       actor: current_user_payload&.dig(:practitioner_id)
     )

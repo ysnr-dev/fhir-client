@@ -24,6 +24,7 @@ import {
   karteDayHeadingLabel,
   karteDayLabel,
   karteItemKey,
+  karteItemMainReferences,
   itemPathway,
   itemProblem,
   referencesProblem,
@@ -75,6 +76,8 @@ import { InjectionPerformModal } from "./InjectionPerformModal";
 import { ExamReportEntryModal } from "./ExamReportEntryModal";
 import { EXAM_REPORT_CONFIGS, EXAM_REPORT_KIND_OF_ORDER } from "../fhir/examReportHelpers";
 import { InjectionDeleteModal } from "./InjectionDeleteModal";
+import { KarteDeleteModal } from "./KarteDeleteModal";
+import { clearDeleteReason, stageDeleteReason } from "../lib/deleteReasonStage";
 import { KarteCardJsonModal } from "./KarteCardModals";
 import { orderKindDefOf, useOrderKindDeletes } from "./orderKindRegistry";
 import { PlainTextModal } from "./PlainTextModal";
@@ -287,7 +290,10 @@ function useKarteItemDelete(onDeleted: (item: KarteTimelineItem) => void) {
     const options = {
       onSuccess: () => onDeletedRef.current(item),
       onError: (error: unknown) => setFailure({ key, error }),
-      onSettled: () => setDeletingKey((current) => (current === key ? null : current)),
+      onSettled: () => {
+        clearDeleteReason();
+        setDeletingKey((current) => (current === key ? null : current));
+      },
     };
     if (isOrderItem(item)) {
       m[item.kind].mutate(item.id, options);
@@ -354,6 +360,7 @@ const KarteCard = memo(function KarteCard({
   const [jsonOpen, setJsonOpen] = useState(false);
   const linkActions = useKarteLinkActions();
   const [injectionDeleteOpen, setInjectionDeleteOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   // 注射の中止・中止取消。開いているときだけモーダルを出す。
   const [injectionCancel, setInjectionCancel] = useState<"cancel" | "restore" | null>(null);
   const [injectionPerformOpen, setInjectionPerformOpen] = useState(false);
@@ -418,14 +425,20 @@ const KarteCard = memo(function KarteCard({
       setInjectionDeleteOpen(true);
       return;
     }
-    // 化学療法の日オーダーを消すとクールが歯抜けになり、化学療法室の予約も残る。
-    // 投与を止めるだけなら化学療法タブの投与日パネルの「中止」を使う(§8.14 N-13)。
-    const regimenNote = regimenDay
-      ? `\n${regimenDay.name} ${cycleDayLabel(regimenDay)} の投与日です。削除するとクールから抜けます。投与を止めるだけなら化学療法タブで中止、クールごと消すならレジメン詳細の「取消」を使ってください。`
-      : "";
-    if (!window.confirm(`この${karteItemKindLabel(item)}を削除します。${regimenNote}よろしいですか?`)) return;
-    onDelete(item);
+    // 確定前の下書きは記録になる前のものなので、理由を求めない(削除の来歴は中継が付ける)。
+    if (item.kind === "note" && item.note.status === "preliminary") {
+      if (!window.confirm(`この${karteItemKindLabel(item)}を削除します。よろしいですか?`)) return;
+      onDelete(item);
+      return;
+    }
+    setDeleteOpen(true);
   }
+
+  // 化学療法の日オーダーを消すとクールが歯抜けになり、化学療法室の予約も残る。
+  // 投与を止めるだけなら化学療法タブの投与日パネルの「中止」を使う(§8.14 N-13)。
+  const regimenDeleteWarning = regimenDay
+    ? `${regimenDay.name} ${cycleDayLabel(regimenDay)} の投与日です。削除するとクールから抜けます。投与を止めるだけなら化学療法タブで中止、クールごと消すならレジメン詳細の「取消」を使ってください。`
+    : undefined;
 
   // プロブレム選択中は、そのプロブレムを参照しない情報を控えめに表示する
   // (件数が減ると読み込み位置が動くので、隠さず減光にとどめる)。
@@ -919,6 +932,18 @@ const KarteCard = memo(function KarteCard({
           mode={injectionCancel}
           onClose={() => setInjectionCancel(null)}
           onDone={() => setInjectionCancel(null)}
+        />
+      )}
+      {deleteOpen && (
+        <KarteDeleteModal
+          title={`${karteItemKindLabel(item)}の削除`}
+          warning={regimenDeleteWarning}
+          onClose={() => setDeleteOpen(false)}
+          onDelete={(reason) => {
+            stageDeleteReason(karteItemMainReferences(item), reason);
+            setDeleteOpen(false);
+            onDelete(item);
+          }}
         />
       )}
       {injectionDeleteOpen && item.kind === "injection" && (

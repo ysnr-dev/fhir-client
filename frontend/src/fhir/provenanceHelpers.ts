@@ -474,3 +474,32 @@ export function summarizeOrderProvenance(provenances: fhir4.Provenance[]): Order
 export function provenancesOf(bundle: fhir4.Bundle | undefined): fhir4.Provenance[] {
   return resourcesOfType<fhir4.Provenance>(bundle, "Provenance");
 }
+
+// ---- 削除の記録 ----
+
+/** 誰が・いつ・なぜ消したか。backend の中継が削除の transaction に来歴として添える(FhirDeleteProvenance)。 */
+export interface DeleteRecord extends ProvenanceActor {
+  reason: string;
+}
+
+export function isDeleteProvenance(provenance: fhir4.Provenance): boolean {
+  return Boolean(
+    provenance.activity?.coding?.some((coding) => coding.system === ACTIVITY_SYSTEM && coding.code === "DELETE"),
+  );
+}
+
+/** 削除の来歴を、消されたリソースの参照("Composition/abc")ごとに引けるようにする。 */
+export function deleteRecordsByTarget(provenances: fhir4.Provenance[]): Map<string, DeleteRecord> {
+  const result = new Map<string, DeleteRecord>();
+  for (const provenance of provenances.filter(isDeleteProvenance).sort(byRecorded)) {
+    const record: DeleteRecord = {
+      name: agentName(agentOfType(provenance, ENTERER)),
+      at: provenance.recorded ?? "",
+      reason: provenance.reason?.map((reason) => reason.text ?? "").filter(Boolean).join("、") ?? "",
+    };
+    for (const target of provenance.target ?? []) {
+      if (target.reference) result.set(target.reference, record);
+    }
+  }
+  return result;
+}

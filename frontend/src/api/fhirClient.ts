@@ -1,4 +1,5 @@
 import { withVersionLock } from "../fhir/shared";
+import { stagedDeleteReason } from "../lib/deleteReasonStage";
 import { notifyUnauthorized, withCsrfHeaders } from "./session";
 
 const BASE = "/fhir";
@@ -123,11 +124,20 @@ export function readTypeHistory(
  * 通すだけで楽観ロックが効く(版違いは 412)。
  */
 export function postBundle(bundle: fhir4.Bundle): Promise<FhirResult<fhir4.Bundle>> {
+  const deleteUrls = (bundle.entry ?? []).flatMap((entry) =>
+    entry.request?.method === "DELETE" && entry.request.url ? [entry.request.url] : [],
+  );
   return fhirFetch(BASE, {
     method: "POST",
-    headers: { "Content-Type": FHIR_JSON },
+    headers: { "Content-Type": FHIR_JSON, ...deleteReasonHeader(deleteUrls) },
     body: JSON.stringify(withVersionLock(bundle)),
   }).then((r) => handle(r));
+}
+
+// 確認モーダルで入れた削除の理由(lib/deleteReasonStage)。中継が削除の来歴に書く。
+function deleteReasonHeader(deleteUrls: string[]): Record<string, string> {
+  const reason = deleteUrls.length > 0 ? stagedDeleteReason(deleteUrls) : null;
+  return reason ? { "X-Delete-Reason": encodeURIComponent(reason) } : {};
 }
 
 export function createResource<T extends fhir4.Resource>(resource: T): Promise<FhirResult<T>> {
@@ -150,7 +160,10 @@ export function updateResource<T extends fhir4.Resource & { id?: string }>(
 }
 
 export function deleteResource(resourceType: string, id: string): Promise<FhirResult<void>> {
-  return fhirFetch(`${BASE}/${resourceType}/${id}`, { method: "DELETE" }).then((r) => handle(r));
+  return fhirFetch(`${BASE}/${resourceType}/${id}`, {
+    method: "DELETE",
+    headers: deleteReasonHeader([`${resourceType}/${id}`]),
+  }).then((r) => handle(r));
 }
 
 // Binary を raw バイトで取得する。非 FHIR な Accept を送ると上流が data を

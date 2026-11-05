@@ -402,6 +402,15 @@ Observation・Composition・Encounter など)を足した(migration 無し。`fo
 
 ## 優先度 C: 個別の検索パラメータ・仕様適合（残り）
 
+### C-27. 型レベル `_history` を「いま削除されているもの」に絞る
+
+- **現状**: カルテ印刷の「履歴を印刷」は、期間内に削除した記録を探すため、タイムラインと同じ条件の型レベル
+  `_history` を全ページ読み、最後の版が削除のものを画面で拾っている(`api/queries/kartePrint.ts` の
+  `readKartePrintDeleted`)。残っているリソースの版もすべて返るので、バイタルの多い入院患者で期間を長く取ると
+  500 件 × 10 ページの上限に当たる(当たったら欠けていることを出す)。
+- **望ましいサーバー機能**: 条件付きの型レベル `_history` に、削除済みのリソースだけを対象にするパラメータ
+  (例: `_deleted=true`)。最後の版だけを返す指定(`_list=last` のようなもの)があればさらに軽い。
+
 ### C-23. MedicationRequest のオーダー種別(処方 / 注射)の索引
 
 - **現状**: データ抽出の「処方・注射」の区分は `MedicationRequest?based-on.category=order-type|prescription` の

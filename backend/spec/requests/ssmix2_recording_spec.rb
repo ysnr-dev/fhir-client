@@ -36,7 +36,10 @@ RSpec.describe "SS-MIX2 transaction の記録", type: :request do
   it "records a single PUT and a DELETE of a target resource" do
     enable_ssmix2
     stub_request(:put, "#{upstream_base}/Patient/123").to_return(status: 200, body: patient, headers: fhir_headers)
-    stub_request(:delete, "#{upstream_base}/Condition/9").to_return(status: 204, body: "")
+    # 診療記録の単体削除は、中継が削除の来歴付きの transaction にして送る(FhirDeleteProvenance)。
+    stub_request(:post, "#{upstream_base}/")
+      .with(body: hash_including("type" => "transaction"))
+      .to_return(status: 200, body: '{"resourceType":"Bundle","type":"transaction-response"}', headers: fhir_headers)
 
     put "/fhir/Patient/123", params: patient, headers: fhir_headers
     delete "/fhir/Condition/9"
