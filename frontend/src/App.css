@@ -30964,7 +30964,9 @@ input.nursing-picker__search {
   background: var(--paper);
 }
 
+/* 高さは全体の既定(--control-height)で決まるので、変数を差し替えて箱いっぱいに広げる。 */
 .document-form-input {
+  --control-height: 100%;
   position: absolute;
   inset: 0;
   width: 100%;

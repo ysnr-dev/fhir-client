@@ -14,7 +14,8 @@ W = 1240                      # ページ画像の幅(px)。A4 150dpi
 PT_W, PT_H = 595.276, 841.89  # A4(pt)
 SCALE = W / PT_W
 H = round(PT_H * SCALE)
-FS = 11                       # 紙面の文字サイズ(pt)。□ も同じ大きさ
+FS = 11                       # 紙面の文字サイズ(pt)
+CB_PX = 21                    # チェック項目の一辺(px)。□ の字面(17px)を覆い、右の文字(□ から 3.7px)にはかからない
 FIELD_PT = 9.5                # 入力値の文字サイズ(pt)
 KANJI_NAME = "%patient.name.where(extension.where(value = 'SYL').empty()).select(family + ' ' + given.first()).first()"
 CATEGORY = {"code": "20f88598-bea0-4280-8e85-24c639035e57", "name": "計画書"}
@@ -52,9 +53,8 @@ class Sheet:
         self.fields.append(f)
 
     def cb(self, id, label, x, y, expression=""):
-        """□ の上のチェック項目。x は □ の左端、y は行のベースライン(pt)。"""
-        box = px(FS)
-        self.field(id, "checkbox", label, px(x) - 5, px(y - 10) - 5, box + 10, box + 10, 10, align="center",
+        """□ の上のチェック項目。x は □ の文字の左端、y は行のベースライン(pt)。箱は □ の字面の中心に合わせる。"""
+        self.field(id, "checkbox", label, px(x + 5.5) - CB_PX / 2, px(y - 4) - CB_PX / 2, CB_PX, CB_PX, 10, align="center",
                    initial_expression=expression)
 
     def tx(self, id, label, x1, x2, y, expression="", font_size=FIELD_PT, **extra):
@@ -170,7 +170,8 @@ def build_initial():
 
 def build_continued():
     s = Sheet()
-    s.field("f_written_date", "date", "記入日", px(398), px(101), px(134), px(15), FIELD_PT, align="center", mask=True,
+    # 塗りつぶしは雛形の「年 月 日」だけを隠す。下に接する表の上罫線にかからない高さにする。
+    s.field("f_written_date", "date", "記入日", px(398), px(101.3), px(134), px(12.5), FIELD_PT, align="center", mask=True,
             initial_expression="%today", date_format="wareki")
     s.tx("f_pt_name", "患者氏名", 85, 300, 127.1, KANJI_NAME, 11)
 
