@@ -23842,6 +23842,12 @@ button.chemo-calendar__cell[draggable="true"] {
   background: var(--accent-bg);
 }
 
+/* ドロワーで開いている患者。一覧の選んだ行と同じ色を当てる。 */
+.ward-map__bed--selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
 .ward-map__bed--moved-away {
   opacity: 0.45;
 }
@@ -23896,15 +23902,9 @@ button.chemo-calendar__cell[draggable="true"] {
   overflow: hidden;
 }
 
-.ward-map__bed-name a {
-  color: inherit;
-  text-decoration: none;
+.ward-map__bed-name-text {
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.ward-map__bed-name a:hover {
-  text-decoration: underline;
 }
 
 .ward-map__bed-age {

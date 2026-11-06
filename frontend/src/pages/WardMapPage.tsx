@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { PatientCaution } from "../api/masterClient";
 import { usePatientCautions, useWardMap } from "../api/masterQueries";
 import {
@@ -19,6 +19,7 @@ import { DischargeModal } from "../components/DischargeModal";
 import { DischargePlanModal } from "../components/DischargePlanModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LeaveModal } from "../components/LeaveModal";
+import { PatientProfileDrawer } from "../components/PatientProfileDrawer";
 import {
   AllergyPictogramBadges,
   CautionPictogramBadges,
@@ -124,7 +125,6 @@ export function WardMapPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const wardId = searchParams.get("ward") ?? "";
   const date = searchParams.get("date") || today();
-  const navigate = useNavigate();
   const returnLinkState = useReturnLinkState();
 
   function setParams(next: Record<string, string>, replace = false) {
@@ -267,6 +267,14 @@ export function WardMapPage() {
   const [rowAction, setRowAction] = useState<RowAction | null>(null);
   const [admissionTarget, setAdmissionTarget] = useState<BedPlace | null>(null);
 
+  // カードを押すと右に患者プロファイルを出す(一覧の行と同じ)。入院で選ぶので、
+  // 移動プランで床が変わっても同じ患者のまま、表示日に居なくなれば閉じる。
+  const [drawerEncounterId, setDrawerEncounterId] = useState<string | null>(null);
+  const drawerEncounter = drawerEncounterId
+    ? inpatients.data?.encounters.find((encounter) => encounter.id === drawerEncounterId)
+    : undefined;
+  const drawerPatientId = drawerEncounter ? encounterPatientId(drawerEncounter) : undefined;
+
   // 病棟や日付が変わったらプランは意味を失うので捨てる。
   useEffect(() => {
     setPlan(emptyMovePlan());
@@ -336,6 +344,9 @@ export function WardMapPage() {
 
   const { drag, start, consumeClick } = useCardDrag<ViewDragItem>({ onDrop: handleDrop });
 
+  // ドロワーは右のパネル(一時退避・入院予定)に重なるので、掴んで動かし始めたら閉じる。
+  if (drag && drawerEncounterId) setDrawerEncounterId(null);
+
   useEffect(() => {
     if (!drag) {
       setDropTarget(null);
@@ -372,10 +383,34 @@ export function WardMapPage() {
     return place === WORKSPACE ? "一時退避から" : `${bedLabel(place)} から`;
   }
 
-  function openKarte(patientId: string) {
+  function toggleDrawer(encounterId: string) {
     if (consumeClick()) return;
-    navigate(`/patients/${patientId}/karte`, { state: returnLinkState });
+    setDrawerEncounterId((current) => (current === encounterId ? null : encounterId));
   }
+
+  /** 入院中の患者への操作。カードのケバブとドロワーで共有する。 */
+  function inpatientActionItems(encounter: fhir4.Encounter, patient: fhir4.Patient | undefined, place: BedPlace) {
+    return (
+      [
+        ["bedTransfer", "転室・転床"],
+        ["leave", "外出泊"],
+        ["transferPlan", "転科・転棟予定"],
+        ["dischargePlan", "退院予定"],
+        ["discharge", "退院"],
+      ] as const
+    ).map(([kind, label]) => (
+      <button
+        key={kind}
+        type="button"
+        className="row-menu__item"
+        onClick={() => setRowAction({ kind, encounter, patient, place })}
+      >
+        {label}
+      </button>
+    ));
+  }
+
+  const drawerPlace = drawerEncounter ? bedPlaces.get(encounterBedId(drawerEncounter) ?? "") : undefined;
 
   // ---- 描画 ----
 
@@ -440,24 +475,7 @@ export function WardMapPage() {
                 カルテ
               </Link>
             )}
-            {(
-              [
-                ["bedTransfer", "転室・転床"],
-                ["leave", "外出泊"],
-                ["transferPlan", "転科・転棟予定"],
-                ["dischargePlan", "退院予定"],
-                ["discharge", "退院"],
-              ] as const
-            ).map(([kind, label]) => (
-              <button
-                key={kind}
-                type="button"
-                className="row-menu__item"
-                onClick={() => setRowAction({ kind, encounter, patient, place })}
-              >
-                {label}
-              </button>
-            ))}
+            {inpatientActionItems(encounter, patient, place)}
           </RowMenu>
         ) : (
           <RowMenu label={`${bedPlaceLabel(place)} の操作`}>
@@ -479,7 +497,8 @@ export function WardMapPage() {
         note={note}
         movable={movable && Boolean(encounter)}
         onPointerDown={encounter ? (event) => startBedDrag(encounter, event) : undefined}
-        onOpen={patientId ? () => openKarte(patientId) : undefined}
+        selected={Boolean(encounter?.id) && encounter?.id === drawerEncounterId}
+        onOpen={patientId && encounter?.id ? () => toggleDrawer(encounter.id!) : undefined}
         pictograms={pictograms}
         tags={tags.length > 0 ? tags : undefined}
         menu={menu}
@@ -650,6 +669,18 @@ export function WardMapPage() {
           patient={rowAction.patient}
           bedLabel={bedPlaceLabel(rowAction.place)}
           onClose={() => setRowAction(null)}
+        />
+      )}
+      {drawerEncounter && drawerPatientId && (
+        <PatientProfileDrawer
+          patientId={drawerPatientId}
+          patient={patientsById?.get(drawerPatientId)}
+          actions={
+            movable && drawerPlace
+              ? inpatientActionItems(drawerEncounter, patientsById?.get(drawerPatientId), drawerPlace)
+              : undefined
+          }
+          onClose={() => setDrawerEncounterId(null)}
         />
       )}
       {admissionTarget && (

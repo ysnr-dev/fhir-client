@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
 import {
   encounterAdmissionDate,
   encounterAttendingName,
@@ -9,13 +8,10 @@ import { calculateAge, displayName, patientNumberOf } from "../fhir/patientHelpe
 import { GenderIcon } from "./icons/GenderIcon";
 import { bedShortLabel } from "../fhir/wardHelpers";
 import { diffDays } from "../lib/dates";
-import { useReturnLinkState } from "../returnTo";
 
 // 病棟マップのベッド 1 床。空床なら番号だけ、入院中なら患者の要点を載せる。
 //
-// 押すとカルテへ。カード全体を Link にすると掴む操作(pointerdown)と競合するので、
-// 本体は onOpen で遷移し、氏名だけを Link にして中クリック・右クリックの
-// 「新しいタブで開く」を残す。
+// 押すと(氏名を含めて)患者プロファイルのドロワーを開く。カルテへはドロワーとケバブから行く。
 
 export type BedCardState = "moved-away" | "moved-in" | "drop-target" | "dragging" | "workspace";
 
@@ -26,6 +22,7 @@ export function WardMapBedCard({
   patient,
   date,
   state,
+  selected = false,
   movable = false,
   onPointerDown,
   onOpen,
@@ -42,10 +39,12 @@ export function WardMapBedCard({
   /** 基準日。入院日数の計算に使う。 */
   date: string;
   state?: BedCardState;
+  /** ドロワーで開いている患者のカード。 */
+  selected?: boolean;
   /** 掴んで動かせる(今日の表示で、患者が居るとき)。 */
   movable?: boolean;
   onPointerDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
-  /** 本体を押したとき(カルテを開く)。ドラッグ直後の click は呼び出し側で飲む。 */
+  /** 本体を押したとき(ドロワーを開く)。ドラッグ直後の click は呼び出し側で飲む。 */
   onOpen?: () => void;
   /** ケバブメニュー。 */
   menu?: ReactNode;
@@ -55,8 +54,6 @@ export function WardMapBedCard({
   /** 移動元・移動先の補足(「→ 302号室 2」など)。 */
   note?: ReactNode;
 }) {
-  const returnLinkState = useReturnLinkState();
-  const patientId = patient?.id;
   const occupied = Boolean(encounter);
   const admission = encounter ? encounterAdmissionDate(encounter) : undefined;
   const days = admission && date >= admission ? diffDays(admission, date) + 1 : undefined;
@@ -67,6 +64,7 @@ export function WardMapBedCard({
     occupied ? "ward-map__bed--occupied" : "ward-map__bed--empty",
     bed ? "" : "ward-map__bed--stale",
     state ? `ward-map__bed--${state}` : "",
+    selected ? "ward-map__bed--selected" : "",
     movable ? "ward-map__bed--movable" : "",
   ]
     .filter(Boolean)
@@ -99,18 +97,7 @@ export function WardMapBedCard({
       {occupied ? (
         <>
           <div className="ward-map__bed-name">
-            {patientId ? (
-              <Link
-                to={`/patients/${patientId}/karte`}
-                state={returnLinkState}
-                onClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                {patient ? displayName(patient) : "(患者不明)"}
-              </Link>
-            ) : (
-              <span>{patient ? displayName(patient) : "(患者不明)"}</span>
-            )}
+            <span className="ward-map__bed-name-text">{patient ? displayName(patient) : "(患者不明)"}</span>
             {patient && (
               <span className="ward-map__bed-age">
                 <GenderIcon gender={patient.gender} />
