@@ -1,53 +1,68 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchMedicinesByCodes } from "../api/masterClient";
-import { fetchRecentMedicationRequests } from "../api/queries";
+import { fetchMedicationOrdersSince } from "../api/queries";
 import { isAntimicrobialYakko } from "../fhir/antimicrobialHelpers";
 import { MEDICINE_CODE_SYSTEM, codingBySystem } from "../fhir/prescriptionHelpers";
+import { addDays, localDay } from "../lib/dates";
 
-// 細菌検査オーダーの前投与抗菌薬「処方から取り込み」の候補。
+// 細菌検査オーダーの前投与抗菌薬「処方取込」の候補。
 //
-// 患者の処方・注射(ServiceRequest + MedicationRequest)を新しい順に取り、薬剤の
-// レセ電算コードで医薬品マスタを引いて、薬効分類が抗菌薬(61x=抗生物質製剤・
+// 患者の処方・注射(ServiceRequest + MedicationRequest)を期間で絞って新しい順に取り、
+// 薬剤のレセ電算コードで医薬品マスタを引いて、薬効分類が抗菌薬(61x=抗生物質製剤・
 // 622=抗結核剤・624=合成抗菌剤)のものだけを候補にする。
 //
 // 「現在投与中」の厳密判定はしない(MedicationRequest.status は常に active で
-// 登録されるため判定できない)。直近のオーダーから新しい順に出す割り切り
+// 登録されるため判定できない)。期間内のオーダーの日付から投与期間を出す割り切り
 // (docs/micro-order-design.md §7.2)。
 
-// 遡る処方・注射オーダーの数。1 オーダーに複数薬剤が入るので候補としては十分。
-const RECENT_ORDER_COUNT = 20;
+// 読む処方・注射オーダーの上限。超えたら一覧に欠けがあることを出す。
+const ORDER_LIMIT = 100;
 
 export interface AntimicrobialSuggestion {
+  /** 薬剤のレセ電算コード。同じ薬剤は 1 行にまとめる。 */
+  code: string;
   /** 薬品名。 */
   name: string;
-  /** オーダー日(YYYY-MM-DD)。 */
-  authoredDate: string;
-  /** 内服の日数。無ければ null(注射・外用・頓服)。 */
-  doseDays: number | null;
-  /** テキスト欄へ挿入する 1 行(「セファゾリン注 1g（2026-08-05〜 7日分）」)。 */
+  kind: "prescription" | "injection";
+  /** 期間内で最初のオーダー日(YYYY-MM-DD)。 */
+  start: string;
+  /** 投与の終わり(内服は日数ぶん進めた日、注射は最後のオーダー日)。 */
+  end: string;
+  /** 投与期間の表示(「2026/08/05〜2026/08/11」。1 日だけなら日付だけ)。 */
+  period: string;
+  /** テキスト欄へ挿入する 1 行(「セファゾリン注 1g（2026/08/05〜2026/08/11）」)。 */
   label: string;
 }
 
-function suggestionLabel(name: string, authoredDate: string, doseDays: number | null): string {
-  const period = [authoredDate ? `${authoredDate}〜` : "", doseDays ? `${doseDays}日分` : ""]
-    .filter(Boolean)
-    .join(" ");
-  return period ? `${name}（${period}）` : name;
+function slashDay(day: string): string {
+  return day.replaceAll("-", "/");
 }
 
-async function fetchSuggestions(patientId: string): Promise<AntimicrobialSuggestion[]> {
-  const medicationRequests = await fetchRecentMedicationRequests(patientId, RECENT_ORDER_COUNT);
-  if (medicationRequests.length === 0) return [];
+function periodLabel(start: string, end: string): string {
+  if (!start) return "";
+  return end && end !== start ? `${slashDay(start)}〜${slashDay(end)}` : slashDay(start);
+}
+
+async function fetchSuggestions(
+  patientId: string,
+  since: string,
+): Promise<{ suggestions: AntimicrobialSuggestion[]; truncated: boolean }> {
+  const { medicationRequests, truncated } = await fetchMedicationOrdersSince(
+    patientId,
+    since,
+    ORDER_LIMIT,
+  );
+  if (medicationRequests.length === 0) return { suggestions: [], truncated };
 
   // 薬効分類は FHIR リソースに載っていないので、レセ電算コードで医薬品マスタを引く。
   const codes = Array.from(
     new Set(
       medicationRequests
-        .map((mr) => codingBySystem(mr.medicationCodeableConcept?.coding, MEDICINE_CODE_SYSTEM)?.code)
+        .map(({ request }) => codingBySystem(request.medicationCodeableConcept?.coding, MEDICINE_CODE_SYSTEM)?.code)
         .filter((code): code is string => Boolean(code)),
     ),
   );
-  if (codes.length === 0) return [];
+  if (codes.length === 0) return { suggestions: [], truncated };
 
   const medicines = await fetchMedicinesByCodes(codes);
   const antimicrobialCodes = new Set(
@@ -56,37 +71,42 @@ async function fetchSuggestions(patientId: string): Promise<AntimicrobialSuggest
       .map((medicine) => medicine.medicine_code),
   );
 
-  // 同じ薬剤が繰り返し処方されていたら最新の 1 件だけを出す(新しい順に走査)。
-  const seen = new Set<string>();
-  const suggestions: AntimicrobialSuggestion[] = [];
-  for (const mr of medicationRequests) {
-    const code = codingBySystem(mr.medicationCodeableConcept?.coding, MEDICINE_CODE_SYSTEM)?.code;
-    if (!code || !antimicrobialCodes.has(code) || seen.has(code)) continue;
-    seen.add(code);
-
+  // 同じ薬剤が繰り返し出ていたら 1 行にまとめ、最初のオーダー日から投与の終わりまでを期間にする。
+  const byCode = new Map<string, Omit<AntimicrobialSuggestion, "period" | "label">>();
+  for (const { request, kind } of medicationRequests) {
+    const code = codingBySystem(request.medicationCodeableConcept?.coding, MEDICINE_CODE_SYSTEM)?.code;
+    if (!code || !antimicrobialCodes.has(code)) continue;
     const name =
-      mr.medicationCodeableConcept?.text ??
-      mr.medicationCodeableConcept?.coding?.[0]?.display ??
+      request.medicationCodeableConcept?.text ??
+      request.medicationCodeableConcept?.coding?.[0]?.display ??
       "";
     if (!name) continue;
 
-    const authoredDate = mr.authoredOn?.slice(0, 10) ?? "";
-    const duration = mr.dispenseRequest?.expectedSupplyDuration;
-    const doseDays = duration?.code === "d" && duration.value != null ? duration.value : null;
-    suggestions.push({
-      name,
-      authoredDate,
-      doseDays,
-      label: suggestionLabel(name, authoredDate, doseDays),
-    });
+    const day = localDay(request.authoredOn);
+    const duration = request.dispenseRequest?.expectedSupplyDuration;
+    const doseDays = duration?.code === "d" && duration.value ? duration.value : 0;
+    const end = day && doseDays > 1 ? addDays(day, doseDays - 1) : day;
+    const current = byCode.get(code);
+    if (!current) {
+      byCode.set(code, { code, name, kind, start: day, end });
+      continue;
+    }
+    if (day && (!current.start || day < current.start)) current.start = day;
+    if (end > current.end) current.end = end;
   }
-  return suggestions;
+  const suggestions = Array.from(byCode.values())
+    .sort((a, b) => b.end.localeCompare(a.end))
+    .map((s) => {
+      const period = periodLabel(s.start, s.end);
+      return { ...s, period, label: period ? `${s.name}（${period}）` : s.name };
+    });
+  return { suggestions, truncated };
 }
 
-export function useAntimicrobialSuggestions(patientId: string, enabled: boolean) {
+export function useAntimicrobialSuggestions(patientId: string, since: string, enabled: boolean) {
   return useQuery({
-    queryKey: ["ServiceRequest", "antimicrobial-suggestions", patientId],
-    queryFn: () => fetchSuggestions(patientId),
+    queryKey: ["ServiceRequest", "antimicrobial-suggestions", patientId, since],
+    queryFn: () => fetchSuggestions(patientId, since),
     enabled: enabled && Boolean(patientId),
   });
 }

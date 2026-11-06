@@ -11,20 +11,13 @@ import {
 import { addMonths, today } from "../../lib/dates";
 import { ErrorBanner } from "../ErrorBanner";
 import { Modal } from "../Modal";
+import { TransferPeriodSelect } from "../TransferPeriodSelect";
 import { TruncatedNotice } from "../TruncatedNotice";
 
 // 様式文書の項目に、患者のオーダー・病名・検査結果を文字で追記する。開いたタブのぶんだけ、
 // 選んだ期間のぶんだけ読む(病名は期間で絞らない)。
 // フォームの中から開くので <form> は書かない(Modal はポータルではない)。
 
-/** 期間の選択肢。0 は全期間。 */
-const PERIOD_OPTIONS: { months: number; label: string }[] = [
-  { months: 1, label: "1か月" },
-  { months: 3, label: "3か月" },
-  { months: 6, label: "6か月" },
-  { months: 12, label: "1年" },
-  { months: 0, label: "全期間" },
-];
 const DEFAULT_PERIOD_MONTHS = 3;
 
 const ORDER_KINDS: TransferKind[] = ["prescription", "injection", "order"];
@@ -116,20 +109,13 @@ export function OrderTransferModal({
           )}
           <div className="order-transfer__controls">
             {active !== "condition" && (
-              <select
-                aria-label="期間"
+              <TransferPeriodSelect
                 value={periodMonths}
-                onChange={(e) => {
-                  setPeriodMonths(Number(e.target.value));
+                onChange={(months) => {
+                  setPeriodMonths(months);
                   reset();
                 }}
-              >
-                {PERIOD_OPTIONS.map((option) => (
-                  <option key={option.months} value={option.months}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              />
             )}
             {expandableRows.length > 0 && (
               <button

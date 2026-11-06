@@ -42,7 +42,7 @@
 | 血液培養 | **特殊処理なし**。好気ボトル・嫌気ボトルを通常の検査項目として選択し、セットを分けたいときはオーダーを分ける | セット展開・ボトルペアのバリデーション等の専用機能は作らない。「前回コピー（DO）」で2セット目の入力の手間を緩和 |
 | 抗酸菌検査 | 「抗酸菌塗抹」「抗酸菌培養」の**2項目**に分ける。核酸増幅は検体検査側 | 染色法・培地・算定とも一般細菌と別。同定・感受性は培養陽性後に検査室が進めるためオーダー項目にしない |
 | 臨床情報 | 疑い病名・**前投与抗菌薬**・**検査目的区分（診断/監視培養）**・コメントを持つ | 前投与抗菌薬は培養結果の解釈に必須級。目的区分は感受性実施判断等に影響 |
-| 前投与抗菌薬の入力 | 「処方から取り込み」＋自由テキスト。**JANIS抗菌薬コードへの構造化はしない** | YJ/レセ電算→JANIS抗菌薬コードの公的対応表が存在せず自動変換不可（§3.3）。検査室が読むのはテキストで十分 |
+| 前投与抗菌薬の入力 | 「処方取込」＋自由テキスト。**JANIS抗菌薬コードへの構造化はしない** | YJ/レセ電算→JANIS抗菌薬コードの公的対応表が存在せず自動変換不可（§3.3）。検査室が読むのはテキストで十分 |
 | テーブル接頭辞 | **`master_micro_*`**（`master_mic_*` にしない） | 微生物検査ドメインで MIC＝最小発育阻止濃度と衝突するため。`micro` が慣用略語 |
 
 喀痰の抗酸菌検査で塗抹＋培養＋PCRを同時依頼する場合、医師は細菌検査と検体検査の
@@ -248,7 +248,7 @@ API: `resources :micro_specimen_types / :micro_organisms / :micro_order_items /
 | `category` | `.../CodeSystem/order-type` の `micro`（細菌検査） |
 | `reasonReference[0]` | 対象プロブレム（Condition参照。既存オーダー共通） |
 | `note` | 依頼コメント |
-| `extension[micro-prior-antimicrobial]` | 前投与抗菌薬（valueString。「処方から取り込み」も最終的に文字列） |
+| `extension[micro-prior-antimicrobial]` | 前投与抗菌薬（valueString。「処方取込」も最終的に文字列） |
 | `extension[micro-exam-purpose]` | 検査目的区分（valueCode: `diagnostic` / `surveillance`） |
 | 入外区分・至急区分・検査日(`occurrenceDateTime`) | 既存オーダーと同じ表現 |
 
@@ -304,12 +304,13 @@ contained Specimen（JP_Specimen_Common）:
   検索から選んだ菌も同じ分類の行に加わる
 - **臨床情報**:
   - 疑い病名: 放射線と同じ `useConditionOptions`（プロブレム＋レセプト病名の候補）＋直接入力
-  - 前投与抗菌薬: テキスト入力＋「処方から取り込み」ボタン。患者の処方・注射
-    （ServiceRequest＋MedicationRequest）を取得し、薬剤コードで医薬品マスタを引いて
-    薬効分類 61x/622/624 に該当するものを候補表示 →選択すると「薬品名（開始日〜）」を
-    整形してテキストに挿入。**「現在投与中」の厳密判定はしない**
-    （`MedicationRequest.status` が常に active のため。直近の抗菌薬オーダーを
-    新しい順に出す程度の割り切り）
+  - 前投与抗菌薬: テキスト入力＋「処方取込」ボタン。様式文書の「転記」と同じ組み方の
+    モーダルで、期間(既定 3か月)内の患者の処方・注射（ServiceRequest＋MedicationRequest）
+    を取得し、薬剤コードで医薬品マスタを引いて薬効分類 61x/622/624 に該当するものを
+    チェックボックスで並べる →選んだものを「薬品名（開始日〜終了日）」に整形してテキストに
+    追記（既に書いてある行は重ねない）。**「現在投与中」の厳密判定はしない**
+    （`MedicationRequest.status` が常に active のため。期間内のオーダー日から投与期間を
+    出す程度の割り切り）
   - 検査目的区分: ラジオ（診断目的 / 監視培養）
 - DO（前回コピー）は既存と同じ。血液培養の2セット目は「DOして採取部位を変える」運用（§2）
 
@@ -328,12 +329,12 @@ contained Specimen（JP_Specimen_Common）:
   `MicroOrderPanels.tsx` / `MicroOrderDetailPanel.tsx`、
   `hooks/useMicroOrderInitialValues.ts` / `useAntimicrobialSuggestions.ts`、
   `api/queries.ts` に `useMicroOrderDetail` / `useDeleteMicroOrder`。
-- 「処方から取り込み」は患者の直近オーダー20件の MedicationRequest から
-  レセ電算コードを集め、`GET /master/medicines?medicine_code[]=...`（一括照会を追加）で
-  薬効分類を引いて 61x/622/624 を抗菌薬とみなす。同じ薬剤は最新の1件だけを候補に出し、
-  選ぶと「薬品名（開始日〜 N日分）」をテキストに追記する。
+- 「処方取込」は期間内の処方・注射オーダー(上限 100 件、超えたら一部のみ表示と出す)の
+  MedicationRequest からレセ電算コードを集め、`GET /master/medicines?medicine_code[]=...`
+  （一括照会）で薬効分類を引いて 61x/622/624 を抗菌薬とみなす。同じ薬剤は 1 行にまとめ、
+  期間は最初のオーダー日から投与の終わり(内服は日数ぶん、注射は最後のオーダー日)まで。
 - 目的菌の頻用チェックは `frequent=true` の一覧、それ以外はインライン検索
-  （検索から選んだ菌は頻用リストの下に選択済みとして残し、外せるようにする）。
+  （検索から選んだ菌は同じ分類の行に選択済みとして残し、外せるようにする）。
 - 開発環境で検証済み（2026-08-11）: 登録（喀出痰・気管内・吸引、塗抹/培養/感受性、
   目的菌 S. pneumoniae、疑い病名、処方から取り込んだセファゾリン）→ カード表示 →
   詳細モーダル → FHIR 構造（ヘッダ+GP+項目3件、orderDetail・reasonCode を上流で確認）→

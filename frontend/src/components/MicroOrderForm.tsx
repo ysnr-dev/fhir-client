@@ -25,11 +25,11 @@ import {
   type MicroSpecimenValues,
 } from "../fhir/microOrderHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
-import { useAntimicrobialSuggestions } from "../hooks/useAntimicrobialSuggestions";
 import { useConditionOptions } from "../hooks/useConditionOptions";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import { AntimicrobialImportModal } from "./AntimicrobialImportModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 
@@ -37,9 +37,9 @@ import { ProblemSelect } from "./ProblemSelect";
 // DO して採取部位を変える運用)。検査項目は 10 項目前後の小マスタなので、
 // 検体検査のようなレイアウト(伝票)機能は持たずチェックボックスを直接並べる。
 //
-// 目的菌は頻用菌(マスタで frequent を付けた菌)をチェックボックスで直接出し、
-// それ以外は検索で選ぶ。前投与抗菌薬は「処方から取り込み」で直近の抗菌薬を
-// 候補表示し、選んだものを自由編集できるテキストに挿入する。
+// 目的菌は頻用菌(マスタで frequent を付けた菌)を分類ごとにチェックボックスで直接出し、
+// それ以外は検索で選ぶ。前投与抗菌薬は「処方取込」のモーダルで期間内の抗菌薬を
+// 選び、自由編集できるテキストに追記する。
 
 interface MicroOrderFormProps {
   patientId: string;
@@ -560,8 +560,7 @@ function ClinicalInfoFieldset({
     value: MicroOrderFormValues[K],
   ) => void;
 }) {
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  const suggestions = useAntimicrobialSuggestions(patientId, suggestionsOpen);
+  const [importOpen, setImportOpen] = useState(false);
   const priorAntimicrobialId = useId();
 
   // 保存済みの疑い病名が候補に無い(病名を消した)場合も、選択を失わせない。
@@ -569,19 +568,20 @@ function ClinicalInfoFieldset({
     Boolean(specimen.reasonConditionId) &&
     !conditionOptions.some((o) => o.conditionId === specimen.reasonConditionId);
 
-  function appendAntimicrobial(label: string) {
-    onChange(
-      "priorAntimicrobial",
-      priorAntimicrobial ? `${priorAntimicrobial}\n${label}` : label,
-    );
+  // 既に書いてある行は重ねない。
+  function appendAntimicrobials(lines: string[]) {
+    const existing = new Set(priorAntimicrobial.split("\n").map((line) => line.trim()));
+    const added = lines.filter((line) => !existing.has(line));
+    if (added.length === 0) return;
+    onChange("priorAntimicrobial", [priorAntimicrobial, ...added].filter(Boolean).join("\n"));
   }
 
   return (
     <fieldset>
       <legend>臨床情報</legend>
-      <label>
+      <label className="micro-order__wide">
         疑い病名
-        <div className="rad-gp__reason">
+        <div className="rad-gp__reason micro-order__reason">
           {!setMode && (
           <select
             value={specimen.reasonConditionId}
@@ -622,50 +622,32 @@ function ClinicalInfoFieldset({
         </div>
       </label>
 
-      {/* ラベル行と入力行を分けたグリッド。取り込みボタンは textarea と同じ行に
+      {/* ラベル行と入力行を分けたグリッド。取込ボタンは textarea と同じ行に
           置いて天を揃える(ラベルの高さを margin で当て込まない)。 */}
-      <div className="micro-order__prior">
+      <div className="micro-order__prior micro-order__wide">
         <label htmlFor={priorAntimicrobialId}>前投与抗菌薬</label>
         <textarea
           id={priorAntimicrobialId}
           value={priorAntimicrobial}
-          rows={2}
+          rows={3}
           placeholder="投与中・投与歴のある抗菌薬(薬品名・期間)"
           onChange={(e) => onChange("priorAntimicrobial", e.target.value)}
         />
         {!setMode && (
           <button
             type="button"
-            className="micro-order__suggest-toggle"
-            onClick={() => setSuggestionsOpen((open) => !open)}
+            className="rp-card__compact-button"
+            onClick={() => setImportOpen(true)}
           >
-            {suggestionsOpen ? "閉じる" : "処方から取り込み"}
+            処方取込
           </button>
         )}
-        {suggestionsOpen && (
-          <div className="micro-order__suggest">
-            <ErrorBanner error={suggestions.error} />
-            {suggestions.isLoading ? (
-              <p className="order-select__muted">処方を確認中...</p>
-            ) : (
-              <ul className="order-select__search-list">
-                {suggestions.data?.map((suggestion) => (
-                  <li key={suggestion.label}>
-                    <button
-                      type="button"
-                      className="micro-order__suggest-item"
-                      onClick={() => appendAntimicrobial(suggestion.label)}
-                    >
-                      {suggestion.label}
-                    </button>
-                  </li>
-                ))}
-                {suggestions.data && suggestions.data.length === 0 && (
-                  <li className="order-select__muted">直近の処方・注射に抗菌薬がありません</li>
-                )}
-              </ul>
-            )}
-          </div>
+        {importOpen && (
+          <AntimicrobialImportModal
+            patientId={patientId}
+            onAppend={appendAntimicrobials}
+            onClose={() => setImportOpen(false)}
+          />
         )}
       </div>
 

@@ -134,13 +134,18 @@ export function useDeletePrescription() {
 }
 
 /**
- * 患者の処方・注射の薬剤(MedicationRequest)を、オーダーの新しい順に orderCount オーダーぶん読む。
- * 細菌検査オーダーの前投与抗菌薬の候補(useAntimicrobialSuggestions)に使う。
+ * 患者の処方・注射の薬剤(MedicationRequest)を、since 以降のオーダーから新しい順に
+ * orderCount オーダーまで読む(since が空なら全期間)。各薬剤にはヘッダの種別を添える。
+ * 細菌検査オーダーの前投与抗菌薬の取込(useAntimicrobialSuggestions)に使う。
  */
-export async function fetchRecentMedicationRequests(
+export async function fetchMedicationOrdersSince(
   patientId: string,
+  since: string,
   orderCount: number,
-): Promise<fhir4.MedicationRequest[]> {
+): Promise<{
+  medicationRequests: { request: fhir4.MedicationRequest; kind: "prescription" | "injection" }[];
+  truncated: boolean;
+}> {
   const params = new URLSearchParams();
   params.set("patient", `Patient/${patientId}`);
   // 処方と注射のヘッダだけ。
@@ -149,9 +154,28 @@ export async function fetchRecentMedicationRequests(
     `${ORDER_TYPE_SYSTEM}|${PRESCRIPTION_ORDER_TYPE.code},${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`,
   );
   params.set("based-on:missing", "true");
+  if (since) params.set("authoredon", `ge${since}`);
   params.set("_sort", "-authoredon");
   params.set("_count", String(orderCount));
   params.set("_revinclude", "MedicationRequest:based-on");
   const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-  return resourcesOfType<fhir4.MedicationRequest>(bundle, "MedicationRequest");
+  const headers = resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest");
+  const injectionHeaderRefs = new Set(
+    headers
+      .filter((sr) =>
+        sr.category?.some((c) =>
+          c.coding?.some((coding) => coding.system === ORDER_TYPE_SYSTEM && coding.code === INJECTION_ORDER_TYPE.code),
+        ),
+      )
+      .map((sr) => `ServiceRequest/${sr.id}`),
+  );
+  const medicationRequests = resourcesOfType<fhir4.MedicationRequest>(bundle, "MedicationRequest").map(
+    (request) => ({
+      request,
+      kind: request.basedOn?.some((ref) => ref.reference && injectionHeaderRefs.has(ref.reference))
+        ? ("injection" as const)
+        : ("prescription" as const),
+    }),
+  );
+  return { medicationRequests, truncated: headers.length >= orderCount };
 }
