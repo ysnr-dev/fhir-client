@@ -3089,11 +3089,11 @@ fieldset.rp-card {
 /* 病理診断レポートの重要度。悪性は塗り、悪性疑いは枠だけにして強さを分ける。 */
 .patho-importance {
   font-size: 11px;
-  padding: 1px 8px;
+  line-height: 16px;
+  padding: 0 6px;
   border-radius: 999px;
   border: 1px solid var(--lab-high);
   color: var(--lab-high);
-  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -8987,7 +8987,8 @@ body.karte-wide {
    2 つ並んで競合するので、こちらは meta と同じ明度の輪郭だけにする。 */
 .karte-card__problem {
   flex: none;
-  padding: 1px 6px;
+  line-height: 16px;
+  padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: transparent;
@@ -12118,7 +12119,8 @@ fieldset.lab-order-item__section label.dose-conversion__checkbox {
 /* 中間報告のバッジ。最終化がまだなことを目立たせる(H 値と同じ注意色)。 */
 .micro-result__badge {
   font-size: 11px;
-  padding: 1px 8px;
+  line-height: 16px;
+  padding: 0 6px;
   border-radius: 999px;
   border: 1px solid var(--lab-high);
   color: var(--lab-high);
