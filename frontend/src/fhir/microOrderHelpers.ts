@@ -222,6 +222,41 @@ export function organismSummary(organisms: MicroOrganismRef[]): string {
   return organisms.map((organism) => organism.name).join(", ");
 }
 
+// JANIS 感染症病原体コードは上 2 桁が菌の分類に対応する。オーダー画面で目的菌を
+// 分類ごとに並べるのに使う。範囲外(総称コード・施設追加分など)は「その他」。
+const ORGANISM_GROUPS: { label: string; from: number; to: number }[] = [
+  { label: "グラム陽性球菌", from: 11, to: 17 },
+  { label: "グラム陰性球菌", from: 18, to: 19 },
+  { label: "腸内細菌目", from: 20, to: 29 },
+  { label: "グラム陰性桿菌", from: 30, to: 39 },
+  { label: "ブドウ糖非発酵菌", from: 40, to: 49 },
+  { label: "嫌気性菌", from: 50, to: 59 },
+  { label: "グラム陽性桿菌", from: 60, to: 64 },
+  { label: "抗酸菌", from: 65, to: 69 },
+  { label: "真菌", from: 70, to: 79 },
+  { label: "寄生虫", from: 90, to: 97 },
+];
+const OTHER_ORGANISM_GROUP = "その他";
+
+/** 目的菌を分類ごとにまとめる。分類はコード順、分類内は渡した順を保つ。 */
+export function groupOrganisms<T extends MicroOrganismRef>(
+  organisms: T[],
+): { label: string; organisms: T[] }[] {
+  const byLabel = new Map<string, T[]>();
+  for (const organism of organisms) {
+    const prefix = /^\d{4}$/.test(organism.code) ? Number(organism.code.slice(0, 2)) : NaN;
+    const label =
+      ORGANISM_GROUPS.find((g) => prefix >= g.from && prefix <= g.to)?.label ??
+      OTHER_ORGANISM_GROUP;
+    const list = byLabel.get(label);
+    if (list) list.push(organism);
+    else byLabel.set(label, [organism]);
+  }
+  return [...ORGANISM_GROUPS.map((g) => g.label), OTHER_ORGANISM_GROUP]
+    .filter((label) => byLabel.has(label))
+    .map((label) => ({ label, organisms: byLabel.get(label)! }));
+}
+
 // ---- FHIR リソースの組み立て ----
 
 /** ServiceRequest が細菌検査オーダーかどうか。他オーダーとの振り分けに使う。 */

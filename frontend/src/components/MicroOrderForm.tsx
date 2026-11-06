@@ -16,6 +16,7 @@ import {
   LATERALITY_OPTIONS,
   PRIORITY_OPTIONS,
   emptyMicroOrderForm,
+  groupOrganisms,
   specimenLabel,
   type MicroExamPurpose,
   type MicroOrderFormValues,
@@ -428,7 +429,7 @@ function SpecimenTypeSelect({
   );
 }
 
-// 目的菌。頻用菌はチェックボックスで直接出し、それ以外は検索で選ぶ。
+// 目的菌。頻用菌は分類ごとの行にチェックボックスで直接出し、それ以外は検索で選ぶ。
 function OrganismFieldset({
   organisms,
   onToggle,
@@ -443,37 +444,40 @@ function OrganismFieldset({
   const searching = name.trim().length > 0;
 
   const selectedCodes = new Set(organisms.map((o) => o.code));
-  // 頻用に無い菌を検索から選んだら、頻用リストの下に選択済みとして出す
+  // 頻用に無い菌を検索から選んだら、頻用菌と同じ分類の行に並べる
   // (チェックを外す手段が検索欄を開き直すだけにならないように)。
-  const frequentCodes = new Set((frequent.data?.items ?? []).map((o) => o.code));
-  const extraSelected = organisms.filter((o) => !frequentCodes.has(o.code));
+  const frequentItems = (frequent.data?.items ?? []).map((o) => ({ code: o.code, name: o.name }));
+  const frequentCodes = new Set(frequentItems.map((o) => o.code));
+  const groups = groupOrganisms([
+    ...frequentItems,
+    ...organisms.filter((o) => !frequentCodes.has(o.code)),
+  ]);
 
   return (
     <fieldset>
       <legend>目的菌</legend>
       <ErrorBanner error={frequent.error ?? search.error} />
-      <ul className="micro-order__checks">
-        {frequent.data?.items.map((organism) => (
-          <li key={organism.code}>
-            <label>
-              <input
-                type="checkbox"
-                checked={selectedCodes.has(organism.code)}
-                onChange={() => onToggle({ code: organism.code, name: organism.name })}
-              />
-              {organism.name}
-            </label>
-          </li>
+      <div className="micro-order__organisms">
+        {groups.map((group) => (
+          <div key={group.label} className="micro-order__organism-group">
+            <span className="micro-order__organism-group-label">{group.label}</span>
+            <ul>
+              {group.organisms.map((organism) => (
+                <li key={organism.code}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={selectedCodes.has(organism.code)}
+                      onChange={() => onToggle(organism)}
+                    />
+                    <span>{organism.name}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
         ))}
-        {extraSelected.map((organism) => (
-          <li key={organism.code}>
-            <label>
-              <input type="checkbox" checked onChange={() => onToggle(organism)} />
-              {organism.name}
-            </label>
-          </li>
-        ))}
-      </ul>
+      </div>
 
       <div className="order-select__search">
         <input

@@ -12055,6 +12055,69 @@ fieldset.lab-order-item__section label.dose-conversion__checkbox {
   margin: 0;
 }
 
+/* 目的菌(頻用)。分類ごとに 1 行とし、左に分類名、右に列を揃えた菌名を並べる。
+   学名は長短の差が大きいので、折り返しで並べると列が揃わず探しにくい。 */
+.micro-order__organisms {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.micro-order__organism-group {
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  gap: 0 8px;
+  align-items: start;
+  padding: 4px 0;
+  border-top: 1px solid var(--surface-stripe);
+}
+
+.micro-order__organism-group:first-child {
+  border-top: none;
+}
+
+.micro-order__organism-group-label {
+  font-size: 12px;
+  color: var(--text);
+  padding-top: 4px;
+}
+
+.micro-order__organism-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 2px 8px;
+}
+
+.micro-order__organism-group label {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.micro-order__organism-group label:hover {
+  background: var(--surface-stripe);
+}
+
+.micro-order__organism-group label:has(input:checked) {
+  background: var(--accent-bg);
+}
+
+.micro-order__organism-group input[type="checkbox"] {
+  width: auto;
+  margin: 2px 0 0;
+  flex: none;
+}
+
 /* 前投与抗菌薬の「処方から取り込み」候補。 */
 /* 前投与抗菌薬。1 行目にラベル、2 行目に textarea と取り込みボタンを並べる。
    ボタンは textarea と同じ行の頭に置くので、天が揃う。 */
