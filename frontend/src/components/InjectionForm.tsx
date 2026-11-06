@@ -67,6 +67,7 @@ import { useOrderContext } from "../hooks/useOrderContext";
 import { usePregnancyAdvisory } from "../hooks/usePatientStateAdvisories";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
+import { RowMenu } from "./RowMenu";
 import { PillIcon } from "./icons/PillIcon";
 import { TrashIcon } from "./icons/TrashIcon";
 
@@ -732,20 +733,21 @@ export function InjectionForm({
               <col />
               <col style={{ width: "88px" }} />
               <col style={{ width: "96px" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "32px" }} />
+              <col style={{ width: "72px" }} />
             </colgroup>
             <thead>
               <tr>
                 <th>医薬品</th>
                 <th>投与量</th>
                 <th>単位</th>
-                <th>薬剤コメント</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {rp.medicines.map((med, medIndex) => (
+              {rp.medicines.map((med, medIndex) => {
+                // コメントは値があれば出す(オーダーセット・レジメンから来た値はフラグを持たない)。
+                const showComment = Boolean(med.showComment || med.comment);
+                return (
                 <Fragment key={medIndex}>
                   <tr className={med.insulinScale ? "insulin-scale-owner" : undefined}>
                     <td>
@@ -783,6 +785,27 @@ export function InjectionForm({
                             </button>
                           </div>
                       )}
+                      {showComment && (
+                        <div className="rp-card__comment-field rp-card__comment-field--inline">
+                          <label>
+                            薬剤コメント
+                            <input
+                              type="text"
+                              value={med.comment}
+                              onChange={(e) => updateMedicine(rpIndex, medIndex, { comment: e.target.value })}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="rp-card__icon-button"
+                            title="薬剤コメントを削除"
+                            aria-label="薬剤コメントを削除"
+                            onClick={() => updateMedicine(rpIndex, medIndex, { comment: "", showComment: false })}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      )}
                     </td>
                     <td>
                       <input
@@ -808,30 +831,36 @@ export function InjectionForm({
                       )}
                     </td>
                     <td>
-                      <input
-                        type="text"
-                        value={med.comment}
-                        onChange={(e) => updateMedicine(rpIndex, medIndex, { comment: e.target.value })}
-                      />
-                    </td>
-                    <td>
-                      {rp.medicines.length > 1 && (
-                        <button
-                          type="button"
-                          className="rp-card__icon-button"
-                          title="この医薬品を削除"
-                          aria-label="この医薬品を削除"
-                          onClick={() => removeMedicine(rpIndex, medIndex)}
-                        >
-                          <TrashIcon />
-                        </button>
-                      )}
+                      <div className="rp-card__row-actions">
+                        {!showComment && (
+                          <RowMenu label="この医薬品の操作" escapesClipping>
+                            <button
+                              type="button"
+                              className="row-menu__item"
+                              onClick={() => updateMedicine(rpIndex, medIndex, { showComment: true })}
+                            >
+                              薬剤コメント
+                            </button>
+                          </RowMenu>
+                        )}
+                        {rp.medicines.length > 1 && (
+                          <button
+                            type="button"
+                            className="rp-card__icon-button"
+                            title="この医薬品を削除"
+                            aria-label="この医薬品を削除"
+                            onClick={() => removeMedicine(rpIndex, medIndex)}
+                          >
+                            <TrashIcon />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                   {/* スケールは幅が要るので、薬剤の行の下に表の幅いっぱいで置く。 */}
                   {med.insulinScale && (
                     <tr className="insulin-scale-row">
-                      <td colSpan={5}>
+                      <td colSpan={4}>
                         <InsulinScaleEditor
                           scale={med.insulinScale}
                           sets={scaleSets.data?.items}
@@ -842,7 +871,8 @@ export function InjectionForm({
                     </tr>
                   )}
                 </Fragment>
-              ))}
+                );
+              })}
             </tbody>
           </table>
 
