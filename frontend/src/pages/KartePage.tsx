@@ -448,11 +448,12 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     // URL から消した時点で openValue は null になる(同じ対象で再発火しない)。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openValue]);
-  const [mode, setMode] = useState<KarteLeftPaneMode>(readLeftPaneMode);
-  const [topRatio, setTopRatio] = useState(readTopRatio);
+  const [mode, setMode] = useState<KarteLeftPaneMode>(() => readLeftPaneMode(detached));
+  const [topRatio, setTopRatio] = useState(() => readTopRatio(detached));
   const [leftWidthRatio, setLeftWidthRatio] = useState(readLeftWidthRatio);
   // 左ペインの縦分割(右側に本日のカルテ)。手前側(既存のカルテ・他タブ)の幅の比率。
-  const [todayVisible, setTodayVisible] = useState(readTodayPaneVisible);
+  // 本日のカルテは記載しながら見るものなので、右ペインの無い別タブには出さない。
+  const [todayVisible, setTodayVisible] = useState(() => !detached && readTodayPaneVisible());
   const [todayMainRatio, setTodayMainRatio] = useState(readTodayMainRatio);
   const [dayListVisible, setDayListVisible] = useState(readDayListVisible);
   const [problemListVisible, setProblemListVisible] = useState(readProblemListVisible);
@@ -938,7 +939,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   function toggleMode() {
     const next = mode === "split" ? "tabs" : "split";
     setMode(next);
-    storeLeftPaneMode(next);
+    storeLeftPaneMode(next, detached);
   }
 
   if (!patientId) return null;
@@ -1065,7 +1066,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const tabActions = (
     <div className="karte-tabs__actions">
       {!detached && patientId && <KarteOpenPaneButton patientId={patientId} />}
-      <KarteTodayToggleButton visible={todayVisible} onToggle={toggleTodayPane} />
+      {!detached && <KarteTodayToggleButton visible={todayVisible} onToggle={toggleTodayPane} />}
       <KarteModeToggleButton mode={mode} onToggle={toggleMode} />
     </div>
   );
@@ -1090,7 +1091,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
           ratio={topRatio}
           label="カルテと他タブの高さ"
           onChange={(ratio) => setTopRatio(clampTopRatio(ratio))}
-          onChangeEnd={storeTopRatio}
+          onChangeEnd={(ratio) => storeTopRatio(ratio, detached)}
         />
         <div className="karte-left__split-bottom">
           <KarteTabs

@@ -67,35 +67,45 @@ export function clampTodayMainRatio(ratio: number): number {
   return Math.min(MAX_TODAY_MAIN_RATIO, Math.max(MIN_TODAY_MAIN_RATIO, ratio));
 }
 
-export function readLeftPaneMode(): KarteLeftPaneMode {
+// 上下分割はカルテの別タブ(サブモニター)とメインタブで別々に覚える。片方で分割しても
+// もう片方の組み方は変わらない。
+function modeStorageKey(detached: boolean): string {
+  return detached ? `${MODE_STORAGE_KEY}.pane` : MODE_STORAGE_KEY;
+}
+
+function topRatioStorageKey(detached: boolean): string {
+  return detached ? `${TOP_RATIO_STORAGE_KEY}.pane` : TOP_RATIO_STORAGE_KEY;
+}
+
+export function readLeftPaneMode(detached = false): KarteLeftPaneMode {
   try {
-    return localStorage.getItem(MODE_STORAGE_KEY) === "split" ? "split" : "tabs";
+    return localStorage.getItem(modeStorageKey(detached)) === "split" ? "split" : "tabs";
   } catch {
     // プライベートブラウズ等で localStorage が使えない場合は既定のモードにする。
     return "tabs";
   }
 }
 
-export function storeLeftPaneMode(mode: KarteLeftPaneMode) {
+export function storeLeftPaneMode(mode: KarteLeftPaneMode, detached = false) {
   try {
-    localStorage.setItem(MODE_STORAGE_KEY, mode);
+    localStorage.setItem(modeStorageKey(detached), mode);
   } catch {
     // 保存できなくてもその場の表示は切り替える。
   }
 }
 
-export function readTopRatio(): number {
+export function readTopRatio(detached = false): number {
   try {
-    const value = localStorage.getItem(TOP_RATIO_STORAGE_KEY);
+    const value = localStorage.getItem(topRatioStorageKey(detached));
     return value ? clampTopRatio(Number(value)) : DEFAULT_TOP_RATIO;
   } catch {
     return DEFAULT_TOP_RATIO;
   }
 }
 
-export function storeTopRatio(ratio: number) {
+export function storeTopRatio(ratio: number, detached = false) {
   try {
-    localStorage.setItem(TOP_RATIO_STORAGE_KEY, String(clampTopRatio(ratio)));
+    localStorage.setItem(topRatioStorageKey(detached), String(clampTopRatio(ratio)));
   } catch {
     // 保存できなくてもその場の表示は変える。
   }
