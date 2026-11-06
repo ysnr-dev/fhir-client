@@ -3,6 +3,7 @@ import type { AutologousUnit } from "../../fhir/autologousHelpers";
 import type { TransfusionDispenseDisplay } from "../../fhir/transfusionDispenseHelpers";
 import type { TransfusionPerformDisplay } from "../../fhir/transfusionResultHelpers";
 import {
+  bloodTypeLabel,
   productLabel,
   summarizeTransfusionOrder,
   transfusionOrderComment,
@@ -74,14 +75,19 @@ export function TransfusionOrderCardBody({
           <div className="karte-perform__head">
             <span className="karte-perform__title">採血</span>
           </div>
-          <div className="karte-perform__row">
-            <span className="karte-perform__label">自己血:</span>
-            <span className="karte-perform__values">
+          <table className="karte-perform__table">
+            <tbody>
               {collections.map((unit) => (
-                <span key={unit.dispenseId}>{unit.label}</span>
+                <tr key={unit.dispenseId}>
+                  <td>{unit.lotNumber && `No.${unit.lotNumber}`}</td>
+                  <td>{unit.collectedAt && `${unit.collectedAt.slice(0, 10)} 採血`}</td>
+                  <td>{unit.volume}</td>
+                  <td>{bloodTypeLabel(unit.abo, unit.rhd)}</td>
+                  <td>{unit.expiry && `期限 ${unit.expiry}`}</td>
+                </tr>
               ))}
-            </span>
-          </div>
+            </tbody>
+          </table>
         </section>
       )}
       {/* 出庫記録。どのバッグを出したか(製剤番号・期限・照射・交差)は実施の前に確かめるもの。

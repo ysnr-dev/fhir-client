@@ -9214,6 +9214,21 @@ body.karte-wide {
   color: var(--text-h);
 }
 
+/* 自己血の採血記録。1 本ずつ同じ項目が並ぶので列を揃えて読み比べられるようにする。 */
+.karte-perform__table {
+  margin-top: 2px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.karte-perform__table td {
+  padding: 0 12px 0 0;
+  white-space: nowrap;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
 .karte-perform__note {
   margin: 2px 0 0;
   font-size: 13px;
