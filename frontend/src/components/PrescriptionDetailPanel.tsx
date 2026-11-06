@@ -88,7 +88,7 @@ export function PrescriptionDetailPanel({
       {rps.map((rp) => (
         <fieldset className="rp-card" key={rp.rpNumber}>
           <legend>{`RP${rp.rpNumber}`}</legend>
-          <table className="rp-card__medicines rp-card__medicines--detail">
+          <table className="rp-card__medicines rp-card__medicines--detail rp-card__medicines--prescription">
             <thead>
               <tr>
                 <th>医薬品</th>

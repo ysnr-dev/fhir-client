@@ -114,7 +114,7 @@ export function SurgeryOrderDetailPanel({
 
       <fieldset className="rp-card">
         <legend>術式</legend>
-        <table className="rp-card__medicines rp-card__medicines--detail">
+        <table className="rp-card__medicines rp-card__medicines--detail rp-card__medicines--surgery">
           <thead>
             <tr>
               <th></th>

@@ -301,7 +301,7 @@ export function RadiotherapyOrderDetailPanel({
       {fractions.length > 0 && (
         <fieldset className="rp-card">
           <legend>照射記録 ({progress.fractionLabel})</legend>
-          <table className="rp-card__medicines">
+          <table className="rp-card__medicines rp-card__medicines--rt-fraction">
             <thead>
               <tr>
                 <th>照射日</th>

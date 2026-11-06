@@ -2948,9 +2948,10 @@ fieldset.rp-card {
   padding: 4px;
 }
 
-/* 処方内容(詳細)表示用: RP は RP ごとに別テーブルなので、table-layout: fixed +
+/* 医薬品の詳細表の列幅: RP は RP ごとに別テーブルなので、table-layout: fixed +
    明示幅で全 RP の列位置を揃える。医薬品名(1列目)は固定幅内で折り返し、コメント
-   (4列目)が残り幅を吸収、DI(5列目)を行末へ右寄せする。 */
+   (4列目)が残り幅を吸収、DI(5列目)を行末へ右寄せする。列の並びが違う表は
+   修飾クラス(--prescription / --surgery / --lab)で上書きする。 */
 .rp-card__medicines--detail {
   table-layout: fixed;
 }
@@ -2969,6 +2970,78 @@ fieldset.rp-card {
 }
 
 /* 4列目(薬剤コメント)は幅指定なし = 残り幅を吸収 */
+
+/* 処方内容(詳細)の表は単位の列が無く用量に単位まで入るので、用量を広く取り、
+   3列目の薬剤コメントに残り幅を回す。 */
+.rp-card__medicines--prescription th:nth-child(2),
+.rp-card__medicines--prescription td:nth-child(2) {
+  width: 176px;
+}
+
+.rp-card__medicines--prescription th:nth-child(3),
+.rp-card__medicines--prescription td:nth-child(3) {
+  width: auto;
+}
+
+/* 手術オーダー(詳細)の術式の表。1列目は主・副の印だけなので詰め、残り幅を術式名に回す。 */
+.rp-card__medicines--surgery th:nth-child(1),
+.rp-card__medicines--surgery td:nth-child(1) {
+  width: 24px;
+}
+
+.rp-card__medicines--surgery th:nth-child(2),
+.rp-card__medicines--surgery td:nth-child(2) {
+  width: auto;
+}
+
+.rp-card__medicines--surgery th:nth-child(3),
+.rp-card__medicines--surgery td:nth-child(3) {
+  width: 84px;
+}
+
+.rp-card__medicines--surgery th:nth-child(4),
+.rp-card__medicines--surgery td:nth-child(4) {
+  width: 140px;
+}
+
+.rp-card__medicines--surgery th:nth-child(5),
+.rp-card__medicines--surgery td:nth-child(5) {
+  width: 124px;
+}
+
+.rp-card__medicines--surgery th:nth-child(6),
+.rp-card__medicines--surgery td:nth-child(6) {
+  width: 84px;
+}
+
+/* 放射線治療オーダー(詳細)の照射記録。照射日時と装置が 1 行に収まる幅を取り、備考に残り幅を回す。 */
+.rp-card__medicines--rt-fraction th:nth-child(1) {
+  width: 184px;
+}
+
+.rp-card__medicines--rt-fraction th:nth-child(2) {
+  width: 56px;
+}
+
+.rp-card__medicines--rt-fraction th:nth-child(3) {
+  width: 24px;
+}
+
+.rp-card__medicines--rt-fraction th:nth-child(4) {
+  width: 72px;
+}
+
+.rp-card__medicines--rt-fraction th:nth-child(5) {
+  width: 116px;
+}
+
+.rp-card__medicines--rt-fraction th:nth-child(6) {
+  width: 60px;
+}
+
+.rp-card__medicines--rt-fraction th:nth-child(7) {
+  width: 84px;
+}
 
 /* DI 列は処方内容(詳細)固有の列。--detail は検査結果(詳細)とも共用しており
    列の並びが違うため、nth-child ではなくクラスで指定する。 */
