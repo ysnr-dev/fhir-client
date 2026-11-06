@@ -41,6 +41,7 @@ export * from "./medicineAttribute";
 export * from "./extractQuery";
 export * from "./dashboard";
 export * from "./clinicalDashboard";
+export * from "./favoriteCondition";
 export * from "./patientFolder";
 export * from "./homeLayout";
 export * from "./kartePaneFavorite";

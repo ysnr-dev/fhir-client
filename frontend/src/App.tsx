@@ -102,6 +102,7 @@ import { RecordDeficiencyPage } from "./pages/RecordDeficiencyPage";
 import { SupervisorGroupPage } from "./pages/SupervisorGroupPage";
 import { CareTeamPage } from "./pages/CareTeamPage";
 import { OrderSetPage } from "./pages/OrderSetPage";
+import { FavoriteConditionPage } from "./pages/FavoriteConditionPage";
 import { NotificationBell } from "./components/NotificationBell";
 import { NursingWorklistPage } from "./pages/NursingWorklistPage";
 import { PathoOrganPage } from "./pages/PathoOrganPage";
@@ -429,6 +430,7 @@ function App() {
           {/* 掲示板(院内のお知らせ)。ホームのカードは今日掲載中だけ、ここは全件。 */}
           <Route path="/bulletin" element={<BulletinPage />} />
           <Route path="/order-sets" element={<OrderSetPage />} />
+          <Route path="/favorite-conditions" element={<FavoriteConditionPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/insulin-worklist" element={<InsulinWorklistPage />} />
           <Route path="/injection-scan" element={<InjectionScanPerformPage />} />

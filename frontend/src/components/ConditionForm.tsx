@@ -1,25 +1,29 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
-import type { Disease, Modifier } from "../api/masterClient";
+import type { Disease } from "../api/masterClient";
 import {
+  applyFavoriteCondition,
   CATEGORY_LABELS,
   conditionBaseName,
   conditionDisplayName,
   emptyConditionForm,
+  favoriteConditionBody,
   invalidParentIds,
-  isSuspected,
   OUTCOME_OPTIONS,
   problemLabel,
-  withSuspected,
   type ConditionCategory,
   type ConditionFormValues,
   type DiseaseInputMode,
+  type FavoriteConditionBody,
   type OutcomeCode,
 } from "../fhir/conditionHelpers";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
+import { useDefinitionOwners } from "../hooks/useDefinitionOwners";
+import { ConditionDiseaseFields, type DiseaseFieldValues } from "./ConditionDiseaseFields";
 import { ErrorBanner } from "./ErrorBanner";
 import { DiseaseSearchModal } from "./DiseaseSearchModal";
-import { ModifierSearchModal } from "./ModifierSearchModal";
+import { FavoriteConditionEditorModal } from "./FavoriteConditionEditorModal";
+import { FavoriteConditionPickerModal } from "./FavoriteConditionPickerModal";
 
 interface ConditionFormProps {
   initialValues?: ConditionFormValues;
@@ -42,7 +46,11 @@ interface ConditionFormProps {
   bulkStartDate?: string;
 }
 
-type ModalState = { kind: "disease" } | { kind: "prefix" } | { kind: "postfix" } | null;
+type ModalState =
+  | { kind: "disease" }
+  | { kind: "favorite" }
+  | { kind: "favorite-save"; body: FavoriteConditionBody }
+  | null;
 
 export function ConditionForm({
   initialValues,
@@ -62,6 +70,9 @@ export function ConditionForm({
 
   const update = makeFieldUpdater(setValues);
   useBulkStartDate(bulkStartDate, (date) => update("startDate", date));
+  // 「頻用登録」は保存先(院内共通・診療科・自分)に書ける人にだけ出す(administrator には出ない)。
+  const { owners } = useDefinitionOwners("自分の頻用病名");
+  const canSaveFavorite = owners.some((o) => o.scope !== "team" && o.canEdit);
 
   // フリー入力では修飾語(疑い病名を含む)を使わないので、切り替えたときに落とす。
   // 残したまま隠すと、画面に出ていない語が病名に付いたまま保存されてしまう。
@@ -78,17 +89,18 @@ export function ConditionForm({
     setModal(null);
   }
 
-  function handleModifierSelect(modifier: Modifier) {
-    if (modal?.kind === "prefix") {
-      setValues((v) => ({ ...v, prefixModifiers: [...v.prefixModifiers, modifier] }));
-    } else if (modal?.kind === "postfix") {
-      setValues((v) => ({ ...v, postfixModifiers: [...v.postfixModifiers, modifier] }));
-    }
+  function handleFavoriteSelect(body: FavoriteConditionBody) {
+    setValues((v) => applyFavoriteCondition(v, body));
     setModal(null);
   }
 
-  function removeModifier(kind: "prefixModifiers" | "postfixModifiers", index: number) {
-    setValues((v) => ({ ...v, [kind]: v[kind].filter((_, i) => i !== index) }));
+  function updateDiseaseFields(patch: Partial<DiseaseFieldValues>) {
+    setValues((v) => ({ ...v, ...patch }));
+  }
+
+  function openFavoriteSave() {
+    const body = favoriteConditionBody(values);
+    if (body) setModal({ kind: "favorite-save", body });
   }
 
   // 引き継ぎ先を指定したら、そのプロブレムは追わなくなるので転帰も閉じる
@@ -148,35 +160,7 @@ export function ConditionForm({
     return found ? problemLabel(found) : "(削除済み)";
   };
 
-  const fullName = conditionDisplayName(values);
-  const singleUseWarning =
-    values.diseaseMode === "master" &&
-    values.disease?.single_use_prohibited_category === "01" &&
-    values.prefixModifiers.length === 0 &&
-    values.postfixModifiers.length === 0;
-
-  function renderModifierList(kind: "prefixModifiers" | "postfixModifiers") {
-    const modifiers = values[kind];
-    if (modifiers.length === 0) {
-      return <span className="rp-card__usage-value rp-card__usage-value--empty">なし</span>;
-    }
-    return (
-      <span className="condition-form__modifiers">
-        {modifiers.map((modifier, index) => (
-          <span className="condition-form__modifier-chip" key={`${modifier.management_number}-${index}`}>
-            {modifier.name}
-            <button
-              type="button"
-              aria-label={`${modifier.name} を削除`}
-              onClick={() => removeModifier(kind, index)}
-            >
-              ×
-            </button>
-          </span>
-        ))}
-      </span>
-    );
-  }
+  const freeName = values.diseaseMode === "free" ? conditionDisplayName(values) : "";
 
   return (
     <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
@@ -210,14 +194,16 @@ export function ConditionForm({
           </div>
         </div>
 
-        {/* 入力方法。既往歴のように具体的な傷病名が分からない場合はフリー入力を使う
+        {/* 入力方法。頻用病名は保存済みの病名+修飾語の組み合わせから選ぶ(選んだ後はマスタと同じ)。
+            既往歴のように具体的な傷病名が分からない場合はフリー入力を使う
             (レセプトに使うコードは付かないので、保険病名では原則マスタから選ぶ)。 */}
         <div className="clinical-note-form__mode condition-form__input-mode">
           <span className="clinical-note-form__mode-legend">入力方法</span>
           <div className="clinical-note-form__mode-options">
             {(
               [
-                ["master", "マスタから選択"],
+                ["master", "病名マスタ"],
+                ["favorite", "頻用病名"],
                 ["free", "フリー入力"],
               ] as const
             ).map(([mode, label]) => (
@@ -257,66 +243,36 @@ export function ConditionForm({
                 <span className="rp-card__usage-value rp-card__usage-value--empty">未選択</span>
               )}
             </label>
-            <button type="button" onClick={() => setModal({ kind: "disease" })}>
-              {values.disease ? "病名変更" : "病名選択"}
-            </button>
+            {values.diseaseMode === "favorite" ? (
+              <button type="button" onClick={() => setModal({ kind: "favorite" })}>
+                頻用病名選択
+              </button>
+            ) : (
+              <button type="button" onClick={() => setModal({ kind: "disease" })}>
+                {values.disease ? "病名変更" : "病名選択"}
+              </button>
+            )}
           </div>
         )}
 
-        {/* 修飾語はマスタの病名に付けるものなので、フリー入力では出さない。
-            疑い病名は毎回修飾語から選ぶのが手間なので、チェックで接尾語「の疑い」を
-            付け外しする。接尾語の一覧にも出るので、モーダルから外しても連動する。 */}
-        {values.diseaseMode === "master" && (
-          <>
-            <div className="condition-form__row">
-              <label className="qe-item__checkbox">
-                <input
-                  type="checkbox"
-                  checked={isSuspected(values.postfixModifiers)}
-                  onChange={(e) =>
-                    update(
-                      "postfixModifiers",
-                      withSuspected(values.postfixModifiers, e.target.checked),
-                    )
-                  }
-                />
-                疑い病名
-              </label>
-            </div>
-
-            <div className="condition-form__row">
-              <label>
-                接頭語
-                {renderModifierList("prefixModifiers")}
-              </label>
-              <button type="button" onClick={() => setModal({ kind: "prefix" })}>
-                + 接頭語追加
-              </button>
-            </div>
-
-            <div className="condition-form__row">
-              <label>
-                接尾語
-                {renderModifierList("postfixModifiers")}
-              </label>
-              <button type="button" onClick={() => setModal({ kind: "postfix" })}>
-                + 接尾語追加
-              </button>
-            </div>
-          </>
+        {/* 修飾語はマスタの病名に付けるものなので、フリー入力では出さない。 */}
+        {values.diseaseMode !== "free" && (
+          <ConditionDiseaseFields
+            values={values}
+            onChange={updateDiseaseFields}
+            previewAction={
+              canSaveFavorite && values.disease ? (
+                <button type="button" className="rp-card__compact-button" onClick={openFavoriteSave}>
+                  頻用登録
+                </button>
+              ) : undefined
+            }
+          />
         )}
 
-        {fullName && (
+        {freeName && (
           <p className="condition-form__preview">
-            登録される病名: <strong>{fullName}</strong>
-            {values.diseaseMode === "master" && values.disease?.icd10_2013
-              ? ` (ICD10: ${values.disease.icd10_2013})`
-              : values.diseaseMode === "free" && " (コードなし)"}
-          </p>
-        )}
-        {singleUseWarning && (
-          <p className="condition-form__hint">
-            この病名は単独での使用が適当でないとされています(修飾語との組合せが望ましい)。
+            登録される病名: <strong>{freeName}</strong> (コードなし)
           </p>
         )}
       </fieldset>
@@ -419,12 +375,11 @@ export function ConditionForm({
       {modal?.kind === "disease" && (
         <DiseaseSearchModal onSelect={handleDiseaseSelect} onClose={() => setModal(null)} />
       )}
-      {(modal?.kind === "prefix" || modal?.kind === "postfix") && (
-        <ModifierSearchModal
-          title={modal.kind === "prefix" ? "接頭語を選択" : "接尾語を選択"}
-          onSelect={handleModifierSelect}
-          onClose={() => setModal(null)}
-        />
+      {modal?.kind === "favorite" && (
+        <FavoriteConditionPickerModal onSelect={handleFavoriteSelect} onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === "favorite-save" && (
+        <FavoriteConditionEditorModal initialBody={modal.body} onClose={() => setModal(null)} />
       )}
     </form>
   );

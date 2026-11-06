@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_06_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -246,6 +246,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_100000) do
     t.datetime "updated_at", null: false
     t.jsonb "settings", default: {}, null: false
     t.index ["singleton_guard"], name: "index_facility_settings_on_singleton_guard", unique: true
+  end
+
+  create_table "favorite_conditions", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "scope", null: false
+    t.string "owner_id"
+    t.string "owner_name"
+    t.string "name", null: false
+    t.jsonb "definition", default: {}, null: false
+    t.integer "display_order"
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_favorite_conditions_on_code", unique: true
+    t.index ["scope", "owner_id"], name: "index_favorite_conditions_on_scope_and_owner_id"
   end
 
   create_table "fhir_connection_settings", force: :cascade do |t|

@@ -31375,3 +31375,21 @@ input.nursing-picker__search {
 .karte-delete-form__reason {
   flex: 1 1 100%;
 }
+
+/* 頻用病名(docs/features/patient-profile.md「頻用病名」) */
+.condition-form__preview .rp-card__compact-button {
+  margin-left: 8px;
+}
+
+.favorite-condition-page__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.favorite-condition-page .master-search__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  align-items: center;
+}

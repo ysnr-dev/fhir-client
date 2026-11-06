@@ -516,6 +516,8 @@ Rails.application.routes.draw do
     resources :dashboards, only: %i[index show create update destroy]
     # 診療ダッシュボード(カルテ左ペインのタブをカードとして並べる。docs/clinical-dashboard-design.md)。
     resources :clinical_dashboards, only: %i[index show create update destroy]
+    # 頻用病名(病名+修飾語の組み合わせ。docs/features/patient-profile.md「頻用病名」)。
+    resources :favorite_conditions, only: %i[index show create update destroy]
     # 患者ごとに最初に開くチャート(ピン留め)。患者につき 1 つ、利用者の間で共有する。
     resources :patient_chart_pins, only: %i[show update destroy], param: :patient_id
     # 患者フォルダ(患者を任意の階層の分類に仕分ける。docs/patient-folder-design.md)。

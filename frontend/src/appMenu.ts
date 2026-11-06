@@ -68,6 +68,8 @@ export const APP_MENU: AppMenuEntry[] = [
       // よく出すオーダーのひとまとめ(オーダーセット)。出すのは診療科の医師なので部門業務ではなく
       // ここに置く(docs/order-set-design.md §1)。
       { label: "セット登録", to: "/order-sets" },
+      // 病名+修飾語の組み合わせの頻用登録(院内共通 / 診療科 / 自分。docs/features/patient-profile.md「頻用病名」)。
+      { label: "頻用病名", to: "/favorite-conditions" },
     ],
   },
   {

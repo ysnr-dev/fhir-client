@@ -302,8 +302,9 @@ export function modifierCategoryLabel(category: string | null | undefined): stri
 }
 
 // 病名の入力方法。既往歴のように具体的な傷病名が分からないことがあるため、
-// マスタから選ぶ以外にフリー入力も許す(区分は問わない)。
-export type DiseaseInputMode = "master" | "free";
+// マスタから選ぶ以外にフリー入力も許す(区分は問わない)。頻用病名は保存済みの
+// 「病名+修飾語」の組み合わせから選ぶ入口で、選んだ後はマスタ入力と同じ扱い。
+export type DiseaseInputMode = "master" | "favorite" | "free";
 
 export interface ConditionFormValues {
   category: ConditionCategory;
@@ -393,6 +394,54 @@ export function withSuspected(postfixModifiers: Modifier[], suspected: boolean):
   return suspected ? [...others, SUSPECTED_MODIFIER] : others;
 }
 
+// ---- 頻用病名(docs/features/patient-profile.md「頻用病名」) ----
+
+/**
+ * 頻用病名の保存内容。病名フォームの病名・修飾語をそのまま持つ(区分・経過は患者ごとの値なので持たない)。
+ * backend(FavoriteCondition)は管理番号と名称があることだけを確かめる。
+ */
+export interface FavoriteConditionBody {
+  schema_version: 1;
+  disease: Disease;
+  prefixModifiers: Modifier[];
+  postfixModifiers: Modifier[];
+}
+
+export const FAVORITE_CONDITION_SCHEMA_VERSION = 1;
+
+/** フォーム値から頻用病名の保存内容を作る。マスタの病名が選ばれていなければ null。 */
+export function favoriteConditionBody(values: {
+  diseaseMode: DiseaseInputMode;
+  disease: Disease | null;
+  prefixModifiers: Modifier[];
+  postfixModifiers: Modifier[];
+}): FavoriteConditionBody | null {
+  if (values.diseaseMode === "free" || !values.disease) return null;
+  return {
+    schema_version: FAVORITE_CONDITION_SCHEMA_VERSION,
+    disease: values.disease,
+    prefixModifiers: values.prefixModifiers,
+    postfixModifiers: values.postfixModifiers,
+  };
+}
+
+/** 頻用病名の表示名(接頭語+病名+接尾語)。保存時の name にも使う。 */
+export function favoriteConditionName(body: FavoriteConditionBody): string {
+  return conditionDisplayName({ diseaseMode: "master", freeText: "", ...body });
+}
+
+/** 頻用病名をフォームに反映する。病名・修飾語だけを差し替え、区分や経過はそのまま。 */
+export function applyFavoriteCondition(values: ConditionFormValues, body: FavoriteConditionBody): ConditionFormValues {
+  return {
+    ...values,
+    diseaseMode: "favorite",
+    disease: body.disease,
+    freeText: "",
+    prefixModifiers: body.prefixModifiers,
+    postfixModifiers: body.postfixModifiers,
+  };
+}
+
 function diseaseCodings(disease: Disease): fhir4.Coding[] {
   const codings: fhir4.Coding[] = [
     { system: DISEASE_KEY_NUMBER_SYSTEM, code: disease.management_number, display: disease.name },
@@ -467,7 +516,7 @@ export function buildCondition(
       ? {
           extension: modifierExtensions.length ? modifierExtensions : undefined,
           coding:
-            values.diseaseMode === "master" && values.disease
+            values.diseaseMode !== "free" && values.disease
               ? diseaseCodings(values.disease)
               : undefined,
           text: conditionDisplayName(values),
