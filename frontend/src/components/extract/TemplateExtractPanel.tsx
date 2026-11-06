@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useDocumentTemplates } from "../../api/adminQueries";
 import { useQuestionnaireOptions, useSelfDepartments, useTemplateExtract } from "../../api/queries";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
 import {
@@ -8,7 +9,6 @@ import {
   type ExtractPeriod,
 } from "../../fhir/extractQueryHelpers";
 import { sortVersionsDesc } from "../../fhir/templateExtractHelpers";
-import { withDocumentFormCategory } from "../../fhir/documentFormQuestionnaire";
 import { today } from "../../lib/dates";
 import { downloadBlob } from "../../lib/download";
 import { ErrorBanner } from "../ErrorBanner";
@@ -38,8 +38,10 @@ const DEFAULT_PERIOD: ExtractPeriod = { mode: "relative", days: 365 };
  * 患者フォルダを選んだら、そのフォルダ(下位フォルダを含む)の患者の回答だけを読む。両方なら両方に入る患者。
  */
 export function TemplateExtractPanel() {
-  // 様式テンプレートで作った文書の回答も抽出できるようにする(選択肢では「様式」の見出しの下に並ぶ)。
+  // 様式テンプレートで作った文書の回答も抽出できるようにする(選択肢では「様式」の見出しの下に、
+  // 様式テンプレートのファイルカテゴリごとと、削除した様式テンプレートの「削除済」に並ぶ)。
   const options = useQuestionnaireOptions({ includeDocumentForms: true });
+  const documentTemplates = useDocumentTemplates();
   const { departments } = useSelfDepartments();
   const departmentOptions = sortDepartmentsByCode(departments).filter((d) => d.id);
   const scope = useExtractPatientScope();
@@ -56,7 +58,7 @@ export function TemplateExtractPanel() {
   // 版は url ごとにまとめて集めるので、選択肢には url ごとに最新の版だけを出す。
   const templates = useMemo(() => {
     const byUrl = new Map<string, fhir4.Questionnaire[]>();
-    for (const q of options.questionnaires.map(withDocumentFormCategory)) {
+    for (const q of options.questionnaires) {
       if (!q.url) continue;
       byUrl.set(q.url, [...(byUrl.get(q.url) ?? []), q]);
     }
@@ -110,6 +112,7 @@ export function TemplateExtractPanel() {
         <ExtractFormRow label="記録">
           <TemplateSelect
             questionnaires={templates}
+            documentTemplates={documentTemplates.data}
             value={selected?.id ?? ""}
             onChange={(id) => setTemplateUrl(templates.find((q) => q.id === id)?.url ?? "")}
           />
@@ -141,7 +144,7 @@ export function TemplateExtractPanel() {
         </ExtractFormRow>
       </div>
 
-      <ErrorBanner error={options.error ?? scope.listError} />
+      <ErrorBanner error={options.error ?? documentTemplates.error ?? scope.listError} />
 
       <div className="data-extract__actions">
         {running ? (

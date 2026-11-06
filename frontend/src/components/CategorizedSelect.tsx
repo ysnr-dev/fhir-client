@@ -26,6 +26,8 @@ export interface CategorizedSelectCategory {
   key: string;
   label: string;
   options: CategorizedOption[];
+  /** 左の列で続けて並ぶ同じ値のカテゴリの上に見出しを出す(任意)。 */
+  section?: string;
 }
 
 interface CategorizedSelectProps {
@@ -228,23 +230,27 @@ export function CategorizedSelect({
             {activeItem ? (
               <>
                 <div className="template-select__categories">
-                  {navItems.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      role="menuitem"
-                      data-menu-column="category"
-                      data-category-key={item.key}
-                      className={
-                        item === activeItem
-                          ? "template-select__category is-active"
-                          : "template-select__category"
-                      }
-                      onClick={() => setActiveKey(item.key)}
-                    >
-                      <span className="template-select__category-name">{item.label}</span>
-                      <span className="template-select__count">{item.options.length}</span>
-                    </button>
+                  {navItems.map((item, index) => (
+                    <Fragment key={item.key}>
+                      {item.section && item.section !== navItems[index - 1]?.section && (
+                        <div className="template-select__section">{item.section}</div>
+                      )}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-menu-column="category"
+                        data-category-key={item.key}
+                        className={
+                          item === activeItem
+                            ? "template-select__category is-active"
+                            : "template-select__category"
+                        }
+                        onClick={() => setActiveKey(item.key)}
+                      >
+                        <span className="template-select__category-name">{item.label}</span>
+                        <span className="template-select__count">{item.options.length}</span>
+                      </button>
+                    </Fragment>
                   ))}
                 </div>
                 <div className="template-select__templates">
