@@ -59,6 +59,7 @@ cd ../fhir-client && docker compose up --build    # db(5434) / backend(3001) / f
 | [features/admin-integration.md](docs/features/admin-integration.md) | 管理画面、外部システム連携、レセコン連携、サーバーの休眠と起動 |
 | [order-flows/prescription.md](docs/order-flows/prescription.md) | 処方オーダーの運用フロー(アクティビティ図)と開発者向けシーケンス図 |
 | [order-flows/injection.md](docs/order-flows/injection.md) | 注射オーダーの運用フロー(アクティビティ図)と開発者向けシーケンス図 |
+| [order-flows/chemotherapy.md](docs/order-flows/chemotherapy.md) | 化学療法の運用フロー(アクティビティ図)と開発者向けシーケンス図 |
 | [demo-seed.md](docs/demo-seed.md) | デモ患者の投入ツール |
 | `docs/*-design.md` | 機能ごとの設計書 |
 | `docs/*-backlog.md` | 未対応の課題。上流への要望は [server-improvement-backlog.md](docs/server-improvement-backlog.md) |
