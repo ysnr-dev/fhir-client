@@ -49,6 +49,7 @@ export * from "./nursingAssignment";
 export * from "./oralExam";
 export * from "./advisory";
 export * from "./pharmacy";
+export * from "./lineDrain";
 export * from "./itemLayout";
 export * from "./performDataset";
 export * from "./examMaster";

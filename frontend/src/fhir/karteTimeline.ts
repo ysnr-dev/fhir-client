@@ -34,6 +34,7 @@ import { isDraftReportStatus, pathoReportImportance, pathoReportResponseIds } fr
 import { pathwayOf } from "./pathwayApplyHelpers";
 import type { PathwayEvaluationCard } from "./pathwayKarteHelpers";
 import { adverseEventLabel, type AdverseEventRecord } from "./adverseEventHelpers";
+import { lineDrainLabel, type LineDrainRecord } from "./lineDrainHelpers";
 import { departmentOf, ORDER_TYPE_SYSTEM } from "./orderHeader";
 import { isPrescriptionServiceRequest, prescriptionProblem } from "./prescriptionHelpers";
 import { categoryCoding } from "./shared";
@@ -209,7 +210,8 @@ export type KarteItemKind =
   | OrderKind
   | "qr"
   | "pathway-evaluation"
-  | "adverse-event";
+  | "adverse-event"
+  | "line-drain";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   note: "診療記録",
@@ -220,10 +222,11 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   qr: "テンプレート",
   "pathway-evaluation": "パス評価",
   "adverse-event": "有害事象",
+  "line-drain": "ライン・ドレーン",
 };
 
 /** オーダーではない記録の種別(カルテ印刷の左段。オーダーのヘッダを持たない)。 */
-const KARTE_RECORD_KINDS = ["note", "vital", "qr", "pathway-evaluation", "adverse-event"] as const;
+const KARTE_RECORD_KINDS = ["note", "vital", "qr", "pathway-evaluation", "adverse-event", "line-drain"] as const;
 type KarteRecordKind = (typeof KARTE_RECORD_KINDS)[number];
 
 export function isKarteRecordItem(item: Pick<KarteTimelineItem, "kind">): boolean {
@@ -521,6 +524,8 @@ export type KarteTimelineItem = KarteItemBase &
     | { kind: "pathway-evaluation"; evaluation: PathwayEvaluationCard }
     // 化学療法・放射線治療の有害事象(CTCAE Grade)。
     | { kind: "adverse-event"; record: AdverseEventRecord }
+    // ライン・ドレーンの留置(挿入の Procedure)。
+    | { kind: "line-drain"; record: LineDrainRecord }
   );
 
 export interface KarteDayGroup {
@@ -548,6 +553,8 @@ export interface KarteTimelineInput {
   pathwayEvaluations: PathwayEvaluationCard[];
   /** 有害事象。パス評価と同じく患者ぶんを全部読んであり、カットオフには加わらない。 */
   adverseEvents: AdverseEventRecord[];
+  /** ライン・ドレーンの留置。有害事象と同じく患者ぶんを全部読んであり、カットオフには加わらない。 */
+  lineDrains: LineDrainRecord[];
   noteHasNext: boolean;
   prescriptionHasNext: boolean;
   responseHasNext: boolean;
@@ -597,6 +604,8 @@ export function karteItemMainReferences(item: KarteTimelineItem): string[] {
       return item.evaluation.observation.id ? [`Observation/${item.evaluation.observation.id}`] : [];
     case "adverse-event":
       return [`Observation/${item.id}`];
+    case "line-drain":
+      return [`Procedure/${item.id}`];
     default:
       return [`ServiceRequest/${item.id}`];
   }
@@ -733,6 +742,17 @@ function pathwayEvaluationItem(evaluation: PathwayEvaluationCard): KarteTimeline
 }
 
 // 有害事象は発現日に置く(記録した日ではなく「いつ起きたか」で読むもの。回復日はカードの本文に出す)。
+function lineDrainItem(record: LineDrainRecord): KarteTimelineItem {
+  return {
+    kind: "line-drain",
+    id: record.id,
+    day: localDay(record.insertedAt),
+    dateTime: record.insertedAt,
+    label: lineDrainLabel(record),
+    record,
+  };
+}
+
 function adverseEventItem(record: AdverseEventRecord): KarteTimelineItem {
   return {
     kind: "adverse-event",
@@ -1300,6 +1320,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
 
   const pathwayEvaluationItems = input.pathwayEvaluations.map(pathwayEvaluationItem);
   const adverseEventItems = input.adverseEvents.filter((r) => r.onset).map(adverseEventItem);
+  const lineDrainItems = input.lineDrains.filter((r) => r.insertedAt).map(lineDrainItem);
 
   const visible = [
     ...noteItems,
@@ -1308,6 +1329,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     ...vitalItems,
     ...pathwayEvaluationItems,
     ...adverseEventItems,
+    ...lineDrainItems,
   ].filter(
     // 日付未定は先読みで全件持っているので、カットオフで隠さない。
     (item) =>
@@ -1434,6 +1456,8 @@ function itemDepartmentId(item: KarteTimelineItem): string {
       return departmentOf(item.evaluation.observation).departmentId;
     case "adverse-event":
       return "";
+    case "line-drain":
+      return departmentOf(item.record.procedure).departmentId;
     default:
       return departmentOf(item.serviceRequest).departmentId;
   }
@@ -1458,6 +1482,8 @@ function itemRecorder(item: KarteTimelineItem): { practitionerId: string; name: 
     case "pathway-evaluation":
       return fromReference(item.evaluation.observation.performer?.[0]);
     case "adverse-event":
+      return fromReference(item.record.performer);
+    case "line-drain":
       return fromReference(item.record.performer);
     default:
       return fromReference(item.serviceRequest.requester);
@@ -1498,7 +1524,11 @@ export function matchesScopeFilter(
  * 種別で絞り込み中は、その種別のものだけ。
  */
 export function preloadedItemDays(
-  preloaded: { pathwayEvaluations: PathwayEvaluationCard[]; adverseEvents: AdverseEventRecord[] },
+  preloaded: {
+    pathwayEvaluations: PathwayEvaluationCard[];
+    adverseEvents: AdverseEventRecord[];
+    lineDrains: LineDrainRecord[];
+  },
   cardFilter: KarteCardFilter | null,
   scope: KarteScopeFilter,
   target: KarteScopeTarget,
@@ -1506,6 +1536,7 @@ export function preloadedItemDays(
   return [
     ...preloaded.pathwayEvaluations.map(pathwayEvaluationItem),
     ...preloaded.adverseEvents.filter((r) => r.onset).map(adverseEventItem),
+    ...preloaded.lineDrains.filter((r) => r.insertedAt).map(lineDrainItem),
   ]
     .filter((item) => !cardFilter || item.kind === cardFilter.kind)
     .filter((item) => scope === "all" || matchesScopeFilter(item, scope, target))

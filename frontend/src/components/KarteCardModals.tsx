@@ -1182,6 +1182,7 @@ function recordRef(item: KarteTimelineItem): { type: fhir4.FhirResource["resourc
   if (item.kind === "qr") return { type: "QuestionnaireResponse", ids: ids([item.response]) };
   if (item.kind === "pathway-evaluation") return { type: "Observation", ids: ids([item.evaluation.observation]) };
   if (item.kind === "adverse-event") return { type: "Observation", ids: ids([item.record.observation]) };
+  if (item.kind === "line-drain") return { type: "Procedure", ids: ids([item.record.procedure]) };
   return { type: "ServiceRequest", ids: ids([item.serviceRequest]) };
 }
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_07_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1335,6 +1335,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_100000) do
     t.datetime "updated_at", null: false
     t.index ["parent_specimen_code"], name: "index_master_lab_specimens_on_parent_specimen_code"
     t.index ["specimen_code"], name: "index_master_lab_specimens_on_specimen_code", unique: true
+  end
+
+  create_table "master_line_drain_types", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "kind", null: false
+    t.integer "warn_days"
+    t.boolean "enabled", default: true, null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_line_drain_types_on_code", unique: true
   end
 
   create_table "master_management_fee_items", force: :cascade do |t|

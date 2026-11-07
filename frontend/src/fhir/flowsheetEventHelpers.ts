@@ -20,7 +20,8 @@ export type FlowsheetEventKind =
   | "exam"
   | "injection"
   | "oral"
-  | "nursing";
+  | "nursing"
+  | "device";
 
 export interface FlowsheetEvent {
   /** イベントの日時。時刻を持たない登録では YYYY-MM-DD。 */

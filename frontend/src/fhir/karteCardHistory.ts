@@ -2,6 +2,7 @@ import { localDay } from "../lib/dates";
 import { karteItemKey, orderCardDay, type KarteTimelineItem } from "./karteTimeline";
 import { labOrderItemRequests } from "./labOrderHelpers";
 import { parseAdverseEvent } from "./adverseEventHelpers";
+import { parseLineDrain } from "./lineDrainHelpers";
 import { withEvaluationObservation } from "./pathwayKarteHelpers";
 import { VITAL_ENTRY_SYSTEM, groupVitalEntries } from "./vitalHelpers";
 
@@ -36,6 +37,7 @@ export function karteCardHistoryPlan(item: HistoryCardItem): KarteCardHistoryPla
     return { main: { resourceType: "Observation", id: item.evaluation.observation.id ?? "" } };
   }
   if (item.kind === "adverse-event") return { main: { resourceType: "Observation", id: item.id } };
+  if (item.kind === "line-drain") return { main: { resourceType: "Procedure", id: item.id } };
   const main = { resourceType: "ServiceRequest", id: item.id };
   if ("medicationRequests" in item) return { main, children: "MedicationRequest" };
   if ("itemRequests" in item) return { main, children: "ServiceRequest" };
@@ -144,6 +146,10 @@ function rebuildItem(
   if (item.kind === "adverse-event") {
     const record = parseAdverseEvent(resource as fhir4.Observation);
     return record ? { ...item, record, day: record.onset, dateTime: record.onset } : null;
+  }
+  if (item.kind === "line-drain") {
+    const record = parseLineDrain(resource as fhir4.Procedure, item.record.observations.map((o) => o.observation));
+    return record ? { ...item, record, day: localDay(record.insertedAt), dateTime: record.insertedAt } : null;
   }
 
   const serviceRequest = resource as fhir4.ServiceRequest;

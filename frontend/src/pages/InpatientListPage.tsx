@@ -981,6 +981,9 @@ export function InpatientListPage() {
               <Link className="row-menu__item" to={`/insulin-worklist?ward=${wardId}&date=${date}`}>
                 血糖インスリン
               </Link>
+              <Link className="row-menu__item" to={`/line-drains?ward=${wardId}&date=${date}`}>
+                ライン・ドレーン
+              </Link>
               <Link className="row-menu__item" to={`/nursing-summary-approvals?ward=${wardId}`}>
                 看護サマリー承認
               </Link>

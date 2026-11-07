@@ -11,6 +11,7 @@ import {
   useWardInjectionOrders,
   useWardOptions,
   useWardOralPrescriptions,
+  useWardLineDrains,
 } from "../api/queries";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -49,6 +50,7 @@ import {
 } from "../fhir/nursingWorksheetHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { useWardInpatients } from "../hooks/useWardInpatients";
+import { daysInserted, type LineDrainRecord } from "../fhir/lineDrainHelpers";
 import { useNow } from "../hooks/useNow";
 import { nowDateTimeInput, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
@@ -105,6 +107,19 @@ export function NursingWorksheetPage() {
   const wardOptions = useWardOptions();
   const ward = wardId || undefined;
   const inpatients = useWardInpatients(date, ward);
+  // 留置中のライン・ドレーン(患者欄に「種別 n日目」で出す。docs/line-drain-design.md §4.6)。
+  const lineDrains = useWardLineDrains(
+    useMemo(() => inpatients.rows.map((row) => row.patientId), [inpatients.rows]),
+    { inProgressOnly: true },
+  );
+  const lineDrainsByPatient = useMemo(() => {
+    const map = new Map<string, LineDrainRecord[]>();
+    for (const record of lineDrains.data?.records ?? []) {
+      const patientId = record.procedure.subject.reference?.split("/").pop() ?? "";
+      map.set(patientId, [...(map.get(patientId) ?? []), record]);
+    }
+    return map;
+  }, [lineDrains.data]);
   const nursing = useNursingWorklist(date, ward);
   const injections = useWardInjectionOrders(date, ward);
   const orals = useWardOralPrescriptions(date, ward);
@@ -384,6 +399,7 @@ export function NursingWorksheetPage() {
 
       <ErrorBanner error={wardOptions.error} />
       <ErrorBanner error={inpatients.error} />
+      <ErrorBanner error={lineDrains.error} />
       <ErrorBanner error={nursing.error} />
       <ErrorBanner error={nursingPerforms.error} />
       <ErrorBanner error={injections.error} />
@@ -431,6 +447,7 @@ export function NursingWorksheetPage() {
                     hoverColumn={hoverColumn}
                     onHoverColumn={setHoverColumn}
                     assignee={assigneeLabel(group.patientId)}
+                    lineDrains={lineDrainsByPatient.get(group.patientId) ?? []}
                     nowMinutes={nowMinutes}
                     returnLinkState={returnLinkState}
                     onPerform={setPerformingKey}
@@ -594,6 +611,7 @@ function PatientRow({
   hoverColumn,
   onHoverColumn,
   assignee,
+  lineDrains,
   nowMinutes,
   returnLinkState,
   onPerform,
@@ -604,6 +622,7 @@ function PatientRow({
   hoverColumn: SlotColumn | null;
   onHoverColumn: (column: SlotColumn | null) => void;
   assignee: string;
+  lineDrains: LineDrainRecord[];
   nowMinutes: number | null;
   returnLinkState: ReturnType<typeof useReturnLinkState>;
   onPerform: (key: string) => void;
@@ -642,6 +661,11 @@ function PatientRow({
         {group.patient && <PatientKana patient={group.patient} />}
         <div className="nursing-worksheet__patient-sub">
           {assignee && <span>担当 {assignee}</span>}
+          {lineDrains.map((record) => (
+            <span key={record.id} title={[record.bodySite, record.deviceLabel].filter(Boolean).join(" ")}>
+              {`${record.typeName} ${daysInserted(record, today())}日目`}
+            </span>
+          ))}
           {undone > 0 && <span className="nursing-worksheet__undone">未実施 {undone}</span>}
           <Link to={`/patients/${group.patientId}/karte?tab=flowsheet`} state={returnLinkState}>
             経過表

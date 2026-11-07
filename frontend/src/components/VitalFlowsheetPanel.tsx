@@ -5,6 +5,7 @@ import {
   usePatientEncounterEvents,
   usePatientExamOrders,
   usePatientInjectionOrders,
+  usePatientLineDrainsInRange,
   usePatientMealIntake,
   usePatientNursingFlowsheet,
   usePatientOralPrescriptions,
@@ -16,6 +17,7 @@ import {
   useVitalThresholds,
 } from "../api/queries";
 import { buildInjectionRows } from "../fhir/flowsheetInjectionHelpers";
+import { buildLineDrainRows } from "../fhir/flowsheetLineDrainHelpers";
 import {
   buildMealIntakeRows,
   mealIntakeLabel,
@@ -98,6 +100,7 @@ import { TruncatedNotice } from "./TruncatedNotice";
 
 /** 印の欄と見出し。並べる順もこの通り。 */
 const MARK_SECTIONS = {
+  device: "ライン・ドレーン",
   injection: "注射",
   oral: "内服",
   observation: "看護観察",
@@ -321,6 +324,12 @@ export function VitalFlowsheetPanel({
     () => (examOrders.data ? buildExamRows(examOrders.data) : []),
     [examOrders.data],
   );
+  // 留置の帯(docs/line-drain-design.md §4.7)。表示範囲と重なる留置を引く。
+  const lineDrains = usePatientLineDrainsInRange(patientId, rangeStart, rangeEnd);
+  const deviceRows = useMemo(
+    () => buildLineDrainRows(lineDrains.data ?? [], rangeEnd, today()),
+    [lineDrains.data, rangeEnd],
+  );
   const nursingData = useMemo(
     () => (nursing.data ? { ...nursing.data, schedule: nursingSchedule } : null),
     [nursing.data, nursingSchedule],
@@ -406,13 +415,14 @@ export function VitalFlowsheetPanel({
   /** 印の欄。見出しと、選んだ印を突き合わせる行の集合。 */
   const markSectionRows: Record<MarkSectionKey, FlowsheetMarkRow[]> = useMemo(
     () => ({
+      device: deviceRows,
       injection: injectionRows,
       oral: oralRows,
       exam: examRows,
       observation: observationRows,
       act: actRows,
     }),
-    [injectionRows, oralRows, examRows, observationRows, actRows],
+    [deviceRows, injectionRows, oralRows, examRows, observationRows, actRows],
   );
 
   const markModal = useMemo(() => {
@@ -628,7 +638,12 @@ export function VitalFlowsheetPanel({
     const group = dayGroups.find((candidate) => candidate.key === key);
     if (group) return (group.start + group.count / 2) * columnWidth;
     const day = key.slice(0, 10);
-    if (dayMode) return day === dayMode ? (columns.length * columnWidth) / 2 : 0;
+    // 24 時間表示で表示日以外の日時は、前なら左端・後なら右端に寄せる(日をまたぐ帯が潰れないように)。
+    if (dayMode) {
+      if (day < dayMode) return 0;
+      if (day > dayMode) return columns.length * columnWidth;
+      return (columns.length * columnWidth) / 2;
+    }
     if (day < rangeStart) return 0;
     if (day > rangeEnd) return columns.length * columnWidth;
     return 0;

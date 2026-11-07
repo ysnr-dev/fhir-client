@@ -653,7 +653,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         [
           ...dayIndex.days,
           ...preloadedItemDays(
-            { pathwayEvaluations: feed.pathwayEvaluations, adverseEvents: feed.adverseEvents },
+            { pathwayEvaluations: feed.pathwayEvaluations, adverseEvents: feed.adverseEvents, lineDrains: feed.lineDrains },
             cardFilter,
             scopeFilter,
             scopeTarget,
@@ -668,6 +668,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
       cardFilter,
       feed.pathwayEvaluations,
       feed.adverseEvents,
+      feed.lineDrains,
       scopeFilter,
       scopeTarget,
     ],
@@ -893,6 +894,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
           : { kind: "regimen-adverse", regimenSrId: record.treatmentSrId, cycle: record.cycle ?? 1 },
       );
     }
+    else if (item.kind === "line-drain") openForm({ kind: "line-drain-edit", procedureId: item.id });
     else if (item.kind === "qr" && documentIdOfResponse(item.response)) {
       // 様式文書は文書の側(右ペインの文書編集)で直す。回答だけを直すと PDF と食い違うため。
       openForm({ kind: "document-edit", documentId: documentIdOfResponse(item.response) as string });
@@ -1058,6 +1060,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         <ErrorBanner error={feed.errors.responses} />
         <ErrorBanner error={feed.errors.pathwayEvaluations} />
         <ErrorBanner error={feed.errors.adverseEvents} />
+        <ErrorBanner error={feed.errors.lineDrains} />
         <ErrorBanner error={conditionsError} />
         <KarteTimeline
           groups={filteredGroups}

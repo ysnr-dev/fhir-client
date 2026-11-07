@@ -38,6 +38,7 @@ import {
   useKartePathwayEvaluations,
 } from "./karte";
 import { usePatientAdverseEvents } from "./adverseEvent";
+import { usePatientLineDrains } from "./lineDrain";
 import { readAllTypeHistory } from "./karteCardHistory";
 import { useFacilitySettings } from "./organization";
 
@@ -269,11 +270,13 @@ export function useKartePrintTimeline(
   });
   const pathwayEvaluations = useKartePathwayEvaluations(patientId, null);
   const adverseEvents = usePatientAdverseEvents(patientId);
+  // 留置は誤登録で残す(DELETE しない)ので、削除分の履歴は読まない。
+  const lineDrains = usePatientLineDrains(patientId);
   const cardOrder = useFacilitySettings().data?.karte_card_order ?? DEFAULT_KARTE_CARD_ORDER;
 
   const { groups, deletions } = useMemo(() => {
     const empty = { groups: [] as KarteDayGroup[], deletions: new Map<string, DeleteRecord>() };
-    if (!source.data || !pathwayEvaluations.data || !adverseEvents.data) return empty;
+    if (!source.data || !pathwayEvaluations.data || !adverseEvents.data || !lineDrains.data) return empty;
     if (withDeleted && !deleted.data) return empty;
     const extra = withDeleted ? deleted.data : undefined;
     const timeline = buildKarteTimeline({
@@ -284,6 +287,7 @@ export function useKartePrintTimeline(
       vitalBundles: [...source.data.vitalBundles, ...(extra?.vitalBundles ?? [])],
       pathwayEvaluations: pathwayEvaluations.data,
       adverseEvents: [...adverseEvents.data, ...(extra?.adverseEvents ?? [])],
+      lineDrains: lineDrains.data,
       noteHasNext: false,
       prescriptionHasNext: false,
       responseHasNext: false,
@@ -297,9 +301,9 @@ export function useKartePrintTimeline(
       }))
       .sort((a, b) => a.day.localeCompare(b.day));
     return { groups, deletions: extra ? itemDeletions(groups, extra.deletions) : empty.deletions };
-  }, [source.data, deleted.data, withDeleted, pathwayEvaluations.data, adverseEvents.data, from, to, cardOrder]);
+  }, [source.data, deleted.data, withDeleted, pathwayEvaluations.data, adverseEvents.data, lineDrains.data, from, to, cardOrder]);
 
-  const queries = [source, ...(withDeleted ? [deleted] : []), pathwayEvaluations, adverseEvents];
+  const queries = [source, ...(withDeleted ? [deleted] : []), pathwayEvaluations, adverseEvents, lineDrains];
   return {
     groups,
     deletions,

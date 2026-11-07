@@ -1,5 +1,6 @@
 import { KARTE_KIND_LABELS, isOrderItem, type KarteTimelineItem } from "../fhir/karteTimeline";
 import { adverseEventLabel, adverseEventTreatmentLabel } from "../fhir/adverseEventHelpers";
+import { lineDrainLabel } from "../fhir/lineDrainHelpers";
 import { statusLabel } from "../fhir/clinicalNoteHelpers";
 import { injectionSeriesLabel, summarizeInjectionServiceRequest } from "../fhir/injectionHelpers";
 import { injectionTaskStatusDisplay } from "../fhir/injectionTaskHelpers";
@@ -28,6 +29,7 @@ export function cardTitle(item: KarteTimelineItem): string {
   // パス評価はどのアウトカムの評価かが見出し(パス名・病日は本文の先頭に出す)。
   if (item.kind === "pathway-evaluation") return item.evaluation.unitName;
   if (item.kind === "adverse-event") return adverseEventLabel(item.record);
+  if (item.kind === "line-drain") return lineDrainLabel(item.record);
   // バイタルは種別バッジだけで内容が分かるので、タイトルは持たない。
   if (item.kind === "vital") return "";
   if (item.kind === "prescription") {
@@ -79,6 +81,12 @@ export function cardMeta(item: KarteTimelineItem): string {
   // 有害事象は日付だけで時刻を持たない。原因の治療と記録者を出す。
   if (item.kind === "adverse-event") {
     return [adverseEventTreatmentLabel(item.record), item.record.performer?.display].filter(Boolean).join(" | ");
+  }
+  // ライン・ドレーンは挿入時刻・診療科・挿入者。
+  if (item.kind === "line-drain") {
+    return [time, departmentOf(item.record.procedure).departmentName, item.record.performer?.display]
+      .filter(Boolean)
+      .join(" | ");
   }
   const requesterSummary = orderContextSummary(orderRequester(item.serviceRequest));
   if (isOrderItem(item)) {

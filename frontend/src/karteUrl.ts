@@ -244,7 +244,7 @@ export function parseKarteTab(value: string | null): KarteTabKey {
  */
 // バイタル・パス評価・有害事象はカードに中身が全部出るので詳細モーダルを持たない。
 export type KarteDetailKind =
-  | Exclude<KarteItemKind, "vital" | "pathway-evaluation" | "adverse-event">
+  | Exclude<KarteItemKind, "vital" | "pathway-evaluation" | "adverse-event" | "line-drain">
   | "lab-result"
   | "micro-result"
   | "patho-result"
@@ -493,6 +493,7 @@ const CARD_KINDS: KarteItemKind[] = [
   "qr",
   "pathway-evaluation",
   "adverse-event",
+  "line-drain",
 ];
 
 export function formatKarteCard(filter: KarteCardFilter): string {

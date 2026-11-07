@@ -6,7 +6,13 @@ import { collectLabCodes, populateLabRow } from "../../fhir/populateLab";
 import type { PatientCaution } from "../masterClient";
 import { usePatientCautions } from "../masterQueries";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../../fhir/infectionHelpers";
-import { RENAL_POPULATE_VARIABLES, usesVariables, type PopulateSources } from "../../fhir/populateContext";
+import {
+  LINE_DRAIN_POPULATE_VARIABLES,
+  RENAL_POPULATE_VARIABLES,
+  usesVariables,
+  type PopulateSources,
+} from "../../fhir/populateContext";
+import { LINE_DRAIN_CATEGORY, LINE_DRAIN_CATEGORY_SYSTEM } from "../../fhir/lineDrainHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { PRESCRIPTION_ORDER_TYPE } from "../../fhir/prescriptionHelpers";
 import { REGIMEN_ORDER_TYPE } from "../../fhir/regimenOrderHelpers";
@@ -86,6 +92,7 @@ export function usePopulateSources(
   const admissionAnswers = useMemo(() => usesVariables(expressions ?? [], ["admissionAnswers"]), [expressions]);
   const mealDiet = useMemo(() => usesVariables(expressions ?? [], ["mealDiet"]), [expressions]);
   const renal = useMemo(() => usesVariables(expressions ?? [], RENAL_POPULATE_VARIABLES), [expressions]);
+  const devices = useMemo(() => usesVariables(expressions ?? [], LINE_DRAIN_POPULATE_VARIABLES), [expressions]);
   // 記入を始めた日で固定する(日付をまたいで開きっぱなしでも値がぶれないように)。
   const [today] = useState(todayString);
 
@@ -330,6 +337,18 @@ export function usePopulateSources(
     enabled: Boolean(patientId && mealDiet),
   });
 
+  // ---- 留置中のライン・ドレーン(式が参照するときだけ) ----
+  const lineDrainParams = new URLSearchParams();
+  lineDrainParams.set("patient", `Patient/${patientId}`);
+  lineDrainParams.set("category", `${LINE_DRAIN_CATEGORY_SYSTEM}|${LINE_DRAIN_CATEGORY.code}`);
+  lineDrainParams.set("status", "in-progress");
+  lineDrainParams.set("_count", "100");
+  const lineDrains = useQuery({
+    queryKey: ["Procedure", "search", patientId, "line-drain", "populate"],
+    queryFn: () => searchResource<fhir4.Procedure>("Procedure", lineDrainParams, { strict: true }),
+    enabled: Boolean(patientId && devices),
+  });
+
   const allConditions = useKarteConditions(patientId);
   const allergies = useActiveAllergies(patientId);
   const flags = useActiveFlags(patientId);
@@ -389,6 +408,7 @@ export function usePopulateSources(
     visitQueries.some((q) => q.isLoading) ||
     admissionResponses.isLoading ||
     mealOrders.isLoading ||
+    lineDrains.isLoading ||
     recentLabs.isLoading;
 
   const author = practitioner.data?.data;
@@ -465,6 +485,7 @@ export function usePopulateSources(
         ? resourcesOfType<fhir4.ServiceRequest>(mealOrders.data?.data, "ServiceRequest").filter(isMealServiceRequest)
         : undefined,
       recentLabs: renal ? resourcesOfType<fhir4.Observation>(recentLabs.data?.data, "Observation") : undefined,
+      lineDrains: devices ? resourcesOfType<fhir4.Procedure>(lineDrains.data?.data, "Procedure") : undefined,
     };
   }, [
     today,
@@ -509,6 +530,8 @@ export function usePopulateSources(
     recentLabs.data,
     mealDiet,
     mealOrders.data,
+    devices,
+    lineDrains.data,
   ]);
 
   return {
@@ -522,6 +545,7 @@ export function usePopulateSources(
       visitQueries.find((q) => q.error)?.error ??
       admissionResponses.error ??
       mealOrders.error ??
+      lineDrains.error ??
       recentLabs.error ??
       null,
     sources,

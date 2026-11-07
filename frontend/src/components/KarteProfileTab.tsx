@@ -25,6 +25,7 @@ import {
 import { InfectionForm } from "./InfectionForm";
 import { PatientInfectionSection } from "./PatientInfectionSection";
 import { PatientAdverseEventSection } from "./PatientAdverseEventSection";
+import { LineDrainSection } from "./LineDrainSection";
 import { HealthMaintenanceSection } from "./HealthMaintenanceSection";
 import { EncounterHistorySection } from "./EncounterHistorySection";
 import {
@@ -78,6 +79,7 @@ const SECTIONS = [
   { key: "body", label: "身体情報" },
   { key: "infection", label: "感染症" },
   { key: "adverse", label: "有害事象" },
+  { key: "device", label: "ライン・ドレーン" },
   { key: "maintenance", label: "定期検査" },
   { key: "caution", label: "診療上の注意" },
 ] as const;
@@ -135,9 +137,11 @@ interface KarteProfileTabProps {
   onViewChange: (view: string | null) => void;
   /** カルテのタイムラインでその日を開く。 */
   onOpenDay: (day: string) => void;
+  /** ライン・ドレーンの編集を右ペインで開く。右ペインの無い場所(患者ドロワー)では渡さない。 */
+  onEditLineDrain?: (procedureId: string) => void;
 }
 
-export function KarteProfileTab({ patientId, view, onViewChange, onOpenDay }: KarteProfileTabProps) {
+export function KarteProfileTab({ patientId, view, onViewChange, onOpenDay, onEditLineDrain }: KarteProfileTabProps) {
   const [form, setForm] = useState<FormMode>(null);
   // 詳細やフォームから戻ったときに元の区画を開いたままにするため、ここで持つ。
   const [section, setSection] = useState<SectionKey>(() =>
@@ -245,6 +249,8 @@ export function KarteProfileTab({ patientId, view, onViewChange, onOpenDay }: Ka
         />
       ) : section === "adverse" ? (
         <PatientAdverseEventSection patientId={patientId} />
+      ) : section === "device" ? (
+        <LineDrainSection patientId={patientId} onEdit={onEditLineDrain} />
       ) : section === "maintenance" ? (
         <HealthMaintenanceSection patientId={patientId} />
       ) : (

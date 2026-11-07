@@ -81,6 +81,7 @@ export const APP_MENU: AppMenuEntry[] = [
       { label: "業務分担", to: "/nursing-assignments" },
       { label: "看護必要度", to: "/nursing-acuity" },
       { label: "褥瘡管理", to: "/pressure-ulcer" },
+      { label: "ライン・ドレーン", to: "/line-drains" },
       { label: "病棟マップ", to: "/ward-map" },
       { label: "血糖インスリン", to: "/insulin-worklist" },
       // ベッドサイドで患者番号と注射ラベルのバーコードを読んで実施入力する(docs/injection-order-design.md §6.6)。

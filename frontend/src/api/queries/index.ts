@@ -51,6 +51,7 @@ export * from "./pathoReception";
 export * from "./transfusion";
 export * from "./regimen";
 export * from "./adverseEvent";
+export * from "./lineDrain";
 export * from "./pathway";
 export * from "./files";
 export * from "./radiotherapy";

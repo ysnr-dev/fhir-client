@@ -22,6 +22,7 @@ import { CdsServicesPage } from "./pages/CdsServicesPage";
 import { AdvisoryOverrideReasonPage } from "./pages/AdvisoryMasterPages";
 import { AdvisoryRulePage } from "./pages/AdvisoryRulePage";
 import { PharmacistInterventionTypePage } from "./pages/PharmacistInterventionTypePage";
+import { LineDrainTypePage } from "./pages/LineDrainTypePage";
 import { HolidayPage } from "./pages/HolidayPage";
 import { AdvisoryReviewPage } from "./pages/AdvisoryReviewPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
@@ -120,6 +121,7 @@ import { AdmissionDocumentsPage } from "./pages/AdmissionDocumentsPage";
 import { ResultFollowupPage } from "./pages/ResultFollowupPage";
 import { NursingAcuityPage } from "./pages/NursingAcuityPage";
 import { PressureUlcerPage } from "./pages/PressureUlcerPage";
+import { LineDrainPage } from "./pages/LineDrainPage";
 import { NursingWorksheetPage } from "./pages/NursingWorksheetPage";
 import { BulkVitalEntryPage } from "./pages/BulkVitalEntryPage";
 import { NursingSummaryApprovalPage } from "./pages/NursingSummaryApprovalPage";
@@ -414,6 +416,7 @@ function App() {
           <Route path="/advisory-override-reasons" element={<AdvisoryOverrideReasonPage />} />
           <Route path="/advisory-rules" element={<AdvisoryRulePage />} />
           <Route path="/pharmacist-intervention-types" element={<PharmacistInterventionTypePage />} />
+          <Route path="/line-drain-types" element={<LineDrainTypePage />} />
           <Route path="/holidays" element={<HolidayPage />} />
           <Route
             path="/nutrition-guidance-worklist"
@@ -443,6 +446,7 @@ function App() {
           <Route path="/result-followup" element={<ResultFollowupPage />} />
           <Route path="/nursing-acuity" element={<NursingAcuityPage />} />
           <Route path="/pressure-ulcer" element={<PressureUlcerPage />} />
+          <Route path="/line-drains" element={<LineDrainPage />} />
           <Route path="/inpatients/bulk-vitals" element={<BulkVitalEntryPage />} />
           <Route path="/nursing-summary-approvals" element={<NursingSummaryApprovalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />

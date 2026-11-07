@@ -96,6 +96,7 @@ import { useKarteLinkActions } from "./KarteLinkContext";
 import { InjectionPerformSection } from "./karteCardBodies/InjectionPerformSection";
 import { PathwayEvaluationCardBody } from "./karteCardBodies/PathwayEvaluationCardBody";
 import { AdverseEventCardBody } from "./karteCardBodies/AdverseEventCardBody";
+import { LineDrainCardBody } from "./karteCardBodies/LineDrainCardBody";
 import { PotencyMark } from "./MedicineWarnings";
 import { PathoImportanceBadge } from "./PathoResultDetailPanel";
 import { MicroCollectionModal } from "./MicroCollectionModal";
@@ -891,8 +892,9 @@ const KarteCard = memo(function KarteCard({
               <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
                 パス表示
               </button>
-            ) : item.kind === "adverse-event" ? (
-              // 有害事象は治療の側の記録パネルで直す(削除もそこで行う)。
+            ) : item.kind === "adverse-event" || item.kind === "line-drain" ? (
+              // 有害事象は治療の側の記録パネルで直す(削除もそこで行う)。ライン・ドレーンの抜去・誤登録は
+              // プロファイルの区画で行う。
               <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
                 編集
               </button>
@@ -1068,11 +1070,16 @@ function consultReplyId(sr: fhir4.ServiceRequest): string {
 
 type KarteDetailItem = Exclude<
   KarteTimelineItem,
-  { kind: "vital" } | { kind: "pathway-evaluation" } | { kind: "adverse-event" }
+  { kind: "vital" } | { kind: "pathway-evaluation" } | { kind: "adverse-event" } | { kind: "line-drain" }
 >;
 
 function hasDetailModal(item: KarteTimelineItem): item is KarteDetailItem {
-  return item.kind !== "vital" && item.kind !== "pathway-evaluation" && item.kind !== "adverse-event";
+  return (
+    item.kind !== "vital" &&
+    item.kind !== "pathway-evaluation" &&
+    item.kind !== "adverse-event" &&
+    item.kind !== "line-drain"
+  );
 }
 
 // 「リンク取得」で貼るリンク。開き方はカードの詳細モーダルと同じ。
@@ -1269,6 +1276,10 @@ export function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 
   if (item.kind === "adverse-event") {
     return <AdverseEventCardBody record={item.record} />;
+  }
+
+  if (item.kind === "line-drain") {
+    return <LineDrainCardBody record={item.record} />;
   }
 
   if (!item.questionnaire) {

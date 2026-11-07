@@ -51,6 +51,7 @@ import {
   QuestionnaireResponseEditPanel,
 } from "./QuestionnaireResponsePanels";
 import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
+import { LineDrainCreatePanel, LineDrainEditPanel } from "./LineDrainPanels";
 import { PlannedAdmissionCreatePanel } from "./PlannedAdmissionPanel";
 import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
 import { PathwayApplyPanel, PathwayPhasePanel } from "./PathwayApplyPanel";
@@ -111,6 +112,9 @@ export type KartePaneState =
   | { kind: "vital-create"; problem?: ProblemRef }
   // 1 回の測定は複数の Observation なので、束ねている identifier で対象を指す。
   | { kind: "vital-edit"; entryId: string }
+  // ライン・ドレーンの留置(docs/line-drain-design.md)。編集は挿入の Procedure を指す。
+  | { kind: "line-drain-create" }
+  | { kind: "line-drain-edit"; procedureId: string }
   // DO(sourceSrId あり)では対象プロブレムも DO 元から引き継ぐので problem は使わない。
   // broughtIds: 持参薬タブの「継続」で選んだ持参薬。その持参薬から初期値を作る。
   | {
@@ -301,6 +305,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "document-edit": "文書編集",
   "vital-create": "バイタル登録",
   "vital-edit": "バイタル編集",
+  "line-drain-create": "ライン・ドレーン登録",
+  "line-drain-edit": "ライン・ドレーン編集",
   "prescription-create": "処方登録",
   "prescription-edit": "処方編集",
   "injection-create": "注射登録",
@@ -369,6 +375,8 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.appointmentId}`;
     case "vital-edit":
       return `${state.kind}:${state.entryId}`;
+    case "line-drain-edit":
+      return `${state.kind}:${state.procedureId}`;
     // 別のセットを選び直したらフォームを作り直す(初期値は初回描画時のみ反映される)。
     case "order-set":
       return `${state.kind}:${state.setId ?? ""}:${state.problem?.conditionId ?? ""}`;
@@ -634,6 +642,10 @@ function PaneContent({
       );
     case "vital-edit":
       return <VitalEditPanel patientId={patientId} entryId={state.entryId} onSaved={onSaved} />;
+    case "line-drain-create":
+      return <LineDrainCreatePanel patientId={patientId} onSaved={onSaved} />;
+    case "line-drain-edit":
+      return <LineDrainEditPanel patientId={patientId} procedureId={state.procedureId} onSaved={onSaved} />;
     case "prescription-create":
       return (
         <PrescriptionCreatePanel

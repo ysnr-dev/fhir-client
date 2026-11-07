@@ -408,6 +408,38 @@
   color: #7e57c2;
 }
 
+.patient-header__caution--line-drain {
+  color: var(--accent);
+}
+
+.patient-header__caution--line-drain-over {
+  color: var(--danger);
+}
+
+/* ライン・ドレーンの区画・一覧の留置日数。警告日数超は赤。 */
+.line-drain__days {
+  white-space: nowrap;
+}
+
+.line-drain__days--over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.line-drain-site__history {
+  margin-bottom: 12px;
+}
+
+.line-drain-site__history th .rp-card__icon-button {
+  margin-left: 4px;
+}
+
+.walk-in__fields .line-drain-site__check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
 .patient-header__caution-count {
   font-size: 11px;
   margin-left: 1px;

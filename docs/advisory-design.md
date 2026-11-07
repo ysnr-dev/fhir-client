@@ -188,6 +188,8 @@ interface Advisory {
   - `%orderItems` … 処方・注射で入力中の薬剤 `{code(YJ), name, ingredient(成分 7 桁)}` の配列。他の場面では空配列(無い変数は FHIRPath が例外にするので必ず置く)。
     規則の編集画面の変数一覧だけに出す(`ADVISORY_RULE_EXTRA_OPTIONS`)。
   - `%labs.….daysAgo`(採取日から今日までの日数)と `%egfr` / `%ccr` はテンプレートでも使える変数として足した(`docs/features/templates.md`)。
+  - `%devices` … 留置中のライン・ドレーン・カテーテル `{code, name, kind, bodySite, insertedAt, daysInserted}` の配列
+    (`docs/line-drain-design.md` §4.8。種別マスタの警告日数は持たせず、閾値は式に書く。seed の記入例 `cvc-over-14` / `foley-over-7`)。
 - **警告**: `{key: "facility-rule|<コード>", kind: "facility-rule", severity: severityOf(kind, 規則の重さ === warning), message: 文言,
   detail: 補足, source: 規則の名前(根拠が URL ならリンク、文なら名前に添える)}`。施設設定 `advisory_severity` の `facility-rule` で、
   施設の規則全体を「表示のみ」「出さない」に下げられる(個別の重さはマスタ)。

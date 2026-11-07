@@ -73,6 +73,13 @@ export const KARTE_MENU_ITEMS: KarteMenuItem[] = [
   // 看護過程の順(情報収集 → 計画 → 指示 → サマリー)に並べる。見出し「看護」の下では
   // 「看護」を付けない(列の幅は最長のラベルで決まる)。
   {
+    key: "line-drain",
+    label: "ライン管理",
+    group: "看護",
+    fullLabel: "ライン・ドレーン",
+    open: () => ({ kind: "line-drain-create" }),
+  },
+  {
     key: "nursing-profile",
     label: "プロファイル",
     group: "看護",

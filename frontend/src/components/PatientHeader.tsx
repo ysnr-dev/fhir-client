@@ -11,6 +11,7 @@ import {
   usePatientAdmission,
   usePatientEmergency,
   useRegimenApplications,
+  usePatientLineDrains,
   useEarlyWarningSettings,
   useLatestEarlyWarning,
 } from "../api/queries";
@@ -32,6 +33,9 @@ import {
 } from "../fhir/emergencyEncounterHelpers";
 import type { PatientCaution } from "../api/masterClient";
 import { regimenStatusLabel } from "../fhir/regimenOrderHelpers";
+import { daysInsertedLabel, isOverWarnDays, lineDrainLabel } from "../fhir/lineDrainHelpers";
+import { useLineDrainTypes } from "../api/masterQueries";
+import { today } from "../lib/dates";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../fhir/infectionHelpers";
 import {
   ageWithMonthsLabel,
@@ -155,6 +159,7 @@ export function PatientPictogramStrip(props: PictogramProps) {
       <AllergyPictograms {...props} />
       <InfectionPictogram {...props} />
       <ChemotherapyPictogram {...props} />
+      <LineDrainPictogram {...props} />
       <EarlyWarningPictogram {...props} />
       <IntakePictogram {...props} />
       {props.cds && <AdvisoryRulePictogram {...props} />}
@@ -230,6 +235,47 @@ function InfectionPictogram({ patientId, size, portal }: PictogramProps) {
  * 分かっている必要があるので帯に置く。中身(レジメン名・クール・状態)は吹き出しで読む。
  * 完了・中止した適用は出さない(いまの状態ではないため。治療歴は化学療法タブで読む)。
  */
+/** 留置中のライン・ドレーン(docs/line-drain-design.md §4.4)。警告日数を超えたものがあれば警告色。 */
+function LineDrainPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }: PictogramProps) {
+  const lineDrains = usePatientLineDrains(patientId);
+  const types = useLineDrainTypes();
+
+  if (!patientId) return null;
+
+  const current = (lineDrains.data ?? []).filter((r) => r.status === "in-progress");
+  if (current.length === 0) return null;
+
+  const todayValue = today();
+  const over = current.some((r) => isOverWarnDays(r, types, todayValue));
+  const label = current.map((r) => `${lineDrainLabel(r)} ${daysInsertedLabel(r, todayValue)}`).join(" / ");
+
+  return (
+    <span className="patient-header__item patient-header__cautions">
+      <PictogramPopover
+        label={label}
+        className={over ? "patient-header__caution--line-drain-over" : "patient-header__caution--line-drain"}
+        icon={<CautionPictogram pictogram="line-drain" size={size} />}
+        count={current.length}
+        portal={portal}
+      >
+        <ul className="patient-header__popover-list">
+          {current.map((record) => (
+            <li key={record.id}>
+              <span className="patient-header__popover-name">{lineDrainLabel(record)}</span>
+              <span className="patient-header__popover-text">
+                {[record.deviceLabel, daysInsertedLabel(record, todayValue)].filter(Boolean).join(" / ")}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <Link className="patient-header__popover-link" to={`/patients/${patientId}/karte?tab=profile`}>
+          プロファイルを開く
+        </Link>
+      </PictogramPopover>
+    </span>
+  );
+}
+
 function ChemotherapyPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }: PictogramProps) {
   const applications = useRegimenApplications(patientId);
 

@@ -1,0 +1,16 @@
+code,name,kind,warn_days,display_order
+cvc,中心静脈カテーテル,vascular-central,14,10
+picc,PICC,vascular-central,30,20
+cv-port,CV ポート,vascular-central,,30
+piv,末梢静脈カテーテル,vascular-peripheral,4,40
+a-line,動脈ライン,arterial,7,50
+foley,尿道留置カテーテル,urinary,7,60
+nephrostomy,腎瘻,urinary,30,70
+ett,気管チューブ,airway,14,80
+trach,気管切開チューブ,airway,,90
+ngt,経鼻胃管,gi,14,100
+peg,胃瘻,gi,,110
+chest-tube,胸腔ドレーン,drain,7,120
+drain-closed,閉鎖式ドレーン,drain,7,130
+drain-open,開放式ドレーン,drain,7,140
+epidural,硬膜外カテーテル,other,4,150

@@ -35,12 +35,14 @@ class FhirProxyController < ApplicationController
   # backend の Active Storage にあり、書き込みも /imaging が行う。ここを通るのは
   # 「画像」タブの一覧・詳細の読み出し。
   # CareTeam はチーム医療のチーム(NST・ICT など。docs/care-team-design.md)。
+  # Device はライン・ドレーンの管の実体(docs/line-drain-design.md)。留置の Procedure が focalDevice で指し、
+  # 編集フォームが読む。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
     PractitionerRole Composition Task Procedure MedicationAdministration MedicationDispense
     MedicationStatement Location Schedule Slot Appointment Encounter Provenance Flag CarePlan Goal
-    DocumentReference ImagingStudy Coverage CareTeam
+    DocumentReference ImagingStudy Coverage CareTeam Device
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

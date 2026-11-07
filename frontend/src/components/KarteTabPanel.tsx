@@ -83,7 +83,15 @@ export function KarteTabPanel({ tab: key, patientId, view, onViewChange, baseDat
       />
     );
   }
-  if (key === "profile") return <KarteProfileTab {...props} onOpenDay={openDay} />;
+  if (key === "profile") {
+    return (
+      <KarteProfileTab
+        {...props}
+        onOpenDay={openDay}
+        onEditLineDrain={(procedureId) => openForm({ kind: "line-drain-edit", procedureId })}
+      />
+    );
+  }
   if (key === "oral-exam") return <KarteOralExamTab {...props} />;
   // 経過表は view に「基準日(と全画面)」を載せる(どの週を見ているかが読む位置
   // そのものなので、リロード・共有で戻れるようにする)。イベント一覧からはカルテの

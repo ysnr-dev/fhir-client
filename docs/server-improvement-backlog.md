@@ -19,6 +19,7 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   2026-10-08（データ抽出の有害事象の実装で、Observation の `date` を `effectivePeriod.start` でも索引するよう同日実装。
   期間で持つ有害事象(発現日〜回復日)を発現日で検索できるようにした。既存の記録を backfill する migration
   `20261008000001_backfill_observation_effective_period_start.rb` 付き）。
+  2026-11-07（ライン・ドレーン管理の実装で C-28〜C-30 を追加。`docs/line-drain-design.md`）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
@@ -410,6 +411,29 @@ Observation・Composition・Encounter など)を足した(migration 無し。`fo
   500 件 × 10 ページの上限に当たる(当たったら欠けていることを出す)。
 - **望ましいサーバー機能**: 条件付きの型レベル `_history` に、削除済みのリソースだけを対象にするパラメータ
   (例: `_deleted=true`)。最後の版だけを返す指定(`_list=last` のようなもの)があればさらに軽い。
+
+### C-28. Procedure の `focal-device` 検索と `_include=Procedure:focal-device`
+
+- **現状**: ライン・ドレーンの留置台帳(`docs/line-drain-design.md`)は挿入の Procedure が `focalDevice.manipulated` で
+  Device(管の種別・製品・サイズ・ロット)を指すが、上流は `focalDevice` を索引していない。一覧・カード・経過表が Device を
+  引き直さずに済むよう、Device の内容を `manipulated.display` に写している(編集フォームだけ `Device/{id}` を read)。
+- **望ましいサーバー機能**: `Procedure?focal-device=Device/{id}`(ローカル名でよい)と `_include=Procedure:focal-device`。
+  `Device?_revinclude=Procedure:focal-device` も効くとロット・製品からの逆引き(回収時)ができる。
+- **影響範囲**: 写しの `display` は表示のために残す。
+
+### C-29. Observation の `device` / `focus` 検索
+
+- **現状**: 刺入部観察の Observation は留置の Procedure を `partOf` で指している(上流に `part-of` の検索と `_revinclude` があるため)。
+  R4 標準の `device`(Observation.device)と `focus` は索引が無い。
+- **望ましいサーバー機能**: `Observation?device=` / `Observation?focus=` と対応する `_revinclude`。
+- **影響範囲**: 今の `partOf` で足りているので急がない。Device を直接指す記録(デバイスの点検など)を持つときに要る。
+
+### C-30. `Provenance:target` の対象に Device
+
+- **現状**: `_revinclude=Provenance:target` の対象型に Device が無い(`search_references.rb`)。Device を target にした来歴は
+  書けるが、Device 側から 0 件になる。留置台帳は来歴を付けていない(記録者は `performer`)ので今は影響しない。
+- **望ましいサーバー機能**: 対象型に Device を足す。
+- **影響範囲**: 将来 Device を単独で更新する操作(UDI 台帳)に来歴を付けるとき。
 
 ### C-23. MedicationRequest のオーダー種別(処方 / 注射)の索引
 

@@ -48,6 +48,7 @@ import {
 import { labExpression, type PopulateLabRow } from "./populateLab";
 import { oralExamPopulateValues, type OralExamPopulateSources } from "./populateOralExam";
 import { surgeryPopulateValues, type SurgeryPopulateSources } from "./populateSurgery";
+import { lineDrainPopulateValues } from "./lineDrainHelpers";
 import { codingBySystem, LOINC_SYSTEM } from "./shared";
 
 export interface PopulateSources {
@@ -104,7 +105,12 @@ export interface PopulateSources {
   mealOrders?: fhir4.ServiceRequest[];
   /** 直近の検体検査の結果(新しい順)。式が %egfr / %ccr を参照するときだけ揃う。 */
   recentLabs?: fhir4.Observation[];
+  /** 留置中のライン・ドレーン(挿入の Procedure)。式が %devices を参照するときだけ揃う。 */
+  lineDrains?: fhir4.Procedure[];
 }
+
+/** 留置中の管の変数。参照するときだけ留置台帳を読む。 */
+export const LINE_DRAIN_POPULATE_VARIABLES = ["devices"] as const;
 
 /** 腎機能の変数。参照するときだけ直近の検体検査の結果を読む。 */
 export const RENAL_POPULATE_VARIABLES = ["egfr", "ccr"] as const;
@@ -450,6 +456,17 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     description:
       "入院に結び付いた確定済みのテンプレート回答(看護プロファイルなど)の項目を、linkId ごとに最新の値で持ちます。linkId を書き換えて使います。選択肢はコードが入ります。",
     sample: "1",
+  },
+
+  // ---- ライン・ドレーン ----
+  {
+    group: "ライン・ドレーン",
+    variable: "devices",
+    label: "留置中の管",
+    expression: "%devices.exists(kind='vascular-central' and daysInserted > 14)",
+    description:
+      "留置中のライン・ドレーン・カテーテルを 1 本ずつ持ちます(code・name・kind・bodySite・insertedAt・daysInserted)。kind は vascular-central / vascular-peripheral / arterial / urinary / airway / gi / drain / other。警告の規則の条件式に使います。",
+    sample: "true",
   },
 
   // ---- 栄養 ----
@@ -1471,6 +1488,7 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     responseSequence: sources.responseCount === undefined ? undefined : sources.responseCount + 1,
     admissionAnswers: admissionAnswerValues(sources.admissionResponses),
     mealDiet: sources.mealOrders?.[0] ? mealOrderOneLine(sources.mealOrders[0]) : "",
+    devices: lineDrainPopulateValues(sources.lineDrains ?? [], today),
     targetEnergyMin: target?.energy[0],
     targetEnergyMax: target?.energy[1],
     targetProteinMin: target?.protein[0],
