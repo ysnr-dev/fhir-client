@@ -7124,12 +7124,12 @@ button.populate-expression__option--active {
   gap: 12px;
 }
 
-.lab-label-batch__table td:not(:first-child),
-.lab-label-batch__table th:not(:first-child) {
+.ward-batch-issue__table td:not(:first-child),
+.ward-batch-issue__table th:not(:first-child) {
   text-align: right;
 }
 
-.lab-label-batch__ward {
+.ward-batch-issue__ward {
   display: inline-flex;
   align-items: center;
   gap: 8px;

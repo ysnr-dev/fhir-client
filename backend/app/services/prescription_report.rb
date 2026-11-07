@@ -2,6 +2,7 @@
 # 上流 FHIR サーバーから処方オーダー一式を 1 往復で取得し、RP ごとのグループに
 # 畳んで PDF を組む。
 #   batch Bundle POST / -- オーダー検索(患者を _include、明細を _revinclude)+ 自院 Organization
+# オーダーは 1 件でも複数でもよく(一括発行)、複数なら渡された順に 1 つの PDF へ並べる。
 #
 # 検体ラベル(LabLabelReport)と同じ作りだが、採番のような副作用は無い(何度呼んでも
 # 読むだけ)。進捗 Task にも触らない -- 発行 = 受付の遷移は frontend が行い、この
@@ -111,33 +112,55 @@ class PrescriptionReport
     def uneven_codes = self[:uneven_codes] || []
   end
 
-  def initialize(order_id, gateway: FhirGateway.new)
-    @order_id = order_id
+  # 1 回の検索で引くオーダー数。
+  SEARCH_SLICE = 100
+
+  # order_ids は 1 件の id でも配列でもよい。
+  def initialize(order_ids, gateway: FhirGateway.new)
+    @order_ids = Array(order_ids).uniq
     @gateway = gateway
   end
 
-  # PDF のバイト列を返す。
+  # PDF のバイト列を返す。1 件でも刷れないオーダーがあれば全体を止める(一部だけ刷ると
+  # 発行済にしたオーダーと紙が食い違う)。
   def generate
-    order, patient, medication_requests, organization = fetch_order_resources
-    if category_code(order, PRESCRIPTION_CATEGORY_SYSTEM) == BROUGHT_CATEGORY
-      raise BroughtMedication, "order #{order_id} is a brought medication order"
-    end
-
-    rps = build_rps(medication_requests)
-    raise NoMedication, "order #{order_id} has no medication requests" if rps.empty?
-
-    layout = LAYOUTS.fetch(layout_key(order))
-    Reports::PrescriptionRenderer.new(
-      layout_path: layout[:path],
-      order:, patient:, organization:, rps:,
-      lines_per_page: layout[:lines_per_page],
-      max_cols: layout[:max_cols]
-    ).render
+    resources, organization = fetch_resources
+    prescriptions = order_ids.map { |order_id| build_prescription(order_id, resources, organization) }
+    Reports::PrescriptionRenderer.render(prescriptions)
   end
 
   private
 
-  attr_reader :order_id, :gateway
+  attr_reader :order_ids, :gateway
+
+  # オーダー 1 件ぶんの PrescriptionRenderer の引数。
+  def build_prescription(order_id, resources, organization)
+    order = resources.find { |r| r["resourceType"] == "ServiceRequest" && r["id"] == order_id }
+    raise NotFound, "ServiceRequest/#{order_id} not found" unless order
+    unless prescription_order?(order)
+      raise NotPrescriptionOrder, "ServiceRequest/#{order_id} is not a prescription order"
+    end
+
+    patient = included_patient(resources, order)
+    if category_code(order, PRESCRIPTION_CATEGORY_SYSTEM) == BROUGHT_CATEGORY
+      raise BroughtMedication, "order #{order_id} is a brought medication order"
+    end
+
+    medication_requests = resources.select do |r|
+      r["resourceType"] == "MedicationRequest" &&
+        Array(r["basedOn"]).any? { |ref| ref["reference"] == "ServiceRequest/#{order_id}" }
+    end
+    rps = build_rps(medication_requests)
+    raise NoMedication, "order #{order_id} has no medication requests" if rps.empty?
+
+    layout = LAYOUTS.fetch(layout_key(order))
+    {
+      layout_path: layout[:path],
+      order:, patient:, organization:, rps:,
+      lines_per_page: layout[:lines_per_page],
+      max_cols: layout[:max_cols]
+    }
+  end
 
   # frontend の isPrescriptionServiceRequest と同じ判定(order-type|prescription)。
   def prescription_order?(order)
@@ -171,13 +194,16 @@ class PrescriptionReport
   # オーダー・患者・明細・自院 Organization を 1 つの batch Bundle で取得する。
   # 患者はオーダーの subject を _include、明細は basedOn がオーダーを指す
   # MedicationRequest を _revinclude で添えてもらう。
-  def fetch_order_resources
+  def fetch_resources
     self_organization_id = FacilitySettings.self_organization_id
-    entries = [
+    searches = order_ids.each_slice(SEARCH_SLICE).map do |ids|
       { "request" => { "method" => "GET",
-                       "url" => "ServiceRequest?_id=#{CGI.escape(order_id)}" \
+                       "url" => "ServiceRequest?_id=#{ids.map { |id| CGI.escape(id) }.join(',')}" \
+                                "&_count=#{SEARCH_SLICE}" \
                                 "&_include=ServiceRequest%3Asubject" \
-                                "&_revinclude=MedicationRequest%3Abased-on" } },
+                                "&_revinclude=MedicationRequest%3Abased-on" } }
+    end
+    entries = searches + [
       { "request" => { "method" => "GET", "url" => institution_url(self_organization_id) } }
     ]
 
@@ -191,19 +217,10 @@ class PrescriptionReport
     ensure_success!(upstream, "batch bundle")
     results = Array(JSON.parse(upstream.body)["entry"])
 
-    resources = searchset_resources(results[0], nil, "ServiceRequest?_id=#{order_id}")
-    order = resources.find { |r| r["resourceType"] == "ServiceRequest" && r["id"] == order_id }
-    raise NotFound, "ServiceRequest/#{order_id} not found" unless order
-    unless prescription_order?(order)
-      raise NotPrescriptionOrder, "ServiceRequest/#{order_id} is not a prescription order"
+    resources = results.first(searches.size).flat_map do |entry|
+      searchset_resources(entry, nil, "ServiceRequest?_id=#{order_ids.join(',')}")
     end
-
-    medication_requests = resources.select do |r|
-      r["resourceType"] == "MedicationRequest" &&
-        Array(r["basedOn"]).any? { |ref| ref["reference"] == "ServiceRequest/#{order_id}" }
-    end
-    [order, included_patient(resources, order), medication_requests,
-     find_institution(results[1], self_organization_id)]
+    [resources, find_institution(results[searches.size], self_organization_id)]
   end
 
   # ---- 明細のグルーピング ----

@@ -11,5 +11,18 @@ module Reports
                 type: "application/pdf",
                 disposition: "inline"
     end
+
+    # POST /reports/prescriptions/pdf
+    # 複数オーダーの処方箋を order_ids の順に 1 つの PDF にまとめる(一覧からの一括発行)。
+    # id が多いと URL に載らないので POST で受ける。
+    def batch
+      order_ids = Array(params[:order_ids]).map(&:to_s).compact_blank
+      return render json: { error: "invalid_prescription_batch" }, status: :bad_request if order_ids.empty?
+
+      send_data PrescriptionReport.new(order_ids).generate,
+                filename: "prescriptions.pdf",
+                type: "application/pdf",
+                disposition: "inline"
+    end
   end
 end

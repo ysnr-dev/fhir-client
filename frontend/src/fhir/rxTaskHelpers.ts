@@ -95,6 +95,21 @@ export function rxTaskActions(status: RxTaskStatus): RxTaskAction[] {
 /** 進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
 export const rxTaskStatus = helpers.taskStatus;
 
+/** 処方箋の発行の段階。依頼済は未発行、受付済以降は発行済。照会中・中止の処方は刷らない。 */
+export function rxPrescriptionIssueOf(status: RxTaskStatus): "unissued" | "issued" | null {
+  switch (status) {
+    case "requested":
+      return "unissued";
+    case "accepted":
+    case "in-progress":
+    case "completed":
+      return "issued";
+    case "on-hold":
+    case "cancelled":
+      return null;
+  }
+}
+
 /** ServiceRequest の id → その進捗。焦点(focus)で突き合わせる。 */
 export const rxTasksByOrderId = helpers.tasksByOrderId;
 

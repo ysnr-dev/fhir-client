@@ -15,7 +15,7 @@ import {
 } from "../../fhir/labSpecimenHelpers";
 import { labTasksByOrderId } from "../../fhir/labTaskHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
-import { buildRxTaskUpdate, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
+import { buildRxTaskUpdate, rxTaskStatus, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
 import { DEFAULT_IDENTIFIER_SYSTEM } from "../../fhir/patientHelpers";
 import { MEAL_INTAKE_STAPLE_MANAGE_NO } from "../../fhir/flowsheetMealHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM, NURSING_ORDER_TYPE } from "../../fhir/nursingOrderHelpers";
@@ -24,8 +24,15 @@ import { LOINC_SYSTEM } from "../../fhir/shared";
 import { CAPILLARY_GLUCOSE } from "../../fhir/vitalHelpers";
 import { addDays } from "../../lib/dates";
 import { postBundle, searchResource } from "../fhirClient";
-import { fetchRxWorklist } from "./prescription";
-import { comparePatientNumber, fetchWorklistBundles, makeUpdateTaskStatusHook, worklistParams } from "./worklist";
+import { postPrescriptionsPdf } from "../reportsClient";
+import { fetchRxWorklist, type RxWorklistRow } from "./prescription";
+import {
+  comparePatientNumber,
+  fetchWorklistBundles,
+  makeUpdateTaskStatusHook,
+  taskBundleEntry,
+  worklistParams,
+} from "./worklist";
 import { resourcesOfType } from "./core";
 import { fetchRxVerificationByGroups } from "./rxVerification";
 import { useFacilitySettings } from "./organization";
@@ -156,6 +163,35 @@ export const useUpdateRxTaskStatus = makeUpdateTaskStatusHook<RxTaskStatus>(
   buildRxTaskUpdate,
   "rx-worklist",
 );
+
+/**
+ * 複数オーダーの処方箋をまとめて発行し、PDF を返す。行の「処方箋発行」と同じく発行が
+ * 受付を兼ねるので、依頼済のオーダーを 1 つの transaction で受付済へ進める。
+ * PDF の生成には副作用が無いので、進捗の書き込みに失敗してもそのまま発行し直せる。
+ */
+export function useIssuePrescriptions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (rows: RxWorklistRow[]) => {
+      const pdf = await postPrescriptionsPdf(rows.map((row) => row.order.id ?? ""));
+      const requested = rows.filter((row) => rxTaskStatus(row.task) === "requested");
+      if (requested.length > 0) {
+        await postBundle({
+          resourceType: "Bundle",
+          type: "transaction",
+          entry: requested.map((row) =>
+            taskBundleEntry(buildRxTaskUpdate(row.task, row.order, "accepted")),
+          ),
+        });
+      }
+      return pdf;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
+}
 
 /**
  * 調剤登録。調剤結果(MedicationDispense)と調剤済の Task を 1 つの transaction で

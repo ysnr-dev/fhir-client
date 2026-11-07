@@ -91,7 +91,7 @@ RSpec.describe PrescriptionReport do
   end
 
   let(:order_search_url) do
-    "ServiceRequest?_id=o1&_include=ServiceRequest%3Asubject&_revinclude=MedicationRequest%3Abased-on"
+    "ServiceRequest?_id=o1&_count=100&_include=ServiceRequest%3Asubject&_revinclude=MedicationRequest%3Abased-on"
   end
 
   # batch の応答。オーダー検索には患者(_include)と明細(_revinclude)が混ざって返る。
@@ -108,9 +108,9 @@ RSpec.describe PrescriptionReport do
 
   def capture_renderer
     captured = nil
-    allow(Reports::PrescriptionRenderer).to receive(:new) do |args|
-      captured = args
-      instance_double(Reports::PrescriptionRenderer, render: "%PDF")
+    allow(Reports::PrescriptionRenderer).to receive(:render) do |prescriptions|
+      captured = prescriptions.first
+      "%PDF"
     end
     -> { captured }
   end
@@ -371,6 +371,80 @@ RSpec.describe PrescriptionReport do
       described_class.new("o1", gateway: gateway).generate
 
       expect(captured.call[:organization]).to be_nil
+    end
+  end
+
+  describe "with several orders" do
+    def order_of(id, patient_id, setting: "inpatient", category: "regular")
+      build_order(setting:, category:).merge("id" => id, "subject" => { "reference" => "Patient/#{patient_id}" })
+    end
+
+    def medication_of(id, order_id, name)
+      medication_request(id, rp: 1, index: 1, name:, days: 7)
+        .merge("basedOn" => [{ "reference" => "ServiceRequest/#{order_id}" }])
+    end
+
+    let(:patients) do
+      %w[p1 p2].map { |id| { "resourceType" => "Patient", "id" => id } }
+    end
+
+    def captured_prescriptions
+      captured = nil
+      allow(Reports::PrescriptionRenderer).to receive(:render) do |prescriptions|
+        captured = prescriptions
+        "%PDF"
+      end
+      -> { captured }
+    end
+
+    it "keeps the given order and gives each order its own patient, details and layout" do
+      stub_batch([], entries: [
+        batch_entry(searchset([
+          order_of("o1", "p1"), order_of("o2", "p2", setting: "outpatient", category: "external"), *patients,
+          medication_of("m1", "o1", "一の薬"), medication_of("m2", "o2", "二の薬")
+        ])),
+        batch_entry(searchset([institution]))
+      ])
+      captured = captured_prescriptions
+
+      described_class.new(%w[o2 o1], gateway: gateway).generate
+
+      expect(captured.call.map { |p| p[:order]["id"] }).to eq(%w[o2 o1])
+      expect(captured.call.map { |p| p[:patient]["id"] }).to eq(%w[p2 p1])
+      expect(captured.call.map { |p| p[:rps].first.medicines.first.name }).to eq(%w[二の薬 一の薬])
+      expect(captured.call.map { |p| p[:layout_path] })
+        .to eq(described_class::LAYOUTS.values_at(:external, :internal).pluck(:path))
+    end
+
+    it "splits the search so that one search stays within _count" do
+      ids = (1..101).map { |n| "o#{n}" }
+      orders = ids.map { |id| order_of(id, "p1") }
+      medications = ids.map { |id| medication_of("m-#{id}", id, "テスト錠") }
+      stub_batch([], entries: [
+        batch_entry(searchset(orders.first(100) + [patients.first] + medications.first(100))),
+        batch_entry(searchset(orders.last(1) + [patients.first] + medications.last(1))),
+        batch_entry(searchset([institution]))
+      ])
+      captured = captured_prescriptions
+
+      described_class.new(ids, gateway: gateway).generate
+
+      expect(captured.call.map { |p| p[:order]["id"] }).to eq(ids)
+      expect(captured.call.map { |p| p[:organization] }.uniq).to eq([institution])
+      expect(
+        a_request(:post, "#{base_url}/").with { |req| JSON.parse(req.body)["entry"].size == 3 }
+      ).to have_been_made.once
+    end
+
+    it "stops the whole batch when one order has nothing to print" do
+      stub_batch([], entries: [
+        batch_entry(searchset([order_of("o1", "p1"), order_of("o2", "p2"), *patients,
+                               medication_of("m1", "o1", "一の薬")])),
+        batch_entry(searchset([institution]))
+      ])
+
+      expect { described_class.new(%w[o1 o2], gateway: gateway).generate }
+        .to raise_error(described_class::NoMedication)
     end
   end
 

@@ -58,13 +58,17 @@ RSpec.describe Reports::PrescriptionRenderer do
     )
   end
 
-  def render(key, rps, organization: self.organization)
+  def prescription(key, rps, organization: self.organization)
     layout = PrescriptionReport::LAYOUTS.fetch(key)
-    described_class.new(
+    {
       layout_path: layout[:path], order: order, patient: patient,
       organization: organization, rps: rps,
       lines_per_page: layout[:lines_per_page], max_cols: layout[:max_cols]
-    ).render
+    }
+  end
+
+  def render(key, rps, organization: self.organization)
+    described_class.render([prescription(key, rps, organization:)])
   end
 
   def page_texts(pdf)
@@ -245,6 +249,30 @@ RSpec.describe Reports::PrescriptionRenderer do
       expect(pages[0].join.gsub(/[[:space:]]/, "")).to include("1/#{symbols}")
       expect(pages.flatten.join.gsub(/[[:space:]]/, "")).to include("#{symbols}/#{symbols}")
     end
+  end
+
+  it "puts prescriptions of different layouts into one PDF in the given order" do
+    pdf = described_class.render([
+      prescription(:internal, [rp(1, medicines: [["院内の薬", 3, "錠"]])]),
+      prescription(:external_qr, [rp(1, medicines: [["院外の薬", 3, "錠"]])])
+    ])
+
+    pages = PDF::Inspector::Page.analyze(pdf).pages
+    expect(pages.size).to eq(2)
+    expect(pages[0][:strings].join).to include("院内の薬")
+    expect(pages[1][:strings].join).to include("院外の薬")
+    # 院内は A5 縦、QR コード付きは A4 横
+    expect(pages[0][:size].first).to be < pages[0][:size].last
+    expect(pages[1][:size].first).to be > pages[1][:size].last
+  end
+
+  it "numbers the pages per prescription" do
+    long_rps = (1..30).map { |i| rp(i, medicines: [["続紙の薬#{i}", 3, "錠"]]) }
+    pdf = described_class.render([prescription(:internal, long_rps), prescription(:internal, simple_rps)])
+
+    pages = page_texts(pdf).map { |strings| strings.join.gsub(/[[:space:]]/, "") }
+    expect(pages.first).to include("1/#{pages.size - 1}")
+    expect(pages.last).to include("1/1")
   end
 
   it "renders with blank institution fields when the organization is unknown" do

@@ -22,6 +22,7 @@ import {
 } from "../components/PatientRowCells";
 import { RowPictograms } from "../components/PatientListRowParts";
 import { RegimenHeldMark } from "../components/RegimenDecision";
+import { RxBatchIssueModal } from "../components/RxBatchIssueModal";
 import { RxDispenseModal } from "../components/RxDispenseModal";
 import { RxInquiryModal } from "../components/RxInquiryModal";
 import { RxOrderViewModal } from "../components/RxOrderViewModal";
@@ -45,6 +46,7 @@ import {
 } from "../fhir/rxInquiryHelpers";
 import {
   RX_TASK_STATUS_OPTIONS,
+  rxPrescriptionIssueOf,
   rxTaskActions,
   rxTaskStatus,
   rxTaskStatusDisplay,
@@ -62,9 +64,9 @@ import {
 // 医薬品の名前だけを並べる。用法や用量は「表示」で開くモーダルに送る。
 //
 // 進捗は 依頼済 → 受付済 → 調剤済 と進む。処方箋の発行が受付を兼ねていて、
-// 依頼済のオーダーは発行と同時に受付済へ進む(検体検査のラベル発行と同じ考え方。
-// 処方箋そのものの発行機能は別タスク)。調剤済へは「調剤登録」で進み、調剤結果の
-// MedicationDispense と一緒に書き込む。
+// 依頼済のオーダーは発行と同時に受付済へ進む(検体検査のラベル発行と同じ考え方)。
+// 病棟ごとにまとめて発行するときは「処方箋一括発行」から。調剤済へは「調剤登録」で
+// 進み、調剤結果の MedicationDispense と一緒に書き込む。
 //
 // 処方日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
 // (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
@@ -107,6 +109,7 @@ export function RxWorklistPage() {
   const [inquiringId, setInquiringId] = useState<string | null>(null);
   // 監査を開いているオーダー。
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [batchIssueOpen, setBatchIssueOpen] = useState(false);
 
   // 処方内容の列が長くなるので、この画面だけ幅を広げる(検体検査一覧と同じ)。
   useEffect(() => {
@@ -162,6 +165,11 @@ export function RxWorklistPage() {
     updateStatus.mutate({ order: row.order, task: row.task, status });
   }
 
+  async function reloadRows() {
+    const { data } = await worklist.refetch({ throwOnError: true });
+    return data?.rows ?? [];
+  }
+
   function handleDateChange(value: string) {
     // 日付を空にはさせない(空で検索すると全期間になってしまう)。
     if (value) setDate(value);
@@ -171,6 +179,15 @@ export function RxWorklistPage() {
     <div className="page">
       <div className="page__header">
         <h1>処方一覧</h1>
+        <div>
+          <button
+            type="button"
+            disabled={wardOptions.length === 0}
+            onClick={() => setBatchIssueOpen(true)}
+          >
+            処方箋一括発行
+          </button>
+        </div>
       </div>
 
       <FilterForm
@@ -295,6 +312,17 @@ export function RxWorklistPage() {
           order={inquiring.order}
           orderLabel={rxOrderLabel(inquiring)}
           onClose={() => setInquiringId(null)}
+        />
+      )}
+      {batchIssueOpen && (
+        <RxBatchIssueModal
+          date={date}
+          wards={wardOptions}
+          rows={worklist.data?.rows ?? []}
+          truncated={worklist.data?.truncated}
+          heldRegimenIds={heldRegimenIds}
+          reloadRows={reloadRows}
+          onClose={() => setBatchIssueOpen(false)}
         />
       )}
     </div>
@@ -585,7 +613,7 @@ function RxRowButtons({
           進める。院外・院内どちらの様式で刷るかは backend がオーダーの区分で決める。
           発行済みの再発行はケバブメニューへ畳む(同じ内容が刷られるだけの操作なので、
           主ボタンの列には出さない)。 */}
-      {status === "requested" && !brought && (
+      {rxPrescriptionIssueOf(status) === "unissued" && !brought && (
         <a
           className="button"
           href={prescriptionPdfUrl(order.id ?? "")}
@@ -647,8 +675,7 @@ function rxMenuState(row: RxWorklistRow) {
     ? rxTaskActions(status).filter((a) => a.next === "cancelled" || a.next === "requested")
     : rxTaskActions(status);
   // 発行済み(受付済以降)は処方箋を刷り直せる。中止した処方は刷らせない。
-  const canReissue =
-    !brought && (status === "accepted" || status === "in-progress" || status === "completed");
+  const canReissue = !brought && rxPrescriptionIssueOf(status) === "issued";
   return { actions, canReissue };
 }
 

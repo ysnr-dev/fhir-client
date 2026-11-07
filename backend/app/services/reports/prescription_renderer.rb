@@ -30,6 +30,14 @@ module Reports
     }.freeze
     SUBSTITUTION_CHECK = "レ".freeze
 
+    # 処方箋を渡された順に 1 つの PDF へ並べる。prescriptions の各要素は new の引数で、
+    # 様式(用紙)の違う処方箋が混ざってもよい。
+    def self.render(prescriptions)
+      report = Thinreports::Report.new
+      prescriptions.each { |prescription| new(**prescription).draw(report) }
+      report.generate
+    end
+
     # layout_path: 同梱の .tlf のパス
     # order/patient/organization: パース済み FHIR リソース(Hash。organization は自院、nil 可)
     # rps: PrescriptionReport::RpGroup の配列
@@ -47,7 +55,8 @@ module Reports
     # レイアウトの QR コードの枠が足りない(連結の上限まで分割しても入らない)。
     class QrOverflow < StandardError; end
 
-    def render
+    # この処方箋のページを report に足す。
+    def draw(report)
       text_ids, image_ids, all_ids = layout_item_ids
       columns = SUBSTITUTION_COLUMNS.values.all? { |id| text_ids.include?(id) }
       qr_slots = image_ids.grep(/\Aqr_\d+\z/).sort_by { |id| id.delete_prefix("qr_").to_i }
@@ -59,9 +68,8 @@ module Reports
       pages = rows.each_slice(@lines_per_page).to_a
       pages = [[]] if pages.empty?
 
-      report = Thinreports::Report.new(layout: @layout_path.to_s)
       pages.each_with_index do |lines, index|
-        report.start_new_page do |page|
+        report.start_new_page(layout: @layout_path.to_s) do |page|
           values = page_values.merge(
             "rx_content" => lines.map(&:first).join("\n"),
             "page_no" => "#{index + 1} / #{pages.size}"
@@ -79,8 +87,6 @@ module Reports
       if qr_pngs.size > qr_slots.size * pages.size
         raise QrOverflow, "#{qr_pngs.size} QR symbols for #{qr_slots.size * pages.size} slots"
       end
-
-      report.generate
     end
 
     private

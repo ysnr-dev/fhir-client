@@ -287,6 +287,7 @@ export function LabWorklistPage() {
           date={date}
           wards={wardOptions}
           rows={worklist.data?.rows ?? []}
+          truncated={worklist.data?.truncated}
           reloadRows={reloadRows}
           onClose={() => setLabelBatchOpen(false)}
         />

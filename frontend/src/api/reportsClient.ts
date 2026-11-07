@@ -54,6 +54,18 @@ export async function postLabLabelsPdf(orderIds: string[], scope: LabLabelScope)
   return res.blob();
 }
 
+/** 複数オーダーの処方箋を order の順に 1 つにまとめた PDF。 */
+export async function postPrescriptionsPdf(orderIds: string[]): Promise<Blob> {
+  const res = await fetch("/reports/prescriptions/pdf", {
+    method: "POST",
+    headers: withCsrfHeaders("POST", { "Content-Type": "application/json" }),
+    body: JSON.stringify({ order_ids: orderIds }),
+  });
+  if (res.status === 401) notifyUnauthorized();
+  if (!res.ok) throw new Error(`処方箋を発行できませんでした (HTTP ${res.status})`);
+  return res.blob();
+}
+
 /** QuestionnaireResponse の帳票 PDF の URL(新規タブでそのまま開ける)。 */
 export function questionnaireResponsePdfUrl(qrId: string): string {
   return `/reports/questionnaire_responses/${encodeURIComponent(qrId)}/pdf`;
