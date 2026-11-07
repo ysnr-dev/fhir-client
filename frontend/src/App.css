@@ -19632,6 +19632,18 @@ button.meal-calendar__cell:hover {
   color: var(--accent);
 }
 
+/* 留置中の留置物。サブ行の 1 項目に収め、本数の数字をピクトグラムに添える。 */
+.nursing-worksheet__line-drain {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent);
+}
+
+.nursing-worksheet__line-drain--over {
+  color: var(--danger);
+}
+
 /* 予定 1 件の印。区分の 1 文字・ちょうどでない分・内容を 1 行に収め、長い内容は省略する。 */
 .nursing-worksheet__mark {
   display: flex;

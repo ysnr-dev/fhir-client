@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { useWardNursingAssignments } from "../api/masterQueries";
+import { useLineDrainTypes, useWardNursingAssignments } from "../api/masterQueries";
 import {
   useFacilitySettings,
   useMedicationSchedule,
@@ -22,6 +22,7 @@ import { OralPerformModal } from "../components/OralPerformModal";
 import { PathwayWardTasks } from "../components/PathwayWardTasks";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { PatientKana } from "../components/PatientRowCells";
+import { CautionPictogram } from "../components/icons/cautionPictograms";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { DEFAULT_MEAL_SCHEDULE } from "../fhir/mealOrderHelpers";
@@ -50,7 +51,7 @@ import {
 } from "../fhir/nursingWorksheetHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { useWardInpatients } from "../hooks/useWardInpatients";
-import { daysInserted, type LineDrainRecord } from "../fhir/lineDrainHelpers";
+import { daysInsertedLabel, isOverWarnDays, lineDrainLabel, type LineDrainRecord } from "../fhir/lineDrainHelpers";
 import { useNow } from "../hooks/useNow";
 import { nowDateTimeInput, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
@@ -107,7 +108,7 @@ export function NursingWorksheetPage() {
   const wardOptions = useWardOptions();
   const ward = wardId || undefined;
   const inpatients = useWardInpatients(date, ward);
-  // 留置中の留置物(患者欄に「種別 n日目」で出す。docs/line-drain-design.md §4.6)。
+  // 留置中の留置物(患者欄にピクトグラムと本数で出す。docs/line-drain-design.md §4.6)。
   const lineDrains = useWardLineDrains(
     useMemo(() => inpatients.rows.map((row) => row.patientId), [inpatients.rows]),
     { inProgressOnly: true },
@@ -661,11 +662,7 @@ function PatientRow({
         {group.patient && <PatientKana patient={group.patient} />}
         <div className="nursing-worksheet__patient-sub">
           {assignee && <span>担当 {assignee}</span>}
-          {lineDrains.map((record) => (
-            <span key={record.id} title={[record.bodySite, record.deviceLabel].filter(Boolean).join(" ")}>
-              {`${record.typeName} ${daysInserted(record, today())}日目`}
-            </span>
-          ))}
+          <LineDrainMark records={lineDrains} />
           {undone > 0 && <span className="nursing-worksheet__undone">未実施 {undone}</span>}
           <Link to={`/patients/${group.patientId}/karte?tab=flowsheet`} state={returnLinkState}>
             経過表
@@ -688,5 +685,26 @@ function PatientRow({
         </td>
       ))}
     </tr>
+  );
+}
+
+/** 留置中の留置物。行の高さを変えないようピクトグラムと本数だけにし、内訳は title に持つ。警告日数超は危険色。 */
+function LineDrainMark({ records }: { records: LineDrainRecord[] }) {
+  const types = useLineDrainTypes();
+  if (records.length === 0) return null;
+  const todayValue = today();
+  const over = records.some((record) => isOverWarnDays(record, types, todayValue));
+  const title = records
+    .map((record) => [lineDrainLabel(record), record.deviceLabel, daysInsertedLabel(record, todayValue)].filter(Boolean).join(" / "))
+    .join("\n");
+  return (
+    <span
+      className={`nursing-worksheet__line-drain${over ? " nursing-worksheet__line-drain--over" : ""}`}
+      title={title}
+      aria-label={title}
+    >
+      <CautionPictogram pictogram="line-drain" size={14} />
+      {records.length}
+    </span>
   );
 }
