@@ -41,7 +41,7 @@
 | `code` | `task-code|rx-verification`(処方監査) |
 | `status` | `requested`(未監査)/ `completed`(監査済) |
 | `priority` | オーダーの至急区分を写す(至急の処方を一覧の上に出す) |
-| `focus` / `basedOn` | 起点のオーダー(`ServiceRequest`)。連日の注射は束ねの最初の日 |
+| `focus` / `basedOn` | 起点のオーダー(`ServiceRequest`)。連日の注射は束ねの最初の日、化学療法の注射はその日のオーダー |
 | `for` / `requester` | 患者 / 処方医 |
 | `performerType` | `practitioner-role|pharmacist`(薬剤師)。宛先は個人ではなく職種 |
 | `owner` | 未監査の間は無し。監査済にしたときに監査した薬剤師 |
@@ -54,8 +54,9 @@
 - ［設計］**通知の対応表には載せない**。件数が多く宛先が個人ではないので、ベル・通知一覧には出さず「処方監査」一覧で追う
   (フォロー推奨と同じ扱い。`docs/features/notifications.md`)。
 - ［設計］**連日の注射は束ねに 1 件**。薬剤師は束ね(同じ内容の数日分)を 1 回で監査する。束ねの各日は `groupIdentifier` で引く。
-- ［設計］**対象外**(`isRxVerificationTarget`): 院外処方(保険薬局が監査する)、持参の処方(持参薬鑑別が確かめる)、
-  化学療法の日オーダー(レジメンの適用で監査する。`regimenOrderOf` が値を返す注射)。
+- ［設計］**対象外**(`isRxVerificationTarget`): 院外処方(保険薬局が監査する)、持参の処方(持参薬鑑別が確かめる)。
+- ［設計］**化学療法の注射は日オーダーごとに 1 件**(処方と同じく束ねない。`groupIdentifier` は無い)。投与量・体格・検査値の確認は
+  投与のたびに要るので、連日の注射のようにまとめない。注射一覧は束ねの無い行の監査を `_revinclude=Task:focus` から拾う。
 - ［事実］上流の Task 検索は `code` / `status` / `focus` / `group-identifier` / `subject` / `modified`(`lastModified`)に対応している
   (`../fhir-server/app/lib/fhir/search_definitions/task.rb`)。`focus` と `group-identifier` はカンマの OR が効く。
 
@@ -78,8 +79,9 @@ Bundle の中の対象の `ServiceRequest` を処方はオーダーごと、注�
 `focus`(処方)と `group-identifier`(注射)で引いて突き合わせる(検索は最大 2 本。登録だけの処方なら引かない)。
 
 - **登録**: 未監査の Task を同じ transaction で POST(`focus` は Bundle の `urn:uuid`)。
-- **編集・継続**: 監査済なら未監査に戻し、`output` と監査者を外して note に再監査の理由を残す。未監査なら要約・期間を書き直す。
+- **編集・継続・化学療法の投与日の移動**: 監査済なら未監査に戻し、`output` と監査者を外して note に再監査の理由を残す。未監査なら要約・期間を書き直す。
   Task が無ければ作る(機能を入れる前に登録したオーダーの編集)。PUT には読んだ版を `ifMatch` に添える。
+  移動は内容を変えないが、投与間隔と処方日が変わるので編集と同じに扱う(`useMoveRegimenDays`)。
 - **削除**: オーダーの削除(`api/queries/orderDelete.ts`)はオーダーを指す Task をまとめて消すので、処方の監査 Task も一緒に消える。
   連日の注射で起点の日だけを消すときは、束ねに残る日を `ServiceRequest?requisition=` で引き、残りの最初の日へ `focus` と
   `basedOn` を付け替える(`rxVerificationDeleteEntries`)。残る日が無ければ消える。
@@ -189,6 +191,7 @@ true にすると、未監査の行では処方一覧の「調剤登録」・注
 - 監査できる人を職種(薬剤師)で縛るか。いまはログインできれば誰でも監査できる。権限機能(`functional-gap-backlog.md` §1 #1)と一緒に決める。
 - 介入率(介入の件数 ÷ 監査の件数)。指標タブは患者数の割合しか出せない(`data-extract-design.md` §23)。いまは監査結果「すべて」の内訳で割合を出す。
 - 注射の実施入力(`components/InjectionDayModal.tsx`)を監査前に止めるか。第 1 段は調剤登録・払出登録だけ。
-- 監査済の処方が中止されたときの扱い(監査 Task は動かさない)。
+- 監査済の処方が中止されたときの扱い(監査 Task は動かさない)。レジメンの完了・中止でも、止めた投与日の未監査は残る。
+- 化学療法の注射を対象にする前に登録した日オーダーには監査 Task が無い(編集・移動で作られる)。
 - CDS Hooks の `order-sign` を監査の画面でも呼ぶか。
 - 処方監査のための薬剤師の監査ルール(処方区分ごとに監査を省く、定期処方の Do は省く等)。

@@ -44,6 +44,7 @@ import {
 } from "./appointment";
 import { readAllTypeHistory } from "./karteCardHistory";
 import { invalidateProvenance, useActivityProvenance, useWithOrderProvenance } from "./provenance";
+import { RX_VERIFICATION_KEY, withRxVerificationTasks } from "./rxVerification";
 import { taskBundleEntry } from "./worklist";
 
 // ---- 化学療法レジメンオーダー(docs/chemo-regimen-design.md §7) ----
@@ -274,7 +275,7 @@ export function pendingRegimenOrders(targets: RegimenDayOrder[]): RegimenDayOrde
 /**
  * 投与日の移動(§7.4)。内容は変えず日付だけ差し替えて同じ id へ PUT する。その日に取ってあった
  * 化学療法室の予約は取り消す(日時が変わるので自動では取り直さない。§8.13 N-5)。
- * 来歴は注射・処方の更新と同じく付ける。
+ * 来歴は注射・処方の更新と同じく付け、処方監査も編集と同じく未監査へ戻す(投与間隔が変わるため)。
  */
 export function useMoveRegimenDays() {
   const queryClient = useQueryClient();
@@ -296,13 +297,16 @@ export function useMoveRegimenDays() {
     }) => {
       const moveBundle = buildRegimenMoveBundle(targets, deltaDays, patientId);
       const headerEntries = header ? regimenStartDateEntries(header, orders, targets, deltaDays) : [];
-      const bundle = withProvenance({ ...moveBundle, entry: [...(moveBundle.entry ?? []), ...headerEntries] });
+      const bundle = withProvenance(
+        await withRxVerificationTasks({ ...moveBundle, entry: [...(moveBundle.entry ?? []), ...headerEntries] }),
+      );
       const cancels = await chemoAppointmentCancelEntries(targets);
       return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...cancels] });
     },
     onSuccess: () => {
       invalidateRegimen(queryClient);
       invalidateProvenance(queryClient);
+      queryClient.invalidateQueries({ queryKey: RX_VERIFICATION_KEY });
     },
   });
 }

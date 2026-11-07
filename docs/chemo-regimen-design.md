@@ -747,6 +747,7 @@ ServiceRequest + MedicationRequest(日オーダー)  通常の注射・処方そ
   **体表面積あたりの逆算**(「68 mg/m²」)と投与率を出す。指示は力価なので、レジメンの基準(mg/m²)と
   突き合わせるには逆算が要る。体格は適用ヘッダから引く(`useRegimenHeaders`。id をまとめて 1 回で読む新しい hook)。
 - 前クールとの差分は入れていない(ワークリストの 1 行から前クールを引くと患者ぶんの日オーダーを読むことになる)。
+- 監査の記録は処方監査の `rx-verification` Task に残す(日オーダーごとに 1 件。`docs/rx-verification-design.md` §2.1)。
 
 #### 検証したこと(2026-09-06、テスト太郎)
 
@@ -1261,8 +1262,8 @@ ServiceRequest(日オーダー) ← focus ── Task chemo-go
 - ［決定］**日オーダーの交付日は投与開始日とみなす**。処方箋は投与日に渡すので、処方箋の交付年月日
   (`Reports::PrescriptionRenderer#issue_date`)と、処方の詳細・調剤・疑義照会に出す処方日(`summarizeServiceRequest`)を
   投与開始日にする。`authoredOn` は書き換えない(登録日時として残る。処方医別のデータ抽出は登録日で数える。注射と同じ)。
-- ［事実］処方監査(`isRxVerificationTarget`)は従来どおり内服の日オーダーも対象(対象外は注射の日オーダーだけ。
-  `docs/rx-verification-design.md` §2.1)。監査 Task は登録時に作られるので、先のクールの内服も登録した日から未監査に並ぶ。
+- ［事実］処方監査(`isRxVerificationTarget`)は注射・内服の日オーダーとも対象(`docs/rx-verification-design.md` §2.1)。
+  監査 Task は登録時に作られるので、先のクールも登録した日から未監査に並ぶ。投与日の移動も編集と同じく未監査へ戻す。
 - 見合わせた日の内服を調剤させない仕組みは、§8.18 の残り(実施可になるまで払出を出さない施設設定)で注射と一緒に扱う。
 
 #### 検証したこと(2026-10-31)

@@ -16,7 +16,6 @@ import {
   prescriptionCategoryOf,
   SETTING_SYSTEM,
 } from "./prescriptionHelpers";
-import { regimenOrderOf } from "./regimenOrderHelpers";
 import { categoryCoding, orderDay, versionEtag } from "./shared";
 
 // 処方監査(docs/rx-verification-design.md)。
@@ -26,6 +25,7 @@ import { categoryCoding, orderDay, versionEtag } from "./shared";
 // 院内の処方と注射を確定したときに作り、薬剤師が監査して完了にする。宛先は個人ではなく
 // 職種(performerType = 薬剤師)で、通知の対応表には載せず「処方監査」一覧で追う。
 // 連日の注射は束ね(requisition)に 1 件で、groupIdentifier に束ねの uuid、focus は束ねの最初の日。
+// 化学療法の注射は処方と同じく日オーダーごとに 1 件。
 // 監査結果と介入(プレアボイド)は output に持つ。
 
 export const RX_VERIFICATION_TASK_CODE = { code: "rx-verification", display: "処方監査" };
@@ -93,18 +93,17 @@ export function rxVerificationOrderKind(sr: fhir4.ServiceRequest): RxVerificatio
   return null;
 }
 
-/**
- * 監査の対象か。院外処方は保険薬局が、持参の処方は持参薬鑑別が、化学療法の日オーダーは
- * レジメンの適用が確かめるので対象外。
- */
+/** 監査の対象か。院外処方は保険薬局が、持参の処方は持参薬鑑別が確かめるので対象外。 */
 export function isRxVerificationTarget(sr: fhir4.ServiceRequest): boolean {
   const kind = rxVerificationOrderKind(sr);
   if (kind === "prescription") return prescriptionCategoryOf(sr) !== "external" && !isBroughtPrescription(sr);
-  if (kind === "injection") return regimenOrderOf(sr) === null;
-  return false;
+  return kind === "injection";
 }
 
-/** 束ねの uuid。注射だけが持つ(単日の注射も 1 日の束ねを持つ)。 */
+/**
+ * 束ねの uuid。連日展開した注射だけが持つ(単日の注射も 1 日の束ねを持つ)。化学療法の日オーダーは
+ * 投与日ごとに投与量と検査値の確認が要るので束ねず、処方と同じくオーダーごとに監査する。
+ */
 export function rxVerificationGroupOf(sr: fhir4.ServiceRequest): string | undefined {
   return rxVerificationOrderKind(sr) === "injection" ? injectionSeriesOf(sr)?.requisition : undefined;
 }

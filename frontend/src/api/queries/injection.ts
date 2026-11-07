@@ -1,6 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { rxInquiryTasksByOrderId } from "../../fhir/rxInquiryHelpers";
-import { isRxVerificationTarget, rxVerificationGroupOf } from "../../fhir/rxVerificationHelpers";
+import {
+  isRxVerificationTarget,
+  rxVerificationGroupOf,
+  rxVerificationTasksByOrderId,
+} from "../../fhir/rxVerificationHelpers";
 import { regimenDecisionsByOrderId } from "../../fhir/regimenDecisionHelpers";
 import { isLabelSpecimen } from "../../fhir/labResultHelpers";
 import { injectionTasksByOrderId } from "../../fhir/injectionTaskHelpers";
@@ -106,6 +110,7 @@ async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLik
   const verificationByGroup = await fetchRxVerificationByGroups(
     orders.filter(isRxVerificationTarget).map((order) => rxVerificationGroupOf(order) ?? ""),
   );
+  const verificationByOrderId = rxVerificationTasksByOrderId(tasks);
 
   const rows = orders.map((order) => ({
     order,
@@ -113,7 +118,8 @@ async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLik
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: taskByOrderId.get(order.id ?? ""),
     inquiries: inquiriesByOrderId.get(order.id ?? "") ?? [],
-    verification: verificationByGroup.get(rxVerificationGroupOf(order) ?? ""),
+    verification:
+      verificationByGroup.get(rxVerificationGroupOf(order) ?? "") ?? verificationByOrderId.get(order.id ?? ""),
     decision: decisionsByOrderId.get(order.id ?? ""),
   }));
   rows.sort(comparePatientNumber);

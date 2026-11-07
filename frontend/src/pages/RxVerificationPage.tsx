@@ -13,6 +13,7 @@ import { INJECTION_TASK_CODE, injectionTaskStatus, injectionTaskStatusDisplay } 
 import { hasTaskCode, taskPatientId } from "../fhir/notificationHelpers";
 import { wardOf } from "../fhir/orderHeader";
 import { displayName } from "../fhir/patientHelpers";
+import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { rxHoldReasonLabel, rxHoldReasonOf } from "../fhir/rxInquiryHelpers";
 import { RX_TASK_CODE, rxTaskStatus, rxTaskStatusDisplay } from "../fhir/rxTaskHelpers";
 import {
@@ -306,6 +307,7 @@ function QueueTableRow({
   const result = rxVerificationResultOf(task);
   const priority = isUrgent(task) ? priorityDisplay(task.priority) : "";
   const head = [summary.setting, summary.category].filter(Boolean).join(" ");
+  const regimen = order ? regimenOrderOf(order) : null;
 
   return (
     <tr {...rowProps} className={`${rowProps.className ?? ""}${priority ? " rx-verification__row--urgent" : ""}`}>
@@ -335,6 +337,16 @@ function QueueTableRow({
           {summary.medicines.join("・") || "-"}
         </span>
         {summary.periodLabel && <span className="order-select__muted"> {summary.periodLabel}</span>}
+        {regimen && (
+          <span className="injection-worklist__chemo">
+            {`${regimen.name} ${cycleDayLabel(regimen)}`}
+            {regimen.reduction && (
+              <span className="injection-worklist__reduced" title={regimen.reduction}>
+                減量
+              </span>
+            )}
+          </span>
+        )}
         {summary.reverify && <span className="rx-verification__reverify">再監査</span>}
       </td>
       <td className="lab-worklist__compact">{(order && wardOf(order).wardName) || "-"}</td>
