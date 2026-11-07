@@ -3,16 +3,24 @@ import {
   useUpdateInjectionTaskStatus,
 } from "../api/queries";
 import { injectionDayOf, injectionSeriesLabel } from "../fhir/injectionHelpers";
-import { type InjectionTaskStatus } from "../fhir/injectionTaskHelpers";
+import {
+  canCancelInjection,
+  canRestoreInjection,
+  injectionTaskStatus,
+  type InjectionTaskStatus,
+} from "../fhir/injectionTaskHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
 // 注射の中止・中止取消。連日オーダーは後続日があるので、削除と同じく
 // 「この日のみ / この日以降すべて」を選ばせる(「明日からやめる」が指示の形)。
-// 実施済の注射は中止できない(判定は canCancelInjection。呼ぶ側で出し分ける)。
+// 実施済の注射は中止できない(判定は canCancelInjection。開いた日は呼ぶ側で出し分け、
+// 後続日はここで除く)。中止取消の後続日は中止した日だけを戻す。
 
 interface InjectionCancelModalProps {
   serviceRequest: fhir4.ServiceRequest;
+  /** その日の薬剤。中止でオーダーと一緒に status を変える。 */
+  medicationRequests: fhir4.MedicationRequest[];
   /** その日の進捗 Task。まだ無ければ undefined(依頼済)。 */
   task: fhir4.Task | undefined;
   /** 中止するのか、中止を取り消して依頼済に戻すのか。 */
@@ -23,6 +31,7 @@ interface InjectionCancelModalProps {
 
 export function InjectionCancelModal({
   serviceRequest,
+  medicationRequests,
   task,
   mode,
   onClose,
@@ -30,7 +39,8 @@ export function InjectionCancelModal({
 }: InjectionCancelModalProps) {
   const later = useInjectionSeriesLater(serviceRequest);
   const update = useUpdateInjectionTaskStatus();
-  const laterTargets = later.data ?? [];
+  const canChange = mode === "cancel" ? canCancelInjection : canRestoreInjection;
+  const laterTargets = (later.data ?? []).filter((target) => canChange(injectionTaskStatus(target.task)));
   const date = injectionDayOf(serviceRequest);
   const last = laterTargets[laterTargets.length - 1]?.serviceRequest;
   const lastDate = last ? injectionDayOf(last) : "";
@@ -57,12 +67,7 @@ export function InjectionCancelModal({
         };
 
   function run(withLater: boolean) {
-    const targets = [
-      { serviceRequest, task },
-      ...(withLater
-        ? laterTargets.map((t) => ({ serviceRequest: t.serviceRequest, task: t.task }))
-        : []),
-    ];
+    const targets = [{ serviceRequest, medicationRequests, task }, ...(withLater ? laterTargets : [])];
     update.mutate({ targets, status }, { onSuccess: onDone });
   }
 

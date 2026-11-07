@@ -114,6 +114,7 @@ export function InjectionDayModal({
     return (
       <InjectionCancelModal
         serviceRequest={order}
+        medicationRequests={mrs}
         task={task}
         mode={cancelMode}
         onClose={() => setCancelMode(null)}

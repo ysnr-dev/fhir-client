@@ -131,7 +131,7 @@ export function InjectionWorklistPage() {
 
   function changeStatus(row: InjectionWorklistRow, status: InjectionTaskStatus) {
     updateStatus.mutate({
-      targets: [{ serviceRequest: row.order, task: row.task }],
+      targets: [{ serviceRequest: row.order, medicationRequests: row.medicationRequests, task: row.task }],
       status,
     });
   }

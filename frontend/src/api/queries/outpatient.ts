@@ -3,6 +3,7 @@ import { nowFhirDateTime, today } from "../../lib/dates";
 import { buildEncounterUpdateBundle } from "../../fhir/encounterHelpers";
 import { orderDay, referenceId } from "../../fhir/shared";
 import { buildInjectionTaskUpdate, injectionTasksByOrderId, type InjectionTaskStatus } from "../../fhir/injectionTaskHelpers";
+import { rxOrderCancelEntries } from "../../fhir/rxTaskHelpers";
 import { buildInjectionPerformDeleteEntries, type InjectionPerformDisplay } from "../../fhir/injectionPerformHelpers";
 import {
   buildInjectionSeriesDeleteBundle,
@@ -520,7 +521,8 @@ export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
 /**
  * 注射の進捗を書き込む。連日オーダーは「この日のみ」でも「この日以降すべて」でも
  * 同じ形(日ごとの Task)なので、対象の配列を受け取って 1 つの transaction で書く
- * (途中の日だけ中止済み、という half-done を作らない)。
+ * (途中の日だけ中止済み、という half-done を作らない)。中止・中止取消ではオーダーの
+ * status も揃える(一覧が読んだ版を postBundle が ifMatch に添えるので、先に編集されていれば 412)。
  */
 export function useUpdateInjectionTaskStatus() {
   const queryClient = useQueryClient();
@@ -530,15 +532,20 @@ export function useUpdateInjectionTaskStatus() {
       targets,
       status,
     }: {
-      targets: { serviceRequest: fhir4.ServiceRequest; task: fhir4.Task | undefined }[];
+      targets: {
+        serviceRequest: fhir4.ServiceRequest;
+        medicationRequests: fhir4.MedicationRequest[];
+        task?: fhir4.Task;
+      }[];
       status: InjectionTaskStatus;
     }) =>
       postBundle({
         resourceType: "Bundle",
         type: "transaction",
-        entry: targets.map(({ serviceRequest, task }) =>
+        entry: targets.flatMap(({ serviceRequest, medicationRequests, task }) => [
           taskBundleEntry(buildInjectionTaskUpdate(task, serviceRequest, status)),
-        ),
+          ...rxOrderCancelEntries(serviceRequest, medicationRequests, status === "cancelled"),
+        ]),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "injection-worklist"] });

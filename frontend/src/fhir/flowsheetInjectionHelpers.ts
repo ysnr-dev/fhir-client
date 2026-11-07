@@ -27,7 +27,7 @@ import { referenceId } from "./shared";
 //    ├ basedOn ← MedicationRequest … 薬剤。RP(混注のまとまり)ごとに用法・投与速度を持ち、
 //    │                                開始時刻は dosageInstruction[0].timing.event(複数可)、
 //    │                                終了予定はローカル拡張(docs §2.2)
-//    ├ focus  ← Task              … 進捗(依頼済/受付済/払出済/実施済/中止)。SR.status は動かさない
+//    ├ focus  ← Task              … 進捗(依頼済/受付済/払出済/実施済/中止)。SR.status を動かすのは中止だけ
 //    └ basedOn ← Procedure(ハブ)  … 実施記録。performedPeriod の start/end(end は任意)
 //                └ partOf ← MedicationAdministration … 薬剤ごとの実施
 

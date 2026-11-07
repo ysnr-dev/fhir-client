@@ -110,6 +110,24 @@ RSpec.describe Ssmix2::Messages::RdeO11 do
     expect(segments(result, "RXE").size).to eq(1)
   end
 
+  it "cancels an injection with its lines when the order is revoked" do
+    revoked = header.merge(
+      "status" => "revoked",
+      "category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "injection" }] }]
+    )
+    line = tablet.merge("status" => "cancelled")
+    allow(store).to receive(:search).with("MedicationRequest", hash_including("based-on" => "ServiceRequest/sr1"), limit: 200).and_return([line])
+    transaction = ssmix2_transaction(method: "PUT", path: "/ServiceRequest/sr1", request: revoked, response: revoked)
+    written = Ssmix2::Dispatcher.written_resources(transaction).first
+
+    result = described_class.new(context: context, transaction: transaction, written: written).build
+
+    expect(result.data_kind).to eq("OMP-02")
+    expect(result.process).to eq("DEL")
+    expect(segment(result, "ORC")).to start_with("ORC|CA|")
+    expect(segments(result, "RXE").size).to eq(1)
+  end
+
   it "builds an inpatient injection with RXC components, route, device-less RXR and the planned period" do
     injection = header.merge(
       "category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "injection" }] },

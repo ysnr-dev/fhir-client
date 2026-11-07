@@ -957,6 +957,7 @@ const KarteCard = memo(function KarteCard({
       {injectionCancel && item.kind === "injection" && (
         <InjectionCancelModal
           serviceRequest={item.serviceRequest}
+          medicationRequests={item.medicationRequests}
           task={item.task}
           mode={injectionCancel}
           onClose={() => setInjectionCancel(null)}

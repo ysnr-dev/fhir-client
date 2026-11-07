@@ -137,6 +137,23 @@ export function rxOrderCancelEntries(
   return entries;
 }
 
+/** 中止したオーダーを書き直しても中止のままにする(フォームからの組み立ては常に active で書く)。 */
+export function keepOrderCancelled(
+  order: fhir4.ServiceRequest,
+  entries: fhir4.BundleEntry[],
+): fhir4.BundleEntry[] {
+  if (order.status !== "revoked") return entries;
+  return entries.map((entry) => {
+    if (entry.resource?.resourceType === "ServiceRequest") {
+      return { ...entry, resource: { ...entry.resource, status: "revoked" } };
+    }
+    if (entry.resource?.resourceType === "MedicationRequest") {
+      return { ...entry, resource: { ...entry.resource, status: "cancelled" } };
+    }
+    return entry;
+  });
+}
+
 /** ServiceRequest の id → その進捗。焦点(focus)で突き合わせる。 */
 export const rxTasksByOrderId = helpers.tasksByOrderId;
 

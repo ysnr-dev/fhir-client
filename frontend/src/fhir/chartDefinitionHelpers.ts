@@ -1283,8 +1283,8 @@ export function medicationRequestsByOrderId(
 }
 
 /**
- * 中止していないオーダー。注射の中止は進捗の Task(cancelled)だけに残り、処方にも Task だけが
- * cancelled のものがあるので、Task の focus で突き合わせて外す。
+ * 中止していないオーダー。処方・注射には Task だけが cancelled のものがあるので、
+ * オーダーの status ではなく Task の focus で突き合わせて外す。
  */
 export function activeOrders(orders: fhir4.ServiceRequest[], tasks: fhir4.Task[]): fhir4.ServiceRequest[] {
   const cancelled = new Set(

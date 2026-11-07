@@ -223,14 +223,12 @@ export function useRegimenDayOrders(patientId: string | undefined, instanceIds: 
   });
 }
 
-/** 内服の日オーダーの中止・中止取消で、オーダーの status を揃えるエントリ。 */
+/** 日オーダーの中止・中止取消で、オーダーの status を揃えるエントリ。 */
 function regimenDayCancelEntries(order: RegimenDayOrder, cancelled: boolean): fhir4.BundleEntry[] {
-  return order.kind === "prescription"
-    ? rxOrderCancelEntries(order.serviceRequest, order.medicationRequests, cancelled)
-    : [];
+  return rxOrderCancelEntries(order.serviceRequest, order.medicationRequests, cancelled);
 }
 
-/** 日オーダーを中止・中止取消にするエントリ(進捗と、内服ならオーダーの status)。 */
+/** 日オーダーを中止・中止取消にするエントリ(進捗とオーダーの status)。 */
 export function regimenDayEntries(
   order: RegimenDayOrder,
   status: InjectionTaskStatus,

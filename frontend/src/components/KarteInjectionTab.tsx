@@ -348,6 +348,7 @@ export function KarteInjectionTab({ patientId, view, onViewChange, onEdit, onCre
       {cancelTarget && (
         <InjectionCancelModal
           serviceRequest={cancelTarget.order}
+          medicationRequests={mrsOf(cancelTarget.order.id ?? "")}
           task={cancelTarget.task}
           mode="cancel"
           onClose={() => setCancelTarget(null)}

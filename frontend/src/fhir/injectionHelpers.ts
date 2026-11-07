@@ -12,6 +12,7 @@ import {
   withVersionLock,
 } from "./shared";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
+import { keepOrderCancelled } from "./rxTaskHelpers";
 import {
   MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
@@ -1078,14 +1079,17 @@ export function buildInjectionUpdateBundle(
   };
   return withVersionLock(
     transactionBundle(
-      buildInjectionDayEntries(
-        values,
-        patientId,
-        requester,
-        registrationAuthoredOn(original),
-        series,
-        original.id,
-        originalMedicationRequestIds,
+      keepOrderCancelled(
+        original,
+        buildInjectionDayEntries(
+          values,
+          patientId,
+          requester,
+          registrationAuthoredOn(original),
+          series,
+          original.id,
+          originalMedicationRequestIds,
+        ),
       ),
     ),
     original,
@@ -1133,15 +1137,18 @@ export function buildInjectionSeriesUpdateBundle(
       const originalIds = target.medicationRequests
         .map((mr) => mr.id)
         .filter((id): id is string => Boolean(id));
-      return buildInjectionDayEntries(
-        dayValues,
-        patientId,
-        requester,
-        // 登録日時は各日の元の値を保つ(一括更新は編集であって登録し直しではない)。
-        registrationAuthoredOn(sr),
-        injectionSeriesOf(sr) ?? values.series ?? fallback,
-        sr.id,
-        originalIds,
+      return keepOrderCancelled(
+        sr,
+        buildInjectionDayEntries(
+          dayValues,
+          patientId,
+          requester,
+          // 登録日時は各日の元の値を保つ(一括更新は編集であって登録し直しではない)。
+          registrationAuthoredOn(sr),
+          injectionSeriesOf(sr) ?? values.series ?? fallback,
+          sr.id,
+          originalIds,
+        ),
       );
     }),
   );

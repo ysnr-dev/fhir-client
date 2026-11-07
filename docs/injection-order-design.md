@@ -169,7 +169,7 @@ RP ごとに「その日の何時に始めて何時に終えるか」を複数�
 
 ## 5. 進捗(Task)と中止
 
-他部門と同じく、オーダーの `ServiceRequest` はそのままにして進捗を `Task` に持つ。
+他部門と同じく、進捗を `Task` に持つ(`ServiceRequest` を動かすのは中止だけ。下記)。
 
 ```
 ServiceRequest(1 日分) ← focus ── Task(進捗)
@@ -191,17 +191,20 @@ ServiceRequest(1 日分) ← focus ── Task(進捗)
 - **払出済を `completed` ではなく `in-progress` にする**のは、実施済(施用)を後から
   足すため。`preserveEnd: true` で、実施済へ進めても `executionPeriod.end`
   (薬剤部の手が離れた時刻)は動かさない(処方の調剤と同じ)。
-- **`ServiceRequest.status` は動かさない**(検体検査・放射線検査・処方と同じ)。
+- **受付・払出・実施では `ServiceRequest.status` を動かさない**(検体検査・放射線検査・処方と同じ)。
   部門一覧が進捗で絞るときは上流の `_has:Task:focus:status` を使う。他科依頼だけが
   SR の status も動かすのは、日付軸を持たず status でしか絞れないため
   (docs/consult-order-design.md §4)。注射は日付軸があるので要らない。
+- **中止だけは `ServiceRequest` を `revoked`、`MedicationRequest` を `cancelled` にする**(処方と同じ
+  `rxOrderCancelEntries`)。SS-MIX2 とレセコン送信がオーダーの status で中止を判定するため。読み手が
+  Task で中止を見るのは変わらない(Task だけが `cancelled` の過去のオーダーがある)。
 
 ### 5.1 中止は「この日のみ / この日以降すべて」
 
 注射の中止は「明日からやめる」という形で起きるので、削除と同じ範囲選択にする
 (`InjectionCancelModal`)。後続日は `useInjectionSeriesLater` が Task ごと返し、
-選んだ日ぶんの Task を **1 つの transaction** で書く(途中の日だけ中止済み、という
-半端な状態を作らない)。
+選んだ日ぶんの Task とオーダーの status を **1 つの transaction** で書く(途中の日だけ中止済み、という
+半端な状態を作らない)。後続日のうち実施済の日は対象から除き、中止取消は中止した日だけを戻す。
 
 - **実施済の注射は中止できない**(`canCancelInjection`)。中止は「これから行わない」
   という指示で、済んだ事実は消せない。訂正は実施記録側の取り消しで行う(未実装)。
