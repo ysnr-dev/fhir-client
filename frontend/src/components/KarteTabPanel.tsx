@@ -39,6 +39,8 @@ export interface KartePanelActions {
   openForm: (next: KartePaneState) => void;
   /** カルテのカードと同じ詳細モーダルを開く。 */
   openDetail: (target: KarteDetailTarget) => void;
+  /** カルテのタイムラインでその日を開く。 */
+  openDay: (day: string) => void;
   /** 選択中のプロブレム(登録フォームの対象の初期値)。 */
   selectedProblem?: { conditionId: string; display: string };
   /** 外来の診察中の受診(SMART アプリの起動の文脈)。 */
@@ -67,7 +69,7 @@ export interface KarteTabPanelProps {
 }
 
 export function KarteTabPanel({ tab: key, patientId, view, onViewChange, baseDate, actions }: KarteTabPanelProps) {
-  const { openForm, openDetail, selectedProblem } = actions;
+  const { openForm, openDetail, openDay, selectedProblem } = actions;
   const props = { patientId, view, onViewChange };
   if (key === "condition") return <KarteConditionTab {...props} />;
   if (key === "allergy") return <KarteAllergyTab {...props} />;
@@ -81,7 +83,7 @@ export function KarteTabPanel({ tab: key, patientId, view, onViewChange, baseDat
       />
     );
   }
-  if (key === "profile") return <KarteProfileTab {...props} />;
+  if (key === "profile") return <KarteProfileTab {...props} onOpenDay={openDay} />;
   if (key === "oral-exam") return <KarteOralExamTab {...props} />;
   // 経過表は view に「基準日(と全画面)」を載せる(どの週を見ているかが読む位置
   // そのものなので、リロード・共有で戻れるようにする)。イベント一覧からはカルテの

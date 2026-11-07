@@ -559,6 +559,29 @@
   white-space: pre-wrap;
 }
 
+/* 受診歴の 1 行。行全体がタイムラインへのボタンなので、見た目は一覧の 1 枚のまま。 */
+button.encounter-history__row {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  color: inherit;
+  font-weight: normal;
+  text-align: left;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+button.encounter-history__row:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.encounter-history__status {
+  margin-left: auto;
+  font-size: 12px;
+}
+
 /* 輸血オーダーに出す「患者に登録された血液型」。選んだ型と食い違うときだけ
    赤くする(食い違い自体は妨げない。意図して別の型を出すことがあるため)。 */
 .transfusion-order__patient-blood-type {

@@ -1,9 +1,10 @@
 import { useMemo, useState, type MouseEvent, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useEscapeClose } from "../hooks/useEscapeClose";
 import { useKarteConditions } from "../api/queries";
 import { splitConditions } from "../fhir/conditionHelpers";
 import { displayName } from "../fhir/patientHelpers";
+import { KARTE_DAY_PARAM } from "../karteUrl";
 import {
   readResolvedProblemsVisible,
   storeResolvedProblemsVisible,
@@ -47,6 +48,7 @@ export function PatientProfileDrawer({
   const [viewState, setViewState] = useState({ patientId, view: "" });
   const view = viewState.patientId === patientId ? viewState.view : "";
   const returnLinkState = useReturnLinkState();
+  const navigate = useNavigate();
   const { conditions } = useKarteConditions(patientId);
   const problems = useMemo(() => splitConditions(conditions).problems, [conditions]);
   // 解決済みの開閉はカルテの帯と同じ設定を使う(どちらで切り替えても揃う)。
@@ -96,6 +98,9 @@ export function PatientProfileDrawer({
         patientId={patientId}
         view={view}
         onViewChange={(v) => setViewState({ patientId, view: v ?? "" })}
+        onOpenDay={(day) =>
+          navigate(`/patients/${patientId}/karte?${KARTE_DAY_PARAM}=${day}`, { state: returnLinkState })
+        }
       />
     </aside>
   );

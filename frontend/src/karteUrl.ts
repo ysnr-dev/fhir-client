@@ -35,6 +35,11 @@ export const KARTE_CARD_PARAM = "card";
  * 読んだら URL から消す(フォームを URL に載せない方針と両立させるため)。
  */
 export const KARTE_OPEN_PARAM = "open";
+/**
+ * 開いた直後にタイムラインで飛ぶ日(YYYY-MM-DD)。カルテの外(患者プロファイルのドロワー)から
+ * その日を開くための一回限りの引数で、KartePage が読んだら URL から消す。
+ */
+export const KARTE_DAY_PARAM = "day";
 
 /**
  * 一覧から「カルテのこのフォームを開く」ために渡す一回限りの引数。読んだら URL から消す

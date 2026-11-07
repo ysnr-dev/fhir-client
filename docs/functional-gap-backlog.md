@@ -295,7 +295,7 @@
 - **テンプレートビューア(回答の日付 × 項目の表)**(拡張、中): `QuestionnaireResponse?questionnaire=` を `linkId` 行 × `authored` 列の表に、しきい値の色、Excel 出力。
 - **カルテ本文のキーワード検索**(拡張、中): 上流の `_content` / `_text` 対応を確認(無ければ `server-improvement-backlog.md`)。
 - **eXChart 相当**: 項目辞書は `Questionnaire.item.code` で代替済み。効くのは「患者データの自動取得の変数を増やす」(受診歴・入院歴・直近オーダー・検査結果)と「書式からプロファイルへの書き戻し」。
-- **受診歴・入退院歴参照**(新規、高): プロファイルタブに「受診歴」区画(`Encounter?patient=&_sort=-date`)、行クリックでタイムラインのその日へ。紹介状・サマリー・開示・DPC の基本。
+- **受診歴・入退院歴参照**(新規、高) — **対応済み(2026-11-07、`docs/features/patient-profile.md`「受診歴」)**: プロファイルタブに「受診歴」区画(`Encounter?patient=&_sort=-date`)、行クリックでタイムラインのその日へ。紹介状・サマリー・開示・DPC の基本。
 - **本人によるパスワード変更・初期画面・お気に入りメニュー**(拡張、中): `PUT /auth/account` を本人用に開く、`users` の jsonb。
 - **レイアウト保存(マルチカルテビューア)**(新規、低〜中): `karte_layouts`(scope + URL 状態)。上下分割と `/karte-pane` で大半は賄える。
 - **患者検索の前方 / 部分一致切替・条件保存・移動歴表示**(拡張、中): `name:contains`。

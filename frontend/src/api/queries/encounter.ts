@@ -18,6 +18,7 @@ import {
   sortPlannedAdmissions,
   withEventWards,
 } from "../../fhir/encounterHelpers";
+import { ENCOUNTER_HISTORY_EXCLUDED_STATUSES } from "../../fhir/encounterHistoryHelpers";
 import { INJECTION_ORDER_TYPE } from "../../fhir/injectionHelpers";
 import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
@@ -73,6 +74,8 @@ import { fetchNursingPerforms, nursingOrderParams, nursingOrderSetOf, nursingPer
 
 const INPATIENT_PAGE = 500;
 const INPATIENT_MAX_PAGES = 2;
+const ENCOUNTER_HISTORY_PAGE = 200;
+const ENCOUNTER_HISTORY_MAX_PAGES = 5;
 
 export interface InpatientResult {
   /** ベッド id -> 入院中の Encounter。 */
@@ -212,6 +215,30 @@ export function useInpatientEncounters(date: string) {
     queryFn: () => fetchInpatients(date),
     enabled: Boolean(date),
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 患者の受診歴(入院・外来・救急を新しい順)。外来の診療科は Encounter に無いので、
+ * もとの予約を一緒に取る。画面に並べるだけなので上限で切れたら truncated を出す。
+ */
+export function usePatientEncounterHistory(patientId: string | undefined) {
+  return useQuery({
+    queryKey: ["Encounter", "patient-history", patientId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("subject", `Patient/${patientId}`);
+      params.set("status:not", ENCOUNTER_HISTORY_EXCLUDED_STATUSES.join(","));
+      params.set("_sort", "-date");
+      params.set("_include", "Encounter:appointment");
+      const { matches, bundles, truncated } = await searchAllPages<fhir4.Encounter>("Encounter", params, {
+        page: ENCOUNTER_HISTORY_PAGE,
+        maxPages: ENCOUNTER_HISTORY_MAX_PAGES,
+      });
+      const appointments = bundles.flatMap((bundle) => resourcesOfType<fhir4.Appointment>(bundle, "Appointment"));
+      return { encounters: matches, appointments, truncated };
+    },
+    enabled: Boolean(patientId),
   });
 }
 

@@ -26,6 +26,7 @@ import { InfectionForm } from "./InfectionForm";
 import { PatientInfectionSection } from "./PatientInfectionSection";
 import { PatientAdverseEventSection } from "./PatientAdverseEventSection";
 import { HealthMaintenanceSection } from "./HealthMaintenanceSection";
+import { EncounterHistorySection } from "./EncounterHistorySection";
 import {
   buildPregnancyObservations,
   parsePregnancyForm,
@@ -73,6 +74,7 @@ const CAUTION_VIEW_PREFIX = "caution:";
 const SECTIONS = [
   { key: "basic", label: "基本情報" },
   { key: "coverage", label: "保険・公費" },
+  { key: "encounters", label: "受診歴" },
   { key: "body", label: "身体情報" },
   { key: "infection", label: "感染症" },
   { key: "adverse", label: "有害事象" },
@@ -131,9 +133,11 @@ interface KarteProfileTabProps {
   /** URL から渡される表示対象。空なら区画の一覧。 */
   view: string;
   onViewChange: (view: string | null) => void;
+  /** カルテのタイムラインでその日を開く。 */
+  onOpenDay: (day: string) => void;
 }
 
-export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileTabProps) {
+export function KarteProfileTab({ patientId, view, onViewChange, onOpenDay }: KarteProfileTabProps) {
   const [form, setForm] = useState<FormMode>(null);
   // 詳細やフォームから戻ったときに元の区画を開いたままにするため、ここで持つ。
   const [section, setSection] = useState<SectionKey>(() =>
@@ -223,6 +227,8 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
       ) : section === "coverage" ? (
         // 保険は医事会計が正本なので参照だけ。取り込み済みの Coverage を見せる。
         <KarteCoverageSection patientId={patientId} />
+      ) : section === "encounters" ? (
+        <EncounterHistorySection patientId={patientId} onOpenDay={onOpenDay} />
       ) : section === "body" ? (
         <PatientBodySection
           patientId={patientId}

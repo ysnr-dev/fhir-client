@@ -70,6 +70,7 @@ import {
 } from "../fhir/karteTimeline";
 import {
   KARTE_CARD_PARAM,
+  KARTE_DAY_PARAM,
   KARTE_DETAIL_PARAM,
   KARTE_OTHER_TABS,
   KARTE_OPEN_PARAM,
@@ -690,17 +691,39 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const timelineRef = useRef<HTMLDivElement>(null);
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
   const highlightTimer = useRef<number | undefined>(undefined);
-  const scrollToTarget = useCallback((key: string) => {
+  const alignTargetToTop = useCallback((key: string) => {
     const container = timelineRef.current;
     const target = container?.querySelector(`[${KARTE_TARGET_ATTR}="${key}"]`);
-    if (!container || !target) return;
+    if (!container || !target) return false;
     container.scrollTop +=
       target.getBoundingClientRect().top - container.getBoundingClientRect().top;
-    setHighlightKey(key);
-    window.clearTimeout(highlightTimer.current);
-    highlightTimer.current = window.setTimeout(() => setHighlightKey(null), HIGHLIGHT_DURATION_MS);
+    return true;
   }, []);
+  const scrollToTarget = useCallback(
+    (key: string) => {
+      if (!alignTargetToTop(key)) return;
+      setHighlightKey(key);
+      window.clearTimeout(highlightTimer.current);
+      highlightTimer.current = window.setTimeout(() => setHighlightKey(null), HIGHLIGHT_DURATION_MS);
+    },
+    [alignTargetToTop],
+  );
   useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
+
+  // 読み込み済みの末尾に近い日は、下の内容が足りず枠の上端まで動かせない。強調している間に
+  // 続きが読み足されたら揃え直す。自分でスクロールを始めたら強調ごとやめる。
+  useEffect(() => {
+    const container = timelineRef.current;
+    if (!container || !highlightKey) return;
+    alignTargetToTop(highlightKey);
+    const release = () => setHighlightKey(null);
+    container.addEventListener("wheel", release, { passive: true });
+    container.addEventListener("touchmove", release, { passive: true });
+    return () => {
+      container.removeEventListener("wheel", release);
+      container.removeEventListener("touchmove", release);
+    };
+  }, [highlightKey, filteredGroups, alignTargetToTop]);
 
   // タイムラインの先頭に見えている日。診療日ペインのその行に色を付ける。スクロールのたびに
   // 日の見出し(section)を上から見て、下端がまだ枠の上端より下にある最初の日を取る。
@@ -753,8 +776,9 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
 
   // 診療日ペインは全日付を出すので、まだ読み込んでいない日も選べる。その場合は
   // 該当の日が表示範囲に入るまで自動で読み進めてから飛ぶ。scroll はクリック
-  // (飛ぶ)か展開だけ(項目を出す)かの区別。
-  const [pendingDay, setPendingDay] = useState<{ key: string; scroll: boolean } | null>(null);
+  // (飛ぶ)か展開だけ(項目を出す)かの区別。nearest は、その日に項目が無ければ
+  // それより前で最も新しい日へ飛ぶ(受診歴のように項目の有無を知らずに日を指すとき)。
+  const [pendingDay, setPendingDay] = useState<{ key: string; scroll: boolean; nearest?: boolean } | null>(null);
 
   // 読み込みの進行(loadToken の変化)のたびに最新の loadMore を呼ぶための ref
   // (KarteTimeline と同じ理由。effect の依存を安定させる)。
@@ -763,20 +787,53 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
 
   useEffect(() => {
     if (!pendingDay) return;
+    // 他のタブから飛ぶときはカルテが描かれ、最初のページが揃うのを待つ。
+    if (!timelineReady || (mode === "tabs" && tab !== "karte")) return;
     const day = pendingDay.key === "no-date" ? "" : pendingDay.key;
+    const target = pendingDay.nearest
+      ? filteredGroups.find((group) => isDateOnly(group.day) && group.day <= day)?.day
+      : pendingDay.key;
     // カットオフより新しければ、その日は既に表示範囲(項目が無ければ無いことも確定)。
     const loaded = timeline.cutoff === undefined || day > timeline.cutoff;
-    if (loaded) {
+    if (loaded && (target || !timeline.hasMore)) {
       // インデックスと実データが食い違って項目の無い日は、スクロール先が無いので
       // 何もせず終わる(scrollToTarget が対象なしを無視する)。
-      if (pendingDay.scroll) scrollToTarget(pendingDay.key);
+      if (pendingDay.scroll) scrollToTarget(target ?? pendingDay.key);
       setPendingDay(null);
     } else if (timeline.hasMore) {
       loadMoreRef.current();
     } else {
       setPendingDay(null);
     }
-  }, [pendingDay, loadToken, timeline.cutoff, timeline.hasMore, scrollToTarget]);
+  }, [
+    pendingDay,
+    loadToken,
+    timeline.cutoff,
+    timeline.hasMore,
+    scrollToTarget,
+    timelineReady,
+    mode,
+    tab,
+    filteredGroups,
+  ]);
+
+  // タブの中(受診歴)からタイムラインのその日へ飛ぶ。上下分割ならカルテは見えているので
+  // 下ペインのタブは替えない。
+  const openDay = useCallback(
+    (day: string) => {
+      if (mode === "tabs") selectTab("karte");
+      setPendingDay({ key: day, scroll: true, nearest: true });
+    },
+    [mode, selectTab],
+  );
+
+  // カルテの外から日を指定して開いたときの一回限りの引数。読んだら URL から消す。
+  const dayParam = searchParams.get(KARTE_DAY_PARAM);
+  useEffect(() => {
+    if (!dayParam) return;
+    setPendingDay({ key: dayParam, scroll: true, nearest: true });
+    updateParams((params) => params.delete(KARTE_DAY_PARAM));
+  }, [dayParam, updateParams]);
 
   // 診療日ペインからの移動。項目キー(kind:id)は読み込み済みの日にしか並ばないので
   // そのまま飛ぶ。日付は未読のことがあるので、読み込みを待ち合わせる上の effect に
@@ -905,11 +962,12 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     () => ({
       openForm,
       openDetail,
+      openDay,
       selectedProblem,
       examEncounterId,
       timeline: { onEdit: handleEdit, onDo: handleDo, onDeleted: handleDeleted, onOpenRadiotherapyPane: openRadiotherapyPane },
     }),
-    [openForm, openDetail, selectedProblem, examEncounterId, handleEdit, handleDo, handleDeleted, openRadiotherapyPane],
+    [openForm, openDetail, openDay, selectedProblem, examEncounterId, handleEdit, handleDo, handleDeleted, openRadiotherapyPane],
   );
 
   function toggleDayList() {
