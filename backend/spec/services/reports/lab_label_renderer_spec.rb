@@ -21,51 +21,55 @@ RSpec.describe Reports::LabLabelRenderer do
     }
   end
 
+  def label(number: "12345678901", label_order: order, label_patient: patient)
+    { order: label_order, patient: label_patient, group: group, number: number }
+  end
+
   def render(labels)
-    described_class.new(
-      layout_path: LabLabelReport::LAYOUT_PATH, order: order, patient: patient, labels: labels
-    ).render
+    described_class.new(layout_path: LabLabelReport::LAYOUT_PATH, labels: labels).render
   end
 
   it "produces a PDF from the bundled layout" do
-    pdf = render([{ group: group, number: "12345678901" }])
+    pdf = render([label])
 
     expect(pdf).to start_with("%PDF-")
   end
 
   it "prints the occurrence day as the order date, not the authoredOn day" do
-    page = PDF::Inspector::Page.analyze(render([{ group: group, number: "12345678901" }])).pages[0][:strings].join
+    page = PDF::Inspector::Page.analyze(render([label])).pages[0][:strings].join
 
     expect(page).to include("2026/08/20")
     expect(page).not_to include("2026/08/19")
   end
 
   it "falls back to the authoredOn day when the order has no occurrenceDateTime" do
-    pdf = described_class.new(
-      layout_path: LabLabelReport::LAYOUT_PATH,
-      order: { "authoredOn" => "2026-08-19T17:30:00+09:00" }, patient: patient,
-      labels: [{ group: group, number: "12345678901" }]
-    ).render
+    pdf = render([label(label_order: { "authoredOn" => "2026-08-19T17:30:00+09:00" })])
     page = PDF::Inspector::Page.analyze(pdf).pages[0][:strings].join
 
     expect(page).to include("2026/08/19")
   end
 
   it "prints one page per tube" do
-    one = render([{ group: group, number: "12345678901" }])
-    two = render([{ group: group, number: "12345678901" },
-                  { group: group, number: "12345678902" }])
+    one = render([label])
+    two = render([label, label(number: "12345678902")])
 
     expect(two.bytesize).to be > one.bytesize
   end
 
+  it "prints each label with the patient and order of its own" do
+    other_order = { "occurrenceDateTime" => "2026-08-21" }
+    other_patient = patient.merge("identifier" => [{ "value" => "P0002" }])
+    pdf = render([label, label(number: "12345678902", label_order: other_order, label_patient: other_patient)])
+
+    pages = PDF::Inspector::Page.analyze(pdf).pages.map { |page| page[:strings].join }
+    expect(pages.size).to eq(2)
+    expect(pages[0]).to include("P0001").and include("2026/08/20")
+    expect(pages[1]).to include("P0002").and include("2026/08/21")
+  end
+
   it "shows the urgent mark only for urgent orders" do
-    normal = render([{ group: group, number: "12345678901" }])
-    urgent = described_class.new(
-      layout_path: LabLabelReport::LAYOUT_PATH,
-      order: order.merge("priority" => "urgent"), patient: patient,
-      labels: [{ group: group, number: "12345678901" }]
-    ).render
+    normal = render([label])
+    urgent = render([label(label_order: order.merge("priority" => "urgent"))])
 
     expect(urgent.bytesize).not_to eq(normal.bytesize)
   end
