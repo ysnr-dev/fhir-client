@@ -3,6 +3,7 @@
 注射オーダーの登録から払出・実施までの流れです。医療機関の運用を検討する人は「運用フロー」、院内の開発者は「開発者向け」を読みます。
 画面のふるまいは [features/medication.md](../features/medication.md)、リソースの要素は実装ガイド(`../fhir-ig` の `medication.md`)、
 連日オーダーと実施記録の設計は [injection-order-design.md](../injection-order-design.md)、監査の設計は [rx-verification-design.md](../rx-verification-design.md) が正典です。
+化学療法の日オーダーはこの文書の対象外です。
 
 ## 運用フロー
 
@@ -12,7 +13,6 @@
 |---|---|---|---|---|---|
 | 入院(定時・臨時・緊急) | あり | あり | あり | あり | なし(外来のみ) |
 | 外来 | あり | あり | あり | あり | 実施の記録から |
-| 化学療法の日オーダー | なし(レジメンの適用で監査) | あり | あり | あり | 外来は実施の記録から、加算を足す |
 
 注射は 1 日 1 オーダーです。連日の指示は登録のときに日ごとのオーダーへ展開します。処方監査は連日をまとめて 1 回、それ以外(注射箋発行・払出・実施)は日ごとに進みます。
 
@@ -37,7 +37,6 @@
 flowchart TD
   start(("開始"))
   finish((("終了")))
-  chemo{"化学療法の<br/>日オーダー?"}
 
   subgraph doctor["医師"]
     input["注射を入力<br/>新規・DO、連日は日ごとに展開"]
@@ -60,10 +59,9 @@ flowchart TD
 
   series{"連日の残りの日?"}
 
-  start --> input --> register --> chemo
-  chemo -- "いいえ" --> verify
-  chemo -- "いいえ" --> issue
-  chemo -- "はい" --> issue
+  start --> input --> register
+  register --> verify
+  register --> issue
   issue --> inquire
   inquire -- "はい" --> inquiry --> inquire
   inquire -- "いいえ" --> wait
@@ -81,7 +79,6 @@ flowchart TD
 - 払出登録は受付済の注射にだけ出ます。注射ラベルは進捗を動かさず、中止以外のどの状態でも刷れます。
 - 予定は登録した時点で注射カレンダー・経過表・看護ワークシートに出ます。
 - 実施は払出・監査・疑義照会を待ちません。止まるのは中止した注射だけです。薬剤部から病棟へ薬を届ける作業は記録の対象ではありません。
-- 化学療法の日オーダーは、当日の投与可否と休止中の印を一覧に出しますが、払出と実施は止めません。
 
 ### 登録の判定
 
@@ -169,7 +166,6 @@ flowchart TD
 | 削除 | カルテのカード、注射カレンダー | この日のみ / この日以降すべて。理由は必須 | 実施の記録がある |
 | 継続 | 注射カレンダーの行のメニュー | 連日の最後の日に、同じ内容の日を足す | |
 
-- 化学療法の日オーダーは、注射カレンダーからは実施と実施取消だけができます。中止・移動は化学療法タブで行います。
 - 変更と継続は、監査済でも未監査へ戻り、再監査になります。
 - 変更・中止は薬剤部へ通知しません。変更は再監査で、中止は注射一覧の状態で見えます。払い出した薬剤の返品・再払出はシステムの記録の対象外です。
 - 注射ラベルの読み取りは内容の変更を見分けません。変更した注射はラベルを刷り直します。
@@ -230,7 +226,7 @@ sequenceDiagram
   end
   UI-)BE: POST /master/advisory_events(発火・無視の台帳)
   UI->>UI: Bundle を組む
-  Note over UI: 日ごとに ServiceRequest + MedicationRequest × 薬剤数<br/>全日で同じ requisition と開始日<br/>Provenance(CREATE)<br/>Task rx-verification(束ねに 1 件。化学療法は除く)<br/>代行・研修医: Task order-approval<br/>警告の無視: Provenance<br/>特定抗菌薬: 届出の通知 Task(連日は 1 件)
+  Note over UI: 日ごとに ServiceRequest + MedicationRequest × 薬剤数<br/>全日で同じ requisition と開始日<br/>Provenance(CREATE)<br/>Task rx-verification(束ねに 1 件)<br/>代行・研修医: Task order-approval<br/>警告の無視: Provenance<br/>特定抗菌薬: 届出の通知 Task(連日は 1 件)
   UI->>BE: POST /fhir(transaction)
   BE->>FHIR: POST /
   FHIR-->>BE: transaction-response
