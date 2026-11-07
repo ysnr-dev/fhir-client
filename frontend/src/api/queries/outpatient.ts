@@ -2,7 +2,12 @@ import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClie
 import { nowFhirDateTime, today } from "../../lib/dates";
 import { buildEncounterUpdateBundle } from "../../fhir/encounterHelpers";
 import { orderDay, referenceId } from "../../fhir/shared";
-import { buildInjectionTaskUpdate, injectionTasksByOrderId, type InjectionTaskStatus } from "../../fhir/injectionTaskHelpers";
+import {
+  buildInjectionTaskUpdate,
+  injectionTasksByOrderId,
+  injectionTaskStatus,
+  type InjectionTaskStatus,
+} from "../../fhir/injectionTaskHelpers";
 import { rxOrderCancelEntries } from "../../fhir/rxTaskHelpers";
 import { buildInjectionPerformDeleteEntries, type InjectionPerformDisplay } from "../../fhir/injectionPerformHelpers";
 import {
@@ -13,6 +18,7 @@ import {
   injectionSeriesOf,
 } from "../../fhir/injectionHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
+import { isRegimenDayStop, type RegimenDayStopStatus } from "../../fhir/regimenOrderHelpers";
 import {
   appointmentActorId,
   hasReceiptComputerReception,
@@ -45,6 +51,8 @@ import {
 } from "./core";
 import { makePerformDetailHook, taskBundleEntry } from "./worklist";
 import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
+import { invalidateProvenance } from "./provenance";
+import { useRegimenDayStopEntries } from "./regimen";
 
 // ---- 外来一覧(受付ワークリスト) ----
 //
@@ -523,36 +531,60 @@ export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
  * 同じ形(日ごとの Task)なので、対象の配列を受け取って 1 つの transaction で書く
  * (途中の日だけ中止済み、という half-done を作らない)。中止・中止取消ではオーダーの
  * status も揃える(一覧が読んだ版を postBundle が ifMatch に添えるので、先に編集されていれば 412)。
+ * 化学療法の日オーダーの中止・中止取消は、投与日パネルと同じ書き込みにする。
  */
 export function useUpdateInjectionTaskStatus() {
   const queryClient = useQueryClient();
+  const regimenDayStopEntries = useRegimenDayStopEntries();
 
   return useMutation({
     mutationFn: async ({
       targets,
       status,
     }: {
-      targets: {
-        serviceRequest: fhir4.ServiceRequest;
-        medicationRequests: fhir4.MedicationRequest[];
-        task?: fhir4.Task;
-      }[];
+      targets: InjectionStatusTarget[];
       status: InjectionTaskStatus;
-    }) =>
-      postBundle({
+    }) => {
+      const regimenDays = targets.filter((target) => isInjectionRegimenStop(target, status));
+      return postBundle({
         resourceType: "Bundle",
         type: "transaction",
-        entry: targets.flatMap(({ serviceRequest, medicationRequests, task }) => [
-          taskBundleEntry(buildInjectionTaskUpdate(task, serviceRequest, status)),
-          ...rxOrderCancelEntries(serviceRequest, medicationRequests, status === "cancelled"),
-        ]),
-      }),
-    onSuccess: () => {
+        entry: [
+          ...targets
+            .filter((target) => !isInjectionRegimenStop(target, status))
+            .flatMap(({ serviceRequest, medicationRequests, task }) => [
+              taskBundleEntry(buildInjectionTaskUpdate(task, serviceRequest, status)),
+              ...rxOrderCancelEntries(serviceRequest, medicationRequests, status === "cancelled"),
+            ]),
+          ...(regimenDays.length > 0
+            ? await regimenDayStopEntries(
+                regimenDays.map((target) => ({ ...target, kind: "injection" as const })),
+                status as RegimenDayStopStatus,
+              )
+            : []),
+        ],
+      });
+    },
+    onSuccess: (_result, { targets, status }) => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "injection-worklist"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      if (targets.some((target) => isInjectionRegimenStop(target, status))) {
+        invalidateAppointments(queryClient);
+        invalidateProvenance(queryClient);
+      }
     },
   });
+}
+
+interface InjectionStatusTarget {
+  serviceRequest: fhir4.ServiceRequest;
+  medicationRequests: fhir4.MedicationRequest[];
+  task?: fhir4.Task;
+}
+
+function isInjectionRegimenStop(target: InjectionStatusTarget, status: InjectionTaskStatus): boolean {
+  return isRegimenDayStop(target.serviceRequest, injectionTaskStatus(target.task), status);
 }
 
 /**

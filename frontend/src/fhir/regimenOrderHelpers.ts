@@ -1225,6 +1225,25 @@ export interface RegimenDayOrder {
   status: InjectionTaskStatus | RxTaskStatus;
 }
 
+/** 日オーダーの中止・中止取消の対象。 */
+export type RegimenDayTarget = Pick<RegimenDayOrder, "kind" | "serviceRequest" | "medicationRequests" | "task">;
+
+/** 日オーダーを止める(中止)か、止めた日を戻す(中止取消)書き込みの状態。 */
+export type RegimenDayStopStatus = "cancelled" | "requested";
+
+/**
+ * 進捗の変更が化学療法の日オーダーの中止・中止取消か。受付取消も依頼済へ戻すので、
+ * 中止取消は今の進捗が中止のときだけとして見分ける。
+ */
+export function isRegimenDayStop(
+  sr: fhir4.ServiceRequest,
+  current: InjectionTaskStatus | RxTaskStatus,
+  next: InjectionTaskStatus | RxTaskStatus,
+): boolean {
+  if (regimenOrderOf(sr) === null) return false;
+  return next === "cancelled" || (next === "requested" && current === "cancelled");
+}
+
 /** クール番号 → そのクールの Day 1 の実日付(登録された日オーダーから逆算)。 */
 export function cycleStartDates(orders: RegimenDayOrder[]): Map<number, string> {
   const result = new Map<number, string>();

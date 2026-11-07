@@ -3,7 +3,7 @@
 注射オーダーの登録から払出・実施までの流れです。医療機関の運用を検討する人は「運用フロー」、院内の開発者は「開発者向け」を読みます。
 画面のふるまいは [features/medication.md](../features/medication.md)、リソースの要素は実装ガイド(`../fhir-ig` の `medication.md`)、
 連日オーダーと実施記録の設計は [injection-order-design.md](../injection-order-design.md)、監査の設計は [rx-verification-design.md](../rx-verification-design.md) が正典です。
-化学療法の日オーダーはこの文書の対象外です。
+化学療法の日オーダーは[化学療法の業務フロー](chemotherapy.md)を読みます。
 
 ## 運用フロー
 

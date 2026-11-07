@@ -914,7 +914,8 @@ ServiceRequest + MedicationRequest(日オーダー)  通常の注射・処方そ
   - ［決定］**target はオーダー(ServiceRequest)にする**。承認待ち一覧は target のオーダーから
     行を組む(`pendingApprovalRows`)ので、Task を指すと行が出ない。投与日の中止はその日の
     オーダー、レジメンの中止・完了・休止はヘッダを指す(日オーダーはヘッダから辿れる)。
-- **書く場所**は `useUpdateRegimenDayStatus`(中止・中止取消)・`useRevokeRegimen`(中止)・
+- **書く場所**は `useRegimenDayStopEntries`(中止・中止取消。投与日パネルに加えて、カルテのカード・注射一覧・処方一覧からの
+  日オーダーの中止も通る。`useUpdateInjectionTaskStatus`・`useUpdateRxTaskStatus` が `isRegimenDayStop` で振り分ける)・`useRevokeRegimen`(中止)・
   `useUpdateRegimenStatus`(完了・休止・再開)の 3 つ。移動は `useMoveRegimenDays` が
   登録・編集と同じ来歴を書く(§8.13 N-5)。
 - **承認一覧**の「活動」列は登録・編集の 2 値だったので `orderActivityLabel` に替えた

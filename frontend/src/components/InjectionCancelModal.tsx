@@ -3,6 +3,7 @@ import {
   useUpdateInjectionTaskStatus,
 } from "../api/queries";
 import { injectionDayOf, injectionSeriesLabel } from "../fhir/injectionHelpers";
+import { regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import {
   canCancelInjection,
   canRestoreInjection,
@@ -60,7 +61,8 @@ export function InjectionCancelModal({
         }
       : {
           title: "注射の中止取消",
-          body: (d: string) => `${d} の注射の中止を取り消します(依頼済に戻します)。`,
+          body: (d: string) =>
+            `${d} の注射の中止を取り消します(${regimenOrderOf(serviceRequest) ? "中止前の状態" : "依頼済"}に戻します)。`,
           one: "この日のみ取消",
           all: (n: number) => `この日以降 ${n} 日分取消`,
           only: "取消",

@@ -15,6 +15,7 @@ import {
 } from "../../fhir/labSpecimenHelpers";
 import { labTasksByOrderId } from "../../fhir/labTaskHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
+import { isRegimenDayStop, type RegimenDayStopStatus } from "../../fhir/regimenOrderHelpers";
 import { buildRxTaskUpdate, rxOrderCancelEntries, rxTaskStatus, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
 import { DEFAULT_IDENTIFIER_SYSTEM } from "../../fhir/patientHelpers";
 import { MEAL_INTAKE_STAPLE_MANAGE_NO } from "../../fhir/flowsheetMealHelpers";
@@ -35,6 +36,9 @@ import {
 import { resourcesOfType } from "./core";
 import { fetchRxVerificationByGroups } from "./rxVerification";
 import { useFacilitySettings } from "./organization";
+import { invalidateAppointments } from "./appointment";
+import { invalidateProvenance } from "./provenance";
+import { useRegimenDayStopEntries } from "./regimen";
 import {
   DEFAULT_INJECTION_VERIFICATION,
   type InjectionVerificationSettings,
@@ -160,25 +164,47 @@ export function useRxWorklist(date: string) {
 /**
  * 処方箋発行などの進捗を書き込む。中止・中止取消ではオーダーの status も同じ transaction で
  * 揃える(一覧が読んだ版を postBundle が ifMatch に添えるので、先に編集されていれば 412)。
+ * 化学療法の日オーダーの中止・中止取消は、投与日パネルと同じ書き込みにする。
  */
 export function useUpdateRxTaskStatus() {
   const queryClient = useQueryClient();
+  const regimenDayStopEntries = useRegimenDayStopEntries();
   return useMutation({
-    mutationFn: ({ row, status }: { row: RxWorklistRow; status: RxTaskStatus }) =>
+    mutationFn: async ({ row, status }: { row: RxWorklistRow; status: RxTaskStatus }) =>
       postBundle({
         resourceType: "Bundle",
         type: "transaction",
-        entry: [
-          taskBundleEntry(buildRxTaskUpdate(row.task, row.order, status)),
-          ...rxOrderCancelEntries(row.order, row.medicationRequests, status === "cancelled"),
-        ],
+        entry: isRxRegimenStop(row, status)
+          ? await regimenDayStopEntries(
+              [
+                {
+                  kind: "prescription",
+                  serviceRequest: row.order,
+                  medicationRequests: row.medicationRequests,
+                  task: row.task,
+                },
+              ],
+              status as RegimenDayStopStatus,
+            )
+          : [
+              taskBundleEntry(buildRxTaskUpdate(row.task, row.order, status)),
+              ...rxOrderCancelEntries(row.order, row.medicationRequests, status === "cancelled"),
+            ],
       }),
-    onSuccess: () => {
+    onSuccess: (_result, { row, status }) => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      if (isRxRegimenStop(row, status)) {
+        invalidateAppointments(queryClient);
+        invalidateProvenance(queryClient);
+      }
     },
   });
+}
+
+function isRxRegimenStop(row: RxWorklistRow, status: RxTaskStatus): boolean {
+  return isRegimenDayStop(row.order, rxTaskStatus(row.task), status);
 }
 
 /**
