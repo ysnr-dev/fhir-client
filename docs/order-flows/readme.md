@@ -15,3 +15,4 @@
 | [rad.md](rad.md) | 放射線検査オーダー(登録から予約・受付・実施・読影・結果確認まで) |
 | [physio-endoscopy-treatment.md](physio-endoscopy-treatment.md) | 生理検査・内視鏡・処置オーダー(放射線検査との違い、登録から予約・受付・実施・所見レポートまで) |
 | [consult-team.md](consult-team.md) | 他科依頼・チーム依頼(登録から受付・回答、回診記録・終了まで、チームあての通知) |
+| [radiotherapy.md](radiotherapy.md) | 放射線治療(依頼から治療処方・受付・照射予定・照射・週次レビュー・終了サマリーまで) |
