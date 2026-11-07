@@ -314,6 +314,9 @@ export function useUpdateFlag() {
  * 項目を引いてから、その結果項目コードと JLAC11 で検索する(`bloodTypeLabSearchCodes`)。
  * 血液型は何年も前に 1 度だけ検査していることが多く、新しい順に件数で切る読み方では
  * 取りこぼすため。
+ *
+ * `summary` は両経路を読み終えるまで null。手入力分だけでまとめると、検査で確定した型にも
+ * 「検査未確定」や申告の型が出てしまうため。
  */
 export function useBloodType(patientId: string | undefined) {
   const params = new URLSearchParams();
@@ -355,16 +358,17 @@ export function useBloodType(patientId: string | undefined) {
     () => resourcesOfType<fhir4.Observation>(lab.data?.data, "Observation"),
     [lab.data],
   );
+  const isLoading = query.isLoading || items.isLoading || lab.isLoading;
   const summary = useMemo(
-    () => summarizeBloodType(observations, labObservations, labItems),
-    [observations, labObservations, labItems],
+    () => (isLoading ? null : summarizeBloodType(observations, labObservations, labItems)),
+    [isLoading, observations, labObservations, labItems],
   );
 
   return {
     ...query,
     observations,
     summary,
-    isLoading: query.isLoading || items.isLoading || lab.isLoading,
+    isLoading,
     error: query.error ?? items.error ?? lab.error,
   };
 }
