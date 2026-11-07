@@ -14,3 +14,4 @@
 | [patho.md](patho.md) | 病理検査オーダー(登録から採取・ラベル発行・病理受付・レポート・結果確認・患者説明まで) |
 | [rad.md](rad.md) | 放射線検査オーダー(登録から予約・受付・実施・読影・結果確認まで) |
 | [physio-endoscopy-treatment.md](physio-endoscopy-treatment.md) | 生理検査・内視鏡・処置オーダー(放射線検査との違い、登録から予約・受付・実施・所見レポートまで) |
+| [consult-team.md](consult-team.md) | 他科依頼・チーム依頼(登録から受付・回答、回診記録・終了まで、チームあての通知) |
