@@ -1173,13 +1173,17 @@ export function buildRegimenCycleBundle(
   return { resourceType: "Bundle", type: "transaction", entry: headerEntry ? [...entries, headerEntry] : entries };
 }
 
-/** ヘッダの体格・入外区分をこのクールの値にする PUT。変わらなければ null(版を無駄に増やさない)。 */
+/**
+ * ヘッダの体格・入外区分をこのクールの値にする PUT。変わらなければ null(版を無駄に増やさない)。
+ * 身長・体重が揃わないクールは体表面積を出せないので、ヘッダの体格は前の値のまま残す。
+ */
 function regimenHeaderCycleEntry(
   header: fhir4.ServiceRequest,
   application: RegimenApplication,
   values: RegimenApplyValues,
 ): fhir4.BundleEntry | null {
-  const body = cycleBodyOfValues(values);
+  const entered = cycleBodyOfValues(values);
+  const body = entered.bsa !== null ? entered : application;
   const unchanged =
     application.setting === values.setting &&
     application.bsa === body.bsa &&

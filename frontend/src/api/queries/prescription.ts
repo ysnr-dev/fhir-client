@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { regimenDecisionsByOrderId } from "../../fhir/regimenDecisionHelpers";
 import { rxInquiryTasksByOrderId } from "../../fhir/rxInquiryHelpers";
 import { rxVerificationTasksByOrderId } from "../../fhir/rxVerificationHelpers";
 import {
@@ -43,6 +44,8 @@ export interface RxWorklistRow {
   inquiries: fhir4.Task[];
   /** 処方監査(fhir/rxVerificationHelpers.ts)。院外・持参の処方と、導入前に登録した処方には無い。 */
   verification?: fhir4.Task;
+  /** 化学療法の当日の投与可否(fhir/regimenDecisionHelpers.ts)。 */
+  decision?: fhir4.Task;
 }
 
 export interface RxWorklistResult {
@@ -92,6 +95,7 @@ export async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
   const rxTaskByOrderId = rxTasksByOrderId(tasks);
   const inquiriesByOrderId = rxInquiryTasksByOrderId(tasks);
   const verificationByOrderId = rxVerificationTasksByOrderId(tasks);
+  const decisionsByOrderId = regimenDecisionsByOrderId(tasks);
   const medicationRequestsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
     for (const reference of mr.basedOn ?? []) {
@@ -110,6 +114,7 @@ export async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
     task: rxTaskByOrderId.get(order.id ?? ""),
     inquiries: inquiriesByOrderId.get(order.id ?? "") ?? [],
     verification: verificationByOrderId.get(order.id ?? ""),
+    decision: decisionsByOrderId.get(order.id ?? ""),
   }));
 
   // 処方オーダーは時刻を持たない(処方日だけ)ので、患者番号順に並べる(検体検査と同じ)。

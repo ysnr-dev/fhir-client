@@ -21,7 +21,7 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { RowPictograms } from "../components/PatientListRowParts";
-import { RegimenHeldMark } from "../components/RegimenDecision";
+import { RegimenDecisionMark, RegimenHeldMark } from "../components/RegimenDecision";
 import { RxBatchIssueModal } from "../components/RxBatchIssueModal";
 import { RxDispenseModal } from "../components/RxDispenseModal";
 import { RxInquiryModal } from "../components/RxInquiryModal";
@@ -536,7 +536,11 @@ function WorklistRow({
                 減量
               </span>
             )}
-            <RegimenHeldMark held={heldRegimenIds.has(regimen.regimenSrId)} status={status} />
+            {heldRegimenIds.has(regimen.regimenSrId) ? (
+              <RegimenHeldMark held status={status} />
+            ) : (
+              <RegimenDecisionMark task={row.decision} order={order} status={status} />
+            )}
           </span>
         )}
       </td>

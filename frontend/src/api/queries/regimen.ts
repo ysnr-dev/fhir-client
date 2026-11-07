@@ -419,6 +419,7 @@ export function useSaveRegimenDecision() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "injection-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
       queryClient.invalidateQueries({ queryKey: ["Appointment", "search", "chemo-room"] });
     },
   });

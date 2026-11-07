@@ -175,7 +175,7 @@ flowchart TD
 
 | 印 | 意味 | 出る場所 |
 |---|---|---|
-| 未確認 | 実施可の記録が無い | 投与日パネル、注射一覧、外来化学療法室 |
+| 未確認 | 実施可の記録が無い | 投与日パネル、注射一覧、処方一覧、外来化学療法室 |
 | 実施可 | 医師が確認した | 同上と暦 |
 | 要再確認 | 確認のあとで移動・編集した | 同上と暦 |
 | 休止中 | 適用が休止中。投与可否の印に代わって出る | 注射一覧、処方一覧、外来化学療法室 |
@@ -184,7 +184,6 @@ flowchart TD
 - 実施可は同じ日の注射と内服の両方に記録します。「取消」で未確認に戻せます。
 - 見合わせという状態はありません。延期は移動、取りやめは中止で記録します。
 - 実施済・中止の日には確認欄も印も出ません。
-- 処方一覧には投与可否の印が出ません。内服だけのレジメンは投与日パネルで確かめます。
 
 ### 変更・中止・削除
 
@@ -278,7 +277,7 @@ sequenceDiagram
   end
   UI-)BE: POST /master/advisory_events(発火・無視の台帳)
   UI->>UI: Bundle を組む
-  Note over UI: 適用: POST ヘッダ ServiceRequest<br/>次クール: 体格か入外区分が変わればヘッダを PUT<br/>投与日ごと: 注射と内服の ServiceRequest<br/>+ MedicationRequest × 薬剤数<br/>Provenance(CREATE)<br/>注射・内服(院外を除く): Task rx-verification<br/>代行・研修医: Task order-approval<br/>警告の無視: Provenance
+  Note over UI: 適用: POST ヘッダ ServiceRequest<br/>次クール: 体格か入外区分が変わればヘッダを PUT<br/>(身長・体重が揃わないクールは前の体格を残す)<br/>投与日ごと: 注射と内服の ServiceRequest<br/>+ MedicationRequest × 薬剤数<br/>Provenance(CREATE)<br/>注射・内服(院外を除く): Task rx-verification<br/>代行・研修医: Task order-approval<br/>警告の無視: Provenance
   UI->>BE: POST /fhir(transaction)
   BE->>FHIR: POST /
   FHIR-->>BE: transaction-response
