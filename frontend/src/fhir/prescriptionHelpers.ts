@@ -928,17 +928,31 @@ export function buildPrescriptionUpdateBundle(
   requester: OrderAttribution,
 ): fhir4.Bundle {
   if (!original.id) throw new Error("更新する処方に id がありません");
-  return withVersionLock(
-    buildPrescriptionTransactionBundle(
-      values,
-      patientId,
-      requester,
-      registrationAuthoredOn(original),
-      original.id,
-      originalMedicationRequestIds,
-    ),
-    original,
+  const bundle = buildPrescriptionTransactionBundle(
+    values,
+    patientId,
+    requester,
+    registrationAuthoredOn(original),
+    original.id,
+    originalMedicationRequestIds,
   );
+  return withVersionLock(original.status === "revoked" ? withCancelledStatus(bundle) : bundle, original);
+}
+
+/** 中止した処方を編集しても、中止のままにする(組み立ては常に active で書く)。 */
+function withCancelledStatus(bundle: fhir4.Bundle): fhir4.Bundle {
+  return {
+    ...bundle,
+    entry: bundle.entry?.map((item) => {
+      if (item.resource?.resourceType === "ServiceRequest") {
+        return { ...item, resource: { ...item.resource, status: "revoked" } };
+      }
+      if (item.resource?.resourceType === "MedicationRequest") {
+        return { ...item, resource: { ...item.resource, status: "cancelled" } };
+      }
+      return item;
+    }),
+  };
 }
 
 // 既存の処方を DO(流用)して新規登録するためのフォーム値に変換する。

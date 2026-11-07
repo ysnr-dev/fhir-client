@@ -36,7 +36,7 @@ module Ssmix2
         pid(patient)
         pv1(patient, encounter: encounter, department_code: department)
         if kind == "prescription"
-          prescription_groups(requests).each do |mr|
+          prescription_groups(header, requests).each do |mr|
             prescription_order(header, mr, order_control, order_no, inpatient, orc_extra: orc_extra)
             administration_segments(hub, administrations_for(administrations, [mr]), [mr], encounter, department)
             rxr_prescription(Array(mr["dosageInstruction"]).first || {})

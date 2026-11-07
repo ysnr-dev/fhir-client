@@ -162,7 +162,7 @@ export function RxWorklistPage() {
   }, [worklist.data]);
 
   function changeStatus(row: RxWorklistRow, status: RxTaskStatus) {
-    updateStatus.mutate({ order: row.order, task: row.task, status });
+    updateStatus.mutate({ row, status });
   }
 
   async function reloadRows() {

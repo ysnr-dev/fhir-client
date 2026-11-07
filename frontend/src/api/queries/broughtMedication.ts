@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
-import { buildRxTaskUpdate, rxTasksByOrderId } from "../../fhir/rxTaskHelpers";
+import { buildRxTaskUpdate, rxOrderCancelEntries, rxTasksByOrderId } from "../../fhir/rxTaskHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
 import { broughtMedicationEntry, isAwaitingDecision } from "../../fhir/broughtMedicationHelpers";
 import {
@@ -206,7 +206,7 @@ export function useBroughtMedicationTransaction() {
 
 /**
  * 持参薬の判断(休止・中止)。継続していた持参薬を止めるときは、起こした処方(stopOrderIds)の
- * 調剤の進捗を中止にする更新も同じ transaction で送る(処方一覧の「中止」と同じ書き方)。
+ * 調剤の進捗を中止にする更新とオーダーの status も同じ transaction で送る(処方一覧の「中止」と同じ書き方)。
  */
 export function useDecideBroughtMedications() {
   const queryClient = useQueryClient();
@@ -220,10 +220,9 @@ export function useDecideBroughtMedications() {
     }) => {
       const entry = [...entries];
       if (stopOrderIds.length) {
-        const result = await searchResource<fhir4.ServiceRequest>(
-          "ServiceRequest",
-          new URLSearchParams({ _id: stopOrderIds.join(","), _revinclude: "Task:focus" }),
-        );
+        const params = new URLSearchParams({ _id: stopOrderIds.join(","), _revinclude: "Task:focus" });
+        params.append("_revinclude", "MedicationRequest:based-on");
+        const result = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
         const resources = (result.data.entry?.map((e) => e.resource) ?? []) as (
           | fhir4.Resource
           | undefined
@@ -231,6 +230,7 @@ export function useDecideBroughtMedications() {
         const tasks = rxTasksByOrderId(
           resources.filter((r): r is fhir4.Task => r?.resourceType === "Task"),
         );
+        const lines = resources.filter((r): r is fhir4.MedicationRequest => r?.resourceType === "MedicationRequest");
         for (const resource of resources) {
           if (resource?.resourceType !== "ServiceRequest" || !resource.id) continue;
           const order = resource as fhir4.ServiceRequest;
@@ -241,6 +241,11 @@ export function useDecideBroughtMedications() {
             task?.id
               ? { resource: next, request: { method: "PUT", url: `Task/${task.id}` } }
               : { resource: next, request: { method: "POST", url: "Task" } },
+            ...rxOrderCancelEntries(
+              order,
+              lines.filter((mr) => mr.basedOn?.some((ref) => ref.reference === `ServiceRequest/${order.id}`)),
+              true,
+            ),
           );
         }
       }

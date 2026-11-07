@@ -25,8 +25,10 @@ module Ssmix2
 
       def order_in_rp(mr) = Fhir.identifier_value(mr, Fhir::ORDER_IN_RP_SYSTEM).to_i
 
-      def prescription_groups(requests)
-        requests.reject { |mr| cancelled?(mr) && written.method != "DELETE" }.sort_by { |mr| [rp_number(mr), order_in_rp(mr)] }
+      # 取り消した薬剤行は外す。オーダーごと取り消したときは取消の相手になる行なので残す。
+      def prescription_groups(header, requests)
+        keep_cancelled = written.method == "DELETE" || cancelled?(header)
+        requests.reject { |mr| cancelled?(mr) && !keep_cancelled }.sort_by { |mr| [rp_number(mr), order_in_rp(mr)] }
       end
 
       def injection_groups(requests)

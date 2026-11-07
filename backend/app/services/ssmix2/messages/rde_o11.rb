@@ -24,7 +24,7 @@ module Ssmix2
         pid(patient)
         pv1(patient, encounter: inpatient ? :current : nil, department_code: department_code_of(Fhir.department_reference(header)))
         if kind == "prescription"
-          prescription_groups(requests).each { |mr| prescription_order(header, mr, order_control, order_no, inpatient) }
+          prescription_groups(header, requests).each { |mr| prescription_order(header, mr, order_control, order_no, inpatient) }
         else
           injection_groups(requests).each { |rp, mrs| injection_order(header, rp, mrs, order_control, order_no, inpatient) }
         end

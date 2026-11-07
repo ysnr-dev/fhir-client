@@ -8,7 +8,7 @@ import {
   chemoAppointmentCancelEntries,
   invalidateRegimen,
   pendingRegimenOrders,
-  regimenDayTaskEntry,
+  regimenDayEntries,
 } from "./regimen";
 import { resourcesOfType } from "./core";
 import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
@@ -176,7 +176,7 @@ export function useUpdateRegimenStatus() {
           ...(status === "completed"
             ? [
                 completeRegimenEntry(header),
-                ...pending.map((order) => regimenDayTaskEntry(order, "cancelled", "レジメン完了")),
+                ...pending.flatMap((order) => regimenDayEntries(order, "cancelled", "レジメン完了")),
                 ...(await chemoAppointmentCancelEntries(pending)),
               ]
             : [holdRegimenEntry(header, status === "on-hold")]),

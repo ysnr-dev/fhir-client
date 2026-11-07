@@ -3,7 +3,7 @@ import { orderDay, referenceId } from "../../fhir/shared";
 import { buildInjectionTaskUpdate, injectionTasksByOrderId, type InjectionTaskStatus } from "../../fhir/injectionTaskHelpers";
 import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
 import { ORDER_TYPE_SYSTEM, REGIMEN_INSTANCE_SYSTEM } from "../../fhir/orderHeader";
-import { buildRxTaskUpdate, rxTasksByOrderId, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
+import { buildRxTaskUpdate, rxOrderCancelEntries, rxTasksByOrderId, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
 import {
   buildRegimenMoveBundle,
   discontinuationReasonLabel,
@@ -223,7 +223,23 @@ export function useRegimenDayOrders(patientId: string | undefined, instanceIds: 
   });
 }
 
-export function regimenDayTaskEntry(
+/** 内服の日オーダーの中止・中止取消で、オーダーの status を揃えるエントリ。 */
+function regimenDayCancelEntries(order: RegimenDayOrder, cancelled: boolean): fhir4.BundleEntry[] {
+  return order.kind === "prescription"
+    ? rxOrderCancelEntries(order.serviceRequest, order.medicationRequests, cancelled)
+    : [];
+}
+
+/** 日オーダーを中止・中止取消にするエントリ(進捗と、内服ならオーダーの status)。 */
+export function regimenDayEntries(
+  order: RegimenDayOrder,
+  status: InjectionTaskStatus,
+  reason?: string,
+): fhir4.BundleEntry[] {
+  return [regimenDayTaskEntry(order, status, reason), ...regimenDayCancelEntries(order, status === "cancelled")];
+}
+
+function regimenDayTaskEntry(
   order: RegimenDayOrder,
   status: InjectionTaskStatus,
   /** 中止の理由(Task.statusReason)。中止以外では消す(中止取消で古い理由が残らないように)。 */
@@ -330,9 +346,11 @@ export function useUpdateRegimenDayStatus() {
         resourceType: "Bundle",
         type: "transaction",
         entry: [
-          ...targets.map((order) => {
+          ...targets.flatMap((order) => {
             const task = restored.get(order.task?.id ?? "");
-            return task ? taskBundleEntry(task) : regimenDayTaskEntry(order, status, reason);
+            return task
+              ? [taskBundleEntry(task), ...regimenDayCancelEntries(order, status === "cancelled")]
+              : regimenDayEntries(order, status, reason);
           }),
           ...(status === "cancelled" ? await chemoAppointmentCancelEntries(targets) : []),
           // 誰がどの投与日を止めたか(代行なら指示医師の承認待ちに並ぶ)。
@@ -412,8 +430,8 @@ export function useRevokeRegimen() {
         type: "transaction",
         entry: [
           revokeRegimenEntry(header, discontinuation),
-          ...pending.map((order) =>
-            regimenDayTaskEntry(order, "cancelled", discontinuationReasonLabel(discontinuation.reason)),
+          ...pending.flatMap((order) =>
+            regimenDayEntries(order, "cancelled", discontinuationReasonLabel(discontinuation.reason)),
           ),
           ...(await chemoAppointmentCancelEntries(pending)),
           // 中止はレジメン全体への判断なので、対象はヘッダだけにする(日オーダーはヘッダから辿れる)。

@@ -8,6 +8,8 @@ import { createTaskHelpers } from "./taskHelpers";
 // Task は最初のステータス変更(処方箋発行・中止)で作る。オーダー登録時には作らない
 // ので、一覧では「Task が無い = 依頼済(未受付)」として扱う。
 //
+// 中止だけはオーダーの status も変える(rxOrderCancelEntries)。
+//
 // 受付済へは処方一覧の「処方箋発行」で進む(発行が受付を兼ねる。処方箋そのものの
 // 印刷は別タスク)。調剤済へは「調剤登録」(RxDispenseModal)で進み、調剤結果の
 // MedicationDispense と一緒に 1 つの transaction で書き込む。
@@ -108,6 +110,31 @@ export function rxPrescriptionIssueOf(status: RxTaskStatus): "unissued" | "issue
     case "cancelled":
       return null;
   }
+}
+
+/**
+ * 中止・中止取消で、処方のヘッダと薬剤行の status を進捗に揃えるエントリ。会計と SS-MIX2 は
+ * Task を読まず status で中止を判定するので、進捗と同じ transaction で書く。読んだリソースを
+ * 書き換えて送るので、版は postBundle が ifMatch に添える。
+ */
+export function rxOrderCancelEntries(
+  order: fhir4.ServiceRequest,
+  medicationRequests: fhir4.MedicationRequest[],
+  cancelled: boolean,
+): fhir4.BundleEntry[] {
+  const [orderFrom, orderTo] = cancelled ? (["active", "revoked"] as const) : (["revoked", "active"] as const);
+  const [lineFrom, lineTo] = cancelled ? (["active", "cancelled"] as const) : (["cancelled", "active"] as const);
+  const entries: fhir4.BundleEntry[] = [];
+  if (order.status === orderFrom) {
+    const updated: fhir4.ServiceRequest = { ...order, status: orderTo };
+    entries.push({ resource: updated, request: { method: "PUT", url: `ServiceRequest/${order.id}` } });
+  }
+  for (const line of medicationRequests) {
+    if (line.status !== lineFrom) continue;
+    const updated: fhir4.MedicationRequest = { ...line, status: lineTo };
+    entries.push({ resource: updated, request: { method: "PUT", url: `MedicationRequest/${line.id}` } });
+  }
+  return entries;
 }
 
 /** ServiceRequest の id → その進捗。焦点(focus)で突き合わせる。 */

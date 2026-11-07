@@ -15,7 +15,7 @@ import {
 } from "../../fhir/labSpecimenHelpers";
 import { labTasksByOrderId } from "../../fhir/labTaskHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
-import { buildRxTaskUpdate, rxTaskStatus, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
+import { buildRxTaskUpdate, rxOrderCancelEntries, rxTaskStatus, type RxTaskStatus } from "../../fhir/rxTaskHelpers";
 import { DEFAULT_IDENTIFIER_SYSTEM } from "../../fhir/patientHelpers";
 import { MEAL_INTAKE_STAPLE_MANAGE_NO } from "../../fhir/flowsheetMealHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM, NURSING_ORDER_TYPE } from "../../fhir/nursingOrderHelpers";
@@ -29,7 +29,6 @@ import { fetchRxWorklist, type RxWorklistRow } from "./prescription";
 import {
   comparePatientNumber,
   fetchWorklistBundles,
-  makeUpdateTaskStatusHook,
   taskBundleEntry,
   worklistParams,
 } from "./worklist";
@@ -158,11 +157,29 @@ export function useRxWorklist(date: string) {
   });
 }
 
-/** 処方箋発行などの進捗を書き込む(組み立ては makeUpdateTaskStatusHook を参照)。 */
-export const useUpdateRxTaskStatus = makeUpdateTaskStatusHook<RxTaskStatus>(
-  buildRxTaskUpdate,
-  "rx-worklist",
-);
+/**
+ * 処方箋発行などの進捗を書き込む。中止・中止取消ではオーダーの status も同じ transaction で
+ * 揃える(一覧が読んだ版を postBundle が ifMatch に添えるので、先に編集されていれば 412)。
+ */
+export function useUpdateRxTaskStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ row, status }: { row: RxWorklistRow; status: RxTaskStatus }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          taskBundleEntry(buildRxTaskUpdate(row.task, row.order, status)),
+          ...rxOrderCancelEntries(row.order, row.medicationRequests, status === "cancelled"),
+        ],
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
+}
 
 /**
  * 複数オーダーの処方箋をまとめて発行し、PDF を返す。行の「処方箋発行」と同じく発行が

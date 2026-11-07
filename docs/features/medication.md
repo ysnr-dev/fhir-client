@@ -98,6 +98,17 @@
   `POST /fhir`(空パス)を transaction Bundle 中継用のルートとして扱います
   (`backend/app/controllers/fhir_proxy_controller.rb`)。
 
+## 処方の中止
+
+処方一覧の「中止」、持参薬の継続の中止、レジメンの日オーダーの中止(中止・完了によるものを含む)は、進捗 Task を `cancelled`、
+`ServiceRequest` を `revoked`、`MedicationRequest` を `cancelled` にする更新を 1 つの transaction で送ります
+(`rxOrderCancelEntries`)。中止取消は `active` に戻します。
+
+- レセコン送信と SS-MIX2 は status で中止を判定するので、中止した処方は送信の対象から外れ、SS-MIX2 は取消(ORC-1 `CA`)を出します。
+  中止取消のあとは新規(`NW`)として出し直します。
+- 中止した処方をカルテで編集しても、中止のままです。
+- 会計を送ったあとに中止しても、送信済みの内容は変わりません。医事が送り直します。
+
 ## 処方箋の一括発行
 
 **部門業務 > 薬剤部門 > 処方一覧**(`/rx-worklist`)の「処方箋一括発行」で、病棟の処方箋を 1 つの PDF にまとめて刷ります。
