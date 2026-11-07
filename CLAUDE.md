@@ -2,7 +2,7 @@
 
 電子カルテ(FHIR R4 クライアント)。上流 FHIR サーバー(別リポジトリ `../fhir-server`)への中継と、
 国内マスタ・帳票などの独自データを持つ Rails backend、React frontend の 2 層構成。
-仕様の正典は `docs/features/*.md`(機能ごとの説明。索引は `readme.md`)と `docs/*-design.md`。着手前に該当節を読むこと。
+仕様の正典は `docs/features/*.md`(機能ごとの説明。索引は `docs/features/readme.md`)と `docs/*-design.md`。着手前に該当節を読むこと。
 
 ## 構成
 
