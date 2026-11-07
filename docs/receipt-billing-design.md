@@ -176,7 +176,7 @@ unpaid 未収額 / self_pay 自費 / copay_rate 負担割合 / points 点数)と
 | 指導・管理料 `medical-management` | 130 / 140 | — | **対応済み(2026-10-29)**。登録と同時に書く実施記録のハブ(項目)と子(加算)のコードをそのまま送る。1 項目 1 剤で、区分は章から決まる(B 130・C 140)。`docs/medical-management-order-design.md` |
 | 化学療法 `chemo-regimen` | 注射 + 加算 | — | **対応済み(2026-09-23)**。レジメン由来の注射(ヘッダの `requisition` が regimen-instance)の剤に、施設設定の外来化学療法加算(15 歳未満は別コード。患者の生年月日で判定)と無菌製剤処理料を 1 日 1 回足す |
 | 麻酔(手術配下) | 540 | — | §2 の剤分割で自動(2026-09-23 に spec で固定)。麻酔時間の加算は実施入力で足す |
-| 食事・看護・他科依頼 | — | 出来高の項目が無い | 対象外(`OrderCatalog::IGNORED`。`skipped` にも出さない) |
+| 食事・看護・他科依頼・チーム依頼 | — | 出来高の項目が無い | 対象外(`OrderCatalog::IGNORED`。`skipped` にも出さない) |
 
 ［決定］**施設で 1 値に決まるコードは `FacilitySettings.receipt_codes`**(項目表に足すだけで migration 不要)、
 **製品・技法ごとのコードはマスタの列**。`FacilitySettings` を backend が読むのはこれが初めてになるので、

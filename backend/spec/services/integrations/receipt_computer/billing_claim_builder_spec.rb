@@ -260,9 +260,9 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       expect(build.skipped).to be_empty
     end
 
-    it "says nothing about 種別 that have nothing to bill (看護指示・食事・他科依頼)" do
+    it "says nothing about 種別 that have nothing to bill (看護指示・食事・他科依頼・チーム依頼)" do
       store.add(order_header(order_type: "nursing", id: "n-1"), order_header(order_type: "meal", id: "m-1"),
-                order_header(order_type: "consult", id: "c-1"))
+                order_header(order_type: "consult", id: "c-1"), order_header(order_type: "team-request", id: "t-1"))
 
       expect(build.skipped).to be_empty
     end

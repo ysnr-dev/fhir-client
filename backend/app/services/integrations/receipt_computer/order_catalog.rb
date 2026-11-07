@@ -99,7 +99,7 @@ module Integrations
       PENDING = { "medication-guidance" => "服薬指導" }.freeze
 
       # 出来高で請求する項目が無い種別と、別経路で送る処方。報告もしない。
-      IGNORED = %w[prescription meal nursing consult chemo-regimen].freeze
+      IGNORED = %w[prescription meal nursing consult team-request chemo-regimen].freeze
 
       # 用法マスタの基本区分コード(1=内服 2=外用 3=注射 4=注入)。
       USAGE_CATEGORY_ORAL = "1".freeze
