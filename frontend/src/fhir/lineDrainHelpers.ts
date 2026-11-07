@@ -483,6 +483,11 @@ export function siteFindingItemsFor(kind: LineDrainKind): SiteFindingItem[] {
   return SITE_FINDING_ITEMS.filter((item) => !item.kinds || item.kinds.includes(kind));
 }
 
+/** 選択肢の並びが異常の程度(0 = 正常、1 = 軽い異常、2 = 重い異常)。未入力は 0。 */
+export function siteFindingLevel(item: SiteFindingItem, code: string | undefined): number {
+  return Math.max(item.options.findIndex((o) => o.code === code), 0);
+}
+
 export function validateSiteObservation(values: LineDrainSiteFormValues): string | null {
   if (!values.effectiveAt) return "観察日時を入力してください";
   const any = Object.values(values.findings).some(Boolean) || values.dressing || values.note.trim();

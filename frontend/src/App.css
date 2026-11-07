@@ -426,18 +426,155 @@
   font-weight: 600;
 }
 
-.line-drain-site__history {
-  margin-bottom: 12px;
+/* 刺入部観察。項目名と今回の入力の列を固定し、過去の観察だけを横に送る。 */
+.line-drain-site__wrap {
+  --line-drain-site-label-w: 140px;
+  --line-drain-site-entry-w: 236px;
+  overflow-x: auto;
+  margin-bottom: 16px;
 }
 
-.line-drain-site__history th .rp-card__icon-button {
-  margin-left: 4px;
+.line-drain-site__table {
+  width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
 }
 
-.walk-in__fields .line-drain-site__check {
-  flex-direction: row;
+.line-drain-site__table th,
+.line-drain-site__table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+  font-weight: 400;
+}
+
+.line-drain-site__table thead th {
+  border-top: 1px solid var(--border);
+}
+
+.line-drain-site__table td,
+.line-drain-site__table thead th:not(:first-child) {
+  text-align: center;
+}
+
+.line-drain-site__table .line-drain-site__note td {
+  text-align: left;
+}
+
+.line-drain-site__table tr > :not(:first-child) {
+  border-left: 1px solid var(--border);
+}
+
+.line-drain-site__table tr > :last-child:not(:first-child) {
+  border-right: 1px solid var(--border);
+}
+
+.line-drain-site__table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: var(--line-drain-site-label-w);
+  max-width: var(--line-drain-site-label-w);
+  box-sizing: border-box;
+  background: var(--bg);
+  white-space: nowrap;
+  color: var(--text-h);
+}
+
+.line-drain-site__table .line-drain-site__entry {
+  position: sticky;
+  left: var(--line-drain-site-label-w);
+  z-index: 1;
+  min-width: var(--line-drain-site-entry-w);
+  max-width: var(--line-drain-site-entry-w);
+  box-sizing: border-box;
+  background: var(--surface-panel);
+}
+
+.line-drain-site__entry input:not([type="checkbox"]) {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.line-drain-site__entry input[type="checkbox"] {
+  margin: 0;
+}
+
+/* 過去の観察は所見の長さによらず同じ幅。長い所見は列の中で折り返す。 */
+.line-drain-site__table .line-drain-site__past {
+  width: 128px;
+  min-width: 128px;
+  max-width: 128px;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+/* 日時を値の列と同じ中央に置くため、ゴミ箱は流れから外して右端に寄せる。 */
+.line-drain-site__past-head {
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.line-drain-site__past-head .rp-card__icon-button {
+  position: absolute;
+  right: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+}
+
+.line-drain-site__options {
+  display: flex;
+}
+
+.line-drain-site__option {
+  flex: 1;
+  justify-content: center;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.line-drain-site__option:not(:first-child) {
+  margin-left: -1px;
+}
+
+.line-drain-site__option:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.line-drain-site__option:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.line-drain-site__option.is-active {
+  position: relative;
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.line-drain-site__table .line-drain-site__level-1 {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.line-drain-site__table .line-drain-site__level-2 {
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .patient-header__caution-count {
