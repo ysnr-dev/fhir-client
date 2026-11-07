@@ -50,7 +50,7 @@ import {
 // - 採取(予定)日時は occurrenceDateTime(オーダー開始日)。部門一覧の日付軸とカルテカードの
 //   置き場所を兼ねる(上流は occurrenceDateTime しか索引しないので Period は使わない)。
 //   authoredOn は登録日時で、フォームでは入力しない(shared.ts を参照)。
-//   検体ごとの実採取日時は結果レポート側の Specimen.collection.collectedDateTime で持つ。
+//   検体ごとの実採取日時は明細の contained Specimen の collection.collectedDateTime(採取の記録)。
 // - 臨床経過・所見、報告希望日、手術室番号はローカル拡張。臨床病名は放射線・細菌検査と
 //   同じく登録病名からの参照(reasonReference)。
 

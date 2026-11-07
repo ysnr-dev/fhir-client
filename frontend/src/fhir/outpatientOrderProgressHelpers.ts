@@ -59,8 +59,8 @@ const CANCELLED_STATUSES = new Set(["cancelled", "revoked", "entered-in-error", 
 const REQUESTED_STATUSES = new Set(["requested", "active", "draft", "on-hold"]);
 /** 報告済みの検査結果。 */
 const FINAL_REPORT_STATUSES = new Set(["final", "amended", "corrected", "appended"]);
-/** 報告途中の検査結果(中間報告)。 */
-const PARTIAL_REPORT_STATUSES = new Set(["registered", "partial", "preliminary"]);
+/** 報告途中の検査結果(中間報告)。registered は病理の下書きなどで、臨床側には結果として見せない。 */
+const PARTIAL_REPORT_STATUSES = new Set(["partial", "preliminary"]);
 
 /** 1 種別ぶんの印。 */
 export interface OutpatientOrderSummary {

@@ -1,4 +1,5 @@
 import { makeFieldUpdater } from "../lib/form";
+import { localDay } from "../lib/dates";
 import {
   lazy,
   Suspense,
@@ -170,8 +171,9 @@ export function PathoResultForm({
         organName: specimen.organName,
         typeCode: specimen.typeCode,
         typeName: specimen.typeName,
-        // 採取日の既定はオーダーの採取(予定)日。実際と違えば入力し直す。
-        collectedDate: header.occurrenceDateTime?.slice(0, 10) ?? v.reportDate,
+        // 採取日の既定は採取の記録の日。記録が無ければオーダーの採取予定日。
+        collectedDate:
+          localDay(specimen.collectedDateTime) || localDay(header.occurrenceDateTime) || v.reportDate,
       })),
     }));
   }, [expandingOrderId, orderDetail.data, orderDetail.isLoading]);
