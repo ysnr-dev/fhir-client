@@ -4,7 +4,7 @@ require "barby/outputter/png_outputter"
 
 module Reports
   # 検体ラベルを ThinReports レイアウトへ流し込んで PDF を生成する。
-  # 1 ページ = ラベル 1 枚(採取管 1 本)。ページ数はオーダー内の検体グループの数。
+  # 1 ページ = ラベル 1 枚(採取管 1 本)。オーダーをまたいで 1 つの PDF に並べられる。
   #
   # レイアウト側のプレースホルダー規約(docs/report-mappings/lab-label-01.md):
   #   pt_id / pt_kana / pt_gender / pt_birthdate ... 患者(既存の予約 ID と同じ)
@@ -13,13 +13,13 @@ module Reports
   #   urgent ... 至急表示(id 付きの text。通常オーダーでは hide する)
   # レイアウトに存在しないプレースホルダーは黙って捨てる(既存レンダラと同じ)。
   class LabLabelRenderer
-    # layout_path: 同梱の .tlf のパス、order/patient: パース済み FHIR リソース(Hash)、
-    # labels: { group: LabLabelReport::LabelGroup, number: String } の配列
-    def initialize(layout_path:, order:, patient:, labels:)
+    # layout_path: 同梱の .tlf のパス、
+    # labels: { order: Hash, patient: Hash, group: LabLabelReport::LabelGroup, number: String } の
+    # 配列(order / patient はパース済み FHIR リソース)
+    def initialize(layout_path:, labels:)
       @layout_path = layout_path
-      @order = order
-      @patient = patient
       @labels = labels
+      @containers = {}
     end
 
     def render
@@ -33,7 +33,7 @@ module Reports
             page.item("barcode_img").src(StringIO.new(barcode_png(label[:number])))
           end
           if all_ids.include?("urgent")
-            urgent? ? page.item("urgent").show : page.item("urgent").hide
+            label[:order]["priority"] == "urgent" ? page.item("urgent").show : page.item("urgent").hide
           end
         end
       end
@@ -44,14 +44,15 @@ module Reports
 
     def page_values(label)
       group = label[:group]
+      patient = label[:patient]
       {
-        "pt_id" => PatientMeta.identifier(@patient),
-        "pt_name" => PatientMeta.display_name(@patient),
-        "pt_kana" => PatientMeta.display_kana(@patient),
-        "pt_gender" => PatientMeta.gender_label(@patient),
-        "pt_birthdate" => PatientMeta.format_date(@patient["birthDate"]),
+        "pt_id" => PatientMeta.identifier(patient),
+        "pt_name" => PatientMeta.display_name(patient),
+        "pt_kana" => PatientMeta.display_kana(patient),
+        "pt_gender" => PatientMeta.gender_label(patient),
+        "pt_birthdate" => PatientMeta.format_date(patient["birthDate"]),
         # 検査日(オーダー開始日 = occurrenceDateTime)。
-        "order_date" => PatientMeta.format_date(OrderDates.order_day(@order)),
+        "order_date" => PatientMeta.format_date(OrderDates.order_day(label[:order])),
         "specimen_name" => group.specimen_name.presence || "検体未設定",
         "container_name" => container_display(group),
         "items" => group.item_labels.join("・"),
@@ -63,8 +64,7 @@ module Reports
     # 採取管マスタから引く(マスタで色を直したら過去のオーダーのラベルも新しい色で
     # 刷られるべきなので、参照にしている)。マスタに無い管はオーダーの写しの名称のみ。
     def container_display(group)
-      master = group.container_code.presence &&
-               Master::LabContainer.find_by(container_code: group.container_code)
+      master = container_master(group.container_code)
       name = master&.short_name.presence || master&.name.presence || group.container_name
       color = master&.cap_color
       return "" if name.blank?
@@ -72,8 +72,10 @@ module Reports
       color.present? ? "#{name}（#{color}）" : name
     end
 
-    def urgent?
-      @order["priority"] == "urgent"
+    def container_master(code)
+      return nil if code.blank?
+
+      @containers.fetch(code) { @containers[code] = Master::LabContainer.find_by(container_code: code) }
     end
 
     # CODE128(サブセット B)の PNG。ラベル幅に収まるよう余白なしで作り、

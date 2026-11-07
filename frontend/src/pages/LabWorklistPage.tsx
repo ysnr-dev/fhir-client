@@ -18,6 +18,7 @@ import {
 import { labLabelPdfUrl } from "../api/reportsClient";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { LabLabelBatchModal } from "../components/LabLabelBatchModal";
 import { LabOrderViewModal } from "../components/LabOrderViewModal";
 import { LabResultEntryModal } from "../components/LabResultEntryModal";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
@@ -89,6 +90,7 @@ export function LabWorklistPage() {
   const [viewingId, setViewingId] = useState<string | null>(null);
   // 結果を入力しているオーダー。同じ理由で id で覚えておく。
   const [enteringId, setEnteringId] = useState<string | null>(null);
+  const [labelBatchOpen, setLabelBatchOpen] = useState(false);
 
   // 検査内容の列が長くなるので、この画面だけ幅を広げる(放射線検査一覧と同じ)。
   useEffect(() => {
@@ -176,6 +178,11 @@ export function LabWorklistPage() {
     );
   }
 
+  async function reloadRows() {
+    const { data } = await worklist.refetch({ throwOnError: true });
+    return data?.rows ?? [];
+  }
+
   function handleDateChange(value: string) {
     // 日付を空にはさせない(空で検索すると全期間になってしまう)。
     if (value) setDate(value);
@@ -185,6 +192,15 @@ export function LabWorklistPage() {
     <div className="page">
       <div className="page__header">
         <h1>検体検査一覧</h1>
+        <div>
+          <button
+            type="button"
+            disabled={wardOptions.length === 0}
+            onClick={() => setLabelBatchOpen(true)}
+          >
+            ラベル一括発行
+          </button>
+        </div>
       </div>
 
       <FilterForm
@@ -266,6 +282,15 @@ export function LabWorklistPage() {
       )}
       {viewing && <LabOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
       {entering && <LabResultEntryModal row={entering} onClose={() => setEnteringId(null)} />}
+      {labelBatchOpen && (
+        <LabLabelBatchModal
+          date={date}
+          wards={wardOptions}
+          rows={worklist.data?.rows ?? []}
+          reloadRows={reloadRows}
+          onClose={() => setLabelBatchOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -167,6 +167,8 @@ Rails.application.routes.draw do
     get "questionnaire_responses/:id/pdf", to: "questionnaire_response_pdfs#show"
     # 検体ラベル(オーダー 1 件ぶん。1 ページ = 採取管 1 本)
     get "lab_labels/:order_id/pdf", to: "lab_label_pdfs#show"
+    # 検体ラベルの一括発行(複数オーダーを 1 つの PDF に)
+    post "lab_labels/pdf", to: "lab_label_pdfs#batch"
     # 病理の検体ラベル(オーダー 1 件ぶん。1 ページ = 容器 1 つ)
     get "patho_labels/:order_id/pdf", to: "patho_label_pdfs#show"
     # 細菌検査の検体ラベル(オーダー 1 件ぶん。1 ページ = 容器 1 つ)

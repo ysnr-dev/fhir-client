@@ -1,13 +1,21 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { buildLabOrderDeleteBundle, isLabServiceRequest, LAB_ORDER_TYPE, labOrderItemRequests } from "../../fhir/labOrderHelpers";
-import { labelSpecimensByOrderId } from "../../fhir/labSpecimenHelpers";
-import { buildLabTaskUpdate, labTasksByOrderId, type LabTaskStatus } from "../../fhir/labTaskHelpers";
+import { labelSpecimensByOrderId, type LabLabelScope } from "../../fhir/labSpecimenHelpers";
+import {
+  buildLabTaskUpdate,
+  labTaskStatus,
+  labTasksByOrderId,
+  type LabTaskStatus,
+} from "../../fhir/labTaskHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
+import { postBundle } from "../fhirClient";
+import { postLabLabelsPdf } from "../reportsClient";
 import {
   comparePatientNumber,
   deleteOrderWithItems,
   fetchWorklistBundles,
   makeUpdateTaskStatusHook,
+  taskBundleEntry,
   worklistParams,
 } from "./worklist";
 import { invalidateOrderDependents } from "./orderDelete";
@@ -117,6 +125,35 @@ export const useUpdateLabTaskStatus = makeUpdateTaskStatusHook<LabTaskStatus>(
   buildLabTaskUpdate,
   "lab-worklist",
 );
+
+/**
+ * 複数オーダーの検体ラベルをまとめて発行し、PDF を返す。行の「ラベル発行」と同じく発行が
+ * 受付を兼ねるので、依頼済のオーダーを 1 つの transaction で受付済へ進める。
+ * Specimen は PDF の生成で作られるので、失敗しても一覧は読み直す。
+ */
+export function useIssueLabLabels() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ rows, scope }: { rows: LabWorklistRow[]; scope: LabLabelScope }) => {
+      const pdf = await postLabLabelsPdf(rows.map((row) => row.order.id ?? ""), scope);
+      const requested = rows.filter((row) => labTaskStatus(row.task) === "requested");
+      if (requested.length > 0) {
+        await postBundle({
+          resourceType: "Bundle",
+          type: "transaction",
+          entry: requested.map((row) =>
+            taskBundleEntry(buildLabTaskUpdate(row.task, row.order, "accepted")),
+          ),
+        });
+      }
+      return pdf;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "lab-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
+}
 
 /**
  * 検体検査は明細も ServiceRequest なので、ぶら下がっているものを引いてからヘッダごと消す

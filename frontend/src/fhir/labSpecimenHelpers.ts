@@ -1,4 +1,5 @@
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
+import type { LabSpecimenGroup } from "./labOrderHelpers";
 import { JLAC11_SPECIMEN_SYSTEM, LAB_LABEL_NUMBER_SYSTEM, isLabelSpecimen } from "./labResultHelpers";
 import { codingBySystem } from "./prescriptionHelpers";
 
@@ -52,6 +53,34 @@ export function specimenArrived(specimen: fhir4.Specimen): boolean {
 export function specimenOrderIdOf(specimen: fhir4.Specimen): string {
   const reference = specimen.request?.[0]?.reference ?? "";
   return reference.match(/^ServiceRequest\/(.+)$/)?.[1] ?? "";
+}
+
+/** 検体グループに対応する管(ラベル発行が作った Specimen)。未発行なら無い。 */
+export function tubeOfGroup(
+  specimens: fhir4.Specimen[],
+  group: LabSpecimenGroup,
+): fhir4.Specimen | undefined {
+  return specimens.find((s) => specimenTypeCodeOf(s) === group.specimenCode);
+}
+
+/**
+ * ラベルの一括発行で刷る管の範囲。backend の LabLabelReport::SCOPES と同じ。
+ * unissued … まだ発行していない管
+ * issued   … 発行済みで、まだ検査室に届いていない管
+ */
+export type LabLabelScope = "unissued" | "issued";
+
+/** オーダーの検体グループに、範囲に入る管が 1 本でもあるか。 */
+export function hasLabLabelTarget(
+  groups: LabSpecimenGroup[],
+  specimens: fhir4.Specimen[],
+  scope: LabLabelScope,
+): boolean {
+  return groups.some((group) => {
+    const tube = tubeOfGroup(specimens, group);
+    if (!tube) return scope === "unissued";
+    return scope === "issued" && !specimenArrived(tube);
+  });
 }
 
 /** オーダー id → その管(ラベル由来の Specimen)の一覧。検索結果の振り分け用。 */

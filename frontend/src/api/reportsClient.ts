@@ -2,6 +2,7 @@
 // (ログインセッション Cookie。非 GET は CSRF トークンを付ける)。
 import { useQuery } from "@tanstack/react-query";
 import type { PdfFieldPayload } from "../fhir/documentFormLayout";
+import type { LabLabelScope } from "../fhir/labSpecimenHelpers";
 import { notifyUnauthorized, withCsrfHeaders } from "./session";
 
 export interface ReportLayoutStatus {
@@ -38,6 +39,18 @@ export async function postDocumentFormPdf(templateId: number, fields: PdfFieldPa
     }
     throw new Error(message);
   }
+  return res.blob();
+}
+
+/** 複数オーダーの検体ラベルを order の順に 1 つにまとめた PDF。 */
+export async function postLabLabelsPdf(orderIds: string[], scope: LabLabelScope): Promise<Blob> {
+  const res = await fetch("/reports/lab_labels/pdf", {
+    method: "POST",
+    headers: withCsrfHeaders("POST", { "Content-Type": "application/json" }),
+    body: JSON.stringify({ order_ids: orderIds, scope }),
+  });
+  if (res.status === 401) notifyUnauthorized();
+  if (!res.ok) throw new Error(`検体ラベルを発行できませんでした (HTTP ${res.status})`);
   return res.blob();
 }
 

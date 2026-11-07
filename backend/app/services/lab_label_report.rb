@@ -1,8 +1,9 @@
 # 検体ラベル PDF 生成のオーケストレータ(docs/lab-label-design.md)。
 # 上流 FHIR サーバーから検体検査オーダー一式を取得し、検体・採取管ごとの
-# グループ(採取管 1 本 = ラベル 1 枚)に畳んで PDF を組む。上流との往復は最大 2 回。
-#   1. GET /ServiceRequest?_id={id} -- オーダー + 患者(_include)+ 明細・発行済み Specimen(_revinclude)
-#   2. batch Bundle POST /          -- まだ発行していない管の Specimen 作成(再発行では走らない)
+# グループ(採取管 1 本 = ラベル 1 枚)に畳んで PDF を組む。
+#   1. GET /ServiceRequest?_id={ids} -- オーダー + 患者(_include)+ 明細・発行済み Specimen(_revinclude)
+#   2. batch Bundle POST /           -- まだ発行していない管の Specimen 作成(再発行では走らない)
+# オーダーは 1 件でも複数でもよく(一括発行)、複数なら渡された順に 1 つの PDF へ並べる。
 #
 # 採取管 1 本の台帳は上流の Specimen リソース(docs/lab-arrival-design.md §6-1)。
 # 発行 = そのオーダー(request)と検体(type)の Specimen を作ること。番号は
@@ -46,51 +47,86 @@ class LabLabelReport
     keyword_init: true
   )
 
-  def initialize(order_id, gateway: FhirGateway.new)
-    @order_id = order_id
+  # 採取管 1 本。specimen は発行済みの台帳(未発行なら nil)。
+  Tube = Struct.new(:order, :patient, :group, :specimen, keyword_init: true)
+
+  # 一括発行で刷る管の範囲。指定が無ければオーダーの全部の管を刷る。
+  #   unissued ... まだ発行していない管
+  #   issued   ... 発行済みで、まだ検査室に届いていない管
+  SCOPES = %w[unissued issued].freeze
+
+  # 1 回の検索で引くオーダー数。_id のカンマ OR が URL に収まる長さに抑える。
+  SEARCH_SLICE = 100
+
+  # order_ids は 1 件の id でも配列でもよい。
+  def initialize(order_ids, scope: nil, gateway: FhirGateway.new)
+    @order_ids = Array(order_ids).uniq
+    @scope = scope
     @gateway = gateway
   end
 
   # PDF のバイト列を返す。
   def generate
-    order, patient, items, specimens = fetch_order_resources
-    groups = build_groups(items)
-    raise NoLabelTarget, "order #{order_id} has no items" if groups.empty?
+    tubes = fetch_tubes.select { |tube| target?(tube) }
+    raise NoLabelTarget, "no label target in #{order_ids.join(',')}" if tubes.empty?
 
-    numbers = ensure_specimen_numbers(groups, order, specimens)
-    labels = groups.zip(numbers).map { |group, number| { group: group, number: number } }
-
-    Reports::LabLabelRenderer.new(layout_path: LAYOUT_PATH, order:, patient:, labels:).render
+    Reports::LabLabelRenderer.new(layout_path: LAYOUT_PATH, labels: build_labels(tubes)).render
   end
 
   private
 
-  attr_reader :order_id, :gateway
+  attr_reader :order_ids, :scope, :gateway
+
+  def target?(tube)
+    case scope
+    when "unissued" then tube.specimen.nil?
+    when "issued" then tube.specimen.present? && tube.specimen["receivedTime"].blank?
+    else true
+    end
+  end
+
+  # 渡されたオーダーの順に、検体グループの順で管を並べる。
+  def fetch_tubes
+    resources = order_ids.each_slice(SEARCH_SLICE).flat_map { |ids| search_orders(ids) }
+    items_by_order = resources_by_reference(resources, "ServiceRequest", "basedOn")
+    specimens_by_order = resources_by_reference(resources, "Specimen", "request")
+
+    order_ids.flat_map do |order_id|
+      order = resources.find { |r| r["resourceType"] == "ServiceRequest" && r["id"] == order_id }
+      raise NotFound, "ServiceRequest/#{order_id} not found" unless order
+      raise NotLabOrder, "ServiceRequest/#{order_id} is not a lab order" unless lab_order?(order)
+
+      patient = included_patient(resources, order)
+      order_reference = "ServiceRequest/#{order_id}"
+      specimens = specimens_by_order.fetch(order_reference, []).select { |s| label_specimen?(s) }
+      build_groups(items_by_order.fetch(order_reference, [])).map do |group|
+        specimen = specimens.find { |s| specimen_type_code(s) == group.specimen_code }
+        Tube.new(order:, patient:, group:, specimen:)
+      end
+    end
+  end
 
   # オーダー・患者・明細・発行済み Specimen を 1 回の検索で取得する。
   # 明細はヘッダ直下(単独項目・パネル)だけでよい。パネルの構成項目は親と同じ検体で、
   # ラベルにはパネル名を刷るため :iterate で辿らない。
-  def fetch_order_resources
-    query = "_id=#{CGI.escape(order_id)}" \
+  def search_orders(ids)
+    query = "_id=#{ids.map { |id| CGI.escape(id) }.join(',')}" \
+            "&_count=#{SEARCH_SLICE}" \
             "&_include=ServiceRequest%3Asubject" \
             "&_revinclude=ServiceRequest%3Abased-on" \
             "&_revinclude=Specimen%3Arequest"
     upstream = gateway.forward(method: :get, path: "/ServiceRequest", query: query)
-    ensure_success!(upstream, "ServiceRequest?_id=#{order_id}")
-    resources = Array(JSON.parse(upstream.body)["entry"]).filter_map { |e| e["resource"] }
+    ensure_success!(upstream, "ServiceRequest?_id=#{ids.join(',')}")
+    Array(JSON.parse(upstream.body)["entry"]).filter_map { |e| e["resource"] }
+  end
 
-    order = resources.find { |r| r["resourceType"] == "ServiceRequest" && r["id"] == order_id }
-    raise NotFound, "ServiceRequest/#{order_id} not found" unless order
-    raise NotLabOrder, "ServiceRequest/#{order_id} is not a lab order" unless lab_order?(order)
+  # 参照先("ServiceRequest/{id}")→ それを key の要素で指すリソースの一覧。
+  def resources_by_reference(resources, resource_type, key)
+    resources.each_with_object(Hash.new { |hash, reference| hash[reference] = [] }) do |resource, by_reference|
+      next unless resource["resourceType"] == resource_type
 
-    order_reference = "ServiceRequest/#{order_id}"
-    items = resources.select do |r|
-      r["resourceType"] == "ServiceRequest" && references?(r["basedOn"], order_reference)
+      Array(resource[key]).each { |target| by_reference[target["reference"]] << resource }
     end
-    specimens = resources.select do |r|
-      r["resourceType"] == "Specimen" && references?(r["request"], order_reference)
-    end
-    [order, included_patient(resources, order), items, specimens]
   end
 
   def lab_order?(order)
@@ -101,22 +137,17 @@ class LabLabelReport
     end
   end
 
-  def references?(references, reference)
-    Array(references).any? { |r| r["reference"] == reference }
-  end
-
   # ---- 番号の確保(台帳 = 上流の Specimen) ----
 
-  # グループの並びと同じ順の管の番号。発行済みの Specimen があればその番号(再発行)、
-  # 無いグループの分はまとめて 1 つの batch Bundle で Specimen を作り、採番された番号を使う。
-  def ensure_specimen_numbers(groups, order, specimens)
-    existing = groups.map do |group|
-      specimens.find { |s| label_specimen?(s) && specimen_type_code(s) == group.specimen_code }
-    end
-    new_groups = groups.zip(existing).filter_map { |group, specimen| group unless specimen }
-    created = create_label_specimens(new_groups, order).each
+  # 管ごとのラベル。発行済みの Specimen があればその番号(再発行)、無い管の分は
+  # オーダーをまたいでまとめて 1 つの batch Bundle で Specimen を作り、採番された番号を使う。
+  def build_labels(tubes)
+    created = create_label_specimens(tubes.reject(&:specimen)).each
 
-    existing.map { |specimen| accession_number(specimen || created.next) }
+    tubes.map do |tube|
+      { order: tube.order, patient: tube.patient, group: tube.group,
+        number: accession_number(tube.specimen || created.next) }
+    end
   end
 
   # ラベル発行で作った Specimen(番号を持つ)。結果登録が作る Specimen は request を
@@ -137,22 +168,23 @@ class LabLabelReport
     number
   end
 
-  # 作成した Specimen を groups と同じ順で返す(batch の応答 entry はリクエストと同順)。
+  # 作成した Specimen を tubes と同じ順で返す(batch の応答 entry はリクエストと同順)。
   # batch は entry ごとに独立して処理されるので、途中で失敗しても作成できた分は残る。
   # 再発行すれば残った分は発行済みとして引かれ、足りない分だけが作られる。
-  def create_label_specimens(groups, order)
-    return [] if groups.empty?
+  def create_label_specimens(tubes)
+    return [] if tubes.empty?
 
-    entries = groups.map do |group|
+    entries = tubes.map do |tube|
+      group = tube.group
       request = { "method" => "POST", "url" => "Specimen" }
       # 二重発行(同時クリック)で同じ管の Specimen が 2 つできないよう conditional create
       # にする。検体未設定のグループは type で識別できないため、発行済みの確認だけで守る。
       # 採番は上流が作成時に行うので、合流(200)でも新規(201)でも応答の番号を使えばよく、
       # 番号が無駄に消費されることもない。
       if group.specimen_code.present?
-        request["ifNoneExist"] = "request=ServiceRequest/#{order_id}&type=#{group.specimen_code}"
+        request["ifNoneExist"] = "request=ServiceRequest/#{tube.order['id']}&type=#{group.specimen_code}"
       end
-      { "resource" => build_label_specimen(group, order), "request" => request }
+      { "resource" => build_label_specimen(group, tube.order), "request" => request }
     end
 
     bundle = { "resourceType" => "Bundle", "type" => "batch", "entry" => entries }
@@ -163,7 +195,7 @@ class LabLabelReport
     ensure_success!(upstream, "Specimen batch create")
     results = Array(JSON.parse(upstream.body)["entry"])
 
-    groups.each_index.map { |index| entry_resource!(results[index], "Specimen create") }
+    tubes.each_index.map { |index| entry_resource!(results[index], "Specimen create") }
   end
 
   # 発行時点の Specimen。まだ採取していないので status は付けない
@@ -174,7 +206,7 @@ class LabLabelReport
       "resourceType" => "Specimen",
       "accessionIdentifier" => { "system" => LABEL_NUMBER_SYSTEM },
       "subject" => { "reference" => order.dig("subject", "reference") },
-      "request" => [{ "reference" => "ServiceRequest/#{order_id}" }]
+      "request" => [{ "reference" => "ServiceRequest/#{order['id']}" }]
     }
     if group.specimen_code.present?
       coding = { "system" => JLAC11_SPECIMEN_SYSTEM, "code" => group.specimen_code }

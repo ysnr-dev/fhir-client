@@ -7124,6 +7124,17 @@ button.populate-expression__option--active {
   gap: 12px;
 }
 
+.lab-label-batch__table td:not(:first-child),
+.lab-label-batch__table th:not(:first-child) {
+  text-align: right;
+}
+
+.lab-label-batch__ward {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .plain-text-modal__result {
   font-size: 13px;
   color: var(--accent);

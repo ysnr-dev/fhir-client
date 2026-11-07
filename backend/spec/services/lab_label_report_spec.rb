@@ -62,19 +62,19 @@ RSpec.describe LabLabelReport do
   end
 
   # 発行済みの管(台帳としての Specimen)。
-  def label_specimen(id, number:, specimen_code:)
+  def label_specimen(id, number:, specimen_code:, order_id: "o1", received: nil)
     {
       "resourceType" => "Specimen",
       "id" => id,
       "accessionIdentifier" => { "system" => described_class::LABEL_NUMBER_SYSTEM, "value" => number },
       "type" => { "coding" => [{ "system" => described_class::JLAC11_SPECIMEN_SYSTEM,
                                  "code" => specimen_code }] },
-      "request" => [{ "reference" => "ServiceRequest/o1" }]
-    }
+      "request" => [{ "reference" => "ServiceRequest/#{order_id}" }]
+    }.merge(received ? { "receivedTime" => received } : {})
   end
 
   let(:search_path) do
-    "#{base_url}/ServiceRequest?_id=o1&_include=ServiceRequest%3Asubject" \
+    "#{base_url}/ServiceRequest?_id=o1&_count=100&_include=ServiceRequest%3Asubject" \
       "&_revinclude=ServiceRequest%3Abased-on&_revinclude=Specimen%3Arequest"
   end
 
@@ -253,6 +253,92 @@ RSpec.describe LabLabelReport do
 
     expect { described_class.new("o1", gateway: gateway).generate }
       .to raise_error(described_class::NoLabelTarget)
+  end
+
+  describe "複数オーダーの一括発行" do
+    let(:blood) { { code: "212", name: "全血", container: "T03", container_name: "EDTA管" } }
+    let(:serum) { { code: "250", name: "血清", container: "T01", container_name: "分離剤管" } }
+    let(:order2) { order.merge("id" => "o2", "subject" => { "reference" => "Patient/p2" }, "priority" => "urgent") }
+    let(:patient2) { { "resourceType" => "Patient", "id" => "p2" } }
+
+    def item_of(order_id, id, specimen)
+      item(id, number: 1, name: id, specimen: specimen)
+        .merge("basedOn" => [{ "reference" => "ServiceRequest/#{order_id}" }])
+    end
+
+    def stub_two_orders(specimens: [])
+      resources = [order, order2, patient, patient2,
+                   item_of("o1", "i1", blood), item_of("o1", "i2", serum), item_of("o2", "i3", blood)] + specimens
+      stub_request(:get, "#{base_url}/ServiceRequest")
+        .with(query: hash_including("_id" => "o2,o1"))
+        .to_return(status: 200, body: searchset(resources).to_json)
+    end
+
+    def capture_labels
+      captured = nil
+      allow(Reports::LabLabelRenderer).to receive(:new) do |args|
+        captured = args
+        instance_double(Reports::LabLabelRenderer, render: "%PDF")
+      end
+      yield
+      captured[:labels]
+    end
+
+    it "prints only unissued tubes across orders, in the given order, with one create batch" do
+      stub_two_orders(specimens: [label_specimen("sp1", number: "00000000111", specimen_code: "212")])
+      create = stub_specimen_batch
+
+      labels = capture_labels { described_class.new(%w[o2 o1], scope: "unissued", gateway: gateway).generate }
+
+      expect(labels.map { |l| [l[:order]["id"], l[:patient]["id"], l[:group].specimen_code] })
+        .to eq([%w[o2 p2 212], %w[o1 p1 250]])
+      expect(create).to have_been_requested.once
+      expect(
+        a_request(:post, "#{base_url}/").with { |req|
+          JSON.parse(req.body)["entry"].map { |e| e.dig("request", "ifNoneExist") } ==
+            ["request=ServiceRequest/o2&type=212", "request=ServiceRequest/o1&type=250"]
+        }
+      ).to have_been_made.once
+    end
+
+    it "reprints only issued tubes that have not arrived and creates nothing" do
+      stub_two_orders(specimens: [
+        label_specimen("sp1", number: "00000000111", specimen_code: "212"),
+        label_specimen("sp2", number: "00000000222", specimen_code: "250",
+                       received: "2026-08-09T10:00:00+09:00"),
+        label_specimen("sp3", number: "00000000333", specimen_code: "212", order_id: "o2")
+      ])
+      create = stub_specimen_batch
+
+      labels = capture_labels { described_class.new(%w[o2 o1], scope: "issued", gateway: gateway).generate }
+
+      expect(labels.map { |l| l[:number] }).to eq(%w[00000000333 00000000111])
+      expect(create).not_to have_been_requested
+    end
+
+    it "raises NoLabelTarget when no tube falls in the scope" do
+      stub_two_orders
+
+      expect { described_class.new(%w[o2 o1], scope: "issued", gateway: gateway).generate }
+        .to raise_error(described_class::NoLabelTarget)
+    end
+
+    it "splits long id lists into several searches" do
+      stub_const("#{described_class}::SEARCH_SLICE", 1)
+      first = stub_request(:get, "#{base_url}/ServiceRequest")
+              .with(query: hash_including("_id" => "o1"))
+              .to_return(status: 200, body: searchset([order, patient, item_of("o1", "i1", blood)]).to_json)
+      second = stub_request(:get, "#{base_url}/ServiceRequest")
+               .with(query: hash_including("_id" => "o2"))
+               .to_return(status: 200, body: searchset([order2, patient2, item_of("o2", "i3", blood)]).to_json)
+      stub_specimen_batch
+
+      labels = capture_labels { described_class.new(%w[o1 o2], scope: "unissued", gateway: gateway).generate }
+
+      expect(labels.map { |l| l[:order]["id"] }).to eq(%w[o1 o2])
+      expect(first).to have_been_requested.once
+      expect(second).to have_been_requested.once
+    end
   end
 
   it "renders with the bundled layout file (no DB registration involved)" do

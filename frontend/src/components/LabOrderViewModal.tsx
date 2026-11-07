@@ -6,9 +6,8 @@ import {
   memberSummary,
   specimenGroupLabel,
   summarizeLabOrder,
-  type LabSpecimenGroup,
 } from "../fhir/labOrderHelpers";
-import { labelNumberOf, specimenArrived, specimenTypeCodeOf } from "../fhir/labSpecimenHelpers";
+import { labelNumberOf, specimenArrived, tubeOfGroup } from "../fhir/labSpecimenHelpers";
 import { labTaskStatus, labTaskStatusDisplay } from "../fhir/labTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
@@ -24,11 +23,6 @@ import { orderDay } from "../fhir/shared";
 // 到着が記録されない管の問い合わせはこの番号で行う。
 //
 // 管ごとの進捗のバッジは、それが掛かっている GP 番号の隣に置く。
-
-/** 検体グループに対応する管(ラベル発行が作った Specimen)。未発行なら無い。 */
-function tubeOf(specimens: fhir4.Specimen[], group: LabSpecimenGroup): fhir4.Specimen | undefined {
-  return specimens.find((s) => specimenTypeCodeOf(s) === group.specimenCode);
-}
 
 /** 管・容器の状況。台帳は上流の Specimen(labSpecimenHelpers を参照)。細菌検査の容器でも使う。 */
 export function TubeBadge({ specimen }: { specimen?: fhir4.Specimen }) {
@@ -66,7 +60,7 @@ export function LabOrderViewModal({ row, onClose }: { row: LabWorklistRow; onClo
         </p>
 
         {groups.map((group, index) => {
-          const tube = tubeOf(row.specimens, group);
+          const tube = tubeOfGroup(row.specimens, group);
           const number = tube ? labelNumberOf(tube) : "";
           return (
             <div className="karte-rp" key={group.specimenCode || `unset-${index}`}>
