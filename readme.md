@@ -62,6 +62,7 @@ cd ../fhir-client && docker compose up --build    # db(5434) / backend(3001) / f
 | [order-flows/chemotherapy.md](docs/order-flows/chemotherapy.md) | 化学療法の運用フロー(アクティビティ図)と開発者向けシーケンス図 |
 | [order-flows/lab.md](docs/order-flows/lab.md) | 検体検査オーダーの運用フロー(アクティビティ図)と開発者向けシーケンス図 |
 | [order-flows/transfusion.md](docs/order-flows/transfusion.md) | 輸血オーダーの運用フロー(アクティビティ図)と開発者向けシーケンス図 |
+| [order-flows/surgery.md](docs/order-flows/surgery.md) | 手術オーダーの運用フロー(アクティビティ図)と開発者向けシーケンス図 |
 | [demo-seed.md](docs/demo-seed.md) | デモ患者の投入ツール |
 | `docs/*-design.md` | 機能ごとの設計書 |
 | `docs/*-backlog.md` | 未対応の課題。上流への要望は [server-improvement-backlog.md](docs/server-improvement-backlog.md) |
