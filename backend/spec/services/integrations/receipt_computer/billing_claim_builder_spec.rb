@@ -405,6 +405,17 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       expect(build.skipped.first.reason).to include("特定器材コード")
     end
 
+    it "reports 器材 entered by name only instead of dropping it" do
+      hub = procedure_hub(order_type: "treatment", code: "140000610")
+      hub["usedCode"] = [{ "text" => "手入力の被覆材" }]
+      store.add(order_header(order_type: "treatment"), hub)
+
+      result = build
+
+      expect(result.items.first.lines.map(&:kind)).to eq([:procedure])
+      expect(result.skipped.map { |s| [s.name, s.reason] }).to eq([["手入力の被覆材", "材料に特定器材コードがありません"]])
+    end
+
     it "does not bill an order of the day that has no 実施記録" do
       Master::RadItem.create!(item_code: "R1", name: "胸部", receipt_code: "170001210")
       store.add(order_header(order_type: "rad", name: "胸部XP"),

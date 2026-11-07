@@ -158,7 +158,7 @@ module Integrations
       # 放射線治療の治療装置のように、算定しない道具が usedCode に載る種別もある。
       def material_lines(record, definition, rad_materials)
         Array(record.hub["usedCode"]).filter_map do |concept|
-          next nil unless Coding.find(concept, Coding::MEDICAL_MATERIAL) || Coding.find(concept, Coding::RAD_MATERIAL)
+          next nil unless material?(concept)
 
           code, name = material_code(concept, rad_materials)
           if code.blank?
@@ -173,6 +173,15 @@ module Integrations
                           quantity: quantity && quantity["value"] ? Numbers.format(quantity["value"]) : "1",
                           unit: quantity&.dig("unit"))
         end
+      end
+
+      # 器材の行。名称だけ手入力した器材は coding を持たないので、送れない項目として報告する側に入れる。
+      # 他の体系の coding だけを持つもの(放射線治療の治療装置)は器材ではない。
+      def material?(concept)
+        codings = Array(concept&.dig("coding"))
+        return concept&.dig("text").present? if codings.empty?
+
+        Coding.find(concept, Coding::MEDICAL_MATERIAL) || Coding.find(concept, Coding::RAD_MATERIAL)
       end
 
       def material_code(concept, rad_materials)
