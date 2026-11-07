@@ -274,6 +274,60 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       expect(build.skipped.first.reason).to include("まだ医事会計へ送りません")
     end
 
+    describe "細菌検査(ヘッダ ← 検体グループ明細 ← 検査項目明細の 3 層)" do
+      let(:micro_system) { "http://fhir-client.local/CodeSystem/micro-order-item" }
+
+      def specimen_group(id: "group-1", parent: "order-1")
+        {
+          "resourceType" => "ServiceRequest", "id" => id, "status" => "active",
+          "code" => { "text" => "静脈血" },
+          "basedOn" => [{ "reference" => "ServiceRequest/#{parent}" }]
+        }
+      end
+
+      before do
+        Master::MicroOrderItem.create!(item_code: "2", name: "培養・同定", receipt_code: "160060310")
+        Master::MicroOrderItem.create!(item_code: "3", name: "薬剤感受性", receipt_code: "160060710")
+        store.add(order_header(order_type: "micro", id: "order-1"), specimen_group)
+      end
+
+      it "reads the 検査項目 under the 検体グループ" do
+        store.add(order_detail(item_code: "2", system: micro_system, name: "培養・同定", id: "item-2", parent: "group-1"),
+                  order_detail(item_code: "3", system: micro_system, name: "薬剤感受性", id: "item-3", parent: "group-1"))
+
+        built = build
+
+        expect(built.items.length).to eq(1)
+        expect(built.items.first.category).to eq(:micro)
+        expect(built.items.first.lines.map(&:code)).to eq(%w[160060310 160060710])
+        expect(built.skipped).to be_empty
+      end
+
+      it "reports the 検査項目, not the 検体, when the 項目マスタ has no レセ電算コード" do
+        Master::MicroOrderItem.create!(item_code: "1", name: "塗抹・鏡検", receipt_code: nil)
+        store.add(order_detail(item_code: "1", system: micro_system, name: "塗抹・鏡検", id: "item-1", parent: "group-1"))
+
+        expect(build.skipped.map(&:name)).to eq(["塗抹・鏡検"])
+      end
+
+      it "asks the 上流 for the 検査項目 two levels below the header" do
+        build
+
+        search = store.searches.find { |type, _| type == "ServiceRequest" }.last
+        expect(Array(search["_revinclude:iterate"])).to include("ServiceRequest:based-on")
+      end
+    end
+
+    it "keeps a パネル as one line without descending to its 構成項目" do
+      Master::LabOrderItem.create!(order_item_code: "L9", name: "生化学セット", receipt_code: "160008010")
+      Master::LabOrderItem.create!(order_item_code: "L1", name: "AST", receipt_code: "160020010")
+      store.add(order_header(order_type: "lab"),
+                order_detail(item_code: "L9", system: lab_system, name: "生化学セット", id: "panel"),
+                order_detail(item_code: "L1", system: lab_system, name: "AST", id: "member", parent: "panel"))
+
+      expect(build.items.first.lines.map(&:code)).to eq(%w[160008010])
+    end
+
     it "ignores a cancelled 伝票" do
       store.add(order_header(order_type: "lab").merge("status" => "revoked"),
                 order_detail(item_code: "L1", system: lab_system))

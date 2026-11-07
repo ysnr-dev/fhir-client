@@ -24,7 +24,7 @@
 | source | 種別 | 集め方 |
 |---|---|---|
 | `:procedure` | rad / physio / endoscopy / treatment / surgery / injection(Phase 2〜: transfusion / rehab / radiotherapy / nutrition-guidance) | `Procedure?subject&date=当日&status=completed&_revinclude=Procedure:part-of&_revinclude:iterate=MedicationAdministration:part-of` → ハブ(`partOf` 無し、category = order-type)ごとに 1 剤 |
-| `:order` | lab / micro(Phase 3: pathology) | ヘッダ SR を `occurrence=当日` で集め、明細 SR を `_revinclude=ServiceRequest:based-on` |
+| `:order` | lab / micro(Phase 3: pathology) | ヘッダ SR を `occurrence=当日` で集め、明細 SR を `_revinclude=ServiceRequest:based-on`。細菌検査の検査項目は検体グループ明細の下なので `_revinclude:iterate` で辿り、項目コードを持たない明細はその下の項目に置き換える(`item_details`) |
 | 処方 | prescription | 同じ検索の `_revinclude:iterate=MedicationRequest:based-on`。処方のヘッダは `order-type|prescription`。RP 番号ごとに 1 剤 |
 
 ［事実］上流への往復は Procedure 1 回 + ServiceRequest 1 回。Task の照会は「実施記録が無いのに

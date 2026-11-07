@@ -72,12 +72,14 @@ module Integrations
       def on_date?(resource, date) = LocalDate.of(resource["occurrenceDateTime"]) == date
 
       # 当日実施(予定)のオーダーのヘッダと、その明細・処方薬・部門の Task を 1 往復で引く。
+      # 細菌検査の検査項目はヘッダの孫(検体グループ明細の下)で、検体グループと日が違うことも
+      # あるので、日付の検索に頼らず iterate で辿る。
       def order_requests(patient_fhir_id, date)
         store.search("ServiceRequest", {
                        "subject" => "Patient/#{patient_fhir_id}",
                        "occurrence" => date,
                        "_revinclude" => ["ServiceRequest:based-on", "Task:focus"],
-                       "_revinclude:iterate" => "MedicationRequest:based-on",
+                       "_revinclude:iterate" => ["MedicationRequest:based-on", "ServiceRequest:based-on"],
                        "_count" => "500"
                      }).uniq { |r| [r["resourceType"], r["id"]] }
       end
@@ -272,7 +274,7 @@ module Integrations
           if definition.resolver
             definition.resolver_for(skipped: skipped, store: store).call(header, details)
           else
-            build_order_item(definition, details, skipped)
+            build_order_item(definition, item_details(details, definition, details_by_parent), skipped)
           end
         end
       end
@@ -294,6 +296,16 @@ module Integrations
         skipped << Skipped.new(kind: definition.label, name: name,
                                reason: "部門で実施済になっていません")
         false
+      end
+
+      # 請求する明細。項目コードを持たない明細(細菌検査の検体グループ)はその下の項目に置き換える。
+      # 項目コードを持つ明細(検体検査のパネル)は 1 行で請求するので、構成項目へは降りない。
+      def item_details(details, definition, details_by_parent)
+        details.flat_map do |detail|
+          next [detail] if Coding.code_of(detail["code"], definition.coding_system)
+
+          details_by_parent[detail["id"]].presence || [detail]
+        end
       end
 
       def build_order_item(definition, details, skipped)
