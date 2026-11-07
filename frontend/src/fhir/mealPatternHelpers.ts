@@ -26,6 +26,7 @@ import {
 } from "./mealOrderHelpers";
 import type { OrderAttribution } from "./orderHeader";
 import { transactionBundle } from "./shared";
+import type { ValidationFailure } from "../lib/validation";
 
 // パターン食。術後の食上げ(流動食 → 三分粥 → 五分粥 → 全粥 → 常食)や検査前の食事
 // (低残渣食 → 食止め)のように段階的に変わる食事を、1 回の登録で段階ごとの食事オーダーに
@@ -157,18 +158,24 @@ export function mealPatternStepsSummary(steps: MealPatternStep[]): string {
  * 段階の検証。マスタの編集とオーダー登録で同じ規則を使う。
  * 食数を空にできるのは最後の段階だけ(途中で空だと次の段階の開始が決まらない)。
  */
-export function validateMealPatternSteps(steps: MealPatternStep[]): string {
-  if (steps.length === 0) return "段階を 1 つ以上入れてください。";
+/** 段階の検証で弾いた項目の鍵。`step:添字` はその段階の行。 */
+export type MealPatternStepField = "steps" | `step:${number}`;
+
+export function validateMealPatternSteps(
+  steps: MealPatternStep[],
+): ValidationFailure<MealPatternStepField> | null {
+  if (steps.length === 0) return { field: "steps", message: "段階を 1 つ以上入れてください。" };
   for (const [index, step] of steps.entries()) {
     const nth = `${index + 1} 段階目`;
-    if (!step.values.diet) return `${nth}の食種を選んでください。`;
+    const field: MealPatternStepField = `step:${index}`;
+    if (!step.values.diet) return { field, message: `${nth}の食種を選んでください。` };
     if (step.meals === null) {
-      if (index !== steps.length - 1) return `${nth}の食数を入れてください。`;
+      if (index !== steps.length - 1) return { field, message: `${nth}の食数を入れてください。` };
     } else if (!Number.isInteger(step.meals) || step.meals < 1) {
-      return `${nth}の食数は 1 以上の整数で入れてください。`;
+      return { field, message: `${nth}の食数は 1 以上の整数で入れてください。` };
     }
   }
-  return "";
+  return null;
 }
 
 /**

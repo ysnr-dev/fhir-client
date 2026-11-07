@@ -7,6 +7,7 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import type { LabOrderItem } from "../api/masterClient";
 import {
@@ -32,7 +33,9 @@ import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionH
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import type { ValidationFailure } from "../lib/validation";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 import { TrashIcon } from "./icons/TrashIcon";
 
@@ -46,6 +49,27 @@ import { TrashIcon } from "./icons/TrashIcon";
 //
 // 選んだ項目は、オーダー時点のマスタの内容(名称・JLAC コード・検体・採取管)を
 // 写して持つ。マスタを直しても過去のオーダーの中身が変わらないようにするため。
+
+/** 必須チェックで弾いた項目の鍵。ラベルの印(FieldAlert)の宛先になる。 */
+type LabField = "items" | "startDate";
+
+/**
+ * 登録前の入力検証。最初に落ちた項目と文言を返す(無ければ null)。
+ * 登録時に弾くのと、弾いた項目が直されたかを表示側で見るのとで同じ規則を使う。
+ */
+function findValidationFailure(
+  values: LabOrderFormValues,
+  setMode: boolean,
+): ValidationFailure<LabField> | null {
+  if (values.items.length === 0) {
+    return { field: "items", message: "検査項目を 1 つ以上選択してください。" };
+  }
+  // セットの内容としての入力では検査日を持たない(適用時に入れる)。
+  if (!setMode && !values.startDate) {
+    return { field: "startDate", message: "検査日を入力してください。" };
+  }
+  return null;
+}
 
 interface LabOrderFormProps {
   patientId: string;
@@ -83,7 +107,8 @@ export function LabOrderForm({
   hideSubmit = false,
 }: LabOrderFormProps) {
   const [values, setValues] = useState<LabOrderFormValues>(initialValues ?? emptyLabOrderForm);
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<LabField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [active, setActive] = useState<ActiveTab | null>(null);
   const [searchCodes, setSearchCodes] = useState<string[]>([]);
@@ -253,15 +278,16 @@ export function LabOrderForm({
     });
   }
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(() => findValidationFailure(values, setMode), [values, setMode]);
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<LabField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (values.items.length === 0) {
-      setValidationError("検査項目を 1 つ以上選択してください。");
-      return;
-    }
-    // セットの内容としての入力では検査日を持たない(適用時に入れる)。
-    if (!setMode && !values.startDate) {
-      setValidationError("検査日を入力してください。");
+    const failure = findValidationFailure(values, setMode);
+    if (failure) {
+      setValidationError(failure.message, failure.field);
       return;
     }
     setValidationError(null);
@@ -277,9 +303,9 @@ export function LabOrderForm({
 
   return (
     <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
@@ -325,8 +351,8 @@ export function LabOrderForm({
           </select>
         </label>
         {!setMode && (
-          <label>
-            検査日
+          <label className={fieldAlert.className("startDate")}>
+            {fieldAlert.label("startDate", "検査日")}
             <input
               type="date"
               value={values.startDate}
@@ -413,7 +439,7 @@ export function LabOrderForm({
         />
       )}
 
-      <SelectionPreview items={values.items} onRemove={remove} />
+      <SelectionPreview items={values.items} onRemove={remove} alert={fieldAlert.icon("items")} />
 
       {!hideSubmit && (
         <div className="prescription-form__submit">
@@ -584,15 +610,20 @@ function ItemSearchTab({
 function SelectionPreview({
   items,
   onRemove,
+  alert,
 }: {
   items: LabOrderItemLine[];
   onRemove: (code: string) => void;
+  /** 検査項目が無いまま登録しようとしたときの印。見出しの横に出す。 */
+  alert: ReactNode;
 }) {
   const groups = groupBySpecimen(items);
 
   return (
     <section className="order-select__preview">
-      <h3>選択中({items.length})</h3>
+      <h3>
+        選択中({items.length}){alert}
+      </h3>
       {items.length === 0 && <p className="order-select__muted">検査項目を選択してください</p>}
       {groups.map((group, index) => (
         <div key={group.specimenCode || "unset"} className="order-select__group">

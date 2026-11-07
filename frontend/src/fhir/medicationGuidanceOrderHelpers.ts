@@ -1,4 +1,5 @@
 import { shortDate, today } from "../lib/dates";
+import type { ValidationFailure } from "../lib/validation";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   categoryCoding,
@@ -143,17 +144,21 @@ export function emptyMedicationGuidanceOrderForm(
 }
 
 /** 入力の検証。空文字なら妥当。 */
+/** 検証で弾いた項目の鍵。フォームのラベルの印(FieldAlert)の宛先。 */
+export type MedicationGuidanceOrderField = "kind" | "startDate" | "endDate";
+
 export function validateMedicationGuidanceOrderForm(
   values: MedicationGuidanceOrderFormValues,
   /** requireDates を偽にすると開始日を求めない(セットの内容としての入力)。 */
   { requireDates = true }: { requireDates?: boolean } = {},
-): string {
-  if (!values.kind) return "指導区分を選んでください。";
-  if (requireDates && !values.startDate) return "開始日を入れてください。";
+): ValidationFailure<MedicationGuidanceOrderField> | null {
+  const fail = (field: MedicationGuidanceOrderField, message: string) => ({ field, message });
+  if (!values.kind) return fail("kind", "指導区分を選んでください。");
+  if (requireDates && !values.startDate) return fail("startDate", "開始日を入れてください。");
   if (values.endDate && values.endDate < values.startDate) {
-    return "終了日は開始日と同じか、それより後にしてください。";
+    return fail("endDate", "終了日は開始日と同じか、それより後にしてください。");
   }
-  return "";
+  return null;
 }
 
 // ---- FHIR リソースの組み立て ----

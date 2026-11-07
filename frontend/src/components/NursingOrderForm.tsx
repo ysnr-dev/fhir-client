@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
-import { scrollIntoViewVisibly } from "../lib/scroll";
 import { useNursingActModifiers } from "../api/masterQueries";
 import { useFacilitySettings } from "../api/queries";
 import {
@@ -16,12 +15,15 @@ import {
   emptyNursingOrderLine,
   validateNursingOrderForm,
   type NursingItemRef,
+  type NursingOrderField,
   type NursingOrderFormValues,
   type NursingOrderLineValues,
 } from "../fhir/nursingOrderHelpers";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { NursingItemSearchModal } from "./NursingItemSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 
@@ -60,10 +62,10 @@ export function NursingOrderForm({
   fixedProblem = false,
 }: Props) {
   const [values, setValues] = useState<NursingOrderFormValues>(initialValues);
-  const [validationError, setValidationError] = useState("");
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<NursingOrderField>();
   const [picking, setPicking] = useState<number | null>(null);
   const problemOptions = useProblemOptions(patientId);
-  const validationErrorRef = useRef<HTMLDivElement>(null);
   // 「1日N回」の既定時刻。読めていない間は既定値で組む(選び直せば設定値が入る)。
   const facility = useFacilitySettings();
   const scheduleSettings = facility.data?.nursing_schedule ?? DEFAULT_NURSING_SCHEDULE;
@@ -72,9 +74,13 @@ export function NursingOrderForm({
     setValues((v) => ({ ...v, lines: v.lines.map((line) => ({ ...line, startDate: date })) })),
   );
 
-  useEffect(() => {
-    if (validationError) scrollIntoViewVisibly(validationErrorRef.current, "nearest");
-  }, [validationError]);
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () => validateNursingOrderForm(values, { requireDates: !setMode }),
+    [values, setMode],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<NursingOrderField>(invalidField, shownError);
 
   function updateLine(index: number, patch: Partial<NursingOrderLineValues>) {
     setValues((prev) => ({
@@ -105,9 +111,12 @@ export function NursingOrderForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateNursingOrderForm(values, { requireDates: !setMode });
-    setValidationError(error);
-    if (error) return;
+    const failure = validateNursingOrderForm(values, { requireDates: !setMode });
+    if (failure) {
+      setValidationError(failure.message, failure.field);
+      return;
+    }
+    setValidationError(null);
     onSubmit(fixedProblem ? values : { ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
   }
 
@@ -117,15 +126,15 @@ export function NursingOrderForm({
     // フォームがネイティブ送信されてしまう(処置・生理のオーダー画面と同じ作り)。
     <>
       <form className="prescription-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
-        {validationError && (
+        {shownError && (
           <div className="error-banner" role="alert" ref={validationErrorRef}>
-            <p className="error-banner__line error-banner__line--error">{validationError}</p>
+            <p className="error-banner__line error-banner__line--error">{shownError}</p>
           </div>
         )}
         <ErrorBanner error={submitError} />
 
         <fieldset>
-          <legend>指示</legend>
+          <legend>{fieldAlert.label("lines", "指示")}</legend>
           <div className="nursing-order-form__lines">
             {values.lines.map((line, index) => (
               <div key={index} className="nursing-order-form__line">
@@ -156,8 +165,8 @@ export function NursingOrderForm({
                     </button>
                   )}
                 </div>
-                <label>
-                  指示内容
+                <label className={fieldAlert.className(`line:${index}:text`)}>
+                  {fieldAlert.label(`line:${index}:text`, "指示内容")}
                   <input
                     type="text"
                     value={line.text}
@@ -169,6 +178,7 @@ export function NursingOrderForm({
                   schedule={line.schedule}
                   settings={scheduleSettings}
                   onChange={(schedule) => updateLine(index, { schedule })}
+                  alertIcon={fieldAlert.icon(`line:${index}:schedule`)}
                 />
                 <label>
                   条件
@@ -180,8 +190,8 @@ export function NursingOrderForm({
                   />
                 </label>
                 <div className="nursing-order-form__dates">
-                  <label>
-                    開始日
+                  <label className={fieldAlert.className(`line:${index}:startDate`)}>
+                    {fieldAlert.label(`line:${index}:startDate`, "開始日")}
                     <input
                       type="date"
                       value={line.startDate}
@@ -189,8 +199,8 @@ export function NursingOrderForm({
                       required
                     />
                   </label>
-                  <label>
-                    終了日
+                  <label className={fieldAlert.className(`line:${index}:endDate`)}>
+                    {fieldAlert.label(`line:${index}:endDate`, "終了日")}
                     <input
                       type="date"
                       value={line.endDate}
@@ -309,10 +319,13 @@ function NursingScheduleFields({
   schedule,
   settings,
   onChange,
+  alertIcon,
 }: {
   schedule: NursingScheduleValues;
   settings: NursingScheduleSettings;
   onChange: (schedule: NursingScheduleValues) => void;
+  /** 頻度の入力が検証で弾かれたときの印。「頻度」のラベルの右に出す。 */
+  alertIcon?: ReactNode;
 }) {
   const presetValue = presetValueOf(schedule);
 
@@ -330,7 +343,10 @@ function NursingScheduleFields({
   return (
     <div className="nursing-order-form__schedule">
       <label>
-        頻度
+        <span className="field-alert__label">
+          頻度
+          {alertIcon}
+        </span>
         <select value={presetValue} onChange={(e) => handlePresetChange(e.target.value)}>
           {NURSING_SCHEDULE_PRESETS.map((preset) => (
             <option key={preset.value} value={preset.value}>

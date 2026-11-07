@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useTransfusionProductOptions } from "../api/masterQueries";
 import {
   useActiveFlags,
@@ -53,6 +61,7 @@ import {
   type TransfusionTestType,
 } from "../fhir/transfusionOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
+import type { ValidationFailure } from "../lib/validation";
 import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
@@ -62,6 +71,7 @@ import { AdvisoryConfirmModal } from "./AdvisoryConfirmModal";
 import { AdvisoryNotice } from "./AdvisoryNotice";
 import { CollectionPlanFieldset } from "./CollectionPlanFieldset";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
 
@@ -126,6 +136,59 @@ function patientForOrder(
   };
 }
 
+/** 検証で弾いた項目の鍵。フォームのラベルの印(FieldAlert)の宛先。 */
+type TransfusionOrderField =
+  | "products"
+  | `product:${number}:units`
+  | "bloodType"
+  | "scheduledDateTime"
+  | `collection:${number}`
+  | "consentConfirmed";
+
+function validateTransfusionOrder(
+  values: TransfusionOrderFormValues,
+  {
+    setMode,
+    showCollections,
+    categoryOf,
+  }: {
+    setMode: boolean;
+    showCollections: boolean;
+    categoryOf: (code: string) => string | undefined;
+  },
+): ValidationFailure<TransfusionOrderField> | null {
+  const fail = (field: TransfusionOrderField, message: string) => ({ field, message });
+  const filled = values.products.filter((product) => product.productCode);
+  if (filled.length === 0) return fail("products", "製剤を 1 つ以上選んでください。");
+  const unitless = values.products.findIndex(
+    (product) => product.productCode && !(Number(product.units) > 0),
+  );
+  if (unitless >= 0) return fail(`product:${unitless}:units`, "製剤の単位数を入れてください。");
+  // セットの内容としての入力では日時・同意の確認・血液型を持たない(適用時に入れる)。
+  if (setMode) return null;
+  const untyped = values.products.findIndex(
+    (product) =>
+      product.productCode &&
+      productNeedsBloodType(categoryOf(product.productCode)) &&
+      !product.abo,
+  );
+  if (untyped >= 0) return fail("bloodType", "血液型を選んでください。");
+  if (!values.scheduledDateTime) return fail("scheduledDateTime", "投与予定日時を入れてください。");
+  if (showCollections) {
+    const unplanned = values.collections.findIndex((line) => !line.plannedAt);
+    if (unplanned >= 0) return fail(`collection:${unplanned}`, "採血予定の日時を入れてください。");
+    const late = values.collections.findIndex(
+      (line) => line.status === "booked" && line.plannedAt >= values.scheduledDateTime,
+    );
+    if (late >= 0) return fail(`collection:${late}`, "採血予定は投与予定日時より前にしてください。");
+  }
+  // 同意書は輸血の必須要件。未確認のまま出せてしまうと確認そのものが形骸化する。
+  if (!values.consentConfirmed) {
+    return fail("consentConfirmed", "輸血同意書の確認にチェックを入れてください。");
+  }
+  return null;
+}
+
 export function TransfusionOrderForm({
   patientId,
   initialValues,
@@ -141,7 +204,8 @@ export function TransfusionOrderForm({
   const [values, setValues] = useState<TransfusionOrderFormValues>(
     initialValues ?? emptyTransfusionOrderForm(""),
   );
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<TransfusionOrderField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
 
   const problemOptions = useProblemOptions(patientId);
@@ -169,7 +233,10 @@ export function TransfusionOrderForm({
   );
 
   const productItems = useMemo(() => products.data?.items ?? [], [products.data]);
-  const categoryOf = (code: string) => productItems.find((i) => i.item_code === code)?.category;
+  const categoryOf = useCallback(
+    (code: string) => productItems.find((i) => i.item_code === code)?.category,
+    [productItems],
+  );
   const update = makeFieldUpdater(setValues);
 
   // 自己血(貯血式)の製剤。選んでいるときだけ採血予定の欄を出す(セットの内容では持たない)。
@@ -416,38 +483,22 @@ export function TransfusionOrderForm({
     }));
   }
 
-  function validate(): string | null {
-    const filled = values.products.filter((product) => product.productCode);
-    if (filled.length === 0) return "製剤を 1 つ以上選んでください。";
-    if (filled.some((product) => !(Number(product.units) > 0))) {
-      return "製剤の単位数を入れてください。";
-    }
-    // セットの内容としての入力では日時・同意の確認・血液型を持たない(適用時に入れる)。
-    if (setMode) return null;
-    const untyped = values.products.findIndex(
-      (product) =>
-        product.productCode &&
-        productNeedsBloodType(categoryOf(product.productCode)) &&
-        !product.abo,
-    );
-    if (untyped >= 0) return "血液型を選んでください。";
-    if (!values.scheduledDateTime) return "投与予定日時を入れてください。";
-    if (showCollections) {
-      if (values.collections.some((line) => !line.plannedAt)) return "採血予定の日時を入れてください。";
-      if (values.collections.some((line) => line.status === "booked" && line.plannedAt >= values.scheduledDateTime)) {
-        return "採血予定は投与予定日時より前にしてください。";
-      }
-    }
-    // 同意書は輸血の必須要件。未確認のまま出せてしまうと確認そのものが形骸化する。
-    if (!values.consentConfirmed) return "輸血同意書の確認にチェックを入れてください。";
-    return null;
-  }
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () => validateTransfusionOrder(values, { setMode, showCollections, categoryOf }),
+    [values, setMode, showCollections, categoryOf],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<TransfusionOrderField>(invalidField, shownError);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validate();
-    setValidationError(error);
-    if (error) return;
+    const failure = validateTransfusionOrder(values, { setMode, showCollections, categoryOf });
+    if (failure) {
+      setValidationError(failure.message, failure.field);
+      return;
+    }
+    setValidationError(null);
     if (session.blocked.length > 0) {
       setValidationError(session.blocked.map((advisory) => advisory.message).join(" / "));
       return;
@@ -468,9 +519,9 @@ export function TransfusionOrderForm({
 
   return (
     <form className="prescription-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
@@ -479,7 +530,7 @@ export function TransfusionOrderForm({
 
       {!setMode && (
         <fieldset>
-          <legend>血液型</legend>
+          <legend>{fieldAlert.label("bloodType", "血液型")}</legend>
           {/* 出す型。選択中の型は日赤の製剤ラベルと同じ色で塗る。オーダーを読む人が
               文字を読まずに型を掴めるようにするため。患者の型に適合しない型は押せない。 */}
           <div className="transfusion-order__blood-type">
@@ -654,8 +705,8 @@ export function TransfusionOrderForm({
             ))}
           </select>
         </label>
-        <label>
-          投与予定日時 *
+        <label className={fieldAlert.className("scheduledDateTime")}>
+          {fieldAlert.label("scheduledDateTime", "投与予定日時 *")}
           <input
             type="datetime-local"
             value={values.scheduledDateTime}
@@ -731,7 +782,7 @@ export function TransfusionOrderForm({
       </fieldset>
 
       <fieldset>
-        <legend>製剤 *</legend>
+        <legend>{fieldAlert.label("products", "製剤 *")}</legend>
         <ul className="transfusion-order__products">
           {values.products.map((product, index) => {
             const category = categoryOf(product.productCode);
@@ -755,6 +806,11 @@ export function TransfusionOrderForm({
                 onProductChange={(code) => handleProductChange(index, code)}
                 onChange={(patch) => updateProduct(index, patch)}
                 onRemove={() => removeProduct(index)}
+                unitsLabel={fieldAlert.label(`product:${index}:units`, "単位数")}
+                unitsClassName={fieldAlert.className(
+                  `product:${index}:units`,
+                  "transfusion-order__product-units",
+                )}
               />
             );
           })}
@@ -775,6 +831,7 @@ export function TransfusionOrderForm({
           scheduledDateTime={values.scheduledDateTime}
           orderedVolume={autoItem?.unit_label === "mL" ? autoVolume : 0}
           defaultVolume={autoItem?.default_units}
+          rowAlert={(index) => fieldAlert.icon(`collection:${index}`)}
         />
       )}
 
@@ -784,16 +841,21 @@ export function TransfusionOrderForm({
         <fieldset>
           <legend>同意</legend>
           <label
-            className={`transfusion-order__consent${
-              values.consentConfirmed ? " transfusion-order__consent--done" : ""
-            }`}
+            className={fieldAlert.className(
+              "consentConfirmed",
+              `transfusion-order__consent${
+                values.consentConfirmed ? " transfusion-order__consent--done" : ""
+              }`,
+            )}
           >
             <input
               type="checkbox"
               checked={values.consentConfirmed}
               onChange={(e) => update("consentConfirmed", e.target.checked)}
             />
-            <span className="transfusion-order__consent-text">輸血同意書を取得済み *</span>
+            <span className="transfusion-order__consent-text">
+              {fieldAlert.label("consentConfirmed", "輸血同意書を取得済み *")}
+            </span>
           </label>
         </fieldset>
       )}
@@ -891,6 +953,8 @@ function ProductCard({
   onProductChange,
   onChange,
   onRemove,
+  unitsLabel,
+  unitsClassName,
 }: {
   index: number;
   product: TransfusionProductValues;
@@ -900,6 +964,9 @@ function ProductCard({
   onProductChange: (code: string) => void;
   onChange: (patch: Partial<TransfusionProductValues>) => void;
   onRemove: () => void;
+  /** 単位数のラベルと label 要素の class。検証で弾かれたときの印(FieldAlert)はここに乗る。 */
+  unitsLabel: ReactNode;
+  unitsClassName: string | undefined;
 }) {
   const missing =
     product.productCode && !productItems.some((i) => i.item_code === product.productCode);
@@ -947,8 +1014,8 @@ function ProductCard({
         </select>
       </label>
 
-      <label className="transfusion-order__product-units">
-        単位数
+      <label className={unitsClassName}>
+        {unitsLabel}
         <input
           type="number"
           min={1}

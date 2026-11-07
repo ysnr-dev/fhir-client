@@ -29,8 +29,10 @@ import { useConditionOptions } from "../hooks/useConditionOptions";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import type { ValidationFailure } from "../lib/validation";
 import { AntimicrobialImportModal } from "./AntimicrobialImportModal";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 
 // 細菌検査オーダーの入力フォーム。1 オーダー = 1 検体(血液培養の 2 セット目は
@@ -40,6 +42,33 @@ import { ProblemSelect } from "./ProblemSelect";
 // 目的菌は頻用菌(マスタで frequent を付けた菌)を分類ごとにチェックボックスで直接出し、
 // それ以外は検索で選ぶ。前投与抗菌薬は「処方取込」のモーダルで期間内の抗菌薬を
 // 選び、自由編集できるテキストに追記する。
+
+/** 必須チェックで弾いた項目の鍵。ラベルの印(FieldAlert)の宛先になる。 */
+type MicroField = "specimenType" | "specimenSite" | "items" | "startDate";
+
+/**
+ * 登録前の入力検証。最初に落ちた項目と文言を返す(無ければ null)。
+ * 登録時に弾くのと、弾いた項目が直されたかを表示側で見るのとで同じ規則を使う。
+ */
+function findValidationFailure(
+  values: MicroOrderFormValues,
+  setMode: boolean,
+): ValidationFailure<MicroField> | null {
+  if (!values.specimen.typeCode) {
+    return { field: "specimenType", message: "検体種別を選択してください。" };
+  }
+  if (!values.specimen.siteCode) {
+    return { field: "specimenSite", message: "採取部位を選択してください。" };
+  }
+  if (values.items.length === 0) {
+    return { field: "items", message: "検査項目を 1 つ以上選択してください。" };
+  }
+  // セットの内容としての入力では検査日を持たない(適用時に入れる)。
+  if (!setMode && !values.startDate) {
+    return { field: "startDate", message: "検査日を入力してください。" };
+  }
+  return null;
+}
 
 interface MicroOrderFormProps {
   patientId: string;
@@ -70,7 +99,8 @@ export function MicroOrderForm({
   const [values, setValues] = useState<MicroOrderFormValues>(
     initialValues ?? emptyMicroOrderForm(),
   );
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<MicroField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
 
   const problemOptions = useProblemOptions(patientId);
@@ -151,23 +181,16 @@ export function MicroOrderForm({
     });
   }
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(() => findValidationFailure(values, setMode), [values, setMode]);
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<MicroField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!values.specimen.typeCode) {
-      setValidationError("検体種別を選択してください。");
-      return;
-    }
-    if (!values.specimen.siteCode) {
-      setValidationError("採取部位を選択してください。");
-      return;
-    }
-    if (values.items.length === 0) {
-      setValidationError("検査項目を 1 つ以上選択してください。");
-      return;
-    }
-    // セットの内容としての入力では検査日を持たない(適用時に入れる)。
-    if (!setMode && !values.startDate) {
-      setValidationError("検査日を入力してください。");
+    const failure = findValidationFailure(values, setMode);
+    if (failure) {
+      setValidationError(failure.message, failure.field);
       return;
     }
     setValidationError(null);
@@ -190,9 +213,9 @@ export function MicroOrderForm({
       onKeyDown={handleKeyDown}
       noValidate={hideSubmit}
     >
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
@@ -239,8 +262,8 @@ export function MicroOrderForm({
             ))}
           </select>
         </label>
-        <label>
-          検査日
+        <label className={fieldAlert.className("startDate")}>
+          {fieldAlert.label("startDate", "検査日")}
           <input
             type="date"
             value={values.startDate}
@@ -281,16 +304,16 @@ export function MicroOrderForm({
 
       <fieldset>
         <legend>検体</legend>
-        <label>
-          検体種別 *
+        <label className={fieldAlert.className("specimenType")}>
+          {fieldAlert.label("specimenType", "検体種別 *")}
           <SpecimenTypeSelect
             types={specimenTypes.data?.items ?? []}
             value={values.specimen.typeCode}
             onChange={handleTypeChange}
           />
         </label>
-        <label>
-          採取部位 *
+        <label className={fieldAlert.className("specimenSite")}>
+          {fieldAlert.label("specimenSite", "採取部位 *")}
           <select
             value={values.specimen.siteCode}
             onChange={(e) => handleSiteChange(e.target.value)}
@@ -344,7 +367,7 @@ export function MicroOrderForm({
       </fieldset>
 
       <fieldset>
-        <legend>検査項目 *</legend>
+        <legend>{fieldAlert.label("items", "検査項目 *")}</legend>
         <ul className="micro-order__checks">
           {activeItems.map((item) => (
             <li key={item.item_code}>

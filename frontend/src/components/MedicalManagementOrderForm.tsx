@@ -10,6 +10,7 @@ import {
   medicalManagementHistoryByCode,
   medicalManagementLimitAdvisories,
   validateMedicalManagementOrderForm,
+  type MedicalManagementField,
   type MedicalManagementLine,
   type MedicalManagementOrderFormValues,
 } from "../fhir/medicalManagementOrderHelpers";
@@ -22,6 +23,7 @@ import { useValidationError } from "../hooks/useValidationError";
 import { makeFieldUpdater } from "../lib/form";
 import { AdvisoryNotice } from "./AdvisoryNotice";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 import { TrashIcon } from "./icons/TrashIcon";
 
@@ -62,7 +64,8 @@ export function MedicalManagementOrderForm({
   const [values, setValues] = useState<MedicalManagementOrderFormValues>(
     initialValues ?? emptyMedicalManagementOrderForm(""),
   );
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<MedicalManagementField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
 
   const problemOptions = useProblemOptions(patientId);
@@ -123,11 +126,22 @@ export function MedicalManagementOrderForm({
     }));
   }
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () => validateMedicalManagementOrderForm(values, { requireDates: !setMode }),
+    [values, setMode],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<MedicalManagementField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateMedicalManagementOrderForm(values, { requireDates: !setMode });
-    setValidationError(error);
-    if (error) return;
+    const failure = validateMedicalManagementOrderForm(values, { requireDates: !setMode });
+    if (failure) {
+      setValidationError(failure.message, failure.field);
+      return;
+    }
+    setValidationError(null);
 
     session.confirm([]);
     onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
@@ -141,9 +155,9 @@ export function MedicalManagementOrderForm({
 
   return (
     <form className="prescription-form medical-management-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
@@ -151,7 +165,7 @@ export function MedicalManagementOrderForm({
       <AdvisoryNotice advisories={session.advisories} />
 
       <fieldset>
-        <legend>算定項目</legend>
+        <legend>{fieldAlert.label("lines", "算定項目")}</legend>
         <ul className="medical-management-form__items">
           {masterItems.map((item) => {
             const line = lineOf(item.receipt_code);
@@ -229,8 +243,8 @@ export function MedicalManagementOrderForm({
       <fieldset>
         <legend>算定日</legend>
         {!setMode && (
-          <label>
-            算定日 *
+          <label className={fieldAlert.className("date")}>
+            {fieldAlert.label("date", "算定日 *")}
             <input type="date" value={values.date} onChange={(e) => update("date", e.target.value)} required />
           </label>
         )}

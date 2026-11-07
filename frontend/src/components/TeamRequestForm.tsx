@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useCareTeams } from "../api/queries";
 import { careTeamKind, careTeamName } from "../fhir/careTeamHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
@@ -8,6 +8,7 @@ import {
   TEAM_REQUEST_PRIORITY_OPTIONS,
   emptyTeamRequestForm,
   validateTeamRequestForm,
+  type TeamRequestField,
   type TeamRequestFormValues,
   type TeamRequestPriority,
 } from "../fhir/teamRequestHelpers";
@@ -16,6 +17,7 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 
@@ -46,7 +48,8 @@ export function TeamRequestForm({
   hideSubmit = false,
 }: TeamRequestFormProps) {
   const [values, setValues] = useState<TeamRequestFormValues>(initialValues ?? emptyTeamRequestForm(""));
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<TeamRequestField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [templateOpen, setTemplateOpen] = useState(false);
   const fromTemplate = Boolean(values.purposeTemplate);
@@ -66,20 +69,31 @@ export function TeamRequestForm({
     }));
   }
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () => validateTeamRequestForm(values, { requireDates: !setMode }),
+    [values, setMode],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<TeamRequestField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateTeamRequestForm(values, { requireDates: !setMode });
-    setValidationError(error);
-    if (error) return;
+    const failure = validateTeamRequestForm(values, { requireDates: !setMode });
+    if (failure) {
+      setValidationError(failure.message, failure.field);
+      return;
+    }
+    setValidationError(null);
     onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
   }
 
   return (
     <>
       <form className="prescription-form consult-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
-        {validationError && (
+        {shownError && (
           <div className="error-banner" role="alert" ref={validationErrorRef}>
-            <p className="error-banner__line error-banner__line--error">{validationError}</p>
+            <p className="error-banner__line error-banner__line--error">{shownError}</p>
           </div>
         )}
         <ErrorBanner error={submitError} />
@@ -87,8 +101,8 @@ export function TeamRequestForm({
 
         <fieldset>
           <legend>依頼先</legend>
-          <label>
-            チーム *
+          <label className={fieldAlert.className("teamId")}>
+            {fieldAlert.label("teamId", "チーム *")}
             <select value={values.teamId} onChange={(e) => changeTeam(e.target.value)} required>
               <option value="">選択してください</option>
               {(teams.data ?? []).map((team) => (
@@ -115,12 +129,14 @@ export function TeamRequestForm({
               ))}
             </select>
           </label>
-          <label>
-            希望日
+          <label className={fieldAlert.className("desiredDate")}>
+            {fieldAlert.label("desiredDate", "希望日")}
             <input type="date" required value={values.desiredDate} onChange={(e) => update("desiredDate", e.target.value)} />
           </label>
-          <div className="consult-form__wide">
-            <span className="consult-form__field-label">依頼目的 *</span>
+          <div className={fieldAlert.className("purpose", "consult-form__wide")}>
+            <span className="consult-form__field-label">
+              {fieldAlert.label("purpose", "依頼目的 *")}
+            </span>
             <div className="rad-gp__template-field">
               <textarea
                 rows={4}

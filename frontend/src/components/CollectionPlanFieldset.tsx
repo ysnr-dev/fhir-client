@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   DEFAULT_COLLECTION_INTERVAL_DAYS,
   DEFAULT_COLLECTION_VOLUME,
@@ -23,9 +23,18 @@ interface Props {
   orderedVolume: number;
   /** 1 回量の既定(製剤マスタの既定単位数)。 */
   defaultVolume: number | null | undefined;
+  /** 検証で弾いた予定の印(FieldAlert)。回の番号の横に出す。 */
+  rowAlert?: (index: number) => ReactNode;
 }
 
-export function CollectionPlanFieldset({ lines, onChange, scheduledDateTime, orderedVolume, defaultVolume }: Props) {
+export function CollectionPlanFieldset({
+  lines,
+  onChange,
+  scheduledDateTime,
+  orderedVolume,
+  defaultVolume,
+  rowAlert,
+}: Props) {
   const [volume, setVolume] = useState(String(defaultVolume || DEFAULT_COLLECTION_VOLUME));
   // 回数は手で変えるまで依頼量 ÷ 1 回量から出す(単位数を直したら追う)。
   const [countInput, setCountInput] = useState("");
@@ -104,7 +113,10 @@ export function CollectionPlanFieldset({ lines, onChange, scheduledDateTime, ord
               return (
                 // 予定は追加・削除しかしないので index を鍵にしてよい。
                 <tr key={index}>
-                  <td>{index + 1}</td>
+                  <td>
+                    {index + 1}
+                    {rowAlert?.(index)}
+                  </td>
                   <td>
                     <input
                       type="datetime-local"

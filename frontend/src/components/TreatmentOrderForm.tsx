@@ -40,6 +40,8 @@ import { Modal } from "./Modal";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import type { ValidationFailure } from "../lib/validation";
+import { shownValidationError, useFieldAlert, type FieldAlert } from "./FieldAlert";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { TreatmentPerformInputModal } from "./TreatmentPerformModal";
@@ -63,6 +65,99 @@ import { bookingLabel } from "../fhir/appointmentHelpers";
 // 「即実施」を選ぶと、診察室でその場で処置する運用のために、登録と同時に実施記録を作って
 // Task を実施済にする。実施入力は処置一覧と同じモーダルで、登録されるオーダー
 // 単位に入れる(単独オーダーの項目を混ぜて選ぶとオーダーが分かれるため)。
+
+/**
+ * 必須チェックで弾いた項目の鍵。ラベルの印(FieldAlert)の宛先になる。
+ * date・perform の後ろはオーダー枠のキー(まとめ枠は空文字、単独枠は処置項目コード)。
+ */
+type TreatmentField =
+  | "items"
+  | `solo:${string}`
+  | `date:${string}`
+  | `booking:${string}`
+  | `perform:${string}`;
+
+type TreatmentFieldAlert = FieldAlert<TreatmentField>;
+
+/**
+ * 登録前の入力検証。最初に落ちた項目と文言を返す(無ければ null)。
+ * 登録時に弾くのと、弾いた項目が直されたかを表示側で見るのとで同じ規則を使う。
+ */
+function findValidationFailure({
+  values,
+  refreshedItems,
+  splits,
+  bookings,
+  performs,
+  performNow,
+  editing,
+  setMode,
+  requiresBooking,
+  canPerformNow,
+  needsPerformInput,
+}: {
+  values: TreatmentOrderFormValues;
+  refreshedItems: TreatmentOrderItemLine[];
+  splits: TreatmentOrderSplit[];
+  bookings: Record<string, SlotSelection>;
+  performs: Record<string, TreatmentPerformFormValues>;
+  performNow: Record<string, boolean>;
+  editing: boolean;
+  setMode: boolean;
+  requiresBooking: (code: string) => boolean;
+  canPerformNow: (split: TreatmentOrderSplit) => boolean;
+  needsPerformInput: (items: TreatmentOrderItemLine[]) => boolean;
+}): ValidationFailure<TreatmentField> | null {
+  if (values.items.length === 0) {
+    return { field: "items", message: "処置項目を 1 つ以上選択してください。" };
+  }
+  const groups = topLevelItems(refreshedItems);
+  const solo = groups.find((line) => !line.groupable);
+  if (editing && solo && groups.length > 1) {
+    return {
+      field: `solo:${solo.code}`,
+      message: `単独オーダーの項目「${solo.name}」は他の処置項目と同じオーダーにできません。`,
+    };
+  }
+
+  // セットの内容としての入力では日付・予約を持たない(適用時に入れる)。
+  if (!setMode && groups.some((line) => line.groupable) && !values.startDate) {
+    return { field: "date:", message: "実施日を入力してください。" };
+  }
+  if (!editing && !setMode) {
+    const soloGroups = groups.filter((line) => !line.groupable);
+    const withoutDate = soloGroups.find((line) => !requiresBooking(line.code) && !line.date);
+    if (withoutDate) {
+      return {
+        field: `date:${withoutDate.code}`,
+        message: `「${withoutDate.name}」の実施日を入力してください。`,
+      };
+    }
+    // 予約必須の枠は予約が実施日時そのもの。選ばずには登録させない。
+    const unbooked = soloGroups.find((line) => requiresBooking(line.code) && !bookings[line.code]);
+    if (unbooked) {
+      return {
+        field: `booking:${unbooked.code}`,
+        message: `「${unbooked.name}」の予約を取得してください。`,
+      };
+    }
+  }
+
+  // 即実施は実施記録まで作る操作なので、入れずに登録できてしまわないようにする
+  // (実施入力をしない項目だけのオーダーは、実施記録を作らないので対象外)。
+  // 予約必須のオーダーはチェックボックス自体を無効化しているが、状態に残った値で
+  // 実施記録を作らないよう判定(canPerformNow)にも噛ませる。
+  const withoutPerform = splits
+    .filter((split) => performNow[split.key] && canPerformNow(split))
+    .find((split) => needsPerformInput(split.values.items) && !performs[split.key]);
+  if (withoutPerform) {
+    return {
+      field: `perform:${withoutPerform.key}`,
+      message: "即実施にする処置の実施入力を行ってください。",
+    };
+  }
+  return null;
+}
 
 interface TreatmentOrderFormProps {
   patientId: string;
@@ -124,7 +219,8 @@ export function TreatmentOrderForm({
   hideSubmit = false,
 }: TreatmentOrderFormProps) {
   const [values, setValues] = useState<TreatmentOrderFormValues>(initialValues ?? emptyTreatmentOrderForm);
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<TreatmentField>();
   const [active, setActive] = useState<ActiveTab | null>(null);
   const [searchCodes, setSearchCodes] = useState<string[]>([]);
   // 即実施。オーダー単位に選べる(添字はどちらも splitTreatmentOrderValues のキー)。
@@ -381,63 +477,41 @@ export function TreatmentOrderForm({
     [catalogByCode],
   );
 
+  const validationInput = useMemo(
+    () => ({
+      values,
+      refreshedItems,
+      splits,
+      bookings,
+      performs,
+      performNow,
+      editing,
+      setMode,
+      requiresBooking,
+      canPerformNow,
+      needsPerformInput,
+    }),
+    [values, refreshedItems, splits, bookings, performs, performNow, editing, setMode, requiresBooking, canPerformNow, needsPerformInput],
+  );
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(() => findValidationFailure(validationInput), [validationInput]);
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<TreatmentField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (values.items.length === 0) {
-      setValidationError("処置項目を 1 つ以上選択してください。");
+    const failure = findValidationFailure(validationInput);
+    if (failure) {
+      setValidationError(failure.message, failure.field);
       return;
     }
 
-    let items = refreshedItems;
+    const items = refreshedItems;
     const groups = topLevelItems(items);
-    const solo = groups.find((line) => !line.groupable);
-    if (editing && solo && groups.length > 1) {
-      setValidationError(
-        `単独オーダーの項目「${solo.name}」は他の処置項目と同じオーダーにできません。`,
-      );
-      return;
-    }
-
     const startDate = values.startDate;
-
-    // セットの内容としての入力では日付・予約を持たない(適用時に入れる)。
-    if (!setMode && groups.some((line) => line.groupable) && !startDate) {
-      setValidationError("実施日を入力してください。");
-      return;
-    }
-    if (!editing && !setMode) {
-      const soloGroups = groups.filter((line) => !line.groupable);
-      const withoutDate = soloGroups.find((line) => !requiresBooking(line.code) && !line.date);
-      if (withoutDate) {
-        setValidationError(`「${withoutDate.name}」の実施日を入力してください。`);
-        return;
-      }
-      // 予約必須の枠は予約が実施日時そのもの。選ばずには登録させない。
-      const unbooked = soloGroups.find(
-        (line) => requiresBooking(line.code) && !bookings[line.code],
-      );
-      if (unbooked) {
-        setValidationError(`「${unbooked.name}」の予約を取得してください。`);
-        return;
-      }
-    }
-
-    // 即実施にするオーダー。予約必須のオーダーはチェックボックス自体を
-    // 無効化しているが、状態に残った値で実施記録を作らないよう判定にも噛ませる。
     const performingSplits = splits.filter(
       (split) => performNow[split.key] && canPerformNow(split),
     );
-
-    // 即実施は実施記録まで作る操作なので、入れずに登録できてしまわないようにする
-    // (実施入力をしない項目だけのオーダーは、実施記録を作らないので対象外)。
-    if (
-      performingSplits.some(
-        (split) => needsPerformInput(split.values.items) && !performs[split.key],
-      )
-    ) {
-      setValidationError("即実施にする処置の実施入力を行ってください。");
-      return;
-    }
 
     // 編集では、枠を選び直したぶんだけが入る(選ばなければ空なので、予約は今のまま)。
     const selected = Object.fromEntries(
@@ -522,9 +596,9 @@ export function TreatmentOrderForm({
   return (
     <>
       <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
-        {validationError && (
+        {shownError && (
           <div className="error-banner" role="alert" ref={validationErrorRef}>
-            <p className="error-banner__line error-banner__line--error">{validationError}</p>
+            <p className="error-banner__line error-banner__line--error">{shownError}</p>
           </div>
         )}
         <ErrorBanner error={submitError} />
@@ -610,6 +684,7 @@ export function TreatmentOrderForm({
 
         <section className="order-select__preview">
           <h3>選択中({entries.length})</h3>
+          {fieldAlert.icon("items")}
           {entries.length === 0 && (
             <p className="order-select__muted">処置項目を選択してください</p>
           )}
@@ -634,10 +709,13 @@ export function TreatmentOrderForm({
                       needsInput: (split) => needsPerformInput(split.values.items),
                       canPerform: canPerformNow,
                       summary: performs[""] ? treatmentPerformSummary(performs[""]) : null,
+                      alert: fieldAlert.icon("perform:"),
                     }
               }
               schedule={
                 <FrameDateTime
+                  fieldAlert={fieldAlert}
+                  dateField="date:"
                   date={values.startDate}
                   time={values.startTime}
                   onChangeDate={(date) => update("startDate", date)}
@@ -652,6 +730,7 @@ export function TreatmentOrderForm({
                   number={index + 1}
                   solo={false}
                   onRemove={remove}
+                  alert={fieldAlert.icon(`solo:${entry.item.code}`)}
                 />
               ))}
             </OrderFrame>
@@ -684,6 +763,7 @@ export function TreatmentOrderForm({
                         needsInput: (split) => needsPerformInput(split.values.items),
                         canPerform: canPerformNow,
                         summary: performs[code] ? treatmentPerformSummary(performs[code]) : null,
+                        alert: fieldAlert.icon(`perform:${code}`),
                       }
                 }
                 schedule={
@@ -715,12 +795,17 @@ export function TreatmentOrderForm({
                         </button>
                       </span>
                     ) : (
-                      <button type="button" onClick={() => openBooking(code)}>
-                        予約
-                      </button>
+                      <span className="rad-order-frame__booking">
+                        <button type="button" onClick={() => openBooking(code)}>
+                          予約
+                        </button>
+                        {fieldAlert.icon(`booking:${code}`)}
+                      </span>
                     )
                   ) : (
                     <FrameDateTime
+                      fieldAlert={fieldAlert}
+                      dateField={`date:${code}`}
                       date={editing ? values.startDate : entry.item.date}
                       time={editing ? values.startTime : entry.item.time}
                       onChangeDate={(date) =>
@@ -733,7 +818,13 @@ export function TreatmentOrderForm({
                   )
                 }
               >
-                <GroupEditor entry={entry} number={1} solo onRemove={remove} />
+                <GroupEditor
+                  entry={entry}
+                  number={1}
+                  solo
+                  onRemove={remove}
+                  alert={fieldAlert.icon(`solo:${code}`)}
+                />
               </OrderFrame>
             );
           })}
@@ -811,6 +902,8 @@ interface FramePerform {
   needsInput: (split: TreatmentOrderSplit) => boolean;
   canPerform: (split: TreatmentOrderSplit) => boolean;
   summary: string | null;
+  /** 実施入力が無いまま登録しようとしたときの印。 */
+  alert: ReactNode;
 }
 
 /**
@@ -880,6 +973,7 @@ function OrderFrame({
                 <button type="button" onClick={perform.onOpen}>
                   実施入力
                 </button>
+                {perform.alert}
                 {perform.summary ? (
                   <span className="rad-perform-now__summary">{perform.summary}</span>
                 ) : (
@@ -899,11 +993,16 @@ function OrderFrame({
 
 /** オーダー枠の実施日・実施時刻。時刻は部門側に任せる場合は未入力でよい任意入力。 */
 function FrameDateTime({
+  fieldAlert,
+  dateField,
   date,
   time,
   onChangeDate,
   onChangeTime,
 }: {
+  fieldAlert: TreatmentFieldAlert;
+  /** この枠の実施日の鍵(未入力の印の宛先)。 */
+  dateField: TreatmentField;
   date: string;
   time: string;
   onChangeDate: (date: string) => void;
@@ -911,8 +1010,8 @@ function FrameDateTime({
 }) {
   return (
     <span className="rad-order-frame__datetime">
-      <label>
-        実施日
+      <label className={fieldAlert.className(dateField)}>
+        {fieldAlert.label(dateField, "実施日")}
         <input type="date" value={date} onChange={(e) => onChangeDate(e.target.value)} />
       </label>
       <label>
@@ -930,12 +1029,15 @@ function GroupEditor({
   number,
   solo,
   onRemove,
+  alert,
 }: {
   entry: TreatmentOrderEntry;
   number: number;
   /** 単独オーダーの項目(登録時にこの GP だけで 1 オーダーになる)。 */
   solo: boolean;
   onRemove: (code: string) => void;
+  /** この GP が登録を弾いたときの印(単独オーダーの同居など)。 */
+  alert?: ReactNode;
 }) {
   const { item, members } = entry;
 
@@ -944,6 +1046,7 @@ function GroupEditor({
       <div className="rad-gp__head">
         <span className="rad-gp__number">GP{number}</span>
         <span className="rad-gp__name">{item.name}</span>
+        {alert}
         {solo && <span className="dose-conversion__badge">単独</span>}
         <button
           type="button"

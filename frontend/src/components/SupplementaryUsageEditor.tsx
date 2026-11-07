@@ -50,6 +50,7 @@ export function SupplementaryUsageEditor({
   onRemove,
   removeButton,
   name,
+  alert,
 }: {
   value: SupplementaryUsage;
   onChange: (value: SupplementaryUsage) => void;
@@ -58,11 +59,16 @@ export function SupplementaryUsageEditor({
   removeButton: (onClick: () => void, label: string) => ReactNode;
   /** 種類のラジオの name(RP ごとに別にする)。 */
   name: string;
+  /** 入力検証で弾かれたときの印。見出しの横に出す。 */
+  alert?: ReactNode;
 }) {
   return (
     <div className="rp-card__supplement">
       <div className="rp-card__supplement-head">
-        <span className="rp-card__usage-label">補足用法</span>
+        <span className="rp-card__usage-label">
+          補足用法
+          {alert}
+        </span>
         <div className="rp-card__supplement-kinds" role="radiogroup">
           {SUPPLEMENT_KIND_OPTIONS.map((option) => (
             <label key={option.kind} className="rp-card__supplement-kind">
@@ -247,16 +253,22 @@ export function UnevenDoseEditor({
   onChange,
   onRemove,
   removeButton,
+  alert,
 }: {
   labels: string[];
   doses: string[];
   onChange: (doses: string[]) => void;
   onRemove: () => void;
   removeButton: (onClick: () => void, label: string) => ReactNode;
+  /** 入力検証で弾かれたときの印。見出しの横に出す。 */
+  alert?: ReactNode;
 }) {
   return (
     <div className="rp-card__uneven">
-      <span className="rp-card__usage-label">不均等</span>
+      <span className="rp-card__usage-label">
+        不均等
+        {alert}
+      </span>
       {labels.map((label, i) => (
         <label key={i} className="rp-card__uneven-item">
           {label}

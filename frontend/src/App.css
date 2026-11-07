@@ -4142,6 +4142,22 @@ fieldset.rp-card {
   color: var(--warning);
 }
 
+/* 必須チェックで弾かれた項目の印(components/FieldAlert)。ラベルの文字の右に警告アイコン、
+   入力欄は赤枠。ラベルは縦並び(.prescription-form label)なので、文字とアイコンは 1 つの span に入れる。
+   アイコンは文字の続きとして流す(狭い項目名の列でも文字の折り返しを変えない)。 */
+.field-alert {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-left: 4px;
+  color: var(--danger);
+  line-height: 0;
+}
+
+/* :is で詳細度を (0,1,1) にし、フォームごとの枠指定(.prescription-form select など)に勝たせる。 */
+.field-alert__field :is(input, select, textarea) {
+  border-color: var(--danger);
+}
+
 /* --- 管理画面: ログイン ---------------------------------------------------- */
 
 .admin-login__lead {

@@ -14,6 +14,7 @@ import {
   emptyNutritionGuidanceOrderForm,
   validateNutritionGuidanceOrderForm,
   type NutritionGuidanceFormat,
+  type NutritionGuidanceOrderField,
   type NutritionGuidanceOrderFormValues,
 } from "../fhir/nutritionGuidanceOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
@@ -22,6 +23,7 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ConditionPickerModal } from "./ConditionPickerModal";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { MealDietPickerModal } from "./MealDietPickerModal";
 import { ProblemSelect } from "./ProblemSelect";
 import { TemplateEntryModal } from "./TemplateEntryModal";
@@ -71,7 +73,8 @@ export function NutritionGuidanceOrderForm({
   const [values, setValues] = useState<NutritionGuidanceOrderFormValues>(
     initialValues ?? emptyNutritionGuidanceOrderForm(""),
   );
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<NutritionGuidanceOrderField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [pickingDiet, setPickingDiet] = useState(false);
   const [pickingCondition, setPickingCondition] = useState(false);
@@ -97,11 +100,22 @@ export function NutritionGuidanceOrderForm({
     setPickingDiet(false);
   }
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () => validateNutritionGuidanceOrderForm(values, { requireDates: !setMode }),
+    [values, setMode],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<NutritionGuidanceOrderField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateNutritionGuidanceOrderForm(values, { requireDates: !setMode });
-    setValidationError(error);
-    if (error) return;
+    const failure = validateNutritionGuidanceOrderForm(values, { requireDates: !setMode });
+    if (failure) {
+      setValidationError(failure.message, failure.field);
+      return;
+    }
+    setValidationError(null);
 
     onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
   }
@@ -113,9 +127,9 @@ export function NutritionGuidanceOrderForm({
         onSubmit={handleSubmit}
         noValidate={hideSubmit}
       >
-        {validationError && (
+        {shownError && (
           <div className="error-banner" role="alert" ref={validationErrorRef}>
-            <p className="error-banner__line error-banner__line--error">{validationError}</p>
+            <p className="error-banner__line error-banner__line--error">{shownError}</p>
           </div>
         )}
         <ErrorBanner error={submitError} />
@@ -123,8 +137,8 @@ export function NutritionGuidanceOrderForm({
 
         <fieldset>
           <legend>指導内容</legend>
-          <label>
-            指導形態 *
+          <label className={fieldAlert.className("format")}>
+            {fieldAlert.label("format", "指導形態 *")}
             <select
               value={values.format}
               onChange={(e) => update("format", e.target.value as NutritionGuidanceFormat)}
@@ -153,8 +167,8 @@ export function NutritionGuidanceOrderForm({
         {/* 期間。終了日を入れなければ継続で、部門一覧の「終了」か退院で終わる。 */}
         <fieldset>
           <legend>期間</legend>
-          <label>
-            開始日 *
+          <label className={fieldAlert.className("startDate")}>
+            {fieldAlert.label("startDate", "開始日 *")}
             <input
               type="date"
               value={values.startDate}
@@ -162,8 +176,8 @@ export function NutritionGuidanceOrderForm({
               required
             />
           </label>
-          <label>
-            終了日
+          <label className={fieldAlert.className("endDate")}>
+            {fieldAlert.label("endDate", "終了日")}
             <input
               type="date"
               value={values.endDate}
@@ -176,8 +190,8 @@ export function NutritionGuidanceOrderForm({
         {/* 対象疾患名は特別食加算の算定要件そのものなので必須。 */}
         <fieldset>
           <legend>対象</legend>
-          <label>
-            対象疾患名 *
+          <label className={fieldAlert.className("targetDisease")}>
+            {fieldAlert.label("targetDisease", "対象疾患名 *")}
             <div className="rad-gp__reason">
               <input
                 type="text"

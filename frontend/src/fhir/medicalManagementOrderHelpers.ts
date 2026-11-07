@@ -1,4 +1,5 @@
 import { shortDate, today } from "../lib/dates";
+import type { ValidationFailure } from "../lib/validation";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { advisoryKey, type Advisory } from "./advisoryHelpers";
 import {
@@ -70,14 +71,18 @@ export function emptyMedicalManagementOrderForm(
   return { setting, date: today(), lines: [], comment: "", problem: null };
 }
 
+/** 入力検証で弾く項目の鍵。ラベルの印(FieldAlert)の宛先になる。 */
+export type MedicalManagementField = "lines" | "date";
+
+/** 入力の検証。最初に落ちた項目と文言を返す(無ければ null)。 */
 export function validateMedicalManagementOrderForm(
   values: MedicalManagementOrderFormValues,
   /** requireDates を偽にすると算定日を求めない(セットの内容としての入力)。 */
   { requireDates = true }: { requireDates?: boolean } = {},
-): string {
-  if (values.lines.length === 0) return "算定する項目を選んでください。";
-  if (requireDates && !values.date) return "算定日を入れてください。";
-  return "";
+): ValidationFailure<MedicalManagementField> | null {
+  if (values.lines.length === 0) return { field: "lines", message: "算定する項目を選んでください。" };
+  if (requireDates && !values.date) return { field: "date", message: "算定日を入れてください。" };
+  return null;
 }
 
 /** 点数の表示(「225点」)。診療行為マスタの点数は "225.0" のような文字列で届く。 */

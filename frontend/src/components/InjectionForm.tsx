@@ -54,7 +54,9 @@ import { switchDoseUnit } from "../fhir/doseConversionHelpers";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import type { ValidationFailure } from "../lib/validation";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { DoseUnitSelect } from "./DoseUnitSelect";
 import { InsulinScaleEditor } from "./InsulinScaleEditor";
 import { FormularyMark, MedicineCautionMarks, useMedicationAdvisories } from "./MedicineWarnings";
@@ -123,6 +125,143 @@ function countDates(start: string, end: string, schedule: InjectionSchedule): nu
 }
 
 // 総投与量。端数が出るのは濃度からの換算だけなので小数第 1 位まで出す。
+/** 必須チェックで弾いた項目の鍵。ラベルの印(FieldAlert)の宛先になる。RP・医薬品ごとの項目は添字付き。 */
+type InjectionField =
+  | "startDate"
+  | "endDate"
+  | "intervalDays"
+  | "weekdays"
+  | "setting"
+  | "category"
+  | "rps"
+  | `usageType:${number}`
+  | `route:${number}`
+  | `rate:${number}`
+  | `times:${number}`
+  | `medicines:${number}`
+  | `medicine:${number}:${number}`
+  | `dose:${number}:${number}`
+  | `insulinScale:${number}:${number}`;
+
+/**
+ * 登録前の入力検証。落ちた項目を順に返す(先頭が登録時に出す文言)。
+ * 共通項目はそれぞれ、RP は 1 つにつき最初の失敗だけを集める。登録時に弾くのと、
+ * 弾いた項目が直されたかを表示側で見るのとで同じ規則を使う。
+ */
+function validationFailures(
+  values: InjectionFormValues,
+  context: {
+    setMode: boolean;
+    creating: boolean;
+    /** 投与時間を選んでいる間は総投与量から計算した速度(換算マスタに依る)。 */
+    effectiveRate: (rp: InjectionRpValues) => string;
+  },
+): ValidationFailure<InjectionField>[] {
+  const failures: ValidationFailure<InjectionField>[] = [];
+  const push = (field: InjectionField, message: string) => failures.push({ field, message });
+  // セットの内容としての入力では日付・期間を持たない(適用時に入れる)。
+  if (!context.setMode && !values.startDate) push("startDate", "注射日は必須です。");
+  if (context.creating && !context.setMode) {
+    if (!values.endDate) push("endDate", "終了日は必須です。");
+    else if (values.endDate < values.startDate) push("endDate", "終了日は注射日以降にしてください。");
+    else if (diffDays(values.startDate, values.endDate) > MAX_INJECTION_SPAN_DAYS) {
+      push("endDate", `期間は${MAX_INJECTION_SPAN_DAYS}日までです。`);
+    }
+    if (values.schedule.kind === "interval") {
+      const n = values.schedule.intervalDays;
+      if (!Number.isInteger(n) || n < 2) push("intervalDays", "間隔は2以上の整数で入力してください。");
+    }
+    if (values.schedule.kind === "weekly" && values.schedule.days.length === 0) {
+      push("weekdays", "曜日を1つ以上選択してください。");
+    }
+    // 展開数の上限を超えるときは、黙って打ち切らず期間を縮めてもらう。
+    if (failures.length === 0) {
+      const span = diffDays(values.startDate, values.endDate);
+      const wanted = countDates(values.startDate, values.endDate, values.schedule);
+      if (wanted > MAX_INJECTION_ORDERS) {
+        push(
+          "endDate",
+          `一度に登録できるのは${MAX_INJECTION_ORDERS}件までです(いまの指定は${wanted}件${
+            span > MAX_INJECTION_SPAN_DAYS ? "以上" : ""
+          })。期間を短くしてください。`,
+        );
+      }
+    }
+  }
+  if (!values.setting) push("setting", "入外区分は必須です。");
+  if (!values.category) push("category", "注射区分は必須です。");
+  if (values.rps.length === 0) push("rps", "RPを1件以上登録してください。");
+
+  for (let i = 0; i < values.rps.length; i++) {
+    const failure = rpValidationFailure(values.rps[i], i, context.effectiveRate);
+    if (failure) failures.push(failure);
+  }
+  return failures;
+}
+
+function rpValidationFailure(
+  rp: InjectionRpValues,
+  i: number,
+  effectiveRate: (rp: InjectionRpValues) => string,
+): ValidationFailure<InjectionField> | null {
+  const rpLabel = `RP${i + 1}`;
+  if (!rp.usageType) return { field: `usageType:${i}`, message: `${rpLabel}: 用法種別を選択してください。` };
+  if (!rp.routeCode) return { field: `route:${i}`, message: `${rpLabel}: 投与経路を選択してください。` };
+  const rate = effectiveRate(rp);
+  if (rp.usageType === "drip" && rate && Number(rate) <= 0) {
+    return { field: `rate:${i}`, message: `${rpLabel}: 投与速度は正の数値で入力してください。` };
+  }
+  if (rp.usageType === "drip" && rp.infusionHours && !rate) {
+    return {
+      field: `rate:${i}`,
+      message: `${rpLabel}: 総投与量を mL 換算できないため投与速度を計算できません。投与時間の選択を外して直接入力してください。`,
+    };
+  }
+  if (rp.times.some((t) => !t.start)) {
+    return {
+      field: `times:${i}`,
+      message: `${rpLabel}: 開始時刻が未入力の行があります。入力するか削除してください。`,
+    };
+  }
+  if (rp.medicines.length === 0) {
+    return { field: `medicines:${i}`, message: `${rpLabel}: 医薬品を1件以上登録してください。` };
+  }
+  for (let j = 0; j < rp.medicines.length; j++) {
+    const med = rp.medicines[j];
+    if (!med.medicine) {
+      return { field: `medicine:${i}:${j}`, message: `${rpLabel}: 医薬品を選択してください。` };
+    }
+    if (med.insulinScale) {
+      // スケールのみの指示は基本量を持たない(施行量はスケールで決まる)。
+      if (med.dose && Number(med.dose) < 0) {
+        return { field: `dose:${i}:${j}`, message: `${rpLabel}: 投与量は 0 以上で入力してください。` };
+      }
+      const scaleErrors = validateInsulinScale(med.insulinScale);
+      if (scaleErrors.length) {
+        return { field: `insulinScale:${i}:${j}`, message: `${rpLabel}: ${scaleErrors[0]}` };
+      }
+      continue;
+    }
+    if (!med.dose || Number(med.dose) <= 0) {
+      return { field: `dose:${i}:${j}`, message: `${rpLabel}: 投与量を入力してください。` };
+    }
+  }
+  return null;
+}
+
+/** 医薬品追加の前の検証。未選択の行があるうちは行を増やさない。 */
+function findUnselectedMedicine(
+  rp: InjectionRpValues,
+  rpIndex: number,
+): ValidationFailure<InjectionField> | null {
+  const j = rp.medicines.findIndex((m) => !m.medicine);
+  if (j < 0) return null;
+  return {
+    field: `medicine:${rpIndex}:${j}`,
+    message: "医薬品が未選択のレコードがあります。選択してから追加してください。",
+  };
+}
+
 function formatMl(ml: number): string {
   return (Math.round(ml * 10) / 10).toLocaleString();
 }
@@ -166,7 +305,8 @@ export function InjectionForm({
   orderId,
 }: InjectionFormProps) {
   const [values, setValues] = useState<InjectionFormValues>(initialValues ?? emptyInjectionForm);
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<InjectionField>();
   const [modal, setModal] = useState<ModalState>(null);
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [usageCommentOpen, setUsageCommentOpen] = useState<boolean[]>(() =>
@@ -401,8 +541,9 @@ export function InjectionForm({
 
   function addMedicine(rpIndex: number) {
     const rp = values.rps[rpIndex];
-    if (rp.medicines.some((m) => !m.medicine)) {
-      setValidationError("医薬品が未選択のレコードがあります。選択してから追加してください。");
+    const unselected = findUnselectedMedicine(rp, rpIndex);
+    if (unselected) {
+      setValidationError(unselected.message, unselected.field);
       return;
     }
     setValidationError(null);
@@ -467,72 +608,23 @@ export function InjectionForm({
     });
   }
 
-  function validate(): string | null {
-    // セットの内容としての入力では日付・期間を持たない(適用時に入れる)。
-    if (!setMode && !values.startDate) return "注射日は必須です。";
-    if (mode === "create" && !setMode) {
-      if (!values.endDate) return "終了日は必須です。";
-      if (values.endDate < values.startDate) return "終了日は注射日以降にしてください。";
-      if (diffDays(values.startDate, values.endDate) > MAX_INJECTION_SPAN_DAYS) {
-        return `期間は${MAX_INJECTION_SPAN_DAYS}日までです。`;
-      }
-      if (values.schedule.kind === "interval") {
-        const n = values.schedule.intervalDays;
-        if (!Number.isInteger(n) || n < 2) return "間隔は2以上の整数で入力してください。";
-      }
-      if (values.schedule.kind === "weekly" && values.schedule.days.length === 0) {
-        return "曜日を1つ以上選択してください。";
-      }
-      // 展開数の上限を超えるときは、黙って打ち切らず期間を縮めてもらう。
-      const span = diffDays(values.startDate, values.endDate);
-      const wanted = countDates(values.startDate, values.endDate, values.schedule);
-      if (wanted > MAX_INJECTION_ORDERS) {
-        return `一度に登録できるのは${MAX_INJECTION_ORDERS}件までです(いまの指定は${wanted}件${
-          span > MAX_INJECTION_SPAN_DAYS ? "以上" : ""
-        })。期間を短くしてください。`;
-      }
-    }
-    if (!values.setting) return "入外区分は必須です。";
-    if (!values.category) return "注射区分は必須です。";
-    if (values.rps.length === 0) return "RPを1件以上登録してください。";
-
-    for (let i = 0; i < values.rps.length; i++) {
-      const rp = values.rps[i];
-      const rpLabel = `RP${i + 1}`;
-      if (!rp.usageType) return `${rpLabel}: 用法種別を選択してください。`;
-      if (!rp.routeCode) return `${rpLabel}: 投与経路を選択してください。`;
-      const rate = effectiveRate(rp);
-      if (rp.usageType === "drip" && rate && Number(rate) <= 0) {
-        return `${rpLabel}: 投与速度は正の数値で入力してください。`;
-      }
-      if (rp.usageType === "drip" && rp.infusionHours && !rate) {
-        return `${rpLabel}: 総投与量を mL 換算できないため投与速度を計算できません。投与時間の選択を外して直接入力してください。`;
-      }
-      if (rp.times.some((t) => !t.start)) {
-        return `${rpLabel}: 開始時刻が未入力の行があります。入力するか削除してください。`;
-      }
-      if (rp.medicines.length === 0) return `${rpLabel}: 医薬品を1件以上登録してください。`;
-      for (let j = 0; j < rp.medicines.length; j++) {
-        const med = rp.medicines[j];
-        if (!med.medicine) return `${rpLabel}: 医薬品を選択してください。`;
-        if (med.insulinScale) {
-          // スケールのみの指示は基本量を持たない(施行量はスケールで決まる)。
-          if (med.dose && Number(med.dose) < 0) return `${rpLabel}: 投与量は 0 以上で入力してください。`;
-          const scaleErrors = validateInsulinScale(med.insulinScale);
-          if (scaleErrors.length) return `${rpLabel}: ${scaleErrors[0]}`;
-          continue;
-        }
-        if (!med.dose || Number(med.dose) <= 0) return `${rpLabel}: 投与量を入力してください。`;
-      }
-    }
-    return null;
-  }
+  // 今の入力で落ちる項目。登録時は先頭で弾き、弾いた項目が直されたら(同じ項目が
+  // 落ちなくなったら)バナーと印を消す。投与速度は換算マスタに依るので関数で渡す
+  // (描画ごとに作り直す関数なので memo はしない。規則は RP を一巡するだけで軽い)。
+  const failures = validationFailures(values, {
+    setMode,
+    creating: mode === "create",
+    effectiveRate,
+  });
+  const liveFailure = failures.find((f) => f.field === invalidField) ?? failures[0] ?? null;
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<InjectionField>(invalidField, shownError);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validate();
-    if (error) {
-      setValidationError(error);
+    const failure = failures[0];
+    if (failure) {
+      setValidationError(failure.message, failure.field);
       return;
     }
     if (session.blocked.length > 0) {
@@ -567,9 +659,9 @@ export function InjectionForm({
 
   return (
     <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
@@ -587,8 +679,8 @@ export function InjectionForm({
             />
           </label>
         )}
-        <label>
-          入外区分
+        <label className={fieldAlert.className("setting")}>
+          {fieldAlert.label("setting", "入外区分")}
           <select
             className="select--placeholder"
             value={values.setting}
@@ -604,8 +696,8 @@ export function InjectionForm({
             ))}
           </select>
         </label>
-        <label>
-          注射区分
+        <label className={fieldAlert.className("category")}>
+          {fieldAlert.label("category", "注射区分")}
           <select
             className="select--placeholder"
             value={values.category}
@@ -623,8 +715,8 @@ export function InjectionForm({
           </select>
         </label>
         {!setMode && (
-          <label>
-            注射日
+          <label className={fieldAlert.className("startDate")}>
+            {fieldAlert.label("startDate", "注射日")}
             <input
               type="date"
               value={values.startDate}
@@ -634,8 +726,8 @@ export function InjectionForm({
         )}
         {mode === "create" && !setMode && (
           <>
-            <label>
-              終了日
+            <label className={fieldAlert.className("endDate")}>
+              {fieldAlert.label("endDate", "終了日")}
               <input
                 type="date"
                 value={values.endDate}
@@ -655,8 +747,8 @@ export function InjectionForm({
               </select>
             </label>
             {values.schedule.kind === "interval" && (
-              <label>
-                間隔
+              <label className={fieldAlert.className("intervalDays")}>
+                {fieldAlert.label("intervalDays", "間隔")}
                 <span className="injection-days">
                   <input
                     type="number"
@@ -673,7 +765,7 @@ export function InjectionForm({
             )}
             {values.schedule.kind === "weekly" && (
               <fieldset className="injection-weekdays">
-                <legend>曜日</legend>
+                <legend>{fieldAlert.label("weekdays", "曜日")}</legend>
                 {DAY_OF_WEEK_OPTIONS.map((o) => (
                   <label key={o.code} className="injection-weekdays__option">
                     <input
@@ -770,6 +862,9 @@ export function InjectionForm({
                         ) : (
                           <span className="rp-card__usage-value--empty">未選択</span>
                         )}
+                        {fieldAlert.icon(`medicine:${rpIndex}:${medIndex}`)}
+                        {fieldAlert.icon(`dose:${rpIndex}:${medIndex}`)}
+                        {fieldAlert.icon(`insulinScale:${rpIndex}:${medIndex}`)}
                       </div>
                       <AdvisoryInlineMarks advisories={advisoriesOfScope(session.advisories, rpIndex, medIndex)} />
                       {!med.insulinScale && isInsulinMedicine(med.medicine, conversions) && (
@@ -807,7 +902,7 @@ export function InjectionForm({
                         </div>
                       )}
                     </td>
-                    <td>
+                    <td className={fieldAlert.className(`dose:${rpIndex}:${medIndex}`)}>
                       <input
                         type="number"
                         step="any"
@@ -884,6 +979,7 @@ export function InjectionForm({
             >
               + 医薬品追加
             </button>
+            {fieldAlert.icon(`medicines:${rpIndex}`)}
             {/* 総投与量は投与速度を使わない場合(ワンショット等)でも常に出す。 */}
             <span className="injection-total">
               <span className="injection-total__label">総投与量</span>
@@ -899,8 +995,8 @@ export function InjectionForm({
           </div>
 
           <div className="injection-usage">
-            <label>
-              用法種別
+            <label className={fieldAlert.className(`usageType:${rpIndex}`)}>
+              {fieldAlert.label(`usageType:${rpIndex}`, "用法種別")}
               <select
                 value={rp.usageType}
                 onChange={(e) => {
@@ -916,8 +1012,8 @@ export function InjectionForm({
                 ))}
               </select>
             </label>
-            <label>
-              投与経路
+            <label className={fieldAlert.className(`route:${rpIndex}`)}>
+              {fieldAlert.label(`route:${rpIndex}`, "投与経路")}
               <select
                 value={rp.routeCode}
                 onChange={(e) => {
@@ -1001,8 +1097,8 @@ export function InjectionForm({
                     ))}
                   </select>
                 </label>
-                <label>
-                  投与速度
+                <label className={fieldAlert.className(`rate:${rpIndex}`)}>
+                  {fieldAlert.label(`rate:${rpIndex}`, "投与速度")}
                   <span className="injection-usage__rate">
                     <input
                       type="number"
@@ -1024,9 +1120,19 @@ export function InjectionForm({
           </div>
 
           <div className="injection-start-times">
-            <span className="rp-card__usage-label">開始・終了時刻</span>
+            <span className="rp-card__usage-label">
+              開始・終了時刻
+              {fieldAlert.icon(`times:${rpIndex}`)}
+            </span>
             {rp.times.map((time, timeIndex) => (
-              <div className="injection-start-times__row" key={timeIndex}>
+              <div
+                className={
+                  time.start
+                    ? "injection-start-times__row"
+                    : fieldAlert.className(`times:${rpIndex}`, "injection-start-times__row")
+                }
+                key={timeIndex}
+              >
                 {/* 日付は注射日を使うので時刻だけを入力する。 */}
                 <input
                   type="time"
@@ -1122,6 +1228,7 @@ export function InjectionForm({
         <button type="button" onClick={addRp}>
           + RP追加
         </button>
+        {fieldAlert.icon("rps")}
       </div>
 
       {!hideSubmit && (

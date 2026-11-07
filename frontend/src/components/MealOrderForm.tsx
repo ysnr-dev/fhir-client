@@ -13,6 +13,7 @@ import {
   mealPatternStepsOf,
   planMealPattern,
   validateMealPatternSteps,
+  type MealPatternStepField,
   type MealPatternSubmission,
 } from "../fhir/mealPatternHelpers";
 import {
@@ -38,12 +39,14 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useMealNutritionTarget } from "../hooks/useMealNutritionTarget";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import type { ValidationFailure } from "../lib/validation";
 import { type Advisory, advisoryKey, severityOf } from "../fhir/advisoryHelpers";
 import { summarizeAllergy } from "../fhir/allergyHelpers";
 import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
 import { useAdvisorySession } from "../hooks/useAdvisorySession";
 import { AdvisoryNotice } from "./AdvisoryNotice";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { MealAllergyList } from "./MealAllergyList";
 import { MealDietPickerModal, type MealPickerTab } from "./MealDietPickerModal";
 import { MealTargetBadge } from "./MealNutritionTargetLine";
@@ -135,6 +138,59 @@ function normalizeForNutritionForm(
   return changed ? { ...values, staples, sideDishForm: null, saltLimit } : values;
 }
 
+/** 検証で弾いた項目の鍵。フォームのラベルの印(FieldAlert)の宛先。 */
+type MealOrderField =
+  | "diet"
+  | "staples"
+  | "saltLimit"
+  | "startDate"
+  | "endDate"
+  | MealPatternStepField;
+
+/**
+ * 単発の食事の検証。startDate は「そのオーダーが始まる日」で、食事変更として登録する
+ * ときだけ暦で押した日に差し替わる(終了との前後もその日で見る)。
+ */
+function validateMealOrder(
+  values: MealOrderFormValues,
+  startDate: string,
+  { setMode, hidePeriod }: { setMode: boolean; hidePeriod: boolean },
+): ValidationFailure<MealOrderField> | null {
+  const fail = (field: MealOrderField, message: string) => ({ field, message });
+  if (!values.diet) return fail("diet", "食種を選んでください。");
+  // 1 日を通して食事が出ないなら、それは欠食ではなく食止めの食種。
+  if (
+    !values.dietIsFasting &&
+    MEAL_TIMING_OPTIONS.every((t) => values.staples[t.code] === MEAL_SKIPPED)
+  ) {
+    return fail("staples", "すべての食事が欠食のときは、食種で「食止め」を選んでください。");
+  }
+  // 数値でない・負の入力は保存で黙って落ちてしまうので、ここで止める。
+  if (values.saltLimit.trim() && parseSaltLimit(values.saltLimit) === undefined) {
+    return fail("saltLimit", "塩分制限は 0 以上の数値で入れてください。");
+  }
+  if (!setMode && !startDate) return fail("startDate", "開始日を入れてください。");
+  if (!hidePeriod && startDate && values.endDate) {
+    const beforeStart =
+      values.endDate < startDate ||
+      (values.endDate === startDate &&
+        timingIndex(values.endTiming) < timingIndex(values.startTiming));
+    if (beforeStart) return fail("endDate", "終了は開始と同じか、それより後にしてください。");
+  }
+  return null;
+}
+
+/** パターン食のときの検証。段階の規則はマスタの編集と同じ。 */
+function validateMealPatternOrder(
+  pattern: MealPatternSubmission,
+  startDate: string,
+): ValidationFailure<MealOrderField> | null {
+  const failure = validateMealPatternSteps(pattern.steps);
+  if (failure) return failure;
+  if (!startDate) return { field: "startDate", message: "開始日を入れてください。" };
+  return null;
+}
+
 /** 開始・終了の前後比較に使う並び順の番号。 */
 function timingIndex(timing: MealTiming): number {
   return MEAL_TIMING_OPTIONS.findIndex((t) => t.code === timing);
@@ -156,7 +212,8 @@ export function MealOrderForm({
   editing = false,
 }: MealOrderFormProps) {
   const [values, setValues] = useState<MealOrderFormValues>(initialValues);
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<MealOrderField>();
   // 選んだパターン食と、この患者向けに直した段階。選ぶと食種・主食の欄が段階の表に変わる。
   const [pattern, setPattern] = useState<MealPatternSubmission | null>(null);
   const patterns = useMealPatterns(allowPattern);
@@ -310,33 +367,16 @@ export function MealOrderForm({
     return choice?.code ?? "";
   }
 
-  /**
-   * 入力の検証。startDate は「そのオーダーが始まる日」で、食事変更として登録する
-   * ときだけ暦で押した日に差し替わる(終了との前後もその日で見る)。
-   */
-  function validate(startDate: string): string {
-    if (!values.diet) return "食種を選んでください。";
-    // 1 日を通して食事が出ないなら、それは欠食ではなく食止めの食種。
-    if (
-      !values.dietIsFasting &&
-      MEAL_TIMING_OPTIONS.every((t) => values.staples[t.code] === MEAL_SKIPPED)
-    ) {
-      return "すべての食事が欠食のときは、食種で「食止め」を選んでください。";
-    }
-    // 数値でない・負の入力は保存で黙って落ちてしまうので、ここで止める。
-    if (values.saltLimit.trim() && parseSaltLimit(values.saltLimit) === undefined) {
-      return "塩分制限は 0 以上の数値で入れてください。";
-    }
-    if (!setMode && !startDate) return "開始日を入れてください。";
-    if (!hidePeriod && startDate && values.endDate) {
-      const beforeStart =
-        values.endDate < startDate ||
-        (values.endDate === startDate &&
-          timingIndex(values.endTiming) < timingIndex(values.startTiming));
-      if (beforeStart) return "終了は開始と同じか、それより後にしてください。";
-    }
-    return "";
-  }
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () =>
+      pattern
+        ? validateMealPatternOrder(pattern, values.startDate)
+        : validateMealOrder(values, values.startDate, { setMode, hidePeriod }),
+    [pattern, values, setMode, hidePeriod],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<MealOrderField>(invalidField, shownError);
 
   function submitValues(): MealOrderFormValues {
     return {
@@ -357,20 +397,14 @@ export function MealOrderForm({
     };
   }
 
-  /** パターン食のときの検証。段階の規則はマスタの編集と同じ。 */
-  function validatePattern(): string {
-    if (!pattern) return "";
-    const error = validateMealPatternSteps(pattern.steps);
-    if (error) return error;
-    if (!values.startDate) return "開始日を入れてください。";
-    return "";
-  }
-
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = pattern ? validatePattern() : validate(values.startDate);
-    setValidationError(error);
-    if (error) return;
+    const failure = liveFailure;
+    if (failure) {
+      setValidationError(failure.message, failure.field);
+      return;
+    }
+    setValidationError(null);
 
     session.confirm([]);
     // 終了させないオーダーは戻す対象にもならない(チェックも出ていない)。
@@ -419,9 +453,9 @@ export function MealOrderForm({
 
   return (
     <form className="prescription-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
@@ -435,7 +469,7 @@ export function MealOrderForm({
           マスタで決めてあり、ここでは食数と段階の削除だけ直せる)。 */}
       {pattern && spans && (
         <fieldset>
-          <legend>パターン食</legend>
+          <legend>{fieldAlert.label("steps", "パターン食")}</legend>
           <div className="meal-pattern-steps__wrap">
             <div className="meal-diet-field__name">
               {/* 単発の食種と同じ並び。選び直しはパターン食のタブで開く(食種のタブに移れば単発に戻る)。 */}
@@ -448,6 +482,7 @@ export function MealOrderForm({
               steps={pattern.steps}
               spans={spans}
               onChange={(steps) => setPattern({ ...pattern, steps })}
+              rowAlert={(index) => fieldAlert.icon(`step:${index}`)}
             />
           </div>
           {!setMode && (
@@ -474,6 +509,7 @@ export function MealOrderForm({
                   <button type="button" onClick={() => setPickingTab("diet")}>
                     食種選択
                   </button>
+                  {fieldAlert.icon("diet")}
                   {values.diet && (
                     <>
                       <strong>{values.diet.name}</strong>
@@ -543,8 +579,8 @@ export function MealOrderForm({
             {/* 塩分制限(g/日)。食種名に含意されないことがあるので独立した欄で持つ。
                 参考仕様は経管・経口食(§3)にも挙げているので出し、調乳食(§4)では出さない。 */}
             {nutritionForm !== "infant_formula" && (
-              <label>
-                塩分制限(g/日)
+              <label className={fieldAlert.className("saltLimit")}>
+                {fieldAlert.label("saltLimit", "塩分制限(g/日)")}
                 <input
                   type="number"
                   min="0"
@@ -595,7 +631,7 @@ export function MealOrderForm({
               経管・経口食と調乳食は主食を持たない(参考仕様 §1 の分類)。欄は残して
               「欠食」だけ選べるようにする —— その食事を出さない指示はどの給与形態でもあるため。 */}
           <fieldset>
-            <legend>{isOralDiet ? "主食" : "食事"}</legend>
+            <legend>{fieldAlert.label("staples", isOralDiet ? "主食" : "食事")}</legend>
             {MEAL_TIMING_OPTIONS.map((timing) => {
               const choice = values.staples[timing.code];
               const missing =
@@ -637,8 +673,8 @@ export function MealOrderForm({
       {!hidePeriod && (
         <fieldset>
           <legend>期間</legend>
-          <label>
-            開始日
+          <label className={fieldAlert.className("startDate")}>
+            {fieldAlert.label("startDate", "開始日")}
             <input
               type="date"
               value={values.startDate}
@@ -661,8 +697,8 @@ export function MealOrderForm({
           </label>
           {!pattern && (
             <>
-              <label>
-                終了日
+              <label className={fieldAlert.className("endDate")}>
+                {fieldAlert.label("endDate", "終了日")}
                 <input
                   type="date"
                   value={values.endDate}

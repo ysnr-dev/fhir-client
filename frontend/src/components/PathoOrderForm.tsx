@@ -1,5 +1,5 @@
 import { makeFieldUpdater } from "../lib/form";
-import { lazy, Suspense, useState, type FormEvent, type KeyboardEvent } from "react";
+import { lazy, Suspense, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { fetchSchema } from "../api/masterClient";
 import { useFrequentPathoOrgans, usePathoCollectionMethods } from "../api/masterQueries";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
@@ -27,7 +27,9 @@ import {
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import type { ValidationFailure } from "../lib/validation";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert, type FieldAlert } from "./FieldAlert";
 import { PathoOrganSearchModal } from "./PathoOrganSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 import { SchemaImageGallery, TemplateSchemaImages } from "./SchemaImageGallery";
@@ -54,6 +56,42 @@ const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
 // シェーマ(JAHIS AP-031)はシェーママスタの臓器図を台紙に選んで描く。病理は
 // オーダーごとに臓器が変わるため、テンプレートに台紙を固定する持ち方ではなく
 // 診療記録と同じ「マスタから台紙を選ぶ」方式にしている。
+
+/** 必須チェックで弾いた項目の鍵。ラベルの印(FieldAlert)の宛先になる。検体ごとの項目は添字付き。 */
+type PathoField = "collectionDateTime" | `organ:${number}` | `count:${number}`;
+
+/**
+ * 登録前の入力検証。最初に落ちた項目と文言を返す(無ければ null)。
+ * 登録時に弾くのと、弾いた項目が直されたかを表示側で見るのとで同じ規則を使う。
+ */
+function findValidationFailure(
+  values: PathoOrderFormValues,
+  setMode: boolean,
+): ValidationFailure<PathoField> | null {
+  // セットの内容としての入力では採取日時を持たない(適用時に入れる)。
+  if (!setMode && !values.collectionDateTime) {
+    return { field: "collectionDateTime", message: "採取(予定)日時を入力してください。" };
+  }
+  const missing = values.specimens.findIndex((specimen) => !specimen.organCode);
+  if (missing >= 0) {
+    return {
+      field: `organ:${missing}`,
+      message: `検体${missing + 1}の臓器・検査材料を選択してください。`,
+    };
+  }
+  const badCount = values.specimens.findIndex(
+    (specimen) =>
+      !isPositiveCount(specimen.containerCount ?? "1") ||
+      Boolean(specimen.pieceCount?.trim() && !isPositiveCount(specimen.pieceCount)),
+  );
+  if (badCount >= 0) {
+    return {
+      field: `count:${badCount}`,
+      message: `検体${badCount + 1}の検体個数・容器数は 1 以上の整数で入力してください。`,
+    };
+  }
+  return null;
+}
 
 interface PathoOrderFormProps {
   patientId: string;
@@ -84,7 +122,8 @@ export function PathoOrderForm({
   const [values, setValues] = useState<PathoOrderFormValues>(
     initialValues ?? emptyPathoOrderForm(),
   );
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<PathoField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [templateOpen, setTemplateOpen] = useState(false);
   // シェーマ: 台紙をマスタから選ぶ → その台紙を背景にペイントする、の 2 段。
@@ -149,25 +188,16 @@ export function PathoOrderForm({
     });
   }
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(() => findValidationFailure(values, setMode), [values, setMode]);
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<PathoField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    // セットの内容としての入力では採取日時を持たない(適用時に入れる)。
-    if (!setMode && !values.collectionDateTime) {
-      setValidationError("採取(予定)日時を入力してください。");
-      return;
-    }
-    const missing = values.specimens.findIndex((specimen) => !specimen.organCode);
-    if (missing >= 0) {
-      setValidationError(`検体${missing + 1}の臓器・検査材料を選択してください。`);
-      return;
-    }
-    const badCount = values.specimens.findIndex(
-      (specimen) =>
-        !isPositiveCount(specimen.containerCount ?? "1") ||
-        Boolean(specimen.pieceCount?.trim() && !isPositiveCount(specimen.pieceCount)),
-    );
-    if (badCount >= 0) {
-      setValidationError(`検体${badCount + 1}の検体個数・容器数は 1 以上の整数で入力してください。`);
+    const failure = findValidationFailure(values, setMode);
+    if (failure) {
+      setValidationError(failure.message, failure.field);
       return;
     }
     setValidationError(null);
@@ -215,9 +245,9 @@ export function PathoOrderForm({
         onKeyDown={handleKeyDown}
         noValidate={hideSubmit}
       >
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
@@ -275,8 +305,8 @@ export function PathoOrderForm({
             ))}
           </select>
         </label>
-        <label>
-          採取(予定)日時 *
+        <label className={fieldAlert.className("collectionDateTime")}>
+          {fieldAlert.label("collectionDateTime", "採取(予定)日時 *")}
           <input
             type="datetime-local"
             value={values.collectionDateTime}
@@ -349,6 +379,7 @@ export function PathoOrderForm({
               examCategory={values.examCategory}
               methods={methods.data?.items ?? []}
               removable={values.specimens.length > 1}
+              fieldAlert={fieldAlert}
               onChange={(patch) => updateSpecimen(index, patch)}
               onRemove={() => removeSpecimen(index)}
             />
@@ -535,6 +566,7 @@ function SpecimenCard({
   examCategory,
   methods,
   removable,
+  fieldAlert,
   onChange,
   onRemove,
 }: {
@@ -543,6 +575,8 @@ function SpecimenCard({
   examCategory: string;
   methods: { code: string; name: string }[];
   removable: boolean;
+  /** 必須チェックで弾かれた項目の印(フォーム全体で 1 つ。鍵の添字で自分の検体を見分ける)。 */
+  fieldAlert: FieldAlert<PathoField>;
   onChange: (patch: Partial<PathoSpecimenValues>) => void;
   onRemove: () => void;
 }) {
@@ -569,8 +603,8 @@ function SpecimenCard({
 
       {/* 臓器の検索欄と頻用ボタンはひと組。横並びにしても離れないよう同じ入れ物に置く。 */}
       <div className="patho-order__organ-group">
-        <label>
-          臓器・検査材料 *
+        <label className={fieldAlert.className(`organ:${index}`)}>
+          {fieldAlert.label(`organ:${index}`, "臓器・検査材料 *")}
           <div className="patho-order__organ">
             <input
               type="text"
@@ -657,8 +691,8 @@ function SpecimenCard({
         </select>
       </label>
 
-      <label className="patho-order__count">
-        検体個数
+      <label className={fieldAlert.className(`count:${index}`, "patho-order__count")}>
+        {fieldAlert.label(`count:${index}`, "検体個数")}
         <input
           type="number"
           min={1}
@@ -668,7 +702,7 @@ function SpecimenCard({
         />
       </label>
 
-      <label className="patho-order__count">
+      <label className={fieldAlert.className(`count:${index}`, "patho-order__count")}>
         容器数
         <input
           type="number"

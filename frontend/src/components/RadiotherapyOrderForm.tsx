@@ -31,6 +31,7 @@ import {
   radiotherapyVolumeTotals,
   validateRadiotherapyOrderForm,
   type RadiotherapyIntent,
+  type RadiotherapyOrderField,
   type RadiotherapyOrderFormValues,
   type RadiotherapyPhaseValues,
   type RadiotherapyVolumeValues,
@@ -41,6 +42,7 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { makeFieldUpdater } from "../lib/form";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 import { AdvisoryNotice } from "./AdvisoryNotice";
 import { RadiotherapyHistory, useRadiotherapyAdvisories } from "./RadiotherapyPreCheck";
@@ -91,7 +93,8 @@ export function RadiotherapyOrderForm({
   const [values, setValues] = useState<RadiotherapyOrderFormValues>(
     initialValues ?? emptyRadiotherapyOrderForm(""),
   );
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<RadiotherapyOrderField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
 
   const problemOptions = useProblemOptions(patientId);
@@ -181,13 +184,26 @@ export function RadiotherapyOrderForm({
   const sessionInput = useMemo(() => [...advisoryInput, ...ruleAdvisories], [advisoryInput, ruleAdvisories]);
   const session = useAdvisorySession(sessionInput, "radiotherapy", !setMode);
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () => validateRadiotherapyOrderForm(values, { requireDates: !setMode }),
+    [values, setMode],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<RadiotherapyOrderField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error =
-      validateRadiotherapyOrderForm(values, { requireDates: !setMode }) ??
-      (session.blocked.length > 0 ? session.blocked.map((advisory) => advisory.message).join(" / ") : null);
-    setValidationError(error);
-    if (error) return;
+    const failure = validateRadiotherapyOrderForm(values, { requireDates: !setMode });
+    if (failure) {
+      setValidationError(failure.message, failure.field);
+      return;
+    }
+    if (session.blocked.length > 0) {
+      setValidationError(session.blocked.map((advisory) => advisory.message).join(" / "));
+      return;
+    }
+    setValidationError(null);
 
     // 出す警告は表示のみなので、確認は挟まず発火だけ台帳に残す。
     session.confirm([]);
@@ -204,9 +220,9 @@ export function RadiotherapyOrderForm({
 
   return (
     <form className="prescription-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
@@ -257,8 +273,8 @@ export function RadiotherapyOrderForm({
             ))}
           </select>
         </label>
-        <label>
-          治療目的 *
+        <label className={fieldAlert.className("intent")}>
+          {fieldAlert.label("intent", "治療目的 *")}
           <select
             value={values.intent}
             onChange={(e) => update("intent", e.target.value as RadiotherapyIntent)}
@@ -272,8 +288,8 @@ export function RadiotherapyOrderForm({
             ))}
           </select>
         </label>
-        <label>
-          コース番号 *
+        <label className={fieldAlert.className("courseNumber")}>
+          {fieldAlert.label("courseNumber", "コース番号 *")}
           <input
             type="number"
             min={1}
@@ -284,8 +300,8 @@ export function RadiotherapyOrderForm({
           />
         </label>
         {!setMode && (
-          <label>
-            開始予定日 *
+          <label className={fieldAlert.className("startDate")}>
+            {fieldAlert.label("startDate", "開始予定日 *")}
             <input
               type="date"
               value={values.startDate}
@@ -341,12 +357,18 @@ export function RadiotherapyOrderForm({
       </fieldset>
 
       <fieldset>
-        <legend>標的 *</legend>
+        <legend>{fieldAlert.label("volumes", "標的 *")}</legend>
         {values.volumes.map((volume) => (
           <div key={volume.volumeId} className="radiotherapy-order__card">
             <div className="radiotherapy-order__row">
-              <label>
-                名称
+              <label className={fieldAlert.className(`volume:${volume.volumeId}:label`)}>
+                {fieldAlert.label(
+                  `volume:${volume.volumeId}:label`,
+                  <>
+                    名称
+                    {fieldAlert.icon(`volume:${volume.volumeId}:untreated`)}
+                  </>,
+                )}
                 <input
                   type="text"
                   value={volume.label}
@@ -379,8 +401,8 @@ export function RadiotherapyOrderForm({
               </button>
             </div>
             <div className="radiotherapy-order__row">
-              <label>
-                部位
+              <label className={fieldAlert.className(`volume:${volume.volumeId}:bodyPart`)}>
+                {fieldAlert.label(`volume:${volume.volumeId}:bodyPart`, "部位")}
                 <select
                   value={volume.bodyPart.code}
                   onChange={(e) => {
@@ -415,8 +437,8 @@ export function RadiotherapyOrderForm({
               </label>
             </div>
             {volume.bodyPart.code === FREE_TEXT_BODY_PART && (
-              <label>
-                部位名
+              <label className={fieldAlert.className(`volume:${volume.volumeId}:bodyPartName`)}>
+                {fieldAlert.label(`volume:${volume.volumeId}:bodyPartName`, "部位名")}
                 <input
                   type="text"
                   value={volume.bodyPart.name}
@@ -452,7 +474,7 @@ export function RadiotherapyOrderForm({
       </fieldset>
 
       <fieldset>
-        <legend>Phase *</legend>
+        <legend>{fieldAlert.label("phases", "Phase *")}</legend>
         {values.phases.map((phase, index) => {
           const fractions = Number(phase.fractions);
           const techniqueChoices = techniques.items.filter(
@@ -496,8 +518,8 @@ export function RadiotherapyOrderForm({
                 </button>
               </div>
               <div className="radiotherapy-order__row">
-                <label>
-                  モダリティ
+                <label className={fieldAlert.className(`phase:${phase.phaseId}:modality`)}>
+                  {fieldAlert.label(`phase:${phase.phaseId}:modality`, "モダリティ")}
                   <select
                     value={phase.modality.code}
                     onChange={(e) =>
@@ -520,8 +542,8 @@ export function RadiotherapyOrderForm({
                     ))}
                   </select>
                 </label>
-                <label>
-                  照射技法
+                <label className={fieldAlert.className(`phase:${phase.phaseId}:technique`)}>
+                  {fieldAlert.label(`phase:${phase.phaseId}:technique`, "照射技法")}
                   <select
                     value={phase.technique.code}
                     onChange={(e) =>
@@ -544,8 +566,8 @@ export function RadiotherapyOrderForm({
                 </label>
               </div>
               <div className="radiotherapy-order__row">
-                <label>
-                  分割回数
+                <label className={fieldAlert.className(`phase:${phase.phaseId}:fractions`)}>
+                  {fieldAlert.label(`phase:${phase.phaseId}:fractions`, "分割回数")}
                   <input
                     type="number"
                     min={1}
@@ -555,8 +577,8 @@ export function RadiotherapyOrderForm({
                     onChange={(e) => updatePhase(phase.phaseId, { fractions: e.target.value })}
                   />
                 </label>
-                <label>
-                  週あたり回数
+                <label className={fieldAlert.className(`phase:${phase.phaseId}:fractionsPerWeek`)}>
+                  {fieldAlert.label(`phase:${phase.phaseId}:fractionsPerWeek`, "週あたり回数")}
                   <input
                     type="number"
                     min={1}
@@ -593,7 +615,10 @@ export function RadiotherapyOrderForm({
                 <thead>
                   <tr>
                     <th>標的</th>
-                    <th>1回線量(Gy)</th>
+                    <th>
+                      1回線量(Gy)
+                      {fieldAlert.icon(`phase:${phase.phaseId}:doses`)}
+                    </th>
                     <th>総線量</th>
                   </tr>
                 </thead>
@@ -605,7 +630,11 @@ export function RadiotherapyOrderForm({
                     return (
                       <tr key={volume.volumeId}>
                         <td>{volume.label}</td>
-                        <td>
+                        <td
+                          className={fieldAlert.className(
+                            `phase:${phase.phaseId}:dose:${volume.volumeId}`,
+                          )}
+                        >
                           <input
                             type="number"
                             min={0}
@@ -621,6 +650,7 @@ export function RadiotherapyOrderForm({
                               })
                             }
                           />
+                          {fieldAlert.icon(`phase:${phase.phaseId}:dose:${volume.volumeId}`)}
                         </td>
                         <td>
                           {valid && `${formatDose(radiotherapyTotalDose(dose, fractions))} Gy`}

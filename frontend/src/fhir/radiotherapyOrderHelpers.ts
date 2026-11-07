@@ -5,6 +5,7 @@ import type {
   RadiotherapyTechnique,
 } from "../api/masterClient";
 import { today } from "../lib/dates";
+import type { ValidationFailure } from "../lib/validation";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { JJ1017P_SYSTEM, JJ1017_LATERALITY_SYSTEM } from "./radOrderHelpers";
 import {
@@ -295,43 +296,76 @@ export function applyRadiotherapyProtocol(
   };
 }
 
-/** 入力の検証。空文字なら妥当。 */
+/**
+ * 入力検証で弾く項目の鍵。標的・Phase の項目はそれぞれの volumeId / phaseId を含む。
+ * ラベルの印(FieldAlert)の宛先になる。
+ */
+export type RadiotherapyOrderField =
+  | "intent"
+  | "courseNumber"
+  | "startDate"
+  | "volumes"
+  | `volume:${string}:label`
+  | `volume:${string}:bodyPart`
+  | `volume:${string}:bodyPartName`
+  | `volume:${string}:untreated`
+  | "phases"
+  | `phase:${string}:modality`
+  | `phase:${string}:technique`
+  | `phase:${string}:fractions`
+  | `phase:${string}:fractionsPerWeek`
+  | `phase:${string}:doses`
+  | `phase:${string}:dose:${string}`;
+
+/** 入力の検証。最初に落ちた項目と文言を返す(無ければ null)。 */
 export function validateRadiotherapyOrderForm(
   values: RadiotherapyOrderFormValues,
   /** requireDates を偽にすると開始予定日を求めない(セットの内容としての入力)。 */
   { requireDates = true }: { requireDates?: boolean } = {},
-): string {
-  if (!values.intent) return "治療目的を選んでください。";
+): ValidationFailure<RadiotherapyOrderField> | null {
+  const fail = (field: RadiotherapyOrderField, message: string) => ({ field, message });
+  if (!values.intent) return fail("intent", "治療目的を選んでください。");
   const courseNumber = Number(values.courseNumber);
   if (!Number.isInteger(courseNumber) || courseNumber < 1) {
-    return "コース番号は 1 以上の整数で入れてください。";
+    return fail("courseNumber", "コース番号は 1 以上の整数で入れてください。");
   }
-  if (requireDates && !values.startDate) return "開始予定日を入れてください。";
+  if (requireDates && !values.startDate) return fail("startDate", "開始予定日を入れてください。");
 
-  if (values.volumes.length === 0) return "標的を 1 件以上入れてください。";
+  if (values.volumes.length === 0) return fail("volumes", "標的を 1 件以上入れてください。");
   for (const volume of values.volumes) {
-    if (!volume.label.trim()) return "標的の名称を入れてください。";
-    if (!volume.bodyPart.code) return `${volume.label} の部位を選んでください。`;
+    const id = volume.volumeId;
+    if (!volume.label.trim()) return fail(`volume:${id}:label`, "標的の名称を入れてください。");
+    if (!volume.bodyPart.code) {
+      return fail(`volume:${id}:bodyPart`, `${volume.label} の部位を選んでください。`);
+    }
     if (volume.bodyPart.code === FREE_TEXT_BODY_PART && !volume.bodyPart.name.trim()) {
-      return `${volume.label} の部位名を入れてください。`;
+      return fail(`volume:${id}:bodyPartName`, `${volume.label} の部位名を入れてください。`);
     }
   }
 
-  if (values.phases.length === 0) return "Phase を 1 件以上入れてください。";
+  if (values.phases.length === 0) return fail("phases", "Phase を 1 件以上入れてください。");
   const treated = new Set<string>();
   for (const [index, phase] of values.phases.entries()) {
     const label = radiotherapyPhaseLabel(phase, index);
-    if (!phase.modality.code) return `${label} のモダリティを選んでください。`;
-    if (!phase.technique.code) return `${label} の照射技法を選んでください。`;
+    const id = phase.phaseId;
+    if (!phase.modality.code) {
+      return fail(`phase:${id}:modality`, `${label} のモダリティを選んでください。`);
+    }
+    if (!phase.technique.code) {
+      return fail(`phase:${id}:technique`, `${label} の照射技法を選んでください。`);
+    }
 
     const fractions = Number(phase.fractions);
     if (!Number.isInteger(fractions) || fractions < 1 || fractions > 99) {
-      return `${label} の分割回数は 1〜99 の整数で入れてください。`;
+      return fail(`phase:${id}:fractions`, `${label} の分割回数は 1〜99 の整数で入れてください。`);
     }
     if (phase.fractionsPerWeek) {
       const perWeek = Number(phase.fractionsPerWeek);
       if (!Number.isInteger(perWeek) || perWeek < 1 || perWeek > 14) {
-        return `${label} の週あたり回数は 1〜14 の整数で入れてください。`;
+        return fail(
+          `phase:${id}:fractionsPerWeek`,
+          `${label} の週あたり回数は 1〜14 の整数で入れてください。`,
+        );
       }
     }
 
@@ -340,18 +374,26 @@ export function validateRadiotherapyOrderForm(
       const text = phase.fractionDoses[volume.volumeId] ?? "";
       if (!text.trim()) continue;
       if (positiveNumber(text) === null) {
-        return `${label} の ${volume.label} の 1 回線量は正の数で入れてください。`;
+        return fail(
+          `phase:${id}:dose:${volume.volumeId}`,
+          `${label} の ${volume.label} の 1 回線量は正の数で入れてください。`,
+        );
       }
       treated.add(volume.volumeId);
       doses += 1;
     }
-    if (doses === 0) return `${label} の 1 回線量を入れてください。`;
+    if (doses === 0) return fail(`phase:${id}:doses`, `${label} の 1 回線量を入れてください。`);
   }
 
   const untreated = values.volumes.find((v) => !treated.has(v.volumeId));
-  if (untreated) return `${untreated.label} に線量を処方している Phase がありません。`;
+  if (untreated) {
+    return fail(
+      `volume:${untreated.volumeId}:untreated`,
+      `${untreated.label} に線量を処方している Phase がありません。`,
+    );
+  }
 
-  return "";
+  return null;
 }
 
 // ---- FHIR リソースの組み立て ----

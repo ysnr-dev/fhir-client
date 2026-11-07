@@ -1,4 +1,5 @@
 import { today } from "../lib/dates";
+import type { ValidationFailure } from "../lib/validation";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import {
@@ -123,17 +124,24 @@ export function emptyConsultOrderForm(setting: PrescriptionSetting): ConsultOrde
   };
 }
 
-/** 入力の検証。空文字なら妥当(リハビリと同じくヘルパー側に置く)。 */
+/** 入力検証で弾く項目の鍵。ラベルの印(FieldAlert)の宛先になる。 */
+export type ConsultOrderField = "targetDepartmentId" | "requestType" | "purpose" | "desiredDate";
+
+/** 入力の検証。最初に落ちた項目と文言を返す(無ければ null。リハビリと同じくヘルパー側に置く)。 */
 export function validateConsultOrderForm(
   values: ConsultOrderFormValues,
   /** requireDates を偽にすると希望日を求めない(セットの内容としての入力)。 */
   { requireDates = true }: { requireDates?: boolean } = {},
-): string {
-  if (!values.targetDepartmentId) return "依頼先の診療科を選んでください。";
-  if (!values.requestType) return "依頼種別を選んでください。";
-  if (!values.purpose.trim()) return "依頼目的を入れてください。";
-  if (requireDates && !values.desiredDate) return "希望日を入れてください。";
-  return "";
+): ValidationFailure<ConsultOrderField> | null {
+  if (!values.targetDepartmentId) {
+    return { field: "targetDepartmentId", message: "依頼先の診療科を選んでください。" };
+  }
+  if (!values.requestType) return { field: "requestType", message: "依頼種別を選んでください。" };
+  if (!values.purpose.trim()) return { field: "purpose", message: "依頼目的を入れてください。" };
+  if (requireDates && !values.desiredDate) {
+    return { field: "desiredDate", message: "希望日を入れてください。" };
+  }
+  return null;
 }
 
 // ---- FHIR リソースの組み立て ----

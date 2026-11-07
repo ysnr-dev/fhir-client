@@ -50,6 +50,8 @@ import { ConditionPickerModal } from "./ConditionPickerModal";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import type { ValidationFailure } from "../lib/validation";
+import { shownValidationError, useFieldAlert, type FieldAlert } from "./FieldAlert";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { AdvisoryNotice } from "./AdvisoryNotice";
@@ -81,6 +83,142 @@ import { bookingLabel } from "../fhir/appointmentHelpers";
 // 「即実施」を選ぶと、診察室でその場で検査する運用のために、登録と同時に実施記録を作って
 // Task を実施済にする。実施入力は生理検査一覧と同じモーダルで、登録されるオーダー
 // 単位に入れる(単独オーダーの項目を混ぜて選ぶとオーダーが分かれるため)。
+
+/**
+ * 必須チェックで弾いた項目の鍵。ラベルの印(FieldAlert)の宛先になる。
+ * date・perform の後ろはオーダー枠のキー(まとめ枠は空文字、単独枠は項目コード)。
+ */
+type PhysioField =
+  | "items"
+  | `solo:${string}`
+  | `date:${string}`
+  | `booking:${string}`
+  | `perform:${string}`;
+
+type PhysioFieldAlert = FieldAlert<PhysioField>;
+
+/**
+ * 登録する実施日・日付未定・明細。至急のオーダーは当日実施に倒す(予約も取らない)。
+ * 至急区分はオーダー枠ごとの入力なので、まとめ枠と単独枠をそれぞれ見る。
+ * 日付未定は通常のオーダーだけ(至急は当日、事後は実施済みの日が決まっている)。
+ */
+function scheduledForSubmit(values: PhysioOrderFormValues, refreshedItems: PhysioOrderItemLine[]) {
+  const startDate = values.priority === "urgent" ? today() : values.startDate;
+  const undated = values.priority === "routine" && values.undated;
+  const items = refreshedItems.map((line) =>
+    !line.parentCode && !line.groupable && line.priority === "urgent"
+      ? { ...line, date: today(), undated: false }
+      : line.priority !== "routine"
+        ? { ...line, undated: false }
+        : line,
+  );
+  return { startDate, undated, items };
+}
+
+/**
+ * 登録前の入力検証。最初に落ちた項目と文言を返す(無ければ null)。
+ * 登録時に弾くのと、弾いた項目が直されたかを表示側で見るのとで同じ規則を使う。
+ */
+function findValidationFailure({
+  values,
+  refreshedItems,
+  splits,
+  bookings,
+  performs,
+  editing,
+  setMode,
+  booksSlot,
+  performsNow,
+  needsPerformInput,
+}: {
+  values: PhysioOrderFormValues;
+  refreshedItems: PhysioOrderItemLine[];
+  splits: PhysioOrderSplit[];
+  bookings: Record<string, SlotSelection>;
+  performs: Record<string, PhysioPerformFormValues>;
+  editing: boolean;
+  setMode: boolean;
+  booksSlot: (priority: PhysioOrderPriority, code: string) => boolean;
+  performsNow: (split: PhysioOrderSplit) => boolean;
+  needsPerformInput: (items: PhysioOrderItemLine[]) => boolean;
+}): ValidationFailure<PhysioField> | null {
+  if (values.items.length === 0) {
+    return { field: "items", message: "検査項目を 1 つ以上選択してください。" };
+  }
+  const groups = topLevelItems(refreshedItems);
+  const solo = groups.find((line) => !line.groupable);
+  if (editing && solo && groups.length > 1) {
+    return {
+      field: `solo:${solo.code}`,
+      message: `単独オーダーの項目「${solo.name}」は他の検査項目と同じオーダーにできません。`,
+    };
+  }
+
+  const { startDate, undated, items } = scheduledForSubmit(values, refreshedItems);
+
+  // セットの内容としての入力では日付・予約を持たない(適用時に入れる)。
+  if (
+    !setMode &&
+    values.priority !== "urgent" &&
+    groups.some((line) => line.groupable) &&
+    !undated &&
+    !startDate
+  ) {
+    return { field: "date:", message: "実施日を入力してください。" };
+  }
+  if (!editing && !setMode) {
+    const soloGroups = items.filter((line) => !line.parentCode && !line.groupable);
+    const withoutDate = soloGroups.find(
+      (line) =>
+        line.priority !== "urgent" &&
+        !line.undated &&
+        !booksSlot(line.priority, line.code) &&
+        !line.date,
+    );
+    if (withoutDate) {
+      return {
+        field: `date:${withoutDate.code}`,
+        message: `「${withoutDate.name}」の実施日を入力してください。`,
+      };
+    }
+    // 予約必須の枠は予約が実施日時そのもの。選ばずには登録させない(至急・事後を除く)。
+    const unbooked = soloGroups.find(
+      (line) => booksSlot(line.priority, line.code) && !line.undated && !bookings[line.code],
+    );
+    if (unbooked) {
+      return {
+        field: `booking:${unbooked.code}`,
+        message: `「${unbooked.name}」の予約を取得してください。`,
+      };
+    }
+  }
+
+  // 事後は済んだ検査を入れるオーダーなので、当日を含む過去日だけを受ける。
+  const future = splits.find(
+    (split) => split.values.priority === RETRO_PRIORITY && split.values.startDate > today(),
+  );
+  if (future) {
+    return {
+      field: `date:${future.key}`,
+      message: "事後のオーダーの実施日には当日以前の日付を入力してください。",
+    };
+  }
+
+  // 即実施は実施記録まで作る操作なので、入れずに登録できてしまわないようにする
+  // (実施入力をしない項目だけのオーダーは、実施記録を作らないので対象外)。
+  // 予約必須の通常オーダーはチェックボックス自体を無効化しているが、状態に残った
+  // 値で実施記録を作らないよう判定(performsNow)にも噛ませる。
+  const withoutPerform = splits
+    .filter(performsNow)
+    .find((split) => needsPerformInput(split.values.items) && !performs[split.key]);
+  if (withoutPerform) {
+    return {
+      field: `perform:${withoutPerform.key}`,
+      message: "即実施にする検査の実施入力を行ってください。",
+    };
+  }
+  return null;
+}
 
 interface PhysioOrderFormProps {
   patientId: string;
@@ -145,7 +283,8 @@ export function PhysioOrderForm({
   hideSubmit = false,
 }: PhysioOrderFormProps) {
   const [values, setValues] = useState<PhysioOrderFormValues>(initialValues ?? emptyPhysioOrderForm);
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<PhysioField>();
   const [active, setActive] = useState<ActiveTab | null>(null);
   const [searchCodes, setSearchCodes] = useState<string[]>([]);
   const [templateTarget, setTemplateTarget] = useState<TemplateTarget | null>(null);
@@ -443,87 +582,37 @@ export function PhysioOrderForm({
   const sessionInput = useMemo(() => [...infection, ...ruleAdvisories], [infection, ruleAdvisories]);
   const session = useAdvisorySession(sessionInput, "physio", !setMode);
 
+  const validationInput = useMemo(
+    () => ({
+      values,
+      refreshedItems,
+      splits,
+      bookings,
+      performs,
+      editing,
+      setMode,
+      booksSlot,
+      performsNow,
+      needsPerformInput,
+    }),
+    [values, refreshedItems, splits, bookings, performs, editing, setMode, booksSlot, performsNow, needsPerformInput],
+  );
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(() => findValidationFailure(validationInput), [validationInput]);
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<PhysioField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (values.items.length === 0) {
-      setValidationError("検査項目を 1 つ以上選択してください。");
+    const failure = findValidationFailure(validationInput);
+    if (failure) {
+      setValidationError(failure.message, failure.field);
       return;
     }
 
-    let items = refreshedItems;
+    const { startDate, undated, items } = scheduledForSubmit(values, refreshedItems);
     const groups = topLevelItems(items);
-    const solo = groups.find((line) => !line.groupable);
-    if (editing && solo && groups.length > 1) {
-      setValidationError(
-        `単独オーダーの項目「${solo.name}」は他の検査項目と同じオーダーにできません。`,
-      );
-      return;
-    }
-
-    // 至急のオーダーは当日実施に倒す(予約も取らない)。至急区分はオーダー枠ごとの
-    // 入力なので、まとめ枠と単独枠をそれぞれ見る。
-    const startDate = values.priority === "urgent" ? today() : values.startDate;
-    // 日付未定は通常のオーダーだけ(至急は当日、事後は実施済みの日が決まっている)。
-    const undated = values.priority === "routine" && values.undated;
-    items = items.map((line) =>
-      !line.parentCode && !line.groupable && line.priority === "urgent"
-        ? { ...line, date: today(), undated: false }
-        : line.priority !== "routine"
-          ? { ...line, undated: false }
-          : line,
-    );
-
-    // セットの内容としての入力では日付・予約を持たない(適用時に入れる)。
-    if (!setMode && values.priority !== "urgent" && groups.some((line) => line.groupable) && !undated && !startDate) {
-      setValidationError("実施日を入力してください。");
-      return;
-    }
-    if (!editing && !setMode) {
-      const soloGroups = items.filter((line) => !line.parentCode && !line.groupable);
-      const withoutDate = soloGroups.find(
-        (line) =>
-          line.priority !== "urgent" &&
-          !line.undated &&
-          !booksSlot(line.priority, line.code) &&
-          !line.date,
-      );
-      if (withoutDate) {
-        setValidationError(`「${withoutDate.name}」の実施日を入力してください。`);
-        return;
-      }
-      // 予約必須の枠は予約が実施日時そのもの。選ばずには登録させない(至急・事後を除く)。
-      const unbooked = soloGroups.find(
-        (line) => booksSlot(line.priority, line.code) && !line.undated && !bookings[line.code],
-      );
-      if (unbooked) {
-        setValidationError(`「${unbooked.name}」の予約を取得してください。`);
-        return;
-      }
-    }
-
-    // 事後は済んだ検査を入れるオーダーなので、当日を含む過去日だけを受ける。
-    const future = splits.find(
-      (split) => split.values.priority === RETRO_PRIORITY && split.values.startDate > today(),
-    );
-    if (future) {
-      setValidationError("事後のオーダーの実施日には当日以前の日付を入力してください。");
-      return;
-    }
-
-    // 即実施にするオーダー。予約必須の通常オーダーはチェックボックス自体を
-    // 無効化しているが、状態に残った値で実施記録を作らないよう判定にも噛ませる。
     const performingSplits = splits.filter(performsNow);
-
-    // 即実施は実施記録まで作る操作なので、入れずに登録できてしまわないようにする
-    // (実施入力をしない項目だけのオーダーは、実施記録を作らないので対象外)。
-    if (
-      performingSplits.some(
-        (split) => needsPerformInput(split.values.items) && !performs[split.key],
-      )
-    ) {
-      setValidationError("即実施にする検査の実施入力を行ってください。");
-      return;
-    }
 
     // 至急のオーダーの予約は取らない。編集では、枠を選び直したぶんだけが入る
     // (選ばなければ空なので、予約は今のままになる)。
@@ -634,9 +723,9 @@ export function PhysioOrderForm({
   return (
     <>
       <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
-        {validationError && (
+        {shownError && (
           <div className="error-banner" role="alert" ref={validationErrorRef}>
-            <p className="error-banner__line error-banner__line--error">{validationError}</p>
+            <p className="error-banner__line error-banner__line--error">{shownError}</p>
           </div>
         )}
         <ErrorBanner error={submitError} />
@@ -726,6 +815,7 @@ export function PhysioOrderForm({
 
         <section className="order-select__preview">
           <h3>選択中({entries.length})</h3>
+          {fieldAlert.icon("items")}
           {entries.length === 0 && (
             <p className="order-select__muted">検査項目を選択してください</p>
           )}
@@ -752,10 +842,13 @@ export function PhysioOrderForm({
                       needsInput: (split) => needsPerformInput(split.values.items),
                       canPerform: canPerformNow,
                       summary: performs[""] ? physioPerformSummary(performs[""]) : null,
+                      alert: fieldAlert.icon("perform:"),
                     }
               }
               schedule={
                 <FrameDateTime
+                  fieldAlert={fieldAlert}
+                  dateField="date:"
                   date={values.startDate}
                   time={values.startTime}
                   urgent={values.priority === "urgent"}
@@ -782,6 +875,7 @@ export function PhysioOrderForm({
                   onOpenConditionPicker={setConditionTarget}
                   onChange={updateItem}
                   onOpenTemplate={setTemplateTarget}
+                  alert={fieldAlert.icon(`solo:${entry.item.code}`)}
                 />
               ))}
             </OrderFrame>
@@ -825,6 +919,7 @@ export function PhysioOrderForm({
                         needsInput: (split) => needsPerformInput(split.values.items),
                         canPerform: canPerformNow,
                         summary: performs[code] ? physioPerformSummary(performs[code]) : null,
+                        alert: fieldAlert.icon(`perform:${code}`),
                       }
                 }
                 schedule={
@@ -863,6 +958,7 @@ export function PhysioOrderForm({
                         <button type="button" onClick={() => openBooking(code)}>
                           予約
                         </button>
+                        {fieldAlert.icon(`booking:${code}`)}
                         {changeUndated && (
                           <UndatedCheckbox checked={undated} onChange={changeUndated} />
                         )}
@@ -870,6 +966,8 @@ export function PhysioOrderForm({
                     )
                   ) : (
                     <FrameDateTime
+                      fieldAlert={fieldAlert}
+                      dateField={`date:${code}`}
                       date={editing ? values.startDate : urgent ? today() : entry.item.date}
                       time={editing ? values.startTime : entry.item.time}
                       urgent={urgent}
@@ -895,6 +993,7 @@ export function PhysioOrderForm({
                   onOpenConditionPicker={setConditionTarget}
                   onChange={updateItem}
                   onOpenTemplate={setTemplateTarget}
+                  alert={fieldAlert.icon(`solo:${code}`)}
                 />
               </OrderFrame>
             );
@@ -1013,6 +1112,8 @@ interface FramePerform {
   needsInput: (split: PhysioOrderSplit) => boolean;
   canPerform: (split: PhysioOrderSplit) => boolean;
   summary: string | null;
+  /** 実施入力が無いまま登録しようとしたときの印。 */
+  alert: ReactNode;
 }
 
 /**
@@ -1105,6 +1206,7 @@ function OrderFrame({
                 <button type="button" onClick={perform.onOpen}>
                   実施入力
                 </button>
+                {perform.alert}
                 {perform.summary ? (
                   <span className="rad-perform-now__summary">{perform.summary}</span>
                 ) : (
@@ -1127,6 +1229,8 @@ function OrderFrame({
  * 至急のオーダーは当日実施に固定する。
  */
 function FrameDateTime({
+  fieldAlert,
+  dateField,
   date,
   time,
   urgent,
@@ -1136,6 +1240,9 @@ function FrameDateTime({
   onChangeDate,
   onChangeTime,
 }: {
+  fieldAlert: PhysioFieldAlert;
+  /** この枠の実施日の鍵(未入力・事後の未来日の印の宛先)。 */
+  dateField: PhysioField;
   date: string;
   time: string;
   urgent?: boolean;
@@ -1149,8 +1256,8 @@ function FrameDateTime({
 }) {
   return (
     <span className="rad-order-frame__datetime">
-      <label>
-        実施日
+      <label className={fieldAlert.className(dateField)}>
+        {fieldAlert.label(dateField, "実施日")}
         <input
           type="date"
           value={date}
@@ -1201,6 +1308,7 @@ function GroupEditor({
   onChange,
   onOpenTemplate,
   onOpenConditionPicker,
+  alert,
 }: {
   /** セットの内容としての入力(依頼病名の選択とテンプレート記入は出さない)。 */
   setMode?: boolean;
@@ -1212,6 +1320,8 @@ function GroupEditor({
   onChange: (code: string, patch: Partial<PhysioOrderItemLine>) => void;
   onOpenTemplate: (target: TemplateTarget) => void;
   onOpenConditionPicker: (code: string) => void;
+  /** この GP が登録を弾いたときの印(単独オーダーの同居など)。 */
+  alert?: ReactNode;
 }) {
   const { item, members } = entry;
   const examType = entryExamTypeName(entry);
@@ -1221,6 +1331,7 @@ function GroupEditor({
       <div className="rad-gp__head">
         <span className="rad-gp__number">GP{number}</span>
         <span className="rad-gp__name">{item.name}</span>
+        {alert}
         {solo && <span className="dose-conversion__badge">単独</span>}
         {examType && <span className="order-select__muted">{examType}</span>}
         <button

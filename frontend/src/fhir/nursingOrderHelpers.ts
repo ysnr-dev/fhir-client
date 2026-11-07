@@ -1,4 +1,5 @@
 import { today } from "../lib/dates";
+import type { ValidationFailure } from "../lib/validation";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   categoryCoding,
@@ -130,26 +131,40 @@ export function buildDoNursingOrderForm(values: NursingOrderFormValues): Nursing
   };
 }
 
+/** 入力検証で弾く項目の鍵。行ごとの項目は行の添字(0 始まり)を含む。ラベルの印(FieldAlert)の宛先になる。 */
+export type NursingOrderField =
+  | "lines"
+  | `line:${number}:text`
+  | `line:${number}:startDate`
+  | `line:${number}:endDate`
+  | `line:${number}:schedule`;
+
 /**
- * 入力チェック。問題なければ空文字。requireDates を偽にすると開始日を求めない
- * (オーダーセットの内容としての入力。日付は適用時に入る)。
+ * 入力チェック。最初に落ちた項目と文言を返す(無ければ null)。requireDates を偽にすると
+ * 開始日を求めない(オーダーセットの内容としての入力。日付は適用時に入る)。
  */
 export function validateNursingOrderForm(
   values: NursingOrderFormValues,
   { requireDates = true }: { requireDates?: boolean } = {},
-): string {
-  if (values.lines.length === 0) return "指示を 1 行以上入れてください。";
+): ValidationFailure<NursingOrderField> | null {
+  if (values.lines.length === 0) return { field: "lines", message: "指示を 1 行以上入れてください。" };
   for (const [index, line] of values.lines.entries()) {
     const n = index + 1;
-    if (!line.text.trim()) return `${n} 行目: 指示内容を入れてください。`;
-    if (requireDates && !line.startDate) return `${n} 行目: 開始日を入れてください。`;
+    if (!line.text.trim()) {
+      return { field: `line:${index}:text`, message: `${n} 行目: 指示内容を入れてください。` };
+    }
+    if (requireDates && !line.startDate) {
+      return { field: `line:${index}:startDate`, message: `${n} 行目: 開始日を入れてください。` };
+    }
     if (line.startDate && line.endDate && line.endDate < line.startDate) {
-      return `${n} 行目: 終了日は開始日以降にしてください。`;
+      return { field: `line:${index}:endDate`, message: `${n} 行目: 終了日は開始日以降にしてください。` };
     }
     const scheduleError = validateSchedule(line.schedule);
-    if (scheduleError) return `${n} 行目: ${scheduleError}`;
+    if (scheduleError) {
+      return { field: `line:${index}:schedule`, message: `${n} 行目: ${scheduleError}` };
+    }
   }
-  return "";
+  return null;
 }
 
 function validateSchedule(schedule: NursingScheduleValues): string {

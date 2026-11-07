@@ -90,7 +90,7 @@ function PatternEditModal({ item, onClose }: { item: MealPattern | null; onClose
     }
     const error = validateMealPatternSteps(steps);
     if (error) {
-      setValidationError(error);
+      setValidationError(error.message);
       return;
     }
     setValidationError(null);

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import {
@@ -8,6 +8,7 @@ import {
   validateMedicationGuidanceOrderForm,
   type MedicationGuidanceCondition,
   type MedicationGuidanceKind,
+  type MedicationGuidanceOrderField,
   type MedicationGuidanceOrderFormValues,
 } from "../fhir/medicationGuidanceOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
@@ -15,6 +16,7 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 
 // 服薬指導オーダーの入力フォーム(docs/medication-guidance-order-design.md)。栄養指導と同じく
@@ -50,7 +52,8 @@ export function MedicationGuidanceOrderForm({
   const [values, setValues] = useState<MedicationGuidanceOrderFormValues>(
     initialValues ?? emptyMedicationGuidanceOrderForm(""),
   );
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<MedicationGuidanceOrderField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const problemOptions = useProblemOptions(patientId);
   useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, startDate: date })));
@@ -65,27 +68,38 @@ export function MedicationGuidanceOrderForm({
     }));
   }
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () => validateMedicationGuidanceOrderForm(values, { requireDates: !setMode }),
+    [values, setMode],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<MedicationGuidanceOrderField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateMedicationGuidanceOrderForm(values, { requireDates: !setMode });
-    setValidationError(error);
-    if (error) return;
+    const failure = validateMedicationGuidanceOrderForm(values, { requireDates: !setMode });
+    if (failure) {
+      setValidationError(failure.message, failure.field);
+      return;
+    }
+    setValidationError(null);
     onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
   }
 
   return (
     <form className="prescription-form medication-guidance-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
 
       <fieldset>
         <legend>指導内容</legend>
-        <label>
-          指導区分 *
+        <label className={fieldAlert.className("kind")}>
+          {fieldAlert.label("kind", "指導区分 *")}
           <select
             value={values.kind}
             onChange={(e) => update("kind", e.target.value as MedicationGuidanceKind)}
@@ -127,12 +141,12 @@ export function MedicationGuidanceOrderForm({
       {/* 期間。終了日を入れなければ継続で、部門一覧の「終了」か退院で終わる。 */}
       <fieldset>
         <legend>期間</legend>
-        <label>
-          開始日 *
+        <label className={fieldAlert.className("startDate")}>
+          {fieldAlert.label("startDate", "開始日 *")}
           <input type="date" value={values.startDate} onChange={(e) => update("startDate", e.target.value)} required />
         </label>
-        <label>
-          終了日
+        <label className={fieldAlert.className("endDate")}>
+          {fieldAlert.label("endDate", "終了日")}
           <input type="date" value={values.endDate} onChange={(e) => update("endDate", e.target.value)} />
         </label>
       </fieldset>

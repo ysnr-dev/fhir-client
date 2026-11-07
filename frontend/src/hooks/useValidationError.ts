@@ -10,20 +10,26 @@ import { scrollIntoViewVisibly } from "../lib/scroll";
  * 同じ文言を続けて出したとき(直さずにもう一度登録を押した場合など)にも
  * スクロールし直せるよう、文言の変化ではなく set した回数で発火する。
  *
- * 戻り値は useState と同じ並びで、3 つ目にバナー用の ref が付く。
+ * 文言に添えて弾いた項目の鍵(フォームごとの文字列)を渡すと 4 つ目に返るので、
+ * 該当項目のラベルに印を出せる(`components/FieldAlert`)。文言を消すと鍵も消える。
+ *
+ * 戻り値は useState と同じ並びで、3 つ目にバナー用の ref、4 つ目に項目の鍵が付く。
  */
-export function useValidationError(): [
+export function useValidationError<Field extends string = string>(): [
   string | null,
-  (message: string | null) => void,
+  (message: string | null, field?: Field) => void,
   RefObject<HTMLDivElement | null>,
+  Field | null,
 ] {
   const [error, setError] = useState<string | null>(null);
+  const [field, setField] = useState<Field | null>(null);
   // set した回数。同じ文言でも再スクロールさせるために持つ。
   const [shownAt, setShownAt] = useState(0);
   const ref = useRef<HTMLDivElement | null>(null);
 
-  const show = useCallback((message: string | null) => {
+  const show = useCallback((message: string | null, invalidField?: Field) => {
     setError(message);
+    setField(message ? (invalidField ?? null) : null);
     if (message) setShownAt((n) => n + 1);
   }, []);
 
@@ -34,5 +40,5 @@ export function useValidationError(): [
     scrollIntoViewVisibly(ref.current, "center");
   }, [shownAt]);
 
-  return [error, show, ref];
+  return [error, show, ref, field];
 }

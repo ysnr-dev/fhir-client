@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import {
@@ -8,6 +8,7 @@ import {
   rehabElapsedDays,
   validateRehabOrderForm,
   type RehabDiseaseCategory,
+  type RehabOrderField,
   type RehabOrderFormValues,
   type RehabTherapyType,
 } from "../fhir/rehabOrderHelpers";
@@ -16,6 +17,7 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 
 // リハビリオーダーの入力フォーム。食事と同じく明細も伝票レイアウトも無いので
@@ -59,7 +61,8 @@ export function RehabOrderForm({
   const [values, setValues] = useState<RehabOrderFormValues>(
     initialValues ?? emptyRehabOrderForm(""),
   );
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<RehabOrderField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
 
   const problemOptions = useProblemOptions(patientId);
@@ -75,11 +78,22 @@ export function RehabOrderForm({
     }));
   }
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () => validateRehabOrderForm(values, { requireDates: !setMode }),
+    [values, setMode],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<RehabOrderField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateRehabOrderForm(values, { requireDates: !setMode });
-    setValidationError(error);
-    if (error) return;
+    const failure = validateRehabOrderForm(values, { requireDates: !setMode });
+    if (failure) {
+      setValidationError(failure.message, failure.field);
+      return;
+    }
+    setValidationError(null);
 
     onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
   }
@@ -90,17 +104,17 @@ export function RehabOrderForm({
 
   return (
     <form className="prescription-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
 
       <fieldset>
         <legend>リハビリ内容</legend>
-        <label>
-          疾患別リハ区分 *
+        <label className={fieldAlert.className("diseaseCategory")}>
+          {fieldAlert.label("diseaseCategory", "疾患別リハ区分 *")}
           <select
             value={values.diseaseCategory}
             onChange={(e) => update("diseaseCategory", e.target.value as RehabDiseaseCategory)}
@@ -118,7 +132,7 @@ export function RehabOrderForm({
 
       {/* 療法種別。PT・OT・ST は併用できるのでチェックボックスで複数選ばせる。 */}
       <fieldset>
-        <legend>療法種別 *</legend>
+        <legend>{fieldAlert.label("therapyTypes", "療法種別 *")}</legend>
         <div className="rehab-order__therapy-types">
           {THERAPY_TYPE_OPTIONS.map((o) => (
             <label key={o.code} className="rehab-order__therapy-type">
@@ -136,8 +150,8 @@ export function RehabOrderForm({
       {/* 実施の目安。週何回・1 回何単位で、実際に何回行ったかは実施記録が正本。 */}
       <fieldset>
         <legend>実施量</legend>
-        <label>
-          1回あたりの単位数 *
+        <label className={fieldAlert.className("unitsPerSession")}>
+          {fieldAlert.label("unitsPerSession", "1回あたりの単位数 *")}
           <input
             type="number"
             min={1}
@@ -148,8 +162,8 @@ export function RehabOrderForm({
             required
           />
         </label>
-        <label>
-          週あたりの回数
+        <label className={fieldAlert.className("frequencyPerWeek")}>
+          {fieldAlert.label("frequencyPerWeek", "週あたりの回数")}
           <input
             type="number"
             min={1}
@@ -168,8 +182,8 @@ export function RehabOrderForm({
       {/* 期間。終了日を入れなければ継続で、部門一覧の「終了」か退院で終わる。 */}
       <fieldset>
         <legend>期間</legend>
-        <label>
-          開始日 *
+        <label className={fieldAlert.className("startDate")}>
+          {fieldAlert.label("startDate", "開始日 *")}
           <input
             type="date"
             value={values.startDate}
@@ -177,8 +191,8 @@ export function RehabOrderForm({
             required
           />
         </label>
-        <label>
-          終了日
+        <label className={fieldAlert.className("endDate")}>
+          {fieldAlert.label("endDate", "終了日")}
           <input
             type="date"
             value={values.endDate}
@@ -191,8 +205,8 @@ export function RehabOrderForm({
       {/* 起算日と対象疾患名は疾患別リハの算定要件。起算日は算定日数上限の起点。 */}
       <fieldset>
         <legend>対象</legend>
-        <label>
-          対象疾患名 *
+        <label className={fieldAlert.className("targetDisease")}>
+          {fieldAlert.label("targetDisease", "対象疾患名 *")}
           <input
             type="text"
             value={values.targetDisease}
@@ -201,8 +215,8 @@ export function RehabOrderForm({
             required
           />
         </label>
-        <label>
-          起算日
+        <label className={fieldAlert.className("onsetDate")}>
+          {fieldAlert.label("onsetDate", "起算日")}
           <input
             type="date"
             value={values.onsetDate}

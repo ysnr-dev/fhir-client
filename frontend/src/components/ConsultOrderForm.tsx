@@ -11,6 +11,7 @@ import {
   REQUEST_TYPE_OPTIONS,
   emptyConsultOrderForm,
   validateConsultOrderForm,
+  type ConsultOrderField,
   type ConsultOrderFormValues,
   type ConsultPriority,
   type ConsultRequestType,
@@ -27,6 +28,7 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 
@@ -73,7 +75,8 @@ export function ConsultOrderForm({
   const [values, setValues] = useState<ConsultOrderFormValues>(
     initialValues ?? emptyConsultOrderForm(""),
   );
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<ConsultOrderField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [templateOpen, setTemplateOpen] = useState(false);
   const fromTemplate = Boolean(values.purposeTemplate);
@@ -124,11 +127,22 @@ export function ConsultOrderForm({
     }));
   }
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () => validateConsultOrderForm(values, { requireDates: !setMode }),
+    [values, setMode],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<ConsultOrderField>(invalidField, shownError);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateConsultOrderForm(values, { requireDates: !setMode });
-    setValidationError(error);
-    if (error) return;
+    const failure = validateConsultOrderForm(values, { requireDates: !setMode });
+    if (failure) {
+      setValidationError(failure.message, failure.field);
+      return;
+    }
+    setValidationError(null);
 
     onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
   }
@@ -140,9 +154,9 @@ export function ConsultOrderForm({
         onSubmit={handleSubmit}
         noValidate={hideSubmit}
       >
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
@@ -152,8 +166,8 @@ export function ConsultOrderForm({
           その医師にだけ出るわけではない)。 */}
       <fieldset>
         <legend>依頼先</legend>
-        <label>
-          診療科 *
+        <label className={fieldAlert.className("targetDepartmentId")}>
+          {fieldAlert.label("targetDepartmentId", "診療科 *")}
           <select
             value={values.targetDepartmentId}
             onChange={(e) => changeDepartment(e.target.value)}
@@ -187,8 +201,8 @@ export function ConsultOrderForm({
       {/* 何をどれくらい急いで聞きたいか。具体的な内容は依頼目的の自由記載に書く。 */}
       <fieldset>
         <legend>依頼内容</legend>
-        <label>
-          依頼種別 *
+        <label className={fieldAlert.className("requestType")}>
+          {fieldAlert.label("requestType", "依頼種別 *")}
           <select
             value={values.requestType}
             onChange={(e) => update("requestType", e.target.value as ConsultRequestType)}
@@ -215,8 +229,8 @@ export function ConsultOrderForm({
             ))}
           </select>
         </label>
-        <label>
-          希望日
+        <label className={fieldAlert.className("desiredDate")}>
+          {fieldAlert.label("desiredDate", "希望日")}
           <input
             type="date"
             required
@@ -226,8 +240,10 @@ export function ConsultOrderForm({
         </label>
         {/* テンプレート紐付き中は直接編集させない(回答と本文が食い違うため)。
             「解除」は紐付けだけ外し、記載された文言は残す。 */}
-        <div className="consult-form__wide">
-          <span className="consult-form__field-label">依頼目的 *</span>
+        <div className={fieldAlert.className("purpose", "consult-form__wide")}>
+          <span className="consult-form__field-label">
+            {fieldAlert.label("purpose", "依頼目的 *")}
+          </span>
           <div className="rad-gp__template-field">
             <textarea
               rows={4}

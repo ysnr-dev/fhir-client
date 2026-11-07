@@ -34,8 +34,10 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useSurgeryConflictCheck } from "../hooks/useSurgeryConflictCheck";
 import { useValidationError } from "../hooks/useValidationError";
+import type { ValidationFailure } from "../lib/validation";
 import { ConditionPickerModal } from "./ConditionPickerModal";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { PractitionerSearchModal } from "./PractitionerSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 import { SurgeryItemSearchModal } from "./SurgeryItemSearchModal";
@@ -87,6 +89,52 @@ function ArrowUpIcon() {
   );
 }
 
+/** 必須チェックで弾いた項目の鍵。ラベルの印(FieldAlert)の宛先になる。左右は術式ごと。 */
+type SurgeryField = "items" | "scheduledDate" | `laterality:${string}` | "surgeon" | "anesthetist";
+
+/**
+ * 登録前の入力検証。最初に落ちた項目と文言を返す(無ければ null)。
+ * 登録時に弾くのと、弾いた項目が直されたかを表示側で見るのとで同じ規則を使う。
+ */
+function findValidationFailure(
+  values: SurgeryOrderFormValues,
+  requiresLaterality: Set<string>,
+): ValidationFailure<SurgeryField> | null {
+  if (values.items.length === 0) {
+    return { field: "items", message: "術式を 1 つ以上選択してください。" };
+  }
+  // 予定手術日は任意(希望日)。日程は手術部が確定するので、未定のまま申し込める。
+  // 時刻だけ入れて日付が無いのは矛盾するのでここで弾く(所要時間・手術室は
+  // 日付が無くても「希望」として意味があるので許す)。
+  if (!values.scheduledDate && values.scheduledTime) {
+    return {
+      field: "scheduledDate",
+      message: "入室予定時刻を入れる場合は予定手術日も入力してください。",
+    };
+  }
+  // 左右の取り違え防止。左右のある術式(マスタで印を付けたもの)は必ず選ばせる。
+  const withoutLaterality = values.items.find(
+    (item) => requiresLaterality.has(item.code) && !item.laterality,
+  );
+  if (withoutLaterality) {
+    return {
+      field: `laterality:${withoutLaterality.code}`,
+      message: `「${withoutLaterality.name}」の左右を選択してください。`,
+    };
+  }
+  if (!values.staff.some((line) => line.role === "surgeon")) {
+    return { field: "surgeon", message: "執刀医を選択してください。" };
+  }
+  // 麻酔科管理なのに麻酔科医が居ない申込は、麻酔科側で誰が診るか分からない。
+  if (
+    values.anesthesiaManagement === "anesthesiologist" &&
+    !values.staff.some((line) => line.role === "anesthetist")
+  ) {
+    return { field: "anesthetist", message: "麻酔科管理の場合は麻酔科医を選択してください。" };
+  }
+  return null;
+}
+
 export function SurgeryOrderForm({
   patientId,
   orderId,
@@ -102,7 +150,8 @@ export function SurgeryOrderForm({
   const [values, setValues] = useState<SurgeryOrderFormValues>(
     initialValues ?? emptySurgeryOrderForm(),
   );
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<SurgeryField>();
   const conflictCheck = useSurgeryConflictCheck();
   // 術式検索・スタッフ選択・術前診断の各モーダル。
   const [searchingItem, setSearchingItem] = useState(false);
@@ -237,40 +286,21 @@ export function SurgeryOrderForm({
     return list.includes(code) ? list.filter((c) => c !== code) : [...list, code];
   }
 
+  // 弾いた項目が直されたら(同じ規則が通るようになったら)、バナーと印を消す。
+  const liveFailure = useMemo(
+    () => findValidationFailure(values, requiresLaterality),
+    [values, requiresLaterality],
+  );
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<SurgeryField>(invalidField, shownError);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (values.items.length === 0) {
-      setValidationError("術式を 1 つ以上選択してください。");
+    const failure = findValidationFailure(values, requiresLaterality);
+    if (failure) {
+      setValidationError(failure.message, failure.field);
       return;
     }
-    // 予定手術日は任意(希望日)。日程は手術部が確定するので、未定のまま申し込める。
-    // 時刻だけ入れて日付が無いのは矛盾するのでここで弾く(所要時間・手術室は
-    // 日付が無くても「希望」として意味があるので許す)。
-    if (!values.scheduledDate && values.scheduledTime) {
-      setValidationError("入室予定時刻を入れる場合は予定手術日も入力してください。");
-      return;
-    }
-    // 左右の取り違え防止。左右のある術式(マスタで印を付けたもの)は必ず選ばせる。
-    const withoutLaterality = values.items.find(
-      (item) => requiresLaterality.has(item.code) && !item.laterality,
-    );
-    if (withoutLaterality) {
-      setValidationError(`「${withoutLaterality.name}」の左右を選択してください。`);
-      return;
-    }
-    if (!values.staff.some((line) => line.role === "surgeon")) {
-      setValidationError("執刀医を選択してください。");
-      return;
-    }
-    // 麻酔科管理なのに麻酔科医が居ない申込は、麻酔科側で誰が診るか分からない。
-    if (
-      values.anesthesiaManagement === "anesthesiologist" &&
-      !values.staff.some((line) => line.role === "anesthetist")
-    ) {
-      setValidationError("麻酔科管理の場合は麻酔科医を選択してください。");
-      return;
-    }
-
     setValidationError(null);
 
     // 外から一括 submit される(セット・パスの適用)ときは同期に登録する。手術室の
@@ -319,9 +349,9 @@ export function SurgeryOrderForm({
         onKeyDown={handleKeyDown}
         noValidate={hideSubmit}
       >
-        {validationError && (
+        {shownError && (
           <div className="error-banner" role="alert" ref={validationErrorRef}>
-            <p className="error-banner__line error-banner__line--error">{validationError}</p>
+            <p className="error-banner__line error-banner__line--error">{shownError}</p>
           </div>
         )}
         <ErrorBanner error={submitError} />
@@ -399,8 +429,8 @@ export function SurgeryOrderForm({
             (日程を入れた/変えた瞬間が、重なりの生まれる唯一の場面)。 */}
         <fieldset>
           <legend>日程・手術室</legend>
-          <label>
-            予定手術日(希望)
+          <label className={fieldAlert.className("scheduledDate")}>
+            {fieldAlert.label("scheduledDate", "予定手術日(希望)")}
             <input
               type="date"
               value={values.scheduledDate}
@@ -467,6 +497,7 @@ export function SurgeryOrderForm({
         <section className="order-select__preview">
           <div className="lab-order-item__section-head">
             <h3>術式({values.items.length})</h3>
+            {fieldAlert.icon("items")}
             <button
               type="button"
               className="rp-card__compact-button"
@@ -522,8 +553,11 @@ export function SurgeryOrderForm({
                   />
                 </label>
                 {/* 左右。取り違え防止のため、左右のある術式ではマスタの印で必須にする。 */}
-                <label>
-                  左右{requiresLaterality.has(item.code) && "(必須)"}
+                <label className={fieldAlert.className(`laterality:${item.code}`)}>
+                  {fieldAlert.label(
+                    `laterality:${item.code}`,
+                    <>左右{requiresLaterality.has(item.code) && "(必須)"}</>,
+                  )}
                   <select
                     value={item.laterality}
                     onChange={(e) => updateItem(item.code, { laterality: e.target.value })}
@@ -587,7 +621,7 @@ export function SurgeryOrderForm({
         {/* スタッフ。役割ごとに医療従事者検索から選ぶ。器械出し・外回りなどの
             実施メンバーは実施記録で扱い、申込では 3 役だけを聞く。 */}
         <fieldset>
-          <legend>スタッフ</legend>
+          <legend>{fieldAlert.label("surgeon", "スタッフ")}</legend>
           <div className="surgery-staff">
             {values.staff.map((line) => (
               <span key={`${line.role}-${line.practitionerId}`} className="surgery-staff__chip">
@@ -653,8 +687,8 @@ export function SurgeryOrderForm({
               </label>
             ))}
           </div>
-          <label>
-            管理区分
+          <label className={fieldAlert.className("anesthetist")}>
+            {fieldAlert.label("anesthetist", "管理区分")}
             <select
               value={values.anesthesiaManagement}
               onChange={(e) => update("anesthesiaManagement", e.target.value)}

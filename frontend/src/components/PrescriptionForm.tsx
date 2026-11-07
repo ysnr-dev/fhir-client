@@ -42,7 +42,9 @@ import { usePrescriptionCategoryDefaults } from "../api/queries";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
+import type { ValidationFailure } from "../lib/validation";
 import { ErrorBanner } from "./ErrorBanner";
+import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { FormularyMark, MedicineCautionMarks, useMedicationAdvisories } from "./MedicineWarnings";
 import {
   prescriptionCategoryOption,
@@ -127,6 +129,114 @@ function OtherDose({ rp, line, basis }: { rp: RpValues; line: MedicineLineValues
   return text ? <span className="rp-card__dose-other">{text}</span> : null;
 }
 
+/** 必須チェックで弾いた項目の鍵。ラベルの印(FieldAlert)の宛先になる。RP・医薬品ごとの項目は添字付き。 */
+type PrescriptionField =
+  | "startDate"
+  | "setting"
+  | "category"
+  | "rps"
+  | `usage:${number}`
+  | `doseDays:${number}`
+  | `doseCount:${number}`
+  | `supplement:${number}`
+  | `medicines:${number}`
+  | `medicine:${number}:${number}`
+  | `uneven:${number}:${number}`
+  | `dose:${number}:${number}`;
+
+/** 一般名処方を受けるか(外来の院外処方だけ)。 */
+function allowsGeneric(values: PrescriptionFormValues): boolean {
+  return values.setting === "outpatient" && values.category === "external";
+}
+
+/**
+ * 登録前の入力検証。落ちた項目を順に返す(先頭が登録時に出す文言)。
+ * 共通項目はそれぞれ、RP は 1 つにつき最初の失敗だけを集める。登録時に弾くのと、
+ * 弾いた項目が直されたかを表示側で見るのとで同じ規則を使う。
+ */
+function validationFailures(
+  values: PrescriptionFormValues,
+  setMode: boolean,
+): ValidationFailure<PrescriptionField>[] {
+  const failures: ValidationFailure<PrescriptionField>[] = [];
+  // セットの内容としての入力では投与開始日を持たない(適用時に入れる)。
+  if (!setMode && !values.startDate) {
+    failures.push({ field: "startDate", message: "投与開始日は必須です。" });
+  }
+  if (!values.setting) failures.push({ field: "setting", message: "入外区分は必須です。" });
+  if (!values.category) failures.push({ field: "category", message: "処方区分は必須です。" });
+  if (values.rps.length === 0) failures.push({ field: "rps", message: "RPを1件以上登録してください。" });
+
+  const allowGeneric = allowsGeneric(values);
+  for (let i = 0; i < values.rps.length; i++) {
+    const failure = rpValidationFailure(values.rps[i], i, allowGeneric);
+    if (failure) failures.push(failure);
+  }
+  return failures;
+}
+
+function rpValidationFailure(
+  rp: PrescriptionFormValues["rps"][number],
+  i: number,
+  allowGeneric: boolean,
+): ValidationFailure<PrescriptionField> | null {
+  const rpLabel = `RP${i + 1}`;
+  if (!rp.usage) return { field: `usage:${i}`, message: `${rpLabel}: 用法を選択してください。` };
+  if (hasDoseDays(rp.usage.usage_code, rp.usage.basic_usage_category)) {
+    if (!rp.doseDays || Number(rp.doseDays) < 1) {
+      return { field: `doseDays:${i}`, message: `${rpLabel}: 投与日数を入力してください。` };
+    }
+  }
+  if (isAsNeededUsage(rp.usage.usage_code)) {
+    if (!rp.doseCount || Number(rp.doseCount) < 1) {
+      return { field: `doseCount:${i}`, message: `${rpLabel}: 投与回数を入力してください。` };
+    }
+  }
+  if (rp.supplement) {
+    const error = supplementError(rp.supplement);
+    if (error) return { field: `supplement:${i}`, message: `${rpLabel}: ${error}` };
+  }
+  if (rp.medicines.length === 0) {
+    return { field: `medicines:${i}`, message: `${rpLabel}: 医薬品を1件以上登録してください。` };
+  }
+  for (let j = 0; j < rp.medicines.length; j++) {
+    const med = rp.medicines[j];
+    if (!med.medicine) {
+      return { field: `medicine:${i}:${j}`, message: `${rpLabel}: 医薬品を選択してください。` };
+    }
+    // 入外区分・処方区分は医薬品を選んだ後でも変えられるので、送信前にもう一度見る。
+    if (med.medicine.generic && !allowGeneric) {
+      return {
+        field: `medicine:${i}:${j}`,
+        message: `${rpLabel}: 一般名(${med.medicine.name})は外来の院外処方でのみ使えます。`,
+      };
+    }
+    if (med.unevenDoses && !med.unevenDoses.every(isValidUnevenDose)) {
+      return {
+        field: `uneven:${i}:${j}`,
+        message: `${rpLabel}: 不均等投与の量は数字と小数点で6桁以内で入力してください。`,
+      };
+    }
+    if (!med.dose || Number(med.dose) <= 0) {
+      return { field: `dose:${i}:${j}`, message: `${rpLabel}: 用量を入力してください。` };
+    }
+  }
+  return null;
+}
+
+/** 医薬品追加の前の検証。未選択の行があるうちは行を増やさない。 */
+function findUnselectedMedicine(
+  rp: PrescriptionFormValues["rps"][number],
+  rpIndex: number,
+): ValidationFailure<PrescriptionField> | null {
+  const j = rp.medicines.findIndex((m) => !m.medicine);
+  if (j < 0) return null;
+  return {
+    field: `medicine:${rpIndex}:${j}`,
+    message: "医薬品が未選択のレコードがあります。選択してから追加してください。",
+  };
+}
+
 function removeButton(onClick: () => void, label: string) {
   return (
     <button
@@ -166,7 +276,8 @@ export function PrescriptionForm({
       category: defaultPrescriptionCategory(categoryDefaults.defaults, base.setting),
     };
   });
-  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [validationError, setValidationError, validationErrorRef, invalidField] =
+    useValidationError<PrescriptionField>();
   const [modal, setModal] = useState<ModalState>(null);
   // コメント欄は常に入力する訳ではないため、既に値がある場合のみ初期表示し、
   // それ以外はボタン操作で表示する。
@@ -237,7 +348,13 @@ export function PrescriptionForm({
   const { data: doseUnits } = useMedicineDoseUnits(medicineCodes);
 
   // 一般名処方は保険上、外来の院外処方でだけ算定できる。
-  const allowGeneric = values.setting === "outpatient" && values.category === "external";
+  const allowGeneric = allowsGeneric(values);
+  // 今の入力で落ちる項目。登録時は先頭で弾き、弾いた項目が直されたら(同じ項目が
+  // 落ちなくなったら)バナーと印を消す。
+  const failures = useMemo(() => validationFailures(values, setMode), [values, setMode]);
+  const liveFailure = failures.find((f) => f.field === invalidField) ?? failures[0] ?? null;
+  const shownError = shownValidationError(validationError, invalidField, liveFailure);
+  const fieldAlert = useFieldAlert<PrescriptionField>(invalidField, shownError);
 
   const update = makeFieldUpdater(setValues);
 
@@ -329,8 +446,9 @@ export function PrescriptionForm({
 
   function addMedicine(rpIndex: number) {
     const rp = values.rps[rpIndex];
-    if (rp.medicines.some((m) => !m.medicine)) {
-      setValidationError("医薬品が未選択のレコードがあります。選択してから追加してください。");
+    const unselected = findUnselectedMedicine(rp, rpIndex);
+    if (unselected) {
+      setValidationError(unselected.message, unselected.field);
       return;
     }
     setValidationError(null);
@@ -393,49 +511,11 @@ export function PrescriptionForm({
     setModal(null);
   }
 
-  function validate(): string | null {
-    // セットの内容としての入力では投与開始日を持たない(適用時に入れる)。
-    if (!setMode && !values.startDate) return "投与開始日は必須です。";
-    if (!values.setting) return "入外区分は必須です。";
-    if (!values.category) return "処方区分は必須です。";
-    if (values.rps.length === 0) return "RPを1件以上登録してください。";
-
-    for (let i = 0; i < values.rps.length; i++) {
-      const rp = values.rps[i];
-      const rpLabel = `RP${i + 1}`;
-      if (!rp.usage) return `${rpLabel}: 用法を選択してください。`;
-      if (hasDoseDays(rp.usage.usage_code, rp.usage.basic_usage_category)) {
-        if (!rp.doseDays || Number(rp.doseDays) < 1) return `${rpLabel}: 投与日数を入力してください。`;
-      }
-      if (isAsNeededUsage(rp.usage.usage_code)) {
-        if (!rp.doseCount || Number(rp.doseCount) < 1) return `${rpLabel}: 投与回数を入力してください。`;
-      }
-      if (rp.supplement) {
-        const error = supplementError(rp.supplement);
-        if (error) return `${rpLabel}: ${error}`;
-      }
-      if (rp.medicines.length === 0) return `${rpLabel}: 医薬品を1件以上登録してください。`;
-      for (let j = 0; j < rp.medicines.length; j++) {
-        const med = rp.medicines[j];
-        if (!med.medicine) return `${rpLabel}: 医薬品を選択してください。`;
-        // 入外区分・処方区分は医薬品を選んだ後でも変えられるので、送信前にもう一度見る。
-        if (med.medicine.generic && !allowGeneric) {
-          return `${rpLabel}: 一般名(${med.medicine.name})は外来の院外処方でのみ使えます。`;
-        }
-        if (med.unevenDoses && !med.unevenDoses.every(isValidUnevenDose)) {
-          return `${rpLabel}: 不均等投与の量は数字と小数点で6桁以内で入力してください。`;
-        }
-        if (!med.dose || Number(med.dose) <= 0) return `${rpLabel}: 用量を入力してください。`;
-      }
-    }
-    return null;
-  }
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validate();
-    if (error) {
-      setValidationError(error);
+    const failure = failures[0];
+    if (failure) {
+      setValidationError(failure.message, failure.field);
       return;
     }
     if (session.blocked.length > 0) {
@@ -481,9 +561,9 @@ export function PrescriptionForm({
 
   return (
     <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
-      {validationError && (
+      {shownError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          <p className="error-banner__line error-banner__line--error">{shownError}</p>
         </div>
       )}
       <ErrorBanner error={submitError} />
@@ -502,8 +582,8 @@ export function PrescriptionForm({
             />
           </label>
         )}
-        <label>
-          入外区分
+        <label className={fieldAlert.className("setting")}>
+          {fieldAlert.label("setting", "入外区分")}
           <select
             className="select--placeholder"
             value={values.setting}
@@ -520,8 +600,8 @@ export function PrescriptionForm({
             ))}
           </select>
         </label>
-        <label>
-          処方区分
+        <label className={fieldAlert.className("category")}>
+          {fieldAlert.label("category", "処方区分")}
           <select
             className="select--placeholder"
             value={values.category}
@@ -541,8 +621,8 @@ export function PrescriptionForm({
           </select>
         </label>
         {!setMode && (
-          <label>
-            投与開始日
+          <label className={fieldAlert.className("startDate")}>
+            {fieldAlert.label("startDate", "投与開始日")}
             <input
               type="date"
               value={values.startDate}
@@ -652,6 +732,8 @@ export function PrescriptionForm({
                         ) : (
                           <span className="rp-card__usage-value--empty">未選択</span>
                         )}
+                        {fieldAlert.icon(`medicine:${rpIndex}:${medIndex}`)}
+                        {fieldAlert.icon(`dose:${rpIndex}:${medIndex}`)}
                         <OtherDose rp={rp} line={med} basis={values.doseBasis} />
                       </div>
                       <AdvisoryInlineMarks advisories={advisoriesOfScope(session.advisories, rpIndex, medIndex)} />
@@ -687,6 +769,7 @@ export function PrescriptionForm({
                           onChange={(doses) => updateUnevenDoses(rpIndex, medIndex, doses)}
                           onRemove={() => setUneven(rpIndex, medIndex, null)}
                           removeButton={removeButton}
+                          alert={fieldAlert.icon(`uneven:${rpIndex}:${medIndex}`)}
                         />
                       )}
                       {showComment && (
@@ -708,7 +791,7 @@ export function PrescriptionForm({
                         </div>
                       )}
                     </td>
-                    <td>
+                    <td className={fieldAlert.className(`dose:${rpIndex}:${medIndex}`)}>
                       <input
                         type="number"
                         step="any"
@@ -783,10 +866,14 @@ export function PrescriptionForm({
             >
               + 医薬品追加
             </button>
+            {fieldAlert.icon(`medicines:${rpIndex}`)}
           </div>
 
           <div className="rp-card__usage">
-            <span className="rp-card__usage-label">用法</span>
+            <span className="rp-card__usage-label">
+              用法
+              {fieldAlert.icon(`usage:${rpIndex}`)}
+            </span>
             <div className="rp-card__usage-row">
               <button
                 type="button"
@@ -803,8 +890,11 @@ export function PrescriptionForm({
                 <span className="rp-card__usage-value rp-card__usage-value--empty">未選択</span>
               )}
               {hasDoseDays(rp.usage?.usage_code, rp.usage?.basic_usage_category) && (
-                <span className="rp-card__dose-count">
-                  <span className="rp-card__dose-count-label">投与日数</span>
+                <span className={fieldAlert.className(`doseDays:${rpIndex}`, "rp-card__dose-count")}>
+                  <span className="rp-card__dose-count-label">
+                    投与日数
+                    {fieldAlert.icon(`doseDays:${rpIndex}`)}
+                  </span>
                   <input
                     type="number"
                     min="1"
@@ -816,8 +906,11 @@ export function PrescriptionForm({
                 </span>
               )}
               {isAsNeededUsage(rp.usage?.usage_code) && (
-                <span className="rp-card__dose-count">
-                  <span className="rp-card__dose-count-label">投与回数</span>
+                <span className={fieldAlert.className(`doseCount:${rpIndex}`, "rp-card__dose-count")}>
+                  <span className="rp-card__dose-count-label">
+                    投与回数
+                    {fieldAlert.icon(`doseCount:${rpIndex}`)}
+                  </span>
                   <input
                     type="number"
                     min="1"
@@ -873,6 +966,7 @@ export function PrescriptionForm({
               onChange={(supplement) => updateRp(rpIndex, { supplement })}
               onRemove={() => updateRp(rpIndex, { supplement: null })}
               removeButton={removeButton}
+              alert={fieldAlert.icon(`supplement:${rpIndex}`)}
             />
           )}
 
@@ -937,6 +1031,7 @@ export function PrescriptionForm({
         <button type="button" onClick={addRp}>
           + RP追加
         </button>
+        {fieldAlert.icon("rps")}
       </div>
 
       {!hideSubmit && (

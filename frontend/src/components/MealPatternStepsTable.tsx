@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   mealPatternSpanLabel,
   mealPatternStepText,
@@ -13,13 +14,15 @@ interface Props {
   onChange: (steps: MealPatternStep[]) => void;
   /** 渡したときだけ「編集」ボタンを出す(マスタの編集)。 */
   onEdit?: (index: number) => void;
+  /** 検証で弾いた段階の印(FieldAlert)。段階の番号の横に出す。 */
+  rowAlert?: (index: number) => ReactNode;
 }
 
 /**
  * パターン食の段階の表。マスタの編集とオーダー登録の両方で使い、食数と削除はどちらでも直せる。
  * 段階の中身(食種・主食)を直せるのはマスタ側だけ。食数を空にすると「継続」。
  */
-export function MealPatternStepsTable({ steps, spans, onChange, onEdit }: Props) {
+export function MealPatternStepsTable({ steps, spans, onChange, onEdit, rowAlert }: Props) {
   function updateMeals(index: number, raw: string) {
     const meals = raw.trim() === "" ? null : Number(raw);
     onChange(steps.map((step, i) => (i === index ? { ...step, meals } : step)));
@@ -41,7 +44,10 @@ export function MealPatternStepsTable({ steps, spans, onChange, onEdit }: Props)
           const span = spans?.[index];
           return (
             <tr key={index}>
-              <td className="meal-pattern-steps__index">{index + 1}</td>
+              <td className="meal-pattern-steps__index">
+                {index + 1}
+                {rowAlert?.(index)}
+              </td>
               <td>{mealPatternStepText(step)}</td>
               <td>
                 <input

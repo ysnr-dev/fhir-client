@@ -1,4 +1,5 @@
 import { today } from "../lib/dates";
+import type { ValidationFailure } from "../lib/validation";
 import { CARE_TEAM_KIND_SYSTEM, careTeamKindLabel } from "./careTeamHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
@@ -76,14 +77,20 @@ export function emptyTeamRequestForm(setting: PrescriptionSetting): TeamRequestF
   };
 }
 
+/** 入力検証で弾く項目の鍵。ラベルの印(FieldAlert)の宛先になる。 */
+export type TeamRequestField = "teamId" | "purpose" | "desiredDate";
+
+/** 入力の検証。最初に落ちた項目と文言を返す(無ければ null)。 */
 export function validateTeamRequestForm(
   values: TeamRequestFormValues,
   { requireDates = true }: { requireDates?: boolean } = {},
-): string {
-  if (!values.teamId) return "依頼先のチームを選んでください。";
-  if (!values.purpose.trim()) return "依頼目的を入れてください。";
-  if (requireDates && !values.desiredDate) return "希望日を入れてください。";
-  return "";
+): ValidationFailure<TeamRequestField> | null {
+  if (!values.teamId) return { field: "teamId", message: "依頼先のチームを選んでください。" };
+  if (!values.purpose.trim()) return { field: "purpose", message: "依頼目的を入れてください。" };
+  if (requireDates && !values.desiredDate) {
+    return { field: "desiredDate", message: "希望日を入れてください。" };
+  }
+  return null;
 }
 
 // ---- FHIR リソースの組み立て ----

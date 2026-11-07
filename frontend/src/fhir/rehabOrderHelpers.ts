@@ -1,4 +1,5 @@
 import { shortDate, today } from "../lib/dates";
+import type { ValidationFailure } from "../lib/validation";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   categoryCoding,
@@ -202,37 +203,51 @@ export function emptyRehabOrderForm(setting: PrescriptionSetting): RehabOrderFor
  * 入力の検証。空文字なら妥当。フォームとパネルの双方から呼べるように
  * ヘルパー側に置く(他のオーダーはフォーム内の関数だが、リハビリは項目が多い)。
  */
+/** 検証で弾いた項目の鍵。フォームのラベルの印(FieldAlert)の宛先。 */
+export type RehabOrderField =
+  | "diseaseCategory"
+  | "therapyTypes"
+  | "unitsPerSession"
+  | "frequencyPerWeek"
+  | "startDate"
+  | "endDate"
+  | "onsetDate"
+  | "targetDisease";
+
 export function validateRehabOrderForm(
   values: RehabOrderFormValues,
   /** requireDates を偽にすると開始日を求めない(セットの内容としての入力)。 */
   { requireDates = true }: { requireDates?: boolean } = {},
-): string {
-  if (!values.diseaseCategory) return "疾患別リハ区分を選んでください。";
-  if (values.therapyTypes.length === 0) return "療法種別を 1 つ以上選んでください。";
+): ValidationFailure<RehabOrderField> | null {
+  const fail = (field: RehabOrderField, message: string) => ({ field, message });
+  if (!values.diseaseCategory) return fail("diseaseCategory", "疾患別リハ区分を選んでください。");
+  if (values.therapyTypes.length === 0) {
+    return fail("therapyTypes", "療法種別を 1 つ以上選んでください。");
+  }
 
   const units = Number(values.unitsPerSession);
-  if (!values.unitsPerSession) return "1 回あたりの単位数を入れてください。";
+  if (!values.unitsPerSession) return fail("unitsPerSession", "1 回あたりの単位数を入れてください。");
   if (!Number.isInteger(units) || units < 1 || units > 24) {
-    return "1 回あたりの単位数は 1〜24 の整数で入れてください。";
+    return fail("unitsPerSession", "1 回あたりの単位数は 1〜24 の整数で入れてください。");
   }
 
   if (values.frequencyPerWeek) {
     const frequency = Number(values.frequencyPerWeek);
     if (!Number.isInteger(frequency) || frequency < 1 || frequency > 7) {
-      return "週あたりの回数は 1〜7 の整数で入れてください。";
+      return fail("frequencyPerWeek", "週あたりの回数は 1〜7 の整数で入れてください。");
     }
   }
 
-  if (requireDates && !values.startDate) return "開始日を入れてください。";
+  if (requireDates && !values.startDate) return fail("startDate", "開始日を入れてください。");
   if (values.startDate && values.endDate && values.endDate < values.startDate) {
-    return "終了日は開始日と同じか、それより後にしてください。";
+    return fail("endDate", "終了日は開始日と同じか、それより後にしてください。");
   }
   if (values.onsetDate && values.onsetDate > values.startDate) {
-    return "起算日は開始日より前の日付にしてください。";
+    return fail("onsetDate", "起算日は開始日より前の日付にしてください。");
   }
-  if (!values.targetDisease.trim()) return "対象疾患名を入れてください。";
+  if (!values.targetDisease.trim()) return fail("targetDisease", "対象疾患名を入れてください。");
 
-  return "";
+  return null;
 }
 
 // ---- FHIR リソースの組み立て ----
