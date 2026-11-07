@@ -267,6 +267,11 @@ class FacilitySettings < ApplicationRecord
     "template" => "http://fhir-client.local/Questionnaire/ncd-case-01"
   }.freeze
 
+  # 麻酔科術前診察(docs/anesthesia-preop-design.md)。template は術前診察のテンプレートの url(版を問わない)。
+  DEFAULT_ANESTHESIA_PREOP = {
+    "template" => "http://fhir-client.local/Questionnaire/sur-anes-preop-01"
+  }.freeze
+
   # 入退院文書の作成状況(docs/bed-management-design.md §4、docs/nutrition-care-plan-design.md、
   # docs/pressure-ulcer-plan-design.md)。
   # *_template はテンプレートの url(版を問わない。空なら対象にしない)、*_days は入院日(看護サマリーは退院日)からの期限。
@@ -501,6 +506,10 @@ class FacilitySettings < ApplicationRecord
     },
     "ncd_registration" => {
       default: DEFAULT_NCD_REGISTRATION,
+      shape: { fields: { "template" => QUESTIONNAIRE_URL } }
+    },
+    "anesthesia_preop" => {
+      default: DEFAULT_ANESTHESIA_PREOP,
       shape: { fields: { "template" => QUESTIONNAIRE_URL } }
     },
     "early_warning" => {

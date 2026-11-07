@@ -197,6 +197,7 @@ import { DpcForm1ExportPage } from "./pages/DpcForm1ExportPage";
 import { DpcPatientListPage } from "./pages/DpcPatientListPage";
 import { CancerRegistryPage } from "./pages/CancerRegistryPage";
 import { InfectiousDiseaseReportPage } from "./pages/InfectiousDiseaseReportPage";
+import { AnesthesiaPreopPage } from "./pages/AnesthesiaPreopPage";
 import { NcdRegistrationPage } from "./pages/NcdRegistrationPage";
 import { DpcTablesPage } from "./pages/DpcTablesPage";
 
@@ -393,6 +394,8 @@ function App() {
           <Route path="/cancer-registry" element={<CancerRegistryPage />} />
           {/* NCD の症例登録の対象(手術の実施記録)と登録の状況。 */}
           <Route path="/ncd-registrations" element={<NcdRegistrationPage />} />
+          {/* 麻酔科術前診察の状況と評価。 */}
+          <Route path="/anesthesia-preop" element={<AnesthesiaPreopPage />} />
           {/* 感染症の発生届の届出対象と届出の状況。 */}
           <Route path="/infectious-disease-reports" element={<InfectiousDiseaseReportPage />} />
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}

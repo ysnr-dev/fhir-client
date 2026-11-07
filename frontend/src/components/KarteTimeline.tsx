@@ -394,6 +394,7 @@ const KarteCard = memo(function KarteCard({
           order: item.serviceRequest,
         }
       : null;
+  const hasAnesthesiaPreop = item.kind === "surgery-order" && Boolean(item.anesthesiaPreop);
 
   // 部門の進捗(依頼済・受付済・実施済・中止)。カードだけで分かるよう、メタ行の先頭に添える。
   const status = cardStatus(item);
@@ -907,12 +908,14 @@ const KarteCard = memo(function KarteCard({
                   type="button"
                   className="row-menu__item row-menu__item--danger"
                   onClick={handleDelete}
-                  // レポートが付いたオーダーを消すと、レポートが指す先が無くなる。
-                  disabled={deleting || Boolean(examReport?.reportId)}
+                  // レポートや術前診察が付いたオーダーを消すと、その記録が指す先が無くなる。
+                  disabled={deleting || Boolean(examReport?.reportId) || hasAnesthesiaPreop}
                   title={
                     examReport?.reportId
                       ? `${examReport.config.labels.report}があるため削除できません`
-                      : undefined
+                      : hasAnesthesiaPreop
+                        ? "術前診察があるため削除できません"
+                        : undefined
                   }
                 >
                   削除

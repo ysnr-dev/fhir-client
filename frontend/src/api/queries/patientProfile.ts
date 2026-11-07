@@ -1007,6 +1007,8 @@ export function useCreateQuestionnaireResponse() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+      // 手術一覧・カルテの手術カードはオーダーの検索に術前診察の回答を添えて読む。
+      if (variables.response.basedOn?.length) queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
       if (variables.extraEntries) {
         queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
         queryClient.invalidateQueries({ queryKey: ["Task", "search"] });
@@ -1033,6 +1035,7 @@ export function useUpdateQuestionnaireResponse() {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", result.data.id] });
       queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+      if (result.data.basedOn?.length) queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
     },
   });
 }
@@ -1055,9 +1058,10 @@ export function useDeleteQuestionnaireResponse() {
       if (!observationRefs.length) return deleteResource("QuestionnaireResponse", id);
       await postBundle(responseDeleteBundle(id, observationRefs));
     },
-    onSuccess: () => {
+    onSuccess: (_data, response) => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+      if (response.basedOn?.length) queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
       queryClient.invalidateQueries({ queryKey: ["DocumentReference", "search"] });
     },
   });

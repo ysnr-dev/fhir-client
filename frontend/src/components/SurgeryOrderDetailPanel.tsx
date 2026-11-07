@@ -1,3 +1,5 @@
+import { useAnesthesiaPreop } from "../api/queries";
+import { summarizeAnesthesiaPreop } from "../fhir/anesthesiaPreopHelpers";
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
@@ -140,7 +142,31 @@ export function SurgeryOrderDetailPanel({
         </table>
         {items.length === 0 && <p className="patient-table__empty">術式がありません。</p>}
       </fieldset>
+
+      <AnesthesiaPreopFieldset orderId={serviceRequest.id} />
     </div>
+  );
+}
+
+function AnesthesiaPreopFieldset({ orderId }: { orderId?: string }) {
+  const { data: response } = useAnesthesiaPreop(orderId);
+  if (!response) return null;
+  const preop = summarizeAnesthesiaPreop(response);
+
+  return (
+    <fieldset>
+      <legend>麻酔科術前診察</legend>
+      <dl className="prescription-detail__common">
+        <dt>評価</dt>
+        <dd>{preop.highlights.join(" / ") || "-"}</dd>
+        <dt>手術室への指示</dt>
+        <dd className="rad-gp__text">{preop.roomLines.join("\n") || "-"}</dd>
+        <dt>病棟への指示</dt>
+        <dd className="rad-gp__text">{preop.wardLines.join("\n") || "-"}</dd>
+        <dt>診察</dt>
+        <dd>{[preop.authoredOn, preop.authorName].filter(Boolean).join(" ") || "-"}</dd>
+      </dl>
+    </fieldset>
   );
 }
 

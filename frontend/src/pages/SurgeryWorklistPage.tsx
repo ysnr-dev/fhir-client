@@ -4,12 +4,14 @@ import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
   useAdmitUnscheduledSurgery,
+  useFacilitySettings,
   useSelfDepartments,
   useSurgeryUnscheduledList,
   useSurgeryWorklist,
   useUpdateSurgeryTaskStatus,
   type SurgeryWorklistRow,
 } from "../api/queries";
+import { AnesthesiaPreopState } from "../components/AnesthesiaPreopState";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
@@ -22,6 +24,7 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { RowPictograms } from "../components/PatientListRowParts";
+import { DEFAULT_ANESTHESIA_PREOP } from "../fhir/anesthesiaPreopHelpers";
 import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
@@ -44,6 +47,7 @@ import {
   useRowPictogramSources,
   type RowPictogramSources,
 } from "../hooks/useRowPictogramSources";
+import { anesthesiaPreopKarteHref } from "../karteUrl";
 
 // 手術一覧(手術部のワークリスト)。予定手術日を決めて、その日の手術を並べる。
 //
@@ -221,6 +225,7 @@ export function SurgeryWorklistPage() {
                   <th className="rad-worklist__content">術式</th>
                   <th>執刀医</th>
                   <th>麻酔</th>
+                  <th className="rad-worklist__compact">術前診察</th>
                   <th className="rad-worklist__compact">予定区分</th>
                   <th className="rad-worklist__compact">区分</th>
                   <th className="rad-worklist__compact">病棟</th>
@@ -480,12 +485,14 @@ function menuContents(row: SurgeryWorklistRow, tab: Tab) {
     // 麻酔チャートを開けるのは入室後(書き始める)と実施済(振り返りに読む)だけ。
     // 日程未定タブは日程を確定する画面なので出さない。
     showChart: tab === "scheduled" && (status === "in-progress" || status === "completed"),
+    // 術前診察は日程が決まる前から書けるが、中止した手術には書かない。
+    showPreop: status !== "cancelled",
   };
 }
 
 function hasMenuItems(row: SurgeryWorklistRow, tab: Tab): boolean {
-  const { secondaryActions, showChart } = menuContents(row, tab);
-  return secondaryActions.length > 0 || showChart;
+  const { secondaryActions, showChart, showPreop } = menuContents(row, tab);
+  return secondaryActions.length > 0 || showChart || showPreop;
 }
 
 function WorklistRow({
@@ -581,6 +588,9 @@ function WorklistRow({
         )}
       </td>
       <td>{summary.anesthesiaMethods.map(surgeryAnesthesiaMethodDisplay).join("・") || "-"}</td>
+      <td className="rad-worklist__compact">
+        <AnesthesiaPreopState response={row.anesthesiaPreop} />
+      </td>
       <td className="rad-worklist__compact">
         {/* 緊急・準緊急だけ目立たせる。予定は既定なのでバッジにしない。 */}
         {summary.priority !== "routine" ? (
@@ -694,10 +704,21 @@ function WorklistMenuItems({
 }) {
   // 麻酔チャートの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
-  const { secondaryActions, showChart } = menuContents(row, tab);
+  const { secondaryActions, showChart, showPreop } = menuContents(row, tab);
+  const facility = useFacilitySettings();
+  const templateUrl = (facility.data?.anesthesia_preop ?? DEFAULT_ANESTHESIA_PREOP).template;
 
   return (
     <>
+      {showPreop && (
+        <Link
+          className="row-menu__item"
+          to={anesthesiaPreopKarteHref(row.order, row.anesthesiaPreop, templateUrl)}
+          state={returnLinkState}
+        >
+          術前診察
+        </Link>
+      )}
       {/* 麻酔チャート(術中リアルタイム記録)。書き始めるのは入室後、
           実施済では振り返りに読む。docs/anesthesia-chart-design.md */}
       {showChart && (

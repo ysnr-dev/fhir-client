@@ -167,6 +167,7 @@ import {
   type SurgeryTaskStatus,
 } from "./surgeryTaskHelpers";
 import { surgeryPerformsByOrderId, type SurgeryPerformDisplay } from "./surgeryResultHelpers";
+import { anesthesiaPreopsByOrderId } from "./anesthesiaPreopHelpers";
 import {
   ENDOSCOPY_ORDER_TYPE,
   isEndoscopyServiceRequest,
@@ -426,6 +427,8 @@ export type KarteTimelineItem = KarteItemBase &
         status: SurgeryTaskStatus;
         /** 実施記録。未実施なら空。 */
         performs: SurgeryPerformDisplay[];
+        /** 麻酔科術前診察の回答。まだ書かれていなければ無い。 */
+        anesthesiaPreop?: fhir4.QuestionnaireResponse;
       }
     // 食事(給食)。他のオーダーと違い明細も進捗 Task も実施記録も持たないので、
     // カードに出すものは ServiceRequest 1 本の中で完結する。
@@ -926,6 +929,9 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     administrations,
     pickByType<fhir4.Observation>(prescriptionResources, "Observation"),
   );
+  const anesthesiaPreopByOrderId = anesthesiaPreopsByOrderId(
+    pickByType<fhir4.QuestionnaireResponse>(prescriptionResources, "QuestionnaireResponse"),
+  );
   const treatmentPerformByOrderId = treatmentPerformsByOrderId(procedures, administrations);
   // リハビリも同じ検索結果に Task と Procedure が混ざって届く。振り分けは
   // rehabPerformsByOrderId が category(order-type)で行うので同じ配列を渡してよい。
@@ -1121,6 +1127,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         // 他部門と同じく、実施情報は進捗が実施済のときだけ出す。
         performs:
           status === "completed" ? (surgeryPerformByOrderId.get(serviceRequest.id ?? "") ?? []) : [],
+        anesthesiaPreop: anesthesiaPreopByOrderId.get(serviceRequest.id ?? ""),
       };
     }
     if (isMealServiceRequest(serviceRequest)) {

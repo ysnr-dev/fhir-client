@@ -1,0 +1,1020 @@
+{
+  "url": "http://fhir-client.local/Questionnaire/sur-anes-preop-01",
+  "name": "SUR_ANESPRE_01",
+  "title": "麻酔科術前診察",
+  "status": "active",
+  "version": "1.0.0",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "code": "9c4e1f37-8a52-4bd6-b071-3f8e2a5c9d14",
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "display": "手術"
+      }
+    }
+  ],
+  "description": "麻酔科医が手術の前に書く術前診察の記録。手術オーダー 1 件に回答 1 件で、回答は basedOn で手術オーダーを指す。手術室への指示は麻酔チャート、病棟への指示は手術カードに出る。",
+  "subjectType": [
+    "Patient"
+  ],
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "item": [
+    {
+      "text": "予定",
+      "type": "group",
+      "linkId": "grp-plan",
+      "item": [
+        {
+          "text": "手術予定日",
+          "type": "date",
+          "linkId": "planned-date",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%plannedSurgeryDate"
+              }
+            }
+          ]
+        },
+        {
+          "text": "予定術式",
+          "type": "text",
+          "linkId": "planned-procedure",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%plannedProcedures"
+              }
+            }
+          ]
+        },
+        {
+          "text": "申込の麻酔方法",
+          "type": "string",
+          "linkId": "planned-anesthesia",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%plannedAnesthesiaMethods"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "text": "術前評価",
+      "type": "group",
+      "linkId": "grp-history",
+      "item": [
+        {
+          "text": "身長(cm)",
+          "type": "decimal",
+          "linkId": "height",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%bodyHeight"
+              }
+            }
+          ]
+        },
+        {
+          "text": "体重(kg)",
+          "type": "decimal",
+          "linkId": "weight",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%bodyWeight"
+              }
+            }
+          ]
+        },
+        {
+          "text": "現病歴",
+          "type": "text",
+          "linkId": "present-illness"
+        },
+        {
+          "text": "既往歴",
+          "type": "text",
+          "linkId": "past-history",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%pastHistory"
+              }
+            }
+          ]
+        },
+        {
+          "text": "麻酔歴",
+          "type": "text",
+          "linkId": "anesthesia-history"
+        },
+        {
+          "text": "悪性高熱症の家族歴",
+          "type": "choice",
+          "linkId": "family-mh",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "不明"
+              }
+            }
+          ]
+        },
+        {
+          "text": "アレルギー",
+          "type": "text",
+          "linkId": "allergies",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%allergies"
+              }
+            }
+          ]
+        },
+        {
+          "text": "内服薬",
+          "type": "text",
+          "linkId": "medications",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%activeMedications"
+              }
+            }
+          ]
+        },
+        {
+          "text": "喫煙",
+          "type": "choice",
+          "linkId": "smoking",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "never",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "past",
+                "display": "過去"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "current",
+                "display": "現在"
+              }
+            }
+          ]
+        },
+        {
+          "text": "ASA-PS",
+          "type": "choice",
+          "linkId": "anes_asa",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3",
+                "display": "3"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "4",
+                "display": "4"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "5"
+              }
+            }
+          ]
+        },
+        {
+          "text": "緊急(E)",
+          "type": "choice",
+          "linkId": "anes_asa-e",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "text": "NYHA",
+          "type": "choice",
+          "linkId": "anes_nyha",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "I"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "II"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3",
+                "display": "III"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "4",
+                "display": "IV"
+              }
+            }
+          ]
+        },
+        {
+          "text": "運動耐容能",
+          "type": "choice",
+          "linkId": "anes_mets",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "ge4",
+                "display": "4 METs 以上"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "lt4",
+                "display": "4 METs 未満"
+              }
+            }
+          ]
+        },
+        {
+          "text": "評価の要点",
+          "type": "text",
+          "linkId": "evaluation-note"
+        }
+      ]
+    },
+    {
+      "text": "気道",
+      "type": "group",
+      "linkId": "grp-airway",
+      "item": [
+        {
+          "text": "Mallampati",
+          "type": "choice",
+          "linkId": "anes_mallampati",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "I"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "II"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3",
+                "display": "III"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "4",
+                "display": "IV"
+              }
+            }
+          ]
+        },
+        {
+          "text": "開口",
+          "type": "choice",
+          "linkId": "mouth-opening",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "ge3",
+                "display": "3 横指以上"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "lt3",
+                "display": "3 横指未満"
+              }
+            }
+          ]
+        },
+        {
+          "text": "甲状頤間距離",
+          "type": "choice",
+          "linkId": "thyromental",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "ge3",
+                "display": "3 横指以上"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "lt3",
+                "display": "3 横指未満"
+              }
+            }
+          ]
+        },
+        {
+          "text": "頸部後屈",
+          "type": "choice",
+          "linkId": "neck-extension",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "normal",
+                "display": "制限なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "limited",
+                "display": "制限あり"
+              }
+            }
+          ]
+        },
+        {
+          "text": "歯牙(動揺歯・義歯)",
+          "type": "string",
+          "linkId": "teeth"
+        },
+        {
+          "text": "予測困難気道",
+          "type": "choice",
+          "linkId": "anes_difficult-airway",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            }
+          ],
+          "item": [
+            {
+              "text": "予測困難気道の内容",
+              "type": "group",
+              "linkId": "grp-difficult",
+              "item": [
+                {
+                  "text": "内容と対応",
+                  "type": "text",
+                  "linkId": "difficult-detail"
+                }
+              ],
+              "enableWhen": [
+                {
+                  "operator": "=",
+                  "question": "anes_difficult-airway",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "text": "手術室への指示",
+      "type": "group",
+      "linkId": "grp-room",
+      "item": [
+        {
+          "text": "麻酔法",
+          "type": "choice",
+          "linkId": "method",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "check-box",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "inhalation",
+                "display": "全身麻酔(吸入)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "tiva",
+                "display": "全身麻酔(TIVA)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "spinal",
+                "display": "脊髄くも膜下麻酔"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "epidural",
+                "display": "硬膜外麻酔"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "nerve-block",
+                "display": "末梢神経ブロック"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "local",
+                "display": "局所浸潤麻酔"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "mac",
+                "display": "監視下鎮静管理(MAC)"
+              }
+            }
+          ]
+        },
+        {
+          "text": "気道確保",
+          "type": "choice",
+          "linkId": "airway-plan",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "check-box",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "mask",
+                "display": "フェイスマスク"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "supraglottic",
+                "display": "声門上器具"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "oral",
+                "display": "経口挿管"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "nasal",
+                "display": "経鼻挿管"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "awake",
+                "display": "意識下挿管"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "videolaryngoscope",
+                "display": "ビデオ喉頭鏡"
+              }
+            }
+          ]
+        },
+        {
+          "text": "ルート",
+          "type": "string",
+          "linkId": "lines"
+        },
+        {
+          "text": "導入薬",
+          "type": "string",
+          "linkId": "induction"
+        },
+        {
+          "text": "モニタ",
+          "type": "choice",
+          "linkId": "monitors",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "check-box",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "standard",
+                "display": "標準モニタ"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "arterial",
+                "display": "観血的動脈圧"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "cvp",
+                "display": "中心静脈圧"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "bis",
+                "display": "BIS"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "tof",
+                "display": "筋弛緩モニタ"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "tee",
+                "display": "経食道心エコー"
+              }
+            }
+          ]
+        },
+        {
+          "text": "術後鎮痛",
+          "type": "string",
+          "linkId": "analgesia-plan"
+        },
+        {
+          "text": "術後管理先",
+          "type": "choice",
+          "linkId": "postop-destination",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "ward",
+                "display": "病棟"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "hcu",
+                "display": "HCU"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "icu",
+                "display": "ICU"
+              }
+            }
+          ]
+        },
+        {
+          "text": "特記",
+          "type": "text",
+          "linkId": "room-note"
+        }
+      ]
+    },
+    {
+      "text": "病棟への指示",
+      "type": "group",
+      "linkId": "grp-ward",
+      "item": [
+        {
+          "text": "最終摂食",
+          "type": "string",
+          "linkId": "last-food"
+        },
+        {
+          "text": "最終飲水",
+          "type": "string",
+          "linkId": "last-water"
+        },
+        {
+          "text": "前投薬",
+          "type": "string",
+          "linkId": "premedication"
+        },
+        {
+          "text": "内服の継続・休薬",
+          "type": "text",
+          "linkId": "medication-instruction"
+        },
+        {
+          "text": "入室方法",
+          "type": "choice",
+          "linkId": "entry-method",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "walk",
+                "display": "歩行"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "wheelchair",
+                "display": "車椅子"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "stretcher",
+                "display": "ストレッチャー"
+              }
+            }
+          ]
+        },
+        {
+          "text": "特記",
+          "type": "text",
+          "linkId": "ward-note"
+        }
+      ]
+    },
+    {
+      "text": "説明",
+      "type": "group",
+      "linkId": "grp-consent",
+      "item": [
+        {
+          "text": "麻酔の説明",
+          "type": "choice",
+          "linkId": "explained",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "done",
+                "display": "実施済"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "not-done",
+                "display": "未実施"
+              }
+            }
+          ]
+        },
+        {
+          "text": "説明の要点",
+          "type": "text",
+          "linkId": "explanation-note"
+        }
+      ]
+    }
+  ]
+}

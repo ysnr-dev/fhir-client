@@ -61,6 +61,8 @@ export type KarteOpenTarget =
   | { kind: "condition-template"; conditionId: string; url: string }
   // 手術の実施記録(ハブ Procedure)を partOf に、テンプレートを選択済みでテンプレート登録を開く(NCD 症例登録の一覧から)。
   | { kind: "procedure-template"; procedureId: string; url: string }
+  // オーダーを basedOn に、テンプレートを選択済みでテンプレート登録を開く(麻酔科術前診察の一覧・手術一覧から)。
+  | { kind: "order-template"; orderId: string; url: string }
   // 入院に紐付けて、テンプレートを選択済みでテンプレート登録を開く(入退院文書のテンプレートで書く文書から)。
   | { kind: "encounter-template"; encounterId: string; url: string }
   // 書いたテンプレートの回答を開く(入退院文書から。入院に結び付いた回答はカルテの時系列に出ないため)。
@@ -82,6 +84,8 @@ export function formatKarteOpen(target: KarteOpenTarget): string {
               ? `${target.conditionId}@${target.url}`
             : target.kind === "procedure-template"
               ? `${target.procedureId}@${target.url}`
+            : target.kind === "order-template"
+              ? `${target.orderId}@${target.url}`
             : target.kind === "encounter-template"
               ? `${target.encounterId}@${target.url}`
             : target.kind === "intake" || target.kind === "questionnaire-response"
@@ -111,17 +115,43 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   if (kind === "team-request") return { kind, teamId: id };
   if (kind === "questionnaire") return { kind, url: id };
   if (kind === "questionnaire-response") return { kind, responseId: id };
-  if (kind === "condition-template" || kind === "procedure-template" || kind === "encounter-template") {
+  if (
+    kind === "condition-template" ||
+    kind === "procedure-template" ||
+    kind === "order-template" ||
+    kind === "encounter-template"
+  ) {
     // リソースの id に「@」は入らないので、最初の 1 つで切る(url 側はコロンを含む)。
     const at = id.indexOf("@");
     if (at <= 0 || at === id.length - 1) return null;
     const url = id.slice(at + 1);
     if (kind === "condition-template") return { kind, conditionId: id.slice(0, at), url };
     if (kind === "procedure-template") return { kind, procedureId: id.slice(0, at), url };
+    if (kind === "order-template") return { kind, orderId: id.slice(0, at), url };
     return { kind, encounterId: id.slice(0, at), url };
   }
   if (kind === "intake" && /^\d+$/.test(id)) return { kind, responseId: Number(id) };
   return null;
+}
+
+/**
+ * 手術オーダーの術前診察を開くカルテの URL。無ければ書き始め、記入中は続きを、確定済みは詳細を開く。
+ */
+export function anesthesiaPreopKarteHref(
+  order: fhir4.ServiceRequest,
+  response: fhir4.QuestionnaireResponse | undefined,
+  templateUrl: string,
+): string {
+  const params = new URLSearchParams();
+  if (response?.id && (response.status === "completed" || response.status === "amended")) {
+    params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind: "qr", id: response.id }));
+  } else if (response?.id) {
+    params.set(KARTE_OPEN_PARAM, formatKarteOpen({ kind: "questionnaire-response", responseId: response.id }));
+  } else {
+    params.set(KARTE_OPEN_PARAM, formatKarteOpen({ kind: "order-template", orderId: order.id ?? "", url: templateUrl }));
+  }
+  const patientId = order.subject?.reference?.split("/").pop() ?? "";
+  return `/patients/${patientId}/karte?${params.toString()}`;
 }
 
 export const KARTE_TABS = [

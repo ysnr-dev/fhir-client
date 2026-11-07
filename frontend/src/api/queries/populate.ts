@@ -17,7 +17,8 @@ import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { PRESCRIPTION_ORDER_TYPE } from "../../fhir/prescriptionHelpers";
 import { REGIMEN_ORDER_TYPE } from "../../fhir/regimenOrderHelpers";
 import { RADIOTHERAPY_ORDER_TYPE } from "../../fhir/radiotherapyOrderHelpers";
-import { SURGERY_ORDER_TYPE } from "../../fhir/surgeryOrderHelpers";
+import { SURGERY_ORDER_TYPE, surgeryOrderItemRequests } from "../../fhir/surgeryOrderHelpers";
+import { anesthesiaPreopsByOrderId } from "../../fhir/anesthesiaPreopHelpers";
 import { CANCER_POPULATE_VARIABLES, type CancerPopulateSources } from "../../fhir/cancerRegistryHelpers";
 import { pathoDiagnosisResponseIdOf } from "../../fhir/pathoResultHelpers";
 import { ADMISSION_CLASS_CODE } from "../../fhir/encounterHelpers";
@@ -75,6 +76,8 @@ export function usePopulateSources(
     focusConditionId?: string;
     /** 記入を始めた手術(ハブ Procedure)の id。無ければ患者の最新の手術が手術の変数の対象。 */
     focusProcedureId?: string;
+    /** 記入を始めたオーダーの id(回答の basedOn)。手術の前に書く記録が予定の変数に使う。 */
+    focusOrderId?: string;
     /** 記入しているテンプレートの canonical(版付きと版なし)。記入回数に使う。 */
     canonicals?: string[];
     /** 回答を結び付ける入院。無ければ今の入院が %admissionAnswers の対象。 */
@@ -264,6 +267,8 @@ export function usePopulateSources(
   surgeryRecordParams.append("_include", "Procedure:based-on");
   surgeryRecordParams.append("_revinclude", "Procedure:part-of");
   surgeryRecordParams.append("_revinclude", "Observation:part-of");
+  // 申込(_include で入る)を指す術前診察の回答まで 1 段たどる。
+  surgeryRecordParams.append("_revinclude:iterate", "QuestionnaireResponse:based-on");
   const surgeryRecord = useQuery({
     queryKey: ["Procedure", "search", "populate-surgery-record", patientId, focusProcedureId],
     queryFn: () => searchResource<fhir4.Resource>("Procedure", surgeryRecordParams),
@@ -280,7 +285,17 @@ export function usePopulateSources(
     queryFn: () => searchResource<fhir4.Encounter>("Encounter", surgeryAdmissionParams),
     enabled: surgeryEnabled,
   });
-  const surgeryQueries = [surgeryRecord, surgeryAdmissions];
+  // 手術の前は実施記録が無いので、予定は記入の対象のオーダーから読む。
+  const focusOrderId = options.focusOrderId ?? "";
+  const plannedOrderParams = new URLSearchParams();
+  plannedOrderParams.set("_id", focusOrderId);
+  plannedOrderParams.append("_revinclude", "ServiceRequest:based-on");
+  const plannedOrder = useQuery({
+    queryKey: ["ServiceRequest", "search", "populate-planned-order", focusOrderId],
+    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", plannedOrderParams),
+    enabled: surgeryEnabled && Boolean(focusOrderId),
+  });
+  const surgeryQueries = [surgeryRecord, surgeryAdmissions, plannedOrder];
 
   // ---- 口腔診査(式が参照するときだけ) ----
   // 最新の診査の見出しを 1 件引き、その identifier で診査全体(歯・口腔全体)を読む。
@@ -467,7 +482,9 @@ export function usePopulateSources(
               .filter((resource): resource is fhir4.Resource => Boolean(resource)),
           } satisfies CancerPopulateSources)
         : undefined,
-      surgery: surgery ? surgerySourcesOf(surgeryRecord.data?.data, surgeryAdmissions.data?.data) : undefined,
+      surgery: surgery
+        ? surgerySourcesOf(surgeryRecord.data?.data, surgeryAdmissions.data?.data, plannedOrder.data?.data, focusOrderId)
+        : undefined,
       oralExam: oralExam ? { snapshot: oralSnapshot.data?.snapshot } : undefined,
       lastEncounter: lastVisit
         ? resourcesOfType<fhir4.Encounter>(lastEncounter.data?.data, "Encounter")[0]
@@ -524,6 +541,8 @@ export function usePopulateSources(
     canonicals.length,
     surgeryRecord.data,
     surgeryAdmissions.data,
+    plannedOrder.data,
+    focusOrderId,
     admissionAnswers,
     admissionResponses.data,
     renal,
@@ -556,13 +575,20 @@ export function usePopulateSources(
 function surgerySourcesOf(
   surgeryBundle: fhir4.Bundle | undefined,
   admissionBundle: fhir4.Bundle | undefined,
+  plannedOrderBundle: fhir4.Bundle | undefined,
+  focusOrderId: string,
 ): SurgeryPopulateSources {
   const procedures = resourcesOfType<fhir4.Procedure>(surgeryBundle, "Procedure").filter(
     (procedure) => procedure.status !== "entered-in-error",
   );
   const hub = procedures.find((procedure) => isSurgeryProcedure(procedure) && !procedure.partOf?.length);
   const admissions = resourcesOfType<fhir4.Encounter>(admissionBundle, "Encounter");
-  if (!hub) return { admissions };
+  const plannedRequests = resourcesOfType<fhir4.ServiceRequest>(plannedOrderBundle, "ServiceRequest");
+  const plannedHeader = plannedRequests.find((request) => request.id === focusOrderId);
+  const plannedOrder = plannedHeader
+    ? { order: plannedHeader, itemRequests: surgeryOrderItemRequests(plannedRequests, focusOrderId) }
+    : undefined;
+  if (!hub) return { admissions, plannedOrder };
   const partIds = new Set([hub.id ?? ""]);
   const children = procedures.filter((procedure) =>
     procedure.partOf?.some((reference) => reference.reference === `Procedure/${hub.id}`),
@@ -573,5 +599,8 @@ function surgerySourcesOf(
   );
   const orderId = hub.basedOn?.find((r) => r.reference?.startsWith("ServiceRequest/"))?.reference?.split("/").pop();
   const order = resourcesOfType<fhir4.ServiceRequest>(surgeryBundle, "ServiceRequest").find((sr) => sr.id === orderId);
-  return { surgery: { hub, children, observations, order }, admissions };
+  const anesthesiaPreop = anesthesiaPreopsByOrderId(
+    resourcesOfType<fhir4.QuestionnaireResponse>(surgeryBundle, "QuestionnaireResponse"),
+  ).get(orderId ?? "");
+  return { surgery: { hub, children, observations, order }, admissions, anesthesiaPreop, plannedOrder };
 }

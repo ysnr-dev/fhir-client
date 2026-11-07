@@ -1,3 +1,4 @@
+import { ANESTHESIA_PREOP_STATE_LABELS, summarizeAnesthesiaPreop } from "../../fhir/anesthesiaPreopHelpers";
 import {
   summarizeSurgeryOrder,
   surgeryAnesthesiaMethodDisplay,
@@ -16,10 +17,12 @@ export function SurgeryOrderCardBody({
   serviceRequest,
   itemRequests,
   performs,
+  anesthesiaPreop,
 }: {
   serviceRequest: fhir4.ServiceRequest;
   itemRequests: fhir4.ServiceRequest[];
   performs: SurgeryPerformDisplay[];
+  anesthesiaPreop?: fhir4.QuestionnaireResponse;
 }) {
   const summary = summarizeSurgeryOrder(serviceRequest);
   const items = surgeryOrderItems(serviceRequest, itemRequests);
@@ -69,6 +72,7 @@ export function SurgeryOrderCardBody({
       {/* 術前指示は病棟が手術前日〜当日に読むもの。要点 1 行と違って畳まず全文を出す
           (絶飲食の開始時刻や休薬の指示は、読み落とすと手術が中止になる)。 */}
       <SurgeryPreopInstruction summary={summary} />
+      <SurgeryAnesthesiaPreop response={anesthesiaPreop} />
       <SurgeryPerformSection performs={performs} />
     </>
   );
@@ -91,6 +95,36 @@ function SurgeryPreopInstruction({ summary }: { summary: SurgeryOrderSummary }) 
         {responseId && <ResponseSchemaImages responseId={responseId} />}
       </div>
     </div>
+  );
+}
+
+// 麻酔科術前診察。要点と、病棟が手術前に読む指示を出す(手術室への指示は手術の詳細と麻酔チャート)。
+function SurgeryAnesthesiaPreop({ response }: { response?: fhir4.QuestionnaireResponse }) {
+  if (!response) return null;
+  const preop = summarizeAnesthesiaPreop(response);
+
+  return (
+    <>
+      <div className="karte-rp__detail karte-rp__detail--indent">
+        <span className="karte-rp__detail-label">術前診察:</span>
+        <div className="karte-rp__detail-body">
+          <span>
+            {[...preop.highlights, preop.state === "draft" ? "記入中" : ""].filter(Boolean).join(" / ") ||
+              ANESTHESIA_PREOP_STATE_LABELS[preop.state]}
+          </span>
+        </div>
+      </div>
+      {preop.wardLines.length > 0 && (
+        <div className="karte-rp__detail karte-rp__detail--indent">
+          <span className="karte-rp__detail-label">病棟への指示:</span>
+          <div className="karte-rp__detail-body">
+            {preop.wardLines.map((line, index) => (
+              <span key={index}>{line}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

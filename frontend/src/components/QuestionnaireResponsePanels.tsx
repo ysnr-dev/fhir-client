@@ -188,10 +188,14 @@ export function QuestionnaireResponseCreatePanel({
   const focusProcedureId = partOf
     ?.map((reference) => reference.reference?.match(/^Procedure\/(.+)$/)?.[1] ?? "")
     .find(Boolean);
+  const focusOrderId = basedOn
+    ?.map((reference) => reference.reference?.match(/^ServiceRequest\/(.+)$/)?.[1] ?? "")
+    .find(Boolean);
   const populate = usePopulateSources(patientId, {
     expressions,
     focusConditionId: defaultProblem?.conditionId,
     focusProcedureId,
+    focusOrderId,
     canonicals,
     encounterId,
   });

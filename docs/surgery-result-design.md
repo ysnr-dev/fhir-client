@@ -228,8 +228,7 @@ backend 全 985 examples green(無変更の回帰確認)。
    症例登録のテンプレート(`docs/ncd-registration-design.md`)で NCD の区分と Clavien-Dindo を選ぶ形にした。
    実施記録へ書き戻すなら `complication` の coding に写す
 4. **ASA-PS**: 麻酔の術前評価は実施記録ではなく麻酔科の術前診察に属するので入れていない。
-   麻酔科ワークフロー(surgery-order-design §B-2 で「今は持たない」と決めたもの)を
-   作るときに扱う
+   正本は術前診察の回答(`docs/anesthesia-preop-design.md`)
 5. **会計連携**: K コード(ハブと子の `Procedure.code`)・材料の `usedCode` 数量・
    薬剤の `dosage.dose` が算定の素材。`ChargeItem` / `Claim` は上流に未実装
 6. **DPC / NCD**: K コード・到達法(申込明細)・合併症・創分類が提出データの起点。

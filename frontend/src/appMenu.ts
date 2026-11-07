@@ -129,6 +129,8 @@ export const APP_MENU: AppMenuEntry[] = [
           // 手術一覧が「その日の手術を 1 件ずつ処理する」画面なのに対し、カレンダーは
           // 「空いているところを探して日程を組む」画面。
           { label: "手術カレンダー", to: "/surgery-calendar" },
+          // 手術ごとの術前診察の状況と評価を、麻酔科の目で並べる(docs/anesthesia-preop-design.md)。
+          { label: "麻酔科術前診察", to: "/anesthesia-preop" },
         ],
       },
       // 輸血は依頼を受けてから製剤を払い出すまでが部門の仕事で、投与は病棟。

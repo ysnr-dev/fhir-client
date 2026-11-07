@@ -3,6 +3,7 @@ import { useAuthSession } from "../api/authQueries";
 import {
   useAnesthesiaChart,
   useAnesthesiaChartWrite,
+  useAnesthesiaPreop,
   usePractitioner,
   useSurgeryOrderDetail,
 } from "../api/queries";
@@ -25,6 +26,7 @@ import {
   type ChartMeasureKey,
   type ChartVitalPoint,
 } from "../fhir/anesthesiaChartHelpers";
+import { summarizeAnesthesiaPreop } from "../fhir/anesthesiaPreopHelpers";
 import { toDateTimeInput, toFhirDateTime } from "../fhir/clinicalNoteHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { serviceRequestsOf } from "../fhir/labOrderHelpers";
@@ -103,6 +105,7 @@ interface AnesthesiaChartPanelProps {
 export function AnesthesiaChartPanel({ orderId, showPatientHeader }: AnesthesiaChartPanelProps) {
   const detail = useSurgeryOrderDetail(orderId);
   const chart = useAnesthesiaChart(orderId);
+  const preop = useAnesthesiaPreop(orderId);
   const write = useAnesthesiaChartWrite(orderId);
 
   const requests = serviceRequestsOf(detail.data?.data);
@@ -185,6 +188,7 @@ export function AnesthesiaChartPanel({ orderId, showPatientHeader }: AnesthesiaC
           )}
         </p>
       )}
+      {preop.data && <AnesthesiaPreopBand response={preop.data} />}
 
       {detail.isLoading || chart.isLoading ? (
         <p>読み込み中...</p>
@@ -208,6 +212,21 @@ export function AnesthesiaChartPanel({ orderId, showPatientHeader }: AnesthesiaC
         />
       )}
     </>
+  );
+}
+
+// 術前診察から引き継ぐ評価と手術室への指示。困難気道は導入の前に必ず目に入るよう帯の色を変える。
+function AnesthesiaPreopBand({ response }: { response: fhir4.QuestionnaireResponse }) {
+  const preop = summarizeAnesthesiaPreop(response);
+
+  return (
+    <div className={`anes-chart__preop${preop.isDifficultAirway ? " anes-chart__preop--alert" : ""}`}>
+      <div className="anes-chart__preop-title">
+        術前診察
+        {preop.highlights.length > 0 && <span> {preop.highlights.join(" / ")}</span>}
+      </div>
+      {preop.roomLines.length > 0 && <div className="anes-chart__preop-body">{preop.roomLines.join("\n")}</div>}
+    </div>
   );
 }
 

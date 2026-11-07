@@ -437,6 +437,12 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
                 templateCanonical: openTarget.url,
                 partOf: [{ reference: `Procedure/${openTarget.procedureId}` }],
               }
+          : openTarget.kind === "order-template"
+            ? {
+                kind: "qr-create",
+                templateCanonical: openTarget.url,
+                basedOn: [{ reference: `ServiceRequest/${openTarget.orderId}` }],
+              }
           : openTarget.kind === "encounter-template"
             ? { kind: "qr-create", templateCanonical: openTarget.url, encounterId: openTarget.encounterId }
           : openTarget.kind === "questionnaire-response"

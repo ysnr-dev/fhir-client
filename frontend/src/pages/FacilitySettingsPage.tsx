@@ -57,6 +57,7 @@ import {
   DEFAULT_INFECTIOUS_DISEASE_REPORT,
   type InfectiousDiseaseReportSettings,
 } from "../fhir/infectiousDiseaseReportHelpers";
+import { DEFAULT_ANESTHESIA_PREOP, type AnesthesiaPreopSettings } from "../fhir/anesthesiaPreopHelpers";
 import { DEFAULT_NCD_REGISTRATION, type NcdRegistrationSettings } from "../fhir/ncdHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import {
@@ -175,6 +176,7 @@ const FACILITY_SECTIONS = [
   { key: "cancer_registry", label: "院内がん登録" },
   { key: "infectious_disease_report", label: "感染症発生届" },
   { key: "ncd_registration", label: "NCD症例登録" },
+  { key: "anesthesia_preop", label: "麻酔科術前診察" },
   { key: "radiotherapy_review", label: "放射線治療の週次レビュー" },
   { key: "intake", label: "Web 問診" },
   { key: "waiting_board", label: "待合表示板" },
@@ -312,6 +314,10 @@ export function FacilitySettingsPage() {
   const savedNcd = settings.data?.ncd_registration ?? DEFAULT_NCD_REGISTRATION;
   const ncdRegistration = ncdDraft ?? savedNcd;
   const ncdValid = /^https?:\/\/[^\s|]+$/.test(ncdRegistration.template);
+  // 麻酔科術前診察のテンプレート(url。版を問わない)。
+  const [anesthesiaPreopDraft, setAnesthesiaPreopDraft] = useState<AnesthesiaPreopSettings | undefined>(undefined);
+  const anesthesiaPreop = anesthesiaPreopDraft ?? settings.data?.anesthesia_preop ?? DEFAULT_ANESTHESIA_PREOP;
+  const anesthesiaPreopValid = /^https?:\/\/[^\s|]+$/.test(anesthesiaPreop.template);
 
   // 看護必要度の評価票の版と該当患者の基準。基準は組("A3" "A2+B3" "#A2")を空白区切りで入れる(組の OR)。
   const [acuityDraft, setAcuityDraft] = useState<
@@ -627,7 +633,7 @@ export function FacilitySettingsPage() {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
     if (!prescriptionCheckValid) return;
-    if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid || !infectiousReportValid || !ncdValid) return;
+    if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid || !infectiousReportValid || !ncdValid || !anesthesiaPreopValid) return;
     if (!reviewValid || !receiptCodesOk || !coefficientsValid || !intakeValid || !ssmix2Valid) return;
     update.mutate({
       self_organization_id: value,
@@ -653,6 +659,7 @@ export function FacilitySettingsPage() {
       cancer_registry: cancerRegistry,
       infectious_disease_report: infectiousReport,
       ncd_registration: ncdRegistration,
+      anesthesia_preop: anesthesiaPreop,
       early_warning: earlyWarning,
       rx_verification: rxVerification,
       injection_verification: injectionVerification,
@@ -1485,6 +1492,25 @@ export function FacilitySettingsPage() {
             </div>
           )}
 
+          {/* 麻酔科術前診察。一覧と手術一覧から書き始めるテンプレート(url は版を問わない)。 */}
+          {section === "anesthesia_preop" && (
+            <div className="facility-settings__schedule-body">
+              <label>
+                術前診察のテンプレート
+                <select
+                  value={anesthesiaPreop.template}
+                  onChange={(e) => setAnesthesiaPreopDraft({ ...anesthesiaPreop, template: e.target.value })}
+                >
+                  {[...new Set([anesthesiaPreop.template, ...templateOptions.questionnaires.map((q) => q.url ?? "").filter(Boolean)])].map((url) => (
+                    <option key={url} value={url}>
+                      {templateOptions.questionnaires.find((q) => q.url === url)?.title ?? url}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
           {/* 放射線治療の治療中の診察。既定の 7 日は外来放射線照射診療料(B001-2-8。7 日間に
               1 回、算定日に放射線治療医の診察)に合わせた値で、入院の患者や施設の運用に合わせて
               変えられるようにしてある。テンプレートは記入欄の初期値(選び直しは妨げない)。 */}
@@ -2187,7 +2213,8 @@ export function FacilitySettingsPage() {
                 !pressureUlcerValid ||
                 !cancerRegistryValid ||
                 !infectiousReportValid ||
-                !ncdValid
+                !ncdValid ||
+                !anesthesiaPreopValid
               }
             >
               {update.isPending ? "保存中..." : "保存"}

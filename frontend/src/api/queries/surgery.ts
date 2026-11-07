@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { anesthesiaPreopsByOrderId } from "../../fhir/anesthesiaPreopHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import {
   buildSurgeryMoveBundle,
@@ -20,7 +21,7 @@ import {
 } from "../../fhir/surgeryTaskHelpers";
 import { buildSurgeryPerformDeleteEntries } from "../../fhir/surgeryResultHelpers";
 import { postBundle, searchResource } from "../fhirClient";
-import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType, WORKLIST_PAGE } from "./core";
+import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, resourcesOfType } from "./core";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import {
   cancelsPerform,
@@ -30,6 +31,7 @@ import {
   makeUpdateTaskStatusHook,
   performCancelEntries,
   taskBundleEntry,
+  UNSCHEDULED_WORKLIST_DATE,
   worklistParams,
 } from "./worklist";
 import { invalidateOrderDependents } from "./orderDelete";
@@ -50,6 +52,8 @@ export interface SurgeryWorklistRow {
   patient?: fhir4.Patient;
   /** 進捗。手術部がまだ触っていないオーダーには無い(= 申込済)。 */
   task?: fhir4.Task;
+  /** 麻酔科術前診察の回答。まだ書かれていなければ無い。 */
+  anesthesiaPreop?: fhir4.QuestionnaireResponse;
 }
 
 export interface SurgeryWorklistResult {
@@ -58,26 +62,30 @@ export interface SurgeryWorklistResult {
   truncated: boolean;
 }
 
-async function fetchSurgeryWorklist(date: string): Promise<SurgeryWorklistResult> {
+/**
+ * 手術オーダーの行をページングしながら全件読む。術式(明細)・進捗・術前診察の回答を同じ応答に添えてもらう。
+ * 並びは呼び出し側で決める。
+ */
+async function fetchSurgeryRows(
+  buildParams: (page: number) => URLSearchParams,
+): Promise<SurgeryWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
+  const responses: fhir4.QuestionnaireResponse[] = [];
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
     (page) => {
-      // 予定手術日(occurrencePeriod)で絞る。日程未定の申込は一覧の対象外
-      // (申込済のまま日程が決まっていないオーダーはカルテ側から辿る)。
-      const params = worklistParams(
-        `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`,
-        date,
-        page,
-        "occurrence",
-      );
-      // 術式も同じ応答に添えてもらう。
+      const params = buildParams(page);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
-      params.set("_revinclude", "Task:focus");
+      params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "QuestionnaireResponse:based-on");
       return params;
     },
     (resource) => {
+      if (resource.resourceType === "QuestionnaireResponse") {
+        responses.push(resource as fhir4.QuestionnaireResponse);
+        return false;
+      }
       if (resource.resourceType !== "ServiceRequest") return false;
       const request = resource as fhir4.ServiceRequest;
       // 検索にヒットしたヘッダと、添えられた明細を分ける。
@@ -91,13 +99,25 @@ async function fetchSurgeryWorklist(date: string): Promise<SurgeryWorklistResult
   );
 
   const taskByOrderId = surgeryTasksByOrderId(tasks);
+  const preopByOrderId = anesthesiaPreopsByOrderId(responses);
 
   const rows = orders.map((order) => ({
     order,
     itemRequests: surgeryOrderItemRequests(items, order.id ?? ""),
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: taskByOrderId.get(order.id ?? ""),
+    anesthesiaPreop: preopByOrderId.get(order.id ?? ""),
   }));
+
+  return { rows, truncated };
+}
+
+async function fetchSurgeryWorklist(date: string): Promise<SurgeryWorklistResult> {
+  // 予定手術日(occurrencePeriod)で絞る。日程未定の申込は一覧の対象外
+  // (申込済のまま日程が決まっていないオーダーはカルテ側から辿る)。
+  const { rows, truncated } = await fetchSurgeryRows((page) =>
+    worklistParams(`${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`, date, page, "occurrence"),
+  );
 
   // 手術室 → 入室予定時刻の順。同じ部屋の時間の重なり(ダブルブッキング)が
   // 並びでそのまま見えるようにする(第 1 段階は枠を持たず目視で確かめるため)。
@@ -127,43 +147,17 @@ export function useSurgeryUnscheduledList() {
   });
 }
 
-async function fetchSurgeryUnscheduled(): Promise<SurgeryWorklistResult> {
-  const orders: fhir4.ServiceRequest[] = [];
-  const items: fhir4.ServiceRequest[] = [];
-
-  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
-    (page) => {
-      const params = new URLSearchParams();
-      params.set("category", `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`);
-      params.set("occurrence:missing", "true");
-      params.set("based-on:missing", "true");
-      params.set("_count", String(WORKLIST_PAGE));
-      params.set("_offset", String(page * WORKLIST_PAGE));
-      params.set("_include", "ServiceRequest:subject");
-      params.set("_revinclude:iterate", "ServiceRequest:based-on");
-      params.set("_revinclude", "Task:focus");
-      return params;
-    },
-    (resource) => {
-      if (resource.resourceType !== "ServiceRequest") return false;
-      const request = resource as fhir4.ServiceRequest;
-      if (isSurgeryServiceRequest(request) && !request.basedOn?.length) {
-        orders.push(request);
-        return true;
-      }
-      items.push(request);
-      return false;
-    },
+function surgeryUnscheduledParams(page: number): URLSearchParams {
+  return worklistParams(
+    `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`,
+    UNSCHEDULED_WORKLIST_DATE,
+    page,
+    "occurrence",
   );
+}
 
-  const taskByOrderId = surgeryTasksByOrderId(tasks);
-
-  const rows = orders.map((order) => ({
-    order,
-    itemRequests: surgeryOrderItemRequests(items, order.id ?? ""),
-    patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
-    task: taskByOrderId.get(order.id ?? ""),
-  }));
+async function fetchSurgeryUnscheduled(): Promise<SurgeryWorklistResult> {
+  const { rows, truncated } = await fetchSurgeryRows(surgeryUnscheduledParams);
 
   // 緊急を先頭に、あとは申込日の古い順(待たせている順)。
   rows.sort((a, b) => {
@@ -173,6 +167,43 @@ async function fetchSurgeryUnscheduled(): Promise<SurgeryWorklistResult> {
   });
 
   return { rows, truncated };
+}
+
+/**
+ * 麻酔科術前診察の一覧(docs/anesthesia-preop-design.md §4)。手術予定日が from〜to のオーダーと日程未定のオーダー。
+ * 中止した手術は診察の対象ではないので除き、予定日の順、日程未定は末尾に並べる。
+ */
+export function useAnesthesiaPreopList(from: string, to: string) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "surgery-anesthesia-preop", from, to],
+    queryFn: async (): Promise<SurgeryWorklistResult> => {
+      const [scheduled, unscheduled] = await Promise.all([
+        fetchSurgeryRows((page) => {
+          const params = worklistParams(
+            `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`,
+            `ge${from}`,
+            page,
+            "occurrence",
+          );
+          params.append("occurrence", `le${to}`);
+          return params;
+        }),
+        fetchSurgeryRows(surgeryUnscheduledParams),
+      ]);
+      const sortKey = (row: SurgeryWorklistRow) => {
+        const summary = summarizeSurgeryOrder(row.order);
+        return `${summary.scheduledDate || "9999"}|${summary.scheduledTime || "99:99"}`;
+      };
+      return {
+        rows: [...scheduled.rows, ...unscheduled.rows]
+          .filter((row) => surgeryTaskStatus(row.task) !== "cancelled")
+          .sort((a, b) => sortKey(a).localeCompare(sortKey(b))),
+        truncated: scheduled.truncated || unscheduled.truncated,
+      };
+    },
+    enabled: Boolean(from) && Boolean(to),
+    placeholderData: keepPreviousData,
+  });
 }
 
 /** 緊急 → 準緊急 → 予定 の順に小さい値を返す。 */
@@ -421,5 +452,24 @@ export function useDeleteSurgeryOrder() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
       invalidateOrderDependents(queryClient);
     },
+  });
+}
+
+/** 手術オーダーの術前診察の回答。手術の詳細と麻酔チャートで使う。 */
+export function useAnesthesiaPreop(orderId: string | undefined) {
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${orderId}`);
+  params.set("_count", "20");
+  return useQuery({
+    queryKey: ["QuestionnaireResponse", "search", "anesthesia-preop", orderId],
+    queryFn: async () => {
+      const { data } = await searchResource<fhir4.QuestionnaireResponse>("QuestionnaireResponse", params);
+      return (
+        anesthesiaPreopsByOrderId(resourcesOfType<fhir4.QuestionnaireResponse>(data, "QuestionnaireResponse")).get(
+          orderId ?? "",
+        ) ?? null
+      );
+    },
+    enabled: Boolean(orderId),
   });
 }

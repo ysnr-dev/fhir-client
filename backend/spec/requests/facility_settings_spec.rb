@@ -475,6 +475,24 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (anesthesia_preop)" do
+    it "術前診察のテンプレートの url を保存し、既定は同梱の SUR_ANESPRE_01" do
+      with_admin_token(nil) { get "/facility_settings" }
+      expect(JSON.parse(response.body)["anesthesia_preop"]).to eq(
+        "template" => "http://fhir-client.local/Questionnaire/sur-anes-preop-01",
+      )
+
+      with_admin_token(nil) do
+        patch "/facility_settings",
+              params: { anesthesia_preop: { template: "http://fhir-client.local/Questionnaire/anes-local" } }, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["anesthesia_preop"]).to eq(
+        "template" => "http://fhir-client.local/Questionnaire/anes-local",
+      )
+    end
+  end
+
   describe "PATCH /facility_settings (document_reminder)" do
     it "stores the days and returns the merged defaults" do
       with_admin_token(nil) do

@@ -1,6 +1,7 @@
 // 初期値変数「手術」の組み立て。対象は記入の対象の手術(回答の partOf が指すハブ Procedure)で、
 // 無ければ患者の最新の手術。手術記録・紹介状・症例登録など、手術の実施記録を写す様式で共通に使う。
 import { diffDays, localDay } from "../lib/dates";
+import { anesthesiaPreopAsaCodes } from "./anesthesiaPreopHelpers";
 import { ADMISSION_CLASS_CODE, encounterAdmissionDate, encounterDischargeDate } from "./encounterHelpers";
 import type { NcdSurgery } from "./ncdHelpers";
 import { departmentOf } from "./orderHeader";
@@ -8,6 +9,7 @@ import {
   summarizeSurgeryOrder,
   surgeryAnesthesiaManagementDisplay,
   surgeryAnesthesiaMethodDisplay,
+  surgeryOrderItems,
 } from "./surgeryOrderHelpers";
 import { surgeryPerformRecord } from "./surgeryResultHelpers";
 
@@ -17,6 +19,10 @@ export interface SurgeryPopulateSources {
   surgery?: NcdSurgery;
   /** 患者の入院(手術を含む入院を探す)。 */
   admissions: fhir4.Encounter[];
+  /** 対象の手術の術前診察の回答。 */
+  anesthesiaPreop?: fhir4.QuestionnaireResponse;
+  /** 記入の対象の手術オーダー(回答の basedOn が指す申込)と術式の明細。手術の前に書く記録が予定を写すのに使う。 */
+  plannedOrder?: { order: fhir4.ServiceRequest; itemRequests: fhir4.ServiceRequest[] };
 }
 
 /** 元データを読む必要がある変数名(% なし)。 */
@@ -46,6 +52,11 @@ export const SURGERY_POPULATE_VARIABLES = [
   "surgeryDischargeDate",
   "postoperativeDays",
   "surgeryToDeathDays",
+  "preopAsa",
+  "preopAsaEmergency",
+  "plannedSurgeryDate",
+  "plannedProcedures",
+  "plannedAnesthesiaMethods",
 ] as const;
 
 function minutesBetween(from: string, to: string): number | undefined {
@@ -90,6 +101,9 @@ export function surgeryPopulateValues(
       .join("、");
   const [main, ...others] = record?.procedures ?? [];
   const transfusion = record?.measures.transfusionVolume;
+  const preopAsa = anesthesiaPreopAsaCodes(sources?.anesthesiaPreop);
+  const plannedOrder = sources?.plannedOrder;
+  const planned = plannedOrder ? summarizeSurgeryOrder(plannedOrder.order) : undefined;
   return {
     surgeryDate,
     surgeryProcedureName: main?.name ?? "",
@@ -103,7 +117,7 @@ export function surgeryPopulateValues(
     surgeryDepartment: summary?.surgicalDepartmentName ?? "",
     surgeon: staffOf("surgeon"),
     surgeryAssistants: staffOf("assistant"),
-    anesthesiologist: staffOf("anesthesiologist"),
+    anesthesiologist: staffOf("anesthetist"),
     anesthesiaMethods: summary?.anesthesiaMethods.map(surgeryAnesthesiaMethodDisplay).join("、") ?? "",
     anesthesiaManagement: summary?.anesthesiaManagement
       ? surgeryAnesthesiaManagementDisplay(summary.anesthesiaManagement)
@@ -121,5 +135,14 @@ export function surgeryPopulateValues(
     surgeryDischargeDate: dischargeDate,
     postoperativeDays: surgeryDate && dischargeDate ? diffDays(surgeryDate, dischargeDate) : undefined,
     surgeryToDeathDays: surgeryDate && deathDate ? diffDays(surgeryDate, deathDate) : undefined,
+    preopAsa: preopAsa.asa,
+    preopAsaEmergency: preopAsa.emergency,
+    plannedSurgeryDate: planned?.scheduledDate ?? "",
+    plannedProcedures: plannedOrder
+      ? surgeryOrderItems(plannedOrder.order, plannedOrder.itemRequests)
+          .map((item) => item.name)
+          .join("、")
+      : "",
+    plannedAnesthesiaMethods: planned?.anesthesiaMethods.map(surgeryAnesthesiaMethodDisplay).join("、") ?? "",
   };
 }

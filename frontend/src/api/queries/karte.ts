@@ -163,6 +163,9 @@ export function appendKarteOrderIncludes(params: URLSearchParams): void {
   // 放射線検査の実施記録。進捗の Task は部門で code が違うだけなので 1 つで足りる。
   params.append("_revinclude", "Task:focus");
   params.append("_revinclude", "Procedure:based-on");
+  // 手術カードの麻酔科術前診察。カルテのテンプレート回答は期間とページで区切って読むので、
+  // 申込の日と離れた回答はそちらからは拾えない。
+  params.append("_revinclude", "QuestionnaireResponse:based-on");
   params.append("_revinclude:iterate", "ServiceRequest:based-on");
   // 実施記録にぶら下がる造影剤・被曝線量。Procedure は上の _revinclude で
   // 入ってくるので、その子を :iterate で 1 段先まで展開してもらう。

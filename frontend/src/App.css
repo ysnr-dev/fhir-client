@@ -16519,6 +16519,37 @@ select.rad-route-select {
   flex-wrap: wrap;
 }
 
+/* 術前診察から引き継ぐ評価と手術室への指示。 */
+.anes-chart__preop {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.anes-chart__preop--alert {
+  border-color: var(--danger);
+}
+
+.anes-chart__preop-title {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.anes-chart__preop-title span {
+  font-weight: 400;
+}
+
+.anes-chart__preop--alert .anes-chart__preop-title span {
+  color: var(--danger);
+}
+
+.anes-chart__preop-body {
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
+
 .anes-chart__empty {
   display: flex;
   align-items: center;
