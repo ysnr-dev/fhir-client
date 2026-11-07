@@ -67,6 +67,7 @@ export interface ExamOrderPanelsConfig<V extends { setting: PrescriptionSetting 
     patientId: string,
     requester: OrderContext,
     performs: P,
+    booking: ExamOrderBooking | undefined,
   ) => fhir4.Bundle;
   buildOrderUpdateBundle: (
     values: V,
@@ -137,7 +138,7 @@ export function createExamOrderPanels<V extends { setting: PrescriptionSetting }
       // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。
       const attribution = withOrderWard(requester, values.setting, defaultSetting);
       const bundle = performs
-        ? config.buildOrderWithPerformBundle(values, patientId, attribution, performs)
+        ? config.buildOrderWithPerformBundle(values, patientId, attribution, performs, booking)
         : config.buildOrderBundle(values, patientId, attribution, booking);
 
       createOrder.mutate(bundle, {

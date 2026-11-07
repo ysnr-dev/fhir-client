@@ -145,6 +145,7 @@ export function createExamOrderQueries(config: ExamOrderQueriesConfig) {
    * 所見レポートが付いた検査は取り消させない(docs/exam-report-design.md)。
    */
   const useUpdateTaskStatus = makeUpdateTaskStatusHook<ExamTaskStatus>(config.buildTaskUpdate, worklistKey, {
+    releaseAppointments: true,
     cancelPerform: {
       cancels: cancelsPerform(config.taskStatus),
       entries: async (order) => {

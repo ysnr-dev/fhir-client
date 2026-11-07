@@ -452,7 +452,7 @@ const radOrder = defineOrderSetType<
     const booking = bookingOf(bookings, patient);
     return {
       bundle: performs
-        ? buildRadOrderWithPerformBundle(values, patientId, attribution, performs)
+        ? buildRadOrderWithPerformBundle(values, patientId, attribution, performs, booking)
         : buildRadOrderBundle(values, patientId, attribution, booking),
       invalidate: examInvalidate("rad-worklist", performs, booking),
     };
@@ -484,7 +484,7 @@ const physioOrder = defineOrderSetType<
     const booking = bookingOf(bookings, patient);
     return {
       bundle: performs
-        ? buildPhysioOrderWithPerformBundle(values, patientId, attribution, performs)
+        ? buildPhysioOrderWithPerformBundle(values, patientId, attribution, performs, booking)
         : buildPhysioOrderBundle(values, patientId, attribution, booking),
       invalidate: examInvalidate("physio-worklist", performs, booking),
     };
@@ -516,7 +516,7 @@ const treatmentOrder = defineOrderSetType<
     const booking = bookingOf(bookings, patient);
     return {
       bundle: performs
-        ? buildTreatmentOrderWithPerformBundle(values, patientId, attribution, performs)
+        ? buildTreatmentOrderWithPerformBundle(values, patientId, attribution, performs, booking)
         : buildTreatmentOrderBundle(values, patientId, attribution, booking),
       invalidate: examInvalidate("treatment-worklist", performs, booking),
     };
@@ -548,7 +548,7 @@ const endoscopyOrder = defineOrderSetType<
     const booking = bookingOf(bookings, patient);
     return {
       bundle: performs
-        ? buildEndoscopyOrderWithPerformBundle(values, patientId, attribution, performs)
+        ? buildEndoscopyOrderWithPerformBundle(values, patientId, attribution, performs, booking)
         : buildEndoscopyOrderBundle(values, patientId, attribution, booking),
       invalidate: examInvalidate("endoscopy-worklist", performs, booking),
     };

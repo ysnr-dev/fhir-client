@@ -60,7 +60,7 @@ export function AppointmentTable({
           // 日時変更・取消はオーダーの編集・削除で行う。
           const autologous = isAutologousAppointment(appointment);
           // 検査予約は放射線オーダーとひとかたまりなので、ここからは動かさない。
-          // 日時変更はオーダーの編集(撮影日時と一緒に動かす)、取消はオーダーの削除
+          // 日時変更はオーダーの編集(撮影日時と一緒に動かす)、取消はオーダーの中止・削除
           // (予約だけ消えてオーダーが残る事故を防ぐ)でだけ行う。
           const exam =
             !rehab && !nutritionGuidance && !chemo && !autologous && isExamAppointment(appointment);

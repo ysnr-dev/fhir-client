@@ -140,6 +140,7 @@ export const useUpdateRadTaskStatus = makeUpdateTaskStatusHook<RadTaskStatus>(
   buildRadTaskUpdate,
   "rad-worklist",
   {
+    releaseAppointments: true,
     cancelPerform: {
       cancels: cancelsPerform(radTaskStatus),
       entries: async (order) => {

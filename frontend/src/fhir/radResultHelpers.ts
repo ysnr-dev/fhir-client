@@ -408,7 +408,7 @@ export function buildRadOrderWithPerformBundle(
   patientId: string,
   requester: OrderContext,
   performs: RadImmediatePerforms,
-  booking?: RadOrderBooking,
+  booking: RadOrderBooking | undefined,
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",

@@ -123,6 +123,7 @@ export const useUpdateTreatmentTaskStatus = makeUpdateTaskStatusHook<TreatmentTa
   buildTreatmentTaskUpdate,
   "treatment-worklist",
   {
+    releaseAppointments: true,
     cancelPerform: {
       cancels: cancelsPerform(treatmentTaskStatus),
       entries: (order) =>

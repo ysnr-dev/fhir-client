@@ -82,7 +82,7 @@ export function TreatmentOrderCreatePanel({
     // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。
     const attribution = withOrderWard(requester, values.setting, defaultSetting);
     const bundle = performs
-      ? buildTreatmentOrderWithPerformBundle(values, patientId, attribution, performs)
+      ? buildTreatmentOrderWithPerformBundle(values, patientId, attribution, performs, booking)
       : buildTreatmentOrderBundle(values, patientId, attribution, booking);
 
     createTreatmentOrder.mutate(bundle, {

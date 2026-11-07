@@ -329,7 +329,7 @@ export function buildTreatmentOrderWithPerformBundle(
   patientId: string,
   requester: OrderContext,
   performs: TreatmentImmediatePerforms,
-  booking?: TreatmentOrderBooking,
+  booking: TreatmentOrderBooking | undefined,
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",

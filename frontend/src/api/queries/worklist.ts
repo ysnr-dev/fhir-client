@@ -3,7 +3,7 @@ import { splitPerformBundle } from "../../fhir/radResultHelpers";
 import { buildExamScheduleBundle, isActiveAppointment, type SlotSelection } from "../../fhir/appointmentHelpers";
 import { postBundle, searchResource } from "../fhirClient";
 import { orderCancelEntries } from "../../fhir/taskHelpers";
-import { buildCancelEntriesOf, invalidateAppointments } from "./appointment";
+import { buildCancelEntriesOf, fetchOrderAppointmentCancelEntries, invalidateAppointments } from "./appointment";
 import {
   appendDetailRevincludes,
   type DetailSearchOptions,
@@ -147,6 +147,11 @@ interface UpdateTaskStatusOptions<S> {
       status: S,
     ) => Promise<fhir4.BundleEntry[]>;
   };
+  /**
+   * 中止で、有効な予約の取消(cancelled + 枠の free 化)も同じ transaction に同梱する。
+   * 予約を持つ検査の種別で指定する。中止取消では予約を戻さない(枠が埋まっていることがある)。
+   */
+  releaseAppointments?: boolean;
   /** 読み直しの指示。省略時は部門一覧・検索キャッシュ(取消があれば実施記録も)。 */
   invalidate?: (queryClient: QueryClient) => void;
 }
@@ -183,14 +188,24 @@ export function makeUpdateTaskStatusHook<S extends fhir4.Task["status"]>(
           options.cancelPerform && options.cancelPerform.cancels(task, status)
             ? await options.cancelPerform.entries(order, task, status)
             : [];
+        const appointmentEntries =
+          options.releaseAppointments && status === "cancelled"
+            ? await fetchOrderAppointmentCancelEntries(order.id ?? "")
+            : [];
         // 中止・中止取消はオーダーの status も同じ transaction で揃える(fhir/taskHelpers.ts)。
         return postBundle({
           resourceType: "Bundle",
           type: "transaction",
-          entry: [...performEntries, taskEntry, ...orderCancelEntries(order, status === "cancelled")],
+          entry: [
+            ...performEntries,
+            ...appointmentEntries,
+            taskEntry,
+            ...orderCancelEntries(order, status === "cancelled"),
+          ],
         });
       },
       onSuccess: () => {
+        if (options.releaseAppointments) invalidateAppointments(queryClient);
         if (options.invalidate) {
           options.invalidate(queryClient);
           return;

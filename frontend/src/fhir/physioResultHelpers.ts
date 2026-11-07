@@ -327,7 +327,7 @@ export function buildPhysioOrderWithPerformBundle(
   patientId: string,
   requester: OrderContext,
   performs: PhysioImmediatePerforms,
-  booking?: PhysioOrderBooking,
+  booking: PhysioOrderBooking | undefined,
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",

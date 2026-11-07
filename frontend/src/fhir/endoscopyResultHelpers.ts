@@ -331,7 +331,7 @@ export function buildEndoscopyOrderWithPerformBundle(
   patientId: string,
   requester: OrderContext,
   performs: EndoscopyImmediatePerforms,
-  booking?: EndoscopyOrderBooking,
+  booking: EndoscopyOrderBooking | undefined,
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",

@@ -623,7 +623,7 @@ export function buildBookBundle(appointment: fhir4.Appointment, slots: fhir4.Slo
 
 /**
  * 予約の取消エントリ(Appointment を cancelled に、押さえていた枠を空きに戻す)。
- * 単体の取消のほか、放射線オーダーの削除 transaction にもこのまま同梱する。
+ * 単体の取消のほか、検査オーダーの中止・削除の transaction にもこのまま同梱する。
  * app-4 により cancelationReason は cancelled / noshow のときだけ持てる。
  */
 export function buildCancelEntries(
