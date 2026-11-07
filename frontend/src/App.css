@@ -416,7 +416,7 @@
   color: var(--danger);
 }
 
-/* ライン・ドレーンの区画・一覧の留置日数。警告日数超は赤。 */
+/* 留置物の区画・一覧の留置日数。警告日数超は赤。 */
 .line-drain__days {
   white-space: nowrap;
 }

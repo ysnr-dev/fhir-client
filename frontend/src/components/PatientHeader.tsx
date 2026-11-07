@@ -235,7 +235,7 @@ function InfectionPictogram({ patientId, size, portal }: PictogramProps) {
  * 分かっている必要があるので帯に置く。中身(レジメン名・クール・状態)は吹き出しで読む。
  * 完了・中止した適用は出さない(いまの状態ではないため。治療歴は化学療法タブで読む)。
  */
-/** 留置中のライン・ドレーン(docs/line-drain-design.md §4.4)。警告日数を超えたものがあれば警告色。 */
+/** 留置中の留置物(docs/line-drain-design.md §4.4)。警告日数を超えたものがあれば警告色。 */
 function LineDrainPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }: PictogramProps) {
   const lineDrains = usePatientLineDrains(patientId);
   const types = useLineDrainTypes();

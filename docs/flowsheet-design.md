@@ -258,9 +258,9 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 取り方をする。ただし**表示している期間で絞る**(患者の全期間を引くと、長期入院で
 上限 200 件に当たって古い記録しか返らない)。
 
-### 6.1 ライン・ドレーンの欄
+### 6.1 留置物の欄
 
-- 印の欄 `device`「ライン・ドレーン」(注射の上)。1 留置 = 1 行で、挿入から抜去までをバーで出す
+- 印の欄 `device`「留置物」(注射の上)。1 留置 = 1 行で、挿入から抜去までをバーで出す
   (`fhir/flowsheetLineDrainHelpers.ts`、元データは `usePatientLineDrainsInRange` = 表示範囲と重なる留置)。
   留置中は表示終了の翌日 0 時まで伸ばして右端まで描く。印を押すと一覧モーダル(実施入力は無い)。
 - 24 時間表示で表示日以外の日時は、前なら左端・後なら右端に寄せる(`slotCenterX`)。日をまたぐバーが

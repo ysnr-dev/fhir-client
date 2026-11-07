@@ -7,7 +7,7 @@ import {
 import { dateTimeLabel, today } from "../../lib/dates";
 
 /**
- * ライン・ドレーンのカードの本文。デバイス・留置日数(抜去済なら抜去日時と区分)・直近の刺入部観察。
+ * 留置物のカードの本文。デバイス・留置日数(抜去済なら抜去日時と区分)・直近の刺入部観察。
  * 種別と部位は見出しに出す。
  */
 export function LineDrainCardBody({ record }: { record: LineDrainRecord }) {

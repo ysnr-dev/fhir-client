@@ -337,7 +337,7 @@ export function usePopulateSources(
     enabled: Boolean(patientId && mealDiet),
   });
 
-  // ---- 留置中のライン・ドレーン(式が参照するときだけ) ----
+  // ---- 留置中の留置物(式が参照するときだけ) ----
   const lineDrainParams = new URLSearchParams();
   lineDrainParams.set("patient", `Patient/${patientId}`);
   lineDrainParams.set("category", `${LINE_DRAIN_CATEGORY_SYSTEM}|${LINE_DRAIN_CATEGORY.code}`);

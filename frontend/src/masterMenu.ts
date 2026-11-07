@@ -205,7 +205,7 @@ export const MASTER_MENU: MasterMenuGroup[] = [
       { label: "看護成果マスタ", to: "/nursing-outcomes" },
       { label: "看護介入マスタ", to: "/nursing-interventions" },
       { label: "標準看護計画マスタ", to: "/nursing-standard-plans" },
-      { label: "ライン・ドレーン種別マスタ", to: "/line-drain-types" },
+      { label: "留置物種別マスタ", to: "/line-drain-types" },
     ],
   },
 ];

@@ -37,7 +37,7 @@ export function useKarteTimelineFeed(patientId: string | undefined, problemIds: 
   // 有害事象も患者ぶんを全部読む。プロブレムを指さないので、プロブレムで絞り込んでいるときは出さない。
   const adverseEventQuery = usePatientAdverseEvents(patientId);
   const adverseEvents = problemIds?.length ? NO_ADVERSE_EVENTS : (adverseEventQuery.data ?? NO_ADVERSE_EVENTS);
-  // ライン・ドレーンの留置も同じ扱い。
+  // 留置物も同じ扱い。
   const lineDrainQuery = usePatientLineDrains(patientId);
   const lineDrains = problemIds?.length ? NO_LINE_DRAINS : (lineDrainQuery.data ?? NO_LINE_DRAINS);
 

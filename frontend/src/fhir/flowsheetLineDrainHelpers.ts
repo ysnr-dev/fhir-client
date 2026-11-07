@@ -3,7 +3,7 @@ import type { FlowsheetMarkRow } from "./flowsheetEventHelpers";
 import { daysInsertedLabel, lineDrainLabel, removalReasonLabel, type LineDrainRecord } from "./lineDrainHelpers";
 
 /**
- * 経過表の「ライン・ドレーン」の欄(docs/line-drain-design.md §4.7)。1 留置 = 1 行で、挿入から抜去までを
+ * 経過表の「留置物」の欄(docs/line-drain-design.md §4.7)。1 留置 = 1 行で、挿入から抜去までを
  * バーで出す。留置中は表示範囲の翌日 0 時まで伸ばして右端まで描く。
  */
 export function buildLineDrainRows(records: LineDrainRecord[], rangeEnd: string, today: string): FlowsheetMarkRow[] {

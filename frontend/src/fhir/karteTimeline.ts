@@ -222,7 +222,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   qr: "テンプレート",
   "pathway-evaluation": "パス評価",
   "adverse-event": "有害事象",
-  "line-drain": "ライン・ドレーン",
+  "line-drain": "留置物",
 };
 
 /** オーダーではない記録の種別(カルテ印刷の左段。オーダーのヘッダを持たない)。 */
@@ -524,7 +524,7 @@ export type KarteTimelineItem = KarteItemBase &
     | { kind: "pathway-evaluation"; evaluation: PathwayEvaluationCard }
     // 化学療法・放射線治療の有害事象(CTCAE Grade)。
     | { kind: "adverse-event"; record: AdverseEventRecord }
-    // ライン・ドレーンの留置(挿入の Procedure)。
+    // 留置物(挿入の Procedure)。
     | { kind: "line-drain"; record: LineDrainRecord }
   );
 
@@ -553,7 +553,7 @@ export interface KarteTimelineInput {
   pathwayEvaluations: PathwayEvaluationCard[];
   /** 有害事象。パス評価と同じく患者ぶんを全部読んであり、カットオフには加わらない。 */
   adverseEvents: AdverseEventRecord[];
-  /** ライン・ドレーンの留置。有害事象と同じく患者ぶんを全部読んであり、カットオフには加わらない。 */
+  /** 留置物。有害事象と同じく患者ぶんを全部読んであり、カットオフには加わらない。 */
   lineDrains: LineDrainRecord[];
   noteHasNext: boolean;
   prescriptionHasNext: boolean;

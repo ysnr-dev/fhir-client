@@ -982,7 +982,7 @@ export function InpatientListPage() {
                 血糖インスリン
               </Link>
               <Link className="row-menu__item" to={`/line-drains?ward=${wardId}&date=${date}`}>
-                ライン・ドレーン
+                留置物管理
               </Link>
               <Link className="row-menu__item" to={`/nursing-summary-approvals?ward=${wardId}`}>
                 看護サマリー承認

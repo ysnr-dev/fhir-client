@@ -10,7 +10,7 @@ import { resourcesOfType } from "./core";
 import { searchExtractRecords } from "./extractRecords";
 import { useOrderEnterer } from "./provenance";
 
-// ---- ライン・ドレーン・カテーテルの留置台帳(docs/line-drain-design.md) ----
+// ---- 留置物(ライン・ドレーン・カテーテル)の台帳(docs/line-drain-design.md) ----
 
 const CATEGORY = `${LINE_DRAIN_CATEGORY_SYSTEM}|${LINE_DRAIN_CATEGORY.code}`;
 

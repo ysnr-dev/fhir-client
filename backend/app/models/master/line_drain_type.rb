@@ -1,5 +1,5 @@
 module Master
-  # ライン・ドレーン・カテーテルの種別マスタ(docs/line-drain-design.md §3)。
+  # 留置物(ライン・ドレーン・カテーテル)の種別マスタ(docs/line-drain-design.md §3)。
   # kind は集計の系統(中心静脈 / 尿路 / 気道など)、warn_days は留置日数を赤く出す既定値。
   class LineDrainType < ApplicationRecord
     self.table_name = "master_line_drain_types"

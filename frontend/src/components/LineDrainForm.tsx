@@ -2,7 +2,7 @@ import type { LineDrainType } from "../api/masterClient";
 import type { LineDrainFormValues } from "../fhir/lineDrainHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 
-// ライン・ドレーンの挿入の入力欄(docs/line-drain-design.md §4.1)。種別は施設マスタから選び、
+// 留置物の挿入の入力欄(docs/line-drain-design.md §4.1)。種別は施設マスタから選び、
 // 部位・サイズ・製品名・ロットは自由記載。
 
 interface LineDrainFormProps {

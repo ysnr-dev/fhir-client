@@ -1,9 +1,10 @@
-# ライン・ドレーン・カテーテル管理(留置台帳)
+# 留置物管理(ライン・ドレーン・カテーテル、留置台帳)
 
-`docs/functional-gap-backlog.md` §6.0 #2・§6.1「ライン・ドレーン・カテーテル管理(LDA)」。
+`docs/functional-gap-backlog.md` §6.0 #2・§6.1「留置物管理(ライン・ドレーン・カテーテル、LDA)」。
 **状態: 実装済(2026-11-07)。**
 患者の体に入っている管(中心静脈カテーテル・末梢ライン・尿道カテーテル・胃管・ドレーン・気管チューブなど)を
 1 本ずつ台帳で持ち、挿入・刺入部観察・抜去を記録して「留置 n 日目」を病棟の画面に出す。
+画面・カルテ種別・マスタの表記は「留置物」(ライン・ドレーン・カテーテル・チューブの総称)。コードやパスの識別子は `line-drain`。
 デバイス日数(CLABSI / CAUTI の分母)を病棟 × 月で数える。
 
 - **［事実］** = FHIR 仕様、このリポジトリ・上流(`../fhir-server`)の実装で確認した内容
@@ -35,7 +36,7 @@
 Procedure
   meta.profile          = JP_Procedure
   status                = in-progress(留置中)/ completed(抜去)/ entered-in-error(誤登録)
-  category              = procedure-category | line-drain 「ライン・ドレーン」
+  category              = procedure-category | line-drain 「留置物」
   code.coding[0]        = http://fhir-client.local/CodeSystem/line-drain-type | <種別マスタの code>(display = 登録時点の名称の写し)
   code.coding[1]        = http://fhir-client.local/CodeSystem/line-drain-kind | <区分(§3)>(マスタを引かずに系統を分けるための写し)
   subject               = Patient
@@ -174,7 +175,7 @@ Observation
 
 ### 4.1 登録・編集(カルテ右ペイン)
 
-- 右ペインの登録メニュー「看護 > ライン管理」(`karteMenu.ts`。正式名はライン・ドレーン)。項目は種別(マスタ)・部位・サイズ・製品名・ロット・挿入日時(既定いま)・
+- 右ペインの登録メニュー「看護 > 留置物」(`karteMenu.ts`)。項目は種別(マスタ)・部位・サイズ・製品名・ロット・挿入日時(既定いま)・
   挿入者・目的・コメント。ボタンは「登録」「更新」。
 - カードの「編集」から同じフォームを右ペインで開く(`line-drain-edit`)。右ペインを使うのはこの登録と編集だけ。
 
@@ -184,7 +185,7 @@ Observation
   「留置 n 日目」または「n 日間(抜去日時・区分)」・直近の観察 1 行。ケバブは「編集」のみ(抜去・観察・誤登録はプロファイル区画で行う)。
 - 観察 Observation はカードにしない(留置のカードと区画の履歴表で読む)。
 
-### 4.3 プロファイル区画「ライン・ドレーン」
+### 4.3 プロファイル区画「留置物」
 
 - `KarteProfileTab` の区画(有害事象の隣)。既定は留置中だけ表示し、「抜去したものも表示」で切り替える。
 - 行 = 種別・部位・デバイス・挿入日時・挿入者・「留置 n 日目」(`warn_days` 超は赤)・最終観察。
@@ -216,7 +217,7 @@ Observation
 
 ### 4.7 経過表の帯
 
-- 印の欄 `MARK_SECTIONS` に `device`「ライン・ドレーン」を注射の前に足す。1 留置 = 1 行、印は `at` = 挿入日時・`end` = 抜去日時
+- 印の欄 `MARK_SECTIONS` に `device`「留置物」を注射の前に足す。1 留置 = 1 行、印は `at` = 挿入日時・`end` = 抜去日時
   (留置中は表示終了の翌日 0 時にして右端まで伸ばす)。印のモーダルは一覧のみで実施は無い。
 - ［事実］24 時間表示の `slotCenterX`(`VitalFlowsheetPanel.tsx`)は表示日以外の日付を一律 0(左端)にしているので、
   日をまたぐバーは `x = endX = 0` に潰れる。

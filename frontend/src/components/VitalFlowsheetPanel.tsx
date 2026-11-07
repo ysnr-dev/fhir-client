@@ -100,7 +100,7 @@ import { TruncatedNotice } from "./TruncatedNotice";
 
 /** 印の欄と見出し。並べる順もこの通り。 */
 const MARK_SECTIONS = {
-  device: "ライン・ドレーン",
+  device: "留置物",
   injection: "注射",
   oral: "内服",
   observation: "看護観察",

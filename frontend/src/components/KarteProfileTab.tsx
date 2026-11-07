@@ -79,7 +79,7 @@ const SECTIONS = [
   { key: "body", label: "身体情報" },
   { key: "infection", label: "感染症" },
   { key: "adverse", label: "有害事象" },
-  { key: "device", label: "ライン・ドレーン" },
+  { key: "device", label: "留置物" },
   { key: "maintenance", label: "定期検査" },
   { key: "caution", label: "診療上の注意" },
 ] as const;
@@ -137,7 +137,7 @@ interface KarteProfileTabProps {
   onViewChange: (view: string | null) => void;
   /** カルテのタイムラインでその日を開く。 */
   onOpenDay: (day: string) => void;
-  /** ライン・ドレーンの編集を右ペインで開く。右ペインの無い場所(患者ドロワー)では渡さない。 */
+  /** 留置物の編集を右ペインで開く。右ペインの無い場所(患者ドロワー)では渡さない。 */
   onEditLineDrain?: (procedureId: string) => void;
 }
 

@@ -23,7 +23,7 @@ import { displayName } from "../fhir/patientHelpers";
 import { useWardInpatients } from "../hooks/useWardInpatients";
 import { addDays, addMonths, dateTimeLabel, diffDays, localDay, shortDate, today } from "../lib/dates";
 
-// ライン・ドレーン管理(docs/line-drain-design.md §4.5)。「留置中」タブは病棟 × 日の留置中の管、
+// 留置物管理(docs/line-drain-design.md §4.5)。「留置中」タブは病棟 × 日の留置中の管、
 // 「デバイス日数」タブは病棟 × 月のデバイス日数(CLABSI / CAUTI / VAP の分母)。行の観察・抜去は
 // プロファイル区画と同じモーダルで書く(カルテへは移らない)。
 
@@ -68,7 +68,7 @@ export function LineDrainPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>ライン・ドレーン管理</h1>
+        <h1>留置物管理</h1>
       </div>
 
       <div className="order-select__tabs" role="tablist">
@@ -182,7 +182,7 @@ function CurrentTab({ date, wardId, kind }: { date: string; wardId: string; kind
       {inpatients.isLoading || lineDrains.isLoading ? (
         <p>読み込み中...</p>
       ) : rows.length === 0 ? (
-        <p className="patient-table__empty">留置中のライン・ドレーンはありません。</p>
+        <p className="patient-table__empty">留置中のものはありません。</p>
       ) : (
         <div className="lab-worklist-wrap sticky-table-wrap">
           <table className="lab-worklist sticky-table">

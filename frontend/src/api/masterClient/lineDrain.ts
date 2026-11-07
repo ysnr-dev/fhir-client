@@ -1,6 +1,6 @@
 import { simpleMasterClient, type SimpleMasterRow } from "./radiotherapy";
 
-// ---- ライン・ドレーン種別マスタ(docs/line-drain-design.md §3) ----
+// ---- 留置物種別マスタ(docs/line-drain-design.md §3) ----
 
 /** 集計の系統。中心静脈・尿路・気道がデバイス日数の分母になる。 */
 export const LINE_DRAIN_KINDS = [

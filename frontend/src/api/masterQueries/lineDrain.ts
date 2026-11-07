@@ -1,7 +1,7 @@
 import { type LineDrainType, lineDrainTypeClient } from "../masterClient";
 import { simpleMasterHooks } from "./radiotherapy";
 
-// ---- ライン・ドレーン種別マスタ ----
+// ---- 留置物種別マスタ ----
 
 export const lineDrainTypeHooks = simpleMasterHooks<LineDrainType>("line_drain_types", lineDrainTypeClient);
 

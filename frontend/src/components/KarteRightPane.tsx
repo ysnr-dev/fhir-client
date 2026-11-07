@@ -112,7 +112,7 @@ export type KartePaneState =
   | { kind: "vital-create"; problem?: ProblemRef }
   // 1 回の測定は複数の Observation なので、束ねている identifier で対象を指す。
   | { kind: "vital-edit"; entryId: string }
-  // ライン・ドレーンの留置(docs/line-drain-design.md)。編集は挿入の Procedure を指す。
+  // 留置物(docs/line-drain-design.md)。編集は挿入の Procedure を指す。
   | { kind: "line-drain-create" }
   | { kind: "line-drain-edit"; procedureId: string }
   // DO(sourceSrId あり)では対象プロブレムも DO 元から引き継ぐので problem は使わない。
@@ -305,8 +305,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "document-edit": "文書編集",
   "vital-create": "バイタル登録",
   "vital-edit": "バイタル編集",
-  "line-drain-create": "ライン・ドレーン登録",
-  "line-drain-edit": "ライン・ドレーン編集",
+  "line-drain-create": "留置物登録",
+  "line-drain-edit": "留置物編集",
   "prescription-create": "処方登録",
   "prescription-edit": "処方編集",
   "injection-create": "注射登録",

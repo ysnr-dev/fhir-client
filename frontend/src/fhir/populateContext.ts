@@ -105,7 +105,7 @@ export interface PopulateSources {
   mealOrders?: fhir4.ServiceRequest[];
   /** 直近の検体検査の結果(新しい順)。式が %egfr / %ccr を参照するときだけ揃う。 */
   recentLabs?: fhir4.Observation[];
-  /** 留置中のライン・ドレーン(挿入の Procedure)。式が %devices を参照するときだけ揃う。 */
+  /** 留置中の留置物(挿入の Procedure)。式が %devices を参照するときだけ揃う。 */
   lineDrains?: fhir4.Procedure[];
 }
 
@@ -458,14 +458,14 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     sample: "1",
   },
 
-  // ---- ライン・ドレーン ----
+  // ---- 留置物 ----
   {
-    group: "ライン・ドレーン",
+    group: "留置物",
     variable: "devices",
     label: "留置中の管",
     expression: "%devices.exists(kind='vascular-central' and daysInserted > 14)",
     description:
-      "留置中のライン・ドレーン・カテーテルを 1 本ずつ持ちます(code・name・kind・bodySite・insertedAt・daysInserted)。kind は vascular-central / vascular-peripheral / arterial / urinary / airway / gi / drain / other。警告の規則の条件式に使います。",
+      "留置中の留置物(ライン・ドレーン・カテーテル)を 1 本ずつ持ちます(code・name・kind・bodySite・insertedAt・daysInserted)。kind は vascular-central / vascular-peripheral / arterial / urinary / airway / gi / drain / other。警告の規則の条件式に使います。",
     sample: "true",
   },
 

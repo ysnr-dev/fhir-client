@@ -35,7 +35,7 @@
   保険情報の保持(レセコン正本)、IME 辞書、Excel チャート、移行ツール。
 - 海外 EHR(Epic・NHS ほか)との照合で出た候補は §5(2026-10-18)。要フォロー推奨の追跡、退院時の薬剤調整、警告のガバナンス、
   NKDA、計算スコア、Health Maintenance、SMART on FHIR アプリ起動が上位。
-- 国内の既出候補にも海外照合にも無いものは §6(2026-10-27)。麻薬帳簿、ライン・ドレーン管理、感染サーベイランス、植込みデバイスの UDI 台帳、
+- 国内の既出候補にも海外照合にも無いものは §6(2026-10-27)。麻薬帳簿、留置物管理、感染サーベイランス、植込みデバイスの UDI 台帳、
   退院カルテの点検、ADR 報告、オンライン診療が上位。上流は Immunization・Device・RelatedPerson・Group・`$export` を既に持つ。
 
 ## 1. 優先度の高い候補(まとめ)
@@ -561,7 +561,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
 | # | 候補 | 区分 | 必要度 | 大きさ | 使う上流リソース | 詳細 |
 |---|---|---|---|---|---|---|
 | 1 | 麻薬・向精神薬の受払管理(麻薬帳簿・廃棄立会・病棟定数) | 新規 | 高 | 中 | MedicationDispense / MedicationAdministration | §6.1 |
-| 2 | ライン・ドレーン・カテーテル管理(LDA) — **対応済み(2026-11-07、`docs/line-drain-design.md`。看護必要度の初期値・水分出納との連動・感染判定は残り)** | 新規 | 高 | 中 | Device / Procedure / Observation | §6.1 |
+| 2 | 留置物管理(ライン・ドレーン・カテーテル、LDA) — **対応済み(2026-11-07、`docs/line-drain-design.md`。看護必要度の初期値・水分出納との連動・感染判定は残り)** | 新規 | 高 | 中 | Device / Procedure / Observation | §6.1 |
 | 3 | 医療関連感染サーベイランス(SSI・CLABSI・CAUTI、JANIS 全入院患者・SSI 部門) | 新規 | 高 | 中〜大 | Procedure / Condition / 細菌結果 | §6.1 |
 | 4 | 植込みデバイス・インプラントの UDI 台帳(回収時の逆引き・MRI 条件) | 新規 | 高 | 中 | Device / Procedure.focalDevice | §6.1 |
 | 5 | 退院カルテの量的・質的点検と疾病統計(診療情報管理) | 新規 | 高 | 中 | QuestionnaireResponse / Task / Condition | §6.1 |
@@ -593,7 +593,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
   - ［不足］麻薬及び向精神薬取締法の帳簿(受入・払出・施用・残量廃棄・立会 2 名・年間届)、病棟定数の棚卸、向精神薬・毒薬の受払。
   - ［当たり］backend `controlled_substance_ledger`(入庫・移動・廃棄)、施用と払出は上流から集計、廃棄の確認者 2 名は輸血の `performer.function` と同型、
     帳簿 PDF は一覧印刷の基盤(`print-backlog.md` §3-4)。
-- **ライン・ドレーン・カテーテル管理(LDA)**(新規、高、中) — **対応済み(2026-11-07、`docs/line-drain-design.md`。看護必要度の初期値・水分出納との連動・感染判定は残り)**
+- **留置物管理(ライン・ドレーン・カテーテル、LDA)**(新規、高、中) — **対応済み(2026-11-07、`docs/line-drain-design.md`。看護必要度の初期値・水分出納との連動・感染判定は残り)**
   - ［対応物］経過表の水分出納(ドレーン排液は部位別)、看護指示、処置オーダー。留置そのものの台帳は無い。
   - ［不足］挿入日・部位・サイズ・刺入部観察・交換 / 抜去を 1 件ずつ持ち、「留置 n 日目」を看護ワークシート・患者帯に出す。CLABSI / CAUTI の分母(デバイス日数)。
   - ［当たり］`Device`(カテーテル種、プロキシ許可に追加)+ `Procedure`(挿入 / 抜去、`bodySite`、`focalDevice`)+ `Observation`(刺入部)。経過表に留置の帯、

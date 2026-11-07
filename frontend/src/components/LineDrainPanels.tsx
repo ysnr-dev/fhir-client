@@ -26,7 +26,7 @@ import { nowDateTimeInput, toDateTimeInputValue } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { LineDrainForm } from "./LineDrainForm";
 
-// ライン・ドレーンの登録・編集(カルテ右ペイン。docs/line-drain-design.md §4.1)。登録は Device と
+// 留置物の登録・編集(カルテ右ペイン。docs/line-drain-design.md §4.1)。登録は Device と
 // 挿入の Procedure を 1 つの transaction で書き、編集は読んだ版を ifMatch に添えて組み直す。
 
 export function LineDrainCreatePanel({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {

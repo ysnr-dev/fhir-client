@@ -19,7 +19,7 @@ import { LineDrainSiteModal } from "./LineDrainSiteModal";
 import { RowMenu } from "./RowMenu";
 
 /**
- * プロファイルタブの「ライン・ドレーン」区画(docs/line-drain-design.md §4.3)。既定は留置中だけ。
+ * プロファイルタブの「留置物」区画(docs/line-drain-design.md §4.3)。既定は留置中だけ。
  * 行から刺入部観察と抜去をモーダルで書き、ケバブに編集(右ペイン)・抜去取消・誤登録を畳む。
  */
 export function LineDrainSection({
@@ -51,7 +51,7 @@ export function LineDrainSection({
   return (
     <section className="karte-profile__section">
       <div className="karte-tabpanel__header">
-        <h3>ライン・ドレーン</h3>
+        <h3>留置物</h3>
         <div className="karte-tabpanel__actions">
           <label className="profile-tab__toggle">
             <input type="checkbox" checked={!currentOnly} onChange={(e) => setCurrentOnly(!e.target.checked)} />
@@ -67,7 +67,7 @@ export function LineDrainSection({
         <p>読み込み中...</p>
       ) : rows.length === 0 ? (
         <p className="patient-table__empty">
-          {currentOnly ? "留置中のライン・ドレーンはありません。" : "ライン・ドレーンの記録がありません。"}
+          {currentOnly ? "留置中のものはありません。" : "留置物の記録がありません。"}
         </p>
       ) : (
         <ul className="regimen-adverse__list">

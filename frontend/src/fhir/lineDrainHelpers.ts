@@ -4,7 +4,7 @@ import { departmentExtension, departmentOf, type DepartmentRef } from "./orderHe
 import { transactionBundle, withVersionLock } from "./shared";
 
 /**
- * ライン・ドレーン・カテーテルの留置台帳(docs/line-drain-design.md)。
+ * 留置物(ライン・ドレーン・カテーテル)の台帳(docs/line-drain-design.md)。
  *
  * 留置 1 件 = 挿入の Procedure 1 件。performedPeriod.start が挿入、end が抜去で、留置中は end を持たない
  * (上流の date 検索が「進行中」として引く)。管の実体(種別・製品・サイズ・ロット)は Device に持ち、
@@ -17,7 +17,7 @@ import { transactionBundle, withVersionLock } from "./shared";
  */
 
 export const LINE_DRAIN_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/procedure-category";
-export const LINE_DRAIN_CATEGORY = { code: "line-drain", display: "ライン・ドレーン" } as const;
+export const LINE_DRAIN_CATEGORY = { code: "line-drain", display: "留置物" } as const;
 export const LINE_DRAIN_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/line-drain-type";
 export const LINE_DRAIN_KIND_SYSTEM = "http://fhir-client.local/CodeSystem/line-drain-kind";
 export const LINE_DRAIN_REMOVAL_SYSTEM = "http://fhir-client.local/CodeSystem/line-drain-removal";

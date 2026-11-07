@@ -82,7 +82,7 @@ export function cardMeta(item: KarteTimelineItem): string {
   if (item.kind === "adverse-event") {
     return [adverseEventTreatmentLabel(item.record), item.record.performer?.display].filter(Boolean).join(" | ");
   }
-  // ライン・ドレーンは挿入時刻・診療科・挿入者。
+  // 留置物は挿入時刻・診療科・挿入者。
   if (item.kind === "line-drain") {
     return [time, departmentOf(item.record.procedure).departmentName, item.record.performer?.display]
       .filter(Boolean)

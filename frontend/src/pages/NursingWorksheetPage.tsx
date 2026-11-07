@@ -107,7 +107,7 @@ export function NursingWorksheetPage() {
   const wardOptions = useWardOptions();
   const ward = wardId || undefined;
   const inpatients = useWardInpatients(date, ward);
-  // 留置中のライン・ドレーン(患者欄に「種別 n日目」で出す。docs/line-drain-design.md §4.6)。
+  // 留置中の留置物(患者欄に「種別 n日目」で出す。docs/line-drain-design.md §4.6)。
   const lineDrains = useWardLineDrains(
     useMemo(() => inpatients.rows.map((row) => row.patientId), [inpatients.rows]),
     { inProgressOnly: true },

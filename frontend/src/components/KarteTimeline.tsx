@@ -893,7 +893,7 @@ const KarteCard = memo(function KarteCard({
                 パス表示
               </button>
             ) : item.kind === "adverse-event" || item.kind === "line-drain" ? (
-              // 有害事象は治療の側の記録パネルで直す(削除もそこで行う)。ライン・ドレーンの抜去・誤登録は
+              // 有害事象は治療の側の記録パネルで直す(削除もそこで行う)。留置物の抜去・誤登録は
               // プロファイルの区画で行う。
               <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
                 編集

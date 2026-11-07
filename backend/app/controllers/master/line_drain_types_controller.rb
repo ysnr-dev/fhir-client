@@ -1,5 +1,5 @@
 module Master
-  # ライン・ドレーン種別マスタのメンテナンス。画面から手で登録する単純編集型(docs/line-drain-design.md §3)。
+  # 留置物種別マスタのメンテナンス。画面から手で登録する単純編集型(docs/line-drain-design.md §3)。
   class LineDrainTypesController < BaseController
     before_action :set_record, only: %i[show update destroy]
 
