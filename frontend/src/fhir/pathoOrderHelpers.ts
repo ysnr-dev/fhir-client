@@ -15,6 +15,7 @@ import {
   priorityDisplay,
   withVersionLock,
 } from "./shared";
+import { keepOrderRevoked } from "./taskHelpers";
 
 export { PRIORITY_OPTIONS };
 import { containedSpecimenOf, labOrderItemRequests } from "./labOrderHelpers";
@@ -698,7 +699,7 @@ export function buildPathoOrderUpdateBundle(
     const header = bundle.entry?.find((entry) => entry.request?.url === `ServiceRequest/${original.id}`);
     if (header?.resource) (header.resource as fhir4.ServiceRequest).identifier = original.identifier;
   }
-  return withVersionLock(bundle, original);
+  return keepOrderRevoked(withVersionLock(bundle, original), original);
 }
 
 /**

@@ -259,7 +259,7 @@ flowchart TD
 | 操作 | できる場所 | できないとき・注意 |
 |---|---|---|
 | 変更 | カルテのカード | 結果が付いていても止まりません。ラベル発行後に検体を足したら、新しい管のラベルを刷り直します |
-| 中止 | 検体検査一覧のメニュー | 到着した管はそのまま残ります。医事会計・SS-MIX2 には伝わりません(下の表) |
+| 中止 | 検体検査一覧のメニュー | 到着した管はそのまま残ります。医事会計の対象から外れ、SS-MIX2 に取消が出ます |
 | 中止取消 | 検体検査一覧のメニュー | 依頼済に戻ります(受付済・実施済には戻りません) |
 | 取消 | 検体検査一覧のメニュー | 1 つ前の状態へ戻す訂正。管の到着記録は消えません |
 | 削除 | カルテのカード | 結果が付いているとできません(結果を削除してから)。進捗は一緒に消え、発行済みの管の記録は残ります |
@@ -296,14 +296,15 @@ flowchart TD
 ### 進捗 Task(`lab-exam`)
 
 Task は登録時には作りません。**Task が無いオーダーは依頼済**として扱い、最初のステータス変更で作ります(`fhir/labTaskHelpers.ts`)。
-中止でも `ServiceRequest` の `status` は動かしません(注射・処方の `revoked` と違います)。
+中止は同じ transaction でヘッダの `ServiceRequest` を `revoked` にし、中止取消で `active` に戻します(`orderCancelEntries`)。
+中止したオーダーを編集しても `revoked` のままです(`keepOrderRevoked`)。
 
 | 状態 | `Task.status` | `executionPeriod` |
 |---|---|---|
 | 依頼済 | `requested`(または Task 無し) | なし |
 | 受付済 | `accepted` | `start` |
 | 実施済 | `completed` | `start` / `end` |
-| 中止 | `cancelled` | なし |
+| 中止 | `cancelled`(ヘッダは `revoked`) | なし |
 
 受付済へは行の「ラベル発行」と一括発行、実施済へは到着確認の全管到着が進めます。メニューの「受付」「実施」は同じ Task の書き込みを手で行う代替です。
 
@@ -600,13 +601,13 @@ sequenceDiagram
 
 ### 医事会計と SS-MIX2
 
-検体検査は実施入力を持たないので、医事会計はオーダーの検査日で集めます(`BillingClaimBuilder` の `:order` 経路)。進捗 Task は見ません。
+検体検査は実施入力を持たないので、医事会計はオーダーの検査日で集めます(`BillingClaimBuilder` の `:order` 経路)。進捗 Task は見ず、中止は `ServiceRequest.status` で判定します。
 
 | 起きたこと | 医事会計(`BillingClaimBuilder`) | SS-MIX2 |
 |---|---|---|
 | 登録・編集 | 検査日のオーダーの項目を `receipt_code` で送る。血液の検体があれば採血料を最初の剤に 1 回足す。`receipt_code` の無い項目は「送れない項目」に出す | OML^O33(OML-01)。ヘッダを書くと出す。編集も INS |
 | 削除 | 対象から外れる | OML^O33 の `CA`(DEL) |
-| 中止(Task) | **対象から外れない**(`ServiceRequest` は `active` のまま) | **出ない**(`ServiceRequest.status` を見る) |
+| 中止 | 対象から外れる(`ServiceRequest` が `revoked`)。送ったあとの中止は医事が送り直す | OML^O33 の `CA`(DEL)。中止取消は `NW`(INS) |
 | 受付・到着 | なし | なし(Specimen の作成・更新はメッセージにしない) |
 | 結果の登録・確定・訂正 | なし | OUL^R22(OML-11)。訂正も INS(前の有効ファイルは過去履歴になる) |
 | 結果の削除 | なし | OUL^R22 の `CA`(DEL) |

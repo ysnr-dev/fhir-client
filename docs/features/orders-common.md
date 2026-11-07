@@ -121,6 +121,22 @@ transaction を `api/queries/orderDelete.ts` の `postOrderDeleteBundle` に通�
   transaction で消す実施記録は数えません(登録と同時に実施済にする指導・管理料は、実施記録ごと消します)。
 - 残すもの: ラベル発行済みの `Specimen`(発行・到着の記録)と来歴の `Provenance`。
 
+## オーダーの中止
+
+部門一覧の「中止」は進捗 Task を `cancelled` にし、同じ transaction でオーダーのヘッダ `ServiceRequest` を `revoked` に
+します(`fhir/taskHelpers.ts` の `orderCancelEntries`。進捗を書く hook `makeUpdateTaskStatusHook` と、リハビリ・栄養指導・
+服薬指導の hook が積みます)。中止取消は `active` に戻します。処方・注射は薬剤行(`MedicationRequest`)も揃えます
+(`rxOrderCancelEntries`、[medication.md](medication.md)「処方の中止」)。他科依頼・チーム依頼・放射線治療・看護指示は
+進捗の遷移表そのものがオーダーの status を持ちます。
+
+- レセコン送信と SS-MIX2 は Task を読まず `status` で中止を判定します。中止したオーダーは送信の対象から外れ、SS-MIX2 は
+  オーダーの電文を持つ種別(検体検査・放射線・生理・内視鏡・食事・処方・注射)で取消(ORC-1 `CA`)を出します。
+  中止取消のあとは新規(`NW`)として出し直します。
+- 中止したオーダーをカルテで編集しても中止のままです(各種別の更新ビルダーが `keepOrderRevoked` でヘッダの status を戻します)。
+- 部門一覧は中止した行も並べます(中止取消はそこから行います)。リハビリ・栄養指導・服薬指導の一覧は `status=active,revoked` で引きます。
+- 導入前に中止したオーダーは `status` が `active` のまま残っています。`bin/rails orders:backfill_cancelled_status`
+  (`backend/lib/tasks/orders.rake`。`DRY_RUN=1` で件数だけ)で Task に揃えます。
+
 ## 麻酔科術前診察
 
 麻酔科医の術前の評価と指示を、手術オーダーに結び付けたテンプレート回答で残します。設計は `docs/anesthesia-preop-design.md`。

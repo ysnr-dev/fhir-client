@@ -54,4 +54,15 @@ RSpec.describe Ssmix2::Messages::OmlO33 do
     expect(obxs[1]).to eq("OBX|1||3A010000002327101^総蛋白^JC10^TP^TP^99X03||||||||O")
     expect(obxs[2]).to eq("OBX|2||3J010000002327101^総ビリルビン^JC10^TBIL^TBIL^99X03||||||||O")
   end
+
+  it "sends the CA control record as DEL when the order is revoked" do
+    revoked = header.merge("status" => "revoked")
+    transaction = ssmix2_transaction(method: "PUT", path: "/ServiceRequest/lab1", request: revoked, response: revoked)
+    written = Ssmix2::Dispatcher.written_resources(transaction).first
+
+    result = described_class.new(context: context, transaction: transaction, written: written).build
+
+    expect(result.process).to eq("DEL")
+    expect(segments(result, "ORC").all? { |orc| orc.start_with?("ORC|CA|") }).to be(true)
+  end
 end

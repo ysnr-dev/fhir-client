@@ -12,6 +12,7 @@ import {
   transactionBundle,
   withVersionLock,
 } from "./shared";
+import { keepOrderRevoked } from "./taskHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
 import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
 
@@ -387,7 +388,7 @@ export function buildNutritionGuidanceOrderUpdateBundle(
     }
   }
 
-  return withVersionLock(transactionBundle(entries), existing);
+  return keepOrderRevoked(withVersionLock(transactionBundle(entries), existing), existing);
 }
 
 /**

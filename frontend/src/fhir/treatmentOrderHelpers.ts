@@ -15,6 +15,7 @@ import {
   ABBREVIATION_SYSTEM,
   withVersionLock,
 } from "./shared";
+import { keepOrderRevoked } from "./taskHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
   SETTING_OPTIONS,
@@ -531,10 +532,13 @@ export function buildTreatmentOrderUpdateBundle(
   originalItemIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return withVersionLock(
-    transactionBundle(
-      buildTreatmentOrderEntries(values, patientId, requester, original, originalItemIds)
-        .entries,
+  return keepOrderRevoked(
+    withVersionLock(
+      transactionBundle(
+        buildTreatmentOrderEntries(values, patientId, requester, original, originalItemIds)
+          .entries,
+      ),
+      original,
     ),
     original,
   );

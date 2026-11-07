@@ -14,6 +14,7 @@ import {
   resourcesOfType,
   withVersionLock,
 } from "./shared";
+import { keepOrderRevoked } from "./taskHelpers";
 
 export { PRIORITY_OPTIONS };
 import { ABBREVIATION_SYSTEM, JLAC10_SYSTEM, JLAC11_SPECIMEN_SYSTEM, JLAC11_SYSTEM } from "./labResultHelpers";
@@ -561,14 +562,17 @@ export function buildLabOrderUpdateBundle(
   originalItemIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return withVersionLock(
-    buildLabOrderTransactionBundle(
-      values,
-      patientId,
-      requester,
-      registrationAuthoredOn(original),
-      original.id,
-      originalItemIds,
+  return keepOrderRevoked(
+    withVersionLock(
+      buildLabOrderTransactionBundle(
+        values,
+        patientId,
+        requester,
+        registrationAuthoredOn(original),
+        original.id,
+        originalItemIds,
+      ),
+      original,
     ),
     original,
   );

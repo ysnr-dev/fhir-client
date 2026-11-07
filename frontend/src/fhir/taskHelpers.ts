@@ -7,6 +7,9 @@ import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 // オーダーはそのままにして進捗を Task で別に持つ理由や executionPeriod の扱いは
 // radTaskHelpers のコメントを参照。ここには「どの部門でも同じ形」の判定・突き合わせ・
 // 組み立てだけを置き、状態遷移表(actions)や進捗の意味付けは各 *TaskHelpers に残す。
+//
+// 中止だけはオーダーの status も動かす(orderCancelEntries)。医事会計と SS-MIX2 は Task を
+// 読まず ServiceRequest.status で中止を判定するため。
 
 /** Task.code。部門の作業種別。部門をまたいだ Task の振り分けに使う。 */
 export const TASK_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/task-code";
@@ -123,4 +126,34 @@ export function createTaskHelpers<S extends fhir4.Task["status"]>(config: TaskHe
   }
 
   return { isTask, taskStatus, statusDisplay, tasksByOrderId, buildTaskUpdate };
+}
+
+/**
+ * 中止・中止取消で、オーダーのヘッダの status を進捗に揃える PUT エントリ。中止で
+ * `active` → `revoked`、中止取消で `revoked` → `active`。既に揃っていれば何も返さない。
+ * 読んだリソースを書き換えて送るので、版は postBundle が ifMatch に添える。
+ * 処方・注射は薬剤行も揃えるので rxTaskHelpers の rxOrderCancelEntries を使う。
+ */
+export function orderCancelEntries(order: fhir4.ServiceRequest, cancelled: boolean): fhir4.BundleEntry[] {
+  const [from, to] = cancelled ? (["active", "revoked"] as const) : (["revoked", "active"] as const);
+  if (order.status !== from || !order.id) return [];
+  const updated: fhir4.ServiceRequest = { ...order, status: to };
+  return [{ resource: updated, request: { method: "PUT", url: `ServiceRequest/${order.id}` } }];
+}
+
+/**
+ * 中止したオーダーを編集しても中止のままにする。フォームから組み直したヘッダは常に
+ * `active` で書くので、元が `revoked` ならヘッダの PUT だけ `revoked` に戻す(明細は触らない)。
+ */
+export function keepOrderRevoked(bundle: fhir4.Bundle, original: fhir4.ServiceRequest): fhir4.Bundle {
+  if (original.status !== "revoked" || !original.id) return bundle;
+  const url = `ServiceRequest/${original.id}`;
+  return {
+    ...bundle,
+    entry: (bundle.entry ?? []).map((entry) =>
+      entry.request?.method === "PUT" && entry.request.url === url && entry.resource?.resourceType === "ServiceRequest"
+        ? { ...entry, resource: { ...entry.resource, status: "revoked" } }
+        : entry,
+    ),
+  };
 }

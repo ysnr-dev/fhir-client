@@ -11,6 +11,7 @@ import {
   medicationGuidanceTasksByOrderId,
   type MedicationGuidanceTaskStatus,
 } from "../../fhir/medicationGuidanceTaskHelpers";
+import { orderCancelEntries } from "../../fhir/taskHelpers";
 import {
   buildMedicationGuidancePerformDeleteEntries,
   medicationGuidancePerformsByOrderId,
@@ -120,7 +121,8 @@ export interface MedicationGuidanceWorklistResult {
 function medicationGuidanceWorklistParams(date: string, page: number): URLSearchParams {
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${MEDICATION_GUIDANCE_ORDER_TYPE.code}`);
-  params.set("status", "active");
+  // 中止したオーダー(revoked)も並べる(中止取消はこの一覧から行う)。
+  params.set("status", "active,revoked");
   setOrderPeriod(params, date, date);
   params.set("based-on:missing", "true");
   params.set("_count", String(WORKLIST_PAGE));
@@ -224,6 +226,7 @@ export function useDeleteMedicationGuidancePerform() {
 
 /**
  * 受付・終了・中止などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
+ * 中止・中止取消はオーダーの status も同じ transaction で揃える(fhir/taskHelpers.ts)。
  * 「終了」だけは ServiceRequest にも終了日を書く(栄養指導と同じ)。
  */
 export function useUpdateMedicationGuidanceTaskStatus() {
@@ -243,6 +246,7 @@ export function useUpdateMedicationGuidanceTaskStatus() {
     }) => {
       const entry: fhir4.BundleEntry[] = [taskBundleEntry(buildMedicationGuidanceTaskUpdate(task, order, status))];
       if (status === "completed" && endDate) entry.push(buildMedicationGuidanceOrderCloseEntry(order, endDate));
+      else entry.push(...orderCancelEntries(order, status === "cancelled"));
       return postBundle({ resourceType: "Bundle", type: "transaction", entry });
     },
     onSuccess: () => invalidateMedicationGuidance(queryClient),

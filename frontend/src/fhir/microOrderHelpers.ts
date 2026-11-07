@@ -12,6 +12,7 @@ import {
   priorityDisplay,
   withVersionLock,
 } from "./shared";
+import { keepOrderRevoked } from "./taskHelpers";
 import { toFhirDateTime } from "../lib/dates";
 
 export { PRIORITY_OPTIONS };
@@ -570,14 +571,17 @@ export function buildMicroOrderUpdateBundle(
   originalItemIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return withVersionLock(
-    buildMicroOrderTransactionBundle(
-      values,
-      patientId,
-      requester,
-      registrationAuthoredOn(original),
-      original.id,
-      originalItemIds,
+  return keepOrderRevoked(
+    withVersionLock(
+      buildMicroOrderTransactionBundle(
+        values,
+        patientId,
+        requester,
+        registrationAuthoredOn(original),
+        original.id,
+        originalItemIds,
+      ),
+      original,
     ),
     original,
   );

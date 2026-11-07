@@ -18,6 +18,7 @@ import {
   ABBREVIATION_SYSTEM,
   withVersionLock,
 } from "./shared";
+import { keepOrderRevoked } from "./taskHelpers";
 
 export { EXAM_PRIORITY_OPTIONS, RETRO_PRIORITY };
 import { templateBindingOf, templateResponseIdOf, type TemplateBinding } from "./questionnaireResponseHelpers";
@@ -708,16 +709,19 @@ export function buildPhysioOrderUpdateBundle(
   originalResponseIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return withVersionLock(
-    transactionBundle(
-      buildPhysioOrderEntries(
-        values,
-        patientId,
-        requester,
-        original,
-        originalItemIds,
-        originalResponseIds,
-      ).entries,
+  return keepOrderRevoked(
+    withVersionLock(
+      transactionBundle(
+        buildPhysioOrderEntries(
+          values,
+          patientId,
+          requester,
+          original,
+          originalItemIds,
+          originalResponseIds,
+        ).entries,
+      ),
+      original,
     ),
     original,
   );

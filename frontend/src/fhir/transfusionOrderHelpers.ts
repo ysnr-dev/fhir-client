@@ -22,6 +22,7 @@ import {
   registrationAuthoredOn,
   withVersionLock,
 } from "./shared";
+import { keepOrderRevoked } from "./taskHelpers";
 
 // 輸血オーダー。病理検査と同じくヘッダは ServiceRequest で、その下に製剤を並べる。
 //
@@ -659,15 +660,18 @@ export function buildTransfusionOrderUpdateBundle(
   /** 元の採血予定。外されたものを取り消し、残したものは版を引き継いで PUT する。 */
   originalAppointments: fhir4.Appointment[] = [],
 ): fhir4.Bundle {
-  return withVersionLock(
-    buildTransfusionOrderTransactionBundle(
-      values,
-      patientId,
-      requester,
-      registrationAuthoredOn(original),
-      original.id,
-      originalItemIds,
-      originalAppointments,
+  return keepOrderRevoked(
+    withVersionLock(
+      buildTransfusionOrderTransactionBundle(
+        values,
+        patientId,
+        requester,
+        registrationAuthoredOn(original),
+        original.id,
+        originalItemIds,
+        originalAppointments,
+      ),
+      original,
     ),
     original,
   );

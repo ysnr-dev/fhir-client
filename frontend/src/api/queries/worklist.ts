@@ -2,6 +2,7 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { splitPerformBundle } from "../../fhir/radResultHelpers";
 import { buildExamScheduleBundle, isActiveAppointment, type SlotSelection } from "../../fhir/appointmentHelpers";
 import { postBundle, searchResource } from "../fhirClient";
+import { orderCancelEntries } from "../../fhir/taskHelpers";
 import { buildCancelEntriesOf, invalidateAppointments } from "./appointment";
 import {
   appendDetailRevincludes,
@@ -182,10 +183,11 @@ export function makeUpdateTaskStatusHook<S extends fhir4.Task["status"]>(
           options.cancelPerform && options.cancelPerform.cancels(task, status)
             ? await options.cancelPerform.entries(order, task, status)
             : [];
+        // 中止・中止取消はオーダーの status も同じ transaction で揃える(fhir/taskHelpers.ts)。
         return postBundle({
           resourceType: "Bundle",
           type: "transaction",
-          entry: [...performEntries, taskEntry],
+          entry: [...performEntries, taskEntry, ...orderCancelEntries(order, status === "cancelled")],
         });
       },
       onSuccess: () => {

@@ -13,6 +13,7 @@ import {
   ABBREVIATION_SYSTEM,
   withVersionLock,
 } from "./shared";
+import { keepOrderRevoked } from "./taskHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
 
@@ -879,21 +880,24 @@ export function buildSurgeryOrderUpdateBundle(
     registrationAuthoredOn(original),
     serviceRequestId,
   );
-  return withVersionLock(
-    transactionBundle([
-      ...templateEntries,
-      {
-        fullUrl: headerReference,
-        resource: header,
-        request: { method: "PUT", url: headerReference },
-      },
-      ...buildItemEntries(values.items, patientId, header, headerReference, originalItemIds),
-      ...originalResponseIds
-        .filter((id) => id !== preop.keptResponseId)
-        .map((id) => ({
-          request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
-        })),
-    ]),
+  return keepOrderRevoked(
+    withVersionLock(
+      transactionBundle([
+        ...templateEntries,
+        {
+          fullUrl: headerReference,
+          resource: header,
+          request: { method: "PUT", url: headerReference },
+        },
+        ...buildItemEntries(values.items, patientId, header, headerReference, originalItemIds),
+        ...originalResponseIds
+          .filter((id) => id !== preop.keptResponseId)
+          .map((id) => ({
+            request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
+          })),
+      ]),
+      original,
+    ),
     original,
   );
 }

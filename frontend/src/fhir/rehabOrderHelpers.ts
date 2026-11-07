@@ -10,6 +10,7 @@ import {
   transactionBundle,
   withVersionLock,
 } from "./shared";
+import { keepOrderRevoked } from "./taskHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
 import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
 
@@ -363,19 +364,22 @@ export function buildRehabOrderUpdateBundle(
   original: fhir4.ServiceRequest,
   requester: OrderAttribution,
 ): fhir4.Bundle {
-  return withVersionLock(
-    transactionBundle([
-      {
-        resource: buildRehabOrderServiceRequest(
-          values,
-          patientId,
-          requester,
-          registrationAuthoredOn(original),
-          original.id,
-        ),
-        request: { method: "PUT", url: `ServiceRequest/${original.id}` },
-      },
-    ]),
+  return keepOrderRevoked(
+    withVersionLock(
+      transactionBundle([
+        {
+          resource: buildRehabOrderServiceRequest(
+            values,
+            patientId,
+            requester,
+            registrationAuthoredOn(original),
+            original.id,
+          ),
+          request: { method: "PUT", url: `ServiceRequest/${original.id}` },
+        },
+      ]),
+      original,
+    ),
     original,
   );
 }

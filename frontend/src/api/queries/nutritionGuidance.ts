@@ -11,6 +11,7 @@ import {
   nutritionGuidanceTasksByOrderId,
   type NutritionGuidanceTaskStatus,
 } from "../../fhir/nutritionGuidanceTaskHelpers";
+import { orderCancelEntries } from "../../fhir/taskHelpers";
 import {
   buildNutritionGuidancePerformDeleteEntries,
   type NutritionGuidancePerformDisplay,
@@ -155,7 +156,8 @@ export interface NutritionGuidanceWorklistResult {
 function nutritionGuidanceWorklistParams(date: string, page: number): URLSearchParams {
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${NUTRITION_GUIDANCE_ORDER_TYPE.code}`);
-  params.set("status", "active");
+  // 中止したオーダー(revoked)も並べる(中止取消はこの一覧から行う)。
+  params.set("status", "active,revoked");
   setOrderPeriod(params, date, date);
   params.set("based-on:missing", "true");
   params.set("_count", String(WORKLIST_PAGE));
@@ -336,6 +338,7 @@ export function useDeleteNutritionGuidancePerform() {
 
 /**
  * 受付・終了・中止などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
+ * 中止・中止取消はオーダーの status も同じ transaction で揃える(fhir/taskHelpers.ts)。
  *
  * 「終了」だけは ServiceRequest にも終了日を書く。Task を completed にするだけでは
  * status=active のまま残り、部門一覧の `occurrence=le{基準日}` に永久にヒットし
@@ -365,6 +368,8 @@ export function useUpdateNutritionGuidanceTaskStatus() {
       ];
       if (status === "completed" && endDate) {
         entry.push(buildNutritionGuidanceOrderCloseEntry(order, endDate));
+      } else {
+        entry.push(...orderCancelEntries(order, status === "cancelled"));
       }
       return postBundle({ resourceType: "Bundle", type: "transaction", entry });
     },
