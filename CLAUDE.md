@@ -70,7 +70,8 @@ docker compose exec frontend node scripts/import-cycles.cjs src/api/queries
   画面に並べるだけの読み込みは `truncated` を `TruncatedNotice` で出す。黙って切らない。
 - `_elements` は JSON キー完全一致(choice 型は `effectiveDateTime` など実キー名)。
 - 日付の検索値はタイムゾーン無しで渡してよい(上流が Asia/Tokyo で解釈)。
-- レート制限は 1 トークン 300 件/分。まとめて書くときは transaction Bundle にし、hook の連続呼び出しで読み直しを積み重ねない。
+- レート制限は本番が 1500 件/分(backend の 1 トークンを全利用者で共有するので院内全体の枠)、開発は IP ごとに 2000 件/分。
+  まとめて書くときは transaction Bundle にし、hook の連続呼び出しで読み直しを積み重ねない。
 - transaction Bundle でオーダーヘッダを書くときも `fullUrl` を必ず付ける(漏れると来歴とパス参照が付かない)。
 - 楽観ロックは `If-Match`(ETag)。単体の更新は `FhirResult.etag` を引き回す。transaction の PUT は、読んだリソースを
   書き換えて送れば `postBundle` が版(`meta.versionId`)を `ifMatch` に添える。フォームから組み直す更新は
