@@ -29405,6 +29405,7 @@ input.nursing-picker__search {
   font-size: 9pt;
   font-weight: normal;
   text-align: center;
+  white-space: pre-line;
 }
 
 .karte-print__day td,
@@ -29420,10 +29421,49 @@ input.nursing-picker__search {
   text-align: center;
 }
 
-/* 区画(表紙・病名・退院時サマリー・診療経過記録)ごとに改ページする。 */
-.karte-print__section + .karte-print__section {
+/* 区画ごとに改ページする。幅で分けた表の続き(continued)は改ページせずに続ける。 */
+.karte-print__section ~ .karte-print__section {
   break-before: page;
   margin-top: 16px;
+}
+
+.karte-print__continued {
+  margin-top: 12px;
+}
+
+.karte-print__cell {
+  font-size: 9pt;
+  word-break: break-all;
+}
+
+.karte-print__abnormal {
+  font-weight: 700;
+}
+
+.karte-print__legend {
+  border: none;
+  font-size: 9pt;
+}
+
+.karte-print__item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 4px;
+}
+
+.karte-print__note {
+  font-size: 9pt;
+  color: var(--text);
+}
+
+.karte-print__profile + .karte-print__profile {
+  margin-top: 8px;
+}
+
+.karte-print__profile-title {
+  font-weight: 600;
 }
 
 .karte-print__sheet .karte-print__section-title {

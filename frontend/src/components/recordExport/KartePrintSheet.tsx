@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 // カルテ印刷の区画 1 つぶんの紙面。見出し(患者・期間)と区画名・列名を thead に置き、
 // ブラウザがページごとに繰り返す。2 つ目以降の区画は改ページで始まる(App.css)。
+// 列の多い表を幅で分けるときは、2 枚目以降を continued にして改ページせずに続ける。
 
 interface KartePrintSheetProps {
   header: ReactNode;
@@ -12,13 +13,23 @@ interface KartePrintSheetProps {
   span?: number;
   /** 列の幅(col の width)。columns と同じ数だけ。 */
   widths?: string[];
+  /** 同じ区画の続き(改ページしない)。 */
+  continued?: boolean;
   children: ReactNode;
 }
 
-export function KartePrintSheet({ header, title, columns, span: bodySpan, widths, children }: KartePrintSheetProps) {
+export function KartePrintSheet({
+  header,
+  title,
+  columns,
+  span: bodySpan,
+  widths,
+  continued = false,
+  children,
+}: KartePrintSheetProps) {
   const span = columns?.length ?? bodySpan ?? 1;
   return (
-    <table className="karte-print__sheet karte-print__section">
+    <table className={`karte-print__sheet ${continued ? "karte-print__continued" : "karte-print__section"}`}>
       {widths && (
         <colgroup>
           {widths.map((width, index) => (
@@ -39,8 +50,8 @@ export function KartePrintSheet({ header, title, columns, span: bodySpan, widths
         </tr>
         {columns && (
           <tr>
-            {columns.map((column) => (
-              <th key={column} className="karte-print__column-title">
+            {columns.map((column, index) => (
+              <th key={index} className="karte-print__column-title">
                 {column}
               </th>
             ))}
@@ -65,8 +76,8 @@ export function KartePrintGroupRow({ span, children }: { span: number; children:
 export function KartePrintColumnRow({ columns }: { columns: string[] }) {
   return (
     <tr>
-      {columns.map((column) => (
-        <th key={column} className="karte-print__column-title">
+      {columns.map((column, index) => (
+        <th key={index} className="karte-print__column-title">
           {column}
         </th>
       ))}

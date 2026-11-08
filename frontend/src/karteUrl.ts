@@ -249,6 +249,11 @@ export const KARTE_PRINT_SECTIONS = [
   { key: "conditions", label: "病名" },
   { key: "summaries", label: "退院時サマリー" },
   { key: "progress", label: "経過記録" },
+  { key: "nursingOrders", label: "指示簿" },
+  { key: "nursing", label: "看護" },
+  { key: "flowsheet", label: "経過表" },
+  { key: "labs", label: "検歴" },
+  { key: "reports", label: "レポート" },
 ] as const;
 
 export type KartePrintSection = (typeof KARTE_PRINT_SECTIONS)[number]["key"];

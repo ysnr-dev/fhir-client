@@ -39,15 +39,28 @@ export function ExamReportDetailPanel({
   return (
     <>
       <ErrorBanner error={detail.error} />
-      {report && (
-        <ExamReportContent
-          config={config}
-          status={report.status}
-          issued={report.issued}
-          values={parseExamReportForm(config, report, observations)}
-        />
-      )}
+      {report && <ExamReportView config={config} report={report} observations={observations} />}
     </>
+  );
+}
+
+/** 読み込み済みのレポートの内容(カルテ印刷はまとめて読んだものを渡す)。 */
+export function ExamReportView({
+  config,
+  report,
+  observations,
+}: {
+  config: ExamReportConfig;
+  report: fhir4.DiagnosticReport;
+  observations: fhir4.Observation[];
+}) {
+  return (
+    <ExamReportContent
+      config={config}
+      status={report.status}
+      issued={report.issued}
+      values={parseExamReportForm(config, report, observations)}
+    />
   );
 }
 

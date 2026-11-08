@@ -137,86 +137,118 @@ export function PathoResultDetailPanel({
       ) : report && isDraftReportStatus(report.status) && !showDraft ? (
         <p className="patient-table__empty">作成中のレポート(下書き)です。</p>
       ) : (
-        report &&
-        values && (
-          <div className="prescription-detail">
-            {values.followUp && (
-              <div className="exam-report-detail__follow-up" role="note">
-                <span className="exam-report-detail__follow-up-label">フォロー推奨</span>
-                {values.followUpText}
-                <span className="exam-report-detail__follow-up-due">期限 {values.followUpDue}</span>
-              </div>
-            )}
-            <fieldset>
-              <legend>報告共通</legend>
-              <dl className="prescription-detail__common prescription-detail__common--micro">
-                <dt>報告日</dt>
-                <dd>{values.reportDate}</dd>
-                <dt>入外区分</dt>
-                <dd>
-                  {values.setting === "inpatient"
-                    ? "入院"
-                    : values.setting === "outpatient"
-                      ? "外来"
-                      : "-"}
-                </dd>
-                <dt>診療科</dt>
-                <dd>{values.departmentName || "-"}</dd>
-                <dt>報告区分</dt>
-                <dd>
-                  <ReportStatusBadge status={report.status} />
-                </dd>
-                <dt>診断医</dt>
-                <dd>
-                  {filledInterpreters(values)
-                    .map((interpreter) => interpreter.name || "(氏名なし)")
-                    .join("、") || "-"}
-                </dd>
-                <dt>病理検査オーダー</dt>
-                <dd>{values.orderId ? orderLabel : "紐付けなし"}</dd>
-              </dl>
-            </fieldset>
-
-            <fieldset>
-              <legend>検体情報</legend>
-              <table className="rp-card__medicines rp-card__medicines--patho">
-                <thead>
-                  <tr>
-                    <th>№</th>
-                    <th>臓器・検体</th>
-                    <th className="rp-card__patho-date">採取日</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {values.specimens.map((specimen, index) => (
-                    <tr key={specimen.id ?? index}>
-                      <td>{index + 1}</td>
-                      <td>{resultSpecimenLabel(specimen)}</td>
-                      <td className="rp-card__patho-date">{specimen.collectedDate || "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {values.specimens.length === 0 && (
-                <p className="patient-table__empty">検体情報がありません。</p>
-              )}
-            </fieldset>
-
-            <FindingSection label="肉眼所見" value={values.gross} />
-            <FindingSection label="顕微鏡所見" value={values.microscopic} />
-            <DiagnosisFieldset values={values} />
-            <FindingSection label="採取法／検体処理法" value={values.procedureStep} />
-            {/* 画像は種別ごとにまとめて並べる。無いレポートの方が多いので、
-                あるときだけ枠を出す(所見セクションと同じ扱い)。 */}
-            {groupReportImagesByKind(values.images).map((group) => (
-              <fieldset key={group.kind}>
-                <legend>{group.display}</legend>
-                <SchemaImageGallery refs={pathoReportImageRefs(group.images)} />
-              </fieldset>
-            ))}
-          </div>
-        )
+        report && values && <PathoResultContent report={report} values={values} orderLabel={orderLabel} />
       )}
     </>
+  );
+}
+
+/**
+ * 読み込み済みのレポートの内容(カルテ印刷はまとめて読んだものを渡す)。
+ * 紐付くオーダーの要約は 1 件ずつ読むことになるので出さない。
+ */
+export function PathoResultView({
+  report,
+  observations,
+  specimens,
+}: {
+  report: fhir4.DiagnosticReport;
+  observations: fhir4.Observation[];
+  specimens: fhir4.Specimen[];
+}) {
+  return <PathoResultContent report={report} values={parsePathoResultForm(report, observations, specimens)} />;
+}
+
+function PathoResultContent({
+  report,
+  values,
+  orderLabel,
+}: {
+  report: fhir4.DiagnosticReport;
+  values: PathoResultFormValues;
+  /** 紐付くオーダーの要約。undefined なら行ごと出さない。 */
+  orderLabel?: string;
+}) {
+  return (
+    <div className="prescription-detail">
+      {values.followUp && (
+        <div className="exam-report-detail__follow-up" role="note">
+          <span className="exam-report-detail__follow-up-label">フォロー推奨</span>
+          {values.followUpText}
+          <span className="exam-report-detail__follow-up-due">期限 {values.followUpDue}</span>
+        </div>
+      )}
+      <fieldset>
+        <legend>報告共通</legend>
+        <dl className="prescription-detail__common prescription-detail__common--micro">
+          <dt>報告日</dt>
+          <dd>{values.reportDate}</dd>
+          <dt>入外区分</dt>
+          <dd>
+            {values.setting === "inpatient"
+              ? "入院"
+              : values.setting === "outpatient"
+                ? "外来"
+                : "-"}
+          </dd>
+          <dt>診療科</dt>
+          <dd>{values.departmentName || "-"}</dd>
+          <dt>報告区分</dt>
+          <dd>
+            <ReportStatusBadge status={report.status} />
+          </dd>
+          <dt>診断医</dt>
+          <dd>
+            {filledInterpreters(values)
+              .map((interpreter) => interpreter.name || "(氏名なし)")
+              .join("、") || "-"}
+          </dd>
+          {orderLabel !== undefined && (
+            <>
+              <dt>病理検査オーダー</dt>
+              <dd>{values.orderId ? orderLabel : "紐付けなし"}</dd>
+            </>
+          )}
+        </dl>
+      </fieldset>
+
+      <fieldset>
+        <legend>検体情報</legend>
+        <table className="rp-card__medicines rp-card__medicines--patho">
+          <thead>
+            <tr>
+              <th>№</th>
+              <th>臓器・検体</th>
+              <th className="rp-card__patho-date">採取日</th>
+            </tr>
+          </thead>
+          <tbody>
+            {values.specimens.map((specimen, index) => (
+              <tr key={specimen.id ?? index}>
+                <td>{index + 1}</td>
+                <td>{resultSpecimenLabel(specimen)}</td>
+                <td className="rp-card__patho-date">{specimen.collectedDate || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {values.specimens.length === 0 && (
+          <p className="patient-table__empty">検体情報がありません。</p>
+        )}
+      </fieldset>
+
+      <FindingSection label="肉眼所見" value={values.gross} />
+      <FindingSection label="顕微鏡所見" value={values.microscopic} />
+      <DiagnosisFieldset values={values} />
+      <FindingSection label="採取法／検体処理法" value={values.procedureStep} />
+      {/* 画像は種別ごとにまとめて並べる。無いレポートの方が多いので、
+          あるときだけ枠を出す(所見セクションと同じ扱い)。 */}
+      {groupReportImagesByKind(values.images).map((group) => (
+        <fieldset key={group.kind}>
+          <legend>{group.display}</legend>
+          <SchemaImageGallery refs={pathoReportImageRefs(group.images)} />
+        </fieldset>
+      ))}
+    </div>
   );
 }
