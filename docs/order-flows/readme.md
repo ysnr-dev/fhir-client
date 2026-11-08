@@ -23,3 +23,4 @@
 | [medical-management.md](medical-management.md) | 指導・管理料(項目マスタの準備から算定・前回算定日と上限の警告・編集・削除・会計の送信まで) |
 | [clinical-pathway.md](clinical-pathway.md) | クリニカルパス(パス定義の作成・承認から適用・日々の評価とバリアンス・フェーズの進行・予定外・日程の変更・終了・中止・取り消しまで) |
 | [admission-discharge.md](admission-discharge.md) | 入院から退院まで(入院予定・入院実施・転室転床・転科転棟・外出泊・退院予定・退院と各取消、入院時・退院後の文書、食事などの連動) |
+| [outpatient.md](outpatient.md) | 外来の受付から会計まで(予約枠と予約・受付と受付番号・当日受付と新患登録・レセコンからの受付・Web 問診・呼出と待合表示板・一時終了と診察再開・診察終了・医事送信と会計済、各取消) |
