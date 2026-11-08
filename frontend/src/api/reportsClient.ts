@@ -136,6 +136,13 @@ export function injectionPrintUrl(orderId: string): string {
   return `${INJECTION_PRINT_PATH}/${encodeURIComponent(orderId)}`;
 }
 
+/** パス定義のパスシートを紙に出す画面(pages/PathwayPrintPage)。 */
+export const PATHWAY_PRINT_PATH = "/pathway-print";
+
+export function pathwayPrintUrl(pathwayId: number | string): string {
+  return `${PATHWAY_PRINT_PATH}/${encodeURIComponent(pathwayId)}`;
+}
+
 /** 検体検査結果(DiagnosticReport)1 件ぶんの報告書 PDF の URL(A4、左右 2 段、材料なし)。 */
 export function labResultPdfUrl(reportId: string): string {
   return `/reports/lab_results/${encodeURIComponent(reportId)}/pdf`;

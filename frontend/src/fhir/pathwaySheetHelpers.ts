@@ -260,6 +260,48 @@ export function buildPathwaySheet(
   };
 }
 
+// ---- 印刷 ----
+
+/** 紙 1 枚ぶんのシート。列は病日の区切りで分け、その列にセルを持つ行だけを載せる。 */
+export interface PathwaySheetPage {
+  days: SheetDay[];
+  dayGroups: SheetDayGroup[];
+  phaseGroups: SheetPhaseGroup[];
+  rows: SheetRow[];
+}
+
+/**
+ * シートを 1 枚 maxDays 列までに分ける。同じ病日のステップは同じ枚に置く
+ * (1 つの病日だけで maxDays を超えるときは、その病日で 1 枚にする)。
+ */
+export function paginatePathwaySheet(sheet: PathwaySheet, maxDays: number): PathwaySheetPage[] {
+  const chunks: SheetDayGroup[][] = [];
+  let columns = 0;
+  for (const group of sheet.dayGroups) {
+    if (chunks.length === 0 || columns + group.days.length > maxDays) {
+      chunks.push([]);
+      columns = 0;
+    }
+    chunks[chunks.length - 1].push(group);
+    columns += group.days.length;
+  }
+
+  const phaseOfDay = sheet.phaseGroups.flatMap((group) => Array.from({ length: group.span }, () => group));
+  const indexOfDay = new Map(sheet.days.map((day, index) => [day.eventId, index]));
+  return chunks.map((dayGroups) => {
+    const days = dayGroups.flatMap((group) => group.days);
+    const phaseGroups: SheetPhaseGroup[] = [];
+    for (const day of days) {
+      const phase = phaseOfDay[indexOfDay.get(day.eventId) as number];
+      const last = phaseGroups[phaseGroups.length - 1];
+      if (last?.phaseKey === phase.phaseKey) last.span += 1;
+      else phaseGroups.push({ ...phase, span: 1 });
+    }
+    const rows = sheet.rows.filter((row) => days.some((day) => row.cells.has(day.eventId)));
+    return { days, dayGroups, phaseGroups, rows };
+  });
+}
+
 // ---- タスクの実施 ----
 
 /** 看護指示の実施記録を、指示の id → 記録のある日付(YYYY-MM-DD)にまとめる。 */

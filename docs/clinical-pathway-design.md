@@ -384,6 +384,11 @@ master_pathway_events          + phase_key(NOT NULL)。一意性は (pathway_cod
     適用フォーム(`PathwayApplyPanel`)の「プレビュー」も同じモーダルで、絞る前の定義を `draftFromPathway` で draft にして渡す。
     日付の初期値はフォームの入院日。次のフェーズの適用では経路の先頭をそのフェーズにし、日付はフェーズの開始日として割り付ける
     (`phaseEventDate`)。フェーズの印が定義に無ければ開始フェーズから出す。
+  - **印刷**(`pages/PathwayPrintPage.tsx`、`/pathway-print/:pathwayId`): 見出しの「印刷」で別タブを開く。［決定］帳票レイアウト(ThinReports)ではなく
+    ブラウザ印刷にする(病日の列数がパスごとに変わる格子は固定レイアウトに載らない。カルテ印刷と同じ)。保存済みの定義を `draftFromPathway` で draft にし、
+    プレビューと同じ `buildPathwayPreview` / `buildPathwaySheet` で組む。［決定］列は `paginatePathwaySheet` で病日の区切りごとに紙へ分ける
+    (同じ病日のステップは分けない、列の幅は全部の紙でそろえる、続きの線は紙の端まで引く)。行が縦に収まらなければ次の紙で thead を繰り返す。
+    用紙は `<style>` の `@page` で上書きする。下書き・廃止の紙を取り違えないよう、状態を紙ごとの見出しに出す。
   - 運用(状態 / 承認日・承認者 / 有効期間 / 表示順)は凍結中も動かせる。承認済・廃止では内容の fieldset を disabled にする。
     状態の選択肢は承認済なら「下書き」も出す(適用済みならサーバーが 422 で返し、ErrorBanner に出る)。廃止では出さない。
   - 複製は保存済みの内容をサーバー側で写す(新しいコード・下書き・`copied_from_code`、uuid はそのまま)。削除は下書きだけ。

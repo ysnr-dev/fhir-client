@@ -42,6 +42,7 @@ import { RegimenListPage } from "./pages/RegimenListPage";
 import { RegimenEditorPage } from "./pages/RegimenEditorPage";
 import { PathwayListPage } from "./pages/PathwayListPage";
 import { PathwayEditorPage } from "./pages/PathwayEditorPage";
+import { PathwayPrintPage } from "./pages/PathwayPrintPage";
 import { PhysioWorklistPage } from "./pages/PhysioWorklistPage";
 import { PhysioExamTypePage } from "./pages/PhysioExamTypePage";
 import { PhysioItemPage } from "./pages/PhysioItemPage";
@@ -184,7 +185,7 @@ import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { RxWorklistPage } from "./pages/RxWorklistPage";
 import { RxVerificationPage } from "./pages/RxVerificationPage";
 import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklistPage";
-import { INJECTION_PRINT_PATH } from "./api/reportsClient";
+import { INJECTION_PRINT_PATH, PATHWAY_PRINT_PATH } from "./api/reportsClient";
 import { InjectionPrintPage } from "./pages/InjectionPrintPage";
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { LotManagementPage } from "./pages/LotManagementPage";
@@ -221,7 +222,10 @@ function App() {
   const { pathname } = useLocation();
   const detachedPane = pathname.startsWith(KARTE_PANE_PATH);
   // カルテ印刷・注射箋の発行も別タブで、印刷する紙面だけを出す。
-  const printPage = pathname.startsWith(KARTE_PRINT_PATH) || pathname.startsWith(INJECTION_PRINT_PATH);
+  const printPage =
+    pathname.startsWith(KARTE_PRINT_PATH) ||
+    pathname.startsWith(INJECTION_PRINT_PATH) ||
+    pathname.startsWith(PATHWAY_PRINT_PATH);
   // Web 問診の患者画面。ログインの外(AuthGate の外)で、トークンだけで開く。
   const intakeToken = pathname.startsWith(INTAKE_PATH) ? pathname.slice(INTAKE_PATH.length).split("/")[0] : "";
   // 待合表示板(ロビーのモニター)。同じくログインの外で、トークンだけで開く。
@@ -493,6 +497,7 @@ function App() {
           <Route path="/pathways" element={<PathwayListPage />} />
           <Route path="/pathways/new" element={<PathwayEditorPage />} />
           <Route path="/pathways/:pathwayId" element={<PathwayEditorPage />} />
+          <Route path={`${PATHWAY_PRINT_PATH}/:pathwayId`} element={<PathwayPrintPage />} />
           <Route path="/physio-items" element={<PhysioItemPage />} />
           <Route path="/physio-item-layouts" element={<PhysioItemLayoutPage />} />
           <Route path="/physio-exam-types" element={<PhysioExamTypePage />} />

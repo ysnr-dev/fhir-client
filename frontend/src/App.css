@@ -29678,6 +29678,170 @@ input.nursing-picker__search {
   }
 }
 
+/* ---- パスシートの印刷(pages/PathwayPrintPage.tsx)。用紙の向きと大きさはページ側の @page で決める。 ---- */
+/* 続きの線と行の塗りは背景で描くので、ブラウザの「背景のグラフィック」の設定によらず印字する。 */
+.pathway-print {
+  color: var(--text-h);
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.pathway-print__page {
+  background: var(--paper);
+}
+
+.pathway-print__page + .pathway-print__page {
+  margin-top: 16px;
+  break-before: page;
+}
+
+.pathway-print__title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 4px;
+  font-size: 14pt;
+  font-weight: 600;
+}
+
+.pathway-print__organization {
+  font-size: 9pt;
+  font-weight: normal;
+}
+
+.pathway-print__info {
+  display: grid;
+  grid-template-columns: repeat(4, auto 1fr);
+  gap: 1px 8px;
+  margin: 0 0 6px;
+  font-size: 8.5pt;
+  line-height: 1.4;
+}
+
+.pathway-print__info dt {
+  font-weight: 600;
+}
+
+.pathway-print__info dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.pathway-print__info-wide {
+  grid-column: 2 / -1;
+}
+
+.pathway-print__table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 8.5pt;
+  line-height: 1.35;
+}
+
+.pathway-print__table th,
+.pathway-print__table td {
+  border: 1px solid var(--text-h);
+  padding: 2px 8px;
+  color: var(--text-h);
+  font-weight: normal;
+  text-align: center;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.pathway-print__table thead th {
+  background: var(--surface-stripe);
+}
+
+.pathway-print__table thead .pathway-print__heading {
+  padding: 0 0 3px;
+  border: none;
+  background: none;
+  text-align: left;
+}
+
+.pathway-print__heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 16px;
+}
+
+.pathway-print__heading-row > :first-child {
+  font-weight: 600;
+}
+
+.pathway-print__day-no {
+  font-weight: 600;
+}
+
+.pathway-print__major {
+  font-weight: 600;
+}
+
+.pathway-print__table tr {
+  break-inside: avoid;
+}
+
+/* 内容の有無でセルの高さが違っても、続きの線が同じ高さでつながるように上で揃える。 */
+.pathway-print__table tbody td {
+  vertical-align: top;
+}
+
+.pathway-print__table th.pathway-print__label {
+  text-align: left;
+  padding: 2px 4px;
+}
+
+.pathway-print__row--assessment .pathway-print__label,
+.pathway-print__row--task .pathway-print__label {
+  padding-left: 12px;
+}
+
+.pathway-print__table .pathway-print__row--unit th,
+.pathway-print__table .pathway-print__row--unit td {
+  background: var(--surface-stripe);
+}
+
+.pathway-print__row--unit .pathway-print__label {
+  font-weight: 600;
+}
+
+.pathway-print__category {
+  margin-right: 4px;
+  padding: 0 3px;
+  border: 1px solid var(--text-h);
+  font-size: 7pt;
+}
+
+.pathway-print__proper {
+  margin-left: 4px;
+  font-size: 7.5pt;
+}
+
+.pathway-print__cell-note {
+  margin: 0 -6px;
+  font-size: 7.5pt;
+  line-height: 1.25;
+}
+
+.pathway-print__legend {
+  margin-top: 4px;
+  font-size: 8pt;
+}
+
+@media print {
+  .pathway-print .karte-print__toolbar {
+    display: none;
+  }
+
+  .pathway-print__page + .pathway-print__page {
+    margin-top: 0;
+  }
+}
+
 /* ---- Web 問診の患者画面(pages/IntakePage.tsx)。スマホで開く前提で、文字と入力欄を大きくする。 ---- */
 .intake-page {
   min-height: 100vh;

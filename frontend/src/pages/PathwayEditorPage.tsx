@@ -8,6 +8,7 @@ import {
   usePathwayMutations,
 } from "../api/masterQueries";
 import { useSelfOrganization } from "../api/queries";
+import { pathwayPrintUrl } from "../api/reportsClient";
 import { buildFacilityPathwayXml, facilityPathwayXmlFileName } from "../fhir/epathMessageHelpers";
 import { organizationInstitutionNumber } from "../fhir/organizationHelpers";
 import { downloadBlob } from "../lib/download";
@@ -347,6 +348,11 @@ export function PathwayEditorPage() {
           <button type="button" onClick={() => setPreviewOpen(true)}>
             プレビュー
           </button>
+          {!isNew && detail.data && (
+            <button type="button" onClick={() => window.open(pathwayPrintUrl(detail.data.id), "_blank", "noopener")}>
+              印刷
+            </button>
+          )}
           {!isNew && (
             <button type="button" onClick={exportFacilityXml} disabled={!detail.data || !selfOrganization}>
               ePath 出力

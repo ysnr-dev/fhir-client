@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { isOrderSetOrderType } from "../fhir/orderSetHelpers";
-import { pathStepLabel, phaseLabelOf, type PathwayDraft, type PathwayTaskDraft } from "../fhir/pathwayHelpers";
+import { pathStepLabel, type PathwayDraft, type PathwayTaskDraft } from "../fhir/pathwayHelpers";
 import { buildPathwayPreview, previewPhaseRoute } from "../fhir/pathwayPreviewHelpers";
 import { buildPathwaySheet, type SheetAssessmentCell, type SheetTaskCell } from "../fhir/pathwaySheetHelpers";
 import { today } from "../lib/dates";
 import { Modal } from "./Modal";
 import { ORDER_SET_TYPE_LABELS } from "./orderSetRegistry";
+import { PathwayRouteSelects } from "./PathwayRouteSelects";
 import { PathwaySeriesLink } from "./PathwaySeriesLink";
 import { PathwayTaskTemplateModal } from "./PathwayTaskTemplateModal";
 
@@ -36,7 +37,6 @@ export function PathwaySheetPreviewModal({
   const { application, tasks } = buildPathwayPreview(draft, admissionDate || today(), route);
   const sheet = buildPathwaySheet(application);
   const visibleRows = sheet.rows.filter((row) => row.kind === "unit" || !collapsedUnits.has(row.unitKey));
-  const branching = draft.phases.length > 1 ? route.filter((phase) => phase.branches.length > 1) : [];
 
   function toggleUnit(unitKey: string) {
     setCollapsedUnits((current) => {
@@ -61,21 +61,7 @@ export function PathwaySheetPreviewModal({
               {route[0] && route[0] !== draft.phases[0] ? "開始日" : "入院日"}
               <input type="date" value={admissionDate} onChange={(e) => setAdmissionDate(e.target.value)} />
             </label>
-            {branching.map((phase) => (
-              <label key={phase.phaseKey} className="pathway-preview__field">
-                {`${phaseLabelOf(draft.phases, phase.phaseKey)} の次`}
-                <select
-                  value={choices.get(phase.phaseKey) ?? phase.branches[0]?.toPhaseKey ?? ""}
-                  onChange={(e) => choose(phase.phaseKey, e.target.value)}
-                >
-                  {phase.branches.map((branch) => (
-                    <option key={branch.key} value={branch.toPhaseKey}>
-                      {branch.toPhaseKey ? phaseLabelOf(draft.phases, branch.toPhaseKey) : "パスを終了"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
+            <PathwayRouteSelects phases={draft.phases} route={route} choices={choices} onChoose={choose} />
             <span>{`病日 ${sheet.dayGroups.length} 日分`}</span>
           </div>
 
