@@ -40,11 +40,16 @@ const DIFF_CONTEXT = 1;
 
 export function KartePrintDocument({ header, groups, history, deletions }: KartePrintDocumentProps) {
   return (
-    <table className="karte-print__sheet">
+    <table className="karte-print__sheet karte-print__section">
       <thead>
         <tr>
           <th colSpan={2} className="karte-print__header">
             {header}
+          </th>
+        </tr>
+        <tr>
+          <th colSpan={2} className="karte-print__section-title">
+            診療経過記録
           </th>
         </tr>
         <tr>

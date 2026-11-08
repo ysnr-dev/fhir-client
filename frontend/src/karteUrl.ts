@@ -240,8 +240,20 @@ export function findKarteTabGroup(key: string) {
   return KARTE_TAB_GROUPS.find((group) => (group.keys as readonly string[]).includes(key));
 }
 
-/** カルテ印刷の別タブ(pages/KartePrintPage)。期間と履歴の有無を URL で渡す。 */
+/** カルテ印刷の別タブ(pages/KartePrintPage)。期間・区画・履歴の有無を URL で渡す。 */
 export const KARTE_PRINT_PATH = "/karte-print";
+
+/** カルテ印刷で束ねる区画。紙面にはこの順で並ぶ。 */
+export const KARTE_PRINT_SECTIONS = [
+  { key: "cover", label: "表紙" },
+  { key: "conditions", label: "病名" },
+  { key: "summaries", label: "退院時サマリー" },
+  { key: "progress", label: "経過記録" },
+] as const;
+
+export type KartePrintSection = (typeof KARTE_PRINT_SECTIONS)[number]["key"];
+
+export const ALL_KARTE_PRINT_SECTIONS: KartePrintSection[] = KARTE_PRINT_SECTIONS.map((section) => section.key);
 
 /** Web 問診の患者画面。末尾にリンクのトークンが付く(/q/<token>)。 */
 export const INTAKE_PATH = "/q/";
@@ -249,10 +261,21 @@ export const INTAKE_PATH = "/q/";
 /** 待合表示板(ロビーのモニター)。末尾にリンクのトークンが付く(/board/<token>)。 */
 export const BOARD_PATH = "/board/";
 
-export function kartePrintUrl(patientId: string, from: string, to: string, history: boolean): string {
+export function kartePrintUrl(
+  patientId: string,
+  { from, to, history, sections }: { from: string; to: string; history: boolean; sections: KartePrintSection[] },
+): string {
   const params = new URLSearchParams({ from, to });
+  params.set("sections", sections.join(","));
   if (history) params.set("history", "1");
   return `${KARTE_PRINT_PATH}/${patientId}?${params.toString()}`;
+}
+
+/** URL の sections を定義の順にそろえる。無いときはすべての区画。 */
+export function parseKartePrintSections(value: string | null): KartePrintSection[] {
+  if (value === null) return ALL_KARTE_PRINT_SECTIONS;
+  const keys = new Set(value.split(","));
+  return ALL_KARTE_PRINT_SECTIONS.filter((key) => keys.has(key));
 }
 
 /** 上下分割モードで下ペインに出せるタブ(カルテは常に上ペインなので除く)。 */

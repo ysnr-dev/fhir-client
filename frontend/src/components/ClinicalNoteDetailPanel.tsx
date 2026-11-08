@@ -31,9 +31,12 @@ import { ResponseSchemaImages } from "./SchemaImageGallery";
 
 export function ClinicalNoteDetailPanel({
   note,
+  hideCountersign = false,
   children,
 }: {
   note: fhir4.Composition;
+  /** カウンターサインの状態と操作を出さない(印刷。確定者は記録情報に出る)。 */
+  hideCountersign?: boolean;
   /** 内容の後ろに続けて出す要素(詳細ページの FHIR JSON 表示など)。 */
   children?: ReactNode;
 }) {
@@ -67,7 +70,7 @@ export function ClinicalNoteDetailPanel({
       </fieldset>
 
       {/* 研修医・学生の記録は指導医のカウンターサインの状態と操作を続けて出す。 */}
-      {isCountersignNote(note) && <NoteCountersignPanel note={note} />}
+      {!hideCountersign && isCountersignNote(note) && <NoteCountersignPanel note={note} />}
 
       {(isDischargeSummary(note) || isNursingSummary(note)) && (
         <AdmissionInfo encounterId={dischargeSummaryEncounterId(note)} />

@@ -28,6 +28,7 @@ export * from "./healthMaintenance";
 export * from "./recordDeficiency";
 export * from "./populate";
 export * from "./karte";
+export * from "./recordExport";
 export * from "./earlyWarning";
 export * from "./antimicrobial";
 export * from "./chart";

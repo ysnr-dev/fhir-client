@@ -29407,7 +29407,8 @@ input.nursing-picker__search {
   text-align: center;
 }
 
-.karte-print__day td {
+.karte-print__day td,
+.karte-print__group td {
   font-weight: 600;
   background: var(--surface-stripe);
   print-color-adjust: exact;
@@ -29417,6 +29418,43 @@ input.nursing-picker__search {
 
 .karte-print__empty {
   text-align: center;
+}
+
+/* 区画(表紙・病名・退院時サマリー・診療経過記録)ごとに改ページする。 */
+.karte-print__section + .karte-print__section {
+  break-before: page;
+  margin-top: 16px;
+}
+
+.karte-print__sheet .karte-print__section-title {
+  border: none;
+  padding: 0 0 4px;
+  font-size: 12pt;
+  font-weight: 600;
+}
+
+.karte-print__cover {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+  margin: 8px 0;
+}
+
+.karte-print__cover-field {
+  display: contents;
+}
+
+.karte-print__cover dt {
+  font-size: 9pt;
+  color: var(--text);
+}
+
+.karte-print__cover dd {
+  margin: 0;
+}
+
+.karte-print__summary + .karte-print__summary td {
+  border-top-width: 2px;
 }
 
 .karte-print__card {
