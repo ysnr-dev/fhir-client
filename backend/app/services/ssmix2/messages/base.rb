@@ -3,8 +3,12 @@ module Ssmix2
     # メッセージ 1 件の組み立ての親。MSH / EVN / PID / PV1 を共通で組み、子が本体のセグメントと
     # SS-MIX ヘッダー項目(データ種別・診療日・オーダ No・処理区分・診療科)を決める。
     class Base
+      # storage は standard(HL7 v2.5、hl7 を CP50221 にして置く)か extended(HL7 CDA R2、hl7 を UTF-8 のまま置く。
+      # patient_id・document_folder・document_name・files はこのときだけ)。
       Result = Struct.new(:data_kind, :service_date, :order_no, :process, :department_code, :hl7, :warnings,
-                          keyword_init: true)
+                          :storage, :patient_id, :document_folder, :document_name, :files, keyword_init: true) do
+        def extended? = storage == "extended"
+      end
 
       # 患者基本・病名・アレルギーの「日付の概念がない」診療日。
       UNDATED = "-".freeze
@@ -34,7 +38,7 @@ module Ssmix2
 
       def result(data_kind:, service_date:, order_no:, process:, department_code:)
         Result.new(data_kind: data_kind, service_date: service_date, order_no: order_no, process: process,
-                   department_code: department_code, hl7: builder.to_s, warnings: warnings)
+                   department_code: department_code, hl7: builder.to_s, warnings: warnings, storage: "standard")
       end
 
       def msh(message_type)

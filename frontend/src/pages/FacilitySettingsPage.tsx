@@ -1723,6 +1723,15 @@ export function FacilitySettingsPage() {
                 />
               </label>
               <label>
+                拡張ストレージの出力先
+                <input
+                  type="text"
+                  className="facility-settings__path"
+                  value={ssmix2.extended_root_path}
+                  onChange={(e) => setSsmix2Draft({ ...ssmix2, extended_root_path: e.target.value })}
+                />
+              </label>
+              <label>
                 医療施設 ID
                 <input
                   type="text"

@@ -23,6 +23,11 @@ module Ssmix2
 
       def root_path = current["root_path"].to_s
 
+      def extended_root_path = current["extended_root_path"].to_s
+
+      # 拡張ストレージ(診療記録の CDA)へも出すか。有効で、拡張ストレージのルートが決まっているとき。
+      def extended_enabled? = enabled? && extended_root_path.strip.present?
+
       def facility_id = current["facility_id"].to_s
 
       def patient_id_digits = current["patient_id_digits"].to_i

@@ -9,6 +9,9 @@ module Ssmix2
       Patient Encounter Appointment AllergyIntolerance Condition
       ServiceRequest MedicationRequest DiagnosticReport Procedure MedicationAdministration
     ].freeze
+    # 拡張ストレージ(診療記録の CDA、§12)の対象。拡張ストレージのルートが決まっているときだけ拾う
+    # (診療記録は書き込みが多いので、出さない施設では記録しない)。
+    DOCUMENT_TYPES = %w[Composition].freeze
 
     # 書き込まれたリソース 1 件。resource は書いた内容(POST は応答の id を補い、Bundle 内の urn:uuid 参照を
     # 採番後の参照に置き換えたもの)。DELETE は resource が nil で type / id だけ持つ。
@@ -21,8 +24,12 @@ module Ssmix2
       if transaction_bundle?(path, request)
         Array(request["entry"]).any? { |entry| relevant_entry?(entry) }
       else
-        RESOURCE_TYPES.include?(resource_type_of(path, request))
+        relevant_type?(resource_type_of(path, request))
       end
+    end
+
+    def relevant_type?(type)
+      RESOURCE_TYPES.include?(type) || (DOCUMENT_TYPES.include?(type) && Settings.extended_enabled?)
     end
 
     def transaction_bundle?(path, request)
@@ -36,7 +43,7 @@ module Ssmix2
       method = entry.dig("request", "method").to_s.upcase
       return false unless Ssmix2Transaction::METHODS.include?(method)
 
-      RESOURCE_TYPES.include?(entry_type(entry))
+      relevant_type?(entry_type(entry))
     end
 
     def entry_type(entry)
@@ -147,6 +154,7 @@ module Ssmix2
           [Messages::RdeO11, Messages::OmlO33, Messages::OmdO03, Messages::OmgO19].map { |b| Plan.new(builder: b, written: w) }
         when "DiagnosticReport" then [Messages::OulR22, Messages::OruR01].map { |b| Plan.new(builder: b, written: w) }
         when "Procedure" then [Messages::RasO17, Messages::OmiZ23].map { |b| Plan.new(builder: b, written: w) }
+        when "Composition" then [Plan.new(builder: Cda::ProgressNote, written: w)]
         else []
         end
       end

@@ -331,9 +331,11 @@ class FacilitySettings < ApplicationRecord
   # 院内エージェントが取りに来て root_path(エージェントが解釈する絶対パス)の下に HL7 ファイルを置く。
   # facility_id は医療施設 ID 10 桁(SS-MIX ヘッダー用)、patient_id_digits は患者 ID の前ゼロの桁数、
   # sending_application は MSH-3。出力先と施設 ID は有効にするときだけ必須。
+  # extended_root_path は拡張ストレージ(診療記録の HL7 CDA R2)のルート。空なら診療記録は出さない。
   DEFAULT_SSMIX2 = {
     "enabled" => false,
     "root_path" => "",
+    "extended_root_path" => "",
     "facility_id" => "",
     "patient_id_digits" => 6,
     "sending_application" => "fhir-client"
@@ -557,6 +559,7 @@ class FacilitySettings < ApplicationRecord
         fields: {
           "enabled" => :boolean,
           "root_path" => SSMIX2_ROOT_PATH,
+          "extended_root_path" => SSMIX2_ROOT_PATH,
           "facility_id" => SSMIX2_FACILITY_ID,
           "patient_id_digits" => { integer: { min: 1, max: 15, unit: "桁" } },
           "sending_application" => SSMIX2_APPLICATION

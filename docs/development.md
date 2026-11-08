@@ -41,7 +41,7 @@ docker compose down -v       # DBデータも含めて削除
 | profile | サービス | 中身 |
 | --- | --- | --- |
 | `agent` | `agent` | 院内エージェント(別リポジトリ `../fhir-client-agent`)。レセコンの通知をカルテへ中継する |
-| `agent` | `agent-ssmix2` | 同じエージェントを `ssmix2-storage` で起動したもの。SS-MIX2 のメッセージを取りに来て `backend/tmp/ssmix2` に書く(施設設定の出力先には `/ssmix2/<医療施設ID>` と書く)。トランザクションストレージは `backend/tmp/ssmix2/transaction` |
+| `agent` | `agent-ssmix2` | 同じエージェントを `ssmix2-storage` で起動したもの。SS-MIX2 のメッセージを取りに来て `backend/tmp/ssmix2` に書く(施設設定の出力先には `/ssmix2/<医療施設ID>`、拡張ストレージの出力先には `/ssmix2/ext/<医療施設ID>` と書く)。トランザクションストレージは `backend/tmp/ssmix2/transaction` |
 | `orca` | `orca` | 日レセ検証環境(別リポジトリ `../weborca-dev`)。`http://localhost:8000/` |
 
 隣にそれぞれのリポジトリを clone したうえで、profile を指定して起動します(`--profile "*"` で全部)。

@@ -11,8 +11,9 @@ RSpec.describe "SS-MIX2 のエージェント向け API", type: :request do
       "name" => [{ "family" => "患者", "given" => ["太郎"] }], "gender" => "female", "birthDate" => "1990-01-02" }
   end
 
-  def enable(enabled: true)
-    FacilitySettings.current.update!(ssmix2: { "enabled" => enabled, "root_path" => "\\\\nas\\ssmix2", "facility_id" => "2219999998" })
+  def enable(enabled: true, extended_root_path: "")
+    FacilitySettings.current.update!(ssmix2: { "enabled" => enabled, "root_path" => "\\\\nas\\ssmix2", "facility_id" => "2219999998",
+                                               "extended_root_path" => extended_root_path })
     Ssmix2::Settings.reset_cache!
   end
 
@@ -57,10 +58,11 @@ RSpec.describe "SS-MIX2 のエージェント向け API", type: :request do
       expect(response).to have_http_status(:ok)
       body = JSON.parse(response.body)
       expect(body["enabled"]).to be(true)
-      expect(body["storage"]).to eq("root_path" => "\\\\nas\\ssmix2", "facility_id" => "2219999998")
+      expect(body["storage"]).to eq("root_path" => "\\\\nas\\ssmix2", "extended_root_path" => "", "facility_id" => "2219999998")
       message = body["messages"].sole
-      expect(message).to include("patient_id" => "000042", "service_date" => "-", "data_kind" => "ADT-00",
+      expect(message).to include("storage" => "standard", "patient_id" => "000042", "service_date" => "-", "data_kind" => "ADT-00",
                                  "order_no" => "ALL9", "process" => "INS", "department_code" => "-")
+      expect(message).not_to have_key("files")
       expect(message["transaction_at"]).to match(/\A\d{17}\z/)
       hl7 = Base64.strict_decode64(message["body_base64"]).encode("UTF-8", "CP50221")
       expect(hl7).to start_with("MSH|^~\\&|fhir-client|2219999998|GW|")
@@ -71,6 +73,36 @@ RSpec.describe "SS-MIX2 のエージェント向け API", type: :request do
       # 取ったままの分は配り直さない。
       get "/integrations/ssmix2/messages", headers: auth
       expect(JSON.parse(response.body)["messages"]).to be_empty
+    end
+
+    it "hands a clinical note to the extended storage as a CDA document with its contents file" do
+      enable(extended_root_path: "\\\\nas\\ssmix2-ext")
+      composition = { "resourceType" => "Composition", "id" => "c1", "meta" => { "versionId" => "1" }, "status" => "final",
+                      "type" => { "coding" => [{ "system" => "http://loinc.org", "code" => "11506-3" }] },
+                      "subject" => { "reference" => "Patient/p1" }, "date" => "2026-11-05T09:00:00+09:00",
+                      "author" => [{ "reference" => "Practitioner/doc1", "display" => "医師 一郎" }], "title" => "診療記録",
+                      "section" => [{ "code" => { "coding" => [{ "system" => "http://loinc.org", "code" => "51847-2" }] },
+                                      "text" => { "status" => "additional", "div" => '<div xmlns="http://www.w3.org/1999/xhtml"><p>A/P</p></div>' } }] }
+      Ssmix2Transaction.create!(occurred_at: Time.current, method: "PUT", path: "/Composition/c1", request: composition, response: composition)
+      stub_request(:get, %r{#{upstream_base}/Patient/p1}).to_return(status: 200, body: patient.to_json, headers: { "Content-Type" => "application/fhir+json" })
+      stub_request(:get, %r{#{upstream_base}/Practitioner/doc1}).to_return(status: 404, body: "", headers: {})
+      stub_request(:get, %r{#{upstream_base}/Organization}).to_return(status: 200, body: { resourceType: "Bundle", entry: [] }.to_json,
+                                                                      headers: { "Content-Type" => "application/fhir+json" })
+
+      get "/integrations/ssmix2/messages", headers: auth
+
+      body = JSON.parse(response.body)
+      expect(body["storage"]["extended_root_path"]).to eq("\\\\nas\\ssmix2-ext")
+      message = body["messages"].sole
+      expect(message).to include("storage" => "extended", "patient_id" => "000042", "service_date" => "20261105", "data_kind" => "11506-3",
+                                 "process" => "INS", "department_code" => "-", "document_folder" => "^経過記録^^11506-3^経過記録^LN",
+                                 "document_name" => "経過記録", "file_name" => "HL7CDA.xml")
+      expect(message["order_no"]).to match(/\A\d{15}\z/)
+      cda = Base64.strict_decode64(message["body_base64"]).force_encoding("UTF-8")
+      expect(cda).to start_with('<?xml version="1.0" encoding="UTF-8"?>')
+      expect(Nokogiri::XML(cda, &:strict).root.name).to eq("ClinicalDocument")
+      expect(message["files"].map { |f| f["name"] }).to eq(["_contents.xml"])
+      expect(Ssmix2Message.sole).to have_attributes(storage: "extended", document_folder: "^経過記録^^11506-3^経過記録^LN")
     end
 
     it "keeps a transaction pending when the upstream is rate limited, and fails it after repeated errors" do

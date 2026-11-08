@@ -1,9 +1,14 @@
 # 院内エージェントに渡す SS-MIX2 のメッセージ 1 件(docs/ssmix2-export-design.md §5.4)。
-# ヘッダー項目(ファイル名とフォルダを決める値)と、CP50221 に変換した電文の本体を持つ。
+# ヘッダー項目(ファイル名とフォルダを決める値)と本体を持つ。標準化ストレージ(standard)の本体は CP50221 に
+# 変換した HL7 の電文、拡張ストレージ(extended、§12)の本体は HL7 CDA R2 の主文書(UTF-8)で、
+# document_folder がデータ種別フォルダ名、files が主文書以外のファイル([{ name, body_base64 }])。
 class Ssmix2Message < ApplicationRecord
   # discarded は失敗を画面で破棄したもの(書かずに諦めた)。
   STATUSES = %w[pending leased written failed discarded].freeze
   PROCESSES = %w[INS DEL].freeze
+  STORAGES = %w[standard extended].freeze
+  # 拡張ストレージのコンテンツフォルダに置く主文書のファイル名。
+  DOCUMENT_FILE_NAME = "HL7CDA.xml".freeze
   # エージェントが取ったまま結果を返さないとき、配り直すまでの時間。
   LEASE = 5.minutes
   MAX_ATTEMPTS = 5
@@ -14,7 +19,11 @@ class Ssmix2Message < ApplicationRecord
   validates :patient_id, :service_date, :data_kind, :order_no, :process, :transaction_at, :body, presence: true
   validates :status, inclusion: { in: STATUSES }
   validates :process, inclusion: { in: PROCESSES }
+  validates :storage, inclusion: { in: STORAGES }
+  validates :document_folder, presence: true, if: :extended?
   validates :transaction_at, format: { with: /\A\d{17}\z/ }
+
+  def extended? = storage == "extended"
 
   scope :pending, -> { where(status: "pending") }
 
@@ -41,11 +50,12 @@ class Ssmix2Message < ApplicationRecord
     {
       id: id, created_at: created_at, updated_at: updated_at, patient_id: patient_id, service_date: service_date,
       data_kind: data_kind, order_no: order_no, process: process, status: status, attempts: attempts,
-      file_stem: file_stem, error: error, warnings: warnings
+      storage: storage, document_folder: document_folder, file_stem: file_stem, error: error, warnings: warnings
     }
   end
 
-  # ファイル名(拡張子なし、コンディションフラグ除く)。エージェントは末尾にフラグを足す。
+  # ファイル名(拡張子なし、コンディションフラグ除く)。拡張ストレージではコンテンツフォルダ名。
+  # エージェントは末尾にフラグを足す。
   def file_stem
     [patient_id, service_date, data_kind, order_no, transaction_at, department_code.presence || "-"].join("_")
   end

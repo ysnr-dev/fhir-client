@@ -13,6 +13,8 @@ export interface Ssmix2Failure {
 
 export interface Ssmix2Status {
   enabled: boolean;
+  /** 拡張ストレージ(診療記録の CDA)へも出すか。 */
+  extended_enabled: boolean;
   /** 起こしていない transaction と、エージェントがまだ書いていないメッセージの合計。 */
   pending: number;
   failed: number;
@@ -37,18 +39,24 @@ export interface Ssmix2FailedTransaction {
 
 export type Ssmix2MessageStatus = "pending" | "leased" | "written" | "failed" | "discarded";
 
+/** standard は標準化ストレージ(HL7 v2.5 のファイル)、extended は拡張ストレージ(診療記録の CDA のコンテンツフォルダ)。 */
+export type Ssmix2Storage = "standard" | "extended";
+
 export interface Ssmix2MessageSummary {
   id: number;
   created_at: string;
   updated_at: string;
+  storage: Ssmix2Storage;
   patient_id: string;
   service_date: string;
   data_kind: string;
+  /** 拡張ストレージのデータ種別フォルダ名(`^経過記録^^11506-3^経過記録^LN`)。標準化ストレージでは null。 */
+  document_folder: string | null;
   order_no: string;
   process: "INS" | "DEL";
   status: Ssmix2MessageStatus;
   attempts: number;
-  /** ファイル名(コンディションフラグを除く)。 */
+  /** ファイル名(拡張ストレージではコンテンツフォルダ名。コンディションフラグを除く)。 */
   file_stem: string;
   error: string | null;
   warnings: string[];

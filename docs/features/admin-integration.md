@@ -189,7 +189,8 @@ backend が discovery（`GET {URL}/cds-services`、5 分キャッシュ）で読
 `GET /integrations/ssmix2/messages` で SS-MIX2 のメッセージを取りに来て標準化ストレージへ書き、
 `POST /integrations/ssmix2/messages/ack` で結果を返します（`docs/ssmix2-export-design.md`）。エージェントに
 `SSMIX2_TRANSACTION_DIR` を置くと、書いたメッセージをトランザクションストレージ（`TR_<日時>_<処理系統番号>.DAT`）
-にも追記します。
+にも追記します。施設設定に拡張ストレージの出力先があれば、確定した診療記録の HL7 CDA R2 も同じポーリングで受け取り、
+拡張ストレージの規則（データ種別フォルダ / コンテンツフォルダ）で置きます。
 日レセ連携と同じ院内サーバーで動かすときは 2 つ目のプロセスとして起動します。
 
 ### 画面

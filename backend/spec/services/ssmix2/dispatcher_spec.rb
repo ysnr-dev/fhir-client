@@ -51,6 +51,22 @@ RSpec.describe Ssmix2::Dispatcher do
                                                                  [Ssmix2::Messages::RasO17, "hub1"], [Ssmix2::Messages::OmiZ23, "hub1"]])
   end
 
+  it "picks up compositions only while the extended storage is on" do
+    composition = { "resourceType" => "Composition", "id" => "c1", "status" => "final" }
+    ssmix2_enable!(extended: false)
+    expect(described_class.relevant?("PUT", "/Composition/c1", composition)).to be(false)
+
+    ssmix2_enable!(extended: true)
+    expect(described_class.relevant?("PUT", "/Composition/c1", composition)).to be(true)
+    expect(described_class.relevant?("DELETE", "/Composition/c1", nil)).to be(true)
+    bundle = { "resourceType" => "Bundle", "type" => "transaction",
+               "entry" => [{ "request" => { "method" => "DELETE", "url" => "QuestionnaireResponse/q1" } },
+                           { "request" => { "method" => "DELETE", "url" => "Composition/c1" } }] }
+    expect(described_class.relevant?("POST", "/", bundle)).to be(true)
+    plans = described_class.plan(ssmix2_transaction(method: "PUT", path: "/Composition/c1", request: composition, response: composition))
+    expect(plans.map { |p| [p.builder, p.written.type, p.written.id] }).to eq([[Ssmix2::Cda::ProgressNote, "Composition", "c1"]])
+  end
+
   it "takes the version of a PUT entry from the etag when the response has no location" do
     encounter = { "resourceType" => "Encounter", "id" => "e1", "status" => "in-progress" }
     request = { "resourceType" => "Bundle", "type" => "transaction",

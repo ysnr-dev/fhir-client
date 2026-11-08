@@ -10,6 +10,7 @@ module Integrations
         today = ::Ssmix2::Hl7::Stamp.now.beginning_of_day
         render json: {
           enabled: ::Ssmix2::Settings.enabled?,
+          extended_enabled: ::Ssmix2::Settings.extended_enabled?,
           pending: Ssmix2Transaction.where(status: %w[pending building]).count + Ssmix2Message.where(status: %w[pending leased]).count,
           failed: Ssmix2Transaction.where(status: "failed").count + Ssmix2Message.where(status: "failed").count,
           written_today: Ssmix2Message.where(status: "written").where(written_at: today..).count,

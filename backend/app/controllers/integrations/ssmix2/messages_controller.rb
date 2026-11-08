@@ -12,7 +12,8 @@ module Integrations
         messages = lease(limit)
         render json: {
           enabled: true,
-          storage: { root_path: ::Ssmix2::Settings.root_path, facility_id: ::Ssmix2::Settings.facility_id },
+          storage: { root_path: ::Ssmix2::Settings.root_path, extended_root_path: ::Ssmix2::Settings.extended_root_path,
+                     facility_id: ::Ssmix2::Settings.facility_id },
           messages: messages.map { |message| message_json(message) }
         }
       end
@@ -66,9 +67,11 @@ module Integrations
         end
       end
 
+      # 拡張ストレージ(storage: extended)の行は body が主文書(file_name)で、files が同じコンテンツフォルダに置く他のファイル。
       def message_json(message)
-        {
+        json = {
           id: message.id,
+          storage: message.storage,
           patient_id: message.patient_id,
           service_date: message.service_date,
           data_kind: message.data_kind,
@@ -78,6 +81,10 @@ module Integrations
           transaction_at: message.transaction_at,
           body_base64: Base64.strict_encode64(message.body)
         }
+        return json unless message.extended?
+
+        json.merge(document_folder: message.document_folder, document_name: message.document_name,
+                   file_name: Ssmix2Message::DOCUMENT_FILE_NAME, files: message.files)
       end
     end
   end

@@ -1,12 +1,15 @@
 # SS-MIX2 標準化ストレージ出力の設計
 
 診療データを上流 FHIR サーバーへ書くたびに、SS-MIX2 標準化ストレージ(HL7 v2.5 のファイルを
-患者 ID / 診療日 / データ種別のフォルダに置く形式)へも書き出す。状態: **第 2 段階まで実装済み**(第 1 段階:
+患者 ID / 診療日 / データ種別のフォルダに置く形式)へも書き出す。状態: **第 3 段階まで実装済み**(第 1 段階:
 患者基本・入退院・転棟・外来受付・アレルギー・病名・処方・注射・検体検査オーダー・検体検査結果。第 2 段階:
 処方・注射の実施、食事オーダー、放射線・内視鏡・生理のオーダー、放射線・内視鏡の実施、生理検査結果、
-入院予定・退院予定・転科転棟予定・担当医変更・外出泊、トランザクションストレージ)。
+入院予定・退院予定・転科転棟予定・担当医変更・外出泊、トランザクションストレージ。第 3 段階: 拡張ストレージへの
+診療記録の HL7 CDA R2 出力、§12)。
 仕様の原典は日本医療情報学会「SS-MIX2 標準化ストレージ仕様書 Ver.1.2j」「同 構成の説明と
-構築ガイドライン Ver.1.2j」「同 コード表」(2026-08 版、`backend/tmp/docs/ssmix2/` に PDF)。
+構築ガイドライン Ver.1.2j」「同 コード表」「SS-MIX2 拡張ストレージ 構成の説明と構築ガイドライン Ver.1.2j」「同 標準文書コード表」
+(2026-08 版)と、JAHIS 標準 17-007「地域医療連携における経過記録構造化記述規約 Ver.1.0」・15-003「診療文書構造化記述規約
+共通編 Ver.1.0」(`backend/tmp/docs/ssmix2/` に PDF)。
 
 ## 1. この設計が守っていること
 
@@ -50,6 +53,7 @@ backend にジョブ基盤を足さない。HL7 の組み立てはエージェ�
 |---|---|---|
 | `enabled` | false | 出力するか。**有効・無効はこの値だけを正とする**(外部システム連携側の enabled は見ない) |
 | `root_path` | "" | 標準化ストレージのルートフォルダ。エージェントが解釈する絶対パス(UNC・ドライブ文字可)。有効のとき必須 |
+| `extended_root_path` | "" | 拡張ストレージ(診療記録の HL7 CDA R2、§12)のルートフォルダ。標準化ストレージとは別のフォルダにする(拡張ストレージ構築ガイドライン 2.2(1))。空なら診療記録は記録も出力もしない |
 | `facility_id` | "" | 医療施設 ID 10 桁(都道府県 2 + 機関区分 1 + 機関コード 6 + チェックデジット 1)。SS-MIX ヘッダーに使い、ルートフォルダ名の推奨値。有効のとき必須 |
 | `patient_id_digits` | 6 | 患者 ID の桁数。足りなければ前ゼロ(ガイドライン表 2.3-1。1〜15) |
 | `sending_application` | "fhir-client" | MSH-3 |
@@ -166,6 +170,8 @@ frontend と同じ約束(ServiceRequest.category の `http://fhir-client.local/C
 | 放射線・内視鏡・生理の ServiceRequest 作成・更新・取消 | OMG^O19(ORC NW/CA + 親 PA + 明細ごとの子 CH。OBR-4 は放射線が JJ1017、他はローカル) | OMG-01 / 02 / 03 | ORC-9 オーダー日 | ヘッダーの番号(子は明細の番号、ORC-8 / OBR-29 で親を指す) | INS / DEL(取消は NW/CA の制御レコードのみ) |
 | 放射線・内視鏡の実施(ハブ Procedure)作成・更新・削除 | OMI^Z23(OBR-7 実施日時、OBR-25 F、子ごとの ZE1 手技、最初の子に実施した手技・使用物品(造影剤 HOT9・器材)・被曝線量の OBX、IPC 受付番号とモダリティ) | OMG-11 / 12 | OBR-7 実施日 | ヘッダーの番号(ORC-3 / OBR-3 / IPC-1 に実施の番号) | INS / DEL |
 | 生理検査の所見レポート(DiagnosticReport、category order-type `physio`)作成・更新 | ORU^R01(OBR-4 検査項目、OBR-7 検査日時、OBR-25 F/C/P、所見と判定を OBX の TX) | OMG-13 | OBR-7 検査日 | 元オーダーの番号 | INS(訂正も INS) / DEL |
+| 診療記録(Composition、type 11506-3 / 11488-4)の確定(final / amended)の作成・更新 | **HL7 CDA R2**(§12、拡張ストレージ) | `11506-3`(看護職の記録は `28623-7`)。フォルダは `^経過記録^^11506-3^経過記録^LN` / `^看護記録^^28623-7^看護記録^LN` | Composition.date | Composition の番号(特定キー) | INS |
+| 診療記録の DELETE、確定 → 下書き、entered-in-error | 同上(前の版の内容) | 同上 | 同上 | 同上 | DEL(コンテンツフォルダを `_0` に改名するだけ) |
 
 実施記録は「ハブの Procedure(basedOn オーダー)+ partOf の子」で揃っている(`frontend/src/fhir/*PerformHelpers.ts`、
 `radResultHelpers.ts`)。Dispatcher は transaction Bundle の `urn:uuid` 参照を採番後の参照に置き換えるので、同じ
@@ -271,7 +277,8 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
         "transaction_at": "20261104103012345", "body_base64": "..." } ] }
   ```
 
-  施設設定が無効なら `{ "enabled": false, "messages": [] }`。
+  施設設定が無効なら `{ "enabled": false, "messages": [] }`。`storage` には `extended_root_path` も入り、拡張ストレージの
+  メッセージは `"storage": "extended"` に `document_folder` / `document_name` / `file_name` / `files: [{ name, body_base64 }]` が付く(§12)。
 - `POST /integrations/ssmix2/messages/ack` `{ "written": [12, 13], "failed": [{ "id": 14, "error": "..." }] }`
   — written / failed に更新。failed は `attempts` を見て pending に戻すか諦める。
 - `GET /integrations/ssmix2/status` — ログイン認証(`UserAuthentication` のみの BaseController。
@@ -448,6 +455,8 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
    ORU(生理検査結果)/ A14・A27・A16・A25・A15・A26(入退院・転科転棟の予定)/ A54・A55(担当医)/
    A21・A52・A22・A53(外出泊)、エージェントのトランザクションストレージ。
 8. A12(移動取消。入院患者一覧の「移動取消」で起こす)。
+9. 第 3 段階: 拡張ストレージ(§12)。施設設定 `extended_root_path`、`ssmix2_messages.storage`、`Ssmix2::Cda::*`、エージェントの
+   `WriteDocument`。
 
 ## 11. 検証
 
@@ -480,3 +489,81 @@ builder ごとの spec は FHIR の fixture(`spec/fixtures/ssmix2/`)→ 期待�
 5. 施設設定画面の状態が「未出力 0・最終出力 日時」になること。エージェントを止めて書いた分が
    「未出力 n」になり、再起動で消えること。
 6. 出力を無効にして書いても `ssmix2_transactions` が増えないこと。
+
+拡張ストレージ(開発環境):
+
+1. 施設設定の拡張ストレージの出力先に `/ssmix2/ext/2219999998` を保存し、backend を再起動(migration 後)・`agent-ssmix2` を `--build` で起こす。
+2. テスト太郎の診療記録を確定で登録(SOAP + 画像)→
+   `backend/tmp/ssmix2/ext/2219999998/000/000/0000001/<診療日>/^経過記録^^11506-3^経過記録^LN/<患者ID>_<診療日>_11506-3_<15桁>_<17桁>_<科>_1/`
+   に `HL7CDA.xml` と `_contents.xml` ができる。
+3. 同じ記録を編集保存 → 前のフォルダが `_2`、新しい `_1`。削除 → 両方 `_0` になり新しいフォルダは増えない。下書きの保存は何も出ない。
+   看護師(nurse)の記録は `^看護記録^^28623-7^看護記録^LN` に入る。
+4. `xmllint --noout HL7CDA.xml` で well-formed を確かめ、規約 17-007 の記述サンプルと見比べる(templateId、セクションの code /
+   templateId、nullFlavor="NI"、observationMedia、recordTarget の IDE / SYL)。
+
+## 12. 拡張ストレージ(診療記録の HL7 CDA R2)
+
+標準化ストレージの対象外である診療記録(Composition)は、「SS-MIX2 拡張ストレージ 構成の説明と構築ガイドライン」の規則で
+**別のルートフォルダ**(施設設定 `extended_root_path`)に置き、中身は JAHIS 17-007「地域医療連携における経過記録構造化記述規約」
+(C-CDA Progress Note (V2) の JP 適用。ヘッダは 15-003 共通編)の CDA R2 文書にする。記録 → 組み立て → エージェントの流れは
+標準化ストレージと同じで、`ssmix2_messages.storage` が `extended` の行だけ置き方が変わる。
+
+### 12.1 対象と処理区分
+
+- 対象は type が LOINC 11506-3(経過記録)か 11488-4(他科依頼回答)の Composition。チーム回診記録・看護職の経過記録も含む。
+  退院時サマリー(18842-5)・看護サマリーは別規約の文書なので出さない(builder が nil を返す)。
+- **確定(final / amended)だけ**を出す。下書き(preliminary)は出さない。確定済みが下書きに戻った・entered-in-error になった・DELETE されたときは
+  DEL(前の版、DELETE は `_history` の最後の版の内容で組む)。確定の編集・カウンターサインは INS(前の有効フォルダが `_2` になる)。
+- Composition の書き込みは `extended_root_path` が空でなく `enabled` のときだけ `ssmix2_transactions` に控える
+  (`Dispatcher::DOCUMENT_TYPES`、`Settings.extended_enabled?`)。診療記録は書き込みが多いので、出さない施設では記録しない。
+
+### 12.2 フォルダとファイル(拡張ストレージ構築ガイドライン 2.2)
+
+```
+<extended_root_path>/患者ID先頭3/次の3/患者ID/診療日/データ種別フォルダ/コンテンツフォルダ/
+  HL7CDA.xml        主文書(CDA、UTF-8、BOM 無し)
+  _contents.xml     コンテンツ定義ファイル(2.2(7)。Document name="HL7CDA.xml" mime="text/x-cda-r2+xml")
+```
+
+| 項目 | 決め方 |
+|---|---|
+| データ種別フォルダ | `[ローカル文書コード]^ローカル文書名称^[ローカル体系]^標準文書コード^標準文書名称^LN`。ローカル文書コードは置かず、医師等の記録は `^経過記録^^11506-3^経過記録^LN`、看護職の記録(category `nursing`)は `^看護記録^^28623-7^看護記録^LN`(標準文書コード表の「記録」) |
+| コンテンツフォルダ | `患者ID_診療日_データ種別コード_特定キー_発生日時_診療科コード_フラグ`。データ種別コードは標準文書コード(`11506-3` / `28623-7`)。`ssmix2_messages` の `data_kind` にはこれを入れ、`document_folder` にフォルダ名を持つ |
+| 診療日 | `Composition.date` の日本時間の日付 |
+| 特定キー | `Ssmix2::OrderNumber` で `Composition/{id}` に採番した 15 桁(修正・削除で同じ番号。インデックス DB の定義どおり半角数字) |
+| 診療科 | Composition の `order-department` 拡張の Organization の SS-MIX2 診療科コード、無ければ `-` |
+| INS | 同じ特定キーの `_1` フォルダを `_2` に改名し、新しい `_1` フォルダに**全ファイル**を置く(`.tmp` に書いて rename) |
+| DEL | `_1` / `_2` を `_0` に改名するだけ。新しいフォルダは作らない(2.2(5)⑥) |
+| 冪等性 | 同じ名前(フラグ除く)のフォルダがあれば何もしない(書きかけの `.tmp` は数えない) |
+| トランザクションストレージ | 拡張トランザクションストレージ(2.3)と拡張インデックス DB(2.4)はどちらも任意で、**作らない**。標準化ストレージのトランザクションストレージにも CDA は追記しない |
+
+### 12.3 CDA 文書(`Ssmix2::Cda::ProgressNote`)
+
+- ヘッダ(共通編 6 章、17-007 表 3-3): `realmCode JP`、`typeId 2.16.840.1.113883.1.3 / POCD_HD000040`、`templateId 1.2.392.200270.3.1`、
+  `code 11506-3`(規約推奨の単一コード。看護記録もデータ種別フォルダだけを分ける)、`title` = Composition.title、
+  `effectiveTime` = Composition.date、`confidentialityCode N`、`languageCode ja-JP`、`setId` = Composition id、
+  `versionNumber` = `meta.versionId`、`id` = `{Composition id}.{版}`。版が 2 以上なら `relatedDocument typeCode=RPLC` で前の版を指す。
+- OID(共通編 5.1(3)): 患者 ID `1.2.392.200250.3.3.1.N`、利用者 ID `1.2.392.200250.3.3.2.N`、施設 `1.2.392.200250.2.2.1.N`、
+  N = `1` + 医療施設 ID 10 桁(施設設定 `facility_id`)。`Cda::Oids`。
+- `recordTarget`: 患者 ID(標準化ストレージと同じ前ゼロ)、氏名 IDE / SYL、性別(2.16.840.1.113883.5.1)、生年月日、住所(HP)、電話。
+- `author`: 1 つ目は記載者(Composition.author、`time` は最終更新日時 = `meta.lastUpdated`、ID は医籍登録番号か FHIR id)、
+  2 つ目は作成システム(`assignedAuthoringDevice`、`manufacturerModelName` = `sending_application`)。どちらも representedOrganization は自院。
+- `custodian`: 自院(`context.institution`)。名称・電話・住所が無ければ `nullFlavor="NI"`(warning)。
+- `legalAuthenticator`: 確定の署名(`attester mode=legal`)があれば `time` と `signatureCode S`。
+- `documentationOf/serviceEvent`(classCode PCPR): `effectiveTime low = high` = Composition.date、`performer` = 記載者。`componentOf` は使わない(規約で N)。
+- ボディ(17-007 4 章): セクションは LOINC で対応表(`SECTIONS`)に通し templateId を付ける(S 61150-9 / O 61149-1 / A 51848-0 /
+  P 18776-5 / A&P 51847-2 / 自由記載 77599-9)。title は Composition のセクション見出しのまま(付録 Case4)。
+  **「評価」と「治療計画」の 2 つか「評価と計画」の 1 つが必須**なので、無いものは `<section nullFlavor="NI">` と空の `<text/>` を補う。
+  対応表に無いコードは自由記載として出し warning。対象プロブレム(11450-4)は共通編 7.1.4 の追加セクション(C-CDA Problem Section の
+  templateId)として `list/item` で出す。
+- 本文(`Cda::Narrative`): FHIR Narrative の XHTML を NarrativeBlock に写す。p / h / blockquote / pre → `paragraph`(見出しは Bold)、
+  strong → `content styleCode=Bold`、em → Italics、u → Underline、色・大きさ・取り消し線・リンクは文字だけ、ul / ol → `list` + `item`、
+  br → `br`、table はそのまま、hr は捨てる。`img` の data: URI は `renderMultiMedia referencedObject=MMn` + `entry/observationMedia`
+  (`value mediaType representation=B64`、埋め込み。4.2.7)、それ以外の画像は捨てて warning。
+- 文字コードは UTF-8(CP50221 への変換と「落とした字」の warning は通さない)。
+
+### 12.4 エージェント(`internal/adapter/ssmix2/document.go`)
+
+`storage: "extended"` のメッセージは `WriteDocument(extended_root_path, m)`。拡張ストレージのルートも `SSMIX2_ALLOWED_ROOT` で検査し、
+未設定・拒否のときは**その種のメッセージだけ** ack せずに残す(標準化ストレージの分は書く)。データ種別フォルダ名は `_` とパス区切りを
+含まず 180 字以内、`^` 区切りで 6 成分であることを検証する。

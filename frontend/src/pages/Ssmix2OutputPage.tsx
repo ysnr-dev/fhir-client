@@ -6,7 +6,7 @@ import {
   useSsmix2Failures,
   useSsmix2Warnings,
 } from "../api/queries";
-import type { Ssmix2FailureSelection, Ssmix2MessageStatus } from "../api/ssmix2Client";
+import type { Ssmix2FailureSelection, Ssmix2MessageStatus, Ssmix2MessageSummary } from "../api/ssmix2Client";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { formatDateTime } from "../lib/dates";
@@ -26,6 +26,11 @@ const MESSAGE_STATUS_LABELS: Record<Ssmix2MessageStatus, string> = {
   failed: "失敗",
   discarded: "破棄",
 };
+
+/** データ種別の表示。拡張ストレージはデータ種別フォルダ名で出す。 */
+function dataKindOf(message: Ssmix2MessageSummary): string {
+  return message.storage === "extended" ? (message.document_folder ?? message.data_kind) : message.data_kind;
+}
 
 export function Ssmix2OutputPage() {
   const [tab, setTab] = useState<Tab>("failures");
@@ -231,7 +236,7 @@ function WarningsTab() {
             {messages.map((message) => (
               <tr key={message.id}>
                 <td className="ssmix2-output__nowrap">{formatDateTime(message.created_at)}</td>
-                <td className="ssmix2-output__nowrap">{message.data_kind}</td>
+                <td className="ssmix2-output__nowrap">{dataKindOf(message)}</td>
                 <td className="ssmix2-output__nowrap">{message.patient_id}</td>
                 <td className="ssmix2-output__nowrap">{message.service_date}</td>
                 <td className="ssmix2-output__nowrap">{message.order_no}</td>

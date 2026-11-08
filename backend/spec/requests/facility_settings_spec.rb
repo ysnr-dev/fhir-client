@@ -790,7 +790,7 @@ RSpec.describe "FacilitySettings", type: :request do
       get "/facility_settings"
 
       expect(JSON.parse(response.body)["ssmix2"]).to eq(
-        "enabled" => false, "root_path" => "", "facility_id" => "", "patient_id_digits" => 6,
+        "enabled" => false, "root_path" => "", "extended_root_path" => "", "facility_id" => "", "patient_id_digits" => 6,
         "sending_application" => "fhir-client"
       )
     end
@@ -798,15 +798,15 @@ RSpec.describe "FacilitySettings", type: :request do
     it "stores the settings" do
       with_admin_token(nil) do
         patch "/facility_settings",
-              params: { ssmix2: { enabled: true, root_path: "\\\\nas\\ssmix2", facility_id: "2219999998",
-                                  patient_id_digits: "8", sending_application: "HIS01" } },
+              params: { ssmix2: { enabled: true, root_path: "\\\\nas\\ssmix2", extended_root_path: "\\\\nas\\ssmix2-ext",
+                                  facility_id: "2219999998", patient_id_digits: "8", sending_application: "HIS01" } },
               as: :json
       end
 
       expect(response).to have_http_status(:ok)
       expect(JSON.parse(response.body)["ssmix2"]).to eq(
-        "enabled" => true, "root_path" => "\\\\nas\\ssmix2", "facility_id" => "2219999998",
-        "patient_id_digits" => 8, "sending_application" => "HIS01"
+        "enabled" => true, "root_path" => "\\\\nas\\ssmix2", "extended_root_path" => "\\\\nas\\ssmix2-ext",
+        "facility_id" => "2219999998", "patient_id_digits" => 8, "sending_application" => "HIS01"
       )
     end
 

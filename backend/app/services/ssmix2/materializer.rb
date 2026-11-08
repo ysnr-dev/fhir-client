@@ -51,9 +51,7 @@ module Ssmix2
     def store(transaction, results)
       Ssmix2Message.transaction do
         results.each_with_index do |result, index|
-          encoded = Hl7::Charset.encode(result.hl7)
-          warnings = result.warnings.dup
-          warnings << "変換できない字を「?」にしました: #{encoded.dropped.join(' ')}" if encoded.dropped.any?
+          body, warnings = encode(result)
           Ssmix2Message.create!(
             ssmix2_transaction: transaction,
             patient_id: patient_id_of(result),
@@ -63,9 +61,13 @@ module Ssmix2
             process: result.process,
             department_code: Codes.file_department_code(result.department_code),
             transaction_at: transaction_at(result, index),
-            body: encoded.bytes,
+            body: body,
             warnings: warnings,
-            status: "pending"
+            status: "pending",
+            storage: result.storage || "standard",
+            document_folder: result.document_folder,
+            document_name: result.document_name,
+            files: result.files || []
           )
         end
         transaction.update!(status: results.empty? ? "skipped" : "done", processed_at: Time.current,
@@ -73,8 +75,20 @@ module Ssmix2
       end
     end
 
-    # PID-3 から患者 ID を取る(ファイル名とフォルダに使う)。
+    # 標準化ストレージの HL7 は CP50221 にし、落とした字を warning に残す。拡張ストレージの CDA は UTF-8 のまま。
+    def encode(result)
+      return [result.hl7.encode("UTF-8").b, result.warnings.dup] if result.extended?
+
+      encoded = Hl7::Charset.encode(result.hl7)
+      warnings = result.warnings.dup
+      warnings << "変換できない字を「?」にしました: #{encoded.dropped.join(' ')}" if encoded.dropped.any?
+      [encoded.bytes, warnings]
+    end
+
+    # 患者 ID(ファイル名とフォルダに使う)。CDA は Result が持ち、HL7 は PID-3 から取る。
     def patient_id_of(result)
+      return result.patient_id if result.patient_id.present?
+
       pid = result.hl7.split("\r").find { |segment| segment.start_with?("PID|") }
       value = pid.to_s.split("|")[3].to_s.split("^").first.to_s
       raise "患者 ID が決まりません" if value.empty?
