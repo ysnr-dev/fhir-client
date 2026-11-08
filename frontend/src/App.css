@@ -29284,11 +29284,17 @@ input.nursing-picker__search {
 
 /* ---- カルテ印刷 ---- */
 
-/* 期間と履歴の指定。 */
+/* 期間・区画・履歴の指定。期間、区画の群(横に並べ、群の中は縦)、印刷ボタンの順に上から置く。 */
 .karte-print-form {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.karte-print-form__dates {
+  display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
   gap: 12px;
 }
 
@@ -29303,7 +29309,48 @@ input.nursing-picker__search {
 .karte-print-form .karte-print-form__check {
   flex-direction: row;
   align-items: center;
-  height: var(--control-height);
+  gap: 6px;
+  min-height: 24px;
+  color: var(--text-h);
+}
+
+/* 群の列は均等の幅にする。幅は一番広い群に合わせ、ペインが狭ければ列ごとに同じだけ縮めて中で折り返す。 */
+.karte-print-form__sections {
+  display: grid;
+  grid-template-columns: repeat(var(--karte-print-groups), minmax(0, 1fr));
+  gap: 12px 32px;
+  width: max-content;
+  max-width: 100%;
+}
+
+.karte-print-form__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.karte-print-form .karte-print-form__group-title {
+  font-weight: 600;
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.karte-print-form__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.karte-print-form__sub {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.karte-print-form__sub:has(input:disabled) {
+  opacity: 0.5;
 }
 
 /* 印刷用の別タブ。画面でも A4 の幅で紙面を見せる(余白 12mm を除いた 186mm)。 */
