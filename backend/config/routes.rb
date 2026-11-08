@@ -190,6 +190,8 @@ Rails.application.routes.draw do
     get "regimen_masters/:id/pdf", to: "regimen_master_pdfs#show"
     # 検体検査結果の報告書(DiagnosticReport 1 件ぶん)
     get "lab_results/:report_id/pdf", to: "lab_result_pdfs#show"
+    # 退院時サマリー(Composition 1 件ぶん。確定したものだけ)
+    get "discharge_summaries/:composition_id/pdf", to: "discharge_summary_pdfs#show"
     # DPC 様式1 の提出ファイル(FF1)。対象月(退院月)の一覧と、ファイル本体。
     get "dpc_form1", to: "dpc_form1#show"
     get "dpc_form1/file", to: "dpc_form1#file"

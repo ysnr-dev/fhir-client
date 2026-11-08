@@ -1,6 +1,6 @@
 # 退院時サマリー(退院時要約)と文書作成の督促の設計
 
-**状態: 第 1 段を実装済(2026-09-17)。** PDF(第 2 段)は未着手。
+**状態: 第 1 段を実装済(2026-09-17)。PDF(第 2 段)を実装済(2026-11-08)。**
 
 本文中の区別は他の設計書と同じ(［事実］/［導出］/［提案］)。
 
@@ -112,15 +112,25 @@ GitHub Actions の purge)。通知の器には `restriction.period.end`(`dueDate
 - 通知一覧の内容セル: 対象日 = 退院日、「退院時サマリー 未作成(期限 MM-DD)」。期限を過ぎていれば
   「期限超過 n 日」を赤で併記(`documentDueRowOf` が今日と比べる。priority は変えない)。
 
-## 6. 第 2 段: PDF(未着手)
+## 6. 第 2 段: PDF(実装済、2026-11-08)
 
-- backend `Reports::DischargeSummaryReport` + `reports/discharge_summary_renderer.rb` + 同梱 `.tlf`
-  (処方箋 `prescription_renderer.rb` と同じ「FHIR から直接描く」前例)。ルート
-  `GET /reports/discharge_summaries/:composition_id/pdf`。
-- 描く内容: 患者メタ・入院情報(日付・診療科・主治医・転帰)・各セクションの見出しと本文
-  (XHTML → プレーンテキスト)・埋め込みテンプレート回答。長文の改ページは ThinReports のリストで行う
-  (ここが実装上のリスク)。
-- フロント: `reportsClient.ts` に URL を足し、カードの PDF ボタンを `note` かつ type 18842-5 のときに出す。
+- backend `DischargeSummaryReport`(`app/services/discharge_summary_report.rb`)+ `Reports::DischargeSummaryRenderer`
+  + 同梱 `lib/report_layouts/discharge_summary.tlf`(検査結果報告書と同じ「FHIR から直接描く」作り。マスタの
+  `report_layouts` には登録しない)。ルート `GET /reports/discharge_summaries/:composition_id/pdf`。
+- 読み込み: batch Bundle 1 本で `Composition?_id=&_include=Composition:subject&_include=Composition:encounter` と自院
+  Organization。type が 18842-5 でなければ 422(`not_discharge_summary`)、下書き(preliminary)は 422
+  (`discharge_summary_draft`)、無い・入力誤りは 404。入院が引けなくても入院の欄を空にして刷る。
+- 紙面(A4 縦): 見出しに自院・患者・印刷日時、入院の行(入院日 〜 退院日・在院日数・診療科・主治医・転帰)、
+  記録の行(記録日時・状態・診療科・作成者・確定者と確定日時)。本文は保存の順にセクションの見出しと本文。
+  - ［事実］本文は保存済みの `section.text.div`。entry のセクション(退院時診断・手術処置・退院時処方・アレルギー)は
+    表示名が焼き付けてあり、テンプレート記入も本文に平文で入っているので、参照を引き直さずに刷れる。
+  - XHTML は `Reports::XhtmlText` で段落の配列にする(装飾は落とし、段落・改行・箇条書き(・ / 1.)・表の行を残す。
+    画像は「［画像］」)。本文の無いセクションは出さない。
+- 長文: ThinReports の list を全幅に 1 本置き、自動改ページは使わずに桁数で折り返して(`ReportText.wrap`、
+  全角 50 字。段落の続きは字下げしない)ページの行数で割り付ける。ページの頭がセクションの途中なら
+  「〜(続き)」の見出しを補い、ページの最終行に見出しだけが残る場合は次のページへ送る。
+- フロント: `reportsClient.ts` の `dischargeSummaryPdfUrl`。カルテのカードの「PDF」を、退院時サマリーで下書きでないときに出す。
+- 科別レイアウトは持たない(必要になったら `report_layouts` に `kind` を足す。`print-backlog.md` §3-2)。
 
 ## 7. 検証(2026-09-17、Docker 環境)
 

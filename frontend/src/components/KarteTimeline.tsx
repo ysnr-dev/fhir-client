@@ -8,6 +8,7 @@ import {
   useDeleteVitalEntry,
 } from "../api/queries";
 import {
+  dischargeSummaryPdfUrl,
   microLabelPdfUrl,
   pathoLabelPdfUrl,
   questionnaireResponsePdfUrl,
@@ -17,6 +18,7 @@ import { fetchBinaryBlob, readResource } from "../api/fhirClient";
 import { documentIdOfResponse } from "../fhir/documentFormQuestionnaire";
 import { parsePatientFile } from "../fhir/patientFileHelpers";
 import {
+  isDischargeSummary,
   noteBodySections,
   sectionResponseId,
   sectionTitle,
@@ -562,6 +564,18 @@ const KarteCard = memo(function KarteCard({
               <DocumentIcon />
               <span className="karte-card__icon-label">PDF</span>
             </button>
+          ) : item.kind === "note" && isDischargeSummary(item.note) && item.note.status !== "preliminary" ? (
+            <a
+              className="button karte-card__icon-button karte-card__icon-button--labeled"
+              href={dischargeSummaryPdfUrl(item.id)}
+              target="_blank"
+              rel="noopener"
+              title="PDF を開く"
+              aria-label="PDF を開く"
+            >
+              <DocumentIcon />
+              <span className="karte-card__icon-label">PDF</span>
+            </a>
           ) : item.kind === "qr" &&
             (pdfReady ? (
               <a

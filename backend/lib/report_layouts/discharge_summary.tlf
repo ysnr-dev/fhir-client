@@ -1,0 +1,352 @@
+{
+  "version": "0.11.0",
+  "title": "退院時サマリー",
+  "report": {
+    "paper-type": "user",
+    "width": 595.28,
+    "height": 841.89,
+    "orientation": "portrait",
+    "margin": [
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "state": {
+    "layout-guides": []
+  },
+  "items": [
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 34,
+      "y": 28,
+      "width": 527.3,
+      "height": 18,
+      "texts": [
+        "退院時サマリー"
+      ],
+      "style": {
+        "font-family": [
+          "IPAGothic"
+        ],
+        "font-size": 14,
+        "font-style": [
+          "bold"
+        ],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "hospital_name",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 381,
+      "y": 30,
+      "width": 180.3,
+      "height": 10,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAGothic"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "right",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "patient_line",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 34,
+      "y": 52,
+      "width": 400,
+      "height": 14,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAGothic"
+        ],
+        "font-size": 11,
+        "font-style": [
+          "bold"
+        ],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "printed_at",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 381,
+      "y": 55,
+      "width": 180.3,
+      "height": 10,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAGothic"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "right",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "admission_line",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 34,
+      "y": 70,
+      "width": 527.3,
+      "height": 11,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAGothic"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "record_line",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 34,
+      "y": 84,
+      "width": 527.3,
+      "height": 11,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAGothic"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 34,
+      "y1": 98,
+      "x2": 561.3,
+      "y2": 98,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.75,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "body",
+      "type": "list",
+      "display": true,
+      "description": "",
+      "x": 34,
+      "y": 104.0,
+      "width": 527.3,
+      "height": 690.0,
+      "content-height": 690.0,
+      "auto-page-break": false,
+      "header": {
+        "enabled": false,
+        "height": 0,
+        "translate": {
+          "x": 0,
+          "y": 0
+        },
+        "items": []
+      },
+      "detail": {
+        "height": 15.0,
+        "translate": {
+          "x": 0,
+          "y": 0
+        },
+        "items": [
+          {
+            "id": "heading",
+            "type": "text-block",
+            "display": true,
+            "description": "",
+            "x": 34,
+            "y": 106.0,
+            "width": 527.3,
+            "height": 12,
+            "value": "",
+            "multiple-line": false,
+            "format": {
+              "base": "",
+              "type": ""
+            },
+            "style": {
+              "font-family": [
+                "IPAGothic"
+              ],
+              "font-size": 10,
+              "font-style": [
+                "bold"
+              ],
+              "color": "#000000",
+              "text-align": "left",
+              "vertical-align": "top",
+              "letter-spacing": "",
+              "line-height": "",
+              "line-height-ratio": "",
+              "overflow": "truncate",
+              "word-wrap": "none"
+            }
+          },
+          {
+            "id": "text",
+            "type": "text-block",
+            "display": true,
+            "description": "",
+            "x": 44,
+            "y": 106.0,
+            "width": 517.3,
+            "height": 12,
+            "value": "",
+            "multiple-line": false,
+            "format": {
+              "base": "",
+              "type": ""
+            },
+            "style": {
+              "font-family": [
+                "IPAGothic"
+              ],
+              "font-size": 10,
+              "font-style": [],
+              "color": "#000000",
+              "text-align": "left",
+              "vertical-align": "top",
+              "letter-spacing": "",
+              "line-height": "",
+              "line-height-ratio": "",
+              "overflow": "truncate",
+              "word-wrap": "none"
+            }
+          }
+        ]
+      },
+      "page-footer": {
+        "enabled": false,
+        "height": 0,
+        "translate": {
+          "x": 0,
+          "y": 0
+        },
+        "items": []
+      },
+      "footer": {
+        "enabled": false,
+        "height": 0,
+        "translate": {
+          "x": 0,
+          "y": 0
+        },
+        "items": []
+      }
+    },
+    {
+      "id": "page_no",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 34,
+      "y": 805,
+      "width": 527.3,
+      "height": 10,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAGothic"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    }
+  ]
+}

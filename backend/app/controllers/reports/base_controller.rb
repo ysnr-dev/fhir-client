@@ -125,6 +125,18 @@ module Reports
       render json: { error: "not_lab_result" }, status: :unprocessable_content
     end
 
+    rescue_from DischargeSummaryReport::NotFound do
+      render json: { error: "discharge_summary_not_found" }, status: :not_found
+    end
+
+    rescue_from DischargeSummaryReport::NotDischargeSummary do
+      render json: { error: "not_discharge_summary" }, status: :unprocessable_content
+    end
+
+    rescue_from DischargeSummaryReport::Draft do
+      render json: { error: "discharge_summary_draft" }, status: :unprocessable_content
+    end
+
     rescue_from QuestionnaireResponseReport::LayoutNotRegistered do
       render json: { error: "layout_not_registered" }, status: :not_found
     end
@@ -141,6 +153,7 @@ module Reports
                 PathoLabelReport::UpstreamError, MicroLabelReport::UpstreamError,
                 PrescriptionReport::UpstreamError, InjectionReport::UpstreamError,
                 LabResultReport::UpstreamError, RegimenReport::UpstreamError,
+                DischargeSummaryReport::UpstreamError,
                 RegimenMasterReport::UpstreamError,
                 Faraday::ConnectionFailed, Faraday::TimeoutError do
       render json: { error: "upstream_unreachable" }, status: :bad_gateway

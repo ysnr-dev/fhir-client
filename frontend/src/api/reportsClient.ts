@@ -141,6 +141,11 @@ export function labResultPdfUrl(reportId: string): string {
   return `/reports/lab_results/${encodeURIComponent(reportId)}/pdf`;
 }
 
+/** 退院時サマリー(Composition)1 件ぶんの PDF の URL。確定したものだけ刷れる(下書きは 422)。 */
+export function dischargeSummaryPdfUrl(compositionId: string): string {
+  return `/reports/discharge_summaries/${encodeURIComponent(compositionId)}/pdf`;
+}
+
 /** canonical(url|version)に帳票レイアウトが登録されているかを照会する。 */
 export function useReportLayoutStatus(canonical: string | undefined) {
   return useQuery({

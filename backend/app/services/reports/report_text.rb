@@ -4,9 +4,10 @@ module Reports
     module_function
 
     # 長い行を桁数(半角換算。全角 = 2)で折り返す。継続行は全角空白 1 つで字下げして
-    # 前の行の続きだと分かるようにする。折り返しを ThinReports 任せにせずここで済ませる
-    # のは、1 ページに入る行数(lines_per_page)との対応を決定的にするため。
-    def wrap(line, max_cols)
+    # 前の行の続きだと分かるようにする(文章の段落のように字下げが要らないときは indent: false)。
+    # 折り返しを ThinReports 任せにせずここで済ませるのは、1 ページに入る行数(lines_per_page)
+    # との対応を決定的にするため。
+    def wrap(line, max_cols, indent: true)
       chunks = []
       current = +""
       cols = 0
@@ -14,8 +15,8 @@ module Reports
         width = char.ascii_only? ? 1 : 2
         if cols + width > max_cols
           chunks << current
-          current = +"　"
-          cols = 2
+          current = indent ? +"　" : +""
+          cols = indent ? 2 : 0
         end
         current << char
         cols += width

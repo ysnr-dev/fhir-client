@@ -106,7 +106,7 @@
   - ［対応物］退院時サマリーの督促 Task だけ。
   - ［不足］入院診療計画書(7 日以内)・退院時サマリー・退院療養計画書・看護サマリーなどの作成状況を病棟・科・担当医で横断、対象文書は施設設定、一覧から作成。
   - ［当たり］入院 × 文書種別(`Composition.type` / `QuestionnaireResponse.questionnaire` + `encounter`)の突き合わせ。入院実施の transaction に計画書の下書きを 1 件積む。
-- **退院サマリーの横断一覧と PDF、科別レイアウト**(拡張、高): `Composition?type=18842-5&ward=&status=` + 退院 Encounter で未作成を出す。PDF は `discharge-summary-design.md` §6 既載。前回サマリー複写、DPC 様式 1 の病名取込。
+- **退院サマリーの横断一覧と PDF、科別レイアウト**(拡張、高): `Composition?type=18842-5&ward=&status=` + 退院 Encounter で未作成を出す。PDF は **対応済み(2026-11-08、`discharge-summary-design.md` §6。科別レイアウトは残り)**。前回サマリー複写、DPC 様式 1 の病名取込。
 - **文書参照(説明書・パンフレットのライブラリ)**(拡張、中): `document_templates.kind = reference`、右ペインから「印刷のみ」。
 - **移行カルテ**(新規、中・導入時のみ): `Composition`(category legacy)+ 取込バッチ(demo-seed と同じ Node 経路)。
 
