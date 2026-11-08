@@ -186,9 +186,13 @@ Appointment (basedOn = ヘッダ ServiceRequest)
 - 予約・取消・日時変更は**オーダーと独立した単独 transaction**(Appointment + Slot)。
   下回りは診察予約と共通(`useBookAppointment` 相当・`useCancelAppointment` ・
   `useRescheduleAppointment`)。
-- ［導出］**オーダー削除のときだけ**有効な予約の取消を同じ transaction に同梱する
+- ［導出］オーダー削除では有効な予約の取消を同じ transaction に同梱する
   (`useDeleteRehabOrder`)。オーダーが消えたのに予約が枠を塞ぎ続けるのを防ぐためで、
   ここは放射線オーダーの削除と同じ後始末。
+- ［導出］終了・中止・退院での打ち切りでも、もう来ない日の予約を同じ transaction で取り消す
+  (終了は終了日の翌日以降、中止は今日以降、退院は退院日の翌日以降。`useUpdateRehabTaskStatus`・
+  `useDischargePatient`)。終了日を過ぎたオーダーは部門一覧に出なくなり、残った予約に気づけないため。
+  過ぎた予約は通院の記録なので残し、終了取消・中止取消でも予約は戻さない。
 
 ### 7.4 画面
 

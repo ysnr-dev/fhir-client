@@ -9,7 +9,7 @@ import {
   buildRescheduleBundle,
 } from "../../fhir/appointmentHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
-import { resourcesOfType } from "./core";
+import { resourcesOfType, searchAllPages } from "./core";
 
 // ---- 予約(Appointment) ----
 
@@ -117,13 +117,26 @@ export async function buildCancelEntriesOf(appointments: fhir4.Appointment[]): P
   );
 }
 
-/** オーダーヘッダに紐づく有効な予約の取消エントリ。予約が無ければ空。 */
-export async function fetchOrderAppointmentCancelEntries(srId: string): Promise<fhir4.BundleEntry[]> {
+/**
+ * オーダーヘッダに紐づく有効な予約の取消エントリ。予約が無ければ空。
+ * from を渡すとその日以降に始まる予約だけを取り消す(期間継続型のオーダーで、過ぎた予約を残すとき)。
+ * 取り消す対象を取りこぼさないよう全ページを読み、検索条件が効かないときは全件を拾わないよう strict にする。
+ */
+export async function fetchOrderAppointmentCancelEntries(
+  srId: string,
+  { from }: { from?: string } = {},
+): Promise<fhir4.BundleEntry[]> {
   const params = new URLSearchParams();
   params.set("based-on", `ServiceRequest/${srId}`);
+  if (from) params.set("date", `ge${from}`);
   setActiveAppointmentStatus(params);
-  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  return buildCancelEntriesOf(resourcesOfType<fhir4.Appointment>(bundle, "Appointment"));
+  const { matches } = await searchAllPages<fhir4.Appointment>("Appointment", params, {
+    page: 500,
+    maxPages: 4,
+    complete: true,
+    strict: true,
+  });
+  return buildCancelEntriesOf(matches);
 }
 
 export function useBookAppointment() {

@@ -34,7 +34,7 @@ import { isMealServiceRequest, MEAL_ORDER_TYPE } from "../../fhir/mealOrderHelpe
 import { HEIGHT_LOINC } from "../../fhir/bodyMeasureHelpers";
 import { LOINC_SYSTEM } from "../../fhir/shared";
 import { buildNursingOrderStopEntries } from "../../fhir/nursingOrderHelpers";
-import { buildRehabOrderStopEntries } from "../../fhir/rehabOrderHelpers";
+import { buildRehabOrderStopEntries, rehabOrderNeedsStop } from "../../fhir/rehabOrderHelpers";
 import { buildNutritionGuidanceOrderStopEntries } from "../../fhir/nutritionGuidanceOrderHelpers";
 import { buildMedicationGuidanceOrderStopEntries } from "../../fhir/medicationGuidanceOrderHelpers";
 import { SURGERY_ORDER_TYPE } from "../../fhir/surgeryOrderHelpers";
@@ -48,6 +48,7 @@ import { createResource, postBundle, searchResource } from "../fhirClient";
 import { fetchYakkaCodes } from "../masterClient";
 import { hasNextPage, NOTIFICATION_TASK_KEY, ORAL_LOOKBACK_DAYS, resourcesOfType, searchAllPages, setOrderPeriod } from "./core";
 import { fetchOpenEwsAlertTasks } from "./earlyWarning";
+import { fetchOrderAppointmentCancelEntries, invalidateAppointments } from "./appointment";
 import { dpcRecodingDueCancelEntries } from "./dpcCoding";
 import { splitLocationMatches } from "./location";
 import { fetchNursingPerforms, nursingOrderParams, nursingOrderSetOf, nursingPerformParams } from "./nursing";
@@ -279,7 +280,7 @@ export function useAdmitPatient() {
 export function useDischargePatient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       encounter,
       dischargeAt,
       mealEntries = [],
@@ -306,6 +307,15 @@ export function useDischargePatient() {
       nursingOrders?: fhir4.ServiceRequest[];
     }) => {
       const dischargeDate = dischargeAt.slice(0, 10);
+      // 打ち切るリハビリの退院日より後の予約は取り消して枠を空ける(終了日を過ぎると
+      // 部門一覧に出なくなり、残った予約に気づけない)。
+      const rehabAppointmentEntries = (
+        await Promise.all(
+          rehabOrders
+            .filter((sr) => sr.id && rehabOrderNeedsStop(sr, dischargeDate))
+            .map((sr) => fetchOrderAppointmentCancelEntries(sr.id ?? "", { from: addDays(dischargeDate, 1) })),
+        )
+      ).flat();
       return postBundle(
         buildEncounterUpdateBundle(buildDischargedEncounter(encounter, dischargeAt), [
           ...mealEntries,
@@ -313,6 +323,7 @@ export function useDischargePatient() {
           // 進捗 Task はここでは触らない(部門が「終了」で締める。オーダーに終了日が
           // 入っていれば翌日以降の部門一覧には出てこない)。
           ...buildRehabOrderStopEntries(rehabOrders, dischargeDate),
+          ...rehabAppointmentEntries,
           // 栄養指導もリハビリと同じ期間継続型なので同じ扱い。
           ...buildNutritionGuidanceOrderStopEntries(nutritionGuidanceOrders, dischargeDate),
           ...buildMedicationGuidanceOrderStopEntries(medicationGuidanceOrders, dischargeDate),
@@ -329,6 +340,8 @@ export function useDischargePatient() {
       queryClient.invalidateQueries({ queryKey: ["Task"] });
       // 持参薬を退院で終了にする。
       queryClient.invalidateQueries({ queryKey: ["MedicationStatement"] });
+      // 打ち切ったリハビリの予約。
+      invalidateAppointments(queryClient);
     },
   });
 }
