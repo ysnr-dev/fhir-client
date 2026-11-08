@@ -204,6 +204,11 @@ QR を道連れにするのと同じ後始末)。そのため一覧表示用の�
 ［導出］`exam` の定員 1 強制(`buildSchedule`)には乗せない。集団指導では 1 枠に複数
 患者が入るため。
 
+［導出］削除・終了・中止・退院での打ち切りでは、リハビリと同じく有効な予約の取消を同じ
+transaction に積む(削除は全件、終了は終了日の翌日以降、中止は今日以降、退院は退院日の
+翌日以降。`deleteNutritionGuidanceOrderRequest`・`useUpdateNutritionGuidanceTaskStatus`・
+`useDischargePatient`)。過ぎた予約は来院の記録なので残し、終了取消・中止取消でも戻さない。
+
 ---
 
 ## 7. 実装フェーズ

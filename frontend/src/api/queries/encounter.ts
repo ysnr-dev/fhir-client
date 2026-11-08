@@ -35,7 +35,7 @@ import { HEIGHT_LOINC } from "../../fhir/bodyMeasureHelpers";
 import { LOINC_SYSTEM } from "../../fhir/shared";
 import { buildNursingOrderStopEntries } from "../../fhir/nursingOrderHelpers";
 import { buildRehabOrderStopEntries, rehabOrderNeedsStop } from "../../fhir/rehabOrderHelpers";
-import { buildNutritionGuidanceOrderStopEntries } from "../../fhir/nutritionGuidanceOrderHelpers";
+import { buildNutritionGuidanceOrderStopEntries, nutritionGuidanceOrderNeedsStop } from "../../fhir/nutritionGuidanceOrderHelpers";
 import { buildMedicationGuidanceOrderStopEntries } from "../../fhir/medicationGuidanceOrderHelpers";
 import { SURGERY_ORDER_TYPE } from "../../fhir/surgeryOrderHelpers";
 import { isSurgeryProcedure } from "../../fhir/surgeryResultHelpers";
@@ -307,12 +307,16 @@ export function useDischargePatient() {
       nursingOrders?: fhir4.ServiceRequest[];
     }) => {
       const dischargeDate = dischargeAt.slice(0, 10);
-      // 打ち切るリハビリの退院日より後の予約は取り消して枠を空ける(終了日を過ぎると
+      // 打ち切るリハビリ・栄養指導の退院日より後の予約は取り消して枠を空ける(終了日を過ぎると
       // 部門一覧に出なくなり、残った予約に気づけない)。
-      const rehabAppointmentEntries = (
+      const stoppedOrders = [
+        ...rehabOrders.filter((sr) => rehabOrderNeedsStop(sr, dischargeDate)),
+        ...nutritionGuidanceOrders.filter((sr) => nutritionGuidanceOrderNeedsStop(sr, dischargeDate)),
+      ];
+      const appointmentEntries = (
         await Promise.all(
-          rehabOrders
-            .filter((sr) => sr.id && rehabOrderNeedsStop(sr, dischargeDate))
+          stoppedOrders
+            .filter((sr) => sr.id)
             .map((sr) => fetchOrderAppointmentCancelEntries(sr.id ?? "", { from: addDays(dischargeDate, 1) })),
         )
       ).flat();
@@ -323,9 +327,9 @@ export function useDischargePatient() {
           // 進捗 Task はここでは触らない(部門が「終了」で締める。オーダーに終了日が
           // 入っていれば翌日以降の部門一覧には出てこない)。
           ...buildRehabOrderStopEntries(rehabOrders, dischargeDate),
-          ...rehabAppointmentEntries,
           // 栄養指導もリハビリと同じ期間継続型なので同じ扱い。
           ...buildNutritionGuidanceOrderStopEntries(nutritionGuidanceOrders, dischargeDate),
+          ...appointmentEntries,
           ...buildMedicationGuidanceOrderStopEntries(medicationGuidanceOrders, dischargeDate),
           ...buildNursingOrderStopEntries(nursingOrders, dischargeDate),
           ...extraEntries,
@@ -340,7 +344,7 @@ export function useDischargePatient() {
       queryClient.invalidateQueries({ queryKey: ["Task"] });
       // 持参薬を退院で終了にする。
       queryClient.invalidateQueries({ queryKey: ["MedicationStatement"] });
-      // 打ち切ったリハビリの予約。
+      // 打ち切ったリハビリ・栄養指導の予約。
       invalidateAppointments(queryClient);
     },
   });

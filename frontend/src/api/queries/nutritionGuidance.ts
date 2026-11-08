@@ -1,4 +1,5 @@
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { addDays, today } from "../../lib/dates";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import {
   buildNutritionGuidanceOrderCloseEntry,
@@ -346,12 +347,16 @@ export function useDeleteNutritionGuidancePerform() {
  *
  * 逆に「終了取消」では終了日を消さない。打ち切った期間まで巻き戻すと、その間に
  * 積んだ実施記録との整合が取れなくなるため。期間を延ばしたいときはオーダーを編集する。
+ *
+ * 終了は終了日の翌日以降、中止は今日以降の予約を同じ transaction で取り消して枠を空ける
+ * (リハビリと同じ。終了日を過ぎたオーダーは一覧に出なくなり、残った予約に気づけないため)。
+ * 過ぎた予約は来院の記録なので残す。終了取消・中止取消でも予約は戻さない。
  */
 export function useUpdateNutritionGuidanceTaskStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       order,
       task,
       status,
@@ -368,11 +373,18 @@ export function useUpdateNutritionGuidanceTaskStatus() {
       ];
       if (status === "completed" && endDate) {
         entry.push(buildNutritionGuidanceOrderCloseEntry(order, endDate));
+        entry.push(...(await fetchOrderAppointmentCancelEntries(order.id ?? "", { from: addDays(endDate, 1) })));
       } else {
         entry.push(...orderCancelEntries(order, status === "cancelled"));
+        if (status === "cancelled") {
+          entry.push(...(await fetchOrderAppointmentCancelEntries(order.id ?? "", { from: today() })));
+        }
       }
       return postBundle({ resourceType: "Bundle", type: "transaction", entry });
     },
-    onSuccess: () => invalidateNutritionGuidance(queryClient),
+    onSuccess: (_result, { status }) => {
+      invalidateNutritionGuidance(queryClient);
+      if (status === "completed" || status === "cancelled") invalidateAppointments(queryClient);
+    },
   });
 }
