@@ -14,6 +14,8 @@
 # 位置と大きさはマス(横 12 列、縦は 1 マスの高さ)の整数。query_code の存在は見ない
 # (消した条件のタイルは画面が「条件が見つかりません」と出す)。
 class Dashboard < ApplicationRecord
+  include ScopedDefinition
+
   SCOPES = ChartDefinition::SCOPES
   SCHEMA_VERSION = 1
   COLUMNS = 12
@@ -57,41 +59,4 @@ class Dashboard < ApplicationRecord
   validate :owner_must_match_scope
   validate :definition_shape
 
-  scope :ordered, -> { order(Arel.sql("display_order NULLS LAST"), :id) }
-
-  # 画面が同時に見る持ち主(ChartDefinition.roots_for と同じ)。
-  def self.roots_for(department_id:, practitioner_id:, team_ids: [])
-    rel = where(scope: "facility")
-    rel = rel.or(where(scope: "department", owner_id: department_id)) if department_id.present?
-    rel = rel.or(where(scope: "practitioner", owner_id: practitioner_id)) if practitioner_id.present?
-    rel = rel.or(where(scope: "team", owner_id: team_ids)) if team_ids.present?
-    rel
-  end
-
-  def definition_with_defaults
-    stored = definition.is_a?(Hash) ? definition : {}
-    DEFAULT_DEFINITION.merge(stored.slice(*DEFINITION_KEYS))
-  end
-
-  private
-
-  def assign_code
-    self.code = SecureRandom.uuid if code.blank?
-  end
-
-  def owner_must_match_scope
-    if scope == "facility"
-      errors.add(:owner_id, "は院内共通では指定できません") if owner_id.present?
-    elsif owner_id.blank?
-      errors.add(:owner_id, "を入力してください")
-    end
-  end
-
-  def definition_shape
-    return if definition.blank?
-
-    JsonShape.errors(DEFINITION_SHAPE, definition).each do |message|
-      errors.add(:definition, message.start_with?("は") ? message : "の #{message}")
-    end
-  end
 end

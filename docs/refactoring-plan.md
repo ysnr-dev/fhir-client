@@ -6,10 +6,127 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 1. クライアントが手元でしている絞り込み・並べ替え・結合のうち、FHIR サーバーに任せた方がよいもの
 2. コメントに残った修正経緯と、過剰な説明
 
-- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回）、2026-10-04（第 3 回）、2026-10-20（第 4 回）、2026-10-24（第 5 回）、2026-11-01（第 6 回。下の節）
+- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回）、2026-10-04（第 3 回）、2026-10-20（第 4 回）、2026-10-24（第 5 回）、2026-11-01（第 6 回）、2026-11-08（第 7 回。下の節）
 - 調査範囲: `frontend/src`、`backend/app`、上流 fhir-server の
   `app/lib/fhir/search_definitions/*.rb` と `app/lib/fhir/search_references.rb`
 - 行番号は調査時点のもの。着手時は関数名で探し直すこと。
+
+## 第 7 回（2026-11-08）
+
+第 6 回以降の約 51k 行(117 コミット。SS-MIX2 出力・留置物管理・麻酔科術前診察・細菌検査ラベル・頻用病名・
+ラベル／処方箋の病棟一括発行・業務フロー図ほか)を含めて全体を洗い、backend に集まっていた写し(帳票レンダラ・
+持ち主つき定義のモデル・official/local マスタのコントローラ・管理カテゴリの CRUD)を同日実施した。
+差し引き約 350 行減。FHIR に書くリソースと `/master` `/admin` の JSON は変えていない。
+
+### 正しさ
+
+なし。ただし次の 1 件を見つけた(未修正。直すかはユーザーの判断):
+
+- `Integrations::Ssmix2::MessagesController#purge` の「1 日 1 回だけ古い行を消す」が、コントローラのインスタンス変数
+  `@purged_today` で日付を覚えている。コントローラは要求ごとに作られるので毎回 nil になり、エージェントのポーリング
+  ごとに `purge_written!` / `purge_processed!` が走る(結果は正しいが、1 日 1 回にはなっていない)。あわせて
+  `Date.current`(UTC)を使っている(`FacilityClock.today` の約束からも外れる)。直すなら日付の覚え場所を
+  `Ssmix2::PollState` などの行に移す。
+
+### 上流に寄せた
+
+なし。上流 fhir-server は触っていない(未使用メソッド・経緯コメントとも 0 件)。
+
+### コメント整理
+
+スキャンの当たり(「以前はどう書いてあったか」「修正した本人」「要確認」= `needs_review`、「中止した処方」など)は
+第 6 回と同じく業務の意味で使う語だったので、書き換えは無し。
+
+### 未使用の削除
+
+- frontend の参照ゼロの export 5 件: 自己血の `collectionAppointmentId`(採血記録の拡張は書くだけで読む側が無い)と
+  `cancelCollectionPlanEntries`(オーダーの中止・削除は `transfusion.ts` が予定を別に扱う)、留置物の刺入部観察の
+  型 `SiteFindingGrade` / `SiteFixation` / `SitePatency`(選択肢は `SiteFindingItem.options` の文字列)。
+- backend・上流は 0 件(`dead-ruby-methods.py`)。
+
+### 機械的な重複統合
+
+**帳票レンダラの `layout_item_ids`(同じ 15 行が 6 か所)**
+
+- `Reports::ReportText.layout_item_ids(layout_path)` は既にあり 9 本のレンダラが使っていたのに、検体・細菌・病理ラベルと
+  処方箋の 4 本が private の写しを持っていた。写しを消して `ReportText` を呼ぶ。`ThinreportsRenderer` は DB に保存した
+  レイアウト(`@layout.tlf` の文字列)を読むので、文字列版 `layout_item_ids_in(tlf)` を足して `layout_item_ids(path)` は
+  その薄い包みにした(「トップレベルのみ、list 非対応」「3 つ目の戻り値は ID を持つ全アイテム」の説明はここに移した)。
+
+**細菌・病理の検体ラベルレンダラ(96〜101 行、正規化後の差 29 行)**
+
+- 容器 1 つ = 1 ページの流し込み・患者欄・容器番号・バーコード・至急の表示は同じで、違いは検体の表示(`specimen_label`)と
+  日付の表示(`date_label`)だけ。`Reports::ContainerLabelRenderer` を基底にし、部門のクラスはその 2 つ(細菌は時刻付きの
+  `date_time` も)を持つだけ(20〜25 行)。検体検査のラベル(`LabLabelRenderer`)はラベルがハッシュで複数オーダーをまたぎ、
+  採取管マスタも引くので乗せていない。
+- 検証: `rails runner` で同じ Label(至急あり／なし × 2 枚)を前後のコードで PDF にし、`pdf-reader` で取り出した各ページの
+  文字列が完全一致。rspec はレンダラをモックしているので、この比較が実質の確認。
+
+**持ち主つき定義のモデル(5 本 + 2 本)**
+
+- `roots_for` / `owner_must_match_scope` / `assign_code` / `definition_with_defaults` / `definition_shape` / `scope :ordered` が
+  チャート定義・分析ダッシュボード・診療ダッシュボード・データ抽出の条件・頻用病名(11-07 に 5 本目が増えた)に同じ形で
+  あった。`app/models/concerns/scoped_owner.rb`(`roots_for`・`owner_must_match_scope`・`ordered`)と、それを含む
+  `scoped_definition.rb`(`assign_code`・`definition_with_defaults`・`JsonShape` の `definition_shape`)に寄せた。
+  チームを持たないモデル(診療ダッシュボード・頻用病名)の `roots_for` は `SCOPES` に `team` が無ければチームの条件を
+  足さない(前と同じ SQL)。データ抽出の条件はタブごとの形、頻用病名は病名と修飾語の形で `definition_shape` を
+  上書きしたまま。`before_validation` / `validates` / `validate` の行は検証の順(エラーの並び)を保つためモデルに残した
+  (第 6 回の `ValidityPeriod` と同じ判断)。
+- オーダーセットと患者フォルダ(definition を持たない)は `ScopedOwner` だけを含む。`roots_for(team_ids:)` を受けるように
+  なるが呼び元は渡していない。
+- コントローラ側: `ScopedDefinitions` と `OrderSetsController` に同じ `forced_owner_id` / `authorize_practitioner_scope!` /
+  `render_forbidden` があったので `Master::PractitionerScopeGuard` に。患者フォルダの `forced_owner_id` は認証の種別
+  (`:session` 以外はパラメータを通す)が違うので乗せていない。
+- 検証: `spec/models` と `/master` の該当 8 本の request spec 248 件通過。開発環境で `/master/favorite_conditions` …
+  `/master/patient_folders`・`team_id` 付きの `/master/clinical_dashboards` が 200 で件数が前と同じ。
+
+**頻用の印だけ編集できる official/local マスタ(第 6 回の「3 本まとめて別テーマ」)**
+
+- 細菌の菌・抗菌薬、病理臓器のコントローラにあった同じ `update`(official は `frequent` だけ更新)と `destroy`(official は
+  断る)を `Master::FrequentOfficialRecords` に。断る文言の「配布ファイル由来」「規約付録由来」は `official_source_label` で
+  渡し、前と同じ文字列を返す。`OfficialLocalRecords` の後に include して差し替える形。
+
+**管理のカテゴリ CRUD(ファイル・テンプレート、74 行 × 2 でモデル名以外同一)**
+
+- `Admin::CategoryRecords`(ログイン認証への切り替え・一覧・登録・更新・削除・`summary`)に寄せ、コントローラは
+  `category_class` を返すだけ。削除しても上流の分類が残る説明はコントローラのコメントに残した。
+
+- 検証(全体): backend rspec 2407 件通過(着手前と同数。第 5・6 回に落ちていた `intake/staff_spec` は直っていた)、
+  `tsc -b`・lint(エラー 0。警告は 202 件で着手前と同数。第 6 回の 34 件から増えたのは 11 月の依存更新で
+  React Compiler 系の規則が増えたため)・import 循環 0・`dead-exports.cjs` の参照ゼロは `demo-seed` の `preflight` だけ。
+  開発環境で `/master` `/admin` の該当エンドポイントの一覧が 200。
+
+### 次の候補(今回やらない)
+
+1. **生理・内視鏡・処置(・放射線)の FHIR に触れる層**(第 5・6 回の候補 1)。オーダーフォーム(生理・内視鏡で正規化後の差
+   112 行、実施欄・テンプレート欄の 111 行と 65 行の塊は 3 部門同一)、実施入力モーダル(81 行・64 行の塊が 3 部門同一)、
+   `*OrderHelpers.ts`(37 行・35 行の塊が 3 部門同一)。round-trip で前後の JSON を突き合わせながら進める。
+2. **処置のオーダー登録・編集パネルと初期値 hook**(第 6 回の候補 2。機能の判断待ち)。
+3. **ワークリスト 12 画面の共通部品**(第 2 回の候補 3)。リハビリと栄養指導は 1,000 行で差 235 行だが、差が 60 か所に
+   散っていて設定方式では畳めない。11-08 の「終了・中止・退院で予約が残る」修正が 2 本に別々に入ったのは、
+   `api/queries` 側(`rehab.ts` / `nutritionGuidance.ts`、差 318 行)の重複なので、寄せるならそちらから。
+4. **JANIS コード表の取込 3 本**(`MicroOrganismImporter` / `MicroSusceptibilityMethodImporter` / `MicroSpecimenTypeImporter`)。
+   `Result` / `call` / `header_columns` / `build_rows` の骨格が同じ(15 + 10 + 9 + 8 行の塊)。見出し語・列の対応・
+   系統の引き継ぎを設定で渡す基底クラスにできるが、設定の方が本体より長くなりそうなので見送った。
+5. `masterClient` の `if (!res.ok) throw await buildError(res);`(約 330 か所)。
+6. `dead-exports.cjs` の「export だけ不要」約 1,340 件(第 4 回から据え置き)。
+7. backend の `set_search_columns`(第 6 回の候補 6)。
+
+### 残すと判断したもの
+
+- 細菌・病理のラベル台帳(`MicroLabelReport` / `PathoLabelReport`、差 190 行)。Specimen の台帳同期(`existing.each` …
+  `retire_entry`、約 30 行)は同じだが、容器の組み方(細菌は検体の容器 + ボトル、病理は検体 × 容器数)が違う。
+- 注射と輸血の照合ステップ(`InjectionVerifyStep` / `TransfusionVerifyStep`、差 66 行)。RP とバッグ・確認者の有無で
+  表の行が違い、名前だけの違いではない。
+- `NewPatientFields` / `PatientForm` の 61 行(住所・連絡先の欄)、`RoomForm` / `WardForm` の 39 行、
+  `extract/*ExtractPanel` の期間・診療科の 45 行。業務は同じでも親フォームの状態の持ち方が違い、部品に切ると
+  props の受け渡しが元より長くなる。
+- `ExamItemPage` / `TreatmentItemPage` / `RadItemPage` の 44〜48 行(第 5 回の判断のまま。処置は検査種別を持たない)。
+- `oralExamHelpers.ts` の PUT に `fullUrl` が無い点(第 5 回の判断のまま)、`extractQueryModel.ts` の `toISOString().slice(0, 10)`
+  (`Date.UTC` の算術)、`ranAt: new Date().toISOString()`(第 6 回の判断のまま)。
+- `App.css` の色の直書き 144 行(第 6 回の 129 行から 15 行増。増えた分は留置物・麻酔科術前診察の画面)。第 3 回の判断のまま。
+- `KarteTimeline.tsx`(43)・`PathwayOrderModal.tsx`(10)・`RegimenPanels.tsx`(7)の種別ごとの分岐。
+- `import_result_json`(シート名も返す 3 本)。`Importable` の既定を `respond_to?` で広げると暗黙になるので、そのまま。
 
 ## 第 6 回（2026-11-01）
 

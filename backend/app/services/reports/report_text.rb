@@ -24,10 +24,17 @@ module Reports
       chunks
     end
 
-    # レイアウト内のアイテム ID を種類別に列挙する。未知の ID へ page.item すると
+    # レイアウト(.tlf のパス)内のアイテム ID を種類別に列挙する。未知の ID へ page.item すると
     # 例外になるため、設定対象を絞るのに使う。
     def layout_item_ids(layout_path)
-      items = JSON.parse(File.read(layout_path)).fetch("items", [])
+      layout_item_ids_in(File.read(layout_path))
+    end
+
+    # .tlf の中身(JSON 文字列)から同じものを列挙する(DB に保存したレイアウト用)。
+    # トップレベルのみで list の中は見ない。戻り値は [text-block の ID, image-block の ID,
+    # ID を持つ全アイテム(text/ellipse 等を含む。表示切替の対象確認用)]。
+    def layout_item_ids_in(tlf)
+      items = JSON.parse(tlf).fetch("items", [])
       text_ids = Set.new
       image_ids = Set.new
       all_ids = Set.new

@@ -204,16 +204,6 @@ export function fulfillAppointmentEntry(appointment: fhir4.Appointment): fhir4.B
   return { resource: fulfilled, request: { method: "PUT", url: `Appointment/${appointment.id ?? ""}` } };
 }
 
-/** 残っている(未採血の)予定を取り消すエントリ。オーダーの中止・削除に同梱する。 */
-export function cancelCollectionPlanEntries(appointments: fhir4.Appointment[]): fhir4.BundleEntry[] {
-  return appointments
-    .filter((a) => isAutologousAppointment(a) && a.status === "booked")
-    .map((a): fhir4.BundleEntry => {
-      const cancelled: fhir4.Appointment = { ...a, status: "cancelled" };
-      return { resource: cancelled, request: { method: "PUT", url: `Appointment/${a.id ?? ""}` } };
-    });
-}
-
 export function collectionPlanStatusLabel(status: CollectionPlanStatus | string): string {
   return status === "fulfilled" ? "採血済" : status === "cancelled" ? "取消" : "未採血";
 }

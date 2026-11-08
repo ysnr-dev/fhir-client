@@ -169,14 +169,6 @@ export function buildAutologousCollectionBundle(
   };
 }
 
-/** 採血記録が沿った予定(Appointment)の id。臨時の採血は空。 */
-export function collectionAppointmentId(hub: fhir4.Procedure): string {
-  return referenceIdOfType(
-    hub.extension?.find((e) => e.url === COLLECTION_APPOINTMENT_EXT_URL)?.valueReference?.reference,
-    "Appointment",
-  );
-}
-
 /** 採った血の量(mL)の合計。 */
 export function collectedVolumeTotal(units: AutologousUnit[]): number {
   return units.reduce((sum, unit) => sum + (parseFloat(unit.volume) || 0), 0);

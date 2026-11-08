@@ -30,6 +30,8 @@
 # 突き合わせは画面が行う(指す先が無くなっていれば画面が落とす)。
 # 設計は docs/patient-chart-design.md。
 class ChartDefinition < ApplicationRecord
+  include ScopedDefinition
+
   # team はチーム医療のチーム(上流の CareTeam の id。docs/care-team-design.md §5)。
   SCOPES = %w[facility department practitioner team].freeze
 
@@ -136,45 +138,4 @@ class ChartDefinition < ApplicationRecord
   validate :owner_must_match_scope
   validate :definition_shape
 
-  scope :ordered, -> { order(Arel.sql("display_order NULLS LAST"), :id) }
-
-  # 画面が同時に見る持ち主(院内共通 + 指定した診療科 + 指定した医師 + 自分のチーム)。
-  # 引数が空の持ち主は含めない(OrderSet.roots_for と同じ)。
-  def self.roots_for(department_id:, practitioner_id:, team_ids: [])
-    rel = where(scope: "facility")
-    rel = rel.or(where(scope: "department", owner_id: department_id)) if department_id.present?
-    rel = rel.or(where(scope: "practitioner", owner_id: practitioner_id)) if practitioner_id.present?
-    rel = rel.or(where(scope: "team", owner_id: team_ids)) if team_ids.present?
-    rel
-  end
-
-  # 欠けたキーを既定値で埋めた定義。読み出しは常にこちらを使う。
-  def definition_with_defaults
-    stored = definition.is_a?(Hash) ? definition : {}
-    DEFAULT_DEFINITION.merge(stored.slice(*DEFINITION_KEYS))
-  end
-
-  private
-
-  # code は運用者に入力させず採番する。複製やインポートで指定があれば尊重する。
-  def assign_code
-    self.code = SecureRandom.uuid if code.blank?
-  end
-
-  def owner_must_match_scope
-    if scope == "facility"
-      errors.add(:owner_id, "は院内共通では指定できません") if owner_id.present?
-    elsif owner_id.blank?
-      errors.add(:owner_id, "を入力してください")
-    end
-  end
-
-  def definition_shape
-    return if definition.blank?
-
-    # 先頭(definition そのもの)の文言は「は〜」で始まり、中の項目は位置から始まる。
-    JsonShape.errors(DEFINITION_SHAPE, definition).each do |message|
-      errors.add(:definition, message.start_with?("は") ? message : "の #{message}")
-    end
-  end
 end

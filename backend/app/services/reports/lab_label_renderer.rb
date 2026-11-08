@@ -23,7 +23,7 @@ module Reports
     end
 
     def render
-      text_ids, image_ids, all_ids = layout_item_ids
+      text_ids, image_ids, all_ids = ReportText.layout_item_ids(@layout_path)
 
       report = Thinreports::Report.new(layout: @layout_path.to_s)
       @labels.each do |label|
@@ -82,26 +82,6 @@ module Reports
     # 実寸はレイアウトの image-block に合わせて縮尺される。
     def barcode_png(number)
       Barby::Code128B.new(number).to_png(xdim: 2, height: 60, margin: 0)
-    end
-
-    # レイアウト内のアイテム ID を種類別に列挙する(ThinreportsRenderer と同じ理由:
-    # 未知の ID へ page.item すると例外になるため、設定対象を絞るのに使う)。
-    def layout_item_ids
-      items = JSON.parse(File.read(@layout_path)).fetch("items", [])
-      text_ids = Set.new
-      image_ids = Set.new
-      all_ids = Set.new
-      items.each do |item|
-        id = item["id"].to_s
-        next if id.empty?
-
-        all_ids << id
-        case item["type"]
-        when "text-block" then text_ids << id
-        when "image-block" then image_ids << id
-        end
-      end
-      [text_ids, image_ids, all_ids]
     end
   end
 end

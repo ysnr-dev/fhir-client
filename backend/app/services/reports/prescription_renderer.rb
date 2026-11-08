@@ -57,7 +57,7 @@ module Reports
 
     # この処方箋のページを report に足す。
     def draw(report)
-      text_ids, image_ids, all_ids = layout_item_ids
+      text_ids, image_ids, all_ids = ReportText.layout_item_ids(@layout_path)
       columns = SUBSTITUTION_COLUMNS.values.all? { |id| text_ids.include?(id) }
       qr_slots = image_ids.grep(/\Aqr_\d+\z/).sort_by { |id| id.delete_prefix("qr_").to_i }
       qr_pngs = qr_slots.any? ? qr_symbol_pngs : []
@@ -205,26 +205,6 @@ module Reports
         "hospital_tel" => PrescriptionMeta.telecom_value(org, "phone"),
         "hospital_fax" => PrescriptionMeta.telecom_value(org, "fax")
       }.merge(PrescriptionMeta.institution_number(org).transform_keys(&:to_s))
-    end
-
-    # レイアウト内のアイテム ID を種類別に列挙する(LabLabelRenderer と同じ理由:
-    # 未知の ID へ page.item すると例外になるため、設定対象を絞るのに使う)。
-    def layout_item_ids
-      items = JSON.parse(File.read(@layout_path)).fetch("items", [])
-      text_ids = Set.new
-      image_ids = Set.new
-      all_ids = Set.new
-      items.each do |item|
-        id = item["id"].to_s
-        next if id.empty?
-
-        all_ids << id
-        case item["type"]
-        when "text-block" then text_ids << id
-        when "image-block" then image_ids << id
-        end
-      end
-      [text_ids, image_ids, all_ids]
     end
   end
 end

@@ -15,6 +15,8 @@
 # 一覧は画面(karteUrl.ts の KARTE_TABS)にしか無いので値は見ない(知らない種別は画面が
 # 「表示できません」と出す)。zoom はカードの中身の表示倍率(%)で、無ければ 100。
 class ClinicalDashboard < ApplicationRecord
+  include ScopedDefinition
+
   SCOPES = %w[facility department practitioner].freeze
   SCHEMA_VERSION = 1
   COLUMNS = 12
@@ -58,41 +60,4 @@ class ClinicalDashboard < ApplicationRecord
   validate :owner_must_match_scope
   validate :definition_shape
 
-  scope :ordered, -> { order(Arel.sql("display_order NULLS LAST"), :id) }
-
-  # 画面が同時に見る持ち主。チームは持たないので team_ids は受けるだけで使わない
-  # (ScopedDefinitions#index が常に渡してくる)。
-  def self.roots_for(department_id:, practitioner_id:, team_ids: [])
-    rel = where(scope: "facility")
-    rel = rel.or(where(scope: "department", owner_id: department_id)) if department_id.present?
-    rel = rel.or(where(scope: "practitioner", owner_id: practitioner_id)) if practitioner_id.present?
-    rel
-  end
-
-  def definition_with_defaults
-    stored = definition.is_a?(Hash) ? definition : {}
-    DEFAULT_DEFINITION.merge(stored.slice(*DEFINITION_KEYS))
-  end
-
-  private
-
-  def assign_code
-    self.code = SecureRandom.uuid if code.blank?
-  end
-
-  def owner_must_match_scope
-    if scope == "facility"
-      errors.add(:owner_id, "は院内共通では指定できません") if owner_id.present?
-    elsif owner_id.blank?
-      errors.add(:owner_id, "を入力してください")
-    end
-  end
-
-  def definition_shape
-    return if definition.blank?
-
-    JsonShape.errors(DEFINITION_SHAPE, definition).each do |message|
-      errors.add(:definition, message.start_with?("は") ? message : "の #{message}")
-    end
-  end
 end

@@ -5,6 +5,8 @@
 # (親と子の持ち主は必ず同じ)。院内共通は owner_id を持たない。本人のフォルダは本人しか
 # 読み書きできない(Master::PatientFolderAccess)。設計は docs/patient-folder-design.md。
 class PatientFolder < ApplicationRecord
+  include ScopedOwner
+
   SCOPES = %w[facility department practitioner].freeze
   # 循環検出の遡上上限(OrderSet と同じ保険)。
   MAX_DEPTH = 50
@@ -16,16 +18,6 @@ class PatientFolder < ApplicationRecord
   validate :owner_must_match_scope
   validate :parent_must_be_in_same_scope, if: -> { parent_id.present? }
   validate :parent_must_not_cycle, if: -> { parent_id.present? }
-
-  scope :ordered, -> { order(Arel.sql("display_order NULLS LAST"), :id) }
-
-  # 画面が同時に見る 3 つの持ち主(院内共通 + 指定した診療科 + 指定した本人)のフォルダ。
-  def self.roots_for(department_id:, practitioner_id:)
-    rel = where(scope: "facility")
-    rel = rel.or(where(scope: "department", owner_id: department_id)) if department_id.present?
-    rel = rel.or(where(scope: "practitioner", owner_id: practitioner_id)) if practitioner_id.present?
-    rel
-  end
 
   # 自分と子孫のフォルダの id(「下位フォルダを含める」で患者を集めるため)。
   def self_and_descendant_ids
@@ -41,14 +33,6 @@ class PatientFolder < ApplicationRecord
   end
 
   private
-
-  def owner_must_match_scope
-    if scope == "facility"
-      errors.add(:owner_id, "は院内共通では指定できません") if owner_id.present?
-    elsif owner_id.blank?
-      errors.add(:owner_id, "を入力してください")
-    end
-  end
 
   # 持ち主をまたぐ木は作らない。
   def parent_must_be_in_same_scope

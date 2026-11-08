@@ -26,6 +26,9 @@
 # tab は条件を保存したタブ。「患者」タブ(patient)は上の形で、記録を表にするタブ(テンプレート・検査結果など)は
 # タブごとの入力欄の値を持つ(ExtractRecordDefinition)。
 class ExtractQuery < ApplicationRecord
+  # チームの条件はスクリーニング一覧。
+  include ScopedDefinition
+
   SCOPES = ChartDefinition::SCOPES
   PATIENT_TAB = "patient"
 
@@ -264,8 +267,6 @@ class ExtractQuery < ApplicationRecord
   validate :owner_must_match_scope
   validate :definition_shape
 
-  scope :ordered, -> { order(Arel.sql("display_order NULLS LAST"), :id) }
-
   # 条件を別のタブへ移すと形が合わなくなるので、保存した後はタブを変えさせない。
   attr_readonly :tab
 
@@ -276,15 +277,6 @@ class ExtractQuery < ApplicationRecord
   def tab_column? = self.class.tab_column?
 
   def patient_tab? = !tab_column? || tab == PATIENT_TAB
-
-  # 画面が同時に見る持ち主(ChartDefinition.roots_for と同じ)。チームの条件はスクリーニング一覧。
-  def self.roots_for(department_id:, practitioner_id:, team_ids: [])
-    rel = where(scope: "facility")
-    rel = rel.or(where(scope: "department", owner_id: department_id)) if department_id.present?
-    rel = rel.or(where(scope: "practitioner", owner_id: practitioner_id)) if practitioner_id.present?
-    rel = rel.or(where(scope: "team", owner_id: team_ids)) if team_ids.present?
-    rel
-  end
 
   def definition_with_defaults
     return ExtractRecordDefinition.with_defaults(tab, definition) if !patient_tab? && ExtractRecordDefinition::TABS.include?(tab)
@@ -297,18 +289,6 @@ class ExtractQuery < ApplicationRecord
 
   def shape_for_tab?
     patient_tab? || ExtractRecordDefinition::TABS.include?(tab)
-  end
-
-  def assign_code
-    self.code = SecureRandom.uuid if code.blank?
-  end
-
-  def owner_must_match_scope
-    if scope == "facility"
-      errors.add(:owner_id, "は院内共通では指定できません") if owner_id.present?
-    elsif owner_id.blank?
-      errors.add(:owner_id, "を入力してください")
-    end
   end
 
   def definition_shape

@@ -6,6 +6,8 @@
 # オーダーそのものではない(患者を持たない雛形)ので上流 FHIR には置かず、backend の
 # DB に持つ。設計は docs/order-set-design.md。
 class OrderSet < ApplicationRecord
+  include ScopedOwner
+
   KINDS = %w[folder set].freeze
   SCOPES = %w[facility department practitioner].freeze
   # 循環検出の遡上上限(Master::SchemaCategory と同じ保険)。
@@ -24,17 +26,6 @@ class OrderSet < ApplicationRecord
   validate :parent_must_be_folder_in_same_scope, if: -> { parent_id.present? }
   validate :parent_must_not_cycle, if: -> { parent_id.present? }
 
-  scope :ordered, -> { order(Arel.sql("display_order NULLS LAST"), :id) }
-
-  # 画面が同時に見る 3 つのルート(院内共通 + 指定した診療科 + 指定した医師)のノード。
-  # 引数が空のルートは含めない。
-  def self.roots_for(department_id:, practitioner_id:)
-    rel = where(scope: "facility")
-    rel = rel.or(where(scope: "department", owner_id: department_id)) if department_id.present?
-    rel = rel.or(where(scope: "practitioner", owner_id: practitioner_id)) if practitioner_id.present?
-    rel
-  end
-
   def folder? = kind == "folder"
 
   private
@@ -42,14 +33,6 @@ class OrderSet < ApplicationRecord
   # code は運用者に入力させず採番する。複製やインポートで指定があれば尊重する。
   def assign_code
     self.code = SecureRandom.uuid if code.blank?
-  end
-
-  def owner_must_match_scope
-    if scope == "facility"
-      errors.add(:owner_id, "は院内共通では指定できません") if owner_id.present?
-    elsif owner_id.blank?
-      errors.add(:owner_id, "を入力してください")
-    end
   end
 
   # 親はフォルダで、持ち主が同じでなければならない(持ち主をまたぐ木は作らない)。

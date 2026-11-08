@@ -408,10 +408,6 @@ export function markLineDrainEnteredInError(procedure: fhir4.Procedure): fhir4.P
 
 // ---- 刺入部観察 ----
 
-export type SiteFindingGrade = "none" | "mild" | "marked";
-export type SiteFixation = "ok" | "loose" | "detached";
-export type SitePatency = "ok" | "sluggish" | "occluded";
-
 export interface SiteFindingItem {
   key: string;
   label: string;

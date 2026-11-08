@@ -44,7 +44,7 @@ module Reports
       formatter = AnswerFormatter.new(collect_units(@questionnaire["item"]))
       mapping = @layout.parsed_mapping
 
-      text_ids, image_ids, all_ids = layout_item_ids
+      text_ids, image_ids, all_ids = ReportText.layout_item_ids_in(@layout.tlf)
 
       values = preset_blank_values(text_ids, link_ids.map { |id| mapper.tlf_id(id) })
       # マッピングの値出力先も、未回答ならデザイン時初期値を残さず空文字にする。
@@ -102,27 +102,6 @@ module Reports
     end
 
     private
-
-    # レイアウト内のアイテム ID を種類別に列挙する(v1 はトップレベルのみ、list 非対応)。
-    # 未知の ID へ page.item すると例外になるため、設定対象を積集合に絞るのに使う。
-    # 3 つ目の戻り値は ID を持つ全アイテム(text/ellipse 等を含む。表示切替の対象確認用)。
-    def layout_item_ids
-      items = JSON.parse(@layout.tlf).fetch("items", [])
-      text_ids = Set.new
-      image_ids = Set.new
-      all_ids = Set.new
-      items.each do |item|
-        id = item["id"].to_s
-        next if id.empty?
-
-        all_ids << id
-        case item["type"]
-        when "text-block" then text_ids << id
-        when "image-block" then image_ids << id
-        end
-      end
-      [text_ids, image_ids, all_ids]
-    end
 
     # レイアウトにあるが回答にない項目を空文字で埋める。対象は linkId 由来の ID
     # (繰り返しの "_n" 変形を含む)のみで、レイアウト独自の text-block は触らない。

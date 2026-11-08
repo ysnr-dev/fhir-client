@@ -4,6 +4,7 @@ module Master
   # 頻用薬の印(frequent)だけ。施設追加分(source=local)は自由に編集できる。
   class MicroAntimicrobialsController < BaseController
     include OfficialLocalRecords
+    include FrequentOfficialRecords
     include Importable
 
     before_action :set_record, only: %i[update destroy]
@@ -17,26 +18,6 @@ module Master
       end
 
       render json: paginate(scope.order(Arel.sql("display_order NULLS LAST")).order(:id))
-    end
-
-    def update
-      # 標準コードは頻用薬の印だけを切り替えられる。
-      permitted = @record.official? ? record_params.slice("frequent") : record_params.except("source", "code")
-      if @record.update(permitted)
-        render json: @record
-      else
-        render_validation_errors(@record)
-      end
-    end
-
-    def destroy
-      if @record.official?
-        return render json: { errors: ["配布ファイル由来の標準コードは削除できません"] },
-                      status: :unprocessable_content
-      end
-
-      @record.destroy!
-      head :no_content
     end
 
     private

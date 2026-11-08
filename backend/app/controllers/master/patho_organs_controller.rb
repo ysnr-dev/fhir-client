@@ -4,6 +4,7 @@ module Master
   # 頻用臓器の印(frequent)だけ。施設追加分(source=local)は自由に編集できる。
   class PathoOrgansController < BaseController
     include OfficialLocalRecords
+    include FrequentOfficialRecords
 
     before_action :set_record, only: %i[update destroy]
 
@@ -19,24 +20,10 @@ module Master
       render json: paginate(scope.order(Arel.sql("display_order NULLS LAST")).order(:id))
     end
 
-    def update
-      # 標準コードは頻用臓器の印だけを切り替えられる。
-      permitted = @record.official? ? record_params.slice("frequent") : record_params.except("source", "code")
-      if @record.update(permitted)
-        render json: @record
-      else
-        render_validation_errors(@record)
-      end
-    end
+    private
 
-    def destroy
-      if @record.official?
-        return render json: { errors: ["規約付録由来の標準コードは削除できません"] },
-                      status: :unprocessable_content
-      end
-
-      @record.destroy!
-      head :no_content
+    def official_source_label
+      "規約付録"
     end
   end
 end
