@@ -290,6 +290,8 @@ Rails.application.routes.draw do
     # 放射線検査で使う器材の施設マスタ。実際の製品を登録し、算定に使うレセプト電算の
     # 特定器材コードを紐付ける(配布マスタは medical_materials 側)。
     resources :rad_materials, only: %i[index show create update destroy]
+    # 血液浄化器の施設マスタ。透析で選ぶ製品を登録し、算定に使う特定器材コードを紐付ける。
+    resources :blood_purifiers, only: %i[index show create update destroy]
     # 実施入力用データセット。手技料・造影剤・器材の組み合わせに名前を付けて
     # 撮影項目に紐付けておく(master_rad_items.dataset_code)と、実施入力モーダルの
     # 初期明細として展開される。

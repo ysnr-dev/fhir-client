@@ -20,9 +20,9 @@ export function DialysisOrderCardBody({ serviceRequest }: { serviceRequest: fhir
             <span className="karte-rp__medicine-name">{summary.conditionLabel}</span>
           </li>
         )}
-        {summary.dialyzerName && (
+        {summary.purifierNames.length > 0 && (
           <li>
-            <span className="karte-rp__medicine-name">ダイアライザ: {summary.dialyzerName}</span>
+            <span className="karte-rp__medicine-name">血液浄化器: {summary.purifierNames.join(" / ")}</span>
           </li>
         )}
         {summary.anticoagulantName && (

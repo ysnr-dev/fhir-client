@@ -50,8 +50,8 @@ export function DialysisOrderDetailPanel({ serviceRequest, problemsById }: Dialy
           <dd>{summary.qbLabel || "-"}</dd>
           <dt>QD</dt>
           <dd>{summary.qdLabel || "-"}</dd>
-          <dt>ダイアライザ</dt>
-          <dd>{summary.dialyzerName || "-"}</dd>
+          <dt>血液浄化器</dt>
+          <dd>{summary.purifierNames.join(" / ") || "-"}</dd>
           <dt>透析液</dt>
           <dd>{summary.dialysate || "-"}</dd>
           {summary.substitutionLabel && (

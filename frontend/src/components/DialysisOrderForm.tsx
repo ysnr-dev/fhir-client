@@ -13,8 +13,16 @@ import {
   type DialysisModality,
   type DialysisOrderField,
   type DialysisOrderFormValues,
+  type DialysisCodedValue,
   type DialysisPatternEntry,
 } from "../fhir/dialysisOrderHelpers";
+import type { DialysisShift } from "../fhir/dialysisShiftHelpers";
+import {
+  bloodPurifierKindDisplay,
+  bloodPurifierKindForRow,
+  bloodPurifierLabel,
+  bloodPurifierRowCount,
+} from "../fhir/bloodPurifierHelpers";
 import { DAY_OF_WEEK_OPTIONS } from "../fhir/injectionHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
@@ -23,23 +31,30 @@ import { useValidationError } from "../hooks/useValidationError";
 import { makeFieldUpdater } from "../lib/form";
 import { ErrorBanner } from "./ErrorBanner";
 import { shownValidationError, useFieldAlert } from "./FieldAlert";
-import { MedicalMaterialSearchModal } from "./MedicalMaterialSearchModal";
+import { BloodPurifierSearchModal } from "./BloodPurifierSearchModal";
+import { TrashIcon } from "./icons/TrashIcon";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 
 // 透析オーダーの入力フォーム。明細も伝票レイアウトも無いので 1 枚で完結する。
 //
-// 曜日 × シフトは格子のチェックボックスで選ぶ。曜日ごとにシフトが違う指示(月曜は午前・金曜は午後)を
+// 曜日 × シフトは格子のチェックボックスで選ぶ(セル全体が押せる)。曜日ごとにシフトが違う指示(月曜は午前・金曜は午後)を
 // そのまま表せるため。施設設定から消したシフトを指すオーダーの編集では、そのシフトの行も残して出す
 // (黙って外さない)。
 //
 // 検索モーダルは <form> を内側に持つので、<form> の外に置く(Modal はポータルではない)。
 
-/** 格子の行。施設設定のシフトに、オーダーが指している設定に無いシフトを足したもの。 */
+/** 血液浄化器の入力行。浄化方法が使う本数に満たない分は空行で埋める。 */
+function padPurifierRows(purifiers: readonly DialysisCodedValue[], count: number): DialysisCodedValue[] {
+  const blanks = Array.from({ length: Math.max(count - purifiers.length, 0) }, () => ({ code: "", name: "" }));
+  return [...purifiers, ...blanks];
+}
+
+/** 格子の行。施設設定のシフトに、オーダーが指している設定に無いシフトを足したもの。設定に無いシフトは時間帯を持たない。 */
 function shiftRows(
-  shifts: readonly { code: string; label: string }[],
+  shifts: readonly DialysisShift[],
   pattern: readonly DialysisPatternEntry[],
-): { code: string; label: string }[] {
+): (Pick<DialysisShift, "code" | "label"> & Partial<Pick<DialysisShift, "start" | "end">>)[] {
   const known = new Set(shifts.map((shift) => shift.code));
   const orphaned = new Map<string, string>();
   for (const entry of pattern) {
@@ -80,7 +95,9 @@ export function DialysisOrderForm({
   const [validationError, setValidationError, validationErrorRef, invalidField] =
     useValidationError<DialysisOrderField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
-  const [picking, setPicking] = useState<"dialyzer" | "anticoagulant" | null>(null);
+  const [pickingAnticoagulant, setPickingAnticoagulant] = useState(false);
+  /** 検索モーダルを開いている血液浄化器の行。 */
+  const [pickingPurifierRow, setPickingPurifierRow] = useState<number | null>(null);
 
   const shifts = useDialysisShifts();
   const problemOptions = useProblemOptions(patientId);
@@ -88,6 +105,15 @@ export function DialysisOrderForm({
   const update = makeFieldUpdater(setValues);
 
   const rows = shiftRows(shifts, values.pattern);
+  const fixedPurifierRows = bloodPurifierRowCount(values.modality);
+  const purifierRows = padPurifierRows(values.purifiers, fixedPurifierRows);
+
+  function setPurifierRow(row: number, value: DialysisCodedValue) {
+    setValues((v) => ({
+      ...v,
+      purifiers: padPurifierRows(v.purifiers, fixedPurifierRows).map((purifier, i) => (i === row ? value : purifier)),
+    }));
+  }
 
   function selectModality(modality: DialysisModality | "") {
     setValues((v) => ({ ...v, modality, bedside: isAcuteDialysisModality(modality) }));
@@ -196,24 +222,35 @@ export function DialysisOrderForm({
                 <tr>
                   <th />
                   {DAY_OF_WEEK_OPTIONS.map((day) => (
-                    <th key={day.code}>{day.label}</th>
+                    <th key={day.code} className={`dialysis-order__day--${day.code}`}>
+                      {day.label}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((shift) => (
                   <tr key={shift.code}>
-                    <th>{shift.label}</th>
+                    <th>
+                      {shift.label}
+                      {shift.start && (
+                        <span className="dialysis-order__shift-time">
+                          {shift.start}〜{shift.end}
+                        </span>
+                      )}
+                    </th>
                     {DAY_OF_WEEK_OPTIONS.map((day) => (
                       <td key={day.code}>
-                        <input
-                          type="checkbox"
-                          aria-label={`${day.label}曜 ${shift.label}`}
-                          checked={values.pattern.some(
-                            (entry) => entry.dayOfWeek === day.code && entry.shift === shift.code,
-                          )}
-                          onChange={(e) => togglePattern(day.code, shift, e.target.checked)}
-                        />
+                        <label className="dialysis-order__cell">
+                          <input
+                            type="checkbox"
+                            aria-label={`${day.label}曜 ${shift.label}`}
+                            checked={values.pattern.some(
+                              (entry) => entry.dayOfWeek === day.code && entry.shift === shift.code,
+                            )}
+                            onChange={(e) => togglePattern(day.code, shift, e.target.checked)}
+                          />
+                        </label>
                       </td>
                     ))}
                   </tr>
@@ -268,25 +305,53 @@ export function DialysisOrderForm({
               />
             </label>
           )}
-          <label className="dialysis-order__wide">
-            ダイアライザ
-            <span className="dialysis-order__picker">
-              <input
-                type="text"
-                value={values.dialyzer?.name ?? ""}
-                onChange={(e) =>
-                  update("dialyzer", e.target.value ? { code: "", name: e.target.value } : null)
-                }
-              />
-              <button
-                type="button"
-                className="rp-card__compact-button"
-                onClick={() => setPicking("dialyzer")}
-              >
-                選択
-              </button>
-            </span>
-          </label>
+          {purifierRows.map((purifier, row) => {
+            const kind = bloodPurifierKindForRow(values.modality, row);
+            return (
+              <label className="dialysis-order__wide" key={row}>
+                {kind ? bloodPurifierKindDisplay(kind) : "血液浄化器"}
+                <span className="dialysis-order__picker">
+                  <input
+                    type="text"
+                    value={purifier.name}
+                    onChange={(e) => setPurifierRow(row, { code: "", name: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="rp-card__compact-button"
+                    onClick={() => setPickingPurifierRow(row)}
+                  >
+                    選択
+                  </button>
+                  {row >= fixedPurifierRows && (
+                    <button
+                      type="button"
+                      className="rp-card__icon-button"
+                      title="血液浄化器を削除"
+                      aria-label="血液浄化器を削除"
+                      onClick={() =>
+                        update(
+                          "purifiers",
+                          purifierRows.filter((_, i) => i !== row),
+                        )
+                      }
+                    >
+                      <TrashIcon />
+                    </button>
+                  )}
+                </span>
+              </label>
+            );
+          })}
+          <div className="dialysis-order__wide">
+            <button
+              type="button"
+              className="rp-card__compact-button"
+              onClick={() => update("purifiers", [...purifierRows, { code: "", name: "" }])}
+            >
+              追加
+            </button>
+          </div>
           <label className="dialysis-order__wide">
             透析液
             <input
@@ -306,7 +371,7 @@ export function DialysisOrderForm({
               <button
                 type="button"
                 className="rp-card__compact-button"
-                onClick={() => setPicking("anticoagulant")}
+                onClick={() => setPickingAnticoagulant(true)}
               >
                 選択
               </button>
@@ -463,31 +528,29 @@ export function DialysisOrderForm({
         )}
       </form>
 
-      {picking === "dialyzer" && (
-        <MedicalMaterialSearchModal
-          onSelect={(material) => {
-            setPicking(null);
-            update("dialyzer", {
-              code: material.material_code,
-              name: material.name ?? material.material_code,
-            });
+      {pickingPurifierRow !== null && (
+        <BloodPurifierSearchModal
+          initialKind={bloodPurifierKindForRow(values.modality, pickingPurifierRow)}
+          onSelect={(purifier) => {
+            setPurifierRow(pickingPurifierRow, { code: purifier.purifier_code, name: bloodPurifierLabel(purifier) });
+            setPickingPurifierRow(null);
           }}
-          onClose={() => setPicking(null)}
+          onClose={() => setPickingPurifierRow(null)}
         />
       )}
-      {picking === "anticoagulant" && (
+      {pickingAnticoagulant && (
         <MedicineSearchModal
           title="抗凝固薬を選択"
           dosageForm="4"
           onSelect={(medicine) => {
-            setPicking(null);
+            setPickingAnticoagulant(false);
             update("anticoagulant", {
               medicineCode: medicine.medicine_code,
               yjCode: medicine.yj_code ?? "",
               name: medicine.name ?? medicine.medicine_code,
             });
           }}
-          onClose={() => setPicking(null)}
+          onClose={() => setPickingAnticoagulant(false)}
         />
       )}
     </>

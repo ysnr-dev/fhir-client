@@ -74,7 +74,7 @@
                category = order-type|dialysis、code = 浄化方法(dialysis-modality)
                status = preparation(入室) → in-progress(開始) → completed(終了)
                performedPeriod = 開始〜終了、performer = 担当(臨床工学技士・看護師)
-               usedCode = 器材(特定保険医療材料)+ extension[dialysis-material-quantity]
+               usedCode = 器材(血液浄化器は施設マスタの製品、その他は特定保険医療材料)+ extension[dialysis-material-quantity]
                extension[dialysis-appointment] = 対応する予約(Appointment/…。ベッドサイドは無し)
                  ├ partOf ← Observation (CodeSystem/dialysis-measurement。透析前体重・透析後体重・除水量・
                  │            実透析時間・血流量・透析液流量。category = order-type|dialysis)
@@ -102,6 +102,7 @@ Location 透析室 (type = CodeSystem/location-type|dialysis-unit、physicalType
 | `CodeSystem/dialysis-measurement` | 各回の測定値。`pre-weight` / `post-weight` / `ultrafiltration` / `actual-minutes` / `qb` / `qd` |
 | `CodeSystem/dialysis-procedure-code` | 追加の手技(レセ電算 診療行為コード)。処置の `treatment-procedure-code` と同じ役 |
 | `CodeSystem/dialysis-shift` | シフト。コードは施設設定 `dialysis_shifts` のもの、`display` に登録時の名前を焼き付ける |
+| `CodeSystem/blood-purifier` | 血液浄化器。コードは施設マスタ `master_blood_purifiers` のもの(§3.1) |
 | `CodeSystem/location-type` の値 `dialysis-unit` | 透析室とそのベッドの `Location.type`(§5.1) |
 | `StructureDefinition/dialysis-order-end` | 終了日(リハビリの `rehab-order-end` と同じ判断。上流の `order-period` が見る) |
 | `StructureDefinition/dialysis-bedside` | ベッドサイド実施(急性血液浄化) |
@@ -127,7 +128,7 @@ JP Core `route-codes`、`StructureDefinition/medication-lot-number`、依頼科�
 | `duration-minutes` | valueInteger | 透析時間(分)。算定の時間区分(4 時間未満 / 4〜5 時間 / 5 時間以上)はここから決まるが、**算定は実施の実時間で行う**(§7) |
 | `qb` | valueQuantity(mL/min) | 血流量 |
 | `qd` | valueQuantity(mL/min) | 透析液流量 |
-| `dialyzer` | valueCodeableConcept | ダイアライザ・ヘモフィルタ。特定保険医療材料(`master_medical_materials`)の coding か、マスタに無ければ `text` だけ |
+| `purifier` ×N | valueCodeableConcept | 血液浄化器。施設マスタ(§3.1)の製品の coding(`CodeSystem/blood-purifier`)か、マスタに無ければ `text` だけ。`text` に膜素材と膜面積を含めて焼き付ける。DFPP は 2 件 |
 | `anticoagulant` | valueCodeableConcept | 抗凝固薬(医薬品マスタ。ヘパリン・低分子ヘパリン・ナファモスタット) |
 | `anticoagulant-initial-dose` | valueQuantity | 初回量 |
 | `anticoagulant-continuous-dose` | valueQuantity(/h) | 持続量 |
@@ -172,20 +173,42 @@ JP Core `route-codes`、`StructureDefinition/medication-lot-number`、依頼科�
 
 ［導出］透析では採らない。予約(Appointment)が `basedOn` でオーダーを指しており、オーダーを作り直すと N 週ぶんの予約の
 `basedOn` を付け直すことになる。**同じオーダーを編集**(`withVersionLock`、編集フォームは `useEditSnapshot` で版を固定)し、
-各回の実施記録に実際の条件(実透析時間・QB・QD・使ったダイアライザ・抗凝固薬)を写すことで「いつどの条件で行ったか」の履歴を担保する。
+各回の実施記録に実際の条件(実透析時間・QB・QD・使った血液浄化器・抗凝固薬)を写すことで「いつどの条件で行ったか」の履歴を担保する。
 条件の変更履歴そのものは `_history`(カルテ印刷の差分と同じ)で読める。
 
 ---
 
 ## 3. マスタと施設設定
 
-### 3.1 DB マスタは持たない
+### 3.1 血液浄化器の施設マスタ `master_blood_purifiers`
+
+［事実］レセプト電算の特定器材マスタ(`master_medical_materials`)のダイアライザーは「ダイアライザー(1a型)」のような機能区分で、
+同じ区分に「(在宅)」のコードも並ぶ。製品・膜素材・膜面積を持たないので指示に使えない。一方、ダイアライザーは人工腎臓の包括項目に無く、
+材料価格基準(040)の機能区分で算定する。
+
+［導出］**オーダーと実施は製品を選び、算定は製品に紐付いた機能区分を使う**。放射線の器材(`master_rad_materials`)と同じ形で、
+製品 N 件 : 特定器材コード 1 件。画面は `pages/BloodPurifierPage.tsx`。
+
+| 列 | 内容 |
+|---|---|
+| `purifier_code` | 施設内のコード(自動採番)。オーダーの coding に入る |
+| `kind` | 種別(ダイアライザ / ヘモダイアフィルタ / ヘモフィルタ / 持続緩徐式血液濾過器 / 血漿分離器 / 血漿成分分離器 / 吸着器) |
+| `name` `name_kana` `maker` `model_number` | 製品 |
+| `membrane_material` `membrane_area` | 膜素材・膜面積(㎡)。記録と表示だけで、不適合歴や ACE 阻害薬との照合はしない(§9) |
+| `receipt_material_code` | 算定に使う特定器材コード。未紐付けは一覧に印を出す |
+| `valid_from` `valid_to` | 採用期間。選択肢は採用中の製品だけ |
+
+［提案］浄化方法ごとに使う種別は `fhir/bloodPurifierHelpers.ts` の `KINDS_BY_MODALITY`。フォームの項目名と検索の初期種別を決めるだけで、
+別の種別も選べる。HD = ダイアライザ、HDF・I-HDF = ヘモダイアフィルタ、CHDF・CHD = 持続緩徐式血液濾過器、PE = 血漿分離器、
+DFPP = 血漿分離器 + 血漿成分分離器、DHP = 吸着器。［要確認］この対応は運用前に臨床工学技士に確認する。
+
+### 3.2 定数に置くもの
 
 ［提案］浄化方法・アクセス種別・測定項目は固定の分類で施設ごとに増減しないため、フロントの定数(`dialysisOrderHelpers.ts`)に置く
-(リハビリ §3 と同じ)。ダイアライザ・抗凝固薬・ESA は既存の特定保険医療材料マスタ・医薬品マスタを直接選ぶ(処置と同じ)。
+(リハビリ §3 と同じ)。抗凝固薬・ESA は既存の医薬品マスタを直接選ぶ。
 施設の「よく使う組み合わせ」はオーダーセットで持てる。
 
-### 3.2 施設設定(`backend/app/models/facility_settings.rb` の `SETTINGS`)
+### 3.3 施設設定(`backend/app/models/facility_settings.rb` の `SETTINGS`)
 
 **シフト `dialysis_shifts`**。透析室の 1 日の区切り。ベッドの枠(Slot)の生成と、オーダーの曜日 × シフト、ボードの列に使う。
 
@@ -345,8 +368,8 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
 - 実施記録と予約の突合は「同じオーダー × 同じ日」を基本にし(リハビリの `fetchRehabPerformsOn` と同じ)、
   ハブの `dialysis-appointment` があれば優先する(同日 2 回の臨時に備える)。
 - 薬剤の投与経路は注射と同じ `route-codes`。ESA・鉄は回路から(IV)、ヘパリンは持続。ロット番号は `withLotNumber`。
-- 器材は特定保険医療材料マスタを直接指す(処置と同じ。マスタに無い名称は手入力)。ダイアライザはオーダーの条件を初期値にする。
-- カルテのカードは開始日に 1 枚(リハビリ §5 と同じ)。本文は「浄化方法 / 入外 / 期間 / 曜日 × シフト / 主要条件(時間・QB・QD・ダイアライザ・抗凝固薬)」
+- 血液浄化器は施設マスタ(§3.1)から選び、オーダーの製品を初期値にする。その他の器材は特定保険医療材料マスタを直接指す(処置と同じ)。マスタに無い名称は手入力。
+- カルテのカードは開始日に 1 枚(リハビリ §5 と同じ)。本文は「浄化方法 / 入外 / 期間 / 曜日 × シフト / 主要条件(時間・QB・QD・血液浄化器・抗凝固薬)」
   + 直近の実施数件(日付・体重・除水)。実施情報は**受付済以降は常に出す**(リハビリと同じ条件。`karteTimeline.ts` にコメント)。
 - 患者帯に「透析中」のピクトグラム(化学療法の `chemotherapy` と同じ作り。`NON_MASTER_KEYS`、色は紫系)。有効な透析オーダー
   (`order-period` に今日が入るもの)があるときに出し、吹き出しに浄化方法・曜日 × シフト・アクセス・DW を出す。
@@ -361,6 +384,7 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
   (4 時間未満 / 4〜5 時間 / 5 時間以上)で `receipt_codes.dialysis` のコードを引く。急性系は 1 コード。
   コードが無ければ「施設設定に透析(hd / from4to5)のレセプト電算コードがありません」で skip。
 - 薬剤(MedicationAdministration)・器材(usedCode + 数量)・追加手技は処置型の送り方に乗る。
+  血液浄化器は製品の `receipt_material_code` で算定する(放射線器材と同じ解決を `coding.rb` に足す)。手入力の製品は特定器材コードが無いので算定に載らず、医事側で補う。
   ［要確認］resolver を持つ種別で子 Procedure・MedicationAdministration・usedCode が剤に載るかを `performed_record_collector.rb` /
   `billing_claim_builder.rb` で読む(処置型 + resolver の組み合わせは初)。
 - `orca/medical_message.rb` の `MEDICAL_CLASS` に `dialysis: "400"`(J 章)。`BillingSendModal.tsx` に種別名。
@@ -389,7 +413,8 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
 - 透析患者一覧(DW の推移・直近の採血・アクセスの状態)、月間統計(回数・浄化方法別・ベッド稼働)。
 - ボードのドラッグによるベッドの入れ替え、週ビューからの直接予約、入院中の外来オーダーの一時中断。
 - B001-15 の月次算定、導入期加算など(§7)。
-- シフトの削除時の使用中判定と注意表示(§3.2)。
+- シフトの削除時の使用中判定と注意表示(§3.3)。
+- 膜素材の照合(膜の不適合歴、AN69 膜と ACE 阻害薬の併用禁忌など。§3.1)。
 - 腹膜透析(PD)の処方と外来管理。
 - SS-MIX2 への出力(処置・リハビリも出していないので同じ扱い)。
 
@@ -405,7 +430,8 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
 - 新規: `fhir/dialysisOrderHelpers.ts`(← `rehabOrderHelpers.ts`)、`fhir/dialysisTaskHelpers.ts`(← `rehabTaskHelpers.ts`)、
   `fhir/dialysisShiftHelpers.ts`(施設設定のシフトの型・検証)、
   `components/DialysisOrderForm.tsx` / `DialysisOrderPanels.tsx` / `DialysisOrderDetailPanel.tsx` / `karteCardBodies/DialysisOrderCardBody.tsx`
-  (← Rehab 同名。薬剤・器材の選択は `TreatmentPerformModal.tsx` の `MedicineSearchModal` / `MedicalMaterialSearchModal`)、
+  (← Rehab 同名。薬剤の選択は `MedicineSearchModal`、血液浄化器の選択は `BloodPurifierSearchModal`)、
+  `pages/BloodPurifierPage.tsx` と backend の `Master::BloodPurifier`(← 放射線器材)、
   `api/queries/dialysis.ts`(← `rehab.ts` の detail / update / delete / patient orders)、患者帯のピクトグラム。
 - 既存に 1 行ずつ: `fhir/orderKinds.ts`、`components/orderKindRegistry.tsx`、`KarteCardModals.tsx`、`KarteRightPane.tsx`、
   `fhir/orderTransferLines.ts`、`fhir/karteTimeline.ts`、`karteMenu.ts`、`orderProgressHelpers.ts`、`outpatientOrderProgressHelpers.ts`(略号「透」)、
@@ -442,7 +468,7 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
 1. `docker compose exec frontend npx tsc -b`、`npm run lint`、backend は `-e RAILS_ENV=test -e ADMIN_TOKEN=` で rspec
    (施設設定・OrderCatalog・resolver の spec を足す)。上流は `../fhir-server` のコンテナで rspec。
 2. ブラウザ(ichiro): 施設設定にシフト 2 本 → 透析室の設定でベッド 3 台 + 枠 1 か月 → カルテ右ペインから HD 月水金午前のオーダー →
-   透析一覧で受付 → 4 週展開(プレビュー 12 件) → 当日ボードで入室 → 開始 → 終了(体重・除水・ESA のロット・ダイアライザ) →
+   透析一覧で受付 → 4 週展開(プレビュー 12 件) → 当日ボードで入室 → 開始 → 終了(体重・除水・ESA のロット・血液浄化器) →
    カードに実施 1 件・患者帯に紫のピクトグラム → 終了で翌日以降の予約が消える → 会計送信モーダルに「透析」の剤。
    別患者で同じ枠を先に取ってから展開し、412 のメッセージが出ることも見る。ライト・ダークの両方で見る。
 3. 開発データ: `frontend/src/demo-seed/` に透析導入の患者シナリオ(ベッド・Schedule・Slot も同じヘルパーで作る)を足し、`docs/demo-seed.md` に 1 行。

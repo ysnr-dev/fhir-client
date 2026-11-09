@@ -37,6 +37,7 @@ import { RadItemLayoutPage } from "./pages/RadItemLayoutPage";
 import { RadItemPage } from "./pages/RadItemPage";
 import { RadJj1017CodePage } from "./pages/RadJj1017CodePage";
 import { RadMaterialPage } from "./pages/RadMaterialPage";
+import { BloodPurifierPage } from "./pages/BloodPurifierPage";
 import { RadDatasetPage } from "./pages/RadDatasetPage";
 import { RegimenListPage } from "./pages/RegimenListPage";
 import { RegimenEditorPage } from "./pages/RegimenEditorPage";
@@ -490,6 +491,7 @@ function App() {
           <Route path="/rad-item-layouts" element={<RadItemLayoutPage />} />
           <Route path="/rad-jj1017-codes" element={<RadJj1017CodePage />} />
           <Route path="/rad-materials" element={<RadMaterialPage />} />
+          <Route path="/blood-purifiers" element={<BloodPurifierPage />} />
           <Route path="/rad-datasets" element={<RadDatasetPage />} />
           <Route path="/regimens" element={<RegimenListPage />} />
           <Route path="/regimens/new" element={<RegimenEditorPage />} />

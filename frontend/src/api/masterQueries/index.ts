@@ -11,6 +11,7 @@ export * from "./dpc";
 export * from "./lab";
 export * from "./medicalMaterial";
 export * from "./rad";
+export * from "./dialysis";
 export * from "./examItem";
 export * from "./physio";
 export * from "./endoscopy";

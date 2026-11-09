@@ -15857,37 +15857,87 @@ select.rad-route-select {
   accent-color: var(--accent);
 }
 
-/* 透析オーダーの曜日 × シフトの格子。 */
+/* 透析オーダーの曜日 × シフトの格子。セル全体が押せる。 */
 .dialysis-order__pattern {
   flex: 1 1 100%;
+  max-width: 560px;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
 }
 
+.dialysis-order__pattern th,
+.dialysis-order__pattern td {
+  border: 1px solid var(--border);
+}
+
 .dialysis-order__pattern th {
   font-weight: normal;
-  color: var(--text);
-  padding: 2px 6px;
-  white-space: nowrap;
+  color: var(--text-h);
+  padding: 4px 8px;
+  background: var(--surface-stripe);
+}
+
+.dialysis-order__pattern thead th {
+  text-align: center;
+}
+
+.dialysis-order__pattern thead th:first-child {
+  width: 104px;
 }
 
 .dialysis-order__pattern tbody th {
   text-align: left;
+  white-space: nowrap;
 }
 
 .dialysis-order__pattern td {
-  padding: 2px 6px;
-  text-align: center;
+  position: relative;
+  height: 40px;
+  padding: 0;
 }
 
-.dialysis-order__pattern input[type="checkbox"] {
-  width: auto;
+.dialysis-order__pattern thead th.dialysis-order__day--sat {
+  color: var(--lab-low);
+}
+
+.dialysis-order__pattern thead th.dialysis-order__day--sun {
+  color: var(--lab-high);
+}
+
+.dialysis-order__shift-time {
+  display: block;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.prescription-form label.dialysis-order__cell {
+  position: absolute;
+  inset: 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.dialysis-order__cell:hover {
+  background: var(--surface-stripe);
+}
+
+.dialysis-order__cell:has(input:checked) {
+  background: var(--accent-bg);
+}
+
+.dialysis-order__cell input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
   margin: 0;
   padding: 0;
   accent-color: var(--accent);
+  cursor: pointer;
 }
 
-.prescription-form label.dialysis-order__wide {
+.prescription-form .dialysis-order__wide {
   flex: 1 1 100%;
 }
 

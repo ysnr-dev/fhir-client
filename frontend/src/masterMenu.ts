@@ -175,6 +175,11 @@ export const MASTER_MENU: MasterMenuGroup[] = [
     label: "輸血",
     items: [{ label: "輸血製剤マスタ", to: "/transfusion-products" }],
   },
+  // 透析。実際の製品を登録し、算定用の特定器材コードを紐付ける。
+  {
+    label: "透析",
+    items: [{ label: "血液浄化器", to: "/blood-purifiers" }],
+  },
   // 放射線治療。装置・技法・定型の線量分割は施設ごとに違うので、選択肢をマスタで持つ。
   {
     label: "放射線治療",

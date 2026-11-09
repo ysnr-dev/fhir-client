@@ -10,6 +10,7 @@ export * from "./ctcae";
 export * from "./dpc";
 export * from "./lab";
 export * from "./rad";
+export * from "./dialysis";
 export * from "./medicalMaterial";
 export * from "./examItem";
 export * from "./examMaster";

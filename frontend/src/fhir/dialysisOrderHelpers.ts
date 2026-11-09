@@ -11,7 +11,6 @@ import {
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
 import {
-  MEDICAL_MATERIAL_SYSTEM,
   categoryCoding,
   codingBySystem,
   displayOf,
@@ -51,6 +50,8 @@ const ORDER_END_EXT_URL = `${LOCAL}/StructureDefinition/dialysis-order-end`;
 const BEDSIDE_EXT_URL = `${LOCAL}/StructureDefinition/dialysis-bedside`;
 const SCHEDULE_PATTERN_EXT_URL = `${LOCAL}/StructureDefinition/dialysis-schedule-pattern`;
 const PRESCRIPTION_EXT_URL = `${LOCAL}/StructureDefinition/dialysis-prescription`;
+/** 血液浄化器の施設マスタ(master_blood_purifiers)のコード。 */
+const BLOOD_PURIFIER_SYSTEM = `${LOCAL}/CodeSystem/blood-purifier`;
 
 const UCUM_SYSTEM = "http://unitsofmeasure.org";
 const FLOW_UNIT = "mL/min";
@@ -141,7 +142,8 @@ export interface DialysisOrderFormValues {
   durationMinutes: string;
   qb: string;
   qd: string;
-  dialyzer: DialysisCodedValue | null;
+  /** 血液浄化器。DFPP など複数使う浄化方法があるので配列で持つ。入力途中の空行を含む。 */
+  purifiers: DialysisCodedValue[];
   anticoagulant: DialysisAnticoagulant | null;
   anticoagulantInitialDose: string;
   anticoagulantContinuousDose: string;
@@ -167,7 +169,7 @@ export function emptyDialysisOrderForm(setting: PrescriptionSetting): DialysisOr
     durationMinutes: "",
     qb: "",
     qd: "",
-    dialyzer: null,
+    purifiers: [],
     anticoagulant: null,
     anticoagulantInitialDose: "",
     anticoagulantContinuousDose: "",
@@ -267,12 +269,12 @@ function buildPrescriptionExtension(values: DialysisOrderFormValues): fhir4.Exte
   }
   if (values.qb) children.push({ url: "qb", valueQuantity: quantity(values.qb, FLOW_UNIT, true) });
   if (values.qd) children.push({ url: "qd", valueQuantity: quantity(values.qd, FLOW_UNIT, true) });
-  if (values.dialyzer?.name.trim()) {
-    const { code, name } = values.dialyzer;
+  for (const { code, name } of values.purifiers) {
+    if (!name.trim()) continue;
     children.push({
-      url: "dialyzer",
+      url: "purifier",
       valueCodeableConcept: {
-        ...(code ? { coding: [{ system: MEDICAL_MATERIAL_SYSTEM, code, display: name }] } : {}),
+        ...(code ? { coding: [{ system: BLOOD_PURIFIER_SYSTEM, code, display: name }] } : {}),
         text: name.trim(),
       },
     });
@@ -500,6 +502,11 @@ function prescriptionChild(sr: fhir4.ServiceRequest, url: string): fhir4.Extensi
   return sr.extension?.find((e) => e.url === PRESCRIPTION_EXT_URL)?.extension?.find((e) => e.url === url);
 }
 
+function orderPurifiers(sr: fhir4.ServiceRequest): fhir4.CodeableConcept[] {
+  const children = sr.extension?.find((e) => e.url === PRESCRIPTION_EXT_URL)?.extension ?? [];
+  return children.flatMap((e) => (e.url === "purifier" && e.valueCodeableConcept ? [e.valueCodeableConcept] : []));
+}
+
 function quantityText(extension: fhir4.Extension | undefined): string {
   const value = extension?.valueQuantity?.value;
   return value == null ? "" : String(value);
@@ -529,7 +536,8 @@ export interface DialysisOrderSummary {
   durationLabel: string;
   qbLabel: string;
   qdLabel: string;
-  dialyzerName: string;
+  /** 血液浄化器の名前(膜素材・膜面積を含む)。 */
+  purifierNames: string[];
   anticoagulantName: string;
   /** 「初回 1000単位 / 持続 500単位/h」。 */
   anticoagulantDoseLabel: string;
@@ -575,7 +583,7 @@ export function summarizeDialysisOrder(sr: fhir4.ServiceRequest): DialysisOrderS
     durationLabel: duration,
     qbLabel: qb,
     qdLabel: qd,
-    dialyzerName: prescriptionChild(sr, "dialyzer")?.valueCodeableConcept?.text ?? "",
+    purifierNames: orderPurifiers(sr).flatMap((purifier) => (purifier.text ? [purifier.text] : [])),
     anticoagulantName: prescriptionChild(sr, "anticoagulant")?.valueCodeableConcept?.text ?? "",
     anticoagulantDoseLabel: [initialDose && `初回 ${initialDose}`, continuousDose && `持続 ${continuousDose}`]
       .filter(Boolean)
@@ -599,7 +607,6 @@ export const dialysisOrderProblem = orderProblem;
 // ---- 編集フォームへの復元 ----
 
 export function parseDialysisOrderForm(sr: fhir4.ServiceRequest): DialysisOrderFormValues {
-  const dialyzer = prescriptionChild(sr, "dialyzer")?.valueCodeableConcept;
   const anticoagulant = prescriptionChild(sr, "anticoagulant")?.valueCodeableConcept;
   const medicineCode = codingBySystem(anticoagulant?.coding, MEDICINE_CODE_SYSTEM)?.code;
   const initialDose = prescriptionChild(sr, "anticoagulant-initial-dose");
@@ -619,9 +626,10 @@ export function parseDialysisOrderForm(sr: fhir4.ServiceRequest): DialysisOrderF
     durationMinutes: String(prescriptionChild(sr, "duration-minutes")?.valueInteger ?? ""),
     qb: quantityText(prescriptionChild(sr, "qb")),
     qd: quantityText(prescriptionChild(sr, "qd")),
-    dialyzer: dialyzer?.text
-      ? { code: codingBySystem(dialyzer.coding, MEDICAL_MATERIAL_SYSTEM)?.code ?? "", name: dialyzer.text }
-      : null,
+    purifiers: orderPurifiers(sr).map((purifier) => ({
+      code: codingBySystem(purifier.coding, BLOOD_PURIFIER_SYSTEM)?.code ?? "",
+      name: purifier.text ?? "",
+    })),
     anticoagulant:
       medicineCode && anticoagulant
         ? {

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_08_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_10_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -448,6 +448,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_100000) do
     t.datetime "updated_at", null: false
     t.jsonb "maintenance"
     t.index ["code"], name: "index_master_advisory_rules_on_code", unique: true
+  end
+
+  create_table "master_blood_purifiers", force: :cascade do |t|
+    t.string "purifier_code", null: false
+    t.string "kind", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "maker"
+    t.string "model_number"
+    t.string "membrane_material"
+    t.decimal "membrane_area", precision: 4, scale: 2
+    t.string "receipt_material_code"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["kind"], name: "index_master_blood_purifiers_on_kind"
+    t.index ["purifier_code"], name: "index_master_blood_purifiers_on_purifier_code", unique: true
+    t.index ["receipt_material_code"], name: "index_master_blood_purifiers_on_receipt_material_code"
   end
 
   create_table "master_bom_assessments", force: :cascade do |t|

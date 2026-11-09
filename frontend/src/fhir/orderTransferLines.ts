@@ -244,7 +244,7 @@ export const ORDER_TRANSFER_LINES: { [K in OrderKind]: (item: OrderItem<K>) => s
       summary.modalityDisplay,
       indent([summary.periodLabel, summary.scheduleLabel].filter(Boolean).join(" / ")),
       ...(summary.conditionLabel ? [indent(summary.conditionLabel)] : []),
-      ...(summary.dialyzerName ? [indent(`ダイアライザ: ${summary.dialyzerName}`)] : []),
+      ...(summary.purifierNames.length > 0 ? [indent(`血液浄化器: ${summary.purifierNames.join(" / ")}`)] : []),
       ...(summary.anticoagulantName
         ? [indent(`抗凝固薬: ${[summary.anticoagulantName, summary.anticoagulantDoseLabel].filter(Boolean).join(" ")}`)]
         : []),
