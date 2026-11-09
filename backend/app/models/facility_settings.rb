@@ -343,6 +343,16 @@ class FacilitySettings < ApplicationRecord
   SSMIX2_FACILITY_ID = { pattern: /\A(\d{10})?\z/, label: "医療施設 ID(10 桁、空可)" }.freeze
   SSMIX2_ROOT_PATH = { pattern: /\A[^\r\n]{0,500}\z/, label: "出力先のパス" }.freeze
   SSMIX2_APPLICATION = { pattern: /\A[ -~]{1,40}\z/, label: "送信アプリケーション名(半角英数 40 文字以内)" }.freeze
+  # 透析室の 1 日の区切り(シフト)。ベッドの枠・オーダーの曜日 × シフト・ボードの列に使う。
+  # 消したシフトが既定値から戻らないよう、map ではなく並びで持つ。長さの違うシフトを作れるよう
+  # 枠表の SlotPattern には置かない(docs/dialysis-order-design.md §3.2)。
+  DEFAULT_DIALYSIS_SHIFTS = {
+    "shifts" => [
+      { "code" => "am", "label" => "午前", "start" => "09:00", "end" => "13:30" },
+      { "code" => "pm", "label" => "午後", "start" => "14:00", "end" => "18:30" }
+    ]
+  }.freeze
+  DIALYSIS_SHIFT_CODE = { pattern: /\A[a-z0-9-]{1,16}\z/, label: "シフトコード(半角英小文字・数字・ハイフン 16 文字以内)", strict: true }.freeze
   # 設定項目の表。ここに 1 項目足せば、検証・既定値・読み書き・管理 API がすべて付く。
   #
   #   default: 保存されていないときに返す値
@@ -572,6 +582,31 @@ class FacilitySettings < ApplicationRecord
         messages << "出力先を指定してください" if value["root_path"].to_s.strip.empty?
         messages << "医療施設 ID を指定してください" if value["facility_id"].to_s.empty?
         messages
+      }
+    },
+    "dialysis_shifts" => {
+      default: DEFAULT_DIALYSIS_SHIFTS,
+      shape: {
+        fields: {
+          "shifts" => {
+            list: {
+              fields: { "code" => DIALYSIS_SHIFT_CODE, "label" => :text, "start" => :time, "end" => :time },
+              required: %w[code label start end]
+            },
+            min: 1,
+            unique: "code"
+          }
+        }
+      },
+      check: lambda { |value|
+        shifts = value.is_a?(Hash) && value["shifts"].is_a?(Array) ? value["shifts"] : []
+        timed = shifts.select { |shift| shift.is_a?(Hash) && shift["start"].is_a?(String) && shift["end"].is_a?(String) }
+        reversed = timed.reject { |shift| shift["start"] < shift["end"] }
+                        .map { |shift| "シフト「#{shift['label']}」の終了は開始より後にしてください" }
+        overlapping = timed.sort_by { |shift| shift["start"] }.each_cons(2).filter_map do |earlier, later|
+          "シフト「#{earlier['label']}」と「#{later['label']}」の時間帯が重なっています" if later["start"] < earlier["end"]
+        end
+        reversed + overlapping
       }
     },
     "dpc_coefficients" => {

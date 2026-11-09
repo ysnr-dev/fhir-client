@@ -49,11 +49,11 @@ class ExtractQuery < ApplicationRecord
   # 部門オーダーの種別(ヘッダの order-type のコード。frontend の fhir/orderKinds.ts)。
   ORDER_KINDS = %w[
     lab micro pathology rad physio endoscopy treatment surgery meal transfusion rehab radiotherapy
-    nutrition-guidance medication-guidance consult
+    nutrition-guidance medication-guidance dialysis consult
   ].freeze
   # 実施(Procedure)でも数えられる種別(frontend の fhir/extractKinds.ts の PERFORMED_ORDER_KINDS)。
   PERFORMED_ORDER_KINDS = %w[
-    rad physio endoscopy treatment surgery transfusion rehab nutrition-guidance medication-guidance
+    rad physio endoscopy treatment surgery transfusion rehab nutrition-guidance medication-guidance dialysis
   ].freeze
   ORDER_STAGES = %w[ordered performed].freeze
   # 出力項目(docs/data-extract-design.md §4)。患者番号・氏名はいつも出す。

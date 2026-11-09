@@ -36,7 +36,7 @@ module JsonShape
     elsif map?(node)
       fill_map(node, default, stored)
     elsif list?(node)
-      stored.is_a?(Array) ? stored.map(&:to_s) : default
+      fill_list(node, default, stored)
     else
       leaf_value(node, default, stored)
     end
@@ -136,6 +136,14 @@ module JsonShape
       filled[key.to_s] = sanitize(node[:map], value)
     end
     filled
+  end
+
+  # list は保存された並びをそのまま使う(要素単位の既定値は持たない)。葉の並びだけ文字列に寄せる。
+  def fill_list(node, default, stored)
+    return default unless stored.is_a?(Array)
+
+    item = node[:list]
+    fields?(item) || map?(item) || list?(item) ? stored : stored.map(&:to_s)
   end
 
   # map のキーに入れる値。決まったキーだけを残し、空(nil)は落とす

@@ -404,7 +404,8 @@
   color: var(--accent);
 }
 
-.patient-header__caution--chemo {
+.patient-header__caution--chemo,
+.patient-header__caution--dialysis {
   color: #7e57c2;
 }
 
@@ -15854,6 +15855,51 @@ select.rad-route-select {
   margin: 0;
   padding: 0;
   accent-color: var(--accent);
+}
+
+/* 透析オーダーの曜日 × シフトの格子。 */
+.dialysis-order__pattern {
+  flex: 1 1 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.dialysis-order__pattern th {
+  font-weight: normal;
+  color: var(--text);
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.dialysis-order__pattern tbody th {
+  text-align: left;
+}
+
+.dialysis-order__pattern td {
+  padding: 2px 6px;
+  text-align: center;
+}
+
+.dialysis-order__pattern input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.prescription-form label.dialysis-order__wide {
+  flex: 1 1 100%;
+}
+
+.dialysis-order__picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dialysis-order__picker input {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* 検査予約モーダル。右ペインより広く使えるのでカレンダーをそのまま出す。 */

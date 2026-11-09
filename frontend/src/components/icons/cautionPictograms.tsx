@@ -38,6 +38,8 @@ export const CAUTION_PICTOGRAM_KEYS = [
   "allergy-other",
   // 化学療法中。注意区分マスタでは選ばせず、患者帯が適用中のレジメンから直接使う。
   "chemotherapy",
+  // 透析中。注意区分マスタでは選ばせず、患者帯が有効な透析オーダーから直接使う。
+  "dialysis",
   // 早期警告(NEWS2 が中以上)。注意区分マスタでは選ばせず、患者帯が最新の NEWS2 から直接使う。
   "early-warning",
   // 取込待ちの Web 問診。注意区分マスタでは選ばせず、患者帯が問診の回答から直接使う。
@@ -70,6 +72,7 @@ export const CAUTION_PICTOGRAM_LABELS: Record<CautionPictogramKey, string> = {
   infection: "バイオハザード",
   "allergy-medication": "カプセルに禁止記号",
   chemotherapy: "点滴バッグ",
+  dialysis: "ダイアライザ",
   "allergy-other": "皿に禁止記号",
   "early-warning": "心拍の波形",
   intake: "用紙にチェック",
@@ -258,6 +261,14 @@ const SHAPES: Record<CautionPictogramKey, ReactNode> = {
       <circle cx="8" cy="14" r="1.2" {...STROKE} />
     </>
   ),
+  // ダイアライザ(透析中)。血液回路の出入りが付いた円筒形の濾過筒。
+  dialysis: (
+    <>
+      <rect x="5" y="1.8" width="6" height="12.4" rx="1.6" {...STROKE} />
+      <path d="M5 4.6h6M5 11.4h6M7 6.4v3.2M9 6.4v3.2" {...STROKE} />
+      <path d="M5 3.2H2.4M11 12.8h2.6" {...STROKE} />
+    </>
+  ),
   // 心拍の波形(早期警告)。バイタルの悪化を表す。
   "early-warning": (
     <>
@@ -308,6 +319,7 @@ const NON_MASTER_KEYS: readonly CautionPictogramKey[] = [
   "allergy-medication",
   "allergy-other",
   "chemotherapy",
+  "dialysis",
   "early-warning",
   "intake",
   "cds",

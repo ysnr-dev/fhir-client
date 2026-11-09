@@ -32,6 +32,7 @@ import {
   RadiotherapyOrderEditPanel,
 } from "./RadiotherapyOrderPanels";
 import { RehabOrderCreatePanel, RehabOrderEditPanel } from "./RehabOrderPanels";
+import { DialysisOrderCreatePanel, DialysisOrderEditPanel } from "./DialysisOrderPanels";
 import {
   NutritionGuidanceOrderCreatePanel,
   NutritionGuidanceOrderEditPanel,
@@ -255,6 +256,10 @@ const ORDER_PANES: Record<
   "rehab-order": {
     create: { title: "リハビリ登録", Panel: RehabOrderCreatePanel },
     edit: { title: "リハビリ編集", Panel: RehabOrderEditPanel },
+  },
+  "dialysis-order": {
+    create: { title: "透析登録", Panel: DialysisOrderCreatePanel },
+    edit: { title: "透析編集", Panel: DialysisOrderEditPanel },
   },
   "radiotherapy-order": {
     create: { title: "放射線治療登録", Panel: RadiotherapyOrderCreatePanel },

@@ -8,7 +8,7 @@ class OrderSetEntry < ApplicationRecord
     prescription injection lab-order micro-order patho-order rad-order physio-order
     endoscopy-order treatment-order surgery-order meal-order transfusion-order
     rehab-order radiotherapy-order nutrition-guidance-order medication-guidance-order medical-management-order
-    consult-order nursing-order
+    dialysis-order consult-order nursing-order
   ].freeze
 
   # 外部キーを張らない方針に合わせ optional にし、存在は親側の has_many で担保する。

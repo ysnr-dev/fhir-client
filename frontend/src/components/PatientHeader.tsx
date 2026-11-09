@@ -11,6 +11,7 @@ import {
   usePatientAdmission,
   usePatientEmergency,
   useRegimenApplications,
+  useActiveDialysisOrders,
   usePatientLineDrains,
   useEarlyWarningSettings,
   useLatestEarlyWarning,
@@ -33,6 +34,7 @@ import {
 } from "../fhir/emergencyEncounterHelpers";
 import type { PatientCaution } from "../api/masterClient";
 import { regimenStatusLabel } from "../fhir/regimenOrderHelpers";
+import { summarizeDialysisOrder } from "../fhir/dialysisOrderHelpers";
 import { daysInsertedLabel, isOverWarnDays, lineDrainLabel } from "../fhir/lineDrainHelpers";
 import { useLineDrainTypes } from "../api/masterQueries";
 import { today } from "../lib/dates";
@@ -159,6 +161,7 @@ export function PatientPictogramStrip(props: PictogramProps) {
       <AllergyPictograms {...props} />
       <InfectionPictogram {...props} />
       <ChemotherapyPictogram {...props} />
+      <DialysisPictogram {...props} />
       <LineDrainPictogram {...props} />
       <EarlyWarningPictogram {...props} />
       <IntakePictogram {...props} />
@@ -314,6 +317,40 @@ function ChemotherapyPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal
         <Link className="patient-header__popover-link" to={`/patients/${patientId}/karte?tab=chemo`}>
           化学療法タブを開く
         </Link>
+      </PictogramPopover>
+    </span>
+  );
+}
+
+/** 透析中(今日に効いている透析オーダーがある)。穿刺する腕や曜日は吹き出しで読む。 */
+function DialysisPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }: PictogramProps) {
+  const orders = useActiveDialysisOrders(patientId);
+
+  if (!patientId) return null;
+  const running = (orders.data ?? []).map((order) => ({ id: order.id, summary: summarizeDialysisOrder(order) }));
+  if (running.length === 0) return null;
+
+  const label = running.map(({ summary }) => `透析: ${summary.modalityShort}`).join(" / ");
+
+  return (
+    <span className="patient-header__item patient-header__cautions">
+      <PictogramPopover
+        label={label}
+        className="patient-header__caution--dialysis"
+        icon={<CautionPictogram pictogram="dialysis" size={size} />}
+        count={running.length}
+        portal={portal}
+      >
+        <ul className="patient-header__popover-list">
+          {running.map(({ id, summary }) => (
+            <li key={id}>
+              <span className="patient-header__popover-name">{summary.modalityDisplay}</span>
+              <span className="patient-header__popover-text">
+                {[summary.scheduleLabel, summary.periodLabel, summary.accessLabel].filter(Boolean).join(" / ")}
+              </span>
+            </li>
+          ))}
+        </ul>
       </PictogramPopover>
     </span>
   );

@@ -21,6 +21,7 @@ import {
   useRadiotherapyCourseReviews,
   useTreatmentAdverseEvents,
   useRehabOrderDetail,
+  useDialysisOrderDetail,
   useNutritionGuidanceOrderDetail,
   useMedicalManagementOrderDetail,
   useMedicationGuidanceOrderDetail,
@@ -86,6 +87,7 @@ import { TransfusionOrderDetailPanel } from "./TransfusionOrderDetailPanel";
 import { transfusionDispensesByOrderId } from "../fhir/transfusionDispenseHelpers";
 import { splitPerformBundle } from "../fhir/radResultHelpers";
 import { RehabOrderDetailPanel } from "./RehabOrderDetailPanel";
+import { DialysisOrderDetailPanel } from "./DialysisOrderDetailPanel";
 import { NutritionGuidanceOrderDetailPanel } from "./NutritionGuidanceOrderDetailPanel";
 import { MedicalManagementOrderDetailPanel } from "./MedicalManagementOrderDetailPanel";
 import { medicalManagementItemsByOrderId } from "../fhir/medicalManagementOrderHelpers";
@@ -139,6 +141,7 @@ const ORDER_DETAILS: Record<OrderKind, ComponentType<OrderDetailProps>> = {
   "meal-order": MealOrderDetail,
   "transfusion-order": TransfusionOrderDetail,
   "rehab-order": RehabOrderDetail,
+  "dialysis-order": DialysisOrderDetail,
   "radiotherapy-order": RadiotherapyOrderDetail,
   "nutrition-guidance-order": NutritionGuidanceOrderDetail,
   "medical-management-order": MedicalManagementOrderDetail,
@@ -572,6 +575,37 @@ function RehabOrderDetail({
         />
       ) : (
         !detail.error && <NotFound label="リハビリオーダー" />
+      )}
+    </>
+  );
+}
+
+function DialysisOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useDialysisOrderDetail(srId);
+  const serviceRequest = serviceRequestsOf(detail.data?.data).find(
+    (request) => request.id === srId,
+  );
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された透析オーダーは別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <DialysisOrderDetailPanel serviceRequest={serviceRequest} problemsById={problemsById} />
+      ) : (
+        !detail.error && <NotFound label="透析オーダー" />
       )}
     </>
   );
@@ -1295,6 +1329,10 @@ function RehabOrderJson({ srId }: SrIdProps) {
   return <OrderBundleJson order={useRehabOrderDetail(srId, AUDIT)} />;
 }
 
+function DialysisOrderJson({ srId }: SrIdProps) {
+  return <OrderBundleJson order={useDialysisOrderDetail(srId, AUDIT)} />;
+}
+
 function NutritionGuidanceOrderJson({ srId }: SrIdProps) {
   return <OrderBundleJson order={useNutritionGuidanceOrderDetail(srId, AUDIT)} />;
 }
@@ -1331,6 +1369,7 @@ const ORDER_JSONS: Record<OrderKind, ComponentType<SrIdProps>> = {
   "meal-order": MealOrderJson,
   "transfusion-order": TransfusionOrderJson,
   "rehab-order": RehabOrderJson,
+  "dialysis-order": DialysisOrderJson,
   "radiotherapy-order": RadiotherapyOrderJson,
   "nutrition-guidance-order": NutritionGuidanceOrderJson,
   "medical-management-order": MedicalManagementOrderJson,

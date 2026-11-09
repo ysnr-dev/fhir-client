@@ -127,6 +127,8 @@ import {
 import { isRehabServiceRequest } from "./rehabOrderHelpers";
 import { rehabTaskStatus, rehabTasksByOrderId, type RehabTaskStatus } from "./rehabTaskHelpers";
 import { rehabPerformsByOrderId, type RehabPerformDisplay } from "./rehabResultHelpers";
+import { isDialysisServiceRequest } from "./dialysisOrderHelpers";
+import { dialysisTaskStatus, dialysisTasksByOrderId, type DialysisTaskStatus } from "./dialysisTaskHelpers";
 import {
   isNutritionGuidanceServiceRequest,
   nutritionGuidanceOrderResponseIds,
@@ -465,6 +467,13 @@ export type KarteTimelineItem = KarteItemBase &
         status: RehabTaskStatus;
         /** 実施記録(新しい順)。 */
         performs: RehabPerformDisplay[];
+      }
+    // 透析。リハビリと同じ期間継続型で、Task は部門の受け入れ状態。
+    | {
+        kind: "dialysis-order";
+        serviceRequest: fhir4.ServiceRequest;
+        /** 透析部門の受け入れ状態。Task がまだ無いオーダーは依頼済。 */
+        status: DialysisTaskStatus;
       }
     // 栄養指導。リハビリと同じ期間継続型で、進捗 Task と実施記録(指導 1 回ぶん)を持つ。
     // カードは先頭数件と件数だけを出す。
@@ -937,6 +946,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // rehabPerformsByOrderId が category(order-type)で行うので同じ配列を渡してよい。
   const rehabTaskByOrderId = rehabTasksByOrderId(tasks);
   const rehabPerformByOrderId = rehabPerformsByOrderId(procedures);
+  const dialysisTaskByOrderId = dialysisTasksByOrderId(tasks);
   // 栄養指導もリハビリと同じ形(Task + Procedure がまとめて届く)。
   const nutritionGuidanceTaskByOrderId = nutritionGuidanceTasksByOrderId(tasks);
   const nutritionGuidancePerformByOrderId = nutritionGuidancePerformsByOrderId(procedures);
@@ -1179,6 +1189,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
           status === "accepted" || status === "completed"
             ? (rehabPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
             : [],
+      };
+    }
+    if (isDialysisServiceRequest(serviceRequest)) {
+      return {
+        ...base,
+        kind: "dialysis-order" as const,
+        label: KARTE_KIND_LABELS["dialysis-order"],
+        status: dialysisTaskStatus(dialysisTaskByOrderId.get(serviceRequest.id ?? "")),
       };
     }
     if (isNutritionGuidanceServiceRequest(serviceRequest)) {

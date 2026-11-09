@@ -97,6 +97,12 @@ import {
   type TransfusionOrderFormValues,
 } from "../fhir/transfusionOrderHelpers";
 import {
+  buildDialysisOrderBundle,
+  buildDoDialysisOrderForm,
+  emptyDialysisOrderForm,
+  type DialysisOrderFormValues,
+} from "../fhir/dialysisOrderHelpers";
+import {
   buildDoRehabOrderForm,
   buildRehabOrderBundle,
   emptyRehabOrderForm,
@@ -166,6 +172,7 @@ import { PrescriptionForm } from "./PrescriptionForm";
 import { RadOrderForm } from "./RadOrderForm";
 import { RadiotherapyOrderForm } from "./RadiotherapyOrderForm";
 import { RehabOrderForm } from "./RehabOrderForm";
+import { DialysisOrderForm } from "./DialysisOrderForm";
 import { SurgeryOrderForm } from "./SurgeryOrderForm";
 import { TransfusionOrderForm } from "./TransfusionOrderForm";
 import { TreatmentOrderForm } from "./TreatmentOrderForm";
@@ -772,6 +779,33 @@ const rehabOrder = defineOrderSetType<RehabOrderFormValues, []>("rehab-order", {
   }),
 });
 
+const dialysisOrder = defineOrderSetType<DialysisOrderFormValues, []>("dialysis-order", {
+  label: "透析",
+  renderForm: (props) => (
+    <DialysisOrderForm
+      patientId={props.patientId}
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+    />
+  ),
+  emptyValues: (setting) => emptyDialysisOrderForm(setting),
+  buildDoValues: buildDoDialysisOrderForm,
+  settingOf: (values) => values.setting,
+  buildBundle: (values, _extra, { patientId, requester, defaultSetting }) => ({
+    bundle: buildDialysisOrderBundle(
+      values,
+      patientId,
+      withOrderWard(requester, values.setting, defaultSetting),
+    ),
+    invalidate: [],
+  }),
+});
+
 const radiotherapyOrder = defineOrderSetType<RadiotherapyOrderFormValues, []>("radiotherapy-order", {
   label: "放射線治療",
   renderForm: (props) => (
@@ -932,6 +966,7 @@ export const ORDER_SET_TYPES: Partial<Record<OrderSetOrderType, OrderSetTypeDef>
   "meal-order": mealOrder,
   "transfusion-order": transfusionOrder,
   "rehab-order": rehabOrder,
+  "dialysis-order": dialysisOrder,
   "radiotherapy-order": radiotherapyOrder,
   "nutrition-guidance-order": nutritionGuidanceOrder,
   "medication-guidance-order": medicationGuidanceOrder,
@@ -961,6 +996,7 @@ export const ORDER_SET_TYPE_LABELS: Record<OrderSetOrderType, string> = {
   "meal-order": "食事",
   "transfusion-order": "輸血",
   "rehab-order": "リハビリ",
+  "dialysis-order": "透析",
   "radiotherapy-order": "放射線治療",
   "nutrition-guidance-order": "栄養指導",
   "medication-guidance-order": "服薬指導",

@@ -14,6 +14,7 @@ import {
   useDeleteRadOrder,
   useDeleteRadiotherapyOrder,
   useDeleteRehabOrder,
+  useDeleteDialysisOrder,
   useDeleteSurgeryOrder,
   useDeleteTransfusionOrder,
   useDeleteTreatmentOrder,
@@ -43,6 +44,8 @@ import { radTaskStatusDisplay } from "../fhir/radTaskHelpers";
 import { summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
 import { radiotherapyTaskStatusDisplay } from "../fhir/radiotherapyTaskHelpers";
 import { summarizeRehabOrder } from "../fhir/rehabOrderHelpers";
+import { summarizeDialysisOrder } from "../fhir/dialysisOrderHelpers";
+import { dialysisTaskStatusDisplay } from "../fhir/dialysisTaskHelpers";
 import { rehabTaskStatusDisplay } from "../fhir/rehabTaskHelpers";
 import { summarizeSurgeryOrder } from "../fhir/surgeryOrderHelpers";
 import { surgeryTaskStatusDisplay } from "../fhir/surgeryTaskHelpers";
@@ -67,6 +70,7 @@ import { PhysioOrderCardBody } from "./karteCardBodies/PhysioOrderCardBody";
 import { RadOrderCardBody } from "./karteCardBodies/RadOrderCardBody";
 import { RadiotherapyOrderCardBody } from "./karteCardBodies/RadiotherapyOrderCardBody";
 import { RehabOrderCardBody } from "./karteCardBodies/RehabOrderCardBody";
+import { DialysisOrderCardBody } from "./karteCardBodies/DialysisOrderCardBody";
 import { SurgeryOrderCardBody } from "./karteCardBodies/SurgeryOrderCardBody";
 import { TransfusionOrderCardBody } from "./karteCardBodies/TransfusionOrderCardBody";
 import { TreatmentOrderCardBody } from "./karteCardBodies/TreatmentOrderCardBody";
@@ -281,6 +285,16 @@ export const ORDER_KIND_DEFS: { [K in OrderKind]: OrderKindDef<K> } = {
       <RehabOrderCardBody serviceRequest={item.serviceRequest} performs={item.performs} />
     ),
   },
+  "dialysis-order": {
+    // リハビリと同じ期間継続型なので「いつからいつまで」が見出しに要る。
+    title: (item) => {
+      const summary = summarizeDialysisOrder(item.serviceRequest);
+      return joinParts(summary.settingDisplay, summary.periodLabel);
+    },
+    status: (item) => ({ code: item.status, label: dialysisTaskStatusDisplay(item.status) }),
+    doable: true,
+    Body: ({ item }) => <DialysisOrderCardBody serviceRequest={item.serviceRequest} />,
+  },
   "radiotherapy-order": {
     // 「第何コースで何が目的か」が見出し。
     title: (item) => {
@@ -386,6 +400,7 @@ export function useOrderKindDeletes() {
     "meal-order": useDeleteMealOrder(),
     "transfusion-order": useDeleteTransfusionOrder(),
     "rehab-order": useDeleteRehabOrder(),
+    "dialysis-order": useDeleteDialysisOrder(),
     "radiotherapy-order": useDeleteRadiotherapyOrder(),
     "nutrition-guidance-order": useDeleteNutritionGuidanceOrder(),
     "medication-guidance-order": useDeleteMedicationGuidanceOrder(),

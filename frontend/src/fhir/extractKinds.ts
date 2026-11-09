@@ -127,6 +127,7 @@ const PERFORMED_ORDER_KINDS: ReadonlySet<OrderKind> = new Set<OrderKind>([
   "rehab-order",
   "nutrition-guidance-order",
   "medication-guidance-order",
+  "dialysis-order",
 ]);
 
 export interface ExtractOrderKind {

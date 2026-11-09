@@ -49,6 +49,7 @@ import {
   radOrderItems,
 } from "./radOrderHelpers";
 import { summarizeRehabOrder } from "./rehabOrderHelpers";
+import { summarizeDialysisOrder } from "./dialysisOrderHelpers";
 import {
   summarizeSurgeryOrder,
   surgeryAnesthesiaMethodDisplay,
@@ -233,6 +234,21 @@ export const ORDER_TRANSFER_LINES: { [K in OrderKind]: (item: OrderItem<K>) => s
       [summary.diseaseCategoryDisplay, summary.therapyTypesLabel].filter(Boolean).join(" "),
       indent([summary.periodLabel, summary.scheduleLabel].filter(Boolean).join(" / ")),
       ...(summary.targetDisease ? [indent(`対象: ${summary.targetDisease}`)] : []),
+      ...noteLines(summary.comment),
+    ];
+  },
+  "dialysis-order": ({ serviceRequest }) => {
+    const summary = summarizeDialysisOrder(serviceRequest);
+    if (!summary.modality) return [];
+    return [
+      summary.modalityDisplay,
+      indent([summary.periodLabel, summary.scheduleLabel].filter(Boolean).join(" / ")),
+      ...(summary.conditionLabel ? [indent(summary.conditionLabel)] : []),
+      ...(summary.dialyzerName ? [indent(`ダイアライザ: ${summary.dialyzerName}`)] : []),
+      ...(summary.anticoagulantName
+        ? [indent(`抗凝固薬: ${[summary.anticoagulantName, summary.anticoagulantDoseLabel].filter(Boolean).join(" ")}`)]
+        : []),
+      ...(summary.accessLabel ? [indent(`アクセス: ${summary.accessLabel}`)] : []),
       ...noteLines(summary.comment),
     ];
   },

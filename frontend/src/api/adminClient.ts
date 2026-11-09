@@ -34,6 +34,7 @@ import type { DocumentFormLayout, DocumentFormPageMeta } from "../fhir/documentF
 import type { DocumentFormTemplateExport } from "../fhir/documentFormExport";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 import type { AdvisorySeveritySettings } from "../fhir/advisoryHelpers";
+import type { DialysisShiftSettings } from "../fhir/dialysisShiftHelpers";
 import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
 import type { Ssmix2Settings } from "../fhir/ssmix2Helpers";
 import type { RxVerificationSettings } from "../fhir/rxVerificationHelpers";
@@ -128,6 +129,8 @@ export interface FacilitySettings {
   injection_verification: InjectionVerificationSettings;
   /** 輸血オーダー(不規則抗体スクリーニングの有効日数)。 */
   transfusion: TransfusionSettings;
+  /** 透析室のシフト。 */
+  dialysis_shifts: DialysisShiftSettings;
   /** SS-MIX2 標準化ストレージへの出力(有無・出力先・医療施設 ID)。 */
   ssmix2: Ssmix2Settings;
 }
@@ -164,6 +167,7 @@ export type FacilitySettingsPayload = Partial<{
   rx_verification: RxVerificationSettings;
   injection_verification: InjectionVerificationSettings;
   transfusion: TransfusionSettings;
+  dialysis_shifts: DialysisShiftSettings;
   ssmix2: Ssmix2Settings;
 }>;
 

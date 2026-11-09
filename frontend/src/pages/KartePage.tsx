@@ -935,6 +935,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
                 current.kind === "meal-order-edit" ||
                 current.kind === "transfusion-order-edit" ||
                 current.kind === "rehab-order-edit" ||
+                current.kind === "dialysis-order-edit" ||
                 current.kind === "radiotherapy-order-edit" ||
                 current.kind === "nutrition-guidance-order-edit" ||
                 current.kind === "medication-guidance-order-edit" ||

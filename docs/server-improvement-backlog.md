@@ -55,7 +55,7 @@ fhir-client のパフォーマンス監査で「上流を直した方が効率�
    `requisition:missing=true` も効く。resource_tokens は書き込み時にしか埋まらないので、既存データは
    migration `20260909000003` が再索引する（Organization の type と同じ方式。開発 DB で 83 件を確認）。
 4. **`ServiceRequest?order-period=`**（ローカル）。開始 = `occurrenceDateTime`、終了 = ローカル拡張
-   `nursing-order-end` / `meal-order-end` / `rehab-order-end` / `nutrition-guidance-order-end`
+   `nursing-order-end` / `meal-order-end` / `rehab-order-end` / `nutrition-guidance-order-end` / `dialysis-order-end`
    （`valueDate` / `valueDateTime`）を `order_end` 列に抽出し、`Encounter.date` と同じ期間検索の
    意味論で引く。終了の無い指示は継続中（開いた区間）。
    `order-period=ge{日}&order-period=le{日}` が「その日に効いている指示」。

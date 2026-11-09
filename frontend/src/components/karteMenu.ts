@@ -55,6 +55,7 @@ export const KARTE_MENU_ITEMS: KarteMenuItem[] = [
   { key: "meal-order", label: "食事", open: (problem) => ({ kind: "meal-order-create", problem }) },
   { key: "transfusion-order", label: "輸血", open: (problem) => ({ kind: "transfusion-order-create", problem }) },
   { key: "rehab-order", label: "リハビリ", open: (problem) => ({ kind: "rehab-order-create", problem }) },
+  { key: "dialysis-order", label: "透析", open: (problem) => ({ kind: "dialysis-order-create", problem }) },
   {
     key: "nutrition-guidance-order",
     label: "栄養指導",

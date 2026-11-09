@@ -4,6 +4,7 @@ import {
   endoscopyTaskStatusDisplay,
   endoscopyTasksByOrderId,
 } from "./endoscopyTaskHelpers";
+import { dialysisTaskStatus, dialysisTaskStatusDisplay, dialysisTasksByOrderId } from "./dialysisTaskHelpers";
 import { injectionTaskStatus, injectionTaskStatusDisplay, injectionTasksByOrderId } from "./injectionTaskHelpers";
 import { orderKindOf } from "./karteTimeline";
 import { labTaskStatus, labTaskStatusDisplay, labTasksByOrderId } from "./labTaskHelpers";
@@ -63,6 +64,7 @@ export interface OrderProgress {
 /** 実施を積み上げる種別。オーダー 1 件に実施記録が日ごとに付く。 */
 const SESSION_KINDS = new Set([
   "rehab-order",
+  "dialysis-order",
   "nutrition-guidance-order",
   "medication-guidance-order",
   "radiotherapy-order",
@@ -105,6 +107,7 @@ const TASK_KINDS: Partial<Record<string, TaskKind>> = {
   "surgery-order": taskKind(surgeryTasksByOrderId, surgeryTaskStatus, surgeryTaskStatusDisplay),
   "transfusion-order": taskKind(transfusionTasksByOrderId, transfusionTaskStatus, transfusionTaskStatusDisplay),
   "rehab-order": taskKind(rehabTasksByOrderId, rehabTaskStatus, rehabTaskStatusDisplay),
+  "dialysis-order": taskKind(dialysisTasksByOrderId, dialysisTaskStatus, dialysisTaskStatusDisplay),
   "radiotherapy-order": taskKind(
     radiotherapyTasksByOrderId,
     radiotherapyTaskStatus,

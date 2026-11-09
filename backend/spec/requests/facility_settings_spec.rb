@@ -752,6 +752,43 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (dialysis_shifts)" do
+    let(:night) { { code: "night", label: "夜間", start: "18:00", end: "22:00" } }
+    let(:morning) { { code: "am", label: "午前", start: "09:00", end: "13:30" } }
+
+    it "returns the default shifts" do
+      get "/facility_settings"
+
+      expect(JSON.parse(response.body).dig("dialysis_shifts", "shifts").pluck("code")).to eq(%w[am pm])
+    end
+
+    it "saves the list as sent, so a removed shift does not come back from the default" do
+      patch "/facility_settings", params: { dialysis_shifts: { shifts: [morning, night] } }, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body).dig("dialysis_shifts", "shifts")).to eq(
+        [morning, night].map { |shift| shift.transform_keys(&:to_s) }
+      )
+    end
+
+    it "rejects an invalid list" do
+      invalid = [
+        { shifts: [] },
+        { shifts: [morning, morning] },
+        { shifts: [morning.merge(code: "AM")] },
+        { shifts: [morning.merge(label: "")] },
+        { shifts: [morning.merge(start: "9:00")] },
+        { shifts: [morning.merge(start: "14:00")] },
+        { shifts: [morning, night.merge(start: "13:00")] }
+      ]
+
+      invalid.each do |value|
+        patch "/facility_settings", params: { dialysis_shifts: value }, as: :json
+        expect(response).to have_http_status(:unprocessable_content), "#{value} should be rejected"
+      end
+    end
+  end
+
   describe "PATCH /facility_settings (early_warning)" do
     it "is disabled by default" do
       get "/facility_settings"

@@ -37,6 +37,7 @@ export * from "./endoscopy";
 export * from "./treatment";
 export * from "./meal";
 export * from "./rehab";
+export * from "./dialysis";
 export * from "./nutritionGuidance";
 export * from "./medicationGuidance";
 export * from "./medicalManagement";

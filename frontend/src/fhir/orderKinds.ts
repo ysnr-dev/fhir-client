@@ -13,6 +13,7 @@ import { isPhysioServiceRequest, physioOrderProblem, PHYSIO_ORDER_TYPE } from ".
 import { isRadServiceRequest, radOrderProblem, RAD_ORDER_TYPE } from "./radOrderHelpers";
 import { isRadiotherapyServiceRequest, radiotherapyOrderProblem, RADIOTHERAPY_ORDER_TYPE } from "./radiotherapyOrderHelpers";
 import { isRehabServiceRequest, rehabOrderProblem, REHAB_ORDER_TYPE } from "./rehabOrderHelpers";
+import { isDialysisServiceRequest, dialysisOrderProblem, DIALYSIS_ORDER_TYPE } from "./dialysisOrderHelpers";
 import { isSurgeryServiceRequest, surgeryOrderProblem, SURGERY_ORDER_TYPE } from "./surgeryOrderHelpers";
 import { isTransfusionServiceRequest, transfusionOrderProblem, TRANSFUSION_ORDER_TYPE } from "./transfusionOrderHelpers";
 import { isTreatmentServiceRequest, treatmentOrderProblem, TREATMENT_ORDER_TYPE } from "./treatmentOrderHelpers";
@@ -35,6 +36,7 @@ export const ORDER_KINDS = [
   "meal-order",
   "transfusion-order",
   "rehab-order",
+  "dialysis-order",
   "radiotherapy-order",
   "nutrition-guidance-order",
   "medication-guidance-order",
@@ -68,6 +70,7 @@ export const ORDER_KIND_CORE: Record<OrderKind, OrderKindCore> = {
   "meal-order": { label: "食事", orderType: MEAL_ORDER_TYPE, matches: isMealServiceRequest, problem: mealOrderProblem },
   "transfusion-order": { label: "輸血", orderType: TRANSFUSION_ORDER_TYPE, matches: isTransfusionServiceRequest, problem: transfusionOrderProblem },
   "rehab-order": { label: "リハビリ", orderType: REHAB_ORDER_TYPE, matches: isRehabServiceRequest, problem: rehabOrderProblem },
+  "dialysis-order": { label: "透析", orderType: DIALYSIS_ORDER_TYPE, matches: isDialysisServiceRequest, problem: dialysisOrderProblem },
   "radiotherapy-order": { label: "放射線治療", orderType: RADIOTHERAPY_ORDER_TYPE, matches: isRadiotherapyServiceRequest, problem: radiotherapyOrderProblem },
   "nutrition-guidance-order": { label: "栄養指導", orderType: NUTRITION_GUIDANCE_ORDER_TYPE, matches: isNutritionGuidanceServiceRequest, problem: nutritionGuidanceOrderProblem },
   "medication-guidance-order": { label: "服薬指導", orderType: MEDICATION_GUIDANCE_ORDER_TYPE, matches: isMedicationGuidanceServiceRequest, problem: medicationGuidanceOrderProblem },

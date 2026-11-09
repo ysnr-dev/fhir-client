@@ -22,6 +22,13 @@ import {
   type NursingScheduleSettings,
 } from "../fhir/nursingScheduleHelpers";
 import {
+  DEFAULT_DIALYSIS_SHIFTS,
+  dialysisShiftsError,
+  newDialysisShiftCode,
+  sortedDialysisShifts,
+  type DialysisShift,
+} from "../fhir/dialysisShiftHelpers";
+import {
   DEFAULT_VITAL_THRESHOLDS,
   VITAL_THRESHOLD_ITEMS,
   type VitalThresholdSettings,
@@ -184,6 +191,7 @@ const FACILITY_SECTIONS = [
   { key: "rx_verification", label: "処方監査" },
   { key: "injection_verification", label: "注射の3点認証" },
   { key: "transfusion", label: "輸血オーダー" },
+  { key: "dialysis_shifts", label: "透析室のシフト" },
   { key: "receipt_codes", label: "医事会計のレセプト電算コード" },
   { key: "water_balance", label: "水分出納の対象項目" },
   { key: "bulk_vital_entry", label: "経過表一括入力の列" },
@@ -451,6 +459,15 @@ export function FacilitySettingsPage() {
   const [transfusionDraft, setTransfusionDraft] = useState<TransfusionSettings | undefined>(undefined);
   const transfusion = transfusionDraft ?? settings.data?.transfusion ?? DEFAULT_TRANSFUSION_SETTINGS;
 
+  // 透析室のシフト。ベッドの枠とオーダーの曜日 × シフトの選択肢になる。
+  const [dialysisShiftsDraft, setDialysisShiftsDraft] = useState<DialysisShift[] | undefined>(undefined);
+  const dialysisShifts =
+    dialysisShiftsDraft ?? settings.data?.dialysis_shifts.shifts ?? DEFAULT_DIALYSIS_SHIFTS.shifts;
+  const dialysisShiftsMessage = dialysisShiftsError(dialysisShifts);
+  function updateDialysisShift(index: number, patch: Partial<DialysisShift>) {
+    setDialysisShiftsDraft(dialysisShifts.map((shift, i) => (i === index ? { ...shift, ...patch } : shift)));
+  }
+
   // SS-MIX2 標準化ストレージへの出力。有効にすると中継の書き込みが記録され、院内エージェントが出力先へ書く。
   const [ssmix2Draft, setSsmix2Draft] = useState<Ssmix2Settings | undefined>(undefined);
   const ssmix2 = ssmix2Draft ?? settings.data?.ssmix2 ?? DEFAULT_SSMIX2;
@@ -635,6 +652,7 @@ export function FacilitySettingsPage() {
     if (!prescriptionCheckValid) return;
     if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid || !infectiousReportValid || !ncdValid || !anesthesiaPreopValid) return;
     if (!reviewValid || !receiptCodesOk || !coefficientsValid || !intakeValid || !ssmix2Valid) return;
+    if (dialysisShiftsMessage) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
@@ -664,6 +682,7 @@ export function FacilitySettingsPage() {
       rx_verification: rxVerification,
       injection_verification: injectionVerification,
       transfusion,
+      dialysis_shifts: { shifts: sortedDialysisShifts(dialysisShifts) },
       intake,
       ssmix2,
       karte_card_order: { ...cardOrder, kinds: cardKinds },
@@ -1826,6 +1845,63 @@ export function FacilitySettingsPage() {
             </div>
           )}
 
+          {section === "dialysis_shifts" && (
+            <div className="facility-settings__schedule-body">
+              <ul className="facility-settings__balance-list">
+                {dialysisShifts.map((shift, index) => (
+                  <li key={shift.code}>
+                    <input
+                      type="text"
+                      value={shift.label}
+                      onChange={(e) => updateDialysisShift(index, { label: e.target.value })}
+                      aria-label="シフトの名前"
+                      placeholder="名前"
+                    />
+                    <input
+                      type="time"
+                      value={shift.start}
+                      onChange={(e) => updateDialysisShift(index, { start: e.target.value })}
+                      aria-label="開始"
+                    />
+                    〜
+                    <input
+                      type="time"
+                      value={shift.end}
+                      onChange={(e) => updateDialysisShift(index, { end: e.target.value })}
+                      aria-label="終了"
+                    />
+                    <button
+                      type="button"
+                      className="rp-card__icon-button"
+                      title="シフトを削除"
+                      aria-label="シフトを削除"
+                      onClick={() => setDialysisShiftsDraft(dialysisShifts.filter((_, i) => i !== index))}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="rp-card__compact-button"
+                onClick={() =>
+                  setDialysisShiftsDraft([
+                    ...dialysisShifts,
+                    { code: newDialysisShiftCode(), label: "", start: "", end: "" },
+                  ])
+                }
+              >
+                追加
+              </button>
+              {dialysisShiftsMessage && (
+                <p className="facility-settings__error" role="alert">
+                  {dialysisShiftsMessage}
+                </p>
+              )}
+            </div>
+          )}
+
           {section === "transfusion" && (
             <div className="facility-settings__schedule-body">
               <label>
@@ -2223,7 +2299,8 @@ export function FacilitySettingsPage() {
                 !cancerRegistryValid ||
                 !infectiousReportValid ||
                 !ncdValid ||
-                !anesthesiaPreopValid
+                !anesthesiaPreopValid ||
+                Boolean(dialysisShiftsMessage)
               }
             >
               {update.isPending ? "保存中..." : "保存"}

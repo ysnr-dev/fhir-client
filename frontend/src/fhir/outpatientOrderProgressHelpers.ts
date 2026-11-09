@@ -42,6 +42,7 @@ const KIND_MARKS = {
   "surgery-order": "手",
   "transfusion-order": "血",
   "rehab-order": "リ",
+  "dialysis-order": "透",
   "radiotherapy-order": "照",
   "nutrition-guidance-order": "栄",
   "medication-guidance-order": "服",

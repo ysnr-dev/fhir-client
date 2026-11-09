@@ -42,6 +42,7 @@ import { invalidateProvenance, useOrderEnterer, useWithOrderProvenance } from ".
 import { deleteRadOrderRequest } from "./rad";
 import { deleteRadiotherapyOrderRequest } from "./radiotherapy";
 import { deleteRehabOrderRequest } from "./rehab";
+import { deleteDialysisOrderRequest } from "./dialysis";
 import { deleteSurgeryOrderRequest } from "./surgery";
 import { deleteTransfusionOrderRequest } from "./transfusion";
 import { deleteTreatmentOrderRequest } from "./treatment";
@@ -362,6 +363,9 @@ export function useCancelPathwayApplication() {
             break;
           case "rehab-order":
             await deleteRehabOrderRequest(id);
+            break;
+          case "dialysis-order":
+            await deleteDialysisOrderRequest(id);
             break;
           case "radiotherapy-order":
             await deleteRadiotherapyOrderRequest(id);
