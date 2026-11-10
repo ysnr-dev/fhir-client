@@ -119,62 +119,75 @@ export function DialysisOrderDetailPanel({
       </fieldset>
 
       {performs && (
-        <fieldset className="rp-card">
+        <fieldset className="rp-card dialysis-detail__history">
           <legend>
             実施履歴
             {performs.length > 0 && ` (${performs.filter((p) => p.status === "completed").length}回)`}
           </legend>
-          <table className="rp-card__medicines dialysis-detail__performs">
-            <thead>
-              <tr>
-                <th>日付</th>
-                <th>状態</th>
-                <th>時刻</th>
-                <th>実透析時間</th>
-                <th>体重(前→後)</th>
-                <th>除水量</th>
-                <th>血圧(前 / 後)</th>
-                <th className="dialysis-detail__used">血液浄化器・薬剤・器材</th>
-                <th>担当</th>
-                {onOpenChart && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {performs.map((perform) => (
-                <tr key={perform.id}>
-                  <td>{perform.date ? shortDate(perform.date) : "-"}</td>
-                  <td>
-                    {perform.statusLabel}
-                    {chartSessionIds?.has(perform.id) && <> <DialysisChartMark /></>}
-                  </td>
-                  <td>{perform.timeLabel || "-"}</td>
-                  <td>{dialysisMinutesLabel(perform.actualMinutes) || "-"}</td>
-                  <td>
-                    {perform.preWeight != null || perform.postWeight != null
-                      ? `${perform.preWeight ?? "-"} → ${perform.postWeight ?? "-"}kg`
-                      : "-"}
-                  </td>
-                  <td>{perform.ultrafiltration != null ? `${perform.ultrafiltration}L` : "-"}</td>
-                  <td>{[perform.preBp || "-", perform.postBp || "-"].join(" / ")}</td>
-                  <td className="dialysis-detail__used">
-                    {[...perform.purifiers, ...perform.medicines, ...perform.materials, ...perform.procedures].join("、") ||
-                      "-"}
-                    {perform.comment && <div className="karte-perform__note">{perform.comment}</div>}
-                  </td>
-                  <td>{perform.performerName || "-"}</td>
-                  {onOpenChart && (
-                    <td>
-                      {perform.status !== "preparation" && (
-                        <button type="button" className="rp-card__compact-button" onClick={() => onOpenChart(perform.id)}>
-                          経過表
-                        </button>
-                      )}
-                    </td>
-                  )}
+          <div className="dialysis-detail__performs-wrap">
+            <table className="rp-card__medicines dialysis-detail__performs">
+              <thead>
+                <tr>
+                  <th>日付</th>
+                  <th>状態</th>
+                  <th>時刻</th>
+                  <th>実透析時間</th>
+                  <th>体重(前→後)</th>
+                  <th>除水量</th>
+                  <th>血圧(前 / 後)</th>
+                  <th>担当</th>
+                  <th>使用</th>
+                  {onOpenChart && <th></th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {performs.map((perform) => {
+                  const used = [...perform.purifiers, ...perform.medicines, ...perform.materials, ...perform.procedures];
+                  return (
+                    <tr key={perform.id}>
+                      <td>{perform.date ? shortDate(perform.date) : "-"}</td>
+                      <td>
+                        {perform.statusLabel}
+                        {chartSessionIds?.has(perform.id) && <> <DialysisChartMark /></>}
+                      </td>
+                      <td>{perform.timeLabel || "-"}</td>
+                      <td>{dialysisMinutesLabel(perform.actualMinutes) || "-"}</td>
+                      <td>
+                        {perform.preWeight != null || perform.postWeight != null
+                          ? `${perform.preWeight ?? "-"} → ${perform.postWeight ?? "-"}kg`
+                          : "-"}
+                      </td>
+                      <td>{perform.ultrafiltration != null ? `${perform.ultrafiltration}L` : "-"}</td>
+                      <td>{[perform.preBp || "-", perform.postBp || "-"].join(" / ")}</td>
+                      <td>{perform.performerName || "-"}</td>
+                      {/* 名前が長いので 1 品目 1 行で全文を出す(回ごとに縦に伸びてよい)。 */}
+                      <td className="dialysis-detail__used">
+                        {used.length > 0 ? (
+                          <ul className="dialysis-detail__used-list">
+                            {used.map((label, index) => (
+                              <li key={index}>{label}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          "-"
+                        )}
+                        {perform.comment && <div className="karte-perform__note">{perform.comment}</div>}
+                      </td>
+                      {onOpenChart && (
+                        <td>
+                          {perform.status !== "preparation" && (
+                            <button type="button" className="rp-card__compact-button" onClick={() => onOpenChart(perform.id)}>
+                              経過表
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           {performs.length === 0 && <p className="patient-table__empty">実施記録がありません。</p>}
         </fieldset>
       )}

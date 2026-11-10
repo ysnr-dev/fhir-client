@@ -110,6 +110,11 @@ import { resourcesOfType } from "../fhir/shared";
 // カルテのタイムラインから開くモーダル。詳細表示は各リソースの詳細ページと同じ
 // パネルを使うので、カードでは省いている情報(処方の DI リンクなど)も参照できる。
 
+/** 既定(modal--wide)より広くする詳細。透析は実施履歴の表に列が多い。 */
+const DETAIL_MODAL_CLASSES: Partial<Record<KarteDetailKind, string>> = {
+  "dialysis-order": "modal--dialysis-detail",
+};
+
 const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   note: "診療記録詳細",
   prescription: "処方内容",
@@ -180,7 +185,7 @@ export function KarteDetailModal({
   onClose: () => void;
 }) {
   return (
-    <Modal title={DETAIL_TITLES[target.kind]} onClose={onClose} className="modal--wide">
+    <Modal title={DETAIL_TITLES[target.kind]} onClose={onClose} className={DETAIL_MODAL_CLASSES[target.kind] ?? "modal--wide"}>
       {target.kind === "note" ? (
         <NoteDetail patientId={patientId} noteId={target.id} />
       ) : target.kind === "prescription" ? (

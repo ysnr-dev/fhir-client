@@ -32355,12 +32355,48 @@ input.nursing-picker__search {
 }
 
 /* 透析の実施履歴。数値の列は折り返さず、使った物の列に幅を回す。 */
+.modal--dialysis-detail {
+  width: min(1120px, 96vw);
+}
+
+/* 実施履歴は列ごとに値の長さが違うので、等分(rp-card__medicines の fixed)にせず中身で幅を決める。
+   モーダルに収まらないときは表だけを横にスクロールさせる(fieldset は既定で中身の最小幅まで広がるので 0 にする)。 */
+.dialysis-detail__history {
+  min-width: 0;
+}
+
+.dialysis-detail__performs-wrap {
+  overflow-x: auto;
+}
+
+.dialysis-detail__performs {
+  table-layout: auto;
+}
+
 .dialysis-detail__performs th,
 .dialysis-detail__performs td {
   white-space: nowrap;
 }
 
+/* 1 回が複数行になるので、数値の列も行の上端に揃えて横に読めるようにする。 */
+.dialysis-detail__performs td {
+  vertical-align: top;
+}
+
+/* 血液浄化器・薬剤・器材。残りの幅を使い、1 品目 1 行で折り返して全文を出す。 */
 .dialysis-detail__performs .dialysis-detail__used {
+  width: 100%;
   min-width: 16em;
   white-space: normal;
+}
+
+.dialysis-detail__used-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.dialysis-detail__used-list li + li {
+  margin-top: 2px;
 }
