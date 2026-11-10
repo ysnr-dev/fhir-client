@@ -21,6 +21,7 @@ import {
   useRadiotherapyCourseReviews,
   useTreatmentAdverseEvents,
   useRehabOrderDetail,
+  useDialysisChartSessionIds,
   useDialysisOrderDetail,
   useLatestDryWeight,
   useNutritionGuidanceOrderDetail,
@@ -89,6 +90,7 @@ import { transfusionDispensesByOrderId } from "../fhir/transfusionDispenseHelper
 import { splitPerformBundle } from "../fhir/radResultHelpers";
 import { RehabOrderDetailPanel } from "./RehabOrderDetailPanel";
 import { DialysisChartModal } from "./DialysisChartModal";
+import { TruncatedNotice } from "./TruncatedNotice";
 import { DialysisOrderDetailPanel } from "./DialysisOrderDetailPanel";
 import { NutritionGuidanceOrderDetailPanel } from "./NutritionGuidanceOrderDetailPanel";
 import { MedicalManagementOrderDetailPanel } from "./MedicalManagementOrderDetailPanel";
@@ -594,6 +596,7 @@ function DialysisOrderDetail({
 }) {
   const detail = useDialysisOrderDetail(srId);
   const dryWeight = useLatestDryWeight(patientId);
+  const chartSessions = useDialysisChartSessionIds(srId);
   // 実施履歴の行から開く透析経過表(docs/dialysis-chart-design.md §3.1)。
   const [chartSessionId, setChartSessionId] = useState<string | null>(null);
   const serviceRequest = serviceRequestsOf(detail.data?.data).find(
@@ -613,6 +616,10 @@ function DialysisOrderDetail({
     <>
       <ErrorBanner error={detail.error} />
       <ErrorBanner error={dryWeight.error} />
+      <ErrorBanner error={chartSessions.error} />
+      <TruncatedNotice show={chartSessions.data?.truncated}>
+        回数が多いため、古い回には経過表の印を出していません。
+      </TruncatedNotice>
       {detail.isLoading ? (
         <p>読み込み中...</p>
       ) : mismatch ? (
@@ -624,6 +631,7 @@ function DialysisOrderDetail({
           performs={performs}
           dryWeight={dryWeight.data ?? null}
           onOpenChart={setChartSessionId}
+          chartSessionIds={chartSessions.data?.ids}
         />
       ) : (
         !detail.error && <NotFound label="透析オーダー" />

@@ -155,6 +155,13 @@ category = `dialysis` の日付検索)のどれにも乗らない。
 | 透析一覧のベッドサイドの表 | 操作列に「経過表」 | 同上 |
 | カルテの透析カードの詳細(実施履歴の表) | 行に「経過表」 | 同上。モーダルで開く(カルテを見ながら読み返す) |
 
+- **経過表ありの印**: 経過表のある回には折れ線のアイコン(`DialysisChartMark`、title「経過表あり」)を添える。
+  ボード・週・ベッドサイドの表は、実施記録の読み出し(`fetchDialysisSessions`)の `_revinclude=Procedure:part-of` に
+  経過表のハブが乗るので、追加の検索は無い(`dialysisChartSessionIds`)。カルテ(カードの実施の行・詳細の実施履歴)は
+  経過表のハブが `basedOn` を持たずオーダーの詳細に乗らないので、オーダー単位のチェーン検索 1 本で引く
+  (`Procedure?category=order-type|dialysis-chart&part-of:Procedure.based-on=ServiceRequest/{id}&_sort=-date`。
+  `useDialysisChartSessionIds`)。カルテの読み出しに `_revinclude:iterate=Procedure:part-of` を足すと
+  `Observation:part-of` の :iterate で打点まで乗るので使わない。読み直しは経過表のハブを作った・消したときだけ。
 - 専用ページ `/dialysis-sessions/:sessionId/chart`(sessionId = 実施記録のハブの id)。「戻る」は開いた画面へ返す(`useChartReturnTo`)。
 - ［提案］モーダルではなくページを本体にする(麻酔チャートと同じ理由。透析中に開きっぱなしにし、グラフ + 表 + 入力が要る)。
   カルテからだけモーダル。
@@ -311,4 +318,3 @@ Device を添えてよい(画面は読まない)。画面側は手入力と同�
 4. **装置からの自動取込**(§5)。HL7 / ベンダー API の受け口は院内エージェント(`fhir-client-agent`)側の話。
 5. **印刷**: 麻酔チャートと同じく ThinReports ではグラフを描けない。SVG → PDF の別経路(`anesthesia-chart-design.md` §7-4)。
 6. **同時編集**: 1 点 1 リソースなので追加同士は衝突しない。回の終了(ハブ PUT)と打点の追加が同時でも、打点はハブを触らないので 412 にならない。
-7. **「経過表あり」の印**: 透析一覧の週ビューとカルテのカードでは、開いてみるまで経過表の有無が分からない。

@@ -7,7 +7,7 @@ import {
   type DialysisSession,
 } from "./dialysisResultHelpers";
 import { ORDER_TYPE_SYSTEM } from "./orderHeader";
-import { LOINC_SYSTEM } from "./shared";
+import { LOINC_SYSTEM, referenceIdOfType } from "./shared";
 import {
   chartObservationDeleteEntries,
   groupChartObservations,
@@ -116,6 +116,17 @@ export function isDialysisChartHub(procedure: fhir4.Procedure): boolean {
   return Boolean(
     procedure.category?.coding?.some((c) => c.system === ORDER_TYPE_SYSTEM && c.code === DIALYSIS_CHART_TYPE.code),
   );
+}
+
+/** 経過表のある回(実施記録のハブの id)。透析一覧とカルテの実施の行に「経過表あり」の印を出すのに使う。 */
+export function dialysisChartSessionIds(procedures: fhir4.Procedure[]): Set<string> {
+  const ids = new Set<string>();
+  for (const procedure of procedures) {
+    if (!isDialysisChartHub(procedure) || procedure.status === "entered-in-error") continue;
+    const sessionId = referenceIdOfType(procedure.partOf?.[0]?.reference, "Procedure");
+    if (sessionId) ids.add(sessionId);
+  }
+  return ids;
 }
 
 export interface DialysisChartData {

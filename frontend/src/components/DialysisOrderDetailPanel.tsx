@@ -13,6 +13,7 @@ import {
 } from "../fhir/dialysisResultHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { shortDate } from "../lib/dates";
+import { DialysisChartMark } from "./DialysisChartMark";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 透析オーダーの内容表示。カルテ画面の詳細モーダルから使う。
@@ -26,6 +27,8 @@ interface DialysisOrderDetailPanelProps {
   dryWeight?: DryWeight | null;
   /** 実施履歴の行の「経過表」。渡さなければ出さない。 */
   onOpenChart?: (sessionId: string) => void;
+  /** 経過表のある回(実施記録のハブの id)。その行に印を出す。 */
+  chartSessionIds?: Set<string>;
 }
 
 export function DialysisOrderDetailPanel({
@@ -34,6 +37,7 @@ export function DialysisOrderDetailPanel({
   performs,
   dryWeight,
   onOpenChart,
+  chartSessionIds,
 }: DialysisOrderDetailPanelProps) {
   const summary = summarizeDialysisOrder(serviceRequest);
   const hasDialysate = dialysisModalityHasDialysate(summary.modality);
@@ -139,7 +143,10 @@ export function DialysisOrderDetailPanel({
               {performs.map((perform) => (
                 <tr key={perform.id}>
                   <td>{perform.date ? shortDate(perform.date) : "-"}</td>
-                  <td>{perform.statusLabel}</td>
+                  <td>
+                    {perform.statusLabel}
+                    {chartSessionIds?.has(perform.id) && <> <DialysisChartMark /></>}
+                  </td>
                   <td>{perform.timeLabel || "-"}</td>
                   <td>{dialysisMinutesLabel(perform.actualMinutes) || "-"}</td>
                   <td>

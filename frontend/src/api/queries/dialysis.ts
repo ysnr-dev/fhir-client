@@ -31,6 +31,7 @@ import {
   buildDialysisChartData,
   buildDialysisChartDeleteEntries,
   DIALYSIS_CHART_TYPE,
+  dialysisChartSessionIds,
   isDialysisChartHub,
   type DialysisChartData,
 } from "../../fhir/dialysisChartHelpers";
@@ -441,6 +442,8 @@ export function useDialysisBoard(from: string, to: string) {
 
 export interface DialysisSessionsResult {
   sessions: DialysisSession[];
+  /** 経過表のある回(実施記録のハブの id)。経過表のハブは Procedure:part-of の逆引きで同じ応答に乗る。 */
+  chartSessionIds: Set<string>;
   truncated: boolean;
 }
 
@@ -476,12 +479,14 @@ async function fetchDialysisSessions(from: string, to: string): Promise<Dialysis
     .flatMap((entry) => (entry.resource ? [entry.resource] : []));
   const ofType = <T extends fhir4.Resource>(type: T["resourceType"]) =>
     resources.filter((resource): resource is T => resource.resourceType === type);
+  const procedures = ofType<fhir4.Procedure>("Procedure");
   return {
     sessions: groupDialysisSessions(
-      ofType<fhir4.Procedure>("Procedure"),
+      procedures,
       ofType<fhir4.Observation>("Observation"),
       ofType<fhir4.MedicationAdministration>("MedicationAdministration"),
     ),
+    chartSessionIds: dialysisChartSessionIds(procedures),
     truncated: results.some((result) => result.truncated),
   };
 }
@@ -591,13 +596,46 @@ export function useDialysisChart(sessionId: string | undefined) {
   });
 }
 
+/**
+ * オーダーの回のうち、経過表のある回(実施記録のハブの id)。カルテの実施の行に「経過表あり」の印を出す。
+ * 経過表のハブは basedOn を持たず(§2.2)オーダーの詳細に乗らないので、実施記録のハブを辿るチェーン検索で引く。
+ * 新しい順に読むので、欠けるのは古い回の印だけ。
+ */
+export function useDialysisChartSessionIds(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ["Procedure", "dialysis-chart-sessions", orderId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("category", `${ORDER_TYPE_SYSTEM}|${DIALYSIS_CHART_TYPE.code}`);
+      params.set("part-of:Procedure.based-on", `ServiceRequest/${orderId}`);
+      params.set("status:not", "entered-in-error");
+      params.set("_sort", "-date");
+      params.set("_elements", "category,partOf,status");
+      const { matches, truncated } = await searchAllPages<fhir4.Procedure>("Procedure", params, {
+        page: 500,
+        maxPages: 4,
+        strict: true,
+      });
+      return { ids: dialysisChartSessionIds(matches), truncated };
+    },
+    enabled: Boolean(orderId),
+  });
+}
+
 /** 経過表への書き込み。打点は 1 時点の組を 1 transaction で書き、途中失敗で組が欠けないようにする。 */
 export function useDialysisChartWrite(sessionId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (entries: fhir4.BundleEntry[]) =>
       postBundle({ resourceType: "Bundle", type: "transaction", entry: entries }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["Procedure", "dialysis-chart", sessionId] }),
+    onSuccess: (_data, entries) => {
+      queryClient.invalidateQueries({ queryKey: ["Procedure", "dialysis-chart", sessionId] });
+      // ハブを作った・消したときだけ、「経過表あり」の印を出す一覧を読み直させる(打点の追加では変わらない)。
+      if (entries.some((entry) => entry.request?.url.split("/")[0] === "Procedure")) {
+        queryClient.invalidateQueries({ queryKey: ["Procedure", "dialysis-chart-sessions"] });
+        queryClient.invalidateQueries({ queryKey: ["Procedure", "dialysis-sessions"] });
+      }
+    },
   });
 }
 

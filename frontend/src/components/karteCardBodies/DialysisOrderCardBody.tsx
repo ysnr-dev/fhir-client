@@ -1,5 +1,7 @@
+import { useDialysisChartSessionIds } from "../../api/queries";
 import { summarizeDialysisOrder } from "../../fhir/dialysisOrderHelpers";
 import { dialysisSessionLine, type DialysisSessionDisplay } from "../../fhir/dialysisResultHelpers";
+import { DialysisChartMark } from "../DialysisChartMark";
 
 /** カードに出す実施の件数。週 3 回を何か月も続けるので直近だけ出す。 */
 const DIALYSIS_PERFORM_PREVIEW = 3;
@@ -15,6 +17,10 @@ export function DialysisOrderCardBody({
   performs: DialysisSessionDisplay[];
 }) {
   const summary = summarizeDialysisOrder(serviceRequest);
+  // 経過表は開始以降の回にしか無いので、始めた回が無ければ読まない。
+  const chartSessions = useDialysisChartSessionIds(
+    performs.some((perform) => perform.status !== "preparation") ? serviceRequest.id : undefined,
+  );
 
   if (!summary.modality) {
     return <p className="karte-card__empty">浄化方法がありません。</p>;
@@ -63,6 +69,7 @@ export function DialysisOrderCardBody({
             <div className="karte-perform__row" key={perform.id}>
               <span className="karte-perform__values">
                 <span>{dialysisSessionLine(perform)}</span>
+                {chartSessions.data?.ids.has(perform.id) && <DialysisChartMark />}
               </span>
             </div>
           ))}

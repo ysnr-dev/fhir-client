@@ -16,6 +16,7 @@ import {
 import { DateStepper } from "../components/DateStepper";
 import { DialysisBoard, type DialysisBoardEntry, type DialysisPerformAction } from "../components/DialysisBoard";
 import { DialysisBookModal } from "../components/DialysisBookModal";
+import { DialysisChartMark } from "../components/DialysisChartMark";
 import { DialysisExpandModal } from "../components/DialysisExpandModal";
 import { DialysisOrderDetailPanel } from "../components/DialysisOrderDetailPanel";
 import { DialysisPerformModal } from "../components/DialysisPerformModal";
@@ -141,16 +142,18 @@ export function DialysisWorklistPage() {
           ?.actor?.reference?.split("/")
           .pop();
         const orderId = appointmentOrderId(appointment);
+        const session = dialysisSessionForAppointment(
+          sessions.data?.sessions ?? [],
+          appointment,
+          orderId,
+          dialysisAppointmentDate(appointment),
+        );
         return {
           appointment,
           patient: patientId ? board.data?.patientsById.get(patientId) : undefined,
           order: board.data?.ordersById.get(orderId),
-          session: dialysisSessionForAppointment(
-            sessions.data?.sessions ?? [],
-            appointment,
-            orderId,
-            dialysisAppointmentDate(appointment),
-          ),
+          session,
+          hasChart: Boolean(session?.hub.id && sessions.data?.chartSessionIds.has(session.hub.id)),
         };
       }),
     [board.data, sessions.data],
@@ -320,6 +323,7 @@ export function DialysisWorklistPage() {
               rows={bedsideRows}
               date={date}
               sessions={sessions.data?.sessions ?? []}
+              chartSessionIds={sessions.data?.chartSessionIds}
               pending={perform.isPending || cancelPerform.isPending}
               onView={(row) => setViewingId(row.order.id ?? null)}
               onPerform={(row, action, session) =>
@@ -692,6 +696,7 @@ function BedsideTable({
   rows,
   date,
   sessions,
+  chartSessionIds,
   pending,
   onView,
   onPerform,
@@ -699,6 +704,7 @@ function BedsideTable({
   rows: DialysisWorklistRow[];
   date: string;
   sessions: DialysisSession[];
+  chartSessionIds: Set<string> | undefined;
   pending: boolean;
   onView: (row: DialysisWorklistRow) => void;
   onPerform: (row: DialysisWorklistRow, action: DialysisPerformAction, session?: DialysisSession) => void;
@@ -755,6 +761,7 @@ function BedsideTable({
                     return [
                       <div key={display.id}>
                         {[display.statusLabel, display.timeLabel, display.summary].filter(Boolean).join(" ")}
+                        {chartSessionIds?.has(display.id) && <> <DialysisChartMark /></>}
                       </div>,
                     ];
                   })}

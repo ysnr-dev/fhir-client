@@ -32248,6 +32248,25 @@ input.nursing-picker__search {
   color: var(--text);
 }
 
+/* 経過表ありの印。行の文字の大きさに合わせて小さく出す。 */
+.dialysis-chart-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  vertical-align: middle;
+  color: var(--accent);
+}
+
+.dialysis-chart-mark svg {
+  width: 14px;
+  height: 14px;
+}
+
+.dialysis-board--week .dialysis-chart-mark svg {
+  width: 12px;
+  height: 12px;
+}
+
 .dialysis-board__subtitle {
   margin: 16px 0 6px;
   font-size: 15px;

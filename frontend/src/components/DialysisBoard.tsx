@@ -14,6 +14,7 @@ import { dialysisBedLabel, type DialysisBoardBed } from "../fhir/dialysisUnitHel
 import { displayName } from "../fhir/patientHelpers";
 import { formatDateLabel } from "../fhir/scheduleHelpers";
 import { useReturnLinkState } from "../returnTo";
+import { DialysisChartMark } from "./DialysisChartMark";
 import { RowMenu } from "./RowMenu";
 
 // 透析室のボード(ベッド × シフトの格子)。docs/dialysis-order-design.md §5。
@@ -36,6 +37,8 @@ export interface DialysisBoardEntry {
   order?: fhir4.ServiceRequest;
   /** この予約の回(入室以降)。 */
   session?: DialysisSession;
+  /** その回に経過表がある。 */
+  hasChart?: boolean;
 }
 
 export type DialysisPerformAction = "arrive" | "start" | "finish" | "cancel-perform";
@@ -290,6 +293,7 @@ function BoardCard({
         )}
         {!compact && perform?.summary && <span className="dialysis-board__meta">{perform.summary}</span>}
       </span>
+      {entry.hasChart && <DialysisChartMark />}
       {!compact && next && (
         <button type="button" className="rp-card__compact-button" disabled={pending} onClick={performAction(next.action)}>
           {next.label}
