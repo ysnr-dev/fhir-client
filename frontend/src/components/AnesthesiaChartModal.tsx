@@ -12,7 +12,7 @@ interface AnesthesiaChartModalProps {
 
 export function AnesthesiaChartModal({ orderId, onClose }: AnesthesiaChartModalProps) {
   return (
-    <Modal title="麻酔チャート" onClose={onClose} className="modal--anes-chart anes-chart">
+    <Modal title="麻酔チャート" onClose={onClose} className="modal--time-chart time-chart">
       <AnesthesiaChartPanel orderId={orderId} />
     </Modal>
   );

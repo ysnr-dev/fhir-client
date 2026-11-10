@@ -21,8 +21,8 @@ export function AnesthesiaChartPage() {
 
   return (
     // .page は見出し・本文の基本の型(h1 のサイズもここで決まる)。
-    // .anes-chart は入力欄の見た目をこの中に閉じて当てるための印。
-    <div className="page anes-chart">
+    // .time-chart は入力欄の見た目をこの中に閉じて当てるための印。
+    <div className="page time-chart">
       <div className="page__header">
         <h1>麻酔チャート</h1>
         <Link to={returnTo}>← 戻る</Link>

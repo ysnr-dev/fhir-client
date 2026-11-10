@@ -193,9 +193,9 @@ Procedure に partOf でぶら下がる子だけ**を消すように直した(�
 
 | 層 | 追加・変更 |
 |---|---|
-| FHIR 変換 | `fhir/anesthesiaChartHelpers.ts`(新規) |
+| FHIR 変換 | `fhir/anesthesiaChartHelpers.ts`(新規)。打点・イベントの組み立てと読み出しは時系列チャートの器 `fhir/timeSeriesChartHelpers.ts`(`ChartSpec` で項目とイベントを渡す。透析経過表と共用。`docs/dialysis-chart-design.md` §3.4) |
 | API | `api/queries.ts` にチャートの読み出し(ページング)・開始・打点/イベント/薬剤の追加・持続終了・削除・確定/再開・取消 |
-| 画面 | `pages/AnesthesiaChartPage.tsx`(新規)。ルート `/surgeries/:orderId/anesthesia-chart` |
+| 画面 | `pages/AnesthesiaChartPage.tsx`(新規)。ルート `/surgeries/:orderId/anesthesia-chart`。グラフ・打点の表・イベント・時刻の入力は `components/timeSeriesChart/`(共用の器。CSS は `time-chart__*` / `time-plot__*`)、薬剤・術前評価の帯・確定は `components/AnesthesiaChartPanel.tsx` |
 | 一覧 | `SurgeryWorklistPage` の入室中・実施済の行のケバブメニューに「麻酔チャート」 |
 | 修正 | `surgeryResultHelpers.buildSurgeryPerformDeleteEntries` が手術ツリーの子だけを消すように(§2.2) |
 

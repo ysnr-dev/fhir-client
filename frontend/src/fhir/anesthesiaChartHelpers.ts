@@ -5,6 +5,15 @@ import { MEDICINE_CODE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
 import { STAFF_ROLE_SYSTEM, surgeryStaffRoleDisplay } from "./surgeryOrderHelpers";
 import { SURGERY_ROUTE_OPTIONS, surgeryRouteDisplay } from "./surgeryResultHelpers";
 import { LOINC_SYSTEM } from "./shared";
+import {
+  chartObservationDeleteEntries,
+  groupChartObservations,
+  minuteOf,
+  type ChartEventLine,
+  type ChartMeasure,
+  type ChartPoint,
+  type ChartSpec,
+} from "./timeSeriesChartHelpers";
 
 // 麻酔チャート(術中リアルタイム記録)。docs/anesthesia-chart-design.md。
 //
@@ -21,6 +30,7 @@ import { LOINC_SYSTEM } from "./shared";
 // 変えてあるので、実施記録の振り分け(isSurgeryProcedure)には引っかからない。
 // 実施入力が「退室後に完成形で1回」なのに対し、チャートは術中に 1 点ずつ
 // 保存する進行形の記録なので、ハブは in-progress の期間を持つ。
+// 打点・イベントの組み立てと読み出しは時系列チャートの器(timeSeriesChartHelpers)。
 
 const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Procedure";
 
@@ -30,24 +40,14 @@ export const ANESTHESIA_CHART_TYPE = { code: "anesthesia-chart", display: "麻�
 /** イベント(麻酔開始・挿管など)の code。 */
 const ANESTHESIA_EVENT_SYSTEM = "http://fhir-client.local/CodeSystem/anesthesia-event";
 
-const LOINC = LOINC_SYSTEM;
-const UCUM_SYSTEM = "http://unitsofmeasure.org";
-
-/** 血圧はバイタル入力と同じくパネル 1 件に component で収縮期・拡張期を持つ。 */
-const BLOOD_PRESSURE = { code: "85354-9", display: "Blood pressure panel" } as const;
-const SYSTOLIC = { code: "8480-6", display: "Systolic blood pressure" } as const;
-const DIASTOLIC = { code: "8462-4", display: "Diastolic blood pressure" } as const;
-
 /** 血圧以外の打点項目。表の行の並びもこの順。 */
-export const CHART_MEASURES = [
-  { key: "pulse", label: "脈拍", code: "8867-4", display: "Heart rate", unit: "/分", ucum: "/min", step: "1" },
-  { key: "spo2", label: "SpO2", code: "2708-6", display: "Oxygen saturation", unit: "%", ucum: "%", step: "1" },
-  { key: "etco2", label: "EtCO2", code: "19889-5", display: "Carbon dioxide [Partial pressure] in Exhaled gas --at end expiration", unit: "mmHg", ucum: "mm[Hg]", step: "1" },
-  { key: "temperature", label: "体温", code: "8310-5", display: "Body temperature", unit: "℃", ucum: "Cel", step: "0.1" },
-  { key: "respiration", label: "呼吸数", code: "9279-1", display: "Respiratory rate", unit: "/分", ucum: "/min", step: "1" },
-] as const;
-
-export type ChartMeasureKey = (typeof CHART_MEASURES)[number]["key"];
+export const CHART_MEASURES: readonly ChartMeasure[] = [
+  { key: "pulse", label: "脈拍", system: LOINC_SYSTEM, code: "8867-4", display: "Heart rate", unit: "/分", ucum: "/min", step: "1" },
+  { key: "spo2", label: "SpO2", system: LOINC_SYSTEM, code: "2708-6", display: "Oxygen saturation", unit: "%", ucum: "%", step: "1" },
+  { key: "etco2", label: "EtCO2", system: LOINC_SYSTEM, code: "19889-5", display: "Carbon dioxide [Partial pressure] in Exhaled gas --at end expiration", unit: "mmHg", ucum: "mm[Hg]", step: "1" },
+  { key: "temperature", label: "体温", system: LOINC_SYSTEM, code: "8310-5", display: "Body temperature", unit: "℃", ucum: "Cel", step: "0.1" },
+  { key: "respiration", label: "呼吸数", system: LOINC_SYSTEM, code: "9279-1", display: "Respiratory rate", unit: "/分", ucum: "/min", step: "1" },
+];
 
 /** イベントの種別。「その他」だけ自由文(note)を本体にする。 */
 export const CHART_EVENT_OPTIONS = [
@@ -60,9 +60,12 @@ export const CHART_EVENT_OPTIONS = [
   { code: "other", display: "その他" },
 ] as const;
 
-export function chartEventDisplay(code: string): string {
-  return CHART_EVENT_OPTIONS.find((o) => o.code === code)?.display ?? code;
-}
+/** 打点は category を持たせない(経過表・カルテのバイタルに出さない。設計 §1-3)。 */
+export const ANESTHESIA_CHART_SPEC: ChartSpec = {
+  measures: CHART_MEASURES,
+  events: CHART_EVENT_OPTIONS,
+  eventSystem: ANESTHESIA_EVENT_SYSTEM,
+};
 
 export { SURGERY_ROUTE_OPTIONS };
 
@@ -108,90 +111,10 @@ export function buildAnesthesiaChartHub(args: {
   };
 }
 
-export interface ChartVitalFormValues {
-  /** datetime-local。必須。 */
-  measuredAt: string;
-  systolic: string;
-  diastolic: string;
-  values: Partial<Record<ChartMeasureKey, string>>;
-}
-
 function numberOf(text: string | undefined): number | null {
   if (!text?.trim()) return null;
   const value = Number(text);
   return Number.isFinite(value) ? value : null;
-}
-
-/**
- * 1 時点ぶんの打点 Observation。入力した項目だけを作り、同じ時点の組が途中で
- * 欠けないよう呼び出し側は 1 transaction で保存する。
- */
-export function buildChartVitalObservations(
-  values: ChartVitalFormValues,
-  patientId: string,
-  hubId: string,
-): fhir4.Observation[] {
-  const base = {
-    resourceType: "Observation" as const,
-    status: "final" as const,
-    subject: { reference: `Patient/${patientId}` },
-    partOf: [{ reference: `Procedure/${hubId}` }],
-    effectiveDateTime: toFhirDateTime(values.measuredAt),
-  };
-
-  const observations: fhir4.Observation[] = [];
-
-  const systolic = numberOf(values.systolic);
-  const diastolic = numberOf(values.diastolic);
-  if (systolic !== null && diastolic !== null) {
-    observations.push({
-      ...base,
-      code: { coding: [{ system: LOINC, ...BLOOD_PRESSURE }] },
-      component: [
-        {
-          code: { coding: [{ system: LOINC, ...SYSTOLIC }] },
-          valueQuantity: { value: systolic, unit: "mmHg", system: UCUM_SYSTEM, code: "mm[Hg]" },
-        },
-        {
-          code: { coding: [{ system: LOINC, ...DIASTOLIC }] },
-          valueQuantity: { value: diastolic, unit: "mmHg", system: UCUM_SYSTEM, code: "mm[Hg]" },
-        },
-      ],
-    });
-  }
-
-  for (const measure of CHART_MEASURES) {
-    const value = numberOf(values.values[measure.key]);
-    if (value === null) continue;
-    observations.push({
-      ...base,
-      code: { coding: [{ system: LOINC, code: measure.code, display: measure.display }] },
-      valueQuantity: { value, unit: measure.unit, system: UCUM_SYSTEM, code: measure.ucum },
-    });
-  }
-  return observations;
-}
-
-export function buildChartEventObservation(args: {
-  patientId: string;
-  hubId: string;
-  code: string;
-  occurredAt: string;
-  note?: string;
-}): fhir4.Observation {
-  const display = chartEventDisplay(args.code);
-  return {
-    resourceType: "Observation",
-    status: "final",
-    code: {
-      coding: [{ system: ANESTHESIA_EVENT_SYSTEM, code: args.code, display }],
-      text: display,
-    },
-    subject: { reference: `Patient/${args.patientId}` },
-    partOf: [{ reference: `Procedure/${args.hubId}` }],
-    effectiveDateTime: toFhirDateTime(args.occurredAt),
-    ...(args.note?.trim() ? { note: [{ text: args.note.trim() }] } : {}),
-  };
 }
 
 export interface ChartDrugFormValues {
@@ -279,25 +202,6 @@ export function isAnesthesiaChartHub(procedure: fhir4.Procedure): boolean {
   );
 }
 
-/** バイタル打点 1 時点(分単位でまとめる)。 */
-export interface ChartVitalPoint {
-  /** "YYYY-MM-DDTHH:mm"(端末ローカル)。表・グラフのキー。 */
-  time: string;
-  systolic: number | null;
-  diastolic: number | null;
-  values: Partial<Record<ChartMeasureKey, number>>;
-  /** この時点を構成する Observation の id(列の削除に使う)。 */
-  observationIds: string[];
-}
-
-export interface ChartEventLine {
-  id: string;
-  time: string;
-  code: string;
-  label: string;
-  note: string;
-}
-
 export interface ChartDrugLine {
   id: string;
   administration: fhir4.MedicationAdministration;
@@ -315,7 +219,7 @@ export interface ChartDrugLine {
 export interface AnesthesiaChartData {
   hub: fhir4.Procedure;
   /** 時刻昇順。 */
-  vitals: ChartVitalPoint[];
+  vitals: ChartPoint[];
   events: ChartEventLine[];
   drugs: ChartDrugLine[];
   /** 麻酔担当の表示名。 */
@@ -323,110 +227,55 @@ export interface AnesthesiaChartData {
   readOnly: boolean;
 }
 
-/** "YYYY-MM-DDTHH:mm" に丸めた端末ローカル時刻。打点を分単位で束ねるキー。 */
-function minuteOf(dateTime: string | undefined): string {
-  return toDateTimeInput(dateTime).slice(0, 16);
-}
-
-function loincCode(observation: fhir4.Observation): string {
-  return observation.code?.coding?.find((c) => c.system === LOINC)?.code ?? "";
-}
-
-function eventCode(observation: fhir4.Observation): string {
-  return observation.code?.coding?.find((c) => c.system === ANESTHESIA_EVENT_SYSTEM)?.code ?? "";
-}
-
 export function buildAnesthesiaChartData(
   hub: fhir4.Procedure,
   observations: fhir4.Observation[],
   administrations: fhir4.MedicationAdministration[],
 ): AnesthesiaChartData {
-  const hubRef = `Procedure/${hub.id}`;
-  const mine = (resource: { partOf?: fhir4.Reference[] }) =>
-    (resource.partOf ?? []).some((reference) => reference.reference === hubRef);
+  const hubId = hub.id ?? "";
+  const hubRef = `Procedure/${hubId}`;
+  const { points, events } = groupChartObservations(ANESTHESIA_CHART_SPEC, hubId, observations);
 
-  const pointByTime = new Map<string, ChartVitalPoint>();
-  const events: ChartEventLine[] = [];
-
-  for (const observation of observations) {
-    if (!mine(observation)) continue;
-
-    const event = eventCode(observation);
-    if (event) {
-      events.push({
-        id: observation.id ?? "",
-        time: minuteOf(observation.effectiveDateTime),
-        code: event,
-        label: chartEventDisplay(event),
-        note: observation.note?.map((n) => n.text).filter(Boolean).join(" / ") ?? "",
-      });
-      continue;
-    }
-
-    const time = minuteOf(observation.effectiveDateTime);
-    if (!time) continue;
-    let point = pointByTime.get(time);
-    if (!point) {
-      point = { time, systolic: null, diastolic: null, values: {}, observationIds: [] };
-      pointByTime.set(time, point);
-    }
-    if (observation.id) point.observationIds.push(observation.id);
-
-    const code = loincCode(observation);
-    if (code === BLOOD_PRESSURE.code) {
-      const componentValue = (target: string) =>
-        observation.component?.find((c) =>
-          c.code?.coding?.some((coding) => coding.code === target),
-        )?.valueQuantity?.value ?? null;
-      point.systolic = componentValue(SYSTOLIC.code);
-      point.diastolic = componentValue(DIASTOLIC.code);
-      continue;
-    }
-    const measure = CHART_MEASURES.find((m) => m.code === code);
-    if (measure && observation.valueQuantity?.value != null) {
-      point.values[measure.key] = observation.valueQuantity.value;
-    }
-  }
-
-  const drugs: ChartDrugLine[] = administrations.filter(mine).map((administration) => {
-    const mode: ChartDrugLine["mode"] = administration.effectivePeriod ? "infusion" : "bolus";
-    const dosage = administration.dosage;
-    const route = dosage?.route?.coding?.find((c) => c.system === ROUTE_SYSTEM)?.code ?? "";
-    const amount =
-      mode === "bolus"
-        ? dosage?.dose?.value != null
-          ? `${dosage.dose.value}${dosage.dose.unit ?? ""}`
-          : ""
-        : dosage?.rateQuantity?.value != null
-          ? `${dosage.rateQuantity.value}${dosage.rateQuantity.unit ?? ""}`
-          : "";
-    return {
-      id: administration.id ?? "",
-      administration,
-      name:
-        administration.medicationCodeableConcept?.text ??
-        administration.medicationCodeableConcept?.coding?.[0]?.display ??
-        "",
-      mode,
-      time: minuteOf(
+  const drugs: ChartDrugLine[] = administrations
+    .filter((administration) => (administration.partOf ?? []).some((reference) => reference.reference === hubRef))
+    .map((administration) => {
+      const mode: ChartDrugLine["mode"] = administration.effectivePeriod ? "infusion" : "bolus";
+      const dosage = administration.dosage;
+      const route = dosage?.route?.coding?.find((c) => c.system === ROUTE_SYSTEM)?.code ?? "";
+      const amount =
         mode === "bolus"
-          ? administration.effectiveDateTime
-          : administration.effectivePeriod?.start,
-      ),
-      endTime: mode === "infusion" ? minuteOf(administration.effectivePeriod?.end) : "",
-      doseLabel: [amount, route ? surgeryRouteDisplay(route) : ""].filter(Boolean).join(" "),
-      running: mode === "infusion" && !administration.effectivePeriod?.end,
-    };
-  });
+          ? dosage?.dose?.value != null
+            ? `${dosage.dose.value}${dosage.dose.unit ?? ""}`
+            : ""
+          : dosage?.rateQuantity?.value != null
+            ? `${dosage.rateQuantity.value}${dosage.rateQuantity.unit ?? ""}`
+            : "";
+      return {
+        id: administration.id ?? "",
+        administration,
+        name:
+          administration.medicationCodeableConcept?.text ??
+          administration.medicationCodeableConcept?.coding?.[0]?.display ??
+          "",
+        mode,
+        time: minuteOf(
+          mode === "bolus"
+            ? administration.effectiveDateTime
+            : administration.effectivePeriod?.start,
+        ),
+        endTime: mode === "infusion" ? minuteOf(administration.effectivePeriod?.end) : "",
+        doseLabel: [amount, route ? surgeryRouteDisplay(route) : ""].filter(Boolean).join(" "),
+        running: mode === "infusion" && !administration.effectivePeriod?.end,
+      };
+    });
 
-  const byTime = (a: { time: string }, b: { time: string }) => a.time.localeCompare(b.time);
   const performer = hub.performer?.[0]?.actor;
 
   return {
     hub,
-    vitals: [...pointByTime.values()].sort(byTime),
-    events: events.sort(byTime),
-    drugs: drugs.sort(byTime),
+    vitals: points,
+    events,
+    drugs: drugs.sort((a, b) => a.time.localeCompare(b.time)),
     performerName: performer?.display ?? "",
     readOnly: hub.status === "completed",
   };
@@ -434,15 +283,7 @@ export function buildAnesthesiaChartData(
 
 /** チャートの取消。子 → ハブの順に消す(実施取消と同じ理由で記録は残さない)。 */
 export function buildAnesthesiaChartDeleteEntries(data: AnesthesiaChartData): fhir4.BundleEntry[] {
-  const entries: fhir4.BundleEntry[] = [];
-  for (const point of data.vitals) {
-    for (const id of point.observationIds) {
-      entries.push({ request: { method: "DELETE", url: `Observation/${id}` } });
-    }
-  }
-  for (const event of data.events) {
-    if (event.id) entries.push({ request: { method: "DELETE", url: `Observation/${event.id}` } });
-  }
+  const entries = chartObservationDeleteEntries(data.vitals, data.events);
   for (const drug of data.drugs) {
     if (drug.id) {
       entries.push({ request: { method: "DELETE", url: `MedicationAdministration/${drug.id}` } });

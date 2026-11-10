@@ -16633,15 +16633,15 @@ select.rad-route-select {
 
 /* カルテのカードから開くときのモーダル。グラフが横に伸びるので、
    広幅(.modal--wide)よりさらに広く取って画面いっぱいまで使う。 */
-.modal--anes-chart {
+.modal--time-chart {
   width: min(1200px, 96vw);
 }
 
 /* 入力欄の見た目。このページはフォームがグラフ・表と地続きに並ぶので、
    フォーム単位ではなくページ全体に当てる(規則は .prescription-form と同じ)。 */
-.anes-chart input,
-.anes-chart select,
-.anes-chart textarea {
+.time-chart input,
+.time-chart select,
+.time-chart textarea {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
@@ -16651,15 +16651,15 @@ select.rad-route-select {
   color: var(--text-h);
 }
 
-.anes-chart fieldset {
+.time-chart fieldset {
   border: 1px solid var(--border);
   border-radius: 8px;
   /* fieldset は既定で min-inline-size: min-content。そのままだと中の表の幅まで
-     広がってしまい、表側の横スクロール(.anes-chart__table-scroll)が効かない。 */
+     広がってしまい、表側の横スクロール(.time-chart__table-scroll)が効かない。 */
   min-width: 0;
 }
 
-.anes-chart fieldset legend {
+.time-chart fieldset legend {
   font-size: 13px;
   color: var(--text);
   padding: 0 4px;
@@ -16705,7 +16705,7 @@ select.rad-route-select {
   white-space: pre-wrap;
 }
 
-.anes-chart__empty {
+.time-chart__empty {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -16713,7 +16713,7 @@ select.rad-route-select {
 }
 
 /* 横軸の倍率切り替えと凡例。グラフの上に小さく置く。 */
-.anes-chart__plot-bar {
+.time-chart__plot-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -16724,7 +16724,7 @@ select.rad-route-select {
 }
 
 /* 凡例はグラフの持ち物なので、倍率のボタン群とは離して右に置く。 */
-.anes-chart__legend {
+.time-chart__legend {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -16732,19 +16732,19 @@ select.rad-route-select {
   margin-left: auto;
 }
 
-.anes-chart__legend-item {
+.time-chart__legend-item {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   color: var(--text-h);
 }
 
-.anes-chart__plot-bar .anes-chart__scale {
+.time-chart__plot-bar .time-chart__scale {
   padding: 2px 10px;
   font-size: 12px;
 }
 
-.anes-chart__plot-bar .anes-chart__scale--active {
+.time-chart__plot-bar .time-chart__scale--active {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -16752,7 +16752,7 @@ select.rad-route-select {
 /* グラフは時間ぶんだけ横に伸びるのでスクロールに閉じ込める。短い手術では
    画面より狭くなるので、枠は中身の幅に合わせる(でないと右が余白だけの
    帯になる)。 */
-.anes-chart__plot-scroll {
+.time-chart__plot-scroll {
   width: fit-content;
   max-width: 100%;
   overflow-x: auto;
@@ -16763,83 +16763,83 @@ select.rad-route-select {
 }
 
 /* 「全画面」。幅いっぱいに引き伸ばすので中身は必ず収まる(横スクロールしない)。 */
-.anes-chart__plot-scroll--fit {
+.time-chart__plot-scroll--fit {
   width: 100%;
   overflow-x: hidden;
 }
 
-.anes-plot__grid {
+.time-plot__grid {
   stroke: var(--surface-stripe);
   stroke-width: 1;
 }
 
-.anes-plot__grid--major {
+.time-plot__grid--major {
   stroke: var(--border);
   stroke-width: 1;
 }
 
-.anes-plot__ylabel,
-.anes-plot__xlabel {
+.time-plot__ylabel,
+.time-plot__xlabel {
   fill: var(--text);
   font-size: 10px;
   text-anchor: end;
 }
 
-.anes-plot__xlabel {
+.time-plot__xlabel {
   text-anchor: middle;
 }
 
-.anes-plot__event {
+.time-plot__event {
   fill: var(--accent);
   font-size: 10px;
 }
 
-.anes-plot__event-label {
+.time-plot__event-label {
   fill: var(--text-h);
   font-size: 10px;
 }
 
-.anes-plot__event-line {
+.time-plot__event-line {
   stroke: var(--accent-border);
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
 
 /* 血圧は ∨(収縮期)/∧(拡張期)、脈拍は ● + 折れ線。紙のチャートと同じ記号。 */
-.anes-plot__bp {
+.time-plot__bp {
   stroke: var(--lab-high);
   stroke-width: 1.6;
   fill: none;
 }
 
-.anes-plot__pulse {
+.time-plot__pulse {
   fill: var(--lab-low);
 }
 
-.anes-plot__pulse-line {
+.time-plot__pulse-line {
   stroke: var(--lab-low);
   stroke-width: 1;
   fill: none;
   opacity: 0.7;
 }
 
-.anes-chart__section {
+.time-chart__section {
   padding: 10px 12px;
   margin-bottom: 12px;
 }
 
-.anes-chart__table-scroll {
+.time-chart__table-scroll {
   overflow-x: auto;
 }
 
 /* 列 = 時点の表。行見出しは左に固定する。 */
-.anes-chart__table {
+.time-chart__table {
   border-collapse: collapse;
   white-space: nowrap;
 }
 
-.anes-chart__table th,
-.anes-chart__table td {
+.time-chart__table th,
+.time-chart__table td {
   border: 1px solid var(--border);
   padding: 2px 8px;
   font-size: 13px;
@@ -16847,7 +16847,7 @@ select.rad-route-select {
   min-width: 56px;
 }
 
-.anes-chart__table tbody th {
+.time-chart__table tbody th {
   position: sticky;
   left: 0;
   background: var(--surface-panel);
@@ -16856,7 +16856,7 @@ select.rad-route-select {
 
 /* 列(時点)の削除。見出しの数字より前に出ないよう、枠も地も持たせず沈める
    (押す先は分かればよく、常時 4〜5 個が並ぶので目立つと表が読みにくい)。 */
-.anes-chart__table .anes-chart__cell-delete {
+.time-chart__table .time-chart__cell-delete {
   height: auto;
   margin-left: 4px;
   padding: 0 2px;
@@ -16868,13 +16868,13 @@ select.rad-route-select {
   opacity: 0.45;
 }
 
-.anes-chart__table .anes-chart__cell-delete:hover {
+.time-chart__table .time-chart__cell-delete:hover {
   opacity: 1;
   color: var(--accent);
   background: transparent;
 }
 
-.anes-chart__entry {
+.time-chart__entry {
   display: flex;
   align-items: flex-end;
   gap: 10px;
@@ -16882,7 +16882,7 @@ select.rad-route-select {
   margin-top: 10px;
 }
 
-.anes-chart__entry label {
+.time-chart__entry label {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -16890,11 +16890,11 @@ select.rad-route-select {
   color: var(--text);
 }
 
-.anes-chart__entry input[type="number"] {
+.time-chart__entry input[type="number"] {
   width: 72px;
 }
 
-.anes-chart__bp-pair {
+.time-chart__bp-pair {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -16911,19 +16911,19 @@ select.rad-route-select {
 }
 
 /* 時刻入力と「現在」ボタンの組。 */
-.anes-chart__time-field {
+.time-chart__time-field {
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
-.anes-chart__time-field .anes-chart__now {
+.time-chart__time-field .time-chart__now {
   padding: 4px 8px;
   font-size: 12px;
   white-space: nowrap;
 }
 
-.anes-chart__list {
+.time-chart__list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -16934,31 +16934,31 @@ select.rad-route-select {
 
 /* 行は「時刻・名前・補足・操作」を 1 行に並べたもの。名前が本文と同じ大きさだと
    一覧としては大きすぎるので、表(14px)に合わせる。 */
-.anes-chart__list li {
+.time-chart__list li {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 14px;
 }
 
-.anes-chart__list-time {
+.time-chart__list-time {
   font-family: var(--mono);
   font-size: 13px;
   color: var(--text-h);
 }
 
-.anes-chart__list-note {
+.time-chart__list-note {
   color: var(--text);
   font-size: 13px;
 }
 
-.anes-chart__footer {
+.time-chart__footer {
   display: flex;
   gap: 12px;
   margin: 16px 0;
 }
 
-.anes-chart__danger {
+.time-chart__danger {
   color: var(--lab-high);
   border-color: var(--lab-high);
 }

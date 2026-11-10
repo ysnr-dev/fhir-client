@@ -444,15 +444,14 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
 ［提案］境界は **ハブ Procedure とその子**。外部システムが 1 回ごとに §6 の形(category、`basedOn` = ヘッダ、子の Observation /
 MedicationAdministration)で書けば、画面側は手入力と同じデータとして扱う(部門一覧・カルテ・会計のいずれも Procedure だけを読む)。
 オーダー(ServiceRequest)と予約(Appointment)はこのアプリが正本のままにし、外部からの取込口は作らない。
-透析中の時間軸(装置が出す分単位のバイタル・QB・除水速度)は §9 の透析経過表の器に入れる。
+透析中の時間軸(装置が出す分単位のバイタル・QB・除水速度)は透析経過表(`docs/dialysis-chart-design.md` §5)の器に入れる。
 
 ---
 
 ## 9. 未実装・今後(申し送り)
 
-- **透析経過表**(透析中のバイタル・血流量・除水の時間軸)。麻酔チャート(`anesthesia-chart-design.md`)の器(ハブ + 時刻つき Observation)を
-  流用し、経過表の 24 時間表示に出すなら `api/queries/karte.ts` の経過表の category に `order-type|dialysis` を足す
-  (行は Observation のコードから自動で立つ)。
+- **透析経過表**(透析中のバイタル・血流量・除水の時間軸)。設計済み・未実装: `docs/dialysis-chart-design.md`
+  (麻酔チャートの器を切り出して共用し、実施記録のハブに `partOf` でぶら下げる 1 回 1 枚の経過表)。
 - 看護向けの患者メモ(消毒液・止血方法・導入年月日・シャントのシェーマ)。看護プロファイルの区画で持てる。
 - 透析患者一覧(DW の推移・直近の採血・アクセスの状態)、月間統計(回数・浄化方法別・ベッド稼働)。
 - ボードのドラッグによるベッドの入れ替え、週ビューからの直接予約、入院中の外来オーダーの一時中断。
