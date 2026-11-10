@@ -473,7 +473,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const [problemMode, setProblemMode] = useState<KarteProblemMode>(readProblemMode);
   const [sidePaneMode, setSidePaneMode] = useState<KarteSidePaneMode>(readSidePaneMode);
   // 情報の種別での絞り込み。共有できるよう URL に載せる(プロブレムと同じ扱い)。
-  const cardFilter = parseKarteCard(searchParams.get(KARTE_CARD_PARAM));
+  // 値は URL の文字列から作るオブジェクトなので、文字列が変わったときだけ作り直す(描画のたびに
+  // 新しくなると、これに依存する絞り込み結果と、それを見る effect が毎回動く)。
+  const cardParam = searchParams.get(KARTE_CARD_PARAM);
+  const cardFilter = useMemo(() => parseKarteCard(cardParam), [cardParam]);
   // 診療科・記録者での絞り込み。見る人ごとの好みなので URL には載せず端末に覚える。
   const [scopeFilter, setScopeFilter] = useState<KarteScopeFilter>(readScopeFilter);
   // 自科はヘッダーで選択中の診療科、個人はログイン中の医療従事者と突き合わせる。
