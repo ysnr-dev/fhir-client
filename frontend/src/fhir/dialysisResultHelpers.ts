@@ -68,9 +68,21 @@ const BUNDLED_MEDICATION_EXT_URL = `${LOCAL}/StructureDefinition/dialysis-bundle
 /** 血圧が透析前か後か。体重はコードで分かれるが、血圧は LOINC のパネル 1 つなので拡張で区別する。 */
 const MEASUREMENT_TIMING_EXT_URL = `${LOCAL}/StructureDefinition/dialysis-measurement-timing`;
 
-type MeasurementCode = "pre-weight" | "post-weight" | "ultrafiltration" | "actual-minutes" | "qb" | "qd" | "dry-weight";
+type MeasurementCode =
+  | "pre-weight"
+  | "post-weight"
+  | "ultrafiltration"
+  | "actual-minutes"
+  | "qb"
+  | "qd"
+  | "dry-weight"
+  | "uf-rate"
+  | "venous-pressure"
+  | "arterial-pressure"
+  | "tmp";
 
-const MEASUREMENTS: Record<MeasurementCode, { display: string; unit: string; ucum: string }> = {
+/** 測定値のコードと単位。実施記録(回の値)と透析経過表(時点の値。dialysisChartHelpers)で共用。 */
+export const DIALYSIS_MEASUREMENTS: Record<MeasurementCode, { display: string; unit: string; ucum: string }> = {
   "pre-weight": { display: "透析前体重", unit: "kg", ucum: "kg" },
   "post-weight": { display: "透析後体重", unit: "kg", ucum: "kg" },
   ultrafiltration: { display: "除水量", unit: "L", ucum: "L" },
@@ -78,6 +90,10 @@ const MEASUREMENTS: Record<MeasurementCode, { display: string; unit: string; ucu
   qb: { display: "血流量", unit: "mL/min", ucum: "mL/min" },
   qd: { display: "透析液流量", unit: "mL/min", ucum: "mL/min" },
   "dry-weight": { display: "ドライウェイト", unit: "kg", ucum: "kg" },
+  "uf-rate": { display: "除水速度", unit: "mL/h", ucum: "mL/h" },
+  "venous-pressure": { display: "静脈圧", unit: "mmHg", ucum: "mm[Hg]" },
+  "arterial-pressure": { display: "動脈圧", unit: "mmHg", ucum: "mm[Hg]" },
+  tmp: { display: "膜間圧力差", unit: "mmHg", ucum: "mm[Hg]" },
 };
 
 /** 薬剤の投与経路。ESA・鉄・ビタミン D などは回路から静注、ヘパリンは持続で回路へ。 */
@@ -440,12 +456,20 @@ function initialTimes(
  * 実施入力の初期値。透析条件(QB・QD・血液浄化器)はオーダーから写す。抗凝固薬と液はオーダーの薬を
  * 薬剤の行に置き、維持透析では所定点数に含まれるので「算定しない」にする。急性血液浄化の液は薬剤料として送る。
  */
+/** 透析経過表の最後の血圧と累積除水量。終了の入力の初期値にする(docs/dialysis-chart-design.md §2.3)。 */
+export interface DialysisChartLatest {
+  systolic: number | null;
+  diastolic: number | null;
+  ultrafiltration: number | null;
+}
+
 export function initialDialysisPerformForm(
   order: fhir4.ServiceRequest,
   session: DialysisSession | undefined,
   appointment: fhir4.Appointment | undefined,
   dryWeight: DryWeight | null,
   now: string,
+  chartLatest: DialysisChartLatest | null = null,
 ): DialysisPerformFormValues {
   const values = parseDialysisOrderForm(order);
   const maintenance = isMaintenanceDialysisModality(values.modality);
@@ -461,11 +485,12 @@ export function initialDialysisPerformForm(
     preSystolic,
     preDiastolic,
     postWeight: "",
-    ultrafiltration: "",
+    // 経過表があれば装置の累積除水と最後の血圧を初期値にする(前後の体重の差より実際の除水に近い)。
+    ultrafiltration: chartLatest?.ultrafiltration != null ? String(chartLatest.ultrafiltration) : "",
     qb: values.qb,
     qd: values.qd,
-    postSystolic: "",
-    postDiastolic: "",
+    postSystolic: chartLatest?.systolic != null ? String(chartLatest.systolic) : "",
+    postDiastolic: chartLatest?.diastolic != null ? String(chartLatest.diastolic) : "",
     purifiers: values.purifiers
       .filter((p) => p.name.trim())
       .map((p) => ({ code: p.code, name: p.name, quantity: "1" })),
@@ -629,7 +654,7 @@ function measurement(
   code: MeasurementCode,
   value: number,
 ): fhir4.Observation {
-  const { display, unit, ucum } = MEASUREMENTS[code];
+  const { display, unit, ucum } = DIALYSIS_MEASUREMENTS[code];
   return {
     ...base,
     code: { coding: [{ system: DIALYSIS_MEASUREMENT_SYSTEM, code, display }], text: display },
@@ -776,6 +801,8 @@ export function buildDialysisFinishBundle(
   ctx: DialysisPerformContext,
   values: DialysisPerformFormValues,
   dryWeight: DryWeight | null,
+  /** この回の透析経過表のハブ。あれば回と一緒に閉じる。 */
+  chartHub?: fhir4.Procedure,
 ): fhir4.Bundle {
   const startAt = toFhirDateTime(values.startAt);
   const endAt = toFhirDateTime(values.endAt);
@@ -820,6 +847,13 @@ export function buildDialysisFinishBundle(
       ? [postObservation(buildDryWeightObservation(ctx, newDryWeight, endAt))]
       : [];
 
+  const closedChart: fhir4.Procedure | null = chartHub?.id
+    ? { ...chartHub, status: "completed", performedPeriod: { start: chartHub.performedPeriod?.start ?? startAt, end: endAt } }
+    : null;
+  const chartEntries: fhir4.BundleEntry[] = closedChart
+    ? [{ resource: closedChart, request: { method: "PUT", url: `Procedure/${closedChart.id}` } }]
+    : [];
+
   return transactionBundle([
     hub.entry(resource),
     ...preEntries(ctx, values, hub.reference, startAt),
@@ -827,6 +861,7 @@ export function buildDialysisFinishBundle(
     ...values.medicines.map((line) => postObservation(medicationAdministration(ctx, line, hub.reference, startAt))),
     ...procedures.map(postObservation),
     ...dryWeightEntries,
+    ...chartEntries,
     ...appointmentEntry(ctx.appointment, "fulfilled"),
   ]);
 }
@@ -842,17 +877,20 @@ function buildDryWeightObservation(
 }
 
 /**
- * 実施取消。子を先に消してからハブを消し(上流は配列順に処理する)、予約を予約済に戻す。
+ * 実施取消。経過表 → 子 → ハブの順に消し(上流は配列順に処理する)、予約を予約済に戻す。
  * 実施しなかった回に記録を残すと会計の除外条件が増えるので、entered-in-error で残さず消す(処置と同じ)。
  * ドライウェイトは患者の状態値なので消さない。
  */
 export function buildDialysisPerformDeleteBundle(
   session: DialysisSession,
   appointment: fhir4.Appointment | undefined,
+  /** この回の透析経過表(打点・イベント・ハブ)。実施しなかった回の経過表は残さない。 */
+  chartEntries: fhir4.BundleEntry[] = [],
 ): fhir4.Bundle {
   const remove = (resourceType: string, id: string | undefined): fhir4.BundleEntry[] =>
     id ? [{ request: { method: "DELETE", url: `${resourceType}/${id}` } }] : [];
   return transactionBundle([
+    ...chartEntries,
     ...session.administrations.flatMap((a) => remove("MedicationAdministration", a.id)),
     ...session.observations.flatMap((o) => remove("Observation", o.id)),
     ...session.procedures.flatMap((p) => remove("Procedure", p.id)),

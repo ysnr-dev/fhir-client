@@ -42,6 +42,15 @@ export interface ChartSpec {
   eventSystem: string;
   /** 打点とイベントに付ける category。無ければ付けない(経過表の vital-signs 検索に拾わせない)。 */
   category?: fhir4.CodeableConcept[];
+  /** 前回の値を次の入力の初期値にする項目(装置の設定値のように、回の中でほぼ変わらないもの)。 */
+  carryOver?: readonly string[];
+}
+
+/** 軸に固定で描く印(回の開始・終了など)。 */
+export interface ChartMarker {
+  /** "YYYY-MM-DDTHH:mm"(端末ローカル)。 */
+  time: string;
+  label: string;
 }
 
 export function chartEventDisplay(spec: ChartSpec, code: string): string {

@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
 
-// 一覧から開いた画面(カルテ・麻酔チャート)の「戻る」。
+// 一覧から開いた画面(カルテ・麻酔チャート・透析経過表)の「戻る」。
 //
 // カルテは患者一覧・外来患者一覧・部門業務の各ワークリストから、麻酔チャートは
-// 手術一覧と手術カレンダーから開ける。どちらも**開いた元の画面(検索条件つき)へ
-// 戻したい**ので、遷移元のパスを Link の state で渡す。
+// 手術一覧と手術カレンダーから、透析経過表は透析一覧のボードとベッドサイドの表から
+// 開ける。いずれも**開いた元の画面(検索条件つき)へ戻したい**ので、遷移元のパスを
+// Link の state で渡す。
 //
-// リロードで state は消えるが、麻酔チャートは手術中ずっと開きっぱなしにする画面で
+// リロードで state は消えるが、チャートは手術中・透析中ずっと開きっぱなしにする画面で
 // リロードは普通に起きる。sessionStorage に控えて、そのときも戻れるようにする。
 
 type ReturnState = { returnFrom: string };
@@ -40,6 +41,7 @@ function useReturnTo(storageKey: string, fallback: string): string {
 
 const KARTE_STORAGE_KEY = "fhir-client.karte.returnTo";
 const CHART_STORAGE_KEY = "fhir-client.anesthesiaChart.returnTo";
+const DIALYSIS_CHART_STORAGE_KEY = "fhir-client.dialysisChart.returnTo";
 
 /**
  * 開く側(一覧)が Link に渡す state。渡す中身は「いま自分がどこにいるか」だけなので、
@@ -55,4 +57,8 @@ export function useKarteReturnTo(): string {
 
 export function useChartReturnTo(): string {
   return useReturnTo(CHART_STORAGE_KEY, "/surgery-worklist");
+}
+
+export function useDialysisChartReturnTo(): string {
+  return useReturnTo(DIALYSIS_CHART_STORAGE_KEY, "/dialysis-worklist");
 }

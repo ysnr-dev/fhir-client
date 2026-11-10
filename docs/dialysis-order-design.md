@@ -116,6 +116,9 @@ Location 透析室 (type = CodeSystem/location-type|dialysis-unit、physicalType
 | `StructureDefinition/dialysis-material-quantity` | `usedCode` に数量を添える(処置の `treatment-material-quantity` と同じ) |
 | `StructureDefinition/dialysis-bundled-medication` | 実施の薬剤のうち人工腎臓の所定点数に含まれるもの(valueBoolean)。会計に送らない(§7) |
 | `StructureDefinition/dialysis-measurement-timing` | 実施の血圧が透析前か後か(valueCode `pre` / `post`)。血圧は LOINC のパネル 1 つなので拡張で分ける |
+| `CodeSystem/order-type` の値 `dialysis-chart` | 透析経過表のハブと打点の `category`(`docs/dialysis-chart-design.md`) |
+| `CodeSystem/dialysis-event` | 透析経過表のイベント(穿刺・除水停止・血圧低下・補液・返血など) |
+| `CodeSystem/dialysis-measurement` の追加 `uf-rate` / `venous-pressure` / `arterial-pressure` / `tmp` | 透析経過表の装置の値。`qb` / `qd` / `ultrafiltration` は時点の値としても同じコードを使う |
 
 ［事実］`OrderCatalog::Definition`(会計)は `#{order_type}-procedure-code`・`#{order_type}-material-quantity`・`#{order_type}-bundled-medication` を規約で組む
 (`integrations/receipt_computer/order_catalog.rb`)ので、上の 2 つはこの名前でなければならない。
@@ -412,6 +415,8 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
   + 直近の実施数件(日付・体重・除水)。実施情報は**受付済以降は常に出す**(リハビリと同じ条件。`karteTimeline.ts` にコメント)。
 - 患者帯に「透析中」のピクトグラム(化学療法の `chemotherapy` と同じ作り。`NON_MASTER_KEYS`、色は紫系)。有効な透析オーダー
   (`order-period` に今日が入るもの)があるときに出し、吹き出しに浄化方法・曜日 × シフト・アクセス・DW を出す。
+- 透析中の時間軸(30 分毎のバイタル・装置の値・できごと)は透析経過表(`docs/dialysis-chart-design.md`)。実施記録のハブに
+  `partOf` でぶら下がる別のハブで、終了で一緒に閉じ、実施取消で一緒に消える。終了の入力の初期値(透析後血圧・除水量)にも使う。
 
 ---
 
@@ -450,8 +455,6 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
 
 ## 9. 未実装・今後(申し送り)
 
-- **透析経過表**(透析中のバイタル・血流量・除水の時間軸)。設計済み・未実装: `docs/dialysis-chart-design.md`
-  (麻酔チャートの器を切り出して共用し、実施記録のハブに `partOf` でぶら下げる 1 回 1 枚の経過表)。
 - 看護向けの患者メモ(消毒液・止血方法・導入年月日・シャントのシェーマ)。看護プロファイルの区画で持てる。
 - 透析患者一覧(DW の推移・直近の採血・アクセスの状態)、月間統計(回数・浄化方法別・ベッド稼働)。
 - ボードのドラッグによるベッドの入れ替え、週ビューからの直接予約、入院中の外来オーダーの一時中断。

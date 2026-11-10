@@ -299,6 +299,17 @@ function BoardCard({
         <button type="button" className="row-menu__item" onClick={() => onView(entry)} disabled={!order}>
           表示
         </button>
+        {/* 透析経過表(透析中の時系列記録)。開始後に書き始め、終了後は振り返りに読む。
+            docs/dialysis-chart-design.md §3.1 */}
+        {session?.hub.id && performStatus !== "preparation" && (
+          <Link
+            className="row-menu__item"
+            to={`/dialysis-sessions/${session.hub.id}/chart`}
+            state={returnLinkState}
+          >
+            経過表
+          </Link>
+        )}
         {compact && next && (
           <button type="button" className="row-menu__item" disabled={pending} onClick={performAction(next.action)}>
             {next.label}

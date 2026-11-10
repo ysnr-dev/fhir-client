@@ -16665,7 +16665,7 @@ select.rad-route-select {
   padding: 0 4px;
 }
 
-.anes-chart__order {
+.time-chart__order {
   margin: 8px 0;
   color: var(--text-h);
   display: flex;
@@ -16803,6 +16803,19 @@ select.rad-route-select {
   stroke: var(--accent-border);
   stroke-width: 1;
   stroke-dasharray: 3 3;
+}
+
+/* 回の開始・終了の縦線。イベントの破線と区別する。 */
+.time-plot__marker {
+  stroke: var(--text);
+  stroke-width: 1;
+  opacity: 0.45;
+}
+
+.time-plot__marker-label {
+  fill: var(--text);
+  font-size: 10px;
+  opacity: 0.7;
 }
 
 /* 血圧は ∨(収縮期)/∧(拡張期)、脈拍は ● + 折れ線。紙のチャートと同じ記号。 */

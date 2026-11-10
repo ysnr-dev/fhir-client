@@ -1,48 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type AnesthesiaChartData, buildAnesthesiaChartData, isAnesthesiaChartHub } from "../../fhir/anesthesiaChartHelpers";
 import { postBundle, searchResource } from "../fhirClient";
-import { resourcesOfType, SearchLimitError } from "./core";
+import { fetchAllByPartOf, resourcesOfType } from "./core";
 
 // ---- 麻酔チャート(docs/anesthesia-chart-design.md) ----
-
-const PART_OF_PAGE = 500;
-// ページ数の上限は暴走ガード(4 ページ = 2000 件)。超えたら欠けたチャートを出さずにエラーにする。
-const PART_OF_MAX_PAGES = 4;
-
-/**
- * part-of の子を全件読む。5 分毎の打点 × 数時間で 1 ページに収まらないことがあるので、
- * 1 ページ目の total から残りのページ数を決め、2 ページ目以降は並列に読む。
- */
-async function fetchAllByPartOf<T extends fhir4.Resource>(
-  resourceType: string,
-  hubId: string,
-): Promise<T[]> {
-  const fetchPage = async (page: number) => {
-    const params = new URLSearchParams();
-    params.set("part-of", `Procedure/${hubId}`);
-    params.set("_count", String(PART_OF_PAGE));
-    params.set("_offset", String(page * PART_OF_PAGE));
-    const { data: bundle } = await searchResource<T>(resourceType, params);
-    return {
-      total: bundle.total,
-      resources: (bundle.entry ?? [])
-        .filter((entry) => entry.search?.mode !== "include")
-        .map((entry) => entry.resource)
-        .filter((resource): resource is T => resource?.resourceType === resourceType),
-    };
-  };
-
-  const first = await fetchPage(0);
-  const total = first.total ?? first.resources.length;
-  const pages = Math.ceil(total / PART_OF_PAGE);
-  if (pages > PART_OF_MAX_PAGES) throw new SearchLimitError();
-  if (pages <= 1) return first.resources;
-
-  const rest = await Promise.all(
-    Array.from({ length: pages - 1 }, (_, i) => fetchPage(i + 1).then((r) => r.resources)),
-  );
-  return [...first.resources, ...rest.flat()];
-}
 
 async function fetchAnesthesiaChart(orderId: string): Promise<AnesthesiaChartData | null> {
   const params = new URLSearchParams();

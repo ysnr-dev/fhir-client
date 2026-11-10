@@ -133,7 +133,7 @@ export function AnesthesiaChartPanel({ orderId, showPatientHeader }: AnesthesiaC
       <ErrorBanner error={write.error} />
 
       {summary && (
-        <p className="anes-chart__order">
+        <p className="time-chart__order">
           {items[0] ? `${items[0].name}` : "術式未登録"}
           {summary.roomName ? ` | ${summary.roomName}` : ""}
           {summary.scheduledDate

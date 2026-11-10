@@ -1,4 +1,4 @@
-import { useMemo, type ComponentType, type ReactNode } from "react";
+import { useMemo, useState, type ComponentType, type ReactNode } from "react";
 import {
   useClinicalNote,
   useLabOrderDetail,
@@ -88,6 +88,7 @@ import { TransfusionOrderDetailPanel } from "./TransfusionOrderDetailPanel";
 import { transfusionDispensesByOrderId } from "../fhir/transfusionDispenseHelpers";
 import { splitPerformBundle } from "../fhir/radResultHelpers";
 import { RehabOrderDetailPanel } from "./RehabOrderDetailPanel";
+import { DialysisChartModal } from "./DialysisChartModal";
 import { DialysisOrderDetailPanel } from "./DialysisOrderDetailPanel";
 import { NutritionGuidanceOrderDetailPanel } from "./NutritionGuidanceOrderDetailPanel";
 import { MedicalManagementOrderDetailPanel } from "./MedicalManagementOrderDetailPanel";
@@ -593,6 +594,8 @@ function DialysisOrderDetail({
 }) {
   const detail = useDialysisOrderDetail(srId);
   const dryWeight = useLatestDryWeight(patientId);
+  // 実施履歴の行から開く透析経過表(docs/dialysis-chart-design.md §3.1)。
+  const [chartSessionId, setChartSessionId] = useState<string | null>(null);
   const serviceRequest = serviceRequestsOf(detail.data?.data).find(
     (request) => request.id === srId,
   );
@@ -620,10 +623,12 @@ function DialysisOrderDetail({
           problemsById={problemsById}
           performs={performs}
           dryWeight={dryWeight.data ?? null}
+          onOpenChart={setChartSessionId}
         />
       ) : (
         !detail.error && <NotFound label="透析オーダー" />
       )}
+      {chartSessionId && <DialysisChartModal sessionId={chartSessionId} onClose={() => setChartSessionId(null)} />}
     </>
   );
 }

@@ -8,7 +8,7 @@
 麻酔チャート(`docs/anesthesia-chart-design.md`)の器(ハブ Procedure + 時刻つき Observation)を流用する。
 ただし麻酔チャートがオーダー単位で 1 枚なのに対し、透析経過表は**透析の 1 回(セッション)ごとに 1 枚**。
 
-設計日: 2026-11-10。未実装。
+設計日: 2026-11-10。第 1 段・第 2 段を同日に実装(§6)。
 
 本文中の区別:
 - **［事実］** = FHIR R4 / JP Core の仕様、または上流・既存実装で確認した内容
@@ -249,7 +249,7 @@ Device を添えてよい(画面は読まない)。画面側は手入力と同�
   画面は `TimeSeriesPlot`(`extraTimes` で薬剤の時刻を軸に入れる、`emptyStart`、`pulseKey`)・`PointsSection`(`legend`)・
   `EventsSection`・`TimeField`。麻酔の打点は従来どおり category 無しで書かれる(FHIR 上の形は変えていない)。
 
-**第 2 段: 透析経過表**(`feat:`)
+**第 2 段: 透析経過表**(`feat:`)— 実装済み(2026-11-10)。
 
 - 新規: `fhir/dialysisChartHelpers.ts`(`DIALYSIS_CHART_TYPE`、`DIALYSIS_CHART_SPEC`(§2.1 の項目とイベント)、ハブの組み立て、
   `isDialysisChartHub`、`buildDialysisChartData`、取消のエントリ)、`components/DialysisChartPanel.tsx`、`DialysisChartModal.tsx`、
@@ -261,12 +261,21 @@ Device を添えてよい(画面は読まない)。画面側は手入力と同�
 - `components/DialysisPerformModal.tsx`: 終了の段階で `useDialysisChart` を読み、初期値と bundle に渡す。
 - 入り口(§3.1): `components/DialysisBoard.tsx` のケバブ、`pages/DialysisWorklistPage.tsx` のベッドサイドの表、
   `components/DialysisOrderDetailPanel.tsx` の実施履歴の行(モーダルは `KarteCardModals.tsx` から)。
-- ドキュメント: この文書の「実装したもの」、`dialysis-order-design.md` §2.1(新しい URI)・§6・§9、`features/` の透析の節、
-  `order-flows/dialysis.md`(透析中の記録の段)、`functional-gap-backlog.md` の透析の行。
+- ドキュメント: `dialysis-order-design.md` §2.1(新しい URI)・§6・§9、`order-flows/dialysis.md`(各回の実施・リソースの構成・部品)、
+  `functional-gap-backlog.md` の透析の行。
+- 実装で決めたこと:
+  - 装置の値(QB・QD・除水速度・累積除水・静脈圧・動脈圧・TMP)は前回の打点の値を次の入力の初期値にする(`ChartSpec.carryOver`)。
+  - 終わった回を後から書くときは、時刻の初期値を回の開始にし、追加のたびに直前の時刻を残す(透析中の回は「今」)。
+  - 回の開始・終了はグラフの固定線(`TimeSeriesPlot` の `markers`)。
+  - 実施取消は `useCancelDialysisPerform` が先に経過表を読んでから、経過表 → 実施記録の順の 1 transaction で消す。
+  - 終了の入力(`DialysisPerformModal`)は終了の段階でだけ経過表を読み、最後の血圧・累積除水を初期値にし、
+    経過表のハブを回と一緒に閉じる(`buildDialysisFinishBundle` の `chartHub`)。
+  - `fetchAllByPartOf` は `api/queries/core.ts` に移し、麻酔チャートと共用。
 
 **第 3 段: 流し込みと見本**
 
 - 温度板の 24 時間表示への表示(§4。要望があれば)。
+- 透析一覧の週ビュー・カルテのカードに「経過表あり」の印(いまは開いてみるまで分からない)。
 - デモ投入(`demo-seed/dialysis.ts`): 直近 3 回に 30 分毎の打点(血圧・脈拍・QB・累積除水・静脈圧)と、血圧低下で短縮した回
   (9/1)に「血圧低下 → 除水停止 → 補液 → 除水再開」のイベントを足す。
 - `docs/order-flows/dialysis.md` の図に「透析中の記録」の箱。

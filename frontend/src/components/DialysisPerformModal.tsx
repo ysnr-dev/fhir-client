@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { useCurrentPractitioner } from "../api/authQueries";
 import type { MedicalMaterial, MedicalProcedure, Medicine } from "../api/masterClient";
 import { useLotRequiredCodes } from "../api/masterQueries";
-import { useDialysisPerform, useLatestDryWeight } from "../api/queries";
+import { useDialysisChart, useDialysisPerform, useLatestDryWeight } from "../api/queries";
+import { dialysisChartLatest, type DialysisChartData } from "../fhir/dialysisChartHelpers";
 import { bloodPurifierKindForRow, bloodPurifierLabel } from "../fhir/bloodPurifierHelpers";
 import { dialysisOrderModality, summarizeDialysisOrder, type DialysisModality } from "../fhir/dialysisOrderHelpers";
 import {
@@ -57,16 +58,26 @@ interface Props {
 export function DialysisPerformModal(props: Props) {
   const patientId = props.order.subject?.reference?.split("/").pop();
   const dryWeight = useLatestDryWeight(patientId);
+  // 終了では経過表の最後の血圧・累積除水を初期値にし、経過表のハブも回と一緒に閉じる(docs/dialysis-chart-design.md §2.3)。
+  const chart = useDialysisChart(props.stage === "finish" ? props.session?.hub.id : undefined);
   const title = `透析の${props.stage === "start" ? "開始" : "終了"}${props.patient ? ` - ${displayName(props.patient)}` : ""}`;
 
-  if (dryWeight.isLoading) {
+  if (dryWeight.isLoading || chart.isLoading) {
     return (
       <Modal title={title} onClose={props.onClose}>
         <p>読み込み中...</p>
       </Modal>
     );
   }
-  return <PerformForm {...props} title={title} dryWeight={dryWeight.data ?? null} dryWeightError={dryWeight.error} />;
+  return (
+    <PerformForm
+      {...props}
+      title={title}
+      dryWeight={dryWeight.data ?? null}
+      chart={chart.data ?? null}
+      loadError={dryWeight.error ?? chart.error}
+    />
+  );
 }
 
 type Picking = { kind: "purifier"; row: number } | { kind: "medicine" } | { kind: "material" } | { kind: "procedure" };
@@ -80,15 +91,17 @@ function PerformForm({
   onClose,
   title,
   dryWeight,
-  dryWeightError,
-}: Props & { title: string; dryWeight: DryWeight | null; dryWeightError: unknown }) {
+  chart,
+  loadError,
+}: Props & { title: string; dryWeight: DryWeight | null; chart: DialysisChartData | null; loadError: unknown }) {
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const perform = useDialysisPerform();
+  const chartLatest = chart ? dialysisChartLatest(chart) : null;
   const [values, setValues] = useState<DialysisPerformFormValues>(() =>
-    initialDialysisPerformForm(order, session, appointment, dryWeight, nowDateTimeInput()),
+    initialDialysisPerformForm(order, session, appointment, dryWeight, nowDateTimeInput(), chartLatest),
   );
-  // 除水量は体重の差を初期値にし、手で直したらそれ以降は追いかけない。
-  const [ultrafiltrationEdited, setUltrafiltrationEdited] = useState(false);
+  // 除水量は体重の差を初期値にし、手で直したらそれ以降は追いかけない。経過表の累積除水が入っていればそれを優先する。
+  const [ultrafiltrationEdited, setUltrafiltrationEdited] = useState(chartLatest?.ultrafiltration != null);
   const [picking, setPicking] = useState<Picking | null>(null);
   const [error, setError] = useState("");
 
@@ -146,7 +159,9 @@ function PerformForm({
         ? { id: practitionerId, name: practitioner ? practitionerDisplayName(practitioner) : "" }
         : null,
     };
-    const bundle = finish ? buildDialysisFinishBundle(ctx, values, dryWeight) : buildDialysisStartBundle(ctx, values);
+    const bundle = finish
+      ? buildDialysisFinishBundle(ctx, values, dryWeight, chart?.hub)
+      : buildDialysisStartBundle(ctx, values);
     perform.mutate(bundle, { onSuccess: onClose });
   }
 
@@ -190,7 +205,7 @@ function PerformForm({
             <p className="error-banner__line error-banner__line--error">{error}</p>
           </div>
         )}
-        <ErrorBanner error={dryWeightError} />
+        <ErrorBanner error={loadError} />
 
         <p className="rad-perform__items">
           <span className="rad-perform__items-label">透析内容</span>

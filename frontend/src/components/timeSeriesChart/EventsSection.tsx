@@ -9,20 +9,22 @@ interface EventsSectionProps {
   spec: ChartSpec;
   events: readonly ChartEventLine[];
   readOnly: boolean;
+  /** 時刻の初期値(datetime-local)。PointsSection と同じ扱い。 */
+  defaultTime?: string;
   onAdd: (code: string, occurredAt: string, note: string) => void;
   onDelete: (event: ChartEventLine) => void;
 }
 
-export function EventsSection({ spec, events, readOnly, onAdd, onDelete }: EventsSectionProps) {
+export function EventsSection({ spec, events, readOnly, defaultTime, onAdd, onDelete }: EventsSectionProps) {
   const [code, setCode] = useState<string>(spec.events[0]?.code ?? "");
-  const [occurredAt, setOccurredAt] = useState(nowInput);
+  const [occurredAt, setOccurredAt] = useState(() => defaultTime || nowInput());
   const [note, setNote] = useState("");
 
   function submit(event: FormEvent) {
     event.preventDefault();
     onAdd(code, occurredAt, note);
     setNote("");
-    setOccurredAt(nowInput());
+    setOccurredAt(defaultTime ? occurredAt : nowInput());
   }
 
   return (

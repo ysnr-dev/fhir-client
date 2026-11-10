@@ -28,6 +28,15 @@ import {
   type DialysisUnitGroup,
 } from "../../fhir/dialysisUnitHelpers";
 import {
+  buildDialysisChartData,
+  buildDialysisChartDeleteEntries,
+  DIALYSIS_CHART_TYPE,
+  isDialysisChartHub,
+  type DialysisChartData,
+} from "../../fhir/dialysisChartHelpers";
+import {
+  buildDialysisPerformDeleteBundle,
+  dialysisSessionOrderId,
   DRY_WEIGHT_CODE,
   dryWeightOf,
   groupDialysisSessions,
@@ -37,7 +46,7 @@ import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { buildSlotCreateBundle, SERVICE_TYPE_SYSTEM as SCHEDULE_SERVICE_TYPE_SYSTEM } from "../../fhir/scheduleHelpers";
 import { orderCancelEntries } from "../../fhir/taskHelpers";
 import { addDays, today } from "../../lib/dates";
-import { postBundle, searchResource } from "../fhirClient";
+import { postBundle, readResource, searchResource } from "../fhirClient";
 import {
   fetchAppointmentSlots,
   fetchOrderAppointmentCancelEntries,
@@ -45,8 +54,10 @@ import {
   setActiveAppointmentStatus,
 } from "./appointment";
 import {
+  fetchAllByPartOf,
   makeOrderDetailHook,
   ORDER_PERFORM_REVINCLUDES,
+  resourcesOfType,
   searchAllPages,
   setOrderPeriod,
   type Truncatable,
@@ -484,21 +495,109 @@ export function useDialysisSessions(from: string, to: string) {
   });
 }
 
+/** 実施を書いたあとに読み直すもの。予約の状態とカルテのカード(実施の表示)、ドライウェイト、経過表。 */
+function invalidateDialysisPerform(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["Procedure"] });
+  queryClient.invalidateQueries({ queryKey: ["Observation"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+  invalidateDialysisAppointments(queryClient);
+}
+
 /**
- * 入室・開始・終了・実施取消(transaction はヘルパーが組む)。進捗 Task は動かさない。
- * 予約の状態とカルテのカード(実施の表示)、ドライウェイトも読み直させる。
+ * 入室・開始・終了(transaction はヘルパーが組む)。進捗 Task は動かさない。
  */
 export function useDialysisPerform() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["Procedure"] });
-      queryClient.invalidateQueries({ queryKey: ["Observation"] });
-      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
-      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
-      invalidateDialysisAppointments(queryClient);
+    onSettled: () => invalidateDialysisPerform(queryClient),
+  });
+}
+
+/**
+ * 実施取消。その回の透析経過表があれば一緒に消す(実施しなかった回の経過表は残さない。
+ * docs/dialysis-chart-design.md §2.3)。経過表は実施記録の応答に乗らないので、ここで読んでから組む。
+ */
+export function useCancelDialysisPerform() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ session, appointment }: { session: DialysisSession; appointment?: fhir4.Appointment }) => {
+      const chart = await fetchDialysisChart(session.hub.id ?? "");
+      return postBundle(
+        buildDialysisPerformDeleteBundle(session, appointment, chart ? buildDialysisChartDeleteEntries(chart) : []),
+      );
     },
+    onSettled: () => invalidateDialysisPerform(queryClient),
+  });
+}
+
+// ---- 透析経過表(docs/dialysis-chart-design.md) ----
+
+/** 1 回の実施記録(ハブと子)と、そのオーダー。経過表のページの見出しに使う。 */
+export interface DialysisSessionDetail {
+  session: DialysisSession;
+  order: fhir4.ServiceRequest;
+}
+
+async function fetchDialysisSessionDetail(sessionId: string): Promise<DialysisSessionDetail | null> {
+  const params = new URLSearchParams();
+  params.set("_id", sessionId);
+  params.set("_count", "100");
+  appendSessionRevincludes(params);
+  const { data } = await searchResource<fhir4.Resource>("Procedure", params);
+  const session = groupDialysisSessions(
+    resourcesOfType<fhir4.Procedure>(data, "Procedure"),
+    resourcesOfType<fhir4.Observation>(data, "Observation"),
+    resourcesOfType<fhir4.MedicationAdministration>(data, "MedicationAdministration"),
+  ).find((candidate) => candidate.hub.id === sessionId);
+  if (!session) return null;
+  const orderId = dialysisSessionOrderId(session);
+  const order = orderId ? (await readResource<fhir4.ServiceRequest>("ServiceRequest", orderId)).data : null;
+  return order ? { session, order } : null;
+}
+
+export function useDialysisSessionDetail(sessionId: string | undefined) {
+  return useQuery({
+    queryKey: ["Procedure", "dialysis-session", sessionId],
+    queryFn: () => fetchDialysisSessionDetail(sessionId ?? ""),
+    enabled: Boolean(sessionId),
+  });
+}
+
+/**
+ * 実施記録のハブにぶら下がる経過表(1 回に 1 件)。ハブは part-of で引き、打点は全件読む。
+ * 無ければ null(最初の打点でハブを作る)。
+ */
+export async function fetchDialysisChart(sessionId: string): Promise<DialysisChartData | null> {
+  const params = new URLSearchParams();
+  params.set("part-of", `Procedure/${sessionId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${DIALYSIS_CHART_TYPE.code}`);
+  params.set("_count", "10");
+  const { data } = await searchResource<fhir4.Procedure>("Procedure", params);
+  const hub = resourcesOfType<fhir4.Procedure>(data, "Procedure").find(
+    (procedure) => isDialysisChartHub(procedure) && procedure.status !== "entered-in-error",
+  );
+  if (!hub?.id) return null;
+  const observations = await fetchAllByPartOf<fhir4.Observation>("Observation", hub.id);
+  return buildDialysisChartData(hub, observations);
+}
+
+export function useDialysisChart(sessionId: string | undefined) {
+  return useQuery({
+    queryKey: ["Procedure", "dialysis-chart", sessionId],
+    queryFn: () => fetchDialysisChart(sessionId ?? ""),
+    enabled: Boolean(sessionId),
+  });
+}
+
+/** 経過表への書き込み。打点は 1 時点の組を 1 transaction で書き、途中失敗で組が欠けないようにする。 */
+export function useDialysisChartWrite(sessionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (entries: fhir4.BundleEntry[]) =>
+      postBundle({ resourceType: "Bundle", type: "transaction", entry: entries }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["Procedure", "dialysis-chart", sessionId] }),
   });
 }
 

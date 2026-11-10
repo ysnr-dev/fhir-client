@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toDateTimeInput } from "../../fhir/clinicalNoteHelpers";
-import type { ChartEventLine, ChartPoint } from "../../fhir/timeSeriesChartHelpers";
+import type { ChartEventLine, ChartMarker, ChartPoint } from "../../fhir/timeSeriesChartHelpers";
 
 // 時系列チャートのグラフ(SVG)。横軸 = 時刻、収縮期(∨)・拡張期(∧)・脈拍(●)を
 // 0〜220 の共通軸に描く(紙のチャートと同じ流儀)。イベントは上端に ▼ + ラベル。
@@ -94,6 +94,8 @@ interface TimeSeriesPlotProps {
   extraTimes?: readonly string[];
   /** 記録が 1 件も無いときに枠の起点にする時刻(FHIR dateTime)。 */
   emptyStart?: string;
+  /** 軸に固定で描く縦線(回の開始・終了など)。軸の範囲にも入れる。 */
+  markers?: readonly ChartMarker[];
   /** 確定後は右の余白を詰める。 */
   readOnly: boolean;
   /** 折れ線にする打点の key。 */
@@ -106,6 +108,7 @@ export function TimeSeriesPlot({
   events,
   extraTimes = [],
   emptyStart,
+  markers = [],
   readOnly,
   pulseKey = "pulse",
   ariaLabel,
@@ -132,7 +135,7 @@ export function TimeSeriesPlot({
   const model = useMemo(() => {
     // 軸は「記録がある範囲」で決める。ハブの開始や「今」まで伸ばすと、
     // 記録を止めている間や退室後に開いたときに余白ばかりの軸になる。
-    const times = [...points.map((p) => p.time), ...events.map((e) => e.time), ...extraTimes]
+    const times = [...points.map((p) => p.time), ...events.map((e) => e.time), ...markers.map((m) => m.time), ...extraTimes]
       .map((t) => t.slice(0, 16))
       .filter(Boolean)
       .map(minutesOf)
@@ -150,7 +153,7 @@ export function TimeSeriesPlot({
     const pad = readOnly ? 5 : 15;
     const max = Math.max(Math.ceil((Math.max(...times) + pad) / 5) * 5, min + 30);
     return { min, max };
-  }, [points, events, extraTimes, emptyStart, readOnly]);
+  }, [points, events, markers, extraTimes, emptyStart, readOnly]);
 
   if (!model) return null;
 
@@ -242,6 +245,24 @@ export function TimeSeriesPlot({
               )}
             </g>
           ))}
+
+          {/* 固定の印(回の開始・終了)。イベントとは別物なので実線で、ラベルは枠の中に置く。 */}
+          {markers
+            .filter((marker) => marker.time)
+            .map((marker) => (
+              <g key={`marker-${marker.time}`}>
+                <line
+                  x1={x(marker.time)}
+                  y1={PLOT.top}
+                  x2={x(marker.time)}
+                  y2={PLOT.height - PLOT.bottom}
+                  className="time-plot__marker"
+                />
+                <text x={x(marker.time) + 3} y={PLOT.top + 10} className="time-plot__marker-label">
+                  {marker.label}
+                </text>
+              </g>
+            ))}
 
           {/* イベント(上端の帯)。数分差で続くことがあり、ラベルを同じ高さに置くと
               重なって読めない。前のラベルと近ければ 1 段下げる(2 段で足りない密度は

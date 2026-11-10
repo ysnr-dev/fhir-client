@@ -24,6 +24,8 @@ interface DialysisOrderDetailPanelProps {
   performs?: DialysisSessionDisplay[];
   /** 直近のドライウェイト。 */
   dryWeight?: DryWeight | null;
+  /** 実施履歴の行の「経過表」。渡さなければ出さない。 */
+  onOpenChart?: (sessionId: string) => void;
 }
 
 export function DialysisOrderDetailPanel({
@@ -31,6 +33,7 @@ export function DialysisOrderDetailPanel({
   problemsById,
   performs,
   dryWeight,
+  onOpenChart,
 }: DialysisOrderDetailPanelProps) {
   const summary = summarizeDialysisOrder(serviceRequest);
   const hasDialysate = dialysisModalityHasDialysate(summary.modality);
@@ -129,6 +132,7 @@ export function DialysisOrderDetailPanel({
                 <th>血圧(前 / 後)</th>
                 <th className="dialysis-detail__used">血液浄化器・薬剤・器材</th>
                 <th>担当</th>
+                {onOpenChart && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -151,6 +155,15 @@ export function DialysisOrderDetailPanel({
                     {perform.comment && <div className="karte-perform__note">{perform.comment}</div>}
                   </td>
                   <td>{perform.performerName || "-"}</td>
+                  {onOpenChart && (
+                    <td>
+                      {perform.status !== "preparation" && (
+                        <button type="button" className="rp-card__compact-button" onClick={() => onOpenChart(perform.id)}>
+                          経過表
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

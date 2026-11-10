@@ -10,23 +10,38 @@ interface PointsSectionProps {
   readOnly: boolean;
   /** 区画の見出し。 */
   legend: string;
+  /**
+   * 時刻の初期値(datetime-local)。終わった回を後から書くときに渡す(「今」では別の日になる)。
+   * 渡したときは追加のたびに直前に入れた時刻を残し、渡さなければ「今」に戻す。
+   */
+  defaultTime?: string;
   onAdd: (values: ChartPointFormValues) => void;
   onDeletePoint: (point: ChartPoint) => void;
 }
 
-export function PointsSection({ spec, points, readOnly, legend, onAdd, onDeletePoint }: PointsSectionProps) {
-  const [measuredAt, setMeasuredAt] = useState(nowInput);
+/** 引き継ぐ項目の値だけを残す。 */
+function carried(spec: ChartSpec, source: Partial<Record<string, string | number>>): Partial<Record<string, string>> {
+  return Object.fromEntries(
+    (spec.carryOver ?? []).flatMap((key) => {
+      const value = source[key];
+      return value != null && value !== "" ? [[key, String(value)]] : [];
+    }),
+  );
+}
+
+export function PointsSection({ spec, points, readOnly, legend, defaultTime, onAdd, onDeletePoint }: PointsSectionProps) {
+  const [measuredAt, setMeasuredAt] = useState(() => defaultTime || nowInput());
   const [systolic, setSystolic] = useState("");
   const [diastolic, setDiastolic] = useState("");
-  const [values, setValues] = useState<Partial<Record<string, string>>>({});
+  const [values, setValues] = useState<Partial<Record<string, string>>>(() => carried(spec, points.at(-1)?.values ?? {}));
 
   function submit(event: FormEvent) {
     event.preventDefault();
     onAdd({ measuredAt, systolic, diastolic, values });
     setSystolic("");
     setDiastolic("");
-    setValues({});
-    setMeasuredAt(nowInput());
+    setValues(carried(spec, values));
+    setMeasuredAt(defaultTime ? measuredAt : nowInput());
   }
 
   return (

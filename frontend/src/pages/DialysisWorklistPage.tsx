@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   useCancelAppointment,
   useDialysisBoard,
+  useCancelDialysisPerform,
   useDialysisPerform,
   useDialysisSessions,
   useDialysisShifts,
@@ -31,7 +32,6 @@ import type { DialysisShift } from "../fhir/dialysisShiftHelpers";
 import { DIALYSIS_MODALITY_OPTIONS, summarizeDialysisOrder } from "../fhir/dialysisOrderHelpers";
 import {
   buildDialysisArrivalBundle,
-  buildDialysisPerformDeleteBundle,
   dialysisSessionAppointmentId,
   dialysisSessionDay,
   dialysisSessionDisplay,
@@ -57,6 +57,7 @@ import { formatDateLabel, weekDates, weekStart } from "../fhir/scheduleHelpers";
 import { useRowPictogramSources, type RowPictogramSources } from "../hooks/useRowPictogramSources";
 import { addDays, shortDate, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
+import { useNavigate } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
 
 // 透析一覧(部門ワークリスト)。docs/dialysis-order-design.md §5。
@@ -110,6 +111,7 @@ export function DialysisWorklistPage() {
   const updateStatus = useUpdateDialysisTaskStatus();
   const cancelAppointment = useCancelAppointment();
   const perform = useDialysisPerform();
+  const cancelPerform = useCancelDialysisPerform();
   const { practitionerId, practitioner } = useCurrentPractitioner();
 
   const dates = useMemo(() => (view === "week" ? weekDates(weekStart(date)) : [date]), [view, date]);
@@ -197,11 +199,11 @@ export function DialysisWorklistPage() {
       return;
     }
     if (!session || !window.confirm("この回の実施記録を取り消します。よろしいですか?")) return;
-    perform.mutate(buildDialysisPerformDeleteBundle(session, appointment));
+    cancelPerform.mutate({ session, appointment });
   }
 
   const boardActions = {
-    pending: cancelAppointment.isPending || perform.isPending,
+    pending: cancelAppointment.isPending || perform.isPending || cancelPerform.isPending,
     onPerform: (entry: DialysisBoardEntry, action: DialysisPerformAction, placeLabel: string) => {
       if (!entry.order) return;
       startPerform(action, {
@@ -279,6 +281,7 @@ export function DialysisWorklistPage() {
       <ErrorBanner error={cancelAppointment.error} />
       <ErrorBanner error={sessions.error} />
       <ErrorBanner error={perform.error} />
+      <ErrorBanner error={cancelPerform.error} />
 
       {view === "orders" ? (
         <>
@@ -317,7 +320,7 @@ export function DialysisWorklistPage() {
               rows={bedsideRows}
               date={date}
               sessions={sessions.data?.sessions ?? []}
-              pending={perform.isPending}
+              pending={perform.isPending || cancelPerform.isPending}
               onView={(row) => setViewingId(row.order.id ?? null)}
               onPerform={(row, action, session) =>
                 startPerform(action, { order: row.order, patient: row.patient, session, placeLabel: "ベッドサイド" })
@@ -701,6 +704,7 @@ function BedsideTable({
   onPerform: (row: DialysisWorklistRow, action: DialysisPerformAction, session?: DialysisSession) => void;
 }) {
   const returnLinkState = useReturnLinkState();
+  const navigate = useNavigate();
   if (rows.length === 0) return null;
   return (
     <div className="dialysis-board__bedside">
@@ -727,6 +731,8 @@ function BedsideTable({
             );
             const open = own.find(isOpenDialysisSession);
             const done = own.filter((session) => !isOpenDialysisSession(session) && dialysisSessionDay(session) === date);
+            // 経過表を開く回。透析中の回、無ければその日の終わった回。
+            const chartSession = open?.hub.status === "in-progress" ? open : done[0];
             return (
               <tr key={row.order.id}>
                 <td>
@@ -802,6 +808,15 @@ function BedsideTable({
                         </button>
                       )}
                     </>
+                  )}
+                  {chartSession?.hub.id && (
+                    <button
+                      type="button"
+                      className="rp-card__compact-button"
+                      onClick={() => navigate(`/dialysis-sessions/${chartSession.hub.id}/chart`, { state: returnLinkState })}
+                    >
+                      経過表
+                    </button>
                   )}
                   <button type="button" className="rp-card__compact-button" onClick={() => onView(row)}>
                     表示
