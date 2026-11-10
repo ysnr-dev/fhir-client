@@ -21,6 +21,7 @@ export type HomeWorklistKey =
   | "medicationGuidance"
   | "antimicrobial"
   | "rehab"
+  | "dialysis"
   | "nutritionGuidance"
   | "endoscopy"
   | "treatment"
@@ -59,6 +60,7 @@ export const HOME_WORKLISTS: Record<HomeWorklistKey, HomeWorklistDef> = {
   },
   antimicrobial: { label: "特定抗菌薬の届出", path: "/ast-worklist?tab=notify", roleCodes: ["pharmacist"] },
   rehab: { label: "リハビリ", path: "/rehab-worklist", roleCodes: REHAB_ROLE_CODES },
+  dialysis: { label: "透析", path: "/dialysis-worklist", roleCodes: ["clinical-engineer"] },
   nutritionGuidance: {
     label: "栄養指導",
     path: "/nutrition-guidance-worklist",

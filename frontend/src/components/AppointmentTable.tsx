@@ -9,6 +9,7 @@ import {
   isChemoAppointment,
   isRehabAppointment,
   isNutritionGuidanceAppointment,
+  isDialysisAppointment,
 } from "../fhir/appointmentHelpers";
 import { RowMenu } from "./RowMenu";
 
@@ -46,13 +47,14 @@ export function AppointmentTable({
         {appointments.map((appointment) => {
           // 取り消した予約・受診が済んだ予約は日時を動かせない(枠はもう空きに戻っている)。
           const active = isActiveAppointment(appointment);
-          // リハビリ・栄養指導の予約もオーダーにぶら下がる(basedOn を持つ)ので
+          // リハビリ・栄養指導・透析の予約もオーダーにぶら下がる(basedOn を持つ)ので
           // isExamAppointment は true になる。**枠種別での判定を先に行うこと。**
           //
-          // どちらもオーダーの日時と予約が連動しない(期間オーダーに予約が何件も
+          // どれもオーダーの日時と予約が連動しない(期間オーダーに予約が何件も
           // ぶら下がり、部門が都度取り直す)ので、ここから日時変更・取消をしてよい。
           const rehab = isRehabAppointment(appointment);
           const nutritionGuidance = isNutritionGuidanceAppointment(appointment);
+          const dialysis = isDialysisAppointment(appointment);
           // 化学療法の予約も投与日のオーダーにぶら下がるが、日時変更・取消は投与日パネル
           // (オーダーと一緒に動かす面)で行うので、ここからは動かさない。
           const chemo = isChemoAppointment(appointment);
@@ -63,7 +65,12 @@ export function AppointmentTable({
           // 日時変更はオーダーの編集(撮影日時と一緒に動かす)、取消はオーダーの中止・削除
           // (予約だけ消えてオーダーが残る事故を防ぐ)でだけ行う。
           const exam =
-            !rehab && !nutritionGuidance && !chemo && !autologous && isExamAppointment(appointment);
+            !rehab &&
+            !nutritionGuidance &&
+            !dialysis &&
+            !chemo &&
+            !autologous &&
+            isExamAppointment(appointment);
 
           return (
             <tr key={appointment.id}>
@@ -76,6 +83,7 @@ export function AppointmentTable({
                 {nutritionGuidance && (
                   <span className="dose-conversion__badge">栄養指導</span>
                 )}
+                {dialysis && <span className="dose-conversion__badge">透析</span>}
                 {chemo && <span className="dose-conversion__badge">化学療法</span>}
                 {autologous && <span className="dose-conversion__badge">自己血採血</span>}
               </td>

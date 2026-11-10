@@ -11,6 +11,7 @@ import {
   isBookedSlot,
   scheduleSummary,
   schedulePeriodLabel,
+  scheduleTypeOf,
   today,
   weekStart,
 } from "../fhir/scheduleHelpers";
@@ -124,6 +125,7 @@ export function ScheduleSlotCalendarPage() {
   }
 
   const busy = updateStatus.isPending || deleteSlots.isPending;
+  const dialysis = scheduleTypeOf(schedule) === "dialysis";
 
   return (
     <div className="page">
@@ -133,12 +135,18 @@ export function ScheduleSlotCalendarPage() {
           <button type="button" onClick={() => setAdding({ date: week, time: "" })}>
             枠追加
           </button>
-          <button type="button" onClick={() => setGenerating(true)}>
-            枠一括生成
-          </button>
-          <Link to={`/schedules/${schedule.id}/edit`} className="button">
-            枠表編集
-          </Link>
+          {/* 透析のベッドの枠表はシフトから枠を作り、ベッドと一組で名前・有効を変えるので、
+              パターンでの生成と枠表の編集を出さない(どちらも透析室の設定で行う)。 */}
+          {!dialysis && (
+            <>
+              <button type="button" onClick={() => setGenerating(true)}>
+                枠一括生成
+              </button>
+              <Link to={`/schedules/${schedule.id}/edit`} className="button">
+                枠表編集
+              </Link>
+            </>
+          )}
           <Link to="/schedules" className="button">
             ← 一覧に戻る
           </Link>

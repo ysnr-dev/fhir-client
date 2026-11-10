@@ -1,6 +1,6 @@
 # 透析(血液浄化)オーダーと透析部門の設計
 
-**状態: 第 1 段(オーダー・カルテ・上流・シフト設定)を実装済み(2026-11-09)。第 2 段・第 3 段は未着手(§10)。** `docs/functional-gap-backlog.md` §2.7 の「透析(血液浄化)」。
+**状態: 第 1 段(オーダー・カルテ・上流・シフト設定)を実装済み(2026-11-09)、第 2 段(透析室の設定・ベッド枠・一括展開・部門一覧)を実装済み(2026-11-10)。第 3 段は未着手(§10)。** `docs/functional-gap-backlog.md` §2.7 の「透析(血液浄化)」。
 
 維持透析(週 3 回を何か月も続ける)と急性血液浄化(ICU などのベッドサイドで行う CHDF・血漿交換)を、
 部門オーダーの 1 種別として足す。雛形はリハビリ(`docs/rehab-order-design.md`。期間継続型・Task は部門の受け入れ状態・
@@ -318,9 +318,11 @@ location にはならない(入院患者が透析室に来ても入院の所在�
 **透析室の設定画面 `/dialysis-unit`**(部門業務メニュー)。ベッド 20 台を手で登録させないための画面。
 
 - 透析室 Location(無ければ作る。複数の透析室も可)、ベッドの一覧(名前・有効 / 無効)。
-- 「ベッドを N 台追加」: ベッド Location と、そのベッドを actor にする Schedule(serviceType dialysis、名前 = ベッド名)を
-  `urn:uuid` で結んで 1 transaction。
-- 「枠を生成」: 期間(N か月)を指定して全ベッドの Slot を日 × シフトで作る(§5.2)。既に枠がある日はスキップ。
+- 「ベッドを N 台追加」: ベッド Location と、そのベッドを actor にする Schedule(serviceType dialysis、名前 = 透析室名 + ベッド名。
+  枠表の一覧でどの透析室のベッドか分かるように)を `urn:uuid` で結んで 1 transaction。ベッド名は既存の数字の名前の続き。
+- 「枠を生成」: 開始日と月数(上限 6)を指定して有効なベッドの Slot を日 × シフトで作る(§5.2)。既に同じ日 × シフトの開始に枠があればスキップ
+  (シフトを足したときは足したシフトの枠だけが増える)。
+- 透析室の名前を変えると、配下の枠表の名前も同じ transaction で揃える。
 - 無効にしたベッドは枠を作らず、ボードにも出さない(Location.status = inactive。Schedule も `active = false`)。
 
 ### 5.2 ベッドの枠(Slot)
@@ -332,7 +334,9 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
 - 1 日 × シフト × ベッドで 1 Slot(定員 1)。枠は休日も作る(透析は祝日も行う施設が多い。休診日は施設の運用で埋めない)。
 - 生成は `generateDialysisSlots(schedule, shifts, from, to)`(`scheduleHelpers.ts` の `buildSlotsAt` を写す)。
   100 件ずつ `postBundle`(`useGenerateSlots` と同じ)。
-- 枠表の一覧 `/schedules` には種別「透析」として出るが、編集画面の「枠を生成」は使えない(パターンが無い)旨を出す。
+- 枠表の一覧 `/schedules` には種別「透析」として出る。ケバブの「編集」と枠カレンダーの「枠一括生成」「枠表編集」は出さない
+  (ScheduleForm で保存すると `schedule-slot-pattern` が付いてしまうため。名前・有効と枠の生成は透析室の設定で行う)。
+  枠カレンダーの停止・再開・個別追加はそのまま使える。ScheduleForm の種別の選択肢にも出さない。
 
 ### 5.3 予約(Appointment)の一括展開
 
@@ -350,7 +354,6 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
 3. 排他: ［事実］`postBundle` は PUT エントリのリソースが `meta.versionId` を持てば `ifMatch` に添える(`api/fhirClient.ts`)。
    検索で読んだ Slot をそのまま busy にして送るので、別の患者が先に取った枠は 412 で transaction 全体が落ちる。
    「別の患者が取った枠があります」と出してプレビューを読み直す。**部分成功は作らない**。
-   (`appointmentHelpers.ts` 冒頭の「Bundle の PUT に If-Match が付かない」というコメントは古いので、このとき直す。)
 4. 臨時の 1 件(スポット)・個別の変更・取消は 1 件ずつ(`RehabBookModal` を写した `DialysisBookModal`。日付を固定して
    その日のベッドの空きだけを出す)。
 
@@ -361,9 +364,14 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
 
 ［事実］リハビリ・栄養指導の予約も `basedOn` を持つため、`isExamAppointment` より先に種別で判定している(`appointmentHelpers.ts`)。
 
-［導出］`isDialysisAppointment`(serviceType = dialysis)を足し、`isRehabAppointment` を参照している箇所(予約タブの操作の出し分け、
+［導出］`isDialysisAppointment`(serviceType = dialysis。`appointmentHelpers.ts` の `isRehabAppointment` の隣)を足し、`isRehabAppointment` を参照している箇所(予約タブの操作の出し分け、
 外来一覧の除外、`useOrderAppointment`)の全部に同じ分岐を足す。`scheduleTypeOf` の if 連鎖にも `dialysis` を足す
 (足し忘れると透析の枠表が診察予約として読まれる)。カルテの予約タブでは「透析」バッジを出し、取消・変更を許す(リハビリと同じ理由)。
+外来一覧は `basedOn` を持つ予約を除いているので、透析の予約は足さなくても出ない。
+
+［導出］予約タブの汎用の日時変更は participant の場所と `dialysis-shift` を書き換えない。ボードは**ベッドを押さえた枠の枠表から、
+シフトを開始時刻から**引き(`dialysisAppointmentShift`)、拡張と participant は枠が読めないときの代わりにする。透析一覧の「予約変更」
+(`DialysisBookModal`)は participant・`description`・`dialysis-shift` も書き換える。
 
 ---
 
@@ -459,9 +467,23 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
   backend `order_set_entry.rb` / `extract_query.rb`、`facility_settings.rb`(`dialysis_shifts`)。
 - 上流: `ORDER_END_EXTENSION_URLS` に `dialysis-order-end`(spec も)。再索引は不要(透析オーダーは新規にしか無い)。本番は fhir-server を先に。
 
-**第 2 段: 透析室の設定・ベッド枠・一括展開・部門一覧**
+**第 2 段: 透析室の設定・ベッド枠・一括展開・部門一覧** — 実装済み(2026-11-10)。
 
-- 新規: `fhir/dialysisShiftHelpers.ts` に曜日 × シフト → 日付の展開(`injectionHelpers.ts` の `injectionDates` を写す)、`fhir/dialysisUnitHelpers.ts`(Location ← `wardHelpers.ts`、Schedule ← `scheduleHelpers.ts` の `buildSchedule`、`generateDialysisSlots`)、
+実装で決めたこと:
+- 透析一覧のビューはボード(1 日)・週(7 日)・オーダー。ボードと週は同じ `DialysisBoard`(列 = 日 × シフト、行 = 有効なベッド)。
+  予約の無いセルは枠の状態(空き・停止・枠なし)を出し、ベッドやシフトに当てはまらない予約(無効にしたベッド・消したシフト)は格子の下に別に並べる。
+  セルの操作は表示・予約変更・予約取消。入室・開始・終了は第 3 段で足す。
+- ベッドサイドのオーダーは、ボードの格子の下に「ベッドサイド」として依頼済・実施中のものを並べる(実施の入口は第 3 段)。
+- オーダーのビューの操作: 依頼済 → 受付、実施中 → 展開・臨時(ベッドサイドは出さない)、ケバブに終了・受付取消・中止。
+  「予約」列は基準日以降の有効な予約の件数と最後の日(展開し忘れに気づけるように)。
+- 展開: 開始日の初期値は、オーダーの開始日と今日の遅いほう、予約があればその最後(有効・実施済)の翌日。週数は 1〜12、終了日があればそこで止める。
+  ベッドの初期値は同じ曜日 × シフトの直近の予約のベッド、無ければ直近の予約のベッド、無ければ未選択(黙って割り当てない)。
+- 臨時予約・予約変更は日付とシフトを選び、その日 × シフトの全ベッドの空きをラジオで出す(変更前の枠は「現在」)。
+- ホームの部門ワークリストに「透析」(臨床工学技士の既定。当日に効いているオーダーの進捗と本日予約の件数)。
+- 予約一覧の Procedure(実施)の読み込みは第 3 段で足す(第 2 段ではボードに実施を出さない)。
+
+
+- 新規: `fhir/dialysisShiftHelpers.ts` に曜日 × シフト → 日付の展開(`dialysisPatternOccurrences`。曜日は `injectionHelpers.ts` の `dayOfWeekCode`)、`fhir/dialysisUnitHelpers.ts`(Location ← `wardHelpers.ts`、Schedule ← `scheduleHelpers.ts` の `buildSchedule`、`generateDialysisSlots`)、
   `pages/DialysisUnitPage.tsx`、`fhir/dialysisAppointmentHelpers.ts`(`buildDialysisAppointmentBatchBundle`、`isDialysisAppointment`)、
   `pages/DialysisWorklistPage.tsx`(← `RehabWorklistPage.tsx`。ビュー: 当日ボード / オーダー一覧 / 週)、`components/DialysisBoard.tsx`
   (ベッド × シフトの格子。`RadiotherapyCalendar.tsx` を単純化)、`DialysisExpandModal.tsx`、`DialysisBookModal.tsx`(← `RehabBookModal.tsx`)。

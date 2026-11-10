@@ -179,7 +179,14 @@ export function slotTime(slot: fhir4.Slot): string {
  * (Procedure.performer)側で持つ
  * (docs/rehab-order-design.md / docs/nutrition-guidance-order-design.md §6)。
  */
-export type ScheduleType = "consultation" | "exam" | "rehab" | "nutrition-guidance" | "chemo" | "autologous";
+export type ScheduleType =
+  | "consultation"
+  | "exam"
+  | "rehab"
+  | "nutrition-guidance"
+  | "chemo"
+  | "autologous"
+  | "dialysis";
 
 export const SCHEDULE_TYPE_OPTIONS: { code: ScheduleType; label: string }[] = [
   { code: "consultation", label: "診察予約" },
@@ -190,6 +197,9 @@ export const SCHEDULE_TYPE_OPTIONS: { code: ScheduleType; label: string }[] = [
   { code: "chemo", label: "化学療法予約" },
   // 自己血の採血予定。枠は作らず(日付と時刻だけ)、Appointment の種別としてだけ使う。
   { code: "autologous", label: "自己血採血" },
+  // 透析室のベッド。1 ベッド 1 枠表で、枠はシフト(施設設定)から透析室の設定画面で作る
+  // (docs/dialysis-order-design.md §5)。枠表の画面からは作らない(ScheduleForm の選択肢に出さない)。
+  { code: "dialysis", label: "透析" },
 ];
 
 export function scheduleTypeLabel(type: ScheduleType): string {
@@ -209,6 +219,7 @@ export function scheduleTypeOf(schedule: fhir4.Schedule): ScheduleType {
   if (code === "nutrition-guidance") return "nutrition-guidance";
   if (code === "chemo") return "chemo";
   if (code === "autologous") return "autologous";
+  if (code === "dialysis") return "dialysis";
   return "consultation";
 }
 

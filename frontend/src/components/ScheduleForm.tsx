@@ -107,7 +107,9 @@ export function ScheduleForm({
           value={values.scheduleType}
           onChange={(e) => update("scheduleType", e.target.value as ScheduleType)}
         >
-          {SCHEDULE_TYPE_OPTIONS.map((option) => (
+          {SCHEDULE_TYPE_OPTIONS.filter(
+            (option) => option.code !== "dialysis" || values.scheduleType === "dialysis",
+          ).map((option) => (
             <option key={option.code} value={option.code}>
               {option.label}
             </option>

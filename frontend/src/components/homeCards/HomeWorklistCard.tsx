@@ -12,6 +12,7 @@ import {
   useRadWorklist,
   useRadiotherapyWorklist,
   useRehabWorklist,
+  useDialysisWorklist,
   useRxVerificationQueue,
   useRxWorklist,
   useSurgeryUnscheduledList,
@@ -43,6 +44,8 @@ import {
   radiotherapyTaskStatus,
 } from "../../fhir/radiotherapyTaskHelpers";
 import { REHAB_TASK_STATUS_OPTIONS, rehabTaskStatus } from "../../fhir/rehabTaskHelpers";
+import { DIALYSIS_TASK_STATUS_OPTIONS, dialysisTaskStatus } from "../../fhir/dialysisTaskHelpers";
+import { dialysisAppointmentDate } from "../../fhir/dialysisAppointmentHelpers";
 import { RX_TASK_STATUS_OPTIONS, rxTaskStatus } from "../../fhir/rxTaskHelpers";
 import { SURGERY_TASK_STATUS_OPTIONS, surgeryTaskStatus } from "../../fhir/surgeryTaskHelpers";
 import {
@@ -263,6 +266,25 @@ function RehabCard({ date }: DateProps) {
   );
 }
 
+/** 透析も期間オーダー。当日に効いている件数と、うち当日の予約がある件数を出す。 */
+function DialysisCard({ date }: DateProps) {
+  const query = useDialysisWorklist(date);
+  const booked = query.data?.rows.filter((row) =>
+    row.appointments.some((appointment) => dialysisAppointmentDate(appointment) === date),
+  ).length;
+  return (
+    <WorklistCounts
+      kind="dialysis"
+      isPending={query.isPending}
+      error={query.error}
+      statuses={query.data?.rows.map((row) => dialysisTaskStatus(row.task))}
+      options={DIALYSIS_TASK_STATUS_OPTIONS}
+      truncated={query.data?.truncated}
+      extra={booked !== undefined ? [{ label: "本日予約", count: booked }] : undefined}
+    />
+  );
+}
+
 function NutritionGuidanceCard({ date }: DateProps) {
   const query = useNutritionGuidanceWorklist(date);
   const notPerformed = query.data?.rows.filter(
@@ -377,6 +399,7 @@ const WORKLIST_CARDS: Record<HomeWorklistKey, ComponentType<DateProps>> = {
   medicationGuidance: MedicationGuidanceCard,
   antimicrobial: AntimicrobialCard,
   rehab: RehabCard,
+  dialysis: DialysisCard,
   nutritionGuidance: NutritionGuidanceCard,
   endoscopy: EndoscopyCard,
   treatment: TreatmentCard,

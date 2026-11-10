@@ -520,6 +520,21 @@ export function buildDoDialysisOrderForm(
   return { ...values, setting, startDate: today(), endDate: "" };
 }
 
+/**
+ * 期間を打ち切る PUT エントリ(終了日を書く)。部門一覧の「終了」で Task と同じ transaction に入れる。
+ * 書かないと status=active のまま order-period に永久にヒットする(docs/dialysis-order-design.md §4.1)。
+ */
+export function buildDialysisOrderCloseEntry(sr: fhir4.ServiceRequest, endDate: string): fhir4.BundleEntry {
+  const next: fhir4.ServiceRequest = {
+    ...sr,
+    extension: [
+      ...(sr.extension ?? []).filter((e) => e.url !== ORDER_END_EXT_URL),
+      { url: ORDER_END_EXT_URL, valueDate: endDate },
+    ],
+  };
+  return { resource: next, request: { method: "PUT", url: `ServiceRequest/${sr.id}` } };
+}
+
 // ---- 一覧・カルテ表示のための parse ----
 
 export function dialysisOrderEnd(sr: fhir4.ServiceRequest): string {

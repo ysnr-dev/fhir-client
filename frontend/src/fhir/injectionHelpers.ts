@@ -927,7 +927,7 @@ function buildInjectionDayEntries(
 }
 
 /** YYYY-MM-DD の曜日コード(Timing.repeat.dayOfWeek と同じ)。 */
-function dayOfWeekCode(date: string): string {
+export function dayOfWeekCode(date: string): string {
   const [y, m, d] = date.split("-").map(Number);
   // getDay() は 0=日曜。DAY_OF_WEEK_OPTIONS は月曜始まりなので 1 つずらす。
   return DAY_OF_WEEK_OPTIONS[(new Date(y, m - 1, d).getDay() + 6) % 7].code;

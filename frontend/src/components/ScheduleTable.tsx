@@ -62,9 +62,12 @@ export function ScheduleTable({ schedules }: { schedules: fhir4.Schedule[] }) {
                   予約枠カレンダー
                 </Link>
                 <RowMenu label={`${scheduleName(schedule)} の操作`}>
-                  <Link className="row-menu__item" to={`/schedules/${schedule.id}/edit`}>
-                    編集
-                  </Link>
+                  {/* 透析のベッドの枠表はベッドと一組なので、名前・有効は透析室の設定で変える(ここでは編集させない)。 */}
+                  {scheduleTypeOf(schedule) !== "dialysis" && (
+                    <Link className="row-menu__item" to={`/schedules/${schedule.id}/edit`}>
+                      編集
+                    </Link>
+                  )}
                   <button
                     type="button"
                     className="row-menu__item row-menu__item--danger"

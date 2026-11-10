@@ -13,6 +13,7 @@ import {
   emptyAppointmentForm,
   isRehabAppointment,
   isNutritionGuidanceAppointment,
+  isDialysisAppointment,
   type AppointmentFormValues,
 } from "../fhir/appointmentHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
@@ -129,7 +130,7 @@ export function AppointmentReschedulePanel({
       <ErrorBanner error={reschedule.error} />
 
       {/* 元の予約と同じ診療科・担当医から探し始める。ここに来るのは診察予約と
-          リハビリ・栄養指導の予約(検査予約の日時は放射線オーダーの編集から、撮影日時と
+          リハビリ・栄養指導・透析の予約(検査予約の日時は放射線オーダーの編集から、撮影日時と
           一緒に変える。予約タブ側で入口を出していない)。枠表の種別が違うと候補が 0 件に
           なるので、元の予約の種別に合わせて探す。 */}
       <AppointmentSlotPicker
@@ -138,7 +139,9 @@ export function AppointmentReschedulePanel({
             ? "rehab"
             : isNutritionGuidanceAppointment(appointment)
               ? "nutrition-guidance"
-              : "consultation"
+              : isDialysisAppointment(appointment)
+                ? "dialysis"
+                : "consultation"
         }
         defaultDepartmentCode={appointmentDepartmentCode(appointment)}
         defaultPractitionerId={appointmentActorId(appointment, "Practitioner")}

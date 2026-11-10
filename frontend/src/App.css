@@ -32083,3 +32083,215 @@ input.nursing-picker__search {
   justify-content: flex-end;
   align-items: center;
 }
+
+/* 透析室の設定(docs/dialysis-order-design.md §5.1) */
+.dialysis-unit__section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.dialysis-unit__title {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.dialysis-unit input.dialysis-unit__count,
+.walk-in__fields input.dialysis-unit__count {
+  width: 80px;
+}
+
+/* 「有効」は入力欄と同じ高さの箱で下に揃え、チェックを入力欄の中央に合わせる。 */
+.patient-search-form label.dialysis-unit__active {
+  align-self: flex-end;
+  height: var(--control-height);
+}
+
+.dialysis-unit__beds {
+  max-width: 640px;
+}
+
+.dialysis-unit input.dialysis-unit__bed-name {
+  width: 160px;
+}
+
+/* 透析一覧のボード(ベッド × シフト)。1 日は列が少ないので広めに、週は詰める。 */
+.dialysis-board-wrap {
+  overflow-x: auto;
+}
+
+.dialysis-board {
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.dialysis-board th,
+.dialysis-board td {
+  border: 1px solid var(--border);
+}
+
+.dialysis-board thead th {
+  padding: 4px 6px;
+  font-weight: normal;
+  color: var(--text-h);
+  background: var(--surface-stripe);
+  text-align: center;
+}
+
+.dialysis-board__shift-time {
+  display: block;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.dialysis-board thead th.dialysis-board__day--sat {
+  color: var(--lab-low);
+}
+
+.dialysis-board thead th.dialysis-board__day--sun {
+  color: var(--lab-high);
+}
+
+.dialysis-board__unit {
+  padding: 4px 8px;
+  text-align: left;
+  color: var(--text-h);
+  background: var(--surface-panel);
+}
+
+.dialysis-board__bed {
+  padding: 4px 8px;
+  font-weight: normal;
+  color: var(--text-h);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dialysis-board__cell {
+  height: 40px;
+  padding: 2px 4px;
+  vertical-align: middle;
+}
+
+.dialysis-board__empty {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.dialysis-board__empty--none {
+  opacity: 0.6;
+}
+
+.dialysis-board__card {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+  background: var(--accent-bg);
+}
+
+.dialysis-board__card--fulfilled {
+  border-left-color: var(--success);
+  background: var(--surface-stripe);
+}
+
+.dialysis-board__card--arrived,
+.dialysis-board__card--checked-in {
+  border-left-color: var(--warning);
+}
+
+.dialysis-board__card-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dialysis-board__patient {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-h);
+}
+
+.dialysis-board__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.dialysis-board__subtitle {
+  margin: 16px 0 6px;
+  font-size: 15px;
+}
+
+.dialysis-board__unplaced ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dialysis-board__unplaced li {
+  width: 320px;
+}
+
+/* 予約の一括展開 */
+.dialysis-expand__beds {
+  max-width: 480px;
+  margin-bottom: 12px;
+}
+
+.dialysis-expand__preview {
+  max-width: 640px;
+}
+
+.dialysis-expand__row--skip td {
+  color: var(--text);
+  opacity: 0.6;
+}
+
+/* 臨時予約・予約変更のベッドの選択 */
+.dialysis-book__beds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+
+.dialysis-book__bed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.dialysis-book__bed--disabled {
+  opacity: 0.5;
+}
+
+.dialysis-book__bed-state {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.dialysis-board--week .dialysis-board__card {
+  padding: 1px 2px;
+  font-size: 12px;
+}
+
+.dialysis-board--week .dialysis-board__card .row-menu__trigger {
+  min-width: 18px;
+  padding: 0;
+}

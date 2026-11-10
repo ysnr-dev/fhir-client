@@ -139,6 +139,14 @@ export const APP_MENU: AppMenuEntry[] = [
       // (1 オーダーが数か月続き、実施が日々積み上がる)。
       { label: "リハビリ部門", items: [{ label: "リハビリ一覧", to: "/rehab-worklist" }] },
       {
+        label: "透析部門",
+        items: [
+          // 透析はベッド × シフトの格子で回る(1 オーダーが何か月も続き、予約は曜日パターンから展開する)。
+          { label: "透析一覧", to: "/dialysis-worklist" },
+          { label: "透析室の設定", to: "/dialysis-unit" },
+        ],
+      },
+      {
         label: "栄養部門",
         items: [
           // 栄養指導もリハビリと同じ期間継続型(1 オーダーに初回・継続の指導が積み上がる)。

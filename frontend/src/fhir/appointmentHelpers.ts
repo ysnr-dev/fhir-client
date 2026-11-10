@@ -5,8 +5,8 @@
 // 誰も予約していないのに埋まっている枠ができる。そのため書き込みはすべて
 // transaction Bundle にして、片方だけが通ることを防ぐ。
 //
-// なお Bundle の中の PUT には If-Match が付かないので、二人が同じ枠を同時に押さえる
-// 取り合いまでは防げない。1 施設で予約を取る端末が限られる前提で許容している。
+// 枠の PUT は読んだ Slot の版(meta.versionId)を postBundle が ifMatch に添えるので、二人が同じ枠を
+// 同時に押さえると後の transaction が 412 で丸ごと落ちる(二重予約にならない)。
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import type { ProblemRef } from "./conditionHelpers";
 import { SSMIX2_DEPARTMENT_CODE_SYSTEM } from "./departmentCodes";
@@ -586,6 +586,11 @@ export function isNutritionGuidanceAppointment(appointment: fhir4.Appointment): 
   return serviceTypeCode(appointment) === "nutrition-guidance";
 }
 
+/** 透析の予約か。リハビリと同じく枠の種別で見分ける(ベッド × シフトの枠。docs/dialysis-order-design.md §5.4)。 */
+export function isDialysisAppointment(appointment: fhir4.Appointment): boolean {
+  return serviceTypeCode(appointment) === "dialysis";
+}
+
 /** 自己血の採血予定か(fhir/autologousPlanHelpers.ts)。枠は持たず、輸血オーダーにぶら下がる。 */
 export function isAutologousAppointment(appointment: fhir4.Appointment): boolean {
   return serviceTypeCode(appointment) === "autologous";
@@ -594,10 +599,10 @@ export function isAutologousAppointment(appointment: fhir4.Appointment): boolean
 /**
  * オーダーに紐づく予約(検査予約)か。予約タブでの操作の出し分けに使う。
  *
- * リハビリ・栄養指導の予約も basedOn を持つのでここでは true になる。どちらも予約が
+ * リハビリ・栄養指導・透析の予約も basedOn を持つのでここでは true になる。どれも予約が
  * オーダーの日時と連動せず、部門が都度取り直すものなので、予約タブから取消・変更
- * できてよい。**呼び出し側は isRehabAppointment / isNutritionGuidanceAppointment を
- * 先に見て振り分けること。**
+ * できてよい。**呼び出し側は isRehabAppointment / isNutritionGuidanceAppointment /
+ * isDialysisAppointment を先に見て振り分けること。**
  */
 export function isExamAppointment(appointment: fhir4.Appointment): boolean {
   return Boolean(appointment.basedOn?.length);

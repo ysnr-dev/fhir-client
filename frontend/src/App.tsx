@@ -93,6 +93,8 @@ import {
 import { RadiotherapyProtocolPage } from "./pages/RadiotherapyProtocolPage";
 import { RadiotherapyWorklistPage } from "./pages/RadiotherapyWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
+import { DialysisUnitPage } from "./pages/DialysisUnitPage";
+import { DialysisWorklistPage } from "./pages/DialysisWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
 import { MealWorklistPage } from "./pages/MealWorklistPage";
 import { NutritionManagementPage } from "./pages/NutritionManagementPage";
@@ -413,6 +415,8 @@ function App() {
           <Route path="/patho-reception" element={<PathoReceptionPage />} />
           <Route path="/transfusion-worklist" element={<TransfusionWorklistPage />} />
           <Route path="/rehab-worklist" element={<RehabWorklistPage />} />
+          <Route path="/dialysis-worklist" element={<DialysisWorklistPage />} />
+          <Route path="/dialysis-unit" element={<DialysisUnitPage />} />
           <Route path="/meal-worklist" element={<MealWorklistPage />} />
           <Route path="/nutrition-management" element={<NutritionManagementPage />} />
           <Route path="/radiotherapy-worklist" element={<RadiotherapyWorklistPage />} />
