@@ -15857,6 +15857,49 @@ select.rad-route-select {
   accent-color: var(--accent);
 }
 
+/* 透析オーダーのカルテカード。浄化方法を見出しにし、条件は項目名と値の 2 列で揃える。 */
+.karte-dialysis__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.karte-dialysis__modality {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.karte-dialysis__schedule {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.karte-dialysis__fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 12px;
+  margin: 4px 0 0;
+  padding-left: 12px;
+  font-size: 13px;
+}
+
+.karte-dialysis__field {
+  display: contents;
+}
+
+.karte-dialysis__fields dt {
+  color: var(--text);
+}
+
+.karte-dialysis__fields dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
 /* 透析オーダーの曜日 × シフトの格子。セル全体が押せる。 */
 .dialysis-order__pattern {
   flex: 1 1 100%;
