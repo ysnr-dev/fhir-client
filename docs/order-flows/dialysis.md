@@ -50,6 +50,7 @@ flowchart TD
     expand["展開<br/>数週間ぶんの予約をベッドに取る"]
     arrive["当日のボードで入室"]
     begin["開始<br/>透析前の体重・血圧"]
+    chart["透析中の記録(経過表)<br/>30 分毎のバイタル・装置の値・できごと"]
     end_["終了<br/>透析後の体重・除水・薬剤・器材"]
     more{"続ける?"}
     close["終了<br/>(終了日を入れる)"]
@@ -59,7 +60,7 @@ flowchart TD
     discharge["退院<br/>入院の透析オーダーを退院日で終了する"]
   end
 
-  start --> order --> accept --> expand --> arrive --> begin --> end_ --> more
+  start --> order --> accept --> expand --> arrive --> begin --> chart --> end_ --> more
   more -- "はい" --> arrive
   more -- "予約が尽きる" --> expand
   more -- "条件を変える" --> edit --> arrive
@@ -85,6 +86,7 @@ flowchart TD
   cell{"セルの予約の段階"}
   arrive["「入室」<br/>押すだけで記録(予約は来院)"]
   start["「開始」<br/>開始時刻・透析前の体重と血圧<br/>ドライウェイトと目標除水を見る"]
+  chart["ケバブの「経過表」<br/>30 分毎のバイタル・装置の値・できごと"]
   finish["「終了」<br/>終了時刻・透析後の体重と血圧・除水量・QB・QD<br/>血液浄化器・薬剤(ロット・算定)・器材・追加の手技<br/>ドライウェイトの見直し・コメント"]
   late["ケバブの「一括記録」<br/>入室・開始を飛ばして終了まで入れる"]
   done((("実施済<br/>(予約は実施済)")))
@@ -92,6 +94,7 @@ flowchart TD
 
   board --> cell
   cell -- "予約済" --> arrive --> start --> finish --> done
+  start -. "透析中" .-> chart -.-> finish
   cell -- "入室" --> start
   cell -- "透析中" --> finish
   cell -- "後から記録する" --> late --> done

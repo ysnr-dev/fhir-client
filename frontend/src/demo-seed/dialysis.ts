@@ -2,6 +2,7 @@
 // 導入前の外来 2 回(Cre の上昇)→ 透析オーダー(受付済)→ 毎回の実施記録(前後の体重・血圧・除水・QB/QD、
 // ヘパリンと週 1 回のダルベポエチンは所定点数に含まれる薬剤としてロット番号つき)→ 浮腫が引いてドライウェイトを
 // 2 回下げる → 透析中の血圧低下で 30 分短縮した回が 1 回。月初の透析前に採血し、リン吸着薬を足すと P が下がる。
+// 直近 3 回と血圧低下の回には透析経過表(30 分毎のバイタル・装置の値・できごと)を付ける。
 // 今日以降は 4 週ぶんを予約のまま残し(今日が透析日なら当日ボードで入室から進められる)、透析一覧・カルテの
 // 実施履歴・患者帯の DW の見本にする。
 //
@@ -29,7 +30,9 @@ import {
 import { createResource, searchResource } from "../api/fhirClient";
 import { fetchFacilitySettings } from "../api/facilityClient";
 import { searchBloodPurifiers } from "../api/masterClient";
-import { addDays, today } from "../lib/dates";
+import { addDays, toFhirDateTime, today } from "../lib/dates";
+import { buildDialysisChartHub, DIALYSIS_CHART_SPEC } from "../fhir/dialysisChartHelpers";
+import { buildChartEventObservation, buildChartPointObservations } from "../fhir/timeSeriesChartHelpers";
 import {
   buildDialysisAppointmentBatchBundle,
   findDialysisSlot,
@@ -43,6 +46,8 @@ import {
 } from "../fhir/dialysisOrderHelpers";
 import {
   buildDialysisFinishBundle,
+  type DialysisPerformFormValues,
+  type DialysisSession,
   initialDialysisPerformForm,
   type DialysisMedicineLine,
   type DryWeight,
@@ -290,6 +295,110 @@ function addMinutesHm(hm: string, minutes: number): string {
   return `${pad(Math.floor(total / 60) % 24)}:${pad(total % 60)}`;
 }
 
+/** datetime-local に分を足す。 */
+function addMinutesLocal(input: string, minutes: number): string {
+  const date = new Date(`${input}:00`);
+  date.setMinutes(date.getMinutes() + minutes);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * 1 回の透析経過表(ハブ + 30 分毎の打点 + できごと)を 1 transaction で作る。
+ * 血圧は透析前から透析後へなだらかに下がり、血圧低下の回は 3 時間で急に下がって補液で戻る。
+ */
+function chartBundle(
+  env: SeedEnv,
+  patientId: string,
+  hubId: string,
+  values: DialysisPerformFormValues,
+  index: number,
+  hypotension: boolean,
+): fhir4.Bundle {
+  const session: DialysisSession = {
+    hub: {
+      resourceType: "Procedure",
+      id: hubId,
+      status: "completed",
+      subject: { reference: `Patient/${patientId}` },
+      performedPeriod: { start: toFhirDateTime(values.startAt), end: toFhirDateTime(values.endAt) },
+    },
+    observations: [],
+    administrations: [],
+    procedures: [],
+  };
+  const reference = `urn:uuid:${crypto.randomUUID()}`;
+  const performer = { id: env.practitioner.id, name: env.practitioner.name };
+  const minutes = Math.round((new Date(`${values.endAt}:00`).getTime() - new Date(`${values.startAt}:00`).getTime()) / 60000);
+  const totalUf = Number(values.ultrafiltration);
+  const pre = { s: Number(values.preSystolic), d: Number(values.preDiastolic) };
+  const post = { s: Number(values.postSystolic), d: Number(values.postDiastolic) };
+  const ufRate = Math.round((totalUf * 1000) / (minutes / 60));
+
+  const point = (elapsed: number, systolic: number, diastolic: number, pulse: number, extra: Record<string, string> = {}) =>
+    buildChartPointObservations(
+      DIALYSIS_CHART_SPEC,
+      {
+        measuredAt: addMinutesLocal(values.startAt, elapsed),
+        systolic: String(Math.round(systolic)),
+        diastolic: String(Math.round(diastolic)),
+        values: {
+          pulse: String(Math.round(pulse)),
+          qb: values.qb,
+          qd: values.qd,
+          "uf-rate": extra["uf-rate"] ?? String(ufRate),
+          ultrafiltration: extra.ultrafiltration ?? String(round1(Math.min(totalUf, (totalUf * elapsed) / minutes))),
+          "venous-pressure": String(Math.round(120 + wobble(index * 7 + elapsed) * 10)),
+          tmp: String(Math.round(30 + elapsed / 30 + wobble(index * 11 + elapsed) * 4)),
+        },
+      },
+      patientId,
+      reference,
+    );
+  const event = (elapsed: number, code: string, note = "") =>
+    buildChartEventObservation(DIALYSIS_CHART_SPEC, {
+      patientId,
+      hubReference: reference,
+      code,
+      occurredAt: addMinutesLocal(values.startAt, elapsed),
+      note,
+    });
+
+  const observations: fhir4.Observation[] = [];
+  for (let elapsed = 10; elapsed <= minutes - 10; elapsed += 30) {
+    const ratio = elapsed / minutes;
+    const drift = wobble(index * 13 + elapsed) * 5;
+    if (hypotension && elapsed >= 180) {
+      // 3 時間で血圧が落ち、除水を止めて補液し、終了まで戻りきらない。
+      observations.push(...point(elapsed, 88 + drift, 50 + drift / 2, 104, { "uf-rate": "0", ultrafiltration: String(round1((totalUf * 180) / minutes)) }));
+      continue;
+    }
+    observations.push(...point(elapsed, pre.s + (post.s - pre.s) * ratio + drift, pre.d + (post.d - pre.d) * ratio + drift / 2, 72 + wobble(index * 17 + elapsed) * 6));
+  }
+  observations.push(event(-8, "puncture"), event(minutes - 3, "blood-return"), event(minutes + 12, "hemostasis"));
+  if (hypotension) {
+    observations.push(
+      event(178, "hypotension"),
+      event(180, "uf-stop"),
+      event(183, "fluid-bolus", "生食 200mL"),
+      event(198, "uf-resume"),
+    );
+  }
+
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      {
+        fullUrl: reference,
+        resource: buildDialysisChartHub(session, performer, toFhirDateTime(addMinutesLocal(values.startAt, 10))),
+        request: { method: "POST", url: "Procedure" },
+      },
+      ...observations.map((resource) => ({ resource, request: { method: "POST" as const, url: "Observation" } })),
+    ],
+  };
+}
+
 // ---- シナリオ ----
 
 export async function seedDialysis(env: SeedEnv): Promise<void> {
@@ -392,9 +501,11 @@ export async function seedDialysis(env: SeedEnv): Promise<void> {
     appointments.map((a) => [a.slot?.[0]?.reference?.split("/").pop() ?? "", a] as const),
   );
 
-  // 実施記録(昨日まで)。ドライウェイトは見直した回だけ記録される。
+  // 実施記録(昨日まで)。ドライウェイトは見直した回だけ記録される。直近 3 回と血圧低下の回には経過表を付ける。
+  const pastCount = bookings.filter((booking) => booking.slot.start.slice(0, 10) < today()).length;
   let dryWeight: DryWeight | null = null;
   let performed = 0;
+  let charted = 0;
   for (const booking of bookings) {
     const date = booking.slot.start.slice(0, 10);
     if (date >= today()) break;
@@ -403,13 +514,19 @@ export async function seedDialysis(env: SeedEnv): Promise<void> {
     if (!appointment || !occurrence) continue;
     const day = Math.round((new Date(`${date}T00:00:00`).getTime() - new Date(`${induction}T00:00:00`).getTime()) / 86400000);
     const values = performValues(order, appointment, dryWeight, drugs, { index: performed, day, occurrence }, shift);
-    await post(
+    const ids = await post(
       buildDialysisFinishBundle(
         { order, appointment, performer: { id: env.practitioner.id, name: env.practitioner.name } },
         values,
         dryWeight,
       ),
     );
+    const hubId = ids.find((entry) => entry.type === "Procedure")?.id;
+    const hypotension = performed === HYPOTENSION_SESSION;
+    if (hubId && (hypotension || performed >= pastCount - 3)) {
+      await post(chartBundle(env, patientId, hubId, values, performed, hypotension));
+      charted += 1;
+    }
     dryWeight = { value: Number(values.dryWeight), date };
     performed += 1;
   }
@@ -437,5 +554,5 @@ export async function seedDialysis(env: SeedEnv): Promise<void> {
 
   const upcoming = bookings.length - performed;
   const todayNote = usable.some((o) => o.date === today()) ? "(今日の回は予約のまま)" : "";
-  env.log(`透析: ベッド ${chosen.bed.bed.name}・実施 ${performed} 回・予約 ${upcoming} 回${todayNote}`);
+  env.log(`透析: ベッド ${chosen.bed.bed.name}・実施 ${performed} 回(経過表 ${charted} 回)・予約 ${upcoming} 回${todayNote}`);
 }
