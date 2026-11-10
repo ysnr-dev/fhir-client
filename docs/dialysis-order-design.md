@@ -1,6 +1,6 @@
 # 透析(血液浄化)オーダーと透析部門の設計
 
-**状態: 第 1 段(オーダー・カルテ・上流・シフト設定)を実装済み(2026-11-09)、第 2 段(透析室の設定・ベッド枠・一括展開・部門一覧)を実装済み(2026-11-10)。第 3 段は未着手(§10)。** `docs/functional-gap-backlog.md` §2.7 の「透析(血液浄化)」。
+**状態: 第 1 段(オーダー・カルテ・上流・シフト設定)を実装済み(2026-11-09)、第 2 段(透析室の設定・ベッド枠・一括展開・部門一覧)と第 3 段(実施記録・会計・退院連動)を実装済み(2026-11-10)。残りは §9 の申し送り。** 運用の流れは `docs/order-flows/dialysis.md`。 `docs/functional-gap-backlog.md` §2.7 の「透析(血液浄化)」。
 
 維持透析(週 3 回を何か月も続ける)と急性血液浄化(ICU などのベッドサイドで行う CHDF・血漿交換)を、
 部門オーダーの 1 種別として足す。雛形はリハビリ(`docs/rehab-order-design.md`。期間継続型・Task は部門の受け入れ状態・
@@ -78,11 +78,14 @@
                extension[dialysis-appointment] = 対応する予約(Appointment/…。ベッドサイドは無し)
                  ├ partOf ← Observation (CodeSystem/dialysis-measurement。透析前体重・透析後体重・除水量・
                  │            実透析時間・血流量・透析液流量。category = order-type|dialysis)
-                 ├ partOf ← Observation 血圧(LOINC 85354-9、category = vital-signs。透析前・後)
-                 ├ partOf ← MedicationAdministration (ESA・鉄・ヘパリンなど。ロット番号は medication-lot-number)
+                 ├ partOf ← Observation 血圧(LOINC 85354-9、category = vital-signs + order-type|dialysis。
+                 │            透析前・後は extension[dialysis-measurement-timing] = pre / post)
+                 ├ partOf ← MedicationAdministration (ESA・鉄・ヘパリンなど。ロット番号は medication-lot-number。
+                 │            所定点数に含まれる薬剤は extension[dialysis-bundled-medication] = true)
                  └ partOf ← Procedure (追加の手技。code = CodeSystem/dialysis-procedure-code)
 
-患者単位 Observation ドライウェイト(LOINC 8340-2 ［要確認］、category = vital-signs。直近値をオーダー・実施画面で参照し、実施時に更新できる)
+患者単位 Observation ドライウェイト(CodeSystem/dialysis-measurement|dry-weight、category = order-type|dialysis、partOf 無し。
+  直近値を実施画面・詳細・患者帯で参照し、実施の終了で値を変えたときだけ 1 件足す)
 
 Location 透析室 (type = CodeSystem/location-type|dialysis-unit、physicalType = ro)
   └ partOf ← Location ベッド ×N (type 同上、physicalType = bd)
@@ -111,8 +114,10 @@ Location 透析室 (type = CodeSystem/location-type|dialysis-unit、physicalType
 | `StructureDefinition/dialysis-shift` | 予約のシフト(valueCoding。ボードの列の振り分けに使う) |
 | `StructureDefinition/dialysis-appointment` | ハブ Procedure から対応する予約への参照 |
 | `StructureDefinition/dialysis-material-quantity` | `usedCode` に数量を添える(処置の `treatment-material-quantity` と同じ) |
+| `StructureDefinition/dialysis-bundled-medication` | 実施の薬剤のうち人工腎臓の所定点数に含まれるもの(valueBoolean)。会計に送らない(§7) |
+| `StructureDefinition/dialysis-measurement-timing` | 実施の血圧が透析前か後か(valueCode `pre` / `post`)。血圧は LOINC のパネル 1 つなので拡張で分ける |
 
-［事実］`OrderCatalog::Definition`(会計)は `#{order_type}-procedure-code` と `#{order_type}-material-quantity` を規約で組む
+［事実］`OrderCatalog::Definition`(会計)は `#{order_type}-procedure-code`・`#{order_type}-material-quantity`・`#{order_type}-bundled-medication` を規約で組む
 (`integrations/receipt_computer/order_catalog.rb`)ので、上の 2 つはこの名前でなければならない。
 
 再利用: `CodeSystem/prescription-setting`(入外区分)、`CodeSystem/medicine-code` / YJ、`CodeSystem/medical-material`、
@@ -145,7 +150,9 @@ JP Core `route-codes`、`StructureDefinition/medication-lot-number`、依頼科�
 形づくる属性で、条件ごとに実施・算定が分かれない。放射線治療の Phase・標的(`radiotherapy-order-design.md`)と同じ複合拡張で持つ。
 
 ［導出］**ドライウェイトはオーダーに持たない**。DW は週単位で見直される患者の状態値で、オーダーの編集で追いかけるのは重い。
-患者単位の Observation(直近値)にし、オーダー画面・実施画面に直近値と測定日を出し、実施の終了時に更新できるようにする。
+患者単位の Observation(直近値)にし、実施画面・オーダーの詳細・患者帯の吹き出しに直近値と設定日を出し、実施の終了時に更新できるようにする。
+コードは LOINC にせずローカルの `dialysis-measurement|dry-weight` にした(DW に当たる LOINC を確かめられず、vital-signs にすると
+経過表の体重の行に「目標値」が実測と並んでしまうため)。
 目標除水量は実施時に「透析前体重 − DW」で出す(入力の初期値。手で直せる)。
 
 ### 2.3 ベッドサイド実施(急性血液浄化)
@@ -386,7 +393,13 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
 | 終了 | 「終了」 | ハブ PUT(status = completed、performedPeriod.end)+ 子(透析後体重・除水量・実透析時間・QB・QD・透析後血圧、薬剤 MedicationAdministration、器材 usedCode + 数量、追加手技)。予約は `fulfilled`。DW を更新した場合は患者単位の Observation を 1 件 POST |
 | 取消 | ケバブ「実施取消」 | ハブと子を DELETE(処置の実施取消と同じ)。予約は `booked` に戻す |
 
-- 途中の段階を飛ばせる(入室せず終了まで一度に入力。後から記録する運用のため)。
+- 途中の段階を飛ばせる(入室せず終了まで一度に入力。後から記録する運用のため)。ボードのケバブ「一括記録」。
+- 入室はボタンだけで記録する(入室時刻は持たない。予約の arrived だけ)。入室のハブは `performed[x]` を持たず日付で引けないので、
+  ボードは「期間に始めた回」と「`status=preparation,in-progress` の回」を別に引いて束ねる(`fetchDialysisSessions`)。
+- 開始・終了の時刻の初期値: 開始は記録済みの開始、無ければ別の日の枠を後から記録するときは枠の開始、その日なら今。
+  終了は「開始 + 指示の透析時間」と今の早いほう。実透析時間(`actual-minutes`)は開始〜終了から出して記録する。
+- 透析前の体重・血圧は開始で記録し、終了では書き直さない(開始で入れていなければ終了で入れる)。除水量は前後の体重の差が初期値。
+- 実施の取消では予約を `booked` に戻す。ボードの予約変更・予約取消は実施の無い予約にだけ出す。
 - 子の Observation は ハブの `partOf` で束ね、測定値は `CodeSystem/dialysis-measurement`、血圧だけ LOINC 85354-9 + `vital-signs`
   にする。［導出］血圧を vital-signs にするのは経過表(`flowsheet-design.md`)が `vital-signs` を読むからで、透析前後の血圧が
   入院患者の温度板にそのまま出る。体重も LOINC 29463-7 + vital-signs にして経過表に流す案があるが、透析前後の 2 値が
@@ -413,8 +426,11 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
   血液浄化器は製品の `receipt_material_code` で算定する(放射線器材と同じ解決を `coding.rb` に足す)。手入力の製品は特定器材コードが無いので算定に載らず、医事側で補う。
   透析液は人工腎臓(J038)の所定点数に含まれるので送らない。［要確認］持続緩徐式血液濾過(J038-2)の透析液・補充液と、血漿交換(J039)の置換液は
   薬剤料として送る扱いと見ているので、実施記録には実際に使った液を医薬品コードと数量で残す(オーダーの液を初期値にする)。
-  ［要確認］resolver を持つ種別で子 Procedure・MedicationAdministration・usedCode が剤に載るかを `performed_record_collector.rb` /
-  `billing_claim_builder.rb` で読む(処置型 + resolver の組み合わせは初)。
+  ［事実］resolver を持つ種別では `PerformedItemBuilder` が手技を resolver に任せ、子 Procedure の手技は拾わない。薬剤・器材・コメントは
+  種別を問わず載る。そこで `Resolvers::Dialysis` が子 Procedure(`dialysis-procedure-code`)の行を自分で並べる。
+- 所定点数に含まれる薬剤(透析液・抗凝固薬・ESA など)は、実施の薬剤の行の「算定」を外して `dialysis-bundled-medication` を付け、
+  `PerformedItemBuilder` が送らない。初期値は、維持透析ではオーダーの抗凝固薬を外し、透析液は行に出さない(記録しても送らないため)。
+  急性血液浄化ではオーダーの透析液・補充液・置換液を算定する行として置く。［要確認］ESA などを足したときに外すのは人の判断に任せている。
 - `orca/medical_message.rb` の `MEDICAL_CLASS` に `dialysis: "400"`(J 章)。`BillingSendModal.tsx` に種別名。
 - **対象外にするもの**(理由を書いておく): 慢性維持透析患者外来医学管理料(B001-15。月 1 回・検査の包括判定が要る月次の算定で、
   実施記録 1 件から出せない)、導入期加算・障害者等加算・時間外加算(患者属性と来院時刻の判定が要る)。医事側で付ける。
@@ -494,7 +510,11 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
 - 既存: `scheduleHelpers.ts`(`ScheduleType` / `SCHEDULE_TYPE_OPTIONS` / `scheduleTypeOf`)、`appointmentHelpers.ts`(§5.4)、`App.tsx`、`appMenu.ts`、
   `homeSections.ts`(臨床工学技士の件数カード)。
 
-**第 3 段: 実施記録・会計・退院連動**
+**第 3 段: 実施記録・会計・退院連動** — 実装済み(2026-11-10)。
+
+実装で決めたこと: §6 の箇条書き、§7 の所定点数に含まれる薬剤、ドライウェイトのコード(§2.2)。カルテの詳細は実施の子まで
+`_revinclude:iterate` で読み(`useDialysisOrderDetail`)、実施履歴を表にする。患者帯の吹き出しに直近の DW。
+クリニカルパスの `TPDI` からの実施入力と、ベッドサイドの急性血液浄化の検証データ(開発環境にベッドサイドのオーダーが無い)は未着手。
 
 - 新規: `fhir/dialysisResultHelpers.ts`(← `treatmentResultHelpers.ts` + `rehabResultHelpers.ts`)、`components/DialysisPerformModal.tsx`
   (← `TreatmentPerformModal.tsx` + `RehabPerformModal.tsx`)。

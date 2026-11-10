@@ -32199,8 +32199,18 @@ input.nursing-picker__search {
 }
 
 .dialysis-board__card--arrived,
-.dialysis-board__card--checked-in {
+.dialysis-board__card--checked-in,
+.dialysis-board__card--perform-preparation {
   border-left-color: var(--warning);
+}
+
+.dialysis-board__card--perform-in-progress {
+  border-left-color: var(--danger);
+}
+
+.dialysis-board__card--perform-completed {
+  border-left-color: var(--success);
+  background: var(--surface-stripe);
 }
 
 .dialysis-board__card-main {
@@ -32291,7 +32301,34 @@ input.nursing-picker__search {
   font-size: 12px;
 }
 
+/* セルの幅が限られるので、三点リーダーの左右の余白を詰める。 */
+.dialysis-board__card .row-menu__trigger {
+  padding: 4px 5px;
+}
+
 .dialysis-board--week .dialysis-board__card .row-menu__trigger {
   min-width: 18px;
   padding: 0;
+}
+
+/* 透析の実施入力。数値の欄は単位を右に添えて横に並べる(血圧は収縮期 / 拡張期)。 */
+.dialysis-perform__pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lab-order-item__fields .dialysis-perform__number {
+  width: 6em;
+}
+
+/* 透析の実施履歴。数値の列は折り返さず、使った物の列に幅を回す。 */
+.dialysis-detail__performs th,
+.dialysis-detail__performs td {
+  white-space: nowrap;
+}
+
+.dialysis-detail__performs .dialysis-detail__used {
+  min-width: 16em;
+  white-space: normal;
 }

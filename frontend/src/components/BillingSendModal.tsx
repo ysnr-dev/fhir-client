@@ -36,6 +36,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   transfusion: "輸血",
   pathology: "病理検査",
   rehab: "リハビリ",
+  dialysis: "透析",
   radiotherapy: "放射線治療",
   "nutrition-guidance": "栄養指導",
   "medical-management": "指導・管理料",

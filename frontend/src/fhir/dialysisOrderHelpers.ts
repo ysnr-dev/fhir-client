@@ -51,7 +51,7 @@ const BEDSIDE_EXT_URL = `${LOCAL}/StructureDefinition/dialysis-bedside`;
 const SCHEDULE_PATTERN_EXT_URL = `${LOCAL}/StructureDefinition/dialysis-schedule-pattern`;
 const PRESCRIPTION_EXT_URL = `${LOCAL}/StructureDefinition/dialysis-prescription`;
 /** 血液浄化器の施設マスタ(master_blood_purifiers)のコード。 */
-const BLOOD_PURIFIER_SYSTEM = `${LOCAL}/CodeSystem/blood-purifier`;
+export const BLOOD_PURIFIER_SYSTEM = `${LOCAL}/CodeSystem/blood-purifier`;
 
 const UCUM_SYSTEM = "http://unitsofmeasure.org";
 const FLOW_UNIT = "mL/min";
@@ -533,6 +533,23 @@ export function buildDialysisOrderCloseEntry(sr: fhir4.ServiceRequest, endDate: 
     ],
   };
   return { resource: next, request: { method: "PUT", url: `ServiceRequest/${sr.id}` } };
+}
+
+/**
+ * 退院で打ち切る透析オーダーか。入院のオーダー(急性血液浄化・入院中の臨時 HD)だけで、
+ * 外来の維持透析は入院・退院をまたいで続くので触らない(docs/dialysis-order-design.md §4.2)。
+ */
+export function dialysisOrderNeedsStop(sr: fhir4.ServiceRequest, endDate: string): boolean {
+  if (categoryCoding(sr, SETTING_SYSTEM)?.code !== "inpatient") return false;
+  const end = dialysisOrderEnd(sr);
+  return !end || end > endDate;
+}
+
+/** 退院の transaction に載せる、入院の透析オーダーの終了日の書き込み。 */
+export function buildDialysisOrderStopEntries(orders: fhir4.ServiceRequest[], endDate: string): fhir4.BundleEntry[] {
+  return orders
+    .filter((sr) => dialysisOrderNeedsStop(sr, endDate))
+    .map((sr) => buildDialysisOrderCloseEntry(sr, endDate));
 }
 
 // ---- 一覧・カルテ表示のための parse ----

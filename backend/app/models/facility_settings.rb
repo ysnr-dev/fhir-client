@@ -300,6 +300,13 @@ class FacilitySettings < ApplicationRecord
   REHAB_THERAPIES = %w[pt ot st].freeze
   # 疾患別リハに添えるコメント(区分ごとにコードが違う): 疾患名(830 系)と発症年月日(850 系)。
   REHAB_COMMENTS = %w[disease_name_comment onset_date_comment].freeze
+  # 人工腎臓(J038)の慢性維持透析は浄化方法 × 時間区分(4 時間未満 / 4〜5 時間 / 5 時間以上)で
+  # コードが分かれる。急性血液浄化(持続緩徐式血液濾過・血漿交換・吸着)は浄化方法ごとに 1 つ。
+  DIALYSIS_MAINTENANCE = %w[hd hdf i-hdf].freeze
+  DIALYSIS_DURATIONS = %w[under4 from4to5 over5].freeze
+  DIALYSIS_ACUTE = %w[chdf chd pe dfpp dhp].freeze
+  DIALYSIS_RECEIPT_CODES = DIALYSIS_MAINTENANCE.index_with { DIALYSIS_DURATIONS.index_with("") }
+                                               .merge(DIALYSIS_ACUTE.index_with { { "single" => "" } }).freeze
   DEFAULT_RECEIPT_CODES = {
     "pathology" => { "N000" => "", "N004" => "", "N003" => "" },
     "rehab" => REHAB_CATEGORIES.index_with { (REHAB_THERAPIES + REHAB_COMMENTS).index_with("") },
@@ -309,6 +316,7 @@ class FacilitySettings < ApplicationRecord
     "lab" => { "blood_draw" => "" },
     # 保存血液輸血の手技(K920)。1 回目は最初の 200mL、2 回目以降は 200mL ごと。
     "transfusion" => { "first" => "", "subsequent" => "" },
+    "dialysis" => DIALYSIS_RECEIPT_CODES,
     "injection" => {
       "outpatient_chemo_addition" => "",
       "outpatient_chemo_addition_child" => "",
@@ -323,6 +331,7 @@ class FacilitySettings < ApplicationRecord
       "nutrition_guidance" => { fields: DEFAULT_RECEIPT_CODES["nutrition_guidance"].keys.index_with(RECEIPT_CODE) },
       "lab" => { fields: DEFAULT_RECEIPT_CODES["lab"].keys.index_with(RECEIPT_CODE) },
       "transfusion" => { fields: DEFAULT_RECEIPT_CODES["transfusion"].keys.index_with(RECEIPT_CODE) },
+      "dialysis" => { fields: DIALYSIS_RECEIPT_CODES.transform_values { |row| { fields: row.keys.index_with(RECEIPT_CODE) } } },
       "injection" => { fields: DEFAULT_RECEIPT_CODES["injection"].keys.index_with(RECEIPT_CODE) }
     }
   }.freeze

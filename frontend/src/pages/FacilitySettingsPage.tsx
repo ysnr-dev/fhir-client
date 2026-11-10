@@ -28,6 +28,7 @@ import {
   sortedDialysisShifts,
   type DialysisShift,
 } from "../fhir/dialysisShiftHelpers";
+import { dialysisModalityDisplay } from "../fhir/dialysisOrderHelpers";
 import {
   DEFAULT_VITAL_THRESHOLDS,
   VITAL_THRESHOLD_ITEMS,
@@ -87,6 +88,10 @@ import {
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
 import {
   DEFAULT_RECEIPT_CODES,
+  DIALYSIS_ACUTE_KEYS,
+  DIALYSIS_DURATION_KEYS,
+  DIALYSIS_DURATION_LABELS,
+  DIALYSIS_MAINTENANCE_KEYS,
   INJECTION_LABELS,
   NUTRITION_LABELS,
   PATHOLOGY_LABELS,
@@ -517,6 +522,14 @@ export function FacilitySettingsPage() {
         ...base,
         rehab: { ...base.rehab, [category]: { ...base.rehab[category], [therapy]: value } },
       };
+    });
+  }
+
+  function updateDialysisCode(modality: string, column: string, value: string) {
+    setReceiptCodesDraft((prev) => {
+      const base = prev ?? savedReceiptCodes;
+      const row = base.dialysis[modality as keyof ReceiptCodeSettings["dialysis"]];
+      return { ...base, dialysis: { ...base.dialysis, [modality]: { ...row, [column]: value } } };
     });
   }
 
@@ -2028,6 +2041,46 @@ export function FacilitySettingsPage() {
                   </label>
                 ),
               )}
+
+              {/* 維持透析は実際に行った時間(実施の開始〜終了)の区分で、急性血液浄化は浄化方法ごとに 1 つ。 */}
+              <h3 className="facility-settings__subheading">人工腎臓(浄化方法 × 時間区分)</h3>
+              <table className="facility-settings__code-table">
+                <thead>
+                  <tr>
+                    <th />
+                    {DIALYSIS_DURATION_KEYS.map((duration) => (
+                      <th key={duration}>{DIALYSIS_DURATION_LABELS[duration]}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {DIALYSIS_MAINTENANCE_KEYS.map((modality) => (
+                    <tr key={modality}>
+                      <th scope="row">{dialysisModalityDisplay(modality)}</th>
+                      {DIALYSIS_DURATION_KEYS.map((duration) => (
+                        <td key={duration}>
+                          {receiptCodeInput(
+                            receiptCodes.dialysis[modality][duration],
+                            (next) => updateDialysisCode(modality, duration, next),
+                            `${dialysisModalityDisplay(modality)} ${DIALYSIS_DURATION_LABELS[duration]} のレセプト電算コード`,
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <h3 className="facility-settings__subheading">急性血液浄化</h3>
+              {DIALYSIS_ACUTE_KEYS.map((modality) => (
+                <label key={modality}>
+                  {dialysisModalityDisplay(modality)}
+                  {receiptCodeInput(
+                    receiptCodes.dialysis[modality].single,
+                    (next) => updateDialysisCode(modality, "single", next),
+                    `${dialysisModalityDisplay(modality)} のレセプト電算コード`,
+                  )}
+                </label>
+              ))}
 
               <h3 className="facility-settings__subheading">送信時に足す加算</h3>
               <label>

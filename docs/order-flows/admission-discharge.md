@@ -234,7 +234,7 @@ flowchart TD
   modal["退院<br/>退院日時(既定は今)・転帰(退院先)"]
   dateQ{"退院日が入院日より前?"}
   error["入力エラーを表示"]
-  stops["一緒に止めるものを確かめる(既定はすべてチェック)<br/>食事: 退院時刻までの最後の食事まで<br/>看護指示・リハビリ・栄養指導・服薬指導: 退院日で終了<br/>リハビリ・栄養指導の翌日以降の予約は取消<br/>持参薬: 継続中・休止中を終了、鑑別依頼を取り下げ"]
+  stops["一緒に止めるものを確かめる(既定はすべてチェック)<br/>食事: 退院時刻までの最後の食事まで<br/>看護指示・リハビリ・栄養指導・服薬指導・入院の透析: 退院日で終了<br/>リハビリ・栄養指導・透析の翌日以降の予約は取消<br/>持参薬: 継続中・休止中を終了、鑑別依頼を取り下げ"]
   due["主治医に退院時サマリーの督促<br/>(確定済みのサマリーがあれば作らない)"]
   done((("退院")))
 
@@ -251,6 +251,7 @@ flowchart TD
 - 退院予定だけでも食事は止まります(退院食止め)。予定のまま退院すると、止めた理由が「退院」に置き換わります。
 - 退院で止めるものは、退院の記録と同じ 1 回の書き込みで書きます。退院だけ通ってオーダーが残ることはありません。チェックを外したものは止まりません。
 - 看護指示は退院日を終了日にするだけで、指示受けの状態は動きません。リハビリ・栄養指導の進捗(部門の「終了」)も部門が締めます。
+- 透析は入外区分が入院のオーダーだけを止めます。外来の維持透析は入院・退院をまたいで続くので出しません。
 - 転帰は退院の画面でも退院時サマリーでも書けます。
 - 退院してもクリニカルパスは自動では終わりません。パスタブで終了・中止を記録します。
 - 退院するとそのベッドはすぐ空床として選べるようになり、同じ日の入院予定を入れられます。
@@ -484,7 +485,7 @@ sequenceDiagram
     BE->>FHIR: 検索
     FHIR-->>UI: 取り消す予約
     UI->>BE: POST /fhir(transaction)
-    Note over UI,BE: PUT Encounter finished、period.end、location[0] completed、dischargeDisposition、退院予定の拡張を外す<br/>食事: 退院時刻までの最後の食事で終了(reason = discharge)<br/>リハビリ・栄養指導・服薬指導・看護指示: 退院日で終了、予約を cancelled<br/>持参薬 completed、鑑別依頼 cancelled<br/>POST Task document-due(owner = 主治医、期限 = 退院日 + N 日)
+    Note over UI,BE: PUT Encounter finished、period.end、location[0] completed、dischargeDisposition、退院予定の拡張を外す<br/>食事: 退院時刻までの最後の食事で終了(reason = discharge)<br/>リハビリ・栄養指導・服薬指導・看護指示・入院の透析: 退院日で終了、予約を cancelled<br/>持参薬 completed、鑑別依頼 cancelled<br/>POST Task document-due(owner = 主治医、期限 = 退院日 + N 日)
     BE->>FHIR: POST /
     FHIR-->>UI: 結果(Encounter・ServiceRequest・Task・MedicationStatement・予約を読み直す)
   else 退院取消

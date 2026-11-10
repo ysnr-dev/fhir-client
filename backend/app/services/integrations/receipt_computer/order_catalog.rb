@@ -34,6 +34,8 @@ module Integrations
         # 5 種別とも frontend の *ResultHelpers が同じ規則で付けている。
         def procedure_code_system = "#{LOCAL}/CodeSystem/#{order_type}-procedure-code"
         def material_quantity_ext = "#{LOCAL}/StructureDefinition/#{order_type}-material-quantity"
+        # 手技の所定点数に含まれる薬剤(透析の透析液・抗凝固薬など)の印。付いた薬剤は記録に残すが送らない。
+        def bundled_medication_ext = "#{LOCAL}/StructureDefinition/#{order_type}-bundled-medication"
 
         def performed? = source == :procedure
 
@@ -87,6 +89,8 @@ module Integrations
                        resolver: Resolvers::Radiotherapy, continuous: true),
         Definition.new(order_type: "transfusion", label: "輸血", source: :procedure,
                        resolver: Resolvers::Transfusion),
+        Definition.new(order_type: "dialysis", label: "透析", source: :procedure, resolver: Resolvers::Dialysis,
+                       continuous: true),
         # 医学管理料・在宅。登録と同時に実施記録を書くので、記録の無い日のヘッダは報告しない。
         Definition.new(order_type: "medical-management", label: "指導・管理料", source: :procedure,
                        continuous: true)

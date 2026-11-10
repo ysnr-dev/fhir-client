@@ -32,11 +32,11 @@ module Integrations
         @resolvers = {}
       end
 
-      # records は同じ診療日のもの。放射線の器材と手技の区分番号は種別をまたいで
+      # records は同じ診療日のもの。施設マスタの器材と手技の区分番号は種別をまたいで
       # 一括で引くので、剤を全部組んでから埋める。
       def call(records)
-        rad_materials = rad_material_codes(records)
-        items = records.filter_map { |record| build(record, rad_materials) }
+        local_materials = local_material_codes(records)
+        items = records.filter_map { |record| build(record, local_materials) }
         fill_sections(items)
         items
       end
@@ -45,7 +45,7 @@ module Integrations
 
       attr_reader :skipped, :medication_requests, :service_requests, :included, :details_by_parent, :store
 
-      def build(record, rad_materials)
+      def build(record, local_materials)
         definition = OrderCatalog.find(record.order_type)
         return nil if definition.nil?
 
@@ -55,7 +55,7 @@ module Integrations
         lines = head +
                 site_comment_lines(record, definition) +
                 medicine_lines(record, definition) +
-                material_lines(record, definition, rad_materials) +
+                material_lines(record, definition, local_materials) +
                 comment_lines(record)
         return nil if lines.empty?
 
@@ -135,11 +135,12 @@ module Integrations
       end
 
       # 薬剤。輸血製剤(製剤マスタの体系)は Resolvers::Transfusion が医薬品コードに読み替えて
-      # 送るので、ここでは扱わない。
+      # 送るので、ここでは扱わない。手技の所定点数に含まれる印の付いた薬剤も送らない。
       def medicine_lines(record, definition)
         record.administrations.filter_map do |administration|
           concept = administration["medicationCodeableConcept"]
           next nil if Coding.find(concept, Coding::TRANSFUSION_PRODUCT)
+          next nil if bundled?(administration, definition)
 
           code = Coding.code_of(concept, Coding::MEDICINE_CODE)
           name = Coding.label_of(concept, Coding::MEDICINE_CODE)
@@ -154,13 +155,19 @@ module Integrations
         end
       end
 
-      # usedCode のうち材料の体系(特定器材・放射線の器材マスタ)のものだけを送る。
+      def bundled?(administration, definition)
+        Array(administration["extension"]).any? do |e|
+          e["url"] == definition.bundled_medication_ext && e["valueBoolean"] == true
+        end
+      end
+
+      # usedCode のうち材料の体系(特定器材・施設の器材マスタ)のものだけを送る。
       # 放射線治療の治療装置のように、算定しない道具が usedCode に載る種別もある。
-      def material_lines(record, definition, rad_materials)
+      def material_lines(record, definition, local_materials)
         Array(record.hub["usedCode"]).filter_map do |concept|
           next nil unless material?(concept)
 
-          code, name = material_code(concept, rad_materials)
+          code, name = material_code(concept, local_materials)
           if code.blank?
             skipped << BillingClaimBuilder::Skipped.new(kind: definition.label, name: name,
                                                        reason: "材料に特定器材コードがありません")
@@ -181,15 +188,16 @@ module Integrations
         codings = Array(concept&.dig("coding"))
         return concept&.dig("text").present? if codings.empty?
 
-        Coding.find(concept, Coding::MEDICAL_MATERIAL) || Coding.find(concept, Coding::RAD_MATERIAL)
+        Coding.find(concept, Coding::MEDICAL_MATERIAL) || LOCAL_MATERIALS.keys.any? { |system| Coding.find(concept, system) }
       end
 
-      def material_code(concept, rad_materials)
+      def material_code(concept, local_materials)
         direct = Coding.code_of(concept, Coding::MEDICAL_MATERIAL)
         return [direct, Coding.label_of(concept, Coding::MEDICAL_MATERIAL)] if direct
 
-        local = Coding.code_of(concept, Coding::RAD_MATERIAL)
-        [rad_materials[local], Coding.label_of(concept, Coding::RAD_MATERIAL)]
+        system = LOCAL_MATERIALS.keys.find { |s| Coding.find(concept, s) }
+        local = Coding.code_of(concept, system)
+        [local_materials.dig(system, local), Coding.label_of(concept, system)]
       end
 
       # 撮影部位の選択式コメント(820 系)。放射線項目マスタの列で、オーダーの項目ごとに 1 つ。
@@ -216,15 +224,23 @@ module Integrations
         end
       end
 
-      # 放射線の器材は施設内の器材マスタを指すので、特定器材コードに読み替える。
-      def rad_material_codes(records)
-        codes = records.flat_map { |r| Array(r.hub["usedCode"]) }
-                       .filter_map { |c| Coding.code_of(c, Coding::RAD_MATERIAL) }.uniq
-        return {} if codes.empty?
+      # 施設内の器材マスタ(放射線の器材・血液浄化器)の体系 → [モデル, コードの列]。
+      # 製品に紐付けた特定器材コード(receipt_material_code)に読み替えて送る。
+      LOCAL_MATERIALS = {
+        Coding::RAD_MATERIAL => ["Master::RadMaterial", :material_code],
+        Coding::BLOOD_PURIFIER => ["Master::BloodPurifier", :purifier_code]
+      }.freeze
 
-        Master::RadMaterial.where(material_code: codes)
-                           .where.not(receipt_material_code: [nil, ""])
-                           .pluck(:material_code, :receipt_material_code).to_h
+      # 体系 → { 施設のコード => 特定器材コード }。
+      def local_material_codes(records)
+        concepts = records.flat_map { |r| Array(r.hub["usedCode"]) }
+        LOCAL_MATERIALS.to_h do |system, (model_name, column)|
+          codes = concepts.filter_map { |c| Coding.code_of(c, system) }.uniq
+          next [system, {}] if codes.empty?
+
+          [system, model_name.constantize.where(column => codes).where.not(receipt_material_code: [nil, ""])
+                             .pluck(column, :receipt_material_code).to_h]
+        end
       end
 
       def fill_sections(items)

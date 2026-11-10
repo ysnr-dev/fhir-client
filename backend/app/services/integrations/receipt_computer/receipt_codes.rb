@@ -21,6 +21,10 @@ module Integrations
       # 放射線治療管理料に添える照射部位のコメント(830 系)。
       def radiotherapy_site_comment = fetch("radiotherapy", "site_comment")
 
+      # 透析。維持透析(hd / hdf / i-hdf)は時間区分(under4 / from4to5 / over5)ごと、
+      # 急性血液浄化(chdf など)は single の 1 つ。
+      def dialysis(modality, duration) = fetch("dialysis", modality, duration)
+
       # 栄養食事指導料。initial / follow-up / group。
       def nutrition_guidance(session) = fetch("nutrition_guidance", session)
 

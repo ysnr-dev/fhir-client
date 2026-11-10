@@ -242,6 +242,68 @@ module Integrations
         end
       end
 
+      # 透析。浄化方法は実施記録の code。維持透析(人工腎臓)は実際に行った時間
+      # (performedPeriod の開始〜終了)の区分でコードが分かれ、急性血液浄化は浄化方法ごとに 1 つ。
+      # 追加の手技(子の Procedure)はレセ電算コードのまま並べる。薬剤・器材は処置と同じ送り方
+      # (PerformedItemBuilder)で、血液浄化器は製品に紐付いた特定器材コードで送る。
+      class Dialysis < Base
+        MODALITY = "#{Coding::LOCAL}/CodeSystem/dialysis-modality".freeze
+        PROCEDURE_CODE = "#{Coding::LOCAL}/CodeSystem/dialysis-procedure-code".freeze
+        MAINTENANCE = FacilitySettings::DIALYSIS_MAINTENANCE
+        DURATION_LABELS = { "under4" => "4時間未満", "from4to5" => "4時間以上5時間未満", "over5" => "5時間以上" }.freeze
+        LABEL = "透析".freeze
+
+        def call(record, _order)
+          modality = Coding.code_of(record.hub["code"], MODALITY)
+          name = Coding.label_of(record.hub["code"], MODALITY).presence || LABEL
+          return skip(LABEL, name, "実施記録に浄化方法がありません") if modality.blank?
+
+          if MAINTENANCE.include?(modality)
+            duration = duration_key(record.hub["performedPeriod"])
+            return skip(LABEL, name, "実施記録に開始と終了の時刻がありません") if duration.nil?
+
+            name = "#{name} #{DURATION_LABELS[duration]}"
+          else
+            duration = "single"
+          end
+
+          code = codes.dialysis(modality, duration)
+          return skip(LABEL, name, "施設設定に透析(#{modality} / #{duration})のレセプト電算コードがありません") if code.nil?
+
+          [[line(code, name)] + child_lines(record), "1"]
+        end
+
+        private
+
+        def duration_key(period)
+          start = parse_time(period&.dig("start"))
+          finish = parse_time(period&.dig("end"))
+          return nil if start.nil? || finish.nil? || finish <= start
+
+          minutes = ((finish - start) / 60).floor
+          return "under4" if minutes < 240
+          return "from4to5" if minutes < 300
+
+          "over5"
+        end
+
+        def parse_time(value)
+          value.present? ? Time.iso8601(value) : nil
+        rescue ArgumentError
+          nil
+        end
+
+        def child_lines(record)
+          record.children.filter_map do |child|
+            code = Coding.code_of(child["code"], PROCEDURE_CODE)
+            child_name = Coding.label_of(child["code"], PROCEDURE_CODE)
+            next skip(LABEL, child_name, "実施記録の手技に診療行為コードがありません") if code.blank?
+
+            line(code, child_name)
+          end
+        end
+      end
+
       # 病理。実施入力を持たないのでオーダーから組む。検査区分(組織診 / 細胞診 / 術中迅速)は
       # ヘッダの code、数量は検体(明細)の数。判断料・診断料は日レセが自動算定する。
       class Pathology < Base

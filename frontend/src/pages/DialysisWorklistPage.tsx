@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import {
   useCancelAppointment,
   useDialysisBoard,
+  useDialysisPerform,
+  useDialysisSessions,
   useDialysisShifts,
   useDialysisSlots,
   useDialysisUnits,
@@ -11,10 +13,11 @@ import {
   type DialysisWorklistRow,
 } from "../api/queries";
 import { DateStepper } from "../components/DateStepper";
-import { DialysisBoard, type DialysisBoardEntry } from "../components/DialysisBoard";
+import { DialysisBoard, type DialysisBoardEntry, type DialysisPerformAction } from "../components/DialysisBoard";
 import { DialysisBookModal } from "../components/DialysisBookModal";
 import { DialysisExpandModal } from "../components/DialysisExpandModal";
 import { DialysisOrderDetailPanel } from "../components/DialysisOrderDetailPanel";
+import { DialysisPerformModal } from "../components/DialysisPerformModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { RowPictograms } from "../components/PatientListRowParts";
@@ -27,6 +30,18 @@ import { dialysisAppointmentDate, dialysisAppointmentShift } from "../fhir/dialy
 import type { DialysisShift } from "../fhir/dialysisShiftHelpers";
 import { DIALYSIS_MODALITY_OPTIONS, summarizeDialysisOrder } from "../fhir/dialysisOrderHelpers";
 import {
+  buildDialysisArrivalBundle,
+  buildDialysisPerformDeleteBundle,
+  dialysisSessionAppointmentId,
+  dialysisSessionDay,
+  dialysisSessionDisplay,
+  dialysisSessionForAppointment,
+  dialysisSessionOrderId,
+  isOpenDialysisSession,
+  type DialysisPerformStage,
+  type DialysisSession,
+} from "../fhir/dialysisResultHelpers";
+import {
   DIALYSIS_TASK_STATUS_OPTIONS,
   dialysisTaskActions,
   dialysisTaskStatus,
@@ -35,12 +50,14 @@ import {
 } from "../fhir/dialysisTaskHelpers";
 import { activeDialysisBeds } from "../fhir/dialysisUnitHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
+import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import { formatDateLabel, weekDates, weekStart } from "../fhir/scheduleHelpers";
 import { useRowPictogramSources, type RowPictogramSources } from "../hooks/useRowPictogramSources";
 import { addDays, shortDate, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
+import { useCurrentPractitioner } from "../api/authQueries";
 
 // 透析一覧(部門ワークリスト)。docs/dialysis-order-design.md §5。
 //
@@ -50,9 +67,19 @@ import { useReturnLinkState } from "../returnTo";
 // - オーダー … 基準日に効いているオーダー(リハビリ一覧の依頼ビューと同じ軸)。受付・展開・臨時予約・終了の起点。
 //
 // 進捗(Task)は部門の受け入れ状態で、予約を展開しても実施しても動かない(dialysisTaskHelpers.ts)。
+// 実施はボードのセル(ベッドサイドは格子の下の表)から 入室 → 開始 → 終了 と進める(dialysisResultHelpers.ts)。
 // 「終了」はオーダーに終了日を書き、終了日の翌日以降の予約を取り消す。
 
 type View = "board" | "week" | "orders";
+
+interface Performing {
+  stage: DialysisPerformStage;
+  order: fhir4.ServiceRequest;
+  patient?: fhir4.Patient;
+  appointment?: fhir4.Appointment;
+  session?: DialysisSession;
+  placeLabel?: string;
+}
 
 interface Filters {
   modality: string;
@@ -70,6 +97,7 @@ export function DialysisWorklistPage() {
   const [expandingId, setExpandingId] = useState<string | null>(null);
   const [booking, setBooking] = useState<{ orderId: string; appointment?: fhir4.Appointment } | null>(null);
   const [finishingId, setFinishingId] = useState<string | null>(null);
+  const [performing, setPerforming] = useState<Performing | null>(null);
 
   useEffect(() => {
     document.body.classList.add("page-wide");
@@ -81,6 +109,8 @@ export function DialysisWorklistPage() {
   const worklist = useDialysisWorklist(date);
   const updateStatus = useUpdateDialysisTaskStatus();
   const cancelAppointment = useCancelAppointment();
+  const perform = useDialysisPerform();
+  const { practitionerId, practitioner } = useCurrentPractitioner();
 
   const dates = useMemo(() => (view === "week" ? weekDates(weekStart(date)) : [date]), [view, date]);
   const from = dates[0];
@@ -92,6 +122,7 @@ export function DialysisWorklistPage() {
   );
   const scheduleIds = beds.flatMap((entry) => (entry.schedule?.id ? [entry.schedule.id] : []));
   const slots = useDialysisSlots(view === "orders" ? [] : scheduleIds, from, to);
+  const sessions = useDialysisSessions(view === "orders" ? "" : from, to);
 
   const allRows = useMemo(() => worklist.data?.rows ?? [], [worklist.data]);
   const rows = useMemo(() => allRows.filter((row) => matchesFilters(row, filters)), [allRows, filters]);
@@ -107,13 +138,20 @@ export function DialysisWorklistPage() {
           ?.find((p) => p.actor?.reference?.startsWith("Patient/"))
           ?.actor?.reference?.split("/")
           .pop();
+        const orderId = appointmentOrderId(appointment);
         return {
           appointment,
           patient: patientId ? board.data?.patientsById.get(patientId) : undefined,
-          order: board.data?.ordersById.get(appointmentOrderId(appointment)),
+          order: board.data?.ordersById.get(orderId),
+          session: dialysisSessionForAppointment(
+            sessions.data?.sessions ?? [],
+            appointment,
+            orderId,
+            dialysisAppointmentDate(appointment),
+          ),
         };
       }),
-    [board.data],
+    [board.data, sessions.data],
   );
 
   // ベッドサイドのオーダーは格子に乗らない(予約を作らない)ので、その日に効いているものを下に並べる。
@@ -142,8 +180,38 @@ export function DialysisWorklistPage() {
     updateStatus.mutate({ order: row.order, task: row.task, status });
   }
 
+  function startPerform(
+    action: DialysisPerformAction,
+    target: Omit<Performing, "stage">,
+  ) {
+    if (action === "start" || action === "finish") {
+      setPerforming({ stage: action, ...target });
+      return;
+    }
+    const { order, appointment, session } = target;
+    if (action === "arrive") {
+      const performer = practitionerId
+        ? { id: practitionerId, name: practitioner ? practitionerDisplayName(practitioner) : "" }
+        : null;
+      perform.mutate(buildDialysisArrivalBundle({ order, appointment, performer }));
+      return;
+    }
+    if (!session || !window.confirm("この回の実施記録を取り消します。よろしいですか?")) return;
+    perform.mutate(buildDialysisPerformDeleteBundle(session, appointment));
+  }
+
   const boardActions = {
-    pending: cancelAppointment.isPending,
+    pending: cancelAppointment.isPending || perform.isPending,
+    onPerform: (entry: DialysisBoardEntry, action: DialysisPerformAction, placeLabel: string) => {
+      if (!entry.order) return;
+      startPerform(action, {
+        order: entry.order,
+        patient: entry.patient,
+        appointment: entry.appointment,
+        session: entry.session,
+        placeLabel,
+      });
+    },
     onView: (entry: DialysisBoardEntry) => setViewingId(entry.order?.id ?? null),
     onReschedule: (entry: DialysisBoardEntry) =>
       setBooking({ orderId: appointmentOrderId(entry.appointment), appointment: entry.appointment }),
@@ -209,6 +277,8 @@ export function DialysisWorklistPage() {
       <ErrorBanner error={slots.error} />
       <ErrorBanner error={updateStatus.error} />
       <ErrorBanner error={cancelAppointment.error} />
+      <ErrorBanner error={sessions.error} />
+      <ErrorBanner error={perform.error} />
 
       {view === "orders" ? (
         <>
@@ -229,7 +299,7 @@ export function DialysisWorklistPage() {
         </>
       ) : (
         <>
-          <TruncatedNotice show={board.data?.truncated} />
+          <TruncatedNotice show={board.data?.truncated || sessions.data?.truncated} />
           {board.isLoading || units.isLoading ? (
             <p>読み込み中...</p>
           ) : (
@@ -243,7 +313,16 @@ export function DialysisWorklistPage() {
             />
           )}
           {view === "board" && (
-            <BedsideTable rows={bedsideRows} onView={(row) => setViewingId(row.order.id ?? null)} />
+            <BedsideTable
+              rows={bedsideRows}
+              date={date}
+              sessions={sessions.data?.sessions ?? []}
+              pending={perform.isPending}
+              onView={(row) => setViewingId(row.order.id ?? null)}
+              onPerform={(row, action, session) =>
+                startPerform(action, { order: row.order, patient: row.patient, session, placeLabel: "ベッドサイド" })
+              }
+            />
           )}
         </>
       )}
@@ -283,6 +362,18 @@ export function DialysisWorklistPage() {
           appointment={booking.appointment}
           defaultDate={latestDate(date, summarizeDialysisOrder(bookingRow.order).startDate)}
           onClose={() => setBooking(null)}
+        />
+      )}
+
+      {performing && (
+        <DialysisPerformModal
+          stage={performing.stage}
+          order={performing.order}
+          patient={performing.patient}
+          appointment={performing.appointment}
+          session={performing.session}
+          placeLabel={performing.placeLabel}
+          onClose={() => setPerforming(null)}
         />
       )}
 
@@ -590,8 +681,25 @@ function OrderMenuItems({ row, pending, onChangeStatus }: { row: DialysisWorklis
   );
 }
 
-/** ベッドサイドで行うオーダー(急性血液浄化など)。透析室のベッドを取らないので格子の下に並べる。 */
-function BedsideTable({ rows, onView }: { rows: DialysisWorklistRow[]; onView: (row: DialysisWorklistRow) => void }) {
+/**
+ * ベッドサイドで行うオーダー(急性血液浄化など)。透析室のベッドを取らないので格子の下に並べ、
+ * 予約なしでここから実施する(CHDF は日をまたいで続くので、終わっていない回は日付を問わず出す)。
+ */
+function BedsideTable({
+  rows,
+  date,
+  sessions,
+  pending,
+  onView,
+  onPerform,
+}: {
+  rows: DialysisWorklistRow[];
+  date: string;
+  sessions: DialysisSession[];
+  pending: boolean;
+  onView: (row: DialysisWorklistRow) => void;
+  onPerform: (row: DialysisWorklistRow, action: DialysisPerformAction, session?: DialysisSession) => void;
+}) {
   const returnLinkState = useReturnLinkState();
   if (rows.length === 0) return null;
   return (
@@ -605,6 +713,7 @@ function BedsideTable({ rows, onView }: { rows: DialysisWorklistRow[]; onView: (
             <th className="rad-item__compact">期間</th>
             <th className="rad-item__compact">病棟</th>
             <th>条件</th>
+            <th>実施</th>
             <th className="rad-item__compact">ステータス</th>
             <th className="rad-item__compact"></th>
           </tr>
@@ -613,6 +722,11 @@ function BedsideTable({ rows, onView }: { rows: DialysisWorklistRow[]; onView: (
           {rows.map((row) => {
             const summary = summarizeDialysisOrder(row.order);
             const status = dialysisTaskStatus(row.task);
+            const own = sessions.filter(
+              (session) => dialysisSessionOrderId(session) === row.order.id && !dialysisSessionAppointmentId(session),
+            );
+            const open = own.find(isOpenDialysisSession);
+            const done = own.filter((session) => !isOpenDialysisSession(session) && dialysisSessionDay(session) === date);
             return (
               <tr key={row.order.id}>
                 <td>
@@ -628,12 +742,67 @@ function BedsideTable({ rows, onView }: { rows: DialysisWorklistRow[]; onView: (
                 <td className="rad-item__compact">{summary.periodLabel}</td>
                 <td className="rad-item__compact">{wardOf(row.order).wardName || "-"}</td>
                 <td>{summary.conditionLabel || "-"}</td>
+                <td>
+                  {[open, ...done].flatMap((session) => {
+                    if (!session) return [];
+                    const display = dialysisSessionDisplay(session);
+                    return [
+                      <div key={display.id}>
+                        {[display.statusLabel, display.timeLabel, display.summary].filter(Boolean).join(" ")}
+                      </div>,
+                    ];
+                  })}
+                  {!open && done.length === 0 && "-"}
+                </td>
                 <td className="rad-item__compact">
                   <span className={`lab-worklist__status lab-worklist__status--${status}`}>
                     {dialysisTaskStatusDisplay(status)}
                   </span>
                 </td>
-                <td className="rad-item__compact">
+                <td className="rad-item__compact dialysis-board__bedside-actions">
+                  {status === "accepted" && (
+                    <>
+                      {open?.hub.status === "in-progress" ? (
+                        <button
+                          type="button"
+                          className="rp-card__compact-button"
+                          disabled={pending}
+                          onClick={() => onPerform(row, "finish", open)}
+                        >
+                          終了
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="rp-card__compact-button"
+                          disabled={pending}
+                          onClick={() => onPerform(row, "start", open)}
+                        >
+                          開始
+                        </button>
+                      )}
+                      {!open && (
+                        <button
+                          type="button"
+                          className="rp-card__compact-button"
+                          disabled={pending}
+                          onClick={() => onPerform(row, "finish")}
+                        >
+                          一括記録
+                        </button>
+                      )}
+                      {open && (
+                        <button
+                          type="button"
+                          className="rp-card__compact-button"
+                          disabled={pending}
+                          onClick={() => onPerform(row, "cancel-perform", open)}
+                        >
+                          実施取消
+                        </button>
+                      )}
+                    </>
+                  )}
                   <button type="button" className="rp-card__compact-button" onClick={() => onView(row)}>
                     表示
                   </button>

@@ -27,11 +27,17 @@ import {
   scheduleBedId,
   type DialysisUnitGroup,
 } from "../../fhir/dialysisUnitHelpers";
+import {
+  DRY_WEIGHT_CODE,
+  dryWeightOf,
+  groupDialysisSessions,
+  type DialysisSession,
+} from "../../fhir/dialysisResultHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { buildSlotCreateBundle, SERVICE_TYPE_SYSTEM as SCHEDULE_SERVICE_TYPE_SYSTEM } from "../../fhir/scheduleHelpers";
 import { orderCancelEntries } from "../../fhir/taskHelpers";
 import { addDays, today } from "../../lib/dates";
-import { postBundle } from "../fhirClient";
+import { postBundle, searchResource } from "../fhirClient";
 import {
   fetchAppointmentSlots,
   fetchOrderAppointmentCancelEntries,
@@ -55,7 +61,11 @@ import { comparePatientNumber, fetchWorklistBundles, taskBundleEntry } from "./w
 //
 // リハビリと同じ期間継続型で、明細を持たずヘッダ 1 本で済む(docs/dialysis-order-design.md)。
 
-export const useDialysisOrderDetail = makeOrderDetailHook<fhir4.Resource>("dialysis-order", ORDER_PERFORM_REVINCLUDES);
+// 実施記録の子(測定値・薬剤)まで同じ応答に揃える(詳細に各回の体重・除水を並べるため)。
+export const useDialysisOrderDetail = makeOrderDetailHook<fhir4.Resource>("dialysis-order", {
+  ...ORDER_PERFORM_REVINCLUDES,
+  iterate: ["Observation:part-of", "MedicationAdministration:part-of"],
+});
 
 /** 施設設定のシフト(開始の早い順)。 */
 export function useDialysisShifts() {
@@ -81,6 +91,48 @@ export function useActiveDialysisOrders(patientId: string | undefined) {
         maxPages: 1,
       });
       return matches.filter(isDialysisServiceRequest);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * その患者の有効な透析オーダー(期間を問わない)。退院で打ち切る対象(入院のオーダー)を選ぶのに使う。
+ * 打ち切りの対象を取りこぼさないよう、ページを辿って全件読む。
+ */
+export function usePatientDialysisOrders(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${DIALYSIS_ORDER_TYPE.code}`);
+  params.set("status", "active");
+  params.set("_sort", "-authoredon");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "dialysis-patient", patientId],
+    queryFn: async () => {
+      const { matches } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+        page: 500,
+        maxPages: 4,
+        complete: true,
+      });
+      return matches.filter(isDialysisServiceRequest);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/** 直近のドライウェイト。患者単位の Observation(実施の終了で見直したときに足される)。 */
+export function useLatestDryWeight(patientId: string | undefined) {
+  return useQuery({
+    queryKey: ["Observation", "dialysis-dry-weight", patientId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("subject", `Patient/${patientId}`);
+      params.set("code", DRY_WEIGHT_CODE);
+      params.set("_sort", "-date");
+      params.set("_count", "1");
+      const { data } = await searchResource<fhir4.Observation>("Observation", params);
+      return dryWeightOf(data.entry?.find((e) => e.resource?.resourceType === "Observation")?.resource);
     },
     enabled: Boolean(patientId),
   });
@@ -371,6 +423,82 @@ export function useDialysisBoard(from: string, to: string) {
     queryFn: () => fetchDialysisBoard(from, to),
     enabled: Boolean(from) && Boolean(to),
     placeholderData: keepPreviousData,
+  });
+}
+
+// ---- 実施記録(docs/dialysis-order-design.md §6) ----
+
+export interface DialysisSessionsResult {
+  sessions: DialysisSession[];
+  truncated: boolean;
+}
+
+/** ハブと子(測定値・薬剤・追加の手技)を同じ応答に揃える。 */
+function appendSessionRevincludes(params: URLSearchParams) {
+  params.append("_revinclude", "Observation:part-of");
+  params.append("_revinclude", "MedicationAdministration:part-of");
+  params.append("_revinclude", "Procedure:part-of");
+}
+
+/**
+ * from〜to(両端を含む)に始めた回と、日付を問わず終わっていない回(入室・透析中)。
+ * 入室の段階のハブは開始時刻を持たず日付で引けないので、状態で別に引く。
+ */
+async function fetchDialysisSessions(from: string, to: string): Promise<DialysisSessionsResult> {
+  const category = `${ORDER_TYPE_SYSTEM}|${DIALYSIS_ORDER_TYPE.code}`;
+  const dated = new URLSearchParams();
+  dated.set("category", category);
+  dated.append("date", `ge${from}`);
+  dated.append("date", `lt${addDays(to, 1)}`);
+  appendSessionRevincludes(dated);
+  const open = new URLSearchParams();
+  open.set("category", category);
+  open.set("status", "preparation,in-progress");
+  appendSessionRevincludes(open);
+
+  const options = { page: 500, maxPages: 4 };
+  const results = await Promise.all([
+    searchAllPages<fhir4.Procedure>("Procedure", dated, options),
+    searchAllPages<fhir4.Procedure>("Procedure", open, options),
+  ]);
+  const resources = results.flatMap((result) => result.bundles.flatMap((bundle) => bundle.entry ?? []))
+    .flatMap((entry) => (entry.resource ? [entry.resource] : []));
+  const ofType = <T extends fhir4.Resource>(type: T["resourceType"]) =>
+    resources.filter((resource): resource is T => resource.resourceType === type);
+  return {
+    sessions: groupDialysisSessions(
+      ofType<fhir4.Procedure>("Procedure"),
+      ofType<fhir4.Observation>("Observation"),
+      ofType<fhir4.MedicationAdministration>("MedicationAdministration"),
+    ),
+    truncated: results.some((result) => result.truncated),
+  };
+}
+
+export function useDialysisSessions(from: string, to: string) {
+  return useQuery({
+    queryKey: ["Procedure", "dialysis-sessions", from, to],
+    queryFn: () => fetchDialysisSessions(from, to),
+    enabled: Boolean(from) && Boolean(to),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 入室・開始・終了・実施取消(transaction はヘルパーが組む)。進捗 Task は動かさない。
+ * 予約の状態とカルテのカード(実施の表示)、ドライウェイトも読み直させる。
+ */
+export function useDialysisPerform() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["Procedure"] });
+      queryClient.invalidateQueries({ queryKey: ["Observation"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateDialysisAppointments(queryClient);
+    },
   });
 }
 

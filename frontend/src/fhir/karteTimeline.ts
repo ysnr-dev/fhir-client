@@ -130,6 +130,11 @@ import { rehabPerformsByOrderId, type RehabPerformDisplay } from "./rehabResultH
 import { isDialysisServiceRequest } from "./dialysisOrderHelpers";
 import { dialysisTaskStatus, dialysisTasksByOrderId, type DialysisTaskStatus } from "./dialysisTaskHelpers";
 import {
+  dialysisSessionsByOrderId,
+  groupDialysisSessions,
+  type DialysisSessionDisplay,
+} from "./dialysisResultHelpers";
+import {
   isNutritionGuidanceServiceRequest,
   nutritionGuidanceOrderResponseIds,
 } from "./nutritionGuidanceOrderHelpers";
@@ -474,6 +479,8 @@ export type KarteTimelineItem = KarteItemBase &
         serviceRequest: fhir4.ServiceRequest;
         /** 透析部門の受け入れ状態。Task がまだ無いオーダーは依頼済。 */
         status: DialysisTaskStatus;
+        /** 各回の実施(新しい順)。 */
+        performs: DialysisSessionDisplay[];
       }
     // 栄養指導。リハビリと同じ期間継続型で、進捗 Task と実施記録(指導 1 回ぶん)を持つ。
     // カードは先頭数件と件数だけを出す。
@@ -947,6 +954,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const rehabTaskByOrderId = rehabTasksByOrderId(tasks);
   const rehabPerformByOrderId = rehabPerformsByOrderId(procedures);
   const dialysisTaskByOrderId = dialysisTasksByOrderId(tasks);
+  // 透析の回は測定値(Observation)と薬剤を子に持つ。振り分けは category(order-type)で行う。
+  const dialysisPerformByOrderId = dialysisSessionsByOrderId(
+    groupDialysisSessions(
+      procedures,
+      pickByType<fhir4.Observation>(prescriptionResources, "Observation"),
+      administrations,
+    ),
+  );
   // 栄養指導もリハビリと同じ形(Task + Procedure がまとめて届く)。
   const nutritionGuidanceTaskByOrderId = nutritionGuidanceTasksByOrderId(tasks);
   const nutritionGuidancePerformByOrderId = nutritionGuidancePerformsByOrderId(procedures);
@@ -1192,11 +1207,18 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       };
     }
     if (isDialysisServiceRequest(serviceRequest)) {
+      const status = dialysisTaskStatus(dialysisTaskByOrderId.get(serviceRequest.id ?? ""));
       return {
         ...base,
         kind: "dialysis-order" as const,
         label: KARTE_KIND_LABELS["dialysis-order"],
-        status: dialysisTaskStatus(dialysisTaskByOrderId.get(serviceRequest.id ?? "")),
+        status,
+        // リハビリと同じく期間中ずっと受付済のまま実施が積み上がるので、受付済以降は常に出す
+        // (他部門の「実施済のときだけ」に揃えると期間中は 1 件も見えない)。
+        performs:
+          status === "accepted" || status === "completed"
+            ? (dialysisPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
+            : [],
       };
     }
     if (isNutritionGuidanceServiceRequest(serviceRequest)) {

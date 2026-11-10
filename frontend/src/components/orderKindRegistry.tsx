@@ -293,7 +293,7 @@ export const ORDER_KIND_DEFS: { [K in OrderKind]: OrderKindDef<K> } = {
     },
     status: (item) => ({ code: item.status, label: dialysisTaskStatusDisplay(item.status) }),
     doable: true,
-    Body: ({ item }) => <DialysisOrderCardBody serviceRequest={item.serviceRequest} />,
+    Body: ({ item }) => <DialysisOrderCardBody serviceRequest={item.serviceRequest} performs={item.performs} />,
   },
   "radiotherapy-order": {
     // 「第何コースで何が目的か」が見出し。

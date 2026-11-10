@@ -766,6 +766,93 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder, "施設設定
     end
   end
 
+  describe "透析" do
+    let(:modality) { "http://fhir-client.local/CodeSystem/dialysis-modality" }
+    let(:dialysis_codes) do
+      { "hd" => { "under4" => "140007310", "from4to5" => "140007410", "over5" => "140007510" },
+        "chdf" => { "single" => "140007810" } }
+    end
+
+    def dialysis_hub(code:, start: "09:00", finish: "13:00", id: "dx-1", status: "completed")
+      hub = procedure_hub(order_type: "dialysis", code: nil, id: id, time: start, status: status,
+                          period_end: "2026-09-20T#{finish}:00+09:00")
+      hub["code"] = coded(modality, code, code.upcase)
+      hub
+    end
+
+    before do
+      receipt_codes!("dialysis" => dialysis_codes)
+      store.add(order_header(order_type: "dialysis"))
+    end
+
+    it "picks the 人工腎臓 code by the 時間区分 of the performed period" do
+      store.add(dialysis_hub(code: "hd", start: "09:00", finish: "13:30"))
+
+      item = build.items.first
+      expect(item.lines.map { |l| [l.kind, l.code] }).to eq([[:procedure, "140007410"]])
+      expect(item.lines.first.name).to eq("HD 4時間以上5時間未満")
+      expect(orca_classes.first["Medical_Class"]).to eq("400")
+    end
+
+    it "treats exactly 4 hours as 4〜5 時間 and under 4 hours as 4 時間未満" do
+      store.add(dialysis_hub(code: "hd", start: "09:00", finish: "13:00", id: "dx-1"),
+                dialysis_hub(code: "hd", start: "14:00", finish: "17:59", id: "dx-2"))
+
+      expect(build.items.map { |i| i.lines.first.code }).to contain_exactly("140007410", "140007310")
+    end
+
+    it "uses the single code for 急性血液浄化 regardless of the duration" do
+      store.add(dialysis_hub(code: "chdf", start: "00:00", finish: "23:30"))
+
+      expect(build.items.first.lines.first.code).to eq("140007810")
+    end
+
+    it "adds 追加の手技, billable 薬剤 and the 血液浄化器 by its 特定器材コード, but not bundled 薬剤" do
+      Master::BloodPurifier.create!(purifier_code: "000001", kind: "dialyzer", name: "ダイアライザ 15",
+                                    receipt_material_code: "730010000")
+      hub = dialysis_hub(code: "hd")
+      hub["usedCode"] = [used_code("dialysis", code: "000001", name: "ダイアライザ 15", quantity: 1, unit: "本",
+                                               system: "http://fhir-client.local/CodeSystem/blood-purifier")]
+      child = procedure_hub(order_type: "dialysis", code: nil, id: "dx-child", time: "09:00")
+                .merge("partOf" => [{ "reference" => "Procedure/dx-1" }])
+      child["code"] = coded("http://fhir-client.local/CodeSystem/dialysis-procedure-code", "140009110", "加算")
+      heparin = administration(code: "620000001", dose: 1, hub: "dx-1", name: "ヘパリン")
+      heparin["extension"] = [{ "url" => "http://fhir-client.local/StructureDefinition/dialysis-bundled-medication",
+                                "valueBoolean" => true }]
+      store.add(hub, child, heparin, administration(code: "620000002", dose: 1, hub: "dx-1", name: "鉄剤"))
+
+      expect(build.items.first.lines.map { |l| [l.kind, l.code] }).to eq([
+        [:procedure, "140007410"],
+        [:procedure, "140009110"],
+        [:medicine, "620000002"],
+        [:material, "730010000"]
+      ])
+    end
+
+    it "reports a 血液浄化器 without a 特定器材コード" do
+      Master::BloodPurifier.create!(purifier_code: "000002", kind: "dialyzer", name: "未紐付け")
+      hub = dialysis_hub(code: "hd")
+      hub["usedCode"] = [used_code("dialysis", code: "000002", name: "未紐付け",
+                                               system: "http://fhir-client.local/CodeSystem/blood-purifier")]
+      store.add(hub)
+
+      expect(build.skipped.map(&:reason)).to include(a_string_including("特定器材コード"))
+    end
+
+    it "reports when the 施設設定 has no code for the 浄化方法 × 時間区分" do
+      store.add(dialysis_hub(code: "hd", start: "09:00", finish: "14:30"))
+      receipt_codes!("dialysis" => { "hd" => { "over5" => "" } })
+
+      expect(build.items).to be_empty
+      expect(build.skipped.first.reason).to include("hd / over5")
+    end
+
+    it "does not report the order on a day without a 実施記録 (期間継続型)" do
+      expect(build.items).to be_empty
+      expect(build.skipped).to be_empty
+    end
+  end
+
   describe "栄養指導" do
     let(:session) { "http://fhir-client.local/CodeSystem/nutrition-guidance-session-type" }
 

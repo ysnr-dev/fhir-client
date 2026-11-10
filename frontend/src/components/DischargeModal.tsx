@@ -3,6 +3,7 @@ import {
   useBroughtMedTasks,
   usePatientBroughtMedications,
   usePatientRehabOrders,
+  usePatientDialysisOrders,
   usePatientNutritionGuidanceOrders,
   usePatientMedicationGuidanceOrders,
   usePatientNursingOrders,
@@ -34,6 +35,7 @@ import { buildDischargeSyncEntries, dischargeStopPoint } from "../fhir/mealEncou
 import { mealPointDisplay } from "../fhir/mealOrderHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { rehabOrderNeedsStop, summarizeRehabOrder } from "../fhir/rehabOrderHelpers";
+import { dialysisOrderNeedsStop, summarizeDialysisOrder } from "../fhir/dialysisOrderHelpers";
 import {
   nutritionGuidanceOrderNeedsStop,
   summarizeNutritionGuidanceOrder,
@@ -88,6 +90,11 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
   const stoppingRehab = (rehabOrders.data ?? []).filter((sr) =>
     rehabOrderNeedsStop(sr, dischargeDate),
   );
+
+  // 透析は入院のオーダーだけを打ち切る(外来の維持透析は退院後も続く)。
+  const [stopDialysis, setStopDialysis] = useState(true);
+  const dialysisOrders = usePatientDialysisOrders(patientId);
+  const stoppingDialysis = (dialysisOrders.data ?? []).filter((sr) => dialysisOrderNeedsStop(sr, dischargeDate));
 
   const [stopNutritionGuidance, setStopNutritionGuidance] = useState(true);
   const nutritionGuidanceOrders = usePatientNutritionGuidanceOrders(patientId);
@@ -158,6 +165,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
         ],
         mealEntries: stopMeals ? mealEntries : [],
         rehabOrders: stopRehab ? stoppingRehab : [],
+        dialysisOrders: stopDialysis ? stoppingDialysis : [],
         nutritionGuidanceOrders: stopNutritionGuidance ? stoppingNutritionGuidance : [],
         medicationGuidanceOrders: stopMedicationGuidance ? stoppingMedicationGuidance : [],
         nursingOrders: stopNursing ? stoppingNursing : [],
@@ -171,6 +179,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
       <ErrorBanner error={discharge.error} />
       <ErrorBanner error={meal.error} />
       <ErrorBanner error={rehabOrders.error} />
+      <ErrorBanner error={dialysisOrders.error} />
       <ErrorBanner error={nutritionGuidanceOrders.error} />
       <ErrorBanner error={medicationGuidanceOrders.error} />
       <ErrorBanner error={nursingOrders.error} />
@@ -237,6 +246,31 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
                   <li key={sr.id}>
                     {summary.diseaseCategoryShort} {summary.therapyTypesLabel}{" "}
                     {summary.periodLabel}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {stoppingDialysis.length > 0 && (
+          <div className="discharge__meal">
+            <label className="discharge__meal-toggle">
+              <input
+                type="checkbox"
+                checked={stopDialysis}
+                onChange={(e) => setStopDialysis(e.target.checked)}
+              />
+              入院の透析オーダーを退院日で終了する
+            </label>
+            <ul className="discharge__meal-list">
+              {stoppingDialysis.map((sr) => {
+                const summary = summarizeDialysisOrder(sr);
+                return (
+                  <li key={sr.id}>
+                    {[summary.modalityShort, summary.settingDisplay, summary.scheduleLabel, summary.periodLabel]
+                      .filter(Boolean)
+                      .join(" ")}
                   </li>
                 );
               })}
@@ -344,6 +378,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
               broughtMedications.isLoading ||
               // 打ち切る指示を読み切れていないまま退院させない(読めなかったぶんが有効なまま残る)。
               !rehabOrders.isSuccess ||
+              !dialysisOrders.isSuccess ||
               !nutritionGuidanceOrders.isSuccess ||
               !medicationGuidanceOrders.isSuccess ||
               !nursingOrders.isSuccess

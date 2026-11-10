@@ -21,6 +21,17 @@ export type RehabCommentKey = (typeof REHAB_COMMENT_KEYS)[number];
 export type RehabColumnKey = RehabTherapyKey | RehabCommentKey;
 export const REHAB_COLUMN_KEYS: readonly RehabColumnKey[] = [...REHAB_THERAPY_KEYS, ...REHAB_COMMENT_KEYS];
 
+/** 維持透析(人工腎臓)は時間区分ごと、急性血液浄化は 1 つ(single)。 */
+export const DIALYSIS_MAINTENANCE_KEYS = ["hd", "hdf", "i-hdf"] as const;
+export const DIALYSIS_DURATION_KEYS = ["under4", "from4to5", "over5"] as const;
+export const DIALYSIS_ACUTE_KEYS = ["chdf", "chd", "pe", "dfpp", "dhp"] as const;
+export type DialysisMaintenanceKey = (typeof DIALYSIS_MAINTENANCE_KEYS)[number];
+export type DialysisDurationKey = (typeof DIALYSIS_DURATION_KEYS)[number];
+export type DialysisAcuteKey = (typeof DIALYSIS_ACUTE_KEYS)[number];
+
+export type DialysisReceiptCodes = Record<DialysisMaintenanceKey, Record<DialysisDurationKey, string>> &
+  Record<DialysisAcuteKey, { single: string }>;
+
 export interface ReceiptCodeSettings {
   /** 病理の検査区分(JAHIS LPATHO001)ごとの診療行為コード。 */
   pathology: { N000: string; N004: string; N003: string };
@@ -34,6 +45,8 @@ export interface ReceiptCodeSettings {
   lab: { blood_draw: string };
   /** 保存血液輸血の手技。1 回目(最初の 200mL)と 2 回目以降(200mL ごと)。 */
   transfusion: { first: string; subsequent: string };
+  /** 透析。浄化方法 × 時間区分(維持透析)、浄化方法ごと(急性血液浄化)。 */
+  dialysis: DialysisReceiptCodes;
   /** 外来化学療法加算(15 歳未満は別コード)と無菌製剤処理料。レジメン由来の注射に 1 日 1 回足す。 */
   injection: {
     outpatient_chemo_addition: string;
@@ -51,6 +64,13 @@ function emptyRehab(): ReceiptCodeSettings["rehab"] {
   ) as ReceiptCodeSettings["rehab"];
 }
 
+function emptyDialysis(): DialysisReceiptCodes {
+  return Object.fromEntries([
+    ...DIALYSIS_MAINTENANCE_KEYS.map((key) => [key, Object.fromEntries(DIALYSIS_DURATION_KEYS.map((d) => [d, ""]))]),
+    ...DIALYSIS_ACUTE_KEYS.map((key) => [key, { single: "" }]),
+  ]) as DialysisReceiptCodes;
+}
+
 export const DEFAULT_RECEIPT_CODES: ReceiptCodeSettings = {
   pathology: { N000: "", N004: "", N003: "" },
   rehab: emptyRehab(),
@@ -58,6 +78,7 @@ export const DEFAULT_RECEIPT_CODES: ReceiptCodeSettings = {
   nutrition_guidance: { initial: "", "follow-up": "", group: "" },
   lab: { blood_draw: "" },
   transfusion: { first: "", subsequent: "" },
+  dialysis: emptyDialysis(),
   injection: {
     outpatient_chemo_addition: "",
     outpatient_chemo_addition_child: "",
@@ -102,6 +123,12 @@ export const TRANSFUSION_LABELS: Record<keyof ReceiptCodeSettings["transfusion"]
   subsequent: "保存血液輸血(2 回目以降)",
 };
 
+export const DIALYSIS_DURATION_LABELS: Record<DialysisDurationKey, string> = {
+  under4: "4 時間未満",
+  from4to5: "4〜5 時間",
+  over5: "5 時間以上",
+};
+
 export const INJECTION_LABELS: Record<keyof ReceiptCodeSettings["injection"], string> = {
   outpatient_chemo_addition: "外来化学療法加算",
   outpatient_chemo_addition_child: "外来化学療法加算(15 歳未満)",
@@ -122,6 +149,7 @@ export function receiptCodesValid(settings: ReceiptCodeSettings): boolean {
     ...Object.values(settings.lab),
     ...Object.values(settings.radiotherapy),
     ...Object.values(settings.transfusion),
+    ...Object.values(settings.dialysis).flatMap((row) => Object.values(row)),
     ...Object.values(settings.injection),
   ];
   return flat.every(receiptCodeValid);

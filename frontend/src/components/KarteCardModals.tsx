@@ -22,6 +22,7 @@ import {
   useTreatmentAdverseEvents,
   useRehabOrderDetail,
   useDialysisOrderDetail,
+  useLatestDryWeight,
   useNutritionGuidanceOrderDetail,
   useMedicalManagementOrderDetail,
   useMedicationGuidanceOrderDetail,
@@ -97,6 +98,7 @@ import { teamRequestTasksByOrderId } from "../fhir/teamRequestTaskHelpers";
 import { RadiotherapyOrderDetailPanel } from "./RadiotherapyOrderDetailPanel";
 import { useRadiotherapyOrderInitialValues } from "../hooks/useRadiotherapyOrderInitialValues";
 import { rehabPerformsByOrderId } from "../fhir/rehabResultHelpers";
+import { dialysisSessionsByOrderId, groupDialysisSessions } from "../fhir/dialysisResultHelpers";
 import { nutritionGuidancePerformsByOrderId } from "../fhir/nutritionGuidanceResultHelpers";
 import { MedicationGuidanceOrderDetailPanel } from "./MedicationGuidanceOrderDetailPanel";
 import { medicationGuidancePerformsByOrderId } from "../fhir/medicationGuidanceResultHelpers";
@@ -590,20 +592,35 @@ function DialysisOrderDetail({
   problemsById: Map<string, fhir4.Condition>;
 }) {
   const detail = useDialysisOrderDetail(srId);
+  const dryWeight = useLatestDryWeight(patientId);
   const serviceRequest = serviceRequestsOf(detail.data?.data).find(
     (request) => request.id === srId,
   );
   const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+  const performs =
+    dialysisSessionsByOrderId(
+      groupDialysisSessions(
+        resourcesOfType<fhir4.Procedure>(detail.data?.data, "Procedure"),
+        resourcesOfType<fhir4.Observation>(detail.data?.data, "Observation"),
+        resourcesOfType<fhir4.MedicationAdministration>(detail.data?.data, "MedicationAdministration"),
+      ),
+    ).get(srId) ?? [];
 
   return (
     <>
       <ErrorBanner error={detail.error} />
+      <ErrorBanner error={dryWeight.error} />
       {detail.isLoading ? (
         <p>読み込み中...</p>
       ) : mismatch ? (
         <p className="patient-table__empty">指定された透析オーダーは別の患者のものです。</p>
       ) : serviceRequest ? (
-        <DialysisOrderDetailPanel serviceRequest={serviceRequest} problemsById={problemsById} />
+        <DialysisOrderDetailPanel
+          serviceRequest={serviceRequest}
+          problemsById={problemsById}
+          performs={performs}
+          dryWeight={dryWeight.data ?? null}
+        />
       ) : (
         !detail.error && <NotFound label="透析オーダー" />
       )}

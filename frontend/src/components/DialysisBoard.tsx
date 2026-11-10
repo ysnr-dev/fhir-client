@@ -8,6 +8,7 @@ import {
   findDialysisSlot,
 } from "../fhir/dialysisAppointmentHelpers";
 import { dialysisOrderModality, dialysisModalityShort } from "../fhir/dialysisOrderHelpers";
+import { dialysisSessionDisplay, type DialysisSession } from "../fhir/dialysisResultHelpers";
 import type { DialysisShift } from "../fhir/dialysisShiftHelpers";
 import { dialysisBedLabel, type DialysisBoardBed } from "../fhir/dialysisUnitHelpers";
 import { displayName } from "../fhir/patientHelpers";
@@ -20,6 +21,9 @@ import { RowMenu } from "./RowMenu";
 // 1 日(当日ボード)と 7 日(週)の両方をこの格子で描く。列は日 × シフト、行は有効なベッド。
 // セルには予約(1 ベッド 1 患者)を出し、予約の無いセルは枠の状態(空き・停止・枠なし)を出す。
 // ベッドやシフトに当てはまらない予約(無効にしたベッド・消したシフト)は格子の下に別に並べ、黙って落とさない。
+//
+// 実施は予約ごとに 入室 → 開始 → 終了 と進める(dialysisResultHelpers.ts)。セルには実施の段階と
+// 体重・除水を出し、次の段階のボタンを 1 つだけ表に置く(残りはケバブ)。
 
 // 列幅(px)。予約の入ったセルだけ広がらないよう、表の幅ごと固定する。
 const BED_COLUMN_WIDTH = 72;
@@ -30,12 +34,18 @@ export interface DialysisBoardEntry {
   appointment: fhir4.Appointment;
   patient?: fhir4.Patient;
   order?: fhir4.ServiceRequest;
+  /** この予約の回(入室以降)。 */
+  session?: DialysisSession;
 }
+
+export type DialysisPerformAction = "arrive" | "start" | "finish" | "cancel-perform";
 
 export interface DialysisBoardActions {
   onView: (entry: DialysisBoardEntry) => void;
   onReschedule: (entry: DialysisBoardEntry) => void;
   onCancel: (entry: DialysisBoardEntry) => void;
+  /** placeLabel は「ベッド 3 / 午前」。実施入力の見出しに出す。 */
+  onPerform: (entry: DialysisBoardEntry, action: DialysisPerformAction, placeLabel: string) => void;
   pending: boolean;
 }
 
@@ -156,6 +166,7 @@ export function DialysisBoard({ dates, beds, shifts, entries, slots, ...actions 
                                 key={cellEntry.appointment.id}
                                 entry={cellEntry}
                                 compact={multiDay}
+                                placeLabel={`ベッド ${dialysisBedLabel(entry.bed)} / ${shift.label}`}
                                 {...actions}
                               />
                             ))
@@ -186,7 +197,7 @@ export function DialysisBoard({ dates, beds, shifts, entries, slots, ...actions 
           <ul>
             {unplaced.map((entry) => (
               <li key={entry.appointment.id}>
-                <BoardCard entry={entry} compact={false} showWhen {...actions} />
+                <BoardCard entry={entry} compact={false} showWhen placeLabel={entry.appointment.description ?? ""} {...actions} />
               </li>
             ))}
           </ul>
@@ -212,30 +223,48 @@ function EmptyCell({ slot }: { slot: fhir4.Slot | undefined }) {
   return <span className="dialysis-board__empty">埋まり</span>;
 }
 
+/** 次に進める段階。表のボタンに出す。 */
+const NEXT_ACTION: Record<string, { action: DialysisPerformAction; label: string }> = {
+  none: { action: "arrive", label: "入室" },
+  preparation: { action: "start", label: "開始" },
+  "in-progress": { action: "finish", label: "終了" },
+};
+
 function BoardCard({
   entry,
   compact,
   showWhen,
+  placeLabel,
   onView,
   onReschedule,
   onCancel,
+  onPerform,
   pending,
 }: {
   entry: DialysisBoardEntry;
   compact: boolean;
   /** 格子の外に出すときは日時とベッドも添える。 */
   showWhen?: boolean;
+  placeLabel: string;
 } & DialysisBoardActions) {
   const returnLinkState = useReturnLinkState();
-  const { appointment, patient, order } = entry;
+  const { appointment, patient, order, session } = entry;
   const modality = order ? dialysisModalityShort(dialysisOrderModality(order)) : "";
   const status = appointment.status;
   const name = patient ? displayName(patient) : "-";
-  // 予約済(booked)以外は状態を添える(実施済・来院など)。
-  const statusLabel = status !== "booked" ? appointmentStatusLabel(status) : "";
+  const perform = session ? dialysisSessionDisplay(session) : undefined;
+  const performStatus = perform?.status ?? "none";
+  // 実施があれば実施の段階、無ければ予約済(booked)以外の予約の状態を添える。
+  const statusLabel = perform
+    ? [perform.statusLabel, perform.timeLabel].filter(Boolean).join(" ")
+    : status !== "booked"
+      ? appointmentStatusLabel(status)
+      : "";
+  const next = order && status !== "noshow" ? NEXT_ACTION[performStatus] : undefined;
+  const performAction = (action: DialysisPerformAction) => () => onPerform(entry, action, placeLabel);
 
   return (
-    <div className={`dialysis-board__card dialysis-board__card--${status}`}>
+    <div className={`dialysis-board__card dialysis-board__card--${perform ? `perform-${performStatus}` : status}`}>
       <span className="dialysis-board__card-main">
         {patient?.id ? (
           <Link to={`/patients/${patient.id}/karte`} state={returnLinkState} className="dialysis-board__patient">
@@ -259,12 +288,39 @@ function BoardCard({
         {compact && (modality || statusLabel) && (
           <span className="dialysis-board__meta">{[modality, statusLabel].filter(Boolean).join(" ")}</span>
         )}
+        {!compact && perform?.summary && <span className="dialysis-board__meta">{perform.summary}</span>}
       </span>
+      {!compact && next && (
+        <button type="button" className="rp-card__compact-button" disabled={pending} onClick={performAction(next.action)}>
+          {next.label}
+        </button>
+      )}
       <RowMenu label={`${name} の予約の操作`} escapesClipping>
         <button type="button" className="row-menu__item" onClick={() => onView(entry)} disabled={!order}>
           表示
         </button>
-        {status === "booked" && (
+        {compact && next && (
+          <button type="button" className="row-menu__item" disabled={pending} onClick={performAction(next.action)}>
+            {next.label}
+          </button>
+        )}
+        {/* 後から記録する運用のため、入室・開始を飛ばして終了を入れられる。 */}
+        {order && performStatus !== "completed" && next?.action !== "finish" && (
+          <button type="button" className="row-menu__item" disabled={pending} onClick={performAction("finish")}>
+            一括記録
+          </button>
+        )}
+        {session && (
+          <button
+            type="button"
+            className="row-menu__item row-menu__item--danger"
+            disabled={pending}
+            onClick={performAction("cancel-perform")}
+          >
+            実施取消
+          </button>
+        )}
+        {status === "booked" && !session && (
           <>
             <button type="button" className="row-menu__item" onClick={() => onReschedule(entry)}>
               予約変更

@@ -12,6 +12,7 @@ import {
   usePatientEmergency,
   useRegimenApplications,
   useActiveDialysisOrders,
+  useLatestDryWeight,
   usePatientLineDrains,
   useEarlyWarningSettings,
   useLatestEarlyWarning,
@@ -37,7 +38,7 @@ import { regimenStatusLabel } from "../fhir/regimenOrderHelpers";
 import { summarizeDialysisOrder } from "../fhir/dialysisOrderHelpers";
 import { daysInsertedLabel, isOverWarnDays, lineDrainLabel } from "../fhir/lineDrainHelpers";
 import { useLineDrainTypes } from "../api/masterQueries";
-import { today } from "../lib/dates";
+import { shortDate, today } from "../lib/dates";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../fhir/infectionHelpers";
 import {
   ageWithMonthsLabel,
@@ -325,6 +326,7 @@ function ChemotherapyPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal
 /** 透析中(今日に効いている透析オーダーがある)。穿刺する腕や曜日は吹き出しで読む。 */
 function DialysisPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }: PictogramProps) {
   const orders = useActiveDialysisOrders(patientId);
+  const dryWeight = useLatestDryWeight(orders.data?.length ? patientId : undefined);
 
   if (!patientId) return null;
   const running = (orders.data ?? []).map((order) => ({ id: order.id, summary: summarizeDialysisOrder(order) }));
@@ -346,7 +348,14 @@ function DialysisPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }: 
             <li key={id}>
               <span className="patient-header__popover-name">{summary.modalityDisplay}</span>
               <span className="patient-header__popover-text">
-                {[summary.scheduleLabel, summary.periodLabel, summary.accessLabel].filter(Boolean).join(" / ")}
+                {[
+                  summary.scheduleLabel,
+                  summary.periodLabel,
+                  summary.accessLabel,
+                  dryWeight.data ? `DW ${dryWeight.data.value}kg(${shortDate(dryWeight.data.date)})` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" / ")}
               </span>
             </li>
           ))}
