@@ -515,6 +515,7 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
 実装で決めたこと: §6 の箇条書き、§7 の所定点数に含まれる薬剤、ドライウェイトのコード(§2.2)。カルテの詳細は実施の子まで
 `_revinclude:iterate` で読み(`useDialysisOrderDetail`)、実施履歴を表にする。患者帯の吹き出しに直近の DW。
 クリニカルパスの `TPDI` からの実施入力と、ベッドサイドの急性血液浄化の検証データ(開発環境にベッドサイドのオーダーが無い)は未着手。
+デモ投入のシナリオ `dialysis`(`frontend/src/demo-seed/dialysis.ts`、`docs/demo-seed.md`)は実装済み。
 
 - 新規: `fhir/dialysisResultHelpers.ts`(← `treatmentResultHelpers.ts` + `rehabResultHelpers.ts`)、`components/DialysisPerformModal.tsx`
   (← `TreatmentPerformModal.tsx` + `RehabPerformModal.tsx`)。

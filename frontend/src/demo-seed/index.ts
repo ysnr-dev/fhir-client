@@ -12,6 +12,7 @@ import {
 } from "./acuteCareCohort";
 import { REQUIREMENTS as ckdRequirements, seedCkd } from "./ckd";
 import { REQUIREMENTS as diabetesRequirements, seedDiabetes } from "./diabetes";
+import { REQUIREMENTS as dialysisRequirements, seedDialysis } from "./dialysis";
 import { REQUIREMENTS as diabetesCohortRequirements, seedDiabetesCohort } from "./diabetesCohort";
 import { REQUIREMENTS as headNeckRequirements, seedHeadNeckRadiotherapy } from "./headNeckRadiotherapy";
 import { REQUIREMENTS as heartFailureRequirements, seedHeartFailure } from "./heartFailure";
@@ -27,6 +28,7 @@ export const SCENARIOS = {
   headNeckRt: seedHeadNeckRadiotherapy,
   diabetesCohort: seedDiabetesCohort,
   acuteCareCohort: seedAcuteCareCohort,
+  dialysis: seedDialysis,
 } as const;
 
 export type ScenarioName = keyof typeof SCENARIOS;
@@ -65,6 +67,7 @@ export async function preflight(): Promise<string[]> {
     headNeckRequirements,
     diabetesCohortRequirements,
     acuteCareRequirements,
+    dialysisRequirements,
   ];
   const labs = new LabMaster();
   const labCodes = [...new Set(all.flatMap((r) => r.labs))];

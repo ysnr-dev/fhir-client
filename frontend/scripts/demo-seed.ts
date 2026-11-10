@@ -15,6 +15,10 @@ import { login } from "../src/api/authClient";
 import { loadEnv } from "../src/demo-seed/base";
 import { preflight, run, SCENARIOS, type ScenarioName } from "../src/demo-seed/index";
 
+// 画面の組み立て関数は実行環境の時差で日時を書くので、施設の時刻(日本時間)に揃える。
+// UTC のコンテナで流すと、午前 9 時の枠が日本時間の 18 時になる。
+process.env.TZ = "Asia/Tokyo";
+
 const TARGETS: Record<string, string> = {
   dev: "http://localhost:3001",
   prod: "https://ysnr-fhir-client-api.onrender.com",

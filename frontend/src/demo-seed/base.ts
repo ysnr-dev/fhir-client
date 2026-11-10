@@ -57,6 +57,7 @@ import { buildAdverseEvent } from "../fhir/adverseEventHelpers";
 import { responseSaveBundle } from "../fhir/observationExtract";
 import { buildQuestionnaireResponse, DEFAULT_INSTITUTION_NUMBER } from "../fhir/questionnaireResponseHelpers";
 import { BED_PHYSICAL_TYPE } from "../fhir/wardHelpers";
+import { DIALYSIS_LOCATION_TYPE, LOCATION_TYPE_SYSTEM } from "../fhir/dialysisUnitHelpers";
 import type { Disease } from "../api/masterClient";
 import {
   chartDrugOf,
@@ -141,10 +142,15 @@ export async function loadEnv(log: (message: string) => void, nameSuffix = ""): 
     .map((id) => ({ id, name: people.get(id) ?? "" }))
     .sort((a, b) => a.name.localeCompare(b.name, "ja"));
   const locations = await searchAll<fhir4.Location>("Location", {});
-  const beds = locations.filter((location) =>
-    location.physicalType?.coding?.some(
-      (coding) => coding.system === PHYSICAL_TYPE_SYSTEM && coding.code === BED_PHYSICAL_TYPE.code,
-    ),
+  // 入院に使う病棟のベッド。透析室のベッドも同じ physicalType なので種別で外す。
+  const beds = locations.filter(
+    (location) =>
+      location.physicalType?.coding?.some(
+        (coding) => coding.system === PHYSICAL_TYPE_SYSTEM && coding.code === BED_PHYSICAL_TYPE.code,
+      ) &&
+      !location.type?.some((type) =>
+        type.coding?.some((c) => c.system === LOCATION_TYPE_SYSTEM && c.code === DIALYSIS_LOCATION_TYPE.code),
+      ),
   );
   const self = { id: practitionerId, name: practitioner ? nameOf(practitioner) : "" };
   return {
