@@ -5,6 +5,11 @@ import {
   DIALYSIS_ACCESS_OPTIONS,
   DIALYSIS_DOSE_UNITS,
   DIALYSIS_MODALITY_OPTIONS,
+  DIALYSATE_YAKKO_CODE,
+  EMPTY_DIALYSIS_MEDICINE,
+  REPLACEMENT_YAKKO_CODE,
+  dialysisModalityHasDialysate,
+  dialysisModalityHasReplacement,
   dialysisModalityHasSubstitution,
   emptyDialysisOrderForm,
   isAcuteDialysisModality,
@@ -14,6 +19,7 @@ import {
   type DialysisOrderField,
   type DialysisOrderFormValues,
   type DialysisCodedValue,
+  type DialysisMedicine,
   type DialysisPatternEntry,
 } from "../fhir/dialysisOrderHelpers";
 import type { DialysisShift } from "../fhir/dialysisShiftHelpers";
@@ -63,6 +69,44 @@ function shiftRows(
   return [...shifts, ...[...orphaned].map(([code, label]) => ({ code, label }))];
 }
 
+/** 医薬品マスタから選ぶ液の欄。 */
+type DialysisFluidField = "dialysate" | "substitutionFluid" | "replacementFluid";
+
+const FLUID_PICKERS: Record<DialysisFluidField, { label: string; yakkoCode: string }> = {
+  dialysate: { label: "透析液", yakkoCode: DIALYSATE_YAKKO_CODE },
+  substitutionFluid: { label: "補充液", yakkoCode: DIALYSATE_YAKKO_CODE },
+  replacementFluid: { label: "置換液", yakkoCode: REPLACEMENT_YAKKO_CODE },
+};
+
+/** 液の名称の入力欄と選択ボタン。名称を書き換えたらマスタのコードは外す。 */
+function FluidInput({
+  label,
+  value,
+  onChange,
+  onPick,
+}: {
+  label: string;
+  value: DialysisMedicine;
+  onChange: (value: DialysisMedicine) => void;
+  onPick: () => void;
+}) {
+  return (
+    <label className="dialysis-order__wide">
+      {label}
+      <span className="dialysis-order__picker">
+        <input
+          type="text"
+          value={value.name}
+          onChange={(e) => onChange({ ...EMPTY_DIALYSIS_MEDICINE, name: e.target.value })}
+        />
+        <button type="button" className="rp-card__compact-button" onClick={onPick}>
+          選択
+        </button>
+      </span>
+    </label>
+  );
+}
+
 interface DialysisOrderFormProps {
   patientId: string;
   initialValues?: DialysisOrderFormValues;
@@ -96,6 +140,7 @@ export function DialysisOrderForm({
     useValidationError<DialysisOrderField>();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [pickingAnticoagulant, setPickingAnticoagulant] = useState(false);
+  const [pickingFluid, setPickingFluid] = useState<DialysisFluidField | null>(null);
   /** 検索モーダルを開いている血液浄化器の行。 */
   const [pickingPurifierRow, setPickingPurifierRow] = useState<number | null>(null);
 
@@ -107,6 +152,9 @@ export function DialysisOrderForm({
   const rows = shiftRows(shifts, values.pattern);
   const fixedPurifierRows = bloodPurifierRowCount(values.modality);
   const purifierRows = padPurifierRows(values.purifiers, fixedPurifierRows);
+  const hasDialysate = dialysisModalityHasDialysate(values.modality);
+  const hasSubstitution = dialysisModalityHasSubstitution(values.modality);
+  const hasReplacement = dialysisModalityHasReplacement(values.modality);
 
   function setPurifierRow(row: number, value: DialysisCodedValue) {
     setValues((v) => ({
@@ -293,18 +341,6 @@ export function DialysisOrderForm({
               onChange={(e) => update("qd", e.target.value)}
             />
           </label>
-          {dialysisModalityHasSubstitution(values.modality) && (
-            <label className={fieldAlert.className("substitutionVolume")}>
-              {fieldAlert.label("substitutionVolume", "補液量(L)")}
-              <input
-                type="number"
-                min={0}
-                step="any"
-                value={values.substitutionVolume}
-                onChange={(e) => update("substitutionVolume", e.target.value)}
-              />
-            </label>
-          )}
           {purifierRows.map((purifier, row) => {
             const kind = bloodPurifierKindForRow(values.modality, row);
             return (
@@ -352,15 +388,61 @@ export function DialysisOrderForm({
               追加
             </button>
           </div>
-          <label className="dialysis-order__wide">
-            透析液
-            <input
-              type="text"
-              value={values.dialysate}
-              onChange={(e) => update("dialysate", e.target.value)}
-            />
-          </label>
         </fieldset>
+
+        {(hasDialysate || hasSubstitution || hasReplacement) && (
+          <fieldset>
+            <legend>使用液</legend>
+            {hasDialysate && (
+              <FluidInput
+                label="透析液"
+                value={values.dialysate}
+                onChange={(value) => update("dialysate", value)}
+                onPick={() => setPickingFluid("dialysate")}
+              />
+            )}
+            {hasSubstitution && (
+              <>
+                <FluidInput
+                  label="補充液"
+                  value={values.substitutionFluid}
+                  onChange={(value) => update("substitutionFluid", value)}
+                  onPick={() => setPickingFluid("substitutionFluid")}
+                />
+                <label className={fieldAlert.className("substitutionVolume")}>
+                  {fieldAlert.label("substitutionVolume", "補充液量(L)")}
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={values.substitutionVolume}
+                    onChange={(e) => update("substitutionVolume", e.target.value)}
+                  />
+                </label>
+              </>
+            )}
+            {hasReplacement && (
+              <>
+                <FluidInput
+                  label="置換液"
+                  value={values.replacementFluid}
+                  onChange={(value) => update("replacementFluid", value)}
+                  onPick={() => setPickingFluid("replacementFluid")}
+                />
+                <label className={fieldAlert.className("replacementVolume")}>
+                  {fieldAlert.label("replacementVolume", "置換液量(mL)")}
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={values.replacementVolume}
+                    onChange={(e) => update("replacementVolume", e.target.value)}
+                  />
+                </label>
+              </>
+            )}
+          </fieldset>
+        )}
 
         <fieldset>
           <legend>抗凝固薬</legend>
@@ -536,6 +618,21 @@ export function DialysisOrderForm({
             setPickingPurifierRow(null);
           }}
           onClose={() => setPickingPurifierRow(null)}
+        />
+      )}
+      {pickingFluid && (
+        <MedicineSearchModal
+          title={`${FLUID_PICKERS[pickingFluid].label}を選択`}
+          initialYakkoCode={FLUID_PICKERS[pickingFluid].yakkoCode}
+          onSelect={(medicine) => {
+            update(pickingFluid, {
+              medicineCode: medicine.medicine_code,
+              yjCode: medicine.yj_code ?? "",
+              name: medicine.name ?? medicine.medicine_code,
+            });
+            setPickingFluid(null);
+          }}
+          onClose={() => setPickingFluid(null)}
         />
       )}
       {pickingAnticoagulant && (

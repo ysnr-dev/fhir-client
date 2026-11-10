@@ -25,6 +25,11 @@ export function DialysisOrderCardBody({ serviceRequest }: { serviceRequest: fhir
             <span className="karte-rp__medicine-name">血液浄化器: {summary.purifierNames.join(" / ")}</span>
           </li>
         )}
+        {summary.fluidLabel && (
+          <li>
+            <span className="karte-rp__medicine-name">{summary.fluidLabel}</span>
+          </li>
+        )}
         {summary.anticoagulantName && (
           <li>
             <span className="karte-rp__medicine-name">

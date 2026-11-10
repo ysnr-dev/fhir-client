@@ -1,5 +1,11 @@
 import { problemLabel } from "../fhir/conditionHelpers";
-import { dialysisOrderProblem, summarizeDialysisOrder } from "../fhir/dialysisOrderHelpers";
+import {
+  dialysisModalityHasDialysate,
+  dialysisModalityHasReplacement,
+  dialysisModalityHasSubstitution,
+  dialysisOrderProblem,
+  summarizeDialysisOrder,
+} from "../fhir/dialysisOrderHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
@@ -12,6 +18,9 @@ interface DialysisOrderDetailPanelProps {
 
 export function DialysisOrderDetailPanel({ serviceRequest, problemsById }: DialysisOrderDetailPanelProps) {
   const summary = summarizeDialysisOrder(serviceRequest);
+  const hasDialysate = dialysisModalityHasDialysate(summary.modality);
+  const hasSubstitution = dialysisModalityHasSubstitution(summary.modality);
+  const hasReplacement = dialysisModalityHasReplacement(summary.modality);
 
   const problem = dialysisOrderProblem(serviceRequest);
   const currentProblem = problem ? problemsById?.get(problem.conditionId) : undefined;
@@ -52,12 +61,22 @@ export function DialysisOrderDetailPanel({ serviceRequest, problemsById }: Dialy
           <dd>{summary.qdLabel || "-"}</dd>
           <dt>血液浄化器</dt>
           <dd>{summary.purifierNames.join(" / ") || "-"}</dd>
-          <dt>透析液</dt>
-          <dd>{summary.dialysate || "-"}</dd>
-          {summary.substitutionLabel && (
+          {hasDialysate && (
             <>
-              <dt>補液量</dt>
-              <dd>{summary.substitutionLabel}</dd>
+              <dt>透析液</dt>
+              <dd>{summary.dialysate || "-"}</dd>
+            </>
+          )}
+          {hasSubstitution && (
+            <>
+              <dt>補充液</dt>
+              <dd>{[summary.substitutionFluid, summary.substitutionVolumeLabel].filter(Boolean).join(" ") || "-"}</dd>
+            </>
+          )}
+          {hasReplacement && (
+            <>
+              <dt>置換液</dt>
+              <dd>{[summary.replacementFluid, summary.replacementVolumeLabel].filter(Boolean).join(" ") || "-"}</dd>
             </>
           )}
           <dt>抗凝固薬</dt>

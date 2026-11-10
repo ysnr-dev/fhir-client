@@ -132,8 +132,11 @@ JP Core `route-codes`、`StructureDefinition/medication-lot-number`、依頼科�
 | `anticoagulant` | valueCodeableConcept | 抗凝固薬(医薬品マスタ。ヘパリン・低分子ヘパリン・ナファモスタット) |
 | `anticoagulant-initial-dose` | valueQuantity | 初回量 |
 | `anticoagulant-continuous-dose` | valueQuantity(/h) | 持続量 |
-| `dialysate` | valueString | 透析液の種類 |
-| `substitution-volume` | valueQuantity(L) | 補液量(HDF のみ) |
+| `dialysate` | valueCodeableConcept | 透析液(HD・HDF・I-HDF・CHDF・CHD)。§3.2 |
+| `substitution-fluid` | valueCodeableConcept | 補充液(HDF・I-HDF・CHDF)。§3.2 |
+| `substitution-volume` | valueQuantity(L) | 補充液量(HDF・I-HDF・CHDF) |
+| `replacement-fluid` | valueCodeableConcept | 置換液(PE・DFPP)。§3.2 |
+| `replacement-volume` | valueQuantity(mL) | 置換液量(PE・DFPP) |
 | `access-type` | valueCode | バスキュラーアクセス: `avf` 自己血管内シャント / `avg` 人工血管 / `catheter` カテーテル / `other` |
 | `access-site` | valueString | 部位(左前腕など) |
 | `needle` | valueString | 穿刺針(ゲージ・種類) |
@@ -202,13 +205,28 @@ JP Core `route-codes`、`StructureDefinition/medication-lot-number`、依頼科�
 別の種別も選べる。HD = ダイアライザ、HDF・I-HDF = ヘモダイアフィルタ、CHDF・CHD = 持続緩徐式血液濾過器、PE = 血漿分離器、
 DFPP = 血漿分離器 + 血漿成分分離器、DHP = 吸着器。［要確認］この対応は運用前に臨床工学技士に確認する。
 
-### 3.2 定数に置くもの
+### 3.2 透析液・補充液・置換液は医薬品マスタ
+
+［事実］血液浄化器と違い、医薬品マスタ(`master_medicines`)は透析液を製品ごとに持つ。薬効分類 3410(人工腎臓透析用剤)に
+透析液(キンダリー・カーボスター・リンパック・D ドライなど)と血液ろ過用補充液(サブラッド・サブパック)が載り、製品の違いが
+Ca・K 濃度や酢酸の有無といった組成の違いになっている。置換液はアルブミン(6343 血漿分画製剤)と FFP(6342 血液成分製剤)。
+
+［導出］**施設マスタを作らず医薬品マスタを直接選ぶ**。coding は抗凝固薬と同じ `CodeSystem/medicine-code` + YJ コードで、
+`text` に名称を焼き付ける。マスタに無い名称(多人数用透析液供給装置の「セントラル」など)は手入力で `text` だけ。
+Na・K の調整は製品で表せないので透析部門への指示に書く。マスタは包装単位なので同じ組成が包装違いで並ぶが、指示としては同じ意味で、
+施設が使っている 1 つを選べばよい。
+
+［提案］選択モーダルは薬効分類を初期値にして開く(`DIALYSATE_YAKKO_CODE` / `REPLACEMENT_YAKKO_CODE`)。置換液はアルブミンから始め、
+FFP を選ぶときは薬効分類を 6342 に切り替える。FFP の払い出しは輸血オーダーで行い、透析オーダーの置換液は指示として持つだけ。
+液の欄は浄化方法で出し分け、使わない浄化方法の値は保存しない(透析液は PE・DFPP・DHP で、置換液は PE・DFPP 以外で落とす)。
+
+### 3.3 定数に置くもの
 
 ［提案］浄化方法・アクセス種別・測定項目は固定の分類で施設ごとに増減しないため、フロントの定数(`dialysisOrderHelpers.ts`)に置く
 (リハビリ §3 と同じ)。抗凝固薬・ESA は既存の医薬品マスタを直接選ぶ。
 施設の「よく使う組み合わせ」はオーダーセットで持てる。
 
-### 3.3 施設設定(`backend/app/models/facility_settings.rb` の `SETTINGS`)
+### 3.4 施設設定(`backend/app/models/facility_settings.rb` の `SETTINGS`)
 
 **シフト `dialysis_shifts`**。透析室の 1 日の区切り。ベッドの枠(Slot)の生成と、オーダーの曜日 × シフト、ボードの列に使う。
 
@@ -385,6 +403,8 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
   コードが無ければ「施設設定に透析(hd / from4to5)のレセプト電算コードがありません」で skip。
 - 薬剤(MedicationAdministration)・器材(usedCode + 数量)・追加手技は処置型の送り方に乗る。
   血液浄化器は製品の `receipt_material_code` で算定する(放射線器材と同じ解決を `coding.rb` に足す)。手入力の製品は特定器材コードが無いので算定に載らず、医事側で補う。
+  透析液は人工腎臓(J038)の所定点数に含まれるので送らない。［要確認］持続緩徐式血液濾過(J038-2)の透析液・補充液と、血漿交換(J039)の置換液は
+  薬剤料として送る扱いと見ているので、実施記録には実際に使った液を医薬品コードと数量で残す(オーダーの液を初期値にする)。
   ［要確認］resolver を持つ種別で子 Procedure・MedicationAdministration・usedCode が剤に載るかを `performed_record_collector.rb` /
   `billing_claim_builder.rb` で読む(処置型 + resolver の組み合わせは初)。
 - `orca/medical_message.rb` の `MEDICAL_CLASS` に `dialysis: "400"`(J 章)。`BillingSendModal.tsx` に種別名。
@@ -413,7 +433,7 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
 - 透析患者一覧(DW の推移・直近の採血・アクセスの状態)、月間統計(回数・浄化方法別・ベッド稼働)。
 - ボードのドラッグによるベッドの入れ替え、週ビューからの直接予約、入院中の外来オーダーの一時中断。
 - B001-15 の月次算定、導入期加算など(§7)。
-- シフトの削除時の使用中判定と注意表示(§3.3)。
+- シフトの削除時の使用中判定と注意表示(§3.4)。
 - 膜素材の照合(膜の不適合歴、AN69 膜と ACE 阻害薬の併用禁忌など。§3.1)。
 - 腹膜透析(PD)の処方と外来管理。
 - SS-MIX2 への出力(処置・リハビリも出していないので同じ扱い)。

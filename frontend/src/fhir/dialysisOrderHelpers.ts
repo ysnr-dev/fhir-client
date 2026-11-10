@@ -55,7 +55,8 @@ const BLOOD_PURIFIER_SYSTEM = `${LOCAL}/CodeSystem/blood-purifier`;
 
 const UCUM_SYSTEM = "http://unitsofmeasure.org";
 const FLOW_UNIT = "mL/min";
-const VOLUME_UNIT = "L";
+const SUBSTITUTION_VOLUME_UNIT = "L";
+const REPLACEMENT_VOLUME_UNIT = "mL";
 
 // ---- 固定の分類 ----
 
@@ -76,16 +77,37 @@ export const DIALYSIS_MODALITY_OPTIONS: { code: DialysisModality; display: strin
 /** ICU・病棟のベッドサイドで行うことが多い急性血液浄化。ベッドサイドの初期値を決める。 */
 const ACUTE_MODALITIES: readonly string[] = ["chdf", "chd", "pe", "dfpp", "dhp"];
 
-/** 補液量を持つ浄化方法(濾過を伴うもの)。 */
+/** 透析液を使う浄化方法(拡散を伴うもの)。 */
+const DIALYSATE_MODALITIES: readonly string[] = ["hd", "hdf", "i-hdf", "chdf", "chd"];
+/** 補充液を使う浄化方法(濾過を伴うもの)。 */
 const SUBSTITUTION_MODALITIES: readonly string[] = ["hdf", "i-hdf", "chdf"];
+/** 置換液を使う浄化方法(血漿を捨てて補うもの)。 */
+const REPLACEMENT_MODALITIES: readonly string[] = ["pe", "dfpp"];
 
 export function isAcuteDialysisModality(code: string): boolean {
   return ACUTE_MODALITIES.includes(code);
 }
 
+/** 浄化方法が未選択のときも出す(透析液はほとんどの浄化方法で使うため)。 */
+export function dialysisModalityHasDialysate(code: string): boolean {
+  return code === "" || DIALYSATE_MODALITIES.includes(code);
+}
+
 export function dialysisModalityHasSubstitution(code: string): boolean {
   return SUBSTITUTION_MODALITIES.includes(code);
 }
+
+export function dialysisModalityHasReplacement(code: string): boolean {
+  return REPLACEMENT_MODALITIES.includes(code);
+}
+
+/**
+ * 液を選ぶときに医薬品マスタを絞る薬効分類(YJ コードの上 4 桁)。透析液と血液ろ過用補充液は
+ * 人工腎臓透析用剤、置換液はアルブミン(血漿分画製剤)から始める。FFP は血液成分製剤(6342)なので、
+ * 選ぶときは薬効分類を切り替える。
+ */
+export const DIALYSATE_YAKKO_CODE = "3410";
+export const REPLACEMENT_YAKKO_CODE = "6343";
 
 export function dialysisModalityDisplay(code: string): string {
   return displayOf(DIALYSIS_MODALITY_OPTIONS, code);
@@ -123,11 +145,14 @@ export interface DialysisCodedValue {
   name: string;
 }
 
-export interface DialysisAnticoagulant {
+export interface DialysisMedicine {
+  /** 医薬品マスタのコード。マスタに無い名称の手入力は空。 */
   medicineCode: string;
   yjCode: string;
   name: string;
 }
+
+export const EMPTY_DIALYSIS_MEDICINE: DialysisMedicine = { medicineCode: "", yjCode: "", name: "" };
 
 export interface DialysisOrderFormValues {
   setting: PrescriptionSetting;
@@ -144,13 +169,18 @@ export interface DialysisOrderFormValues {
   qd: string;
   /** 血液浄化器。DFPP など複数使う浄化方法があるので配列で持つ。入力途中の空行を含む。 */
   purifiers: DialysisCodedValue[];
-  anticoagulant: DialysisAnticoagulant | null;
+  /** 抗凝固薬。量の指示を伴うのでマスタから選んだものに限る。 */
+  anticoagulant: DialysisMedicine | null;
   anticoagulantInitialDose: string;
   anticoagulantContinuousDose: string;
   anticoagulantDoseUnit: string;
-  dialysate: string;
-  /** 補液量(L)。濾過を伴う浄化方法だけ。 */
+  dialysate: DialysisMedicine;
+  /** 補充液と補充液量(L)。濾過を伴う浄化方法だけ。 */
+  substitutionFluid: DialysisMedicine;
   substitutionVolume: string;
+  /** 置換液と置換液量(mL)。PE・DFPP だけ。 */
+  replacementFluid: DialysisMedicine;
+  replacementVolume: string;
   accessType: DialysisAccessType | "";
   accessSite: string;
   needle: string;
@@ -174,8 +204,11 @@ export function emptyDialysisOrderForm(setting: PrescriptionSetting): DialysisOr
     anticoagulantInitialDose: "",
     anticoagulantContinuousDose: "",
     anticoagulantDoseUnit: DIALYSIS_DOSE_UNITS[0],
-    dialysate: "",
+    dialysate: EMPTY_DIALYSIS_MEDICINE,
+    substitutionFluid: EMPTY_DIALYSIS_MEDICINE,
     substitutionVolume: "",
+    replacementFluid: EMPTY_DIALYSIS_MEDICINE,
+    replacementVolume: "",
     accessType: "",
     accessSite: "",
     needle: "",
@@ -196,7 +229,8 @@ export type DialysisOrderField =
   | "anticoagulant"
   | "anticoagulantInitialDose"
   | "anticoagulantContinuousDose"
-  | "substitutionVolume";
+  | "substitutionVolume"
+  | "replacementVolume";
 
 const MIN_DURATION_MINUTES = 30;
 /** 持続的血液浄化(CHDF)の連日 24 時間まで。 */
@@ -236,7 +270,10 @@ export function validateDialysisOrderForm(
   if (values.qb && !isPositive(values.qb)) return fail("qb", "QB は正の数で入れてください。");
   if (values.qd && !isPositive(values.qd)) return fail("qd", "QD は正の数で入れてください。");
   if (values.substitutionVolume && !isPositive(values.substitutionVolume)) {
-    return fail("substitutionVolume", "補液量は正の数で入れてください。");
+    return fail("substitutionVolume", "補充液量は正の数で入れてください。");
+  }
+  if (values.replacementVolume && !isPositive(values.replacementVolume)) {
+    return fail("replacementVolume", "置換液量は正の数で入れてください。");
   }
   if (values.anticoagulantInitialDose && !isPositive(values.anticoagulantInitialDose)) {
     return fail("anticoagulantInitialDose", "初回量は正の数で入れてください。");
@@ -261,6 +298,22 @@ function quantity(text: string, unit: string, ucum = false): fhir4.Quantity {
   return { value: Number(text), unit, ...(ucum ? { system: UCUM_SYSTEM, code: unit } : {}) };
 }
 
+/** 医薬品マスタの薬のコードと名称。手入力(コード無し)は名称だけ。 */
+function medicineConcept({ medicineCode, yjCode, name }: DialysisMedicine): fhir4.CodeableConcept {
+  const text = name.trim();
+  return {
+    ...(medicineCode
+      ? {
+          coding: [
+            { system: MEDICINE_CODE_SYSTEM, code: medicineCode, display: text },
+            ...(yjCode ? [{ system: YJ_CODE_SYSTEM, code: yjCode }] : []),
+          ],
+        }
+      : {}),
+    text,
+  };
+}
+
 /** 透析条件の複合拡張。入力の無い項目は載せない。何も無ければ undefined。 */
 function buildPrescriptionExtension(values: DialysisOrderFormValues): fhir4.Extension | undefined {
   const children: fhir4.Extension[] = [];
@@ -280,17 +333,7 @@ function buildPrescriptionExtension(values: DialysisOrderFormValues): fhir4.Exte
     });
   }
   if (values.anticoagulant) {
-    const { medicineCode, yjCode, name } = values.anticoagulant;
-    children.push({
-      url: "anticoagulant",
-      valueCodeableConcept: {
-        coding: [
-          { system: MEDICINE_CODE_SYSTEM, code: medicineCode, display: name },
-          ...(yjCode ? [{ system: YJ_CODE_SYSTEM, code: yjCode }] : []),
-        ],
-        text: name,
-      },
-    });
+    children.push({ url: "anticoagulant", valueCodeableConcept: medicineConcept(values.anticoagulant) });
     const unit = values.anticoagulantDoseUnit;
     if (values.anticoagulantInitialDose) {
       children.push({
@@ -305,12 +348,30 @@ function buildPrescriptionExtension(values: DialysisOrderFormValues): fhir4.Exte
       });
     }
   }
-  if (values.dialysate.trim()) children.push({ url: "dialysate", valueString: values.dialysate.trim() });
-  if (values.substitutionVolume && dialysisModalityHasSubstitution(values.modality)) {
-    children.push({
-      url: "substitution-volume",
-      valueQuantity: quantity(values.substitutionVolume, VOLUME_UNIT, true),
-    });
+  if (dialysisModalityHasDialysate(values.modality) && values.dialysate.name.trim()) {
+    children.push({ url: "dialysate", valueCodeableConcept: medicineConcept(values.dialysate) });
+  }
+  if (dialysisModalityHasSubstitution(values.modality)) {
+    if (values.substitutionFluid.name.trim()) {
+      children.push({ url: "substitution-fluid", valueCodeableConcept: medicineConcept(values.substitutionFluid) });
+    }
+    if (values.substitutionVolume) {
+      children.push({
+        url: "substitution-volume",
+        valueQuantity: quantity(values.substitutionVolume, SUBSTITUTION_VOLUME_UNIT, true),
+      });
+    }
+  }
+  if (dialysisModalityHasReplacement(values.modality)) {
+    if (values.replacementFluid.name.trim()) {
+      children.push({ url: "replacement-fluid", valueCodeableConcept: medicineConcept(values.replacementFluid) });
+    }
+    if (values.replacementVolume) {
+      children.push({
+        url: "replacement-volume",
+        valueQuantity: quantity(values.replacementVolume, REPLACEMENT_VOLUME_UNIT, true),
+      });
+    }
   }
   if (values.accessType) children.push({ url: "access-type", valueCode: values.accessType });
   if (values.accessSite.trim()) children.push({ url: "access-site", valueString: values.accessSite.trim() });
@@ -507,6 +568,17 @@ function orderPurifiers(sr: fhir4.ServiceRequest): fhir4.CodeableConcept[] {
   return children.flatMap((e) => (e.url === "purifier" && e.valueCodeableConcept ? [e.valueCodeableConcept] : []));
 }
 
+function prescriptionMedicine(sr: fhir4.ServiceRequest, url: string): DialysisMedicine {
+  const concept = prescriptionChild(sr, url)?.valueCodeableConcept;
+  if (!concept) return EMPTY_DIALYSIS_MEDICINE;
+  const medicineCode = codingBySystem(concept.coding, MEDICINE_CODE_SYSTEM)?.code ?? "";
+  return {
+    medicineCode,
+    yjCode: codingBySystem(concept.coding, YJ_CODE_SYSTEM)?.code ?? "",
+    name: concept.text ?? medicineCode,
+  };
+}
+
 function quantityText(extension: fhir4.Extension | undefined): string {
   const value = extension?.valueQuantity?.value;
   return value == null ? "" : String(value);
@@ -542,7 +614,14 @@ export interface DialysisOrderSummary {
   /** 「初回 1000単位 / 持続 500単位/h」。 */
   anticoagulantDoseLabel: string;
   dialysate: string;
-  substitutionLabel: string;
+  substitutionFluid: string;
+  /** 「48L」。 */
+  substitutionVolumeLabel: string;
+  replacementFluid: string;
+  /** 「3000mL」。 */
+  replacementVolumeLabel: string;
+  /** 「透析液: キンダリー… / 補充液: サブラッド… 48L」。カードと転記の 1 行。 */
+  fluidLabel: string;
   /** 「自己血管内シャント 左前腕」。 */
   accessLabel: string;
   needle: string;
@@ -568,6 +647,15 @@ export function summarizeDialysisOrder(sr: fhir4.ServiceRequest): DialysisOrderS
   const initialDose = quantityLabel(prescriptionChild(sr, "anticoagulant-initial-dose"));
   const continuousDose = quantityLabel(prescriptionChild(sr, "anticoagulant-continuous-dose"));
   const accessType = prescriptionChild(sr, "access-type")?.valueCode ?? "";
+  const dialysate = prescriptionMedicine(sr, "dialysate").name;
+  const substitutionFluid = prescriptionMedicine(sr, "substitution-fluid").name;
+  const substitutionVolume = quantityLabel(prescriptionChild(sr, "substitution-volume"));
+  const replacementFluid = prescriptionMedicine(sr, "replacement-fluid").name;
+  const replacementVolume = quantityLabel(prescriptionChild(sr, "replacement-volume"));
+  const fluidPart = (label: string, name: string, volume = "") => {
+    const text = [name, volume].filter(Boolean).join(" ");
+    return text ? `${label}: ${text}` : "";
+  };
 
   return {
     settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
@@ -588,8 +676,18 @@ export function summarizeDialysisOrder(sr: fhir4.ServiceRequest): DialysisOrderS
     anticoagulantDoseLabel: [initialDose && `初回 ${initialDose}`, continuousDose && `持続 ${continuousDose}`]
       .filter(Boolean)
       .join(" / "),
-    dialysate: prescriptionChild(sr, "dialysate")?.valueString ?? "",
-    substitutionLabel: quantityLabel(prescriptionChild(sr, "substitution-volume")),
+    dialysate,
+    substitutionFluid,
+    substitutionVolumeLabel: substitutionVolume,
+    replacementFluid,
+    replacementVolumeLabel: replacementVolume,
+    fluidLabel: [
+      fluidPart("透析液", dialysate),
+      fluidPart("補充液", substitutionFluid, substitutionVolume),
+      fluidPart("置換液", replacementFluid, replacementVolume),
+    ]
+      .filter(Boolean)
+      .join(" / "),
     accessLabel: [
       accessType ? displayOf(DIALYSIS_ACCESS_OPTIONS, accessType) : "",
       prescriptionChild(sr, "access-site")?.valueString ?? "",
@@ -607,8 +705,7 @@ export const dialysisOrderProblem = orderProblem;
 // ---- 編集フォームへの復元 ----
 
 export function parseDialysisOrderForm(sr: fhir4.ServiceRequest): DialysisOrderFormValues {
-  const anticoagulant = prescriptionChild(sr, "anticoagulant")?.valueCodeableConcept;
-  const medicineCode = codingBySystem(anticoagulant?.coding, MEDICINE_CODE_SYSTEM)?.code;
+  const anticoagulant = prescriptionMedicine(sr, "anticoagulant");
   const initialDose = prescriptionChild(sr, "anticoagulant-initial-dose");
   const continuousDose = prescriptionChild(sr, "anticoagulant-continuous-dose");
   const doseUnit =
@@ -630,19 +727,15 @@ export function parseDialysisOrderForm(sr: fhir4.ServiceRequest): DialysisOrderF
       code: codingBySystem(purifier.coding, BLOOD_PURIFIER_SYSTEM)?.code ?? "",
       name: purifier.text ?? "",
     })),
-    anticoagulant:
-      medicineCode && anticoagulant
-        ? {
-            medicineCode,
-            yjCode: codingBySystem(anticoagulant.coding, YJ_CODE_SYSTEM)?.code ?? "",
-            name: anticoagulant.text ?? medicineCode,
-          }
-        : null,
+    anticoagulant: anticoagulant.medicineCode ? anticoagulant : null,
     anticoagulantInitialDose: quantityText(initialDose),
     anticoagulantContinuousDose: quantityText(continuousDose),
     anticoagulantDoseUnit: doseUnit,
-    dialysate: prescriptionChild(sr, "dialysate")?.valueString ?? "",
+    dialysate: prescriptionMedicine(sr, "dialysate"),
+    substitutionFluid: prescriptionMedicine(sr, "substitution-fluid"),
     substitutionVolume: quantityText(prescriptionChild(sr, "substitution-volume")),
+    replacementFluid: prescriptionMedicine(sr, "replacement-fluid"),
+    replacementVolume: quantityText(prescriptionChild(sr, "replacement-volume")),
     accessType: (prescriptionChild(sr, "access-type")?.valueCode ?? "") as DialysisAccessType | "",
     accessSite: prescriptionChild(sr, "access-site")?.valueString ?? "",
     needle: prescriptionChild(sr, "needle")?.valueString ?? "",

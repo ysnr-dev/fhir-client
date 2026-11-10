@@ -245,6 +245,7 @@ export const ORDER_TRANSFER_LINES: { [K in OrderKind]: (item: OrderItem<K>) => s
       indent([summary.periodLabel, summary.scheduleLabel].filter(Boolean).join(" / ")),
       ...(summary.conditionLabel ? [indent(summary.conditionLabel)] : []),
       ...(summary.purifierNames.length > 0 ? [indent(`血液浄化器: ${summary.purifierNames.join(" / ")}`)] : []),
+      ...(summary.fluidLabel ? [indent(summary.fluidLabel)] : []),
       ...(summary.anticoagulantName
         ? [indent(`抗凝固薬: ${[summary.anticoagulantName, summary.anticoagulantDoseLabel].filter(Boolean).join(" ")}`)]
         : []),

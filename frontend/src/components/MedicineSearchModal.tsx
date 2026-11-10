@@ -23,6 +23,8 @@ interface MedicineSearchModalProps {
    * 経口造影剤は内用薬なので、剤形では絞れない。
    */
   contrastMedium?: boolean;
+  /** 薬効分類(YJ コードの上 4 桁)の初期値。用途で候補が決まっているときに渡す(利用者は切り替えられる)。 */
+  initialYakkoCode?: string;
   /** モーダルの見出し。用途が造影剤選択のときなどに差し替える。 */
   title?: string;
   /**
@@ -47,6 +49,7 @@ export function MedicineSearchModal({
   onClose,
   dosageForm,
   contrastMedium,
+  initialYakkoCode = "",
   title = "医薬品を選択",
   allowGeneric = false,
   datasetPick,
@@ -55,8 +58,9 @@ export function MedicineSearchModal({
   const [mode, setMode] = useDatasetPickMode(datasetPick);
   const [name, setName] = useState("");
   // yakkoInput は入力欄の表示文字列、yakkoCode は候補確定時のみ更新する薬効分類番号。
-  const [yakkoInput, setYakkoInput] = useState("");
-  const [yakkoCode, setYakkoCode] = useState("");
+  // yakkoInput が null の間は未操作で、初期値の薬効分類の表示名を出す。
+  const [yakkoInput, setYakkoInput] = useState<string | null>(initialYakkoCode ? null : "");
+  const [yakkoCode, setYakkoCode] = useState(initialYakkoCode);
   const [page, setPage] = useState(1);
   // 銘柄 / 一般名の切り替え。一般名は院外処方だけなので既定は銘柄。
   const [generic, setGeneric] = useState(false);
@@ -83,6 +87,10 @@ export function MedicineSearchModal({
     }
     return map;
   }, [yakkoOptions.data]);
+
+  const initialYakkoType = yakkoOptions.data?.find((type) => type.code === initialYakkoCode);
+  const yakkoInputValue =
+    yakkoInput ?? (initialYakkoType ? `${initialYakkoType.code} ${initialYakkoType.name ?? ""}` : initialYakkoCode);
 
   function handleNameChange(value: string) {
     setName(value);
@@ -190,7 +198,7 @@ export function MedicineSearchModal({
               薬効分類
               <input
                 type="text"
-                value={yakkoInput}
+                value={yakkoInputValue}
                 onChange={(e) => handleYakkoInputChange(e.target.value)}
                 list={yakkoListId}
                 placeholder="薬効名・番号で絞り込んで選択(例: 冠血管、2171)"
