@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useAuthSession } from "../api/authQueries";
 import {
   useAnesthesiaChart,
@@ -6,6 +7,7 @@ import {
   usePractitioner,
   useSurgeryOrderDetail,
 } from "../api/queries";
+import { anesthesiaChartPrintUrl } from "../api/reportsClient";
 import { ErrorBanner } from "./ErrorBanner";
 import { PatientHeader } from "./PatientHeader";
 import {
@@ -162,6 +164,7 @@ export function AnesthesiaChartPanel({ orderId, showPatientHeader }: AnesthesiaC
         </div>
       ) : (
         <ChartBody
+          orderId={orderId ?? ""}
           data={data}
           patientId={patientId ?? ""}
           write={write}
@@ -190,6 +193,7 @@ function AnesthesiaPreopBand({ response }: { response: fhir4.QuestionnaireRespon
 }
 
 interface ChartBodyProps {
+  orderId: string;
   data: AnesthesiaChartData;
   patientId: string;
   write: ReturnType<typeof useAnesthesiaChartWrite>;
@@ -198,7 +202,7 @@ interface ChartBodyProps {
   onCancel: () => void;
 }
 
-function ChartBody({ data, patientId, write, onFinalize, onReopen, onCancel }: ChartBodyProps) {
+function ChartBody({ orderId, data, patientId, write, onFinalize, onReopen, onCancel }: ChartBodyProps) {
   const hubId = data.hub.id ?? "";
   const hubReference = `Procedure/${hubId}`;
   const readOnly = data.readOnly;
@@ -266,6 +270,9 @@ function ChartBody({ data, patientId, write, onFinalize, onReopen, onCancel }: C
       />
 
       <div className="time-chart__footer">
+        <Link to={anesthesiaChartPrintUrl(orderId)} target="_blank" rel="noopener" className="time-chart__print">
+          印刷
+        </Link>
         {readOnly ? (
           <button type="button" onClick={onReopen} disabled={write.isPending}>
             再開(確定解除)

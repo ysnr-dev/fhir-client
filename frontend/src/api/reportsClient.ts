@@ -150,6 +150,13 @@ export function dialysisChartPrintUrl(sessionId: string): string {
   return `${DIALYSIS_CHART_PRINT_PATH}/${encodeURIComponent(sessionId)}`;
 }
 
+/** 麻酔チャートを紙に出す画面(pages/AnesthesiaChartPrintPage)。orderId は手術オーダーの id。 */
+export const ANESTHESIA_CHART_PRINT_PATH = "/anesthesia-chart-print";
+
+export function anesthesiaChartPrintUrl(orderId: string): string {
+  return `${ANESTHESIA_CHART_PRINT_PATH}/${encodeURIComponent(orderId)}`;
+}
+
 /** 検体検査結果(DiagnosticReport)1 件ぶんの報告書 PDF の URL(A4、左右 2 段、材料なし)。 */
 export function labResultPdfUrl(reportId: string): string {
   return `/reports/lab_results/${encodeURIComponent(reportId)}/pdf`;

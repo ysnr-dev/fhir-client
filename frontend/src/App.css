@@ -30042,19 +30042,19 @@ input.nursing-picker__search {
   }
 }
 
-/* ---- 透析経過表の印刷(pages/DialysisChartPrintPage.tsx)。A4 横 1 枚を目安に、グラフ・打点の表・できごと・薬剤を並べる。 ---- */
-.dialysis-chart-print {
+/* ---- 時系列チャートの印刷(components/timeSeriesChart/ChartPrintPage.tsx。麻酔チャート・透析経過表)。A4 横 1 枚を目安に、グラフ・打点の表・できごと・薬剤を並べる。 ---- */
+.time-chart-print {
   color: var(--text-h);
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
 }
 
-.dialysis-chart-print__page {
+.time-chart-print__page {
   background: var(--paper);
   font-size: 10pt;
 }
 
-.dialysis-chart-print__title {
+.time-chart-print__title {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -30063,92 +30063,106 @@ input.nursing-picker__search {
   margin-bottom: 4px;
 }
 
-.dialysis-chart-print__organization {
+.time-chart-print__organization {
   font-size: 10pt;
   font-weight: 400;
 }
 
-.dialysis-chart-print__info {
+.time-chart-print__info {
   display: flex;
   flex-wrap: wrap;
   gap: 2px 16px;
   margin: 0 0 6px;
 }
 
-.dialysis-chart-print__item {
+.time-chart-print__item {
   display: flex;
   gap: 4px;
 }
 
-.dialysis-chart-print__item dt {
+.time-chart-print__item dt {
   color: var(--text);
 }
 
-.dialysis-chart-print__item dd {
+.time-chart-print__item dd {
   margin: 0;
 }
 
 /* グラフの枠は画面と同じ部品を使うので、紙では枠線と余白を詰める。 */
-.dialysis-chart-print .time-chart__plot-scroll {
+.time-chart-print .time-chart__plot-scroll {
   margin-bottom: 6px;
 }
 
-.dialysis-chart-print__table {
+.time-chart-print__table {
   margin-bottom: 6px;
   font-size: 9pt;
 }
 
-.dialysis-chart-print .time-chart__table th,
-.dialysis-chart-print .time-chart__table td {
+.time-chart-print .time-chart__table th,
+.time-chart-print .time-chart__table td {
   padding: 0 6px;
   font-size: 8.5pt;
   line-height: 1.5;
   min-width: 0;
 }
 
-.dialysis-chart-print .time-chart__table tbody th {
+.time-chart-print .time-chart__table tbody th {
   position: static;
   background: transparent;
 }
 
-.dialysis-chart-print__unit {
+/* 見出しの下の帯(麻酔の術前診察)。紙では色を使わず枠だけで区切る。 */
+.time-chart-print__note {
+  margin: 0 0 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 9pt;
+}
+
+.time-chart-print__note-title {
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.time-chart-print__unit {
   margin-left: 4px;
   color: var(--text);
   font-size: 8pt;
 }
 
-.dialysis-chart-print__lists {
+.time-chart-print__lists {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-.dialysis-chart-print__lists h2 {
+.time-chart-print__lists h2 {
   margin: 2px 0;
   font-size: 10pt;
 }
 
-.dialysis-chart-print .time-chart__list {
+.time-chart-print .time-chart__list {
   gap: 0;
 }
 
-.dialysis-chart-print .time-chart__list li {
+.time-chart-print .time-chart__list li {
   font-size: 9pt;
   line-height: 1.5;
 }
 
-.dialysis-chart-print .time-chart__list-time,
-.dialysis-chart-print .time-chart__list-note {
+.time-chart-print .time-chart__list-time,
+.time-chart-print .time-chart__list-note {
   font-size: 9pt;
 }
 
 @media print {
-  .dialysis-chart-print .karte-print__toolbar {
+  .time-chart-print .karte-print__toolbar {
     display: none;
   }
 
-  .dialysis-chart-print__table,
-  .dialysis-chart-print__lists {
+  .time-chart-print__table,
+  .time-chart-print__lists {
     break-inside: avoid;
   }
 }

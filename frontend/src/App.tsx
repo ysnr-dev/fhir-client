@@ -58,6 +58,7 @@ import { TreatmentWorklistPage } from "./pages/TreatmentWorklistPage";
 import { SurgeryWorklistPage } from "./pages/SurgeryWorklistPage";
 import { SurgeryCalendarPage } from "./pages/SurgeryCalendarPage";
 import { AnesthesiaChartPage } from "./pages/AnesthesiaChartPage";
+import { AnesthesiaChartPrintPage } from "./pages/AnesthesiaChartPrintPage";
 import { SurgeryRoomBlockPage } from "./pages/SurgeryRoomBlockPage";
 import { SurgeryItemPage } from "./pages/SurgeryItemPage";
 import { SurgeryCategoryPage } from "./pages/SurgeryCategoryPage";
@@ -190,7 +191,12 @@ import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { RxWorklistPage } from "./pages/RxWorklistPage";
 import { RxVerificationPage } from "./pages/RxVerificationPage";
 import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklistPage";
-import { DIALYSIS_CHART_PRINT_PATH, INJECTION_PRINT_PATH, PATHWAY_PRINT_PATH } from "./api/reportsClient";
+import {
+  ANESTHESIA_CHART_PRINT_PATH,
+  DIALYSIS_CHART_PRINT_PATH,
+  INJECTION_PRINT_PATH,
+  PATHWAY_PRINT_PATH,
+} from "./api/reportsClient";
 import { InjectionPrintPage } from "./pages/InjectionPrintPage";
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { LotManagementPage } from "./pages/LotManagementPage";
@@ -231,7 +237,8 @@ function App() {
     pathname.startsWith(KARTE_PRINT_PATH) ||
     pathname.startsWith(INJECTION_PRINT_PATH) ||
     pathname.startsWith(PATHWAY_PRINT_PATH) ||
-    pathname.startsWith(DIALYSIS_CHART_PRINT_PATH);
+    pathname.startsWith(DIALYSIS_CHART_PRINT_PATH) ||
+    pathname.startsWith(ANESTHESIA_CHART_PRINT_PATH);
   // Web 問診の患者画面。ログインの外(AuthGate の外)で、トークンだけで開く。
   const intakeToken = pathname.startsWith(INTAKE_PATH) ? pathname.slice(INTAKE_PATH.length).split("/")[0] : "";
   // 待合表示板(ロビーのモニター)。同じくログインの外で、トークンだけで開く。
@@ -482,6 +489,7 @@ function App() {
           <Route path="/surgery-worklist" element={<SurgeryWorklistPage />} />
           <Route path="/surgery-calendar" element={<SurgeryCalendarPage />} />
           <Route path="/surgeries/:orderId/anesthesia-chart" element={<AnesthesiaChartPage />} />
+          <Route path={`${ANESTHESIA_CHART_PRINT_PATH}/:orderId`} element={<AnesthesiaChartPrintPage />} />
           <Route path="/masters" element={<MasterMenuPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/dpc-tables" element={<DpcTablesPage />} />

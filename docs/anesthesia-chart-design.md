@@ -195,7 +195,8 @@ Procedure に partOf でぶら下がる子だけ**を消すように直した(�
 |---|---|
 | FHIR 変換 | `fhir/anesthesiaChartHelpers.ts`(新規)。打点・イベントの組み立てと読み出しは時系列チャートの器 `fhir/timeSeriesChartHelpers.ts`(`ChartSpec` で項目とイベントを渡す。透析経過表と共用。`docs/dialysis-chart-design.md` §3.4) |
 | API | `api/queries.ts` にチャートの読み出し(ページング)・開始・打点/イベント/薬剤の追加・持続終了・削除・確定/再開・取消 |
-| 画面 | `pages/AnesthesiaChartPage.tsx`(新規)。ルート `/surgeries/:orderId/anesthesia-chart`。グラフ・打点の表・イベント・時刻の入力は `components/timeSeriesChart/`(共用の器。CSS は `time-chart__*` / `time-plot__*`)、薬剤・術前評価の帯・確定は `components/AnesthesiaChartPanel.tsx` |
+| 画面 | `pages/AnesthesiaChartPage.tsx`(新規)。ルート `/surgeries/:orderId/anesthesia-chart`。グラフ・打点の表・イベント・薬剤・時刻の入力は `components/timeSeriesChart/`(共用の器。CSS は `time-chart__*` / `time-plot__*`)、術前評価の帯・確定は `components/AnesthesiaChartPanel.tsx` |
+| 印刷 | `pages/AnesthesiaChartPrintPage.tsx`。ルート `/anesthesia-chart-print/:orderId`(別タブ、`ANESTHESIA_CHART_PRINT_PATH`)。チャートのフッタの「印刷」から開く。紙面は時系列チャートの器 `components/timeSeriesChart/ChartPrintPage.tsx`(透析経過表と共用。§7-4) |
 | 一覧 | `SurgeryWorklistPage` の入室中・実施済の行のケバブメニューに「麻酔チャート」 |
 | 修正 | `surgeryResultHelpers.buildSurgeryPerformDeleteEntries` が手術ツリーの子だけを消すように(§2.2) |
 
@@ -252,10 +253,12 @@ Procedure に partOf でぶら下がる子だけ**を消すように直した(�
 3. **カルテでの見え方**: チャートはカルテのタイムラインに出していない(手術
    カードの実施情報とテンプレートが要点を持つ)。カルテから読みたい要望が出たら、
    手術カードの詳細モーダルにチャートへのリンクを足すのが最小。
-4. **帳票**: 麻酔チャートの印刷(紙カルテ運用・他院提供)は ThinReports では
-   グラフを描けない。透析経過表は画面と同じ SVG をブラウザ印刷に渡す別タブ
-   (`docs/dialysis-chart-design.md` §3.5。器の `TimeSeriesPlot` の `fixedWidth` / `height`)で
-   済ませたので、麻酔も同じ形で足せる。
+4. **帳票**(対応済み 2026-11-11): ThinReports ではグラフを描けないので、画面と同じ SVG を
+   ブラウザ印刷に渡す別タブ(`docs/dialysis-chart-design.md` §3.5 と同じ器)。A4 横で、見出し
+   (患者・術式・手術室・記録の期間・麻酔担当・状態・印刷日時)、術前診察の要点(ASA・NYHA・
+   Mallampati・困難気道と手術室への指示)の帯、グラフ、バイタルの表、イベント・薬剤の一覧。
+   5 分毎 × 2 時間(25 時点)なら表 2 段で 1 枚目に収まり、一覧は 2 枚目に送られる。
+   記録中のチャートも印刷できる(見出しの「状態」が記録中になる)。
 5. **同時編集**: 1 点 1 リソースなので追加同士は衝突しないが、ハブの確定と
    追加が同時に走ると「確定後の追加」が残りうる。運用(麻酔担当 1 人が記録)で
    足りている間は楽観のまま。
