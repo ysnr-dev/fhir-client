@@ -1,15 +1,17 @@
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
-import { LOINC_SYSTEM } from "./shared";
+import { ROUTE_SYSTEM } from "./injectionHelpers";
+import { MEDICINE_CODE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
+import { displayOf, LOINC_SYSTEM, type CodeOption } from "./shared";
 
 // 時系列チャート(麻酔チャート・透析経過表)の器。docs/dialysis-chart-design.md §3.4。
 //
 //   Procedure ハブ(部門ごとに作る)
 //    ├ partOf ← Observation (打点。1 時点 1 項目。血圧だけはパネル 1 件に収縮期・拡張期を component で持つ)
-//    └ partOf ← Observation (イベント。値を持たず時刻が本体。code = 部門ごとの CodeSystem)
+//    ├ partOf ← Observation (イベント。値を持たず時刻が本体。code = 部門ごとの CodeSystem)
+//    └ partOf ← MedicationAdministration (薬剤。単回 / 持続)
 //
-// 何を打点にするか・どんなイベントがあるかは部門ごとの ChartSpec で渡し、
-// Observation の組み立てと時刻ごとの束ねをここで行う。ハブの組み立てと
-// 部門固有の子(麻酔の薬剤など)は部門側に残す。
+// 何を打点にするか・どんなイベントがあるか・薬剤の経路は部門ごとの ChartSpec で渡し、
+// リソースの組み立てと時刻ごとの束ねをここで行う。ハブの組み立ては部門側に残す。
 
 const UCUM_SYSTEM = "http://unitsofmeasure.org";
 
@@ -44,6 +46,8 @@ export interface ChartSpec {
   category?: fhir4.CodeableConcept[];
   /** 前回の値を次の入力の初期値にする項目(装置の設定値のように、回の中でほぼ変わらないもの)。 */
   carryOver?: readonly string[];
+  /** 薬剤の投与経路の選択肢。 */
+  drugRoutes: readonly CodeOption[];
 }
 
 /** 軸に固定で描く印(回の開始・終了など)。 */
@@ -51,6 +55,18 @@ export interface ChartMarker {
   /** "YYYY-MM-DDTHH:mm"(端末ローカル)。 */
   time: string;
   label: string;
+}
+
+/** グラフの右軸に重ねる 1 項目(累積除水量など、単調に増える値)。 */
+export interface ChartSecondaryAxis {
+  /** 打点の key。 */
+  key: string;
+  label: string;
+  unit: string;
+  /** 軸の上端(0 から)。 */
+  max: number;
+  /** 目標の横線。 */
+  target?: number;
 }
 
 export function chartEventDisplay(spec: ChartSpec, code: string): string {
@@ -157,6 +173,81 @@ export function buildChartEventObservation(
   };
 }
 
+export interface ChartDrugFormValues {
+  medicineCode: string;
+  name: string;
+  yjCode: string;
+  /** 単回(bolus) / 持続(infusion)。 */
+  mode: "bolus" | "infusion";
+  /** 単回の投与量(製剤単位)。 */
+  dose: string;
+  unitName: string;
+  /** 持続の速度。単位は自由記載(mL/h など)。 */
+  rate: string;
+  rateUnit: string;
+  routeCode: string;
+  /** 単回の投与時刻 / 持続の開始時刻(datetime-local)。 */
+  givenAt: string;
+}
+
+/**
+ * 薬剤 1 件。単回は投与時刻、持続は開始時刻で作り(終了は finishChartInfusion)、
+ * hubReference は打点と同じく `Procedure/{id}` か `urn:uuid`。
+ */
+export function buildChartDrugAdministration(
+  spec: ChartSpec,
+  values: ChartDrugFormValues,
+  patientId: string,
+  hubReference: string,
+): fhir4.MedicationAdministration {
+  const coding: fhir4.Coding[] = [{ system: MEDICINE_CODE_SYSTEM, code: values.medicineCode, display: values.name }];
+  if (values.yjCode) coding.push({ system: YJ_CODE_SYSTEM, code: values.yjCode });
+
+  const dosage: fhir4.MedicationAdministrationDosage = {};
+  if (values.mode === "bolus") {
+    const dose = numberOf(values.dose);
+    if (dose !== null) {
+      // 単位は製剤単位。UCUM に無いので system/code は載せない(実施入力と同じ)。
+      dosage.dose = { value: dose, ...(values.unitName ? { unit: values.unitName } : {}) };
+    }
+  } else {
+    const rate = numberOf(values.rate);
+    if (rate !== null) {
+      dosage.rateQuantity = { value: rate, ...(values.rateUnit ? { unit: values.rateUnit } : {}) };
+    }
+  }
+  if (values.routeCode) {
+    dosage.route = {
+      coding: [{ system: ROUTE_SYSTEM, code: values.routeCode, display: displayOf(spec.drugRoutes, values.routeCode) }],
+    };
+  }
+
+  const time = toFhirDateTime(values.givenAt);
+  return {
+    resourceType: "MedicationAdministration",
+    // 持続は投与中(in-progress)で作り、「終了」で completed + end にする。
+    status: values.mode === "bolus" ? "completed" : "in-progress",
+    ...(spec.category?.[0] ? { category: spec.category[0] } : {}),
+    medicationCodeableConcept: { coding, text: values.name },
+    subject: { reference: `Patient/${patientId}` },
+    partOf: [{ reference: hubReference }],
+    ...(values.mode === "bolus" ? { effectiveDateTime: time } : { effectivePeriod: { start: time } }),
+    ...(Object.keys(dosage).length ? { dosage } : {}),
+  };
+}
+
+/** 持続投与の終了。end を入れて completed に確定させた複製を返す。 */
+export function finishChartInfusion(
+  administration: fhir4.MedicationAdministration,
+  endedAt: string,
+): fhir4.MedicationAdministration {
+  return {
+    ...administration,
+    status: "completed",
+    effectivePeriod: { ...administration.effectivePeriod, end: toFhirDateTime(endedAt) },
+  };
+}
+
 // ---- 読み出し ----
 
 /** 打点 1 時点(分単位でまとめる)。 */
@@ -242,10 +333,73 @@ export function groupChartObservations(
   return { points: [...pointByTime.values()].sort(byTime), events: events.sort(byTime) };
 }
 
-/** 打点とイベントを消す DELETE エントリ(ハブは呼び出し側が最後に足す)。 */
-export function chartObservationDeleteEntries(
+export interface ChartDrugLine {
+  id: string;
+  administration: fhir4.MedicationAdministration;
+  medicineCode: string;
+  yjCode: string;
+  name: string;
+  mode: "bolus" | "infusion";
+  /** 単回の時刻 / 持続の開始。 */
+  time: string;
+  /** 持続の終了(投与中なら空)。 */
+  endTime: string;
+  /** 単回の投与量と製剤単位。 */
+  dose: number | null;
+  unitName: string;
+  routeCode: string;
+  /** 「5mL 静脈内」「4mL/h 静脈内」の形。 */
+  doseLabel: string;
+  running: boolean;
+}
+
+/** ハブの子の MedicationAdministration を時刻順に並べる。他のハブの子が混ざっていても partOf で落とす。 */
+export function groupChartDrugs(
+  spec: ChartSpec,
+  hubId: string,
+  administrations: readonly fhir4.MedicationAdministration[],
+): ChartDrugLine[] {
+  const hubRef = `Procedure/${hubId}`;
+  return administrations
+    .filter((administration) => (administration.partOf ?? []).some((reference) => reference.reference === hubRef))
+    .map((administration) => {
+      const mode: ChartDrugLine["mode"] = administration.effectivePeriod ? "infusion" : "bolus";
+      const dosage = administration.dosage;
+      const codings = administration.medicationCodeableConcept?.coding ?? [];
+      const routeCode = dosage?.route?.coding?.find((c) => c.system === ROUTE_SYSTEM)?.code ?? "";
+      const dose = mode === "bolus" ? (dosage?.dose?.value ?? null) : null;
+      const amount =
+        mode === "bolus"
+          ? dose != null
+            ? `${dose}${dosage?.dose?.unit ?? ""}`
+            : ""
+          : dosage?.rateQuantity?.value != null
+            ? `${dosage.rateQuantity.value}${dosage.rateQuantity.unit ?? ""}`
+            : "";
+      return {
+        id: administration.id ?? "",
+        administration,
+        medicineCode: codings.find((c) => c.system === MEDICINE_CODE_SYSTEM)?.code ?? "",
+        yjCode: codings.find((c) => c.system === YJ_CODE_SYSTEM)?.code ?? "",
+        name: administration.medicationCodeableConcept?.text ?? codings[0]?.display ?? "",
+        mode,
+        time: minuteOf(mode === "bolus" ? administration.effectiveDateTime : administration.effectivePeriod?.start),
+        endTime: mode === "infusion" ? minuteOf(administration.effectivePeriod?.end) : "",
+        dose,
+        unitName: dosage?.dose?.unit ?? "",
+        routeCode,
+        doseLabel: [amount, routeCode ? displayOf(spec.drugRoutes, routeCode) : ""].filter(Boolean).join(" "),
+        running: mode === "infusion" && !administration.effectivePeriod?.end,
+      };
+    })
+    .sort((a, b) => a.time.localeCompare(b.time));
+}
+
+/** 打点・イベント・薬剤を消す DELETE エントリ(ハブは呼び出し側が最後に足す)。 */
+export function chartChildDeleteEntries(
   points: readonly ChartPoint[],
   events: readonly ChartEventLine[],
+  drugs: readonly ChartDrugLine[] = [],
 ): fhir4.BundleEntry[] {
   const entries: fhir4.BundleEntry[] = [];
   for (const point of points) {
@@ -255,6 +409,9 @@ export function chartObservationDeleteEntries(
   }
   for (const event of events) {
     if (event.id) entries.push({ request: { method: "DELETE", url: `Observation/${event.id}` } });
+  }
+  for (const drug of drugs) {
+    if (drug.id) entries.push({ request: { method: "DELETE", url: `MedicationAdministration/${drug.id}` } });
   }
   return entries;
 }

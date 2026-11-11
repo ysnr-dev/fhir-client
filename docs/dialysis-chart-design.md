@@ -8,7 +8,7 @@
 麻酔チャート(`docs/anesthesia-chart-design.md`)の器(ハブ Procedure + 時刻つき Observation)を流用する。
 ただし麻酔チャートがオーダー単位で 1 枚なのに対し、透析経過表は**透析の 1 回(セッション)ごとに 1 枚**。
 
-設計日: 2026-11-10。第 1 段・第 2 段を同日に実装(§6)。
+設計日: 2026-11-10。第 1 段〜第 3 段を同日に実装、第 4 段(透析中の薬剤・右軸・温度板・印刷)を 2026-11-11 に実装(§6)。
 
 本文中の区別:
 - **［事実］** = FHIR R4 / JP Core の仕様、または上流・既存実装で確認した内容
@@ -22,8 +22,8 @@
 | # | 既存のもの | 経過表との関係 |
 |---|---|---|
 | 1 | **実施記録**(`dialysis-order-design.md` §6。入室 → 開始 → 終了のハブ Procedure と、透析前後の体重・血圧・除水量・実透析時間の子) | 実施記録は**各回の完成形**(会計・カルテの実施履歴・ボードの進捗)。経過表は**その回の中の時間軸**。経過表のハブは実施記録のハブに `partOf` でぶら下がる(§1) |
-| 2 | **実施記録の薬剤**(MedicationAdministration。ESA・ヘパリンなど、会計に送るもの) | 経過表は薬剤を持たない(§2)。透析中の補液・昇圧薬は、いまはイベントの自由文で残し、時刻つきの薬剤記録は申し送り(§8-1) |
-| 3 | **経過表(温度板)**(`flowsheet-design.md`。`vital-signs` と看護の Observation を読む) | 経過表の打点は温度板に**出さない**。30 分毎の打点で温度板の列が埋まるのを避ける(麻酔チャートと同じ判断)。24 時間表示に出す案は §4 |
+| 2 | **実施記録の薬剤**(MedicationAdministration。ESA・ヘパリンなど、会計に送るもの) | 経過表は透析中の薬剤(補液・昇圧薬など)を**時刻つき**で持つ(§2.1)。会計に送るのは実施記録の薬剤で、終了の入力の初期値に経過表の薬剤を流し込む(§2.3)。二度書きにはせず、経過表の薬剤のハブは実施記録と別なので会計に乗らない |
+| 3 | **経過表(温度板)**(`flowsheet-design.md`。`vital-signs` と看護の Observation を読む) | 期間表示(1 週間〜1 か月)には**出さない**。30 分毎の打点で透析日だけ列が伸びるのを避ける(麻酔チャートと同じ判断)。**24 時間表示にだけ**バイタルの打点を重ねる(§4) |
 | 4 | **麻酔チャート** | 器(グラフ・打点表・イベント・時刻の入力)を共通化して両方から使う(§3.4)。麻酔チャートの薬剤(単回/持続)と術前評価の帯は麻酔側に残す |
 | 5 | **透析支援システム**(`dialysis-order-design.md` §8) | 装置が出す分単位の値は、外部システムがこの経過表の形で書く(§5)。画面側は手入力と同じデータとして扱う |
 
@@ -61,7 +61,8 @@ ServiceRequest(透析オーダー)
            │  performedPeriod = 最初の打点〜回の終了
            │  basedOn   = 持たない(§2.2)
            ├ partOf ← Observation (打点。category = order-type|dialysis-chart)
-           └ partOf ← Observation (イベント。code = dialysis-event)
+           ├ partOf ← Observation (イベント。code = dialysis-event)
+           └ partOf ← MedicationAdministration (透析中の薬剤。category = order-type|dialysis-chart)
 ```
 
 - ［事実］`Procedure.partOf` は Procedure を指せる(R4)。上流は `Procedure?part-of=Procedure/{id}` を索引している
@@ -95,8 +96,8 @@ ServiceRequest(透析オーダー)
 - ［導出］QB・QD・累積除水に実施記録と同じコードを使うのは、意味が同じ(粒度だけ違う)から。データ抽出・SS-MIX2 で
   「血流量」を 1 つのコードで引ける。
 
-**イベント**: `code = CodeSystem/dialysis-event` の Observation。値は持たず時刻が本体。「その他」と「補液」は `note` に本文
-(補液は「生食 200mL」のように量を書く。§8-1)。
+**イベント**: `code = CodeSystem/dialysis-event` の Observation。値は持たず時刻が本体。「その他」は `note` に本文。
+「補液」は時刻の印で、何をどれだけ入れたかは薬剤(下)に書く。
 
 | code | 表示 |
 |---|---|
@@ -114,7 +115,12 @@ ServiceRequest(透析オーダー)
   グラフにはそこから固定の印として描く。二重に持つと食い違いの元になる(麻酔チャートに「麻酔開始」があるのは、
   手術の実施記録が退室後にまとめて書かれ、術中はチャートしか時刻を持たないから)。
 
-**薬剤**: 持たない(§0-2、§8-1)。
+**薬剤**: 麻酔チャートと同じ `MedicationAdministration`(器の `buildChartDrugAdministration`)。単回は `effectiveDateTime`、
+持続は `effectivePeriod`(終了で `completed` + `end`)。医薬品マスタのコード(`medicine-code` + YJ)、`dosage.dose`(製剤単位)または
+`dosage.rateQuantity`、`dosage.route`(`DIALYSIS_ROUTE_OPTIONS`)。`category` に `order-type|dialysis-chart` を付け、`partOf` は経過表のハブ。
+- ［提案］**会計には乗せない**。会計・カルテの実施履歴が読む薬剤は実施記録のハブの子(category = `dialysis`)で、経過表の薬剤は
+  別のハブの子なので検索に混ざらない。実施記録の薬剤の行は、終了の入力で経過表の薬剤を初期値に流し込んで作る(§2.3)。
+  持続投与は総量が決まらないので量は空で流し、手で入れる。
 
 ### 2.2 読み出しと、既存の読み出しへの影響
 
@@ -134,7 +140,7 @@ category = `dialysis` の日付検索)のどれにも乗らない。
 |---|---|
 | 実施取消(`buildDialysisPerformDeleteBundle`) | **一緒に消す**。実施しなかった回の経過表は残す意味が無い(麻酔チャートが実施取消で消えないのとは逆。手術は実施記録とチャートが別の事実だが、透析は経過表が実施記録の中身)。順序は 打点・イベント → 経過表のハブ → 実施記録の子 → 実施記録のハブ |
 | 終了(`buildDialysisFinishBundle`) | 経過表があれば、ハブを `completed` にし `performedPeriod.end` を回の終了に揃える PUT を同じ transaction に入れる |
-| 終了の入力の初期値 | 透析後血圧 = 最後の血圧の打点、除水量 = 最後の累積除水量(無ければ従来どおり前後の体重の差)。装置の値のほうが実際の除水に近い |
+| 終了の入力の初期値 | 透析後血圧 = 最後の血圧の打点、除水量 = 最後の累積除水量(無ければ従来どおり前後の体重の差)。装置の値のほうが実際の除水に近い。薬剤の行 = オーダーから写した行に経過表の薬剤を重ねる(`mergeChartMedicines`。同じ薬で量が空の行には量と経路を入れ、それ以外は行を足す。算定の印はオーダー側の行のまま) |
 
 ［導出］終了・取消のどちらも経過表の有無を知る必要があるので、実施入力のモーダル(終了の段階)と取消の処理は
 経過表のハブを 1 回読む(`useDialysisChart(sessionId)`)。終了は 1 回に 1 度しか開かないので、この読みは許容する。
@@ -173,17 +179,20 @@ category = `dialysis` の日付検索)のどれにも乗らない。
 1. **ヘッダ**: 患者(氏名・患者番号)、回の日付・ベッドまたはベッドサイド・シフト、浄化方法、指示の条件
    (透析時間・QB・QD・目標除水 = 透析前体重 − DW)、回の開始時刻。経過表が無ければ打点の入力だけを出し、
    最初の打点でハブを作る(「開始」ボタンは置かない。回の開始は実施記録が持っている)。
-2. **グラフ**(SVG。麻酔チャートの `ChartPlot` を共用): 横軸 = 時刻(回の開始〜終了、記録中は右に余白)。
+2. **グラフ**(SVG。器の `TimeSeriesPlot` を共用): 横軸 = 時刻(回の開始〜終了、記録中は右に余白)。
    収縮期(∨)・拡張期(∧)・脈拍(●)を 0〜220 の共通軸。イベントは上端に ▼ + ラベル。回の開始・終了は
    固定の縦線(実施記録の `performedPeriod`)。目盛りは 4 段階(広く / 標準 / 拡大 / 全画面)。
-   ［提案］累積除水量は v1 ではグラフに描かず表で見せる(右軸が要る。§8-2)。
+   **累積除水量は右軸**(■ + 折れ線。`ChartSecondaryAxis`)。上端は目標除水 × 1.2(目標が無ければ記録の最大値 × 1.2)を
+   0.5L 刻みに丸め、目標除水(透析前体重 − DW)を破線の横線で描く(`dialysisChartSecondaryAxis`)。目標も記録も無ければ右軸を出さない。
 3. **打点の表**: 列 = 時点、行 = 項目(血圧・脈拍・SpO2・体温・QB・QD・除水速度・累積除水量・静脈圧・動脈圧・TMP)。
    列頭に削除(その時点の打点を 1 transaction で消す)。追加フォームは時刻(既定 = 今、「現在」ボタン)+ 各項目で、
    入れた項目だけ Observation になる。
    ［提案］**装置の値の行は前回の値を初期値にする**(QB・QD は回の中でほぼ変わらず、累積除水は単調に増える)。
    血圧・脈拍は空から入れる。
-4. **イベント**: 種別(+ 補液・その他は自由文)と時刻で追加。一覧に削除(ゴミ箱アイコン)。
-5. **フッタ**: 「経過表取消」(打点・イベント・ハブを消す。confirm を挟む)だけ。確定は無い(§2.3)。
+4. **イベント**: 種別(+ その他は自由文)と時刻で追加。一覧に削除(ゴミ箱アイコン)。
+5. **薬剤**(器の `DrugsSection`): 医薬品マスタから選び、単回(量 + 製剤単位)か持続(速度)、経路、時刻。持続は「終了」で閉じる
+   (終わった回では回の終了時刻、透析中なら今)。一覧に削除。
+6. **フッタ**: 「印刷」(別タブ。§3.5)と「経過表取消」(打点・イベント・薬剤・ハブを消す。confirm を挟む)。確定は無い(§2.3)。
 
 ### 3.3 保存の単位
 
@@ -211,11 +220,27 @@ category = `dialysis` の日付検索)のどれにも乗らない。
 | `components/timeSeriesChart/TimeField.tsx` | 時刻の入力と「現在」 | `TimeField` |
 | `App.css` | クラス名を `anes-chart__*` / `anes-plot__*` から `time-chart__*` / `time-plot__*` に寄せる | 55 規則 |
 
-- 麻酔側に残すもの: ハブの組み立て(`buildAnesthesiaChartHub`。麻酔担当の performer)、薬剤(`DrugsSection`・
-  `buildChartDrugAdministration`・`finishChartInfusion`)、術前評価の帯、確定 / 再開、イベントの種別定数。
+- 麻酔側に残すもの: ハブの組み立て(`buildAnesthesiaChartHub`。麻酔担当の performer)、術前評価の帯、確定 / 再開、イベントの種別定数。
+  薬剤(`DrugsSection`・`buildChartDrugAdministration`・`finishChartInfusion`・`groupChartDrugs`)は第 4 段で器に移した
+  (経路の選択肢は `ChartSpec.drugRoutes`、category は `ChartSpec.category` の先頭を `MedicationAdministration.category` に写す)。
 - グラフに描く項目は `ChartSpec` の `plot`(収縮期・拡張期・脈拍の key)で指す。固定の縦線(透析の開始・終了)は
   `TimeSeriesPlot` の `markers` で渡す。
 - ［提案］**切り出しは振る舞いを変えない第 1 段として先に行い、麻酔チャートの画面が変わらないことを確かめてから**透析に進む(§6)。
+
+### 3.5 印刷
+
+［事実］ThinReports ではグラフを描けない(麻酔チャートの申し送りと同じ)。
+
+［提案］**画面と同じ SVG をブラウザの印刷に渡す**。別タブのページ `/dialysis-chart-print/:sessionId`(`pages/DialysisChartPrintPage.tsx`。
+`App.tsx` の印刷ページ判定に足し、ヘッダー無し・ライトテーマ固定)。A4 横 1 枚を目安に:
+
+1. 見出し: 施設名、患者(氏名・患者番号)、実施日・時刻、浄化方法、条件、透析前体重、DW、目標除水、記録者、印刷日時。
+2. グラフ: `TimeSeriesPlot` を `fixedWidth`(紙面の幅 277mm → px)と `height`(210px)で描く。横軸の切り替えは出さず、
+   「全画面」と同じく全体を幅に収める。右軸・イベント・固定線は画面と同じ。
+3. 打点の表: 列 = 時点。12 列ごとに表を分けて段にする(CHDF の連日などで列が多いとき)。行見出しに単位。
+4. できごと・薬剤の一覧(2 段組)。
+
+4 時間の回(30 分毎 8 時点)は 1 枚に収まる。紙面の確認は `browser-print-pdf-check` の手順(puppeteer で PDF)。
 
 ---
 
@@ -224,10 +249,11 @@ category = `dialysis` の日付検索)のどれにも乗らない。
 ［事実］温度板は `Observation?category=vital-signs,{order-type}|nursing` を読む(`api/queries/karte.ts`)。
 1 週間表示では 1 測定が 1 列になるので、30 分毎の打点をそのまま読むと透析日だけ 8 列伸びる。
 
-［提案］v1 では**出さない**(打点に `vital-signs` を付けない)。
-24 時間表示(`flowsheet-design.md` §1.1)にだけ `order-type|dialysis-chart` を足して透析中の血圧の推移を温度板で読めるようにする案は、
-24 時間表示の取得が 1 週間表示と同じ検索を共有しているので、表示の単位で category を分ける小さな変更で済む。
-入院患者の透析で病棟がどこまで読みたいかを聞いてから足す(§8-3)。
+［提案］期間表示には**出さない**(打点に `vital-signs` を付けない)。
+**24 時間表示にだけ**(`flowsheet-design.md` §1.1)透析中のバイタルを重ねる(第 4 段で実装)。取得は `useVitalFlowsheet` の
+第 4 引数(`withDialysisChart`)で、24 時間表示のときだけ
+`Observation?patient&category=order-type|dialysis-chart&code=85354-9,8867-4,2708-6,8310-5&date=…` をもう 1 本並列に引いて混ぜる
+(装置の値は code で上流に落としてもらう。手元で絞らない)。打点は `vital-entry` の identifier を持たないので、列からバイタル編集は開かない。
 
 ---
 
@@ -287,6 +313,19 @@ Device を添えてよい(画面は読まない)。画面側は手入力と同�
 - `docs/order-flows/dialysis.md` の全体の流れと各回の実施の図に「透析中の記録」の箱。
 - 温度板の 24 時間表示への表示(§4)は要望があれば(§8-3)。
 
+**第 4 段: 透析中の薬剤・右軸・温度板・印刷**(`feat:`)— 実装済み(2026-11-11)。
+
+- 器: `fhir/timeSeriesChartHelpers.ts` に薬剤(`ChartDrugFormValues`・`buildChartDrugAdministration`・`finishChartInfusion`・
+  `ChartDrugLine`・`groupChartDrugs`)、`chartChildDeleteEntries`(打点・イベント・薬剤)、`ChartSecondaryAxis`、`ChartSpec.drugRoutes`。
+  `components/timeSeriesChart/DrugsSection.tsx`(麻酔チャートから移設)。`TimeSeriesPlot` に `secondary`(右軸)・`fixedWidth`・`height`。
+  麻酔チャート(`anesthesiaChartHelpers.ts`・`AnesthesiaChartPanel.tsx`)は器を使う形に書き換え(FHIR 上の形は変えていない)。
+- 透析: `DIALYSIS_CHART_SPEC.drugRoutes`、`DialysisChartData.drugs`、`fetchDialysisChart` が `MedicationAdministration` も part-of で読む、
+  `dialysisChartLatest` に `medicines`、`initialDialysisPerformForm` の `mergeChartMedicines`、`dialysisChartSecondaryAxis`・`dialysisChartTarget`、
+  `DialysisChartPanel` に `DrugsSection` と「印刷」、`DIALYSIS_CHART_FLOWSHEET_CODES`。
+- 温度板: `api/queries/karte.ts` の `useVitalFlowsheet(…, withDialysisChart)`、`VitalFlowsheetPanel` が 24 時間表示で渡す。
+- 印刷: `pages/DialysisChartPrintPage.tsx`、`DIALYSIS_CHART_PRINT_PATH`(`api/reportsClient.ts`)、`App.css` の `.dialysis-chart-print*`。
+- デモ投入(`demo-seed/dialysis.ts`): 血圧低下の回の経過表に生理食塩液 200mL バッグ 1 袋(12:23・静脈内)の薬剤を足した(`MED.saline`)。
+
 ---
 
 ## 7. 検証の手順(開発環境)
@@ -310,11 +349,8 @@ Device を添えてよい(画面は読まない)。画面側は手入力と同�
 
 ## 8. 申し送り
 
-1. **透析中の薬剤**(補液・昇圧薬・鎮痛薬)の時刻つき記録。器の `DrugsSection` を透析の `ChartSpec` にも足せば置けるが、
-   実施記録の薬剤(会計に送る)との二度書きになる。終了の入力の初期値へ流し込む(経過表の薬剤 → 実施記録の薬剤の行)形とセットで入れる。
-   それまで補液はイベント `fluid-bolus` の自由文。
-2. **累積除水量の右軸**: グラフに目標除水までの到達を描くには右軸(0〜目標除水 × 1.2 L)が要る。器の `TimeSeriesPlot` に第 2 軸を足す。
-3. **温度板の 24 時間表示**(§4)。
-4. **装置からの自動取込**(§5)。HL7 / ベンダー API の受け口は院内エージェント(`fhir-client-agent`)側の話。
-5. **印刷**: 麻酔チャートと同じく ThinReports ではグラフを描けない。SVG → PDF の別経路(`anesthesia-chart-design.md` §7-4)。
-6. **同時編集**: 1 点 1 リソースなので追加同士は衝突しない。回の終了(ハブ PUT)と打点の追加が同時でも、打点はハブを触らないので 412 にならない。
+1. **装置からの自動取込**(§5)。HL7 / ベンダー API の受け口は院内エージェント(`fhir-client-agent`)側の話。
+2. **持続投与の総量**: 経過表の持続(速度 × 時間)から実施記録の薬剤の量を出していない(製剤単位への換算が要る)。終了の入力では量が空で流れる。
+3. **麻酔チャートの印刷**: 器の `TimeSeriesPlot` が `fixedWidth` / `height` を持ったので、透析と同じ別タブの印刷ページを麻酔にも作れる
+   (`anesthesia-chart-design.md` §7-4)。
+4. **同時編集**: 1 点 1 リソースなので追加同士は衝突しない。回の終了(ハブ PUT)と打点の追加が同時でも、打点はハブを触らないので 412 にならない。

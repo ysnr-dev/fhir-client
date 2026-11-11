@@ -263,7 +263,12 @@ export function VitalFlowsheetPanel({
     [dayMode, periodDays, rangeStart],
   );
 
-  const { data: observations, isLoading, error, truncated } = useVitalFlowsheet(patientId, rangeStart, rangeEnd);
+  const { data: observations, isLoading, error, truncated } = useVitalFlowsheet(
+    patientId,
+    rangeStart,
+    rangeEnd,
+    Boolean(dayMode),
+  );
   // 異常値(H/L)の色付けは施設設定のしきい値で表示時に判定する。
   const thresholds = useVitalThresholds();
   const flowsheet = useMemo(

@@ -117,10 +117,15 @@ flowchart TD
 
 - 30 分毎などのバイタル(血圧・脈拍・SpO2・体温)と装置の値(QB・QD・除水速度・累積除水・静脈圧・動脈圧・TMP)を時刻つきで足していきます。
   装置の値は前回の値が初期値で、変わったところだけ直します。グラフは血圧(∨ ∧)と脈拍(●)で、回の開始・終了が縦線で出ます。
-- できごと(穿刺・除水停止・除水再開・血圧低下・補液・回路交換・返血・止血確認・その他)は時刻と種別で足します。補液は量をメモに書きます。
+  累積除水は右軸(■)に描き、目標除水(透析前体重 − ドライウェイト)が破線で出ます。
+- できごと(穿刺・除水停止・除水再開・血圧低下・補液・回路交換・返血・止血確認・その他)は時刻と種別で足します。
+- 透析中の薬剤(補液・昇圧薬など)は「薬剤」に医薬品マスタから選んで、単回(量)か持続(速度)と経路・時刻で足します。持続は「終了」で閉じます。
+  この薬剤は会計には送りません。終了の入力で実施記録の薬剤の行の初期値になり、そこで算定するかを決めます。
 - 記録は 1 点ずつ保存されます。「確定」はありません(回の終了がその役で、終了後も書き忘れた血圧を足せます)。
-- 終了の入力では、経過表の最後の血圧が透析後血圧、累積除水が除水量の初期値になります。実施取消をすると経過表も一緒に消えます。
-- 経過表の打点は温度板(経過表)には出しません。
+- 終了の入力では、経過表の最後の血圧が透析後血圧、累積除水が除水量、経過表の薬剤が薬剤の行の初期値になります(オーダーの抗凝固薬と同じ薬なら
+  その行に量が入ります)。実施取消をすると経過表も一緒に消えます。
+- 「印刷」で別タブに A4 横の紙面(見出し・グラフ・打点の表・できごと・薬剤)を開き、ブラウザから印刷します。
+- 経過表の打点は温度板(経過表)の期間表示には出しません。日付の見出しを押した 24 時間表示にだけ、透析中の血圧・脈拍・SpO2・体温が重なります。
 
 ### 終了・中止・退院
 
@@ -151,7 +156,7 @@ flowchart TD
 | 薬剤 | `MedicationAdministration`(`partOf` = ハブ) | ロットは `medication-lot-number`、算定しない薬剤は `dialysis-bundled-medication` = true |
 | 追加の手技 | `Procedure`(`partOf` = ハブ、`basedOn` = オーダー) | `code` = `dialysis-procedure-code`(レセ電算の診療行為コード) |
 | ドライウェイト | `Observation`(`partOf` 無し) | `dialysis-measurement|dry-weight`(kg)。患者単位の状態値で、直近 1 件を読む |
-| 透析経過表 | `Procedure` ハブ(`partOf` = 実施のハブ、`basedOn` 無し) | `category` = `order-type|dialysis-chart`、`status` = `in-progress` / `completed`(回の終了で閉じる)。打点は `Observation`(`partOf` = 経過表のハブ、`category` = `order-type|dialysis-chart`。血圧・脈拍・SpO2・体温は LOINC、装置の値は `dialysis-measurement`)、できごとは `dialysis-event` の `Observation`(`docs/dialysis-chart-design.md`) |
+| 透析経過表 | `Procedure` ハブ(`partOf` = 実施のハブ、`basedOn` 無し) | `category` = `order-type|dialysis-chart`、`status` = `in-progress` / `completed`(回の終了で閉じる)。打点は `Observation`(`partOf` = 経過表のハブ、`category` = `order-type|dialysis-chart`。血圧・脈拍・SpO2・体温は LOINC、装置の値は `dialysis-measurement`)、できごとは `dialysis-event` の `Observation`、透析中の薬剤は `MedicationAdministration`(`partOf` = 経過表のハブ、同じ `category`。会計には乗らない)(`docs/dialysis-chart-design.md`) |
 
 - 入室のハブは `performed[x]` を持たないので日付で引けません。ボードは「期間に始めた回」と「`status=preparation,in-progress` の回」を別々に引いて束ねます(`fetchDialysisSessions`)。
 - 予約と回の突き合わせはハブの `dialysis-appointment` を優先し、無ければ同じオーダー × 同じ日です(`dialysisSessionForAppointment`)。
@@ -164,7 +169,7 @@ flowchart TD
 |---|---|
 | オーダー | `components/DialysisOrderForm.tsx`・`DialysisOrderPanels.tsx`、詳細 `DialysisOrderDetailPanel.tsx`、カード `karteCardBodies/DialysisOrderCardBody.tsx` |
 | 組み立て | `fhir/dialysisOrderHelpers.ts`(オーダー・終了日・退院の打ち切り)・`dialysisTaskHelpers.ts`(進捗)・`dialysisAppointmentHelpers.ts`(予約)・`dialysisUnitHelpers.ts`(透析室・ベッド・枠)・`dialysisResultHelpers.ts`(実施)・`dialysisChartHelpers.ts`(経過表。器は `timeSeriesChartHelpers.ts`) |
-| 部門の画面 | `pages/DialysisWorklistPage.tsx`(ボード・週・オーダー)、`components/DialysisBoard.tsx`、`pages/DialysisUnitPage.tsx`、経過表 `pages/DialysisChartPage.tsx`(`/dialysis-sessions/:sessionId/chart`)・`components/DialysisChartPanel.tsx`・`DialysisChartModal.tsx`(器は `components/timeSeriesChart/`) |
+| 部門の画面 | `pages/DialysisWorklistPage.tsx`(ボード・週・オーダー)、`components/DialysisBoard.tsx`、`pages/DialysisUnitPage.tsx`、経過表 `pages/DialysisChartPage.tsx`(`/dialysis-sessions/:sessionId/chart`)・`components/DialysisChartPanel.tsx`・`DialysisChartModal.tsx`・印刷 `pages/DialysisChartPrintPage.tsx`(`/dialysis-chart-print/:sessionId`)(器は `components/timeSeriesChart/`) |
 | モーダル | 実施 `components/DialysisPerformModal.tsx`、展開 `DialysisExpandModal.tsx`、臨時・変更 `DialysisBookModal.tsx` |
 | hook | `api/queries/dialysis.ts`(`useDialysisSessions`・`useDialysisPerform`・`useCancelDialysisPerform`・`useLatestDryWeight`・`usePatientDialysisOrders`・`useDialysisChart`・`useDialysisChartWrite`・`useDialysisSessionDetail` ほか) |
 | 退院 | `components/DischargeModal.tsx`、`api/queries/encounter.ts`(`buildDialysisOrderStopEntries`) |

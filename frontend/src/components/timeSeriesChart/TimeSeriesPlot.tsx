@@ -1,10 +1,11 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toDateTimeInput } from "../../fhir/clinicalNoteHelpers";
-import type { ChartEventLine, ChartMarker, ChartPoint } from "../../fhir/timeSeriesChartHelpers";
+import type { ChartEventLine, ChartMarker, ChartPoint, ChartSecondaryAxis } from "../../fhir/timeSeriesChartHelpers";
 
 // 時系列チャートのグラフ(SVG)。横軸 = 時刻、収縮期(∨)・拡張期(∧)・脈拍(●)を
 // 0〜220 の共通軸に描く(紙のチャートと同じ流儀)。イベントは上端に ▼ + ラベル。
-// SpO2 など軸の違う項目はグラフに重ねず表で見せる。
+// SpO2 など軸の違う項目はグラフに重ねず表で見せる。累積除水量のように
+// 単調に増える 1 項目だけは右軸(secondary)で重ねられる。
 
 const PLOT = {
   height: 292,
@@ -12,8 +13,15 @@ const PLOT = {
   bottom: 22, // 時刻ラベル
   left: 34,
   right: 16,
+  /** 右軸があるときの右の余白(目盛りのラベルぶん)。 */
+  rightWithAxis: 44,
   yMax: 220,
 };
+
+/** 右軸の目盛りの刻み。4〜5 本に収まる見やすい値を選ぶ。 */
+function secondaryStep(max: number): number {
+  return [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100].find((step) => max / step <= 5) ?? max / 4;
+}
 
 /**
  * 横軸の目盛り。30 分で終わる記録から 8 時間を超えるものまであり、
@@ -52,7 +60,7 @@ function minutesOf(time: string): number {
  * 記号の凡例。グラフと同じクラスで同じ形・同じ色を描くので、色や記号を
  * 変えたときに凡例だけ取り残されることがない。
  */
-function PlotLegend() {
+function PlotLegend({ secondary }: { secondary?: ChartSecondaryAxis }) {
   return (
     <span className="time-chart__legend">
       <span className="time-chart__legend-item">
@@ -83,6 +91,15 @@ function PlotLegend() {
         </svg>
         イベント
       </span>
+      {secondary && (
+        <span className="time-chart__legend-item">
+          <svg width="16" height="12" aria-hidden="true" focusable="false">
+            <line x1="1" y1="9" x2="15" y2="3" className="time-plot__secondary-line" />
+            <rect x="6" y="4" width="4" height="4" className="time-plot__secondary" />
+          </svg>
+          {secondary.label}(右軸)
+        </span>
+      )}
     </span>
   );
 }
@@ -100,6 +117,14 @@ interface TimeSeriesPlotProps {
   readOnly: boolean;
   /** 折れ線にする打点の key。 */
   pulseKey?: string;
+  /** 右軸に重ねる項目。 */
+  secondary?: ChartSecondaryAxis;
+  /**
+   * 幅を固定して全体を収める(印刷)。横軸の切り替えは出さず、スクロールもしない。
+   */
+  fixedWidth?: number;
+  /** グラフ全体の高さ(px)。印刷で紙に収めるときに縮める。 */
+  height?: number;
   ariaLabel: string;
 }
 
@@ -111,11 +136,15 @@ export function TimeSeriesPlot({
   markers = [],
   readOnly,
   pulseKey = "pulse",
+  secondary,
+  fixedWidth,
+  height = PLOT.height,
   ariaLabel,
 }: TimeSeriesPlotProps) {
   const [scaleKey, setScaleKey] = useState<PlotScaleKey>("normal");
   const scale = PLOT_SCALES.find((s) => s.key === scaleKey) ?? PLOT_SCALES[1];
-  const fit = scale.pxPerMin === null;
+  const fit = scale.pxPerMin === null || fixedWidth != null;
+  const right = secondary ? PLOT.rightWithAxis : PLOT.right;
 
   // "全画面" は置ける幅から 1 分あたりの幅を逆算するので、実際の幅を測る。
   // 初回は同期で測る(ResizeObserver の初回配信を待つと、標準の幅で 1 度描いて
@@ -158,13 +187,18 @@ export function TimeSeriesPlot({
   if (!model) return null;
 
   const span = model.max - model.min;
-  // 全画面のときだけ、置ける幅に収まる 1 分あたりの幅にする(幅を測る前の
+  // 全画面(と印刷の固定幅)のときだけ、置ける幅に収まる 1 分あたりの幅にする(幅を測る前の
   // 初回描画では標準の幅で描いておき、測れ次第 1 度だけ描き直す)。
+  const fitWidth = fixedWidth ?? wrapWidth;
   const pxPerMin =
-    scale.pxPerMin ?? (wrapWidth > 0 ? Math.max(0.3, (wrapWidth - PLOT.left - PLOT.right) / span) : 4);
+    fixedWidth != null || scale.pxPerMin === null
+      ? fitWidth > 0
+        ? Math.max(0.3, (fitWidth - PLOT.left - right) / span)
+        : 4
+      : scale.pxPerMin;
   const { gridMinutes, labelMinutes } = gridSpec(pxPerMin);
-  const width = PLOT.left + PLOT.right + span * pxPerMin;
-  const plotH = PLOT.height - PLOT.top - PLOT.bottom;
+  const width = PLOT.left + right + span * pxPerMin;
+  const plotH = height - PLOT.top - PLOT.bottom;
   const x = (time: string) => PLOT.left + (minutesOf(time) - model.min) * pxPerMin;
   const y = (value: number) => PLOT.top + plotH - (Math.min(value, PLOT.yMax) / PLOT.yMax) * plotH;
 
@@ -187,28 +221,48 @@ export function TimeSeriesPlot({
     .map((p) => `${x(p.time)},${y(pulseOf(p) ?? 0)}`)
     .join(" ");
 
+  // 右軸。上端を超える値は上端に貼り付ける(目標を超えた除水など)。
+  const secondaryOf = (point: ChartPoint) => (secondary ? point.values[secondary.key] : undefined);
+  const y2 = (value: number) =>
+    secondary ? PLOT.top + plotH - (Math.min(Math.max(value, 0), secondary.max) / secondary.max) * plotH : 0;
+  const secondaryLine = secondary
+    ? points
+        .filter((p) => secondaryOf(p) != null)
+        .map((p) => `${x(p.time)},${y2(secondaryOf(p) ?? 0)}`)
+        .join(" ")
+    : "";
+  const secondaryTicks: number[] = [];
+  if (secondary && secondary.max > 0) {
+    const step = secondaryStep(secondary.max);
+    for (let v = 0; v <= secondary.max + step / 1000; v += step) secondaryTicks.push(Math.round(v * 1000) / 1000);
+  }
+
   return (
     <>
       <div className="time-chart__plot-bar">
-        <span>横軸</span>
-        {PLOT_SCALES.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            className={option.key === scaleKey ? "time-chart__scale time-chart__scale--active" : "time-chart__scale"}
-            onClick={() => setScaleKey(option.key)}
-          >
-            {option.label}
-          </button>
-        ))}
-        <PlotLegend />
+        {fixedWidth == null && (
+          <>
+            <span>横軸</span>
+            {PLOT_SCALES.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                className={option.key === scaleKey ? "time-chart__scale time-chart__scale--active" : "time-chart__scale"}
+                onClick={() => setScaleKey(option.key)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </>
+        )}
+        <PlotLegend secondary={secondary} />
       </div>
       <div ref={wrapRef} className={fit ? "time-chart__plot-scroll time-chart__plot-scroll--fit" : "time-chart__plot-scroll"}>
         <svg
           className="time-chart__plot"
           width={width}
-          height={PLOT.height}
-          viewBox={`0 0 ${width} ${PLOT.height}`}
+          height={height}
+          viewBox={`0 0 ${width} ${height}`}
           role="img"
           aria-label={ariaLabel}
         >
@@ -218,7 +272,7 @@ export function TimeSeriesPlot({
               <line
                 x1={PLOT.left}
                 y1={y(v)}
-                x2={width - PLOT.right}
+                x2={width - right}
                 y2={y(v)}
                 className={v % 40 === 0 ? "time-plot__grid--major" : "time-plot__grid"}
               />
@@ -235,16 +289,39 @@ export function TimeSeriesPlot({
                 x1={minuteX(minute)}
                 y1={PLOT.top}
                 x2={minuteX(minute)}
-                y2={PLOT.height - PLOT.bottom}
+                y2={height - PLOT.bottom}
                 className={major ? "time-plot__grid--major" : "time-plot__grid"}
               />
               {major && (
-                <text x={minuteX(minute)} y={PLOT.height - 8} textAnchor="middle" className="time-plot__xlabel">
+                <text x={minuteX(minute)} y={height - 8} textAnchor="middle" className="time-plot__xlabel">
                   {timeLabel(minute)}
                 </text>
               )}
             </g>
           ))}
+
+          {/* 右軸(目盛りは右端の外)。目標があれば破線の横線にする。 */}
+          {secondary &&
+            secondaryTicks.map((v) => (
+              <text key={`y2-${v}`} x={width - right + 6} y={y2(v) + 3} className="time-plot__ylabel--right">
+                {v}
+              </text>
+            ))}
+          {secondary && secondary.target != null && secondary.target > 0 && (
+            <g>
+              <line
+                x1={PLOT.left}
+                y1={y2(secondary.target)}
+                x2={width - right}
+                y2={y2(secondary.target)}
+                className="time-plot__target"
+              />
+              <text x={width - right - 3} y={y2(secondary.target) - 3} textAnchor="end" className="time-plot__target-label">
+                目標 {secondary.target}
+                {secondary.unit}
+              </text>
+            </g>
+          )}
 
           {/* 固定の印(回の開始・終了)。イベントとは別物なので実線で、ラベルは枠の中に置く。 */}
           {markers
@@ -255,7 +332,7 @@ export function TimeSeriesPlot({
                   x1={x(marker.time)}
                   y1={PLOT.top}
                   x2={x(marker.time)}
-                  y2={PLOT.height - PLOT.bottom}
+                  y2={height - PLOT.bottom}
                   className="time-plot__marker"
                 />
                 <text x={x(marker.time) + 3} y={PLOT.top + 10} className="time-plot__marker-label">
@@ -288,7 +365,7 @@ export function TimeSeriesPlot({
                     x1={eventX}
                     y1={PLOT.top}
                     x2={eventX}
-                    y2={PLOT.height - PLOT.bottom}
+                    y2={height - PLOT.bottom}
                     className="time-plot__event-line"
                   />
                   <text x={eventX} y={12} textAnchor="middle" className="time-plot__event">
@@ -301,6 +378,23 @@ export function TimeSeriesPlot({
               );
             });
           })()}
+
+          {/* 右軸の項目(折れ線 + ■) */}
+          {secondaryLine && <polyline points={secondaryLine} className="time-plot__secondary-line" />}
+          {secondary &&
+            points.map((point) => {
+              const value = secondaryOf(point);
+              return value != null ? (
+                <rect
+                  key={`s-${point.time}`}
+                  x={x(point.time) - 2.5}
+                  y={y2(value) - 2.5}
+                  width={5}
+                  height={5}
+                  className="time-plot__secondary"
+                />
+              ) : null;
+            })}
 
           {/* 脈拍(折れ線 + ●) */}
           {pulseLine && <polyline points={pulseLine} className="time-plot__pulse-line" />}

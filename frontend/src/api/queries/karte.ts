@@ -27,6 +27,7 @@ import { EVALUATION_ITEM_SYSTEM, FREE_TEXT_CODE } from "../../fhir/pathwayEvalua
 import { today } from "../../lib/dates";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { NURSING_ORDER_TYPE } from "../../fhir/nursingOrderHelpers";
+import { DIALYSIS_CHART_FLOWSHEET_CODES, DIALYSIS_CHART_TYPE } from "../../fhir/dialysisChartHelpers";
 import { type FhirResult, postBundle, searchResource } from "../fhirClient";
 import { fetchDistinctDates, hasRelation, NOTIFICATION_TASK_KEY, type PagedItems, resourcesOfType, searchAllPages } from "./core";
 
@@ -561,35 +562,54 @@ const VITAL_FLOWSHEET_MAX_PAGES = 4;
 // (看護観察を混ぜるとカードにならない Observation で診療日だけが増える)。
 const VITAL_FLOWSHEET_CATEGORY = `vital-signs,${NURSING_ORDER_TYPE.code}`;
 
-async function fetchVitalFlowsheetObservations(
-  patientId: string,
-  rangeStart: string,
-  rangeEnd: string,
-): Promise<PagedItems<fhir4.Observation>> {
-  const params = new URLSearchParams();
-  params.set("patient", `Patient/${patientId}`);
-  params.set("category", VITAL_FLOWSHEET_CATEGORY);
+async function fetchVitalFlowsheetPages(params: URLSearchParams, rangeStart: string, rangeEnd: string) {
   // 日付だけの値は上流が施設のタイムゾーンで日の範囲に広げて解釈する。
   params.append("date", `ge${rangeStart}`);
   params.append("date", `le${rangeEnd}`);
   params.set("_sort", "date");
-  const { matches, truncated } = await searchAllPages<fhir4.Observation>("Observation", params, {
+  return searchAllPages<fhir4.Observation>("Observation", params, {
     page: VITAL_FLOWSHEET_PAGE,
     maxPages: VITAL_FLOWSHEET_MAX_PAGES,
   });
-  return { items: matches, truncated };
+}
+
+/**
+ * 24 時間表示にだけ、透析経過表の打点のうちバイタル(血圧・脈拍・SpO2・体温)を重ねる
+ * (docs/dialysis-chart-design.md §4)。期間表示では 30 分毎の打点で透析日だけ列が伸びるので出さない。
+ * 装置の値(QB・除水など)は code で上流に落としてもらう。
+ */
+async function fetchVitalFlowsheetObservations(
+  patientId: string,
+  rangeStart: string,
+  rangeEnd: string,
+  withDialysisChart: boolean,
+): Promise<PagedItems<fhir4.Observation>> {
+  const vitals = new URLSearchParams();
+  vitals.set("patient", `Patient/${patientId}`);
+  vitals.set("category", VITAL_FLOWSHEET_CATEGORY);
+  const dialysis = new URLSearchParams();
+  dialysis.set("patient", `Patient/${patientId}`);
+  dialysis.set("category", `${ORDER_TYPE_SYSTEM}|${DIALYSIS_CHART_TYPE.code}`);
+  dialysis.set("code", DIALYSIS_CHART_FLOWSHEET_CODES.join(","));
+  const results = await Promise.all([
+    fetchVitalFlowsheetPages(vitals, rangeStart, rangeEnd),
+    ...(withDialysisChart ? [fetchVitalFlowsheetPages(dialysis, rangeStart, rangeEnd)] : []),
+  ]);
+  return { items: results.flatMap((r) => r.matches), truncated: results.some((r) => r.truncated) };
 }
 
 export function useVitalFlowsheet(
   patientId: string | undefined,
   rangeStart: string,
   rangeEnd: string,
+  /** 24 時間表示(透析経過表の打点も重ねる)。 */
+  withDialysisChart = false,
 ) {
   const query = useQuery({
     // 登録・更新・削除の invalidateQueries(["Observation", "search"]) でまとめて
     // 無効化されるよう search 配下のキーにしている。
-    queryKey: ["Observation", "search", "vital-flowsheet", patientId, rangeStart, rangeEnd],
-    queryFn: () => fetchVitalFlowsheetObservations(patientId ?? "", rangeStart, rangeEnd),
+    queryKey: ["Observation", "search", "vital-flowsheet", patientId, rangeStart, rangeEnd, withDialysisChart],
+    queryFn: () => fetchVitalFlowsheetObservations(patientId ?? "", rangeStart, rangeEnd, withDialysisChart),
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
     placeholderData: keepPreviousData,
   });

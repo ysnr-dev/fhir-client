@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
   useDialysisChart,
@@ -6,20 +7,30 @@ import {
   useLatestDryWeight,
   type DialysisSessionDetail,
 } from "../api/queries";
+import { dialysisChartPrintUrl } from "../api/reportsClient";
 import {
   buildDialysisChartDeleteEntries,
   buildDialysisChartHub,
   DIALYSIS_CHART_SPEC,
   dialysisChartMarkers,
+  dialysisChartSecondaryAxis,
+  dialysisChartTarget,
   type DialysisChartData,
 } from "../fhir/dialysisChartHelpers";
 import { summarizeDialysisOrder } from "../fhir/dialysisOrderHelpers";
 import { dialysisSessionDisplay, type DryWeight } from "../fhir/dialysisResultHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
-import { buildChartEventObservation, buildChartPointObservations } from "../fhir/timeSeriesChartHelpers";
+import {
+  buildChartDrugAdministration,
+  buildChartEventObservation,
+  buildChartPointObservations,
+  finishChartInfusion,
+  nowInput,
+} from "../fhir/timeSeriesChartHelpers";
 import { shortDate, toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { PatientHeader } from "./PatientHeader";
+import { DrugsSection } from "./timeSeriesChart/DrugsSection";
 import { EventsSection } from "./timeSeriesChart/EventsSection";
 import { PointsSection } from "./timeSeriesChart/PointsSection";
 import { TimeSeriesPlot } from "./timeSeriesChart/TimeSeriesPlot";
@@ -34,6 +45,10 @@ import { TimeSeriesPlot } from "./timeSeriesChart/TimeSeriesPlot";
 
 function postEntry(resource: fhir4.Resource): fhir4.BundleEntry {
   return { resource, request: { method: "POST", url: resource.resourceType } };
+}
+
+function putEntry<T extends fhir4.Resource & { id?: string }>(resource: T): fhir4.BundleEntry {
+  return { resource, request: { method: "PUT", url: `${resource.resourceType}/${resource.id}` } };
 }
 
 interface DialysisChartPanelProps {
@@ -86,12 +101,13 @@ function ChartBody({ sessionId, detail, data, dryWeight }: ChartBodyProps) {
   const patientId = order.subject?.reference?.split("/").pop() ?? "";
   const summary = summarizeDialysisOrder(order);
   const display = dialysisSessionDisplay(session);
-  const target =
-    display.preWeight != null && dryWeight ? Math.round((display.preWeight - dryWeight.value) * 100) / 100 : null;
+  const target = dialysisChartTarget(session, dryWeight);
   const markers = dialysisChartMarkers(session);
   // 終わった回を後から書くときは、時刻の初期値を回の開始にする(「今」では別の日になる)。
   const completed = session.hub.status === "completed";
   const defaultTime = completed ? toDateTimeInputValue(session.hub.performedPeriod?.start).slice(0, 16) : undefined;
+  // 終わった回の持続投与を閉じる時刻も、「今」ではなく回の終了にする。
+  const infusionEnd = completed ? toDateTimeInputValue(session.hub.performedPeriod?.end).slice(0, 16) || nowInput() : nowInput();
 
   /**
    * ハブがまだ無ければ、最初の記録と同じ transaction で作る(urn:uuid で結ぶ)。
@@ -145,10 +161,12 @@ function ChartBody({ sessionId, detail, data, dryWeight }: ChartBodyProps) {
       <TimeSeriesPlot
         points={data?.points ?? []}
         events={data?.events ?? []}
+        extraTimes={data?.drugs.flatMap((d) => [d.time, d.endTime]) ?? []}
         markers={markers}
         emptyStart={session.hub.performedPeriod?.start}
         readOnly={completed}
-        ariaLabel="透析経過表(血圧・脈拍)"
+        secondary={dialysisChartSecondaryAxis(data?.points ?? [], target)}
+        ariaLabel="透析経過表(血圧・脈拍・累積除水)"
       />
       <PointsSection
         spec={DIALYSIS_CHART_SPEC}
@@ -183,9 +201,28 @@ function ChartBody({ sessionId, detail, data, dryWeight }: ChartBodyProps) {
           write.mutate([{ request: { method: "DELETE", url: `Observation/${event.id}` } }]);
         }}
       />
+      <DrugsSection
+        spec={DIALYSIS_CHART_SPEC}
+        drugs={data?.drugs ?? []}
+        readOnly={false}
+        defaultTime={defaultTime}
+        onAdd={(values) =>
+          withHub(values.givenAt, (hubReference) => [
+            buildChartDrugAdministration(DIALYSIS_CHART_SPEC, values, patientId, hubReference),
+          ])
+        }
+        onFinish={(line) => write.mutate([putEntry(finishChartInfusion(line.administration, infusionEnd))])}
+        onDelete={(line) => {
+          if (!window.confirm(`薬剤「${line.name}」の記録を削除しますか?`)) return;
+          write.mutate([{ request: { method: "DELETE", url: `MedicationAdministration/${line.id}` } }]);
+        }}
+      />
 
       {data && (
         <div className="time-chart__footer">
+          <Link to={dialysisChartPrintUrl(sessionId)} target="_blank" rel="noopener" className="time-chart__print">
+            印刷
+          </Link>
           <button type="button" className="time-chart__danger" onClick={cancelChart} disabled={write.isPending}>
             経過表取消
           </button>

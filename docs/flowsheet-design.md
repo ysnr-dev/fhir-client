@@ -72,6 +72,7 @@
 | 病日・術後 | 日ごと | 1 日ぶんが全列にまたがる |
 | 列幅の下限 | 64px(長い期間は 46px) | 34px(見出しが 2 桁のため) |
 | 取得の範囲 | 基準日までの N 日 | その日だけ |
+| 透析経過表の打点 | 出さない | 血圧・脈拍・SpO2・体温を重ねる(`docs/dialysis-chart-design.md` §4) |
 
 **期間表示の基準日と日数は URL に残す**。24 時間表示から戻ったときに元の期間へ帰るため
 (見ていた日で期間を作り直すと、期間の途中の日を見ていた場合にずれる)。
@@ -86,6 +87,9 @@
 Observation?patient=…&category=vital-signs,{order-type}|nursing
   &date=ge{基準日-6日}&date=le{基準日}&_sort=date&_count=100&_offset=…
 ```
+
+24 時間表示では、これに加えて `Observation?patient=…&category={order-type}|dialysis-chart&code=85354-9,8867-4,2708-6,8310-5&date=…`
+を並列に引いて混ぜる(`useVitalFlowsheet` の `withDialysisChart`)。透析中の 30 分毎の打点は期間表示では列を埋めるので出さない。
 
 日付だけの検索値は上流が施設のタイムゾーンで日の範囲に広げて解釈する
 (`docs/server-improvement-backlog.md`)。1 回の測定が 8 件前後の Observation に分かれる

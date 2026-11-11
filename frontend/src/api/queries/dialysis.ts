@@ -571,7 +571,7 @@ export function useDialysisSessionDetail(sessionId: string | undefined) {
 }
 
 /**
- * 実施記録のハブにぶら下がる経過表(1 回に 1 件)。ハブは part-of で引き、打点は全件読む。
+ * 実施記録のハブにぶら下がる経過表(1 回に 1 件)。ハブは part-of で引き、打点・イベント・薬剤は全件読む。
  * 無ければ null(最初の打点でハブを作る)。
  */
 export async function fetchDialysisChart(sessionId: string): Promise<DialysisChartData | null> {
@@ -584,8 +584,11 @@ export async function fetchDialysisChart(sessionId: string): Promise<DialysisCha
     (procedure) => isDialysisChartHub(procedure) && procedure.status !== "entered-in-error",
   );
   if (!hub?.id) return null;
-  const observations = await fetchAllByPartOf<fhir4.Observation>("Observation", hub.id);
-  return buildDialysisChartData(hub, observations);
+  const [observations, administrations] = await Promise.all([
+    fetchAllByPartOf<fhir4.Observation>("Observation", hub.id),
+    fetchAllByPartOf<fhir4.MedicationAdministration>("MedicationAdministration", hub.id),
+  ]);
+  return buildDialysisChartData(hub, observations, administrations);
 }
 
 export function useDialysisChart(sessionId: string | undefined) {

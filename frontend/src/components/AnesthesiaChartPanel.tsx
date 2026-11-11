@@ -1,4 +1,3 @@
-import { useState, type FormEvent } from "react";
 import { useAuthSession } from "../api/authQueries";
 import {
   useAnesthesiaChart,
@@ -7,19 +6,13 @@ import {
   usePractitioner,
   useSurgeryOrderDetail,
 } from "../api/queries";
-import type { Medicine } from "../api/masterClient";
 import { ErrorBanner } from "./ErrorBanner";
-import { MedicineSearchModal } from "./MedicineSearchModal";
 import { PatientHeader } from "./PatientHeader";
 import {
   ANESTHESIA_CHART_SPEC,
-  SURGERY_ROUTE_OPTIONS,
   buildAnesthesiaChartDeleteEntries,
   buildAnesthesiaChartHub,
-  buildChartDrugAdministration,
-  finishChartInfusion,
   type AnesthesiaChartData,
-  type ChartDrugFormValues,
 } from "../fhir/anesthesiaChartHelpers";
 import { summarizeAnesthesiaPreop } from "../fhir/anesthesiaPreopHelpers";
 import { toFhirDateTime } from "../fhir/clinicalNoteHelpers";
@@ -30,11 +23,16 @@ import {
   surgeryOrderItemRequests,
   surgeryOrderItems,
 } from "../fhir/surgeryOrderHelpers";
-import { buildChartEventObservation, buildChartPointObservations, nowInput } from "../fhir/timeSeriesChartHelpers";
-import { RemoveRowButton } from "./RemoveRowButton";
+import {
+  buildChartDrugAdministration,
+  buildChartEventObservation,
+  buildChartPointObservations,
+  finishChartInfusion,
+  nowInput,
+} from "../fhir/timeSeriesChartHelpers";
+import { DrugsSection } from "./timeSeriesChart/DrugsSection";
 import { EventsSection } from "./timeSeriesChart/EventsSection";
 import { PointsSection } from "./timeSeriesChart/PointsSection";
-import { TimeField } from "./timeSeriesChart/TimeField";
 import { TimeSeriesPlot } from "./timeSeriesChart/TimeSeriesPlot";
 
 // 麻酔チャート(術中リアルタイム記録)の中身。docs/anesthesia-chart-design.md。
@@ -43,8 +41,8 @@ import { TimeSeriesPlot } from "./timeSeriesChart/TimeSeriesPlot";
 // (/surgeries/:orderId/anesthesia-chart)だが、カルテからも同じものを
 // モーダルで開けるよう、中身をこのパネルに切り出してある。
 // 記録は追加のたびに保存され、確定(ハブ completed)後は閲覧のみになる。
-// グラフ・打点・イベントは時系列チャートの器(components/timeSeriesChart)で、
-// 薬剤・術前評価の帯・確定が麻酔チャートの固有の部分。
+// グラフ・打点・イベント・薬剤は時系列チャートの器(components/timeSeriesChart)で、
+// 術前評価の帯・確定が麻酔チャートの固有の部分。
 
 function postEntry(resource: fhir4.Resource): fhir4.BundleEntry {
   return { resource, request: { method: "POST", url: resource.resourceType } };
@@ -250,10 +248,11 @@ function ChartBody({ data, patientId, write, onFinalize, onReopen, onCancel }: C
         }}
       />
       <DrugsSection
-        data={data}
+        spec={ANESTHESIA_CHART_SPEC}
+        drugs={data.drugs}
         readOnly={readOnly}
         onAdd={(values) =>
-          write.mutate([postEntry(buildChartDrugAdministration(values, patientId, hubId))])
+          write.mutate([postEntry(buildChartDrugAdministration(ANESTHESIA_CHART_SPEC, values, patientId, hubReference))])
         }
         onFinish={(line) =>
           write.mutate([putEntry(finishChartInfusion(line.administration, nowInput()))])
@@ -288,161 +287,5 @@ function ChartBody({ data, patientId, write, onFinalize, onReopen, onCancel }: C
         )}
       </div>
     </>
-  );
-}
-
-// ---- 薬剤 ----
-
-interface DrugsSectionProps {
-  data: AnesthesiaChartData;
-  readOnly: boolean;
-  onAdd: (values: ChartDrugFormValues) => void;
-  onFinish: (line: AnesthesiaChartData["drugs"][number]) => void;
-  onDelete: (line: AnesthesiaChartData["drugs"][number]) => void;
-}
-
-function DrugsSection({ data, readOnly, onAdd, onFinish, onDelete }: DrugsSectionProps) {
-  const [searching, setSearching] = useState(false);
-  const [draft, setDraft] = useState<ChartDrugFormValues | null>(null);
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!draft) return;
-    onAdd(draft);
-    setDraft(null);
-  }
-
-  return (
-    <fieldset className="time-chart__section">
-      <legend>薬剤</legend>
-      {data.drugs.length === 0 ? (
-        <p className="patient-table__empty">薬剤はまだありません。</p>
-      ) : (
-        <ul className="time-chart__list">
-          {data.drugs.map((line) => (
-            <li key={line.id}>
-              <span className="time-chart__list-time">
-                {line.time.slice(11, 16)}
-                {line.mode === "infusion" &&
-                  ` 〜 ${line.running ? "投与中" : line.endTime.slice(11, 16)}`}
-              </span>
-              <span>{line.name}</span>
-              <span className="time-chart__list-note">
-                {line.mode === "bolus" ? "単回" : "持続"}
-                {line.doseLabel ? ` ${line.doseLabel}` : ""}
-              </span>
-              {!readOnly && line.running && (
-                <button type="button" onClick={() => onFinish(line)}>
-                  終了
-                </button>
-              )}
-              {!readOnly && <RemoveRowButton title="削除" onClick={() => onDelete(line)} />}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {!readOnly && !draft && (
-        <button type="button" onClick={() => setSearching(true)}>
-          薬剤追加
-        </button>
-      )}
-
-      {draft && (
-        <form className="time-chart__entry" onSubmit={submit}>
-          <span className="anes-chart__drug-name">{draft.name}</span>
-          <label>
-            投与
-            <select
-              value={draft.mode}
-              onChange={(e) =>
-                setDraft({ ...draft, mode: e.target.value as ChartDrugFormValues["mode"] })
-              }
-            >
-              <option value="bolus">単回</option>
-              <option value="infusion">持続</option>
-            </select>
-          </label>
-          {draft.mode === "bolus" ? (
-            <label>
-              量
-              <span className="time-chart__bp-pair">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={draft.dose}
-                  onChange={(e) => setDraft({ ...draft, dose: e.target.value })}
-                />
-                {draft.unitName}
-              </span>
-            </label>
-          ) : (
-            <label>
-              速度
-              <span className="time-chart__bp-pair">
-                <input
-                  type="number"
-                  step="0.1"
-                  value={draft.rate}
-                  onChange={(e) => setDraft({ ...draft, rate: e.target.value })}
-                />
-                <input
-                  type="text"
-                  className="anes-chart__unit-input"
-                  placeholder="mL/h"
-                  value={draft.rateUnit}
-                  onChange={(e) => setDraft({ ...draft, rateUnit: e.target.value })}
-                />
-              </span>
-            </label>
-          )}
-          <label>
-            経路
-            <select
-              value={draft.routeCode}
-              onChange={(e) => setDraft({ ...draft, routeCode: e.target.value })}
-            >
-              <option value="">未指定</option>
-              {SURGERY_ROUTE_OPTIONS.map((option) => (
-                <option key={option.code} value={option.code}>
-                  {option.display}
-                </option>
-              ))}
-            </select>
-          </label>
-          <TimeField
-            label={draft.mode === "bolus" ? "時刻" : "開始"}
-            value={draft.givenAt}
-            onChange={(givenAt) => setDraft({ ...draft, givenAt })}
-          />
-          <button type="submit">追加</button>
-          <button type="button" onClick={() => setDraft(null)}>
-            やめる
-          </button>
-        </form>
-      )}
-
-      {searching && (
-        <MedicineSearchModal
-          title="薬剤を選択"
-          onSelect={(medicine: Medicine) => {
-            setSearching(false);
-            setDraft({
-              medicineCode: medicine.medicine_code,
-              name: medicine.name,
-              yjCode: medicine.yj_code ?? "",
-              mode: "bolus",
-              dose: "",
-              unitName: medicine.unit_name ?? "",
-              rate: "",
-              rateUnit: "mL/h",
-              routeCode: "IV",
-              givenAt: nowInput(),
-            });
-          }}
-          onClose={() => setSearching(false)}
-        />
-      )}
-    </fieldset>
   );
 }

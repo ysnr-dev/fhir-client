@@ -32,7 +32,11 @@ import { fetchFacilitySettings } from "../api/facilityClient";
 import { searchBloodPurifiers } from "../api/masterClient";
 import { addDays, toFhirDateTime, today } from "../lib/dates";
 import { buildDialysisChartHub, DIALYSIS_CHART_SPEC } from "../fhir/dialysisChartHelpers";
-import { buildChartEventObservation, buildChartPointObservations } from "../fhir/timeSeriesChartHelpers";
+import {
+  buildChartDrugAdministration,
+  buildChartEventObservation,
+  buildChartPointObservations,
+} from "../fhir/timeSeriesChartHelpers";
 import {
   buildDialysisAppointmentBatchBundle,
   findDialysisSlot,
@@ -87,6 +91,7 @@ export const MED = {
   esa30: "622199801",
   aml5: "620007818",
   lanthanum: "622552101",
+  saline: "622842201",
 };
 const QD = "１日１回朝食後　服用";
 const TID = "１日３回朝昼夕食後　服用";
@@ -304,8 +309,8 @@ function addMinutesLocal(input: string, minutes: number): string {
 }
 
 /**
- * 1 回の透析経過表(ハブ + 30 分毎の打点 + できごと)を 1 transaction で作る。
- * 血圧は透析前から透析後へなだらかに下がり、血圧低下の回は 3 時間で急に下がって補液で戻る。
+ * 1 回の透析経過表(ハブ + 30 分毎の打点 + できごと + 透析中の薬剤)を 1 transaction で作る。
+ * 血圧は透析前から透析後へなだらかに下がり、血圧低下の回は 3 時間で急に下がって補液(生理食塩液)で戻る。
  */
 function chartBundle(
   env: SeedEnv,
@@ -314,6 +319,7 @@ function chartBundle(
   values: DialysisPerformFormValues,
   index: number,
   hypotension: boolean,
+  drugs: DrugMaster,
 ): fhir4.Bundle {
   const session: DialysisSession = {
     hub: {
@@ -376,12 +382,33 @@ function chartBundle(
     observations.push(...point(elapsed, pre.s + (post.s - pre.s) * ratio + drift, pre.d + (post.d - pre.d) * ratio + drift / 2, 72 + wobble(index * 17 + elapsed) * 6));
   }
   observations.push(event(-8, "puncture"), event(minutes - 3, "blood-return"), event(minutes + 12, "hemostasis"));
+  const administrations: fhir4.MedicationAdministration[] = [];
   if (hypotension) {
     observations.push(
       event(178, "hypotension"),
       event(180, "uf-stop"),
       event(183, "fluid-bolus", "生食 200mL"),
       event(198, "uf-resume"),
+    );
+    const saline = drugs.medicine(MED.saline);
+    administrations.push(
+      buildChartDrugAdministration(
+        DIALYSIS_CHART_SPEC,
+        {
+          medicineCode: saline.medicine_code,
+          name: saline.name,
+          yjCode: saline.yj_code ?? "",
+          mode: "bolus",
+          dose: "1",
+          unitName: saline.unit_name ?? "",
+          rate: "",
+          rateUnit: "",
+          routeCode: "IV",
+          givenAt: addMinutesLocal(values.startAt, 183),
+        },
+        patientId,
+        reference,
+      ),
     );
   }
 
@@ -395,6 +422,10 @@ function chartBundle(
         request: { method: "POST", url: "Procedure" },
       },
       ...observations.map((resource) => ({ resource, request: { method: "POST" as const, url: "Observation" } })),
+      ...administrations.map((resource) => ({
+        resource,
+        request: { method: "POST" as const, url: "MedicationAdministration" },
+      })),
     ],
   };
 }
@@ -524,7 +555,7 @@ export async function seedDialysis(env: SeedEnv): Promise<void> {
     const hubId = ids.find((entry) => entry.type === "Procedure")?.id;
     const hypotension = performed === HYPOTENSION_SESSION;
     if (hubId && (hypotension || performed >= pastCount - 3)) {
-      await post(chartBundle(env, patientId, hubId, values, performed, hypotension));
+      await post(chartBundle(env, patientId, hubId, values, performed, hypotension, drugs));
       charted += 1;
     }
     dryWeight = { value: Number(values.dryWeight), date };

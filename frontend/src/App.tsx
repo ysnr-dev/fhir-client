@@ -94,6 +94,7 @@ import { RadiotherapyProtocolPage } from "./pages/RadiotherapyProtocolPage";
 import { RadiotherapyWorklistPage } from "./pages/RadiotherapyWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { DialysisChartPage } from "./pages/DialysisChartPage";
+import { DialysisChartPrintPage } from "./pages/DialysisChartPrintPage";
 import { DialysisUnitPage } from "./pages/DialysisUnitPage";
 import { DialysisWorklistPage } from "./pages/DialysisWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
@@ -189,7 +190,7 @@ import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { RxWorklistPage } from "./pages/RxWorklistPage";
 import { RxVerificationPage } from "./pages/RxVerificationPage";
 import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklistPage";
-import { INJECTION_PRINT_PATH, PATHWAY_PRINT_PATH } from "./api/reportsClient";
+import { DIALYSIS_CHART_PRINT_PATH, INJECTION_PRINT_PATH, PATHWAY_PRINT_PATH } from "./api/reportsClient";
 import { InjectionPrintPage } from "./pages/InjectionPrintPage";
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { LotManagementPage } from "./pages/LotManagementPage";
@@ -229,7 +230,8 @@ function App() {
   const printPage =
     pathname.startsWith(KARTE_PRINT_PATH) ||
     pathname.startsWith(INJECTION_PRINT_PATH) ||
-    pathname.startsWith(PATHWAY_PRINT_PATH);
+    pathname.startsWith(PATHWAY_PRINT_PATH) ||
+    pathname.startsWith(DIALYSIS_CHART_PRINT_PATH);
   // Web 問診の患者画面。ログインの外(AuthGate の外)で、トークンだけで開く。
   const intakeToken = pathname.startsWith(INTAKE_PATH) ? pathname.slice(INTAKE_PATH.length).split("/")[0] : "";
   // 待合表示板(ロビーのモニター)。同じくログインの外で、トークンだけで開く。
@@ -419,6 +421,7 @@ function App() {
           <Route path="/dialysis-worklist" element={<DialysisWorklistPage />} />
           <Route path="/dialysis-unit" element={<DialysisUnitPage />} />
           <Route path="/dialysis-sessions/:sessionId/chart" element={<DialysisChartPage />} />
+          <Route path={`${DIALYSIS_CHART_PRINT_PATH}/:sessionId`} element={<DialysisChartPrintPage />} />
           <Route path="/meal-worklist" element={<MealWorklistPage />} />
           <Route path="/nutrition-management" element={<NutritionManagementPage />} />
           <Route path="/radiotherapy-worklist" element={<RadiotherapyWorklistPage />} />

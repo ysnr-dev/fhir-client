@@ -16789,6 +16789,37 @@ select.rad-route-select {
   text-anchor: middle;
 }
 
+/* 右軸(累積除水量など)。目盛りは枠の右の外に左揃えで置く。 */
+.time-plot__ylabel--right {
+  fill: var(--success);
+  font-size: 10px;
+  text-anchor: start;
+}
+
+.time-plot__secondary {
+  fill: var(--success);
+}
+
+.time-plot__secondary-line {
+  stroke: var(--success);
+  stroke-width: 1.2;
+  fill: none;
+  opacity: 0.8;
+}
+
+/* 右軸の目標(目標除水)。横の破線。 */
+.time-plot__target {
+  stroke: var(--success);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.7;
+}
+
+.time-plot__target-label {
+  fill: var(--success);
+  font-size: 10px;
+}
+
 .time-plot__event {
   fill: var(--accent);
   font-size: 10px;
@@ -16913,11 +16944,11 @@ select.rad-route-select {
   gap: 4px;
 }
 
-.anes-chart__unit-input {
+.time-chart__unit-input {
   width: 64px;
 }
 
-.anes-chart__drug-name {
+.time-chart__drug-name {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-h);
@@ -16974,6 +17005,23 @@ select.rad-route-select {
 .time-chart__danger {
   color: var(--lab-high);
   border-color: var(--lab-high);
+}
+
+/* 印刷は別タブに開くリンク。取消のボタンと同じ行に、同じ高さで並べる。 */
+.time-chart__print {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-height);
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-h);
+  text-decoration: none;
+}
+
+.time-chart__print:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 
@@ -29991,6 +30039,117 @@ input.nursing-picker__search {
 
   .pathway-print__page + .pathway-print__page {
     margin-top: 0;
+  }
+}
+
+/* ---- 透析経過表の印刷(pages/DialysisChartPrintPage.tsx)。A4 横 1 枚を目安に、グラフ・打点の表・できごと・薬剤を並べる。 ---- */
+.dialysis-chart-print {
+  color: var(--text-h);
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.dialysis-chart-print__page {
+  background: var(--paper);
+  font-size: 10pt;
+}
+
+.dialysis-chart-print__title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 14pt;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.dialysis-chart-print__organization {
+  font-size: 10pt;
+  font-weight: 400;
+}
+
+.dialysis-chart-print__info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  margin: 0 0 6px;
+}
+
+.dialysis-chart-print__item {
+  display: flex;
+  gap: 4px;
+}
+
+.dialysis-chart-print__item dt {
+  color: var(--text);
+}
+
+.dialysis-chart-print__item dd {
+  margin: 0;
+}
+
+/* グラフの枠は画面と同じ部品を使うので、紙では枠線と余白を詰める。 */
+.dialysis-chart-print .time-chart__plot-scroll {
+  margin-bottom: 6px;
+}
+
+.dialysis-chart-print__table {
+  margin-bottom: 6px;
+  font-size: 9pt;
+}
+
+.dialysis-chart-print .time-chart__table th,
+.dialysis-chart-print .time-chart__table td {
+  padding: 0 6px;
+  font-size: 8.5pt;
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.dialysis-chart-print .time-chart__table tbody th {
+  position: static;
+  background: transparent;
+}
+
+.dialysis-chart-print__unit {
+  margin-left: 4px;
+  color: var(--text);
+  font-size: 8pt;
+}
+
+.dialysis-chart-print__lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dialysis-chart-print__lists h2 {
+  margin: 2px 0;
+  font-size: 10pt;
+}
+
+.dialysis-chart-print .time-chart__list {
+  gap: 0;
+}
+
+.dialysis-chart-print .time-chart__list li {
+  font-size: 9pt;
+  line-height: 1.5;
+}
+
+.dialysis-chart-print .time-chart__list-time,
+.dialysis-chart-print .time-chart__list-note {
+  font-size: 9pt;
+}
+
+@media print {
+  .dialysis-chart-print .karte-print__toolbar {
+    display: none;
+  }
+
+  .dialysis-chart-print__table,
+  .dialysis-chart-print__lists {
+    break-inside: avoid;
   }
 }
 

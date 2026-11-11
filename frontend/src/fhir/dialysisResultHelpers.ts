@@ -456,11 +456,31 @@ function initialTimes(
  * 実施入力の初期値。透析条件(QB・QD・血液浄化器)はオーダーから写す。抗凝固薬と液はオーダーの薬を
  * 薬剤の行に置き、維持透析では所定点数に含まれるので「算定しない」にする。急性血液浄化の液は薬剤料として送る。
  */
-/** 透析経過表の最後の血圧と累積除水量。終了の入力の初期値にする(docs/dialysis-chart-design.md §2.3)。 */
+/** 透析経過表の最後の血圧・累積除水量と透析中の薬剤。終了の入力の初期値にする(docs/dialysis-chart-design.md §2.3)。 */
 export interface DialysisChartLatest {
   systolic: number | null;
   diastolic: number | null;
   ultrafiltration: number | null;
+  medicines: DialysisMedicineLine[];
+}
+
+/**
+ * オーダーから写した薬剤の行に、経過表の薬剤を重ねる。同じ薬で量が空の行(オーダーの抗凝固薬など)には
+ * 量と経路を入れ、それ以外は行を足す(算定の印はオーダー側の行のものを残す)。
+ */
+function mergeChartMedicines(rows: DialysisMedicineLine[], chart: DialysisMedicineLine[]): DialysisMedicineLine[] {
+  const merged = rows.map((row) => ({ ...row }));
+  for (const line of chart) {
+    const target = merged.find((row) => row.medicineCode && row.medicineCode === line.medicineCode && !row.dose);
+    if (target) {
+      target.dose = line.dose;
+      target.unitName = line.unitName || target.unitName;
+      target.routeCode = line.routeCode || target.routeCode;
+    } else {
+      merged.push({ ...line });
+    }
+  }
+  return merged;
 }
 
 export function initialDialysisPerformForm(
@@ -494,13 +514,16 @@ export function initialDialysisPerformForm(
     purifiers: values.purifiers
       .filter((p) => p.name.trim())
       .map((p) => ({ code: p.code, name: p.name, quantity: "1" })),
-    medicines: [
-      ...(values.anticoagulant ? medicine(values.anticoagulant, maintenance, "IV") : []),
-      // 維持透析の透析液は所定点数に含まれ、記録しても送らないので行に出さない。
-      ...(maintenance ? [] : medicine(values.dialysate, false)),
-      ...(maintenance ? [] : medicine(values.substitutionFluid, false)),
-      ...medicine(values.replacementFluid, false, "IV"),
-    ],
+    medicines: mergeChartMedicines(
+      [
+        ...(values.anticoagulant ? medicine(values.anticoagulant, maintenance, "IV") : []),
+        // 維持透析の透析液は所定点数に含まれ、記録しても送らないので行に出さない。
+        ...(maintenance ? [] : medicine(values.dialysate, false)),
+        ...(maintenance ? [] : medicine(values.substitutionFluid, false)),
+        ...medicine(values.replacementFluid, false, "IV"),
+      ],
+      chartLatest?.medicines ?? [],
+    ),
     materials: [],
     procedures: [],
     comment: "",
