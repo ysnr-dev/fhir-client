@@ -169,7 +169,12 @@ export function dialysisSessionOrderId(session: DialysisSession): string {
 }
 
 export function dialysisSessionAppointmentId(session: DialysisSession): string {
-  const extension = session.hub.extension?.find((e) => e.url === APPOINTMENT_EXT_URL);
+  return dialysisHubAppointmentId(session.hub);
+}
+
+/** ハブが指す予約の id。ベッドサイドの回は空。 */
+export function dialysisHubAppointmentId(hub: fhir4.Procedure): string {
+  const extension = hub.extension?.find((e) => e.url === APPOINTMENT_EXT_URL);
   return referenceIdOfType(extension?.valueReference?.reference, "Appointment");
 }
 

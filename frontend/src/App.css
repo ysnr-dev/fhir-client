@@ -32586,3 +32586,190 @@ input.nursing-picker__search {
   margin-left: auto;
   font-size: 12px;
 }
+
+/* 透析患者一覧(docs/dialysis-order-design.md §6.2)。セルの 2 行目は補足(推移・日付・除水)。 */
+.dialysis-patients__line {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.dialysis-patients th.dialysis-patients__lab,
+.dialysis-patients td.dialysis-patients__lab {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dialysis-patients td.dialysis-patients__lab--high,
+.dialysis-patients td.dialysis-patients__lab--critical-high {
+  color: var(--lab-high);
+  font-weight: 700;
+}
+
+.dialysis-patients td.dialysis-patients__lab--low,
+.dialysis-patients td.dialysis-patients__lab--critical-low {
+  color: var(--lab-low);
+  font-weight: 700;
+}
+
+/* 透析の月間統計(§6.3)。概要のカード、同じ幅に並ぶ集計表、日付を横に並べた日別。 */
+.dialysis-stats {
+  display: grid;
+  gap: 16px;
+}
+
+.dialysis-stats__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.dialysis-stats__summary-card,
+.dialysis-stats__card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-card);
+}
+
+.dialysis-stats__summary-card {
+  padding: 10px 14px;
+}
+
+.dialysis-stats__summary-card dt {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.dialysis-stats__summary-card dd {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 0;
+}
+
+.dialysis-stats__value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.dialysis-stats__sub {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.dialysis-stats__tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.dialysis-stats__card {
+  padding: 10px 14px 12px;
+  min-width: 0;
+}
+
+.dialysis-stats__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dialysis-stats__title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.dialysis-stats__table th.dialysis-stats__number,
+.dialysis-stats__table td.dialysis-stats__number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dialysis-stats__table tfoot th,
+.dialysis-stats__table tfoot td {
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+  background: transparent;
+}
+
+.dialysis-stats__days-wrap {
+  overflow-x: auto;
+}
+
+.dialysis-stats__days {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dialysis-stats__days th,
+.dialysis-stats__days td {
+  min-width: 30px;
+  padding: 4px 3px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+
+.dialysis-stats__days thead th {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.dialysis-stats__weekday {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.dialysis-stats__days .dialysis-stats__days-head {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 84px;
+  padding-right: 8px;
+  text-align: left;
+  white-space: nowrap;
+  background: var(--surface-card);
+}
+
+.dialysis-stats__days .dialysis-stats__days-total {
+  min-width: 44px;
+  border-left: 2px solid var(--border);
+  font-weight: 700;
+}
+
+.dialysis-stats__days .dialysis-stats__sat,
+.dialysis-stats__days .dialysis-stats__sun {
+  background: var(--surface-stripe);
+}
+
+.dialysis-stats__days .dialysis-stats__sun .dialysis-stats__weekday,
+.dialysis-stats__days thead .dialysis-stats__sun {
+  color: var(--lab-high);
+}
+
+.dialysis-stats__days .dialysis-stats__sat .dialysis-stats__weekday,
+.dialysis-stats__days thead .dialysis-stats__sat {
+  color: var(--lab-low);
+}
+
+.dialysis-stats__days-sum td,
+.dialysis-stats__days-sum th {
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+}
+
+.dialysis-stats__days-sub td,
+.dialysis-stats__days-sub th {
+  font-size: 12px;
+  color: var(--text);
+}

@@ -136,6 +136,13 @@ flowchart TD
 - シャントのシェーマは両上肢の台紙に描き込みます。項目や台紙はテンプレート「透析の患者メモ」(HD_MEMO_01)を直すと変えられます。
 - カルテの時系列には出ません。
 
+### 透析患者一覧・月間統計
+
+- 透析一覧の「患者」では、その日に透析室で透析を受けている患者を 1 人 1 行で見られます。
+  アクセス、ドライウェイトの推移、直近の透析(透析後体重と DW の差・除水量・時間)、透析間の体重増加、直近の採血(Hb・Alb・K・P・Ca)、次回予約が並びます。
+- 「統計」では月を選んで、実施回数・実患者数・平均の透析時間・ベッドの稼働率を見られます。浄化方法別、シフト別・ベッド別(枠・予約・未来院・実施)、
+  日別の表があり、日別は CSV に出せます。稼働率は「透析室で実施した回 ÷ 枠」で、ベッドサイドの回は別に数えます。
+
 ### 終了・中止・退院
 
 - 終了(終了日)・中止・各取消はリハビリと同じです。終了は終了日の翌日以降、中止は今日以降の予約を同じ操作で取り消します。
@@ -179,7 +186,8 @@ flowchart TD
 |---|---|
 | オーダー | `components/DialysisOrderForm.tsx`・`DialysisOrderPanels.tsx`、詳細 `DialysisOrderDetailPanel.tsx`、カード `karteCardBodies/DialysisOrderCardBody.tsx` |
 | 組み立て | `fhir/dialysisOrderHelpers.ts`(オーダー・終了日・退院の打ち切り)・`dialysisTaskHelpers.ts`(進捗)・`dialysisAppointmentHelpers.ts`(予約)・`dialysisUnitHelpers.ts`(透析室・ベッド・枠)・`dialysisResultHelpers.ts`(実施)・`dialysisChartHelpers.ts`(経過表。器は `timeSeriesChartHelpers.ts`) |
-| 部門の画面 | `pages/DialysisWorklistPage.tsx`(ボード・週・オーダー)、`components/DialysisBoard.tsx`、`pages/DialysisUnitPage.tsx`、経過表 `pages/DialysisChartPage.tsx`(`/dialysis-sessions/:sessionId/chart`)・`components/DialysisChartPanel.tsx`・`DialysisChartModal.tsx`・印刷 `pages/DialysisChartPrintPage.tsx`(`/dialysis-chart-print/:sessionId`)(器は `components/timeSeriesChart/`) |
+| 部門の画面 | `pages/DialysisWorklistPage.tsx`(ボード・週・オーダー・患者・統計)、`components/DialysisBoard.tsx`、`pages/DialysisUnitPage.tsx`、経過表 `pages/DialysisChartPage.tsx`(`/dialysis-sessions/:sessionId/chart`)・`components/DialysisChartPanel.tsx`・`DialysisChartModal.tsx`・印刷 `pages/DialysisChartPrintPage.tsx`(`/dialysis-chart-print/:sessionId`)(器は `components/timeSeriesChart/`) |
+| 患者一覧・統計 | `components/DialysisPatientTable.tsx`・`fhir/dialysisPatientListHelpers.ts`(`useDialysisPatientData`)、`components/DialysisMonthlyStats.tsx`・`fhir/dialysisStatsHelpers.ts`(`useDialysisMonth`) |
 | 患者メモ | `components/DialysisMemo.tsx`(詳細の区画・ボードのモーダル)、`fhir/dialysisMemoHelpers.ts`、雛形 `docs/report-mappings/dialysis-memo-01.questionnaire.json` |
 | モーダル | 実施 `components/DialysisPerformModal.tsx`、展開 `DialysisExpandModal.tsx`、臨時・変更 `DialysisBookModal.tsx` |
 | hook | `api/queries/dialysis.ts`(`useDialysisSessions`・`useDialysisPerform`・`useCancelDialysisPerform`・`useLatestDryWeight`・`usePatientDialysisOrders`・`useDialysisChart`・`useDialysisChartWrite`・`useDialysisSessionDetail` ほか) |

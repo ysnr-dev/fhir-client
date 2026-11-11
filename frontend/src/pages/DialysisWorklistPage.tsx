@@ -19,7 +19,9 @@ import { DialysisBookModal } from "../components/DialysisBookModal";
 import { DialysisChartMark } from "../components/DialysisChartMark";
 import { DialysisExpandModal } from "../components/DialysisExpandModal";
 import { DialysisMemoModal } from "../components/DialysisMemo";
+import { DialysisMonthlyStats } from "../components/DialysisMonthlyStats";
 import { DialysisOrderDetailPanel } from "../components/DialysisOrderDetailPanel";
+import { DialysisPatientTable } from "../components/DialysisPatientTable";
 import { DialysisPerformModal } from "../components/DialysisPerformModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
@@ -32,6 +34,7 @@ import { appointmentOrderId } from "../fhir/appointmentHelpers";
 import { dialysisAppointmentDate, dialysisAppointmentShift } from "../fhir/dialysisAppointmentHelpers";
 import type { DialysisShift } from "../fhir/dialysisShiftHelpers";
 import { DIALYSIS_MODALITY_OPTIONS, summarizeDialysisOrder } from "../fhir/dialysisOrderHelpers";
+import { dialysisPatientOrders } from "../fhir/dialysisPatientListHelpers";
 import {
   buildDialysisArrivalBundle,
   dialysisSessionAppointmentId,
@@ -57,23 +60,25 @@ import { displayName } from "../fhir/patientHelpers";
 import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
 import { formatDateLabel, weekDates, weekStart } from "../fhir/scheduleHelpers";
 import { useRowPictogramSources, type RowPictogramSources } from "../hooks/useRowPictogramSources";
-import { addDays, shortDate, today } from "../lib/dates";
+import { addDays, addMonths, shortDate, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
 import { useNavigate } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
 
 // 透析一覧(部門ワークリスト)。docs/dialysis-order-design.md §5。
 //
-// 3 つのビューを切り替える。
+// 5 つのビューを切り替える。
 // - ボード … その日のベッド × シフトの格子と、ベッドサイドのオーダー。日々の運用の起点。
 // - 週     … 7 日ぶんの格子。予約の偏りと空きを見る。
 // - オーダー … 基準日に効いているオーダー(リハビリ一覧の依頼ビューと同じ軸)。受付・展開・臨時予約・終了の起点。
+// - 患者   … 基準日に透析室で透析を受けている患者。DW の推移・直近の透析・直近の採血・アクセス(§6.2)。
+// - 統計   … 月ごとの回数・浄化方法別・ベッドの稼働(§6.3)。
 //
 // 進捗(Task)は部門の受け入れ状態で、予約を展開しても実施しても動かない(dialysisTaskHelpers.ts)。
 // 実施はボードのセル(ベッドサイドは格子の下の表)から 入室 → 開始 → 終了 と進める(dialysisResultHelpers.ts)。
 // 「終了」はオーダーに終了日を書き、終了日の翌日以降の予約を取り消す。
 
-type View = "board" | "week" | "orders";
+type View = "board" | "week" | "orders" | "patients" | "stats";
 
 interface Performing {
   stage: DialysisPerformStage;
@@ -95,6 +100,7 @@ const emptyFilters: Filters = { modality: "", setting: "", status: "" };
 export function DialysisWorklistPage() {
   const [date, setDate] = useState(today);
   const [view, setView] = useState<View>("board");
+  const [month, setMonth] = useState(() => today().slice(0, 7));
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [memoPatient, setMemoPatient] = useState<fhir4.Patient | null>(null);
@@ -120,17 +126,24 @@ export function DialysisWorklistPage() {
   const dates = useMemo(() => (view === "week" ? weekDates(weekStart(date)) : [date]), [view, date]);
   const from = dates[0];
   const to = dates[dates.length - 1];
-  const board = useDialysisBoard(from, to);
+  // 格子(ボード・週)のビューだけが予約・枠・実施を読む。
+  const gridView = view === "board" || view === "week";
+  const board = useDialysisBoard(gridView ? from : "", to);
   const beds = useMemo(
     () => activeDialysisBeds(units.data?.groups ?? [], units.data?.schedulesByBedId ?? new Map()),
     [units.data],
   );
   const scheduleIds = beds.flatMap((entry) => (entry.schedule?.id ? [entry.schedule.id] : []));
-  const slots = useDialysisSlots(view === "orders" ? [] : scheduleIds, from, to);
-  const sessions = useDialysisSessions(view === "orders" ? "" : from, to);
+  const slots = useDialysisSlots(gridView ? scheduleIds : [], from, to);
+  const sessions = useDialysisSessions(gridView ? from : "", to);
 
   const allRows = useMemo(() => worklist.data?.rows ?? [], [worklist.data]);
-  const rows = useMemo(() => allRows.filter((row) => matchesFilters(row, filters)), [allRows, filters]);
+  // 患者のビューには進捗の絞り込みを出さない(受付取消を除いた効いているオーダーの患者を並べる)。
+  const rows = useMemo(
+    () => allRows.filter((row) => matchesFilters(row, view === "patients" ? { ...filters, status: "" } : filters)),
+    [allRows, filters, view],
+  );
+  const patientCount = useMemo(() => dialysisPatientOrders(allRows).length, [allRows]);
   const patientIds = useMemo(() => rows.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])), [rows]);
   const pictograms = useRowPictogramSources(patientIds);
   const drawer = useRowDrawer(view);
@@ -256,6 +269,8 @@ export function DialysisWorklistPage() {
             ["board", "ボード"],
             ["week", "週"],
             ["orders", `オーダー${allRows.length > 0 ? ` (${allRows.length})` : ""}`],
+            ["patients", `患者${patientCount > 0 ? ` (${patientCount})` : ""}`],
+            ["stats", "統計"],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -275,7 +290,9 @@ export function DialysisWorklistPage() {
         date={date}
         view={view}
         filters={filters}
+        month={month}
         onDateChange={(value) => value && setDate(value)}
+        onMonthChange={setMonth}
         onChange={setFilters}
       />
 
@@ -289,7 +306,29 @@ export function DialysisWorklistPage() {
       <ErrorBanner error={perform.error} />
       <ErrorBanner error={cancelPerform.error} />
 
-      {view === "orders" ? (
+      {view === "stats" ? (
+        units.isLoading ? (
+          <p>読み込み中...</p>
+        ) : (
+          <DialysisMonthlyStats month={month} beds={beds} shifts={shifts} />
+        )
+      ) : view === "patients" ? (
+        <>
+          <TruncatedNotice show={worklist.data?.truncated} />
+          {worklist.isLoading ? (
+            <p>読み込み中...</p>
+          ) : (
+            <DialysisPatientTable
+              rows={rows}
+              date={date}
+              shifts={shifts}
+              pictograms={pictograms}
+              onView={setViewingId}
+              onMemo={setMemoPatient}
+            />
+          )}
+        </>
+      ) : view === "orders" ? (
         <>
           <TruncatedNotice show={worklist.data?.truncated} />
           {worklist.isLoading ? (
@@ -431,19 +470,47 @@ function FilterForm({
   date,
   view,
   filters,
+  month,
   onDateChange,
+  onMonthChange,
   onChange,
 }: {
   date: string;
   view: View;
   filters: Filters;
+  month: string;
   onDateChange: (value: string) => void;
+  onMonthChange: (value: string) => void;
   onChange: (filters: Filters) => void;
 }) {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
   }
   const weekFrom = weekStart(date);
+  const listView = view === "orders" || view === "patients";
+
+  if (view === "stats") {
+    const shiftMonth = (months: number) => onMonthChange(addMonths(`${month}-01`, months).slice(0, 7));
+    return (
+      <form className="patient-search-form" onSubmit={handleSubmit}>
+        <label>
+          月
+          <span className="inpatient__date">
+            <button type="button" onClick={() => shiftMonth(-1)} aria-label="前の月">
+              &lt;
+            </button>
+            <input type="month" value={month} onChange={(e) => e.target.value && onMonthChange(e.target.value)} />
+            <button type="button" onClick={() => shiftMonth(1)} aria-label="次の月">
+              &gt;
+            </button>
+            <button type="button" onClick={() => onMonthChange(today().slice(0, 7))}>
+              今月
+            </button>
+          </span>
+        </label>
+      </form>
+    );
+  }
 
   return (
     <form className="patient-search-form" onSubmit={handleSubmit}>
@@ -469,7 +536,7 @@ function FilterForm({
           <DateStepper value={date} onChange={onDateChange} />
         )}
       </label>
-      {view === "orders" && (
+      {listView && (
         <>
           <label>
             浄化方法
@@ -493,17 +560,19 @@ function FilterForm({
               ))}
             </select>
           </label>
-          <label>
-            ステータス
-            <select value={filters.status} onChange={(e) => onChange({ ...filters, status: e.target.value })}>
-              <option value="">すべて</option>
-              {DIALYSIS_TASK_STATUS_OPTIONS.map((option) => (
-                <option key={option.code} value={option.code}>
-                  {option.display}
-                </option>
-              ))}
-            </select>
-          </label>
+          {view === "orders" && (
+            <label>
+              ステータス
+              <select value={filters.status} onChange={(e) => onChange({ ...filters, status: e.target.value })}>
+                <option value="">すべて</option>
+                {DIALYSIS_TASK_STATUS_OPTIONS.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.display}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="patient-search-form__actions">
             <button type="button" onClick={() => onChange(emptyFilters)}>
               クリア

@@ -36,6 +36,8 @@ import {
   type DialysisChartData,
 } from "../../fhir/dialysisChartHelpers";
 import { DIALYSIS_MEMO_TAG_TOKEN, dialysisMemoOf } from "../../fhir/dialysisMemoHelpers";
+import { DIALYSIS_LAB_LOOKBACK_DAYS, dialysisLabSearchCodes } from "../../fhir/dialysisPatientListHelpers";
+import { DIALYSIS_STATS_APPOINTMENT_STATUSES, dialysisMonthRange } from "../../fhir/dialysisStatsHelpers";
 import {
   buildDialysisPerformDeleteBundle,
   dialysisSessionOrderId,
@@ -46,6 +48,7 @@ import {
 } from "../../fhir/dialysisResultHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { buildSlotCreateBundle, SERVICE_TYPE_SYSTEM as SCHEDULE_SERVICE_TYPE_SYSTEM } from "../../fhir/scheduleHelpers";
+import { referenceIdOfType } from "../../fhir/shared";
 import { orderCancelEntries } from "../../fhir/taskHelpers";
 import { addDays, today } from "../../lib/dates";
 import { postBundle, readResource, searchResource } from "../fhirClient";
@@ -518,6 +521,123 @@ export function useDialysisSessions(from: string, to: string) {
     queryKey: ["Procedure", "dialysis-sessions", from, to],
     queryFn: () => fetchDialysisSessions(from, to),
     enabled: Boolean(from) && Boolean(to),
+    placeholderData: keepPreviousData,
+  });
+}
+
+// ---- 透析患者一覧・月間統計(docs/dialysis-order-design.md §6.2・§6.3) ----
+
+/** ドライウェイトは 1 人あたりの件数が少ないので大きな塊で引く。 */
+const DRY_WEIGHT_PATIENT_CHUNK = 50;
+/** 採血は 1 人あたりの件数が多いので塊を小さくする。 */
+const LAB_PATIENT_CHUNK = 20;
+
+/** 患者を塊に分けて Observation を引き、患者 id ごとに束ねる。 */
+async function fetchObservationsByPatients(
+  patientIds: readonly string[],
+  chunkSize: number,
+  build: (params: URLSearchParams) => void,
+): Promise<Truncatable<Map<string, fhir4.Observation[]>>> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < patientIds.length; i += chunkSize) chunks.push(patientIds.slice(i, i + chunkSize));
+  const results = await Promise.all(
+    chunks.map((ids) => {
+      const params = new URLSearchParams();
+      params.set("subject", ids.map((id) => `Patient/${id}`).join(","));
+      build(params);
+      return searchAllPages<fhir4.Observation>("Observation", params, { page: 500, maxPages: 4 });
+    }),
+  );
+  const byPatient = new Map<string, fhir4.Observation[]>();
+  for (const observation of results.flatMap((result) => result.matches)) {
+    const patientId = referenceIdOfType(observation.subject?.reference, "Patient");
+    if (!patientId) continue;
+    const list = byPatient.get(patientId);
+    if (list) list.push(observation);
+    else byPatient.set(patientId, [observation]);
+  }
+  return { value: byPatient, truncated: results.some((result) => result.truncated) };
+}
+
+export interface DialysisPatientDataResult {
+  dryWeightsByPatient: Map<string, fhir4.Observation[]>;
+  labsByPatient: Map<string, fhir4.Observation[]>;
+  truncated: boolean;
+}
+
+/**
+ * 透析患者一覧の患者ごとのドライウェイト(基準日まで、新しい順)と直近の採血。
+ * 新しい順に引くので、上限で欠けるのは古い側。
+ */
+export function useDialysisPatientData(patientIds: readonly string[], date: string) {
+  const key = [...new Set(patientIds)].sort().join(",");
+  return useQuery({
+    queryKey: ["Observation", "dialysis-patients", key, date],
+    queryFn: async (): Promise<DialysisPatientDataResult> => {
+      const ids = key.split(",");
+      const until = `lt${addDays(date, 1)}`;
+      const [dryWeights, labs] = await Promise.all([
+        fetchObservationsByPatients(ids, DRY_WEIGHT_PATIENT_CHUNK, (params) => {
+          params.set("code", DRY_WEIGHT_CODE);
+          params.append("date", until);
+          params.set("_sort", "-date");
+        }),
+        fetchObservationsByPatients(ids, LAB_PATIENT_CHUNK, (params) => {
+          params.set("code", dialysisLabSearchCodes());
+          params.append("date", `ge${addDays(date, -DIALYSIS_LAB_LOOKBACK_DAYS)}`);
+          params.append("date", until);
+          params.set("_sort", "-date");
+        }),
+      ]);
+      return {
+        dryWeightsByPatient: dryWeights.value,
+        labsByPatient: labs.value,
+        truncated: dryWeights.truncated || labs.truncated,
+      };
+    },
+    enabled: key.length > 0 && Boolean(date),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export interface DialysisMonthResult {
+  /** その月にかかる実施記録(ハブと追加の手技。束ね・月の判定は buildDialysisMonthlyStats)。 */
+  hubs: fhir4.Procedure[];
+  ordersById: Map<string, fhir4.ServiceRequest>;
+  /** その月の予約(取消を除く。未来院を含む)。 */
+  appointments: fhir4.Appointment[];
+}
+
+/** 合計を出すので、上限に当たったら欠けたまま数えずに止める(complete)。 */
+async function fetchDialysisMonth(month: string): Promise<DialysisMonthResult> {
+  const { from, to } = dialysisMonthRange(month);
+  const procedures = new URLSearchParams();
+  procedures.set("category", `${ORDER_TYPE_SYSTEM}|${DIALYSIS_ORDER_TYPE.code}`);
+  procedures.append("date", `ge${from}`);
+  procedures.append("date", `lt${addDays(to, 1)}`);
+  procedures.set("_include", "Procedure:based-on");
+  const appointments = new URLSearchParams();
+  appointments.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|dialysis`);
+  appointments.append("date", `ge${from}`);
+  appointments.append("date", `lt${addDays(to, 1)}`);
+  appointments.set("status", DIALYSIS_STATS_APPOINTMENT_STATUSES);
+  const options = { page: 500, maxPages: 10, complete: true };
+  const [hubs, booked] = await Promise.all([
+    searchAllPages<fhir4.Procedure>("Procedure", procedures, options),
+    searchAllPages<fhir4.Appointment>("Appointment", appointments, options),
+  ]);
+  const ordersById = new Map<string, fhir4.ServiceRequest>();
+  for (const order of hubs.bundles.flatMap((bundle) => resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest"))) {
+    if (order.id) ordersById.set(order.id, order);
+  }
+  return { hubs: hubs.matches, ordersById, appointments: booked.matches };
+}
+
+export function useDialysisMonth(month: string) {
+  return useQuery({
+    queryKey: ["Procedure", "dialysis-month", month],
+    queryFn: () => fetchDialysisMonth(month),
+    enabled: /^\d{4}-\d{2}$/.test(month),
     placeholderData: keepPreviousData,
   });
 }
