@@ -127,6 +127,15 @@ flowchart TD
 - 「印刷」で別タブに A4 横の紙面(見出し・グラフ・打点の表・できごと・薬剤)を開き、ブラウザから印刷します。
 - 経過表の打点は温度板(経過表)の期間表示には出しません。日付の見出しを押した 24 時間表示にだけ、透析中の血圧・脈拍・SpO2・体温が重なります。
 
+### 患者メモ
+
+消毒液・止血方法・導入年月日・シャントのシェーマなど、穿刺・止血のたびに見返すことは患者メモに書きます。
+患者 1 人に 1 枚で、入院・外来をまたいで同じものを書き直していきます。
+
+- ボードのカードのケバブ「患者メモ」で開きます。透析オーダーの詳細(カルテの透析カード・透析一覧の「表示」)にも出ます。
+- シャントのシェーマは両上肢の台紙に描き込みます。項目や台紙はテンプレート「透析の患者メモ」(HD_MEMO_01)を直すと変えられます。
+- カルテの時系列には出ません。
+
 ### 終了・中止・退院
 
 - 終了(終了日)・中止・各取消はリハビリと同じです。終了は終了日の翌日以降、中止は今日以降の予約を同じ操作で取り消します。
@@ -156,6 +165,7 @@ flowchart TD
 | 薬剤 | `MedicationAdministration`(`partOf` = ハブ) | ロットは `medication-lot-number`、算定しない薬剤は `dialysis-bundled-medication` = true |
 | 追加の手技 | `Procedure`(`partOf` = ハブ、`basedOn` = オーダー) | `code` = `dialysis-procedure-code`(レセ電算の診療行為コード) |
 | ドライウェイト | `Observation`(`partOf` 無し) | `dialysis-measurement|dry-weight`(kg)。患者単位の状態値で、直近 1 件を読む |
+| 患者メモ | `QuestionnaireResponse`(`encounter` 無し) | テンプレート `Questionnaire/dialysis-memo-01` の回答を患者 1 人に 1 件。`meta.tag` = `questionnaire-response-purpose|dialysis-memo` で引き(`_tag`、strict)、カルテの時系列からは `_tag:not` で外す |
 | 透析経過表 | `Procedure` ハブ(`partOf` = 実施のハブ、`basedOn` 無し) | `category` = `order-type|dialysis-chart`、`status` = `in-progress` / `completed`(回の終了で閉じる)。打点は `Observation`(`partOf` = 経過表のハブ、`category` = `order-type|dialysis-chart`。血圧・脈拍・SpO2・体温は LOINC、装置の値は `dialysis-measurement`)、できごとは `dialysis-event` の `Observation`、透析中の薬剤は `MedicationAdministration`(`partOf` = 経過表のハブ、同じ `category`。会計には乗らない)(`docs/dialysis-chart-design.md`) |
 
 - 入室のハブは `performed[x]` を持たないので日付で引けません。ボードは「期間に始めた回」と「`status=preparation,in-progress` の回」を別々に引いて束ねます(`fetchDialysisSessions`)。
@@ -170,6 +180,7 @@ flowchart TD
 | オーダー | `components/DialysisOrderForm.tsx`・`DialysisOrderPanels.tsx`、詳細 `DialysisOrderDetailPanel.tsx`、カード `karteCardBodies/DialysisOrderCardBody.tsx` |
 | 組み立て | `fhir/dialysisOrderHelpers.ts`(オーダー・終了日・退院の打ち切り)・`dialysisTaskHelpers.ts`(進捗)・`dialysisAppointmentHelpers.ts`(予約)・`dialysisUnitHelpers.ts`(透析室・ベッド・枠)・`dialysisResultHelpers.ts`(実施)・`dialysisChartHelpers.ts`(経過表。器は `timeSeriesChartHelpers.ts`) |
 | 部門の画面 | `pages/DialysisWorklistPage.tsx`(ボード・週・オーダー)、`components/DialysisBoard.tsx`、`pages/DialysisUnitPage.tsx`、経過表 `pages/DialysisChartPage.tsx`(`/dialysis-sessions/:sessionId/chart`)・`components/DialysisChartPanel.tsx`・`DialysisChartModal.tsx`・印刷 `pages/DialysisChartPrintPage.tsx`(`/dialysis-chart-print/:sessionId`)(器は `components/timeSeriesChart/`) |
+| 患者メモ | `components/DialysisMemo.tsx`(詳細の区画・ボードのモーダル)、`fhir/dialysisMemoHelpers.ts`、雛形 `docs/report-mappings/dialysis-memo-01.questionnaire.json` |
 | モーダル | 実施 `components/DialysisPerformModal.tsx`、展開 `DialysisExpandModal.tsx`、臨時・変更 `DialysisBookModal.tsx` |
 | hook | `api/queries/dialysis.ts`(`useDialysisSessions`・`useDialysisPerform`・`useCancelDialysisPerform`・`useLatestDryWeight`・`usePatientDialysisOrders`・`useDialysisChart`・`useDialysisChartWrite`・`useDialysisSessionDetail` ほか) |
 | 退院 | `components/DischargeModal.tsx`、`api/queries/encounter.ts`(`buildDialysisOrderStopEntries`) |

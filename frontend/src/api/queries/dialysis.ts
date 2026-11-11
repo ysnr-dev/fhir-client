@@ -35,6 +35,7 @@ import {
   isDialysisChartHub,
   type DialysisChartData,
 } from "../../fhir/dialysisChartHelpers";
+import { DIALYSIS_MEMO_TAG_TOKEN, dialysisMemoOf } from "../../fhir/dialysisMemoHelpers";
 import {
   buildDialysisPerformDeleteBundle,
   dialysisSessionOrderId,
@@ -145,6 +146,27 @@ export function useLatestDryWeight(patientId: string | undefined) {
       params.set("_count", "1");
       const { data } = await searchResource<fhir4.Observation>("Observation", params);
       return dryWeightOf(data.entry?.find((e) => e.resource?.resourceType === "Observation")?.resource);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * 透析の患者メモ(患者 1 人に 1 件のテンプレート回答)。用途の印で引くので strict にする
+ * (上流が `_tag` を知らないと全件が返り、別の回答をメモとして出してしまう)。
+ */
+export function useDialysisMemo(patientId: string | undefined) {
+  return useQuery({
+    queryKey: ["QuestionnaireResponse", "search", "dialysis-memo", patientId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("_tag", DIALYSIS_MEMO_TAG_TOKEN);
+      params.set("_sort", "-authored");
+      params.set("_count", "1");
+      params.set("_include", "QuestionnaireResponse:questionnaire");
+      const { data } = await searchResource<fhir4.Resource>("QuestionnaireResponse", params, { strict: true });
+      return dialysisMemoOf(data);
     },
     enabled: Boolean(patientId),
   });

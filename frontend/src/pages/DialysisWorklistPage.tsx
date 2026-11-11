@@ -18,6 +18,7 @@ import { DialysisBoard, type DialysisBoardEntry, type DialysisPerformAction } fr
 import { DialysisBookModal } from "../components/DialysisBookModal";
 import { DialysisChartMark } from "../components/DialysisChartMark";
 import { DialysisExpandModal } from "../components/DialysisExpandModal";
+import { DialysisMemoModal } from "../components/DialysisMemo";
 import { DialysisOrderDetailPanel } from "../components/DialysisOrderDetailPanel";
 import { DialysisPerformModal } from "../components/DialysisPerformModal";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -96,6 +97,7 @@ export function DialysisWorklistPage() {
   const [view, setView] = useState<View>("board");
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [memoPatient, setMemoPatient] = useState<fhir4.Patient | null>(null);
   const [expandingId, setExpandingId] = useState<string | null>(null);
   const [booking, setBooking] = useState<{ orderId: string; appointment?: fhir4.Appointment } | null>(null);
   const [finishingId, setFinishingId] = useState<string | null>(null);
@@ -218,6 +220,7 @@ export function DialysisWorklistPage() {
       });
     },
     onView: (entry: DialysisBoardEntry) => setViewingId(entry.order?.id ?? null),
+    onMemo: (entry: DialysisBoardEntry) => setMemoPatient(entry.patient ?? null),
     onReschedule: (entry: DialysisBoardEntry) =>
       setBooking({ orderId: appointmentOrderId(entry.appointment), appointment: entry.appointment }),
     onCancel: (entry: DialysisBoardEntry) => {
@@ -356,6 +359,14 @@ export function DialysisWorklistPage() {
         >
           <DialysisOrderDetailPanel serviceRequest={viewing.order} />
         </Modal>
+      )}
+
+      {memoPatient?.id && (
+        <DialysisMemoModal
+          patientId={memoPatient.id}
+          patientName={displayName(memoPatient)}
+          onClose={() => setMemoPatient(null)}
+        />
       )}
 
       {expanding && (

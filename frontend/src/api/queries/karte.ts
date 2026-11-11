@@ -28,6 +28,7 @@ import { today } from "../../lib/dates";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/orderHeader";
 import { NURSING_ORDER_TYPE } from "../../fhir/nursingOrderHelpers";
 import { DIALYSIS_CHART_FLOWSHEET_CODES, DIALYSIS_CHART_TYPE } from "../../fhir/dialysisChartHelpers";
+import { DIALYSIS_MEMO_TAG_TOKEN } from "../../fhir/dialysisMemoHelpers";
 import { type FhirResult, postBundle, searchResource } from "../fhirClient";
 import { fetchDistinctDates, hasRelation, NOTIFICATION_TASK_KEY, type PagedItems, resourcesOfType, searchAllPages } from "./core";
 
@@ -183,6 +184,8 @@ export function karteResponseParams(patientId: string | undefined): URLSearchPar
   // 入院に結び付いた回答(DPC 様式1・看護プロファイル)は入院単位の書類で、カルテの記載
   // ではないので出さない。
   params.set("encounter:missing", "true");
+  // 患者単位で 1 件を書き直していく回答(透析の患者メモ)も記載ではないので出さない。
+  params.set("_tag:not", DIALYSIS_MEMO_TAG_TOKEN);
   return params;
 }
 

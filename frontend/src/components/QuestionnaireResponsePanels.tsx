@@ -75,6 +75,8 @@ interface QuestionnaireResponseCreatePanelProps {
   authored?: string;
   /** 回答に足す拡張(回答の出どころなど)。 */
   extension?: fhir4.Extension[];
+  /** 回答の用途の印(透析の患者メモ)。 */
+  tag?: fhir4.Coding[];
   /** 保存後。保存した回答を受け取れる(Web 問診の取込済みの書き戻しに使う)。 */
   onSaved: (saved?: fhir4.QuestionnaireResponse) => void;
 }
@@ -92,6 +94,7 @@ export function QuestionnaireResponseCreatePanel({
   initialResponse,
   authored,
   extension,
+  tag,
   onSaved,
 }: QuestionnaireResponseCreatePanelProps) {
   const { data: patientResult } = usePatient(patientId);
@@ -252,6 +255,7 @@ export function QuestionnaireResponseCreatePanel({
           encounterId,
           authored,
           extension,
+          tag,
         }),
         imageEntries,
         extraEntries,

@@ -32573,3 +32573,16 @@ input.nursing-picker__search {
 .dialysis-detail__used-list li + li {
   margin-top: 2px;
 }
+
+/* 透析の患者メモ。記入日時・記入者と「編集」を 1 行に並べ、その下に平文とシェーマ。 */
+.dialysis-memo__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.dialysis-memo__stamp {
+  margin-left: auto;
+  font-size: 12px;
+}

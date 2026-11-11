@@ -14,6 +14,7 @@ import {
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
 import { shortDate } from "../lib/dates";
 import { DialysisChartMark } from "./DialysisChartMark";
+import { DialysisMemoSection } from "./DialysisMemo";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 透析オーダーの内容表示。カルテ画面の詳細モーダルから使う。
@@ -47,6 +48,7 @@ export function DialysisOrderDetailPanel({
   const problem = dialysisOrderProblem(serviceRequest);
   const currentProblem = problem ? problemsById?.get(problem.conditionId) : undefined;
   const problemText = currentProblem ? problemLabel(currentProblem) : problem?.display || "-";
+  const patientId = serviceRequest.subject?.reference?.match(/^Patient\/(.+)$/)?.[1];
 
   return (
     <div className="prescription-detail">
@@ -117,6 +119,8 @@ export function DialysisOrderDetailPanel({
           )}
         </dl>
       </fieldset>
+
+      {patientId && <DialysisMemoSection patientId={patientId} />}
 
       {performs && (
         <fieldset className="rp-card dialysis-detail__history">

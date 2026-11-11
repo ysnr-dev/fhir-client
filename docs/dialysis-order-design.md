@@ -1,6 +1,6 @@
 # 透析(血液浄化)オーダーと透析部門の設計
 
-**状態: 第 1 段(オーダー・カルテ・上流・シフト設定)を実装済み(2026-11-09)、第 2 段(透析室の設定・ベッド枠・一括展開・部門一覧)と第 3 段(実施記録・会計・退院連動)を実装済み(2026-11-10)。残りは §9 の申し送り。** 運用の流れは `docs/order-flows/dialysis.md`。 `docs/functional-gap-backlog.md` §2.7 の「透析(血液浄化)」。
+**状態: 第 1 段(オーダー・カルテ・上流・シフト設定)を実装済み(2026-11-09)、第 2 段(透析室の設定・ベッド枠・一括展開・部門一覧)と第 3 段(実施記録・会計・退院連動)を実装済み(2026-11-10)、看護向けの患者メモ(§6.1)を実装済み(2026-11-11)。残りは §9 の申し送り。** 運用の流れは `docs/order-flows/dialysis.md`。 `docs/functional-gap-backlog.md` §2.7 の「透析(血液浄化)」。
 
 維持透析(週 3 回を何か月も続ける)と急性血液浄化(ICU などのベッドサイドで行う CHDF・血漿交換)を、
 部門オーダーの 1 種別として足す。雛形はリハビリ(`docs/rehab-order-design.md`。期間継続型・Task は部門の受け入れ状態・
@@ -119,6 +119,8 @@ Location 透析室 (type = CodeSystem/location-type|dialysis-unit、physicalType
 | `CodeSystem/order-type` の値 `dialysis-chart` | 透析経過表のハブと打点の `category`(`docs/dialysis-chart-design.md`) |
 | `CodeSystem/dialysis-event` | 透析経過表のイベント(穿刺・除水停止・血圧低下・補液・返血など) |
 | `CodeSystem/dialysis-measurement` の追加 `uf-rate` / `venous-pressure` / `arterial-pressure` / `tmp` | 透析経過表の装置の値。`qb` / `qd` / `ultrafiltration` は時点の値としても同じコードを使う |
+| `CodeSystem/questionnaire-response-purpose` の値 `dialysis-memo` | 透析の患者メモの `QuestionnaireResponse.meta.tag`(§6.1) |
+| `Questionnaire/dialysis-memo-01` | 透析の患者メモのテンプレート(`HD_MEMO_01`。雛形は `docs/report-mappings/dialysis-memo.md`) |
 
 ［事実］`OrderCatalog::Definition`(会計)は `#{order_type}-procedure-code`・`#{order_type}-material-quantity`・`#{order_type}-bundled-medication` を規約で組む
 (`integrations/receipt_computer/order_catalog.rb`)ので、上の 2 つはこの名前でなければならない。
@@ -420,6 +422,27 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
 
 ---
 
+### 6.1 看護向けの患者メモ
+
+消毒液・止血方法・導入年月日・シャントのシェーマなど、透析室の看護師が穿刺・止血のたびに見返す患者ごとの状態。
+
+- ［導出］**器はテンプレート(Questionnaire)**。項目は施設ごとに違い(固定テープ・穿刺の注意・シャント肢の禁止事項など)、
+  シェーマの台紙と描き込みはテンプレートの機能(`questionnaire-itemMedia` + 描き込み済み画像)でそのまま持てる。
+  看護プロファイル(`docs/nursing-profile-design.md`)と同じ考え方。雛形 `HD_MEMO_01` を同梱し、施設は同じ url のまま版を上げて項目や台紙を直す
+  (施設設定は持たない。url は `DIALYSIS_MEMO_QUESTIONNAIRE_URL`)。
+- ［導出］**患者 1 人に 1 件の `QuestionnaireResponse`**(`encounter` 無し)。看護プロファイルは入院単位だが、維持透析の患者の多くは外来で、
+  メモは入院をまたいで同じ。書き直しは同じ回答の更新(PUT、`If-Match`)で、版の履歴は上流の `_history`。
+- ［事実］テンプレートの url では回答を引けない(上流の `questionnaire` 検索は版込みの完全一致)。そこで回答に**用途の印**
+  `meta.tag` = `questionnaire-response-purpose|dialysis-memo` を付け、`QuestionnaireResponse?patient=…&_tag=…&_sort=-authored&_count=1` で読む。
+  上流に `_tag` が無いと条件が黙殺されて別の回答をメモとして出すので、この読み込みは strict。1 件のはずが 2 件あれば(同時に新規登録した場合)新しいほうを採る。
+- **カルテの時系列には出さない**。時系列のテンプレート回答の検索に `_tag:not=…|dialysis-memo` を足す(記載ではなく、書き直していく今の状態のため)。
+  患者のテンプレート回答の一覧には出る。
+- 透析条件にあるもの(バスキュラーアクセスの種類・部位・穿刺針)はメモに持たない。
+- 画面: 透析オーダーの詳細(カルテのカード・透析一覧の「表示」)に「患者メモ」の区画(平文 + 描き込んだシェーマ、「記入」「編集」はモーダル)、
+  ボードのカードのケバブ「患者メモ」(表示から始めるモーダル)。部品は `components/DialysisMemo.tsx`・`fhir/dialysisMemoHelpers.ts`・`useDialysisMemo`。
+
+---
+
 ## 7. 医事会計
 
 - `OrderCatalog::ALL` に `Definition.new(order_type: "dialysis", label: "透析", source: :procedure, resolver: Resolvers::Dialysis, continuous: true)`。
@@ -455,7 +478,6 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
 
 ## 9. 未実装・今後(申し送り)
 
-- 看護向けの患者メモ(消毒液・止血方法・導入年月日・シャントのシェーマ)。看護プロファイルの区画で持てる。
 - 透析患者一覧(DW の推移・直近の採血・アクセスの状態)、月間統計(回数・浄化方法別・ベッド稼働)。
 - ボードのドラッグによるベッドの入れ替え、週ビューからの直接予約、入院中の外来オーダーの一時中断。
 - B001-15 の月次算定、導入期加算など(§7)。

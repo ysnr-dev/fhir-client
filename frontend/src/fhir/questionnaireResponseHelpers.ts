@@ -106,6 +106,12 @@ export function questionnaireResponseProblem(
   return problemRefFromReference(reference);
 }
 
+/**
+ * 回答の用途の印(`meta.tag`)の CodeSystem。テンプレートの url は版込みでしか検索できないので、
+ * 決まった用途の回答は url ではなくこの印で引く(上流の `QuestionnaireResponse?_tag=`)。
+ */
+export const QR_PURPOSE_SYSTEM = "http://fhir-client.local/CodeSystem/questionnaire-response-purpose";
+
 export interface BuildQuestionnaireResponseArgs {
   questionnaire: fhir4.Questionnaire;
   patient: fhir4.Patient;
@@ -142,6 +148,11 @@ export interface BuildQuestionnaireResponseArgs {
   authored?: string;
   /** 回答の出どころなど、付け足す拡張。 */
   extension?: fhir4.Extension[];
+  /**
+   * 回答の用途の印(`meta.tag`。`QR_PURPOSE_SYSTEM`)。患者単位で 1 件を持つ回答(透析の患者メモ)を
+   * 用途で引き、カルテの時系列から外すのに使う。更新では保存済みの値を引き継ぐ。
+   */
+  tag?: fhir4.Coding[];
 }
 
 // identifier は IG の記法「保険医療機関番号^患者ID^報告単位ID」で組み立てる。
@@ -180,6 +191,8 @@ export function buildQuestionnaireResponse(
   };
 
   if (existing?.id) response.id = existing.id;
+  const tag = args.tag ?? existing?.meta?.tag?.filter((coding) => coding.system === QR_PURPOSE_SYSTEM);
+  if (tag?.length) response.meta = { ...response.meta, tag };
   const encounter = encounterId ? { reference: `Encounter/${encounterId}` } : existing?.encounter;
   if (encounter) response.encounter = encounter;
   // 更新では元の対象を引き継ぐ(編集の入口が対象を知らないことがある)。

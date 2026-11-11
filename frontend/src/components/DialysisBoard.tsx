@@ -47,6 +47,8 @@ export interface DialysisBoardActions {
   onView: (entry: DialysisBoardEntry) => void;
   onReschedule: (entry: DialysisBoardEntry) => void;
   onCancel: (entry: DialysisBoardEntry) => void;
+  /** 透析の患者メモ(消毒液・止血方法・シャントのシェーマなど)。 */
+  onMemo: (entry: DialysisBoardEntry) => void;
   /** placeLabel は「ベッド 3 / 午前」。実施入力の見出しに出す。 */
   onPerform: (entry: DialysisBoardEntry, action: DialysisPerformAction, placeLabel: string) => void;
   pending: boolean;
@@ -241,6 +243,7 @@ function BoardCard({
   onView,
   onReschedule,
   onCancel,
+  onMemo,
   onPerform,
   pending,
 }: {
@@ -302,6 +305,9 @@ function BoardCard({
       <RowMenu label={`${name} の予約の操作`} escapesClipping>
         <button type="button" className="row-menu__item" onClick={() => onView(entry)} disabled={!order}>
           表示
+        </button>
+        <button type="button" className="row-menu__item" onClick={() => onMemo(entry)} disabled={!patient?.id}>
+          患者メモ
         </button>
         {/* 透析経過表(透析中の時系列記録)。開始後に書き始め、終了後は振り返りに読む。
             docs/dialysis-chart-design.md §3.1 */}
