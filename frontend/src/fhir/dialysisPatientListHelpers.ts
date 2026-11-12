@@ -16,18 +16,40 @@ import { codingBySystem, referenceIdOfType } from "./shared";
 // ドライウェイトの推移・直近の透析・直近の採血・バスキュラーアクセスを並べる。
 
 /**
- * 一覧に並べる採血の項目。結果項目コード(同梱の検体検査マスタ = レセ電算の検査コード)で引く。
+ * 一覧に並べる採血の項目(施設設定 `dialysis_lab_items`。backend の FacilitySettings::DEFAULT_DIALYSIS_LAB_ITEMS と同じ)。
+ * 結果項目コード(同梱の検体検査マスタ = レセ電算の検査コード)で引く。
  * 上流のコード検索は完全一致なので、JLAC11 の分析物での前方一致はできない。
  */
-export const DIALYSIS_LAB_ITEMS = [
-  { key: "hb", label: "Hb", resultItemCode: "160008010-03" },
-  { key: "alb", label: "Alb", resultItemCode: "160018910" },
-  { key: "k", label: "K", resultItemCode: "160021410" },
-  { key: "ip", label: "P", resultItemCode: "160021810" },
-  { key: "ca", label: "Ca", resultItemCode: "160021510" },
-] as const;
+export interface DialysisLabItem {
+  /** 結果項目コード。 */
+  code: string;
+  /** 列の見出し。 */
+  label: string;
+}
 
-export type DialysisLabKey = (typeof DIALYSIS_LAB_ITEMS)[number]["key"];
+export interface DialysisLabItemSettings {
+  items: DialysisLabItem[];
+}
+
+export const DEFAULT_DIALYSIS_LAB_ITEMS: DialysisLabItemSettings = {
+  items: [
+    { code: "160008010-03", label: "Hb" },
+    { code: "160018910", label: "Alb" },
+    { code: "160021410", label: "K" },
+    { code: "160021810", label: "P" },
+    { code: "160021510", label: "Ca" },
+  ],
+};
+
+export const MAX_DIALYSIS_LAB_ITEMS = 10;
+
+/** 施設設定のフォームの検証。妥当なら空文字。 */
+export function dialysisLabItemsError(items: readonly DialysisLabItem[]): string {
+  if (items.length > MAX_DIALYSIS_LAB_ITEMS) return `採血の項目は ${MAX_DIALYSIS_LAB_ITEMS} 件までです。`;
+  if (items.some((item) => !item.label.trim())) return "採血の項目の見出しを入れてください。";
+  if (new Set(items.map((item) => item.code)).size !== items.length) return "同じ検査項目が重複しています。";
+  return "";
+}
 
 /** 何日前までの採血を「直近」として拾うか。 */
 export const DIALYSIS_LAB_LOOKBACK_DAYS = 90;
@@ -38,8 +60,8 @@ export const DIALYSIS_SESSION_LOOKBACK_DAYS = 21;
 /** ドライウェイトの推移に並べる件数(古い → 新しい)。 */
 const DRY_WEIGHT_HISTORY = 4;
 
-export function dialysisLabSearchCodes(): string {
-  return DIALYSIS_LAB_ITEMS.map((item) => `${RESULT_ITEM_SYSTEM}|${item.resultItemCode}`).join(",");
+export function dialysisLabSearchCodes(items: readonly DialysisLabItem[]): string {
+  return items.map((item) => `${RESULT_ITEM_SYSTEM}|${item.code}`).join(",");
 }
 
 export interface DialysisLabValue {
@@ -52,7 +74,8 @@ export interface DialysisLabValue {
 export interface DialysisLabSnapshot {
   /** 一覧の項目のうち最も新しい採血の日。 */
   date: string;
-  values: Partial<Record<DialysisLabKey, DialysisLabValue>>;
+  /** 結果項目コード → 値。 */
+  values: Record<string, DialysisLabValue>;
 }
 
 const IGNORED_OBSERVATION_STATUSES = new Set(["entered-in-error", "cancelled", "registered"]);
@@ -64,7 +87,11 @@ function labValueText(observation: fhir4.Observation): string {
 }
 
 /** 項目ごとに基準日以前で最も新しい結果。 */
-export function latestDialysisLabs(observations: readonly fhir4.Observation[], baseDate: string): DialysisLabSnapshot {
+export function latestDialysisLabs(
+  observations: readonly fhir4.Observation[],
+  baseDate: string,
+  items: readonly DialysisLabItem[],
+): DialysisLabSnapshot {
   const values: DialysisLabSnapshot["values"] = {};
   const sorted = observations
     .filter((o) => !IGNORED_OBSERVATION_STATUSES.has(o.status))
@@ -73,11 +100,11 @@ export function latestDialysisLabs(observations: readonly fhir4.Observation[], b
     .sort((a, b) => (b.observation.effectiveDateTime ?? "").localeCompare(a.observation.effectiveDateTime ?? ""));
   for (const { observation, date } of sorted) {
     const code = codingBySystem(observation.code?.coding, RESULT_ITEM_SYSTEM)?.code;
-    const item = DIALYSIS_LAB_ITEMS.find((i) => i.resultItemCode === code);
-    if (!item || values[item.key]) continue;
+    const item = items.find((i) => i.code === code);
+    if (!item || values[item.code]) continue;
     const text = labValueText(observation);
     if (!text) continue;
-    values[item.key] = { text, interpretation: interpretationCodeOf(observation), date };
+    values[item.code] = { text, interpretation: interpretationCodeOf(observation), date };
   }
   const dates = Object.values(values).map((value) => value.date);
   return { date: dates.sort().pop() ?? "", values };
@@ -162,6 +189,7 @@ export interface DialysisPatientRowInput {
   sessions: readonly DialysisSession[];
   dryWeightsByPatient: ReadonlyMap<string, fhir4.Observation[]>;
   labsByPatient: ReadonlyMap<string, fhir4.Observation[]>;
+  labItems: readonly DialysisLabItem[];
 }
 
 export function buildDialysisPatientRows(input: DialysisPatientRowInput): DialysisPatientRow[] {
@@ -200,7 +228,7 @@ export function buildDialysisPatientRows(input: DialysisPatientRowInput): Dialys
       latest,
       postDiff: latest?.postWeight != null && dw ? round1(latest.postWeight - dw.value) : undefined,
       weightGain,
-      labs: latestDialysisLabs(input.labsByPatient.get(patientId) ?? [], input.baseDate),
+      labs: latestDialysisLabs(input.labsByPatient.get(patientId) ?? [], input.baseDate, input.labItems),
     };
   });
 }

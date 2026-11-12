@@ -1,11 +1,10 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useDialysisPatientData, useDialysisSessions, type DialysisWorklistRow } from "../api/queries";
+import { useDialysisLabItems, useDialysisPatientData, useDialysisSessions, type DialysisWorklistRow } from "../api/queries";
 import { dialysisAppointmentDate, dialysisAppointmentShift } from "../fhir/dialysisAppointmentHelpers";
 import { summarizeDialysisOrder } from "../fhir/dialysisOrderHelpers";
 import {
   buildDialysisPatientRows,
-  DIALYSIS_LAB_ITEMS,
   DIALYSIS_SESSION_LOOKBACK_DAYS,
   dialysisPatientOrders,
   signedKg,
@@ -41,7 +40,8 @@ export function DialysisPatientTable({ rows, date, shifts, pictograms, onView, o
   const returnLinkState = useReturnLinkState();
   const targets = useMemo(() => dialysisPatientOrders(rows), [rows]);
   const patientIds = useMemo(() => targets.flatMap((row) => (row.patient?.id ? [row.patient.id] : [])), [targets]);
-  const data = useDialysisPatientData(patientIds, date);
+  const labItems = useDialysisLabItems();
+  const data = useDialysisPatientData(patientIds, date, labItems);
   const sessions = useDialysisSessions(addDays(date, -(DIALYSIS_SESSION_LOOKBACK_DAYS - 1)), date);
 
   const patientRows = useMemo(
@@ -52,8 +52,9 @@ export function DialysisPatientTable({ rows, date, shifts, pictograms, onView, o
         sessions: sessions.data?.sessions ?? [],
         dryWeightsByPatient: data.data?.dryWeightsByPatient ?? new Map(),
         labsByPatient: data.data?.labsByPatient ?? new Map(),
+        labItems,
       }),
-    [targets, date, sessions.data, data.data],
+    [targets, date, sessions.data, data.data, labItems],
   );
 
   return (
@@ -75,8 +76,8 @@ export function DialysisPatientTable({ rows, date, shifts, pictograms, onView, o
               <th className="lab-worklist__compact">直近の透析</th>
               <th className="lab-worklist__compact">体重増加</th>
               <th className="lab-worklist__compact">採血日</th>
-              {DIALYSIS_LAB_ITEMS.map((item) => (
-                <th key={item.key} className="lab-worklist__compact dialysis-patients__lab">
+              {labItems.map((item) => (
+                <th key={item.code} className="lab-worklist__compact dialysis-patients__lab">
                   {item.label}
                 </th>
               ))}
@@ -132,13 +133,13 @@ export function DialysisPatientTable({ rows, date, shifts, pictograms, onView, o
                     )}
                   </td>
                   <td className="lab-worklist__compact">{row.labs.date ? shortDate(row.labs.date) : "-"}</td>
-                  {DIALYSIS_LAB_ITEMS.map((item) => {
-                    const value = row.labs.values[item.key];
+                  {labItems.map((item) => {
+                    const value = row.labs.values[item.code];
                     // 採血日より前の結果(その回に測っていない項目)は日付を添えて区別する。
                     const older = value && value.date !== row.labs.date;
                     return (
                       <td
-                        key={item.key}
+                        key={item.code}
                         className={interpretationClass(value?.interpretation ?? "", "dialysis-patients__lab")}
                         title={value ? `${item.label} ${value.text}(${shortDate(value.date)})` : undefined}
                       >
@@ -171,7 +172,7 @@ export function DialysisPatientTable({ rows, date, shifts, pictograms, onView, o
             })}
             {patientRows.length === 0 && (
               <tr>
-                <td colSpan={13 + DIALYSIS_LAB_ITEMS.length} className="master-search__empty">
+                <td colSpan={13 + labItems.length} className="master-search__empty">
                   {rows.length === 0 ? `${date} に透析室で透析を受けている患者はいません` : "絞り込みに該当する患者がいません"}
                 </td>
               </tr>

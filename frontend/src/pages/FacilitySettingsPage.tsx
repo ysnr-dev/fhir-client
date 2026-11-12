@@ -30,6 +30,12 @@ import {
 } from "../fhir/dialysisShiftHelpers";
 import { dialysisModalityDisplay } from "../fhir/dialysisOrderHelpers";
 import {
+  DEFAULT_DIALYSIS_LAB_ITEMS,
+  dialysisLabItemsError,
+  type DialysisLabItem,
+} from "../fhir/dialysisPatientListHelpers";
+import { LabResultItemSearchModal } from "../components/LabResultItemSearchModal";
+import {
   DEFAULT_VITAL_THRESHOLDS,
   VITAL_THRESHOLD_ITEMS,
   type VitalThresholdSettings,
@@ -197,6 +203,7 @@ const FACILITY_SECTIONS = [
   { key: "injection_verification", label: "注射の3点認証" },
   { key: "transfusion", label: "輸血オーダー" },
   { key: "dialysis_shifts", label: "透析室のシフト" },
+  { key: "dialysis_lab_items", label: "透析患者一覧の採血項目" },
   { key: "receipt_codes", label: "医事会計のレセプト電算コード" },
   { key: "water_balance", label: "水分出納の対象項目" },
   { key: "bulk_vital_entry", label: "経過表一括入力の列" },
@@ -473,6 +480,13 @@ export function FacilitySettingsPage() {
     setDialysisShiftsDraft(dialysisShifts.map((shift, i) => (i === index ? { ...shift, ...patch } : shift)));
   }
 
+  // 透析患者一覧に並べる採血の項目(結果項目コードと列の見出し)。
+  const [dialysisLabItemsDraft, setDialysisLabItemsDraft] = useState<DialysisLabItem[] | undefined>(undefined);
+  const dialysisLabItems =
+    dialysisLabItemsDraft ?? settings.data?.dialysis_lab_items.items ?? DEFAULT_DIALYSIS_LAB_ITEMS.items;
+  const dialysisLabItemsMessage = dialysisLabItemsError(dialysisLabItems);
+  const [dialysisLabSearch, setDialysisLabSearch] = useState(false);
+
   // SS-MIX2 標準化ストレージへの出力。有効にすると中継の書き込みが記録され、院内エージェントが出力先へ書く。
   const [ssmix2Draft, setSsmix2Draft] = useState<Ssmix2Settings | undefined>(undefined);
   const ssmix2 = ssmix2Draft ?? settings.data?.ssmix2 ?? DEFAULT_SSMIX2;
@@ -665,7 +679,7 @@ export function FacilitySettingsPage() {
     if (!prescriptionCheckValid) return;
     if (!admissionDocsValid || !acuityValid || !pressureUlcerValid || !cancerRegistryValid || !infectiousReportValid || !ncdValid || !anesthesiaPreopValid) return;
     if (!reviewValid || !receiptCodesOk || !coefficientsValid || !intakeValid || !ssmix2Valid) return;
-    if (dialysisShiftsMessage) return;
+    if (dialysisShiftsMessage || dialysisLabItemsMessage) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
@@ -696,6 +710,7 @@ export function FacilitySettingsPage() {
       injection_verification: injectionVerification,
       transfusion,
       dialysis_shifts: { shifts: sortedDialysisShifts(dialysisShifts) },
+      dialysis_lab_items: { items: dialysisLabItems.map((item) => ({ ...item, label: item.label.trim() })) },
       intake,
       ssmix2,
       karte_card_order: { ...cardOrder, kinds: cardKinds },
@@ -1915,6 +1930,46 @@ export function FacilitySettingsPage() {
             </div>
           )}
 
+          {section === "dialysis_lab_items" && (
+            <div className="facility-settings__schedule-body">
+              <ul className="facility-settings__balance-list">
+                {dialysisLabItems.map((item, index) => (
+                  <li key={item.code}>
+                    <input
+                      type="text"
+                      value={item.label}
+                      onChange={(e) =>
+                        setDialysisLabItemsDraft(
+                          dialysisLabItems.map((row, i) => (i === index ? { ...row, label: e.target.value } : row)),
+                        )
+                      }
+                      aria-label="列の見出し"
+                      placeholder="見出し"
+                    />
+                    <span className="order-select__muted">{item.code}</span>
+                    <button
+                      type="button"
+                      className="rp-card__icon-button"
+                      title="採血の項目を削除"
+                      aria-label="採血の項目を削除"
+                      onClick={() => setDialysisLabItemsDraft(dialysisLabItems.filter((_, i) => i !== index))}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" className="rp-card__compact-button" onClick={() => setDialysisLabSearch(true)}>
+                追加
+              </button>
+              {dialysisLabItemsMessage && (
+                <p className="facility-settings__error" role="alert">
+                  {dialysisLabItemsMessage}
+                </p>
+              )}
+            </div>
+          )}
+
           {section === "transfusion" && (
             <div className="facility-settings__schedule-body">
               <label>
@@ -2404,6 +2459,23 @@ export function FacilitySettingsPage() {
           <ErrorBanner error={update.error} />
         </div>
       </form>
+
+      {dialysisLabSearch && (
+        <LabResultItemSearchModal
+          title="透析患者一覧に足す検査項目を選択"
+          dataType="PQ"
+          onSelect={(item) => {
+            if (!dialysisLabItems.some((row) => row.code === item.result_item_code)) {
+              setDialysisLabItemsDraft([
+                ...dialysisLabItems,
+                { code: item.result_item_code, label: item.short_name || item.name },
+              ]);
+            }
+            setDialysisLabSearch(false);
+          }}
+          onClose={() => setDialysisLabSearch(false)}
+        />
+      )}
 
       {pickingSide && (
         <NursingItemSearchModal

@@ -98,6 +98,35 @@ export function buildDialysisRescheduleBundle(
   return buildRescheduleBundle(moved, oldSlots, [booking.slot]);
 }
 
+/**
+ * 同じ日 × シフトの 2 件の予約のベッドを入れ替える(ボードのドラッグ)。枠はどちらも busy のまま、
+ * 予約の枠・ベッド・時刻・名前だけを交換する。読んだ予約を書き換えて送るので、版は postBundle が ifMatch に添える。
+ */
+export function buildDialysisSwapBundle(a: fhir4.Appointment, b: fhir4.Appointment): fhir4.Bundle {
+  const isBed = (p: fhir4.AppointmentParticipant) => Boolean(p.actor?.reference?.startsWith("Location/"));
+  const swapped = (from: fhir4.Appointment, to: fhir4.Appointment): fhir4.Appointment => ({
+    ...from,
+    slot: to.slot,
+    start: to.start,
+    end: to.end,
+    description: to.description,
+    participant: [...(from.participant ?? []).filter((p) => !isBed(p)), ...(to.participant ?? []).filter(isBed)],
+  });
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      { resource: swapped(a, b), request: { method: "PUT", url: `Appointment/${a.id}` } },
+      { resource: swapped(b, a), request: { method: "PUT", url: `Appointment/${b.id}` } },
+    ],
+  };
+}
+
+/** ボードでドラッグできる予約(予約済で、まだ入室していない)。予約変更・予約取消と同じ条件。 */
+export function isDialysisAppointmentMovable(appointment: fhir4.Appointment, hasSession: boolean): boolean {
+  return appointment.status === "booked" && !hasSession;
+}
+
 // ---- 読み取り ----
 
 /** 予約のベッド(Location.id)。 */

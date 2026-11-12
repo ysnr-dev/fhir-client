@@ -362,6 +362,18 @@ class FacilitySettings < ApplicationRecord
     ]
   }.freeze
   DIALYSIS_SHIFT_CODE = { pattern: /\A[a-z0-9-]{1,16}\z/, label: "シフトコード(半角英小文字・数字・ハイフン 16 文字以内)", strict: true }.freeze
+  # 透析患者一覧に並べる採血の項目(結果項目コードと列の見出し)。上流のコード検索は完全一致なので
+  # 結果項目コード(同梱の検体検査マスタ = レセ電算の検査コード)で引く(docs/dialysis-order-design.md §6.2)。
+  DEFAULT_DIALYSIS_LAB_ITEMS = {
+    "items" => [
+      { "code" => "160008010-03", "label" => "Hb" },
+      { "code" => "160018910", "label" => "Alb" },
+      { "code" => "160021410", "label" => "K" },
+      { "code" => "160021810", "label" => "P" },
+      { "code" => "160021510", "label" => "Ca" }
+    ]
+  }.freeze
+  DIALYSIS_LAB_ITEMS_MAX = 10
   # 設定項目の表。ここに 1 項目足せば、検証・既定値・読み書き・管理 API がすべて付く。
   #
   #   default: 保存されていないときに返す値
@@ -616,6 +628,18 @@ class FacilitySettings < ApplicationRecord
           "シフト「#{earlier['label']}」と「#{later['label']}」の時間帯が重なっています" if later["start"] < earlier["end"]
         end
         reversed + overlapping
+      }
+    },
+    "dialysis_lab_items" => {
+      default: DEFAULT_DIALYSIS_LAB_ITEMS,
+      shape: {
+        fields: {
+          "items" => {
+            list: { fields: { "code" => :text, "label" => :text }, required: %w[code label] },
+            max: DIALYSIS_LAB_ITEMS_MAX,
+            unique: "code"
+          }
+        }
       }
     },
     "dpc_coefficients" => {

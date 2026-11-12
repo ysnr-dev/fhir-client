@@ -789,6 +789,40 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (dialysis_lab_items)" do
+    let(:hb) { { code: "160008010-03", label: "Hb" } }
+    let(:crp) { { code: "160054710", label: "CRP" } }
+
+    it "returns the default items" do
+      get "/facility_settings"
+
+      expect(JSON.parse(response.body).dig("dialysis_lab_items", "items").pluck("label")).to eq(%w[Hb Alb K P Ca])
+    end
+
+    it "saves the list as sent" do
+      patch "/facility_settings", params: { dialysis_lab_items: { items: [crp, hb] } }, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body).dig("dialysis_lab_items", "items")).to eq(
+        [crp, hb].map { |item| item.transform_keys(&:to_s) }
+      )
+    end
+
+    it "rejects duplicates, blanks and too many items" do
+      invalid = [
+        { items: [hb, hb] },
+        { items: [hb.merge(label: "")] },
+        { items: [hb.merge(code: "")] },
+        { items: Array.new(11) { |i| { code: "1600#{i}", label: "X#{i}" } } }
+      ]
+
+      invalid.each do |value|
+        patch "/facility_settings", params: { dialysis_lab_items: value }, as: :json
+        expect(response).to have_http_status(:unprocessable_content), "#{value} should be rejected"
+      end
+    end
+  end
+
   describe "PATCH /facility_settings (early_warning)" do
     it "is disabled by default" do
       get "/facility_settings"

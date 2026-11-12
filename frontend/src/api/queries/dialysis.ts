@@ -3,6 +3,7 @@ import { ACTIVE_APPOINTMENT_STATUSES, appointmentOrderId } from "../../fhir/appo
 import {
   buildDialysisAppointmentBatchBundle,
   buildDialysisRescheduleBundle,
+  buildDialysisSwapBundle,
   type DialysisBooking,
 } from "../../fhir/dialysisAppointmentHelpers";
 import {
@@ -18,6 +19,7 @@ import {
 import {
   buildDialysisTaskUpdate,
   dialysisTasksByOrderId,
+  type DialysisHold,
   type DialysisTaskStatus,
 } from "../../fhir/dialysisTaskHelpers";
 import {
@@ -36,7 +38,12 @@ import {
   type DialysisChartData,
 } from "../../fhir/dialysisChartHelpers";
 import { DIALYSIS_MEMO_TAG_TOKEN, dialysisMemoOf } from "../../fhir/dialysisMemoHelpers";
-import { DIALYSIS_LAB_LOOKBACK_DAYS, dialysisLabSearchCodes } from "../../fhir/dialysisPatientListHelpers";
+import {
+  DEFAULT_DIALYSIS_LAB_ITEMS,
+  DIALYSIS_LAB_LOOKBACK_DAYS,
+  type DialysisLabItem,
+  dialysisLabSearchCodes,
+} from "../../fhir/dialysisPatientListHelpers";
 import { DIALYSIS_STATS_APPOINTMENT_STATUSES, dialysisMonthRange } from "../../fhir/dialysisStatsHelpers";
 import {
   buildDialysisPerformDeleteBundle,
@@ -87,6 +94,12 @@ export const useDialysisOrderDetail = makeOrderDetailHook<fhir4.Resource>("dialy
 export function useDialysisShifts() {
   const settings = useFacilitySettings();
   return sortedDialysisShifts((settings.data?.dialysis_shifts ?? DEFAULT_DIALYSIS_SHIFTS).shifts);
+}
+
+/** 透析患者一覧に並べる採血の項目(施設設定)。 */
+export function useDialysisLabItems(): DialysisLabItem[] {
+  const settings = useFacilitySettings();
+  return (settings.data?.dialysis_lab_items ?? DEFAULT_DIALYSIS_LAB_ITEMS).items;
 }
 
 /** その患者の、今日に効いている透析オーダー。患者帯の印に使う。 */
@@ -569,10 +582,11 @@ export interface DialysisPatientDataResult {
  * 透析患者一覧の患者ごとのドライウェイト(基準日まで、新しい順)と直近の採血。
  * 新しい順に引くので、上限で欠けるのは古い側。
  */
-export function useDialysisPatientData(patientIds: readonly string[], date: string) {
+export function useDialysisPatientData(patientIds: readonly string[], date: string, labItems: readonly DialysisLabItem[]) {
   const key = [...new Set(patientIds)].sort().join(",");
+  const labCodes = dialysisLabSearchCodes(labItems);
   return useQuery({
-    queryKey: ["Observation", "dialysis-patients", key, date],
+    queryKey: ["Observation", "dialysis-patients", key, date, labCodes],
     queryFn: async (): Promise<DialysisPatientDataResult> => {
       const ids = key.split(",");
       const until = `lt${addDays(date, 1)}`;
@@ -582,12 +596,14 @@ export function useDialysisPatientData(patientIds: readonly string[], date: stri
           params.append("date", until);
           params.set("_sort", "-date");
         }),
-        fetchObservationsByPatients(ids, LAB_PATIENT_CHUNK, (params) => {
-          params.set("code", dialysisLabSearchCodes());
-          params.append("date", `ge${addDays(date, -DIALYSIS_LAB_LOOKBACK_DAYS)}`);
-          params.append("date", until);
-          params.set("_sort", "-date");
-        }),
+        labCodes
+          ? fetchObservationsByPatients(ids, LAB_PATIENT_CHUNK, (params) => {
+              params.set("code", labCodes);
+              params.append("date", `ge${addDays(date, -DIALYSIS_LAB_LOOKBACK_DAYS)}`);
+              params.append("date", until);
+              params.set("_sort", "-date");
+            })
+          : Promise.resolve({ value: new Map<string, fhir4.Observation[]>(), truncated: false }),
       ]);
       return {
         dryWeightsByPatient: dryWeights.value,
@@ -841,12 +857,22 @@ export function useRescheduleDialysisAppointment() {
   });
 }
 
+/** 同じ日 × シフトの 2 件の予約のベッドを入れ替える(ボードのドラッグ)。どちらかが先に変わっていれば 412。 */
+export function useSwapDialysisAppointments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ a, b }: { a: fhir4.Appointment; b: fhir4.Appointment }) => postBundle(buildDialysisSwapBundle(a, b)),
+    onSettled: () => invalidateDialysisAppointments(queryClient),
+  });
+}
+
 // ---- 進捗 ----
 
 /**
  * 受付・終了・中止などの進捗を書き込む(リハビリの useUpdateRehabTaskStatus と同じ)。
  * 終了はオーダーに終了日を書き、終了日の翌日以降の予約を同じ transaction で取り消す。中止は今日以降の予約を取り消す。
- * 過ぎた予約は通院の記録なので残す。終了取消・中止取消で予約は戻さない。
+ * 中断は中断の期間(再開予定日が無ければ中断開始日以降すべて)の予約を取り消し、オーダーの期間は触らない。
+ * 過ぎた予約は通院の記録なので残す。終了取消・中止取消・再開で予約は戻さない(再開後は展開・臨時で取り直す)。
  */
 export function useUpdateDialysisTaskStatus() {
   const queryClient = useQueryClient();
@@ -856,14 +882,17 @@ export function useUpdateDialysisTaskStatus() {
       task,
       status,
       endDate,
+      hold,
     }: {
       order: fhir4.ServiceRequest;
       task: fhir4.Task | undefined;
       status: DialysisTaskStatus;
       /** 終了日。status が completed のときだけ使う。 */
       endDate?: string;
+      /** 中断の期間。status が on-hold のときだけ使う。 */
+      hold?: DialysisHold;
     }) => {
-      const entry: fhir4.BundleEntry[] = [taskBundleEntry(buildDialysisTaskUpdate(task, order, status))];
+      const entry: fhir4.BundleEntry[] = [taskBundleEntry(buildDialysisTaskUpdate(task, order, status, hold))];
       if (status === "completed" && endDate) {
         entry.push(buildDialysisOrderCloseEntry(order, endDate));
         entry.push(...(await fetchOrderAppointmentCancelEntries(order.id ?? "", { from: addDays(endDate, 1) })));
@@ -871,6 +900,9 @@ export function useUpdateDialysisTaskStatus() {
         entry.push(...orderCancelEntries(order, status === "cancelled"));
         if (status === "cancelled") {
           entry.push(...(await fetchOrderAppointmentCancelEntries(order.id ?? "", { from: today() })));
+        }
+        if (status === "on-hold" && hold) {
+          entry.push(...(await fetchOrderAppointmentCancelEntries(order.id ?? "", hold)));
         }
       }
       return postBundle({ resourceType: "Bundle", type: "transaction", entry });
@@ -880,7 +912,7 @@ export function useUpdateDialysisTaskStatus() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["Task", "search"] });
-      if (status === "completed" || status === "cancelled") invalidateAppointments(queryClient);
+      if (status === "completed" || status === "cancelled" || status === "on-hold") invalidateAppointments(queryClient);
     },
   });
 }

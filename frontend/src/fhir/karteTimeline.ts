@@ -1216,7 +1216,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         // リハビリと同じく期間中ずっと受付済のまま実施が積み上がるので、受付済以降は常に出す
         // (他部門の「実施済のときだけ」に揃えると期間中は 1 件も見えない)。
         performs:
-          status === "accepted" || status === "completed"
+          status === "accepted" || status === "on-hold" || status === "completed"
             ? (dialysisPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
             : [],
       };

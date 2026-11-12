@@ -1,6 +1,6 @@
 # 透析(血液浄化)オーダーと透析部門の設計
 
-**状態: 第 1 段(オーダー・カルテ・上流・シフト設定)を実装済み(2026-11-09)、第 2 段(透析室の設定・ベッド枠・一括展開・部門一覧)と第 3 段(実施記録・会計・退院連動)を実装済み(2026-11-10)、看護向けの患者メモ(§6.1)、透析患者一覧(§6.2)と月間統計(§6.3)を実装済み(2026-11-11)。残りは §9 の申し送り。** 運用の流れは `docs/order-flows/dialysis.md`。 `docs/functional-gap-backlog.md` §2.7 の「透析(血液浄化)」。
+**状態: 第 1 段(オーダー・カルテ・上流・シフト設定)を実装済み(2026-11-09)、第 2 段(透析室の設定・ベッド枠・一括展開・部門一覧)と第 3 段(実施記録・会計・退院連動)を実装済み(2026-11-10)、看護向けの患者メモ(§6.1)、透析患者一覧(§6.2)と月間統計(§6.3)を実装済み(2026-11-11)、採血項目の施設設定・ボードのドラッグ・空き枠からの予約・中断(§4.3)を実装済み(2026-11-12)。残りは §9 の申し送り。** 運用の流れは `docs/order-flows/dialysis.md`。 `docs/functional-gap-backlog.md` §2.7 の「透析(血液浄化)」。
 
 維持透析(週 3 回を何か月も続ける)と急性血液浄化(ICU などのベッドサイドで行う CHDF・血漿交換)を、
 部門オーダーの 1 種別として足す。雛形はリハビリ(`docs/rehab-order-design.md`。期間継続型・Task は部門の受け入れ状態・
@@ -274,6 +274,11 @@ DEFAULT_DIALYSIS_SHIFTS = {
 シフトを消しても、既存オーダーのパターンと予約は登録時の名前のまま読める。設定画面で「オーダーで使われているシフトは消せない」
 まではしない(使用中かの判定にオーダー全件の検索が要るため)。編集フォームの格子は、設定に無いシフトの行も残して出す(黙って外さない)。
 
+**採血の項目 `dialysis_lab_items`**(§6.2)。透析患者一覧に並べる採血の列。`{ "items" => [{ "code" => 結果項目コード, "label" => 列の見出し }, …] }`
+の並び(`list`、`unique: "code"`、10 件まで)。既定は Hb・Alb・K・P・Ca。設定画面「透析患者一覧の採血項目」は結果項目の検索モーダル
+(数値型 PQ のみ)から足し、見出しは略称を初期値にして書き換えられる。frontend は `dialysisPatientListHelpers.ts` の
+`DEFAULT_DIALYSIS_LAB_ITEMS` / `dialysisLabItemsError`、読み出しは `useDialysisLabItems`。
+
 **会計コード `receipt_codes.dialysis`**(§7)。`DEFAULT_RECEIPT_CODES` / `RECEIPT_CODES_SHAPE` にキーを足す。
 
 ```ruby
@@ -306,7 +311,23 @@ frontend は `fhir/receiptCodeSettingsHelpers.ts` と `pages/FacilitySettingsPag
 
 ［導出］透析は `prescription-setting|inpatient` のオーダー(急性血液浄化・入院中の臨時 HD)だけを退院の対象にし、
 外来のオーダーは触らない。退院ダイアログの対象選択では入外区分を見せる。入院中に外来の維持透析を院内で続ける場合は、
-入院時に入院のオーダーを別に出す運用(外来のオーダーを一時中断する仕組みは持たない。§9)。
+入院時に入院のオーダーを別に出し、外来のオーダーは中断(§4.3)しておく。
+
+### 4.3 中断(入院中などの一時的な休み)
+
+［事実］他疾患での入院・転院先での一時的な透析・長期の旅行などで、外来の維持透析をしばらく行わないことがある。
+オーダーを終了すると再開時に出し直しになり、予約を 1 件ずつ取り消すのも手間。
+
+［提案］Task の `on-hold` を **中断** とし、実施中(accepted)から「中断」、中断から「再開」(accepted に戻す)と「中止」に移る。
+中断のモーダルで中断開始日(基準日か今日の遅いほう)と再開予定日(任意)を入れ、その期間(両端を含む。再開予定日が無ければ
+中断開始日以降すべて)の有効な予約を同じ transaction で取り消す(`fetchOrderAppointmentCancelEntries` の `from` / `to`)。
+オーダーの期間(`dialysis-order-end`)は触らない。期間は `Task.statusReason.text`(「中断 2026-11-12〜2026-11-20」)に残し、
+一覧のステータスの下に出す(`dialysisTaskHold`)。再開では予約を戻さない(展開・臨時・空き枠からの予約で取り直す。
+再開予定日より後の予約は残っているので、展開の開始日はその続きになる。中断の期間に穴が空いたまま再開が早まったときは
+臨時か空き枠から埋める)。
+
+［導出］中断中は予約の展開・臨時・空き枠からの予約の候補に出ない(受付済だけに限る判定のまま)。透析患者一覧(§6.2)には
+中断中も載せる(受け持ちの患者であることは変わらない)。カルテのカードの実施は中断中も出す。
 
 ---
 
@@ -368,6 +389,15 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
    「別の患者が取った枠があります」と出してプレビューを読み直す。**部分成功は作らない**。
 4. 臨時の 1 件(スポット)・個別の変更・取消は 1 件ずつ(`RehabBookModal` を写した `DialysisBookModal`。日付を固定して
    その日のベッドの空きだけを出す)。
+5. **空き枠からの予約**(ボード・週ビュー): 空いている枠(「空き」)を押すと、ベッド × 日 × シフトが決まった状態で
+   患者だけを選ぶ(`DialysisCellBookModal`)。候補は一覧に効いている受付済の透析室のオーダーのうち、その日が期間内で、
+   その日 × シフトにまだ予約が無いもの。書き込みは臨時と同じ `buildDialysisAppointmentBundle`。
+6. **ボードのドラッグ**: 予約済でまだ入室していないカード(予約変更・予約取消と同じ条件 `isDialysisAppointmentMovable`)を
+   空いている枠へ落とすと予約変更(`buildDialysisRescheduleBundle`。日・シフトをまたいでもよい)、同じ日 × シフトの別の
+   動かせるカードへ落とすとベッドの入れ替え(`buildDialysisSwapBundle`。枠は busy のまま、2 件の予約の枠・ベッド・時刻・
+   名前を交換する 2 PUT の transaction)。別の端末で先に枠か予約が変わっていれば 412 で止め、読み直した旨を出す。
+   入室以降のカードと、入れ替え先が 2 件以上入っているマスには落とせない。リンク(患者名)は `draggable={false}` にして
+   カード全体のドラッグに譲る。
 
 ［導出］レート制限(本番 1500 件/分)に対して 1 transaction = 1 リクエスト。プレビューの Slot 検索はベッド数ぶん並ぶので、
 ベッドが多い透析室では `Slot?schedule=a,b,c&…`(カンマ OR)でまとめて 1〜2 本にする。
@@ -454,7 +484,8 @@ Schedule (actor = ベッド Location, serviceType = dialysis, active)  ← Slot 
   - DW は `Observation?code=dialysis-measurement|dry-weight&subject=Patient/a,Patient/b,…&date=lt{翌日}&_sort=-date`(50 人ずつ)。
   - 採血は `Observation?code={結果項目コード,…}&subject=…&date=ge{90 日前}&date=lt{翌日}&_sort=-date`(20 人ずつ)。
     ［事実］上流のコード検索は完全一致で、JLAC11 の分析物での前方一致はできない。そこで項目は**結果項目コード**
-    (同梱の検体検査マスタ = レセ電算の検査コード。`DIALYSIS_LAB_ITEMS`)で引く。施設が結果項目を別のコードで採番している場合は出ない。
+    (同梱の検体検査マスタ = レセ電算の検査コード)で引く。項目と列の見出しは施設設定 `dialysis_lab_items`(§3.4)で選ぶ
+    (既定は Hb・Alb・K・P・Ca)。項目が 0 件なら採血は読まない。
     基準日より前の回に測った項目(その回に測っていないもの)は日付を添えて区別する。
   - 直近の透析と前回は、基準日までの 3 週間の実施記録(`useDialysisSessions`。ボードと同じ読み込み)を患者ごとに束ねる。
   - どれも新しい順に引くので、上限で欠けるのは古い側。欠けたときは `TruncatedNotice` を出す。
@@ -511,8 +542,7 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
 
 ## 9. 未実装・今後(申し送り)
 
-- 透析患者一覧の採血の項目を施設で選べるようにする(今は同梱マスタの結果項目コードで固定。§6.2)。
-- ボードのドラッグによるベッドの入れ替え、週ビューからの直接予約、入院中の外来オーダーの一時中断。
+- 中断(§4.3)を入院の登録から自動で起こす(今は透析一覧から手で行う)。
 - B001-15 の月次算定、導入期加算など(§7)。
 - シフトの削除時の使用中判定と注意表示(§3.4)。
 - 膜素材の照合(膜の不適合歴、AN69 膜と ACE 阻害薬の併用禁忌など。§3.1)。
@@ -559,7 +589,8 @@ MedicationAdministration)で書けば、画面側は手入力と同じデータ�
 - 新規: `fhir/dialysisShiftHelpers.ts` に曜日 × シフト → 日付の展開(`dialysisPatternOccurrences`。曜日は `injectionHelpers.ts` の `dayOfWeekCode`)、`fhir/dialysisUnitHelpers.ts`(Location ← `wardHelpers.ts`、Schedule ← `scheduleHelpers.ts` の `buildSchedule`、`generateDialysisSlots`)、
   `pages/DialysisUnitPage.tsx`、`fhir/dialysisAppointmentHelpers.ts`(`buildDialysisAppointmentBatchBundle`、`isDialysisAppointment`)、
   `pages/DialysisWorklistPage.tsx`(← `RehabWorklistPage.tsx`。ビュー: 当日ボード / オーダー一覧 / 週)、`components/DialysisBoard.tsx`
-  (ベッド × シフトの格子。`RadiotherapyCalendar.tsx` を単純化)、`DialysisExpandModal.tsx`、`DialysisBookModal.tsx`(← `RehabBookModal.tsx`)。
+  (ベッド × シフトの格子。`RadiotherapyCalendar.tsx` を単純化)、`DialysisExpandModal.tsx`、`DialysisBookModal.tsx`(← `RehabBookModal.tsx`)、`DialysisCellBookModal.tsx`(空き枠からの予約。§5.3 の 5)。
+  ボードのドラッグ(§5.3 の 6)と中断(§4.3)は `DialysisBoard.tsx` / `DialysisWorklistPage.tsx` の中。
 - `api/queries/dialysis.ts` 追記: 一覧(`order-period`)、展開プレビュー、当日ボード
   (`Appointment?service-type=schedule-service-type|dialysis&date=ge{d}&date=lt{d+1}&status=booked,arrived,checked-in,fulfilled&_include=Appointment:patient&_include=Appointment:based-on&_include=Appointment:location`。
   `setActiveAppointmentStatus` は fulfilled を除くので使わない)、実施(`Procedure?category=order-type|dialysis&date={d}`)、

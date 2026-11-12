@@ -12,10 +12,19 @@ import {
   useDialysisWorklist,
   useUpdateDialysisTaskStatus,
   type DialysisWorklistRow,
+  useRescheduleDialysisAppointment,
+  useSwapDialysisAppointments,
 } from "../api/queries";
+import { FhirError } from "../api/fhirClient";
 import { DateStepper } from "../components/DateStepper";
-import { DialysisBoard, type DialysisBoardEntry, type DialysisPerformAction } from "../components/DialysisBoard";
+import {
+  DialysisBoard,
+  type DialysisBoardCellTarget,
+  type DialysisBoardEntry,
+  type DialysisPerformAction,
+} from "../components/DialysisBoard";
 import { DialysisBookModal } from "../components/DialysisBookModal";
+import { DialysisCellBookModal } from "../components/DialysisCellBookModal";
 import { DialysisChartMark } from "../components/DialysisChartMark";
 import { DialysisExpandModal } from "../components/DialysisExpandModal";
 import { DialysisMemoModal } from "../components/DialysisMemo";
@@ -52,6 +61,8 @@ import {
   dialysisTaskStatus,
   dialysisTaskStatusDisplay,
   type DialysisTaskStatus,
+  dialysisTaskHold,
+  type DialysisHold,
 } from "../fhir/dialysisTaskHelpers";
 import { activeDialysisBeds } from "../fhir/dialysisUnitHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
@@ -106,7 +117,9 @@ export function DialysisWorklistPage() {
   const [memoPatient, setMemoPatient] = useState<fhir4.Patient | null>(null);
   const [expandingId, setExpandingId] = useState<string | null>(null);
   const [booking, setBooking] = useState<{ orderId: string; appointment?: fhir4.Appointment } | null>(null);
+  const [cellBooking, setCellBooking] = useState<DialysisBoardCellTarget | null>(null);
   const [finishingId, setFinishingId] = useState<string | null>(null);
+  const [holdingId, setHoldingId] = useState<string | null>(null);
   const [performing, setPerforming] = useState<Performing | null>(null);
 
   useEffect(() => {
@@ -119,6 +132,8 @@ export function DialysisWorklistPage() {
   const worklist = useDialysisWorklist(date);
   const updateStatus = useUpdateDialysisTaskStatus();
   const cancelAppointment = useCancelAppointment();
+  const reschedule = useRescheduleDialysisAppointment();
+  const swap = useSwapDialysisAppointments();
   const perform = useDialysisPerform();
   const cancelPerform = useCancelDialysisPerform();
   const { practitionerId, practitioner } = useCurrentPractitioner();
@@ -191,10 +206,15 @@ export function DialysisWorklistPage() {
   const expanding = allRows.find((row) => row.order.id === expandingId);
   const bookingRow = orderOf(booking?.orderId);
   const finishing = allRows.find((row) => row.order.id === finishingId);
+  const holding = allRows.find((row) => row.order.id === holdingId);
 
   function handleChangeStatus(row: DialysisWorklistRow, status: DialysisTaskStatus) {
     if (status === "completed") {
       setFinishingId(row.order.id ?? null);
+      return;
+    }
+    if (status === "on-hold") {
+      setHoldingId(row.order.id ?? null);
       return;
     }
     updateStatus.mutate({ order: row.order, task: row.task, status });
@@ -220,8 +240,32 @@ export function DialysisWorklistPage() {
     cancelPerform.mutate({ session, appointment });
   }
 
+  // ドラッグの移動・入れ替えは、先に別の端末で枠や予約が変わっていると 412 で止まる。読み直した旨を出す。
+  const moveConflict =
+    (reschedule.error instanceof FhirError && reschedule.error.status === 412) ||
+    (swap.error instanceof FhirError && swap.error.status === 412);
+
   const boardActions = {
-    pending: cancelAppointment.isPending || perform.isPending || cancelPerform.isPending,
+    pending:
+      cancelAppointment.isPending ||
+      perform.isPending ||
+      cancelPerform.isPending ||
+      reschedule.isPending ||
+      swap.isPending,
+    onBookCell: setCellBooking,
+    onMove: (entry: DialysisBoardEntry, target: DialysisBoardCellTarget) => {
+      if (!target.bed.schedule) return;
+      reschedule.mutate({
+        appointment: entry.appointment,
+        booking: {
+          schedule: target.bed.schedule,
+          slot: target.slot,
+          shift: { code: target.shift.code, label: target.shift.label },
+        },
+      });
+    },
+    onSwap: (entry: DialysisBoardEntry, other: DialysisBoardEntry) =>
+      swap.mutate({ a: entry.appointment, b: other.appointment }),
     onPerform: (entry: DialysisBoardEntry, action: DialysisPerformAction, placeLabel: string) => {
       if (!entry.order) return;
       startPerform(action, {
@@ -305,6 +349,18 @@ export function DialysisWorklistPage() {
       <ErrorBanner error={sessions.error} />
       <ErrorBanner error={perform.error} />
       <ErrorBanner error={cancelPerform.error} />
+      {moveConflict ? (
+        <div className="error-banner" role="alert">
+          <p className="error-banner__line error-banner__line--error">
+            別の端末で先に枠か予約が変わっていたので、移動を止めました。ボードを読み直したので、確かめてください。
+          </p>
+        </div>
+      ) : (
+        <>
+          <ErrorBanner error={reschedule.error} />
+          <ErrorBanner error={swap.error} />
+        </>
+      )}
 
       {view === "stats" ? (
         units.isLoading ? (
@@ -419,6 +475,30 @@ export function DialysisWorklistPage() {
           appointment={booking.appointment}
           defaultDate={latestDate(date, summarizeDialysisOrder(bookingRow.order).startDate)}
           onClose={() => setBooking(null)}
+        />
+      )}
+
+      {cellBooking && (
+        <DialysisCellBookModal
+          target={cellBooking}
+          rows={allRows}
+          booked={board.data?.appointments ?? []}
+          onClose={() => setCellBooking(null)}
+        />
+      )}
+
+      {holding && (
+        <DialysisHoldModal
+          row={holding}
+          defaultFrom={latestDate(date, today())}
+          pending={updateStatus.isPending}
+          onSubmit={(hold) =>
+            updateStatus.mutate(
+              { order: holding.order, task: holding.task, status: "on-hold", hold },
+              { onSuccess: () => setHoldingId(null) },
+            )
+          }
+          onClose={() => setHoldingId(null)}
         />
       )}
 
@@ -636,6 +716,7 @@ function OrderTable({
               const { order, patient } = row;
               const summary = summarizeDialysisOrder(order);
               const status = dialysisTaskStatus(row.task);
+              const hold = dialysisTaskHold(row.task);
               const next = row.appointments[0];
               const last = row.appointments[row.appointments.length - 1];
               return (
@@ -688,6 +769,11 @@ function OrderTable({
                     <span className={`lab-worklist__status lab-worklist__status--${status}`}>
                       {dialysisTaskStatusDisplay(status)}
                     </span>
+                    {hold && (
+                      <span className="order-select__muted dialysis-patients__line">
+                        {shortDate(hold.from)}〜{hold.to ? shortDate(hold.to) : ""}
+                      </span>
+                    )}
                   </td>
                   <td className="lab-worklist__actions sticky-table__fix-actions">
                     <OrderRowButtons row={row} {...actions(row)} />
@@ -974,6 +1060,81 @@ function DialysisFinishModal({
         <div className="walk-in__actions">
           <button type="submit" disabled={pending}>
             {pending ? "終了中..." : "終了"}
+          </button>
+          <button type="button" onClick={onClose} disabled={pending}>
+            キャンセル
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * 中断(他疾患での入院などで外来の維持透析をしばらく行わない)。Task を on-hold にし、中断の期間の予約を取り消す。
+ * 再開予定日を入れなければ中断開始日以降の予約をすべて取り消す。オーダーの期間は触らず、再開後に展開・臨時で取り直す。
+ */
+function DialysisHoldModal({
+  row,
+  defaultFrom,
+  pending,
+  onSubmit,
+  onClose,
+}: {
+  row: DialysisWorklistRow;
+  defaultFrom: string;
+  pending: boolean;
+  onSubmit: (hold: DialysisHold) => void;
+  onClose: () => void;
+}) {
+  const [from, setFrom] = useState(defaultFrom);
+  const [to, setTo] = useState("");
+  const [error, setError] = useState("");
+  const summary = summarizeDialysisOrder(row.order);
+  const cancelCount = row.appointments.filter((a) => {
+    const day = dialysisAppointmentDate(a);
+    return day >= from && (!to || day <= to);
+  }).length;
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!from) {
+      setError("中断開始日を入れてください。");
+      return;
+    }
+    if (to && to < from) {
+      setError("再開予定日は中断開始日と同じか、それより後にしてください。");
+      return;
+    }
+    setError("");
+    onSubmit({ from, ...(to ? { to } : {}) });
+  }
+
+  return (
+    <Modal title={`透析の中断${row.patient ? ` - ${displayName(row.patient)}` : ""}`} onClose={onClose}>
+      <form className="walk-in" onSubmit={handleSubmit}>
+        {error && (
+          <div className="error-banner" role="alert">
+            <p className="error-banner__line error-banner__line--error">{error}</p>
+          </div>
+        )}
+        <p className="appointment-panel__current">
+          {[summary.modalityShort, summary.scheduleLabel, summary.periodLabel].filter(Boolean).join(" / ")}
+        </p>
+        <div className="walk-in__fields">
+          <label>
+            中断開始日
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} required />
+          </label>
+          <label>
+            再開予定日
+            <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
+          </label>
+        </div>
+        {cancelCount > 0 && <p className="order-select__muted">取り消す予約: {cancelCount} 件</p>}
+        <div className="walk-in__actions">
+          <button type="submit" disabled={pending}>
+            {pending ? "中断中..." : "中断"}
           </button>
           <button type="button" onClick={onClose} disabled={pending}>
             キャンセル

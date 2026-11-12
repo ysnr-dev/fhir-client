@@ -9,6 +9,7 @@ import {
   buildRescheduleBundle,
 } from "../../fhir/appointmentHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
+import { addDays } from "../../lib/dates";
 import { resourcesOfType, searchAllPages } from "./core";
 
 // ---- 予約(Appointment) ----
@@ -120,15 +121,17 @@ export async function buildCancelEntriesOf(appointments: fhir4.Appointment[]): P
 /**
  * オーダーヘッダに紐づく有効な予約の取消エントリ。予約が無ければ空。
  * from を渡すとその日以降に始まる予約だけを取り消す(期間継続型のオーダーで、過ぎた予約を残すとき)。
+ * to を渡すとその日まで(両端を含む)に絞る(透析の中断の期間)。
  * 取り消す対象を取りこぼさないよう全ページを読み、検索条件が効かないときは全件を拾わないよう strict にする。
  */
 export async function fetchOrderAppointmentCancelEntries(
   srId: string,
-  { from }: { from?: string } = {},
+  { from, to }: { from?: string; to?: string } = {},
 ): Promise<fhir4.BundleEntry[]> {
   const params = new URLSearchParams();
   params.set("based-on", `ServiceRequest/${srId}`);
-  if (from) params.set("date", `ge${from}`);
+  if (from) params.append("date", `ge${from}`);
+  if (to) params.append("date", `lt${addDays(to, 1)}`);
   setActiveAppointmentStatus(params);
   const { matches } = await searchAllPages<fhir4.Appointment>("Appointment", params, {
     page: 500,

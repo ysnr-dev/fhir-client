@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { appointmentStatusLabel } from "../fhir/appointmentHelpers";
 import {
@@ -6,6 +7,7 @@ import {
   dialysisAppointmentShift,
   dialysisSlotKey,
   findDialysisSlot,
+  isDialysisAppointmentMovable,
 } from "../fhir/dialysisAppointmentHelpers";
 import { dialysisOrderModality, dialysisModalityShort } from "../fhir/dialysisOrderHelpers";
 import { dialysisSessionDisplay, type DialysisSession } from "../fhir/dialysisResultHelpers";
@@ -25,6 +27,9 @@ import { RowMenu } from "./RowMenu";
 //
 // 実施は予約ごとに 入室 → 開始 → 終了 と進める(dialysisResultHelpers.ts)。セルには実施の段階と
 // 体重・除水を出し、次の段階のボタンを 1 つだけ表に置く(残りはケバブ)。
+//
+// 予約済でまだ入室していないカードはドラッグで動かせる: 空いている枠へ落とすと予約変更、同じ日 × シフトの
+// 別のカードへ落とすとベッドの入れ替え。空いている枠はそのまま押して予約を取れる(onBookCell)。
 
 // 列幅(px)。予約の入ったセルだけ広がらないよう、表の幅ごと固定する。
 const BED_COLUMN_WIDTH = 72;
@@ -43,6 +48,14 @@ export interface DialysisBoardEntry {
 
 export type DialysisPerformAction = "arrive" | "start" | "finish" | "cancel-perform";
 
+/** 格子の 1 マス(ベッド × 日 × シフト)とその枠。 */
+export interface DialysisBoardCellTarget {
+  bed: DialysisBoardBed;
+  date: string;
+  shift: DialysisShift;
+  slot: fhir4.Slot;
+}
+
 export interface DialysisBoardActions {
   onView: (entry: DialysisBoardEntry) => void;
   onReschedule: (entry: DialysisBoardEntry) => void;
@@ -51,7 +64,19 @@ export interface DialysisBoardActions {
   onMemo: (entry: DialysisBoardEntry) => void;
   /** placeLabel は「ベッド 3 / 午前」。実施入力の見出しに出す。 */
   onPerform: (entry: DialysisBoardEntry, action: DialysisPerformAction, placeLabel: string) => void;
+  /** 空いている枠を押して、その枠に予約を取る。 */
+  onBookCell: (target: DialysisBoardCellTarget) => void;
+  /** ドラッグで空いている枠へ移す(予約変更)。 */
+  onMove: (entry: DialysisBoardEntry, target: DialysisBoardCellTarget) => void;
+  /** ドラッグで同じ日 × シフトの別の予約とベッドを入れ替える。 */
+  onSwap: (entry: DialysisBoardEntry, other: DialysisBoardEntry) => void;
   pending: boolean;
+}
+
+type DropKind = "move" | "swap";
+
+function movable(entry: DialysisBoardEntry): boolean {
+  return Boolean(entry.order) && isDialysisAppointmentMovable(entry.appointment, Boolean(entry.session));
 }
 
 interface Props extends DialysisBoardActions {
@@ -64,6 +89,29 @@ interface Props extends DialysisBoardActions {
 }
 
 export function DialysisBoard({ dates, beds, shifts, entries, slots, ...actions }: Props) {
+  const [dragging, setDragging] = useState<DialysisBoardEntry | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
+  const draggingShift = dragging ? dialysisAppointmentShift(dragging.appointment, shifts)?.code : undefined;
+  const draggingDate = dragging ? dialysisAppointmentDate(dragging.appointment) : undefined;
+
+  /** 掴んでいるカードをこのマスに落とせるか。空きの枠なら移動、同じ日 × シフトの動かせる 1 件なら入れ替え。 */
+  function dropKindOf(
+    cellEntries: readonly DialysisBoardEntry[],
+    target: DialysisBoardCellTarget | undefined,
+    date: string,
+    shiftCode: string,
+  ): DropKind | undefined {
+    if (!dragging || actions.pending || cellEntries.includes(dragging)) return undefined;
+    if (cellEntries.length === 0) return target?.slot.status === "free" ? "move" : undefined;
+    if (cellEntries.length !== 1 || !movable(cellEntries[0])) return undefined;
+    return date === draggingDate && shiftCode === draggingShift ? "swap" : undefined;
+  }
+
+  function endDrag() {
+    setDragging(null);
+    setOverKey(null);
+  }
+
   const byCell = new Map<string, DialysisBoardEntry[]>();
   const unplaced: DialysisBoardEntry[] = [];
   const bedIds = new Set(beds.map((entry) => entry.bed.id));
@@ -161,10 +209,45 @@ export function DialysisBoard({ dates, beds, shifts, entries, slots, ...actions 
                   <th className="dialysis-board__bed">{dialysisBedLabel(entry.bed)}</th>
                   {dates.flatMap((date) =>
                     shifts.map((shift) => {
-                      const cellEntries =
-                        byCell.get(`${entry.bed.id}|${dialysisSlotKey(date, shift.code)}`) ?? [];
+                      const cellKey = `${entry.bed.id}|${dialysisSlotKey(date, shift.code)}`;
+                      const cellEntries = byCell.get(cellKey) ?? [];
+                      const slot = findDialysisSlot(scheduleSlots, date, shift);
+                      const target = slot && entry.schedule ? { bed: entry, date, shift, slot } : undefined;
+                      const dropKind = dropKindOf(cellEntries, target, date, shift.code);
+                      const cellClass = [
+                        "dialysis-board__cell",
+                        dropKind ? "dialysis-board__cell--can-drop" : "",
+                        dropKind && overKey === cellKey ? "dialysis-board__cell--drop-target" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ");
                       return (
-                        <td key={`${date}|${shift.code}`} className="dialysis-board__cell">
+                        <td
+                          key={`${date}|${shift.code}`}
+                          className={cellClass}
+                          onDragOver={
+                            dropKind
+                              ? (e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = "move";
+                                  if (overKey !== cellKey) setOverKey(cellKey);
+                                }
+                              : undefined
+                          }
+                          onDragLeave={dropKind ? () => setOverKey((key) => (key === cellKey ? null : key)) : undefined}
+                          onDrop={
+                            dropKind
+                              ? (e) => {
+                                  e.preventDefault();
+                                  const moved = dragging;
+                                  endDrag();
+                                  if (!moved) return;
+                                  if (dropKind === "move" && target) actions.onMove(moved, target);
+                                  else if (dropKind === "swap") actions.onSwap(moved, cellEntries[0]);
+                                }
+                              : undefined
+                          }
+                        >
                           {cellEntries.length > 0 ? (
                             cellEntries.map((cellEntry) => (
                               <BoardCard
@@ -172,11 +255,18 @@ export function DialysisBoard({ dates, beds, shifts, entries, slots, ...actions 
                                 entry={cellEntry}
                                 compact={multiDay}
                                 placeLabel={`ベッド ${dialysisBedLabel(entry.bed)} / ${shift.label}`}
+                                draggable={movable(cellEntry) && !actions.pending}
+                                dragging={dragging === cellEntry}
+                                onDragStart={() => setDragging(cellEntry)}
+                                onDragEnd={endDrag}
                                 {...actions}
                               />
                             ))
                           ) : (
-                            <EmptyCell slot={findDialysisSlot(scheduleSlots, date, shift)} />
+                            <EmptyCell
+                              slot={slot}
+                              onBook={target?.slot.status === "free" ? () => actions.onBookCell(target) : undefined}
+                            />
                           )}
                         </td>
                       );
@@ -219,9 +309,17 @@ function dayClass(date: string): string {
   return "dialysis-board__day";
 }
 
-function EmptyCell({ slot }: { slot: fhir4.Slot | undefined }) {
+function EmptyCell({ slot, onBook }: { slot: fhir4.Slot | undefined; onBook?: () => void }) {
   if (!slot) return <span className="dialysis-board__empty dialysis-board__empty--none">枠なし</span>;
-  if (slot.status === "free") return <span className="dialysis-board__empty">空き</span>;
+  if (slot.status === "free") {
+    return onBook ? (
+      <button type="button" className="dialysis-board__empty dialysis-board__empty--book" onClick={onBook}>
+        空き
+      </button>
+    ) : (
+      <span className="dialysis-board__empty">空き</span>
+    );
+  }
   if (slot.status === "busy-unavailable") {
     return <span className="dialysis-board__empty dialysis-board__empty--none">停止</span>;
   }
@@ -240,6 +338,10 @@ function BoardCard({
   compact,
   showWhen,
   placeLabel,
+  draggable = false,
+  dragging = false,
+  onDragStart,
+  onDragEnd,
   onView,
   onReschedule,
   onCancel,
@@ -252,6 +354,10 @@ function BoardCard({
   /** 格子の外に出すときは日時とベッドも添える。 */
   showWhen?: boolean;
   placeLabel: string;
+  draggable?: boolean;
+  dragging?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 } & DialysisBoardActions) {
   const returnLinkState = useReturnLinkState();
   const { appointment, patient, order, session } = entry;
@@ -269,11 +375,41 @@ function BoardCard({
   const next = order && status !== "noshow" ? NEXT_ACTION[performStatus] : undefined;
   const performAction = (action: DialysisPerformAction) => () => onPerform(entry, action, placeLabel);
 
+  const cardClass = [
+    "dialysis-board__card",
+    `dialysis-board__card--${perform ? `perform-${performStatus}` : status}`,
+    draggable ? "dialysis-board__card--movable" : "",
+    dragging ? "dialysis-board__card--dragging" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className={`dialysis-board__card dialysis-board__card--${perform ? `perform-${performStatus}` : status}`}>
+    <div
+      className={cardClass}
+      draggable={draggable}
+      title={draggable ? "ドラッグで別のベッドへ移す" : undefined}
+      onDragStart={
+        draggable
+          ? (e) => {
+              // Firefox はデータを置かないとドラッグが始まらない。
+              e.dataTransfer.setData("text/plain", appointment.id ?? "");
+              e.dataTransfer.effectAllowed = "move";
+              onDragStart?.();
+            }
+          : undefined
+      }
+      onDragEnd={draggable ? onDragEnd : undefined}
+    >
       <span className="dialysis-board__card-main">
         {patient?.id ? (
-          <Link to={`/patients/${patient.id}/karte`} state={returnLinkState} className="dialysis-board__patient">
+          // リンクは既定でドラッグできるので止める(カード全体のドラッグに譲る)。
+          <Link
+            to={`/patients/${patient.id}/karte`}
+            state={returnLinkState}
+            className="dialysis-board__patient"
+            draggable={false}
+          >
             {name}
           </Link>
         ) : (

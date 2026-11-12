@@ -35,6 +35,7 @@ import type { DocumentFormTemplateExport } from "../fhir/documentFormExport";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 import type { AdvisorySeveritySettings } from "../fhir/advisoryHelpers";
 import type { DialysisShiftSettings } from "../fhir/dialysisShiftHelpers";
+import type { DialysisLabItemSettings } from "../fhir/dialysisPatientListHelpers";
 import type { EarlyWarningSettings } from "../fhir/earlyWarningHelpers";
 import type { Ssmix2Settings } from "../fhir/ssmix2Helpers";
 import type { RxVerificationSettings } from "../fhir/rxVerificationHelpers";
@@ -131,6 +132,8 @@ export interface FacilitySettings {
   transfusion: TransfusionSettings;
   /** 透析室のシフト。 */
   dialysis_shifts: DialysisShiftSettings;
+  /** 透析患者一覧に並べる採血の項目。 */
+  dialysis_lab_items: DialysisLabItemSettings;
   /** SS-MIX2 標準化ストレージへの出力(有無・出力先・医療施設 ID)。 */
   ssmix2: Ssmix2Settings;
 }
@@ -168,6 +171,7 @@ export type FacilitySettingsPayload = Partial<{
   injection_verification: InjectionVerificationSettings;
   transfusion: TransfusionSettings;
   dialysis_shifts: DialysisShiftSettings;
+  dialysis_lab_items: DialysisLabItemSettings;
   ssmix2: Ssmix2Settings;
 }>;
 
