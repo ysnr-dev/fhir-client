@@ -241,21 +241,19 @@ function buildActivityDefinition(
   };
 }
 
-/** ステップの投与日。内服は各投与日から dose_days 日ぶん続ける。 */
-function stepTiming(step: RegimenStep): fhir4.Timing | undefined {
+/** ステップの投与日(action に付ける HL7 の標準拡張。context は PlanDefinition.action)。 */
+function daysOfCycleExtension(step: RegimenStep): fhir4.Extension | undefined {
   if (!step.days.length) return undefined;
-  const timing: fhir4.Timing = {
-    extension: [
-      {
-        url: DAYS_OF_CYCLE_EXT_URL,
-        extension: step.days.map((day) => ({ url: "day", valueInteger: day })),
-      },
-    ],
+  return {
+    url: DAYS_OF_CYCLE_EXT_URL,
+    extension: step.days.map((day) => ({ url: "day", valueInteger: day })),
   };
-  if (step.usage_type === "oral" && step.dose_days) {
-    timing.repeat = { boundsDuration: days(step.dose_days) };
-  }
-  return timing;
+}
+
+/** 内服は各投与日から dose_days 日ぶん続ける。 */
+function stepTiming(step: RegimenStep): fhir4.Timing | undefined {
+  if (step.usage_type !== "oral" || !step.dose_days) return undefined;
+  return { repeat: { boundsDuration: days(step.dose_days) } };
 }
 
 function stepText(step: RegimenStep): string {
@@ -308,7 +306,7 @@ function buildUseContext(regimen: RegimenDetail): fhir4.UsageContext[] {
     });
   }
   const venue = (code: string, display: string): fhir4.UsageContext => ({
-    code: context("venue", "Venue"),
+    code: context("venue", "Clinical Venue"),
     valueCodeableConcept: { coding: [{ system: ACT_CODE_SYSTEM, code, display }] },
   });
   if (regimen.setting === "outpatient" || regimen.setting === "both") result.push(venue("AMB", "ambulatory"));
@@ -420,7 +418,9 @@ export function buildRegimenFhirBundle(regimen: RegimenDetail): fhir4.Bundle {
       };
     });
     const timing = stepTiming(step);
+    const daysOfCycle = daysOfCycleExtension(step);
     return {
+      ...(daysOfCycle ? { extension: [daysOfCycle] } : {}),
       id: `step-${stepNumber}`,
       prefix: String(stepNumber),
       ...(step.name ? { title: step.name } : {}),

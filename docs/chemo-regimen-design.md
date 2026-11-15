@@ -1566,7 +1566,7 @@ PlanDefinition                      id = regimen-{code}、url = http://fhir-clie
                     regimen-adverse-event { term, grade, note }
   action[cycle]     timingTiming.repeat { count = 予定クール数, duration = 投与期間(d), frequency 1, period = 1 クール(d) }
     action[step-n]  prefix = 順序、title = 見出し、description = 投与時注意、textEquivalent = 用法の要約
-                    timingTiming.extension = timing-daysOfCycle(day = 相対日)
+                    extension = timing-daysOfCycle(day = 相対日)
                     内服は timingTiming.repeat.boundsDuration = dose_days(各投与日からの日数)
       action[step-n-drug-m]  title = 薬剤名、description = 薬剤のコメント、code = CodeSystem/regimen-drug-role
                              definitionCanonical → ActivityDefinition
@@ -1583,7 +1583,7 @@ ActivityDefinition                  id = regimen-{code}-s{n}-d{m}、kind = Medic
   dosage.maxDosePerAdministration(注射) / maxDosePerPeriod(内服、1 d)   dose_max
 ```
 
-- ［決定］クールの中の投与日は HL7 の標準拡張 `timing-daysOfCycle` で持つ(FHIR 仕様の化学療法の例と同じ)。
+- ［決定］クールの中の投与日は HL7 の標準拡張 `timing-daysOfCycle` でステップの action に持つ(拡張の context が `PlanDefinition.action`)。
   クールの繰り返しは 1 段上の action に分けた(投与期間と休薬期間を duration と period で素直に書ける)。
 - ［決定］FHIR に置き場所が無いもの(制吐リスク・検査基準・減量 / 中止基準・副作用)は PlanDefinition の独自拡張にした。
   検査基準を `action.condition` にしなかったのは、R4 の condition が式(言語つき)を要求し、実行できない式を
@@ -1600,7 +1600,9 @@ ActivityDefinition                  id = regimen-{code}-s{n}-d{m}、kind = Medic
 - 編集画面(id 51)に「FHIR出力」が出て、押すと `regimen-900001.json`(PlanDefinition 1 件 + ActivityDefinition 9 件)が
   落ちること。
 - コンテナ内 `npx tsc -b`・`npm run lint`(エラーなし)。
-- **HL7 の公式バリデータには掛けていない**(実行できなかった)。
+- CapeOX の出力を実装ガイド(`../fhir-ig`)の例にして IG Publisher で検証した。残るのは url の形のエラー(url を適用の
+  `instantiatesUri` と揃えたため、canonical/PlanDefinition/{id} の形にならない)と、院内マスタ由来のコード体系が未知という警告、
+  YJ コードの display が規格付きの薬剤名で配布の表示名と違うという警告(処方・注射と同じ)。
 
 ## 9. 申し送り
 
