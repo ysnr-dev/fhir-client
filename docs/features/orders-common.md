@@ -307,6 +307,11 @@ transaction を `api/queries/orderDelete.ts` の `postOrderDeleteBundle` に通�
   (`GET /reports/regimen_masters/:id/pdf`、A4 縦)。属性(治療目的・1 クール・クール数・制吐リスク・承認日)、適応疾患、投与内容
   (ステップごとの Day・用法と薬剤の基準量・上限)、投与基準、減量・中止基準、主な副作用、参考文献、問い合わせ先(自院の名称・電話)を載せ、
   承認者と内部の備考は載せません。下書き・廃止は出せません(422 `regimen_not_approved`)。
+- **FHIR出力**: 保存済みのレジメンは編集画面の「FHIR出力」で、FHIR R4 の定義リソースを JSON(`regimen-{コード}.json`)として
+  ダウンロードできます(下書き・廃止も出せ、状態は `status` に入ります)。中身は collection の Bundle で、先頭が PlanDefinition
+  (レジメン本体 → 1 クール → 投与ステップ → 薬剤 の入れ子の action)、続いて薬剤ごとの ActivityDefinition(kind = MedicationRequest、
+  医薬品コード・経路・手技・基準量・上限)です。`PlanDefinition.url` は適用のヘッダが `instantiatesUri` で指す URI と同じです。
+  承認者と内部の備考は載せません。対応づけは `docs/chemo-regimen-design.md` §8.30。
 - **API**: `GET/POST /master/regimens`、`GET/PATCH/DELETE /master/regimens/:id`(id でもレジメンコードでも可)、`POST /master/regimens/:id/copy`。
   本体と子を 1 リクエストで読み書きし、子は送った種別だけ配列で丸ごと置換します。詳細は薬剤名・用法をマスタから解決して返します。
 - **レジメンオーダー(患者への適用)**: カルテ右ペインの「化学療法」で承認済のレジメンを選び、開始日(Day 1)と体格(身長・体重 →

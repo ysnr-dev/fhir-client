@@ -1,7 +1,7 @@
 # 化学療法レジメンの設計
 
 **状態: 第 1 段階(レジメンマスタの登録)、第 2 段階(レジメンオーダー = 患者への適用、§7)とも実装済(2026-09-06)。
-不足機能の洗い出しと着手順は §7.6(2026-09-06、2026-09-07 に再精査)。再精査で見つけた欠陥の修正は §8.13、記録の真正性と DO の封鎖は §8.14、適用後の運用操作は §8.15、部門・病棟への周知は §8.16、マスタの凍結と検証は §8.17、当日の投与可否確認は §8.18、内服の日オーダーの処方一覧(N-11)は §8.19、累積投与量の上限(A-5)は §8.23、帳票(E-2)は §8.25、外部公開用のレジメンの帳票は §8.29。**
+不足機能の洗い出しと着手順は §7.6(2026-09-06、2026-09-07 に再精査)。再精査で見つけた欠陥の修正は §8.13、記録の真正性と DO の封鎖は §8.14、適用後の運用操作は §8.15、部門・病棟への周知は §8.16、マスタの凍結と検証は §8.17、当日の投与可否確認は §8.18、内服の日オーダーの処方一覧(N-11)は §8.19、累積投与量の上限(A-5)は §8.23、帳票(E-2)は §8.25、外部公開用のレジメンの帳票は §8.29、FHIR の定義リソースでの出力は §8.30。**
 本文中の区別は他の設計書と同じ(［事実］/［導出］/［決定］/［提案］)。
 
 ---
@@ -1532,6 +1532,75 @@ ThinReports の同梱レイアウト 2 枚(`regimen_plan.tlf` / `regimen_schedul
   下書き(id 52)が 422 になること。
 - `spec/services/regimen_master_report_spec.rb`(改ページと続きの見出しを含む)・`spec/requests/reports/regimen_master_pdfs_spec.rb`。
   コンテナ内 `npx tsc -b`・`npm run lint`(エラーなし)。
+
+### 8.30 FHIR の定義リソースでの出力(2026-11-15)
+
+レジメンマスタ 1 件を FHIR R4 の定義リソースに写してダウンロードする(`fhir/regimenFhirExport.ts` の
+`buildRegimenFhirBundle`。入口はレジメン編集画面の「FHIR出力」)。
+
+- ［決定］**frontend で組む**。FHIR の JSON は frontend で組み立てる約束で、経路・手技・ライン・用法・医薬品のコード体系も
+  注射・処方の helper が持っている。詳細 API(`GET /master/regimens/:id`)が薬剤名・YJ コード・用法を解決して返すので、
+  backend に入口は足さない。出すのは**保存済みの内容**(編集中の値ではない)。
+- ［決定］**上流には保存しない**。レジメンの正は backend のマスタで、上流は PlanDefinition / ActivityDefinition を持たない。
+  出力は外部との受け渡し用のファイルで、適用のヘッダは従来どおり `instantiatesUri` で指す。その URI
+  (`http://fhir-client.local/regimen/{code}`)を `PlanDefinition.url` にしたので、ファイルを受け取った側は適用と定義を結べる。
+- ［決定］状態を問わず出せる(公開用 PDF と違い、`status` で下書き・廃止が読める)。**承認者と本体の `note` は載せない**
+  (公開用 PDF と同じ。内部の申し送り)。
+- ［決定］Bundle は `collection`。先頭が PlanDefinition、続いて**薬剤ごと**の ActivityDefinition
+  (`product[x]` が 1 つしか持てないため。適用が薬剤ごとに MedicationRequest を作るのとも揃う)。
+
+```text
+PlanDefinition                      id = regimen-{code}、url = http://fhir-client.local/regimen/{code}
+  identifier        CodeSystem/regimen | レジメンコード
+  title / subtitle  name / short_name
+  type              plan-definition-type | clinical-protocol
+  status            draft → draft、approved → active、retired → retired
+  date / approvalDate / effectivePeriod   updated_at / approved_on / valid_from〜valid_to
+  useContext        focus = 適応疾患(病名管理番号 + ICD10)、user = 診療科、venue = AMB / IMP(実施区分。both は 2 件)
+  usage             indication_note
+  goal.description  CodeSystem/regimen-purpose(治療目的)
+  relatedArtifact   citation = references_note、derived-from = 複製元の url
+  extension         regimen-emetic-risk(valueCoding)
+                    regimen-lab-criterion { category, code(CodeSystem/jlac11-analyte), range(low / high), note }
+                    regimen-dose-reduction-criteria / regimen-discontinuation-criteria(valueMarkdown)
+                    regimen-adverse-event { term, grade, note }
+  action[cycle]     timingTiming.repeat { count = 予定クール数, duration = 投与期間(d), frequency 1, period = 1 クール(d) }
+    action[step-n]  prefix = 順序、title = 見出し、description = 投与時注意、textEquivalent = 用法の要約
+                    timingTiming.extension = timing-daysOfCycle(day = 相対日)
+                    内服は timingTiming.repeat.boundsDuration = dose_days(各投与日からの日数)
+      action[step-n-drug-m]  title = 薬剤名、description = 薬剤のコメント、code = CodeSystem/regimen-drug-role
+                             definitionCanonical → ActivityDefinition
+ActivityDefinition                  id = regimen-{code}-s{n}-d{m}、kind = MedicationRequest、intent = order
+  productCodeableConcept   medicine-code(レセプト電算)+ YJ コード
+  dosage.extension         injection-usage-type、JP_MedicationDosage_Line(注射)
+  dosage.route / method    注射オーダーと同じコード体系
+  dosage.timing            注射 = repeat.duration(点滴時間、min)、内服 = code(用法コード + 基本用法区分)
+  dosage.additionalInstruction  device_note
+  dosage.doseAndRate       type = CodeSystem/regimen-dose-basis
+                           注射 = doseQuantity、内服 = rateRatio(1 日量 / 1 d)
+                           bsa → mg/m2、weight → mg/kg、auc → 目標 AUC(mg.min/mL)、fixed / unit → そのままの単位
+                           速度(rate)は 2 つめの doseAndRate に rateQuantity(mL/h)
+  dosage.maxDosePerAdministration(注射) / maxDosePerPeriod(内服、1 d)   dose_max
+```
+
+- ［決定］クールの中の投与日は HL7 の標準拡張 `timing-daysOfCycle` で持つ(FHIR 仕様の化学療法の例と同じ)。
+  クールの繰り返しは 1 段上の action に分けた(投与期間と休薬期間を duration と period で素直に書ける)。
+- ［決定］FHIR に置き場所が無いもの(制吐リスク・検査基準・減量 / 中止基準・副作用)は PlanDefinition の独自拡張にした。
+  検査基準を `action.condition` にしなかったのは、R4 の condition が式(言語つき)を要求し、実行できない式を
+  書くことになるため。
+- ［決定］基準量は「計算前の基準」をそのまま持つ(85 mg/m2)。体格から投与量を出す式(`dynamicValue`)は書かない。
+  AUC は Calvert 式の GFR の出どころを画面で選ぶ運用で、式として固定できない。
+- UCUM の `system` / `code` を付けるのは mg・g・ug・mL・L だけ(瓶・袋・単位などは `unit` の文字だけ)。
+- カナ名・表示順・`regimen_code` 以外の内部 id は出さない。
+
+#### 検証したこと(2026-11-15)
+
+- 開発 DB の mFOLFOX6(id 51、承認済)・CapeOX(id 53、内服あり)・カルボプラチン + パクリタキセル(id 57、AUC・器材あり)で
+  Bundle を生成し、ステップ・薬剤・投与日・基準量・点滴時間・用法・器材が写ることを目視。
+- 編集画面(id 51)に「FHIR出力」が出て、押すと `regimen-900001.json`(PlanDefinition 1 件 + ActivityDefinition 9 件)が
+  落ちること。
+- コンテナ内 `npx tsc -b`・`npm run lint`(エラーなし)。
+- **HL7 の公式バリデータには掛けていない**(実行できなかった)。
 
 ## 9. 申し送り
 

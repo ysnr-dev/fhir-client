@@ -210,8 +210,8 @@ export function injectionSeriesLabel(sr: fhir4.ServiceRequest): string {
 }
 
 // 用法種別(点滴/ワンショット)。JAHIS・JP Core に対応するコード表が無いためローカル定義。
-const USAGE_TYPE_EXT_URL = "http://fhir-client.local/StructureDefinition/injection-usage-type";
-const USAGE_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/injection-usage-type";
+export const USAGE_TYPE_EXT_URL = "http://fhir-client.local/StructureDefinition/injection-usage-type";
+export const USAGE_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/injection-usage-type";
 
 // 投与経路。JP Core route-codes(HL7 Table 0162 ベース)のうち注射で使うもの。
 // 放射線検査の造影剤(経口・注腸を含む)も同じコード表を使う。
@@ -221,11 +221,11 @@ export const ROUTE_SYSTEM = "http://jpfhir.jp/fhir/core/CodeSystem/route-codes";
 const SITE_SYSTEM = "urn:oid:1.2.392.200250.2.2.20.32";
 
 // 手技。JAMI詳細用法コード(urn:oid:1.2.392.200250.2.2.20.40)の注射手技(30〜3Z)。
-const METHOD_SYSTEM = "urn:oid:1.2.392.200250.2.2.20.40";
+export const METHOD_SYSTEM = "urn:oid:1.2.392.200250.2.2.20.40";
 
 // ライン。拡張 URL は JP Core の JP_MedicationDosage_Line、コードは公式表が無いためローカル。
-const LINE_EXT_URL = "http://jpfhir.jp/fhir/core/Extension/StructureDefinition/JP_MedicationDosage_Line";
-const LINE_SYSTEM = "http://fhir-client.local/CodeSystem/injection-line";
+export const LINE_EXT_URL = "http://jpfhir.jp/fhir/core/Extension/StructureDefinition/JP_MedicationDosage_Line";
+export const LINE_SYSTEM = "http://fhir-client.local/CodeSystem/injection-line";
 
 export type { CodeOption };
 

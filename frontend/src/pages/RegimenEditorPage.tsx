@@ -4,6 +4,7 @@ import type { CtcaeTerm, Disease, JlacItem, Medicine, MedicineUsage } from "../a
 import { useFormularyRankLookup, useMedicineDoseFactors, useRegimen, useRegimenMutations } from "../api/masterQueries";
 import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
 import { regimenPublicPdfUrl } from "../api/reportsClient";
+import { downloadRegimenFhirBundle } from "../fhir/regimenFhirExport";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RegimenGuide } from "../components/RegimenGuide";
@@ -797,6 +798,12 @@ export function RegimenEditorPage() {
                 {detail.data?.status === "approved" && (
                   <button type="button" onClick={() => window.open(regimenPublicPdfUrl(savedId), "_blank", "noopener")}>
                     公開用PDF
+                  </button>
+                )}
+                {/* 保存済みの内容を FHIR(PlanDefinition + ActivityDefinition)で書き出す。 */}
+                {detail.data && (
+                  <button type="button" onClick={() => downloadRegimenFhirBundle(detail.data)}>
+                    FHIR出力
                   </button>
                 )}
                 {/* 削除できるのは下書きだけ(承認済・廃止は施設の記録で、適用が指している)。 */}
