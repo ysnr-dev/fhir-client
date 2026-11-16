@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useCallback, useId, useState, type FormEvent } from "react";
 import type {
   Disease,
   DrugCheckSeverity,
@@ -12,6 +12,7 @@ import type {
 } from "../api/masterClient";
 import {
   useDrugCheckMutations,
+  useMedicineIngredients,
   useDrugDiseaseRules,
   useDrugDoseRules,
   useDrugInteractions,
@@ -21,13 +22,14 @@ import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { Modal } from "../components/Modal";
-import { ingredientKey } from "../fhir/medicationSafetyHelpers";
+import { buildIngredientIndex, ruleIngredientCode } from "../fhir/ingredientIndex";
+import { medicineIdentity } from "../fhir/medicationSafetyHelpers";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
 import { MasterBackLink } from "../components/MasterBackLink";
 
 // 薬剤チェックの施設マスタ(docs/drug-check-master-design.md)。
 // 相互作用(併用禁忌・併用注意)、用量と患者条件(年齢・腎機能・体重・投与日数)の規則、
-// 病名の禁忌・注意をタブで切り替える。薬は YJ コードの先頭 4〜7 桁(成分 7 桁 / 薬効分類 4 桁)で持つ。
+// 病名の禁忌・注意をタブで切り替える。薬は成分マスタの成分(`I` + 成分の ID)か、YJ コードの先頭 4〜7 桁(成分 7 桁 / 薬効分類 4 桁)で持つ。
 
 type Tab = "interactions" | "doseRules" | "diseaseRules";
 
@@ -213,9 +215,10 @@ function InteractionEditModal({
     onClose();
   }
 
+  const pickIngredient = useIngredientPicker();
   function handlePicked(medicine: Medicine) {
     if (!picking) return;
-    const picked = ingredientFromMedicine(medicine);
+    const picked = pickIngredient(medicine);
     setPicking(null);
     setPickError(picked instanceof Error ? picked : null);
     if (picked instanceof Error) return;
@@ -470,9 +473,10 @@ function DoseRuleEditModal({ rule, onClose }: { rule: DrugDoseRule | null; onClo
     onClose();
   }
 
+  const pickIngredient = useIngredientPicker();
   function handlePicked(medicine: Medicine) {
     if (!picking) return;
-    const picked = ingredientFromMedicine(medicine);
+    const picked = pickIngredient(medicine);
     setPicking(false);
     setPickError(picked instanceof Error ? picked : null);
     if (picked instanceof Error) return;
@@ -745,8 +749,9 @@ function DiseaseRuleEditModal({ rule, onClose }: { rule: DrugDiseaseRule | null;
     onClose();
   }
 
+  const pickIngredient = useIngredientPicker();
   function handleMedicinePicked(medicine: Medicine) {
-    const picked = ingredientFromMedicine(medicine);
+    const picked = pickIngredient(medicine);
     setPicking(null);
     setPickError(picked instanceof Error ? picked : null);
     if (picked instanceof Error) return;
@@ -842,15 +847,29 @@ function DiseaseRuleEditModal({ rule, onClose }: { rule: DrugDiseaseRule | null;
 
 // ---- 共通 ---------------------------------------------------------------
 
-/** 成分(YJ 上 7 桁)で指すか、薬効分類(4 桁)で指すか。 */
+/** 成分で指すか、薬効分類(4 桁)で指すか。 */
 type CodeLevel = "ingredient" | "yakko";
 
-/** 選んだ医薬品から成分のコード(YJ 上 7 桁)と一般名を作る。成分が取れない薬は Error。 */
-function ingredientFromMedicine(medicine: Medicine): { code: string; name: string } | Error {
-  const key = ingredientKey(medicine);
-  if (!key) return new Error(`${medicine.name} は YJ コードを持たないため選べません。`);
-  const generic = (medicine.generic_name_description ?? "").replace(/^【般】/, "");
-  return { code: key, name: generic || medicine.name };
+/**
+ * 選んだ医薬品から成分のコードと名称を作る関数を返す。成分マスタに単一の成分で載っている薬は
+ * 成分の ID(薬効分類や銘柄をまたいで当たる)、配合剤と載っていない薬は YJ 上 7 桁(その薬そのもの)。
+ * 成分が取れない薬は Error。
+ */
+function useIngredientPicker(): (medicine: Medicine) => { code: string; name: string } | Error {
+  const { data: rows } = useMedicineIngredients();
+  return useCallback(
+    (medicine) => {
+      const identity = medicineIdentity(medicine, buildIngredientIndex(rows ?? []));
+      if (!identity) return new Error(`${medicine.name} は YJ コードを持たないため選べません。`);
+      if (identity.ids.length === 1) {
+        const row = rows?.find((r) => r.ingredient_id === identity.ids[0]);
+        return { code: ruleIngredientCode(identity.ids[0]), name: row?.name_ja ?? row?.name ?? medicine.name };
+      }
+      const generic = (medicine.generic_name_description ?? "").replace(/^【般】/, "");
+      return { code: identity.key, name: generic || medicine.name };
+    },
+    [rows],
+  );
 }
 
 /**

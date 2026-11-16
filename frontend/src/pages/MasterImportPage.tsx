@@ -68,6 +68,12 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".csv",
   },
   {
+    type: "medicine_ingredients",
+    label: "成分マスタ",
+    formatHint: "medicine_ingredients.csv（UTF-8、ヘッダあり・5列。rake medicine_ingredients:generate で作成）",
+    accept: ".csv",
+  },
+  {
     type: "ctcae_terms",
     label: "CTCAE(有害事象共通用語規準)",
     formatHint:

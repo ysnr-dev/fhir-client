@@ -8,7 +8,7 @@ module Master
 
     before_validation :normalize
 
-    validates :code, presence: true, format: { with: DrugInteraction::CODE_FORMAT, message: "は YJ コードの先頭 4〜7 桁で入力してください" }
+    validates :code, presence: true, format: { with: DrugInteraction::CODE_FORMAT, message: DrugInteraction::CODE_FORMAT_MESSAGE }
     validates :name, presence: true
     validates :severity, inclusion: { in: SEVERITIES }
     validates :dosage_form, inclusion: { in: %w[1 4 6] }, allow_blank: true

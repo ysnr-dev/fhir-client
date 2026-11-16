@@ -1,7 +1,14 @@
 import type { DrugDiseaseRule, DrugDoseRule, DrugInteraction } from "../api/masterClient";
 import { convertDose, type MedicineDoseConversionMap } from "./doseConversionHelpers";
 import {
-  ingredientKey,
+  type DrugIdentity,
+  EMPTY_INGREDIENT_INDEX,
+  type IngredientIndex,
+  ruleCodeMatches,
+} from "./ingredientIndex";
+import {
+  activeIdentity,
+  medicineIdentity,
   type ActiveMedication,
   type MedicationRp,
   type MedicationWarning,
@@ -14,8 +21,9 @@ import {
 //               累積の上限はここでは見ない(化学療法の適用で `regimenCheckHelpers` が積算する)
 //   病名      … 患者の活動中の病名(ICD-10 の前方一致)との禁忌・注意
 //
-// 薬はマスタ側で YJ コードの先頭 4〜7 桁で書き、薬剤行の成分キー(YJ 上 7 桁)の前方一致で
-// 当てる。**登録は止めない**(`medicationSafetyHelpers` と同じ)。
+// 薬はマスタ側で YJ コードの先頭 4〜7 桁か成分マスタの成分(`I` + 成分の ID)で書く。前者は
+// 薬剤行の成分キー(YJ 上 7 桁)の前方一致、後者は薬剤行の成分の ID で当てる(`ingredientIndex.ts`)。
+// **登録は止めない**(`medicationSafetyHelpers` と同じ)。
 
 /** 薬剤行の投与量。比べられない量(外用の総量、頓用の 1 日量など)は null。 */
 export interface LineDose {
@@ -59,17 +67,12 @@ const SEVERITY_LABELS: Record<DrugInteraction["severity"], string> = {
 
 const RENAL_LABELS: Record<"egfr" | "ccr", string> = { egfr: "eGFR", ccr: "CCr" };
 
-/** マスタのコード(YJ 先頭 4〜7 桁)が成分キーに当たるか。 */
-export function codeMatches(key: string, code: string): boolean {
-  return Boolean(code) && key.startsWith(code);
-}
-
 function formatNumber(value: number): string {
   return String(Math.round(value * 100) / 100);
 }
 
 interface Partner {
-  key: string;
+  identity: DrugIdentity;
   name: string;
   /** どこにある薬か(「RP2」「投与中」「持参薬」)。 */
   where: string;
@@ -80,7 +83,7 @@ interface Partner {
  * 同じ規則・同じ相手は 1 回だけ出す。
  */
 function interactionWarnings(
-  key: string,
+  self: DrugIdentity,
   partners: Partner[],
   interactions: DrugInteraction[],
 ): MedicationWarning[] {
@@ -88,16 +91,16 @@ function interactionWarnings(
   const seen = new Set<string>();
 
   for (const rule of interactions) {
-    const selfIsA = codeMatches(key, rule.code_a);
-    const selfIsB = codeMatches(key, rule.code_b);
+    const selfIsA = ruleCodeMatches(self, rule.code_a);
+    const selfIsB = ruleCodeMatches(self, rule.code_b);
     if (!selfIsA && !selfIsB) continue;
 
     for (const partner of partners) {
       const hit =
-        (selfIsA && codeMatches(partner.key, rule.code_b)) ||
-        (selfIsB && codeMatches(partner.key, rule.code_a));
+        (selfIsA && ruleCodeMatches(partner.identity, rule.code_b)) ||
+        (selfIsB && ruleCodeMatches(partner.identity, rule.code_a));
       if (!hit) continue;
-      const dedupe = `${rule.id}:${partner.key}:${partner.where}`;
+      const dedupe = `${rule.id}:${partner.identity.key}:${partner.where}`;
       if (seen.has(dedupe)) continue;
       seen.add(dedupe);
 
@@ -249,7 +252,7 @@ export function isCumulativeOnlyRule(rule: DrugDoseRule): boolean {
 
 function doseRuleWarnings(
   line: CheckedLine,
-  key: string,
+  self: DrugIdentity,
   doseRules: DrugDoseRule[],
   patient: PatientFactors,
   conversions: MedicineDoseConversionMap | undefined,
@@ -258,7 +261,7 @@ function doseRuleWarnings(
   const warnings: MedicationWarning[] = [];
 
   for (const rule of doseRules) {
-    if (!codeMatches(key, rule.code)) continue;
+    if (!ruleCodeMatches(self, rule.code)) continue;
     if (rule.dosage_form && rule.dosage_form !== medicine.dosage_form) continue;
     if (isCumulativeOnlyRule(rule)) continue;
 
@@ -297,13 +300,13 @@ function doseRuleWarnings(
 
 /** 病名との禁忌・注意。同じ規則は当たった病名ごとに 1 回。 */
 function diseaseWarnings(
-  key: string,
+  self: DrugIdentity,
   diagnoses: PatientDiagnosis[],
   diseaseRules: DrugDiseaseRule[],
 ): MedicationWarning[] {
   const warnings: MedicationWarning[] = [];
   for (const rule of diseaseRules) {
-    if (!codeMatches(key, rule.code)) continue;
+    if (!ruleCodeMatches(self, rule.code)) continue;
     for (const diagnosis of diagnoses) {
       if (!diagnosis.code.startsWith(rule.disease_code)) continue;
       warnings.push({
@@ -332,6 +335,8 @@ export function buildDrugCheckWarnings(args: {
   conversions: MedicineDoseConversionMap | undefined;
   excludeOrderId?: string;
   excludeBroughtIds?: string[];
+  /** 成分マスタ。渡さなければ成分の ID で書いた規則は当たらない。 */
+  ingredients?: IngredientIndex;
 }): MedicationWarning[][][] {
   const {
     rps,
@@ -344,35 +349,36 @@ export function buildDrugCheckWarnings(args: {
     conversions,
     excludeOrderId,
     excludeBroughtIds = [],
+    ingredients = EMPTY_INGREDIENT_INDEX,
   } = args;
 
   const formLines = rps.flatMap((rp, rpIndex) =>
     rp.medicines.flatMap((line, medIndex) => {
-      const key = ingredientKey(line.medicine);
-      return key && line.medicine
-        ? [{ rpIndex, medIndex, key, name: line.medicine.name }]
+      const identity = medicineIdentity(line.medicine, ingredients);
+      return identity && line.medicine
+        ? [{ rpIndex, medIndex, identity, name: line.medicine.name }]
         : [];
     }),
   );
   const ongoing: Partner[] = active
     .filter((a) => (a.brought ? !excludeBroughtIds.includes(a.orderId) : a.orderId !== excludeOrderId))
-    .map((a) => ({ key: a.ingredient, name: a.name, where: a.brought ? "持参薬" : "投与中" }));
+    .map((a) => ({ identity: activeIdentity(a, ingredients), name: a.name, where: a.brought ? "持参薬" : "投与中" }));
 
   return rps.map((rp, rpIndex) =>
     rp.medicines.map((line, medIndex) => {
-      const key = ingredientKey(line.medicine);
-      if (!key || !line.medicine) return [];
+      const self = medicineIdentity(line.medicine, ingredients);
+      if (!self || !line.medicine) return [];
 
       const partners: Partner[] = [
         ...formLines
           .filter((l) => l.rpIndex !== rpIndex || l.medIndex !== medIndex)
-          .map((l) => ({ key: l.key, name: l.name, where: `RP${l.rpIndex + 1}` })),
+          .map((l) => ({ identity: l.identity, name: l.name, where: `RP${l.rpIndex + 1}` })),
         ...ongoing,
       ];
       return [
-        ...interactionWarnings(key, partners, interactions),
-        ...doseRuleWarnings(line, key, doseRules, patient, conversions),
-        ...diseaseWarnings(key, diagnoses, diseaseRules),
+        ...interactionWarnings(self, partners, interactions),
+        ...doseRuleWarnings(line, self, doseRules, patient, conversions),
+        ...diseaseWarnings(self, diagnoses, diseaseRules),
       ];
     }),
   );

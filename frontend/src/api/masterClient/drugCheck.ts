@@ -1,7 +1,7 @@
 import { buildError, masterFetch } from "./core";
 
 // 薬剤チェックの施設マスタ(相互作用・用量と患者条件・病名)。docs/drug-check-master-design.md
-// 薬は YJ コードの先頭 4〜7 桁で指す(7 桁 = 成分、4 桁 = 薬効分類)。
+// 薬は成分マスタの成分(`I` + 成分の ID)か、YJ コードの先頭 4〜7 桁(7 桁 = 成分、4 桁 = 薬効分類)で指す。
 
 export type DrugCheckSeverity = "contraindicated" | "caution";
 

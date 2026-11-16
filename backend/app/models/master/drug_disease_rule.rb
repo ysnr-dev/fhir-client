@@ -9,7 +9,7 @@ module Master
 
     before_validation :normalize_codes
 
-    validates :code, presence: true, format: { with: DrugInteraction::CODE_FORMAT, message: "は YJ コードの先頭 4〜7 桁で入力してください" }
+    validates :code, presence: true, format: { with: DrugInteraction::CODE_FORMAT, message: DrugInteraction::CODE_FORMAT_MESSAGE }
     validates :disease_code, presence: true, format: { with: DISEASE_CODE_FORMAT, message: "は ICD-10 の先頭 3〜5 文字で入力してください" }
     validates :disease_code, uniqueness: { scope: :code, message: "は同じ薬で登録済みです" }
     validates :name, :disease_name, presence: true

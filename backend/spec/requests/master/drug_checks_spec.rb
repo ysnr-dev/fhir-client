@@ -31,6 +31,14 @@ RSpec.describe "Master drug checks", type: :request do
       expect(body["errors"]).to include("同じ組み合わせが登録済みです")
     end
 
+    it "成分の ID(I + 数字)でも登録できる" do
+      post "/master/drug_interactions",
+           params: { code_a: "i1310149", name_a: "ワルファリン", code_b: "I1112807", name_b: "アスピリン", severity: "caution" },
+           as: :json
+      expect(response).to have_http_status(:created)
+      expect(JSON.parse(response.body)).to include("code_a" => "I1310149", "code_b" => "I1112807")
+    end
+
     it "コードは YJ の先頭 4〜7 桁" do
       post "/master/drug_interactions",
            params: { code_a: "33", name_a: "x", code_b: "1149019F1560", name_b: "y", severity: "caution" }, as: :json

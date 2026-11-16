@@ -28,7 +28,7 @@ import {
   PRESCRIPTION_ORDER_TYPE,
 } from "../../fhir/prescriptionHelpers";
 import { rpEndDate } from "../../fhir/medicationScheduleHelpers";
-import { type ActiveMedication, ingredientKey } from "../../fhir/medicationSafetyHelpers";
+import { type ActiveMedication, ingredientKey, medicineLookupCode } from "../../fhir/medicationSafetyHelpers";
 import { rxTasksByOrderId, rxTaskStatus } from "../../fhir/rxTaskHelpers";
 import { isMealServiceRequest, MEAL_ORDER_TYPE } from "../../fhir/mealOrderHelpers";
 import { HEIGHT_LOINC } from "../../fhir/bodyMeasureHelpers";
@@ -837,12 +837,16 @@ export function useActiveMedications(patientId: string | undefined, onDate: stri
       const yakkaCodes = missing.length > 0 ? await fetchYakkaCodes(missing) : new Map<string, string>();
 
       for (const line of lines) {
-        const ingredient = ingredientKey({
-          ...line.medicine,
-          yakka_code: yakkaCodes.get(line.medicine.medicine_code),
-        });
+        const medicine = { ...line.medicine, yakka_code: yakkaCodes.get(line.medicine.medicine_code) };
+        const ingredient = ingredientKey(medicine);
         if (!ingredient) continue;
-        active.push({ orderId: line.orderId, name: line.name, ingredient, endDate: line.endDate });
+        active.push({
+          orderId: line.orderId,
+          name: line.name,
+          ingredient,
+          lookupCode: medicineLookupCode(medicine),
+          endDate: line.endDate,
+        });
       }
       return active;
     },

@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Regimen, RegimenDetail } from "../api/masterClient";
-import { useApplicableRegimens, useDrugDoseRules, useMedicineDoseFactors, useRegimen } from "../api/masterQueries";
+import {
+  useApplicableRegimens,
+  useDrugDoseRules,
+  useIngredientIndex,
+  useMedicineDoseFactors,
+  useRegimen,
+} from "../api/masterQueries";
 import {
   useActiveAllergies,
   useBodyMeasures,
@@ -387,6 +393,7 @@ function RegimenApplyForm({
   const pregnancy = usePregnancyAdvisory(patientId);
   // 累積投与量(§7.6 A-5)。上限は用量規則に成分で持ち、患者の全適用の日オーダーから積算する。
   const doseRules = useDrugDoseRules();
+  const ingredients = useIngredientIndex();
   const applications = useRegimenApplications(patientId);
   const applicationList = applications.data?.applications;
   const instanceIds = useMemo(() => (applicationList ?? []).map((a) => a.instanceId), [applicationList]);
@@ -400,7 +407,7 @@ function RegimenApplyForm({
     regimen.steps.forEach((step, rp) => {
       step.drugs.forEach((drug, line) => {
         scopes.set(drug.id, { rp, line });
-        for (const m of matchMedicationAllergies(drug.yj_code, allergies.allergies)) {
+        for (const m of matchMedicationAllergies(drug.yj_code, allergies.allergies, ingredients)) {
           result.push({
             key: advisoryKey("allergy", drug.yj_code, m.allergyId),
             kind: "allergy",
@@ -413,7 +420,7 @@ function RegimenApplyForm({
       });
     });
     return { allergyAdvisories: result, drugScope: scopes };
-  }, [regimen, allergies.allergies]);
+  }, [regimen, allergies.allergies, ingredients]);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
 
   const measures = useMemo(() => summarizeBodyMeasures(body.observations), [body.observations]);
@@ -531,9 +538,10 @@ function RegimenApplyForm({
               egfr: renal.egfr ?? null,
               ccr: renal.ccr,
             },
+            ingredients,
           })
         : [],
-    [values, regimen, dayOrders.data, applicationList, doseRules.data, patient?.birthDate, renal.egfr, renal.ccr],
+    [values, regimen, dayOrders.data, applicationList, doseRules.data, patient?.birthDate, renal.egfr, renal.ccr, ingredients],
   );
   const advisoryInput = useMemo<Advisory[]>(() => {
     const lab = regimenLabAdvisory(checkSummary);

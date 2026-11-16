@@ -458,6 +458,10 @@ Rails.application.routes.draw do
     resources :jfagy_drugs, only: %i[index] do
       collection { post :import }
     end
+    # 成分マスタ(コードの上 7 桁・上 9 桁 → 成分)。取込で全件洗い替え。
+    resources :medicine_ingredients, only: %i[index] do
+      collection { post :import }
+    end
     # BOM(Basic Outcome Master)のアウトカム・観察項目。検索専用(取込で全件洗い替え)。
     resources :bom_outcomes, only: %i[index] do
       collection { post :import }

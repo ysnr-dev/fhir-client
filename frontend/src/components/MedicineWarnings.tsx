@@ -16,6 +16,7 @@ import {
   useDrugDiseaseRules,
   useDrugDoseRules,
   useDrugInteractions,
+  useIngredientIndex,
   useMedicineAttributeLookup,
   useMedicineDoseFactors,
   useYakkaCodes,
@@ -97,6 +98,7 @@ export function useMedicationWarnings(args: {
   const { conditions } = useActiveConditions(enabled && (diseaseRules?.length ?? 0) > 0 ? patientId : undefined);
   const diagnoses = useMemo(() => conditionDiagnoses(conditions), [conditions]);
   const checkSettings = usePrescriptionCheckSettings();
+  const ingredients = useIngredientIndex();
   const { departments } = useSelfDepartments();
   const departmentNames = useMemo(
     () => new Map(departments.map((d) => [departmentCode(d), departmentDisplayName(d)])),
@@ -126,7 +128,7 @@ export function useMedicationWarnings(args: {
   );
 
   return useMemo(() => {
-    const base = buildMedicationWarnings({ rps, allergies, active, excludeOrderId, excludeBroughtIds });
+    const base = buildMedicationWarnings({ rps, allergies, active, excludeOrderId, excludeBroughtIds, ingredients });
     if (!enabled) return base;
     const checks = buildDrugCheckWarnings({
       rps: rps.map((rp) => ({ medicines: rp.medicines.map((line) => ({ ...line, days: line.days ?? rp.days })) })),
@@ -139,6 +141,7 @@ export function useMedicationWarnings(args: {
       conversions,
       excludeOrderId,
       excludeBroughtIds,
+      ingredients,
     });
     const antimicrobial = buildAntimicrobialWarnings({ rps, startDate, courses, attributes, antimicrobialCodes });
     const facility = buildPrescriptionCheckWarnings({
@@ -181,6 +184,7 @@ export function useMedicationWarnings(args: {
     doseRules,
     patient,
     conversions,
+    ingredients,
   ]);
 }
 

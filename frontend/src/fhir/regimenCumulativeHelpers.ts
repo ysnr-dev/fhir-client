@@ -1,7 +1,14 @@
 import type { DrugDoseRule, RegimenDetail } from "../api/masterClient";
 import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
-import { codeMatches, evaluateConditions, type PatientFactors } from "./drugCheckHelpers";
-import { ingredientKey } from "./medicationSafetyHelpers";
+import { evaluateConditions, type PatientFactors } from "./drugCheckHelpers";
+import {
+  drugIdentity,
+  type DrugIdentity,
+  EMPTY_INGREDIENT_INDEX,
+  type IngredientIndex,
+  ruleCodeMatches,
+} from "./ingredientIndex";
+import { medicineIdentity } from "./medicationSafetyHelpers";
 import { MEDICINE_CODE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
 import {
   REGIMEN_DOSE_EXT_URL,
@@ -105,17 +112,20 @@ export function checkCumulativeDoses(args: {
   applications: RegimenApplication[];
   doseRules: DrugDoseRule[];
   patient: PatientFactors;
+  /** 成分マスタ。渡さなければ成分の ID で書いた規則は当たらない。 */
+  ingredients?: IngredientIndex;
 }): CumulativeDoseCheck[] {
   const { regimen, steps, cycleCount, bsa, orders, applications, doseRules, patient } = args;
+  const ingredients = args.ingredients ?? EMPTY_INGREDIENT_INDEX;
   const rules = doseRules.filter((r) => r.max_cumulative_dose !== null && r.dose_unit);
   if (rules.length === 0) return [];
 
   // 保存済みのオーダーが YJ コードを持たないときは、このレジメンの薬剤の医薬品コードで引き当てる。
-  const keyByMedicine = new Map<string, string>();
+  const identityByMedicine = new Map<string, DrugIdentity>();
   for (const step of regimen.steps) {
     for (const drug of step.drugs) {
-      const key = ingredientKey(drug);
-      if (key) keyByMedicine.set(drug.medicine_code, key);
+      const identity = medicineIdentity(drug, ingredients);
+      if (identity) identityByMedicine.set(drug.medicine_code, identity);
     }
   }
   const headerBsa = new Map(applications.map((a) => [a.id, a.bsa]));
@@ -128,8 +138,8 @@ export function checkCumulativeDoses(args: {
       .flatMap((plan) =>
         plan.drugs
           .filter((d) => {
-            const key = ingredientKey(d.drug);
-            if (!key || !codeMatches(key, rule.code)) return false;
+            const identity = medicineIdentity(d.drug, ingredients);
+            if (!identity || !ruleCodeMatches(identity, rule.code)) return false;
             return !rule.dosage_form || rule.dosage_form === d.drug.dosage_form;
           })
           .map((d) => ({ plan: d, days: plan.step.days.length })),
@@ -153,11 +163,11 @@ export function checkCumulativeDoses(args: {
       for (const mr of order.medicationRequests) {
         const coding = mr.medicationCodeableConcept?.coding;
         const medicineCode = codingBySystem(coding, MEDICINE_CODE_SYSTEM)?.code ?? "";
-        const key =
-          ingredientKey({ yj_code: codingBySystem(coding, YJ_CODE_SYSTEM)?.code }) ??
-          keyByMedicine.get(medicineCode) ??
+        const identity =
+          drugIdentity(codingBySystem(coding, YJ_CODE_SYSTEM)?.code, ingredients) ??
+          identityByMedicine.get(medicineCode) ??
           null;
-        if (!key || !codeMatches(key, rule.code)) continue;
+        if (!identity || !ruleCodeMatches(identity, rule.code)) continue;
         const fallbackBsa = order.ref.body?.bsa ?? headerBsa.get(order.ref.regimenSrId) ?? null;
         const amount = orderedAmount(mr, unit, perBsa, fallbackBsa);
         if (amount === null) {

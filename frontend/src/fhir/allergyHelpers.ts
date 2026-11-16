@@ -1,5 +1,6 @@
 import { today } from "../lib/dates";
 import type { JfagyAllergen, JfagyDrug, Medicine } from "../api/masterClient";
+import { type DrugIdentity, EMPTY_INGREDIENT_INDEX, type IngredientIndex, sameIngredient } from "./ingredientIndex";
 
 // JP Core AllergyIntolerance プロファイルと J-FAGY アレルゲンコードの URI 群。
 const PROFILE_URL = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_AllergyIntolerance";
@@ -362,6 +363,18 @@ export function allergenIngredient(jfagyCode: string | undefined): string | null
   return ingredient.length === INGREDIENT_LENGTH ? ingredient : null;
 }
 
+/** 成分指定(GCM)のアレルゲンが、薬と同じ成分を含むか。 */
+function matchesAllergenIngredient(
+  jfagyCode: string | undefined,
+  drug: DrugIdentity,
+  ingredients: IngredientIndex,
+): boolean {
+  const key = allergenIngredient(jfagyCode);
+  if (!key || !jfagyCode) return false;
+  const allergen = { key, ids: ingredients.idsOf(jfagyCode.slice(GENERIC_PREFIX.length)) };
+  return sameIngredient(allergen, drug);
+}
+
 export interface AllergyMatch {
   allergyId: string;
   /** 銘柄一致(その薬そのもの)か、成分一致(同じ成分の別銘柄)か。 */
@@ -384,9 +397,12 @@ export interface AllergyMatch {
 export function matchMedicationAllergies(
   code: string | null | undefined,
   allergies: fhir4.AllergyIntolerance[],
+  /** 成分マスタ。渡すと、薬効分類が違う同じ成分・配合剤の中の成分にも当たる。 */
+  ingredients: IngredientIndex = EMPTY_INGREDIENT_INDEX,
 ): AllergyMatch[] {
   const codes = medicationAllergenCodes(code);
   if (!codes) return [];
+  const drug: DrugIdentity = { key: codes.ingredient, ids: ingredients.idsOf(code) };
   const matches: AllergyMatch[] = [];
   for (const allergy of allergies) {
     if (allergy.verificationStatus?.coding?.[0]?.code === "refuted") continue;
@@ -394,7 +410,7 @@ export function matchMedicationAllergies(
     const kind =
       summary.jfagyCode === codes.brand
         ? "brand"
-        : allergenIngredient(summary.jfagyCode) === codes.ingredient
+        : matchesAllergenIngredient(summary.jfagyCode, drug, ingredients)
           ? "generic"
           : null;
     if (!kind) continue;

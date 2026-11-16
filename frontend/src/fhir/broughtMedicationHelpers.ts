@@ -1,7 +1,7 @@
 import { nowFhirDateTime, toDateTimeInputValue, toFhirDateTime, today } from "../lib/dates";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { isAsNeededUsage, timesPerDay } from "./medicationScheduleHelpers";
-import { ingredientKey, type ActiveMedication } from "./medicationSafetyHelpers";
+import { ingredientKey, medicineLookupCode, type ActiveMedication } from "./medicationSafetyHelpers";
 import {
   BROUGHT_CATEGORY,
   buildDosage,
@@ -148,12 +148,21 @@ export function broughtActiveMedications(
 ): ActiveMedication[] {
   return statements.filter(isAwaitingDecision).flatMap((statement) => {
     const summary = summarizeBroughtMedication(statement);
-    const medicine = summary.medicine;
-    const ingredient = ingredientKey(
-      medicine ? { ...medicine, yakka_code: yakkaCodes?.get(medicine.medicine_code) } : null,
-    );
-    return ingredient && summary.id
-      ? [{ orderId: summary.id, name: summary.name, ingredient, endDate: "", brought: true }]
+    const medicine = summary.medicine
+      ? { ...summary.medicine, yakka_code: yakkaCodes?.get(summary.medicine.medicine_code) }
+      : null;
+    const ingredient = ingredientKey(medicine);
+    return medicine && ingredient && summary.id
+      ? [
+          {
+            orderId: summary.id,
+            name: summary.name,
+            ingredient,
+            lookupCode: medicineLookupCode(medicine),
+            endDate: "",
+            brought: true,
+          },
+        ]
       : [];
   });
 }

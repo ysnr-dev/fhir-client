@@ -4,12 +4,13 @@ module Master
     self.table_name = "master_drug_interactions"
 
     SEVERITIES = %w[contraindicated caution].freeze
-    # YJ コードの先頭 4〜7 桁(薬効分類 4 桁 + 成分 3 桁)。
-    CODE_FORMAT = /\A\d{4}[0-9A-Z]{0,3}\z/
+    # YJ コードの先頭 4〜7 桁(薬効分類 4 桁 + 成分 3 桁)か、成分マスタの成分(`I` + 成分の ID)。
+    CODE_FORMAT = /\A(?:\d{4}[0-9A-Z]{0,3}|I\d+)\z/
+    CODE_FORMAT_MESSAGE = "は YJ コードの先頭 4〜7 桁か成分の ID で入力してください".freeze
 
     before_validation :normalize_codes
 
-    validates :code_a, :code_b, presence: true, format: { with: CODE_FORMAT, message: "は YJ コードの先頭 4〜7 桁で入力してください" }
+    validates :code_a, :code_b, presence: true, format: { with: CODE_FORMAT, message: CODE_FORMAT_MESSAGE }
     validates :name_a, :name_b, presence: true
     validates :severity, inclusion: { in: SEVERITIES }
     validate :distinct_pair

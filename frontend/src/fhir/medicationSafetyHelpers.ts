@@ -1,6 +1,14 @@
 import type { Medicine } from "../api/masterClient";
 import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
 import { allergyMatchLabel, matchMedicationAllergies } from "./allergyHelpers";
+import {
+  drugIdentity,
+  type DrugIdentity,
+  EMPTY_INGREDIENT_INDEX,
+  type IngredientIndex,
+  ingredientLookupCode,
+  sameIngredient,
+} from "./ingredientIndex";
 
 // 薬剤オーダーの安全性チェック(`docs/order-common-backlog.md` §3)。
 //
@@ -27,9 +35,9 @@ const INGREDIENT_LENGTH = 7;
  * 薬価基準コードの上 7 桁を使う。薬価基準コードと YJ コードは上 9 桁が一致する(開発 DB の
  * 内服で不一致 0 件)ので、成分の判定には同じに使える。
  *
- * **限界**: 上 4 桁が薬効分類なので、同じ成分でも効能が違えば別のキーになる。
- * 例: アスピリン(解熱鎮痛 1143001)とバイアスピリン(抗血小板 3399007)は重複と出ない。
- * 成分そのもので突き合わせるには別の成分マスタが要る(アレルギー照合も同じ制約)。
+ * 上 4 桁が薬効分類なので、同じ成分でも効能が違えば別のキーになる
+ * (アスピリンの解熱鎮痛 1143001 と抗血小板 3399007)。効能をまたいだ突き合わせは
+ * 成分マスタの成分の ID で行う(`medicineIdentity`)。
  */
 export function ingredientKey(
   // 保存済みのオーダーから起こした表示用の行(`MedicineLineDisplay`)も渡せるよう、
@@ -57,6 +65,21 @@ function ingredientSourceCode(medicine: {
   yakka_code?: string | null;
 }): string {
   return (medicine.yj_code || medicine.yakka_code || (medicine.generic ? medicine.medicine_code : "") || "").trim();
+}
+
+type IngredientSource = Parameters<typeof ingredientSourceCode>[0];
+
+/** 突き合わせに使う成分(上 7 桁のキーと成分マスタの成分の ID)。コードを持たない薬は null。 */
+export function medicineIdentity(
+  medicine: IngredientSource | null | undefined,
+  index: IngredientIndex,
+): DrugIdentity | null {
+  return medicine ? drugIdentity(ingredientSourceCode(medicine), index) : null;
+}
+
+/** 成分マスタを引くコード(上 9 桁)。`ActiveMedication.lookupCode` に入れる。 */
+export function medicineLookupCode(medicine: IngredientSource): string {
+  return ingredientLookupCode(ingredientSourceCode(medicine));
 }
 
 export type MedicineCautionKind =
@@ -168,10 +191,16 @@ export interface ActiveMedication {
   orderId: string;
   name: string;
   ingredient: string;
+  /** 成分マスタを引くコード(上 9 桁)。無ければ `ingredient` で引く。 */
+  lookupCode?: string;
   /** 投与終了日。日数を持たない RP(頓用・外用)では開始日。持参薬は持たない(空)。 */
   endDate: string;
   /** 持参薬(MedicationStatement)。 */
   brought?: boolean;
+}
+
+export function activeIdentity(medication: ActiveMedication, index: IngredientIndex): DrugIdentity {
+  return { key: medication.ingredient, ids: index.idsOf(medication.lookupCode ?? medication.ingredient) };
 }
 
 /**
@@ -244,18 +273,21 @@ export function buildMedicationWarnings(args: {
   excludeOrderId?: string;
   /** 継続して処方に起こしている最中の持参薬(その処方の行と重複させない)。 */
   excludeBroughtIds?: string[];
+  /** 成分マスタ。渡さなければ上 7 桁だけで比べる。 */
+  ingredients?: IngredientIndex;
 }): MedicationWarning[][][] {
-  const { rps, allergies, active, excludeOrderId, excludeBroughtIds = [] } = args;
+  const { rps, allergies, active, excludeOrderId, excludeBroughtIds = [], ingredients = EMPTY_INGREDIENT_INDEX } = args;
 
-  // フォーム内の同一成分。1 つの成分がどの RP の何行目に出るかを先に集める。
-  const positions = new Map<string, { rpIndex: number; medIndex: number }[]>();
-  rps.forEach((rp, rpIndex) => {
-    rp.medicines.forEach((line, medIndex) => {
-      const key = ingredientKey(line.medicine);
-      if (!key) return;
-      positions.set(key, [...(positions.get(key) ?? []), { rpIndex, medIndex }]);
-    });
-  });
+  // フォーム内の同一成分を探すため、全行の成分を先に集める。
+  const positions = rps.flatMap((rp, rpIndex) =>
+    rp.medicines.flatMap((line, medIndex) => {
+      const identity = medicineIdentity(line.medicine, ingredients);
+      return identity ? [{ rpIndex, medIndex, identity }] : [];
+    }),
+  );
+  const ongoingCandidates = active
+    .filter((a) => (a.brought ? !excludeBroughtIds.includes(a.orderId) : a.orderId !== excludeOrderId))
+    .map((a) => ({ medication: a, identity: activeIdentity(a, ingredients) }));
 
   return rps.map((rp, rpIndex) =>
     rp.medicines.map((line, medIndex) => {
@@ -263,7 +295,7 @@ export function buildMedicationWarnings(args: {
       if (!line.medicine) return warnings;
 
       // 成分指定のアレルギー(上 7 桁)は薬価基準コード・一般名処方コードでも当たる。
-      for (const match of matchMedicationAllergies(ingredientSourceCode(line.medicine), allergies)) {
+      for (const match of matchMedicationAllergies(ingredientSourceCode(line.medicine), allergies, ingredients)) {
         warnings.push({
           kind: "allergy",
           text: `アレルギー: ${allergyMatchLabel(match)}`,
@@ -272,11 +304,11 @@ export function buildMedicationWarnings(args: {
         });
       }
 
-      const key = ingredientKey(line.medicine);
-      if (!key) return warnings;
+      const identity = medicineIdentity(line.medicine, ingredients);
+      if (!identity) return warnings;
 
-      const others = (positions.get(key) ?? []).filter(
-        (p) => p.rpIndex !== rpIndex || p.medIndex !== medIndex,
+      const others = positions.filter(
+        (p) => (p.rpIndex !== rpIndex || p.medIndex !== medIndex) && sameIngredient(p.identity, identity),
       );
       if (others.length > 0) {
         // 同じ RP の中か、別の RP かで言い方を変える(どこを直せばよいかが分かるように)。
@@ -288,11 +320,9 @@ export function buildMedicationWarnings(args: {
         warnings.push({ kind: "duplicate", text, high: false });
       }
 
-      const ongoing = active.filter(
-        (a) =>
-          a.ingredient === key &&
-          (a.brought ? !excludeBroughtIds.includes(a.orderId) : a.orderId !== excludeOrderId),
-      );
+      const ongoing = ongoingCandidates
+        .filter((candidate) => sameIngredient(candidate.identity, identity))
+        .map((candidate) => candidate.medication);
       for (const a of ongoing) {
         warnings.push({
           kind: "duplicate",
