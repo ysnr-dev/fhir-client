@@ -8,6 +8,7 @@ import { SearchLimitError } from './api/queries/core'
 import { setUnauthorizedHandler } from './api/session'
 import App from './App.tsx'
 import './index.css'
+import { installPrintTheme } from './theme'
 
 // 4xx は状態が変わらない限り何度投げても同じ結果なので再試行しない(上流の 401 は
 // backend が 502 に写すので、ここに来る 4xx はクライアント側の問題)。取得の上限に達した
@@ -47,6 +48,8 @@ setUnauthorizedHandler(() => {
   queryClient.invalidateQueries({ queryKey: AUTH_SESSION_KEY })
   queryClient.invalidateQueries({ queryKey: ADMIN_SESSION_KEY })
 })
+
+installPrintTheme()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

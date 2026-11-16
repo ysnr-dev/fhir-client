@@ -1,3 +1,4 @@
+/* ライトテーマ。紙に出すもの(印刷用の別タブとブラウザの印刷)の配色で、画面は下のダークテーマで描く。 */
 :root {
   --text: #6b6375;
   --text-h: #08060d;
@@ -91,9 +92,8 @@
   }
 }
 
-/* ダークテーマ。data-theme は index.html の起動時スクリプトと useTheme が
-   必ず light / dark のどちらかに解決して書き込むので、ここでは
-   prefers-color-scheme を見ない(管理メニューの手動選択を効かせるため)。 */
+/* ダークテーマ。画面の配色。data-theme="dark" は index.html の <html> に書いてあり、
+   印刷のときだけ theme.ts が light に切り替える。OS の prefers-color-scheme は見ない。 */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --text: #9ca3af;

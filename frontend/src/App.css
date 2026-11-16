@@ -6952,25 +6952,6 @@ button.populate-expression__option--active {
   right: auto;
 }
 
-/* ---- テーマ切替(管理メニュー内) ---- */
-
-/* ラベルと ON/OFF を左右に振り分ける。詳細度は .row-menu__item に合わせる。 */
-.row-menu__items .theme-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.theme-toggle__state {
-  font-size: 12px;
-  color: var(--text);
-}
-
-.theme-toggle[aria-checked="true"] .theme-toggle__state {
-  color: var(--accent);
-}
-
 /* ---- 患者テンプレート(QuestionnaireResponse) ---- */
 
 /* テンプレートのプルダウンと「前回値複写」を 1 行に並べる。プルダウンにはラベルが

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useSelfOrganization } from "../../api/queries";
 import type {
   ChartDrugLine,
@@ -9,7 +9,7 @@ import type {
   ChartSpec,
 } from "../../fhir/timeSeriesChartHelpers";
 import { dateTimeLabel, nowFhirDateTime } from "../../lib/dates";
-import { applyTheme, resolveTheme } from "../../theme";
+import { usePrintPageTheme } from "../../theme";
 import { ErrorBanner } from "../ErrorBanner";
 import { TimeSeriesPlot } from "./TimeSeriesPlot";
 
@@ -57,11 +57,8 @@ export function ChartPrintPage({ loading, errors, emptyMessage, sheet }: ChartPr
   // 印刷日時は開いた時点で固定する。
   const printedAt = useMemo(() => dateTimeLabel(nowFhirDateTime()), []);
 
-  // 紙面は白地に印字するので、ダークテーマでもこのタブだけライトで描く。
-  useEffect(() => {
-    applyTheme("light");
-    return () => applyTheme(resolveTheme());
-  }, []);
+  // 紙面は白地に印字するので、このタブだけライトで描く。
+  usePrintPageTheme();
 
   return (
     <div className="time-chart-print time-chart">

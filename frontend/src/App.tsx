@@ -7,7 +7,6 @@ import { CurrentUserBadge } from "./components/CurrentUserBadge";
 import { HoverMenu } from "./components/HoverMenu";
 import { OrderContextPicker } from "./components/OrderContextPicker";
 import { SubMenu } from "./components/SubMenu";
-import { ThemeToggleItem } from "./components/ThemeToggleItem";
 import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
 import { DocumentTemplatesPage } from "./pages/DocumentTemplatesPage";
@@ -315,7 +314,6 @@ function App() {
             <Link to="/external-systems" className="row-menu__item">
               外部システム連携
             </Link>
-            <ThemeToggleItem />
           </HoverMenu>
         </nav>
         {/* オーダーはカルテ以外(手術カレンダーなど)からも登録するので、

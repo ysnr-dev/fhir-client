@@ -1,39 +1,30 @@
-// テーマ(ライト/ダーク)の保存と適用。
-// CSS 側は :root[data-theme="dark"] だけを見るため、OS 設定に従う場合でも
-// 解決済みの light / dark を必ず属性に書き込む。
-export type Theme = "light" | "dark";
+import { useEffect } from "react";
 
-// index.html の起動時スクリプトでも同じキーを読む(初回描画のちらつき防止)。
-// 変更する場合は両方揃えること。
-export const THEME_STORAGE_KEY = "fhir-client.theme";
+// 画面はダークテーマで描き、紙に出すもの(印刷用の別タブとブラウザの印刷)だけライトで描く。
+// CSS は :root がライト(紙面)、:root[data-theme="dark"] が画面の配色。
+// 起動時の data-theme="dark" は index.html の <html> に書いてある。
+type Theme = "light" | "dark";
 
-// 保存済みの明示選択。未選択(= OS 設定に従う)なら null。
-export function readStoredTheme(): Theme | null {
-  try {
-    const value = localStorage.getItem(THEME_STORAGE_KEY);
-    return value === "light" || value === "dark" ? value : null;
-  } catch {
-    // プライベートブラウズ等で localStorage が使えない場合は OS 設定にフォールバックする。
-    return null;
-  }
-}
+let screenTheme: Theme = "dark";
 
-export function storeTheme(theme: Theme) {
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
-  } catch {
-    // 保存できなくてもその場の表示は切り替える。
-  }
-}
-
-export function systemTheme(): Theme {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-export function resolveTheme(): Theme {
-  return readStoredTheme() ?? systemTheme();
-}
-
-export function applyTheme(theme: Theme) {
+function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme;
+}
+
+// 印刷用の別タブを開いている間は、画面上の紙面もライトで描く。
+export function usePrintPageTheme() {
+  useEffect(() => {
+    screenTheme = "light";
+    applyTheme("light");
+    return () => {
+      screenTheme = "dark";
+      applyTheme("dark");
+    };
+  }, []);
+}
+
+// どの画面からブラウザの印刷をしても、紙面はライトで出す。起動時に 1 回呼ぶ。
+export function installPrintTheme() {
+  window.addEventListener("beforeprint", () => applyTheme("light"));
+  window.addEventListener("afterprint", () => applyTheme(screenTheme));
 }

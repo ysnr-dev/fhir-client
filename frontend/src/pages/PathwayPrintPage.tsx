@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { usePathway } from "../api/masterQueries";
 import { useSelfOrganization } from "../api/queries";
@@ -27,7 +27,7 @@ import {
 } from "../fhir/pathwaySheetHelpers";
 import { displayOf } from "../fhir/shared";
 import { dateTimeLabel, nowFhirDateTime, today } from "../lib/dates";
-import { applyTheme, resolveTheme } from "../theme";
+import { usePrintPageTheme } from "../theme";
 
 // パス定義(保存済みの内容)のパスシートを紙に出す別タブ。カルテのオーバービューと同じ並びで、
 // 列の多いパスは病日の区切りで次の紙へ送り、行の見出しと病日の段を紙ごとに繰り返す。
@@ -47,11 +47,8 @@ export function PathwayPrintPage() {
   const { organization } = useSelfOrganization();
   const draft = useMemo(() => (detail.data ? draftFromPathway(detail.data) : null), [detail.data]);
 
-  // 紙面は白地に印字するので、ダークテーマでもこのタブだけライトで描く。
-  useEffect(() => {
-    applyTheme("light");
-    return () => applyTheme(resolveTheme());
-  }, []);
+  // 紙面は白地に印字するので、このタブだけライトで描く。
+  usePrintPageTheme();
 
   const [admissionDate, setAdmissionDate] = useState("");
   const [paper, setPaper] = useState<Paper>("A4");
