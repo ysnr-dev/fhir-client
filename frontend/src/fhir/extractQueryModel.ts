@@ -71,7 +71,10 @@ export interface ExtractRelation {
   anchor_date?: "start" | "end";
 }
 
-/** 薬効分類(YJ コードの先頭 2〜4 桁)。実行時に医薬品コードへ展開する。 */
+/**
+ * 薬の群。薬効分類(YJ コードの先頭 2〜4 桁)・ATC 分類(`C10AA`)・成分(`I` + 成分の ID)。
+ * 実行時に医薬品コードへ展開する。
+ */
 export interface ExtractDrugClass {
   code: string;
   name?: string;

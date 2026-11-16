@@ -73,6 +73,8 @@ J-FAGY の GCM は上 9 桁が同じ体系なので、どれからでも引け�
 - 引き方(`fhir/ingredientIndex.ts`): 上 9 桁 → 上 7 桁の順。規則のコードの書き方は `ruleCodeKind`、当たる成分は `ruleComponents`。frontend は全件を読んで手元で引く(`useIngredientIndex`)。
   **同じ成分**は「上 7 桁が同じ、または成分の ID が 1 つでも重なる」で判定するので、成分マスタが空でも従来どおり動く。
   重複投与・アレルギー(成分指定)・相互作用・用量・病名・累積の上限が同じ判定を通る。
+- データ抽出の処方・注射の条件も、成分マスタで ATC 分類・成分を医薬品コードに展開する(`GET /master/medicines/codes`。
+  `docs/data-extract-design.md` §2)。こちらは backend が同じ引き方(上 9 桁 → 上 7 桁)で引く。
 
 ## 2. 照合(`fhir/drugCheckHelpers.ts`)
 

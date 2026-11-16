@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useId, useState, type FormEvent } from "react";
 import type {
   Disease,
   DrugCheckSeverity,
@@ -11,7 +11,7 @@ import type {
   Medicine,
 } from "../api/masterClient";
 import {
-  useAtcClasses,
+  useAtcClassOptions,
   useDrugCheckMutations,
   useMedicineIngredients,
   useDrugDiseaseRules,
@@ -949,9 +949,6 @@ function DrugField({
   );
 }
 
-/** ATC 分類の候補に添える成分名の数。 */
-const ATC_MEMBER_NAMES = 4;
-
 /**
  * ATC 分類(薬理の群)の選択。候補("C10AA HMG CoA reductase inhibitors（アトルバスタチン・…）")を選ぶか、
  * コードを直接打つと確定する。分類名は英語なので、候補には属する成分の名前を添え、名称は手で直せる。
@@ -967,29 +964,9 @@ function AtcInput({
   name: string;
   onChange: (code: string, name: string) => void;
 }) {
-  const classes = useAtcClasses();
-  const ingredients = useMedicineIngredients();
+  const options = useAtcClassOptions();
   const listId = useId();
   const [text, setText] = useState(code);
-
-  const options = useMemo(() => {
-    const names = new Map<string, Set<string>>();
-    for (const row of ingredients.data ?? []) {
-      if (!row.name_ja) continue;
-      for (const atc of row.atc_codes) {
-        for (const length of [3, 4, 5]) {
-          const prefix = atc.slice(0, length);
-          names.set(prefix, (names.get(prefix) ?? new Set()).add(row.name_ja));
-        }
-      }
-    }
-    return (classes.data ?? []).map((atcClass) => {
-      const members = [...(names.get(atcClass.code) ?? [])];
-      const shown = members.slice(0, ATC_MEMBER_NAMES).join("・");
-      const suffix = members.length > ATC_MEMBER_NAMES ? "…" : "";
-      return { ...atcClass, text: `${atcClass.code} ${atcClass.name}${shown ? `（${shown}${suffix}）` : ""}` };
-    });
-  }, [classes.data, ingredients.data]);
 
   function handleChange(value: string) {
     setText(value);

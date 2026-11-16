@@ -87,6 +87,54 @@ RSpec.describe "Master::Medicines", type: :request do
       get "/master/medicines/codes", params: { yakko_prefix: "6,abc,%" }
       expect(JSON.parse(response.body)["codes"]).to eq([])
     end
+
+    context "成分マスタで引く指定" do
+      before do
+        Master::Medicine.create!(medicine_code: "610000201", name: "アスピリン原末", yakka_code: "1143001X1010")
+        Master::Medicine.create!(medicine_code: "610000202", name: "バイアスピリン錠", yakka_code: "3399007H1021")
+        Master::Medicine.create!(medicine_code: "610000203", name: "タケルダ配合錠", yakka_code: "3399102F1020")
+        Master::Medicine.create!(medicine_code: "610000204", name: "混合型インスリン", yakka_code: "2492414G1020")
+        Master::Medicine.create!(medicine_code: "610000205", name: "速効型インスリン", yakka_code: "2492414G2026")
+        ingredient = ->(prefix, id, atc) { Master::MedicineIngredient.create!(code_prefix: prefix, ingredient_id: id, name: "x", atc_codes: atc) }
+        ingredient.call("1143001", 1112807, "B01AC06 N02BA01")
+        ingredient.call("3399007", 1112807, "B01AC06 N02BA01")
+        ingredient.call("3399102", 1112807, "B01AC06 N02BA01")
+        ingredient.call("3399102", 929887, "A02BC03")
+        ingredient.call("2492414", 1596977, "A10AB01")
+        ingredient.call("2492414G1", 1562586, "A10AC01")
+      end
+
+      it "成分の ID で、薬効分類の違う薬と配合剤を返す" do
+        get "/master/medicines/codes", params: { ingredient_id: "1112807" }
+        expect(JSON.parse(response.body)["codes"]).to eq(%w[610000201 610000202 610000203])
+      end
+
+      it "ATC 分類の前方一致で返す(2 つ目以降の ATC コードにも当たる)" do
+        get "/master/medicines/codes", params: { atc_prefix: "A02BC" }
+        expect(JSON.parse(response.body)["codes"]).to eq(%w[610000203])
+
+        get "/master/medicines/codes", params: { atc_prefix: "N02" }
+        expect(JSON.parse(response.body)["codes"]).to eq(%w[610000201 610000202 610000203])
+      end
+
+      it "上 9 桁の行がある薬は上 7 桁の行で引かない" do
+        get "/master/medicines/codes", params: { ingredient_id: "1596977" }
+        expect(JSON.parse(response.body)["codes"]).to eq(%w[610000205])
+
+        get "/master/medicines/codes", params: { atc_prefix: "A10AC" }
+        expect(JSON.parse(response.body)["codes"]).to eq(%w[610000204])
+      end
+
+      it "薬効分類と合わせて指定すると和をとる" do
+        get "/master/medicines/codes", params: { yakko_prefix: "1124", ingredient_id: "929887" }
+        expect(JSON.parse(response.body)["codes"]).to eq(%w[610000103 610000203])
+      end
+
+      it "形式に合わない指定は無視する" do
+        get "/master/medicines/codes", params: { atc_prefix: "c10aa,%,I01", ingredient_id: "abc" }
+        expect(JSON.parse(response.body)["codes"]).to eq([])
+      end
+    end
   end
 
   describe "GET /master/medicines (薬効分類)" do

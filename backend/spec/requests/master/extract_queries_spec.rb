@@ -149,6 +149,19 @@ RSpec.describe "Master::ExtractQueries", type: :request do
       expect(errors_text).to include("2〜4 桁")
     end
 
+    it "処方・注射は ATC 分類と成分でも指定できる" do
+      create_query({ "op" => "and", "children" => [
+        { "key" => "a", "kind" => "medication",
+          "drug_classes" => [{ "code" => "C10AA", "name" => "スタチン" }, { "code" => "I1112807", "name" => "アスピリン" }] }
+      ] })
+      expect(response).to have_http_status(:created)
+
+      create_query({ "op" => "and", "children" => [
+        { "key" => "a", "kind" => "medication", "drug_classes" => [{ "code" => "C10AA05" }] }
+      ] }, name: "誤り")
+      expect(errors_text).to include("ATC 分類")
+    end
+
     it "時間関係は同じ AND グループの、除外でも時間関係でもない条件を基準にできる" do
       dis = { "key" => "dis", "kind" => "admission", "date_mode" => "discharged", "period" => { "mode" => "relative", "days" => 365 } }
       re = { "key" => "re", "kind" => "admission", "period" => { "mode" => "relative", "days" => 365 },

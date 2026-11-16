@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { useId, useState, type ComponentType } from "react";
 import type {
   Disease,
   EndoscopyItem,
@@ -10,7 +10,12 @@ import type {
   SurgeryItem,
   TreatmentItem,
 } from "../../api/masterClient";
-import { useMedicineTypeOptions } from "../../api/masterQueries";
+import {
+  useAtcClassOptions,
+  useIngredientOptions,
+  useMedicineTypeOptions,
+  type DrugClassOption,
+} from "../../api/masterQueries";
 import { useSelfDepartments, useWardOptions } from "../../api/queries";
 import { DISEASE_KEY_NUMBER_SYSTEM } from "../../fhir/conditionHelpers";
 import { departmentDisplayName, sortDepartmentsByCode } from "../../fhir/departmentHelpers";
@@ -19,6 +24,7 @@ import { EXTRACT_ORDER_KINDS, extractOrderKindOf } from "../../fhir/extractKinds
 import {
   ADMISSION_DATE_MODES,
   CLINICAL_STATUS_OPTIONS,
+  drugClassLabel,
   EXTRACT_ORDER_STAGES,
   EXTRACT_ORDER_TYPES,
   EXTRACT_VALUE_OPS,
@@ -331,6 +337,47 @@ function ObservationCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) 
   );
 }
 
+/**
+ * 薬の群(ATC 分類・成分)を候補から選ぶ欄。打った文字で候補が絞られ、候補を選ぶと確定して欄を空に戻す。
+ */
+function DrugClassPicker({
+  label,
+  options,
+  onPick,
+}: {
+  label: string;
+  options: DrugClassOption[];
+  onPick: (drugClass: ExtractDrugClass) => void;
+}) {
+  const listId = useId();
+  const [text, setText] = useState("");
+
+  function handleChange(value: string) {
+    const matched = options.find((o) => o.text === value);
+    if (!matched) return setText(value);
+    onPick({ code: matched.code, name: matched.name });
+    setText("");
+  }
+
+  return (
+    <label className="extract-field extract-field--inline">
+      {label}
+      <input
+        type="text"
+        className="extract-field__label"
+        value={text}
+        onChange={(e) => handleChange(e.target.value)}
+        list={listId}
+      />
+      <datalist id={listId}>
+        {options.map((option) => (
+          <option key={option.code} value={option.text} />
+        ))}
+      </datalist>
+    </label>
+  );
+}
+
 export function MedicationCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Patch }) {
   const [picking, setPicking] = useState(false);
   const [classCode, setClassCode] = useState("");
@@ -338,8 +385,11 @@ export function MedicationCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Pat
   const codes = leaf.codes ?? [];
   const classes = leaf.drug_classes ?? [];
 
+  const atcOptions = useAtcClassOptions();
+  const ingredientOptions = useIngredientOptions();
+
   const addClass = (drugClass: ExtractDrugClass) => {
-    if (!/^\d{2,4}$/.test(drugClass.code) || classes.some((c) => c.code === drugClass.code)) return;
+    if (classes.some((c) => c.code === drugClass.code)) return;
     patch({ drug_classes: [...classes, drugClass] });
   };
 
@@ -386,15 +436,17 @@ export function MedicationCodes({ leaf, patch }: { leaf: ExtractLeaf; patch: Pat
       >
         追加
       </button>
+      <DrugClassPicker label="ATC分類" options={atcOptions} onPick={addClass} />
+      <DrugClassPicker label="成分" options={ingredientOptions} onPick={addClass} />
       {classes.length > 0 && (
         <span className="extract-chips">
           {classes.map((drugClass) => (
             <span key={drugClass.code} className="extract-chip extract-chip--class">
-              {drugClass.name ? `${drugClass.code} ${drugClass.name}` : `薬効 ${drugClass.code}`}
+              {drugClassLabel(drugClass)}
               <button
                 type="button"
                 className="extract-chip__remove"
-                aria-label={`薬効 ${drugClass.code} を外す`}
+                aria-label={`${drugClassLabel(drugClass)} を外す`}
                 onClick={() => patch({ drug_classes: classes.filter((c) => c !== drugClass) })}
               >
                 ×

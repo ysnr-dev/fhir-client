@@ -37,19 +37,51 @@ module Master
       render json: paginate(scope)
     end
 
-    # 薬効分類(YJ コードの先頭 2〜4 桁)に当たる医薬品コードを全件返す(データ抽出の
-    # 「薬効分類で指定」を実行時に展開する。docs/data-extract-design.md)。廃止された薬も
-    # 過去のオーダーにあるので含める。yakko_prefix はカンマ区切りで複数指定できる。
+    # 薬の群に当たる医薬品コードを全件返す(データ抽出の「薬効分類・ATC 分類・成分で指定」を実行時に展開する。
+    # docs/data-extract-design.md)。廃止された薬も過去のオーダーにあるので含める。どの指定もカンマ区切りで
+    # 複数指定でき、和をとる。
+    #   yakko_prefix   薬効分類(YJ コードの先頭 2〜4 桁)
+    #   atc_prefix     ATC 分類(2〜4 階層目。成分マスタで引く)
+    #   ingredient_id  成分の ID(成分マスタで引く。配合剤も当たる)
     def codes
-      prefixes = params[:yakko_prefix].to_s.split(",").map(&:strip).select { |p| p.match?(/\A\d{2,4}\z/) }.uniq
-      return render json: { codes: [] } if prefixes.empty?
+      scopes = [yakko_scope, ingredient_scope].compact
+      return render json: { codes: [] } if scopes.empty?
 
-      conditions = prefixes.map { "master_medicines.yakka_code LIKE ?" }.join(" OR ")
-      codes = Master::Medicine.where(conditions, *prefixes.map { |p| "#{p}%" }).order(:medicine_code).pluck(:medicine_code)
+      codes = scopes.reduce { |merged, scope| merged.or(scope) }.order(:medicine_code).pluck(:medicine_code)
       render json: { codes: codes }
     end
 
     private
+
+    def code_list(name, pattern)
+      params[name].to_s.split(",").map(&:strip).select { |value| value.match?(pattern) }.uniq
+    end
+
+    def yakko_scope
+      prefixes = code_list(:yakko_prefix, /\A\d{2,4}\z/)
+      return nil if prefixes.empty?
+
+      Master::Medicine.where(prefixes.map { "master_medicines.yakka_code LIKE ?" }.join(" OR "), *prefixes.map { |p| "#{p}%" })
+    end
+
+    # 成分マスタは薬価基準コードの上 7 桁で持ち、規格で成分が変わる薬だけ上 9 桁で持つ。
+    # 上 9 桁の行がある薬はそちらだけを見る(画面の照合と同じ引き方)。
+    INGREDIENT_KEY_SQL = <<~SQL.squish.freeze
+      CASE WHEN EXISTS (SELECT 1 FROM master_medicine_ingredients s WHERE s.code_prefix = LEFT(master_medicines.yakka_code, 9))
+           THEN LEFT(master_medicines.yakka_code, 9) ELSE LEFT(master_medicines.yakka_code, 7) END
+    SQL
+
+    def ingredient_scope
+      atc_prefixes = code_list(:atc_prefix, /\A[A-HJ-Z]\d{2}[A-Z]{0,2}\z/)
+      ingredient_ids = code_list(:ingredient_id, /\A\d{1,12}\z/)
+      return nil if atc_prefixes.empty? && ingredient_ids.empty?
+
+      # atc_codes は空白区切りなので、先頭に空白を足して「空白 + 分類」で前方一致させる。
+      rows = atc_prefixes.reduce(Master::MedicineIngredient.where(ingredient_id: ingredient_ids)) do |scope, prefix|
+        scope.or(Master::MedicineIngredient.where("(' ' || atc_codes) LIKE ?", "% #{prefix}%"))
+      end
+      Master::Medicine.where("#{INGREDIENT_KEY_SQL} IN (?)", rows.select(:code_prefix))
+    end
 
     # 院内フォーミュラリの印(docs/formulary-design.md)。検索結果の各行に、
     # 推奨順位(複数の群に載っていれば最小)とその群の名前を添える。

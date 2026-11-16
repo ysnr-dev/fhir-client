@@ -60,6 +60,7 @@ class ExtractQuery < ApplicationRecord
   PATIENT_COLUMNS = %w[kana age gender birth_date postal_code address phone patient_id].freeze
   LEAF_OUTPUT_FIELDS = %w[count first last latest].freeze
   MAX_DRUG_CLASSES = 20
+  DRUG_CLASS_CODE = /\A(?:\d{2,4}|[A-HJ-Z]\d{2}[A-Z]{0,2}|I\d{1,12})\z/
   DATE_PATTERN = { pattern: /\A\d{4}-\d{2}-\d{2}\z/, label: " YYYY-MM-DD ", strict: true }.freeze
 
   PERIOD_SHAPE = {
@@ -113,10 +114,14 @@ class ExtractQuery < ApplicationRecord
     # 入院の病棟(Location)。入院のベッドから病室・病棟を辿るチェーン検索で絞る。
     "ward_id" => :string,
     "ward_name" => :string,
-    # 薬効分類(YJ コードの先頭 2〜4 桁)。実行時に医薬品コードへ展開する(新しい薬も拾える)。
+    # 薬の群。薬効分類(YJ コードの先頭 2〜4 桁)・ATC 分類(2〜4 階層目)・成分(`I` + 成分の ID)。
+    # 実行時に医薬品コードへ展開する(新しい薬も拾える)。
     "drug_classes" => {
       list: {
-        fields: { "code" => { pattern: /\A\d{2,4}\z/, label: "数字 2〜4 桁", strict: true }, "name" => :any },
+        fields: {
+          "code" => { pattern: DRUG_CLASS_CODE, label: "薬効分類(数字 2〜4 桁)・ATC 分類・成分の ID のいずれか", strict: true },
+          "name" => :any
+        },
         required: %w[code]
       },
       max: MAX_DRUG_CLASSES,

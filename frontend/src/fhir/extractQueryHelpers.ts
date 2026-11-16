@@ -2,6 +2,7 @@ import { csvBlob } from "../lib/csv";
 import { addDays, localDay } from "../lib/dates";
 import { DETAIL_COLUMNS, EXTRACT_KIND_DEFS, extractKindDef } from "./extractKinds";
 import {
+  type ExtractDrugClass,
   EXTRACT_KINDS,
   LEAF_OUTPUT_FIELDS,
   ageToBirthDateRange,
@@ -26,6 +27,7 @@ import {
   mobilePhoneOf,
   patientNumberOf,
 } from "./patientHelpers";
+import { ruleCodeKind } from "./ingredientIndex";
 import { referenceIdOfType } from "./shared";
 
 export * from "./extractQueryModel";
@@ -148,11 +150,23 @@ export function withBucketPeriod<T extends ExtractNode>(node: T, range: { from: 
   return { ...node, period };
 }
 
+/** 薬の群の表示名。薬効分類と ATC 分類はコードを添え、成分は名前だけ。 */
+export function drugClassLabel(drugClass: ExtractDrugClass): string {
+  switch (ruleCodeKind(drugClass.code)) {
+    case "ingredient":
+      return drugClass.name || `成分 ${drugClass.code}`;
+    case "atc":
+      return drugClass.name ? `${drugClass.code} ${drugClass.name}` : `ATC ${drugClass.code}`;
+    case "yj":
+      return drugClass.name ? `${drugClass.code} ${drugClass.name}` : `薬効 ${drugClass.code}`;
+  }
+}
+
 /** 条件の表示名。手で付けた名前が無ければ中身から作る(一覧の列名・CSV の見出しにも使う)。 */
 export function leafLabel(leaf: ExtractLeaf): string {
   if (leaf.label?.trim()) return leaf.label.trim();
   const codes = [
-    ...(leaf.drug_classes ?? []).map((c) => c.name || `薬効${c.code}`),
+    ...(leaf.drug_classes ?? []).map((c) => c.name || drugClassLabel(c)),
     ...(leaf.codes ?? []).map((c) => c.display || c.code),
   ];
   const names = codes.length > 2 ? `${codes.slice(0, 2).join("・")}ほか${codes.length - 2}件` : codes.join("・");

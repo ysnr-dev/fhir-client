@@ -1,4 +1,5 @@
 import { buildError, masterFetch, type MasterSearchResult } from "./core";
+import { ruleCodeKind, type RuleCodeKind } from "../../fhir/ingredientIndex";
 import { DOSE_CONVERSIONS_PATH } from "./ctcae";
 
 export interface Medicine {
@@ -155,11 +156,18 @@ export async function fetchYakkaCodes(medicineCodes: string[]): Promise<Map<stri
 }
 
 /**
- * 薬効分類(YJ コードの先頭 2〜4 桁)に当たる医薬品コード(廃止された薬も含む)。データ抽出の
- * 「薬効分類で指定」を実行時に展開する。
+ * 薬の群に当たる医薬品コード(廃止された薬も含む)。群は薬効分類(YJ コードの先頭 2〜4 桁)・ATC 分類・
+ * 成分(`I` + 成分の ID)のどれでも書け、和をとる。データ抽出の「薬の群で指定」を実行時に展開する。
  */
-export async function fetchMedicineCodesByClass(prefixes: string[]): Promise<string[]> {
-  const search = new URLSearchParams({ yakko_prefix: prefixes.join(",") });
+export async function fetchMedicineCodesByClass(classCodes: string[]): Promise<string[]> {
+  const byKind: Record<RuleCodeKind, string[]> = { yj: [], atc: [], ingredient: [] };
+  for (const code of classCodes) byKind[ruleCodeKind(code)].push(code);
+  const search = new URLSearchParams();
+  if (byKind.yj.length > 0) search.set("yakko_prefix", byKind.yj.join(","));
+  if (byKind.atc.length > 0) search.set("atc_prefix", byKind.atc.join(","));
+  if (byKind.ingredient.length > 0) {
+    search.set("ingredient_id", byKind.ingredient.map((code) => code.slice(1)).join(","));
+  }
   const res = await masterFetch(`/master/medicines/codes?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return ((await res.json()) as { codes: string[] }).codes;

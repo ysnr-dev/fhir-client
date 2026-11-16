@@ -60,7 +60,7 @@
   | patient | 性別・年齢(以上 / 以下) | 患者の属性 |
   | condition | 病名(病名管理番号 or ICD10)・状態・日付(開始日 / 登録日)と期間 | その病名がある |
   | observation | 検査結果項目 / バイタル・値の範囲・期間 | 期間内にその記録がある(値の範囲に入る) |
-  | medication | 薬剤(レセ電コード)・薬効分類(YJ コードの先頭 2〜4 桁)・区分(処方 / 注射 / 両方)・期間 | 期間内に処方・注射のオーダーがある |
+  | medication | 薬剤(レセ電コード)・薬の群(薬効分類 = YJ コードの先頭 2〜4 桁、ATC 分類、成分)・区分(処方 / 注射 / 両方)・期間 | 期間内に処方・注射のオーダーがある |
   | order | 部門オーダーの種別(`order_kind`。order-type のコード)・区分(`stage`: 依頼 / 実施)・項目(依頼のときだけ。任意)・期間・診療科 | 期間内にその部門オーダーの依頼(実施)がある |
   | admission | 期間・見方(期間中に入院していた / 入院した / 退院した)・診療科・病棟 | 入院がある |
   | outpatient | 期間 | 外来受診がある |
@@ -91,9 +91,19 @@
   絶対日を書かず、実行時に今日で解決する。
 - 患者属性以外の条件は「件数(以上)」(`min_count`、既定 1)を持つ。期間内にその件数以上の記録がある患者だけが当たる
   (「抗菌薬の注射が 30 日に 2 回以上」など)。判定は患者ごとに畳んだ件数で手元で行う。
-- 薬効分類(`drug_classes`)は保存した条件にはコードを持たず、**実行のたびに**医薬品マスタで医薬品コードに展開する
-  (`GET /master/medicines/codes?yakko_prefix=61,62`。廃止された薬も含む)。条件を保存した後に採用された薬も拾える。
-  薬剤と薬効分類の両方を指定したら和をとる。
+- 薬の群(`drug_classes`)は保存した条件にはコードを持たず、**実行のたびに**医薬品マスタで医薬品コードに展開する
+  (`GET /master/medicines/codes?yakko_prefix=61,62&atc_prefix=C10AA&ingredient_id=1112807`。廃止された薬も含む)。
+  条件を保存した後に採用された薬も拾える。薬剤と群、群どうしを合わせて指定したら和をとる。
+  - 群の `code` の書き方は 3 つ。薬効分類(YJ コードの先頭 2〜4 桁。`61`)、ATC 分類(2〜4 階層目。`C10AA` = スタチン)、
+    成分(`I` + 成分の ID。`I1112807` = アスピリン)。ATC 分類と成分の書き方は薬剤チェックの規則と同じ
+    (`docs/drug-check-master-design.md` §1)。
+  - ATC 分類と成分は成分マスタ(`master_medicine_ingredients`)で引く。薬価基準コードの上 9 桁の行があればそれ、無ければ
+    上 7 桁の行を見て(画面の照合と同じ引き方)、成分の ID か ATC コードの前方一致で当たった薬を返す。薬効分類をまたぐ薬
+    (アスピリンの解熱鎮痛と抗血小板)と配合剤(成分の 1 つが当たれば当たる)も拾える。
+  - 成分マスタに載っていない薬(外用薬・漢方・新しい成分)と ATC の付かない成分は、ATC 分類・成分の指定では拾えない。
+    薬効分類か薬剤で指定する。一般名処方は一般名処方コードだけを持つので、群の指定(薬効分類も含む)では拾えない。
+  - 入力欄(`MedicationCodes`)は、薬効分類はプルダウンか分類コード、ATC 分類と成分は候補(`useAtcClassOptions`・
+    `useIngredientOptions`)から選ぶ。ATC 分類の名称は英語なので、候補には属する成分の名前を添える。
 - **除外**(`not`)は AND グループの直下で、除外でない兄弟が 1 つ以上あるときだけ置ける。兄弟の積集合から差を
   取るため(OR の下や除外だけの AND は「全患者」の集合が要る)。
 - ICD10 の入力は上流の token が完全一致なので、3 桁(E11)を 4 桁の細分類(E110〜E119)まで広げて送る
@@ -366,9 +376,9 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
 - **取得**(`api/queries/medicationExtract.ts`): `MedicationRequest?authoredon=ge…&authoredon=le…&status:not=entered-in-error,cancelled
   [&code=<薬剤,…>][&based-on.category=order-type|<prescription|injection>][&based-on.department=Organization/x]
   &_include=MedicationRequest:based-on&_include=MedicationRequest:subject&_sort=-authoredon` を strict で `searchAllPages`。
-  - 薬剤・薬効分類は「患者」タブの処方・注射の条件の入力欄(`MedicationCodes`)をそのまま使う。薬効分類は実行のたびに医薬品マスタで
-    医薬品コードに展開し(`fetchMedicineCodesByClass`)、薬剤と合わせて 100 件ずつ code= で引いて合わせる。薬剤も薬効分類も
-    選ばなければ期間内のすべての薬剤。薬効分類に当たる薬が無ければ何も引かない。
+  - 薬剤と薬の群(薬効分類・ATC 分類・成分)は「患者」タブの処方・注射の条件の入力欄(`MedicationCodes`)をそのまま使う。群は実行のたびに
+    医薬品マスタで医薬品コードに展開し(`fetchMedicineCodesByClass`)、薬剤と合わせて 100 件ずつ code= で引いて合わせる。薬剤も群も
+    選ばなければ期間内のすべての薬剤。群に当たる薬が無ければ何も引かない。
   - 区分と依頼科は MedicationRequest に検索が無いので、ヘッダへのチェーンで引く。
   - 期間はオーダー日(authoredOn。登録日時)。開始日(ヘッダの occurrence)は列に出す。
 - **列**(`fhir/medicationExtractHelpers.ts`): オーダー日・開始日・区分(ヘッダの order-type)・処方区分(定期・臨時・院外など)・入外・
