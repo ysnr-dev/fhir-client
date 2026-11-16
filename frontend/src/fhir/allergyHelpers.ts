@@ -1,6 +1,12 @@
 import { today } from "../lib/dates";
 import type { JfagyAllergen, JfagyDrug, Medicine } from "../api/masterClient";
-import { type DrugIdentity, EMPTY_INGREDIENT_INDEX, type IngredientIndex, sameIngredient } from "./ingredientIndex";
+import {
+  drugIdentity,
+  type DrugIdentity,
+  EMPTY_INGREDIENT_INDEX,
+  type IngredientIndex,
+  sameIngredient,
+} from "./ingredientIndex";
 
 // JP Core AllergyIntolerance プロファイルと J-FAGY アレルゲンコードの URI 群。
 const PROFILE_URL = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_AllergyIntolerance";
@@ -369,10 +375,9 @@ function matchesAllergenIngredient(
   drug: DrugIdentity,
   ingredients: IngredientIndex,
 ): boolean {
-  const key = allergenIngredient(jfagyCode);
-  if (!key || !jfagyCode) return false;
-  const allergen = { key, ids: ingredients.idsOf(jfagyCode.slice(GENERIC_PREFIX.length)) };
-  return sameIngredient(allergen, drug);
+  if (!jfagyCode || !allergenIngredient(jfagyCode)) return false;
+  const allergen = drugIdentity(jfagyCode.slice(GENERIC_PREFIX.length), ingredients);
+  return Boolean(allergen) && sameIngredient(allergen!, drug);
 }
 
 export interface AllergyMatch {
@@ -402,7 +407,8 @@ export function matchMedicationAllergies(
 ): AllergyMatch[] {
   const codes = medicationAllergenCodes(code);
   if (!codes) return [];
-  const drug: DrugIdentity = { key: codes.ingredient, ids: ingredients.idsOf(code) };
+  const drug = drugIdentity(code, ingredients);
+  if (!drug) return [];
   const matches: AllergyMatch[] = [];
   for (const allergy of allergies) {
     if (allergy.verificationStatus?.coding?.[0]?.code === "refuted") continue;

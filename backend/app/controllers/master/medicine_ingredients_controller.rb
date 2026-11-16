@@ -6,9 +6,10 @@ module Master
 
     def index
       rows = Master::MedicineIngredient.order(:code_prefix, :ingredient_id)
-                                       .pluck(:code_prefix, :ingredient_id, :name, :name_ja)
-      render json: rows.map { |code_prefix, ingredient_id, name, name_ja|
-        { code_prefix: code_prefix, ingredient_id: ingredient_id, name: name, name_ja: name_ja }
+                                       .pluck(:code_prefix, :ingredient_id, :name, :name_ja, :atc_codes, :amount, :amount_unit)
+      render json: rows.map { |code_prefix, ingredient_id, name, name_ja, atc_codes, amount, amount_unit|
+        { code_prefix: code_prefix, ingredient_id: ingredient_id, name: name, name_ja: name_ja,
+          atc_codes: atc_codes.split, amount: amount&.to_f, amount_unit: amount_unit }
       }
     end
   end

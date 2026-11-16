@@ -70,7 +70,13 @@ const MASTER_OPTIONS: MasterOption[] = [
   {
     type: "medicine_ingredients",
     label: "成分マスタ",
-    formatHint: "medicine_ingredients.csv（UTF-8、ヘッダあり・5列。rake medicine_ingredients:generate で作成）",
+    formatHint: "medicine_ingredients.csv（UTF-8、ヘッダあり・8列。rake medicine_ingredients:generate で作成）",
+    accept: ".csv",
+  },
+  {
+    type: "atc_classes",
+    label: "ATC分類",
+    formatHint: "atc_classes.csv（UTF-8、ヘッダあり・2列。rake medicine_ingredients:generate で作成）",
     accept: ".csv",
   },
   {

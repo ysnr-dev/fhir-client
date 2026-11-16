@@ -462,6 +462,10 @@ Rails.application.routes.draw do
     resources :medicine_ingredients, only: %i[index] do
       collection { post :import }
     end
+    # ATC 分類(2〜4 階層目)の名称。取込で全件洗い替え。
+    resources :atc_classes, only: %i[index] do
+      collection { post :import }
+    end
     # BOM(Basic Outcome Master)のアウトカム・観察項目。検索専用(取込で全件洗い替え)。
     resources :bom_outcomes, only: %i[index] do
       collection { post :import }

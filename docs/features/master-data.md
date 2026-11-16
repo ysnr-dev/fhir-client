@@ -13,7 +13,8 @@ JSON REST**（snake_case、`OperationOutcome` は使わず `{error: ...}` / `{er
 | 医薬品 | `/master/medicines` | 医薬品マスタ（CSV, Shift_JIS, ヘッダーなし） |
 | 用法 | `/master/medicine_usages` | 電子処方箋用法マスタ（xlsx） |
 | 薬効分類 | `/master/medicine_types` | 薬効分類番号(4桁)→名称。`db/seed_data/medicine_types.csv` を `db:seed` で投入（日本標準商品分類「87」由来） |
-| 成分 | `/master/medicine_ingredients` | コードの上 7 桁・上 9 桁 → 成分。`bin/rails medicine_ingredients:generate` で作った `medicine_ingredients.csv`（UTF-8, ヘッダーあり）。検索は全件、編集なし（`docs/drug-check-master-design.md` §1.1） |
+| 成分 | `/master/medicine_ingredients` | コードの上 7 桁・上 9 桁 → 成分(ATC コード・配合剤の含量つき)。`bin/rails medicine_ingredients:generate` で作った `medicine_ingredients.csv`（UTF-8, ヘッダーあり）。検索は全件、編集なし（`docs/drug-check-master-design.md` §1.1） |
+| ATC分類 | `/master/atc_classes` | ATC 分類(2〜4 階層目)の名称。同じ rake が作る `atc_classes.csv`（UTF-8, ヘッダーあり）。検索は全件、編集なし |
 | 口腔診査コード | `/master/oral_exam_codes` | 口腔診査情報標準コード仕様(JDAOES)のコード表。配布 xlsx から rake で作った `db/seed_data/oral_exam_codes.csv` を seed と migration で投入。読み取り専用（`docs/features/oral-exam.md`） |
 
 ### 薬効分類（薬効検索）

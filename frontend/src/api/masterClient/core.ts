@@ -11,6 +11,7 @@ export type MasterType =
   | "jfagy_allergens"
   | "jfagy_drugs"
   | "medicine_ingredients"
+  | "atc_classes"
   | "lab_specimens"
   | "rad_jj1017_codes"
   | "rad_frequent_codes"

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_17_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_17_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -448,6 +448,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_17_100000) do
     t.datetime "updated_at", null: false
     t.jsonb "maintenance"
     t.index ["code"], name: "index_master_advisory_rules_on_code", unique: true
+  end
+
+  create_table "master_atc_classes", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_atc_classes_on_code", unique: true
   end
 
   create_table "master_blood_purifiers", force: :cascade do |t|
@@ -1707,6 +1715,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_17_100000) do
     t.string "rxcui"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "atc_codes", default: "", null: false
+    t.decimal "amount", precision: 16, scale: 6
+    t.string "amount_unit"
     t.index ["code_prefix", "ingredient_id"], name: "idx_on_code_prefix_ingredient_id_79246bd9fc", unique: true
     t.index ["ingredient_id"], name: "index_master_medicine_ingredients_on_ingredient_id"
   end

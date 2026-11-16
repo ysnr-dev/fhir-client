@@ -4,9 +4,10 @@ module Master
     self.table_name = "master_drug_interactions"
 
     SEVERITIES = %w[contraindicated caution].freeze
-    # YJ コードの先頭 4〜7 桁(薬効分類 4 桁 + 成分 3 桁)か、成分マスタの成分(`I` + 成分の ID)。
-    CODE_FORMAT = /\A(?:\d{4}[0-9A-Z]{0,3}|I\d+)\z/
-    CODE_FORMAT_MESSAGE = "は YJ コードの先頭 4〜7 桁か成分の ID で入力してください".freeze
+    # YJ コードの先頭 4〜7 桁(薬効分類 4 桁 + 成分 3 桁)、成分マスタの成分(`I` + 成分の ID)、
+    # ATC 分類の 2〜4 階層目(`C10`・`C10A`・`C10AA`。先頭の英字に I は無い)のいずれか。
+    CODE_FORMAT = /\A(?:\d{4}[0-9A-Z]{0,3}|I\d+|[A-HJ-Z]\d{2}[A-Z]{0,2})\z/
+    CODE_FORMAT_MESSAGE = "は YJ コードの先頭 4〜7 桁・成分の ID・ATC 分類のいずれかで入力してください".freeze
 
     before_validation :normalize_codes
 

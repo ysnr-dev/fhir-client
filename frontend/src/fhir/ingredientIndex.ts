@@ -11,23 +11,40 @@ const KEY_LENGTH = 7;
 /** 薬剤チェックの規則に成分を書くときの接頭辞(`I` + 成分の ID)。 */
 const RULE_INGREDIENT_PREFIX = "I";
 
-export interface IngredientIndex {
-  /** YJ コード・薬価基準コード・一般名処方コード(上 7 桁以上)から成分の ID を引く。無ければ空。 */
-  idsOf(code: string | null | undefined): number[];
+/** 薬に含まれる成分 1 つ。 */
+export interface IngredientComponent {
+  id: number;
+  /** その成分が主成分の ATC コード(5 階層目)。 */
+  atc: string[];
+  /** 1 薬価単位(錠・カプセル)あたりの量。配合剤で分かっているものだけ。 */
+  amount: number | null;
+  amountUnit: string | null;
 }
 
-export const EMPTY_INGREDIENT_INDEX: IngredientIndex = { idsOf: () => [] };
+export interface IngredientIndex {
+  /** YJ コード・薬価基準コード・一般名処方コード(上 7 桁以上)から成分を引く。無ければ空。 */
+  componentsOf(code: string | null | undefined): IngredientComponent[];
+}
+
+export const EMPTY_INGREDIENT_INDEX: IngredientIndex = { componentsOf: () => [] };
 
 export function buildIngredientIndex(
-  rows: { code_prefix: string; ingredient_id: number }[],
+  rows: {
+    code_prefix: string;
+    ingredient_id: number;
+    atc_codes: string[];
+    amount: number | null;
+    amount_unit: string | null;
+  }[],
 ): IngredientIndex {
-  const byPrefix = new Map<string, number[]>();
+  const byPrefix = new Map<string, IngredientComponent[]>();
   for (const row of rows) {
-    byPrefix.set(row.code_prefix, [...(byPrefix.get(row.code_prefix) ?? []), row.ingredient_id]);
+    const component = { id: row.ingredient_id, atc: row.atc_codes, amount: row.amount, amountUnit: row.amount_unit };
+    byPrefix.set(row.code_prefix, [...(byPrefix.get(row.code_prefix) ?? []), component]);
   }
   return {
-    // 規格で成分が変わる薬(混合型インスリンなど)だけ上 9 桁で載っているので、先に 9 桁を見る。
-    idsOf(code) {
+    // 規格で成分や含量が変わる薬(混合型インスリン、配合剤)は上 9 桁で載っているので、先に 9 桁を見る。
+    componentsOf(code) {
       const trimmed = (code ?? "").trim();
       return (
         byPrefix.get(trimmed.slice(0, LOOKUP_LENGTH)) ?? byPrefix.get(trimmed.slice(0, KEY_LENGTH)) ?? []
@@ -45,28 +62,47 @@ export function ingredientLookupCode(code: string | null | undefined): string {
 export interface DrugIdentity {
   /** コードの上 7 桁。 */
   key: string;
-  /** 成分マスタの成分の ID。配合剤は複数、載っていない薬は空。 */
-  ids: number[];
+  /** 成分マスタの成分。配合剤は複数、載っていない薬は空。 */
+  components: IngredientComponent[];
 }
 
 export function drugIdentity(code: string | null | undefined, index: IngredientIndex): DrugIdentity | null {
   const trimmed = (code ?? "").trim();
   if (trimmed.length < KEY_LENGTH) return null;
-  return { key: trimmed.slice(0, KEY_LENGTH), ids: index.idsOf(trimmed) };
+  return { key: trimmed.slice(0, KEY_LENGTH), components: index.componentsOf(trimmed) };
 }
 
 /** 同じ成分を含むか。上 7 桁が同じか、成分の ID が 1 つでも重なれば同じとみなす。 */
 export function sameIngredient(a: DrugIdentity, b: DrugIdentity): boolean {
-  return a.key === b.key || a.ids.some((id) => b.ids.includes(id));
+  return a.key === b.key || a.components.some((x) => b.components.some((y) => y.id === x.id));
 }
 
-/** 規則のコード(YJ 先頭 4〜7 桁、または `I` + 成分の ID)が薬に当たるか。 */
+/** 規則のコードの書き方。成分(`I` + 成分の ID)、ATC 分類(`C10AA`)、YJ コードの先頭 4〜7 桁。 */
+export type RuleCodeKind = "ingredient" | "atc" | "yj";
+
+export function ruleCodeKind(code: string): RuleCodeKind {
+  if (/^I\d+$/.test(code)) return "ingredient";
+  return /^[A-Z]/.test(code) ? "atc" : "yj";
+}
+
+/** 規則のコードに当たる成分。YJ コードで書いた規則は薬そのものを指すので空。 */
+export function ruleComponents(drug: DrugIdentity, code: string): IngredientComponent[] {
+  switch (ruleCodeKind(code)) {
+    case "ingredient": {
+      const id = Number(code.slice(RULE_INGREDIENT_PREFIX.length));
+      return drug.components.filter((c) => c.id === id);
+    }
+    case "atc":
+      return drug.components.filter((c) => c.atc.some((atc) => atc.startsWith(code)));
+    case "yj":
+      return [];
+  }
+}
+
+/** 規則のコードが薬に当たるか。 */
 export function ruleCodeMatches(drug: DrugIdentity, code: string): boolean {
   if (!code) return false;
-  if (code.startsWith(RULE_INGREDIENT_PREFIX)) {
-    return drug.ids.includes(Number(code.slice(RULE_INGREDIENT_PREFIX.length)));
-  }
-  return drug.key.startsWith(code);
+  return ruleCodeKind(code) === "yj" ? drug.key.startsWith(code) : ruleComponents(drug, code).length > 0;
 }
 
 /** 成分の ID を規則のコードにする。 */

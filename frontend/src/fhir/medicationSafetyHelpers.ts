@@ -200,7 +200,10 @@ export interface ActiveMedication {
 }
 
 export function activeIdentity(medication: ActiveMedication, index: IngredientIndex): DrugIdentity {
-  return { key: medication.ingredient, ids: index.idsOf(medication.lookupCode ?? medication.ingredient) };
+  return {
+    key: medication.ingredient,
+    components: index.componentsOf(medication.lookupCode ?? medication.ingredient),
+  };
 }
 
 /**

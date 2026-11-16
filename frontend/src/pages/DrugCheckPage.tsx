@@ -1,4 +1,4 @@
-import { useCallback, useId, useState, type FormEvent } from "react";
+import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
 import type {
   Disease,
   DrugCheckSeverity,
@@ -11,6 +11,7 @@ import type {
   Medicine,
 } from "../api/masterClient";
 import {
+  useAtcClasses,
   useDrugCheckMutations,
   useMedicineIngredients,
   useDrugDiseaseRules,
@@ -22,7 +23,7 @@ import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { Modal } from "../components/Modal";
-import { buildIngredientIndex, ruleIngredientCode } from "../fhir/ingredientIndex";
+import { buildIngredientIndex, ruleCodeKind, ruleIngredientCode } from "../fhir/ingredientIndex";
 import { medicineIdentity } from "../fhir/medicationSafetyHelpers";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
 import { MasterBackLink } from "../components/MasterBackLink";
@@ -847,8 +848,13 @@ function DiseaseRuleEditModal({ rule, onClose }: { rule: DrugDiseaseRule | null;
 
 // ---- 共通 ---------------------------------------------------------------
 
-/** 成分で指すか、薬効分類(4 桁)で指すか。 */
-type CodeLevel = "ingredient" | "yakko";
+/** 成分で指すか、薬効分類(4 桁)で指すか、ATC 分類(薬理の群)で指すか。 */
+type CodeLevel = "ingredient" | "yakko" | "atc";
+
+function codeLevelOf(code: string): CodeLevel {
+  if (/^\d{4}$/.test(code)) return "yakko";
+  return code && ruleCodeKind(code) === "atc" ? "atc" : "ingredient";
+}
 
 /**
  * 選んだ医薬品から成分のコードと名称を作る関数を返す。成分マスタに単一の成分で載っている薬は
@@ -861,9 +867,10 @@ function useIngredientPicker(): (medicine: Medicine) => { code: string; name: st
     (medicine) => {
       const identity = medicineIdentity(medicine, buildIngredientIndex(rows ?? []));
       if (!identity) return new Error(`${medicine.name} は YJ コードを持たないため選べません。`);
-      if (identity.ids.length === 1) {
-        const row = rows?.find((r) => r.ingredient_id === identity.ids[0]);
-        return { code: ruleIngredientCode(identity.ids[0]), name: row?.name_ja ?? row?.name ?? medicine.name };
+      if (identity.components.length === 1) {
+        const id = identity.components[0].id;
+        const row = rows?.find((r) => r.ingredient_id === id);
+        return { code: ruleIngredientCode(id), name: row?.name_ja ?? row?.name ?? medicine.name };
       }
       const generic = (medicine.generic_name_description ?? "").replace(/^【般】/, "");
       return { code: identity.key, name: generic || medicine.name };
@@ -890,7 +897,7 @@ function DrugField({
   /** 成分を医薬品検索から選ぶ。 */
   onPick: () => void;
 }) {
-  const [level, setLevel] = useState<CodeLevel>(code.length === 4 ? "yakko" : "ingredient");
+  const [level, setLevel] = useState<CodeLevel>(codeLevelOf(code));
 
   function changeLevel(next: CodeLevel) {
     setLevel(next);
@@ -907,8 +914,11 @@ function DrugField({
       >
         <option value="ingredient">成分</option>
         <option value="yakko">薬効分類</option>
+        <option value="atc">ATC分類</option>
       </select>
-      {level === "ingredient" ? (
+      {level === "atc" ? (
+        <AtcInput label={label} code={code} name={name} onChange={onChange} />
+      ) : level === "ingredient" ? (
         <>
           <input
             type="text"
@@ -936,6 +946,90 @@ function DrugField({
         <YakkoInput label={label} code={code} name={name} onChange={onChange} />
       )}
     </div>
+  );
+}
+
+/** ATC 分類の候補に添える成分名の数。 */
+const ATC_MEMBER_NAMES = 4;
+
+/**
+ * ATC 分類(薬理の群)の選択。候補("C10AA HMG CoA reductase inhibitors（アトルバスタチン・…）")を選ぶか、
+ * コードを直接打つと確定する。分類名は英語なので、候補には属する成分の名前を添え、名称は手で直せる。
+ */
+function AtcInput({
+  label,
+  code,
+  name,
+  onChange,
+}: {
+  label: string;
+  code: string;
+  name: string;
+  onChange: (code: string, name: string) => void;
+}) {
+  const classes = useAtcClasses();
+  const ingredients = useMedicineIngredients();
+  const listId = useId();
+  const [text, setText] = useState(code);
+
+  const options = useMemo(() => {
+    const names = new Map<string, Set<string>>();
+    for (const row of ingredients.data ?? []) {
+      if (!row.name_ja) continue;
+      for (const atc of row.atc_codes) {
+        for (const length of [3, 4, 5]) {
+          const prefix = atc.slice(0, length);
+          names.set(prefix, (names.get(prefix) ?? new Set()).add(row.name_ja));
+        }
+      }
+    }
+    return (classes.data ?? []).map((atcClass) => {
+      const members = [...(names.get(atcClass.code) ?? [])];
+      const shown = members.slice(0, ATC_MEMBER_NAMES).join("・");
+      const suffix = members.length > ATC_MEMBER_NAMES ? "…" : "";
+      return { ...atcClass, text: `${atcClass.code} ${atcClass.name}${shown ? `（${shown}${suffix}）` : ""}` };
+    });
+  }, [classes.data, ingredients.data]);
+
+  function handleChange(value: string) {
+    setText(value);
+    const typed = value.trim().toUpperCase();
+    const matched = options.find((o) => o.text === value) ?? options.find((o) => o.code === typed);
+    if (matched) {
+      onChange(matched.code, matched.code === code && name ? name : matched.name);
+      setText(matched.code);
+    } else {
+      onChange("", "");
+    }
+  }
+
+  return (
+    <>
+      <input
+        type="text"
+        className="drug-check__code"
+        value={text}
+        onChange={(e) => handleChange(e.target.value)}
+        list={listId}
+        placeholder="分類"
+        aria-label={`${label}のATC分類`}
+        required
+      />
+      <datalist id={listId}>
+        {options.map((option) => (
+          <option key={option.code} value={option.text} />
+        ))}
+      </datalist>
+      <input
+        type="text"
+        className="drug-check__name"
+        value={name}
+        onChange={(e) => onChange(code, e.target.value)}
+        placeholder="名称"
+        aria-label={`${label}の名称`}
+        required
+      />
+    </>
   );
 }
 

@@ -4,7 +4,9 @@ import {
   type DrugIdentity,
   EMPTY_INGREDIENT_INDEX,
   type IngredientIndex,
+  ruleCodeKind,
   ruleCodeMatches,
+  ruleComponents,
 } from "./ingredientIndex";
 import {
   activeIdentity,
@@ -18,11 +20,12 @@ import {
 //
 //   相互作用  … 併用禁忌・併用注意。フォームの別の行と、投与中の処方・持参薬が相手
 //   用量規則  … 年齢・腎機能の条件と、1 回量・1 日量・投与日数の上限(体重あたりも可)
+//               1 日量は同じ成分を含むフォームの行を足し合わせて比べる
 //               累積の上限はここでは見ない(化学療法の適用で `regimenCheckHelpers` が積算する)
 //   病名      … 患者の活動中の病名(ICD-10 の前方一致)との禁忌・注意
 //
-// 薬はマスタ側で YJ コードの先頭 4〜7 桁か成分マスタの成分(`I` + 成分の ID)で書く。前者は
-// 薬剤行の成分キー(YJ 上 7 桁)の前方一致、後者は薬剤行の成分の ID で当てる(`ingredientIndex.ts`)。
+// 薬はマスタ側で YJ コードの先頭 4〜7 桁、成分マスタの成分(`I` + 成分の ID)、ATC 分類のいずれかで書く。
+// YJ は薬剤行の成分キー(YJ 上 7 桁)の前方一致、成分と ATC 分類は薬剤行の成分で当てる(`ingredientIndex.ts`)。
 // **登録は止めない**(`medicationSafetyHelpers` と同じ)。
 
 /** 薬剤行の投与量。比べられない量(外用の総量、頓用の 1 日量など)は null。 */
@@ -164,15 +167,68 @@ export function evaluateConditions(rule: DrugDoseRule, patient: PatientFactors):
     : { status: "met", label };
 }
 
-/** 規則の上限と行の投与量を比べる。比べられる上限が無ければ空。 */
+/** 上限を比べる薬剤行。 */
+interface DosedLine {
+  identity: DrugIdentity;
+  line: CheckedLine;
+}
+
+/**
+ * 行の量を規則の単位に直す。配合剤に成分・ATC 分類の規則が当たるときは、当たった成分の含量(成分マスタ)で
+ * 数える。それ以外は製剤としての換算(投与量換算マスタ)。直せなければ null。
+ */
+function ruleAmount(
+  rule: DrugDoseRule,
+  drug: DosedLine,
+  value: number,
+  conversions: MedicineDoseConversionMap | undefined,
+): number | null {
+  const unit = rule.dose_unit ?? "";
+  const medicineCode = drug.line.medicine!.medicine_code;
+  const doseUnit = drug.line.dose!.unit;
+  const hit = ruleComponents(drug.identity, rule.code);
+  if (drug.identity.components.length <= 1 || hit.length === 0) {
+    return convertDose(value, doseUnit, medicineCode, unit, conversions);
+  }
+  if (hit.some((c) => c.amount === null || c.amountUnit !== unit)) return null;
+  // 配合剤は薬価算定単位(錠)で入力する。換算行があるときだけ製剤数に直す。
+  const packUnit = conversions?.packUnits.get(medicineCode);
+  const packs = packUnit ? convertDose(value, doseUnit, medicineCode, packUnit, conversions) : value;
+  return packs === null ? null : packs * hit.reduce((sum, c) => sum + c.amount!, 0);
+}
+
+/**
+ * 1 日量を足し合わせる相手か。成分で書いた規則はその成分を含む行すべて、群(薬効分類・ATC 分類)で
+ * 書いた規則は成分ごとの上限なので同じ成分の行だけ。
+ */
+function sharesDailyLimit(rule: DrugDoseRule, self: DosedLine, other: DosedLine): boolean {
+  if (!ruleCodeMatches(other.identity, rule.code)) return false;
+  if (rule.dosage_form && rule.dosage_form !== other.line.medicine!.dosage_form) return false;
+  switch (ruleCodeKind(rule.code)) {
+    case "ingredient":
+      return true;
+    case "atc": {
+      const ids = ruleComponents(self.identity, rule.code).map((c) => c.id);
+      return ruleComponents(other.identity, rule.code).some((c) => ids.includes(c.id));
+    }
+    case "yj":
+      return other.identity.key === self.identity.key;
+  }
+}
+
+/**
+ * 規則の上限と行の投与量を比べる。比べられる上限が無ければ空。1 日量は、同じ成分を含むフォームの
+ * 他の行(`others`)と足し合わせて比べる。1 回量は行ごと。
+ */
 function limitWarnings(
   rule: DrugDoseRule,
   condition: string,
-  medicineCode: string,
-  dose: LineDose | null | undefined,
+  self: DosedLine,
+  others: DosedLine[],
   patient: PatientFactors,
   conversions: MedicineDoseConversionMap | undefined,
 ): MedicationWarning[] {
+  const dose = self.line.dose;
   const unit = rule.dose_unit ?? "";
   const prefix = condition ? ` ${condition}` : "";
   const limits: { kind: "1日量" | "1回量"; max: number; amount: number | null }[] = [];
@@ -196,18 +252,30 @@ function limitWarnings(
     ];
   }
 
+  const isCombination = self.identity.components.length > 1;
   const warnings: MedicationWarning[] = [];
   for (const limit of limits) {
-    const amount = convertDose(limit.amount!, dose.unit, medicineCode, unit, conversions);
-    if (amount === null) {
+    const own = ruleAmount(rule, self, limit.amount!, conversions);
+    if (own === null) {
       warnings.push({
         kind: "dose",
         text: `${dose.unit} を ${unit} に換算できず、${limit.kind}の上限 ${formatNumber(limit.max)}${unit}${perKgSuffix} を確認できません`,
         high: false,
-        detail: "投与量換算マスタに換算行を登録すると確認できます。",
+        detail: isCombination
+          ? "成分マスタに含量が無い配合剤です。"
+          : "投与量換算マスタに換算行を登録すると確認できます。",
       });
       continue;
     }
+    // 換算できない行は足さない(その行には「確認できません」が出る)。
+    const added =
+      limit.kind === "1日量"
+        ? others
+            .filter((other) => other.line.dose?.daily != null && sharesDailyLimit(rule, self, other))
+            .map((other) => ruleAmount(rule, other, other.line.dose!.daily!, conversions))
+            .filter((amount): amount is number => amount !== null)
+        : [];
+    const amount = added.reduce((sum, value) => sum + value, own);
     const weight = rule.per_kg ? patient.weight!.value : 1;
     const max = limit.max * weight;
     // 換算の丸めで上限ちょうどが超過に見えないよう、わずかな誤差は許す。
@@ -216,9 +284,10 @@ function limitWarnings(
     const basis = rule.per_kg
       ? `${formatNumber(limit.max)}${unit}/kg × ${formatNumber(weight)}kg（${patient.weight!.date}）`
       : "";
+    const total = added.length > 0 ? `（${added.length + 1} 剤の合計）` : "";
     warnings.push({
       kind: "dose",
-      text: `上限超過${prefix}: ${limit.kind} ${formatNumber(amount)}${unit} > ${formatNumber(max)}${unit}`,
+      text: `上限超過${prefix}: ${limit.kind} ${formatNumber(amount)}${unit}${total} > ${formatNumber(max)}${unit}`,
       high: true,
       detail: [basis, rule.message].filter(Boolean).join("\n") || undefined,
     });
@@ -251,17 +320,18 @@ export function isCumulativeOnlyRule(rule: DrugDoseRule): boolean {
 }
 
 function doseRuleWarnings(
-  line: CheckedLine,
-  self: DrugIdentity,
+  self: DosedLine,
+  others: DosedLine[],
   doseRules: DrugDoseRule[],
   patient: PatientFactors,
   conversions: MedicineDoseConversionMap | undefined,
 ): MedicationWarning[] {
+  const { line } = self;
   const medicine = line.medicine!;
   const warnings: MedicationWarning[] = [];
 
   for (const rule of doseRules) {
-    if (!ruleCodeMatches(self, rule.code)) continue;
+    if (!ruleCodeMatches(self.identity, rule.code)) continue;
     if (rule.dosage_form && rule.dosage_form !== medicine.dosage_form) continue;
     if (isCumulativeOnlyRule(rule)) continue;
 
@@ -280,9 +350,7 @@ function doseRuleWarnings(
 
     const hasDoseLimit = rule.max_daily_dose !== null || rule.max_single_dose !== null;
     if (hasDoseLimit) {
-      warnings.push(
-        ...limitWarnings(rule, condition.label, medicine.medicine_code, line.dose, patient, conversions),
-      );
+      warnings.push(...limitWarnings(rule, condition.label, self, others, patient, conversions));
     }
     if (rule.max_days !== null) {
       warnings.push(...daysWarnings(rule, condition.label, line.days));
@@ -356,7 +424,7 @@ export function buildDrugCheckWarnings(args: {
     rp.medicines.flatMap((line, medIndex) => {
       const identity = medicineIdentity(line.medicine, ingredients);
       return identity && line.medicine
-        ? [{ rpIndex, medIndex, identity, name: line.medicine.name }]
+        ? [{ rpIndex, medIndex, identity, line, name: line.medicine.name }]
         : [];
     }),
   );
@@ -369,15 +437,14 @@ export function buildDrugCheckWarnings(args: {
       const self = medicineIdentity(line.medicine, ingredients);
       if (!self || !line.medicine) return [];
 
+      const otherLines = formLines.filter((l) => l.rpIndex !== rpIndex || l.medIndex !== medIndex);
       const partners: Partner[] = [
-        ...formLines
-          .filter((l) => l.rpIndex !== rpIndex || l.medIndex !== medIndex)
-          .map((l) => ({ identity: l.identity, name: l.name, where: `RP${l.rpIndex + 1}` })),
+        ...otherLines.map((l) => ({ identity: l.identity, name: l.name, where: `RP${l.rpIndex + 1}` })),
         ...ongoing,
       ];
       return [
         ...interactionWarnings(self, partners, interactions),
-        ...doseRuleWarnings(line, self, doseRules, patient, conversions),
+        ...doseRuleWarnings({ identity: self, line }, otherLines, doseRules, patient, conversions),
         ...diseaseWarnings(self, diagnoses, diseaseRules),
       ];
     }),
