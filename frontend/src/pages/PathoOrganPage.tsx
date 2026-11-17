@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { PathoOrgan } from "../api/masterClient";
 import { usePathoOrganMutations, usePathoOrganSearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { Modal } from "../components/Modal";
 import { MasterBackLink } from "../components/MasterBackLink";
 
@@ -33,7 +34,10 @@ export function PathoOrganPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>病理臓器・検査材料</h1>
+        <h1>
+          病理臓器・検査材料
+          <HelpTip text="病理検査オーダーの臓器・検査材料の選択肢です(JAHIS テーブル LPATHO003)。頻用の印を付けた臓器は、オーダー画面で検索せずに押して選べます。" align="start" />
+        </h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
             施設追加コード追加
@@ -41,11 +45,6 @@ export function PathoOrganPage() {
           <MasterBackLink />
         </div>
       </div>
-
-      <p className="dose-conversion__lead">
-        病理検査オーダーの臓器・検査材料の選択肢です(JAHIS テーブル LPATHO003)。
-        頻用の印を付けた臓器は、オーダー画面で検索せずに押して選べます。
-      </p>
 
       <form className="patient-search-form" onSubmit={handleSearch}>
         <label>

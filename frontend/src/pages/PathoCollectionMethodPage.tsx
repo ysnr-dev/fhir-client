@@ -5,6 +5,7 @@ import {
   usePathoCollectionMethods,
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { Modal } from "../components/Modal";
 import { MasterBackLink } from "../components/MasterBackLink";
 
@@ -17,7 +18,10 @@ export function PathoCollectionMethodPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>病理採取法</h1>
+        <h1>
+          病理採取法
+          <HelpTip text="病理検査オーダーの採取法の選択肢です(JAHIS テーブル LPATHO004)。行をクリックすると編集できます。" align="start" />
+        </h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
             追加
@@ -25,10 +29,6 @@ export function PathoCollectionMethodPage() {
           <MasterBackLink />
         </div>
       </div>
-
-      <p className="dose-conversion__lead">
-        病理検査オーダーの採取法の選択肢です(JAHIS テーブル LPATHO004)。行をクリックすると編集できます。
-      </p>
 
       <ErrorBanner error={list.error} />
 

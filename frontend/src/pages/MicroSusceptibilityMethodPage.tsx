@@ -5,6 +5,7 @@ import {
   useMicroSusceptibilityMethodSearch,
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { Modal } from "../components/Modal";
 import { MasterBackLink } from "../components/MasterBackLink";
 
@@ -29,7 +30,10 @@ export function MicroSusceptibilityMethodPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>JANIS感受性測定法コード</h1>
+        <h1>
+          JANIS感受性測定法コード
+          <HelpTip text="細菌検査結果の薬剤感受性の検査方法の選択肢です。標準コードは取込で洗い替えるため読むだけで、施設追加分だけを編集できます。" align="start" />
+        </h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
             施設追加コード追加
@@ -37,11 +41,6 @@ export function MicroSusceptibilityMethodPage() {
           <MasterBackLink />
         </div>
       </div>
-
-      <p className="dose-conversion__lead">
-        細菌検査結果の薬剤感受性の検査方法の選択肢です。標準コードは取込で
-        洗い替えるため読むだけで、施設追加分だけを編集できます。
-      </p>
 
       <form className="patient-search-form" onSubmit={handleSearch}>
         <label>

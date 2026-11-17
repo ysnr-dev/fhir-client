@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { LabContainer, LabContainerPayload } from "../api/masterClient";
 import { useLabContainerMutations, useLabContainers } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { Modal } from "../components/Modal";
 import { MasterBackLink } from "../components/MasterBackLink";
 
@@ -47,7 +48,10 @@ export function LabContainerPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>採取管マスタ</h1>
+        <h1>
+          採取管マスタ
+          <HelpTip text="採血管・採尿容器などの採取容器です。呼称やキャップ色は施設ごとに直してください。検体マスタの「既定採取管」と検査オーダー項目の採取管指定から参照されます。" align="start" />
+        </h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
             採取管追加
@@ -55,11 +59,6 @@ export function LabContainerPage() {
           <MasterBackLink />
         </div>
       </div>
-
-      <p className="dose-conversion__lead">
-        採血管・採尿容器などの採取容器です。呼称やキャップ色は施設ごとに直してください。
-        検体マスタの「既定採取管」と検査オーダー項目の採取管指定から参照されます。
-      </p>
 
       <ErrorBanner error={list.error} />
 

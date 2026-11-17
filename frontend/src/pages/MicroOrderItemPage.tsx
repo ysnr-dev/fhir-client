@@ -13,6 +13,7 @@ import {
   useMicroOrderItems,
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { Modal } from "../components/Modal";
 import { MasterBackLink } from "../components/MasterBackLink";
 
@@ -73,11 +74,8 @@ function OrderItemTab() {
         <button type="button" onClick={() => setEditing("new")}>
           検査項目追加
         </button>
+        <HelpTip text="オーダー画面にチェックボックスとして並ぶ検査項目です。廃止は削除ではなく有効終了日で行うと、過去のオーダーの表示が保たれます。" align="start" />
       </div>
-      <p className="dose-conversion__lead">
-        オーダー画面にチェックボックスとして並ぶ検査項目です。廃止は削除ではなく
-        有効終了日で行うと、過去のオーダーの表示が保たれます。
-      </p>
 
       <ErrorBanner error={list.error} />
 

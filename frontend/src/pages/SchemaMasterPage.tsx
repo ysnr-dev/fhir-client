@@ -7,6 +7,7 @@ import {
   useSchemas,
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { Modal } from "../components/Modal";
 import {
   buildCategoryTree,
@@ -167,7 +168,10 @@ export function SchemaMasterPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>シェーママスタ</h1>
+        <h1>
+          シェーママスタ
+          <HelpTip text="診療記録に描き込んで挿入する台紙画像です。カテゴリは任意の深さの階層で分類でき、並び順は診療記録の「シェーマ」選択画面の表示順になります。" align="start" />
+        </h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setSchemaEditing("new")}>
             シェーマ追加
@@ -175,11 +179,6 @@ export function SchemaMasterPage() {
           <MasterBackLink />
         </div>
       </div>
-
-      <p className="dose-conversion__lead">
-        診療記録に描き込んで挿入する台紙画像です。カテゴリは任意の深さの階層で分類でき、
-        並び順は診療記録の「シェーマ」選択画面の表示順になります。
-      </p>
 
       <ErrorBanner error={categoriesQuery.error} />
       <ErrorBanner

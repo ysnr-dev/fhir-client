@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { MicroAntimicrobial } from "../api/masterClient";
 import { useMicroAntimicrobialMutations, useMicroAntimicrobialSearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { Modal } from "../components/Modal";
 import { MasterBackLink } from "../components/MasterBackLink";
 
@@ -28,7 +29,10 @@ export function MicroAntimicrobialPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>JANIS抗菌薬コード</h1>
+        <h1>
+          JANIS抗菌薬コード
+          <HelpTip text="細菌検査結果の薬剤感受性の選択肢です。「頻用」を付けた薬は結果画面に直接並び、それ以外は検索で選びます。頻用の指定と施設追加分は取込で消えません。" align="start" />
+        </h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
             施設追加コード追加
@@ -36,11 +40,6 @@ export function MicroAntimicrobialPage() {
           <MasterBackLink />
         </div>
       </div>
-
-      <p className="dose-conversion__lead">
-        細菌検査結果の薬剤感受性の選択肢です。「頻用」を付けた薬は結果画面に
-        直接並び、それ以外は検索で選びます。頻用の指定と施設追加分は取込で消えません。
-      </p>
 
       <form className="patient-search-form" onSubmit={handleSearch}>
         <label>

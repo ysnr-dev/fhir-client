@@ -8,6 +8,7 @@ import {
   type LabSpecimenFilters,
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { Modal } from "../components/Modal";
 import { MasterBackLink } from "../components/MasterBackLink";
 
@@ -69,7 +70,10 @@ export function LabSpecimenPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>検体マスタ</h1>
+        <h1>
+          検体マスタ
+          <HelpTip text="JLAC11 の材料コード一覧から取り込みます（マスタ取込画面）。略称・既定採取管・備考は取込で消えない手入力の列です。" align="start" />
+        </h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setEditing("new")}>
             検体追加
@@ -77,11 +81,6 @@ export function LabSpecimenPage() {
           <MasterBackLink />
         </div>
       </div>
-
-      <p className="dose-conversion__lead">
-        JLAC11 の材料コード一覧から取り込みます（マスタ取込画面）。略称・既定採取管・備考は
-        取込で消えない手入力の列です。
-      </p>
 
       <form className="patient-search-form" onSubmit={handleSearch}>
         <label>
