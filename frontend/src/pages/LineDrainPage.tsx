@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useLineDrainTypes } from "../api/masterQueries";
-import { useBedWardIndex, useEncountersInRange, useWardLineDrains, useWardOptions } from "../api/queries";
+import { useWardLineDrains, useWardOptions } from "../api/queries";
 import type { LineDrainKind } from "../api/masterClient";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LineDrainRemovalModal } from "../components/LineDrainRemovalModal";
 import { LineDrainSiteModal } from "../components/LineDrainSiteModal";
 import { TruncatedNotice } from "../components/TruncatedNotice";
-import { wardPatientsByDay } from "../fhir/bedScheduleHelpers";
 import {
   daysInserted,
   DEVICE_DAY_GROUPS,
@@ -21,7 +20,8 @@ import {
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { useWardInpatients } from "../hooks/useWardInpatients";
-import { addDays, addMonths, dateTimeLabel, diffDays, localDay, shortDate, today } from "../lib/dates";
+import { useWardMonthPresence } from "../hooks/useWardMonthPresence";
+import { addMonths, dateTimeLabel, diffDays, localDay, shortDate, today } from "../lib/dates";
 
 // 留置物管理(docs/line-drain-design.md §4.5)。「留置中」タブは病棟 × 日の留置中の管、
 // 「デバイス日数」タブは病棟 × 月のデバイス日数(CLABSI / CAUTI / VAP の分母)。行の観察・抜去は
@@ -261,26 +261,9 @@ function CurrentTab({ date, wardId, kind }: { date: string; wardId: string; kind
 }
 
 function DaysTab({ month, wardId }: { month: string; wardId: string }) {
-  const from = `${month}-01`;
-  const to = addDays(addMonths(from, 1), -1);
-  const encounters = useEncountersInRange(from, to);
-  const bedWards = useBedWardIndex();
-  const presence = useMemo(
-    () =>
-      wardPatientsByDay({
-        encounters: encounters.data?.encounters ?? [],
-        bedPlaces: bedWards.bedWards,
-        wardId,
-        from,
-        to,
-      }),
-    [encounters.data, bedWards.bedWards, wardId, from, to],
-  );
-  const patientIds = useMemo(() => [...new Set([...presence.values()].flatMap((set) => [...set]))], [presence]);
-  const lineDrains = useWardLineDrains(patientIds, { from, to });
-  // 当月は今日までで数える(先の日の在院は見込みで、デバイス日数の分母にしない)。
-  const todayValue = today();
-  const days = useMemo(() => [...presence.keys()].filter((day) => day <= todayValue), [presence, todayValue]);
+  const ward = useWardMonthPresence(month, wardId);
+  const { presence, days } = ward;
+  const lineDrains = useWardLineDrains(ward.patientIds, { from: ward.from, to: ward.to });
   const stats = useMemo(
     () => lineDrainMonthStats(presence, lineDrains.data?.records ?? [], days),
     [presence, lineDrains.data, days],
@@ -288,14 +271,15 @@ function DaysTab({ month, wardId }: { month: string; wardId: string }) {
   const ratio = (numerator: number, denominator: number) =>
     denominator > 0 ? (numerator / denominator).toFixed(2) : "-";
   // 分母が欠けると使用比が狂うので、読み切れていないときは表を出さない。
-  const truncated = Boolean(encounters.data?.truncated || lineDrains.data?.truncated);
+  const truncated = ward.truncated || Boolean(lineDrains.data?.truncated);
 
   return (
     <>
-      <ErrorBanner error={encounters.error} />
-      <ErrorBanner error={bedWards.error} />
+      {ward.errors.map((error, index) => (
+        <ErrorBanner key={index} error={error} />
+      ))}
       <ErrorBanner error={lineDrains.error} />
-      {encounters.isLoading || bedWards.isLoading || lineDrains.isLoading ? (
+      {ward.isLoading || lineDrains.isLoading ? (
         <p>読み込み中...</p>
       ) : truncated ? (
         <TruncatedNotice show>入院または留置の記録を読み切れていないため、デバイス日数を出せません。</TruncatedNotice>

@@ -58,6 +58,8 @@ export const APP_MENU: AppMenuEntry[] = [
       { label: "検査結果フォロー", to: "/result-followup" },
       // 感染症法の届出対象の病名と発生届の状況・期限(docs/infectious-disease-report-design.md)。届け出るのは診断した医師。
       { label: "感染症発生届", to: "/infectious-disease-reports" },
+      // 手術部位感染とデバイス関連感染の判定と発生率(docs/hai-surveillance-design.md)。判定するのは感染対策チーム。
+      { label: "感染サーベイランス", to: "/infection-surveillance" },
       // 研修医・学生の記録とオーダーのカウンターサイン(指導医向け。docs/countersign-design.md)。
       { label: "カルテ承認", to: "/countersigns" },
       // 下書きの診療記録・承認待ち・差戻し・作成待ちの文書・未確認の結果などを担当者 × 種別で数える

@@ -539,7 +539,8 @@ export function buildSiteObservation(
 }
 
 export function parseSiteObservation(observation: fhir4.Observation): LineDrainSiteObservation | null {
-  if (!observation.id) return null;
+  // 留置を partOf で指す記録には感染の判定(haiSurveillanceHelpers)もあるので、刺入部観察だけを採る。
+  if (!observation.id || codingOf(observation.code, LINE_DRAIN_SITE_SYSTEM)?.code !== SITE_CHECK_CODE.code) return null;
   const findings: Record<string, string> = {};
   let dressing = false;
   for (const component of observation.component ?? []) {

@@ -13,7 +13,7 @@
 | [notifications.md](notifications.md) | 通知(Task)の種別と画面 |
 | [nursing.md](nursing.md) | 看護計画・看護サマリー・看護記録(フォーカスチャーティング)・看護プロファイル・ワークシート・看護必要度・チーム医療・褥瘡・留置物、看護マスタ |
 | [templates.md](templates.md) | シェーマ、テンプレートカテゴリ・入出力、文書作成(Word / Excel・様式)、帳票 PDF、基礎データ・初期計画、項目コード、回答の複写、Observation 生成 |
-| [patient-profile.md](patient-profile.md) | 患者の基本情報、血液型・身長体重・妊娠・感染症、感染症の発生届、診療上の注意(Flag)、病名の区分 |
+| [patient-profile.md](patient-profile.md) | 患者の基本情報、血液型・身長体重・妊娠・感染症、感染症の発生届、感染サーベイランス、診療上の注意(Flag)、病名の区分 |
 | [oral-exam.md](oral-exam.md) | 口腔診査情報(JDAOES 準拠の歯式図と診査ごとのスナップショット) |
 | [facility.md](facility.md) | 自院と連携先、施設設定、医療機関(Organization)、医療従事者(Practitioner / PractitionerRole) |
 | [ward.md](ward.md) | 病棟・病室・ベッド(Location)、入院患者一覧、病棟マップ、ベッドスケジュール |

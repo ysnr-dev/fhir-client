@@ -210,6 +210,7 @@ import { CancerRegistryPage } from "./pages/CancerRegistryPage";
 import { InfectiousDiseaseReportPage } from "./pages/InfectiousDiseaseReportPage";
 import { AnesthesiaPreopPage } from "./pages/AnesthesiaPreopPage";
 import { NcdRegistrationPage } from "./pages/NcdRegistrationPage";
+import { InfectionSurveillancePage } from "./pages/InfectionSurveillancePage";
 import { DpcTablesPage } from "./pages/DpcTablesPage";
 
 // 患者配下の未定義パスをその患者のカルテへ寄せる。
@@ -409,6 +410,7 @@ function App() {
           <Route path="/cancer-registry" element={<CancerRegistryPage />} />
           {/* NCD の症例登録の対象(手術の実施記録)と登録の状況。 */}
           <Route path="/ncd-registrations" element={<NcdRegistrationPage />} />
+          <Route path="/infection-surveillance" element={<InfectionSurveillancePage />} />
           {/* 麻酔科術前診察の状況と評価。 */}
           <Route path="/anesthesia-preop" element={<AnesthesiaPreopPage />} />
           {/* 感染症の発生届の届出対象と届出の状況。 */}

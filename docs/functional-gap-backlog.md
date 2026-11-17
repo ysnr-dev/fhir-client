@@ -562,7 +562,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
 |---|---|---|---|---|---|---|
 | 1 | 麻薬・向精神薬の受払管理(麻薬帳簿・廃棄立会・病棟定数) | 新規 | 高 | 中 | MedicationDispense / MedicationAdministration | §6.1 |
 | 2 | 留置物管理(ライン・ドレーン・カテーテル、LDA) — **対応済み(2026-11-07、`docs/line-drain-design.md`。看護必要度の初期値・水分出納との連動・感染判定は残り)** | 新規 | 高 | 中 | Device / Procedure / Observation | §6.1 |
-| 3 | 医療関連感染サーベイランス(SSI・CLABSI・CAUTI、JANIS 全入院患者・SSI 部門) | 新規 | 高 | 中〜大 | Procedure / Condition / 細菌結果 | §6.1 |
+| 3 | 医療関連感染サーベイランス(SSI・CLABSI・CAUTI、JANIS 全入院患者・SSI 部門) — **第 1 段階を対応済み(2026-11-17、`docs/hai-surveillance-design.md`。判定と発生率まで。JANIS の提出ファイル・リスクインデックス・手指衛生は残り)** | 新規 | 高 | 中〜大 | Procedure / Condition / 細菌結果 | §6.1 |
 | 4 | 植込みデバイス・インプラントの UDI 台帳(回収時の逆引き・MRI 条件) | 新規 | 高 | 中 | Device / Procedure.focalDevice | §6.1 |
 | 5 | 退院カルテの量的・質的点検と疾病統計(診療情報管理) | 新規 | 高 | 中 | QuestionnaireResponse / Task / Condition | §6.1 |
 | 6 | 薬剤有害事象(ADR)の構造化と PMDA 副作用報告 | 拡張 | 中〜高 | 中 | Observation(有害事象の器)/ AllergyIntolerance | §6.1 |
@@ -598,7 +598,7 @@ athenahealth / eClinicalWorks / NHS England / 北欧の Cambio・DIPS / Alcidion
   - ［不足］挿入日・部位・サイズ・刺入部観察・交換 / 抜去を 1 件ずつ持ち、「留置 n 日目」を看護ワークシート・患者帯に出す。CLABSI / CAUTI の分母(デバイス日数)。
   - ［当たり］`Device`(カテーテル種、プロキシ許可に追加)+ `Procedure`(挿入 / 抜去、`bodySite`、`focalDevice`)+ `Observation`(刺入部)。経過表に留置の帯、
     警告の器(`advisory-design.md`)で「○日超」。
-- **医療関連感染サーベイランス**(新規、高、中〜大)
+- **医療関連感染サーベイランス**(新規、高、中〜大) — **第 1 段階を対応済み(2026-11-17、`docs/hai-surveillance-design.md`。SSI とデバイス関連感染の判定・発生率・CSV。JANIS の提出ファイル・手術手技分類とリスクインデックス・手指衛生遵守率は残り)**
   - ［対応物］手術実施の創分類(`surgery-wound-class`。`surgery-result-design.md` に「SSI サーベイランスの軸」と明記)、細菌検査結果、AST、感染症 Flag。
     接触者追跡・隔離(§4.2)と耐性菌の感受性推移(`micro-result-design.md` 先送り)は別軸。
   - ［不足］SSI 判定ワークリスト(手術 × 30 / 90 日以内の培養・創部所見)、デバイス関連感染(LDA の留置日数が分母)、JANIS 全入院患者部門・SSI 部門の提出ファイル、

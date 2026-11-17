@@ -434,6 +434,26 @@
   font-weight: 600;
 }
 
+/* 感染サーベイランスの判定の状態。感染ありは赤、未判定は控えめに出す。 */
+.hai__state--infected {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.hai__state--pending {
+  color: var(--text);
+}
+
+/* 発生率・感染率の表。表を縦に並べるので間を空け、合計の行は上に線を引く。 */
+.hai__rate {
+  margin-bottom: 20px;
+}
+
+.hai__rate-total > * {
+  border-top: 2px solid var(--border);
+  font-weight: 600;
+}
+
 /* 刺入部観察。項目名と今回の入力の列を固定し、過去の観察だけを横に送る。 */
 .line-drain-site__wrap {
   --line-drain-site-label-w: 140px;
