@@ -10127,6 +10127,11 @@ body.karte-wide {
   width: 80px;
 }
 
+/* 文字の無いゴミ箱アイコンは下端がベースラインになり「保存」より上にずれるので、中央で揃える。 */
+.dose-conversion__table td.master-search__actions > button {
+  vertical-align: middle;
+}
+
 /* 包装単位の係数に添える「1枚 =」と換算先の単位。 */
 .dose-conversion__table td:has(.dose-conversion__per) {
   white-space: nowrap;
