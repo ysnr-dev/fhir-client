@@ -102,6 +102,11 @@ module Master
                                        "WHERE m.generic_name_code = master_medicines.generic_name_code " \
                                        "ORDER BY fe.rank, fe.id LIMIT 1)".freeze
 
+    # 用量入力の初期単位にする包装単位(投与量換算マスタの包装単位の行。複数あれば先に登録したもの)。
+    PACKAGE_UNIT_SQL = "(SELECT c.from_unit FROM master_medicine_dose_conversions c " \
+                       "WHERE c.medicine_code = master_medicines.medicine_code AND c.kind = 'package' " \
+                       "ORDER BY c.id LIMIT 1)".freeze
+
     # 薬効分類名称(yakko_name)と薬効分類番号(yakko_code=YJ上4桁)を各医薬品に付与する。
     # master_medicine_types.code は一意なので LEFT JOIN で件数は増えない。
     # yj_code(個別医薬品コード)は医薬品マスタに無いため、HOTコードマスタを
@@ -120,6 +125,7 @@ module Master
           "AND hc.individual_medicine_code <> '' LIMIT 1) AS yj_code",
           "#{FORMULARY_RANK_SQL} AS formulary_rank",
           "#{FORMULARY_GROUP_NAME_SQL} AS formulary_group_name",
+          "#{PACKAGE_UNIT_SQL} AS package_unit",
         )
     end
 

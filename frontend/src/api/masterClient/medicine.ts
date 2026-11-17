@@ -33,6 +33,8 @@ export interface Medicine {
   // 院内フォーミュラリの推奨順位(1=第一選択)と群名。検索APIが付与する。載っていなければ null。
   formulary_rank?: number | null;
   formulary_group_name?: string | null;
+  // 包装単位(枚・本など)。投与量換算マスタに包装単位の行がある薬に検索APIが付与する。用量の単位の初期値。
+  package_unit?: string | null;
 }
 
 export interface MedicineType {
@@ -40,6 +42,8 @@ export interface MedicineType {
   code: string;
   name: string | null;
 }
+
+export type MedicineDoseConversionKind = "potency" | "volume" | "package" | "identity";
 
 // 投与量の入力単位 → 医薬品マスタの薬価算定単位への換算。
 // 入力値 ÷ factor = to_unit での数量（例: factor=20, to_unit="管" なら 20mL が 1管）。
@@ -53,6 +57,8 @@ export interface MedicineDoseConversion {
   // explicit=規格単位に力価量が明示 / from_percent=濃度%から算出 /
   // volume=規格単位の容量から / identity=薬価算定単位が量そのもの / manual=手動登録
   source: string;
+  // potency=力価 / volume=容量(mL) / package=包装単位(枚・本など) / identity=薬価算定単位そのもの
+  kind: MedicineDoseConversionKind;
   needs_review: boolean;
   note: string | null;
   // 以下は一覧APIが医薬品マスタ・HOTコードマスタから JOIN で付与する。
@@ -79,6 +85,8 @@ export interface MedicineDoseConversionPayload {
   from_unit: string;
   factor: number;
   to_unit?: string | null;
+  /** 省くと単位の表記から決まる(mL は容量、ほかは力価)。 */
+  kind?: MedicineDoseConversionKind;
   note?: string | null;
   needs_review?: boolean;
 }
@@ -91,6 +99,8 @@ export interface MedicineDoseConversionGenerateResult {
   needs_review: number;
   /** 既存の医薬品に後から足した mL 行の数(点滴の総投与量を出すための補完)。 */
   volume_filled: number;
+  /** 薬価算定単位の言い換え(瓶 → 本)で足した包装単位の行の数。 */
+  package_filled: number;
 }
 
 export interface MedicineUsage {
@@ -238,6 +248,7 @@ export async function searchMedicineDoseConversions(params: {
   medicine_code?: string;
   from_unit?: string;
   source?: string;
+  kind?: MedicineDoseConversionKind;
   dosage_form?: string;
   needs_review?: boolean;
   page?: number;
@@ -248,6 +259,7 @@ export async function searchMedicineDoseConversions(params: {
   if (params.medicine_code) search.set("medicine_code", params.medicine_code);
   if (params.from_unit) search.set("from_unit", params.from_unit);
   if (params.source) search.set("source", params.source);
+  if (params.kind) search.set("kind", params.kind);
   if (params.dosage_form) search.set("dosage_form", params.dosage_form);
   if (params.needs_review) search.set("needs_review", "true");
   if (params.page) search.set("page", String(params.page));
@@ -261,12 +273,15 @@ export async function searchMedicineDoseConversions(params: {
 export async function searchUnmappedMedicines(params: {
   name?: string;
   dosage_form?: string;
+  /** 指定すると、その種類の換算行を持たない医薬品を返す。 */
+  kind?: MedicineDoseConversionKind;
   page?: number;
   per?: number;
 }): Promise<MasterSearchResult<UnmappedMedicine>> {
   const search = new URLSearchParams();
   if (params.name) search.set("name", params.name);
   if (params.dosage_form) search.set("dosage_form", params.dosage_form);
+  if (params.kind) search.set("kind", params.kind);
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 

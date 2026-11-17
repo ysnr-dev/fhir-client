@@ -212,6 +212,21 @@ RSpec.describe "Master::Medicines", type: :request do
       item = JSON.parse(response.body)["items"].first
       expect(item["yj_code"]).to be_nil
     end
+
+    it "包装単位の換算行があれば、先に登録した単位を package_unit に付与する" do
+      Master::MedicineDoseConversion.create!(medicine_code: "620003477", from_unit: "mg", factor: 60,
+                                             to_unit: "錠", source: "explicit")
+      Master::MedicineDoseConversion.create!(medicine_code: "620003477", from_unit: "シート", factor: 0.1,
+                                             to_unit: "錠", source: "manual", kind: "package")
+      Master::MedicineDoseConversion.create!(medicine_code: "620003477", from_unit: "箱", factor: 0.01,
+                                             to_unit: "錠", source: "manual", kind: "package")
+
+      get "/master/medicines", params: { name: "ロキソプロフェン" }
+      expect(JSON.parse(response.body)["items"].first["package_unit"]).to eq("シート")
+
+      get "/master/medicines", params: { name: "HOT無し薬" }
+      expect(JSON.parse(response.body)["items"].first["package_unit"]).to be_nil
+    end
   end
 
   describe "GET /master/medicines (一般名検索)" do

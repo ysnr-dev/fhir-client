@@ -1,6 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  doseUnitKind,
   type DoseUnits,
   type MedicineDoseConversionMap,
 } from "../../fhir/doseConversionHelpers";
@@ -11,6 +10,8 @@ import {
   fetchMedicineUsageCategories,
   generateMedicineDoseConversions,
   fetchYakkaCodes,
+  type MedicineDoseConversion,
+  type MedicineDoseConversionKind,
   type MedicineDoseConversionPayload,
   searchMedicineDoseConversions,
   searchMedicines,
@@ -30,6 +31,7 @@ export interface MedicineUsageFilters {
 export interface MedicineDoseConversionFilters {
   name?: string;
   source?: string;
+  kind?: MedicineDoseConversionKind | "";
   dosageForm?: string;
   needsReview?: boolean;
 }
@@ -127,6 +129,7 @@ export function useMedicineDoseConversionSearch(
       searchMedicineDoseConversions({
         name: filters.name || undefined,
         source: filters.source || undefined,
+        kind: filters.kind || undefined,
         dosage_form: filters.dosageForm || undefined,
         needs_review: filters.needsReview || undefined,
         page,
@@ -148,6 +151,7 @@ export function useUnmappedMedicineSearch(
       searchUnmappedMedicines({
         name: filters.name || undefined,
         dosage_form: filters.dosageForm || undefined,
+        kind: filters.kind || undefined,
         page,
         per: DOSE_CONVERSION_PER,
       }),
@@ -239,6 +243,18 @@ export function useContrastMedicines(enabled: boolean) {
   });
 }
 
+/** 医薬品の換算行を全件読む(1 薬に力価・容量・包装単位の行があり、薬の数より多い)。 */
+async function fetchDoseConversions(codes: string[]): Promise<MedicineDoseConversion[]> {
+  const per = 100;
+  const items: MedicineDoseConversion[] = [];
+  for (let page = 1; ; page++) {
+    const result = await searchMedicineDoseConversions({ medicine_code: codes.join(","), page, per });
+    items.push(...result.items);
+    if (items.length >= result.total || result.items.length < per) break;
+  }
+  return items;
+}
+
 /**
  * 医薬品コード → 入力単位(mg・g・mL…)→ 1 [薬価算定単位] あたりの量と、薬価算定単位。
  * 化学療法の投与量(mg/m² から出した mg)を製剤数に直す払出、注射の総投与量・経過表の
@@ -250,18 +266,21 @@ export function useMedicineDoseFactors(medicineCodes: string[]) {
   return useQuery({
     queryKey: ["master", "medicine_dose_conversions", "all-units", codes],
     queryFn: async (): Promise<MedicineDoseConversionMap> => {
-      const result = await searchMedicineDoseConversions({ medicine_code: codes.join(","), per: 100 });
       const factors = new Map<string, Map<string, number>>();
       const packUnits = new Map<string, string>();
-      for (const row of result.items) {
+      const packageUnits = new Map<string, Set<string>>();
+      for (const row of await fetchDoseConversions(codes)) {
         const factor = Number(row.factor);
         if (!(factor > 0)) continue;
         const byUnit = factors.get(row.medicine_code) ?? new Map<string, number>();
         byUnit.set(row.from_unit, factor);
         factors.set(row.medicine_code, byUnit);
         if (row.to_unit) packUnits.set(row.medicine_code, row.to_unit);
+        if (row.kind === "package") {
+          packageUnits.set(row.medicine_code, (packageUnits.get(row.medicine_code) ?? new Set()).add(row.from_unit));
+        }
       }
-      return { factors, packUnits };
+      return { factors, packUnits, packageUnits };
     },
     staleTime: Infinity,
     enabled: codes.length > 0,
@@ -269,7 +288,7 @@ export function useMedicineDoseFactors(medicineCodes: string[]) {
 }
 
 /**
- * 医薬品コード → 処方・注射の用量に選べる単位(力価・容量)。薬価算定単位のほかに
+ * 医薬品コード → 処方・注射の用量に選べる単位(力価・容量・包装単位)。薬価算定単位のほかに
  * 換算行を持たない医薬品は入らない(薬価算定単位だけで入れる)。
  */
 export function useMedicineDoseUnits(medicineCodes: string[]) {
@@ -278,12 +297,11 @@ export function useMedicineDoseUnits(medicineCodes: string[]) {
   return useQuery({
     queryKey: ["master", "medicine_dose_conversions", "dose-units", codes],
     queryFn: async (): Promise<Map<string, DoseUnits>> => {
-      const result = await searchMedicineDoseConversions({ medicine_code: codes.join(","), per: 100 });
       const byCode = new Map<string, DoseUnits>();
-      for (const row of result.items) {
+      for (const row of await fetchDoseConversions(codes)) {
         const factor = Number(row.factor);
-        const kind = doseUnitKind(row.from_unit, row.to_unit);
-        if (!(factor > 0) || !kind) continue;
+        const kind = row.kind;
+        if (!(factor > 0) || kind === "identity") continue;
         const entry = byCode.get(row.medicine_code) ?? { packUnit: row.to_unit, units: new Map() };
         entry.units.set(row.from_unit, { factor, kind });
         byCode.set(row.medicine_code, entry);

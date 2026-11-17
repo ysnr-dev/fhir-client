@@ -90,6 +90,17 @@ RSpec.describe "Master::MedicineDoseConversions", type: :request do
 
       expect(items).to be_empty
     end
+
+    it "kind を指定すると、その種類の行を持たない医薬品を返す" do
+      get "/master/medicine_dose_conversions/unmapped", params: { kind: "package" }
+
+      expect(items.map { |item| item["medicine_code"] }).to contain_exactly("620000242", "621662301")
+
+      Master::MedicineDoseConversion.create!(valid_attrs(from_unit: "本", factor: 1, kind: "package"))
+      get "/master/medicine_dose_conversions/unmapped", params: { kind: "package" }
+
+      expect(items.map { |item| item["medicine_code"] }).to eq(["621662301"])
+    end
   end
 
   describe "POST /master/medicine_dose_conversions/generate" do
@@ -148,6 +159,17 @@ RSpec.describe "Master::MedicineDoseConversions", type: :request do
       patch "/master/medicine_dose_conversions/#{record.id}", params: { factor: 10 }, as: :json
 
       expect(JSON.parse(response.body)["source"]).to eq("manual")
+    end
+
+    it "種類を省くと単位から決め、包装単位は指定で登録できる" do
+      post "/master/medicine_dose_conversions", params: valid_attrs(from_unit: "ｍＬ", factor: 1)
+      expect(JSON.parse(response.body)).to include("from_unit" => "mL", "kind" => "volume")
+
+      post "/master/medicine_dose_conversions", params: valid_attrs(from_unit: "本", factor: 1, kind: "package")
+      expect(JSON.parse(response.body)).to include("kind" => "package")
+
+      get "/master/medicine_dose_conversions", params: { kind: "package" }
+      expect(items.map { |item| item["from_unit"] }).to eq(["本"])
     end
 
     it "returns 422 for a duplicate input unit" do

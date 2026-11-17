@@ -262,4 +262,56 @@ RSpec.describe Master::DoseConversionBuilder do
 
     expect(result.needs_review_count).to be_zero
   end
+
+  describe "包装単位の言い換え" do
+    def package_rows(code)
+      Master::MedicineDoseConversion.where(medicine_code: code, kind: "package")
+        .pluck(:from_unit, :factor, :to_unit, :source, :needs_review)
+        .map { |from_unit, factor, *rest| [from_unit, factor.to_f, *rest] }
+    end
+
+    it "薬価算定単位が瓶の外用薬に 本 の行を作る" do
+      create_medicine("660000001", unit_name: "瓶", dosage_form: "6")
+      create_hot("０．１％５ｍＬ１瓶", receipt_code_1: "660000001")
+
+      result = described_class.call
+
+      expect(package_rows("660000001")).to eq([["本", 1.0, "瓶", "package", false]])
+      expect(result.package_filled_count).to eq(1)
+    end
+
+    it "力価の行を既に持つ外用薬にも後から足し、2回目は足さない" do
+      create_medicine("660000002", unit_name: "瓶", dosage_form: "6")
+      Master::MedicineDoseConversion.create!(medicine_code: "660000002", from_unit: "mg", factor: 5,
+                                             to_unit: "瓶", source: "explicit")
+
+      described_class.call
+      result = described_class.call
+
+      expect(package_rows("660000002").size).to eq(1)
+      expect(result.package_filled_count).to be_zero
+    end
+
+    it "手動でメンテした行を持つ医薬品と注射薬には作らない" do
+      create_medicine("660000003", unit_name: "瓶", dosage_form: "6")
+      Master::MedicineDoseConversion.create!(medicine_code: "660000003", from_unit: "mg", factor: 5,
+                                             to_unit: "瓶", source: "manual")
+      create_medicine("640000001", unit_name: "瓶", dosage_form: "4")
+
+      described_class.call
+
+      expect(package_rows("660000003")).to be_empty
+      expect(package_rows("640000001")).to be_empty
+    end
+
+    it "包装単位の行だけを持つ医薬品は、力価の行を後から生成できる" do
+      create_medicine("660000004", unit_name: "瓶", dosage_form: "6")
+      described_class.call
+      create_hot("０．１％５ｍＬ１瓶", receipt_code_1: "660000004")
+
+      described_class.call
+
+      expect(conversions_for("660000004").map(&:first)).to contain_exactly("mL", "mg", "本")
+    end
+  end
 end

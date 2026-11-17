@@ -8,8 +8,9 @@ import {
   useUpdateMedicineDoseConversion,
   type MedicineDoseConversionFilters,
 } from "../api/masterQueries";
-import type { MedicineDoseConversion, UnmappedMedicine } from "../api/masterClient";
+import type { MedicineDoseConversion, MedicineDoseConversionKind, UnmappedMedicine } from "../api/masterClient";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { TrashIcon } from "../components/icons/TrashIcon";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
 import { MasterBackLink } from "../components/MasterBackLink";
 
@@ -21,8 +22,35 @@ const SOURCE_LABELS: Record<string, string> = {
   identity: "製剤量と同一",
   from_name: "医薬品名から算出",
   injection_volume: "マスタの注射容量",
+  package: "単位の言い換え",
   manual: "手動登録",
 };
+
+// 入力単位の種類。値は backend の Master::MedicineDoseConversion::KINDS と対応する。
+const KIND_LABELS: Record<MedicineDoseConversionKind, string> = {
+  potency: "力価",
+  volume: "容量",
+  package: "包装単位",
+  identity: "製剤量と同一",
+};
+
+// 未紐付けの一覧で「その種類の行を持たない医薬品」に絞れる種類。
+const ADDABLE_KINDS: MedicineDoseConversionKind[] = ["potency", "volume", "package"];
+
+/**
+ * 画面に出す係数。力価・容量は 1 [換算先] あたりの入力単位の量(保存値そのまま)、
+ * 包装単位は 1 [入力単位] あたりの換算先の量(1 枚 = 10 g の 10。保存値の逆数)で見せる。
+ */
+function shownFactor(factor: string, kind: MedicineDoseConversionKind): string {
+  if (kind !== "package") return factor;
+  const value = Number(factor);
+  return value > 0 ? String(Number((1 / value).toPrecision(8))) : factor;
+}
+
+/** 画面の係数 → 保存値。 */
+function storedFactor(shown: number, packaged: boolean): number {
+  return packaged ? 1 / shown : shown;
+}
 
 const DOSAGE_FORM_OPTIONS = [
   { value: "1", label: "内用薬" },
@@ -35,6 +63,7 @@ const DOSAGE_FORM_OPTIONS = [
 const emptyFilters: MedicineDoseConversionFilters = {
   name: "",
   source: "",
+  kind: "",
   dosageForm: "",
   needsReview: false,
 };
@@ -54,7 +83,7 @@ export function MedicineDoseConversionPage() {
   // 編集中の値。未編集の行はサーバーの値をそのまま表示する。
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
   // 未紐付け一覧で入力中の新規換算（医薬品コードごと）。
-  const [additions, setAdditions] = useState<Record<string, Draft & { fromUnit: string }>>({});
+  const [additions, setAdditions] = useState<Record<string, Draft & { fromUnit: string; packaged: boolean }>>({});
 
   const mapped = useMedicineDoseConversionSearch(filters, tab === "mapped" ? page : 1);
   const unmapped = useUnmappedMedicineSearch(filters, page, tab === "unmapped");
@@ -88,7 +117,7 @@ export function MedicineDoseConversionPage() {
   }
 
   function draftFor(row: MedicineDoseConversion): Draft {
-    return drafts[row.id] ?? { factor: row.factor, note: row.note ?? "" };
+    return drafts[row.id] ?? { factor: shownFactor(row.factor, row.kind), note: row.note ?? "" };
   }
 
   function setDraft(id: number, patch: Partial<Draft>, current: Draft) {
@@ -98,7 +127,7 @@ export function MedicineDoseConversionPage() {
   function isDirty(row: MedicineDoseConversion) {
     const draft = drafts[row.id];
     if (!draft) return false;
-    return draft.factor !== row.factor || draft.note !== (row.note ?? "");
+    return draft.factor !== shownFactor(row.factor, row.kind) || draft.note !== (row.note ?? "");
   }
 
   async function handleSave(row: MedicineDoseConversion) {
@@ -106,7 +135,10 @@ export function MedicineDoseConversionPage() {
     const factor = Number(draft.factor);
     if (!Number.isFinite(factor) || factor <= 0) return;
 
-    await update.mutateAsync({ id: row.id, payload: { factor, note: draft.note || null } });
+    await update.mutateAsync({
+      id: row.id,
+      payload: { factor: storedFactor(factor, row.kind === "package"), note: draft.note || null },
+    });
     setDrafts((prev) => {
       const next = { ...prev };
       delete next[row.id];
@@ -121,7 +153,14 @@ export function MedicineDoseConversionPage() {
   }
 
   function additionFor(medicine: UnmappedMedicine) {
-    return additions[medicine.medicine_code] ?? { fromUnit: "", factor: "", note: "" };
+    return (
+      additions[medicine.medicine_code] ?? {
+        fromUnit: "",
+        factor: "",
+        note: "",
+        packaged: filters.kind === "package",
+      }
+    );
   }
 
   async function handleAdd(medicine: UnmappedMedicine) {
@@ -132,8 +171,9 @@ export function MedicineDoseConversionPage() {
     await create.mutateAsync({
       medicine_code: medicine.medicine_code,
       from_unit: addition.fromUnit,
-      factor,
+      factor: storedFactor(factor, addition.packaged),
       to_unit: medicine.unit_name,
+      ...(addition.packaged ? { kind: "package" as const } : {}),
     });
     setAdditions((prev) => {
       const next = { ...prev };
@@ -165,7 +205,7 @@ export function MedicineDoseConversionPage() {
           {generate.data.created} 件の換算を作成しました（対象医薬品 {generate.data.medicines} 件 /
           作成済みのためスキップ {generate.data.skipped} 件 / 規格を読み取れず未紐付けのまま{" "}
           {generate.data.unmapped} 件 / 要確認 {generate.data.needs_review} 件 / 既存医薬品への mL 行補完{" "}
-          {generate.data.volume_filled} 件）
+          {generate.data.volume_filled} 件 / 包装単位の行 {generate.data.package_filled} 件）
         </p>
       )}
 
@@ -207,6 +247,22 @@ export function MedicineDoseConversionPage() {
                 {option.label}
               </option>
             ))}
+          </select>
+        </label>
+        <label>
+          種類
+          <select
+            value={inputs.kind ?? ""}
+            onChange={(e) => setInputs({ ...inputs, kind: e.target.value as MedicineDoseConversionKind | "" })}
+          >
+            <option value="">すべて</option>
+            {(tab === "mapped" ? (Object.keys(KIND_LABELS) as MedicineDoseConversionKind[]) : ADDABLE_KINDS).map(
+              (kind) => (
+                <option key={kind} value={kind}>
+                  {tab === "mapped" ? KIND_LABELS[kind] : `${KIND_LABELS[kind]}なし`}
+                </option>
+              ),
+            )}
           </select>
         </label>
         {tab === "mapped" && (
@@ -257,6 +313,7 @@ export function MedicineDoseConversionPage() {
                 <th>医薬品名</th>
                 <th>剤形</th>
                 <th>規格単位</th>
+                <th>種類</th>
                 <th>入力単位</th>
                 <th>係数</th>
                 <th>換算先</th>
@@ -276,8 +333,10 @@ export function MedicineDoseConversionPage() {
                     </td>
                     <td>{dosageFormLabel(row.dosage_form)}</td>
                     <td>{row.standard_unit ?? "-"}</td>
+                    <td>{KIND_LABELS[row.kind] ?? row.kind}</td>
                     <td>{row.from_unit}</td>
                     <td>
+                      {row.kind === "package" && <span className="dose-conversion__per">1{row.from_unit} =</span>}
                       <input
                         type="number"
                         step="any"
@@ -304,8 +363,15 @@ export function MedicineDoseConversionPage() {
                       >
                         保存
                       </button>
-                      <button type="button" onClick={() => handleDelete(row)} disabled={busy}>
-                        削除
+                      <button
+                        type="button"
+                        className="rp-card__icon-button"
+                        title="換算を削除"
+                        aria-label="換算を削除"
+                        onClick={() => handleDelete(row)}
+                        disabled={busy}
+                      >
+                        <TrashIcon />
                       </button>
                     </td>
                   </tr>
@@ -313,7 +379,7 @@ export function MedicineDoseConversionPage() {
               })}
               {mapped.data && mapped.data.items.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="master-search__empty">
+                  <td colSpan={10} className="master-search__empty">
                     該当する換算がありません
                   </td>
                 </tr>
@@ -328,6 +394,7 @@ export function MedicineDoseConversionPage() {
                 <th>剤形</th>
                 <th>規格単位</th>
                 <th>マスタ単位</th>
+                <th>種類</th>
                 <th>入力単位</th>
                 <th>係数</th>
                 <th></th>
@@ -344,10 +411,25 @@ export function MedicineDoseConversionPage() {
                     <td>{medicine.standard_unit ?? "-"}</td>
                     <td>{medicine.unit_name ?? "-"}</td>
                     <td>
+                      <select
+                        aria-label="種類"
+                        value={addition.packaged ? "package" : ""}
+                        onChange={(e) =>
+                          setAdditions((prev) => ({
+                            ...prev,
+                            [medicine.medicine_code]: { ...addition, packaged: e.target.value === "package" },
+                          }))
+                        }
+                      >
+                        <option value="">力価・容量</option>
+                        <option value="package">{KIND_LABELS.package}</option>
+                      </select>
+                    </td>
+                    <td>
                       <input
                         type="text"
                         className="dose-conversion__from-unit"
-                        placeholder="mg"
+                        placeholder={addition.packaged ? "枚" : "mg"}
                         value={addition.fromUnit}
                         onChange={(e) =>
                           setAdditions((prev) => ({
@@ -358,6 +440,9 @@ export function MedicineDoseConversionPage() {
                       />
                     </td>
                     <td>
+                      {addition.packaged && (
+                        <span className="dose-conversion__per">1{addition.fromUnit} =</span>
+                      )}
                       <input
                         type="number"
                         step="any"
@@ -371,6 +456,7 @@ export function MedicineDoseConversionPage() {
                           }))
                         }
                       />
+                      {addition.packaged && <span className="dose-conversion__per">{medicine.unit_name}</span>}
                     </td>
                     <td className="master-search__actions">
                       <button type="button" onClick={() => handleAdd(medicine)} disabled={busy || !ready}>
@@ -382,7 +468,7 @@ export function MedicineDoseConversionPage() {
               })}
               {unmapped.data && unmapped.data.items.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="master-search__empty">
+                  <td colSpan={8} className="master-search__empty">
                     未紐付けの医薬品はありません
                   </td>
                 </tr>

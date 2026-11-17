@@ -1,7 +1,7 @@
 import type { Medicine } from "../api/masterClient";
 
 /**
- * 投与量の単位換算(力価 ⇔ 製剤数 ⇔ 容量)。
+ * 投与量の単位換算(力価 ⇔ 製剤数 ⇔ 容量 ⇔ 包装単位)。
  *
  * 化学療法レジメンから出たオーダーは投与量を**力価**(148.75 mg)で持つ(指示の実体が
  * 力価のため。docs/chemo-regimen-design.md §7.2)。一方、手入力の注射・処方は製剤数
@@ -10,6 +10,10 @@ import type { Medicine } from "../api/masterClient";
  * 投与量換算マスタ(`master_medicine_dose_conversions`)で製剤数に直す。
  * 注射の総投与量・経過表の水分出納のように **mL に揃える**ところも、単位を見ずに
  * 「製剤数 × 1 製剤の mL」と掛けると力価のオーダーで桁違いになるので `toMilliliters` を通す。
+ *
+ * 薬価算定単位が g・mL の外用薬(湿布・点眼など)は、現物の数え方(枚・本)を**包装単位**の行として
+ * 換算マスタに持てる。包装単位の行がある薬は、その単位で用量を入れ、払出もその単位のまま出す。
+ * 薬価算定単位に直すのはレセコンへの送信だけ(backend の `PackQuantity`)。
  */
 
 const ML_UNIT = "mL";
@@ -76,10 +80,12 @@ export function convertDose(
 }
 
 export interface MedicineDoseConversionMap {
-  /** 薬剤コード → 力価の単位 → 1 [薬価算定単位] あたりの力価。 */
+  /** 薬剤コード → 入力単位 → 1 [薬価算定単位] あたりの量。 */
   factors: Map<string, Map<string, number>>;
   /** 薬剤コード → 薬価算定単位(換算行の to_unit)。換算行が無い薬剤は入らない。 */
   packUnits: Map<string, string>;
+  /** 薬剤コード → 包装単位(枚・本など)。払出はこの単位のまま出す。 */
+  packageUnits?: Map<string, Set<string>>;
 }
 
 export interface PackQuantity {
@@ -88,8 +94,9 @@ export interface PackQuantity {
 }
 
 /**
- * オーダーの投与量を製剤数(薬価算定単位)に直す。
+ * オーダーの投与量を払出の数量に直す。力価・容量は製剤数(薬価算定単位)にする。
  * - 換算行が無い薬剤、または単位が薬価算定単位そのもの(製剤数で出したオーダー)なら、そのまま返す
+ * - 単位が包装単位(枚・本など)なら、そのまま返す
  * - 単位が違い、換算があれば 力価 ÷ 係数
  * - 単位が違い、換算が無ければ null(手入力してもらう)
  */
@@ -101,13 +108,22 @@ export function toPackQuantity(
 ): PackQuantity | null {
   const packUnit = conversions?.packUnits.get(medicineCode);
   if (!packUnit || !unit || unit === packUnit) return { value: dose, unit };
+  if (conversions?.packageUnits?.get(medicineCode)?.has(unit)) return { value: dose, unit };
   const factor = conversions?.factors.get(medicineCode)?.get(unit);
   if (!factor) return null;
   return { value: Math.round((dose / factor) * 100) / 100, unit: packUnit };
 }
 
-/** 薬価算定単位のほかに選べる量の単位の種類。力価(mg・単位…)か、製剤の容量(mL)。 */
-export type DoseUnitKind = "potency" | "volume";
+/** 薬価算定単位のほかに選べる量の単位の種類。力価(mg・単位…)、製剤の容量(mL)、包装単位(枚・本…)。 */
+export type DoseUnitKind = "potency" | "volume" | "package";
+
+/** 単位の選択肢に添える印。 */
+const DOSE_UNIT_SUFFIX: Record<DoseUnitKind, string> = { potency: "(力価)", volume: "(容量)", package: "" };
+
+/** 容量(mL)は注射だけが選べる。 */
+function selectableKind(kind: DoseUnitKind, { volume }: { volume: boolean }): boolean {
+  return kind !== "volume" || volume;
+}
 
 /**
  * 処方・注射の用量に選べる単位。`units` は単位 → 1 [薬価算定単位] あたりの量と種類。
@@ -118,8 +134,11 @@ export interface DoseUnits {
   units: Map<string, { factor: number; kind: DoseUnitKind }>;
 }
 
-/** 換算行の単位の種類。薬価算定単位と同じ単位(g → ｇ。薬価算定単位が量そのもの)なら null。 */
-export function doseUnitKind(fromUnit: string, toUnit: string): DoseUnitKind | null {
+/**
+ * 単位の表記から見た種類(力価か容量)。薬価算定単位と同じ単位(g → ｇ。薬価算定単位が量そのもの)なら null。
+ * 換算行そのものの種類は行の `kind` を見る(包装単位は表記からは分からない)。
+ */
+export function doseUnitKind(fromUnit: string, toUnit: string): "potency" | "volume" | null {
   const from = fromUnit.normalize("NFKC").trim();
   if (from === toUnit.normalize("NFKC").trim()) return null;
   return from.toLowerCase() === ML_UNIT.toLowerCase() ? "volume" : "potency";
@@ -130,7 +149,7 @@ export function isPotencyConversion(fromUnit: string, toUnit: string): boolean {
   return doseUnitKind(fromUnit, toUnit) === "potency";
 }
 
-/** 単位の選択肢。薬価算定単位を先頭に、力価は「(力価)」、容量は「(容量)」を添える。 */
+/** 単位の選択肢。薬価算定単位を先頭に、力価は「(力価)」、容量は「(容量)」を添える。包装単位は印なし。 */
 export function doseUnitOptions(
   doseUnits: DoseUnits,
   current: string | null,
@@ -138,8 +157,7 @@ export function doseUnitOptions(
 ): { unit: string; label: string }[] {
   const options = [{ unit: doseUnits.packUnit, label: doseUnits.packUnit }];
   for (const [unit, { kind }] of doseUnits.units) {
-    if (kind === "potency") options.push({ unit, label: `${unit}(力価)` });
-    else if (volume) options.push({ unit, label: `${unit}(容量)` });
+    if (selectableKind(kind, { volume })) options.push({ unit, label: `${unit}${DOSE_UNIT_SUFFIX[kind]}` });
   }
   // 換算マスタに無い単位で保存された行も、そのまま選ばれた状態で開く。
   if (current && !options.some((o) => o.unit === current)) options.push({ unit: current, label: current });
@@ -148,7 +166,15 @@ export function doseUnitOptions(
 
 /** 薬価算定単位のほかに選べる単位があるか(単位をセレクトにするかの判定)。 */
 export function hasDoseUnitChoice(doseUnits: DoseUnits | undefined, { volume }: { volume: boolean }): boolean {
-  return Array.from(doseUnits?.units.values() ?? []).some((u) => u.kind === "potency" || volume);
+  return Array.from(doseUnits?.units.values() ?? []).some((u) => selectableKind(u.kind, { volume }));
+}
+
+/**
+ * 選んだ医薬品に包装単位(枚・本など)があれば、用量の単位をそれで始める(処方)。
+ * 注射は薬価算定単位(袋・管・瓶…)から用法種別を決めるので、薬価算定単位で始めて単位のセレクトから選ぶ。
+ */
+export function withPackageUnit<T extends Medicine>(medicine: T): T {
+  return medicine.package_unit ? { ...medicine, unit_name: medicine.package_unit } : medicine;
 }
 
 /**

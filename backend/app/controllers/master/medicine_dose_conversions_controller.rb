@@ -22,6 +22,7 @@ module Master
       scope = scope.where(medicine_code: params[:medicine_code].split(",")) if params[:medicine_code].present?
       scope = scope.where(from_unit: params[:from_unit]) if params[:from_unit].present?
       scope = scope.where(source: params[:source]) if params[:source].present?
+      scope = scope.where(kind: params[:kind]) if params[:kind].present?
       scope = scope.where(needs_review: true) if params[:needs_review] == "true"
       scope = scope.where("master_medicines.dosage_form = ?", params[:dosage_form]) if params[:dosage_form].present?
       scope = filter_by_medicine_name(scope, params[:name]) if params[:name].present?
@@ -29,11 +30,14 @@ module Master
       render json: paginate(scope)
     end
 
-    # 換算行を1件も持たない医薬品。手動メンテの対象一覧。
+    # 換算行を持たない医薬品。手動メンテの対象一覧。kind を指定すると、その種類の行を持たない
+    # 医薬品(力価の行はあるが包装単位の行が無い、など)を返す。
     def unmapped
+      kind = params[:kind].presence_in(Master::MedicineDoseConversion::KINDS)
+      kind_condition = kind ? Master::MedicineDoseConversion.sanitize_sql([" AND c.kind = ?", kind]) : ""
       scope = Master::Medicine
         .where("NOT EXISTS (SELECT 1 FROM master_medicine_dose_conversions c " \
-               "WHERE c.medicine_code = master_medicines.medicine_code)")
+               "WHERE c.medicine_code = master_medicines.medicine_code#{kind_condition})")
         .select("master_medicines.id", "master_medicines.medicine_code", "master_medicines.name",
                 "master_medicines.unit_name", "master_medicines.dosage_form",
                 "master_medicines.yakka_code", STANDARD_UNIT_SQL)
@@ -53,6 +57,7 @@ module Master
         unmapped: result.unmapped_count,
         needs_review: result.needs_review_count,
         volume_filled: result.volume_filled_count,
+        package_filled: result.package_filled_count,
       }
     end
 

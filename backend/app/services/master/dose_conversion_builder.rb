@@ -12,22 +12,34 @@ module Master
   # 例外は上記2の mL 行だけ。点滴の投与速度は RP の総量(mL)から計算するので、力価行しか
   # 持たない注射薬は速度が過小に出てしまう。手動でメンテした医薬品には触れないまま、
   # 自動生成行しか持たない医薬品にだけ後から mL 行を足す。
+  #
+  # 包装単位の行(用量入力の初期単位になる)は、薬価算定単位の言い換えで済むものだけを作る。
+  # 外用薬の「瓶」は現場では「本」で数えるので 本 → 瓶(係数 1)を足す。1 枚あたりの g のように
+  # 包装の大きさが要る換算は規格単位からは読めないので、画面で登録する。
   class DoseConversionBuilder
     Result = Struct.new(
       :created_count, :medicine_count, :skipped_count, :unmapped_count, :needs_review_count,
-      :volume_filled_count,
+      :volume_filled_count, :package_filled_count,
       keyword_init: true
     )
 
     INSERT_SLICE = 1000
+
+    # 薬価算定単位 → 現場での数え方。
+    PACKAGE_ALIASES = { "瓶" => "本" }.freeze
+    # 言い換えの行を作る剤形区分(外用薬)。
+    PACKAGE_ALIAS_DOSAGE_FORM = "6".freeze
 
     def self.call
       new.call
     end
 
     def call
-      mapped = Master::MedicineDoseConversion.distinct.pluck(:medicine_code).to_set
+      # 包装単位の行は力価・容量の行とは別に足すので、それだけを持つ医薬品は未紐付けとして扱う。
+      mapped = Master::MedicineDoseConversion.where.not(kind: Master::MedicineDoseConversion::PACKAGE)
+                                             .distinct.pluck(:medicine_code).to_set
       backfillable = volume_backfillable_codes
+      package_fixed = package_fixed_units
       standard_units = build_standard_unit_index
 
       rows = []
@@ -36,8 +48,16 @@ module Master
       unmapped_count = 0
       needs_review_count = 0
       volume_filled_count = 0
+      package_filled_count = 0
 
-      medicine_columns.each do |code, unit_name, yakka_code, injection_volume, name|
+      medicine_columns.each do |code, unit_name, yakka_code, injection_volume, name, dosage_form|
+        package_unit = package_alias(unit_name, dosage_form, package_fixed[code])
+        if package_unit
+          package_filled_count += 1
+          rows << row_for(code, unit_name, [package_unit, 1.0, "package"], review: false,
+                                                                          kind: Master::MedicineDoseConversion::PACKAGE)
+        end
+
         if mapped.include?(code)
           skipped_count += 1
           if backfillable.include?(code) && fill_volume?([], unit_name, injection_volume)
@@ -80,22 +100,44 @@ module Master
       Result.new(
         created_count: rows.size, medicine_count: medicine_count, skipped_count: skipped_count,
         unmapped_count: unmapped_count, needs_review_count: needs_review_count,
-        volume_filled_count: volume_filled_count
+        volume_filled_count: volume_filled_count, package_filled_count: package_filled_count
       )
     end
 
     private
 
     def medicine_columns
-      Master::Medicine.pluck(:medicine_code, :unit_name, :yakka_code, :injection_volume, :name)
+      Master::Medicine.pluck(:medicine_code, :unit_name, :yakka_code, :injection_volume, :name, :dosage_form)
     end
 
-    def row_for(code, unit_name, conversion, review:)
+    def row_for(code, unit_name, conversion, review:, kind: nil)
       from_unit, factor, source = conversion
       {
         medicine_code: code, from_unit: from_unit, factor: factor,
-        to_unit: unit_name, source: source, needs_review: review
+        to_unit: unit_name, source: source, needs_review: review,
+        kind: kind || Master::MedicineDoseConversion.kind_of(from_unit, unit_name)
       }
+    end
+
+    # 言い換えの行を足さない医薬品 → 理由になった入力単位。包装単位の行を既に持つもの、
+    # 手動でメンテした行を持つもの(消したのが意図的な可能性がある)は :any で全単位を塞ぐ。
+    def package_fixed_units
+      fixed = Hash.new { |hash, code| hash[code] = Set.new }
+      Master::MedicineDoseConversion.pluck(:medicine_code, :from_unit, :kind, :source).each do |code, from_unit, kind, source|
+        fixed[code] << from_unit
+        fixed[code] << :any if kind == Master::MedicineDoseConversion::PACKAGE || source == "manual"
+      end
+      fixed
+    end
+
+    # 薬価算定単位の言い換えになる包装単位。作らないときは nil。
+    def package_alias(unit_name, dosage_form, fixed)
+      return nil unless dosage_form.to_s == PACKAGE_ALIAS_DOSAGE_FORM
+
+      package_unit = PACKAGE_ALIASES[StandardUnitParser.canonical_unit(unit_name)]
+      return nil if package_unit.nil? || fixed.include?(:any) || fixed.include?(package_unit)
+
+      package_unit
     end
 
     # mL 行を後から足してよい医薬品。mL 行を既に持つものは当然対象外、手動でメンテした

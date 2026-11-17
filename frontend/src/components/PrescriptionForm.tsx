@@ -58,7 +58,7 @@ import { feedbackParams, PrescriptionOrderSelectCards } from "./PrescriptionCdsC
 import { fetchCdsOrderHook, type CdsCard } from "../api/cdsClient";
 import { useSendCdsFeedback } from "../api/cdsQueries";
 import { useAdvisoryOverrideReasons, useMedicineDoseUnits } from "../api/masterQueries";
-import { switchDoseUnit } from "../fhir/doseConversionHelpers";
+import { switchDoseUnit, withPackageUnit } from "../fhir/doseConversionHelpers";
 import { type Advisory, advisoriesOfScope, unscopedAdvisories } from "../fhir/advisoryHelpers";
 import { cdsCardAdvisories, cdsCardOfAdvisory, overrideReasonsOf } from "../fhir/cdsCardHelpers";
 import { useAdvisoryRuleAdvisories } from "../hooks/useAdvisoryRuleAdvisories";
@@ -507,7 +507,7 @@ export function PrescriptionForm({
 
   function handleMedicineSelect(medicine: Medicine) {
     if (modal?.kind !== "medicine") return;
-    updateMedicine(modal.rpIndex, modal.medIndex, { medicine, potency: false });
+    updateMedicine(modal.rpIndex, modal.medIndex, { medicine: withPackageUnit(medicine), potency: false });
     setModal(null);
   }
 

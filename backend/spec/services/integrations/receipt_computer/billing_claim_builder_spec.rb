@@ -202,6 +202,28 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       line = build.items.first.lines.first
       expect([line.quantity, line.unit]).to eq(["1.5", "ｇ"])
     end
+
+    it "converts a dose ordered in 包装単位 to the 薬価算定単位" do
+      Master::MedicineDoseConversion.create!(medicine_code: "660407074", from_unit: "枚", factor: 1.to_d / 7,
+                                             to_unit: "ｇ", source: "manual", kind: "package")
+      request = medication_request(code: "660407074", dose: 70, days: 1, name: "ＭＳ温シップ")
+      request["dosageInstruction"][0]["doseAndRate"][0]["doseQuantity"]["unit"] = "枚"
+      store.add(request)
+
+      line = build.items.first.lines.first
+      expect([line.quantity, line.unit]).to eq(["490", "ｇ"])
+    end
+
+    it "matches the dose unit regardless of 全角 / 半角" do
+      Master::MedicineDoseConversion.create!(medicine_code: "620004513", from_unit: "ｍｇ", factor: 100,
+                                             to_unit: "ｇ", source: "explicit")
+      request = medication_request(code: "620004513", dose: 150, days: 5, name: "セフゾン細粒")
+      request["dosageInstruction"][0]["doseAndRate"][0]["doseQuantity"]["unit"] = "ｍｇ"
+      store.add(request)
+
+      line = build.items.first.lines.first
+      expect([line.quantity, line.unit]).to eq(["1.5", "ｇ"])
+    end
   end
 
   describe "実施入力を持たない種別(検体検査など)" do
