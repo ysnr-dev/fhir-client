@@ -10,6 +10,7 @@ import {
 } from "../api/masterQueries";
 import type { MedicineDoseConversion, MedicineDoseConversionKind, UnmappedMedicine } from "../api/masterClient";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { TrashIcon } from "../components/icons/TrashIcon";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
 import { MasterBackLink } from "../components/MasterBackLink";
@@ -36,6 +37,14 @@ const KIND_LABELS: Record<MedicineDoseConversionKind, string> = {
 
 // 未紐付けの一覧で「その種類の行を持たない医薬品」に絞れる種類。
 const ADDABLE_KINDS: MedicineDoseConversionKind[] = ["potency", "volume", "package"];
+
+const GENERATE_HELP =
+  "HOTコードマスタの規格単位から力価・容量の換算を作ります。対象は力価・容量の行を持たない医薬品で、既存の行は上書きしません。" +
+  "自動で作った行だけを持つ注射薬には mL の行を、薬価算定単位が瓶の外用薬には包装単位「本」の行を足します。";
+
+const FACTOR_HELP =
+  "力価・容量は、換算先 1 あたりの入力単位の量です(係数 20・換算先「管」なら 20mL が 1 管)。" +
+  "包装単位は、入力単位 1 あたりの換算先の量です(1枚 = 10 g)。";
 
 /**
  * 画面に出す係数。力価・容量は 1 [換算先] あたりの入力単位の量(保存値そのまま)、
@@ -187,18 +196,13 @@ export function MedicineDoseConversionPage() {
       <div className="page__header">
         <h1>投与量換算マスタ</h1>
         <div>
+          <HelpTip text={GENERATE_HELP} />
           <button type="button" onClick={() => generate.mutate()} disabled={busy}>
             {generate.isPending ? "作成中..." : "未紐付け一括作成"}
           </button>
           <MasterBackLink />
         </div>
       </div>
-
-      <p className="dose-conversion__lead">
-        HOTコードマスタの規格単位から、入力単位ごとの換算係数を作ります。入力値 ÷ 係数 =
-        医薬品マスタの単位での数量です（例: 係数 20 / 換算先「管」なら 20mL が 1管）。
-        一括作成は換算行を1件も持たない医薬品だけが対象で、既存の行は上書きしません。
-      </p>
 
       {generate.isSuccess && (
         <p className="master-import-form__success" role="status">
@@ -315,7 +319,10 @@ export function MedicineDoseConversionPage() {
                 <th>規格単位</th>
                 <th>種類</th>
                 <th>入力単位</th>
-                <th>係数</th>
+                <th>
+                  係数
+                  <HelpTip text={FACTOR_HELP} />
+                </th>
                 <th>換算先</th>
                 <th>導出根拠</th>
                 <th>備考</th>
@@ -396,7 +403,10 @@ export function MedicineDoseConversionPage() {
                 <th>マスタ単位</th>
                 <th>種類</th>
                 <th>入力単位</th>
-                <th>係数</th>
+                <th>
+                  係数
+                  <HelpTip text={FACTOR_HELP} />
+                </th>
                 <th></th>
               </tr>
             </thead>

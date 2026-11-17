@@ -1896,6 +1896,12 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   cursor: help;
 }
 
+/* 表の中のボタンの余白と文字の大きさ(.master-search__table button)を受けず、丸のままにする。 */
+.master-search__table button.help-tip__icon {
+  padding: 0;
+  font-size: 11px;
+}
+
 .help-tip__icon:hover,
 .help-tip__icon:focus-visible {
   color: var(--text-h);
