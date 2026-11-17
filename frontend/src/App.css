@@ -454,6 +454,134 @@
   font-weight: 600;
 }
 
+.hai__rate th.lab-worklist__compact,
+.hai__rate td.nursing-acuity-report__value {
+  text-align: right;
+}
+
+/* デバイス関連感染。デバイスごとに、その月の集計と対象の留置を 1 つの区画にまとめる。 */
+.hai-device__period {
+  margin: 0 0 12px;
+  color: var(--text);
+}
+
+.hai-device__period strong {
+  color: var(--text-h);
+}
+
+.hai-device {
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-panel);
+}
+
+.hai-device__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  padding: 10px 12px;
+}
+
+.hai-device__title {
+  min-width: 260px;
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.hai-device__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  margin: 0;
+}
+
+.hai-device__stats > div {
+  min-width: 120px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.hai-device__stats dt {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.hai-device__stats dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.hai-device__stats dd.hai__state--infected {
+  color: var(--danger);
+}
+
+.hai-device__empty {
+  margin: 0;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 列幅を固定して、区画が違っても列の位置を揃える。 */
+.hai-device__table {
+  table-layout: fixed;
+  border-top: 1px solid var(--border);
+}
+
+.hai-device__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.hai-device__col--patient {
+  width: 150px;
+}
+
+.hai-device__col--device {
+  width: 240px;
+}
+
+.hai-device__col--period {
+  width: 140px;
+}
+
+.hai-device__col--days {
+  width: 90px;
+}
+
+.hai-device__col--reason,
+.hai-device__col--state {
+  width: 100px;
+}
+
+.hai-device__col--date {
+  width: 80px;
+}
+
+.hai-device__col--performer {
+  width: 130px;
+}
+
+.hai-device__col--action {
+  width: 80px;
+}
+
+.hai-device__table th.hai-device__number,
+.hai-device__table td.hai-device__number {
+  text-align: right;
+}
+
+.hai-device__table td.hai-device__wrap {
+  white-space: normal;
+}
+
 /* 刺入部観察。項目名と今回の入力の列を固定し、過去の観察だけを横に送る。 */
 .line-drain-site__wrap {
   --line-drain-site-label-w: 140px;

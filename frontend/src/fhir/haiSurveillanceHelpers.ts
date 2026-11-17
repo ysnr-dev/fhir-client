@@ -31,14 +31,6 @@ export const HAI_TYPE_LABELS: Record<HaiType, string> = {
   vap: "人工呼吸器関連肺炎",
 };
 
-/** 一覧・表の見出しに出す略称。 */
-export const HAI_TYPE_SHORT_LABELS: Record<HaiType, string> = {
-  ssi: "SSI",
-  clabsi: "CLABSI",
-  cauti: "CAUTI",
-  vap: "VAP",
-};
-
 export type HaiResult = "infected" | "not-infected";
 
 export const HAI_RESULT_OPTIONS: { code: HaiResult; display: string }[] = [

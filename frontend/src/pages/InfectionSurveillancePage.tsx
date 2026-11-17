@@ -8,12 +8,12 @@ import {
   useWardOptions,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { HaiJudgmentModal } from "../components/HaiJudgmentModal";
 import { PatientKana } from "../components/PatientRowCells";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import {
   HAI_RESULT_OPTIONS,
-  HAI_TYPE_SHORT_LABELS,
   SSI_CSV_HEADER,
   SSI_DEPTH_OPTIONS,
   SSI_IMPLANT_FOLLOW_UP_DAYS,
@@ -479,75 +479,89 @@ function DeviceMonth({ month, wardId }: { month: string; wardId: string }) {
         <TruncatedNotice show>入院または留置の記録を読み切れていないため、感染率を出せません。</TruncatedNotice>
       ) : (
         <>
-          <div className="lab-worklist-wrap">
-            <table className="lab-worklist nursing-acuity-report hai__rate">
-              <caption className="nursing-acuity-report__caption">
-                {month.replace("-", "/")} 患者延べ日数 {stats.patientDays}
-              </caption>
-              <thead>
-                <tr>
-                  <th></th>
-                  <th className="lab-worklist__compact">デバイス日数</th>
-                  <th className="lab-worklist__compact">感染件数</th>
-                  <th className="lab-worklist__compact">感染率(1000デバイス日あたり)</th>
-                  <th className="lab-worklist__compact">使用比</th>
-                </tr>
-              </thead>
-              <tbody>
-                {DEVICE_GROUPS.map(({ type, group, label }) => {
-                  const deviceDays = stats.groups[group].deviceDays;
-                  return (
-                    <tr key={type}>
-                      <th className="nursing-acuity-report__label">{label}</th>
-                      <td className="nursing-acuity-report__value">{deviceDays}</td>
-                      <td className="nursing-acuity-report__value">{counts[type]}</td>
-                      <td className="nursing-acuity-report__value">{deviceInfectionRateLabel(counts[type], deviceDays)}</td>
-                      <td className="nursing-acuity-report__value">{ratio(deviceDays, stats.patientDays)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="lab-worklist-wrap sticky-table-wrap">
-            <table className="lab-worklist sticky-table">
-              <thead>
-                <tr>
-                  <th>患者</th>
-                  <th className="lab-worklist__compact">対象</th>
-                  <th>種別・部位</th>
-                  <th className="lab-worklist__compact">挿入日</th>
-                  <th className="lab-worklist__compact">抜去日</th>
-                  <th className="lab-worklist__compact">抜去区分</th>
-                  <th className="lab-worklist__compact">留置日数</th>
-                  <th className="lab-worklist__compact">判定</th>
-                  <th className="lab-worklist__compact">診断日</th>
-                  <th>起因菌</th>
-                  <th className="lab-worklist__compact">判定者</th>
-                  <th className="lab-worklist__compact"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <DeviceRow
-                    key={row.record.id}
-                    row={row}
-                    patient={ward.patientsById?.get(row.patientId)}
-                    today={todayValue}
-                    onJudge={() => setDialogId(row.record.id)}
-                  />
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={12} className="master-search__empty">
-                      対象の留置物はありません。
-                    </td>
-                  </tr>
+          <p className="hai-device__period">
+            {month.replace("-", "/")} 患者延べ日数 <strong>{stats.patientDays}</strong>
+          </p>
+          {DEVICE_GROUPS.map(({ type, group, label }) => {
+            const deviceDays = stats.groups[group].deviceDays;
+            const groupRows = rows.filter((row) => row.type === type);
+            return (
+              <section key={type} className="hai-device">
+                <div className="hai-device__head">
+                  <h3 className="hai-device__title">{label}</h3>
+                  <dl className="hai-device__stats">
+                    <div>
+                      <dt>デバイス日数</dt>
+                      <dd>{deviceDays}</dd>
+                    </div>
+                    <div>
+                      <dt>感染</dt>
+                      <dd className={counts[type] > 0 ? "hai__state--infected" : undefined}>{counts[type]}件</dd>
+                    </div>
+                    <div>
+                      <dt>
+                        感染率
+                        <HelpTip text="感染件数 ÷ デバイス日数 × 1000" />
+                      </dt>
+                      <dd>{deviceInfectionRateLabel(counts[type], deviceDays)}</dd>
+                    </div>
+                    <div>
+                      <dt>
+                        使用比
+                        <HelpTip text="デバイス日数 ÷ 患者延べ日数" />
+                      </dt>
+                      <dd>{ratio(deviceDays, stats.patientDays)}</dd>
+                    </div>
+                  </dl>
+                </div>
+                {groupRows.length === 0 ? (
+                  <p className="hai-device__empty">対象の留置物はありません。</p>
+                ) : (
+                  <div className="lab-worklist-wrap">
+                    <table className="lab-worklist hai-device__table">
+                      <colgroup>
+                        <col className="hai-device__col--patient" />
+                        <col className="hai-device__col--device" />
+                        <col className="hai-device__col--period" />
+                        <col className="hai-device__col--days" />
+                        <col className="hai-device__col--reason" />
+                        <col className="hai-device__col--state" />
+                        <col className="hai-device__col--date" />
+                        <col />
+                        <col className="hai-device__col--performer" />
+                        <col className="hai-device__col--action" />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th>患者</th>
+                          <th>種別・部位</th>
+                          <th>留置期間</th>
+                          <th className="hai-device__number">留置日数</th>
+                          <th>抜去区分</th>
+                          <th>判定</th>
+                          <th>診断日</th>
+                          <th>起因菌</th>
+                          <th>判定者</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupRows.map((row) => (
+                          <DeviceRow
+                            key={row.record.id}
+                            row={row}
+                            patient={ward.patientsById?.get(row.patientId)}
+                            today={todayValue}
+                            onJudge={() => setDialogId(row.record.id)}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </section>
+            );
+          })}
         </>
       )}
 
@@ -599,21 +613,19 @@ function DeviceRow({
           row.patientId
         )}
       </td>
-      <td className="lab-worklist__compact">{HAI_TYPE_SHORT_LABELS[row.type]}</td>
       <td>{lineDrainLabel(record)}</td>
-      <td className="lab-worklist__compact">{shortDate(localDay(record.insertedAt))}</td>
-      <td className="lab-worklist__compact">{record.removedAt ? shortDate(localDay(record.removedAt)) : ""}</td>
-      <td className={suspected ? "lab-worklist__compact line-drain__days--over" : "lab-worklist__compact"}>
-        {removalReasonLabel(record.removalReason)}
+      <td>
+        {shortDate(localDay(record.insertedAt))} 〜 {record.removedAt ? shortDate(localDay(record.removedAt)) : "留置中"}
       </td>
-      <td className="lab-worklist__compact">{daysInserted(record, todayValue)}</td>
-      <td className={`lab-worklist__compact hai__state--${state}`}>
+      <td className="hai-device__number">{daysInserted(record, todayValue)}</td>
+      <td className={suspected ? "line-drain__days--over" : undefined}>{removalReasonLabel(record.removalReason)}</td>
+      <td className={`hai__state--${state}`}>
         {judgment ? HAI_RESULT_OPTIONS.find((o) => o.code === judgment.result)?.display : "未判定"}
       </td>
-      <td className="lab-worklist__compact">{judgment?.date ?? ""}</td>
-      <td>{judgment?.pathogen ?? ""}</td>
-      <td className="lab-worklist__compact">{judgment?.performer?.display ?? ""}</td>
-      <td className="lab-worklist__compact">
+      <td>{judgment?.date ? shortDate(judgment.date) : ""}</td>
+      <td className="hai-device__wrap">{judgment?.pathogen ?? ""}</td>
+      <td>{judgment?.performer?.display ?? ""}</td>
+      <td className="lab-worklist__actions">
         <button type="button" className="rp-card__compact-button" onClick={onJudge}>
           判定
         </button>
