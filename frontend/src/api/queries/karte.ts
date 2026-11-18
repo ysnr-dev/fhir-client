@@ -1,3 +1,4 @@
+import { REFERRAL_ORDER_TYPE_TOKEN } from "../../fhir/referralHelpers";
 import { useMemo } from "react";
 import {
   keepPreviousData,
@@ -51,9 +52,9 @@ const NO_PENDING_ORDERS: PagedItems<fhir4.Bundle> = { items: [], truncated: fals
 /**
  * カルテのオーダー検索から外す種別。看護指示はカルテのカードにせず指示簿タブで見せる
  * (karteTimeline 側でも落としているが、サーバー側で外さないと診療日ペインに
- * 看護指示しか無い日が空の日として並ぶ)。
+ * 看護指示しか無い日が空の日として並ぶ)。地域連携の紹介も台帳であってカルテの記載ではない。
  */
-const KARTE_EXCLUDED_ORDER_TYPE_TOKENS = `${ORDER_TYPE_SYSTEM}|${NURSING_ORDER_TYPE.code}`;
+const KARTE_EXCLUDED_ORDER_TYPE_TOKENS = `${ORDER_TYPE_SYSTEM}|${NURSING_ORDER_TYPE.code},${REFERRAL_ORDER_TYPE_TOKEN}`;
 
 // _include / _revinclude の関連リソースも entry に混ざるため、次ページのオフセットは
 // entry 数ではなく _count 固定で進める。

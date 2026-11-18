@@ -32960,3 +32960,88 @@ button.dialysis-board__empty--book:hover {
   font-size: 12px;
   color: var(--text);
 }
+
+/* 地域連携の紹介台帳(pages/ReferralPage、docs/referral-design.md)。 */
+.referral__filters {
+  margin-top: 8px;
+}
+
+.referral__range,
+.referral__partner-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.referral__create {
+  margin-left: auto;
+}
+
+.referral__partner {
+  flex: 1 1 320px;
+}
+
+.referral__partner .referral__partner-row input {
+  flex: 1;
+}
+
+.referral__wide-field {
+  flex: 1 1 100%;
+}
+
+.referral__count-input {
+  width: 100px;
+}
+
+.referral__reply {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.referral__tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.referral__tile {
+  min-width: 120px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.referral__tile-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.referral__tile-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.master-search__table th.referral__number,
+.master-search__table td.referral__number {
+  text-align: right;
+  width: 110px;
+}
+
+/* 行の操作。ボタンとリンクの大きさを揃え、ケバブメニューは既定の見た目のまま右に置く。 */
+.referral__actions > .button,
+.referral__actions > button {
+  box-sizing: border-box;
+  min-width: 5.5em;
+  margin-left: 8px;
+  padding: 4px 0.5em;
+  font-size: 13px;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+.referral__actions > .row-menu {
+  margin-left: 8px;
+  vertical-align: middle;
+}

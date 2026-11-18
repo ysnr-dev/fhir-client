@@ -20,6 +20,7 @@ export * from "./rxVerification";
 export * from "./labResult";
 export * from "./notification";
 export * from "./resultFollowup";
+export * from "./referral";
 export * from "./micro";
 export * from "./dischargeSummary";
 export * from "./broughtMedication";

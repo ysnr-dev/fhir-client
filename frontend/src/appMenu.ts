@@ -176,6 +176,9 @@ export const APP_MENU: AppMenuEntry[] = [
       // 化学療法室は注射一覧(オーダー軸)と違い、その日の予約(時間割)で回る部門なので
       // 別の面にする(docs/chemo-regimen-design.md §7.6 E-7)。
       { label: "外来化学療法室", items: [{ label: "外来化学療法室", to: "/chemo-room-worklist" }] },
+      // 他院から受けた紹介と他院へ出した紹介の台帳、返書の記録、紹介率(docs/referral-design.md)。
+      // 台帳を回すのは地域連携室。
+      { label: "地域連携部門", items: [{ label: "地域連携", to: "/referrals" }] },
     ],
   },
   { kind: "link", label: "予約枠", to: "/schedules" },

@@ -125,6 +125,7 @@ import { BedSchedulePage } from "./pages/BedSchedulePage";
 import { BedStatusPage } from "./pages/BedStatusPage";
 import { AdmissionDocumentsPage } from "./pages/AdmissionDocumentsPage";
 import { ResultFollowupPage } from "./pages/ResultFollowupPage";
+import { ReferralPage } from "./pages/ReferralPage";
 import { NursingAcuityPage } from "./pages/NursingAcuityPage";
 import { PressureUlcerPage } from "./pages/PressureUlcerPage";
 import { LineDrainPage } from "./pages/LineDrainPage";
@@ -468,6 +469,7 @@ function App() {
           <Route path="/bed-status" element={<BedStatusPage />} />
           <Route path="/admission-documents" element={<AdmissionDocumentsPage />} />
           <Route path="/result-followup" element={<ResultFollowupPage />} />
+          <Route path="/referrals" element={<ReferralPage />} />
           <Route path="/nursing-acuity" element={<NursingAcuityPage />} />
           <Route path="/pressure-ulcer" element={<PressureUlcerPage />} />
           <Route path="/line-drains" element={<LineDrainPage />} />

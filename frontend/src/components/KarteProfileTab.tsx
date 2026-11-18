@@ -28,6 +28,7 @@ import { PatientAdverseEventSection } from "./PatientAdverseEventSection";
 import { LineDrainSection } from "./LineDrainSection";
 import { HealthMaintenanceSection } from "./HealthMaintenanceSection";
 import { EncounterHistorySection } from "./EncounterHistorySection";
+import { ReferralSection } from "./ReferralSection";
 import {
   buildPregnancyObservations,
   parsePregnancyForm,
@@ -76,6 +77,7 @@ const SECTIONS = [
   { key: "basic", label: "基本情報" },
   { key: "coverage", label: "保険・公費" },
   { key: "encounters", label: "受診歴" },
+  { key: "referrals", label: "紹介" },
   { key: "body", label: "身体情報" },
   { key: "infection", label: "感染症" },
   { key: "adverse", label: "有害事象" },
@@ -233,6 +235,8 @@ export function KarteProfileTab({ patientId, view, onViewChange, onOpenDay, onEd
         <KarteCoverageSection patientId={patientId} />
       ) : section === "encounters" ? (
         <EncounterHistorySection patientId={patientId} onOpenDay={onOpenDay} />
+      ) : section === "referrals" ? (
+        <ReferralSection patientId={patientId} />
       ) : section === "body" ? (
         <PatientBodySection
           patientId={patientId}
