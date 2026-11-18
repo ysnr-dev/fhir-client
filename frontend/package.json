@@ -43,5 +43,16 @@
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.6"
+  },
+  "overrides": {
+    "@kitware/vtk.js": {
+      "fflate": "0.7.5"
+    },
+    "dcmjs": {
+      "adm-zip": "0.6.1"
+    },
+    "@cornerstonejs/dicom-image-loader": {
+      "uuid": "14.0.3"
+    }
   }
 }
