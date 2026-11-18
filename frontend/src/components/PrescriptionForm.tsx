@@ -1057,6 +1057,7 @@ export function PrescriptionForm({
           onClose={() => setModal(null)}
           allowGeneric={allowGeneric}
           formularyPick={{}}
+          adoptedFor={prescriptionDispensing(values.setting, values.category)}
         />
       )}
       {confirm && (

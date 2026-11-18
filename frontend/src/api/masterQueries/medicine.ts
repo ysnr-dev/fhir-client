@@ -50,6 +50,7 @@ export function useMedicineSearch(
   dosageForm?: string,
   contrastMedium?: boolean,
   generic?: boolean,
+  adoptedFor?: "internal" | "external",
 ) {
   return useQuery({
     queryKey: [
@@ -60,6 +61,7 @@ export function useMedicineSearch(
       dosageForm ?? "",
       contrastMedium ? "contrast" : "",
       generic ? "generic" : "",
+      adoptedFor ?? "",
       page,
     ],
     queryFn: () =>
@@ -69,6 +71,7 @@ export function useMedicineSearch(
         dosage_form: dosageForm || undefined,
         contrast_medium: contrastMedium || undefined,
         generic: generic || undefined,
+        adopted_for: adoptedFor,
         page,
         per: MASTER_SEARCH_PER,
       }),

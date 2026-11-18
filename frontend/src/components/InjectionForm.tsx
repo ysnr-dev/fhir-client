@@ -1258,6 +1258,7 @@ export function InjectionForm({
           onSelect={handleMedicineSelect}
           onClose={() => setModal(null)}
           formularyPick={{ dosageForm: "4" }}
+          adoptedFor="internal"
         />
       )}
     </form>

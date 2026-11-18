@@ -6,6 +6,7 @@ import {
   DatasetPickModeTabs,
   DatasetPickTable,
   useDatasetPickMode,
+  type DatasetPickMode,
   type DatasetPickProps,
 } from "./DatasetPickList";
 import { ErrorBanner } from "./ErrorBanner";
@@ -42,6 +43,11 @@ interface MedicineSearchModalProps {
    * (処方・注射・レジメン・持参薬の代替薬)。始まりは全件検索。渡さなければ印だけ出す。
    */
   formularyPick?: FormularyPickProps;
+  /**
+   * 採用薬(薬剤付加情報の採用区分)だけを検索するモード。調剤の場所を渡すとモード切替に「採用薬」が出る。
+   * internal(院内処方・入院・注射)は採用と仮採用、external(院外処方)は院外専用も並ぶ。始まりは全件検索。
+   */
+  adoptedFor?: "internal" | "external" | null;
 }
 
 export function MedicineSearchModal({
@@ -54,6 +60,7 @@ export function MedicineSearchModal({
   allowGeneric = false,
   datasetPick,
   formularyPick,
+  adoptedFor,
 }: MedicineSearchModalProps) {
   const [mode, setMode] = useDatasetPickMode(datasetPick);
   const [name, setName] = useState("");
@@ -75,6 +82,7 @@ export function MedicineSearchModal({
     dosageForm,
     contrastMedium,
     generic,
+    (mode === "adopted" && adoptedFor) || undefined,
   );
   const yakkoOptions = useMedicineTypeOptions(true);
   const yakkoListId = useId();
@@ -94,6 +102,11 @@ export function MedicineSearchModal({
 
   function handleNameChange(value: string) {
     setName(value);
+    setPage(1);
+  }
+
+  function handleModeChange(next: DatasetPickMode) {
+    setMode(next);
     setPage(1);
   }
 
@@ -140,12 +153,13 @@ export function MedicineSearchModal({
   const tabs = [
     ...(datasetPick ? [{ mode: "dataset" as const, label: `データセット (${datasetPick.options.length})` }] : []),
     { mode: "all" as const, label: "全件検索" },
+    ...(adoptedFor ? [{ mode: "adopted" as const, label: "採用薬" }] : []),
     ...(formularyPick ? [{ mode: "formulary" as const, label: "フォーミュラリ" }] : []),
   ];
 
   return (
     <Modal title={title} onClose={onClose} className="modal--wide">
-      {tabs.length > 1 && <DatasetPickModeTabs mode={mode} onChange={setMode} tabs={tabs} />}
+      {tabs.length > 1 && <DatasetPickModeTabs mode={mode} onChange={handleModeChange} tabs={tabs} />}
       {datasetPick && mode === "dataset" ? (
         <DatasetPickTable {...datasetPick} />
       ) : formularyPick && mode === "formulary" ? (

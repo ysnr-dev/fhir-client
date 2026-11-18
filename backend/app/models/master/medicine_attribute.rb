@@ -14,6 +14,11 @@ module Master
     DDD_UNITS = %w[g mg MU].freeze
     # 採用区分。unset は区分を決めていない薬(施設設定で採用外として扱うかを選ぶ)。
     ADOPTION_CATEGORIES = %w[unset adopted provisional outpatient_only not_adopted].freeze
+    # 調剤の場所(internal: 院内、external: 院外)ごとの、採用薬として候補に出す採用区分。
+    ADOPTED_CATEGORIES = {
+      "internal" => %w[adopted provisional],
+      "external" => %w[adopted provisional outpatient_only]
+    }.freeze
     # 診療科コード(SS-MIX2 の 2〜3 桁。院内で足した科は英字を含む)。
     DEPARTMENT_CODE = { pattern: /\A[0-9A-Z]{2,3}\z/, label: "診療科コード", strict: true }.freeze
 

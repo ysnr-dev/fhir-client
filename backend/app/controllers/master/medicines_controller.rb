@@ -13,6 +13,7 @@ module Master
         end
         scope = scope.where("LEFT(master_medicines.generic_name_code, 4) = ?", params[:yakko_code]) if params[:yakko_code].present?
         scope = filter_by_yakko_name(scope, params[:yakko_name], code_column: "generic_name_code") if params[:yakko_name].present?
+        scope = filter_by_adoption(scope, GENERIC_ADOPTED_SQL)
         return render json: paginate(scope)
       end
 
@@ -33,6 +34,7 @@ module Master
       # 薬効分類は YJコード(yakka_code)の上4桁。code 完全一致 / 名称検索の2通りで絞り込む。
       scope = scope.where("LEFT(master_medicines.yakka_code, 4) = ?", params[:yakko_code]) if params[:yakko_code].present?
       scope = filter_by_yakko_name(scope, params[:yakko_name]) if params[:yakko_name].present?
+      scope = filter_by_adoption(scope, ADOPTED_SQL)
 
       render json: paginate(scope)
     end
@@ -81,6 +83,24 @@ module Master
         scope.or(Master::MedicineIngredient.where("(' ' || atc_codes) LIKE ?", "% #{prefix}%"))
       end
       Master::Medicine.where("#{INGREDIENT_KEY_SQL} IN (?)", rows.select(:code_prefix))
+    end
+
+    # 採用薬(薬剤付加情報の採用区分)。EXISTS なので件数(paginate の COUNT)を増やさない。
+    ADOPTED_SQL = "EXISTS (SELECT 1 FROM master_medicine_attributes a " \
+                  "WHERE a.medicine_code = master_medicines.medicine_code " \
+                  "AND a.settings->>'adoption' IN (?))".freeze
+    # 一般名の行は、同じ一般名処方コードの銘柄が 1 つでも採用薬なら採用薬とみなす。
+    GENERIC_ADOPTED_SQL = "EXISTS (SELECT 1 FROM master_medicine_attributes a " \
+                          "JOIN master_medicines m ON m.medicine_code = a.medicine_code " \
+                          "WHERE m.generic_name_code = master_medicines.generic_name_code " \
+                          "AND a.settings->>'adoption' IN (?))".freeze
+
+    # adopted_for(internal: 院内、external: 院外)で、その調剤の場所の採用薬だけに絞る。
+    def filter_by_adoption(scope, sql)
+      return scope if params[:adopted_for].blank?
+
+      categories = Master::MedicineAttribute::ADOPTED_CATEGORIES[params[:adopted_for]]
+      categories ? scope.where(sql, categories) : scope.none
     end
 
     # 院内フォーミュラリの印(docs/formulary-design.md)。検索結果の各行に、

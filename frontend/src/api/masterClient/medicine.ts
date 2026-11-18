@@ -126,6 +126,8 @@ export async function searchMedicines(params: {
   contrast_medium?: boolean;
   /** true なら銘柄ではなく一般名処方(【般】〜)の候補を返す。院外処方の一般名処方で使う。 */
   generic?: boolean;
+  /** 採用薬(薬剤付加情報の採用区分)だけに絞る。internal は院内、external は院外(院外専用も含む)。 */
+  adopted_for?: "internal" | "external";
   page?: number;
   per?: number;
 }): Promise<MasterSearchResult<Medicine>> {
@@ -137,6 +139,7 @@ export async function searchMedicines(params: {
   if (params.dosage_form) search.set("dosage_form", params.dosage_form);
   if (params.contrast_medium) search.set("contrast_medium", "true");
   if (params.generic) search.set("generic", "true");
+  if (params.adopted_for) search.set("adopted_for", params.adopted_for);
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 

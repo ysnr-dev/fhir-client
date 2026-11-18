@@ -191,6 +191,49 @@ RSpec.describe "Master::Medicines", type: :request do
     end
   end
 
+  describe "GET /master/medicines (採用薬)" do
+    before do
+      generic = { generic_name_code: "2325003B2ZZZ", generic_name_description: "【般】ファモチジン散２％" }
+      Master::Medicine.create!(medicine_code: "610000040", name: "採用薬A")
+      Master::Medicine.create!(medicine_code: "610000041", name: "仮採用薬B")
+      Master::Medicine.create!(medicine_code: "610000042", name: "院外専用薬C", **generic)
+      Master::Medicine.create!(medicine_code: "610000043", name: "採用外薬D", **generic)
+      Master::Medicine.create!(medicine_code: "610000044", name: "未設定薬E")
+      Master::Medicine.create!(medicine_code: "610000045", name: "区分なし薬F")
+      { "610000040" => "adopted", "610000041" => "provisional", "610000042" => "outpatient_only",
+        "610000043" => "not_adopted" }.each do |code, adoption|
+        Master::MedicineAttribute.create!(medicine_code: code, settings: { "adoption" => adoption })
+      end
+      Master::MedicineAttribute.create!(medicine_code: "610000045", settings: { "lot_required" => true })
+    end
+
+    def names_for(params)
+      get "/master/medicines", params: params
+      JSON.parse(response.body)["items"].map { |i| i["name"] }
+    end
+
+    it "internal は採用・仮採用だけを返す" do
+      expect(names_for(adopted_for: "internal")).to contain_exactly("採用薬A", "仮採用薬B")
+    end
+
+    it "external は院外専用も返す" do
+      expect(names_for(adopted_for: "external")).to contain_exactly("採用薬A", "仮採用薬B", "院外専用薬C")
+    end
+
+    it "ほかの条件と組み合わせて絞り込む" do
+      expect(names_for(adopted_for: "external", name: "仮採用")).to eq(["仮採用薬B"])
+    end
+
+    it "一般名は同じ一般名処方コードの銘柄が採用薬なら返す" do
+      expect(names_for(adopted_for: "external", generic: "true")).to eq(["【般】ファモチジン散２％"])
+      expect(names_for(adopted_for: "internal", generic: "true")).to eq([])
+    end
+
+    it "未知の値なら何も返さない" do
+      expect(names_for(adopted_for: "unknown")).to eq([])
+    end
+  end
+
   describe "GET /master/medicines (YJコード付与)" do
     before do
       Master::Medicine.create!(medicine_code: "620003477", name: "ロキソプロフェン錠")
