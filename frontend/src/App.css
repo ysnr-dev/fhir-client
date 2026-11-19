@@ -28695,10 +28695,74 @@ input.nursing-picker__search {
   max-width: 100%;
 }
 
-/* 病床状況。数の列は右寄せ、見出しの区分(空床・本日…)は中央。合計の行の上の 2 重線がセルの間で
-   切れないよう、罫線は collapse で表に持たせる。2 段の見出しは下に揃える。 */
+/* 病床状況の要約(病院全体)。大きな数字のタイルを横に並べ、幅が足りなければ折り返す。 */
+.bed-status-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.bed-status-summary__tile {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-card);
+}
+
+.bed-status-summary__tile dt {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.bed-status-summary__tile dd {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 0;
+}
+
+.bed-status-summary__tile dd.bed-status-summary__pair {
+  flex-direction: row;
+  gap: 24px;
+}
+
+.bed-status-summary__count {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.bed-status-summary__value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.bed-status-summary__value small {
+  font-size: 13px;
+  font-weight: normal;
+  color: var(--text);
+}
+
+.bed-status-summary__sub {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.bed-status-summary .bed-status__meter {
+  width: 100%;
+  margin: 2px 0;
+}
+
+/* 病床状況の表。列は中身なりの幅で左に詰め、区分(病床・空床・本日…)の境に縦線を引く。数の列は
+   右寄せ、区分の見出しは中央。合計の行の上の線がセルの間で切れないよう、罫線は collapse で表に持たせる。 */
 .bed-status {
+  width: auto;
   border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
 }
 
 .bed-status thead th {
@@ -28707,15 +28771,23 @@ input.nursing-picker__search {
 
 .bed-status th.bed-status__group {
   text-align: center;
-  border-bottom: 1px solid var(--border);
+  color: var(--text-h);
+  background: var(--surface-stripe);
+  border-left: 1px solid var(--border);
 }
 
 .bed-status .bed-status__num {
+  min-width: 64px;
   text-align: right;
   white-space: nowrap;
 }
 
+.bed-status .bed-status__group-start {
+  border-left: 1px solid var(--border);
+}
+
 .bed-status th.bed-status__ward {
+  min-width: 140px;
   text-align: left;
   font-weight: normal;
   white-space: nowrap;
@@ -28724,6 +28796,33 @@ input.nursing-picker__search {
 .bed-status .bed-status__strong {
   font-weight: bold;
   color: var(--text-h);
+}
+
+.bed-status .bed-status__zero {
+  opacity: 0.4;
+}
+
+.bed-status__occupancy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 稼働率の棒。塗りの幅が在院の割合。 */
+.bed-status__meter {
+  display: inline-block;
+  width: 64px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.bed-status__meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
 }
 
 .bed-status tfoot th,
