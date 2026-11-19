@@ -104,6 +104,22 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
 - 並べるマスタは `frontend/src/masterMenu.ts` に定義しています。マスタの画面を足すときは、ルートに
   加えてここに 1 行足します。
 
+## 約束処方
+
+マスタメンテの「医薬品」>「約束処方」(`/promised-prescriptions`)で、院内で決めた組み合わせと量に名前を付けて
+登録します(軟膏の混合など)。処方オーダーの医薬品検索の候補「約束処方」に、運用期間内のものが並びます
+(`features/medication.md`)。
+
+- 持つもの: コード(空欄なら採番)・名称・カナ・**基準量と単位**(例 50 g)・混合・運用期間・表示順・備考と、
+  構成薬(医薬品と、基準量あたりの量)。構成薬は銘柄で選び、同じ医薬品は 1 回だけ載せられます。
+- 処方では基準量に対する比で構成薬の量を出します(基準量 50 g で A 25 g・B 25 g の約束処方を 100 g 出すと、
+  A 50 g・B 50 g)。
+- API は `/master/promised_prescriptions`(`name`・`active=true`・`page`/`per`)。一覧・詳細とも構成薬(`items`)を
+  医薬品名つきで返し、登録・更新は `items: [{ medicine_code, amount, unit_name }]` を一緒に受けて差し替えます
+  (`items` を渡さない更新では構成薬に触れません)。構成薬はレセプト電算コードで持つので、医薬品マスタを
+  取り込み直しても残ります。
+- seed にサンプル 2 件(`db/seed_data/promised_prescriptions.json`、コード 900001〜)があります。
+
 ## 祝日・休診日
 
 「マスタメンテ」>「共通」>「祝日・休診日」(`/holidays`)。1 日 1 行で、区分は「祝日」(国民の祝日)と

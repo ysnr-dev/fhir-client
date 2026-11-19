@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+import { collapsePromised, promisedAmountText } from "../fhir/promisedPrescriptionHelpers";
 import type { RxWorklistRow } from "../api/queries";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import { displayName } from "../fhir/patientHelpers";
@@ -65,28 +67,50 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
               <span className="karte-rp__number">{`RP${rp.rpNumber}`}</span>
             </div>
             <ul className="karte-rp__medicines">
-              {rp.medicines.map((medicine) => (
-                <li key={medicine.orderInRp}>
-                  <span className="karte-rp__medicine-name">{medicine.name}</span>
-                  {medicine.dose != null && (
-                    <span className="karte-rp__medicine-dose">
-                      {doseText(medicine.amounts ?? {}, medicine.unit)}
-                      <PotencyMark potency={medicine.potency} />
-                    </span>
-                  )}
-                  {medicine.substitutionBlock && (
-                    <span className="karte-rp__comment">
-                      {`（${substitutionBlockMark(medicine.substitutionBlock)}）`}
-                    </span>
-                  )}
-                  {medicine.unevenLabel && (
-                    <span className="karte-rp__comment">{`（${medicine.unevenLabel}）`}</span>
-                  )}
-                  {medicine.comment && (
-                    <span className="karte-rp__comment">{`（${medicine.comment}）`}</span>
-                  )}
-                </li>
-              ))}
+              {collapsePromised(rp.medicines).map((entry) => {
+                if (entry.kind === "promised") {
+                  return (
+                    <Fragment key={`promised-${entry.index}`}>
+                      <li>
+                        <span className="karte-rp__medicine-name">
+                          {entry.promised.name}
+                          <span className="medicine-caution">約束</span>
+                        </span>
+                        <span className="karte-rp__medicine-dose">{promisedAmountText(entry.promised)}</span>
+                      </li>
+                      {entry.lines.map((line) => (
+                        <li key={line.orderInRp} className="karte-rp__promised-item">
+                          <span>{line.name}</span>
+                          {line.dose != null && <span>{doseText(line.amounts ?? {}, line.unit)}</span>}
+                        </li>
+                      ))}
+                    </Fragment>
+                  );
+                }
+                const medicine = entry.line;
+                return (
+                    <li key={medicine.orderInRp}>
+                      <span className="karte-rp__medicine-name">{medicine.name}</span>
+                      {medicine.dose != null && (
+                        <span className="karte-rp__medicine-dose">
+                          {doseText(medicine.amounts ?? {}, medicine.unit)}
+                          <PotencyMark potency={medicine.potency} />
+                        </span>
+                      )}
+                      {medicine.substitutionBlock && (
+                        <span className="karte-rp__comment">
+                          {`（${substitutionBlockMark(medicine.substitutionBlock)}）`}
+                        </span>
+                      )}
+                      {medicine.unevenLabel && (
+                        <span className="karte-rp__comment">{`（${medicine.unevenLabel}）`}</span>
+                      )}
+                      {medicine.comment && (
+                        <span className="karte-rp__comment">{`（${medicine.comment}）`}</span>
+                      )}
+                    </li>
+                );
+              })}
             </ul>
             {/* 紙の処方箋と同じく、用法は薬剤の後ろに置く。 */}
             <div className="karte-rp__detail">

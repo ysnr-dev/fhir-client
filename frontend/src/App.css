@@ -33045,3 +33045,42 @@ button.dialysis-board__empty--book:hover {
   margin-left: 8px;
   vertical-align: middle;
 }
+
+/* 約束処方。名称と量の下に構成薬を内訳として並べ、まとまりの中は罫線で区切らない。 */
+.rp-card__medicines tr.rp-card__promised-head td,
+.rp-card__medicines tr.rp-card__promised-item:not(.rp-card__promised-item--last) td {
+  border-bottom: none;
+}
+
+.rp-card__medicines tr.rp-card__promised-head td {
+  padding-bottom: 2px;
+}
+
+.rp-card__medicines tr.rp-card__promised-item td {
+  padding-top: 0;
+  padding-bottom: 2px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.rp-card__medicines tr.rp-card__promised-item--last td {
+  padding-bottom: 6px;
+}
+
+.rp-card__medicines tr.rp-card__promised-item td:first-child {
+  padding-left: 20px;
+}
+
+.rp-card__medicines--form tr.rp-card__promised-item td:first-child {
+  padding-left: 36px;
+}
+
+.rp-card__medicines--form tr.rp-card__promised-item td.rp-card__promised-dose {
+  padding-left: 12px;
+}
+
+.karte-rp__medicines li.karte-rp__promised-item {
+  padding-left: 12px;
+  color: var(--text);
+  font-size: 12px;
+}

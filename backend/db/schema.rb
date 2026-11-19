@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_17_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_18_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -2431,6 +2431,37 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_17_200000) do
     t.index ["postal_code"], name: "index_master_postal_codes_on_postal_code"
   end
 
+  create_table "master_promised_prescription_items", force: :cascade do |t|
+    t.bigint "promised_prescription_id", null: false
+    t.string "medicine_code", null: false
+    t.decimal "amount", precision: 10, scale: 3, null: false
+    t.string "unit_name"
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["medicine_code"], name: "index_master_promised_prescription_items_on_medicine_code"
+    t.index ["promised_prescription_id", "medicine_code"], name: "idx_promised_prescription_items_unique", unique: true
+    t.index ["promised_prescription_id"], name: "idx_on_promised_prescription_id_7e97f4076f"
+  end
+
+  create_table "master_promised_prescriptions", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.decimal "base_amount", precision: 10, scale: 3, null: false
+    t.string "unit_name", null: false
+    t.boolean "mix", default: false, null: false
+    t.integer "display_order"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_promised_prescriptions_on_code", unique: true
+  end
+
   create_table "master_rad_dataset_details", force: :cascade do |t|
     t.string "dataset_code", null: false
     t.string "detail_type", null: false
@@ -3214,6 +3245,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_17_200000) do
   add_foreign_key "document_template_pages", "document_templates", on_delete: :cascade
   add_foreign_key "document_templates", "file_categories", on_delete: :nullify
   add_foreign_key "master_formulary_entries", "master_formulary_groups", column: "formulary_group_id", on_delete: :cascade
+  add_foreign_key "master_promised_prescription_items", "master_promised_prescriptions", column: "promised_prescription_id", on_delete: :cascade
   add_foreign_key "ssmix2_messages", "ssmix2_transactions", on_delete: :nullify
   add_foreign_key "supervisor_group_members", "supervisor_groups", on_delete: :cascade
 end

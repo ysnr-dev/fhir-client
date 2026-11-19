@@ -221,6 +221,8 @@ Rails.application.routes.draw do
     resources :medicine_types, only: %i[index show create update destroy] do
       collection { get :options }
     end
+    # 約束処方(組み合わせと量に名前を付けたもの)。構成薬はヘッダと一緒に読み書きする。
+    resources :promised_prescriptions, only: %i[index show create update destroy]
     # 院内フォーミュラリ(薬効群と推奨順位)。docs/formulary-design.md
     resources :formulary_groups, only: %i[index show create update destroy]
     resources :formulary_entries, only: %i[show create update destroy] do

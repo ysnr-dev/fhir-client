@@ -1,0 +1,26 @@
+[
+  {
+    "code": "900001",
+    "name": "保湿ステロイド混合軟膏",
+    "name_kana": "ホシツステロイドコンゴウナンコウ",
+    "base_amount": 50,
+    "unit_name": "ｇ",
+    "mix": true,
+    "items": [
+      { "medicine_code": "620009048", "amount": 25, "unit_name": "ｇ" },
+      { "medicine_code": "662640418", "amount": 25, "unit_name": "ｇ" }
+    ]
+  },
+  {
+    "code": "900002",
+    "name": "亜鉛華アズノール軟膏",
+    "name_kana": "アエンカアズノールナンコウ",
+    "base_amount": 30,
+    "unit_name": "ｇ",
+    "mix": true,
+    "items": [
+      { "medicine_code": "620001570", "amount": 20, "unit_name": "ｇ" },
+      { "medicine_code": "620002619", "amount": 10, "unit_name": "ｇ" }
+    ]
+  }
+]

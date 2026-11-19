@@ -1,6 +1,7 @@
 import { makeFieldUpdater } from "../lib/form";
-import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import type { Medicine, MedicineUsage } from "../api/masterClient";
+import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import type { Medicine, MedicineUsage, PromisedPrescription } from "../api/masterClient";
+import { nextPromisedGroup, promisedLinesOf, promisedSpan, rescalePromised } from "../fhir/promisedPrescriptionHelpers";
 import { advisoryOrderItemsOf } from "../fhir/advisoryRuleHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
@@ -8,6 +9,7 @@ import {
   canBlockSubstitution,
   CATEGORY_OPTIONS,
   convertDoseField,
+  convertPromisedLine,
   defaultPrescriptionCategory,
   DISPENSE_INSTRUCTION_OPTIONS,
   DOSE_BASIS_OPTIONS,
@@ -419,6 +421,7 @@ export function PrescriptionForm({
       rps: v.rps.map((rp) => ({
         ...rp,
         medicines: rp.medicines.map((med) => {
+          if (med.promised) return convertPromisedLine(med, { rp, basis: v.doseBasis }, { rp, basis });
           if (med.doseBeforeSwitch && med.dose === med.doseBeforeSwitch.converted) {
             return { ...med, dose: med.doseBeforeSwitch.dose, doseBeforeSwitch: undefined };
           }
@@ -483,6 +486,9 @@ export function PrescriptionForm({
       doseCount: "",
       supplement: isAsNeededUsage(usage.usage_code) ? null : rp.supplement,
       medicines: rp.medicines.map((med) => {
+        if (med.promised) {
+          return convertPromisedLine(med, { rp, basis: values.doseBasis }, { rp: { usage }, basis: values.doseBasis });
+        }
         if (!med.unevenDoses) {
           // 回数の分からない用法との行き来では用量欄の意味(1 回量 / 1 日量)が変わるので換算する。
           const dose = convertDoseField(
@@ -507,8 +513,59 @@ export function PrescriptionForm({
 
   function handleMedicineSelect(medicine: Medicine) {
     if (modal?.kind !== "medicine") return;
-    updateMedicine(modal.rpIndex, modal.medIndex, { medicine: withPackageUnit(medicine), potency: false });
+    const { rpIndex, medIndex } = modal;
+    const medicines = values.rps[rpIndex].medicines;
+    if (medicines[medIndex]?.promised) {
+      updateRp(rpIndex, {
+        medicines: [
+          ...medicines.slice(0, medIndex),
+          { ...emptyMedicineLine, medicine: withPackageUnit(medicine) },
+          ...medicines.slice(medIndex + promisedSpan(medicines, medIndex)),
+        ],
+      });
+    } else {
+      updateMedicine(rpIndex, medIndex, { medicine: withPackageUnit(medicine), potency: false });
+    }
     setModal(null);
+  }
+
+  // 約束処方を選んだら、開いていた行(約束処方ならその構成薬すべて)を構成薬の行に置き換える。量は基準量から始める。
+  function handlePromisedSelect(master: PromisedPrescription, medicines: Medicine[]) {
+    if (modal?.kind !== "medicine") return;
+    const { rpIndex, medIndex } = modal;
+    const rp = values.rps[rpIndex];
+    const byCode = new Map(medicines.map((medicine) => [medicine.medicine_code, medicine]));
+    const lines = promisedLinesOf(master, nextPromisedGroup(rp.medicines)).flatMap((line) => {
+      const medicine = byCode.get(line.medicineCode);
+      if (!medicine) return [];
+      return [
+        {
+          ...emptyMedicineLine,
+          medicine: { ...medicine, unit_name: line.unit ?? medicine.unit_name },
+          dose: line.dose,
+          promised: line.promised,
+        },
+      ];
+    });
+    const instructions = rp.dispenseInstructions ?? [];
+    updateRp(rpIndex, {
+      medicines: [
+        ...rp.medicines.slice(0, medIndex),
+        ...lines,
+        ...rp.medicines.slice(medIndex + promisedSpan(rp.medicines, medIndex)),
+      ],
+      ...(master.mix && !instructions.includes("MX") ? { dispenseInstructions: [...instructions, "MX"] } : {}),
+    });
+    setModal(null);
+  }
+
+  function updatePromisedAmount(rpIndex: number, group: number, amount: string) {
+    updateRp(rpIndex, { medicines: rescalePromised(values.rps[rpIndex].medicines, group, amount) });
+  }
+
+  function removePromised(rpIndex: number, group: number) {
+    const rest = values.rps[rpIndex].medicines.filter((med) => med.promised?.group !== group);
+    updateRp(rpIndex, { medicines: rest.length > 0 ? rest : [{ ...emptyMedicineLine }] });
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -710,6 +767,75 @@ export function PrescriptionForm({
                 const substitutable = canBlockSubstitution(values.setting, med.medicine);
                 const showSubstitution = substitutable && Boolean(med.substitutionBlock);
                 const canSubstitution = substitutable && !med.substitutionBlock;
+                if (med.promised) {
+                  // 約束処方は罫線で区切らない 1 つのまとまりにし、名称と量の下に構成薬を読み取り専用の内訳として並べる。
+                  const promised = med.promised;
+                  if (rp.medicines[medIndex - 1]?.promised?.group === promised.group) return null;
+                  const span = promisedSpan(rp.medicines, medIndex);
+                  return (
+                    <Fragment key={medIndex}>
+                      <tr className="rp-card__promised-head">
+                        <td>
+                          <div className="rp-card__medicine-cell">
+                            <button
+                              type="button"
+                              className="rp-card__icon-button"
+                              title="医薬品を変更"
+                              aria-label="医薬品を変更"
+                              onClick={() => setModal({ kind: "medicine", rpIndex, medIndex })}
+                            >
+                              <PillIcon />
+                            </button>
+                            <span className="rp-card__medicine-name">
+                              {promised.name}
+                              <span className="medicine-caution">約束</span>
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            className="rp-card__dose-input"
+                            aria-label={`${promised.name}の量`}
+                            value={promised.amount}
+                            onChange={(e) => updatePromisedAmount(rpIndex, promised.group, e.target.value)}
+                          />
+                        </td>
+                        <td className="rp-card__medicine-unit">{promised.unit}</td>
+                        <td>
+                          <div className="rp-card__row-actions">
+                            {removeButton(() => removePromised(rpIndex, promised.group), "約束処方を削除")}
+                          </div>
+                        </td>
+                      </tr>
+                      {rp.medicines.slice(medIndex, medIndex + span).map((item, offset) => (
+                        <tr
+                          key={offset}
+                          className={`rp-card__promised-item${offset === span - 1 ? " rp-card__promised-item--last" : ""}`}
+                        >
+                          <td>
+                            <div className="rp-card__medicine-cell">
+                              <span className="rp-card__medicine-name">
+                                {item.medicine?.name}
+                                {item.medicine && <MedicineCautionMarks medicine={item.medicine} />}
+                              </span>
+                              {fieldAlert.icon(`medicine:${rpIndex}:${medIndex + offset}`)}
+                              {fieldAlert.icon(`dose:${rpIndex}:${medIndex + offset}`)}
+                            </div>
+                            <AdvisoryInlineMarks
+                              advisories={advisoriesOfScope(session.advisories, rpIndex, medIndex + offset)}
+                            />
+                          </td>
+                          <td className="rp-card__promised-dose">{item.dose}</td>
+                          <td className="rp-card__medicine-unit">{item.medicine?.unit_name}</td>
+                          <td></td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  );
+                }
                 return (
                   <tr key={medIndex}>
                     <td>
@@ -1058,6 +1184,7 @@ export function PrescriptionForm({
           allowGeneric={allowGeneric}
           formularyPick={{}}
           adoptedFor={prescriptionDispensing(values.setting, values.category)}
+          promisedPick={{ onSelect: handlePromisedSelect }}
         />
       )}
       {confirm && (

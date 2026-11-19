@@ -120,14 +120,22 @@ module Reports
     def rp_lines(columns:)
       @rps.flat_map do |rp|
         lines = [["Rp#{rp.rp_number}", nil]]
+        promised_group = nil
         rp.medicines.each do |medicine|
+          # 約束処方は名称と量の行を先に置き、構成薬を 1 段下げて内訳として並べる。
+          promised = medicine.promised
+          if promised && promised.group != promised_group
+            lines << ["　#{promised.name}#{promised_amount(promised)}", nil]
+          end
+          promised_group = promised&.group
+          indent = promised ? "　　" : "　"
           amount = medicine.dose_text.presence || "#{medicine.dose}#{medicine.unit}"
           dose = medicine.dose.present? ? " #{amount}#{'(力価)' if medicine.potency}" : ""
           uneven = medicine.uneven.present? ? "（#{medicine.uneven}）" : ""
           comment = medicine.comment.present? ? "（#{medicine.comment}）" : ""
           block = medicine.substitution_block
           label = !columns && block ? SUBSTITUTION_LABELS[block] : ""
-          lines << ["　#{medicine.name}#{dose}#{uneven}#{comment}#{label}", columns ? block : nil]
+          lines << ["#{indent}#{medicine.name}#{dose}#{uneven}#{comment}#{label}", columns ? block : nil]
         end
         amount =
           if rp.dose_days.present?
@@ -143,6 +151,12 @@ module Reports
         lines << ["　調剤指示: #{rp.dispense_instruction}", nil] if rp.dispense_instruction.present?
         lines
       end
+    end
+
+    def promised_amount(promised)
+      return "" if promised.amount.blank?
+
+      " #{promised.amount.to_d.to_s('F').sub(/\.0+\z/, '')}#{promised.unit}"
     end
 
     # 長い行を桁数(半角換算。全角 = 2)で折り返す。継続行は全角空白 1 つで字下げして

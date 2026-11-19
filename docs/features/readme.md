@@ -17,6 +17,6 @@
 | [oral-exam.md](oral-exam.md) | 口腔診査情報(JDAOES 準拠の歯式図と診査ごとのスナップショット) |
 | [facility.md](facility.md) | 自院と連携先、施設設定、地域連携(紹介の台帳)、医療機関(Organization)、医療従事者(Practitioner / PractitionerRole) |
 | [ward.md](ward.md) | 病棟・病室・ベッド(Location)、入院患者一覧、病棟マップ、ベッドスケジュール |
-| [master-data.md](master-data.md) | マスタデータ API(医薬品・用法・頻用コード)、マスタメンテ |
+| [master-data.md](master-data.md) | マスタデータ API(医薬品・用法・頻用コード)、マスタメンテ、約束処方 |
 | [data-analysis.md](data-analysis.md) | 患者フォルダ、データ抽出、分析ダッシュボード、DPC、院内がん登録、NCD 症例登録 |
 | [admin-integration.md](admin-integration.md) | 管理画面、外部システム連携、レセコン連携、サーバーの休眠と起動 |

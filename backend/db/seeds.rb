@@ -1823,3 +1823,27 @@ if File.exist?(care_teams_json)
 else
   puts "CareTeam: #{care_teams_json} not found, skipped"
 end
+
+# 約束処方のサンプル(db/seed_data/promised_prescriptions.json)。**開発とデモのためのサンプル**で、
+# 同じ code があれば上書きしない。構成薬は医薬品マスタのレセプト電算コードで持つので、医薬品マスタを
+# 取り込んでいない環境では名称が出ない。
+promised_prescriptions_json = Rails.root.join("db/seed_data/promised_prescriptions.json")
+if File.exist?(promised_prescriptions_json)
+  loaded = 0
+  JSON.parse(File.read(promised_prescriptions_json)).each_with_index do |row, index|
+    next if Master::PromisedPrescription.exists?(code: row["code"])
+
+    Master::PromisedPrescription.create!(
+      row.except("items").merge(
+        "display_order" => index + 1,
+        "items" => row["items"].each_with_index.map do |item, item_index|
+          Master::PromisedPrescriptionItem.new(item.merge("display_order" => item_index + 1))
+        end
+      )
+    )
+    loaded += 1
+  end
+  puts "master_promised_prescriptions: seeded #{loaded}"
+else
+  puts "master_promised_prescriptions: #{promised_prescriptions_json} not found, skipped"
+end

@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from "react";
-import { searchMedicines, type FormularyEntry, type Medicine } from "../api/masterClient";
+import { searchMedicines, type FormularyEntry, type Medicine, type PromisedPrescription } from "../api/masterClient";
 import { useMedicineSearch, useMedicineTypeOptions } from "../api/masterQueries";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
 import {
@@ -13,6 +13,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { FormularyPickTable, type FormularyPickProps } from "./FormularyPickList";
 import { FormularyMark, MedicineCautionMarks } from "./MedicineWarnings";
 import { Modal } from "./Modal";
+import { PromisedPrescriptionPickTable } from "./PromisedPrescriptionPickTable";
 
 interface MedicineSearchModalProps {
   onSelect: (medicine: Medicine) => void;
@@ -48,6 +49,11 @@ interface MedicineSearchModalProps {
    * internal(院内処方・入院・注射)は採用と仮採用、external(院外処方)は院外専用も並ぶ。始まりは全件検索。
    */
   adoptedFor?: "internal" | "external" | null;
+  /**
+   * 約束処方から選ぶモード(処方オーダー)。渡すとモード切替に「約束処方」が出る。選ぶと onSelect ではなく
+   * こちらに、約束処方と構成薬の医薬品マスタの行(構成薬の並び順)が返る。
+   */
+  promisedPick?: { onSelect: (promised: PromisedPrescription, medicines: Medicine[]) => void };
 }
 
 export function MedicineSearchModal({
@@ -61,6 +67,7 @@ export function MedicineSearchModal({
   datasetPick,
   formularyPick,
   adoptedFor,
+  promisedPick,
 }: MedicineSearchModalProps) {
   const [mode, setMode] = useDatasetPickMode(datasetPick);
   const [name, setName] = useState("");
@@ -150,11 +157,33 @@ export function MedicineSearchModal({
     }
   }
 
+  // 構成薬を医薬品マスタの行に戻してから返す。マスタに無い薬が混ざる約束処方は選ばせない。
+  async function handlePromisedSelect(promised: PromisedPrescription) {
+    setSelecting(true);
+    setSelectError(null);
+    try {
+      const codes = promised.items.map((item) => item.medicine_code);
+      const result = await searchMedicines({ medicine_code: codes.join(","), per: codes.length });
+      const byCode = new Map(result.items.map((medicine) => [medicine.medicine_code, medicine]));
+      const medicines = codes.map((code) => {
+        const medicine = byCode.get(code);
+        if (!medicine) throw new Error(`医薬品マスタに ${code} がありません`);
+        return medicine;
+      });
+      promisedPick?.onSelect(promised, medicines);
+    } catch (e) {
+      setSelectError(e instanceof Error ? e : new Error(String(e)));
+    } finally {
+      setSelecting(false);
+    }
+  }
+
   const tabs = [
     ...(datasetPick ? [{ mode: "dataset" as const, label: `データセット (${datasetPick.options.length})` }] : []),
     { mode: "all" as const, label: "全件検索" },
     ...(adoptedFor ? [{ mode: "adopted" as const, label: "採用薬" }] : []),
     ...(formularyPick ? [{ mode: "formulary" as const, label: "フォーミュラリ" }] : []),
+    ...(promisedPick ? [{ mode: "promised" as const, label: "約束処方" }] : []),
   ];
 
   return (
@@ -170,6 +199,11 @@ export function MedicineSearchModal({
             onSelect={handleFormularySelect}
             selecting={selecting}
           />
+        </>
+      ) : promisedPick && mode === "promised" ? (
+        <>
+          <ErrorBanner error={selectError} />
+          <PromisedPrescriptionPickTable onSelect={handlePromisedSelect} selecting={selecting} />
         </>
       ) : (
         <>

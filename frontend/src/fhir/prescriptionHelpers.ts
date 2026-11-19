@@ -26,6 +26,7 @@ import {
 } from "./shared";
 import { applyOrderContext, isRegimenDayOrder, ORDER_TYPE_SYSTEM, type OrderAttribution } from "./orderHeader";
 import { keepOrderCancelled } from "./rxTaskHelpers";
+import { promisedDose, promisedExtension, promisedOf, type PromisedLine } from "./promisedPrescriptionHelpers";
 import type { OrderContext } from "../orderContext";
 
 export { codingBySystem, SETTING_OPTIONS };
@@ -194,6 +195,22 @@ export function convertDoseField(from: DoseFieldContext, to: DoseFieldContext): 
   const times = timesPerDay((toKind === "single" ? to : from).rp.usage?.usage_code);
   if (!times) return from.line.dose;
   return String(roundDose(toKind === "single" ? dose / times : dose * times));
+}
+
+/**
+ * 約束処方の構成薬の行を、用量欄の意味の変化に合わせて直す。約束処方の量を換算し、構成薬の量はその比で出し直す
+ * (行の量を個別に換算すると、丸めで組の中の比が崩れる)。約束処方でない行はそのまま返す。
+ */
+export function convertPromisedLine(
+  med: MedicineLineValues,
+  from: Omit<DoseFieldContext, "line">,
+  to: Omit<DoseFieldContext, "line">,
+): MedicineLineValues {
+  if (!med.promised) return med;
+  const line = { dose: med.promised.amount, unevenDoses: null };
+  const amount = convertDoseField({ ...from, line }, { ...to, line });
+  if (amount === med.promised.amount) return med;
+  return { ...med, dose: promisedDose(med.promised.ratio, amount), promised: { ...med.promised, amount } };
 }
 
 const DOSE_PER_DAY_DENOMINATOR: fhir4.Quantity = {
@@ -434,6 +451,8 @@ export interface MedicineLineValues {
    * (1 → 0.333 → 0.999)を出さず、換算後の値のままなら元の値に戻すのに使う。
    */
   doseBeforeSwitch?: { dose: string; converted: string };
+  /** 約束処方の構成薬の行(処方のみ)。量は約束処方の量から決まり、行だけでは編集しない。 */
+  promised?: PromisedLine;
 }
 
 /**
@@ -690,6 +709,12 @@ function buildMedicationRequest(
   if (medLine.id) resource.id = medLine.id;
 
   applyOrderContext(resource, requester);
+
+  // 約束処方の量は入力区分によらず 1 日量(頓用は 1 回量、外用などは全量)で持つ。
+  const promised = convertPromisedLine(medLine, { rp, basis: doseBasis }, { rp, basis: "daily" }).promised;
+  if (promised) {
+    resource.extension = [...(resource.extension ?? []), promisedExtension(promised)];
+  }
 
   if (hasDoseDays(rp.usage?.usage_code, rp.usage?.basic_usage_category) && rp.doseDays) {
     resource.dispenseRequest = {
@@ -1074,6 +1099,8 @@ export interface MedicineLineDisplay {
   unevenLabel?: string;
   /** インスリンのスケール(注射のみ)。dose はスケールの基本量で、スケールのみなら空。 */
   insulinScale?: InsulinScaleValues | null;
+  /** 約束処方の構成薬の行。表示は `collapsePromised` で組にまとめる。 */
+  promised?: PromisedLine;
 }
 
 export interface RpDisplay {
@@ -1141,6 +1168,7 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
       comment: mr.note?.[0]?.text,
       substitutionBlock: substitutionBlockOf(mr) ?? undefined,
       unevenLabel: unevenLabel(unevenDosesOf(dosage), usageCoding?.code, prescriptionDoseUnitOf(dosage)) || undefined,
+      promised: promisedOf(mr),
     });
   }
 
@@ -1259,7 +1287,7 @@ export function parsePrescriptionForm(
     const unevenDoses = unevenDosesOf(dosage);
     const kind = doseFieldKind(group, { unevenDoses }, basis);
     const doseValue = kind === "single" ? amounts.single : kind === "daily" ? amounts.daily : amounts.amount;
-    group.medicinesByOrder.set(orderInRp, {
+    const medLine: MedicineLineValues = {
       id: mr.id,
       medicine: medicineFromCoding(mr),
       dose: doseValue != null ? String(doseValue) : "",
@@ -1269,7 +1297,18 @@ export function parsePrescriptionForm(
       unevenDoses,
       ...(isPotencyDose(dosage?.doseAndRate?.[0]) ? { potency: true } : {}),
       ...(broughtMedicationIdOf(mr) ? { broughtMedicationId: broughtMedicationIdOf(mr) } : {}),
-    });
+    };
+    const promised = promisedOf(mr);
+    group.medicinesByOrder.set(
+      orderInRp,
+      promised
+        ? {
+            ...medLine,
+            promised: convertPromisedLine({ ...medLine, promised }, { rp: group, basis: "daily" }, { rp: group, basis })
+              .promised,
+          }
+        : medLine,
+    );
   }
 
   const rps: RpValues[] = Array.from(rpGroups.entries())

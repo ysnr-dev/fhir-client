@@ -135,6 +135,7 @@ import { NursingSummaryApprovalPage } from "./pages/NursingSummaryApprovalPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { MedicineAttributePage } from "./pages/MedicineAttributePage";
 import { FormularyPage } from "./pages/FormularyPage";
+import { PromisedPrescriptionPage } from "./pages/PromisedPrescriptionPage";
 import { DrugCheckPage } from "./pages/DrugCheckPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
 import { PractitionerEditPage } from "./pages/PractitionerEditPage";
@@ -498,6 +499,7 @@ function App() {
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/medicine-attributes" element={<MedicineAttributePage />} />
           <Route path="/formularies" element={<FormularyPage />} />
+          <Route path="/promised-prescriptions" element={<PromisedPrescriptionPage />} />
           <Route path="/drug-checks" element={<DrugCheckPage />} />
           <Route path="/insulin-scale-sets" element={<InsulinScaleSetPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />

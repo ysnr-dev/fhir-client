@@ -1,3 +1,4 @@
+import { collapsePromised, promisedAmountText } from "../fhir/promisedPrescriptionHelpers";
 import type { ReactNode } from "react";
 import { useHeldRegimenIds } from "../api/queries";
 import { problemLabel } from "../fhir/conditionHelpers";
@@ -98,8 +99,29 @@ export function PrescriptionDetailPanel({
               </tr>
             </thead>
             <tbody>
-              {rp.medicines.map((med) => (
-                <tr key={med.orderInRp}>
+              {collapsePromised(rp.medicines).flatMap((entry) => [
+                ...(entry.kind === "promised"
+                  ? [
+                      <tr key={`promised-${entry.index}`} className="rp-card__promised-head">
+                        <td>
+                          {entry.promised.name}
+                          <span className="medicine-caution">約束</span>
+                        </td>
+                        <td>{promisedAmountText(entry.promised) || "-"}</td>
+                        <td>-</td>
+                        <td className="rp-card__medicine-di"></td>
+                      </tr>,
+                    ]
+                  : []),
+                ...(entry.kind === "promised" ? entry.lines : [entry.line]).map((med, i, lines) => (
+                <tr
+                  key={med.orderInRp}
+                  className={
+                    med.promised
+                      ? `rp-card__promised-item${i === lines.length - 1 ? " rp-card__promised-item--last" : ""}`
+                      : undefined
+                  }
+                >
                   <td>
                     {med.name}
                     <SubstitutionBlockMark block={med.substitutionBlock} />
@@ -113,7 +135,7 @@ export function PrescriptionDetailPanel({
                   </td>
                   <td>{med.comment || "-"}</td>
                   <td className="rp-card__medicine-di">
-                    {med.yjCode && (
+                    {med.yjCode && !med.promised && (
                       <a
                         className="master-search__medley-link"
                         href={`https://medley.life/medicines/prescription/${med.yjCode}/`}
@@ -125,7 +147,8 @@ export function PrescriptionDetailPanel({
                     )}
                   </td>
                 </tr>
-              ))}
+                )),
+              ])}
             </tbody>
           </table>
           <dl className="prescription-detail__common">

@@ -8,6 +8,7 @@
 // 提供する変数の一覧と説明は POPULATE_EXPRESSION_OPTIONS(テンプレート編集画面の
 // 変数選択モーダルに出すもの)が正。テンプレートの変数(variable 拡張)が同じ名前を
 // 定義していれば、そちらが優先される(QuestionnaireResponseForm の expressionEnv)。
+import { promisedAmountText } from "./promisedPrescriptionHelpers";
 import type { PatientCaution } from "../api/masterClient";
 import { dateTimeLabel, diffDays, toWareki } from "../lib/dates";
 import { summarizeAllergy } from "./allergyHelpers";
@@ -1275,14 +1276,22 @@ export function prescriptionRpLines(medicationRequests: fhir4.MedicationRequest[
   const lines: string[] = [];
   for (const rp of groupByRp(medicationRequests)) {
     lines.push(`Rp${rp.rpNumber}`);
+    let promisedGroup: number | undefined;
     for (const medicine of rp.medicines) {
+      // 約束処方は名称と量の行を先に置き、構成薬を 1 段下げて内訳として並べる(処方箋と同じ)。
+      const promised = medicine.promised;
+      if (promised && promised.group !== promisedGroup) {
+        lines.push(`　${[promised.name, promisedAmountText(promised)].filter(Boolean).join(" ")}`);
+      }
+      promisedGroup = promised?.group;
+      const indent = promised ? "　　" : "　";
       const dose =
         medicine.dose !== undefined
           ? ` ${doseText(medicine.amounts ?? {}, medicine.unit)}${medicine.potency ? "(力価)" : ""}`
           : "";
       const uneven = medicine.unevenLabel ? `（${medicine.unevenLabel}）` : "";
       const comment = medicine.comment ? `（${medicine.comment}）` : "";
-      lines.push(`　${medicine.name}${dose}${uneven}${comment}`);
+      lines.push(`${indent}${medicine.name}${dose}${uneven}${comment}`);
     }
     const amount =
       rp.doseDays !== undefined

@@ -15,7 +15,7 @@ import { useId, useState } from "react";
 // 別の型だが、候補にするのに要る列は同じなので DatasetDetailLike で構造だけ受ける。
 
 // formulary(院内フォーミュラリの群から選ぶ)と adopted(採用薬だけを検索する)は医薬品の検索モーダルだけが持つ。
-export type DatasetPickMode = "dataset" | "formulary" | "adopted" | "all";
+export type DatasetPickMode = "dataset" | "formulary" | "adopted" | "promised" | "all";
 
 /** データセットに登録されている候補 1 行。 */
 export interface DatasetPickOption {

@@ -1,3 +1,4 @@
+import { collapsePromised } from "../fhir/promisedPrescriptionHelpers";
 import { today } from "../lib/dates";
 import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
 import { Link } from "react-router-dom";
@@ -657,10 +658,16 @@ function RxRowButtons({
   );
 }
 
-/** 処方の医薬品名を並べたもの。一覧の処方内容の列と、疑義照会の通知に出すオーダーの要約に使う。 */
+/** 処方の医薬品名を並べたもの。約束処方は名称の後ろに構成薬を括弧で添える。一覧の処方内容の列と、疑義照会の通知に出すオーダーの要約に使う。 */
 function rxMedicineNames(row: RxWorklistRow): string {
   return groupByRp(row.medicationRequests)
-    .flatMap((rp) => rp.medicines.map((medicine) => medicine.name))
+    .flatMap((rp) =>
+      collapsePromised(rp.medicines).map((entry) =>
+        entry.kind === "promised"
+          ? `${entry.promised.name}(${entry.lines.map((line) => line.name).join("・")})`
+          : entry.line.name,
+      ),
+    )
     .filter(Boolean)
     .join("・");
 }

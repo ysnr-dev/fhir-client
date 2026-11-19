@@ -73,6 +73,8 @@ class PrescriptionReport
   DISPENSE_INSTRUCTION_EXT_URL =
     "http://jpfhir.jp/fhir/core/Extension/StructureDefinition/JP_MedicationRequest_DispenseRequest_InstructionForDispense".freeze
   DISPENSE_INSTRUCTION_SYSTEM = "http://jami.jp/CodeSystem/DrugDispensePreparationMethod".freeze
+  # 約束処方の構成薬に付く印(frontend の prescriptionHelpers.ts と同じ定義)。
+  PROMISED_PRESCRIPTION_EXT_URL = "http://fhir-client.local/StructureDefinition/promised-prescription".freeze
   # JP Core の力価区分。「2 原薬量」の量は力価で、印刷では単位の後ろに「(力価)」を添える。
   DOSE_STRENGTH_TYPE_SYSTEMS = [
     "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationIngredientStrengthStrengthType",
@@ -107,10 +109,13 @@ class PrescriptionReport
   # dose: 量 1 つで扱うときの量(日数を持つ内服は 1 日量)。dose_text: 1 回量と 1 日量の併記(「1回1錠（1日3錠）」)。
   # code / general: 薬品コードと、それが一般名処方コードか(QR コードの記録用)。single: 1 回量。
   # uneven_codes: 不均等(V)の [コード, 表示] の配列。
+  # promised: 約束処方の構成薬であれば、その約束処方(PromisedGroup)。
   MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :potency, :comment, :uneven, :substitution_block,
-                            :dose_text, :code, :general, :single, :uneven_codes, keyword_init: true) do
+                            :dose_text, :code, :general, :single, :uneven_codes, :promised, keyword_init: true) do
     def uneven_codes = self[:uneven_codes] || []
   end
+  # 約束処方 1 組。group は RP 内の組の番号(同じ約束処方を 2 回入れても別の組)。amount は約束処方としての量。
+  PromisedGroup = Struct.new(:group, :name, :amount, :unit, keyword_init: true)
 
   # 1 回の検索で引くオーダー数。
   SEARCH_SLICE = 100
@@ -267,13 +272,30 @@ class PrescriptionReport
         comment: mr.dig("note", 0, "text").to_s,
         uneven: uneven_codes.map(&:last).join("・"),
         uneven_codes: uneven_codes,
-        substitution_block: substitution_block(mr)
+        substitution_block: substitution_block(mr),
+        promised: promised_group(mr)
       )
     end
 
     groups.values.sort_by(&:rp_number).each do |group|
       group.medicines.sort_by!(&:order_in_rp)
     end
+  end
+
+  def promised_group(medication_request)
+    ext = Array(medication_request["extension"]).find { |e| e["url"] == PROMISED_PRESCRIPTION_EXT_URL }
+    return nil unless ext
+
+    parts = Array(ext["extension"]).index_by { |e| e["url"] }
+    name = parts.dig("name", "valueString").to_s
+    return nil if name.blank?
+
+    PromisedGroup.new(
+      group: parts.dig("group", "valueInteger").to_i,
+      name: name,
+      amount: parts.dig("amount", "valueQuantity", "value"),
+      unit: parts.dig("amount", "valueQuantity", "unit").to_s
+    )
   end
 
   # 「一包化・粉砕」のような表示。RP 内の明細は同じ値を持つので、最初の明細から取る。

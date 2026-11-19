@@ -155,6 +155,20 @@ RSpec.describe Reports::PrescriptionRenderer do
     end
   end
 
+  it "prints the 約束処方 name and amount above its components" do
+    group = PrescriptionReport::PromisedGroup.new(group: 1, name: "混合軟膏Ａ", amount: 100.0, unit: "ｇ")
+    ointment = rp(1, medicines: [["ヒルドイドソフト軟膏", 50, "ｇ"], ["リンデロンＶＧ軟膏", 50, "ｇ"],
+                                 ["白色ワセリン", 10, "ｇ"]], usage: "１日２回患部に塗布", days: nil)
+    ointment.medicines.first(2).each { |medicine| medicine.promised = group }
+
+    %i[external internal].each do |key|
+      text = page_texts(render(key, [ointment])).flatten.join.gsub(/[[:space:]]/, "")
+
+      expect(text).to include("混合軟膏Ａ100ｇヒルドイドソフト軟膏50ｇリンデロンＶＧ軟膏50ｇ白色ワセリン10ｇ")
+      expect(text.scan("混合軟膏Ａ").size).to eq(1)
+    end
+  end
+
   it "wraps long medicine names instead of truncating them" do
     long_name = "とても長い医薬品名" * 8 # 全角 72 文字 > 1 行の桁数
     pdf = render(:external, [rp(1, medicines: [[long_name, 1, "錠"]])])

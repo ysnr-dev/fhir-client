@@ -212,6 +212,35 @@ RSpec.describe PrescriptionReport do
     expect(rps[1].usage_name).to eq("疼痛時")
   end
 
+  it "reads the 約束処方 of its component lines" do
+    promised = lambda do |group|
+      { "url" => described_class::PROMISED_PRESCRIPTION_EXT_URL,
+        "extension" => [
+          { "url" => "code", "valueString" => "000001" },
+          { "url" => "name", "valueString" => "混合軟膏Ａ" },
+          { "url" => "group", "valueInteger" => group },
+          { "url" => "amount", "valueQuantity" => { "value" => 100, "unit" => "ｇ" } }
+        ] }
+    end
+    stub_batch([
+      medication_request("m1", rp: 1, index: 1, name: "ヒルドイドソフト軟膏", dose: 50, unit: "ｇ")
+        .merge("extension" => [promised.call(1)]),
+      medication_request("m2", rp: 1, index: 2, name: "リンデロンＶＧ軟膏", dose: 50, unit: "ｇ")
+        .merge("extension" => [promised.call(1)]),
+      medication_request("m3", rp: 1, index: 3, name: "白色ワセリン", dose: 10, unit: "ｇ")
+    ])
+    captured = capture_renderer
+
+    described_class.new("o1", gateway: gateway).generate
+
+    medicines = captured.call[:rps][0].medicines
+    expect(medicines.map { |m| m.promised&.to_h }).to eq([
+      { group: 1, name: "混合軟膏Ａ", amount: 100, unit: "ｇ" },
+      { group: 1, name: "混合軟膏Ａ", amount: 100, unit: "ｇ" },
+      nil
+    ])
+  end
+
   it "reads a dose ordered in 力価 from the JP Core 力価区分 (原薬量)" do
     potency = medication_request("m1", rp: 1, index: 1, name: "セフゾン細粒", dose: 150, unit: "mg", days: 5)
     potency["dosageInstruction"][0]["doseAndRate"][0]["type"] = {
