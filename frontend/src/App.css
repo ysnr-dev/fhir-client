@@ -28757,6 +28757,16 @@ input.nursing-picker__search {
   margin: 2px 0;
 }
 
+/* 計算式の吹き出し。右寄せの見出しの中でも文は左から読ませ、「?」は見出しの文字の中ほどに置く。 */
+.bed-status .help-tip,
+.bed-status-summary .help-tip {
+  vertical-align: middle;
+}
+
+.bed-status .help-tip__text {
+  text-align: left;
+}
+
 /* 病床状況の表。列は中身なりの幅で左に詰め、区分(病床・空床・本日…)の境に縦線を引く。数の列は
    右寄せ、区分の見出しは中央。合計の行の上の線がセルの間で切れないよう、罫線は collapse で表に持たせる。 */
 .bed-status {

@@ -8,6 +8,7 @@ import {
 } from "../api/queries";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import {
   averageStay,
@@ -25,6 +26,13 @@ import { addDays, today } from "../lib/dates";
 //
 // 在院はその日の 24 時に居る患者(退院日は数えない)。病床利用率と平均在院日数は期間の
 // 在院患者延日数(夜の数)から出す簡易計算で、届出の様式の計算(除外する患者など)とは別物。
+
+// 指標の計算式(見出しの「?」に出す)。
+const FORMULA = {
+  occupancy: "在院 ÷ (病床数 − 休止)。在院はその日の 24 時に居る患者。",
+  rate: "期間の在院患者延日数 ÷ ((病床数 − 休止) × 日数)。延日数は毎日 24 時の在院患者数の合計(退院日は数えない)。",
+  stay: "期間の在院患者延日数 ÷ ((新入棟 + 新退棟) ÷ 2)。病棟は転入・転出を含め、合計は入院と退院だけで数える。",
+};
 
 const PERIOD_OPTIONS = [
   { days: 30, label: "直近30日" },
@@ -144,7 +152,9 @@ export function BedStatusPage() {
                   <th className="bed-status__num bed-status__group-start">病床数</th>
                   <th className="bed-status__num">休止</th>
                   <th className="bed-status__num">在院</th>
-                  <th className="bed-status__num">稼働率</th>
+                  <th className="bed-status__num">
+                    稼働率 <HelpTip text={FORMULA.occupancy} />
+                  </th>
                   <th className="bed-status__num bed-status__group-start">計</th>
                   {roomClasses.map((code) => (
                     <th key={code} className="bed-status__num">
@@ -157,8 +167,12 @@ export function BedStatusPage() {
                   <th className="bed-status__num">転出</th>
                   <th className="bed-status__num bed-status__group-start">入院</th>
                   <th className="bed-status__num">退院</th>
-                  <th className="bed-status__num bed-status__group-start">病床利用率</th>
-                  <th className="bed-status__num">平均在院日数</th>
+                  <th className="bed-status__num bed-status__group-start">
+                    病床利用率 <HelpTip text={FORMULA.rate} />
+                  </th>
+                  <th className="bed-status__num">
+                    平均在院日数 <HelpTip text={FORMULA.stay} />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -239,7 +253,7 @@ function StatsSummary({
           {occupancy !== null && <OccupancyMeter percent={occupancy} />}
           <span className="bed-status-summary__sub">
             稼働率 {occupancy === null ? "-" : `${occupancy}%`}
-            {stats.unusable > 0 && `・休止 ${stats.unusable}`}
+            {stats.unusable > 0 && `・休止 ${stats.unusable}`} <HelpTip text={FORMULA.occupancy} align="start" />
           </span>
         </dd>
       </div>
@@ -269,14 +283,18 @@ function StatsSummary({
         </dd>
       </div>
       <div className="bed-status-summary__tile">
-        <dt>病床利用率</dt>
+        <dt>
+          病床利用率 <HelpTip text={FORMULA.rate} />
+        </dt>
         <dd>
           <span className="bed-status-summary__value">{rate === null ? "-" : `${rate.toFixed(1)}%`}</span>
           <span className="bed-status-summary__sub">{periodLabel}</span>
         </dd>
       </div>
       <div className="bed-status-summary__tile">
-        <dt>平均在院日数</dt>
+        <dt>
+          平均在院日数 <HelpTip text={FORMULA.stay} />
+        </dt>
         <dd>
           <span className="bed-status-summary__value">{stay === null ? "-" : `${stay.toFixed(1)}日`}</span>
           <span className="bed-status-summary__sub">{periodLabel}</span>
