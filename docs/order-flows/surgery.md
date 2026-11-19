@@ -513,4 +513,4 @@ sequenceDiagram
 | 中止 | 対象から外れる(`ServiceRequest` が `revoked`) | なし |
 | 削除 | 対象から外れる | なし |
 
-看護必要度の C 項目は実施記録の K コードから推します(`features/nursing.md`)。DPC の様式 1・NCD は K コード・到達法・創分類・合併症を起点にするので、構造化を崩さないでください。
+看護必要度の C 項目は実施記録の K コードから推します([features/nursing.md](../features/nursing.md))。DPC の様式 1・NCD は K コード・到達法・創分類・合併症を起点にするので、構造化を崩さないでください。

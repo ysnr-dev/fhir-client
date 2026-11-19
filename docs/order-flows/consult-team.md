@@ -268,7 +268,7 @@ flowchart TD
 | 返るもの | `Composition`(`type` = LOINC 11488-4、`event[0].detail` = 依頼、`event[0].code` = `consult-note-event|reply`、拡張 `order-department` = 答えた科) | `Composition`(`type` = 11506-3、`category` = `clinical-note-category|team-round`、`event[0].detail` = 依頼、`event[0].code` = `consult-note-event|round`) |
 | 代行入力 | `Provenance`(`target` = ヘッダ) | 同じ |
 
-- 上流は `Composition.event` を索引しないので、チーム依頼の回診記録の一覧は患者の回診記録(`Composition?patient=&category=…|team-round`)を引いて `event.detail` で絞ります(`useTeamRounds`。`docs/server-improvement-backlog.md` C-21)。
+- 上流は `Composition.event` を索引しないので、チーム依頼の回診記録の一覧は患者の回診記録(`Composition?patient=&category=…|team-round`)を引いて `event.detail` で絞ります(`useTeamRounds`)([server-improvement-backlog.md](../server-improvement-backlog.md) C-21)。
 - カルテのタイムラインは `KARTE_NOTE_TYPE_SEARCH`(`fhir/clinicalNoteHelpers.ts`)で経過記録と他科依頼回答の両方を引きます。
 - 放射線治療オーダーは元の他科依頼を拡張 `radiotherapy-consult-request` で指せます。検査結果フォローの対応オーダーにも他科依頼を選べます。
 
@@ -437,7 +437,7 @@ sequenceDiagram
 
 ### シーケンス図: チームあての通知
 
-依頼済の進捗 Task がそのまま通知です。共通の作法は `fhir/notificationHelpers.ts`、一覧は [features/notifications.md](../features/notifications.md)。
+依頼済の進捗 Task がそのまま通知です。共通の作法は `fhir/notificationHelpers.ts` です([features/notifications.md](../features/notifications.md))。
 
 ```mermaid
 sequenceDiagram

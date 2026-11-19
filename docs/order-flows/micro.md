@@ -359,7 +359,7 @@ sequenceDiagram
 ### シーケンス図: 採取の記録とラベル発行
 
 `components/MicroCollectionModal.tsx`、`useRecordMicroCollection`(`api/queries/micro.ts`)、`buildMicroCollectionBundle`(`fhir/microOrderHelpers.ts`)、
-`Reports::MicroLabelPdfsController`、`MicroLabelReport`・`Reports::MicroLabelRenderer`(backend)。レイアウトは `docs/report-mappings/micro-label-01.md`。
+`Reports::MicroLabelPdfsController`、`MicroLabelReport`・`Reports::MicroLabelRenderer`(backend)([micro-label-01.md](../report-mappings/micro-label-01.md))。
 
 ```mermaid
 sequenceDiagram

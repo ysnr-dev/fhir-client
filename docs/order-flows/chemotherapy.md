@@ -222,7 +222,7 @@ flowchart TD
 ### リソースの構成
 
 適用 1 件はヘッダの `ServiceRequest`(`order-type|chemo-regimen`、`intent = plan`)です。投与日のオーダー(日オーダー)は通常の注射・処方で、`requisition` にヘッダと同じ `regimen-instance` の uuid、`regimen-order` 拡張にクール・Day・体格を持ちます。
-日オーダーはヘッダを `basedOn` で指しません(`basedOn` を持つと明細として扱われ、一覧から消えます)。構造の全体は [chemo-regimen-design.md](../chemo-regimen-design.md) §7.1 です。
+日オーダーはヘッダを `basedOn` で指しません(`basedOn` を持つと明細として扱われ、一覧から消えます)([chemo-regimen-design.md](../chemo-regimen-design.md) §7.1)。
 
 | 適用の状態 | ヘッダの `status` | 記録 |
 |---|---|---|
