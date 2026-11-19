@@ -13,6 +13,7 @@ import { OrganizationSearchModal } from "../components/OrganizationSearchModal";
 import { PatientKana } from "../components/PatientRowCells";
 import { ReferralFormModal, ReferralReplyModal, ReferralVisitModal } from "../components/ReferralModals";
 import { RowMenu } from "../components/RowMenu";
+import { StatCell, StatSection, StatTile, StatTiles } from "../components/StatSummary";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { departmentDisplayName } from "../fhir/departmentHelpers";
 import { organizationDisplayName } from "../fhir/organizationHelpers";
@@ -361,16 +362,6 @@ function StatsTab() {
   const stats = useMemo(() => referralStatsOf(query.data ?? []), [query.data]);
   const denominator = Number(firstVisits) > 0 ? Number(firstVisits) : 0;
 
-  const tiles: { label: string; value: string }[] = [
-    { label: "紹介受", value: String(stats.inbound) },
-    { label: "紹介", value: String(stats.outbound) },
-    { label: "うち逆紹介", value: String(stats.counterReferral) },
-    { label: "紹介率", value: percentLabel(stats.inbound, denominator) || "-" },
-    { label: "逆紹介率", value: percentLabel(stats.counterReferral, denominator) || "-" },
-    { label: "返書率", value: percentLabel(stats.inboundReplied, stats.inboundVisited) || "-" },
-    { label: `返書待ち ${REFERRAL_REPLY_OVERDUE_DAYS} 日超`, value: String(stats.replyOverdue) },
-  ];
-
   return (
     <>
       <div className="patient-search-form referral__filters">
@@ -397,32 +388,51 @@ function StatsTab() {
 
       <ErrorBanner error={query.error} />
 
-      <div className="referral__tiles">
-        {tiles.map((tile) => (
-          <div key={tile.label} className="referral__tile">
-            <div className="referral__tile-label">{tile.label}</div>
-            <div className="referral__tile-value">{tile.value}</div>
-          </div>
-        ))}
-      </div>
+      <StatTiles>
+        <StatTile label="紹介受" value={stats.inbound} />
+        <StatTile label="紹介" value={stats.outbound} sub={`うち逆紹介 ${stats.counterReferral}`} />
+        <StatTile
+          label="紹介率"
+          help="紹介受 ÷ 初診患者数"
+          value={percentLabel(stats.inbound, denominator) || "-"}
+          sub={denominator > 0 ? `初診 ${denominator}人` : undefined}
+        />
+        <StatTile
+          label="逆紹介率"
+          help="逆紹介 ÷ 初診患者数"
+          value={percentLabel(stats.counterReferral, denominator) || "-"}
+          sub={denominator > 0 ? `初診 ${denominator}人` : undefined}
+        />
+        <StatTile
+          label="返書率"
+          help="受診済みの紹介受のうち、返書を 1 通以上出した割合"
+          value={percentLabel(stats.inboundReplied, stats.inboundVisited) || "-"}
+          sub={`返書 ${stats.inboundReplied} / 受診 ${stats.inboundVisited}`}
+        />
+        <StatTile
+          label={`返書待ち ${REFERRAL_REPLY_OVERDUE_DAYS}日超`}
+          value={stats.replyOverdue}
+          alert={stats.replyOverdue > 0}
+        />
+      </StatTiles>
 
-      <div className="notification__table-wrap">
-        <table className="master-search__table notification">
+      <StatSection title="連携先別">
+        <table className="lab-worklist stat-table">
           <thead>
             <tr>
               <th>連携先</th>
-              <th className="referral__number">紹介受</th>
-              <th className="referral__number">紹介</th>
-              <th className="referral__number">うち逆紹介</th>
+              <th className="stat-table__num stat-table__group-start">紹介受</th>
+              <th className="stat-table__num">紹介</th>
+              <th className="stat-table__num">うち逆紹介</th>
             </tr>
           </thead>
           <tbody>
             {stats.partners.map((partner) => (
               <tr key={partner.organizationId}>
-                <td>{partner.organizationName || partner.organizationId}</td>
-                <td className="referral__number">{partner.inbound}</td>
-                <td className="referral__number">{partner.outbound}</td>
-                <td className="referral__number">{partner.counterReferral}</td>
+                <th className="stat-table__label">{partner.organizationName || partner.organizationId}</th>
+                <StatCell value={partner.inbound} groupStart />
+                <StatCell value={partner.outbound} />
+                <StatCell value={partner.counterReferral} />
               </tr>
             ))}
             {!query.isLoading && stats.partners.length === 0 && (
@@ -433,8 +443,18 @@ function StatsTab() {
               </tr>
             )}
           </tbody>
+          {stats.partners.length > 1 && (
+            <tfoot>
+              <tr>
+                <th className="stat-table__label">合計</th>
+                <StatCell value={stats.inbound} groupStart />
+                <StatCell value={stats.outbound} />
+                <StatCell value={stats.counterReferral} />
+              </tr>
+            </tfoot>
+          )}
         </table>
-      </div>
+      </StatSection>
     </>
   );
 }

@@ -14,7 +14,9 @@ import {
 } from "../api/queries";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { NursingAcuityBulkGrid } from "../components/NursingAcuityBulkGrid";
+import { StatCell, StatTile, StatTiles } from "../components/StatSummary";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { patientsByDayAtBeds } from "../fhir/bedScheduleHelpers";
 import { departmentCode } from "../fhir/departmentHelpers";
@@ -379,7 +381,6 @@ function SummaryTab({
   const index2 = ratioIndexPercent(ratio2, coef);
   const below1 = belowThreshold(index1, unit.thresholds[0]);
   const below2 = belowThreshold(index2, unit.thresholds[1]);
-  const belowClass = (below: boolean | null) => (below ? " nursing-acuity-list__below" : "");
   const columns = showRatio2 ? 9 : 7;
 
   return (
@@ -391,100 +392,179 @@ function SummaryTab({
       {encounters.isLoading || observations.isLoading || coefficient.isLoading ? (
         <p>読み込み中...</p>
       ) : (
-        <div className="lab-worklist-wrap sticky-table-wrap">
-          <table className="lab-worklist sticky-table nursing-acuity-list">
-            <thead>
-              <tr>
-                <th className="lab-worklist__compact">日付</th>
-                <th className="nursing-acuity-list__num">在棟</th>
-                <th className="nursing-acuity-list__num">評価</th>
-                <th className="nursing-acuity-list__num">対象外</th>
-                <th className="nursing-acuity-list__num">未評価</th>
-                {/* 割合1・割合2は該当患者の基準を吹き出しに出す。 */}
-                <th className="nursing-acuity-list__num" title={ratio1Title}>割合1 該当</th>
-                <th className="nursing-acuity-list__num" title={ratio1Title}>割合1</th>
-                {showRatio2 && <th className="nursing-acuity-list__num" title={ratio2Title}>割合2 該当</th>}
-                {showRatio2 && <th className="nursing-acuity-list__num" title={ratio2Title}>割合2</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((d) => (
+        <>
+          {shown.length > 0 && (
+            <StatTiles>
+              <StatTile
+                label="在棟延べ"
+                value={total.present}
+                sub={`評価 ${total.evaluated}・対象外 ${total.excluded}`}
+              />
+              <StatTile label="未評価" value={total.missing} sub={`${month.replace("-", "/")} の延べ`} />
+              <RatioTile
+                label="割合1"
+                help={ratio1Title}
+                met={total.met1}
+                evaluated={total.evaluated}
+                threshold={unit.coefficientApplies ? undefined : unit.thresholds[0]}
+                below={!unit.coefficientApplies && below1 === true}
+              />
+              {showRatio2 && (
+                <RatioTile
+                  label="割合2"
+                  help={ratio2Title}
+                  met={total.met2}
+                  evaluated={total.evaluated}
+                  threshold={unit.coefficientApplies ? undefined : unit.thresholds[1]}
+                  below={!unit.coefficientApplies && below2 === true}
+                />
+              )}
+              {unit.coefficientApplies && (
+                <StatTile
+                  label="割合指数1"
+                  help={coefficientTitle(fiscalYear, unitCoefficient)}
+                  value={percentText(index1)}
+                  alert={below1 === true}
+                  sub={`応需係数 ${coef.toFixed(4)}・基準 ${thresholdText(unit.thresholds[0])}`}
+                />
+              )}
+              {unit.coefficientApplies && showRatio2 && (
+                <StatTile
+                  label="割合指数2"
+                  help={coefficientTitle(fiscalYear, unitCoefficient)}
+                  value={percentText(index2)}
+                  alert={below2 === true}
+                  sub={`応需係数 ${coef.toFixed(4)}・基準 ${thresholdText(unit.thresholds[1])}`}
+                />
+              )}
+            </StatTiles>
+          )}
+          <div className="lab-worklist-wrap sticky-table-wrap">
+            <table className="lab-worklist sticky-table stat-table nursing-acuity-list">
+              <thead>
+                <tr>
+                  <th className="lab-worklist__compact">日付</th>
+                  <th className="stat-table__num stat-table__group-start">在棟</th>
+                  <th className="stat-table__num">評価</th>
+                  <th className="stat-table__num">対象外</th>
+                  <th className="stat-table__num">未評価</th>
+                  <th className="stat-table__num stat-table__group-start">割合1 該当</th>
+                  <th className="stat-table__num">
+                    割合1 <HelpTip text={ratio1Title} />
+                  </th>
+                  {showRatio2 && <th className="stat-table__num stat-table__group-start">割合2 該当</th>}
+                  {showRatio2 && (
+                    <th className="stat-table__num">
+                      割合2 <HelpTip text={ratio2Title} />
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((d) => (
                   <tr key={d.day}>
                     <td className="lab-worklist__compact">
                       <Link to={`/nursing-acuity?ward=${unit.id}&date=${d.day}`}>{d.day.slice(5).replace("-", "/")}</Link>
                     </td>
-                    <td className="nursing-acuity-list__num">{d.present}</td>
-                    <td className="nursing-acuity-list__num">{d.evaluated}</td>
-                    <td className="nursing-acuity-list__num">{d.excluded || "-"}</td>
-                    <td className={`nursing-acuity-list__num${d.missing > 0 ? " nursing-acuity-list__pending" : ""}`}>
-                      {d.missing || "-"}
-                    </td>
-                    <td className="nursing-acuity-list__num">{d.met1}</td>
-                    <td className="nursing-acuity-list__num">{percent(d.met1, d.evaluated)}</td>
-                    {showRatio2 && <td className="nursing-acuity-list__num">{d.met2}</td>}
-                    {showRatio2 && <td className="nursing-acuity-list__num">{percent(d.met2, d.evaluated)}</td>}
+                    <StatCell value={d.present} groupStart />
+                    <StatCell value={d.evaluated} />
+                    <StatCell value={d.excluded} />
+                    <StatCell value={d.missing} tone="warning" />
+                    <StatCell value={d.met1} groupStart />
+                    <StatCell value={percent(d.met1, d.evaluated)} />
+                    {showRatio2 && <StatCell value={d.met2} groupStart />}
+                    {showRatio2 && <StatCell value={percent(d.met2, d.evaluated)} />}
                   </tr>
                 ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <th className="lab-worklist__compact">{month.replace("-", "/")} 計</th>
-                <td className="nursing-acuity-list__num">{total.present}</td>
-                <td className="nursing-acuity-list__num">{total.evaluated}</td>
-                <td className="nursing-acuity-list__num">{total.excluded || "-"}</td>
-                <td className="nursing-acuity-list__num">{total.missing || "-"}</td>
-                <td className="nursing-acuity-list__num">{total.met1}</td>
-                <td className={`nursing-acuity-list__num${!unit.coefficientApplies ? belowClass(below1) : ""}`}>
-                  {percent(total.met1, total.evaluated)}
-                </td>
-                {showRatio2 && <td className="nursing-acuity-list__num">{total.met2}</td>}
-                {showRatio2 && (
-                  <td className={`nursing-acuity-list__num${!unit.coefficientApplies ? belowClass(below2) : ""}`}>
-                    {percent(total.met2, total.evaluated)}
-                  </td>
-                )}
-              </tr>
-              {/* 応需係数を算入する単位は、割合に係数を足した割合指数で基準値と比べる。 */}
-              {unit.coefficientApplies && (
-                <tr className="nursing-acuity-list__index">
-                  <th className="lab-worklist__compact" colSpan={5}>
-                    割合指数
-                    <span
-                      className="order-select__muted"
-                      title={coefficientTitle(fiscalYear, unitCoefficient)}
-                    >
-                      (応需係数 {coef.toFixed(4)}、{fiscalYear}年度)
-                    </span>
-                  </th>
-                  <td className="nursing-acuity-list__num"></td>
-                  <td className={`nursing-acuity-list__num${belowClass(below1)}`}>{percentText(index1)}</td>
-                  {showRatio2 && <td className="nursing-acuity-list__num"></td>}
-                  {showRatio2 && <td className={`nursing-acuity-list__num${belowClass(below2)}`}>{percentText(index2)}</td>}
-                </tr>
-              )}
-              {(unit.thresholds[0] !== null || unit.thresholds[1] !== null) && (
-                <tr className="nursing-acuity-list__threshold">
-                  <th className="lab-worklist__compact" colSpan={5}>
-                    基準値{unit.category ? `(${unit.category.label})` : ""}
-                  </th>
-                  <td className="nursing-acuity-list__num"></td>
-                  <td className="nursing-acuity-list__num">{thresholdText(unit.thresholds[0])}</td>
-                  {showRatio2 && <td className="nursing-acuity-list__num"></td>}
-                  {showRatio2 && <td className="nursing-acuity-list__num">{thresholdText(unit.thresholds[1])}</td>}
-                </tr>
-              )}
-              {shown.length === 0 && (
+              </tbody>
+              <tfoot>
                 <tr>
-                  <td colSpan={columns} className="master-search__empty">
-                    この月の日はまだありません。
-                  </td>
+                  <th className="lab-worklist__compact">{month.replace("-", "/")} 計</th>
+                  <StatCell value={total.present} groupStart />
+                  <StatCell value={total.evaluated} />
+                  <StatCell value={total.excluded} />
+                  <StatCell value={total.missing} tone="warning" />
+                  <StatCell value={total.met1} groupStart />
+                  <StatCell
+                    value={percent(total.met1, total.evaluated)}
+                    tone={!unit.coefficientApplies && below1 ? "alert" : undefined}
+                  />
+                  {showRatio2 && <StatCell value={total.met2} groupStart />}
+                  {showRatio2 && (
+                    <StatCell
+                      value={percent(total.met2, total.evaluated)}
+                      tone={!unit.coefficientApplies && below2 ? "alert" : undefined}
+                    />
+                  )}
                 </tr>
-              )}
-            </tfoot>
-          </table>
-        </div>
+                {/* 応需係数を算入する単位は、割合に係数を足した割合指数で基準値と比べる。 */}
+                {unit.coefficientApplies && (
+                  <tr className="nursing-acuity-list__index">
+                    <th className="lab-worklist__compact" colSpan={5}>
+                      割合指数
+                      <span className="order-select__muted" title={coefficientTitle(fiscalYear, unitCoefficient)}>
+                        (応需係数 {coef.toFixed(4)}、{fiscalYear}年度)
+                      </span>
+                    </th>
+                    <td className="stat-table__num stat-table__group-start"></td>
+                    <StatCell value={percentText(index1)} tone={below1 ? "alert" : undefined} />
+                    {showRatio2 && <td className="stat-table__num stat-table__group-start"></td>}
+                    {showRatio2 && <StatCell value={percentText(index2)} tone={below2 ? "alert" : undefined} />}
+                  </tr>
+                )}
+                {(unit.thresholds[0] !== null || unit.thresholds[1] !== null) && (
+                  <tr className="nursing-acuity-list__threshold">
+                    <th className="lab-worklist__compact" colSpan={5}>
+                      基準値{unit.category ? `(${unit.category.label})` : ""}
+                    </th>
+                    <td className="stat-table__num stat-table__group-start"></td>
+                    <td className="stat-table__num">{thresholdText(unit.thresholds[0])}</td>
+                    {showRatio2 && <td className="stat-table__num stat-table__group-start"></td>}
+                    {showRatio2 && <td className="stat-table__num">{thresholdText(unit.thresholds[1])}</td>}
+                  </tr>
+                )}
+                {shown.length === 0 && (
+                  <tr>
+                    <td colSpan={columns} className="master-search__empty">
+                      この月の日はまだありません。
+                    </td>
+                  </tr>
+                )}
+              </tfoot>
+            </table>
+          </div>
+        </>
       )}
     </>
+  );
+}
+
+/** 月の割合のタイル。基準値を下回れば値を赤くする。 */
+function RatioTile({
+  label,
+  help,
+  met,
+  evaluated,
+  threshold,
+  below,
+}: {
+  label: string;
+  help: string;
+  met: number;
+  evaluated: number;
+  threshold: number | null | undefined;
+  below: boolean;
+}) {
+  const ratio = percentOf(met, evaluated);
+  return (
+    <StatTile
+      label={label}
+      help={help}
+      value={percentText(ratio)}
+      meter={ratio}
+      alert={below}
+      sub={`該当 ${met} / 評価 ${evaluated}${threshold != null ? `・基準 ${thresholdText(threshold)}` : ""}`}
+    />
   );
 }
 

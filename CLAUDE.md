@@ -104,6 +104,8 @@ docker compose exec frontend node scripts/import-cycles.cjs src/api/queries
 - Escape で閉じるもの(モーダル・メニュー・吹き出し・ドロワー・全画面)は `hooks/useEscapeClose` に載せる。
   開いた順に積まれ、一番上だけが閉じる。個別に keydown を購読して Escape を見ない。
 - 1 行に収まらないトグル類は行のケバブメニュー(RowMenu)に畳む。
+- 統計・集計の画面(タブ)は病床状況にそろえ、`components/StatSummary` の部品で組む(上に要約のタイル、下に
+  `lab-worklist stat-table` の集計表。数は `StatCell` で右寄せ・0 は薄い「-」、合計は tfoot、計算式は見出しの `HelpTip`)。
 - 通知は Task に統一。種別を足すときはレジストリに 1 要素足す。
 - 部門オーダーの種別を足すときは `fhir/orderKinds.ts` に 1 行足し、型エラーになった対応表
   (`components/orderKindRegistry.tsx`・`KarteCardModals.tsx`・`KarteRightPane.tsx`・`fhir/orderTransferLines.ts`)を埋める。

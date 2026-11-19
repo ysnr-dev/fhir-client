@@ -15,9 +15,13 @@ import { csvBlob } from "../lib/csv";
 import { shortDate } from "../lib/dates";
 import { downloadBlob } from "../lib/download";
 import { ErrorBanner } from "./ErrorBanner";
+import { HelpTip } from "./HelpTip";
+import { StatCell, StatMeter, StatSection, StatSections, StatTile, StatTiles } from "./StatSummary";
 
 // 透析の月間統計(docs/dialysis-order-design.md §6.3)。透析一覧の「統計」ビュー。
 // 回数・浄化方法別、シフト別とベッド別の稼働、日別。
+
+const RATE_FORMULA = "実施 ÷ 枠。実施は透析室のベッドで行った回数(ベッドサイドは含めない)";
 
 interface Props {
   month: string;
@@ -86,52 +90,53 @@ function StatsBody({ month, stats }: { month: string; stats: Stats }) {
   }
 
   return (
-    <div className="dialysis-stats">
-      <dl className="dialysis-stats__summary">
-        <SummaryCard
+    <>
+      <StatTiles>
+        <StatTile
           label="実施回数"
-          value={String(summary.sessions)}
+          value={summary.sessions}
           sub={[
             `入院 ${summary.inpatient}`,
             `外来 ${summary.outpatient}`,
             summary.bedside > 0 ? `ベッドサイド ${summary.bedside}` : "",
           ]
             .filter(Boolean)
-            .join(" / ")}
+            .join("・")}
         />
-        <SummaryCard label="実患者数" value={String(summary.patients)} />
-        <SummaryCard label="平均実透析時間" value={dialysisMinutesLabel(summary.averageMinutes) || "-"} />
-        <SummaryCard
+        <StatTile label="実患者数" value={summary.patients} />
+        <StatTile label="平均実透析時間" value={dialysisMinutesLabel(summary.averageMinutes) || "-"} />
+        <StatTile
           label="ベッド稼働率"
+          help={RATE_FORMULA}
           value={rateLabel(summary.rate)}
+          meter={summary.rate == null ? null : summary.rate * 100}
           sub={`実施 ${summary.unitSessions} / 枠 ${summary.slots}`}
         />
-        <SummaryCard label="予約" value={String(summary.booked)} sub={`未来院 ${summary.noshow}`} />
-      </dl>
+        <StatTile label="予約" value={summary.booked} sub={`未来院 ${summary.noshow}`} />
+      </StatTiles>
 
-      <div className="dialysis-stats__tables">
-        <section className="dialysis-stats__card">
-          <h3 className="dialysis-stats__title">浄化方法別</h3>
-          <table className="master-search__table dialysis-stats__table">
+      <StatSections>
+        <StatSection title="浄化方法別">
+          <table className="lab-worklist stat-table">
             <thead>
               <tr>
                 <th>浄化方法</th>
-                <th className="dialysis-stats__number">回数</th>
-                <th className="dialysis-stats__number">患者数</th>
-                <th className="dialysis-stats__number">入院</th>
-                <th className="dialysis-stats__number">外来</th>
-                <th className="dialysis-stats__number">平均時間</th>
+                <th className="stat-table__num stat-table__group-start">回数</th>
+                <th className="stat-table__num">患者数</th>
+                <th className="stat-table__num stat-table__group-start">入院</th>
+                <th className="stat-table__num">外来</th>
+                <th className="stat-table__num stat-table__group-start">平均時間</th>
               </tr>
             </thead>
             <tbody>
               {stats.byModality.map((row) => (
                 <tr key={row.code}>
-                  <td>{row.label}</td>
-                  <td className="dialysis-stats__number">{row.sessions}</td>
-                  <td className="dialysis-stats__number">{row.patients}</td>
-                  <td className="dialysis-stats__number">{row.inpatient}</td>
-                  <td className="dialysis-stats__number">{row.outpatient}</td>
-                  <td className="dialysis-stats__number">{dialysisMinutesLabel(row.averageMinutes) || "-"}</td>
+                  <th className="stat-table__label">{row.label}</th>
+                  <StatCell value={row.sessions} groupStart strong />
+                  <StatCell value={row.patients} />
+                  <StatCell value={row.inpatient} groupStart />
+                  <StatCell value={row.outpatient} />
+                  <StatCell value={dialysisMinutesLabel(row.averageMinutes)} groupStart />
                 </tr>
               ))}
               {stats.byModality.length === 0 && (
@@ -145,29 +150,30 @@ function StatsBody({ month, stats }: { month: string; stats: Stats }) {
             {stats.byModality.length > 1 && (
               <tfoot>
                 <tr>
-                  <th>合計</th>
-                  <td className="dialysis-stats__number">{summary.sessions}</td>
-                  <td className="dialysis-stats__number">{summary.patients}</td>
-                  <td className="dialysis-stats__number">{summary.inpatient}</td>
-                  <td className="dialysis-stats__number">{summary.outpatient}</td>
-                  <td className="dialysis-stats__number">{dialysisMinutesLabel(summary.averageMinutes) || "-"}</td>
+                  <th className="stat-table__label">合計</th>
+                  <StatCell value={summary.sessions} groupStart />
+                  <StatCell value={summary.patients} />
+                  <StatCell value={summary.inpatient} groupStart />
+                  <StatCell value={summary.outpatient} />
+                  <StatCell value={dialysisMinutesLabel(summary.averageMinutes)} groupStart />
                 </tr>
               </tfoot>
             )}
           </table>
-        </section>
+        </StatSection>
 
         <CapacityTable title="シフト別" heading="シフト" rows={stats.byShift} />
         <CapacityTable title="ベッド別" heading="ベッド" rows={stats.byBed} />
-      </div>
+      </StatSections>
 
-      <section className="dialysis-stats__card">
-        <div className="dialysis-stats__card-head">
-          <h3 className="dialysis-stats__title">日別</h3>
+      <StatSection
+        title="日別"
+        actions={
           <button type="button" className="rp-card__compact-button" onClick={handleCsv}>
             CSV
           </button>
-        </div>
+        }
+      >
         {/* 月報の形(日付を横に並べる)。行はシフトごとの実施・ベッドサイド・計・枠・稼働率。 */}
         <div className="dialysis-stats__days-wrap">
           <table className="dialysis-stats__days">
@@ -245,20 +251,8 @@ function StatsBody({ month, stats }: { month: string; stats: Stats }) {
             </tbody>
           </table>
         </div>
-      </section>
-    </div>
-  );
-}
-
-function SummaryCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="dialysis-stats__summary-card">
-      <dt>{label}</dt>
-      <dd>
-        <span className="dialysis-stats__value">{value}</span>
-        {sub && <span className="dialysis-stats__sub">{sub}</span>}
-      </dd>
-    </div>
+      </StatSection>
+    </>
   );
 }
 
@@ -285,28 +279,29 @@ function CapacityTable({
 }) {
   const total = capacityTotal(rows);
   return (
-    <section className="dialysis-stats__card">
-      <h3 className="dialysis-stats__title">{title}</h3>
-      <table className="master-search__table dialysis-stats__table">
+    <StatSection title={title}>
+      <table className="lab-worklist stat-table">
         <thead>
           <tr>
             <th>{heading}</th>
-            <th className="dialysis-stats__number">枠</th>
-            <th className="dialysis-stats__number">予約</th>
-            <th className="dialysis-stats__number">未来院</th>
-            <th className="dialysis-stats__number">実施</th>
-            <th className="dialysis-stats__number">稼働率</th>
+            <th className="stat-table__num stat-table__group-start">枠</th>
+            <th className="stat-table__num">予約</th>
+            <th className="stat-table__num">未来院</th>
+            <th className="stat-table__num stat-table__group-start">実施</th>
+            <th className="stat-table__num">
+              稼働率 <HelpTip text={RATE_FORMULA} />
+            </th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.key}>
-              <td>{row.label}</td>
-              <td className="dialysis-stats__number">{row.slots || "-"}</td>
-              <td className="dialysis-stats__number">{row.booked}</td>
-              <td className="dialysis-stats__number">{row.noshow}</td>
-              <td className="dialysis-stats__number">{row.sessions}</td>
-              <td className="dialysis-stats__number">{rateLabel(row.rate)}</td>
+              <th className="stat-table__label">{row.label}</th>
+              <StatCell value={row.slots} groupStart />
+              <StatCell value={row.booked} />
+              <StatCell value={row.noshow} tone="warning" />
+              <StatCell value={row.sessions} groupStart strong />
+              <RateCell rate={row.rate} />
             </tr>
           ))}
           {rows.length === 0 && (
@@ -320,16 +315,29 @@ function CapacityTable({
         {rows.length > 1 && (
           <tfoot>
             <tr>
-              <th>合計</th>
-              <td className="dialysis-stats__number">{total.slots}</td>
-              <td className="dialysis-stats__number">{total.booked}</td>
-              <td className="dialysis-stats__number">{total.noshow}</td>
-              <td className="dialysis-stats__number">{total.sessions}</td>
-              <td className="dialysis-stats__number">{rateLabel(total.rate)}</td>
+              <th className="stat-table__label">合計</th>
+              <StatCell value={total.slots} groupStart />
+              <StatCell value={total.booked} />
+              <StatCell value={total.noshow} tone="warning" />
+              <StatCell value={total.sessions} groupStart />
+              <RateCell rate={total.rate} />
             </tr>
           </tfoot>
         )}
       </table>
-    </section>
+    </StatSection>
+  );
+}
+
+/** 稼働率のセル(棒と数)。枠が無ければ薄い「-」。 */
+function RateCell({ rate }: { rate: number | undefined }) {
+  if (rate == null) return <StatCell value={null} />;
+  return (
+    <td className="stat-table__num">
+      <span className="stat-table__rate">
+        <StatMeter percent={rate * 100} />
+        {rateLabel(rate)}
+      </span>
+    </td>
   );
 }

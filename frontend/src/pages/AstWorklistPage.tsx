@@ -18,8 +18,10 @@ import {
   useTeamActiveRequestPatientIds,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { Modal } from "../components/Modal";
 import { QuestionnaireResponseCreatePanel } from "../components/QuestionnaireResponsePanels";
+import { StatCell, StatSection, StatTile, StatTiles } from "../components/StatSummary";
 import { TeamRequestCreatePanel } from "../components/TeamRequestPanels";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import {
@@ -494,6 +496,12 @@ function NotifyModal({ row, name, onClose }: { row: AntimicrobialNotificationRow
   );
 }
 
+// 使用量の指標の計算式(見出しの「?」に出す。docs/antimicrobial-stewardship-design.md §3)。
+const FORMULA = {
+  dot: "投与日数(患者 × 成分 × 投与日の重複を除いた数) ÷ 在院患者延日数 × 1000",
+  aud: "DDD 数(投与量を DDD の単位に換算して DDD で割った合計) ÷ 在院患者延日数 × 1000。換算できない投与は含めない",
+};
+
 function SummaryTab() {
   const thisMonth = today().slice(0, 7);
   const [month, setMonth] = useState(thisMonth);
@@ -588,57 +596,71 @@ function SummaryTab() {
       {loading ? (
         <p>読み込み中...</p>
       ) : (
-        <div className="lab-worklist-wrap">
-          <table className="lab-worklist ast-summary">
-            <caption className="nursing-acuity-report__caption">
-              {month.replace("-", "/")} {wardName} 在院患者延日数 {summary.patientDays}
-            </caption>
-            <thead>
-              <tr>
-                <th>抗菌薬</th>
-                <th className="ast-summary__number">投与患者数</th>
-                <th className="ast-summary__number">投与日数</th>
-                <th className="ast-summary__number">DOT</th>
-                <th className="ast-summary__number">DDD 数</th>
-                <th className="ast-summary__number">AUD</th>
-                <th className="ast-summary__number">換算できない投与</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.rows.map((row) => (
-                <tr key={row.ingredient}>
-                  <td>{row.name}</td>
-                  <td className="ast-summary__number">{row.patients}</td>
-                  <td className="ast-summary__number">{row.days}</td>
-                  <td className="ast-summary__number">{format(row.dot)}</td>
-                  <td className="ast-summary__number">{format(row.ddds)}</td>
-                  <td className="ast-summary__number">{format(row.aud)}</td>
-                  <td className="ast-summary__number">{row.unconverted || "-"}</td>
-                </tr>
-              ))}
-              {summary.rows.length === 0 && (
+        <>
+          <StatTiles>
+            <StatTile label="在院患者延日数" value={summary.patientDays} sub={`${month.replace("-", "/")} ${wardName}`} />
+            <StatTile label="投与患者数" value={summary.total.patients} sub={`投与日数 ${summary.total.days}`} />
+            <StatTile label="DOT" help={FORMULA.dot} value={format(summary.total.dot)} />
+            <StatTile
+              label="AUD"
+              help={FORMULA.aud}
+              value={format(summary.total.aud)}
+              sub={summary.total.unconverted > 0 ? `換算できない投与 ${summary.total.unconverted}` : undefined}
+            />
+          </StatTiles>
+          <StatSection title="抗菌薬別">
+            <table className="lab-worklist stat-table">
+              <thead>
                 <tr>
-                  <td colSpan={7} className="master-search__empty">
-                    この月に入院患者への抗菌薬の注射の実施はありません
-                  </td>
+                  <th>抗菌薬</th>
+                  <th className="stat-table__num stat-table__group-start">投与患者数</th>
+                  <th className="stat-table__num">投与日数</th>
+                  <th className="stat-table__num stat-table__group-start">
+                    DOT <HelpTip text={FORMULA.dot} />
+                  </th>
+                  <th className="stat-table__num">DDD 数</th>
+                  <th className="stat-table__num">
+                    AUD <HelpTip text={FORMULA.aud} />
+                  </th>
+                  <th className="stat-table__num stat-table__group-start">換算できない投与</th>
                 </tr>
+              </thead>
+              <tbody>
+                {summary.rows.map((row) => (
+                  <tr key={row.ingredient}>
+                    <th className="stat-table__label">{row.name}</th>
+                    <StatCell value={row.patients} groupStart />
+                    <StatCell value={row.days} />
+                    <StatCell value={format(row.dot)} groupStart strong />
+                    <StatCell value={format(row.ddds)} />
+                    <StatCell value={format(row.aud)} strong />
+                    <StatCell value={row.unconverted} groupStart tone="warning" />
+                  </tr>
+                ))}
+                {summary.rows.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="master-search__empty">
+                      この月に入院患者への抗菌薬の注射の実施はありません
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {summary.rows.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <th className="stat-table__label">合計</th>
+                    <StatCell value={summary.total.patients} groupStart />
+                    <StatCell value={summary.total.days} />
+                    <StatCell value={format(summary.total.dot)} groupStart />
+                    <StatCell value={null} />
+                    <StatCell value={format(summary.total.aud)} />
+                    <StatCell value={summary.total.unconverted} groupStart tone="warning" />
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {summary.rows.length > 0 && (
-              <tfoot>
-                <tr>
-                  <th>合計</th>
-                  <td className="ast-summary__number">{summary.total.patients}</td>
-                  <td className="ast-summary__number">{summary.total.days}</td>
-                  <td className="ast-summary__number">{format(summary.total.dot)}</td>
-                  <td className="ast-summary__number"></td>
-                  <td className="ast-summary__number">{format(summary.total.aud)}</td>
-                  <td className="ast-summary__number">{summary.total.unconverted || "-"}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+            </table>
+          </StatSection>
+        </>
       )}
     </>
   );

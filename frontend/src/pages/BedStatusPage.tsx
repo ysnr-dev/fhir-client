@@ -9,6 +9,7 @@ import {
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { HelpTip } from "../components/HelpTip";
+import { StatCell, StatMeter, StatSection, StatTile, StatTiles } from "../components/StatSummary";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import {
   averageStay,
@@ -137,40 +138,40 @@ export function BedStatusPage() {
               periodLabel={periodLabel}
             />
           )}
-          <div className="lab-worklist-wrap">
-            <table className="lab-worklist bed-status">
+          <StatSection>
+            <table className="lab-worklist stat-table">
               <thead>
                 <tr>
                   <th rowSpan={2}>病棟</th>
-                  <th colSpan={4} className="bed-status__group">病床</th>
-                  <th colSpan={roomClasses.length + 1} className="bed-status__group">空床</th>
-                  <th colSpan={4} className="bed-status__group">本日</th>
-                  <th colSpan={2} className="bed-status__group">翌日の予定</th>
-                  <th colSpan={2} className="bed-status__group">{periodLabel}</th>
+                  <th colSpan={4} className="stat-table__group">病床</th>
+                  <th colSpan={roomClasses.length + 1} className="stat-table__group">空床</th>
+                  <th colSpan={4} className="stat-table__group">本日</th>
+                  <th colSpan={2} className="stat-table__group">翌日の予定</th>
+                  <th colSpan={2} className="stat-table__group">{periodLabel}</th>
                 </tr>
                 <tr>
-                  <th className="bed-status__num bed-status__group-start">病床数</th>
-                  <th className="bed-status__num">休止</th>
-                  <th className="bed-status__num">在院</th>
-                  <th className="bed-status__num">
+                  <th className="stat-table__num stat-table__group-start">病床数</th>
+                  <th className="stat-table__num">休止</th>
+                  <th className="stat-table__num">在院</th>
+                  <th className="stat-table__num">
                     稼働率 <HelpTip text={FORMULA.occupancy} />
                   </th>
-                  <th className="bed-status__num bed-status__group-start">計</th>
+                  <th className="stat-table__num stat-table__group-start">計</th>
                   {roomClasses.map((code) => (
-                    <th key={code} className="bed-status__num">
+                    <th key={code} className="stat-table__num">
                       {roomClassLabel(code)}
                     </th>
                   ))}
-                  <th className="bed-status__num bed-status__group-start">入院</th>
-                  <th className="bed-status__num">退院</th>
-                  <th className="bed-status__num">転入</th>
-                  <th className="bed-status__num">転出</th>
-                  <th className="bed-status__num bed-status__group-start">入院</th>
-                  <th className="bed-status__num">退院</th>
-                  <th className="bed-status__num bed-status__group-start">
+                  <th className="stat-table__num stat-table__group-start">入院</th>
+                  <th className="stat-table__num">退院</th>
+                  <th className="stat-table__num">転入</th>
+                  <th className="stat-table__num">転出</th>
+                  <th className="stat-table__num stat-table__group-start">入院</th>
+                  <th className="stat-table__num">退院</th>
+                  <th className="stat-table__num stat-table__group-start">
                     病床利用率 <HelpTip text={FORMULA.rate} />
                   </th>
-                  <th className="bed-status__num">
+                  <th className="stat-table__num">
                     平均在院日数 <HelpTip text={FORMULA.stay} />
                   </th>
                 </tr>
@@ -201,7 +202,7 @@ export function BedStatusPage() {
                 </tfoot>
               )}
             </table>
-          </div>
+          </StatSection>
         </>
       )}
     </div>
@@ -216,14 +217,6 @@ function currentOccupancy(stats: WardBedStats): number | null {
 
 function emptyBeds(stats: WardBedStats): number {
   return [...stats.emptyByRoomClass.values()].reduce((sum, n) => sum + n, 0);
-}
-
-function OccupancyMeter({ percent }: { percent: number }) {
-  return (
-    <span className="bed-status__meter" aria-hidden="true">
-      <span style={{ width: `${Math.min(percent, 100)}%` }} />
-    </span>
-  );
 }
 
 /** 病院全体の要約。表の合計の行と同じ集計を、大きな数字のタイルで出す。 */
@@ -242,83 +235,48 @@ function StatsSummary({
   const rate = occupancyRate(stats, periodDays);
   const stay = averageStay(stats);
   return (
-    <dl className="bed-status-summary">
-      <div className="bed-status-summary__tile">
-        <dt>在院</dt>
-        <dd>
-          <span className="bed-status-summary__value">
-            {stats.occupied}
-            <small> / {stats.beds}床</small>
-          </span>
-          {occupancy !== null && <OccupancyMeter percent={occupancy} />}
-          <span className="bed-status-summary__sub">
-            稼働率 {occupancy === null ? "-" : `${occupancy}%`}
-            {stats.unusable > 0 && `・休止 ${stats.unusable}`} <HelpTip text={FORMULA.occupancy} align="start" />
-          </span>
-        </dd>
-      </div>
-      <div className="bed-status-summary__tile">
-        <dt>空床</dt>
-        <dd>
-          <span className="bed-status-summary__value">{emptyBeds(stats)}</span>
-          <span className="bed-status-summary__sub">
-            {roomClasses
-              .map((code) => `${roomClassLabel(code)} ${stats.emptyByRoomClass.get(code) ?? 0}`)
-              .join("・")}
-          </span>
-        </dd>
-      </div>
-      <div className="bed-status-summary__tile">
-        <dt>本日</dt>
-        <dd className="bed-status-summary__pair">
-          <SummaryCount label="入院" value={stats.admissions} />
-          <SummaryCount label="退院" value={stats.discharges} />
-        </dd>
-      </div>
-      <div className="bed-status-summary__tile">
-        <dt>翌日の予定</dt>
-        <dd className="bed-status-summary__pair">
-          <SummaryCount label="入院" value={stats.plannedAdmissionsNext} />
-          <SummaryCount label="退院" value={stats.plannedDischargesNext} />
-        </dd>
-      </div>
-      <div className="bed-status-summary__tile">
-        <dt>
-          病床利用率 <HelpTip text={FORMULA.rate} />
-        </dt>
-        <dd>
-          <span className="bed-status-summary__value">{rate === null ? "-" : `${rate.toFixed(1)}%`}</span>
-          <span className="bed-status-summary__sub">{periodLabel}</span>
-        </dd>
-      </div>
-      <div className="bed-status-summary__tile">
-        <dt>
-          平均在院日数 <HelpTip text={FORMULA.stay} />
-        </dt>
-        <dd>
-          <span className="bed-status-summary__value">{stay === null ? "-" : `${stay.toFixed(1)}日`}</span>
-          <span className="bed-status-summary__sub">{periodLabel}</span>
-        </dd>
-      </div>
-    </dl>
+    <StatTiles>
+      <StatTile
+        label="在院"
+        help={FORMULA.occupancy}
+        value={stats.occupied}
+        unit={`/ ${stats.beds}床`}
+        meter={occupancy}
+        sub={`稼働率 ${occupancy === null ? "-" : `${occupancy}%`}${stats.unusable > 0 ? `・休止 ${stats.unusable}` : ""}`}
+      />
+      <StatTile
+        label="空床"
+        value={emptyBeds(stats)}
+        sub={roomClasses.map((code) => `${roomClassLabel(code)} ${stats.emptyByRoomClass.get(code) ?? 0}`).join("・")}
+      />
+      <StatTile
+        label="本日"
+        counts={[
+          { label: "入院", value: stats.admissions },
+          { label: "退院", value: stats.discharges },
+        ]}
+      />
+      <StatTile
+        label="翌日の予定"
+        counts={[
+          { label: "入院", value: stats.plannedAdmissionsNext },
+          { label: "退院", value: stats.plannedDischargesNext },
+        ]}
+      />
+      <StatTile
+        label="病床利用率"
+        help={FORMULA.rate}
+        value={rate === null ? "-" : `${rate.toFixed(1)}%`}
+        sub={periodLabel}
+      />
+      <StatTile
+        label="平均在院日数"
+        help={FORMULA.stay}
+        value={stay === null ? "-" : `${stay.toFixed(1)}日`}
+        sub={periodLabel}
+      />
+    </StatTiles>
   );
-}
-
-function SummaryCount({ label, value }: { label: string; value: number }) {
-  return (
-    <span className="bed-status-summary__count">
-      <span className="bed-status-summary__sub">{label}</span>
-      <span className="bed-status-summary__value">{value}</span>
-    </span>
-  );
-}
-
-/** 数のセル。0 は「-」にして薄くし、動きのある数だけが目に入るようにする。 */
-function CountCell({ value, groupStart }: { value: number | undefined; groupStart?: boolean }) {
-  const classes = ["bed-status__num"];
-  if (groupStart) classes.push("bed-status__group-start");
-  if (!value) classes.push("bed-status__zero");
-  return <td className={classes.join(" ")}>{value || "-"}</td>;
 }
 
 function StatsRow({
@@ -337,36 +295,32 @@ function StatsRow({
   const stay = averageStay(stats);
   return (
     <tr>
-      <th className="bed-status__ward">{label}</th>
-      <td className="bed-status__num bed-status__group-start">{stats.beds}</td>
-      <CountCell value={stats.unusable} />
-      <td className="bed-status__num bed-status__strong">{stats.occupied}</td>
-      <td className="bed-status__num">
+      <th className="stat-table__label">{label}</th>
+      <td className="stat-table__num stat-table__group-start">{stats.beds}</td>
+      <StatCell value={stats.unusable} />
+      <td className="stat-table__num stat-table__strong">{stats.occupied}</td>
+      <td className="stat-table__num">
         {occupancy === null ? (
-          <span className="bed-status__zero">-</span>
+          <span className="stat-table__zero">-</span>
         ) : (
-          <span className="bed-status__occupancy">
-            <OccupancyMeter percent={occupancy} />
+          <span className="stat-table__rate">
+            <StatMeter percent={occupancy} />
             {occupancy}%
           </span>
         )}
       </td>
-      <td className="bed-status__num bed-status__group-start bed-status__strong">{emptyBeds(stats)}</td>
+      <td className="stat-table__num stat-table__group-start stat-table__strong">{emptyBeds(stats)}</td>
       {roomClasses.map((code) => (
-        <CountCell key={code} value={stats.emptyByRoomClass.get(code)} />
+        <StatCell key={code} value={stats.emptyByRoomClass.get(code)} />
       ))}
-      <CountCell value={stats.admissions} groupStart />
-      <CountCell value={stats.discharges} />
-      <CountCell value={stats.transfersIn} />
-      <CountCell value={stats.transfersOut} />
-      <CountCell value={stats.plannedAdmissionsNext} groupStart />
-      <CountCell value={stats.plannedDischargesNext} />
-      <td className={`bed-status__num bed-status__group-start${rate === null ? " bed-status__zero" : ""}`}>
-        {rate === null ? "-" : `${rate.toFixed(1)}%`}
-      </td>
-      <td className={`bed-status__num${stay === null ? " bed-status__zero" : ""}`}>
-        {stay === null ? "-" : `${stay.toFixed(1)}日`}
-      </td>
+      <StatCell value={stats.admissions} groupStart />
+      <StatCell value={stats.discharges} />
+      <StatCell value={stats.transfersIn} />
+      <StatCell value={stats.transfersOut} />
+      <StatCell value={stats.plannedAdmissionsNext} groupStart />
+      <StatCell value={stats.plannedDischargesNext} />
+      <StatCell value={rate === null ? null : `${rate.toFixed(1)}%`} groupStart />
+      <StatCell value={stay === null ? null : `${stay.toFixed(1)}日`} />
     </tr>
   );
 }

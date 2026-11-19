@@ -11,6 +11,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { HelpTip } from "../components/HelpTip";
 import { HaiJudgmentModal } from "../components/HaiJudgmentModal";
 import { PatientKana } from "../components/PatientRowCells";
+import { StatCell, StatSection, StatSections, StatTile, StatTiles } from "../components/StatSummary";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import {
   HAI_RESULT_OPTIONS,
@@ -30,6 +31,7 @@ import {
   type DeviceInfectionRow,
   type HaiType,
   type SsiRateRow,
+  type SsiRow,
   type SsiState,
 } from "../fhir/haiSurveillanceHelpers";
 import {
@@ -208,10 +210,7 @@ function SsiTab({ rate, searchParams, setParams }: TabProps & { rate: boolean })
         truncated ? (
           <TruncatedNotice show>手術の記録を読み切れていないため、発生率を出せません。</TruncatedNotice>
         ) : (
-          <>
-            <SsiRateTable caption="創分類別" rows={ssiRateSummary(rows, (row) => row.record.woundClass)} />
-            <SsiRateTable caption="依頼科別" rows={ssiRateSummary(rows, (row) => row.departmentName)} />
-          </>
+          <SsiRate rows={rows} />
         )
       ) : (
         <>
@@ -338,53 +337,104 @@ function patientLabel(patient: fhir4.Patient | undefined, patientId: string): st
   return patient ? displayName(patient) : patientId;
 }
 
-function SsiRateTable({ caption, rows }: { caption: string; rows: SsiRateRow[] }) {
+const SSI_RATE_FORMULA = "SSI の件数 ÷ 手術件数 × 100。分母は期間内の手術すべて(未判定を含む)";
+
+function SsiRate({ rows }: { rows: SsiRow[] }) {
+  const byWoundClass = ssiRateSummary(rows, (row) => row.record.woundClass);
+  const byDepartment = ssiRateSummary(rows, (row) => row.departmentName);
+  // 末尾が合計の行(どちらの表でも同じ)。
+  const total = byWoundClass[byWoundClass.length - 1];
   return (
-    <div className="lab-worklist-wrap">
-      <table className="lab-worklist nursing-acuity-report hai__rate">
-        <caption className="nursing-acuity-report__caption">{caption}</caption>
+    <>
+      <StatTiles>
+        <StatTile label="手術件数" value={total.surgeries} />
+        <StatTile
+          label="SSI"
+          value={total.infected}
+          alert={total.infected > 0}
+          sub={SSI_DEPTH_OPTIONS.map((o, i) => `${o.display} ${total.byDepth[i]}`).join("・")}
+        />
+        <StatTile label="発生率" help={SSI_RATE_FORMULA} value={rateText(ssiRateLabel(total))} />
+        <StatTile label="未判定" value={total.pending} />
+      </StatTiles>
+      <StatSections>
+        <SsiRateTable title="創分類別" rows={byWoundClass} />
+        <SsiRateTable title="依頼科別" rows={byDepartment} />
+      </StatSections>
+    </>
+  );
+}
+
+/** 発生率の表示(ssiRateLabel は「-」か % を付けない数)。 */
+function rateText(label: string): string {
+  return label === "-" ? label : `${label}%`;
+}
+
+function SsiRateTable({ title, rows }: { title: string; rows: SsiRateRow[] }) {
+  const body = rows.slice(0, -1);
+  const total = rows[rows.length - 1];
+  const line = (row: SsiRateRow) => (
+    <>
+      <th className="stat-table__label">{row.label}</th>
+      <StatCell value={row.surgeries} groupStart />
+      <StatCell value={row.pending} />
+      <StatCell value={row.infected} groupStart strong tone="alert" />
+      {row.byDepth.map((count, depthIndex) => (
+        <StatCell key={SSI_DEPTH_OPTIONS[depthIndex].code} value={count} />
+      ))}
+      <StatCell value={rateText(ssiRateLabel(row))} groupStart />
+    </>
+  );
+  return (
+    <StatSection title={title}>
+      <table className="lab-worklist stat-table">
         <thead>
           <tr>
             <th></th>
-            <th className="lab-worklist__compact">手術件数</th>
-            <th className="lab-worklist__compact">未判定</th>
-            <th className="lab-worklist__compact">SSI</th>
+            <th className="stat-table__num stat-table__group-start">手術件数</th>
+            <th className="stat-table__num">未判定</th>
+            <th className="stat-table__num stat-table__group-start">SSI</th>
             {SSI_DEPTH_OPTIONS.map((o) => (
-              <th key={o.code} className="lab-worklist__compact">
+              <th key={o.code} className="stat-table__num">
                 {o.display}
               </th>
             ))}
-            <th className="lab-worklist__compact">発生率(%)</th>
+            <th className="stat-table__num stat-table__group-start">
+              発生率 <HelpTip text={SSI_RATE_FORMULA} />
+            </th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
-            <tr key={row.label} className={index === rows.length - 1 ? "hai__rate-total" : undefined}>
-              <th className="nursing-acuity-report__label">{row.label}</th>
-              <td className="nursing-acuity-report__value">{row.surgeries}</td>
-              <td className="nursing-acuity-report__value">{row.pending}</td>
-              <td className="nursing-acuity-report__value">{row.infected}</td>
-              {row.byDepth.map((count, depthIndex) => (
-                <td key={SSI_DEPTH_OPTIONS[depthIndex].code} className="nursing-acuity-report__value">
-                  {count}
-                </td>
-              ))}
-              <td className="nursing-acuity-report__value">{ssiRateLabel(row)}</td>
-            </tr>
+          {body.map((row) => (
+            <tr key={row.label}>{line(row)}</tr>
           ))}
+          {body.length === 0 && (
+            <tr>
+              <td colSpan={5 + SSI_DEPTH_OPTIONS.length} className="master-search__empty">
+                手術の実施記録はありません。
+              </td>
+            </tr>
+          )}
         </tbody>
+        {body.length > 1 && (
+          <tfoot>
+            <tr>{line(total)}</tr>
+          </tfoot>
+        )}
       </table>
-    </div>
+    </StatSection>
   );
 }
 
 // ---- デバイス関連感染 ----
 
-const DEVICE_GROUPS: { type: Exclude<HaiType, "ssi">; group: DeviceDayGroup; label: string }[] = [
-  { type: "clabsi", group: "vascular-central", label: "中心静脈カテーテル(CLABSI)" },
-  { type: "cauti", group: "urinary", label: "尿道留置カテーテル(CAUTI)" },
-  { type: "vap", group: "airway", label: "気管チューブ(VAP)" },
+const DEVICE_GROUPS: { type: Exclude<HaiType, "ssi">; group: DeviceDayGroup; label: string; short: string }[] = [
+  { type: "clabsi", group: "vascular-central", label: "中心静脈カテーテル(CLABSI)", short: "CLABSI" },
+  { type: "cauti", group: "urinary", label: "尿道留置カテーテル(CAUTI)", short: "CAUTI" },
+  { type: "vap", group: "airway", label: "気管チューブ(VAP)", short: "VAP" },
 ];
+
+const DEVICE_RATE_FORMULA = "感染件数 ÷ デバイス日数 × 1000。使用比はデバイス日数 ÷ 患者延べ日数";
 
 function DeviceTab({ searchParams, setParams }: TabProps) {
   const wardId = searchParams.get("ward") ?? "";
@@ -479,40 +529,28 @@ function DeviceMonth({ month, wardId }: { month: string; wardId: string }) {
         <TruncatedNotice show>入院または留置の記録を読み切れていないため、感染率を出せません。</TruncatedNotice>
       ) : (
         <>
-          <p className="hai-device__period">
-            {month.replace("-", "/")} 患者延べ日数 <strong>{stats.patientDays}</strong>
-          </p>
-          {DEVICE_GROUPS.map(({ type, group, label }) => {
-            const deviceDays = stats.groups[group].deviceDays;
+          <StatTiles>
+            <StatTile label="患者延べ日数" value={stats.patientDays} sub={month.replace("-", "/")} />
+            {DEVICE_GROUPS.map(({ type, group, short }) => {
+              const deviceDays = stats.groups[group].deviceDays;
+              return (
+                <StatTile
+                  key={type}
+                  label={`${short} 感染率`}
+                  help={DEVICE_RATE_FORMULA}
+                  value={deviceInfectionRateLabel(counts[type], deviceDays)}
+                  alert={counts[type] > 0}
+                  sub={`感染 ${counts[type]}件・デバイス日数 ${deviceDays}・使用比 ${ratio(deviceDays, stats.patientDays)}`}
+                />
+              );
+            })}
+          </StatTiles>
+          {DEVICE_GROUPS.map(({ type, label }) => {
             const groupRows = rows.filter((row) => row.type === type);
             return (
               <section key={type} className="hai-device">
                 <div className="hai-device__head">
                   <h3 className="hai-device__title">{label}</h3>
-                  <dl className="hai-device__stats">
-                    <div>
-                      <dt>デバイス日数</dt>
-                      <dd>{deviceDays}</dd>
-                    </div>
-                    <div>
-                      <dt>感染</dt>
-                      <dd className={counts[type] > 0 ? "hai__state--infected" : undefined}>{counts[type]}件</dd>
-                    </div>
-                    <div>
-                      <dt>
-                        感染率
-                        <HelpTip text="感染件数 ÷ デバイス日数 × 1000" />
-                      </dt>
-                      <dd>{deviceInfectionRateLabel(counts[type], deviceDays)}</dd>
-                    </div>
-                    <div>
-                      <dt>
-                        使用比
-                        <HelpTip text="デバイス日数 ÷ 患者延べ日数" />
-                      </dt>
-                      <dd>{ratio(deviceDays, stats.patientDays)}</dd>
-                    </div>
-                  </dl>
                 </div>
                 {groupRows.length === 0 ? (
                   <p className="hai-device__empty">対象の留置物はありません。</p>

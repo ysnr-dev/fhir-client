@@ -12,6 +12,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { RowPictograms } from "../components/PatientListRowParts";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { PatientKana } from "../components/PatientRowCells";
+import { StatCell, StatSection, StatSections, StatTile, StatTiles } from "../components/StatSummary";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { MEAL_TIMING_OPTIONS } from "../fhir/mealOrderHelpers";
@@ -215,8 +216,19 @@ export function MealWorklistPage() {
           <p className="order-select__muted lab-worklist__count">{visible.length} 人</p>
         </>
       ) : (
-        <div className="meal-count">
-          <CountTable
+        <>
+          <StatTiles>
+            {MEAL_TIMING_OPTIONS.map((timing) => (
+              <StatTile
+                key={timing.code}
+                label={timing.display}
+                value={summary.served[timing.code]}
+                sub={`欠食 ${summary.skipped[timing.code]}・オーダーなし ${summary.noOrder[timing.code]}`}
+              />
+            ))}
+          </StatTiles>
+          <StatSections>
+            <CountTable
             title="食種"
             rows={summary.diets}
             footer={[
@@ -225,8 +237,9 @@ export function MealWorklistPage() {
               { label: "オーダーなし", counts: summary.noOrder },
             ]}
           />
-          <CountTable title="主食" rows={summary.staples} />
-        </div>
+            <CountTable title="主食" rows={summary.staples} />
+          </StatSections>
+        </>
       )}
 
       {view === "patients" && selectedRow && (
@@ -276,56 +289,55 @@ function CountTable({
   footer?: { label: string; counts: Record<string, number> }[];
 }) {
   return (
-    <table className="lab-worklist meal-count__table">
-      <thead>
-        <tr>
-          <th>{title}</th>
-          {MEAL_TIMING_OPTIONS.map((timing) => (
-            <th key={timing.code} className="meal-count__num">
-              {timing.display}
-            </th>
-          ))}
-          <th className="meal-count__num">計</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.key}>
-            <td>{row.label}</td>
-            {MEAL_TIMING_OPTIONS.map((timing) => (
-              <td key={timing.code} className="meal-count__num">
-                {row.counts[timing.code] || ""}
-              </td>
-            ))}
-            <td className="meal-count__num">{row.total}</td>
-          </tr>
-        ))}
-        {rows.length === 0 && (
+    <StatSection title={`${title}別`}>
+      <table className="lab-worklist stat-table">
+        <thead>
           <tr>
-            <td colSpan={5} className="master-search__empty">
-              ありません
-            </td>
+            <th>{title}</th>
+            {MEAL_TIMING_OPTIONS.map((timing, index) => (
+              <th key={timing.code} className={index === 0 ? "stat-table__num stat-table__group-start" : "stat-table__num"}>
+                {timing.display}
+              </th>
+            ))}
+            <th className="stat-table__num stat-table__group-start">計</th>
           </tr>
-        )}
-      </tbody>
-      {footer.length > 0 && (
-        <tfoot>
-          {footer.map((line) => (
-            <tr key={line.label}>
-              <th>{line.label}</th>
-              {MEAL_TIMING_OPTIONS.map((timing) => (
-                <td key={timing.code} className="meal-count__num">
-                  {line.counts[timing.code]}
-                </td>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key}>
+              <th className="stat-table__label">{row.label}</th>
+              {MEAL_TIMING_OPTIONS.map((timing, index) => (
+                <StatCell key={timing.code} value={row.counts[timing.code]} groupStart={index === 0} />
               ))}
-              <td className="meal-count__num">
-                {MEAL_TIMING_OPTIONS.reduce((sum, t) => sum + line.counts[t.code], 0)}
-              </td>
+              <StatCell value={row.total} groupStart strong />
             </tr>
           ))}
-        </tfoot>
-      )}
-    </table>
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={5} className="master-search__empty">
+                ありません
+              </td>
+            </tr>
+          )}
+        </tbody>
+        {footer.length > 0 && (
+          <tfoot>
+            {footer.map((line) => (
+              <tr key={line.label}>
+                <th className="stat-table__label">{line.label}</th>
+                {MEAL_TIMING_OPTIONS.map((timing, index) => (
+                  <StatCell key={timing.code} value={line.counts[timing.code]} groupStart={index === 0} />
+                ))}
+                <StatCell
+                  value={MEAL_TIMING_OPTIONS.reduce((sum, t) => sum + line.counts[t.code], 0)}
+                  groupStart
+                />
+              </tr>
+            ))}
+          </tfoot>
+        )}
+      </table>
+    </StatSection>
   );
 }
 

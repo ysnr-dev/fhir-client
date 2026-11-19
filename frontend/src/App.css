@@ -444,31 +444,7 @@
   color: var(--text);
 }
 
-/* 発生率・感染率の表。表を縦に並べるので間を空け、合計の行は上に線を引く。 */
-.hai__rate {
-  margin-bottom: 20px;
-}
-
-.hai__rate-total > * {
-  border-top: 2px solid var(--border);
-  font-weight: 600;
-}
-
-.hai__rate th.lab-worklist__compact,
-.hai__rate td.nursing-acuity-report__value {
-  text-align: right;
-}
-
-/* デバイス関連感染。デバイスごとに、その月の集計と対象の留置を 1 つの区画にまとめる。 */
-.hai-device__period {
-  margin: 0 0 12px;
-  color: var(--text);
-}
-
-.hai-device__period strong {
-  color: var(--text-h);
-}
-
+/* デバイス関連感染。デバイスごとに対象の留置を 1 つの区画にまとめる(月の集計は上のタイル)。 */
 .hai-device {
   margin-bottom: 16px;
   border: 1px solid var(--border);
@@ -489,37 +465,6 @@
   margin: 0;
   font-size: 15px;
   color: var(--text-h);
-}
-
-.hai-device__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 24px;
-  margin: 0;
-}
-
-.hai-device__stats > div {
-  min-width: 120px;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.hai-device__stats dt {
-  font-size: 12px;
-  color: var(--text);
-}
-
-.hai-device__stats dd {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-h);
-  font-variant-numeric: tabular-nums;
-}
-
-.hai-device__stats dd.hai__state--infected {
-  color: var(--danger);
 }
 
 .hai-device__empty {
@@ -10438,17 +10383,6 @@ body.karte-wide {
   font-weight: 700;
 }
 
-.ast-summary .ast-summary__number {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.ast-summary tfoot th,
-.ast-summary tfoot td {
-  border-top: 2px solid var(--border);
-  font-weight: 700;
-}
-
 /* 実施入力の薬の行のロット番号(docs/lot-number-design.md)。 */
 .lot-number-cell {
   display: flex;
@@ -18205,28 +18139,6 @@ td.surgery-calendar__cell--drop-target {
 .meal-worklist__comment {
   white-space: pre-wrap;
   font-size: 13px;
-}
-
-.meal-count {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 24px;
-}
-
-.meal-count__table {
-  width: auto;
-  min-width: 360px;
-}
-
-.meal-count__num {
-  text-align: right;
-  width: 4em;
-}
-
-.meal-count__table tfoot th,
-.meal-count__table tfoot td {
-  border-top: 1px solid var(--border);
 }
 
 /* ---- パターン食の段階の表(docs/meal-order-design.md §2.11・§3.5) ---- */
@@ -28695,45 +28607,48 @@ input.nursing-picker__search {
   max-width: 100%;
 }
 
-/* 病床状況の要約(病院全体)。大きな数字のタイルを横に並べ、幅が足りなければ折り返す。 */
-.bed-status-summary {
+/* 統計・集計の画面の共通の見た目(components/StatSummary.tsx。見本は病床状況)。 */
+
+/* 要約のタイル。大きな数字のタイルを横に並べ、幅が足りなければ折り返す。 */
+.stat-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
   margin: 0 0 16px;
 }
 
-.bed-status-summary__tile {
+.stat-tile {
   padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-card);
 }
 
-.bed-status-summary__tile dt {
+.stat-tile dt {
   font-size: 12px;
   color: var(--text);
 }
 
-.bed-status-summary__tile dd {
+.stat-tile dd {
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 2px 0 0;
 }
 
-.bed-status-summary__tile dd.bed-status-summary__pair {
+.stat-tile dd.stat-tile__pair {
   flex-direction: row;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 0 24px;
 }
 
-.bed-status-summary__count {
+.stat-tile__count {
   display: flex;
   align-items: baseline;
   gap: 6px;
 }
 
-.bed-status-summary__value {
+.stat-tile__value {
   font-size: 24px;
   font-weight: 700;
   line-height: 1.3;
@@ -28741,85 +28656,137 @@ input.nursing-picker__search {
   font-variant-numeric: tabular-nums;
 }
 
-.bed-status-summary__value small {
+.stat-tile__value--alert {
+  color: var(--danger);
+}
+
+.stat-tile__value small {
   font-size: 13px;
   font-weight: normal;
   color: var(--text);
 }
 
-.bed-status-summary__sub {
+.stat-tile__sub {
   font-size: 12px;
   color: var(--text);
 }
 
-.bed-status-summary .bed-status__meter {
+.stat-tile .stat-meter {
   width: 100%;
   margin: 2px 0;
 }
 
-/* 計算式の吹き出し。右寄せの見出しの中でも文は左から読ませ、「?」は見出しの文字の中ほどに置く。 */
-.bed-status .help-tip,
-.bed-status-summary .help-tip {
+/* 計算式の吹き出し。見出しの文字の中ほどに置き、右寄せの見出しの中でも文は左から読ませる。
+   左端のタイルは中央寄せだと左に見切れるので左揃えにする。 */
+.stat-table .help-tip,
+.stat-tile .help-tip {
   vertical-align: middle;
 }
 
-.bed-status .help-tip__text {
+.stat-table .help-tip__text {
   text-align: left;
 }
 
-/* 病床状況の表。列は中身なりの幅で左に詰め、区分(病床・空床・本日…)の境に縦線を引く。数の列は
-   右寄せ、区分の見出しは中央。合計の行の上の線がセルの間で切れないよう、罫線は collapse で表に持たせる。 */
-.bed-status {
+.stat-tile:first-child .help-tip__text {
+  left: 0;
+  transform: none;
+}
+
+/* 集計表のまとまり。横に並べるときは .stat-sections で包む。吹き出しが切れないよう overflow は付けない。 */
+.stat-sections {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 32px;
+  margin-bottom: 16px;
+}
+
+.stat-section {
+  max-width: 100%;
+  margin-bottom: 16px;
+}
+
+.stat-sections > .stat-section {
+  margin-bottom: 0;
+}
+
+.stat-section__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 4px;
+}
+
+.stat-section__title {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+/* 集計表(.lab-worklist に重ねる)。列は中身なりの幅で左に詰め、区分の境に縦線を引く。数の列は右寄せ、
+   区分の見出しは中央。合計の行の上の線がセルの間で切れないよう、罫線は collapse で表に持たせる。 */
+.stat-table {
   width: auto;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
 }
 
-.bed-status thead th {
+.stat-table thead th {
   vertical-align: bottom;
 }
 
-.bed-status th.bed-status__group {
+.stat-table th.stat-table__group {
   text-align: center;
   color: var(--text-h);
   background: var(--surface-stripe);
   border-left: 1px solid var(--border);
 }
 
-.bed-status .bed-status__num {
+.stat-table .stat-table__num {
   min-width: 64px;
   text-align: right;
   white-space: nowrap;
 }
 
-.bed-status .bed-status__group-start {
+.stat-table .stat-table__group-start {
   border-left: 1px solid var(--border);
 }
 
-.bed-status th.bed-status__ward {
+/* 行の見出し(病棟・薬剤・食種など)。 */
+.stat-table .stat-table__label {
   min-width: 140px;
   text-align: left;
   font-weight: normal;
   white-space: nowrap;
 }
 
-.bed-status .bed-status__strong {
+.stat-table .stat-table__strong {
   font-weight: bold;
   color: var(--text-h);
 }
 
-.bed-status .bed-status__zero {
-  opacity: 0.4;
+/* 罫線まで薄くならないよう、文字の色だけを薄くする。 */
+.stat-table .stat-table__zero {
+  color: color-mix(in srgb, var(--text) 40%, transparent);
 }
 
-.bed-status__occupancy {
+.stat-table .stat-table__alert {
+  color: var(--danger);
+  font-weight: bold;
+}
+
+.stat-table .stat-table__warning {
+  color: var(--warning);
+}
+
+/* 割合の棒と数を並べたセル。 */
+.stat-table__rate {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-/* 稼働率の棒。塗りの幅が在院の割合。 */
-.bed-status__meter {
+.stat-meter {
   display: inline-block;
   width: 64px;
   height: 6px;
@@ -28828,18 +28795,31 @@ input.nursing-picker__search {
   overflow: hidden;
 }
 
-.bed-status__meter > span {
+.stat-meter > span {
   display: block;
   height: 100%;
   border-radius: 3px;
   background: var(--accent);
 }
 
-.bed-status tfoot th,
-.bed-status tfoot td,
-.bed-status tfoot th.bed-status__ward {
+.stat-table tfoot th,
+.stat-table tfoot td,
+.stat-table tfoot th.stat-table__label {
   font-weight: bold;
+}
+
+.stat-table tfoot tr:first-child > * {
   border-top: 2px solid var(--border);
+}
+
+/* 縦に送る表(.sticky-table)は罫線をセルに持たせるので collapse にしない。合計の行に上の線を足すと
+   直前の行の罫線と二重に見えるので、線は足さず太字だけにする。 */
+.stat-table.sticky-table {
+  border-collapse: separate;
+}
+
+.stat-table.sticky-table tfoot tr:first-child > * {
+  border-top: none;
 }
 
 /* 入退院文書の作成状況。セルは状態の語と期限で、未作成は強調、期限超過は赤。 */
@@ -29150,25 +29130,7 @@ input.nursing-picker__search {
   color: var(--text);
 }
 
-/* 看護必要度の一覧・集計。得点・件数の列は中央に揃え、隣の列と詰まって見えないよう幅を持たせる。 */
-.nursing-acuity-list .nursing-acuity-list__num {
-  min-width: 4em;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.nursing-acuity-list__pending {
-  color: var(--warning);
-}
-
-/* 合計の行。固定見出しの表(border-collapse: separate)で上に太線を引くと直前の行の罫線と
-   二重に見えるので、線は足さず太字だけにする。 */
-.nursing-acuity-list tfoot th,
-.nursing-acuity-list tfoot td {
-  font-weight: bold;
-}
-
-/* 月の割合指数・基準値の行。基準値を下回る割合・指数は赤くする。 */
+/* 看護必要度の集計の、月の割合指数・基準値の行。 */
 .nursing-acuity-list__index th,
 .nursing-acuity-list__threshold th {
   text-align: right;
@@ -29182,10 +29144,6 @@ input.nursing-picker__search {
 
 .nursing-acuity-list__threshold td {
   font-weight: normal;
-}
-
-.nursing-acuity-list__below {
-  color: var(--danger);
 }
 
 .nursing-acuity__unit-info {
@@ -32910,92 +32868,7 @@ button.dialysis-board__empty--book:hover {
   font-weight: 700;
 }
 
-/* 透析の月間統計(§6.3)。概要のカード、同じ幅に並ぶ集計表、日付を横に並べた日別。 */
-.dialysis-stats {
-  display: grid;
-  gap: 16px;
-}
-
-.dialysis-stats__summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin: 0;
-}
-
-.dialysis-stats__summary-card,
-.dialysis-stats__card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-card);
-}
-
-.dialysis-stats__summary-card {
-  padding: 10px 14px;
-}
-
-.dialysis-stats__summary-card dt {
-  font-size: 12px;
-  color: var(--text);
-}
-
-.dialysis-stats__summary-card dd {
-  display: flex;
-  flex-direction: column;
-  margin: 2px 0 0;
-}
-
-.dialysis-stats__value {
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--text-h);
-  font-variant-numeric: tabular-nums;
-}
-
-.dialysis-stats__sub {
-  font-size: 12px;
-  color: var(--text);
-}
-
-.dialysis-stats__tables {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 12px;
-  align-items: start;
-}
-
-.dialysis-stats__card {
-  padding: 10px 14px 12px;
-  min-width: 0;
-}
-
-.dialysis-stats__card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.dialysis-stats__title {
-  margin: 0 0 6px;
-  font-size: 15px;
-  color: var(--text-h);
-}
-
-.dialysis-stats__table th.dialysis-stats__number,
-.dialysis-stats__table td.dialysis-stats__number {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.dialysis-stats__table tfoot th,
-.dialysis-stats__table tfoot td {
-  border-top: 2px solid var(--border);
-  font-weight: 700;
-  background: transparent;
-}
-
+/* 透析の月間統計の日別(§6.3)。日付を横に並べた月報の形。 */
 .dialysis-stats__days-wrap {
   overflow-x: auto;
 }
@@ -33105,37 +32978,6 @@ button.dialysis-board__empty--book:hover {
 .referral__reply {
   font-size: 13px;
   white-space: nowrap;
-}
-
-.referral__tiles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.referral__tile {
-  min-width: 120px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 14px;
-}
-
-.referral__tile-label {
-  font-size: 12px;
-  color: var(--text);
-}
-
-.referral__tile-value {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--text-h);
-}
-
-.master-search__table th.referral__number,
-.master-search__table td.referral__number {
-  text-align: right;
-  width: 110px;
 }
 
 /* 行の操作。ボタンとリンクの大きさを揃え、ケバブメニューは既定の見た目のまま右に置く。 */
