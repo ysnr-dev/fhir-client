@@ -1,10 +1,12 @@
 # 検体検査オーダーの業務フロー
 
-検体検査オーダーの登録から採取・到着・結果報告・結果確認までの流れです。医療機関の運用を検討する人は「運用フロー」、院内の開発者は「開発者向け」を読みます。
+検体検査オーダーの登録から採取・到着・結果報告・結果確認までの流れです。
+細菌検査・病理検査は進捗の考え方が同じですが、容器・採取の記録・レポートが違うので別の文書で扱います。
+
+医療機関の運用を検討する人は「運用フロー」、院内の開発者は「開発者向け」を読みます。
 画面のふるまいは [features/lab.md](../features/lab.md)、種別共通の約束(削除・代行入力・日付)は [features/orders-common.md](../features/orders-common.md)、
 リソースの要素は実装ガイド(`../fhir-ig`)、ラベル・到着・取込の設計は [lab-label-design.md](../lab-label-design.md)・
 [lab-arrival-design.md](../lab-arrival-design.md)・[lab-result-import-design.md](../lab-result-import-design.md) が正典です。
-細菌検査・病理検査は進捗の考え方が同じですが、容器・採取の記録・レポートが違うので別の文書で扱います。
 
 ## 運用フロー
 

@@ -1,9 +1,12 @@
 # クリニカルパスの業務フロー
 
-クリニカルパスを、パス定義の作成と承認から患者への適用、病棟の日々の評価と実施、バリアンス、フェーズの進行、終了・中止まで追う流れです。医療機関の運用を検討する人は「運用フロー」、院内の開発者は「開発者向け」を読みます。
+クリニカルパスを、パス定義の作成と承認から患者への適用、病棟の日々の評価と実施、バリアンス、フェーズの進行、終了・中止まで追う流れです。
 クリニカルパスは、疾患・術式ごとの入院診療の標準計画を**病日 × アウトカム**の格子(パスシート)で書いたものです。病日ごとに「患者がこうなっている」(アウトカム)、「それを何で判断するか」(観察項目)、「何をするか」(タスク)を置き、適用した患者ではタスクが日付の入ったオーダーになり、病棟は毎日アウトカムの達成・未達成(バリアンス)を記録します。
 雛形から出たオーダー(処方・注射・検査・看護指示・食事など)はそれぞれの種別の流れに乗るので、部門の受付・実施の細部は各種別の業務フロー([看護指示](nursing.md)、[食事](meal.md)、[注射](injection.md)、[検体検査](lab.md)など)を読みます。
-画面のふるまいは [features/orders-common.md](../features/orders-common.md#クリニカルパス定義マスタ)、設計は [clinical-pathway-design.md](../clinical-pathway-design.md)、不足機能は [clinical-pathway-backlog.md](../clinical-pathway-backlog.md) が正典です。基本仕様は JAMI・JSCP の ePath(ePath R4 実装ガイド)に準じます。
+基本仕様は JAMI・JSCP の ePath に準じます。
+
+医療機関の運用を検討する人は「運用フロー」、院内の開発者は「開発者向け」を読みます。
+画面のふるまいは [features/orders-common.md](../features/orders-common.md#クリニカルパス定義マスタ)、設計は [clinical-pathway-design.md](../clinical-pathway-design.md)、不足機能は [clinical-pathway-backlog.md](../clinical-pathway-backlog.md) が正典です。
 
 ## 運用フロー
 

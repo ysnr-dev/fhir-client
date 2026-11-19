@@ -1,6 +1,8 @@
 # 輸血オーダーの業務フロー
 
-輸血オーダーの登録から出庫・投与・副作用の記録までと、自己血(貯血式)の採血の流れです。医療機関の運用を検討する人は「運用フロー」、院内の開発者は「開発者向け」を読みます。
+輸血オーダーの登録から出庫・投与・副作用の記録までと、自己血(貯血式)の採血の流れです。
+
+医療機関の運用を検討する人は「運用フロー」、院内の開発者は「開発者向け」を読みます。
 設計と画面のふるまいは [transfusion-order-design.md](../transfusion-order-design.md)、JAHIS 患者安全ガイド(輸血編)との突合は [transfusion-backlog.md](../transfusion-backlog.md)、
 血液型の確定の判定は [features/patient-profile.md](../features/patient-profile.md)「血液型」、種別共通の約束(削除・代行入力・中止)は [features/orders-common.md](../features/orders-common.md)、
 リソースの要素は実装ガイド(`../fhir-ig`)が正典です。

@@ -1,6 +1,8 @@
 # 処方オーダーの業務フロー
 
-処方オーダーの登録から調剤・与薬までの流れです。医療機関の運用を検討する人は「運用フロー」、院内の開発者は「開発者向け」を読みます。
+処方オーダーの登録から調剤・与薬までの流れです。
+
+医療機関の運用を検討する人は「運用フロー」、院内の開発者は「開発者向け」を読みます。
 画面のふるまいは [features/medication.md](../features/medication.md)、リソースの要素は実装ガイド(`../fhir-ig` の `medication.md`)、
 与薬の設計は [prescription-order-design.md](../prescription-order-design.md)、監査の設計は [rx-verification-design.md](../rx-verification-design.md) が正典です。
 
