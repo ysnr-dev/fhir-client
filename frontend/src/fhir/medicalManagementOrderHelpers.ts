@@ -114,6 +114,7 @@ function buildServiceRequest(
   requester: OrderAttribution,
   authoredOn: string,
   serviceRequestId?: string,
+  supportingInfo?: fhir4.Reference[],
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
     resourceType: "ServiceRequest",
@@ -142,6 +143,7 @@ function buildServiceRequest(
     occurrenceDateTime: values.date,
   };
   if (serviceRequestId) resource.id = serviceRequestId;
+  if (supportingInfo?.length) resource.supportingInfo = supportingInfo;
   if (values.comment.trim()) resource.note = [{ text: values.comment.trim() }];
   if (values.problem) {
     resource.reasonReference = [
@@ -253,18 +255,29 @@ function stripRef({ ref: _ref, ...entry }: fhir4.BundleEntry & { ref: string }):
   return entry;
 }
 
-/** 新規登録。ヘッダと実施記録を 1 つの transaction で書く。 */
+/**
+ * 新規登録。ヘッダと実施記録を 1 つの transaction で書く。文書作成から算定するときは、
+ * 元になった文書を supportingInfo に入れる。
+ */
 export function buildMedicalManagementOrderBundle(
   values: MedicalManagementOrderFormValues,
   patientId: string,
   requester: OrderAttribution,
+  document?: fhir4.Reference,
 ): fhir4.Bundle {
   const fullUrl = `urn:uuid:${crypto.randomUUID()}`;
   return transactionBundle([
     {
       // fullUrl は来歴(Provenance)がこのオーダーを指すのと、実施記録の basedOn に使う。
       fullUrl,
-      resource: buildServiceRequest(values, patientId, requester, registrationAuthoredOn()),
+      resource: buildServiceRequest(
+        values,
+        patientId,
+        requester,
+        registrationAuthoredOn(),
+        undefined,
+        document ? [document] : undefined,
+      ),
       request: { method: "POST", url: "ServiceRequest" },
     },
     ...procedureEntries(values, patientId, fullUrl, requester, []),
@@ -282,7 +295,14 @@ export function buildMedicalManagementOrderUpdateBundle(
   const id = existing.id ?? "";
   const bundle = transactionBundle([
     {
-      resource: buildServiceRequest(values, patientId, requester, registrationAuthoredOn(existing), id),
+      resource: buildServiceRequest(
+        values,
+        patientId,
+        requester,
+        registrationAuthoredOn(existing),
+        id,
+        existing.supportingInfo,
+      ),
       request: { method: "PUT", url: `ServiceRequest/${id}` },
     },
     ...procedureEntries(values, patientId, `ServiceRequest/${id}`, requester, procedures),

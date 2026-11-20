@@ -32,7 +32,7 @@ RSpec.describe FacilitySettings do
       settings.update!(document_reminder: { "discharge_summary_days" => 7 })
 
       expect(settings.meal_schedule_with_defaults["lunch"]).to eq("11:30")
-      expect(settings.document_reminder_with_defaults).to eq("discharge_summary_days" => 7)
+      expect(settings.document_reminder_with_defaults).to eq("discharge_summary_days" => 7, "management_fee_days" => 7)
     end
   end
 

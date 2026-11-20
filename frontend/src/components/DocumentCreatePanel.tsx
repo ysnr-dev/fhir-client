@@ -13,6 +13,7 @@ import {
   useSaveDocumentFormDocument,
 } from "../api/queries";
 import { FhirError } from "../api/fhirClient";
+import type { ManagementFeeItem } from "../api/masterClient";
 import {
   missingRequiredLabels,
   normalizeLayout,
@@ -43,11 +44,13 @@ import { buildPopulateContext } from "../fhir/populateContext";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { DEFAULT_INSTITUTION_NUMBER } from "../fhir/questionnaireResponseHelpers";
 import { readFileAsDataUrl } from "../fhir/schemaImage";
+import { useDocumentFeeLink } from "../hooks/useDocumentFeeLink";
 import { useEditSnapshot } from "../hooks/useEditSnapshot";
 import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
 import { localDay, today } from "../lib/dates";
 import { downloadBlob } from "../lib/download";
 import { CategorizedSelect, type CategorizedSelectCategory } from "./CategorizedSelect";
+import { DocumentFeeConfirmModal } from "./DocumentFeeConfirmModal";
 import { DocumentFormFill } from "./documentForm/DocumentFormFill";
 import { ErrorBanner } from "./ErrorBanner";
 
@@ -57,6 +60,8 @@ import { ErrorBanner } from "./ErrorBanner";
 // 「ファイル」タブの「差し替え」で戻す)。
 // 様式(PDF / 画像)のテンプレートは、様式の見た目のまま入力し、表示用 PDF と回答(QuestionnaireResponse)を
 // 一緒に保存する。作った文書はファイルタブの「内容編集」から同じ画面で直せる(edit)。
+// 作る文書を算定の要件に持つ指導・管理料があれば、「作成」で算定の確認を挟み、選んだ項目を
+// 文書と同じ transaction で算定する(docs/medical-management-order-design.md §6)。
 
 const STATUS_NOTES: Partial<Record<PlaceholderStatus, string>> = {
   empty: "(該当なし)",
@@ -79,25 +84,38 @@ function extensionOf(fileName: string): string {
 
 export function DocumentCreatePanel({
   patientId,
+  templateCode,
   edit,
   onSaved,
 }: {
   patientId: string;
+  /** 選んでおくテンプレートの code(文書作成の督促から開くとき)。 */
+  templateCode?: string;
   /** 様式文書の再編集。作成した文書(DocumentReference)の id。 */
   edit?: { documentId: string };
   onSaved: () => void;
 }) {
   if (edit) return <DocumentFormEditPanel patientId={patientId} documentId={edit.documentId} onSaved={onSaved} />;
-  return <DocumentCreateBody patientId={patientId} onSaved={onSaved} />;
+  return <DocumentCreateBody patientId={patientId} templateCode={templateCode} onSaved={onSaved} />;
 }
 
-function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
+function DocumentCreateBody({
+  patientId,
+  templateCode,
+  onSaved,
+}: {
+  patientId: string;
+  templateCode?: string;
+  onSaved: () => void;
+}) {
   const templates = useDocumentTemplates(true);
   const { data: patientResult, error: patientError } = usePatient(patientId);
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const createFiles = useCreatePatientFiles();
 
-  const [templateId, setTemplateId] = useState("");
+  // null の間は、開くときに指定されたテンプレート(あれば)を選んでおく。
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   // null の間はテンプレートから決まる既定の表示名を使う。
   const [title, setTitle] = useState<string | null>(null);
   const [date, setDate] = useState(today());
@@ -126,7 +144,12 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
     return uncategorized ? [...byKey.values(), uncategorized] : [...byKey.values()];
   }, [items]);
 
-  const template = items.find((item) => String(item.id) === templateId);
+  const template =
+    pickedId === null
+      ? items.find((item) => Boolean(templateCode) && item.code === templateCode)
+      : items.find((item) => String(item.id) === pickedId);
+  const templateId = template ? String(template.id) : "";
+  const fee = useDocumentFeeLink(patientId, template?.code);
   const isForm = template?.kind === "form";
   const file = useDocumentTemplateFile(isForm ? undefined : template);
   const extension = template ? (isForm ? ".pdf" : extensionOf(template.file_name)) : "";
@@ -172,7 +195,7 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
     [placeholders, context],
   );
 
-  async function handleCreate() {
+  async function handleCreate(feeItems: ManagementFeeItem[]) {
     if (!template || !file.data || !kind || !resolved) return;
     setMessage(null);
     setBuilding(true);
@@ -202,6 +225,7 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
         practitionerId: practitionerId ?? undefined,
         practitionerName: practitioner ? practitionerDisplayName(practitioner) : undefined,
         documentType: { code: template.code, name: template.name },
+        extraEntries: fee.extraEntries({ items: feeItems, date, title: fileName }),
       });
       if (result.errors.length > 0) {
         setMessage(result.errors.join(" "));
@@ -219,7 +243,7 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
 
   const loadingValues = Boolean(template) && !isForm && (file.isLoading || !context);
   const unsupported = Boolean(template && !isForm && file.data && !kind);
-  const busy = building || createFiles.isPending;
+  const busy = building || createFiles.isPending || !fee.ready;
 
   return (
     <div className="karte-file-form document-create">
@@ -227,6 +251,7 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
       <ErrorBanner error={patientError} />
       <ErrorBanner error={populate.error} />
       <ErrorBanner error={file.error} />
+      {!isForm && <ErrorBanner error={fee.error} />}
       {(message || unsupported) && (
         <div className="error-banner" role="alert">
           <p className="error-banner__line error-banner__line--error">
@@ -240,7 +265,7 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
           categories={categories}
           value={templateId}
           onChange={(id) => {
-            setTemplateId(id);
+            setPickedId(id);
             setTitle(null);
             setMessage(null);
           }}
@@ -306,10 +331,27 @@ function DocumentCreateBody({ patientId, onSaved }: { patientId: string; onSaved
 
       {!isForm && (
         <div className="karte-file-form__actions">
-          <button type="button" disabled={busy || !resolved} onClick={() => void handleCreate()}>
-            {busy ? "作成中..." : "作成"}
+          <button
+            type="button"
+            disabled={busy || !resolved}
+            onClick={() => (fee.candidates.length > 0 ? setConfirming(true) : void handleCreate([]))}
+          >
+            {building || createFiles.isPending ? "作成中..." : "作成"}
           </button>
         </div>
+      )}
+      {confirming && (
+        <DocumentFeeConfirmModal
+          patientId={patientId}
+          date={date}
+          candidates={fee.candidates}
+          awaitedCodes={fee.awaitedCodes}
+          onConfirm={(feeItems) => {
+            setConfirming(false);
+            void handleCreate(feeItems);
+          }}
+          onClose={() => setConfirming(false)}
+        />
       )}
     </div>
   );
@@ -358,6 +400,9 @@ function DocumentFormEntry({
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const institutionNumber = useSelfInstitutionNumber();
   const save = useSaveDocumentFormDocument();
+  // 算定の候補は新規のときだけ出す(再編集では算定も督促も動かさない)。
+  const fee = useDocumentFeeLink(patientId, existing ? undefined : template.code);
+  const [confirming, setConfirming] = useState(false);
   const [values, setValues] = useState<DocumentFormValues | null>(
     existing ? documentFormValuesFromResponse(existing.response, layout) : null,
   );
@@ -389,7 +434,8 @@ function DocumentFormEntry({
     setValues(documentFormInitialValues(layout.fields, context));
   }, [values, existing, context, layout]);
 
-  async function handleSave() {
+  /** 必須項目を確かめ、算定の候補があれば確認を挟んでから保存する。 */
+  function handleSubmit() {
     if (!values || !questionnaire) return;
     setMessage(null);
     const missing = missingRequiredLabels(layout, values);
@@ -397,6 +443,13 @@ function DocumentFormEntry({
       setMessage(`${missing.join("、")}を入力してください。`);
       return;
     }
+    if (fee.candidates.length > 0) setConfirming(true);
+    else void handleSave([]);
+  }
+
+  async function handleSave(feeItems: ManagementFeeItem[]) {
+    if (!values || !questionnaire) return;
+    const documentTitle = title.trim() || template.name;
     try {
       await save.mutateAsync({
         template,
@@ -404,8 +457,9 @@ function DocumentFormEntry({
         questionnaire,
         patient,
         values,
-        title: title.trim() || template.name,
+        title: documentTitle,
         date,
+        extraEntries: existing ? undefined : fee.extraEntries({ items: feeItems, date, title: documentTitle }),
         meta: {
           status: "completed",
           authorName: practitioner ? practitionerDisplayName(practitioner) : "",
@@ -430,11 +484,12 @@ function DocumentFormEntry({
   }
 
   const busy = save.isPending;
-  const ready = values !== null && Boolean(questionnaire);
+  const ready = values !== null && Boolean(questionnaire) && (Boolean(existing) || fee.ready);
 
   return (
     <>
       <ErrorBanner error={questionnaireError} />
+      {!existing && <ErrorBanner error={fee.error} />}
       {message ? (
         <div className="error-banner" role="alert">
           <p className="error-banner__line error-banner__line--error">{message}</p>
@@ -473,11 +528,24 @@ function DocumentFormEntry({
                   )}
                 </button>
               )}
-              <button type="button" disabled={busy || !ready} onClick={() => void handleSave()}>
+              <button type="button" disabled={busy || !ready} onClick={handleSubmit}>
                 {busy ? "保存中..." : existing ? "更新" : "作成"}
               </button>
             </>
           }
+        />
+      )}
+      {confirming && (
+        <DocumentFeeConfirmModal
+          patientId={patientId}
+          date={date}
+          candidates={fee.candidates}
+          awaitedCodes={fee.awaitedCodes}
+          onConfirm={(feeItems) => {
+            setConfirming(false);
+            void handleSave(feeItems);
+          }}
+          onClose={() => setConfirming(false)}
         />
       )}
     </>

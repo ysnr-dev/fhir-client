@@ -11,6 +11,7 @@ import {
   completeNotificationEntry,
   notificationTaskEntry,
   taskInputOf,
+  taskInputsOf,
   taskOwnerName,
   taskPatientId,
   type NotificationRowBase,
@@ -23,8 +24,8 @@ import {
 // job/cron が無い)ので、N 日後にサーバーが何かをするのではなく、事象(退院)を書く
 // transaction に entry を足し、期限超過は表示時に判定する(既存 5 種別と同じ作り)。
 //
-// 文書の種別は Task.input で持つ。将来の診療情報提供書の返書やパス終了の督促も
-// 同じ種別に載せられる(通知一覧の種別は「文書作成」1 つで、内容欄に文書名が出る)。
+// 文書の種別は Task.input で持つ(通知一覧の種別は「文書作成」1 つで、内容欄に文書名が出る)。
+// 退院時サマリーは入院を、指導・管理料の要件の文書は指導・管理料のオーダーを focus にする。
 
 export const DOCUMENT_DUE_TASK_CODE = { code: "document-due", display: "文書作成" };
 
@@ -36,8 +37,14 @@ const DOCUMENT_LABEL_INPUT = "文書名";
 const ENCOUNTER_INPUT = "入院";
 const DISCHARGE_DATE_INPUT = "退院日";
 const DUE_DATE_INPUT = "期限";
+const TEMPLATE_INPUT = "テンプレート";
+const FEE_ITEM_INPUT = "算定項目";
+const FEE_CODE_INPUT = "算定コード";
+const BILLING_DATE_INPUT = "算定日";
 
 export const DISCHARGE_SUMMARY_DOCUMENT = "discharge-summary";
+/** 文書作成(文書テンプレート)で作る文書。どのテンプレートかは input「テンプレート」で持つ。 */
+export const TEMPLATE_DOCUMENT = "document-template";
 const DOCUMENT_LABELS: Record<string, string> = {
   [DISCHARGE_SUMMARY_DOCUMENT]: "退院時サマリー",
 };
@@ -49,10 +56,13 @@ export function documentLabelOf(code: string): string {
 /** 施設設定「文書作成の督促」。値は日数。 */
 export interface DocumentReminderSettings {
   discharge_summary_days: number;
+  /** 指導・管理料の要件の文書。算定日からの日数。 */
+  management_fee_days: number;
 }
 
 export const DEFAULT_DOCUMENT_REMINDER: DocumentReminderSettings = {
   discharge_summary_days: 14,
+  management_fee_days: 7,
 };
 
 /**
@@ -91,6 +101,62 @@ export function dischargeSummaryDueEntry(
   return notificationTaskEntry(task);
 }
 
+/**
+ * 指導・管理料の要件の文書が無いときの督促。宛先は指示医師。focus を指導・管理料のオーダーに
+ * するので、オーダーを削除すれば督促も一緒に消える。文書作成でそのテンプレートの文書を
+ * 作ると閉じる(templateDocumentDueTasks)。
+ */
+export function managementFeeDocumentDueEntry(args: {
+  /** 指導・管理料のヘッダ(同じ transaction の urn:uuid)。 */
+  orderReference: string;
+  patientId: string;
+  owner?: fhir4.Reference;
+  itemName: string;
+  /** 算定項目のレセ電算コード。 */
+  itemCode: string;
+  documentName: string;
+  templateCodes: string[];
+  /** 算定日。 */
+  date: string;
+  settings: DocumentReminderSettings;
+}): fhir4.BundleEntry {
+  const dueDate = addDays(args.date, args.settings.management_fee_days);
+  const task = buildNotificationTask({
+    code: DOCUMENT_DUE_TASK_CODE,
+    severity: "info",
+    focusReference: args.orderReference,
+    patientId: args.patientId,
+    owner: args.owner,
+    description: `${args.documentName} 未作成(${args.itemName} ${args.date}、期限 ${dueDate})`,
+    dueDate,
+    input: [
+      { type: { text: DOCUMENT_INPUT }, valueCode: TEMPLATE_DOCUMENT },
+      { type: { text: DOCUMENT_LABEL_INPUT }, valueString: args.documentName },
+      ...args.templateCodes.map((code) => ({ type: { text: TEMPLATE_INPUT }, valueString: code })),
+      { type: { text: FEE_ITEM_INPUT }, valueString: args.itemName },
+      { type: { text: FEE_CODE_INPUT }, valueString: args.itemCode },
+      { type: { text: BILLING_DATE_INPUT }, valueDate: args.date },
+      { type: { text: DUE_DATE_INPUT }, valueDate: dueDate },
+    ],
+  });
+  return notificationTaskEntry(task);
+}
+
+/** 督促が待っている文書テンプレートの code。 */
+export function documentDueTemplateCodes(task: fhir4.Task): string[] {
+  return taskInputsOf(task, TEMPLATE_INPUT).flatMap((input) => (input.valueString ? [input.valueString] : []));
+}
+
+/** 未対応の督促のうち、その文書テンプレートの文書を待っているもの。 */
+export function templateDocumentDueTasks(tasks: fhir4.Task[], templateCode: string): fhir4.Task[] {
+  return tasks.filter((task) => documentDueTemplateCodes(task).includes(templateCode));
+}
+
+/** 督促の元になった算定項目のレセ電算コード(指導・管理料の要件の文書のみ)。 */
+export function documentDueFeeCode(task: fhir4.Task): string {
+  return taskInputOf(task, FEE_CODE_INPUT)?.valueString ?? "";
+}
+
 /** 文書を確定したときに督促を閉じる entry。 */
 export function buildCompletedDocumentDueEntries(
   tasks: fhir4.Task[],
@@ -113,6 +179,10 @@ export interface DocumentDueRow extends NotificationRowBase {
   documentLabel: string;
   encounterId: string;
   dischargeDate: string;
+  /** 指導・管理料の要件の文書なら、算定項目と算定日、待っているテンプレート。 */
+  feeItemName: string;
+  billingDate: string;
+  templateCodes: string[];
   dueDate: string;
   /** 期限を過ぎた日数。期限内なら 0。表示時に今日と比べる(Task には書かない)。 */
   overdueDays: number;
@@ -133,6 +203,9 @@ export function documentDueRowOf(task: fhir4.Task, patient: fhir4.Patient | unde
     encounterId:
       taskInputOf(task, ENCOUNTER_INPUT)?.valueReference?.reference?.split("/").pop() ?? "",
     dischargeDate: taskInputOf(task, DISCHARGE_DATE_INPUT)?.valueDate ?? "",
+    feeItemName: taskInputOf(task, FEE_ITEM_INPUT)?.valueString ?? "",
+    billingDate: taskInputOf(task, BILLING_DATE_INPUT)?.valueDate ?? "",
+    templateCodes: documentDueTemplateCodes(task),
     dueDate,
     overdueDays: overdueDaysOf(dueDate),
   };

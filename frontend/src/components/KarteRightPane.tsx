@@ -107,7 +107,8 @@ export type KartePaneState =
   | { kind: "dpc-form1-create"; encounterId?: string; tab?: DpcPaneTab }
   | { kind: "dpc-form1-edit"; responseId: string; tab?: DpcPaneTab }
   // 文書テンプレート(Word / Excel / 様式)から文書を作る。作った文書は「ファイル」タブに入る。
-  | { kind: "document-create" }
+  // templateCode は選んでおくテンプレート(文書作成の督促から)。
+  | { kind: "document-create"; templateCode?: string }
   // 様式テンプレートから作った文書の内容を直す(ファイルタブの「内容編集」)。documentId は DocumentReference。
   | { kind: "document-edit"; documentId: string }
   | { kind: "vital-create"; problem?: ProblemRef }
@@ -634,7 +635,7 @@ function PaneContent({
         />
       );
     case "document-create":
-      return <DocumentCreatePanel patientId={patientId} onSaved={onSaved} />;
+      return <DocumentCreatePanel patientId={patientId} templateCode={state.templateCode} onSaved={onSaved} />;
     case "document-edit":
       return (
         <DocumentCreatePanel patientId={patientId} edit={{ documentId: state.documentId }} onSaved={onSaved} />

@@ -67,6 +67,8 @@ export type KarteOpenTarget =
   | { kind: "encounter-template"; encounterId: string; url: string }
   // 書いたテンプレートの回答を開く(入退院文書から。入院に結び付いた回答はカルテの時系列に出ないため)。
   | { kind: "questionnaire-response"; responseId: string }
+  // 文書作成を、文書テンプレートを選択済みで開く(文書作成の督促から)。
+  | { kind: "document-template"; templateCode: string }
   // Web 問診の回答の取込(患者帯のピクトグラムから)。
   | { kind: "intake"; responseId: number };
 
@@ -78,6 +80,8 @@ export function formatKarteOpen(target: KarteOpenTarget): string {
         ? target.compositionId
         : target.kind === "team-request"
           ? target.teamId
+          : target.kind === "document-template"
+            ? target.templateCode
           : target.kind === "questionnaire"
             ? target.url
             : target.kind === "condition-template"
@@ -113,6 +117,7 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   if (kind === "radiotherapy-review") return { kind, srId: id };
   if (kind === "nursing-summary") return { kind, compositionId: id };
   if (kind === "team-request") return { kind, teamId: id };
+  if (kind === "document-template") return { kind, templateCode: id };
   if (kind === "questionnaire") return { kind, url: id };
   if (kind === "questionnaire-response") return { kind, responseId: id };
   if (

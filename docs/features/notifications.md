@@ -14,7 +14,7 @@
 | `order-approval` オーダー承認 | お知らせ | 来歴(`Provenance`) | 指示医師(研修医の活動は指導医ごとに 1 件) | 承認 |
 | `note-countersign` カルテ承認 | お知らせ | 研修医の診療記録(`Composition`) | 指導医ごとに 1 件 | 承認(差戻し・コメントはカルテの詳細から) |
 | `note-returned` カルテ差戻し | お知らせ | 研修医の診療記録(`Composition`) | 記録した研修医 | 対応済(確定し直すと自動) |
-| `document-due` 文書作成 | お知らせ | 入院(`Encounter`) | 入院の主治医 | 対応済(文書の確定で自動) |
+| `document-due` 文書作成 | お知らせ | 退院時サマリーは入院(`Encounter`)、指導・管理料の要件の文書は指導・管理料のオーダー(`ServiceRequest`) | 入院の主治医 / 指示医師 | 対応済(文書の確定・作成で自動) |
 | `dpc-recoding-due` DPC再判定 | お知らせ | 入院(`Encounter`) | 入院の主治医 | 対応済(転棟時・退院時の決定で自動) |
 | `nursing-summary-returned` 看護サマリー差戻し | お知らせ | 看護サマリー(`Composition`) | サマリーの作成者 | 対応済(確定し直すと自動) |
 | `rx-inquiry` 疑義照会 | 注意 | 処方・注射のオーダー(`ServiceRequest`) | オーダーの依頼医 | 回答(カルテの詳細から。一覧からは閉じられない) |

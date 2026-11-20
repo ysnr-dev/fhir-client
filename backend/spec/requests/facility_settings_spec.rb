@@ -502,7 +502,7 @@ RSpec.describe "FacilitySettings", type: :request do
       end
 
       expect(response).to have_http_status(:ok)
-      expect(JSON.parse(response.body)["document_reminder"]).to eq("discharge_summary_days" => 7)
+      expect(JSON.parse(response.body)["document_reminder"]).to eq("discharge_summary_days" => 7, "management_fee_days" => 7)
     end
 
     it "rejects a negative number of days" do
@@ -910,7 +910,7 @@ RSpec.describe "FacilitySettings", type: :request do
       expect(response).to have_http_status(:ok)
       body = JSON.parse(response.body)
       expect(body["meal_schedule"]["lunch"]).to eq("11:30")
-      expect(body["document_reminder"]).to eq("discharge_summary_days" => 7)
+      expect(body["document_reminder"]).to eq("discharge_summary_days" => 7, "management_fee_days" => 7)
     end
   end
 

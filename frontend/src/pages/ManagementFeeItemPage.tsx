@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { ManagementFeeAddition, ManagementFeeItem, MedicalProcedure } from "../api/masterClient";
+import { useDocumentTemplates } from "../api/adminQueries";
 import { useManagementFeeItemMutations, useManagementFeeItems } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { MasterBackLink } from "../components/MasterBackLink";
@@ -10,7 +11,8 @@ import { formatPoints } from "../fhir/medicalManagementOrderHelpers";
 
 // 指導・管理料の項目マスタ(docs/medical-management-order-design.md §2)。
 // 診療行為マスタの B 章(医学管理等)・C 章(在宅)から、施設が算定するものだけを登録する。
-// 加算はカルテのフォームで項目の下に候補として出す。
+// 加算はカルテのフォームで項目の下に候補として出す。算定の要件になる文書(文書テンプレート)を
+// 結び付けると、算定のフォームが文書の有無を、文書作成が算定の候補を出す(同 §6)。
 export function ManagementFeeItemPage() {
   const [editing, setEditing] = useState<ManagementFeeItem | "new" | null>(null);
   const list = useManagementFeeItems();
@@ -100,12 +102,18 @@ function ItemEditModal({ item, onClose }: ItemEditModalProps) {
     inpatient: item?.inpatient ?? true,
     outpatient: item?.outpatient ?? true,
     monthlyLimit: item?.monthly_limit != null ? String(item.monthly_limit) : "",
+    documents: item?.documents ?? ([] as { code: string; name: string | null }[]),
+    documentIntervalMonths: item?.document_interval_months != null ? String(item.document_interval_months) : "",
     displayOrder: item?.display_order != null ? String(item.display_order) : "",
     active: item?.active ?? true,
   });
   // 手技の検索モーダルの用途。項目本体のコードか、加算の追加か。
   const [searching, setSearching] = useState<"receipt" | "addition" | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const templates = useDocumentTemplates(true);
+  const addableTemplates = (templates.data ?? []).filter(
+    (template) => !draft.documents.some((d) => d.code === template.code),
+  );
 
   function handleSelect(procedure: MedicalProcedure) {
     const name = procedure.name ?? procedure.procedure_code;
@@ -148,6 +156,8 @@ function ItemEditModal({ item, onClose }: ItemEditModalProps) {
       inpatient: draft.inpatient,
       outpatient: draft.outpatient,
       monthly_limit: draft.monthlyLimit ? Number(draft.monthlyLimit) : null,
+      document_template_codes: draft.documents.map((d) => d.code),
+      document_interval_months: draft.documentIntervalMonths ? Number(draft.documentIntervalMonths) : null,
       display_order: draft.displayOrder ? Number(draft.displayOrder) : null,
       active: draft.active,
     };
@@ -266,6 +276,59 @@ function ItemEditModal({ item, onClose }: ItemEditModalProps) {
               onChange={(e) => setDraft({ ...draft, monthlyLimit: e.target.value })}
             />
           </label>
+          <div className="management-fee-item__additions">
+            <span>要件の文書</span>
+            <ul>
+              {draft.documents.map((document) => {
+                const name = document.name ?? "(削除済み)";
+                return (
+                  <li key={document.code}>
+                    <span>{name}</span>
+                    <button
+                      type="button"
+                      className="rp-card__icon-button"
+                      title={`${name}を削除`}
+                      aria-label={`${name}を削除`}
+                      onClick={() =>
+                        setDraft((d) => ({ ...d, documents: d.documents.filter((x) => x.code !== document.code) }))
+                      }
+                    >
+                      <TrashIcon />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <select
+              value=""
+              aria-label="要件の文書を追加"
+              onChange={(e) => {
+                const template = addableTemplates.find((t) => t.code === e.target.value);
+                if (template) {
+                  setDraft((d) => ({
+                    ...d,
+                    documents: [...d.documents, { code: template.code, name: template.name }],
+                  }));
+                }
+              }}
+            >
+              <option value="">追加</option>
+              {addableTemplates.map((template) => (
+                <option key={template.code} value={template.code}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <label>
+            文書の有効月数
+            <input
+              type="number"
+              min={1}
+              value={draft.documentIntervalMonths}
+              onChange={(e) => setDraft({ ...draft, documentIntervalMonths: e.target.value })}
+            />
+          </label>
           <label>
             表示順
             <input
@@ -285,7 +348,7 @@ function ItemEditModal({ item, onClose }: ItemEditModalProps) {
         </div>
 
         <ErrorBanner
-          error={mutations.create.error ?? mutations.update.error ?? mutations.remove.error}
+          error={mutations.create.error ?? mutations.update.error ?? mutations.remove.error ?? templates.error}
         />
 
         <div className="lab-order-item__actions">

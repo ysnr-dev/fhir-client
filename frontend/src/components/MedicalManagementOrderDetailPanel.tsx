@@ -25,6 +25,9 @@ export function MedicalManagementOrderDetailPanel({
 
   const problem = medicalManagementOrderProblem(serviceRequest);
   const currentProblem = problem ? problemsById?.get(problem.conditionId) : undefined;
+  const documents = (serviceRequest.supportingInfo ?? [])
+    .filter((ref) => ref.reference?.startsWith("DocumentReference/"))
+    .map((ref) => ref.display || "文書");
   const problemText = currentProblem ? problemLabel(currentProblem) : problem?.display || "-";
 
   return (
@@ -40,6 +43,12 @@ export function MedicalManagementOrderDetailPanel({
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>依頼科 | 指示医師</dt>
           <dd>{orderContextSummary(orderRequester(serviceRequest)) || "-"}</dd>
+          {documents.length > 0 && (
+            <>
+              <dt>文書</dt>
+              <dd>{documents.join("、")}</dd>
+            </>
+          )}
           <dt>備考</dt>
           <dd>{summary.comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />

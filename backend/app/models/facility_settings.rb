@@ -89,9 +89,11 @@ class FacilitySettings < ApplicationRecord
 
   # 文書作成の督促。退院時サマリーは退院日からこの日数を期限にして、退院の時点で
   # 主治医あての通知 Task を作る(期限は Task に焼き付くので、ここを変えても
-  # 作成済みの通知は動かない)。
+  # 作成済みの通知は動かない)。指導・管理料の要件の文書は、算定日からの日数を期限にして
+  # 登録の時点で指示医師あての通知を作る。
   DEFAULT_DOCUMENT_REMINDER = {
-    "discharge_summary_days" => 14
+    "discharge_summary_days" => 14,
+    "management_fee_days" => 7
   }.freeze
 
   # 処方区分の初期値。処方フォームを開いたときと、入外区分を選び直したときの値に使う。
@@ -422,7 +424,7 @@ class FacilitySettings < ApplicationRecord
     },
     "document_reminder" => {
       default: DEFAULT_DOCUMENT_REMINDER,
-      shape: { fields: { "discharge_summary_days" => DAYS } }
+      shape: { fields: { "discharge_summary_days" => DAYS, "management_fee_days" => DAYS } }
     },
     "prescription_category" => {
       default: DEFAULT_PRESCRIPTION_CATEGORY,

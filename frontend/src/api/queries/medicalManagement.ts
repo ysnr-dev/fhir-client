@@ -5,6 +5,7 @@ import {
   MEDICAL_MANAGEMENT_ORDER_TYPE,
   medicalManagementProceduresOf,
 } from "../../fhir/medicalManagementOrderHelpers";
+import { documentTemplateTypeSearch, latestDocumentDates } from "../../fhir/managementFeeDocumentHelpers";
 import { postBundle, searchResource } from "../fhirClient";
 import { makeOrderDetailHook, ORDER_PERFORM_REVINCLUDES, resourcesOfType, searchAllPages } from "./core";
 import { invalidateOrderDependents, postOrderDeleteBundle } from "./orderDelete";
@@ -80,5 +81,32 @@ export function usePatientMedicalManagementProcedures(patientId: string | undefi
       return { procedures: matches, truncated };
     },
     enabled: Boolean(patientId),
+  });
+}
+
+const REQUIRED_DOCUMENT_PAGE = 200;
+
+/**
+ * 算定の要件になる文書の、テンプレートごとの最後の診療日。文書の有無の判定に使うので、
+ * 上限で欠けた結果は使わない(complete)。
+ */
+export function usePatientRequiredDocuments(patientId: string | undefined, templateCodes: string[]) {
+  const codes = [...new Set(templateCodes)].sort();
+  return useQuery({
+    queryKey: ["DocumentReference", "search", "required-documents", patientId, codes],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("type", documentTemplateTypeSearch(codes));
+      params.set("_sort", "-date");
+      params.set("_elements", "type,date");
+      const { matches } = await searchAllPages<fhir4.DocumentReference>("DocumentReference", params, {
+        page: REQUIRED_DOCUMENT_PAGE,
+        maxPages: 5,
+        complete: true,
+      });
+      return latestDocumentDates(matches);
+    },
+    enabled: Boolean(patientId) && codes.length > 0,
   });
 }

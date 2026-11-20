@@ -291,12 +291,14 @@ export function FacilitySettingsPage() {
     setMedicationDraft((prev) => ({ ...(prev ?? savedMedication), [key]: value }));
   }
 
-  // 文書作成の督促。退院時サマリーは退院日からこの日数を期限にして通知を作る。
+  // 文書作成の督促。退院時サマリーは退院日から、指導・管理料の要件の文書は算定日から、
+  // この日数を期限にして通知を作る。
   const [reminderDraft, setReminderDraft] = useState<DocumentReminderSettings | undefined>(undefined);
-  const savedReminder = settings.data?.document_reminder ?? DEFAULT_DOCUMENT_REMINDER;
+  const savedReminder = { ...DEFAULT_DOCUMENT_REMINDER, ...settings.data?.document_reminder };
   const reminder = reminderDraft ?? savedReminder;
-  const reminderValid =
-    Number.isInteger(reminder.discharge_summary_days) && reminder.discharge_summary_days >= 0;
+  const reminderValid = [reminder.discharge_summary_days, reminder.management_fee_days].every(
+    (days) => Number.isInteger(days) && days >= 0,
+  );
 
   // 入退院文書の作成状況の対象と期限。入院診療計画書はテンプレートの url(版を問わない)で数える。
   const [admissionDocsDraft, setAdmissionDocsDraft] = useState<AdmissionDocumentSettings | undefined>(undefined);
@@ -1141,6 +1143,22 @@ export function FacilitySettingsPage() {
                     aria-label="退院時サマリーの期限の日数"
                   />
                   <span className="facility-settings__unit">日以内(退院日から)</span>
+                </span>
+              </label>
+              <label>
+                指導・管理料の文書の期限
+                <span className="facility-settings__times">
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={reminder.management_fee_days}
+                    onChange={(e) =>
+                      setReminderDraft({ ...reminder, management_fee_days: Number(e.target.value) })
+                    }
+                    aria-label="指導・管理料の文書の期限の日数"
+                  />
+                  <span className="facility-settings__unit">日以内(算定日から)</span>
                 </span>
               </label>
               {/* ここから下は入退院文書の作成状況(/admission-documents)の判定だけに使う(通知は作らない)。 */}

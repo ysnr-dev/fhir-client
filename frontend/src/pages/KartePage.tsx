@@ -422,6 +422,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             ? { kind: "admission-plan-create", encounterId: openTarget.encounterId }
           : openTarget.kind === "team-request"
             ? { kind: "team-request-create", teamId: openTarget.teamId }
+          : openTarget.kind === "document-template"
+            ? { kind: "document-create", templateCode: openTarget.templateCode }
           : openTarget.kind === "questionnaire"
             ? { kind: "qr-create", templateCanonical: openTarget.url }
           : openTarget.kind === "condition-template"

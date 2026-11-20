@@ -1,5 +1,7 @@
 import { useMemo } from "react";
-import { useCreatePrescription, useUpdateMedicalManagementOrder } from "../api/queries";
+import { useCreatePrescription, useFacilitySettings, useUpdateMedicalManagementOrder } from "../api/queries";
+import { DEFAULT_DOCUMENT_REMINDER, managementFeeDocumentDueEntry } from "../fhir/documentDueHelpers";
+import type { MissingFeeDocument } from "../fhir/managementFeeDocumentHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { orderRequester, withOrderWard } from "../fhir/orderHeader";
 import {
@@ -37,6 +39,7 @@ export function MedicalManagementOrderCreatePanel({
   const defaultSetting = useDefaultOrderSetting(patientId);
   const waiting = (sourceSrId && !source.ready) || !defaultSetting.ready;
   const requester = useOrderContext();
+  const facility = useFacilitySettings();
 
   const initialValues = useMemo(
     () =>
@@ -46,11 +49,30 @@ export function MedicalManagementOrderCreatePanel({
     [source.initialValues, defaultProblem, defaultSetting.setting],
   );
 
-  function handleSubmit(values: MedicalManagementOrderFormValues) {
+  function handleSubmit(values: MedicalManagementOrderFormValues, missing: MissingFeeDocument[]) {
     const attribution = withOrderWard(requester, values.setting, defaultSetting);
-    createOrder.mutate(buildMedicalManagementOrderBundle(values, patientId, attribution), {
-      onSuccess: onSaved,
-    });
+    const bundle = buildMedicalManagementOrderBundle(values, patientId, attribution);
+    // 要件の文書が足りない項目は、指示医師あての文書作成の督促を同じ transaction で作る。
+    const orderReference = bundle.entry?.[0]?.fullUrl;
+    const settings = { ...DEFAULT_DOCUMENT_REMINDER, ...facility.data?.document_reminder };
+    const reminders = orderReference
+      ? missing.map((item) =>
+          managementFeeDocumentDueEntry({
+            orderReference,
+            patientId,
+            owner: attribution.practitionerId
+              ? { reference: `Practitioner/${attribution.practitionerId}`, display: attribution.practitionerName }
+              : undefined,
+            itemName: item.name,
+            itemCode: item.code,
+            documentName: item.documentName,
+            templateCodes: item.templateCodes,
+            date: values.date,
+            settings,
+          }),
+        )
+      : [];
+    createOrder.mutate({ ...bundle, entry: [...(bundle.entry ?? []), ...reminders] }, { onSuccess: onSaved });
   }
 
   return (

@@ -33,6 +33,12 @@ export interface ManagementFeeItem {
   receipt_max_times?: string | null;
   /** addition_codes を名称・点数つきに展開したもの。一覧・詳細 API が添える。 */
   additions?: ManagementFeeAddition[];
+  /** 算定の要件になる文書(文書テンプレートの code)。どれか 1 つがあれば足りる。 */
+  document_template_codes: string[];
+  /** 文書の有効月数。null は算定日当日の文書が要る。 */
+  document_interval_months: number | null;
+  /** document_template_codes を名称つきに展開したもの。無いテンプレートは name が null。 */
+  documents?: { code: string; name: string | null }[];
 }
 
 export interface ManagementFeeItemPayload {
@@ -43,6 +49,8 @@ export interface ManagementFeeItemPayload {
   inpatient?: boolean;
   outpatient?: boolean;
   monthly_limit?: number | null;
+  document_template_codes?: string[];
+  document_interval_months?: number | null;
   active?: boolean;
   display_order?: number | null;
   note?: string | null;

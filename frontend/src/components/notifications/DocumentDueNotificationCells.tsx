@@ -7,10 +7,10 @@ import type { DocumentDueRow } from "../../fhir/documentDueHelpers";
 export function DocumentDueNotificationCells({ row }: { row: DocumentDueRow }) {
   return (
     <>
-      <td className="notification__compact">{row.dischargeDate}</td>
+      <td className="notification__compact">{row.dischargeDate || row.billingDate}</td>
       <td className="notification__content">
         <span className="notification__review-kind">{row.documentLabel}</span>
-        未作成(期限 {row.dueDate || "-"})
+        未作成({row.feeItemName ? `${row.feeItemName}、` : ""}期限 {row.dueDate || "-"})
         {row.overdueDays > 0 && (
           <span className="notification__overdue"> 期限超過 {row.overdueDays} 日</span>
         )}

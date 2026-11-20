@@ -49,15 +49,18 @@ module Master
                 "master_medical_procedures.max_times AS receipt_max_times")
     end
 
-    # 加算コードを名称・点数つきに展開する。ページ内の加算をまとめて 1 回で引く。
+    # 加算コードを名称・点数つきに、要件の文書を名称つきに展開する。ページ内のぶんをまとめて 1 回ずつ引く。
     def with_additions(records)
       codes = records.flat_map(&:addition_codes).uniq
+      documents = DocumentTemplate.where(code: records.flat_map(&:document_template_codes).uniq)
+                                  .pluck(:code, :name).to_h
       procedures = Master::MedicalProcedure.where(procedure_code: codes)
                                            .pluck(:procedure_code, :name, :points)
                                            .to_h { |code, name, points| [code, { code: code, name: name, points: points }] }
       records.map do |record|
         record.as_json.merge(
-          "additions" => record.addition_codes.map { |code| procedures[code] || { code: code, name: nil, points: nil } }
+          "additions" => record.addition_codes.map { |code| procedures[code] || { code: code, name: nil, points: nil } },
+          "documents" => record.document_template_codes.map { |code| { code: code, name: documents[code] } }
         )
       end
     end
@@ -75,9 +78,9 @@ module Master
     end
 
     def record_params
-      params.permit(*(Master::ManagementFeeItem.column_names - %w[id addition_codes search_name search_kana
-                                                                   created_at updated_at]),
-                    addition_codes: [])
+      params.permit(*(Master::ManagementFeeItem.column_names - %w[id addition_codes document_template_codes
+                                                                   search_name search_kana created_at updated_at]),
+                    addition_codes: [], document_template_codes: [])
     end
   end
 end

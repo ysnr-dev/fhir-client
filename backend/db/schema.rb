@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_18_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_20_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1396,6 +1396,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_100000) do
     t.string "search_kana"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "document_template_codes", default: [], null: false
+    t.integer "document_interval_months"
     t.index ["item_code"], name: "index_master_management_fee_items_on_item_code", unique: true
     t.index ["receipt_code"], name: "index_master_management_fee_items_on_receipt_code"
   end

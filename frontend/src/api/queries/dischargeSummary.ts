@@ -23,7 +23,7 @@ import {
   searchResource,
   updateResource,
 } from "../fhirClient";
-import { hasRelation, NOTIFICATION_TASK_KEY, resourcesOfType } from "./core";
+import { hasRelation, NOTIFICATION_TASK_KEY, resourcesOfType, searchAllPages } from "./core";
 import { fetchWardNameByBed } from "./encounter";
 import { fetchOpenMealAllergyChecks, mealAllergyCheckEntriesFor } from "./meal";
 import { KARTE_CONDITION_COUNT, saveClinicalNote, staleObservationEntries } from "./micro";
@@ -97,6 +97,24 @@ export async function fetchDocumentDueTasks(encounterId: string): Promise<fhir4.
   params.set("_count", "10");
   const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
   return resourcesOfType<fhir4.Task>(bundle, "Task");
+}
+
+/** その患者の未対応の文書作成督促。文書作成で、作った文書を待っていた督促を閉じるのに使う。 */
+export async function fetchPatientDocumentDueTasks(patientId: string): Promise<fhir4.Task[]> {
+  const params = new URLSearchParams();
+  params.set("code", `${TASK_CODE_SYSTEM}|${DOCUMENT_DUE_TASK_CODE.code}`);
+  params.set("subject", `Patient/${patientId}`);
+  params.set("status", "requested");
+  const { matches } = await searchAllPages<fhir4.Task>("Task", params, { page: 100, maxPages: 5, complete: true });
+  return matches;
+}
+
+export function usePatientDocumentDueTasks(patientId: string | undefined) {
+  return useQuery({
+    queryKey: [...NOTIFICATION_TASK_KEY, "document-due", "patient", patientId],
+    queryFn: () => fetchPatientDocumentDueTasks(patientId as string),
+    enabled: Boolean(patientId),
+  });
 }
 
 export function useDocumentDueTasks(encounterId: string | undefined) {

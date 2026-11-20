@@ -294,12 +294,15 @@ const documentDueKind = defineNotificationKind<DocumentDueRow>({
   label: DOCUMENT_DUE_TASK_CODE.display,
   toRow: documentDueRowOf,
   Cells: DocumentDueNotificationCells,
-  // カルテの右ペインをその入院の退院時サマリーで開く(一回限りの open パラメータ)。
+  // カルテの右ペインをその入院の退院時サマリー、または待っている文書テンプレートの文書作成で開く
+  // (一回限りの open パラメータ)。
   karteLink: (row) => {
     if (!row.patientId) return null;
     const params = new URLSearchParams();
     if (row.documentCode === DISCHARGE_SUMMARY_DOCUMENT && row.encounterId) {
       params.set(KARTE_OPEN_PARAM, formatKarteOpen({ kind: "discharge-summary", encounterId: row.encounterId }));
+    } else if (row.templateCodes[0]) {
+      params.set(KARTE_OPEN_PARAM, formatKarteOpen({ kind: "document-template", templateCode: row.templateCodes[0] }));
     }
     const query = params.toString();
     return `/patients/${row.patientId}/karte${query ? `?${query}` : ""}`;

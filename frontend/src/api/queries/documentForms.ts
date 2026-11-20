@@ -13,6 +13,8 @@ import {
 import { DOCUMENT_TEMPLATES_KEY } from "../adminQueries";
 import { createResource, postBundle, searchResource } from "../fhirClient";
 import { postDocumentFormPdf } from "../reportsClient";
+import { invalidateDocumentFeeLink } from "./files";
+import { useWithOrderProvenance } from "./provenance";
 import {
   fieldSetChanged,
   normalizeLayout,
@@ -230,6 +232,11 @@ export interface SaveDocumentFormDocumentArgs {
   meta: QuestionnaireResponseMetaValues;
   practitionerId?: string;
   practitionerName?: string;
+  /**
+   * 文書と同じ transaction で書く entry(文書作成から算定する指導・管理料、閉じる督促)。新規のみ。
+   * 引数は作る文書の参照(urn:uuid)。オーダーが入るので来歴も添える。
+   */
+  extraEntries?: (documentReference: string) => Promise<fhir4.BundleEntry[]>;
   /** 再編集なら、読んだ時点の文書と回答(版を固定したもの)。 */
   existing?: {
     doc: fhir4.DocumentReference;
@@ -245,6 +252,7 @@ export interface SaveDocumentFormDocumentArgs {
  */
 export function useSaveDocumentFormDocument() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
     mutationFn: async (args: SaveDocumentFormDocumentArgs): Promise<Blob> => {
       const blob = await postDocumentFormPdf(args.template.id, pdfFieldPayload(args.layout, args.values));
@@ -293,7 +301,12 @@ export function useSaveDocumentFormDocument() {
             practitionerName: args.practitionerName,
             documentType,
           });
-      await postBundle(bundle);
+      if (args.extraEntries && !args.existing) {
+        const extra = await args.extraEntries(documentUrl);
+        await postBundle(withProvenance({ ...bundle, entry: [...(bundle.entry ?? []), ...extra] }));
+      } else {
+        await postBundle(bundle);
+      }
       return blob;
     },
     retry: false,
@@ -302,6 +315,8 @@ export function useSaveDocumentFormDocument() {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse"] });
       if (args.existing) {
         queryClient.invalidateQueries({ queryKey: ["DocumentReference", args.existing.doc.id] });
+      } else if (args.extraEntries) {
+        invalidateDocumentFeeLink(queryClient);
       }
     },
   });

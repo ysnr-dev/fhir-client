@@ -32363,7 +32363,8 @@ input.nursing-picker__search {
   gap: 6px;
 }
 
-.management-fee-item__additions > button {
+.management-fee-item__additions > button,
+.management-fee-item__additions > select {
   align-self: flex-start;
 }
 
@@ -32383,7 +32384,8 @@ input.nursing-picker__search {
   margin-top: 2px;
 }
 
-.prescription-form label.medical-management-form__item {
+.prescription-form label.medical-management-form__item,
+.document-fee-modal label.medical-management-form__item {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -32406,6 +32408,14 @@ input.nursing-picker__search {
 .medical-management-form__history {
   font-size: 12px;
   color: var(--text);
+}
+
+/* 文書作成で挟む算定の確認。 */
+.document-fee-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 420px;
 }
 
 /* 化学療法の当日の投与可否(docs/chemo-regimen-design.md §8.18)。 */

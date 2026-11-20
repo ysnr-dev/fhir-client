@@ -20,7 +20,8 @@ import {
 import { deleteImagingStudy, fetchStoredStudies, fetchStudyInstances } from "../imagingClient";
 import { IMAGING_STUDY_SUMMARY_ELEMENTS } from "../../fhir/imagingHelpers";
 import { responseWithDocumentDeleteBundle } from "../../fhir/documentFormQuestionnaire";
-import { hasRelation } from "./core";
+import { hasRelation, NOTIFICATION_TASK_KEY } from "./core";
+import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 
 // --- カルテに取り込んだファイル(docs/patient-file-design.md) ------------------
 
@@ -92,9 +93,11 @@ export interface PatientFileUploadResult {
  */
 export function useCreatePatientFiles() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
     mutationFn: async ({
       drafts,
+      extraEntries,
       ...options
     }: {
       drafts: PatientFileDraft[];
@@ -105,13 +108,25 @@ export function useCreatePatientFiles() {
       practitionerName?: string;
       /** 文書テンプレートから作った文書なら、元のテンプレート。 */
       documentType?: PatientFileDocumentType;
+      /**
+       * 文書と同じ transaction で書く entry(文書作成から算定する指導・管理料、閉じる督促)。
+       * 引数は作る文書の参照(urn:uuid)。オーダーが入るので来歴も添える。
+       */
+      extraEntries?: (documentReference: string) => Promise<fhir4.BundleEntry[]>;
     }): Promise<PatientFileUploadResult> => {
       let saved = 0;
       const failedKeys: string[] = [];
       const errors: string[] = [];
       for (const draft of drafts) {
         try {
-          await postBundle(buildPatientFileBundle(draft, options));
+          if (extraEntries) {
+            const documentUrl = `urn:uuid:${crypto.randomUUID()}`;
+            const bundle = buildPatientFileBundle(draft, options, documentUrl);
+            const extra = await extraEntries(documentUrl);
+            await postBundle(withProvenance({ ...bundle, entry: [...(bundle.entry ?? []), ...extra] }));
+          } else {
+            await postBundle(buildPatientFileBundle(draft, options));
+          }
           saved += 1;
         } catch (err) {
           failedKeys.push(draft.key);
@@ -122,10 +137,19 @@ export function useCreatePatientFiles() {
       }
       return { saved, failedKeys, errors };
     },
-    onSuccess: () => {
+    onSuccess: (_result, args) => {
       queryClient.invalidateQueries({ queryKey: PATIENT_FILE_KEY });
+      if (args.extraEntries) invalidateDocumentFeeLink(queryClient);
     },
   });
+}
+
+/** 文書と一緒に指導・管理料と督促を書いたあとの読み直し。 */
+export function invalidateDocumentFeeLink(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+  queryClient.invalidateQueries({ queryKey: ["Procedure", "search", "medical-management"] });
+  queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+  invalidateProvenance(queryClient);
 }
 
 export function useUpdatePatientFile() {

@@ -1,7 +1,14 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { ManagementFeeItem } from "../api/masterClient";
 import { useManagementFeeItems } from "../api/masterQueries";
-import { usePatientMedicalManagementProcedures } from "../api/queries";
+import { usePatientMedicalManagementProcedures, usePatientRequiredDocuments } from "../api/queries";
+import {
+  missingFeeDocuments,
+  requiredDocumentAdvisories,
+  requiredDocumentLabel,
+  requiredDocumentStatus,
+  type MissingFeeDocument,
+} from "../fhir/managementFeeDocumentHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   emptyMedicalManagementOrderForm,
@@ -31,13 +38,15 @@ import { TrashIcon } from "./icons/TrashIcon";
 // 並べ、算定するものにチェックを入れる。チェックした項目の下に加算の候補が出る。
 // 各項目には前回算定日と当月の回数を添え、項目マスタの上限に達していれば表示のみの警告を出す
 // (算定できるかの判断は医事会計に任せる。docs/medical-management-order-design.md §5)。
+// 文書が要件の項目には文書の最終作成日を添え、足りなければ登録時に督促を作らせる(同 §6)。
 
 interface MedicalManagementOrderFormProps {
   patientId: string;
   initialValues?: MedicalManagementOrderFormValues;
   /** 編集中のオーダー。前回算定日・当月の回数から自分の記録を外す。 */
   editingOrderId?: string;
-  onSubmit: (values: MedicalManagementOrderFormValues) => void;
+  /** missing は選んだ項目のうち要件の文書が足りないもの(新規登録で文書作成の督促にする)。 */
+  onSubmit: (values: MedicalManagementOrderFormValues, missing: MissingFeeDocument[]) => void;
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
@@ -88,8 +97,18 @@ export function MedicalManagementOrderForm({
     () => medicalManagementLimitAdvisories(values.lines, history, limits),
     [values.lines, history, limits],
   );
+  const documentCodes = useMemo(() => masterItems.flatMap((item) => item.document_template_codes), [masterItems]);
+  const documents = usePatientRequiredDocuments(setMode ? undefined : patientId, documentCodes);
+  // 文書の有無が読めるまでは足りないと決めない(読めていない間の登録で督促を作らない)。
+  const missingDocuments = useMemo(
+    () => (documents.data ? missingFeeDocuments(values.lines, masterItems, documents.data, values.date) : []),
+    [documents.data, values.lines, masterItems, values.date],
+  );
   const ruleAdvisories = useAdvisoryRuleAdvisories(setMode ? "" : patientId, "medical-management");
-  const sessionInput = useMemo(() => [...limitAdvisories, ...ruleAdvisories], [limitAdvisories, ruleAdvisories]);
+  const sessionInput = useMemo(
+    () => [...limitAdvisories, ...requiredDocumentAdvisories(missingDocuments), ...ruleAdvisories],
+    [limitAdvisories, missingDocuments, ruleAdvisories],
+  );
   const session = useAdvisorySession(sessionInput, "medical-management", !setMode);
 
   // マスタから外れた(無効にした・入外区分が合わない)項目でも、保存済みなら行として残す。
@@ -144,13 +163,21 @@ export function MedicalManagementOrderForm({
     setValidationError(null);
 
     session.confirm([]);
-    onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
+    onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) }, missingDocuments);
   }
 
   function historyOf(code: string, limit: number | null) {
     if (setMode) return null;
     const label = historyLabel(history.get(code), limit);
     return label ? <span className="medical-management-form__history">{label}</span> : null;
+  }
+
+  function documentOf(item: ManagementFeeItem) {
+    if (setMode || !documents.data) return null;
+    const status = requiredDocumentStatus(item, documents.data, values.date);
+    return status ? (
+      <span className="medical-management-form__history">{requiredDocumentLabel(status)}</span>
+    ) : null;
   }
 
   return (
@@ -161,7 +188,7 @@ export function MedicalManagementOrderForm({
         </div>
       )}
       <ErrorBanner error={submitError} />
-      <ErrorBanner error={master.error ?? records.error} />
+      <ErrorBanner error={master.error ?? records.error ?? documents.error} />
       <AdvisoryNotice advisories={session.advisories} />
 
       <fieldset>
@@ -180,6 +207,7 @@ export function MedicalManagementOrderForm({
                   <span className="medical-management-form__name">{item.name}</span>
                   <span className="medical-management-form__points">{formatPoints(item.receipt_points)}</span>
                   {historyOf(item.receipt_code, item.monthly_limit)}
+                  {documentOf(item)}
                 </label>
                 {line && (item.additions ?? []).length > 0 && (
                   <ul className="medical-management-form__additions">

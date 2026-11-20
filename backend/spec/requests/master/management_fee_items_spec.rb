@@ -54,6 +54,32 @@ RSpec.describe "Master::ManagementFeeItems", type: :request do
     end
   end
 
+  describe "要件の文書" do
+    it "文書テンプレートの名称を添えて返し、無いテンプレートは名称なしで返す" do
+      template = DocumentTemplate.create!(name: "療養計画書", file_name: "plan.docx", data: "PK\x03\x04docx".b)
+      create_item("M0020", document_template_codes: [template.code, "missing"], document_interval_months: 4)
+
+      get "/master/management_fee_items", params: { item_code: "M0020" }
+
+      item = body["items"].first
+      expect(item["document_interval_months"]).to eq(4)
+      expect(item["documents"]).to eq([{ "code" => template.code, "name" => "療養計画書" },
+                                       { "code" => "missing", "name" => nil }])
+    end
+
+    it "文書と有効月数を保存でき、月数が 0 以下なら 422" do
+      post "/master/management_fee_items", params: { name: "x", receipt_code: "113001810",
+                                                     document_template_codes: %w[abc], document_interval_months: 4 },
+                                           as: :json
+      expect(response).to have_http_status(:created)
+      expect(body["document_template_codes"]).to eq(%w[abc])
+
+      post "/master/management_fee_items", params: { name: "y", receipt_code: "113001810",
+                                                     document_interval_months: 0 }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "POST /master/management_fee_items" do
     it "項目コードを省略すると自動採番し、加算コードを保存する" do
       create_item("000004")

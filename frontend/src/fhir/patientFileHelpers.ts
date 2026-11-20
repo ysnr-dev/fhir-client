@@ -127,10 +127,12 @@ export function buildPatientFileBundle(
     practitionerName?: string;
     documentType?: PatientFileDocumentType;
   },
+  /** DocumentReference の fullUrl(urn:uuid)。同じ Bundle の他の entry からこの文書を指すときに渡す。 */
+  documentUrl?: string,
 ): fhir4.Bundle {
   const { placeholder, entry } = imageBinaryEntry(draft.dataUrl, draft.contentType);
   const doc = buildDocumentReference({ ...options, draft, attachmentUrl: placeholder });
-  return resourceWithImagesBundle(doc, [entry]);
+  return resourceWithImagesBundle(doc, [entry], undefined, documentUrl);
 }
 
 /**

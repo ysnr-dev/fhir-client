@@ -10,18 +10,24 @@ module Master
     validates :name, presence: true
     validates :receipt_code, format: { with: RECEIPT_CODE, message: "は 9 桁の数字で入力してください" }
     validates :monthly_limit, numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
+    validates :document_interval_months, numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
     validate :addition_codes_must_be_receipt_codes
     validate :must_apply_to_some_setting
 
     scope :active, -> { where(active: true) }
 
     before_validation :normalize_addition_codes
+    before_validation :normalize_document_template_codes
     before_save :set_search_columns
 
     private
 
     def normalize_addition_codes
       self.addition_codes = Array(addition_codes).map { |c| c.to_s.strip }.compact_blank.uniq
+    end
+
+    def normalize_document_template_codes
+      self.document_template_codes = Array(document_template_codes).map { |c| c.to_s.strip }.compact_blank.uniq
     end
 
     def addition_codes_must_be_receipt_codes
