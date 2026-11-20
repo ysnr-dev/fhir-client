@@ -57,7 +57,7 @@
 | [guidance.md](guidance.md) | 栄養指導・服薬指導(リハビリとの違い、登録から受付・予約・指導の記録・担当薬剤師・終了・退院での打ち切りまで) |
 | [meal.md](meal.md) | 食事オーダー(登録から食事変更・再開・パターン食・摂取量まで、入退院と外出泊の連動、食物アレルギー、食事一覧) |
 | [nursing.md](nursing.md) | 看護指示(登録から指示受け・頻度の予定・実施・終了・中止・退院での打ち切り、看護計画・パスから出る指示まで) |
-| [medical-management.md](medical-management.md) | 指導・管理料(項目マスタの準備から算定・前回算定日と上限の警告・編集・削除・会計の送信まで) |
+| [medical-management.md](medical-management.md) | 指導・管理料(項目マスタの準備から算定・前回算定日と上限の警告・編集・削除・医事送信まで) |
 | [clinical-pathway.md](clinical-pathway.md) | クリニカルパス(パス定義の作成・承認から適用・日々の評価とバリアンス・フェーズの進行・終了・中止まで、予定外の追加、日程の変更) |
 | [admission-discharge.md](admission-discharge.md) | 入院から退院まで(入院予定・入院実施・ベッドと病棟の移動・外出泊・退院予定・退院と各取消、入院時と退院後の文書) |
 | [outpatient.md](outpatient.md) | 外来の受付から会計まで(予約・受付・Web 問診・呼出と待合表示板・診察・一時終了・診察終了・医事送信と会計済、各取消) |
