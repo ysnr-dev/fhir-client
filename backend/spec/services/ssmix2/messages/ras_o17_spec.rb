@@ -6,7 +6,7 @@ RSpec.describe Ssmix2::Messages::RasO17 do
   let(:header) do
     { "resourceType" => "ServiceRequest", "id" => "sr1", "status" => "active", "subject" => { "reference" => "Patient/p1" },
       "category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "prescription" }] },
-                     { "coding" => [{ "system" => F::PRESCRIPTION_SETTING_SYSTEM, "code" => "inpatient" }] }],
+                     CareSetting.category("inpatient")],
       "authoredOn" => "2026-11-04T10:30:45+09:00", "occurrenceDateTime" => "2026-11-04",
       "requester" => { "reference" => "Practitioner/doc1" },
       "extension" => [{ "url" => F::ORDER_DEPARTMENT_EXT_URL, "valueReference" => { "reference" => "Organization/dept1" } }] }
@@ -116,7 +116,7 @@ RSpec.describe Ssmix2::Messages::RasO17 do
 
   it "builds OMP-12 for an injection with RXC components, the RP group number and a stopped infusion as PA" do
     injection_header = header.merge("category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "injection" }] },
-                                                   { "coding" => [{ "system" => F::PRESCRIPTION_SETTING_SYSTEM, "code" => "inpatient" }] }])
+                                                   CareSetting.category("inpatient")])
     fluid = tablet.merge("id" => "mr2", "medicationCodeableConcept" => { "coding" => [{ "system" => F::MEDICINE_CODE_SYSTEM, "code" => "620007329", "display" => "ソリタ" }], "text" => "ソリタ" },
                          "dosageInstruction" => [{ "route" => { "coding" => [{ "code" => "IV", "display" => "静脈内" }] }, "timing" => { "event" => ["2026-11-05T08:00:00+09:00"] },
                                                    "doseAndRate" => [{ "doseQuantity" => { "value" => 500, "unit" => "mL" } }] }])

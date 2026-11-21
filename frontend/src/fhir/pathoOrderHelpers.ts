@@ -5,7 +5,6 @@ import { binaryIdFromAttachment, imageBinaryEntry } from "./schemaImage";
 import type { SchemaImageRef } from "./questionnaireResponseHelpers";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import {
-  categoryCoding,
   displayOf,
   itemNumber,
   orderComment,
@@ -14,6 +13,9 @@ import {
   registrationAuthoredOn,
   priorityDisplay,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 
@@ -21,8 +23,6 @@ export { PRIORITY_OPTIONS };
 import { containedSpecimenOf, labOrderItemRequests } from "./labOrderHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -458,13 +458,7 @@ function buildPathoOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -789,7 +783,7 @@ export interface PathoOrderSummary {
 export function summarizePathoOrder(sr: fhir4.ServiceRequest): PathoOrderSummary {
   const category = pathoOrderExamCategory(sr);
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     priorityDisplay: priorityDisplay(sr.priority),
     examCategoryDisplay: examCategoryDisplay(category),
     examCategory: category,
@@ -938,7 +932,7 @@ export function parsePathoOrderForm(
   const examCategory = pathoOrderExamCategory(sr);
   const specimens = pathoOrderSpecimens(itemRequests);
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as PathoOrderPriority,
     examCategory,
     // datetime-local の入力値に合わせて分までに丸める。時刻を持たない値は

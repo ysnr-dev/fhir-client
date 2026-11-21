@@ -12,10 +12,13 @@ import {
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
-import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
+import { type PrescriptionSetting } from "./prescriptionHelpers";
 
 // 栄養指導オーダー。リハビリ(rehabOrderHelpers.ts)と同じ「期間継続型」で、1 つの
 // オーダーが数週間〜数か月続き、その間に指導(実施)が何度も積み上がる
@@ -211,13 +214,7 @@ function buildNutritionGuidanceServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -540,7 +537,7 @@ export function summarizeNutritionGuidanceOrder(
   const endDate = nutritionGuidanceOrderEnd(sr);
 
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     formatDisplay: sr.code?.text || guidanceFormatDisplay(format),
     formatShort: guidanceFormatShort(format),
     format,
@@ -578,7 +575,7 @@ export function parseNutritionGuidanceOrderForm(
   sr: fhir4.ServiceRequest,
 ): NutritionGuidanceOrderFormValues {
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     format: nutritionGuidanceFormat(sr) as NutritionGuidanceFormat | "",
     startDate: orderDay(sr) || today(),
     endDate: nutritionGuidanceOrderEnd(sr),

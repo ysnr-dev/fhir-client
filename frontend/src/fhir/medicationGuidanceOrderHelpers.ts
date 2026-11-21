@@ -10,10 +10,13 @@ import {
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
-import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
+import { type PrescriptionSetting } from "./prescriptionHelpers";
 
 // 服薬指導オーダー(docs/medication-guidance-order-design.md)。医師が薬剤師へ服薬指導を
 // 依頼し、薬剤部が受付 → 入院中に週ごとの指導 → 退院時指導 → 終了と進める。
@@ -184,9 +187,7 @@ function buildMedicationGuidanceServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                { system: SETTING_SYSTEM, code: values.setting, display: displayOf(SETTING_OPTIONS, values.setting) },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -351,7 +352,7 @@ export function summarizeMedicationGuidanceOrder(sr: fhir4.ServiceRequest): Medi
   const startDate = (sr.occurrenceDateTime ?? "").slice(0, 10);
   const endDate = medicationGuidanceOrderEnd(sr);
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     kind,
     kindDisplay: sr.code?.text || guidanceKindDisplay(kind),
     kindShort: guidanceKindShort(kind),
@@ -378,7 +379,7 @@ export const medicationGuidanceOrderProblem = orderProblem;
 export function parseMedicationGuidanceOrderForm(sr: fhir4.ServiceRequest): MedicationGuidanceOrderFormValues {
   const summary = summarizeMedicationGuidanceOrder(sr);
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     kind: summary.kind as MedicationGuidanceKind | "",
     conditions: medicationGuidanceConditions(sr),
     startDate: orderDay(sr) || today(),

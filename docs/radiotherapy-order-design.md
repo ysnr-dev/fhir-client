@@ -82,7 +82,7 @@ OIS が照射のたびに §6.1 の形で Procedure を書けば、画面側は�
 ```text
 ServiceRequest(治療処方 = Course 1 件。明細は持たない)   intent=order
   status    active(処方済・計画中・治療中)| completed(終了)| revoked(中止)   ※ §4
-  category  order-type|radiotherapy ＋ prescription-setting|inpatient/outpatient
+  category  order-type|radiotherapy ＋ v3-ActCode|IMP / AMB
   code      radiotherapy-order|course-prescription「放射線治療処方」
   occurrenceDateTime  開始予定日(照射初日の予定。日付のみ)
   authoredOn          登録日時

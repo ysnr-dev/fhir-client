@@ -92,7 +92,7 @@
 |---|---|
 | `StructureDefinition/surgery-approach` | 到達法(開腹/腹腔鏡/胸腔鏡/ロボット支援/鏡視下/経皮/その他)。［提案］DPC・NCD の起点になるので構造化して持つ |
 
-再利用: `CodeSystem/prescription-setting`、`CodeSystem/lab-item-abbreviation`、
+再利用: 入外区分(v3 ActCode の `IMP` / `AMB`)、`CodeSystem/lab-item-abbreviation`、
 `CodeSystem/jj1017-laterality`(bodySite の左右 R/L/B)、`CodeSystem/task-code` の値
 `surgery`、依頼科・病棟の拡張(`applyOrderContext`)。
 

@@ -8,9 +8,8 @@ import {
 import { dialysisActualMinutes, dialysisHubAppointmentId, isDialysisProcedure } from "./dialysisResultHelpers";
 import { dialysisShiftAt, type DialysisShift } from "./dialysisShiftHelpers";
 import { dialysisBoardBedLabel, type DialysisBoardBed } from "./dialysisUnitHelpers";
-import { SETTING_SYSTEM } from "./prescriptionHelpers";
 import { slotDate, slotTime } from "./scheduleHelpers";
-import { categoryCoding, codingBySystem, referenceIdOfType } from "./shared";
+import { codingBySystem, referenceIdOfType, careSettingOf } from "./shared";
 
 // 透析の月間統計(docs/dialysis-order-design.md §6.3)。その月に始めた回(実施記録のハブ)と、
 // 透析室の枠・予約から、回数・浄化方法別・シフト別とベッド別の稼働・日別を出す。
@@ -142,7 +141,7 @@ function sessionFacts(input: DialysisStatsInput, from: string, to: string): Sess
         patientId: referenceIdOfType(hub.subject?.reference, "Patient"),
         day,
         modality: codingBySystem(hub.code?.coding, DIALYSIS_MODALITY_SYSTEM)?.code ?? "",
-        setting: (order && categoryCoding(order, SETTING_SYSTEM)?.code) ?? "",
+        setting: (order && careSettingOf(order)) ?? "",
         minutes:
           hub.status === "in-progress" ? null : dialysisActualMinutes(start ?? "", hub.performedPeriod?.end ?? ""),
         shift,

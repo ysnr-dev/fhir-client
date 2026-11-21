@@ -26,7 +26,7 @@ module Ssmix2
         order_control = deleted ? "CA" : "NW"
         order_no = OrderNumber.for("ServiceRequest/#{header['id']}")
         perform_no = OrderNumber.for("Procedure/#{hub['id']}")
-        inpatient = inpatient_setting?(header, Fhir::PRESCRIPTION_SETTING_SYSTEM)
+        inpatient = inpatient_setting?(header)
         department = department_code_of(Fhir.department_reference(header))
         encounter = encounter_for(hub, inpatient)
         encounter = context.current_admission(patient["id"]) if encounter == :current

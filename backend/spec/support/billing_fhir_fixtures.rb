@@ -69,8 +69,7 @@ module BillingFhirFixtures
   def order_header(order_type:, id: "hdr-1", date: "2026-09-20", status: "active", name: nil)
     category = [{ "coding" => [{ "system" => ORDER_TYPE, "code" => order_type }] }]
     if order_type == "prescription"
-      category << { "coding" => [{ "system" => "#{ORDER_TYPE.sub('order-type', 'prescription-setting')}",
-                                   "code" => "outpatient" }] }
+      category << CareSetting.category("outpatient")
     end
     {
       "resourceType" => "ServiceRequest", "id" => id, "status" => status,

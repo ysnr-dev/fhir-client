@@ -23,7 +23,7 @@ RSpec.describe Ssmix2::Messages::OruR01 do
       "basedOn" => [{ "reference" => "ServiceRequest/ph1" }],
       "category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "physio" }] },
                      { "coding" => [{ "system" => "http://terminology.hl7.org/CodeSystem/v2-0074", "code" => "OTH" }] },
-                     { "coding" => [{ "system" => F::PRESCRIPTION_SETTING_SYSTEM, "code" => "outpatient" }] }],
+                     CareSetting.category("outpatient")],
       "code" => { "text" => "標準１２誘導心電図" }, "effectiveDateTime" => "2026-11-06T10:00:00+09:00", "issued" => "2026-11-06T11:20:30+09:00",
       "result" => [{ "reference" => "Observation/obs1" }], "conclusion" => "虚血性変化あり。循環器内科に紹介",
       "extension" => [{ "url" => F::ORDER_DEPARTMENT_EXT_URL, "valueReference" => { "reference" => "Organization/dept1" } }] }

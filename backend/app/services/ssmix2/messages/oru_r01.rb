@@ -17,7 +17,7 @@ module Ssmix2
         leaves = header ? exam_items(header, spec) : []
         deleted = written.method == "DELETE" || cancelled?(report)
         order_no = OrderNumber.for(header ? "ServiceRequest/#{header['id']}" : "DiagnosticReport/#{report['id']}")
-        inpatient = inpatient_setting?(report, Fhir::PRESCRIPTION_SETTING_SYSTEM)
+        inpatient = inpatient_setting?(report)
         department = department_code_of(Fhir.department_reference(report))
         performed = report["effectiveDateTime"] || report["issued"]
 

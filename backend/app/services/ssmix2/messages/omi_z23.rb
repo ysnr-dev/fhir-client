@@ -23,7 +23,7 @@ module Ssmix2
         deleted = written.method == "DELETE" || cancelled?(hub) || hub["status"] == "not-done"
         order_no = OrderNumber.for("ServiceRequest/#{header['id']}")
         perform_no = OrderNumber.for("Procedure/#{hub['id']}")
-        inpatient = inpatient_setting?(header, Fhir::PRESCRIPTION_SETTING_SYSTEM)
+        inpatient = inpatient_setting?(header)
         department = department_code_of(Fhir.department_reference(header))
         performed_start, performed_end = performed_range(hub)
         parent_code = parent_code_cwe(spec, leaves)

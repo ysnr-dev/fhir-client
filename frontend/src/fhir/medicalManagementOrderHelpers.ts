@@ -5,15 +5,17 @@ import { advisoryKey, type Advisory } from "./advisoryHelpers";
 import {
   categoryCoding,
   codingBySystem,
-  displayOf,
   orderComment,
   orderDay,
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, departmentExtension, type OrderAttribution } from "./orderHeader";
-import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
+import { type PrescriptionSetting } from "./prescriptionHelpers";
 
 // 指導・管理料(医学管理料・在宅)のオーダー(docs/medical-management-order-design.md)。
 //
@@ -125,13 +127,7 @@ function buildServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -394,7 +390,7 @@ export interface MedicalManagementOrderSummary {
 
 export function summarizeMedicalManagementOrder(sr: fhir4.ServiceRequest): MedicalManagementOrderSummary {
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     date: orderDay(sr),
     title: sr.code?.text ?? "",
     comment: orderComment(sr),
@@ -416,7 +412,7 @@ export function parseMedicalManagementOrderForm(
 ): MedicalManagementOrderFormValues {
   const items = medicalManagementItemsByOrderId(medicalManagementProceduresOf(procedures, sr.id ?? "")).get(sr.id ?? "") ?? [];
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     date: orderDay(sr) || today(),
     lines: items.map((item) => ({
       code: item.code,

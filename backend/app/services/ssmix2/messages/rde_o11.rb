@@ -18,7 +18,7 @@ module Ssmix2
         deleted = written.method == "DELETE" || cancelled?(header)
         order_control = deleted ? "CA" : "NW"
         order_no = OrderNumber.for("ServiceRequest/#{header['id']}")
-        inpatient = inpatient_setting?(header, Fhir::PRESCRIPTION_SETTING_SYSTEM)
+        inpatient = inpatient_setting?(header)
 
         msh("RDE^O11^RDE_O11")
         pid(patient)

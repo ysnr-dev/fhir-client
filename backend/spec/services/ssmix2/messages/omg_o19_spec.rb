@@ -7,7 +7,7 @@ RSpec.describe Ssmix2::Messages::OmgO19 do
     { "resourceType" => "ServiceRequest", "id" => "rad1", "status" => "active", "intent" => "order", "priority" => "urgent",
       "subject" => { "reference" => "Patient/p1" },
       "category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "rad" }] },
-                     { "coding" => [{ "system" => F::PRESCRIPTION_SETTING_SYSTEM, "code" => "outpatient" }] }],
+                     CareSetting.category("outpatient")],
       "authoredOn" => "2026-11-04T10:30:45+09:00", "occurrenceDateTime" => "2026-11-06T09:30:00+09:00",
       "requester" => { "reference" => "Practitioner/doc1" },
       "extension" => [{ "url" => F::ORDER_DEPARTMENT_EXT_URL, "valueReference" => { "reference" => "Organization/dept1" } }] }

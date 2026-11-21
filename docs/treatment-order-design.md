@@ -70,7 +70,7 @@
 | `IdSystem/treatment-order-item-number` | 明細 `identifier`。伝票で選んだ並び順 |
 | `StructureDefinition/treatment-material-quantity` | `usedCode` に数量を添える |
 
-再利用: `CodeSystem/prescription-setting`、`CodeSystem/lab-item-abbreviation`、
+再利用: 入外区分(v3 ActCode の `IMP` / `AMB`)、`CodeSystem/lab-item-abbreviation`、
 `CodeSystem/medicine-code` / YJ、`CodeSystem/medical-material`、JP Core `route-codes`、
 JP_Procedure、依頼科・病棟の拡張。
 

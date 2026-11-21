@@ -3,14 +3,13 @@ import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   categoryCoding,
   codingBySystem,
-  displayOf,
   orderComment,
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingCoding,
 } from "./shared";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, orderRequester, type OrderAttribution } from "./orderHeader";
-import { SETTING_OPTIONS, SETTING_SYSTEM } from "./prescriptionHelpers";
 
 // 食事(給食)オーダー。SS-MIX2 標準化ストレージの給食オーダメッセージ
 // (OMD^O03)を参考仕様にしている。
@@ -493,13 +492,7 @@ function buildMealOrderServiceRequest(
     category: [
       { coding: [{ system: ORDER_TYPE_SYSTEM, ...MEAL_ORDER_TYPE }] },
       {
-        coding: [
-          {
-            system: SETTING_SYSTEM,
-            code: "inpatient",
-            display: displayOf(SETTING_OPTIONS, "inpatient"),
-          },
-        ],
+        coding: [careSettingCoding("inpatient")],
       },
     ],
     subject: { reference: `Patient/${patientId}` },

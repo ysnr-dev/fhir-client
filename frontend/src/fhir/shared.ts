@@ -82,14 +82,73 @@ export const EXAM_PRIORITY_OPTIONS: {
   display: string;
 }[] = [...PRIORITY_OPTIONS, { code: RETRO_PRIORITY, display: "事後" }];
 
-/** 入院/外来。system はオーダー系・結果系で別なので、選択肢と表示名だけを共有する。 */
-export const SETTING_OPTIONS: { code: "inpatient" | "outpatient"; display: string }[] = [
+/** 入院/外来(入外区分)。画面とフォームが持つ値。 */
+export type CareSetting = "inpatient" | "outpatient";
+
+export const SETTING_OPTIONS: { code: CareSetting; display: string }[] = [
   { code: "inpatient", display: "入院" },
   { code: "outpatient", display: "外来" },
 ];
 
 export function findSettingDisplay(code: string): string {
   return SETTING_OPTIONS.find((s) => s.code === code)?.display ?? code;
+}
+
+/**
+ * 入外区分の CodeSystem。オーダーヘッダ(ServiceRequest)と報告(DiagnosticReport)の category に、
+ * Encounter.class と同じ HL7 v3 ActCode の IMP(入院)/ AMB(外来)で持つ。
+ */
+export const CARE_SETTING_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-ActCode";
+
+const CARE_SETTING_CODINGS: Record<CareSetting, { code: string; display: string }> = {
+  inpatient: { code: "IMP", display: "inpatient encounter" },
+  outpatient: { code: "AMB", display: "ambulatory" },
+};
+
+/** 入外区分の Coding(category の 1 要素に入れる)。 */
+export function careSettingCoding(setting: CareSetting): fhir4.Coding {
+  return { system: CARE_SETTING_SYSTEM, ...CARE_SETTING_CODINGS[setting] };
+}
+
+/**
+ * 入外区分の category。未選択なら category ごと付けない(code が空の Coding は FHIR として不正)。
+ * category の配列へ展開して入れる。
+ */
+export function careSettingCategory(setting: CareSetting | ""): fhir4.CodeableConcept[] {
+  return setting ? [{ coding: [careSettingCoding(setting)] }] : [];
+}
+
+/** category の 1 要素が入外区分か。 */
+export function isCareSettingCategory(category: fhir4.CodeableConcept): boolean {
+  return (category.coding ?? []).some((c) => careSettingOfCoding(c) !== undefined);
+}
+
+function careSettingOfCoding(coding: fhir4.Coding): CareSetting | undefined {
+  if (coding.system !== CARE_SETTING_SYSTEM) return undefined;
+  return SETTING_OPTIONS.find((o) => CARE_SETTING_CODINGS[o.code].code === coding.code)?.code;
+}
+
+/** リソースの入外区分(code は画面の値、display は「入院」「外来」)。持たなければ undefined。 */
+export function careSetting(
+  resource: { category?: fhir4.CodeableConcept[] },
+): { code: CareSetting; display: string } | undefined {
+  for (const category of resource.category ?? []) {
+    for (const coding of category.coding ?? []) {
+      const code = careSettingOfCoding(coding);
+      if (code) return { code, display: findSettingDisplay(code) };
+    }
+  }
+  return undefined;
+}
+
+/** リソースの入外区分。持たなければ空文字。 */
+export function careSettingOf(resource: { category?: fhir4.CodeableConcept[] }): CareSetting | "" {
+  return careSetting(resource)?.code ?? "";
+}
+
+/** リソースの入外区分の表示名(「入院」「外来」)。持たなければ空文字。 */
+export function careSettingLabel(resource: { category?: fhir4.CodeableConcept[] }): string {
+  return careSetting(resource)?.display ?? "";
 }
 
 /** オーダーのコメント(note の先頭)。 */

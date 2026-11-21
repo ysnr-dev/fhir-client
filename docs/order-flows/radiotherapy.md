@@ -494,7 +494,7 @@ flowchart TD
 
 | リソース | 要素 | 中身 |
 |---|---|---|
-| ヘッダ `ServiceRequest` | `category` | `order-type\|radiotherapy` + `prescription-setting` |
+| ヘッダ `ServiceRequest` | `category` | `order-type\|radiotherapy` + 入外区分(v3 ActCode の `IMP` / `AMB`) |
 | ヘッダ | `code` | `radiotherapy-order\|course-prescription` |
 | ヘッダ | `occurrenceDateTime` | 開始予定日 |
 | ヘッダ | `performer` | 担当医(任意) |

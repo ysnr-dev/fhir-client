@@ -2,8 +2,6 @@ import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
-  categoryCoding,
-  displayOf,
   itemNumber,
   orderComment,
   orderDay,
@@ -13,6 +11,9 @@ import {
   registrationAuthoredOn,
   resourcesOfType,
   withVersionLock,
+  careSettingOf,
+  careSettingCoding,
+  careSetting,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 
@@ -20,8 +21,6 @@ export { PRIORITY_OPTIONS };
 import { ABBREVIATION_SYSTEM, JLAC10_SYSTEM, JLAC11_SPECIMEN_SYSTEM, JLAC11_SYSTEM } from "./labResultHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -468,13 +467,7 @@ function buildLabOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -621,7 +614,7 @@ export interface LabOrderSummary {
 }
 
 export function summarizeLabOrder(sr: fhir4.ServiceRequest): LabOrderSummary {
-  const setting = categoryCoding(sr, SETTING_SYSTEM);
+  const setting = careSetting(sr);
   return {
     settingCode: setting?.code ?? "",
     settingDisplay: setting?.display ?? "",
@@ -692,7 +685,7 @@ export function parseLabOrderForm(
   items: fhir4.ServiceRequest[] = [],
 ): LabOrderFormValues {
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as LabOrderPriority,
     startDate: orderDay(sr) || today(),
     comment: labOrderComment(sr),

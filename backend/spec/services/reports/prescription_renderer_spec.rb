@@ -13,8 +13,7 @@ RSpec.describe Reports::PrescriptionRenderer do
       "authoredOn" => "2026-08-20T09:15:30+09:00",
       "occurrenceDateTime" => "2026-08-21",
       "category" => [
-        { "coding" => [{ "system" => PrescriptionReport::SETTING_SYSTEM,
-                         "code" => "outpatient", "display" => "外来" }] },
+        CareSetting.category("outpatient"),
         { "coding" => [{ "system" => PrescriptionReport::PRESCRIPTION_CATEGORY_SYSTEM,
                          "code" => "external", "display" => "院外" }] }
       ],

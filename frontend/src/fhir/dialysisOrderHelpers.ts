@@ -5,8 +5,6 @@ import { DAY_OF_WEEK_OPTIONS } from "./injectionHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
 import {
   MEDICINE_CODE_SYSTEM,
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
   YJ_CODE_SYSTEM,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -19,6 +17,9 @@ import {
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 
@@ -401,13 +402,7 @@ function buildDialysisOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -540,7 +535,7 @@ export function buildDialysisOrderCloseEntry(sr: fhir4.ServiceRequest, endDate: 
  * 外来の維持透析は入院・退院をまたいで続くので触らない(docs/dialysis-order-design.md §4.2)。
  */
 export function dialysisOrderNeedsStop(sr: fhir4.ServiceRequest, endDate: string): boolean {
-  if (categoryCoding(sr, SETTING_SYSTEM)?.code !== "inpatient") return false;
+  if (careSettingOf(sr) !== "inpatient") return false;
   const end = dialysisOrderEnd(sr);
   return !end || end > endDate;
 }
@@ -690,7 +685,7 @@ export function summarizeDialysisOrder(sr: fhir4.ServiceRequest): DialysisOrderS
   };
 
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     modality,
     modalityDisplay: sr.code?.text || dialysisModalityDisplay(modality),
     modalityShort: dialysisModalityShort(modality),
@@ -746,7 +741,7 @@ export function parseDialysisOrderForm(sr: fhir4.ServiceRequest): DialysisOrderF
     DIALYSIS_DOSE_UNITS[0];
 
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     modality: dialysisOrderModality(sr) as DialysisModality | "",
     bedside: dialysisOrderBedside(sr),
     startDate: orderDay(sr) || today(),

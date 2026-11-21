@@ -1,11 +1,9 @@
 import { today } from "../lib/dates";
 import {
-  SETTING_SYSTEM,
   type LabResultSetting,
   observationIdsFromReport,
-  settingCategory,
 } from "./labResultHelpers";
-import { categoryCoding, type CodeOption, codingBySystem, displayOf, LOINC_SYSTEM } from "./shared";
+import { categoryCoding, type CodeOption, codingBySystem, displayOf, LOINC_SYSTEM, careSettingOf, careSettingCategory } from "./shared";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import { departmentExtension, departmentOf } from "./orderHeader";
 import type { SchemaImageRef } from "./questionnaireResponseHelpers";
@@ -700,7 +698,7 @@ function buildPathoResultTransactionBundle(
             : { system: REPORT_CATEGORY_SYSTEM, code: "SP", display: "Surgical Pathology" },
         ],
       },
-      ...settingCategory(values.setting),
+      ...careSettingCategory(values.setting),
     ],
     code: {
       coding: [{ system: LOINC_SYSTEM, code: LOINC_PATHO_REPORT_CODE, display: "Pathology study" }],
@@ -975,7 +973,7 @@ export function parsePathoResultForm(
   specimens: fhir4.Specimen[] = [],
 ): PathoResultFormValues {
   const values = emptyPathoResultForm();
-  values.setting = (categoryCoding(report, SETTING_SYSTEM)?.code ?? "") as LabResultSetting;
+  values.setting = careSettingOf(report);
   values.reportDate = report.effectiveDateTime?.slice(0, 10) ?? today();
   const department = departmentOf(report);
   values.departmentId = department.departmentId;

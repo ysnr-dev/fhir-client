@@ -66,7 +66,7 @@ module Ssmix2
         fields[9] = number(total)
         fields[10] = Codes.unit_cwe(unit)
         fields[14] = Hl7::Types.text(header["id"])
-        fields[20] = Codes.prescription_category_cwe(Fhir.category_code(header, Fhir::PRESCRIPTION_SETTING_SYSTEM),
+        fields[20] = Codes.prescription_category_cwe(CareSetting.of(header),
                                                     Fhir.category_code(header, Fhir::PRESCRIPTION_CATEGORY_SYSTEM))
         fields[30] = supplemental_code_cwe(mr)
         builder.add("RXE", *fields)
@@ -112,7 +112,7 @@ module Ssmix2
                                           .map { |t| Hl7::Types.cwe("", t, "99IC6") })
         fields[14] = Hl7::Types.text(header["id"])
         category = Fhir.category_coding(header, Fhir::INJECTION_CATEGORY_SYSTEM)
-        fields[20] = Codes.injection_category_cwe(Fhir.category_code(header, Fhir::PRESCRIPTION_SETTING_SYSTEM),
+        fields[20] = Codes.injection_category_cwe(CareSetting.of(header),
                                                   category&.dig("code"), category&.dig("display"))
         if rate
           fields[21] = "H1"

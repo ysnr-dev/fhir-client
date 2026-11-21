@@ -18,7 +18,6 @@ class LabResultReport
   # frontend の fhir/labResultHelpers.ts と同じ system 定義。
   REPORT_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074".freeze
   LAB_CATEGORY_CODE = "LAB".freeze
-  SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-setting".freeze
   RESULT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-item".freeze
   JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11".freeze
   ABBREVIATION_SYSTEM = LabLabelReport::ABBREVIATION_SYSTEM
@@ -108,9 +107,7 @@ class LabResultReport
   def build_summary(report)
     Summary.new(
       date: Reports::PatientMeta.format_date(report["effectiveDateTime"].to_s[0, 10]),
-      setting: Array(report["category"]).filter_map do |category|
-        coding_by_system(category["coding"], SETTING_SYSTEM)&.dig("display")
-      end.first.to_s,
+      setting: CareSetting.label(report),
       department: Array(report["extension"]).find { |e| e["url"] == ORDER_DEPARTMENT_EXT_URL }
                     &.dig("valueReference", "display").to_s,
       status: STATUS_DISPLAYS.fetch(report["status"].to_s, ""),

@@ -198,13 +198,9 @@ module Reports
 
     # 「外来 院内」「入院 定期」のような区分表示(院内レイアウト用)。
     def rx_category
-      displays = Array(@order["category"]).filter_map do |category|
-        Array(category["coding"]).find do |coding|
-          [PrescriptionReport::SETTING_SYSTEM,
-           PrescriptionReport::PRESCRIPTION_CATEGORY_SYSTEM].include?(coding["system"])
-        end&.dig("display")
-      end
-      displays.join(" ")
+      category = Array(@order["category"]).flat_map { |c| Array(c["coding"]) }
+                                          .find { |coding| coding["system"] == PrescriptionReport::PRESCRIPTION_CATEGORY_SYSTEM }
+      [CareSetting.label(@order), category&.dig("display")].compact_blank.join(" ")
     end
 
     # 自院(保険医療機関)の欄。Organization が引けなくても発行は止めない(空欄で刷る)。

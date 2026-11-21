@@ -84,7 +84,7 @@
 | `StructureDefinition/physio-remarks-questionnaire-response` | 特別指示のテンプレート回答参照 |
 | `StructureDefinition/physio-material-quantity` | `usedCode` に数量を添える(CodeableConcept は数量を持てない) |
 
-再利用: `CodeSystem/prescription-setting`(入外区分)、
+再利用: 入外区分(v3 ActCode の `IMP` / `AMB`)、
 `CodeSystem/lab-item-abbreviation`(略称。放射線も共用)、
 `CodeSystem/medicine-code` / YJ コード、`CodeSystem/medical-material`、
 JP Core `route-codes`、JP_Procedure プロファイル、依頼科・病棟の拡張。

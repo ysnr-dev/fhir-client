@@ -21,9 +21,9 @@ import {
   type ShiftCode,
 } from "./nursingScheduleHelpers";
 import { oralPerformsByOrderId } from "./oralPerformHelpers";
-import { groupByRp, isPrescriptionServiceRequest, SETTING_SYSTEM } from "./prescriptionHelpers";
+import { groupByRp, isPrescriptionServiceRequest } from "./prescriptionHelpers";
 import { rxTaskStatus, rxTasksByOrderId } from "./rxTaskHelpers";
-import { categoryCoding, conceptLabel, orderDay, referenceId } from "./shared";
+import { conceptLabel, orderDay, referenceId, careSettingOf } from "./shared";
 import { labelSpecimensByOrderId, specimenArrived } from "./labSpecimenHelpers";
 import { microOrderContents, microOrderItemRequests } from "./microOrderHelpers";
 
@@ -234,7 +234,7 @@ export function oralWorksheetItems(
 
   for (const order of data.orders) {
     if (!isPrescriptionServiceRequest(order)) continue;
-    if (categoryCoding(order, SETTING_SYSTEM)?.code !== "inpatient") continue;
+    if (careSettingOf(order) !== "inpatient") continue;
     const id = order.id ?? "";
     if (order.status === "revoked" || rxTaskStatus(taskByOrderId.get(id)) === "cancelled") continue;
     const startDate = orderDay(order);

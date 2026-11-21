@@ -6,7 +6,7 @@ import {
   summarizeEndoscopyOrder,
 } from "./endoscopyOrderHelpers";
 import { isEndoscopyProcedure } from "./endoscopyResultHelpers";
-import { SETTING_SYSTEM, type LabResultSetting } from "./labResultHelpers";
+import { type LabResultSetting } from "./labResultHelpers";
 import {
   entryLabel as physioEntryLabel,
   orderEntries as physioOrderEntries,
@@ -24,7 +24,7 @@ import {
 } from "./radOrderHelpers";
 import { isRadProcedure } from "./radResultHelpers";
 import { binaryIdFromAttachment, imageBinaryEntry, newBinaryDataLength } from "./schemaImage";
-import { categoryCoding, codingBySystem, findSettingDisplay, LOINC_SYSTEM } from "./shared";
+import { codingBySystem, LOINC_SYSTEM, careSettingOf, careSettingCategory } from "./shared";
 
 // 検査レポート(docs/exam-report-design.md)。放射線の読影レポート・生理検査の所見レポート・
 // 内視鏡の所見レポートで共通の形。
@@ -574,11 +574,7 @@ export function buildExamReportBundle(
     category: [
       { coding: [config.kindCoding] },
       { coding: [config.sectionCoding] },
-      {
-        coding: [
-          { system: SETTING_SYSTEM, code: values.setting, display: findSettingDisplay(values.setting) },
-        ],
-      },
+      ...careSettingCategory(values.setting),
     ],
     code: {
       coding: [config.code],
@@ -790,7 +786,7 @@ export function parseExamReportForm(
 
   return {
     orderId: referenceOf(report.basedOn, "ServiceRequest").id,
-    setting: (categoryCoding(report, SETTING_SYSTEM)?.code ?? "") as LabResultSetting,
+    setting: careSettingOf(report),
     departmentId: department.departmentId,
     departmentName: department.departmentName,
     effectiveDateTime: report.effectiveDateTime ?? "",

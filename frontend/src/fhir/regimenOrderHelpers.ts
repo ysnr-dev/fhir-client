@@ -23,7 +23,6 @@ import {
   type OrderAttribution,
 } from "./orderHeader";
 import {
-  SETTING_SYSTEM,
   buildPrescriptionBundle,
   buildPrescriptionUpdateBundle,
   MEDICINE_CODE_SYSTEM,
@@ -45,10 +44,12 @@ import { usageCommentOf } from "./supplementaryUsage";
 import {
   categoryCoding,
   codingBySystem,
-  findSettingDisplay,
   orderComment,
   orderDay,
   registrationAuthoredOn,
+  careSettingOf,
+  isCareSettingCategory,
+  careSettingCategory,
 } from "./shared";
 
 // 化学療法レジメンオーダー(患者への適用)。docs/chemo-regimen-design.md §7。
@@ -173,7 +174,7 @@ export function parseRegimenApplication(sr: fhir4.ServiceRequest): RegimenApplic
     height: extDecimal(ext, "height"),
     weight: extDecimal(ext, "weight"),
     status: sr.status,
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     comment: orderComment(sr),
     problem: orderProblem(sr),
     discontinuation:
@@ -1069,9 +1070,7 @@ function buildHeader(
     intent: "plan",
     category: [
       { coding: [{ system: ORDER_TYPE_SYSTEM, ...REGIMEN_ORDER_TYPE }] },
-      {
-        coding: [{ system: SETTING_SYSTEM, code: values.setting, display: findSettingDisplay(values.setting) }],
-      },
+      ...careSettingCategory(values.setting),
     ],
     code: {
       coding: [{ system: REGIMEN_CODE_SYSTEM, code: regimen.regimen_code, display: regimen.name }],
@@ -1195,10 +1194,8 @@ function regimenHeaderCycleEntry(
   const resource: fhir4.ServiceRequest = {
     ...header,
     category: [
-      ...(header.category ?? []).filter((c) => !c.coding?.some((coding) => coding.system === SETTING_SYSTEM)),
-      {
-        coding: [{ system: SETTING_SYSTEM, code: values.setting, display: findSettingDisplay(values.setting) }],
-      },
+      ...(header.category ?? []).filter((c) => !isCareSettingCategory(c)),
+      ...careSettingCategory(values.setting),
     ],
     extension: [
       ...(header.extension ?? []).filter((e) => e.url !== REGIMEN_EXT_URL),
@@ -1597,9 +1594,7 @@ export function buildRegimenHeaderUpdateBundle(
     ...header,
     category: [
       { coding: [{ system: ORDER_TYPE_SYSTEM, ...REGIMEN_ORDER_TYPE }] },
-      {
-        coding: [{ system: SETTING_SYSTEM, code: values.setting, display: findSettingDisplay(values.setting) }],
-      },
+      ...careSettingCategory(values.setting),
     ],
     extension: [
       ...(header.extension ?? []).filter((e) => e.url !== REGIMEN_EXT_URL),

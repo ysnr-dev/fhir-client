@@ -7,7 +7,6 @@ import { slotDate, slotTime } from "./scheduleHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   categoryCoding,
-  displayOf,
   itemNumber,
   EXAM_PRIORITY_OPTIONS,
   RETRO_PRIORITY,
@@ -17,6 +16,9 @@ import {
   priorityDisplay,
   ABBREVIATION_SYSTEM,
   withVersionLock,
+  careSettingOf,
+  careSettingCoding,
+  careSetting,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 
@@ -24,8 +26,6 @@ export { EXAM_PRIORITY_OPTIONS, RETRO_PRIORITY };
 import { templateBindingOf, templateResponseIdOf, type TemplateBinding } from "./questionnaireResponseHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -574,13 +574,7 @@ function buildRadOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -872,7 +866,7 @@ export interface RadOrderSummary {
 }
 
 export function summarizeRadOrder(sr: fhir4.ServiceRequest): RadOrderSummary {
-  const setting = categoryCoding(sr, SETTING_SYSTEM);
+  const setting = careSetting(sr);
   return {
     settingCode: setting?.code ?? "",
     settingDisplay: setting?.display ?? "",
@@ -920,7 +914,7 @@ export function parseRadOrderForm(
   items: fhir4.ServiceRequest[] = [],
 ): RadOrderFormValues {
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     priority: (sr.priority === "urgent" || sr.priority === RETRO_PRIORITY
       ? sr.priority
       : "routine") as RadOrderPriority,

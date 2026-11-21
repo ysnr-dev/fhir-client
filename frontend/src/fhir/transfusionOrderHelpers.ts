@@ -9,18 +9,18 @@ import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { labOrderItemRequests } from "./labOrderHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
 import {
-  categoryCoding,
   displayOf,
   itemNumber,
   orderComment,
   registrationAuthoredOn,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 
@@ -512,13 +512,7 @@ function buildTransfusionOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -818,7 +812,7 @@ export function summarizeTransfusionOrder(sr: fhir4.ServiceRequest): Transfusion
   const rhd = transfusionOrderRhd(sr);
   const urgencyLevel = urgencyLevelOf(sr.priority);
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     priorityDisplay: transfusionPriorityDisplay(sr.priority),
     urgencyLevel,
     urgencyBadge: urgencyBadgeLabel(sr.priority),
@@ -898,7 +892,7 @@ export function parseTransfusionOrderForm(
     ? (sr.priority as TransfusionOrderPriority)
     : "routine";
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     priority,
     testType: transfusionOrderTestType(sr),
     patientAbo: transfusionOrderAbo(sr),

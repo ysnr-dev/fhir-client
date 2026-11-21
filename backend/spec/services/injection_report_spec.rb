@@ -17,7 +17,7 @@ RSpec.describe InjectionReport do
       "resourceType" => "ServiceRequest", "id" => "o1",
       "category" => [
         { "coding" => [{ "system" => described_class::ORDER_TYPE_SYSTEM, "code" => "injection" }] },
-        { "coding" => [{ "system" => described_class::SETTING_SYSTEM, "code" => "inpatient", "display" => "入院" }] },
+        CareSetting.category("inpatient"),
         { "coding" => [{ "system" => described_class::INJECTION_CATEGORY_SYSTEM, "code" => "regular", "display" => "定時" }] }
       ],
       "subject" => { "reference" => "Patient/p1" },

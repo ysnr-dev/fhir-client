@@ -103,7 +103,7 @@ JED 自身も「検査目的」と別に「治療目的」の用語を持ち、�
 | `StructureDefinition/endoscopy-remarks-questionnaire-response` | 特別指示のテンプレート回答参照 |
 | `StructureDefinition/endoscopy-material-quantity` | `usedCode` に数量を添える |
 
-再利用: `CodeSystem/prescription-setting`、`CodeSystem/lab-item-abbreviation`、
+再利用: 入外区分(v3 ActCode の `IMP` / `AMB`)、`CodeSystem/lab-item-abbreviation`、
 `CodeSystem/medicine-code` / YJ、`CodeSystem/medical-material`、JP Core `route-codes`、
 JP_Procedure、依頼科・病棟の拡張。
 

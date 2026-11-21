@@ -373,7 +373,7 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 オーダー自体が時刻を持つが、処方は投与開始日から投与日数ぶん毎日決まった回数を飲ませ、
 **何時に飲ませるかはどこにも無い**。そこで予定は用法コードから組み立てる(§9.1)。
 
-対象は**入院処方だけ**(`prescription-setting` が inpatient)で、RP は内服のものだけ。
+対象は**入院処方だけ**(入外区分が入院 = v3 ActCode の `IMP`)で、RP は内服のものだけ。
 外来・院内処方は病棟が与薬しないので出さない。
 
 ### 9.1 予定は用法コードから出す

@@ -14,9 +14,8 @@ import {
   PRESCRIPTION_CATEGORY_SYSTEM,
   PRESCRIPTION_ORDER_TYPE,
   prescriptionCategoryOf,
-  SETTING_SYSTEM,
 } from "./prescriptionHelpers";
-import { categoryCoding, orderDay, versionEtag } from "./shared";
+import { categoryCoding, orderDay, versionEtag, careSetting, CARE_SETTING_SYSTEM } from "./shared";
 
 // 処方監査(docs/rx-verification-design.md)。
 //
@@ -139,12 +138,12 @@ export interface RxVerificationTaskInput {
 export function buildRxVerificationTask(input: RxVerificationTaskInput, existing?: fhir4.Task): fhir4.Task {
   const { order, orderReference, medicationRequests, period } = input;
   const kind = rxVerificationOrderKind(order) ?? "prescription";
-  const setting = categoryCoding(order, SETTING_SYSTEM);
+  const setting = careSetting(order);
   const categoryCode =
     kind === "prescription"
       ? categoryCoding(order, PRESCRIPTION_CATEGORY_SYSTEM)
       : order.category?.flatMap((c) => c.coding ?? []).find(
-          (c) => c.system !== ORDER_TYPE_SYSTEM && c.system !== SETTING_SYSTEM,
+          (c) => c.system !== ORDER_TYPE_SYSTEM && c.system !== CARE_SETTING_SYSTEM,
         );
   // 外来の注射区分は「外来」の 1 つだけで、入外区分と同じ表示になるので省く。
   const category = categoryCode?.display === setting?.display ? undefined : categoryCode;

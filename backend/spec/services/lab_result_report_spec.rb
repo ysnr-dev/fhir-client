@@ -17,7 +17,7 @@ RSpec.describe LabResultReport do
       "resourceType" => "DiagnosticReport", "id" => "r1", "status" => "corrected",
       "category" => [
         { "coding" => [{ "system" => described_class::REPORT_CATEGORY_SYSTEM, "code" => "LAB" }] },
-        { "coding" => [{ "system" => described_class::SETTING_SYSTEM, "code" => "outpatient", "display" => "外来" }] }
+        CareSetting.category("outpatient")
       ],
       "extension" => [{ "url" => described_class::ORDER_DEPARTMENT_EXT_URL,
                         "valueReference" => { "reference" => "Organization/d1", "display" => "内科" } }],

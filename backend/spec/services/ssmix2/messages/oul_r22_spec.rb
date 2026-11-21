@@ -20,7 +20,7 @@ RSpec.describe Ssmix2::Messages::OulR22 do
   end
   let(:report) do
     { "resourceType" => "DiagnosticReport", "id" => "dr1", "status" => "corrected", "subject" => { "reference" => "Patient/p1" },
-      "category" => [{ "coding" => [{ "code" => "LAB" }] }, { "coding" => [{ "system" => F::LAB_RESULT_SETTING_SYSTEM, "code" => "outpatient" }] }],
+      "category" => [{ "coding" => [{ "code" => "LAB" }] }, CareSetting.category("outpatient")],
       "effectiveDateTime" => "2026-11-03", "issued" => "2026-11-04T10:30:59+09:00",
       "basedOn" => [{ "reference" => "ServiceRequest/lab1" }], "specimen" => [{ "reference" => "Specimen/sp1" }],
       "result" => [{ "reference" => "Observation/o1" }, { "reference" => "Observation/o2" }],

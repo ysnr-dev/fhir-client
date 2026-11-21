@@ -22,11 +22,9 @@ module Reports
 
     # 「入院 臨時」のような区分表示(入外区分 + 注射区分)。
     def category_display(order)
-      Array(order["category"]).filter_map do |category|
-        Array(category["coding"]).find do |coding|
-          [InjectionReport::SETTING_SYSTEM, InjectionReport::INJECTION_CATEGORY_SYSTEM].include?(coding["system"])
-        end&.dig("display")
-      end.join(" ")
+      category = Array(order["category"]).flat_map { |c| Array(c["coding"]) }
+                                         .find { |coding| coding["system"] == InjectionReport::INJECTION_CATEGORY_SYSTEM }
+      [CareSetting.label(order), category&.dig("display")].compact_blank.join(" ")
     end
 
     def department_name(order)

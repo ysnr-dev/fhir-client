@@ -261,7 +261,7 @@ flowchart TD
 
 | リソース | 要素 | 中身 |
 |---|---|---|
-| ヘッダ `ServiceRequest` | `category` | 先頭から、オーダー種別 `order-type|prescription`、入外区分(`prescription-setting`)、処方区分(`prescription-category`) |
+| ヘッダ `ServiceRequest` | `category` | 先頭から、オーダー種別 `order-type|prescription`、入外区分(v3 ActCode の `IMP` / `AMB`)、処方区分(`prescription-category`) |
 | ヘッダ `ServiceRequest` | `orderDetail` の拡張 | 薬剤の行への参照(`prescription-medication-request`) |
 | ヘッダ `ServiceRequest` | `encounter` | 入院中に登録した処方の入院 |
 | ヘッダ `ServiceRequest` | `status` | 中止で `revoked`、中止取消で `active` |

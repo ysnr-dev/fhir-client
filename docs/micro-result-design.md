@@ -15,7 +15,7 @@
 DELETE。backend は FhirProxyController の中継のみで改修なし。
 
 ```
-DiagnosticReport (category = v2-0074 "MB" + 入外区分(lab-result-setting)、
+DiagnosticReport (category = v2-0074 "MB" + 入外区分(v3 ActCode の IMP / AMB)、
                   code = LOINC 18725-2 "Microbiology studies (set)"、
                   status = preliminary(中間報告) | final(最終報告)、
                   basedOn = 細菌検査オーダーのヘッダ ServiceRequest)
@@ -75,8 +75,8 @@ DiagnosticReport (category = v2-0074 "MB" + 入外区分(lab-result-setting)、
 | `janis-susceptibility-method` | JANIS 感受性測定法コード(新マスタ) |
 
 菌名は既存 `janis-organism`、材料は既存 `janis-specimen-type`
-(microOrderHelpers から export)を再利用。入外区分は検体検査結果の
-`lab-result-setting`(labResultHelpers から export)を共有する。
+(microOrderHelpers から export)を再利用。入外区分はオーダー・報告で共通の
+v3 ActCode(`IMP` / `AMB`。`fhir/shared.ts` の `careSettingCoding`)で持つ。
 
 ## 3. マスタ
 

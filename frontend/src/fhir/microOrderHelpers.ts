@@ -3,7 +3,6 @@ import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   PRIORITY_OPTIONS,
-  categoryCoding,
   displayOf,
   itemNumber,
   orderComment,
@@ -11,6 +10,9 @@ import {
   registrationAuthoredOn,
   priorityDisplay,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 import { toFhirDateTime } from "../lib/dates";
@@ -19,8 +21,6 @@ export { PRIORITY_OPTIONS };
 import { containedSpecimenOf, labOrderItemRequests } from "./labOrderHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -432,13 +432,7 @@ function buildMicroOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -694,7 +688,7 @@ export interface MicroOrderSummary {
 
 export function summarizeMicroOrder(sr: fhir4.ServiceRequest): MicroOrderSummary {
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     priorityDisplay: priorityDisplay(sr.priority),
     urgent: sr.priority === "urgent",
   };
@@ -820,7 +814,7 @@ export function parseMicroOrderForm(
 ): MicroOrderFormValues {
   const contents = microOrderContents(itemRequests);
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as MicroOrderPriority,
     startDate: orderDay(sr) || today(),
     comment: microOrderComment(sr),

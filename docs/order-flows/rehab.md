@@ -307,7 +307,7 @@ flowchart TD
 
 | リソース | 要素 | 中身 |
 |---|---|---|
-| ヘッダ `ServiceRequest` | `category` | `order-type|rehab` + `prescription-setting` |
+| ヘッダ `ServiceRequest` | `category` | `order-type|rehab` + 入外区分(v3 ActCode の `IMP` / `AMB`) |
 | | `code` | 疾患別リハ区分(`rehab-disease-category`) |
 | | `orderDetail[]` | 療法種別(`rehab-therapy-type`: pt / ot / st) |
 | | `quantityQuantity` | 1 回あたりの単位数(unit「単位」、UCUM なし) |

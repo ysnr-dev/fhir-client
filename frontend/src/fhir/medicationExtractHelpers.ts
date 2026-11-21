@@ -7,8 +7,8 @@ import {
   type ExtractPatientRow,
 } from "./extractQueryHelpers";
 import { ORDER_TYPE_SYSTEM, departmentOf } from "./orderHeader";
-import { PRESCRIPTION_CATEGORY_SYSTEM, SETTING_SYSTEM, doseText, groupByRp } from "./prescriptionHelpers";
-import { categoryCoding, findSettingDisplay } from "./shared";
+import { PRESCRIPTION_CATEGORY_SYSTEM, doseText, groupByRp } from "./prescriptionHelpers";
+import { categoryCoding, findSettingDisplay, careSetting } from "./shared";
 
 // 投薬の抽出(docs/data-extract-design.md §15)。処方・注射のオーダーの薬剤 1 件(MedicationRequest)を 1 行にし、
 // オーダーの区分・日付・依頼科と、薬剤・用量・用法・日数を列にする。用法・用量の読み方は処方の表示と同じ(groupByRp)。
@@ -48,7 +48,7 @@ export function medicationExtractRows(
     const [rp] = groupByRp([request]);
     const medicine = rp?.medicines[0];
     const header = headers.get(headerIdOf(request));
-    const setting = header ? categoryCoding(header, SETTING_SYSTEM) : undefined;
+    const setting = header ? careSetting(header) : undefined;
     const dosage = request.dosageInstruction?.[0];
     const patientId = request.subject?.reference?.split("/").pop() ?? "";
     const days = rp?.doseDays ? `${rp.doseDays}日` : rp?.doseCount ? `${rp.doseCount}回` : "";

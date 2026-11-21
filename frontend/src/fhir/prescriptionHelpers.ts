@@ -17,12 +17,14 @@ import {
 import {
   categoryCoding,
   codingBySystem,
-  findSettingDisplay,
   orderComment,
   orderDay,
   registrationAuthoredOn,
   SETTING_OPTIONS,
   withVersionLock,
+  careSettingOf,
+  careSetting,
+  careSettingCategory,
 } from "./shared";
 import { applyOrderContext, isRegimenDayOrder, ORDER_TYPE_SYSTEM, type OrderAttribution } from "./orderHeader";
 import { keepOrderCancelled } from "./rxTaskHelpers";
@@ -33,8 +35,6 @@ export { codingBySystem, SETTING_OPTIONS };
 
 // ローカル拡張・コードシステム。JP Core / FHIR 標準に存在しない項目を表現するための、
 // この処方オーダー機能専用の URI。
-// 入外区分。注射オーダーでも同じ区分(入院/外来)を使うので injectionHelpers.ts と共用する
-// (URI の "prescription-" は登録済みデータと揃えるためそのまま)。
 
 /**
  * 処方のオーダー種別。ヘッダ ServiceRequest の category の先頭に持たせるほか、内服の与薬の
@@ -42,7 +42,6 @@ export { codingBySystem, SETTING_OPTIONS };
  */
 export const PRESCRIPTION_ORDER_TYPE = { code: "prescription", display: "処方" };
 
-export const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting";
 // 処方区分。
 export const PRESCRIPTION_CATEGORY_SYSTEM =
   "http://fhir-client.local/CodeSystem/prescription-category";
@@ -833,11 +832,7 @@ function buildPrescriptionTransactionBundle(
     intent: "order",
     category: [
       { coding: [{ system: ORDER_TYPE_SYSTEM, ...PRESCRIPTION_ORDER_TYPE }] },
-      {
-        coding: [
-          { system: SETTING_SYSTEM, code: values.setting, display: findSettingDisplay(values.setting) },
-        ],
-      },
+      ...careSettingCategory(values.setting),
       {
         coding: [
           {
@@ -1038,7 +1033,7 @@ export function isPrescriptionServiceRequest(sr: fhir4.ServiceRequest): boolean 
 }
 
 export function summarizeServiceRequest(sr: fhir4.ServiceRequest): PrescriptionSummary {
-  const setting = categoryCoding(sr, SETTING_SYSTEM);
+  const setting = careSetting(sr);
   const category = categoryCoding(sr, PRESCRIPTION_CATEGORY_SYSTEM);
 
   return {
@@ -1256,7 +1251,7 @@ export function parsePrescriptionForm(
   mrs: fhir4.MedicationRequest[],
   { basis = doseBasisOf(sr) }: { basis?: DoseBasis } = {},
 ): PrescriptionFormValues {
-  const setting = (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting;
+  const setting = careSettingOf(sr);
   const category = categoryCoding(sr, PRESCRIPTION_CATEGORY_SYSTEM)?.code ?? "";
 
   const rpGroups = new Map<number, RpValues & { medicinesByOrder: Map<number, MedicineLineValues> }>();

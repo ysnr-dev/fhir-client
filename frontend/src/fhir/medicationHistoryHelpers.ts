@@ -15,11 +15,10 @@ import { groupInjectionByRp } from "./injectionHelpers";
 import { isAsNeededUsage, isOralUsage } from "./medicationScheduleHelpers";
 import {
   PRESCRIPTION_CATEGORY_SYSTEM,
-  SETTING_SYSTEM,
   groupByRp,
   hasDoseDays,
 } from "./prescriptionHelpers";
-import { categoryCoding, orderDay } from "./shared";
+import { categoryCoding, orderDay, careSettingOf, careSetting } from "./shared";
 
 // 投薬歴。処方・注射・持参薬を「薬剤(銘柄・規格ごと)× 列(日・月)」の表にする。
 //
@@ -130,12 +129,12 @@ function draftOf(
 }
 
 function settingOf(order: fhir4.ServiceRequest): string {
-  return categoryCoding(order, SETTING_SYSTEM)?.code ?? "";
+  return careSettingOf(order);
 }
 
 function orderLabel(order: fhir4.ServiceRequest): string {
   return [
-    categoryCoding(order, SETTING_SYSTEM)?.display,
+    careSetting(order)?.display,
     categoryCoding(order, PRESCRIPTION_CATEGORY_SYSTEM)?.display,
   ]
     .filter(Boolean)

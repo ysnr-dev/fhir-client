@@ -53,7 +53,7 @@ ServiceRequest (category: order-type|meal)
   "status": "active", "intent": "order",
   "category": [
     { "coding": [{ "system": ".../order-type", "code": "meal" }] },
-    { "coding": [{ "system": ".../prescription-setting", "code": "inpatient" }] }
+    { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "IMP" }] }
   ],
   "code":        { "coding": [{ "system": ".../meal-type", "code": "A00105" }],
                    "text": "一般食2000kcal" },          // ODS-1=T 食種
@@ -93,7 +93,7 @@ ServiceRequest (category: order-type|meal)
 | `StructureDefinition/meal-order-end` | 終了日時(`valueDateTime`)。無ければ継続中 | TQ1-8 |
 | `StructureDefinition/meal-pattern` | パターン食から展開したオーダーのパターン(`code` / `name`)と段階(`step` / `count`)。表示のためだけ(§2.11) | 対応なし |
 
-再利用: `CodeSystem/prescription-setting`、依頼科(`order-department`)・病棟(`order-ward`)の
+再利用: 入外区分(v3 ActCode の `IMP` / `AMB`)、依頼科(`order-department`)・病棟(`order-ward`)の
 拡張、`reasonReference`(対象プロブレム)。**`CodeSystem/task-code` は作っていない**(進捗が無い)。
 
 ［提案］**主食を `orderDetail` に置いた**のは、R4 の `orderDetail` が「`code` をどう実施するかの
@@ -989,7 +989,7 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
    コード省略の登録が `000001` に自動採番され、**`NPO` などの英字コードが採番に
    混ざらない**こと。kind / active / 名称・カナ検索が効くこと
 2. オーダー: カルテ右ペイン「食事」→ 一般食2000kcal + 米飯180g + 朝食から + コメントで登録。
-   FHIR 上で `category`(`order-type|meal` + `prescription-setting|inpatient`)・
+   FHIR 上で `category`(`order-type|meal` + `v3-ActCode|IMP`)・
    `code`(食種)・`orderDetail`(主食)・`note`・
    **`occurrenceDateTime = 2026-08-28T08:00:00+09:00`**・依頼科・病棟拡張・`requester` を確認
 3. カードが**開始日**に「食事 8/28 朝〜 継続中」で出て、食種・主食・コメントが並ぶこと

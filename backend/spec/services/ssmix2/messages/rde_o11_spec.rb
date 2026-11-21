@@ -6,7 +6,7 @@ RSpec.describe Ssmix2::Messages::RdeO11 do
   let(:header) do
     { "resourceType" => "ServiceRequest", "id" => "sr1", "status" => "active", "subject" => { "reference" => "Patient/p1" },
       "category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "prescription" }] },
-                     { "coding" => [{ "system" => F::PRESCRIPTION_SETTING_SYSTEM, "code" => "outpatient" }] },
+                     CareSetting.category("outpatient"),
                      { "coding" => [{ "system" => F::PRESCRIPTION_CATEGORY_SYSTEM, "code" => "external" }] }],
       "authoredOn" => "2026-11-04T10:30:45+09:00", "occurrenceDateTime" => "2026-11-04",
       "requester" => { "reference" => "Practitioner/doc1" },
@@ -131,7 +131,7 @@ RSpec.describe Ssmix2::Messages::RdeO11 do
   it "builds an inpatient injection with RXC components, route, device-less RXR and the planned period" do
     injection = header.merge(
       "category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "injection" }] },
-                     { "coding" => [{ "system" => F::PRESCRIPTION_SETTING_SYSTEM, "code" => "inpatient" }] },
+                     CareSetting.category("inpatient"),
                      { "coding" => [{ "system" => F::INJECTION_CATEGORY_SYSTEM, "code" => "regular", "display" => "定時" }] }]
     )
     dosage = { "route" => { "coding" => [{ "system" => F::ROUTE_SYSTEM, "code" => "IV", "display" => "静脈内" }] },

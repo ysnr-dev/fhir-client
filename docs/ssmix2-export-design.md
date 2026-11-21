@@ -193,7 +193,7 @@ Encounter の転科と退院取消は前の版が要るので `Encounter/{id}/_h
 - ORC: ORC-1 NW / CA(修正は NW のまま INS)、ORC-2 15 桁、ORC-9 `YYYYMMDDHHMMSS`、ORC-10 入力者(actor)、
   ORC-12 依頼者(requester)、ORC-13 入力場所、ORC-17 診療科、ORC-21〜23 自院、
   ORC-29 `I^入院患者オーダ^HL70482` / `O^外来患者オーダ^HL70482`。入外・処方区分は MedicationRequest に
-  無く、ヘッダー ServiceRequest の category(`prescription-setting` / `prescription-category`)。
+  無く、ヘッダー ServiceRequest の category(入外区分の v3 ActCode `IMP` / `AMB` と `prescription-category`)。
   MedicationRequest 単体の PUT では `basedOn` からヘッダーを読む。
 - RXE: RXE-2 `HOT9^名称^HOT9`、無ければレセ電コードをローカル(`^99Zxxx`)にし RXE-31 に
   `ローカル^^99Zxxx^YJ^^YJ`。RXE-3/5 1 回量と単位(MR9P、無ければ ISO+ かローカル)、RXE-10/11 調剤量、

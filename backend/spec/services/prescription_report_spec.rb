@@ -19,7 +19,7 @@ RSpec.describe PrescriptionReport do
       "id" => "o1",
       "category" => [
         { "coding" => [{ "system" => described_class::ORDER_TYPE_SYSTEM, "code" => "prescription" }] },
-        { "coding" => [{ "system" => described_class::SETTING_SYSTEM, "code" => setting }] },
+        CareSetting.category(setting),
         { "coding" => [{ "system" => described_class::PRESCRIPTION_CATEGORY_SYSTEM, "code" => category }] }
       ],
       "subject" => { "reference" => "Patient/p1" },

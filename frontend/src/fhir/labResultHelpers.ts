@@ -1,11 +1,12 @@
 import { nowFhirDateTime, today } from "../lib/dates";
 import {
   ABBREVIATION_SYSTEM,
-  categoryCoding,
   codingBySystem,
-  findSettingDisplay,
   LOINC_SYSTEM,
   SETTING_OPTIONS,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCategory,
 } from "./shared";
 
 export { SETTING_OPTIONS };
@@ -23,17 +24,7 @@ import { departmentExtension, departmentOf } from "./orderHeader";
 
 // ローカル拡張・コードシステム。正式な CodeSystem が定義されていない(または
 // 不明な)項目を表現するための、この検査結果機能専用の URI。
-// 入外区分。細菌検査結果(microResultHelpers)も同じ意味で使うので共有する。
-export const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-setting";
 
-/**
- * 報告の入院・外来区分の category。未選択なら category ごと付けない(code が空文字の
- * Coding は FHIR として不正)。検体検査・細菌検査・病理の報告で共通。
- */
-export function settingCategory(setting: LabResultSetting): fhir4.CodeableConcept[] {
-  if (!setting) return [];
-  return [{ coding: [{ system: SETTING_SYSTEM, code: setting, display: findSettingDisplay(setting) }] }];
-}
 // 結果項目コード(検体検査の結果項目マスタ、施設採番)。Observation.code の先頭に置き、
 // 読み出し・時系列の突き合わせのキーにする。オーダー側の lab-order-item と同じ流儀。
 export const RESULT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-item";
@@ -704,7 +695,7 @@ function buildLabResultTransactionBundle(
     status,
     category: [
       { coding: [{ system: REPORT_CATEGORY_SYSTEM, code: "LAB", display: "Laboratory" }] },
-      ...settingCategory(values.setting),
+      ...careSettingCategory(values.setting),
     ],
     code: {
       coding: [{ system: LOINC_SYSTEM, code: LOINC_LAB_REPORT_CODE, display: "Laboratory report" }],
@@ -931,7 +922,7 @@ export function summarizeDiagnosticReport(report: fhir4.DiagnosticReport): LabRe
   return {
     id: report.id ?? "",
     date: report.effectiveDateTime?.slice(0, 10) ?? "",
-    settingDisplay: categoryCoding(report, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(report),
     departmentName: departmentOf(report).departmentName,
     itemCount: report.result?.length ?? 0,
     orderId: labOrderIdFromReport(report),
@@ -1315,7 +1306,7 @@ export function parseLabResultForm(
   }));
 
   return {
-    setting: (categoryCoding(report, SETTING_SYSTEM)?.code ?? "") as LabResultSetting,
+    setting: careSettingOf(report),
     specimenDate: report.effectiveDateTime?.slice(0, 10) ?? today(),
     ...departmentOf(report),
     orderId: labOrderIdFromReport(report),

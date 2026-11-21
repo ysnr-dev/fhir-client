@@ -12,7 +12,7 @@ module Ssmix2
         specimens = specimens_of(report)
         deleted = written.method == "DELETE" || cancelled?(report)
         order_no = order_number(report)
-        inpatient = inpatient_setting?(report, Fhir::LAB_RESULT_SETTING_SYSTEM)
+        inpatient = inpatient_setting?(report)
         department = department_code_of(Fhir.department_reference(report))
         collected = specimens.filter_map { |s| s.dig("collection", "collectedDateTime") }.first || report["effectiveDateTime"]
 

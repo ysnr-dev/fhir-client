@@ -48,7 +48,6 @@ class PrescriptionReport
   }.freeze
 
   # frontend の fhir/prescriptionHelpers.ts と同じ system 定義。
-  SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting".freeze
   PRESCRIPTION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-category".freeze
   BROUGHT_CATEGORY = "brought".freeze
   PRESCRIPTION_ORDER_TYPE = "prescription".freeze
@@ -175,9 +174,8 @@ class PrescriptionReport
   # 院外処方(外来 かつ 処方区分「院外」)だけが国の様式。院内・入院すべてと、
   # 区分が読めないオーダーは簡易様式に倒す(不明なものを保険請求の様式で刷る方が事故)。
   def external?(order)
-    setting = category_code(order, SETTING_SYSTEM)
     category = category_code(order, PRESCRIPTION_CATEGORY_SYSTEM)
-    setting == "outpatient" && category == "external"
+    CareSetting.of(order) == CareSetting::OUTPATIENT && category == "external"
   end
 
   # 院外は施設設定で QR コード付き(A4 横)に切り替わる。

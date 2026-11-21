@@ -400,7 +400,7 @@ flowchart TD
 
 | 要素 | 栄養指導 | 服薬指導 |
 |---|---|---|
-| `category` | `order-type|nutrition-guidance` と `prescription-setting` | `order-type|medication-guidance` と `prescription-setting` |
+| `category` | `order-type|nutrition-guidance` と 入外区分(v3 ActCode の `IMP` / `AMB`) | `order-type|medication-guidance` と 入外区分(v3 ActCode の `IMP` / `AMB`) |
 | `code` | 指導形態(`nutrition-guidance-format`) | 指導区分(`medication-guidance-kind`) |
 | `orderDetail[]` | 使わない | 指導条件(`medication-guidance-condition`) |
 | `occurrenceDateTime` | 開始日 | 開始日 |

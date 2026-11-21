@@ -123,7 +123,7 @@ ServiceRequest (放射線オーダー ヘッダ)                          ※既
 | `StructureDefinition/rad-report-conclusion-response` | valueReference | 診断のテンプレート記入(§7) |
 | `CodeSystem/rad-report-item` | CodeSystem | 所見 Observation の `code`(`findings`)。LOINC が確定したら coding を**追加**する |
 
-既存を再利用するもの: 入外区分(`lab-result-setting`)、診療科(`order-department`)、
+既存を再利用するもの: 入外区分(v3 ActCode の `IMP` / `AMB`)、診療科(`order-department`)、
 通知の `task-code`(`result-review` と新設の `rad-critical-finding`)。
 
 ---

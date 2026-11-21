@@ -269,7 +269,7 @@ flowchart TD
 
 | リソース | 要素 | 中身 |
 |---|---|---|
-| ヘッダ `ServiceRequest` | `category` | オーダー種別 `order-type|injection`、入外区分(`prescription-setting`)、注射区分(`injection-category`) |
+| ヘッダ `ServiceRequest` | `category` | オーダー種別 `order-type|injection`、入外区分(v3 ActCode の `IMP` / `AMB`)、注射区分(`injection-category`) |
 | ヘッダ `ServiceRequest` | `requisition` | 束ねの uuid(`injection-series`) |
 | ヘッダ `ServiceRequest` | 拡張 `injection-series-start` | 束ねの開始日 |
 | ヘッダ `ServiceRequest` | 拡張 `injection-series-schedule` | 実施パターン(毎日のときは付けない) |

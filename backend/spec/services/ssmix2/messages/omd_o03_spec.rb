@@ -7,7 +7,7 @@ RSpec.describe Ssmix2::Messages::OmdO03 do
     { "resourceType" => "ServiceRequest", "id" => "meal1", "status" => "active", "subject" => { "reference" => "Patient/p1" },
       "encounter" => { "reference" => "Encounter/enc1" },
       "category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "meal" }] },
-                     { "coding" => [{ "system" => F::PRESCRIPTION_SETTING_SYSTEM, "code" => "inpatient" }] }],
+                     CareSetting.category("inpatient")],
       "authoredOn" => "2026-11-04T10:30:45+09:00", "occurrenceDateTime" => "2026-11-05T08:00:00+09:00",
       "requester" => { "reference" => "Practitioner/doc1" },
       "code" => { "coding" => [{ "system" => F::MEAL_TYPE_SYSTEM, "code" => "A00105", "display" => "一般食2000kcal" }], "text" => "一般食2000kcal" },

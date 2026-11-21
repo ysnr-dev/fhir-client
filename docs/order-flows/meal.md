@@ -456,7 +456,7 @@ flowchart TD
 
 | 要素 | 中身 |
 |---|---|
-| `category` | `order-type|meal` と `prescription-setting|inpatient` |
+| `category` | `order-type|meal` と `v3-ActCode|IMP` |
 | `code` | 食種(`meal-type`) |
 | `orderDetail[]` | 主食(`meal-staple-food`)と副食形態(`meal-side-dish-form`) |
 | `orderDetail[]` の拡張 `meal-timing` | 主食がどの食のものか(朝昼夕)。無ければ全食共通 |

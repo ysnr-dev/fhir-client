@@ -578,7 +578,7 @@ flowchart TD
 
 | リソース | 要素 | 中身 |
 |---|---|---|
-| `ServiceRequest` | `category` | `order-type|dialysis` + `prescription-setting` |
+| `ServiceRequest` | `category` | `order-type|dialysis` + 入外区分(v3 ActCode の `IMP` / `AMB`) |
 | `ServiceRequest` | `code` | 浄化方法(`dialysis-modality`) |
 | `ServiceRequest` | `occurrenceDateTime` | 開始日(日付のみ) |
 | `ServiceRequest` | `reasonReference` | 対象プロブレム |

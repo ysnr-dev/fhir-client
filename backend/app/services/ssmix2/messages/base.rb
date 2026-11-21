@@ -336,9 +336,9 @@ module Ssmix2
         builder.add("ORC", *fields)
       end
 
-      # オーダーの入外区分(prescription-setting / lab-result-setting)が入院か。
-      def inpatient_setting?(resource, system)
-        Fhir.category_code(resource, system) == "inpatient"
+      # オーダー・報告の入外区分が入院か。
+      def inpatient_setting?(resource)
+        CareSetting.inpatient?(resource)
       end
 
       # 書き込みの種類から処理区分とオーダ制御を決める。取消・削除は DEL / CA。

@@ -5,9 +5,9 @@ import { wardExtension, wardOf } from "./orderHeader";
 import { isRadiotherapyFraction } from "./radiotherapyResultHelpers";
 import { isSurgeryProcedure } from "./surgeryResultHelpers";
 import { isTransfusionProcedure } from "./transfusionResultHelpers";
-import { categoryCoding, referenceId } from "./shared";
+import { referenceId, careSettingOf } from "./shared";
 import { rpActiveDays } from "./medicationScheduleHelpers";
-import { groupByRp, SETTING_SYSTEM } from "./prescriptionHelpers";
+import { groupByRp } from "./prescriptionHelpers";
 
 // 重症度、医療・看護必要度(docs/nursing-acuity-design.md)。
 //
@@ -759,7 +759,7 @@ export function acuitySuggestions(args: {
     if (orderId) itemsByOrder.set(orderId, [...(itemsByOrder.get(orderId) ?? []), mr]);
   }
   for (const order of args.prescriptions ?? []) {
-    if (categoryCoding(order, SETTING_SYSTEM)?.code !== "inpatient") continue;
+    if (careSettingOf(order) !== "inpatient") continue;
     const start = (order.occurrenceDateTime ?? "").slice(0, 10);
     for (const rp of groupByRp(itemsByOrder.get(order.id ?? "") ?? [])) {
       if (!rpActiveDays(start, rp).includes(date)) continue;

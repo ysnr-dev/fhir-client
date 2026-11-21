@@ -18,9 +18,12 @@ import {
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
-import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
+import { type PrescriptionSetting } from "./prescriptionHelpers";
 
 // 放射線治療オーダー = 放射線治療医が書く「治療処方」(docs/radiotherapy-order-design.md)。
 //
@@ -559,13 +562,7 @@ function buildRadiotherapyServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -818,7 +815,7 @@ export function parseRadiotherapyOrderForm(sr: fhir4.ServiceRequest): Radiothera
   const courseNumber = sub(course, "courseNumber")?.valueInteger;
 
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     intent: (sub(course, "intent")?.valueCoding?.code ?? "") as RadiotherapyIntent | "",
     courseNumber: courseNumber == null ? "1" : String(courseNumber),
     concurrentTherapy: sub(course, "concurrentTherapy")?.valueCoding?.code ?? "",
@@ -972,7 +969,7 @@ export function summarizeRadiotherapyOrder(sr: fhir4.ServiceRequest): Radiothera
   ].filter(Boolean);
 
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     courseNumber: Number(values.courseNumber) || 1,
     intent: values.intent,
     intentDisplay: values.intent ? displayOf(RADIOTHERAPY_INTENT_OPTIONS, values.intent) : "",

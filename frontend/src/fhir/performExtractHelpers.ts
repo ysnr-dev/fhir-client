@@ -11,9 +11,8 @@ import { lotNumberLabel } from "./lotNumberHelpers";
 import { UNDERSTANDING_EXT_URL } from "./medicationGuidanceResultHelpers";
 import { PERFORMED_MINUTES_EXT_URL } from "./nutritionGuidanceResultHelpers";
 import { departmentOf } from "./orderHeader";
-import { SETTING_SYSTEM } from "./prescriptionHelpers";
 import { PERFORMED_UNITS_EXT_URL } from "./rehabResultHelpers";
-import { categoryCoding, conceptLabel, findSettingDisplay, quantityLabel } from "./shared";
+import { conceptLabel, findSettingDisplay, quantityLabel, careSetting } from "./shared";
 
 // 部門オーダーの実施記録の抽出(docs/data-extract-design.md §13)。実施 1 件(ハブの Procedure)を 1 行にし、
 // 実施日時・状態・依頼の情報・実施者・手技・薬剤・材料と、測定値(被曝線量など)を項目ごとの列にする。
@@ -155,8 +154,7 @@ export function performExtractTable(
       measures.set(key, [...(measures.get(key) ?? []), text]);
     }
 
-    // 入外区分はオーダー共通の prescription-setting(処方と同じコード表)。
-    const setting = order ? categoryCoding(order, SETTING_SYSTEM) : undefined;
+    const setting = order ? careSetting(order) : undefined;
     const patientId = hub.subject?.reference?.split("/").pop() ?? "";
     const performedAt = hub.performedDateTime ?? hub.performedPeriod?.start ?? "";
     return {

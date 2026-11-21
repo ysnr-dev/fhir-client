@@ -1,7 +1,6 @@
 import { KARTE_KIND_LABELS, orderKindOf } from "./karteTimeline";
 import { orderPerformedOn, orderProgressByOrderId, type OrderProgress } from "./orderProgressHelpers";
-import { SETTING_SYSTEM } from "./prescriptionHelpers";
-import { categoryCoding, referenceId } from "./shared";
+import { referenceId, careSettingOf } from "./shared";
 
 // 外来患者一覧の「当日オーダー」列。その日の外来オーダーを種別ごとにまとめ、
 // 種別 1 つを 1 文字の印(「検」「放」など)にする。段階は印の色と塗りで表す。
@@ -141,7 +140,7 @@ export function outpatientOrderSummaries(
   date: string,
 ): Map<string, OutpatientOrderSummary[]> {
   const targets = orders.filter((order) => {
-    const setting = categoryCoding(order, SETTING_SYSTEM)?.code;
+    const setting = careSettingOf(order);
     return (!setting || setting === "outpatient") && isOutpatientKind(orderKindOf(order));
   });
   const progressById = orderProgressByOrderId(targets, tasks, performs);

@@ -7,7 +7,7 @@ RSpec.describe Ssmix2::Messages::OmlO33 do
     { "resourceType" => "ServiceRequest", "id" => "lab1", "status" => "active", "priority" => "urgent",
       "subject" => { "reference" => "Patient/p1" },
       "category" => [{ "coding" => [{ "system" => F::ORDER_TYPE_SYSTEM, "code" => "lab" }] },
-                     { "coding" => [{ "system" => F::PRESCRIPTION_SETTING_SYSTEM, "code" => "outpatient" }] }],
+                     CareSetting.category("outpatient")],
       "authoredOn" => "2026-11-04T18:33:01+09:00", "occurrenceDateTime" => "2026-11-05",
       "requester" => { "reference" => "Practitioner/doc1" },
       "extension" => [{ "url" => F::ORDER_DEPARTMENT_EXT_URL, "valueReference" => { "reference" => "Organization/dept1" } }] }

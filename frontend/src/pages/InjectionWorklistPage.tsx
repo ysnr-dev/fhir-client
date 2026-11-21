@@ -49,8 +49,7 @@ import {
 } from "../fhir/rxInquiryHelpers";
 import { orderContextSummary, orderRequester, wardOf } from "../fhir/orderHeader";
 import { SETTING_OPTIONS } from "../fhir/prescriptionHelpers";
-import { categoryCoding } from "../fhir/shared";
-import { SETTING_SYSTEM } from "../fhir/prescriptionHelpers";
+import { categoryCoding, careSettingOf, careSettingLabel } from "../fhir/shared";
 import {
   useRowPictogramSources,
   type RowPictogramSources,
@@ -277,7 +276,7 @@ export function InjectionWorklistPage() {
 }
 
 function matchesFilters(row: InjectionWorklistRow, filters: Filters): boolean {
-  const setting = categoryCoding(row.order, SETTING_SYSTEM)?.code ?? "";
+  const setting = careSettingOf(row.order);
   const category = categoryCoding(row.order, INJECTION_CATEGORY_SYSTEM)?.code ?? "";
   if (filters.setting && setting !== filters.setting) return false;
   if (filters.category && category !== filters.category) return false;
@@ -440,7 +439,7 @@ function WorklistRow({
   const { order, patient } = row;
   const requester = orderRequester(order);
   const status = injectionTaskStatus(row.task);
-  const settingDisplay = categoryCoding(order, SETTING_SYSTEM)?.display ?? "";
+  const settingDisplay = careSettingLabel(order);
   const categoryDisplay = categoryCoding(order, INJECTION_CATEGORY_SYSTEM)?.display ?? "";
   const seriesLabel = injectionSeriesLabel(order);
   // 化学療法(レジメン)から出たオーダーか。日オーダーの拡張で判る(§7.6 E-1)。

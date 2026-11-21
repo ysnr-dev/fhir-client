@@ -13,7 +13,6 @@ module Ssmix2
     # オーダー(frontend/src/fhir/orderHeader.ts・prescriptionHelpers.ts・injectionHelpers.ts・labOrderHelpers.ts)。
     ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type".freeze
     ORDER_DEPARTMENT_EXT_URL = "http://fhir-client.local/StructureDefinition/order-department".freeze
-    PRESCRIPTION_SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting".freeze
     PRESCRIPTION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-category".freeze
     INJECTION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/injection-category".freeze
     MEDICINE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-code".freeze
@@ -33,7 +32,6 @@ module Ssmix2
     JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11".freeze
     JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11-specimen".freeze
     ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation".freeze
-    LAB_RESULT_SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-setting".freeze
     INTERPRETATION_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation".freeze
     UCUM_SYSTEM = "http://unitsofmeasure.org".freeze
     # 病名(conditionHelpers.ts)。

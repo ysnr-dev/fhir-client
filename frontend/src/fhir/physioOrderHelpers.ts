@@ -7,7 +7,6 @@ import { slotDate, slotTime } from "./scheduleHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   categoryCoding,
-  displayOf,
   itemNumber,
   EXAM_PRIORITY_OPTIONS,
   RETRO_PRIORITY,
@@ -17,6 +16,9 @@ import {
   priorityDisplay,
   ABBREVIATION_SYSTEM,
   withVersionLock,
+  careSettingOf,
+  careSettingCoding,
+  careSetting,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 
@@ -24,8 +26,6 @@ export { EXAM_PRIORITY_OPTIONS, RETRO_PRIORITY };
 import { templateBindingOf, templateResponseIdOf, type TemplateBinding } from "./questionnaireResponseHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -499,13 +499,7 @@ function buildPhysioOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -797,7 +791,7 @@ export interface PhysioOrderSummary {
 }
 
 export function summarizePhysioOrder(sr: fhir4.ServiceRequest): PhysioOrderSummary {
-  const setting = categoryCoding(sr, SETTING_SYSTEM);
+  const setting = careSetting(sr);
   return {
     settingCode: setting?.code ?? "",
     settingDisplay: setting?.display ?? "",
@@ -845,7 +839,7 @@ export function parsePhysioOrderForm(
   items: fhir4.ServiceRequest[] = [],
 ): PhysioOrderFormValues {
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     priority: (sr.priority === "urgent" || sr.priority === RETRO_PRIORITY
       ? sr.priority
       : "routine") as PhysioOrderPriority,

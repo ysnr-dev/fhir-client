@@ -114,7 +114,7 @@
 | `StructureDefinition/transfusion-observation-point` | バイタル Observation。観察の時点(before / 5min / 15min / end) |
 | `CodeSystem/transfusion-reaction` | 副作用 Observation の `code` と値 |
 
-再利用: `CodeSystem/prescription-setting`(入外区分)、依頼科・病棟の拡張
+再利用: 入外区分(v3 ActCode の `IMP` / `AMB`)、依頼科・病棟の拡張
 (`applyOrderContext`)、JP Core `route-codes`(投与経路 IV)、JP_Procedure。
 
 ### 2.3 輸血検査区分をヘッダの code に置く

@@ -18,7 +18,7 @@ RSpec.describe RegimenReport do
       "resourceType" => "ServiceRequest", "id" => "h1", "status" => "active", "intent" => "plan",
       "category" => [
         { "coding" => [{ "system" => described_class::ORDER_TYPE_SYSTEM, "code" => "chemo-regimen" }] },
-        { "coding" => [{ "system" => PrescriptionReport::SETTING_SYSTEM, "code" => "outpatient", "display" => "外来" }] }
+        CareSetting.category("outpatient")
       ],
       "code" => { "coding" => [{ "system" => described_class::REGIMEN_CODE_SYSTEM, "code" => "000001",
                                  "display" => "CapeOX" }] },

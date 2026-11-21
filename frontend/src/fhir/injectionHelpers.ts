@@ -10,6 +10,9 @@ import {
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCategory,
 } from "./shared";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import { keepOrderCancelled } from "./rxTaskHelpers";
@@ -17,8 +20,6 @@ import {
   MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
   RP_NUMBER_SYSTEM,
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
   UNITS_OF_MEASURE_SYSTEM,
   YJ_CODE_SYSTEM,
   codingBySystem,
@@ -863,15 +864,7 @@ function buildInjectionDayEntries(
       {
         coding: [{ system: ORDER_TYPE_SYSTEM, ...INJECTION_ORDER_TYPE }],
       },
-      {
-        coding: [
-          {
-            system: SETTING_SYSTEM,
-            code: values.setting,
-            display: displayOf(SETTING_OPTIONS, values.setting),
-          },
-        ],
-      },
+      ...careSettingCategory(values.setting),
       {
         coding: [
           {
@@ -1288,7 +1281,7 @@ export interface InjectionSummary {
 // summarizeServiceRequest)と違い system で引く(shared の categoryCoding を使う)。
 export function summarizeInjectionServiceRequest(sr: fhir4.ServiceRequest): InjectionSummary {
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     categoryDisplay: categoryCoding(sr, CATEGORY_SYSTEM)?.display ?? "",
   };
 }
@@ -1366,7 +1359,7 @@ export function parseInjectionForm(
     }));
 
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     category: categoryCoding(sr, CATEGORY_SYSTEM)?.code ?? "",
     startDate: injectionDayOf(sr) || today(),
     endDate: injectionDayOf(sr) || today(),

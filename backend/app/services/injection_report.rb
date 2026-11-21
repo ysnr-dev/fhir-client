@@ -23,7 +23,6 @@ class InjectionReport
   LABEL_LAYOUT_PATH = Rails.root.join("lib/report_layouts/injection_label.tlf").freeze
 
   # frontend の fhir/injectionHelpers.ts / prescriptionHelpers.ts と同じ system 定義。
-  SETTING_SYSTEM = PrescriptionReport::SETTING_SYSTEM
   INJECTION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/injection-category".freeze
   RP_NUMBER_SYSTEM = PrescriptionReport::RP_NUMBER_SYSTEM
   ORDER_IN_RP_SYSTEM = PrescriptionReport::ORDER_IN_RP_SYSTEM

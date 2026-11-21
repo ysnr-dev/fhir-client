@@ -6,16 +6,18 @@ import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import {
   categoryCoding,
   codingBySystem,
-  displayOf,
   orderComment,
   orderDay,
   referenceId,
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
-import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
+import { type PrescriptionSetting } from "./prescriptionHelpers";
 import { buildTeamRequestTaskUpdate, withTeamRequestTaskContent } from "./teamRequestTaskHelpers";
 
 // チーム依頼(docs/care-team-design.md §2)。NST・ICT・褥瘡対策・緩和ケアなどのチームへの介入依頼。
@@ -114,7 +116,7 @@ function buildTeamRequestServiceRequest(
     category: [
       { coding: [{ system: ORDER_TYPE_SYSTEM, ...TEAM_REQUEST_ORDER_TYPE }] },
       ...(values.setting
-        ? [{ coding: [{ system: SETTING_SYSTEM, code: values.setting, display: displayOf(SETTING_OPTIONS, values.setting) }] }]
+        ? [{ coding: [careSettingCoding(values.setting)] }]
         : []),
     ],
     subject: { reference: `Patient/${patientId}` },
@@ -356,7 +358,7 @@ export function summarizeTeamRequest(sr: fhir4.ServiceRequest): TeamRequestSumma
   const priority = (sr.priority === "urgent" ? "urgent" : "routine") as TeamRequestPriority;
   const last = teamRequestLastRound(sr);
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     teamId: team.teamId,
     teamName: team.teamName,
     teamKind: kind,
@@ -379,7 +381,7 @@ export const teamRequestProblem = orderProblem;
 export function parseTeamRequestForm(sr: fhir4.ServiceRequest): TeamRequestFormValues {
   const team = teamRequestTeam(sr);
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     teamId: team.teamId,
     teamName: team.teamName,
     teamKind: teamRequestKind(sr),

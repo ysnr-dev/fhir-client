@@ -4,7 +4,6 @@ import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import {
-  categoryCoding,
   codingBySystem,
   displayOf,
   itemNumber,
@@ -12,10 +11,12 @@ import {
   transactionBundle,
   ABBREVIATION_SYSTEM,
   withVersionLock,
+  careSettingCoding,
+  careSetting,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
-import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
+import { type PrescriptionSetting } from "./prescriptionHelpers";
 
 // 手術オーダー(申込)。他の同型オーダー(放射線・生理・内視鏡・処置)と同じく
 // ヘッダは ServiceRequest、明細(術式 1 件)も 1 件ずつ独立した ServiceRequest。
@@ -589,13 +590,7 @@ function buildSurgeryOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -1111,7 +1106,7 @@ export interface SurgeryOrderSummary {
 }
 
 export function summarizeSurgeryOrder(sr: fhir4.ServiceRequest): SurgeryOrderSummary {
-  const setting = categoryCoding(sr, SETTING_SYSTEM);
+  const setting = careSetting(sr);
   // occurrencePeriod を持つ申込も読めるよう start へフォールバック。
   const start = sr.occurrenceDateTime ?? sr.occurrencePeriod?.start ?? "";
   const duration = sr.extension?.find((e) => e.url === DURATION_EXT_URL)?.valueQuantity?.value;

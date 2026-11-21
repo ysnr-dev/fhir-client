@@ -6,20 +6,19 @@ import { slotDate, slotTime } from "./scheduleHelpers";
 // FHIR dateTime へのタイムゾーン付与は診療記録と同じ変換でよいので共用する。
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
-  categoryCoding,
-  displayOf,
   itemNumber,
   orderDay,
   registrationAuthoredOn,
   transactionBundle,
   ABBREVIATION_SYSTEM,
   withVersionLock,
+  careSettingOf,
+  careSettingCoding,
+  careSetting,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext } from "./orderHeader";
 import {
-  SETTING_OPTIONS,
-  SETTING_SYSTEM,
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
@@ -325,13 +324,7 @@ function buildTreatmentOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -597,7 +590,7 @@ export interface TreatmentOrderSummary {
 }
 
 export function summarizeTreatmentOrder(sr: fhir4.ServiceRequest): TreatmentOrderSummary {
-  const setting = categoryCoding(sr, SETTING_SYSTEM);
+  const setting = careSetting(sr);
   return {
     settingCode: setting?.code ?? "",
     settingDisplay: setting?.display ?? "",
@@ -643,7 +636,7 @@ export function parseTreatmentOrderForm(
   items: fhir4.ServiceRequest[] = [],
 ): TreatmentOrderFormValues {
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     startDate: orderDay(sr) || today(),
     startTime: treatmentOrderTime(sr),
     problem: treatmentOrderProblem(sr),

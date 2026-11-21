@@ -1,4 +1,4 @@
-import { categoryCoding, orderDay, referenceId } from "./shared";
+import { orderDay, referenceId, careSettingOf } from "./shared";
 import {
   type FlowsheetMark,
   type FlowsheetMarkKind,
@@ -16,7 +16,6 @@ import {
 import type { NursingScheduleSettings } from "./nursingScheduleHelpers";
 import { oralPerformsByOrderId } from "./oralPerformHelpers";
 import {
-  SETTING_SYSTEM,
   groupByRp,
   isPrescriptionServiceRequest,
   type RpDisplay,
@@ -93,7 +92,7 @@ function markEvent(
 
 /** 入院の処方か。外来・院内処方は病棟が与薬しないので経過表に出さない。 */
 function isInpatientPrescription(sr: fhir4.ServiceRequest): boolean {
-  return categoryCoding(sr, SETTING_SYSTEM)?.code === "inpatient";
+  return careSettingOf(sr) === "inpatient";
 }
 
 /**

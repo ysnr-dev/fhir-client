@@ -258,7 +258,7 @@ flowchart TD
 | リソース | 要素 | 中身 |
 |---|---|---|
 | ヘッダ `ServiceRequest` | `status` | `completed`(登録したときから) |
-| ヘッダ `ServiceRequest` | `category` | `order-type|medical-management` と、入外区分の `prescription-setting` |
+| ヘッダ `ServiceRequest` | `category` | `order-type|medical-management` と、入外区分(v3 ActCode の `IMP` / `AMB`) |
 | ヘッダ `ServiceRequest` | `code.text` | 項目名のまとめ |
 | ヘッダ `ServiceRequest` | `occurrenceDateTime` | 算定日(日付のみ) |
 | ヘッダ `ServiceRequest` | `note` | 備考 |

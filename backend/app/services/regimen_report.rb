@@ -154,9 +154,7 @@ class RegimenReport
       bsa: part(ext, "bsa", "valueDecimal"),
       height: part(ext, "height", "valueDecimal"),
       weight: part(ext, "weight", "valueDecimal"),
-      setting: Array(sr["category"]).filter_map do |c|
-        coding_by_system(c["coding"], PrescriptionReport::SETTING_SYSTEM)&.dig("display")
-      end.first.to_s,
+      setting: CareSetting.label(sr),
       problem: sr.dig("reasonReference", 0, "display").to_s,
       comment: sr.dig("note", 0, "text").to_s,
       department: Array(sr["extension"]).find { |e| e["url"] == ORDER_DEPARTMENT_EXT_URL }

@@ -12,9 +12,12 @@ import {
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
-import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
+import { type PrescriptionSetting } from "./prescriptionHelpers";
 
 // 他科依頼(コンサルテーション)オーダー(docs/consult-order-design.md)。
 //
@@ -170,13 +173,7 @@ function buildConsultOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -544,7 +541,7 @@ export function summarizeConsultOrder(sr: fhir4.ServiceRequest): ConsultOrderSum
   const reply = consultReply(sr);
 
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     targetDepartmentId: department.departmentId,
     targetDepartmentName: department.departmentName,
     targetPractitionerName: practitioner.practitionerName,
@@ -574,7 +571,7 @@ export function parseConsultOrderForm(sr: fhir4.ServiceRequest): ConsultOrderFor
   const practitioner = consultTargetPractitioner(sr);
 
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     targetDepartmentId: department.departmentId,
     targetDepartmentName: department.departmentName,
     targetPractitionerId: practitioner.practitionerId,

@@ -10,10 +10,13 @@ import {
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingOf,
+  careSettingLabel,
+  careSettingCoding,
 } from "./shared";
 import { keepOrderRevoked } from "./taskHelpers";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
-import { SETTING_OPTIONS, SETTING_SYSTEM, type PrescriptionSetting } from "./prescriptionHelpers";
+import { type PrescriptionSetting } from "./prescriptionHelpers";
 
 // リハビリオーダー。食事オーダー(mealOrderHelpers.ts)と同じ「期間継続型」で、
 // 1 つのオーダーが数週間〜数か月続き、その間に実施が何度も積み上がる
@@ -273,13 +276,7 @@ function buildRehabOrderServiceRequest(
       ...(values.setting
         ? [
             {
-              coding: [
-                {
-                  system: SETTING_SYSTEM,
-                  code: values.setting,
-                  display: displayOf(SETTING_OPTIONS, values.setting),
-                },
-              ],
+              coding: [careSettingCoding(values.setting)],
             },
           ]
         : []),
@@ -527,7 +524,7 @@ export function summarizeRehabOrder(sr: fhir4.ServiceRequest): RehabOrderSummary
   const frequency = rehabOrderFrequency(sr);
 
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingDisplay: careSettingLabel(sr),
     diseaseCategoryDisplay: sr.code?.text || diseaseCategoryDisplay(diseaseCategory),
     diseaseCategoryShort: diseaseCategoryShort(diseaseCategory),
     diseaseCategory,
@@ -585,7 +582,7 @@ export function parseRehabOrderForm(sr: fhir4.ServiceRequest): RehabOrderFormVal
   const frequency = rehabOrderFrequency(sr);
 
   return {
-    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: careSettingOf(sr),
     diseaseCategory: rehabOrderDiseaseCategory(sr) as RehabDiseaseCategory | "",
     therapyTypes: rehabOrderTherapyTypes(sr),
     unitsPerSession: units == null ? "" : String(units),

@@ -339,7 +339,7 @@ basedOn=原因の治療のヘッダ)を表と CSV にする。設定は保存し
   &_include=Procedure:subject&_sort=-date` を strict で `searchAllPages`(200 件 × 25 ページ)。ハブ・子の手技・薬剤・測定値・
   オーダーヘッダ・ヘッダの明細(依頼項目)を 1 本の検索で受け取る。患者の絞り込みは §8 と同じ。
 - **列**(`fhir/performExtractHelpers.ts`): 部門ごとの組み立て関数は使わず、実施記録の共通の形から読む。
-  - 実施日時・終了(performedPeriod.end)・状態・依頼日(ヘッダの occurrence)・依頼科・入外(ヘッダの prescription-setting)。
+  - 実施日時・終了(performedPeriod.end)・状態・依頼日(ヘッダの occurrence)・依頼科・入外(ヘッダの category の v3 ActCode)。
   - 依頼項目(ヘッダを basedOn で指す明細の code。構成項目の 2 段目は出さない)・実施者・手技(ハブと子の code)・手技コード・
     薬剤(名称・量・経路・ロット番号)・材料(usedCode と `*-material-quantity` 拡張の数量)・コメント(note)。
   - 測定値: 実施にぶら下がる Observation を code ごとに列にする(放射線の CTDIvol・DLP、輸血の副作用など)。単位が 1 つなら見出しに添える。

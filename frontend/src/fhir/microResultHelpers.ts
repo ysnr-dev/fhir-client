@@ -1,11 +1,9 @@
 import { today } from "../lib/dates";
 import {
-  SETTING_SYSTEM,
   type LabResultSetting,
   observationIdsFromReport,
-  settingCategory,
 } from "./labResultHelpers";
-import { categoryCoding, type CodeOption, codingBySystem, displayOf, LOINC_SYSTEM } from "./shared";
+import { type CodeOption, codingBySystem, displayOf, LOINC_SYSTEM, careSettingOf, careSettingCategory } from "./shared";
 import { departmentExtension, departmentOf } from "./orderHeader";
 import { SPECIMEN_TYPE_SYSTEM, ORGANISM_SYSTEM } from "./microOrderHelpers";
 
@@ -645,7 +643,7 @@ function buildMicroResultTransactionBundle(
     status: values.reportStatus,
     category: [
       { coding: [{ system: REPORT_CATEGORY_SYSTEM, code: "MB", display: "Microbiology" }] },
-      ...settingCategory(values.setting),
+      ...careSettingCategory(values.setting),
     ],
     code: {
       coding: [
@@ -863,7 +861,7 @@ export function parseMicroResultForm(
   specimens: fhir4.Specimen[] = [],
 ): MicroResultFormValues {
   const values = emptyMicroResultForm();
-  values.setting = (categoryCoding(report, SETTING_SYSTEM)?.code ?? "") as LabResultSetting;
+  values.setting = careSettingOf(report);
   values.specimenDate = report.effectiveDateTime?.slice(0, 10) ?? today();
   const department = departmentOf(report);
   values.departmentId = department.departmentId;

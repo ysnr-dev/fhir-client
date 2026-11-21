@@ -356,7 +356,7 @@ flowchart TD
 
 | 要素 | 中身 |
 |---|---|
-| `category` | `order-type|nursing` + `prescription-setting|inpatient`(固定) |
+| `category` | `order-type|nursing` + `v3-ActCode|IMP`(固定) |
 | `code`(看護行為) | 16 桁の階層コード `master-nursingAction-16digits` + 管理番号 `urn:oid:1.2.392.200119.4.704` |
 | `code`(看護観察) | `master-nursingObservationKeyCode` |
 | `code`(自由記載) | `text` だけ |

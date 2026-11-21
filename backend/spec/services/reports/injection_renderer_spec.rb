@@ -10,7 +10,7 @@ RSpec.describe Reports::InjectionRenderer do
       "authoredOn" => "2026-08-31T16:20:45+09:00",
       "occurrenceDateTime" => "2026-09-01",
       "category" => [
-        { "coding" => [{ "system" => InjectionReport::SETTING_SYSTEM, "code" => "inpatient", "display" => "入院" }] },
+        CareSetting.category("inpatient"),
         { "coding" => [{ "system" => InjectionReport::INJECTION_CATEGORY_SYSTEM, "code" => "regular", "display" => "定時" }] }
       ],
       "requester" => { "display" => "児玉 義憲" },

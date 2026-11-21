@@ -152,7 +152,7 @@ master_regimen_adverse_events    … 副作用(term = CTCAE 用語の自由記�
 
 ```text
 ServiceRequest(ヘッダ = 適用 1 件)          intent = plan、status = active | revoked
-  category      order-type|chemo-regimen、prescription-setting|inpatient/outpatient
+  category      order-type|chemo-regimen、v3-ActCode|IMP / AMB
   code          CodeSystem/regimen(code = レジメンコード、display = 名前)
   identifier    Identifier/regimen-instance = 適用 1 件の uuid
   instantiatesUri  http://fhir-client.local/regimen/{code}(マスタは backend。FHIR 上は URI で指すだけ)

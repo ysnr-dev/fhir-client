@@ -58,7 +58,7 @@
     回数が分かれば `rateRatio` も付きます。
 - **オーダー種別**: ほかのオーダーと同じく `ServiceRequest.category` の先頭にオーダー種別
   `order-type|prescription` を持ち、処方一覧・カルテ・経過表などはこの種別で引きます。続けて入外区分
-  (`.../prescription-setting`)と処方区分(`.../prescription-category`)を入れます。
+  (HL7 v3 ActCode の `IMP` 入院 / `AMB` 外来。`Encounter.class` と同じコード)と処方区分(`.../prescription-category`)を入れます。
 - **入院のオーダー**: 入院中に登録した処方は `ServiceRequest.encounter` にその入院を入れます
   (与薬の実施記録がここから Encounter を写します)。
 - **処方区分の初期値**: 入外区分で選択肢が違う(入院=定期/継続/臨時/退院/緊急、外来=院外/院内)ので、
@@ -298,7 +298,7 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
   タイムラインは処方と同じ `ServiceRequest` 検索(1本のページング)で取得し、この category で
   処方カード/注射カードに振り分けます(処方は `order-type|prescription`)。
 - **入外区分・注射区分**: `category` にはオーダー種別に続けてこの2つも入れます。入外区分
-  (入院/外来)は処方と同じコードシステム(`.../prescription-setting`)を共用し、注射区分は
+  (入院/外来)は全オーダー共通の v3 ActCode(`IMP` / `AMB`)で、注射区分は
   選択肢が処方と異なるため専用のコードシステム(`.../injection-category`)にしています
   (入院→定時/臨時/緊急、外来→外来)。category は 3 要素になるので、読み出しは処方
   (添字で引く)と違い system で引きます。

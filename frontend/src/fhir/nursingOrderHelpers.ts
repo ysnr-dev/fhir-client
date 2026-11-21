@@ -4,14 +4,13 @@ import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   categoryCoding,
   codingBySystem,
-  displayOf,
   orderComment,
   registrationAuthoredOn,
   transactionBundle,
   withVersionLock,
+  careSettingCoding,
 } from "./shared";
 import { ORDER_TYPE_SYSTEM, applyOrderContext, type OrderAttribution } from "./orderHeader";
-import { SETTING_OPTIONS, SETTING_SYSTEM } from "./prescriptionHelpers";
 import { buildNursingTaskUpdate, withTaskOwner } from "./nursingTaskHelpers";
 import {
   isValidTime,
@@ -237,13 +236,7 @@ function buildNursingOrderServiceRequest(
     category: [
       { coding: [{ system: ORDER_TYPE_SYSTEM, ...NURSING_ORDER_TYPE }] },
       {
-        coding: [
-          {
-            system: SETTING_SYSTEM,
-            code: "inpatient",
-            display: displayOf(SETTING_OPTIONS, "inpatient"),
-          },
-        ],
+        coding: [careSettingCoding("inpatient")],
       },
     ],
     code: nursingItemConcept(line.item, line.text),

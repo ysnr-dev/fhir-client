@@ -55,7 +55,7 @@
 ## 2. FHIR の構造
 
 ```text
-ヘッダ ServiceRequest  (category[0] = order-type|dialysis, category[1] = prescription-setting|inpatient / outpatient)
+ヘッダ ServiceRequest  (category[0] = order-type|dialysis, category[1] = v3-ActCode|IMP / AMB)
   status = active / intent = order
   code               = 浄化方法 (CodeSystem/dialysis-modality)
   subject            = Patient
@@ -125,7 +125,7 @@ Location 透析室 (type = CodeSystem/location-type|dialysis-unit、physicalType
 ［事実］`OrderCatalog::Definition`(会計)は `#{order_type}-procedure-code`・`#{order_type}-material-quantity`・`#{order_type}-bundled-medication` を規約で組む
 (`integrations/receipt_computer/order_catalog.rb`)ので、上の 2 つはこの名前でなければならない。
 
-再利用: `CodeSystem/prescription-setting`(入外区分)、`CodeSystem/medicine-code` / YJ、`CodeSystem/medical-material`、
+再利用: 入外区分(v3 ActCode の `IMP` / `AMB`)、`CodeSystem/medicine-code` / YJ、`CodeSystem/medical-material`、
 JP Core `route-codes`、`StructureDefinition/medication-lot-number`、依頼科・病棟の拡張(`orderHeader.ts`)。
 
 ### 2.2 透析条件(`dialysis-prescription`)
@@ -309,7 +309,7 @@ frontend は `fhir/receiptCodeSettingsHelpers.ts` と `pages/FacilitySettingsPag
 
 ［事実］維持透析患者が他疾患で入院・退院しても外来の透析は続く。リハビリは退院で全件を打ち切る(`useDischargePatient`)。
 
-［導出］透析は `prescription-setting|inpatient` のオーダー(急性血液浄化・入院中の臨時 HD)だけを退院の対象にし、
+［導出］透析は `v3-ActCode|IMP` のオーダー(急性血液浄化・入院中の臨時 HD)だけを退院の対象にし、
 外来のオーダーは触らない。退院ダイアログの対象選択では入外区分を見せる。入院中に外来の維持透析を院内で続ける場合は、
 入院時に入院のオーダーを別に出し、外来のオーダーは中断(§4.3)しておく。
 
