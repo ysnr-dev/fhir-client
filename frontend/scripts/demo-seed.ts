@@ -6,6 +6,7 @@
 //   node scripts/dist/demo-seed.mjs --target dev --check    ログインと前提の確認だけ(書き込まない)
 //   node scripts/dist/demo-seed.mjs --target dev --only diabetes,rectal
 //   node scripts/dist/demo-seed.mjs --target dev --name-suffix テスト   試し流し(名に「テスト」を足す)
+//   node scripts/dist/demo-seed.mjs --target dev --only manualShots    操作マニュアルの撮影用(開発環境のみ)
 //
 // ログイン ID とパスワードは実行時に聞く(パスワードは画面に出さない)。環境変数
 // DEMO_SEED_LOGIN / DEMO_SEED_PASSWORD があればそれを使う。ビルドは docs/demo-seed.md。
@@ -13,7 +14,7 @@
 import { createInterface } from "node:readline";
 import { login } from "../src/api/authClient";
 import { loadEnv } from "../src/demo-seed/base";
-import { preflight, run, SCENARIOS, type ScenarioName } from "../src/demo-seed/index";
+import { OPT_IN_SCENARIOS, preflight, run, SCENARIOS, type ScenarioName } from "../src/demo-seed/index";
 
 // 画面の組み立て関数は実行環境の時差で日時を書くので、施設の時刻(日本時間)に揃える。
 // UTC のコンテナで流すと、午前 9 時の枠が日本時間の 18 時になる。
@@ -78,6 +79,9 @@ async function main(): Promise<void> {
   const only = option("only")?.split(",").map((s) => s.trim()).filter(Boolean) as ScenarioName[] | undefined;
   for (const name of only ?? []) {
     if (!(name in SCENARIOS)) throw new Error(`シナリオ ${name} はありません(${Object.keys(SCENARIOS).join(", ")})`);
+    if (OPT_IN_SCENARIOS.includes(name) && target !== "dev") {
+      throw new Error(`シナリオ ${name} は開発環境専用です(--target dev で流してください)`);
+    }
   }
 
   installFetch(base);

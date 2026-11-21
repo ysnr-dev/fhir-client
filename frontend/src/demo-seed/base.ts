@@ -75,6 +75,9 @@ import { isDoctorRoleCode } from "../fhir/practitionerRoleHelpers";
 
 const PHYSICAL_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/location-physical-type";
 
+/** 操作マニュアルの撮影用の病棟(manualShots が作る)。 */
+export const SHOOTING_WARD_NAME = "見本病棟";
+
 // ---- 実行環境 ----
 
 export interface Named {
@@ -142,6 +145,11 @@ export async function loadEnv(log: (message: string) => void, nameSuffix = ""): 
     .map((id) => ({ id, name: people.get(id) ?? "" }))
     .sort((a, b) => a.name.localeCompare(b.name, "ja"));
   const locations = await searchAll<fhir4.Location>("Location", {});
+  // 撮影用の病棟のベッドには、ほかのシナリオの患者を入れない(病棟の画面写真に写り込む)。
+  const byId = new Map(locations.map((location) => [location.id ?? "", location]));
+  const parentOf = (location: fhir4.Location | undefined) =>
+    byId.get(location?.partOf?.reference?.split("/").pop() ?? "");
+  const inShootingWard = (bed: fhir4.Location) => parentOf(parentOf(bed))?.name === SHOOTING_WARD_NAME;
   // 入院に使う病棟のベッド。透析室のベッドも同じ physicalType なので種別で外す。
   const beds = locations.filter(
     (location) =>
@@ -150,7 +158,8 @@ export async function loadEnv(log: (message: string) => void, nameSuffix = ""): 
       ) &&
       !location.type?.some((type) =>
         type.coding?.some((c) => c.system === LOCATION_TYPE_SYSTEM && c.code === DIALYSIS_LOCATION_TYPE.code),
-      ),
+      ) &&
+      !inShootingWard(location),
   );
   const self = { id: practitionerId, name: practitioner ? nameOf(practitioner) : "" };
   return {

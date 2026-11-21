@@ -16,6 +16,7 @@ import { REQUIREMENTS as dialysisRequirements, seedDialysis } from "./dialysis";
 import { REQUIREMENTS as diabetesCohortRequirements, seedDiabetesCohort } from "./diabetesCohort";
 import { REQUIREMENTS as headNeckRequirements, seedHeadNeckRadiotherapy } from "./headNeckRadiotherapy";
 import { REQUIREMENTS as heartFailureRequirements, seedHeartFailure } from "./heartFailure";
+import { seedManualShots } from "./manualShots";
 import { REQUIREMENTS as periodontalRequirements, seedPeriodontal } from "./periodontal";
 import { REQUIREMENTS as rectalRequirements, seedRectalCancer } from "./rectalCancer";
 
@@ -29,12 +30,20 @@ export const SCENARIOS = {
   diabetesCohort: seedDiabetesCohort,
   acuteCareCohort: seedAcuteCareCohort,
   dialysis: seedDialysis,
+  manualShots: seedManualShots,
 } as const;
 
 export type ScenarioName = keyof typeof SCENARIOS;
 
+/** 名指ししたときだけ流すシナリオ(開発環境専用のもの)。 */
+export const OPT_IN_SCENARIOS: readonly ScenarioName[] = ["manualShots"];
+
+const DEFAULT_SCENARIOS = (Object.keys(SCENARIOS) as ScenarioName[]).filter(
+  (name) => !OPT_IN_SCENARIOS.includes(name),
+);
+
 export async function run(
-  names: ScenarioName[] = Object.keys(SCENARIOS) as ScenarioName[],
+  names: ScenarioName[] = DEFAULT_SCENARIOS,
   nameSuffix = "",
 ): Promise<string[]> {
   const lines: string[] = [];
