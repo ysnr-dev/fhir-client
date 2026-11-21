@@ -42,6 +42,7 @@ import {
   orderAppointmentCancelEntries,
   setActiveAppointmentStatus,
 } from "./appointment";
+import { searchAllPages } from "./core";
 import { readAllTypeHistory } from "./karteCardHistory";
 import { invalidateProvenance, useActivityProvenance, useWithOrderProvenance } from "./provenance";
 import { RX_VERIFICATION_KEY, withRxVerificationTasks } from "./rxVerification";
@@ -482,28 +483,33 @@ export interface ChemoRoomRow {
   decision?: fhir4.Task;
 }
 
+const CHEMO_ROOM_PAGE_SIZE = 200;
+const CHEMO_ROOM_MAX_PAGES = 5;
+
 export function useChemoRoomList(date: string) {
   return useQuery({
     queryKey: ["Appointment", "search", "chemo-room", date],
-    queryFn: async (): Promise<ChemoRoomRow[]> => {
+    queryFn: async (): Promise<{ rows: ChemoRoomRow[]; truncated: boolean }> => {
       const params = new URLSearchParams();
       params.set("date", date);
       params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|chemo`);
       setActiveAppointmentStatus(params);
-      params.set("_count", "200");
       params.set("_sort", "date");
       params.append("_include", "Appointment:patient");
       // 予約が指す日オーダーと、そのオーダーの進捗 Task・薬剤も同じ応答で揃える。
       params.append("_include", "Appointment:based-on");
       params.append("_revinclude:iterate", "Task:focus,MedicationRequest:based-on");
-      const { data: bundle } = await searchResource<fhir4.Resource>("Appointment", params);
+      const { bundles, truncated } = await searchAllPages<fhir4.Appointment>("Appointment", params, {
+        page: CHEMO_ROOM_PAGE_SIZE,
+        maxPages: CHEMO_ROOM_MAX_PAGES,
+      });
 
       const appointments: fhir4.Appointment[] = [];
       const patientsById = new Map<string, fhir4.Patient>();
       const ordersById = new Map<string, fhir4.ServiceRequest>();
       const tasks: fhir4.Task[] = [];
       const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
-      for (const entry of bundle.entry ?? []) {
+      for (const entry of bundles.flatMap((bundle) => bundle.entry ?? [])) {
         const resource = entry.resource;
         if (resource?.resourceType === "Appointment") {
           appointments.push(resource as fhir4.Appointment);
@@ -524,7 +530,7 @@ export function useChemoRoomList(date: string) {
       const tasksByOrderId = injectionTasksByOrderId(tasks);
       const decisionsByOrderId = regimenDecisionsByOrderId(tasks);
 
-      return appointments
+      const rows = appointments
         .map((appointment) => {
           const orderId = appointmentOrderId(appointment);
           const patientId = appointmentActorId(appointment, "Patient");
@@ -538,6 +544,7 @@ export function useChemoRoomList(date: string) {
           };
         })
         .sort((a, b) => (a.appointment.start ?? "").localeCompare(b.appointment.start ?? ""));
+      return { rows, truncated };
     },
     enabled: Boolean(date),
   });

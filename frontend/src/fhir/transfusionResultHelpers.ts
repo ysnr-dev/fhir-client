@@ -1,5 +1,5 @@
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
-import { nowFhirDateTime } from "../lib/dates";
+import { dateTimeLabel, nowFhirDateTime } from "../lib/dates";
 import { parseIsbt128 } from "./isbt128";
 import { ORDER_TYPE_SYSTEM } from "./orderHeader";
 import { displayName, patientNumberOf } from "./patientHelpers";
@@ -819,7 +819,7 @@ export function reactionLabel(observation: fhir4.Observation | undefined): strin
 }
 
 function delayedReactionLabel(observation: fhir4.Observation): string {
-  const when = (observation.effectiveDateTime ?? "").slice(0, 16).replace("T", " ");
+  const when = dateTimeLabel(observation.effectiveDateTime);
   const label = reactionLabel(observation).replace(/^あり:?\s*/, "");
   return [when, label].filter(Boolean).join(" ");
 }

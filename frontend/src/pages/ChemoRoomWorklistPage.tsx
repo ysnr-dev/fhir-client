@@ -7,6 +7,7 @@ import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfile
 import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "../components/PatientRowCells";
 import { RowPictograms } from "../components/PatientListRowParts";
 import { RegimenDecisionMark, RegimenHeldMark } from "../components/RegimenDecision";
+import { TruncatedNotice } from "../components/TruncatedNotice";
 import { appointmentTimeLabel } from "../fhir/appointmentHelpers";
 import { groupInjectionByRp } from "../fhir/injectionHelpers";
 import { injectionTaskStatus, injectionTaskStatusDisplay } from "../fhir/injectionTaskHelpers";
@@ -36,10 +37,10 @@ export function ChemoRoomWorklistPage() {
   }, []);
 
   const list = useChemoRoomList(date);
-  const rows = list.data ?? [];
+  const rows = list.data?.rows ?? [];
 
   const patientIds = useMemo(
-    () => (list.data ?? []).flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
+    () => (list.data?.rows ?? []).flatMap((row) => (row.patient?.id ? [row.patient.id] : [])),
     [list.data],
   );
   const pictograms = useRowPictogramSources(patientIds);
@@ -57,6 +58,7 @@ export function ChemoRoomWorklistPage() {
       <h1>外来化学療法室</h1>
       <DateForm date={date} onChange={setDate} />
       <ErrorBanner error={list.error} />
+      <TruncatedNotice show={list.data?.truncated} />
 
       {list.isPending ? (
         <p>読み込み中...</p>

@@ -85,8 +85,9 @@ export function ChemoRoomCard({ date }: HomeCardProps<"chemoRoom">) {
       path="/chemo-room-worklist"
       isPending={query.isPending}
       error={query.error}
-      statuses={query.data?.map((row) => injectionTaskStatus(row.task))}
+      statuses={query.data?.rows.map((row) => injectionTaskStatus(row.task))}
       options={INJECTION_TASK_STATUS_OPTIONS}
+      truncated={query.data?.truncated}
     />
   );
 }

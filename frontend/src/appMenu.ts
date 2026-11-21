@@ -199,6 +199,25 @@ export const APP_MENU: AppMenuEntry[] = [
   },
 ];
 
+// 「管理」メニュー。
+export const ADMIN_MENU: AppMenuItem[] = [
+  // マスタメンテは項目が多くメニューに収まらないので、一覧のページ(/masters)へ送る。
+  { label: "マスタメンテ", to: "/masters" },
+  { label: "OAuth クライアント", to: "/oauth-clients" },
+  // カルテの「SMARTアプリ」タブから起動する SMART on FHIR アプリの台帳。
+  { label: "SMART アプリ", to: "/smart-apps" },
+  // カルテを開いたときに呼ぶ外部の判断支援(CDS Hooks)の提供元。
+  { label: "CDS サービス", to: "/cds-services" },
+  // 警告(判断支援)の発火数・無視率と、種別ごとの重さの調整。
+  { label: "警告の集計と設定", to: "/advisory-review" },
+  { label: "接続設定", to: "/settings" },
+  // どの Organization が自院かの指定。診療科・診察室・スタッフの所属や帳票の自院欄がこの設定を見る。
+  { label: "施設設定", to: "/facility-settings" },
+  // 外部システム連携。一覧でシステムを選ぶと、そのシステムの設定ページへ入る
+  // (レセコン連携は docs/receipt-computer-integration.md)。
+  { label: "外部システム連携", to: "/external-systems" },
+];
+
 // 「管理」メニューの項目のうち、ショートカットに置けるもの。管理の他の項目は設定画面なので候補に入れない。
 const ADMIN_SHORTCUT_LINKS: AppMenuItem[] = [{ label: "マスタメンテ", to: "/masters" }];
 

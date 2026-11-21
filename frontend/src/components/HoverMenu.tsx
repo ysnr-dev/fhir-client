@@ -1,12 +1,26 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 
 // マウスオーバーで開くコンテキストメニュー。キーボード操作向けにクリックでも開閉する。
 // メニュー項目には row-menu__item のスタイルを流用する。
 export function HoverMenu({ label, children }: { label: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEscapeClose(() => setOpen(false), open);
+
+  // クリックで開いたときは、メニューの外を押しても閉じる。
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [open]);
 
   return (
     <div
+      ref={ref}
       className="hover-menu"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}

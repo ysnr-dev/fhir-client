@@ -33,6 +33,7 @@ import { useIsNursingLogin } from "../hooks/useIsNursingLogin";
 import { ErrorBanner } from "./ErrorBanner";
 import type { KartePaneState } from "./KarteRightPane";
 import { NursingSummaryForm, type NursingSummarySubmitMode } from "./NursingSummaryForm";
+import { dateTimeLabel } from "../lib/dates";
 
 // 看護サマリーの登録・編集・承認(カルテ右ペイン)。登録は入院と種別を選ぶところから始め、
 // 退院の看護サマリーが既にあれば編集に切り替える(中間・転棟は何件でも書ける)。
@@ -283,8 +284,8 @@ function EditForm({
         sources={sources.data}
         status={{
           author: note.author?.[0]?.display ?? "",
-          attested: attestation?.time ? attestation.time.slice(0, 16).replace("T", " ") : "",
-          approver: approver ? `${approver.name} (${approver.time.slice(0, 16).replace("T", " ")})` : "",
+          attested: attestation?.time ? dateTimeLabel(attestation.time) : "",
+          approver: approver ? `${approver.name} (${dateTimeLabel(approver.time)})` : "",
           returnReason: returnedTasks.map(nursingSummaryReturnReason).filter(Boolean).join(" / "),
         }}
         role={role}

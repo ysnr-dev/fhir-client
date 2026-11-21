@@ -15,7 +15,7 @@ import {
   type NursingSummarySources,
 } from "../fhir/nursingSummaryHelpers";
 import type { NursingProblemView } from "../fhir/nursingCarePlanHelpers";
-import { today } from "../lib/dates";
+import { dateTimeLabel, today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { NursingProblemTree } from "./NursingProblemTree";
 import { Modal } from "./Modal";
@@ -344,7 +344,7 @@ function RecordImportModal({
                     })
                   }
                 />
-                {r.date.slice(0, 16).replace("T", " ")} {r.title}({r.author})
+                {dateTimeLabel(r.date)} {r.title}({r.author})
               </label>
               <div className="nursing-summary__record-text">{r.text}</div>
             </li>

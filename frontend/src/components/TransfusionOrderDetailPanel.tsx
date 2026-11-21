@@ -10,6 +10,7 @@ import {
   transfusionOrderProblem,
   transfusionOrderProducts,
 } from "../fhir/transfusionOrderHelpers";
+import { dateTimeLabel } from "../lib/dates";
 
 // 輸血オーダーの内容表示。カルテ画面の詳細モーダルと部門一覧から使う
 // (病理・検体検査の DetailPanel と同じ構成)。
@@ -58,7 +59,7 @@ export function TransfusionOrderDetailPanel({
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
           <dt>投与予定日時</dt>
-          <dd>{serviceRequest.occurrenceDateTime?.slice(0, 16).replace("T", " ") || "-"}</dd>
+          <dd>{dateTimeLabel(serviceRequest.occurrenceDateTime) || "-"}</dd>
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>緊急度</dt>

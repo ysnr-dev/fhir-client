@@ -1,4 +1,4 @@
-import { addDays, nowFhirDateTime, today } from "../lib/dates";
+import { addDays, dateTimeLabel, nowFhirDateTime, today } from "../lib/dates";
 import { summarizeAllergy } from "./allergyHelpers";
 import {
   NURSING_SUMMARY_TYPE,
@@ -344,7 +344,7 @@ export function appendNursingRecords(
   records: NursingRecordSource[],
 ): NursingSummaryFormValues {
   const html = linesToHtml(
-    records.flatMap((r) => [`${r.date.slice(0, 16).replace("T", " ")} ${r.title}(${r.author})`, ...r.text.split("\n")]),
+    records.flatMap((r) => [`${dateTimeLabel(r.date)} ${r.title}(${r.author})`, ...r.text.split("\n")]),
   );
   return {
     ...values,

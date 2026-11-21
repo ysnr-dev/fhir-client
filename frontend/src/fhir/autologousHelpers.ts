@@ -1,4 +1,4 @@
-import { localDay, toFhirDateTime } from "../lib/dates";
+import { dateTimeLabel, localDay, toFhirDateTime } from "../lib/dates";
 import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
 import { COLLECTION_APPOINTMENT_EXT_URL, fulfillAppointmentEntry } from "./autologousPlanHelpers";
 import { conceptLabel, referenceIdOfType } from "./shared";
@@ -208,7 +208,7 @@ export function parseAutologousUnit(
   const type = bloodTypeOfExtensions(dispense.extension);
   const expiry =
     dispense.extension?.find((e) => e.url.endsWith("/transfusion-expiry"))?.valueDate ?? "";
-  const collectedAt = (hub.performedDateTime ?? "").slice(0, 16).replace("T", " ");
+  const collectedAt = dateTimeLabel(hub.performedDateTime);
   const unit: Omit<AutologousUnit, "label"> = {
     procedureId: hub.id ?? "",
     dispenseId: dispense.id ?? "",

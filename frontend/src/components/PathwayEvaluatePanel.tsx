@@ -36,7 +36,7 @@ import {
 } from "../fhir/pathwaySheetHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useValidationError } from "../hooks/useValidationError";
-import { toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
+import { dateTimeLabel, toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
 import { usePathwayVarianceNotice } from "../hooks/usePathwayVarianceNotice";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
@@ -405,7 +405,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
                 return (
                   <tr key={record.observation?.id ?? record.recordNo}>
                     <td>{record.recordNo} 回目</td>
-                    <td>{record.recordedAt.slice(0, 16).replace("T", " ")}</td>
+                    <td>{dateTimeLabel(record.recordedAt)}</td>
                     <td>{achievementLabel(record.achievement)}</td>
                     <td>{record.performerName}</td>
                     <td className="pathway-evaluate__history-text" title={writing || record.comment}>

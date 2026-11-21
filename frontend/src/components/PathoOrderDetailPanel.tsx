@@ -60,7 +60,7 @@ export function PathoOrderDetailPanel({
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
           <dt>採取(予定)日時</dt>
-          <dd>{serviceRequest.occurrenceDateTime?.slice(0, 16).replace("T", " ") || "-"}</dd>
+          <dd>{dateTimeLabel(serviceRequest.occurrenceDateTime) || "-"}</dd>
           <dt>採取日時</dt>
           <dd>{dateTimeLabel(pathoCollectedDateTime(specimens)) || "未記録"}</dd>
           <dt>入外区分</dt>

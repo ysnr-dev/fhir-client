@@ -12,7 +12,7 @@ import {
   isOpenBroughtMedReview,
 } from "../../fhir/broughtMedTaskHelpers";
 import { useOrderEnterer } from "./provenance";
-import { resourcesOfType } from "./core";
+import { resourcesOfType, searchAllPages } from "./core";
 
 // ---- 持参薬(MedicationStatement) ----
 //
@@ -270,14 +270,16 @@ export interface BroughtMedWorklistItem {
  * 入院にぶら下がる持参薬を _revinclude:iterate で同じ 1 検索に添える。
  * 鑑別済も出すときは、依頼日がその日以降のものに絞る。
  */
+const BROUGHT_MED_WORKLIST_PAGE_SIZE = 200;
+const BROUGHT_MED_WORKLIST_MAX_PAGES = 5;
+
 export function useBroughtMedWorklist(options: { includeCompletedSince?: string }) {
   return useQuery({
     queryKey: ["Task", "search", "brought-med-worklist", options.includeCompletedSince ?? null],
-    queryFn: async (): Promise<BroughtMedWorklistItem[]> => {
+    queryFn: async (): Promise<{ items: BroughtMedWorklistItem[]; truncated: boolean }> => {
       const params = new URLSearchParams({
         code: `${TASK_CODE_SYSTEM}|${BROUGHT_MED_REVIEW_TASK_CODE.code}`,
         _sort: "authored-on",
-        _count: "200",
       });
       params.append("_include", "Task:subject");
       params.append("_include", "Task:encounter");
@@ -288,11 +290,14 @@ export function useBroughtMedWorklist(options: { includeCompletedSince?: string 
       } else {
         params.set("status", "requested,in-progress");
       }
-      const taskBundle = await searchResource<fhir4.Task>("Task", params);
+      const { bundles, truncated } = await searchAllPages<fhir4.Task>("Task", params, {
+        page: BROUGHT_MED_WORKLIST_PAGE_SIZE,
+        maxPages: BROUGHT_MED_WORKLIST_MAX_PAGES,
+      });
       const tasks: fhir4.Task[] = [];
       const patients = new Map<string, fhir4.Patient>();
       const statementsByEncounter = new Map<string, fhir4.MedicationStatement[]>();
-      for (const e of taskBundle.data.entry ?? []) {
+      for (const e of bundles.flatMap((bundle) => bundle.entry ?? [])) {
         const resource = e.resource as
           | fhir4.Task
           | fhir4.Patient
@@ -310,11 +315,12 @@ export function useBroughtMedWorklist(options: { includeCompletedSince?: string 
         }
       }
 
-      return tasks.map((task) => ({
+      const items = tasks.map((task) => ({
         task,
         patient: patients.get(task.for?.reference?.split("/").pop() ?? ""),
         statements: sortByAsserted(statementsByEncounter.get(task.encounter?.reference ?? "") ?? []),
       }));
+      return { items, truncated };
     },
   });
 }

@@ -12,6 +12,7 @@ import {
 } from "../fhir/nursingTaskHelpers";
 import { useDeleteNursingPerform, useNursingPerformsOfOrder } from "../api/queries";
 import { Modal } from "./Modal";
+import { dateTimeLabel } from "../lib/dates";
 
 interface Props {
   order: fhir4.ServiceRequest;
@@ -82,7 +83,7 @@ export function NursingOrderDetailModal({
           <dd>
             {nursingTaskStatusDisplay(taskStatus)}
             {nursingTaskOwnerName(task) && ` / ${nursingTaskOwnerName(task)}`}
-            {acceptedAt && ` / ${acceptedAt.slice(0, 16).replace("T", " ")}`}
+            {acceptedAt && ` / ${dateTimeLabel(acceptedAt)}`}
           </dd>
         </div>
         <div>

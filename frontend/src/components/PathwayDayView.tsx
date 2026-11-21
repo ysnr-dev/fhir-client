@@ -21,7 +21,7 @@ import type { OrderProgress } from "../fhir/orderProgressHelpers";
 import { isOrderDrivenTask, pathwayTaskPerformedOn } from "../fhir/pathwaySheetHelpers";
 import { majorEventLabel, type PathwayMajorEvent } from "../fhir/pathwayMajorEventHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
-import { nowFhirDateTime } from "../lib/dates";
+import { dateTimeLabel, nowFhirDateTime } from "../lib/dates";
 import { usePathwayVarianceNotice } from "../hooks/usePathwayVarianceNotice";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
@@ -303,7 +303,7 @@ export function PathwayDayView({
           <h4>総合評価</h4>
           {savedDay && (
             <span className="pathway-day__date">
-              {savedDay.performerName} {savedDay.recordedAt.slice(0, 16).replace("T", " ")}
+              {savedDay.performerName} {dateTimeLabel(savedDay.recordedAt)}
             </span>
           )}
         </header>

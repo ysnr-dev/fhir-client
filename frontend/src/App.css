@@ -212,7 +212,7 @@
 }
 
 .wake-button--ready .wake-button__dot {
-  background: #22c55e;
+  background: var(--success);
   opacity: 1;
 }
 
@@ -370,11 +370,11 @@
 }
 
 .patient-header__caution--advance-directive {
-  color: #7b3fb5;
+  color: var(--caution-directive);
 }
 
 .patient-header__caution--administrative {
-  color: #6b7280;
+  color: var(--text);
 }
 
 /* 感染症(陽性)。区分の色とは別に、標準予防策の合図として赤で出す。 */
@@ -396,7 +396,6 @@
   min-inline-size: 0;
 }
 
-/* 化学療法中。禁忌ではなく「いま何をしている患者か」の情報なので、赤とは分けた色にする。 */
 /* 早期警告。中は注意色、高は危険色。 */
 .patient-header__caution--ews-medium {
   color: var(--warning);
@@ -411,9 +410,10 @@
   color: var(--accent);
 }
 
+/* 化学療法中・透析中。禁忌ではなく「いま何をしている患者か」の情報なので、赤とは分けた色にする。 */
 .patient-header__caution--chemo,
 .patient-header__caution--dialysis {
-  color: #7e57c2;
+  color: var(--caution-treatment);
 }
 
 .patient-header__caution--line-drain {
@@ -767,12 +767,12 @@
 
 .flag-table__pictogram--advance-directive,
 .flag-form__pictogram--advance-directive {
-  color: #7b3fb5;
+  color: var(--caution-directive);
 }
 
 .flag-table__pictogram--administrative,
 .flag-form__pictogram--administrative {
-  color: #6b7280;
+  color: var(--text);
 }
 
 /* プロファイルの区画の一覧(注意・感染症・保険)。狭いドロワーでも読めるよう 1 件を 1 枚に畳む。 */
@@ -1103,7 +1103,6 @@ button.encounter-history__row:hover:not(:disabled) {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .modal--advisory-rule textarea {
@@ -2066,7 +2065,7 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
 /* フォーミュラリから選ぶモード。群の見出し行の下に順位順の薬剤行。 */
 .formulary-pick__group th {
   text-align: left;
-  background: var(--surface-2, var(--accent-bg));
+  background: var(--accent-bg);
   color: var(--text-h);
 }
 
@@ -3622,12 +3621,12 @@ fieldset.rp-card {
 
 .notification__flag--critical-high {
   background: var(--lab-high);
-  color: #fff;
+  color: var(--lab-high-text);
 }
 
 .notification__flag--critical-low {
   background: var(--lab-low);
-  color: #fff;
+  color: var(--lab-high-text);
 }
 
 /* 検査結果確認の内容。種別の後ろに要約を続けて読ませる。 */
@@ -3764,7 +3763,7 @@ fieldset.rp-card {
 
 .notification-bell--alert .notification-bell__count {
   background: var(--lab-high);
-  color: #fff;
+  color: var(--lab-high-text);
 }
 
 /* 新着の通知のトースト。ヘッダーの下、右端に新しいものを下へ積む。
@@ -3853,7 +3852,7 @@ fieldset.rp-card {
 .lab-result-history__table td.rp-card__lab-value--critical-low,
 .lab-timeline__table td.lab-timeline__value--critical-low {
   font-weight: 700;
-  color: #fff;
+  color: var(--lab-high-text);
   border-radius: 3px;
 }
 
@@ -3999,7 +3998,7 @@ fieldset.rp-card {
   flex-basis: 100%;
   margin: 0;
   font-size: 12px;
-  color: #555;
+  color: var(--text);
 }
 
 .rp-card__medicine-di .master-search__medley-link {
@@ -4990,7 +4989,7 @@ fieldset.rp-card {
 /* パニック値のセルは背景を塗りつぶすので、印も反転した文字色に合わせる。 */
 .lab-timeline__table td.lab-timeline__value--critical-high::after,
 .lab-timeline__table td.lab-timeline__value--critical-low::after {
-  color: #fff;
+  color: var(--lab-high-text);
 }
 
 .lab-timeline__table td.lab-timeline__value--preliminary::after {
@@ -6675,7 +6674,6 @@ button.populate-expression__option--active {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .populate-expression__condition input {
@@ -10317,7 +10315,6 @@ body.karte-wide {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .medicine-attribute__fields {
@@ -11445,7 +11442,6 @@ input.lot-number-cell__input.is-invalid {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .lab-order-item__fields input[type="number"] {
@@ -11543,7 +11539,6 @@ fieldset.lab-order-item__section label.dose-conversion__checkbox {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
   min-width: 220px;
 }
 
@@ -11603,7 +11598,6 @@ fieldset.lab-order-item__section label.dose-conversion__checkbox {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .order-layout__bar input[type="number"] {
@@ -11688,7 +11682,6 @@ fieldset.lab-order-item__section label.dose-conversion__checkbox {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
   min-width: 240px;
 }
 
@@ -11790,7 +11783,6 @@ fieldset.lab-order-item__section label.dose-conversion__checkbox {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
   min-width: 240px;
   margin-bottom: 8px;
 }
@@ -11930,7 +11922,7 @@ fieldset.lab-order-item__section label.dose-conversion__checkbox {
 .rad-code__badge {
   padding: 1px 6px;
   border-radius: 999px;
-  background: var(--accent-soft, rgba(127, 127, 127, 0.18));
+  background: var(--surface-card);
   font-size: 11px;
 }
 
@@ -14170,7 +14162,6 @@ select.rad-route-select {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 /* 数量は桁数が知れているので固定幅にし、列の幅が値で揺れないようにする。
@@ -14251,7 +14242,6 @@ select.rad-route-select {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
   resize: vertical;
 }
 
@@ -16688,7 +16678,7 @@ select.rad-route-select {
   padding: 0 5px;
   border-radius: 999px;
   background: var(--lab-high);
-  color: #fff;
+  color: var(--lab-high-text);
   font-size: 10px;
 }
 
@@ -18310,7 +18300,6 @@ td.surgery-calendar__cell--drop-target {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .meal-diet-nutrients input {
@@ -18478,7 +18467,7 @@ button.meal-calendar__cell:hover {
 
 /* 種別ごとの色。開始と変更は同じ系(食事が出る)、再開は薄め、食止め系は警告色。 */
 .meal-calendar__changed-badge--resume {
-  background: var(--text-muted, #7a8a99);
+  background: var(--text);
 }
 
 .meal-calendar__changed-badge--leave-fasting,
@@ -19310,7 +19299,6 @@ button.meal-calendar__cell:hover {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 /* 副作用の有無。血液型のチップと同じ作りだが、色は型の区分色と混ぜない。
@@ -20351,7 +20339,7 @@ button.nursing-worksheet__mark {
 }
 
 .nursing-order-form__line {
-  border: 1px solid var(--border, #ddd);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 8px;
   display: flex;
@@ -21205,7 +21193,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
   width: 100%;
   box-sizing: border-box;
 }
@@ -21261,7 +21248,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
   resize: vertical;
 }
 
@@ -21311,7 +21297,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .regimen-step__days {
@@ -21347,7 +21332,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 /* 投与時注意は用法の下に 1 行まるごと使う。 */
@@ -21366,7 +21350,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .regimen-step__drugs {
@@ -21536,7 +21519,7 @@ button.nursing-worksheet__mark {
 }
 
 .pathway-next-phase__criteria {
-  color: var(--text-muted, inherit);
+  color: var(--text);
   font-size: 13px;
 }
 
@@ -22854,7 +22837,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .pathway-unplanned__task-head select {
@@ -22925,7 +22907,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .pathway-evaluate__rows td input[type="number"] {
@@ -22944,7 +22925,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 /* 詳細モーダルの下に並べる操作(編集・実施入力)。本文と離して置く。 */
@@ -22991,7 +22971,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .regimen-picker__list {
@@ -23227,7 +23206,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
   width: 80px;
   --control-height: 26px;
 }
@@ -23372,7 +23350,6 @@ button.nursing-worksheet__mark {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 /* 暦(化学療法タブ)。食事の暦を土台に、適用の切り替えと Day の印を足す。 */
@@ -23703,7 +23680,6 @@ button.chemo-calendar__cell[draggable="true"] {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
   width: 56px;
   --control-height: 26px;
 }
@@ -23780,7 +23756,7 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 .regimen-history__row:hover td {
-  background: var(--bg-hover, rgba(127, 127, 127, 0.08));
+  background: var(--accent-bg);
 }
 
 .master-search__table button.regimen-history__name {
@@ -24052,7 +24028,7 @@ button.chemo-calendar__cell[draggable="true"] {
 
 .ctcae-search__detail-row td {
   padding-top: 0;
-  background: var(--bg-soft, rgba(127, 127, 127, 0.05));
+  background: var(--surface-panel);
 }
 
 .ctcae-search__definition {
@@ -24100,7 +24076,7 @@ button.chemo-calendar__cell[draggable="true"] {
 .regimen-apply__step-note {
   margin: 2px 0 0;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text);
 }
 
 /* 病棟マップ ------------------------------------------------------------------ */
@@ -24156,6 +24132,7 @@ button.chemo-calendar__cell[draggable="true"] {
 .ward-map__toolbar input[type="date"] {
   padding-left: 8px;
   padding-right: 8px;
+  color: var(--text-h);
 }
 
 /* 押せるものは他の画面のボタンと同じ色にする(枠だけ上で揃えている)。 */
@@ -24805,7 +24782,6 @@ button.chemo-calendar__cell[draggable="true"] {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
 }
 
 .ward-map-edit__props-row input[type="number"] {
@@ -30400,7 +30376,7 @@ input.nursing-picker__search {
   padding: 20px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface);
+  background: var(--surface-card);
   font-size: 17px;
   line-height: 1.6;
 }

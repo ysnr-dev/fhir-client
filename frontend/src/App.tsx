@@ -1,6 +1,6 @@
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useParams } from "react-router-dom";
 import "./App.css";
-import { APP_MENU, type AppMenuItem } from "./appMenu";
+import { ADMIN_MENU, APP_MENU, type AppMenuItem } from "./appMenu";
 import { AdminGate } from "./components/AdminGate";
 import { AuthGate } from "./components/AuthGate";
 import { CurrentUserBadge } from "./components/CurrentUserBadge";
@@ -145,6 +145,7 @@ import { PatientEditPage } from "./pages/PatientEditPage";
 import { PatientListPage } from "./pages/PatientListPage";
 import { KartePage } from "./pages/KartePage";
 import { KartePanePage } from "./pages/KartePanePage";
+import { useRouteDocumentTitle } from "./hooks/useDocumentTitle";
 import { KARTE_PANE_PATH, useKartePaneHost } from "./kartePaneChannel";
 import { KartePrintPage } from "./pages/KartePrintPage";
 import { BOARD_PATH, INTAKE_PATH, KARTE_PRINT_PATH } from "./karteUrl";
@@ -247,6 +248,7 @@ function App() {
   const boardToken = pathname.startsWith(BOARD_PATH) ? pathname.slice(BOARD_PATH.length).split("/")[0] : "";
   // メインタブは、別タブから見た「生きているか」「いま誰のカルテか」の応答口になる。
   useKartePaneHost(!detachedPane && !printPage && !intakeToken && !boardToken);
+  useRouteDocumentTitle(pathname);
 
   if (intakeToken) return <IntakePage token={decodeURIComponent(intakeToken)} />;
   if (boardToken) return <WaitingBoardPage token={decodeURIComponent(boardToken)} />;
@@ -281,42 +283,16 @@ function App() {
             ),
           )}
           <HoverMenu label="管理">
-            {/* マスタメンテは項目が多くメニューに収まらないので、一覧のページ(/masters)へ送る。
-                そこから入ったマスタの画面にいる間も、戻り先としてこの項目を強調する。 */}
-            <Link
-              to="/masters"
-              className={`row-menu__item${isMasterPath(pathname) ? " active" : ""}`}
-            >
-              マスタメンテ
-            </Link>
-            <Link to="/oauth-clients" className="row-menu__item">
-              OAuth クライアント
-            </Link>
-            {/* カルテの「SMARTアプリ」タブから起動する SMART on FHIR アプリの台帳。 */}
-            <Link to="/smart-apps" className="row-menu__item">
-              SMART アプリ
-            </Link>
-            {/* カルテを開いたときに呼ぶ外部の判断支援(CDS Hooks)の提供元。 */}
-            <Link to="/cds-services" className="row-menu__item">
-              CDS サービス
-            </Link>
-            {/* 警告(判断支援)の発火数・無視率と、種別ごとの重さの調整。 */}
-            <Link to="/advisory-review" className="row-menu__item">
-              警告の集計と設定
-            </Link>
-            <Link to="/settings" className="row-menu__item">
-              接続設定
-            </Link>
-            {/* どの Organization が自院かの指定。診療科・診察室・スタッフの所属や
-                帳票の自院欄がこの設定を見る。 */}
-            <Link to="/facility-settings" className="row-menu__item">
-              施設設定
-            </Link>
-            {/* 外部システム連携。一覧でシステムを選ぶと、そのシステムの設定ページへ入る
-                (レセコン連携は docs/receipt-computer-integration.md)。 */}
-            <Link to="/external-systems" className="row-menu__item">
-              外部システム連携
-            </Link>
+            {/* マスタメンテから入ったマスタの画面にいる間も、戻り先としてマスタメンテを強調する。 */}
+            {ADMIN_MENU.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`row-menu__item${item.to === "/masters" && isMasterPath(pathname) ? " active" : ""}`}
+              >
+                {item.label}
+              </Link>
+            ))}
           </HoverMenu>
         </nav>
         {/* オーダーはカルテ以外(手術カレンダーなど)からも登録するので、

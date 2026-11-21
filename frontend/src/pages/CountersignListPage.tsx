@@ -8,6 +8,7 @@ import { Modal } from "../components/Modal";
 import { useCompleteNotificationRows } from "../components/notifications/notificationQueries";
 import { notificationRows, type NotificationRow } from "../components/notifications/notificationRegistry";
 import { PatientKana } from "../components/PatientRowCells";
+import { TruncatedNotice } from "../components/TruncatedNotice";
 import { NOTE_COUNTERSIGN_TASK_CODE, type NoteCountersignRow } from "../fhir/countersignHelpers";
 import { kindLabel, type OrderApprovalRow } from "../fhir/orderApprovalTaskHelpers";
 import { displayName, patientNumberOf } from "../fhir/patientHelpers";
@@ -91,6 +92,7 @@ export function CountersignListPage() {
       </form>
 
       <ErrorBanner error={list.error ?? complete.error} />
+      <TruncatedNotice show={list.data?.truncated} />
 
       {!practitionerId ? (
         <p className="patient-table__empty">医療従事者に紐付いたアカウントでログインしてください。</p>

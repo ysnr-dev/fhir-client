@@ -377,7 +377,10 @@ export function DpcCodingView({ patient, encounter, values, age, active }: DpcCo
                           type="button"
                           className="rp-card__compact-button"
                           disabled={cancel.isPending}
-                          onClick={() => cancel.mutate(decision.response)}
+                          onClick={() => {
+                            if (!window.confirm(`診断群分類 ${decision.dpcCode} の決定を取り消しますか?`)) return;
+                            cancel.mutate(decision.response);
+                          }}
                         >
                           取消
                         </button>

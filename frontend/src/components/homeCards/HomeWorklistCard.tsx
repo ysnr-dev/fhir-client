@@ -241,8 +241,9 @@ function BroughtMedCard() {
       kind="broughtMed"
       isPending={query.isPending}
       error={query.error}
-      statuses={query.data?.map((item) => item.task.status)}
+      statuses={query.data?.items.map((item) => item.task.status)}
       options={BROUGHT_MED_REVIEW_STATUS_OPTIONS}
+      truncated={query.data?.truncated}
     />
   );
 }

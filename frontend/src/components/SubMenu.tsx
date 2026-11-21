@@ -1,9 +1,11 @@
 import { useState, type ReactNode } from "react";
+import { useEscapeClose } from "../hooks/useEscapeClose";
 
 // HoverMenu のパネル内に入れ子にするサブメニュー。マウスオーバーで右側に開く。
 // 見た目を揃えるためトリガー自身も row-menu__item のスタイルを使う。
 export function SubMenu({ label, children }: { label: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  useEscapeClose(() => setOpen(false), open);
 
   return (
     <div

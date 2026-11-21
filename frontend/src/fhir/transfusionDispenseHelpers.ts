@@ -1,4 +1,4 @@
-import { localDay, toFhirDateTime, today } from "../lib/dates";
+import { dateTimeLabel, localDay, today, toFhirDateTime } from "../lib/dates";
 import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
 import type { BloodTypeSummary } from "./bloodTypeHelpers";
 import { conceptLabel, displayOf, referenceIdOfType } from "./shared";
@@ -560,7 +560,7 @@ export function transfusionDispensesByOrderId(
     );
     const display: TransfusionDispenseDisplay = {
       id: hubId,
-      dispensedAt: (hub.performedDateTime ?? "").slice(0, 16).replace("T", " "),
+      dispensedAt: dateTimeLabel(hub.performedDateTime),
       dispenserName: hub.performer?.[0]?.actor?.display ?? "",
       crossmatchPerformerName: performerName(own[0], CROSSMATCH_FUNCTION.code),
       comment: hub.note?.map((note) => note.text).filter(Boolean).join("\n") ?? "",

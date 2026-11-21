@@ -137,6 +137,7 @@ import {
   type KarteProblemMode,
   type KarteSidePaneMode,
 } from "../karteLayout";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 // 患者 1 人のカルテ画面。左ペインで登録済みの情報を参照し、右ペインで登録・編集する。
 // 「どのタブで何を開いているか」は URL に持たせる(karteUrl.ts 参照)。
@@ -187,6 +188,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const boardInUse = useWaitingBoardInUse();
   const [callPromptOpen, setCallPromptOpen] = useState(false);
   const patient = usePatient(patientId);
+  useDocumentTitle(patient.data?.data ? `${displayName(patient.data.data)} カルテ` : undefined);
   // 会計送信はレセコン連携が有効なときだけ。無効なら診察終了でそのまま一覧へ戻る。
   const receiptStatus = useReceiptStatus();
   const [billingTarget, setBillingTarget] = useState<BillingSendTarget | null>(null);

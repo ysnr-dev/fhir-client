@@ -6,7 +6,7 @@ import { eventDayStepLabel } from "../fhir/pathwayHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useValidationError } from "../hooks/useValidationError";
 import { useOrderContext } from "../hooks/useOrderContext";
-import { nowFhirDateTime, toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
+import { dateTimeLabel, nowFhirDateTime, toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 
 // 「クリニカルパス(総合評価)」。オーバービューの最下段のセルからモーダルで開き、その病日の医師の
@@ -94,7 +94,7 @@ export function PathwayDayAssessmentPanel({ patientId, applyId, eventId, onSaved
         </span>
         {saved && (
           <span className="pathway-day__date">
-            {saved.performerName} {saved.recordedAt.slice(0, 16).replace("T", " ")}
+            {saved.performerName} {dateTimeLabel(saved.recordedAt)}
           </span>
         )}
       </div>

@@ -36,6 +36,7 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { KARTE_PRINT_SECTIONS, parseKartePrintSections, type KartePrintSection } from "../karteUrl";
 import { dateTimeLabel, nowFhirDateTime, today } from "../lib/dates";
 import { usePrintPageTheme } from "../theme";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 // カルテ印刷の別タブ。カルテの「カルテ印刷」タブから期間・区画・履歴の有無を受け取り、
 // 選んだ区画(表紙・病名・退院時サマリー・診療経過記録・指示簿・看護・経過表・検歴・レポート)を
@@ -59,6 +60,7 @@ export function KartePrintPage() {
   usePrintPageTheme();
 
   const patient = usePatient(patientId);
+  useDocumentTitle(patient.data?.data ? `${displayName(patient.data.data)} カルテ印刷` : undefined);
   const self = useSelfOrganization();
   const current = useCurrentPractitioner();
   const encounters = useRecordExportEncounters(patientId, from, to, needsEncounters);

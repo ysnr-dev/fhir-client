@@ -224,7 +224,10 @@ export function RadiotherapyWorklistPage() {
   }
 
   function handleDeletePlanned(ids: string[]) {
-    if (ids.length > 0) deletePlanned.mutate(ids);
+    if (ids.length === 0) return;
+    const message = ids.length === 1 ? "この予定を削除しますか?" : `予定 ${ids.length} 回分を削除しますか?`;
+    if (!window.confirm(message)) return;
+    deletePlanned.mutate(ids);
   }
 
   return (

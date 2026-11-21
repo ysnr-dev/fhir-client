@@ -17,6 +17,7 @@ import {
 } from "../components/PatientRowCells";
 import { RowPictograms } from "../components/PatientListRowParts";
 import { RowMenu } from "../components/RowMenu";
+import { TruncatedNotice } from "../components/TruncatedNotice";
 import {
   broughtStateOf,
   countBroughtStates,
@@ -60,9 +61,9 @@ export function BroughtMedicationWorklistPage() {
       ? { practitionerId, display: practitionerDisplayName(practitioner) }
       : null;
 
-  const items = worklist.data ?? [];
+  const items = worklist.data?.items ?? [];
   const patientIds = useMemo(
-    () => (worklist.data ?? []).flatMap((item) => (item.patient?.id ? [item.patient.id] : [])),
+    () => (worklist.data?.items ?? []).flatMap((item) => (item.patient?.id ? [item.patient.id] : [])),
     [worklist.data],
   );
   const pictograms = useRowPictogramSources(patientIds);
@@ -140,6 +141,7 @@ export function BroughtMedicationWorklistPage() {
 
       <ErrorBanner error={worklist.error} />
       <ErrorBanner error={transaction.error ?? completeError} />
+      <TruncatedNotice show={worklist.data?.truncated} />
 
       {worklist.isLoading ? (
         <p>読み込み中...</p>

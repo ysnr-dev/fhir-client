@@ -18,7 +18,7 @@ import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import { useCurrentPractitioner } from "../authQueries";
 import { postBundle, searchResource } from "../fhirClient";
 import { useMySupervision } from "../masterQueries";
-import { NOTIFICATION_TASK_KEY, resourcesOfType } from "./core";
+import { NOTIFICATION_TASK_KEY, resourcesOfType, searchAllPages } from "./core";
 
 // 研修医のカウンターサイン(docs/countersign-design.md)の読み書き。
 
@@ -127,7 +127,11 @@ export function useSaveNoteTask() {
 export interface CountersignTaskList {
   tasks: fhir4.Task[];
   patients: Map<string, fhir4.Patient>;
+  truncated: boolean;
 }
+
+const COUNTERSIGN_LIST_PAGE_SIZE = 500;
+const COUNTERSIGN_LIST_MAX_PAGES = 4;
 
 /**
  * カルテ承認一覧。自分あてのカウンターサイン(記録・オーダー)を未対応・対応済みで引く。
@@ -146,9 +150,16 @@ export function useMyCountersignTasks(ownerId: string | null, status: "requested
       params.set("status", status);
       params.set("_include", "Task:subject");
       params.set("_sort", "-authored-on");
-      params.set("_count", "500");
-      const { data } = await searchResource<fhir4.Resource>("Task", params);
-      return splitNotificationBundle(data);
+      const { bundles, truncated } = await searchAllPages<fhir4.Task>("Task", params, {
+        page: COUNTERSIGN_LIST_PAGE_SIZE,
+        maxPages: COUNTERSIGN_LIST_MAX_PAGES,
+      });
+      const merged: fhir4.Bundle = {
+        resourceType: "Bundle",
+        type: "searchset",
+        entry: bundles.flatMap((bundle) => bundle.entry ?? []),
+      };
+      return { ...splitNotificationBundle(merged), truncated };
     },
     enabled: Boolean(ownerId),
   });

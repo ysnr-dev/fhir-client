@@ -36,6 +36,9 @@
   --danger: #c0392b;
   /* 照合の一致など、確かめて問題なかったことを表す色。 */
   --success: #2e8b57;
+  /* 患者ヘッダーの注意の区分色。事前指示と、化学療法中・透析中(いま何をしている患者か)。 */
+  --caution-directive: #7b3fb5;
+  --caution-treatment: #7e57c2;
   /* 変更履歴の差分。行の地(消えた行・増えた行)と、行の中で変わった文字の地。 */
   --diff-removed-bg: rgba(192, 57, 43, 0.1);
   --diff-removed-strong: rgba(192, 57, 43, 0.3);
@@ -122,6 +125,8 @@
   --warning: #e0a33a;
   --danger: #ef5b4f;
   --success: #3fa76c;
+  --caution-directive: #b57be8;
+  --caution-treatment: #9d8ae6;
   --diff-removed-bg: rgba(239, 91, 79, 0.14);
   --diff-removed-strong: rgba(239, 91, 79, 0.38);
   --diff-added-bg: rgba(63, 167, 108, 0.16);

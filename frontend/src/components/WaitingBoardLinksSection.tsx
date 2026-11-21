@@ -82,7 +82,10 @@ export function WaitingBoardLinksSection() {
                       title={`${link.label} を削除`}
                       aria-label={`${link.label} を削除`}
                       disabled={revoke.isPending}
-                      onClick={() => revoke.mutate(link.id)}
+                      onClick={() => {
+                        if (!window.confirm(`${link.label} を削除しますか?このリンクで表示中の表示板は表示できなくなります。`)) return;
+                        revoke.mutate(link.id);
+                      }}
                     >
                       <TrashIcon />
                     </button>

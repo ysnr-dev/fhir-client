@@ -5,7 +5,7 @@ import { buildPathwayTaskBundle } from "../fhir/pathwayEvaluationHelpers";
 import { eventDayStepLabel, taskCategoryLabel } from "../fhir/pathwayHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useValidationError } from "../hooks/useValidationError";
-import { nowFhirDateTime, toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
+import { dateTimeLabel, nowFhirDateTime, toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 
 // カルテ右ペインの「クリニカルパス(タスク)」。パスシートでオーダーを持たないタスクのセルを
@@ -96,7 +96,7 @@ export function PathwayTaskPanel({ applyId, procedureId, onSaved }: PathwayTaskP
             </tr>
             <tr>
               <th scope="row">状態</th>
-              <td>{task.done ? `実施済 ${task.performedDateTime?.slice(0, 16).replace("T", " ") ?? ""}` : "未実施"}</td>
+              <td>{task.done ? `実施済 ${dateTimeLabel(task.performedDateTime ?? undefined)}` : "未実施"}</td>
             </tr>
           </tbody>
         </table>
