@@ -138,25 +138,19 @@ export function UsageSearchModal({ onSelect, onClose, initialFilters }: UsageSea
               <th>用法コード</th>
               <th>用法名</th>
               <th>大分類</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {data?.items.map((usage) => (
-              <tr key={usage.id}>
+              <tr key={usage.id} className="master-search__row" onClick={() => onSelect(usage)}>
                 <td>{usage.usage_code}</td>
                 <td>{usage.usage_name}</td>
                 <td>{usage.basic_usage_category}</td>
-                <td>
-                  <button type="button" onClick={() => onSelect(usage)}>
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {data && data.items.length === 0 && (
               <tr>
-                <td colSpan={4} className="master-search__empty">
+                <td colSpan={3} className="master-search__empty">
                   該当する用法がありません
                 </td>
               </tr>

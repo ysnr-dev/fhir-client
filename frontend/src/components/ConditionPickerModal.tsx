@@ -112,12 +112,15 @@ export function ConditionPickerModal({
               <th>開始日</th>
               <th>終了日</th>
               <th>転帰</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {rows.map(({ summary }) => (
-              <tr key={summary.id}>
+              <tr
+                key={summary.id}
+                className="master-search__row"
+                onClick={() => onSelect({ conditionId: summary.id, name: summary.name })}
+              >
                 <td>
                   <span
                     className={`condition-badge condition-badge--${summary.category}`}
@@ -136,19 +139,11 @@ export function ConditionPickerModal({
                 <td>{summary.startDate || "-"}</td>
                 <td>{summary.endDate || "-"}</td>
                 <td>{summary.outcomeDisplay || "-"}</td>
-                <td className="master-search__actions">
-                  <button
-                    type="button"
-                    onClick={() => onSelect({ conditionId: summary.id, name: summary.name })}
-                  >
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="master-search__empty">
+                <td colSpan={5} className="master-search__empty">
                   {isLoading
                     ? "読み込み中..."
                     : conditions.length === 0

@@ -43,26 +43,20 @@ export function DiseaseSearchModal({ onSelect, onClose }: DiseaseSearchModalProp
               <th>カナ</th>
               <th>ICD10</th>
               <th>交換用コード</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {data?.items.map((disease) => (
-              <tr key={disease.id}>
+              <tr key={disease.id} className="master-search__row" onClick={() => onSelect(disease)}>
                 <td>{disease.name}</td>
                 <td>{disease.name_kana}</td>
                 <td>{disease.icd10_2013}</td>
                 <td>{disease.exchange_code}</td>
-                <td className="master-search__actions">
-                  <button type="button" onClick={() => onSelect(disease)}>
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {data && data.items.length === 0 && (
               <tr>
-                <td colSpan={5} className="master-search__empty">
+                <td colSpan={4} className="master-search__empty">
                   該当する病名がありません
                 </td>
               </tr>

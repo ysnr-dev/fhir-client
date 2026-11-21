@@ -94,26 +94,20 @@ export function OrganizationSearchModal({
               <th>医療機関名</th>
               <th>電話番号</th>
               <th>所在地</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {organizations.map((organization) => (
-              <tr key={organization.id}>
+              <tr key={organization.id} className="master-search__row" onClick={() => onSelect(organization)}>
                 <td>{organizationInstitutionNumber(organization) || "-"}</td>
                 <td>{organizationDisplayName(organization)}</td>
                 <td>{organization.telecom?.find((t) => t.system === "phone")?.value ?? "-"}</td>
                 <td>{organization.address?.[0]?.text ?? "-"}</td>
-                <td className="master-search__actions">
-                  <button type="button" onClick={() => onSelect(organization)}>
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {!isFetching && organizations.length === 0 && (
               <tr>
-                <td colSpan={5} className="master-search__empty">
+                <td colSpan={4} className="master-search__empty">
                   該当する医療機関がありません
                 </td>
               </tr>

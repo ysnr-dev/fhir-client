@@ -273,7 +273,7 @@ export function MedicineSearchModal({
               </thead>
               <tbody>
                 {data?.items.map((medicine) => (
-                  <tr key={medicine.id}>
+                  <tr key={medicine.id} className="master-search__row" onClick={() => onSelect(medicine)}>
                     <td>{medicine.medicine_code}</td>
                     <td>
                       {medicine.name}
@@ -292,13 +292,11 @@ export function MedicineSearchModal({
                           href={`https://medley.life/medicines/prescription/${medicine.yj_code}/`}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           DI
                         </a>
                       )}
-                      <button type="button" onClick={() => onSelect(medicine)}>
-                        選択
-                      </button>
                     </td>
                   </tr>
                 ))}

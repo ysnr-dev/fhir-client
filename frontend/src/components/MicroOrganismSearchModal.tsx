@@ -58,27 +58,22 @@ export function MicroOrganismSearchModal({
           <tr>
             <th className="rad-code__compact">コード</th>
             <th>菌名</th>
-            <th></th>
           </tr>
         </thead>
         <tbody>
           {search.data?.items.map((organism) => (
-            <tr key={organism.id}>
+            <tr
+              key={organism.id}
+              className="master-search__row"
+              onClick={() => onSelect({ code: organism.code, name: organism.name })}
+            >
               <td className="rad-code__compact">{organism.code}</td>
               <td>{organism.name}</td>
-              <td>
-                <button
-                  type="button"
-                  onClick={() => onSelect({ code: organism.code, name: organism.name })}
-                >
-                  選択
-                </button>
-              </td>
             </tr>
           ))}
           {search.data && search.data.items.length === 0 && (
             <tr>
-              <td colSpan={3} className="master-search__empty">
+              <td colSpan={2} className="master-search__empty">
                 該当する菌がありません。
               </td>
             </tr>

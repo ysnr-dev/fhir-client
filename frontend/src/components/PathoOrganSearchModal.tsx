@@ -59,28 +59,23 @@ export function PathoOrganSearchModal({
             <th className="rad-code__compact">コード</th>
             <th>臓器・検査材料</th>
             <th className="rad-code__compact">ICD-10</th>
-            <th></th>
           </tr>
         </thead>
         <tbody>
           {search.data?.items.map((organ) => (
-            <tr key={organ.id}>
+            <tr
+              key={organ.id}
+              className="master-search__row"
+              onClick={() => onSelect({ code: organ.code, name: organ.name })}
+            >
               <td className="rad-code__compact">{organ.code}</td>
               <td>{organ.name}</td>
               <td className="rad-code__compact">{organ.icd10 ?? ""}</td>
-              <td>
-                <button
-                  type="button"
-                  onClick={() => onSelect({ code: organ.code, name: organ.name })}
-                >
-                  選択
-                </button>
-              </td>
             </tr>
           ))}
           {search.data && search.data.items.length === 0 && (
             <tr>
-              <td colSpan={4} className="master-search__empty">
+              <td colSpan={3} className="master-search__empty">
                 該当する臓器がありません。
               </td>
             </tr>

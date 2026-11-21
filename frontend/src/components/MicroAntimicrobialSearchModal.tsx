@@ -66,35 +66,26 @@ export function MicroAntimicrobialSearchModal({
             <th>薬剤名</th>
             <th className="rad-code__compact">略号</th>
             <th>系統</th>
-            <th></th>
           </tr>
         </thead>
         <tbody>
           {search.data?.items.map((drug) => (
-            <tr key={drug.id}>
+            <tr
+              key={drug.id}
+              className="master-search__row"
+              onClick={() =>
+                onSelect({ code: drug.code, name: drug.name, abbreviation: drug.abbreviation ?? "" })
+              }
+            >
               <td className="rad-code__compact">{drug.code}</td>
               <td>{drug.name}</td>
               <td className="rad-code__compact">{drug.abbreviation}</td>
               <td>{drug.category}</td>
-              <td>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onSelect({
-                      code: drug.code,
-                      name: drug.name,
-                      abbreviation: drug.abbreviation ?? "",
-                    })
-                  }
-                >
-                  選択
-                </button>
-              </td>
             </tr>
           ))}
           {search.data && search.data.items.length === 0 && (
             <tr>
-              <td colSpan={5} className="master-search__empty">
+              <td colSpan={4} className="master-search__empty">
                 該当する抗菌薬がありません。
               </td>
             </tr>

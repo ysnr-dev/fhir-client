@@ -169,7 +169,6 @@ export function PractitionerSearchModal({
               <th>医籍登録番号</th>
               <th>職種</th>
               <th>所属医療機関</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -177,23 +176,18 @@ export function PractitionerSearchModal({
               const role = practitioner.id ? roleByPractitioner[practitioner.id] : undefined;
               const roleValues = role ? parsePractitionerRole(role) : undefined;
               return (
-                <tr key={practitioner.id}>
+                <tr key={practitioner.id} className="master-search__row" onClick={() => onSelect(practitioner, role)}>
                   <td>{practitionerDisplayName(practitioner)}</td>
                   <td>{practitionerDisplayKana(practitioner)}</td>
                   <td>{practitionerRegistrationNumber(practitioner) || "-"}</td>
                   <td>{practitionerRoleLabel(roleValues?.roleCode) || "-"}</td>
                   <td>{roleValues?.organizationName || "-"}</td>
-                  <td className="master-search__actions">
-                    <button type="button" onClick={() => onSelect(practitioner, role)}>
-                      選択
-                    </button>
-                  </td>
                 </tr>
               );
             })}
             {!isFetching && practitioners.length === 0 && (
               <tr>
-                <td colSpan={6} className="master-search__empty">
+                <td colSpan={5} className="master-search__empty">
                   該当する医療従事者がありません
                 </td>
               </tr>

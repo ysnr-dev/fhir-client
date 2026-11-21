@@ -399,12 +399,11 @@ export function AdmissionPatientSearch({ onSelect }: { onSelect: (patient: fhir4
               <th>患者氏名</th>
               <PatientProfileHeadCells />
               <th>入院病棟</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {patients.map((patient) => (
-              <tr key={patient.id}>
+              <tr key={patient.id} className="master-search__row" onClick={() => onSelect(patient)}>
                 <td>{patient.identifier?.[0]?.value ?? "-"}</td>
                 <td>
                   {displayName(patient)}
@@ -412,16 +411,11 @@ export function AdmissionPatientSearch({ onSelect }: { onSelect: (patient: fhir4
                 </td>
                 <PatientProfileCells patient={patient} />
                 <td>{(patient.id && wardByPatient.get(patient.id)?.wardName) || "-"}</td>
-                <td className="master-search__actions">
-                  <button type="button" onClick={() => onSelect(patient)}>
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {!loading && patients.length === 0 && (
               <tr>
-                <td colSpan={6} className="master-search__empty">
+                <td colSpan={5} className="master-search__empty">
                   該当する患者がいません
                 </td>
               </tr>

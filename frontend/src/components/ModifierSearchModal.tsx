@@ -44,25 +44,19 @@ export function ModifierSearchModal({ title, onSelect, onClose }: ModifierSearch
               <th>修飾語</th>
               <th>カナ</th>
               <th>分類</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {data?.items.map((modifier) => (
-              <tr key={modifier.id}>
+              <tr key={modifier.id} className="master-search__row" onClick={() => onSelect(modifier)}>
                 <td>{modifier.name}</td>
                 <td>{modifier.name_kana}</td>
                 <td>{modifierCategoryLabel(modifier.modifier_category)}</td>
-                <td className="master-search__actions">
-                  <button type="button" onClick={() => onSelect(modifier)}>
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {data && data.items.length === 0 && (
               <tr>
-                <td colSpan={4} className="master-search__empty">
+                <td colSpan={3} className="master-search__empty">
                   該当する修飾語がありません
                 </td>
               </tr>

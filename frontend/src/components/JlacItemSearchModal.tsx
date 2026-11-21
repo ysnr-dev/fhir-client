@@ -169,27 +169,21 @@ export function JlacItemSearchModal({ onSelect, onClose }: JlacItemSearchModalPr
               <th>材料</th>
               <th>測定法</th>
               <th>単位</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {data?.items.map((item) => (
-              <tr key={item.id}>
+              <tr key={item.id} className="master-search__row" onClick={() => onSelect(item)}>
                 <td>{item.major_item}</td>
                 <td>{item.fhir_item_name}</td>
                 <td>{item.jlac11_specimen}</td>
                 <td>{item.jlac11_method}</td>
                 <td>{item.display_unit}</td>
-                <td className="master-search__actions">
-                  <button type="button" onClick={() => onSelect(item)}>
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {data && data.items.length === 0 && (
               <tr>
-                <td colSpan={6} className="master-search__empty">
+                <td colSpan={5} className="master-search__empty">
                   該当する検査項目がありません
                 </td>
               </tr>

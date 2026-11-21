@@ -105,41 +105,42 @@ function GroupRows({
           {group.note && <span className="formulary-pick__group-note">{group.note}</span>}
         </th>
       </tr>
-      {group.entries.map((entry) => (
-        <tr key={entry.id}>
-          <td className="rad-item__compact">
-            <span className="medicine-caution formulary-mark">第{entry.rank}選択</span>
-          </td>
-          <td>
-            {entry.medicine_name ?? `(マスタに無いコード ${entry.medicine_code})`}
-            {entry.generic_name && (
-              <span className="lab-order-item__code">{entry.generic_name}</span>
-            )}
-          </td>
-          <td>{entry.medicine_unit_name}</td>
-          <td>{dosageFormLabel(entry.medicine_dosage_form)}</td>
-          <td className="formulary-pick__note">{entry.note}</td>
-          <td className="master-search__actions">
-            {entry.yj_code && (
-              <a
-                className="master-search__medley-link"
-                href={`https://medley.life/medicines/prescription/${entry.yj_code}/`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                DI
-              </a>
-            )}
-            <button
-              type="button"
-              onClick={() => onSelect(entry)}
-              disabled={selecting || !entry.medicine_name}
-            >
-              選択
-            </button>
-          </td>
-        </tr>
-      ))}
+      {group.entries.map((entry) => {
+        const selectable = !selecting && Boolean(entry.medicine_name);
+        return (
+          <tr
+            key={entry.id}
+            className={selectable ? "master-search__row" : undefined}
+            onClick={selectable ? () => onSelect(entry) : undefined}
+          >
+            <td className="rad-item__compact">
+              <span className="medicine-caution formulary-mark">第{entry.rank}選択</span>
+            </td>
+            <td>
+              {entry.medicine_name ?? `(マスタに無いコード ${entry.medicine_code})`}
+              {entry.generic_name && (
+                <span className="lab-order-item__code">{entry.generic_name}</span>
+              )}
+            </td>
+            <td>{entry.medicine_unit_name}</td>
+            <td>{dosageFormLabel(entry.medicine_dosage_form)}</td>
+            <td className="formulary-pick__note">{entry.note}</td>
+            <td className="master-search__actions">
+              {entry.yj_code && (
+                <a
+                  className="master-search__medley-link"
+                  href={`https://medley.life/medicines/prescription/${entry.yj_code}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  DI
+                </a>
+              )}
+            </td>
+          </tr>
+        );
+      })}
       {group.entries.length === 0 && (
         <tr>
           <td colSpan={6} className="master-search__empty">

@@ -44,33 +44,30 @@ export function PromisedPrescriptionPickTable({
               <th>名称</th>
               <th className="rad-item__compact">基準量</th>
               <th>構成薬</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
-            {data?.items.map((promised) => (
-              <tr key={promised.id}>
-                <td>{promised.code}</td>
-                <td>{promised.name}</td>
-                <td className="rad-item__compact">
-                  {Number(promised.base_amount)}
-                  {promised.unit_name}
-                </td>
-                <td>{promisedItemsSummary(promised)}</td>
-                <td className="master-search__actions">
-                  <button
-                    type="button"
-                    onClick={() => onSelect(promised)}
-                    disabled={selecting || promised.items.length === 0}
-                  >
-                    選択
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {data?.items.map((promised) => {
+              const selectable = !selecting && promised.items.length > 0;
+              return (
+                <tr
+                  key={promised.id}
+                  className={selectable ? "master-search__row" : undefined}
+                  onClick={selectable ? () => onSelect(promised) : undefined}
+                >
+                  <td>{promised.code}</td>
+                  <td>{promised.name}</td>
+                  <td className="rad-item__compact">
+                    {Number(promised.base_amount)}
+                    {promised.unit_name}
+                  </td>
+                  <td>{promisedItemsSummary(promised)}</td>
+                </tr>
+              );
+            })}
             {data && data.items.length === 0 && (
               <tr>
-                <td colSpan={5} className="master-search__empty">
+                <td colSpan={4} className="master-search__empty">
                   該当する約束処方がありません
                 </td>
               </tr>

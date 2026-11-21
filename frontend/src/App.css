@@ -2326,10 +2326,9 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   vertical-align: middle;
 }
 
-/* DIリンクを「選択」ボタンと並ぶボタン風の見た目にする。 */
+/* DIリンクをボタン風の見た目にする。 */
 .master-search__medley-link {
   display: inline-block;
-  margin-right: 8px;
   padding: 4px 10px;
   font-size: 13px;
   border: 1px solid var(--accent-border);

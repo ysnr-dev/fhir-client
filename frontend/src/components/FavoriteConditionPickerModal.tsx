@@ -46,25 +46,19 @@ export function FavoriteConditionPickerModal({ onSelect, onClose }: FavoriteCond
               <th>病名</th>
               <th>ICD10</th>
               <th>持ち主</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {items.map((item) => (
-              <tr key={item.id}>
+              <tr key={item.id} className="master-search__row" onClick={() => onSelect(item.definition)}>
                 <td>{item.name}</td>
                 <td>{item.definition.disease.icd10_2013}</td>
                 <td>{favoriteConditionOwnerLabel(item)}</td>
-                <td className="master-search__actions">
-                  <button type="button" onClick={() => onSelect(item.definition)}>
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {list.data && items.length === 0 && (
               <tr>
-                <td colSpan={4} className="master-search__empty">
+                <td colSpan={3} className="master-search__empty">
                   頻用病名がありません
                 </td>
               </tr>

@@ -157,26 +157,20 @@ export function WalkInPatientSearch({ onSelect }: { onSelect: (patient: fhir4.Pa
               <th>氏名</th>
               <th>カナ</th>
               <th>生年月日</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {patients.map((patient) => (
-              <tr key={patient.id}>
+              <tr key={patient.id} className="master-search__row" onClick={() => onSelect(patient)}>
                 <td>{patient.identifier?.[0]?.value ?? "-"}</td>
                 <td>{displayName(patient)}</td>
                 <td>{displayKana(patient)}</td>
                 <td>{patient.birthDate ?? "-"}</td>
-                <td className="master-search__actions">
-                  <button type="button" onClick={() => onSelect(patient)}>
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {!isFetching && patients.length === 0 && (
               <tr>
-                <td colSpan={5} className="master-search__empty">
+                <td colSpan={4} className="master-search__empty">
                   該当する患者がいません
                 </td>
               </tr>

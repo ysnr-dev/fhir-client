@@ -119,12 +119,11 @@ export function AllergenSearchModal({ onSelect, onClose }: AllergenSearchModalPr
               <th>名称</th>
               <th>カナ</th>
               <th>英名</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {data?.items.map((allergen) => (
-              <tr key={allergen.id}>
+              <tr key={allergen.id} className="master-search__row" onClick={() => onSelect(allergen)}>
                 <td>
                   {groupNames.get(groupPrefix(allergen.jfagy_code)) ??
                     allergenDomainLabel(allergen.jfagy_code)}
@@ -139,16 +138,11 @@ export function AllergenSearchModal({ onSelect, onClose }: AllergenSearchModalPr
                 </td>
                 <td>{allergen.name_kana}</td>
                 <td>{allergen.name_en}</td>
-                <td className="master-search__actions">
-                  <button type="button" onClick={() => onSelect(allergen)}>
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {data && data.items.length === 0 && (
               <tr>
-                <td colSpan={5} className="master-search__empty">
+                <td colSpan={4} className="master-search__empty">
                   該当するアレルゲンがありません
                 </td>
               </tr>

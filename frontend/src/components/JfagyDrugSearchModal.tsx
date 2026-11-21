@@ -44,24 +44,18 @@ export function JfagyDrugSearchModal({ onSelect, onClose }: JfagyDrugSearchModal
             <tr>
               <th>コード</th>
               <th>薬剤成分名</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {data?.items.map((drug) => (
-              <tr key={drug.id}>
+              <tr key={drug.id} className="master-search__row" onClick={() => onSelect(drug)}>
                 <td>{drug.jfagy_code}</td>
                 <td>{drug.name}</td>
-                <td className="master-search__actions">
-                  <button type="button" onClick={() => onSelect(drug)}>
-                    選択
-                  </button>
-                </td>
               </tr>
             ))}
             {data && data.items.length === 0 && (
               <tr>
-                <td colSpan={3} className="master-search__empty">
+                <td colSpan={2} className="master-search__empty">
                   該当する医薬品がありません
                 </td>
               </tr>
