@@ -985,13 +985,15 @@ export function PrescriptionForm({
           </table>
 
           <div className="rp-card__actions">
-            <button
-              type="button"
-              className="rp-card__compact-button"
-              onClick={() => addMedicine(rpIndex)}
-            >
-              + 医薬品追加
-            </button>
+            {rp.medicines.some((m) => m.medicine) && (
+              <button
+                type="button"
+                className="rp-card__compact-button"
+                onClick={() => addMedicine(rpIndex)}
+              >
+                + 医薬品追加
+              </button>
+            )}
             {fieldAlert.icon(`medicines:${rpIndex}`)}
           </div>
 

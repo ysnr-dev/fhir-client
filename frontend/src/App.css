@@ -3014,6 +3014,7 @@ fieldset.rp-card {
 
 .injection-total {
   display: flex;
+  margin-left: auto;
   align-items: baseline;
   gap: 6px;
   font-size: 13px;

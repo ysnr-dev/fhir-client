@@ -972,13 +972,15 @@ export function InjectionForm({
           </table>
 
           <div className="rp-card__actions rp-card__actions--between">
-            <button
-              type="button"
-              className="rp-card__compact-button"
-              onClick={() => addMedicine(rpIndex)}
-            >
-              + 医薬品追加
-            </button>
+            {rp.medicines.some((m) => m.medicine) && (
+              <button
+                type="button"
+                className="rp-card__compact-button"
+                onClick={() => addMedicine(rpIndex)}
+              >
+                + 医薬品追加
+              </button>
+            )}
             {fieldAlert.icon(`medicines:${rpIndex}`)}
             {/* 総投与量は投与速度を使わない場合(ワンショット等)でも常に出す。 */}
             <span className="injection-total">
