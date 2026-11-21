@@ -17,7 +17,7 @@
   実IDへ書き換わります)。処方詳細画面はこの extension から MedicationRequest の id を取り出し、並列 read
   で内容を取得します(`_id` のカンマ区切り検索に fhir-server が対応していないため)。
 - **RP・医薬品**: 用法・医薬品はいずれもマスタデータAPI([master-data.md](master-data.md))から検索して選択します。RP・医薬品行は
-  フォーム上で動的に追加/削除でき、RP番号は自動連番です。**頓用は用法コードの 3 桁目(`5`)で判定**し
+  フォーム上で動的に追加/削除でき、RP番号は自動連番です。「医薬品追加」は RP に医薬品を 1 件以上選んでから出ます。**頓用は用法コードの 3 桁目(`5`)で判定**し
   (用法マスタの `basic_usage_category` は 内服 / 外用 / 注射 / 注入 の 4 種で「頓服」が無いため)、
   頓用なら「投与回数」、頓用でない内服なら「投与日数」を入力します。判定は
   `fhir/medicationScheduleHelpers.ts` の `isAsNeededUsage` と `fhir/prescriptionHelpers.ts` の
@@ -292,7 +292,7 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
 
 - **リソースの持ち方**: 処方と同一(1注射 = `ServiceRequest` + 薬剤数分の `MedicationRequest`、
   RP = 同じルートから同時に投与する薬剤のまとまり(混注)、登録・更新・削除は transaction Bundle)。
-  実装は `frontend/src/fhir/injectionHelpers.ts`。
+  実装は `frontend/src/fhir/injectionHelpers.ts`。処方と同じく、「医薬品追加」は RP に医薬品を 1 件以上選んでから出ます。
 - **処方との判別**: `ServiceRequest.category` にローカルのオーダー種別
   (`http://fhir-client.local/CodeSystem/order-type` = `injection`)を付与します。カルテの
   タイムラインは処方と同じ `ServiceRequest` 検索(1本のページング)で取得し、この category で
