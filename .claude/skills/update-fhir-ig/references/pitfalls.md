@@ -9,6 +9,11 @@ SUSHI や QA でエラーが出たとき、または新しいプロファイル�
   スライスは具象プロファイルごとに宣言する。親が宣言済みのスライスを子で絞るのは問題ない。
 - **discriminator が value / system のスライスは `.system =` を固定する。** `= $cs#code` の pattern だけだと
   QA が `SLICING_CANNOT_BE_EVALUATED` を出す。
+- **discriminator が `$this` の pattern のスライスは、スライス要素そのものに pattern か required binding が要る。**
+  子要素(`.coding.system =`)だけを固定すると QA で「スライシングは評価できません」のエラーが例ごとに出る。
+  system だけの `^patternCodeableConcept` は「No code provided for CodeSystem」の警告になり、binding で判別する
+  隣のスライス(病理の区分など)と並ぶと順序エラーも出る。コードが複数あるスライスは ValueSet の required binding にする
+  (入外区分の `CareSettingSlice` / `FCCareSettingVS`)。
 - **1 つの CodeableConcept に coding を 2 つ持つ pattern** は
   `^patternCodeableConcept.coding[1].system` / `.code` で書く(クリニカルパスの `CarePlan.category`)。
 - 上流サーバーが `category` の先頭しか索引しないので、種別を表す coding は先頭。プロファイルは `^slicing.ordered = true`。
