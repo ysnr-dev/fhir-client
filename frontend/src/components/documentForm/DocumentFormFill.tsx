@@ -28,6 +28,7 @@ export function DocumentFormFill({
   values,
   onChange,
   actions,
+  notice,
 }: {
   patientId: string;
   layout: DocumentFormLayout;
@@ -37,6 +38,8 @@ export function DocumentFormFill({
   onChange: (values: DocumentFormValues) => void;
   /** ツールバーの右端に置くもの(作成 / 更新ボタン)。全画面でも押せるようにここに置く。 */
   actions?: ReactNode;
+  /** ツールバーの下に出す知らせ(保存時の検証・エラー)。最大化・全画面でも見えるようにここに置く。 */
+  notice?: ReactNode;
 }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [view, setView] = useState<FillView>("normal");
@@ -130,6 +133,7 @@ export function DocumentFormFill({
         </button>
         <div className="document-form-fill__actions">{actions}</div>
       </div>
+      {notice}
       <div ref={scrollRef} className="document-form-fill__scroll">
         <DocumentFormPage page={page} imageUrl={imageUrlOf(page.page_number)} zoom={zoom}>
           {fieldsOnPage(layout, page.page_number).map((field) => (

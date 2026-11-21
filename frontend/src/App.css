@@ -32105,6 +32105,10 @@ input.nursing-picker__search {
   gap: 8px;
 }
 
+.document-form-fill > .error-banner {
+  margin-bottom: 0;
+}
+
 .document-form-fill__scroll {
   overflow: auto;
   flex: 1;

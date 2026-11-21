@@ -485,10 +485,8 @@ function DocumentFormEntry({
 
   const busy = save.isPending;
   const ready = values !== null && Boolean(questionnaire) && (Boolean(existing) || fee.ready);
-
-  return (
+  const notice = (
     <>
-      <ErrorBanner error={questionnaireError} />
       {!existing && <ErrorBanner error={fee.error} />}
       {message ? (
         <div className="error-banner" role="alert">
@@ -497,6 +495,13 @@ function DocumentFormEntry({
       ) : (
         <ErrorBanner error={save.error} />
       )}
+    </>
+  );
+
+  return (
+    <>
+      <ErrorBanner error={questionnaireError} />
+      {values === null && notice}
       {!canonical && (
         <p className="order-select__muted">このテンプレートは配置が保存されていません。</p>
       )}
@@ -512,6 +517,7 @@ function DocumentFormEntry({
           imageUrlOf={(pageNumber) => documentTemplatePageUrl(template, pageNumber)}
           values={values}
           onChange={setValues}
+          notice={notice}
           actions={
             <>
               {latest && (
