@@ -31,6 +31,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 import { TemplateEntryModal } from "./TemplateEntryModal";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 他科依頼の入力フォーム。明細も伝票レイアウトも無いので 1 枚で完結する。
 //
@@ -331,7 +332,7 @@ export function ConsultOrderForm({
                 update("comment", "");
               }}
             >
-              ×
+              <TrashIcon />
             </button>
           </div>
         ) : (

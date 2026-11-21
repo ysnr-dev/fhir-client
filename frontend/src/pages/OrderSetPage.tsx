@@ -31,6 +31,7 @@ import {
 } from "../fhir/practitionerRoleHelpers";
 import { useStackedOrderForms } from "../hooks/useStackedOrderForms";
 import { scrollIntoViewVisibly } from "../lib/scroll";
+import { TrashIcon } from "../components/icons/TrashIcon";
 
 // オーダーセット(よく出すオーダーのひとまとめ)の登録画面。左ペインで 3 つの持ち主
 // (院内共通 / 診療科 / 自分)ごとのフォルダ・セットのツリーを管理し、右ペインで
@@ -694,8 +695,15 @@ function SetEditor({
                   >
                     ↓
                   </button>
-                  <button type="button" disabled={readOnly} onClick={() => removeEntry(entry.localId)}>
-                    削除
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    disabled={readOnly}
+                    onClick={() => removeEntry(entry.localId)}
+                    title={`${index + 1} 番目の項目を削除`}
+                    aria-label={`${index + 1} 番目の項目を削除`}
+                  >
+                    <TrashIcon />
                   </button>
                 </span>
               </div>

@@ -797,8 +797,8 @@ Task  code = task-code|pathway-variance、priority = urgent(注意)、status req
 ### 7.11 フェーズ単位の適用と分岐
 
 - ［決定］最初の適用は開始フェーズだけを登録する(CarePlan の木 + オーダー)。続きはパスタブの見出しのアイコン
-  「次のフェーズを適用」→ 分岐の候補(フェーズ名 + 目安、「パスを終了」)から選ぶ → 右ペインの同じ適用フォームを
-  次のフェーズとして開く(`PathwayPhasePanel`、レジメンの `RegimenCyclePanel` と同じ作り)。「パスを終了」は終了・中止の入力へ進む。
+  「次のフェーズを適用」→ 分岐の候補(フェーズ名 + 目安、「パスを終了」)から選ぶ → 同じ適用フォームを
+  次のフェーズとしてパスタブのモーダルで開く(`PathwayPhasePanel`、レジメンの `RegimenCyclePanel` と同じ作り)。「パスを終了」は終了・中止の入力へ進む。
 - ［決定］フェーズ階層の CarePlan は足さない。**病日の CarePlan に印を焼く**:
   拡張 `pathway-phase`(valueCoding: code = phase_key、display = フェーズ名)。partOf・識別子・根の検索は変わらない。
   分岐を選んだときの記録(目安の写し + コメント)は、フェーズの最初の病日の拡張 `pathway-phase-note` に残し、

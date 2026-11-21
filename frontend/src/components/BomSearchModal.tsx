@@ -139,12 +139,8 @@ export function BomSearchModal(props: Props) {
         <tbody>
           {props.kind === "outcome" &&
             (outcomes.data?.items ?? []).map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <button type="button" className="ctcae-search__term" onClick={() => props.onSelect(item)}>
-                    {item.outcome_code}
-                  </button>
-                </td>
+              <tr key={item.id} className="master-search__row" onClick={() => props.onSelect(item)}>
+                <td>{item.outcome_code}</td>
                 <td>{item.outcome_name}</td>
                 <td>
                   {[item.category_name, item.subcategory_name].filter(Boolean).join(" / ")}
@@ -154,12 +150,8 @@ export function BomSearchModal(props: Props) {
             ))}
           {props.kind === "assessment" &&
             (assessments.data?.items ?? []).map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <button type="button" className="ctcae-search__term" onClick={() => props.onSelect(item)}>
-                    {item.assessment_code}
-                  </button>
-                </td>
+              <tr key={item.id} className="master-search__row" onClick={() => props.onSelect(item)}>
+                <td>{item.assessment_code}</td>
                 <td>
                   {item.name}
                   {item.name2 && <span className="lab-order-item__code">{item.name2}</span>}

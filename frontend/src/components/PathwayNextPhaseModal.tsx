@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { PathwayDetail, PathwayPhaseBranch } from "../api/masterClient";
 import { Modal } from "./Modal";
 
-// フェーズの終わりで次を選ぶ。候補はパス定義の分岐(先頭が標準の経路)。フェーズを選べば右ペインで
-// そのフェーズを適用し、「パスを終了」なら終了・中止の入力へ進む。
+// フェーズの終わりで次を選ぶ。候補はパス定義の分岐(先頭が標準の経路)。フェーズを選べばパスタブの
+// モーダルでそのフェーズを適用し、「パスを終了」なら終了・中止の入力へ進む。
 
 const CLOSE = "close";
 
@@ -40,7 +40,6 @@ export function PathwayNextPhaseModal({ pathway, currentName, candidates, onSele
       <div className="lab-order-item__actions">
         <button
           type="button"
-          className="primary"
           onClick={() => (selected === CLOSE ? onSelectClose() : onSelectPhase(selected))}
         >
           進む

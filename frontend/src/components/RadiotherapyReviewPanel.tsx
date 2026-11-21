@@ -16,7 +16,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { QuestionnaireResponseCreatePanel } from "./QuestionnaireResponsePanels";
 import { serviceRequestsOf } from "../fhir/labOrderHelpers";
 
-// カルテ右ペインの「放射線治療(週次レビュー)」。照射期間中の診察を、テンプレート回答として
+// 放射線治療の週次レビュー(TreatmentRecordModal の中身)。照射期間中の診察を、テンプレート回答として
 // 治療処方に結んで残す(docs/radiotherapy-order-design.md §6.3)。
 //
 // 様式は施設がテンプレートで決めるので、ここは器だけを用意して中身は

@@ -20,6 +20,7 @@ import { DARK_IMAGE_PEN_COLORS } from "./penColors";
 import { ReportImageViewerModal } from "./ReportImageViewerModal";
 import { RowMenu } from "./RowMenu";
 import { SchemaImageGallery } from "./SchemaImageGallery";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 描き込みモーダル(fabric.js)は重いので、開くまで読み込まない。
 const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
@@ -233,11 +234,11 @@ export function ReportImagesEditor({
           <button
             type="button"
             className="rp-card__icon-button"
-            title="この画像を外す"
-            aria-label={`画像${index + 1}を外す`}
+            title={`画像${index + 1}を削除`}
+            aria-label={`画像${index + 1}を削除`}
             onClick={() => remove(index)}
           >
-            ×
+            <TrashIcon />
           </button>
         </div>
       ))}

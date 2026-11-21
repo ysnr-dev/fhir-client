@@ -19,6 +19,7 @@ import { normalizeImageFile } from "../fhir/schemaImage";
 import { PopulateExpressionModal } from "./PopulateExpressionModal";
 import { qeItemAnchorId } from "./QuestionnaireEditorToc";
 import { TrashIcon } from "./icons/TrashIcon";
+import { HelpTip } from "./HelpTip";
 
 interface QuestionnaireItemEditorProps {
   item: EditorItem;
@@ -657,7 +658,10 @@ export function QuestionnaireItemEditor({
         {isTextual && (
           <div className="qe-item__grid">
             <label>
-              医療機関の項目
+              <span>
+                医療機関の項目
+                <HelpTip text="回答画面で、このグループ内に出る「医療機関選択」ボタンから一括入力されます。" />
+              </span>
               <select
                 value={item.organizationField}
                 disabled={Boolean(item.practitionerField)}
@@ -678,7 +682,10 @@ export function QuestionnaireItemEditor({
               </select>
             </label>
             <label>
-              医療従事者の項目
+              <span>
+                医療従事者の項目
+                <HelpTip text="回答画面で、このグループ内に出る「医療従事者選択」ボタンから一括入力されます。" />
+              </span>
               <select
                 value={item.practitionerField}
                 disabled={Boolean(item.organizationField)}
@@ -700,7 +707,10 @@ export function QuestionnaireItemEditor({
             </label>
             {item.practitionerField && (
               <label>
-                職種の初期値
+                <span>
+                  職種の初期値
+                  <HelpTip text="選択モーダルの職種フィルタの初期値になります。" />
+                </span>
                 <select
                   value={item.practitionerRoleDefault}
                   onChange={(e) => patch({ practitionerRoleDefault: e.target.value })}
@@ -724,18 +734,8 @@ export function QuestionnaireItemEditor({
                 {item.organizationField
                   ? "ログイン中の医療従事者の所属医療機関から自動入力"
                   : "ログイン中の医療従事者から自動入力"}
+                <HelpTip text="テンプレート登録画面を開いた時点で値が入ります(その後の選択・手入力で上書きできます)。" />
               </label>
-            )}
-            {(item.organizationField || item.practitionerField) && (
-              <p className="qe-hint">
-                回答画面で、このグループ内に出る「
-                {item.organizationField ? "医療機関選択" : "医療従事者選択"}
-                」ボタンから一括入力されます。
-                {item.practitionerField &&
-                  "職種の初期値は、選択モーダルの職種フィルタの初期値になります。"}
-                {item.loginAutofill &&
-                  "自動入力を設定すると、テンプレート登録画面を開いた時点でログイン中の医療従事者の値が入ります(その後の選択・手入力で上書きできます)。"}
-              </p>
             )}
           </div>
         )}

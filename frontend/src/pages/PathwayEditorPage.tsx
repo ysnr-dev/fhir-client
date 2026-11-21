@@ -569,7 +569,8 @@ export function PathwayEditorPage() {
                                 draft.indications.filter((x) => x.key !== i.key),
                               )
                             }
-                            aria-label="削除"
+                            title={`${i.name}を削除`}
+                            aria-label={`${i.name}を削除`}
                           >
                             <TrashIcon />
                           </button>

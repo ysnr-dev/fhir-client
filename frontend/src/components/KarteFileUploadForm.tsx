@@ -10,6 +10,7 @@ import {
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // ファイルの取込フォーム。ファイル選択とドラッグ&ドロップの 2 経路で足し、
 // まとめて登録する。診療日とカテゴリはまとめて 1 つぶんだけ持つ(同じ日に
@@ -141,10 +142,13 @@ export function KarteFileUploadForm({
               <span className="karte-file-drafts__size">{formatFileSize(draft.size)}</span>
               <button
                 type="button"
+                className="rp-card__icon-button"
                 disabled={busy}
                 onClick={() => setDrafts((prev) => prev.filter((_, i) => i !== index))}
+                title={`ファイル${index + 1}を削除`}
+                aria-label={`ファイル${index + 1}を削除`}
               >
-                除く
+                <TrashIcon />
               </button>
             </li>
           ))}

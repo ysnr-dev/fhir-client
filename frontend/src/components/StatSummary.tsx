@@ -109,15 +109,19 @@ export function StatCell({
   strong,
   tone,
   title,
+  className,
 }: {
   value: ReactNode;
   groupStart?: boolean;
   strong?: boolean;
   tone?: "alert" | "warning";
   title?: string;
+  /** 表ごとの列の寸法などを足すとき。 */
+  className?: string;
 }) {
   const empty = value === 0 || value == null || value === "" || value === "-";
   const classes = ["stat-table__num"];
+  if (className) classes.push(className);
   if (groupStart) classes.push("stat-table__group-start");
   if (empty) classes.push("stat-table__zero");
   else if (strong) classes.push("stat-table__strong");

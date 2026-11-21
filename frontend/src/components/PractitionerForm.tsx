@@ -16,6 +16,7 @@ import {
 import { PRACTITIONER_ROLE_OPTIONS } from "../fhir/practitionerRoleHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { OrganizationSearchModal } from "./OrganizationSearchModal";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // ログイン設定(users テーブル)。Practitioner 本体とは別に backend の
 // /auth/account へ保存するため、FHIR 用の PractitionerFormValues とは分ける。
@@ -380,9 +381,12 @@ export function PractitionerForm({
                       </span>
                       <button
                         type="button"
+                        className="rp-card__icon-button"
                         onClick={() => removeDepartment(department.organizationId)}
+                        title={`${department.name}を削除`}
+                        aria-label={`${department.name}を削除`}
                       >
-                        削除
+                        <TrashIcon />
                       </button>
                     </li>
                   ))}

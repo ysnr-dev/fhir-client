@@ -8,7 +8,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
 // 外来化学療法室の予約・日時変更(docs/chemo-regimen-design.md §7.6 D-3)。
-// カルテ右ペインの投与日パネルから、その日の注射オーダーに対して取る。
+// 化学療法タブの投与日のモーダルから、その日の注射オーダーに対して取る。
 //
 // リハビリ・栄養指導と同じ形。1 つの適用に投与日が何日もあるので、オーダーと同じ
 // transaction には入れず、投与日ごとに都度取る。枠選び UI は診察・検査と同じ

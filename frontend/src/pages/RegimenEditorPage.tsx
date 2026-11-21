@@ -383,14 +383,14 @@ export function RegimenEditorPage() {
                       <button
                         type="button"
                         className="rp-card__icon-button"
-                        title="外す"
-                        aria-label="外す"
                         onClick={() =>
                           update(
                             "indications",
                             draft.indications.filter((i) => i.key !== row.key),
                           )
                         }
+                        title={`${row.name}を削除`}
+                        aria-label={`${row.name}を削除`}
                       >
                         <TrashIcon />
                       </button>
@@ -438,7 +438,7 @@ export function RegimenEditorPage() {
                   min="1"
                   value={draft.plannedCycles}
                   onChange={(e) => update("plannedCycles", e.target.value)}
-                  placeholder="空欄は継続"
+                  placeholder="空欄なら継続"
                 />
               </label>
             </div>
@@ -588,14 +588,14 @@ export function RegimenEditorPage() {
                         <button
                           type="button"
                           className="rp-card__icon-button"
-                          title="外す"
-                          aria-label="外す"
                           onClick={() =>
                             update(
                               "labCriteria",
                               draft.labCriteria.filter((c) => c.key !== row.key),
                             )
                           }
+                          title="検査値の基準を削除"
+                          aria-label="検査値の基準を削除"
                         >
                           <TrashIcon />
                         </button>
@@ -701,14 +701,14 @@ export function RegimenEditorPage() {
                       <button
                         type="button"
                         className="rp-card__icon-button"
-                        title="外す"
-                        aria-label="外す"
                         onClick={() =>
                           update(
                             "adverseEvents",
                             draft.adverseEvents.filter((a) => a.key !== row.key),
                           )
                         }
+                        title="有害事象を削除"
+                        aria-label="有害事象を削除"
                       >
                         <TrashIcon />
                       </button>
@@ -1119,9 +1119,9 @@ function StepCard({
                 <button
                   type="button"
                   className="rp-card__icon-button"
-                  title="外す"
-                  aria-label="外す"
                   onClick={() => onRemoveDrug(drug.key)}
+                  title="薬剤を削除"
+                  aria-label="薬剤を削除"
                 >
                   <TrashIcon />
                 </button>

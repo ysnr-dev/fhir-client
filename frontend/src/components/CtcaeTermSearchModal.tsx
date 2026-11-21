@@ -77,38 +77,40 @@ export function CtcaeTermSearchModal({ onSelect, onClose }: Props) {
             (レジメン編集の薬剤行と同じ手法)。 */}
         {(data?.items ?? []).map((term) => (
           <tbody key={term.id} className="ctcae-search__group">
-              <tr>
+            <tr className="master-search__row" onClick={() => onSelect(term)}>
               <td>
-                <button type="button" className="ctcae-search__term" onClick={() => onSelect(term)}>
-                    {term.term_ja}
-                  </button>
-                  {term.term_en && <span className="lab-order-item__code">{term.term_en}</span>}
-                </td>
-                <td>{term.soc_ja ?? "-"}</td>
-                <td className="rad-item__compact">
-                  <button
-                    type="button"
-                    className="rp-card__compact-button"
-                    onClick={() => setExpanded(expanded === term.id ? null : term.id)}
-                  >
-                    {expanded === term.id ? "閉じる" : "Grade"}
-                  </button>
+                {term.term_ja}
+                {term.term_en && <span className="lab-order-item__code">{term.term_en}</span>}
+              </td>
+              <td>{term.soc_ja ?? "-"}</td>
+              <td className="rad-item__compact">
+                {/* Grade を開くだけで、用語は選ばない。 */}
+                <button
+                  type="button"
+                  className="rp-card__compact-button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpanded(expanded === term.id ? null : term.id);
+                  }}
+                >
+                  {expanded === term.id ? "閉じる" : "Grade"}
+                </button>
+              </td>
+            </tr>
+            {expanded === term.id && (
+              <tr className="ctcae-search__detail-row">
+                <td colSpan={3}>
+                  {term.definition_ja && <p className="ctcae-search__definition">{term.definition_ja}</p>}
+                  <dl className="ctcae-search__grades">
+                    {gradesOf(term).map((g) => (
+                      <div key={g.grade} className="ctcae-search__grade">
+                        <dt>Grade {g.grade}</dt>
+                        <dd>{g.text}</dd>
+                      </div>
+                    ))}
+                  </dl>
                 </td>
               </tr>
-              {expanded === term.id && (
-                <tr className="ctcae-search__detail-row">
-                  <td colSpan={3}>
-                    {term.definition_ja && <p className="ctcae-search__definition">{term.definition_ja}</p>}
-                    <dl className="ctcae-search__grades">
-                      {gradesOf(term).map((g) => (
-                        <div key={g.grade} className="ctcae-search__grade">
-                          <dt>Grade {g.grade}</dt>
-                          <dd>{g.text}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </td>
-                </tr>
             )}
           </tbody>
         ))}

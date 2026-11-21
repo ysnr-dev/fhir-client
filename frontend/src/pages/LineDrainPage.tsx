@@ -5,8 +5,10 @@ import { useWardLineDrains, useWardOptions } from "../api/queries";
 import type { LineDrainKind } from "../api/masterClient";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { LineDrainRemovalModal } from "../components/LineDrainRemovalModal";
 import { LineDrainSiteModal } from "../components/LineDrainSiteModal";
+import { StatCell, StatSection, StatTile, StatTiles } from "../components/StatSummary";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import {
   daysInserted,
@@ -15,6 +17,7 @@ import {
   LINE_DRAIN_KIND_OPTIONS,
   lineDrainMonthStats,
   siteObservationSummary,
+  type DeviceDayStats,
   type LineDrainRecord,
 } from "../fhir/lineDrainHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
@@ -28,6 +31,11 @@ import { addMonths, dateTimeLabel, diffDays, localDay, shortDate, today } from "
 // プロファイル区画と同じモーダルで書く(カルテへは移らない)。
 
 type Tab = "current" | "days";
+
+const USAGE_RATIO_FORMULA = "デバイス日数 ÷ 患者延べ日数";
+
+/** 要約のタイルに出す系統(CLABSI / CAUTI / VAP の分母)。 */
+const TILE_DEVICE_DAY_GROUPS = DEVICE_DAY_GROUPS.filter((group) => group.key !== "other");
 
 /** 最終観察がこの日数以上前なら赤く出す。 */
 const OBSERVATION_STALE_DAYS = 3;
@@ -270,6 +278,8 @@ function DaysTab({ month, wardId }: { month: string; wardId: string }) {
   );
   const ratio = (numerator: number, denominator: number) =>
     denominator > 0 ? (numerator / denominator).toFixed(2) : "-";
+  const sumOf = (field: keyof DeviceDayStats) =>
+    DEVICE_DAY_GROUPS.reduce((total, group) => total + stats.groups[group.key][field], 0);
   // 分母が欠けると使用比が狂うので、読み切れていないときは表を出さない。
   const truncated = ward.truncated || Boolean(lineDrains.data?.truncated);
 
@@ -284,38 +294,65 @@ function DaysTab({ month, wardId }: { month: string; wardId: string }) {
       ) : truncated ? (
         <TruncatedNotice show>入院または留置の記録を読み切れていないため、デバイス日数を出せません。</TruncatedNotice>
       ) : (
-        <div className="lab-worklist-wrap">
-          <table className="lab-worklist nursing-acuity-report">
-            <caption className="nursing-acuity-report__caption">
-              {month.replace("-", "/")} 患者延べ日数 {stats.patientDays}
-            </caption>
-            <thead>
-              <tr>
-                <th></th>
-                <th className="lab-worklist__compact">デバイス日数</th>
-                <th className="lab-worklist__compact">新規挿入</th>
-                <th className="lab-worklist__compact">抜去</th>
-                <th className="lab-worklist__compact">計画外抜去</th>
-                <th className="lab-worklist__compact">使用比</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DEVICE_DAY_GROUPS.map((group) => {
-                const row = stats.groups[group.key];
-                return (
-                  <tr key={group.key}>
-                    <th className="nursing-acuity-report__label">{group.label}</th>
-                    <td className="nursing-acuity-report__value">{row.deviceDays}</td>
-                    <td className="nursing-acuity-report__value">{row.inserted}</td>
-                    <td className="nursing-acuity-report__value">{row.removed}</td>
-                    <td className="nursing-acuity-report__value">{row.unplannedRemoved}</td>
-                    <td className="nursing-acuity-report__value">{ratio(row.deviceDays, stats.patientDays)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <StatTiles>
+            <StatTile label="患者延べ日数" value={stats.patientDays} sub={month.replace("-", "/")} />
+            {TILE_DEVICE_DAY_GROUPS.map((group) => {
+              const row = stats.groups[group.key];
+              return (
+                <StatTile
+                  key={group.key}
+                  label={group.label}
+                  value={row.deviceDays}
+                  unit="日"
+                  sub={`使用比 ${ratio(row.deviceDays, stats.patientDays)}`}
+                />
+              );
+            })}
+          </StatTiles>
+          <StatSection title="デバイス別">
+            <table className="lab-worklist stat-table">
+              <thead>
+                <tr>
+                  <th>系統</th>
+                  <th className="stat-table__num stat-table__group-start">デバイス日数</th>
+                  <th className="stat-table__num stat-table__group-start">新規挿入</th>
+                  <th className="stat-table__num">抜去</th>
+                  <th className="stat-table__num">計画外抜去</th>
+                  <th className="stat-table__num stat-table__group-start">
+                    使用比 <HelpTip text={USAGE_RATIO_FORMULA} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {DEVICE_DAY_GROUPS.map((group) => {
+                  const row = stats.groups[group.key];
+                  return (
+                    <tr key={group.key}>
+                      <th className="stat-table__label">{group.label}</th>
+                      <StatCell value={row.deviceDays} groupStart strong />
+                      <StatCell value={row.inserted} groupStart />
+                      <StatCell value={row.removed} />
+                      <StatCell value={row.unplannedRemoved} tone="warning" />
+                      <StatCell value={ratio(row.deviceDays, stats.patientDays)} groupStart />
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th className="stat-table__label">合計</th>
+                  <StatCell value={sumOf("deviceDays")} groupStart />
+                  <StatCell value={sumOf("inserted")} groupStart />
+                  <StatCell value={sumOf("removed")} />
+                  <StatCell value={sumOf("unplannedRemoved")} tone="warning" />
+                  {/* 使用比は系統ごとの指標なので、合計の行には出さない。 */}
+                  <td className="stat-table__num stat-table__group-start" />
+                </tr>
+              </tfoot>
+            </table>
+          </StatSection>
+        </>
       )}
     </>
   );

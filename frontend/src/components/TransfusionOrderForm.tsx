@@ -74,6 +74,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 輸血オーダーの入力フォーム。病理検査と同じく明細(製剤)を可変リストで持つ。
 //
@@ -765,7 +766,7 @@ export function TransfusionOrderForm({
                 update("comment", "");
               }}
             >
-              ×
+              <TrashIcon />
             </button>
           </div>
         ) : (
@@ -989,11 +990,11 @@ function ProductCard({
           <button
             type="button"
             className="rp-card__icon-button"
-            title="この製剤を削除"
+            title={`製剤${index + 1}を削除`}
             aria-label={`製剤${index + 1}を削除`}
             onClick={onRemove}
           >
-            ×
+            <TrashIcon />
           </button>
         )}
       </div>

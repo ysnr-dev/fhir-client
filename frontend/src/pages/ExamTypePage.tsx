@@ -296,7 +296,7 @@ function ExamTypeEditModal({ config, examType, onClose }: ExamTypeEditModalProps
               value={draft.exam_type_code}
               onChange={(e) => setDraft({ ...draft, exam_type_code: e.target.value })}
               disabled={examType !== null}
-              placeholder="空欄で自動採番"
+              placeholder="空欄なら自動採番"
             />
           </label>
           <label>

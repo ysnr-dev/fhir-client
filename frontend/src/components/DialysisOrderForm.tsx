@@ -585,7 +585,7 @@ export function DialysisOrderForm({
                   update("comment", "");
                 }}
               >
-                ×
+                <TrashIcon />
               </button>
             </div>
           ) : (

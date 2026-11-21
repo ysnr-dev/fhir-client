@@ -10,9 +10,11 @@ import {
 } from "../api/queries";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
 import { Modal } from "../components/Modal";
 import { PressureUlcerHistoryModal } from "../components/PressureUlcerHistoryModal";
 import { QuestionnaireResponseCreatePanel } from "../components/QuestionnaireResponsePanels";
+import { StatCell, StatSection, StatTile, StatTiles } from "../components/StatSummary";
 import { TeamRequestCreatePanel } from "../components/TeamRequestPanels";
 import { TruncatedNotice } from "../components/TruncatedNotice";
 import { wardPatientsByDay } from "../fhir/bedScheduleHelpers";
@@ -312,6 +314,12 @@ function PatientsTab({ date, wardId, templateUrl, teamId }: { date: string; ward
   );
 }
 
+const INCIDENCE_FORMULA = "院内新規発生 ÷ 在院患者数(実人数)";
+const INCIDENCE_D2_FORMULA = "院内新規発生のうち d2 以上 ÷ 在院患者数(実人数)";
+const PREVALENCE_FORMULA = "月末に保有する患者 ÷ 月末の在院患者数。今月は今日の時点";
+const RATE_COLUMN_FORMULA =
+  "患者数 ÷ 分母。院内新規発生(うち d2 以上)は褥瘡発生率で分母は在院患者数(実人数)、月末の保有は褥瘡有病率で分母は月末の在院患者数";
+
 function RateTab({ month, wardId, templateUrl }: { month: string; wardId: string; templateUrl: string }) {
   const from = `${month}-01`;
   const to = addDays(addMonths(from, 1), -1);
@@ -354,47 +362,69 @@ function RateTab({ month, wardId, templateUrl }: { month: string; wardId: string
       {encounters.isLoading || bedWards.isLoading || responses.isLoading ? (
         <p>読み込み中...</p>
       ) : (
-        <div className="lab-worklist-wrap">
-          <table className="lab-worklist nursing-acuity-report">
-            <caption className="nursing-acuity-report__caption">{month.replace("-", "/")}</caption>
-            <tbody>
-              <tr>
-                <th className="nursing-acuity-report__label">在院患者数(実人数)</th>
-                <td className="nursing-acuity-report__value">{stats.patients}</td>
-              </tr>
-              <tr>
-                <th className="nursing-acuity-report__label">持込(月初に保有)</th>
-                <td className="nursing-acuity-report__value">{stats.brought}</td>
-              </tr>
-              <tr>
-                <th className="nursing-acuity-report__label">院内新規発生</th>
-                <td className="nursing-acuity-report__value">{stats.acquired}</td>
-              </tr>
-              <tr>
-                <th className="nursing-acuity-report__label">うち d2 以上</th>
-                <td className="nursing-acuity-report__value">{stats.acquiredD2}</td>
-              </tr>
-              <tr>
-                <th className="nursing-acuity-report__label">褥瘡発生率(院内新規発生 ÷ 在院患者数)</th>
-                <td className="nursing-acuity-report__value">{percent(stats.acquired, stats.patients)}</td>
-              </tr>
-              <tr>
-                <th className="nursing-acuity-report__label">d2 以上の褥瘡発生率</th>
-                <td className="nursing-acuity-report__value">{percent(stats.acquiredD2, stats.patients)}</td>
-              </tr>
-              <tr>
-                <th className="nursing-acuity-report__label">月末の保有患者 / 在院患者</th>
-                <td className="nursing-acuity-report__value">
-                  {stats.prevalent} / {stats.prevalentBase}
-                </td>
-              </tr>
-              <tr>
-                <th className="nursing-acuity-report__label">褥瘡有病率(月末)</th>
-                <td className="nursing-acuity-report__value">{percent(stats.prevalent, stats.prevalentBase)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <>
+          <StatTiles>
+            <StatTile label="在院患者数" value={stats.patients} unit="人" sub={`${month.replace("-", "/")} の実人数`} />
+            <StatTile
+              label="褥瘡発生率"
+              help={INCIDENCE_FORMULA}
+              value={percent(stats.acquired, stats.patients)}
+              sub={`院内新規発生 ${stats.acquired} 人`}
+            />
+            <StatTile
+              label="d2 以上の褥瘡発生率"
+              help={INCIDENCE_D2_FORMULA}
+              value={percent(stats.acquiredD2, stats.patients)}
+              sub={`d2 以上 ${stats.acquiredD2} 人`}
+            />
+            <StatTile
+              label="褥瘡有病率(月末)"
+              help={PREVALENCE_FORMULA}
+              value={percent(stats.prevalent, stats.prevalentBase)}
+              sub={`保有 ${stats.prevalent} / 在院 ${stats.prevalentBase} 人`}
+            />
+          </StatTiles>
+          <StatSection title="内訳">
+            <table className="lab-worklist stat-table">
+              <thead>
+                <tr>
+                  <th>区分</th>
+                  <th className="stat-table__num stat-table__group-start">患者数</th>
+                  <th className="stat-table__num">分母</th>
+                  <th className="stat-table__num stat-table__group-start">
+                    割合 <HelpTip text={RATE_COLUMN_FORMULA} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th className="stat-table__label">持込(月初に保有)</th>
+                  <StatCell value={stats.brought} groupStart />
+                  <StatCell value={null} />
+                  <StatCell value={null} groupStart />
+                </tr>
+                <tr>
+                  <th className="stat-table__label">院内新規発生</th>
+                  <StatCell value={stats.acquired} groupStart strong />
+                  <StatCell value={stats.patients} />
+                  <StatCell value={percent(stats.acquired, stats.patients)} groupStart />
+                </tr>
+                <tr>
+                  <th className="stat-table__label">うち d2 以上</th>
+                  <StatCell value={stats.acquiredD2} groupStart />
+                  <StatCell value={stats.patients} />
+                  <StatCell value={percent(stats.acquiredD2, stats.patients)} groupStart />
+                </tr>
+                <tr>
+                  <th className="stat-table__label">月末の保有</th>
+                  <StatCell value={stats.prevalent} groupStart strong />
+                  <StatCell value={stats.prevalentBase} />
+                  <StatCell value={percent(stats.prevalent, stats.prevalentBase)} groupStart />
+                </tr>
+              </tbody>
+            </table>
+          </StatSection>
+        </>
       )}
     </>
   );

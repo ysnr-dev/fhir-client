@@ -29,6 +29,7 @@ import { useStackedOrderForms } from "../hooks/useStackedOrderForms";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { ORDER_SET_TYPE_LABELS, ORDER_SET_TYPE_ORDER, ORDER_SET_TYPES } from "./orderSetRegistry";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 予定外のアウトカム(OAT ユニット)の追加。パスシートの見出しから開き、選んだ病日に
 // アウトカム 1 件と、任意で観察項目・タスクを足す。タスクには適用パネルと同じ器で
@@ -306,9 +307,12 @@ function UnplannedForm({
                 <td className="pathway-rows__tools">
                   <button
                     type="button"
+                    className="rp-card__icon-button"
                     onClick={() => setAssessments((rows) => rows.filter((_, i) => i !== index))}
+                    title={`観察項目 ${index + 1}を削除`}
+                    aria-label={`観察項目 ${index + 1}を削除`}
                   >
-                    外す
+                    <TrashIcon />
                   </button>
                 </td>
               </tr>
@@ -384,9 +388,12 @@ function UnplannedForm({
                   </select>
                   <button
                     type="button"
+                    className="rp-card__icon-button"
                     onClick={() => setTasks((rows) => rows.filter((row) => row.key !== task.key))}
+                    title={`${task.name || "タスク"}を削除`}
+                    aria-label={`${task.name || "タスク"}を削除`}
                   >
-                    外す
+                    <TrashIcon />
                   </button>
                 </div>
                 {/* 折りたたみはアンマウントせず隠すだけ(入力中の値を保つ)。 */}

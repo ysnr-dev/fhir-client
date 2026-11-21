@@ -15,6 +15,8 @@ import {
 } from "../fhir/advisoryHelpers";
 import { ADVISORY_RULE_KIND } from "../fhir/advisoryRuleHelpers";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { HelpTip } from "../components/HelpTip";
+import { StatCell, StatTile, StatTiles } from "../components/StatSummary";
 import { addMonths, today } from "../lib/dates";
 
 // 警告の集計と設定(docs/advisory-design.md §4)。種別 × 月の発火数・無視数(率)と主な無視理由を並べ、
@@ -27,6 +29,16 @@ const DEFAULT_MONTHS = 6;
 const TOP_REASONS = 3;
 
 const OVERRIDE_OPTIONS: AdvisorySeverityOverride[] = ["default", "info", "off"];
+
+/** 合計の行のキー(種別の行だけを足す。施設の規則の内訳は種別「施設の規則」の行に含まれる)。 */
+const TOTAL_KEY = "";
+
+const OVERRIDE_RATE_FORMULA = "無視 ÷ 発火";
+
+/** 無視率(%)。発火が無ければ null。 */
+function overrideRate(count: { fired: number; overridden: number }): number | null {
+  return count.fired > 0 ? Math.round((count.overridden / count.fired) * 100) : null;
+}
 
 /** 見出しの月(「5月」)。年は期間の入力で分かるので出さない。 */
 function monthLabel(month: string): string {
@@ -76,8 +88,26 @@ export function AdvisoryReviewPage() {
       }
       map.set(row.key, entry);
     }
+    const total = { byMonth: new Map<string, { fired: number; overridden: number }>(), reasons: new Map<string, number>() };
+    for (const row of stats.data?.rows ?? []) {
+      const count = total.byMonth.get(row.month) ?? { fired: 0, overridden: 0 };
+      total.byMonth.set(row.month, { fired: count.fired + row.fired, overridden: count.overridden + row.overridden });
+      for (const [code, n] of Object.entries(row.reasons)) {
+        total.reasons.set(code, (total.reasons.get(code) ?? 0) + n);
+      }
+    }
+    map.set(TOTAL_KEY, total);
     return map;
   }, [stats.data]);
+  const summary = useMemo(() => {
+    const sum = { fired: 0, overridden: 0 };
+    for (const [month, count] of byKind.get(TOTAL_KEY)?.byMonth ?? []) {
+      if (!months.includes(month)) continue;
+      sum.fired += count.fired;
+      sum.overridden += count.overridden;
+    }
+    return sum;
+  }, [byKind, months]);
   // 規則のマスタにある規則と、台帳にだけ残っている(削除した)規則。
   const ruleList = advisoryRuleHooks.useList();
   const rules = useMemo(() => {
@@ -100,21 +130,31 @@ export function AdvisoryReviewPage() {
     update.mutate({ advisory_severity: next });
   }
 
-  function cell(kind: string, month: string) {
+  function cell(kind: string, month: string, index: number) {
     const count = byKind.get(kind)?.byMonth.get(month);
-    if (!count || (count.fired === 0 && count.overridden === 0)) return <td key={month} className="advisory-review__count" />;
-    const rate = count.fired > 0 ? Math.round((count.overridden / count.fired) * 100) : null;
+    const empty = !count || (count.fired === 0 && count.overridden === 0);
+    const rate = count ? overrideRate(count) : null;
     return (
-      <td key={month} className="advisory-review__count">
-        {count.fired}
-        {count.overridden > 0 && (
-          <span className="advisory-review__overridden">
-            {` / ${count.overridden}${rate !== null ? `（${rate}%）` : ""}`}
-          </span>
-        )}
-      </td>
+      <StatCell
+        key={month}
+        groupStart={index === 0}
+        value={
+          empty ? null : (
+            <>
+              {count.fired}
+              {count.overridden > 0 && (
+                <span className="advisory-review__overridden">
+                  {` / ${count.overridden}${rate !== null ? `（${rate}%）` : ""}`}
+                </span>
+              )}
+            </>
+          )
+        }
+      />
     );
   }
+
+  const summaryRate = overrideRate(summary);
 
   function topReasons(kind: string): string {
     const entries = [...(byKind.get(kind)?.reasons ?? new Map<string, number>())]
@@ -150,19 +190,39 @@ export function AdvisoryReviewPage() {
 
       <ErrorBanner error={stats.error ?? settings.error ?? update.error} />
 
+      <StatTiles>
+        <StatTile label="発火" value={summary.fired} />
+        <StatTile label="無視" value={summary.overridden} />
+        <StatTile
+          label="無視率"
+          help={OVERRIDE_RATE_FORMULA}
+          value={summaryRate === null ? "-" : `${summaryRate}%`}
+          meter={summaryRate}
+        />
+      </StatTiles>
+
       <div className="advisory-review__scroll">
-      <table className="master-search__table advisory-review__table">
+      <table className="lab-worklist stat-table advisory-review__table">
         <thead>
           <tr>
-            <th className="advisory-review__kind">種別</th>
-            <th className="advisory-review__default">既定</th>
-            <th className="advisory-review__severity">重さ</th>
-            {months.map((month) => (
-              <th key={month} className="advisory-review__count" title={month}>
+            <th rowSpan={2} className="advisory-review__kind">種別</th>
+            <th rowSpan={2} className="advisory-review__default">既定</th>
+            <th rowSpan={2} className="advisory-review__severity">重さ</th>
+            <th colSpan={months.length} className="stat-table__group">
+              発火 / 無視（無視率） <HelpTip text={OVERRIDE_RATE_FORMULA} />
+            </th>
+            <th rowSpan={2} className="advisory-review__reasons stat-table__group-start">主な理由</th>
+          </tr>
+          <tr>
+            {months.map((month, index) => (
+              <th
+                key={month}
+                className={index === 0 ? "stat-table__num stat-table__group-start" : "stat-table__num"}
+                title={month}
+              >
                 {monthLabel(month)}
               </th>
             ))}
-            <th className="advisory-review__reasons">主な理由</th>
           </tr>
         </thead>
         <tbody>
@@ -180,6 +240,15 @@ export function AdvisoryReviewPage() {
             />
           ))}
         </tbody>
+        <tfoot>
+          <tr>
+            <th colSpan={3} className="stat-table__label">
+              合計
+            </th>
+            {months.map((month, index) => cell(TOTAL_KEY, month, index))}
+            <td className="advisory-review__reasons stat-table__group-start">{topReasons(TOTAL_KEY)}</td>
+          </tr>
+        </tfoot>
       </table>
       </div>
     </div>
@@ -198,7 +267,7 @@ function GroupRows({
 }: {
   group: (typeof ADVISORY_GROUPS)[number];
   months: string[];
-  cell: (key: string, month: string) => ReactNode;
+  cell: (key: string, month: string, index: number) => ReactNode;
   topReasons: (key: string) => string;
   overrides: Record<string, AdvisorySeverityOverride>;
   onChange: (kind: AdvisoryKind, value: AdvisorySeverityOverride) => void;
@@ -233,8 +302,8 @@ function GroupRows({
                 ))}
               </select>
             </td>
-            {months.map((month) => cell(kind, month))}
-            <td className="advisory-review__reasons">{topReasons(kind)}</td>
+            {months.map((month, index) => cell(kind, month, index))}
+            <td className="advisory-review__reasons stat-table__group-start">{topReasons(kind)}</td>
           </tr>
         );
       })}
@@ -246,8 +315,8 @@ function GroupRows({
             <td className="advisory-review__severity">
               <Link to="/advisory-rules">規則マスタ</Link>
             </td>
-            {months.map((month) => cell(rule.key, month))}
-            <td className="advisory-review__reasons">{topReasons(rule.key)}</td>
+            {months.map((month, index) => cell(rule.key, month, index))}
+            <td className="advisory-review__reasons stat-table__group-start">{topReasons(rule.key)}</td>
           </tr>
         ))}
     </>

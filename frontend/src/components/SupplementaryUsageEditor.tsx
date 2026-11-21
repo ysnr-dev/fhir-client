@@ -10,6 +10,7 @@ import {
   type SupplementaryUsage,
 } from "../fhir/supplementaryUsage";
 import { WEEKDAY_LABELS } from "../lib/dates";
+import { TrashIcon } from "./icons/TrashIcon";
 
 const MONTH_OPTIONS = [
   { value: 0, label: "毎月" },
@@ -225,10 +226,12 @@ function DateMonthsEditor({
           {value.length > 1 && (
             <button
               type="button"
-              className="comment-add-button"
+              className="rp-card__icon-button"
               onClick={() => onChange(value.filter((_, i) => i !== index))}
+              title={`補足用法${index + 1}を削除`}
+              aria-label={`補足用法${index + 1}を削除`}
             >
-              削除
+              <TrashIcon />
             </button>
           )}
         </div>

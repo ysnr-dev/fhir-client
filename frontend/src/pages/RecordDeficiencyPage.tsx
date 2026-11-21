@@ -11,6 +11,7 @@ import {
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { StatCell } from "../components/StatSummary";
 import { notificationKindOf } from "../components/notifications/notificationRegistry";
 import { displayName, patientNumberOf } from "../fhir/patientHelpers";
 import {
@@ -110,21 +111,24 @@ export function RecordDeficiencyPage() {
         <p className="patient-table__empty">未完了の記録はありません。</p>
       ) : (
         <div className="lab-worklist-wrap sticky-table-wrap">
-          <table className="lab-worklist sticky-table record-deficiency">
+          <table className="lab-worklist sticky-table stat-table record-deficiency">
             <thead>
               <tr>
                 <th className="sticky-table__fix-1">担当者</th>
-                <th className="record-deficiency__count">合計</th>
-                <th className="record-deficiency__count">最長</th>
+                <th className="stat-table__num stat-table__group-start">合計</th>
+                <th className="stat-table__num">最長</th>
                 {kinds.map((kind, i) => (
-                  <th key={kind.code} className={kindCellClass(kinds, i, "record-deficiency__kind")} title={kind.group}>
+                  <th
+                    key={kind.code}
+                    className={`stat-table__num record-deficiency__kind${isGroupStart(kinds, i) ? " stat-table__group-start" : ""}`}
+                    title={kind.group}
+                  >
                     {kind.label}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              <DeficiencyLine row={total} kinds={kinds} name="合計" departments="" summary />
               {rows.map((row) => (
                 <DeficiencyLine
                   key={row.ownerId || "none"}
@@ -137,6 +141,11 @@ export function RecordDeficiencyPage() {
                 />
               ))}
             </tbody>
+            {rows.length > 1 && (
+              <tfoot>
+                <DeficiencyLine row={total} kinds={kinds} name="合計" departments="" />
+              </tfoot>
+            )}
           </table>
         </div>
       )}
@@ -159,9 +168,8 @@ function ownerName(ownerId: string, owner: DeficiencyOwner | undefined): string 
 }
 
 /** 種別の列。分類(記録・結果・照会・届出)の変わり目に区切りの罫線を引く。 */
-function kindCellClass(kinds: readonly RecordDeficiencyKind[], index: number, base: string): string {
-  const groupStart = index === 0 || kinds[index - 1].group !== kinds[index].group;
-  return `${base} record-deficiency__count${groupStart ? " record-deficiency__group-start" : ""}`;
+function isGroupStart(kinds: readonly RecordDeficiencyKind[], index: number): boolean {
+  return index === 0 || kinds[index - 1].group !== kinds[index].group;
 }
 
 function DeficiencyLine({
@@ -169,7 +177,6 @@ function DeficiencyLine({
   kinds,
   name,
   departments,
-  summary = false,
   mine = false,
   onOpen,
 }: {
@@ -177,36 +184,47 @@ function DeficiencyLine({
   kinds: readonly RecordDeficiencyKind[];
   name: string;
   departments: string;
-  summary?: boolean;
   mine?: boolean;
   onOpen?: (kind: RecordDeficiencyKind) => void;
 }) {
-  const className = [summary ? "record-deficiency__total" : "", mine ? "record-deficiency__mine" : ""]
-    .filter(Boolean)
-    .join(" ");
+  // 担当者の行の見出しは td にして、行に乗せたときの色を敷く(合計の行は th)。
+  const LabelCell = onOpen ? "td" : "th";
   return (
-    <tr className={className || undefined}>
-      <td className="sticky-table__fix-1" title={departments ? `${name}(${departments})` : name}>
+    <tr className={mine ? "record-deficiency__mine" : undefined}>
+      <LabelCell className="sticky-table__fix-1 stat-table__label" title={departments ? `${name}(${departments})` : name}>
         {name}
         {departments && <span className="record-deficiency__department">{departments}</span>}
-      </td>
-      <td className="record-deficiency__count">
-        <strong>{row.total}</strong>
-        {row.overdue > 0 && <span className="record-deficiency__overdue">超過 {row.overdue}</span>}
-      </td>
-      <td className="record-deficiency__count">{row.total > 0 ? `${row.oldestDays} 日` : ""}</td>
-      {kinds.map((kind, i) => (
-        <td key={kind.code} className={kindCellClass(kinds, i, "record-deficiency__kind-cell")}>
-          <CellButton cell={row.cells.get(kind.code)} onClick={onOpen ? () => onOpen(kind) : undefined} />
-        </td>
-      ))}
+      </LabelCell>
+      <StatCell
+        groupStart
+        strong
+        value={
+          row.total > 0 ? (
+            <>
+              {row.total}
+              {row.overdue > 0 && <span className="record-deficiency__overdue">超過 {row.overdue}</span>}
+            </>
+          ) : null
+        }
+      />
+      <StatCell value={row.total > 0 ? `${row.oldestDays} 日` : null} />
+      {kinds.map((kind, i) => {
+        const cell = row.cells.get(kind.code);
+        return (
+          <StatCell
+            key={kind.code}
+            className="record-deficiency__kind-cell"
+            groupStart={isGroupStart(kinds, i)}
+            value={cell ? <CellButton cell={cell} onClick={onOpen ? () => onOpen(kind) : undefined} /> : null}
+          />
+        );
+      })}
     </tr>
   );
 }
 
 /** 担当者の行は件数をボタンにして一覧を開く。合計の行は押せないので数字だけ。 */
-function CellButton({ cell, onClick }: { cell: DeficiencyCell | undefined; onClick?: () => void }) {
-  if (!cell) return null;
+function CellButton({ cell, onClick }: { cell: DeficiencyCell; onClick?: () => void }) {
   const title = `最も古いもの ${cell.oldestDays} 日前${cell.overdue > 0 ? `・期限超過 ${cell.overdue} 件` : ""}`;
   return (
     <>

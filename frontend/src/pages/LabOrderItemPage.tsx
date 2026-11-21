@@ -820,13 +820,21 @@ function ResultItemsEditor({ orderItem }: ResultItemsEditorProps) {
                 </td>
                 <td>{mapping.result_item?.display_unit ?? ""}</td>
                 <td className="master-search__actions">
-                  <button type="button" onClick={() => move(index, -1)} disabled={index === 0}>
+                  <button
+                    type="button"
+                    onClick={() => move(index, -1)}
+                    disabled={index === 0}
+                    title="上へ"
+                    aria-label="上へ"
+                  >
                     ↑
                   </button>
                   <button
                     type="button"
                     onClick={() => move(index, 1)}
                     disabled={index === mappings.length - 1}
+                    title="下へ"
+                    aria-label="下へ"
                   >
                     ↓
                   </button>

@@ -17,6 +17,7 @@ import {
 } from "../components/labOrderItemOptions";
 import { Modal } from "../components/Modal";
 import { MasterBackLink } from "../components/MasterBackLink";
+import { TrashIcon } from "../components/icons/TrashIcon";
 
 // 検体検査の結果項目(施設マスタ)のメンテナンス。検査結果として返ってくる単位で、
 // データ型・単位・選択肢を持つ。オーダー項目との対応づけは検査オーダー項目マスタ側で行う。
@@ -843,14 +844,20 @@ function ReferenceRangeRow({ range, onChange, onMoveUp, onMoveDown, onRemove }: 
         />
       </td>
       <td className="master-search__actions">
-        <button type="button" onClick={onMoveUp} disabled={!onMoveUp}>
+        <button type="button" onClick={onMoveUp} disabled={!onMoveUp} title="上へ" aria-label="上へ">
           ↑
         </button>
-        <button type="button" onClick={onMoveDown} disabled={!onMoveDown}>
+        <button type="button" onClick={onMoveDown} disabled={!onMoveDown} title="下へ" aria-label="下へ">
           ↓
         </button>
-        <button type="button" onClick={onRemove}>
-          外す
+        <button
+          type="button"
+          className="rp-card__icon-button"
+          onClick={onRemove}
+          title="基準範囲を削除"
+          aria-label="基準範囲を削除"
+        >
+          <TrashIcon />
         </button>
       </td>
     </tr>

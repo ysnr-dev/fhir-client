@@ -239,7 +239,7 @@ function CategoryEditModal({ category, categories, onClose }: CategoryEditModalP
               value={draft.category_code}
               onChange={(e) => setDraft({ ...draft, category_code: e.target.value })}
               disabled={category !== null}
-              placeholder="空欄で自動採番"
+              placeholder="空欄なら自動採番"
             />
           </label>
           <label>

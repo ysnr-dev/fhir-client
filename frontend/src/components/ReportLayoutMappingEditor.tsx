@@ -7,6 +7,7 @@ import {
 } from "../fhir/reportLayoutMapping";
 import { questionnairePlaceholders, RESERVED_PLACEHOLDERS } from "../fhir/reportPlaceholders";
 import type { TlfItemIds } from "../fhir/tlfPlaceholders";
+import { TrashIcon } from "./icons/TrashIcon";
 
 type RuleKind = MappingRule["kind"];
 
@@ -160,8 +161,14 @@ export function ReportLayoutMappingEditor({
               onChange={(e) => update(rule.show.map((s, j) => (j === i ? e.target.value : s)))}
             />
             {rule.show.length > 1 && (
-              <button type="button" onClick={() => update(rule.show.filter((_, j) => j !== i))}>
-                削除
+              <button
+                type="button"
+                className="rp-card__icon-button"
+                onClick={() => update(rule.show.filter((_, j) => j !== i))}
+                title={`表示項目${i + 1}を削除`}
+                aria-label={`表示項目${i + 1}を削除`}
+              >
+                <TrashIcon />
               </button>
             )}
           </div>
@@ -189,8 +196,14 @@ export function ReportLayoutMappingEditor({
               </option>
             ))}
           </select>
-          <button type="button" onClick={() => updateRules(rules.filter((_, i) => i !== index))}>
-            削除
+          <button
+            type="button"
+            className="rp-card__icon-button"
+            onClick={() => updateRules(rules.filter((_, i) => i !== index))}
+            title={`規則${index + 1}を削除`}
+            aria-label={`規則${index + 1}を削除`}
+          >
+            <TrashIcon />
           </button>
         </div>
         <div className="mapping-editor__fields">

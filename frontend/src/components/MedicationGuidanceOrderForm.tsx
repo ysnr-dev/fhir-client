@@ -18,6 +18,7 @@ import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 服薬指導オーダーの入力フォーム(docs/medication-guidance-order-design.md)。栄養指導と同じく
 // 明細も伝票レイアウトも無いので 1 枚で完結する。指導区分・指導条件は診療報酬の区分に沿った
@@ -190,7 +191,7 @@ export function MedicationGuidanceOrderForm({
                 update("comment", "");
               }}
             >
-              ×
+              <TrashIcon />
             </button>
           </div>
         ) : (

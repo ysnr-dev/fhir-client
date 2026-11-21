@@ -562,9 +562,9 @@ function DetailRow<D extends PerformDatasetDetail>({
         <button
           type="button"
           className="rp-card__icon-button"
-          title="外す"
-          aria-label="外す"
           onClick={() => mutations.remove.mutate(detail.id)}
+          title="明細を削除"
+          aria-label="明細を削除"
         >
           <TrashIcon />
         </button>

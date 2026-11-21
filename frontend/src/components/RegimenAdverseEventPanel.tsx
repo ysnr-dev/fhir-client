@@ -5,7 +5,7 @@ import { useRegimenApplication } from "../hooks/useRegimenApplication";
 import { AdverseEventEditor } from "./AdverseEventEditor";
 import { ErrorBanner } from "./ErrorBanner";
 
-// カルテ右ペインの「化学療法(有害事象)」。適用 1 件のクールに対して記録する(§7.6 C-3)。
+// 化学療法の有害事象の記録(TreatmentRecordModal の中身)。適用 1 件のクールに対して記録する(§7.6 C-3)。
 // 用語はレジメンマスタの「想定される副作用」を候補に出し、自由入力もできる。
 // 記録は適用ヘッダ(basedOn)で引き、クールで絞る。
 

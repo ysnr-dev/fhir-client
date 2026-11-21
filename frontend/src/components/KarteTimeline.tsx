@@ -121,8 +121,8 @@ interface KarteTimelineProps {
   onDo: (item: KarteTimelineItem) => void;
   /** 詳細表示。対象は URL に載せるので、モーダルは親(カルテ画面)が描く。 */
   onOpenDetail: (target: KarteDetailTarget) => void;
-  /** 放射線治療コースの記録を右ペインで開く(docs/radiotherapy-order-design.md §6.3)。 */
-  onOpenRadiotherapyPane: (kind: "adverse" | "review", srId: string) => void;
+  /** 放射線治療コースの記録(週次レビュー・有害事象)をモーダルで開く(docs/radiotherapy-order-design.md §6.3)。 */
+  onOpenRadiotherapyRecord: (kind: "adverse" | "review", srId: string) => void;
   /** 削除された項目。右ペインで開いていたら閉じるために親へ通知する。 */
   onDeleted: (item: KarteTimelineItem) => void;
   /** スクロールコンテナ。診療日パネルからのスクロール指示に使う。 */
@@ -154,7 +154,7 @@ export function KarteTimeline({
   onEdit,
   onDo,
   onOpenDetail,
-  onOpenRadiotherapyPane,
+  onOpenRadiotherapyRecord,
   onDeleted,
   containerRef,
   problemsById,
@@ -237,7 +237,7 @@ export function KarteTimeline({
                     onEdit={onEdit}
                     onDo={onDo}
                     onOpenDetail={onOpenDetail}
-                    onOpenRadiotherapyPane={onOpenRadiotherapyPane}
+                    onOpenRadiotherapyRecord={onOpenRadiotherapyRecord}
                     onDelete={remove}
                     onDeleted={onDeleted}
                     deleting={deletingKey === key}
@@ -337,7 +337,7 @@ const KarteCard = memo(function KarteCard({
   onEdit,
   onDo,
   onOpenDetail,
-  onOpenRadiotherapyPane,
+  onOpenRadiotherapyRecord,
   onDelete,
   onDeleted,
   deleting,
@@ -350,7 +350,7 @@ const KarteCard = memo(function KarteCard({
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (item: KarteTimelineItem) => void;
   onOpenDetail: (target: KarteDetailTarget) => void;
-  onOpenRadiotherapyPane: (kind: "adverse" | "review", srId: string) => void;
+  onOpenRadiotherapyRecord: (kind: "adverse" | "review", srId: string) => void;
   /** 確認の後に呼ぶ削除。実行状態は deleting / deleteError で戻ってくる。 */
   onDelete: (item: KarteTimelineItem) => void;
   onDeleted: (item: KarteTimelineItem) => void;
@@ -778,7 +778,7 @@ const KarteCard = memo(function KarteCard({
               <button
                 type="button"
                 className="row-menu__item"
-                onClick={() => onOpenRadiotherapyPane("review", item.serviceRequest.id ?? "")}
+                onClick={() => onOpenRadiotherapyRecord("review", item.serviceRequest.id ?? "")}
               >
                 週次レビュー
               </button>
@@ -787,7 +787,7 @@ const KarteCard = memo(function KarteCard({
               <button
                 type="button"
                 className="row-menu__item"
-                onClick={() => onOpenRadiotherapyPane("adverse", item.serviceRequest.id ?? "")}
+                onClick={() => onOpenRadiotherapyRecord("adverse", item.serviceRequest.id ?? "")}
               >
                 有害事象
               </button>

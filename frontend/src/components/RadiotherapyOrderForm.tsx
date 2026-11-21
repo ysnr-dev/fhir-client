@@ -722,7 +722,7 @@ export function RadiotherapyOrderForm({
                 update("comment", "");
               }}
             >
-              ×
+              <TrashIcon />
             </button>
           </div>
         ) : (

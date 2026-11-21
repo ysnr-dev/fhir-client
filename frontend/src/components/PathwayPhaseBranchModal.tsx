@@ -64,8 +64,10 @@ export function PathwayPhaseBranchModal({ phase, phases, readOnly, onCommit, onC
               </button>
               <button
                 type="button"
+                className="rp-card__icon-button"
                 onClick={() => setBranches((prev) => prev.filter((b) => b.key !== branch.key))}
-                aria-label="削除"
+                title="分岐を削除"
+                aria-label="分岐を削除"
               >
                 <TrashIcon />
               </button>
@@ -83,7 +85,7 @@ export function PathwayPhaseBranchModal({ phase, phases, readOnly, onCommit, onC
       </fieldset>
       <div className="lab-order-item__actions">
         {!readOnly && (
-          <button type="button" className="primary" onClick={() => onCommit(branches)}>
+          <button type="button" onClick={() => onCommit(branches)}>
             決定
           </button>
         )}

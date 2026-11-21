@@ -821,7 +821,7 @@ function RegimenApplyForm({
                 min="1"
                 value={values.plannedCycles}
                 onChange={(e) => update("plannedCycles", e.target.value)}
-                placeholder="空欄は継続"
+                placeholder="空欄なら継続"
               />
             </label>
           )}

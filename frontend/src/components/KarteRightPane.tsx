@@ -55,13 +55,10 @@ import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
 import { LineDrainCreatePanel, LineDrainEditPanel } from "./LineDrainPanels";
 import { PlannedAdmissionCreatePanel } from "./PlannedAdmissionPanel";
 import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
-import { PathwayApplyPanel, PathwayPhasePanel } from "./PathwayApplyPanel";
+import { PathwayApplyPanel } from "./PathwayApplyPanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
-import { RegimenCycleLoader, RegimenDayPanel, RegimenHeaderPanel } from "./RegimenPanels";
+import { RegimenHeaderPanel } from "./RegimenPanels";
 import { IntakeReviewPanel } from "./IntakeReviewPanel";
-import { RadiotherapyAdverseEventPanel } from "./RadiotherapyAdverseEventPanel";
-import { RadiotherapyReviewPanel } from "./RadiotherapyReviewPanel";
-import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
 import { KartePaneMenu } from "./KartePaneMenu";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
@@ -173,20 +170,9 @@ export type KartePaneState =
   | { kind: "regimen-apply"; regimenId?: number; problem?: ProblemRef }
   // クリニカルパスの適用。pathwayId 未指定はパス選択の状態。
   | { kind: "pathway-apply"; pathwayId?: number }
-  | { kind: "pathway-phase"; applyId: string; phaseKey: string }
-  // パスシートの 1 セル(病日 × OAT ユニット)の評価入力。unitId は OAT ユニットの CarePlan。
-  // 適用済みレジメンへの次クールの登録。regimenSrId はヘッダ ServiceRequest。
-  | { kind: "regimen-cycle"; regimenSrId: string }
-  // 暦の 1 日(その日のオーダーの編集・移動・中止)。
-  | { kind: "regimen-day"; regimenSrId: string; date: string }
-  // クールの有害事象(CTCAE Grade)の記録。
-  | { kind: "regimen-adverse"; regimenSrId: string; cycle: number }
-  // 適用のヘッダ(予定クール数・入外区分・プロブレム・コメント)の編集。
-  | { kind: "regimen-header"; regimenSrId: string }
-  // 放射線治療コースの有害事象(CTCAE Grade)の記録。srId は治療処方。
-  | { kind: "radiotherapy-adverse"; srId: string }
-  // 放射線治療コースの週次レビュー(治療中の診察)。テンプレート回答として残す。
-  | { kind: "radiotherapy-review"; srId: string };
+  // 適用済みレジメンのヘッダ(予定クール数・入外区分・プロブレム・コメント)の編集。regimenSrId はヘッダ
+  // ServiceRequest。次クール・投与日・有害事象は化学療法タブのモーダルで扱う。
+  | { kind: "regimen-header"; regimenSrId: string };
 
 interface OrderCreatePanelProps {
   patientId: string;
@@ -334,12 +320,6 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "order-set": "セット適用",
   "regimen-apply": "化学療法(レジメン適用)",
   "pathway-apply": "クリニカルパス(適用)",
-  "pathway-phase": "クリニカルパス(次のフェーズ)",
-  "regimen-cycle": "化学療法(クール登録)",
-  "regimen-day": "化学療法(投与日)",
-  "regimen-adverse": "化学療法(有害事象)",
-  "radiotherapy-adverse": "放射線治療(有害事象)",
-  "radiotherapy-review": "放射線治療(週次レビュー)",
   "regimen-header": "化学療法(適用の編集)",
 };
 
@@ -392,17 +372,6 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.regimenId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "pathway-apply":
       return `${state.kind}:${state.pathwayId ?? ""}`;
-    case "pathway-phase":
-      return `${state.kind}:${state.applyId}:${state.phaseKey}`;
-    case "regimen-cycle":
-      return `${state.kind}:${state.regimenSrId}`;
-    case "regimen-day":
-      return `${state.kind}:${state.regimenSrId}:${state.date}`;
-    case "regimen-adverse":
-      return `${state.kind}:${state.regimenSrId}:${state.cycle}`;
-    case "radiotherapy-adverse":
-    case "radiotherapy-review":
-      return `${state.kind}:${state.srId}`;
     case "regimen-header":
       return `${state.kind}:${state.regimenSrId}`;
     case "prescription-create":
@@ -553,36 +522,6 @@ function PaneContent({
           onSaved={onSaved}
         />
       );
-    case "pathway-phase":
-      return (
-        <PathwayPhasePanel
-          patientId={patientId}
-          applyId={state.applyId}
-          phaseKey={state.phaseKey}
-          onSaved={onSaved}
-        />
-      );
-    case "regimen-cycle":
-      return <RegimenCycleLoader patientId={patientId} regimenSrId={state.regimenSrId} onSaved={onSaved} />;
-    case "regimen-day":
-      return (
-        <RegimenDayPanel
-          patientId={patientId}
-          regimenSrId={state.regimenSrId}
-          date={state.date}
-          onEditInjection={(srId) => onStateChange({ kind: "injection-edit", srId })}
-          onEditPrescription={(srId) => onStateChange({ kind: "prescription-edit", srId })}
-          onSaved={onSaved}
-        />
-      );
-    case "regimen-adverse":
-      return (
-        <RegimenAdverseEventPanel patientId={patientId} regimenSrId={state.regimenSrId} cycle={state.cycle} />
-      );
-    case "radiotherapy-adverse":
-      return <RadiotherapyAdverseEventPanel patientId={patientId} srId={state.srId} />;
-    case "radiotherapy-review":
-      return <RadiotherapyReviewPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "regimen-header":
       return <RegimenHeaderPanel patientId={patientId} regimenSrId={state.regimenSrId} onSaved={onSaved} />;
     case "note-create":

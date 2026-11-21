@@ -28,6 +28,7 @@ import { MealDietPickerModal } from "./MealDietPickerModal";
 import { ProblemSelect } from "./ProblemSelect";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { TemplateTextField } from "./TemplateTextField";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 栄養指導オーダーの入力フォーム。リハビリと同じく明細も伝票レイアウトも無いので
 // 1 枚のフォームで完結する。
@@ -309,7 +310,7 @@ export function NutritionGuidanceOrderForm({
                   update("comment", "");
                 }}
               >
-                ×
+                <TrashIcon />
               </button>
             </div>
           ) : (

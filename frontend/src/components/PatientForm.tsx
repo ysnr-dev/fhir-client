@@ -15,6 +15,7 @@ import { NameKanjiInput } from "./NameKanjiInput";
 import { OrganizationSearchModal } from "./OrganizationSearchModal";
 import { PostalCodeInput } from "./PostalCodeInput";
 import { PractitionerSearchModal } from "./PractitionerSearchModal";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 患者の登録・編集フォーム。入力欄の並びは新患登録モーダル
 // (NewPatientCheckInModal)と共通のレイアウト(.patient-fields)にしてある。
@@ -472,8 +473,14 @@ function ContactFields({ contact, onChange, onRemove }: ContactFieldsProps) {
             onChange={(e) => onChange({ ...contact, address: e.target.value })}
           />
         </label>
-        <button type="button" onClick={onRemove}>
-          削除
+        <button
+          type="button"
+          className="rp-card__icon-button"
+          onClick={onRemove}
+          title="連絡先を削除"
+          aria-label="連絡先を削除"
+        >
+          <TrashIcon />
         </button>
       </div>
     </div>

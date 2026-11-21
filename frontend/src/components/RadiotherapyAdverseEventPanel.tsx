@@ -6,7 +6,7 @@ import { AdverseEventEditor } from "./AdverseEventEditor";
 import { ErrorBanner } from "./ErrorBanner";
 import { serviceRequestsOf } from "../fhir/labOrderHelpers";
 
-// カルテ右ペインの「放射線治療(有害事象)」。治療コース 1 件に対して記録する
+// 放射線治療の有害事象の記録(TreatmentRecordModal の中身)。治療コース 1 件に対して記録する
 // (docs/radiotherapy-order-design.md §6.3)。
 //
 // 化学療法と違ってクールの区切りが無いので、コース単位で並べる。何回目の照射の頃に

@@ -27,6 +27,7 @@ import { PractitionerSearchModal } from "./PractitionerSearchModal";
 import type { EditorTocEntry } from "./EditorToc";
 import { QuestionnaireResponseToc, responseTocAnchorId } from "./QuestionnaireResponseToc";
 import { SchemaImageField, type AnnotationState } from "./SchemaImageField";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // Questionnaire の item ツリーからテンプレート入力フォームを再帰レンダリングする。
 // onSubmit 指定時は入力フォーム(送信で QuestionnaireResponse.item を返す)、
@@ -953,8 +954,14 @@ export function QuestionnaireResponseForm({
               <div className="qp-group__instance-header">
                 <span>{i + 1}件目</span>
                 {count > 1 && (
-                  <button type="button" onClick={() => removeGroupInstance(key, i, count)}>
-                    削除
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    onClick={() => removeGroupInstance(key, i, count)}
+                    title={`${i + 1}件目を削除`}
+                    aria-label={`${i + 1}件目を削除`}
+                  >
+                    <TrashIcon />
                   </button>
                 )}
               </div>

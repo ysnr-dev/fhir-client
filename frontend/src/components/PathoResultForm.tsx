@@ -57,6 +57,7 @@ import { SchemaImageGallery } from "./SchemaImageGallery";
 import { SchemaPickerModal } from "./SchemaPickerModal";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { TemplateTextField } from "./TemplateTextField";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // ペイントモーダル(fabric.js)は重いので、開くまで読み込まない(オーダー側と同じ)。
 const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
@@ -659,11 +660,11 @@ export function PathoResultForm({
               <button
                 type="button"
                 className="rp-card__icon-button"
-                title="この画像を外す"
-                aria-label={`画像${index + 1}を外す`}
+                title={`画像${index + 1}を削除`}
+                aria-label={`画像${index + 1}を削除`}
                 onClick={() => removeImage(index)}
               >
-                ×
+                <TrashIcon />
               </button>
             </div>
           ))}

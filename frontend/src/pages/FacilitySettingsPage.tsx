@@ -154,6 +154,7 @@ import {
   type KarteCardOrderSettings,
 } from "../fhir/karteCardOrderHelpers";
 import { KARTE_KIND_LABELS } from "../fhir/karteTimeline";
+import { HelpTip } from "../components/HelpTip";
 
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
 // 診療科・診察室・スタッフは自院のものしか登録しない。他院は診療情報提供書の
@@ -181,7 +182,11 @@ const FACILITY_SECTIONS = [
   { key: "self_organization", label: "自院の医療機関" },
   { key: "karte_card_order", label: "カルテカードの並び順" },
   { key: "nursing_schedule", label: "看護指示の既定時刻" },
-  { key: "meal_schedule", label: "食事の提供時刻" },
+  {
+    key: "meal_schedule",
+    label: "食事の提供時刻",
+    help: "退院・外出泊の時刻と比べて、その時刻までに出た最後の食事で止め、その時刻以降に出る最初の食事から戻します。",
+  },
   { key: "vital_thresholds", label: "バイタルの異常値" },
   { key: "medication_schedule", label: "内服の与薬の時刻" },
   { key: "prescription_category", label: "処方の初期値" },
@@ -219,7 +224,11 @@ export function FacilitySettingsPage() {
   const { organizations, isLoading: loadingOrganizations } = useOrganizationOptions();
   const update = useUpdateFacilitySettings();
   const [section, setSection] = useState<FacilitySectionKey>("self_organization");
-  const sectionLabel = FACILITY_SECTIONS.find((item) => item.key === section)?.label;
+  const sectionEntry: { label: string; help?: string } | undefined = FACILITY_SECTIONS.find(
+    (item) => item.key === section,
+  );
+  const sectionLabel = sectionEntry?.label;
+  const sectionHelp = sectionEntry?.help;
   // 未保存の選択。読み込み前は undefined にしておき、保存済みの値を初期表示にする。
   const [selected, setSelected] = useState<string | undefined>(undefined);
 
@@ -807,7 +816,10 @@ export function FacilitySettingsPage() {
           ))}
         </nav>
         <div className="connection-settings-form facility-settings__content">
-          <h2 className="facility-settings__title">{sectionLabel}</h2>
+          <h2 className="facility-settings__title">
+            {sectionLabel}
+            {sectionHelp && <HelpTip text={sectionHelp} />}
+          </h2>
           {section === "self_organization" && (
             <label>
               自院の医療機関
@@ -893,7 +905,10 @@ export function FacilitySettingsPage() {
                 </label>
               ))}
               <label>
-                N時間毎の起点
+                <span>
+                  N時間毎の起点
+                  <HelpTip text="4時間毎ならこの時刻から 4 時間刻みで、その日の予定を組みます。" />
+                </span>
                 <input
                   type="time"
                   value={schedule.interval_start}
@@ -901,9 +916,6 @@ export function FacilitySettingsPage() {
                     setScheduleDraft({ ...(scheduleDraft ?? savedSchedule), interval_start: e.target.value })
                   }
                 />
-                <span className="connection-settings-form__field-hint">
-                  4時間毎ならこの時刻から 4 時間刻みで、その日の予定を組みます。
-                </span>
               </label>
             </div>
           )}
@@ -925,10 +937,6 @@ export function FacilitySettingsPage() {
                   />
                 </label>
               ))}
-              <span className="connection-settings-form__field-hint">
-                退院・外出泊の時刻と比べて、その時刻までに出た最後の食事で止め、その時刻以降に
-                出る最初の食事から戻します。
-              </span>
             </div>
           )}
 
@@ -2199,10 +2207,12 @@ export function FacilitySettingsPage() {
                         <span>{balanceNames.data?.get(manageNo)?.name ?? manageNo}</span>
                         <button
                           type="button"
+                          className="rp-card__icon-button"
+                          title={`${balanceNames.data?.get(manageNo)?.name ?? manageNo} を削除`}
                           aria-label={`${balanceNames.data?.get(manageNo)?.name ?? manageNo} を削除`}
                           onClick={() => removeBalanceItem(side, manageNo)}
                         >
-                          ×
+                          <TrashIcon />
                         </button>
                       </li>
                     ))}

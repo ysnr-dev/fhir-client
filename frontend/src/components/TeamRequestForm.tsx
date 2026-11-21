@@ -20,6 +20,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 import { TemplateEntryModal } from "./TemplateEntryModal";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // チーム依頼の入力フォーム(docs/care-team-design.md §2)。他科依頼のフォームと同じ 1 枚で、
 // 宛先が診療科ではなくチーム(CareTeam)になる。依頼目的はテンプレートからも書ける。
@@ -204,7 +205,7 @@ export function TeamRequestForm({
                   update("comment", "");
                 }}
               >
-                ×
+                <TrashIcon />
               </button>
             </div>
           ) : (

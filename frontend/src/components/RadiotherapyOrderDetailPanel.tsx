@@ -344,13 +344,14 @@ export function RadiotherapyOrderDetailPanel({
                     <td>
                       {/* 予定の変更・削除はカレンダーから行う(ここは照射録の取消)。 */}
                       {!fraction.planned && (
-                      <button
-                        type="button"
-                        onClick={() => onCancelFraction(fraction.id)}
-                        disabled={cancellingFractionId === fraction.id}
-                      >
-                        {cancellingFractionId === fraction.id ? "取消中..." : "取消"}
-                      </button>
+                        <button
+                          type="button"
+                          className="rp-card__compact-button"
+                          onClick={() => onCancelFraction(fraction.id)}
+                          disabled={cancellingFractionId === fraction.id}
+                        >
+                          {cancellingFractionId === fraction.id ? "取消中..." : "取消"}
+                        </button>
                       )}
                     </td>
                   )}

@@ -392,6 +392,8 @@ export default function DocumentFormDesigner({
                   className="rp-card__compact-button"
                   disabled={currentPage <= 1}
                   onClick={() => setCurrentPage((p) => p - 1)}
+                  title="前のページ"
+                  aria-label="前のページ"
                 >
                   ‹
                 </button>
@@ -403,6 +405,8 @@ export default function DocumentFormDesigner({
                   className="rp-card__compact-button"
                   disabled={currentPage >= source.metas.length}
                   onClick={() => setCurrentPage((p) => p + 1)}
+                  title="次のページ"
+                  aria-label="次のページ"
                 >
                   ›
                 </button>

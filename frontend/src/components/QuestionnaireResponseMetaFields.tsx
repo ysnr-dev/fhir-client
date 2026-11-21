@@ -5,6 +5,7 @@ import {
   type QuestionnaireResponseMetaValues,
   type QuestionnaireResponseStatus,
 } from "../fhir/questionnaireResponseHelpers";
+import { HelpTip } from "./HelpTip";
 
 interface QuestionnaireResponseMetaFieldsProps {
   values: QuestionnaireResponseMetaValues;
@@ -104,6 +105,7 @@ export function QuestionnaireResponseMetaFields({
             <span className="qp-field__label">
               保険医療機関番号
               <span className="qp-field__required">必須</span>
+              <HelpTip text="10桁の数字(都道府県2桁 + 点数表1桁 + 医療機関コード7桁)。" />
             </span>
             <input
               type="text"
@@ -112,9 +114,6 @@ export function QuestionnaireResponseMetaFields({
               onChange={(e) => update("institutionNumber", e.target.value)}
             />
           </label>
-          <p className="qp-field__note">
-            10桁の数字(都道府県2桁 + 点数表1桁 + 医療機関コード7桁)。
-          </p>
         </div>
       </div>
     </details>

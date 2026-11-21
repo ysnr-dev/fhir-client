@@ -3,6 +3,7 @@ import type { NewOauthClient, OauthClientCreated } from "../api/adminClient";
 import { useCreateOauthClient } from "../api/adminQueries";
 import { ErrorBanner } from "./ErrorBanner";
 import { ContextScopeSelector, ScopeSelector, type ScopeFamily } from "./ScopeSelector";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // クライアントの「形」は判別フィールドではなく、送るフィールドの組み合わせで
 // 決まる(上流の OauthClient.register がそうなっている)。この画面のラジオは
@@ -212,9 +213,12 @@ export function OauthClientCreateForm({ onCreated, onCancel }: Props) {
                 {redirectUris.length > 1 && (
                   <button
                     type="button"
+                    className="rp-card__icon-button"
                     onClick={() => setRedirectUris(redirectUris.filter((_, i) => i !== index))}
+                    title={`リダイレクトURI ${index + 1}を削除`}
+                    aria-label={`リダイレクトURI ${index + 1}を削除`}
                   >
-                    削除
+                    <TrashIcon />
                   </button>
                 )}
               </div>

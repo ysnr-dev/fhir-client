@@ -109,6 +109,7 @@ export function RehabOrderDetailPanel({
                   <td>
                     <button
                       type="button"
+                      className="rp-card__compact-button"
                       onClick={() => onDeletePerform(perform.id)}
                       disabled={deletingPerformId === perform.id}
                     >

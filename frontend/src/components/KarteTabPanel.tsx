@@ -50,7 +50,8 @@ export interface KartePanelActions {
     onEdit: (item: KarteTimelineItem) => void;
     onDo: (item: KarteTimelineItem) => void;
     onDeleted: (item: KarteTimelineItem) => void;
-    onOpenRadiotherapyPane: (kind: "adverse" | "review", srId: string) => void;
+    /** 放射線治療コースの記録(週次レビュー・有害事象)のモーダルを開く。 */
+    onOpenRadiotherapyRecord: (kind: "adverse" | "review", srId: string) => void;
   };
 }
 
@@ -154,29 +155,26 @@ export function KarteTabPanel({ tab: key, patientId, view, onViewChange, baseDat
       />
     );
   }
-  // 化学療法。暦とレジメン詳細は左ペインのタブで切り替え、オーダーを作る操作
-  // (適用・次クールの登録)と投与日の操作は右ペインで行う。
+  // 化学療法。次クールの登録・投与日の操作・有害事象はタブのモーダルで行い、右ペインで開くのは
+  // 適用のヘッダと日オーダー(注射・処方)の編集だけ。
   if (key === "chemo") {
     return (
       <KarteChemoTab
         {...props}
         baseDate={baseDate}
-        onAddCycle={(regimenSrId) => openForm({ kind: "regimen-cycle", regimenSrId })}
-        onOpenDay={(regimenSrId, date) => openForm({ kind: "regimen-day", regimenSrId, date })}
-        onOpenAdverseEvents={(regimenSrId, cycle) => openForm({ kind: "regimen-adverse", regimenSrId, cycle })}
+        onEditOrder={(kind, srId) => openForm({ kind: `${kind}-edit`, srId })}
         onEditHeader={(regimenSrId) => openForm({ kind: "regimen-header", regimenSrId })}
       />
     );
   }
   // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る。適用は右ペインの
-  // 「クリニカルパス」から、評価の入力も右ペインの担当。
+  // 「クリニカルパス」から。評価・次のフェーズなどシートからの操作はタブのモーダルで行う。
   if (key === "pathway") {
     return (
       <KartePathwayTab
         {...props}
         baseDate={baseDate}
         onOpenOrder={(kind, srId) => openForm({ kind: `${kind}-edit`, srId } as KartePaneState)}
-        onApplyPhase={(applyId, phaseKey) => openForm({ kind: "pathway-phase", applyId, phaseKey })}
       />
     );
   }

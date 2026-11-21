@@ -35,6 +35,7 @@ import { ProblemSelect } from "./ProblemSelect";
 import { SchemaImageGallery, TemplateSchemaImages } from "./SchemaImageGallery";
 import { SchemaPickerModal } from "./SchemaPickerModal";
 import { TemplateEntryModal } from "./TemplateEntryModal";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // ペイントモーダル(fabric.js)は重いので、開くまで読み込まない(診療記録と同じ)。
 const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
@@ -351,7 +352,7 @@ export function PathoOrderForm({
                 update("comment", "");
               }}
             >
-              ×
+              <TrashIcon />
             </button>
           </div>
         ) : (
@@ -592,11 +593,11 @@ function SpecimenCard({
           <button
             type="button"
             className="rp-card__icon-button"
-            title="この検体を削除"
+            title={`検体${index + 1}を削除`}
             aria-label={`検体${index + 1}を削除`}
             onClick={onRemove}
           >
-            ×
+            <TrashIcon />
           </button>
         )}
       </div>

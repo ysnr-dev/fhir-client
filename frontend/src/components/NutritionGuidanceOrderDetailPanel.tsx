@@ -97,6 +97,7 @@ export function NutritionGuidanceOrderDetailPanel({
                   <td>
                     <button
                       type="button"
+                      className="rp-card__compact-button"
                       onClick={() => onDeletePerform(perform)}
                       disabled={deletingPerformId === perform.id}
                     >

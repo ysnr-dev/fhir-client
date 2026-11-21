@@ -29,7 +29,9 @@ import { ClockIcon } from "./icons/ClockIcon";
 import { RegimenDecisionMark } from "./RegimenDecision";
 import { RegimenDetailView } from "./RegimenDetailView";
 import { RegimenHistoryView } from "./RegimenHistoryView";
-import { RegimenMoveModal } from "./RegimenPanels";
+import { Modal } from "./Modal";
+import { RegimenCycleLoader, RegimenDayPanel, RegimenMoveModal } from "./RegimenPanels";
+import { TreatmentRecordModal } from "./TreatmentRecordModal";
 
 // カルテ画面の「化学療法」タブ。適用中のレジメンの投与スケジュールを月の暦で見る。
 //
@@ -37,7 +39,8 @@ import { RegimenMoveModal } from "./RegimenPanels";
 // 「C1 Day8」の印と薬剤名で並べる。適用が複数あるときはヘッダのタブで切り替える
 // (1 つの暦に 2 レジメンを重ねると、どちらの Day かが読めない)。
 //
-// 操作(適用・次クール・移動・中止・編集)は右ペインの担当。暦は表示と導線だけ持つ。
+// 次クールの登録・投与日の操作(投与可否・移動・中止)・有害事象の記録はタブのモーダルで開く。
+// 右ペインを使うのは、右ペインで登録したものの編集(適用のヘッダ、日オーダーの注射・処方)だけ。
 
 /** 暦の 1 マスに出すステップの上限。 */
 const MAX_STEPS_IN_CELL = 3;
@@ -60,15 +63,17 @@ interface KarteChemoTabProps {
   /** URL から渡される表示。"detail" ならレジメン詳細、空なら暦。 */
   view: string;
   onViewChange: (view: string | null) => void;
-  /** 次クールの登録を右ペインで開く。 */
-  onAddCycle: (regimenSrId: string) => void;
-  /** 暦の 1 日(その日のオーダーの操作)を右ペインで開く。 */
-  onOpenDay: (regimenSrId: string, date: string) => void;
-  /** クールの有害事象の記録を右ペインで開く。 */
-  onOpenAdverseEvents: (regimenSrId: string, cycle: number) => void;
+  /** 投与日の日オーダー(注射・処方)の編集を右ペインで開く。 */
+  onEditOrder: (kind: RegimenDayOrder["kind"], srId: string) => void;
   /** 適用のヘッダの編集を右ペインで開く。 */
   onEditHeader: (regimenSrId: string) => void;
 }
+
+/** タブのモーダルで開く操作。どれも選んでいる適用(ヘッダ ServiceRequest)に対して行う。 */
+type ChemoModal =
+  | { kind: "cycle"; regimenSrId: string }
+  | { kind: "day"; regimenSrId: string; date: string }
+  | { kind: "adverse"; regimenSrId: string; cycle: number };
 
 function calendarDays(month: Date): { date: string; inMonth: boolean; weekday: number }[] {
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -105,9 +110,7 @@ export function KarteChemoTab({
   patientId,
   view,
   onViewChange,
-  onAddCycle,
-  onOpenDay,
-  onOpenAdverseEvents,
+  onEditOrder,
   onEditHeader,
   baseDate,
 }: KarteChemoTabProps) {
@@ -141,6 +144,9 @@ export function KarteChemoTab({
   const selectedHeader = applications.data?.headers.find((h) => h.id === selected?.id) ?? null;
   const isDetail = view === "detail";
   const isHistory = view === "history";
+  const [modal, setModal] = useState<ChemoModal | null>(null);
+  const onAddCycle = (regimenSrId: string) => setModal({ kind: "cycle", regimenSrId });
+  const onOpenDay = (regimenSrId: string, date: string) => setModal({ kind: "day", regimenSrId, date });
 
   // 基準日(無ければ今日)の月を「今月」として暦の初期位置にする。
   const currentMonth = monthOf(baseDate ?? today());
@@ -322,7 +328,7 @@ export function KarteChemoTab({
             adverseEvents={adverseEvents.data ?? []}
             onOpenDay={(date) => onOpenDay(selected.id, date)}
             onAddCycle={() => onAddCycle(selected.id)}
-            onOpenAdverseEvents={(cycle) => onOpenAdverseEvents(selected.id, cycle)}
+            onOpenAdverseEvents={(cycle) => setModal({ kind: "adverse", regimenSrId: selected.id, cycle })}
             onEditHeader={() => onEditHeader(selected.id)}
           />
         ) : (
@@ -330,6 +336,38 @@ export function KarteChemoTab({
         )
       ) : (
         renderCalendar()
+      )}
+
+      {modal?.kind === "cycle" && (
+        <Modal title="化学療法(クール登録)" className="modal--wide" onClose={() => setModal(null)}>
+          <RegimenCycleLoader patientId={patientId} regimenSrId={modal.regimenSrId} onSaved={() => setModal(null)} />
+        </Modal>
+      )}
+      {/* 日オーダーの「編集」は右ペインの注射・処方の編集へ渡す(このモーダルは閉じる)。 */}
+      {modal?.kind === "day" && (
+        <Modal title="化学療法(投与日)" className="modal--wide" onClose={() => setModal(null)}>
+          <RegimenDayPanel
+            patientId={patientId}
+            regimenSrId={modal.regimenSrId}
+            date={modal.date}
+            onEditInjection={(srId) => {
+              setModal(null);
+              onEditOrder("injection", srId);
+            }}
+            onEditPrescription={(srId) => {
+              setModal(null);
+              onEditOrder("prescription", srId);
+            }}
+            onSaved={() => setModal(null)}
+          />
+        </Modal>
+      )}
+      {modal?.kind === "adverse" && (
+        <TreatmentRecordModal
+          patientId={patientId}
+          target={{ kind: "regimen-adverse", regimenSrId: modal.regimenSrId, cycle: modal.cycle }}
+          onClose={() => setModal(null)}
+        />
       )}
     </div>
   );
@@ -453,7 +491,7 @@ function weekendClass(weekday: number): string {
 }
 
 /**
- * 暦の 1 マス。オーダーのある日はボタンで、押すと右ペインにその日の操作が開く。
+ * 暦の 1 マス。オーダーのある日はボタンで、押すとその日の操作がモーダルで開く。
  * オーダーの無い日は押せない(暦から直接オーダーを足す操作は無く、クールの追加は
  * 詳細パネルから行う)。クールの中の日には「C1 Day5」を、投与期間を過ぎた日には
  * 休薬の地を敷いて、治療の周期が面で読めるようにする。

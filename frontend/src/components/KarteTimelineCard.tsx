@@ -70,7 +70,7 @@ export function KarteTimelineCard({
           onEdit={actions.timeline.onEdit}
           onDo={actions.timeline.onDo}
           onOpenDetail={actions.openDetail}
-          onOpenRadiotherapyPane={actions.timeline.onOpenRadiotherapyPane}
+          onOpenRadiotherapyRecord={actions.timeline.onOpenRadiotherapyRecord}
           onDeleted={actions.timeline.onDeleted}
           containerRef={containerRef}
           problemsById={problemsById}

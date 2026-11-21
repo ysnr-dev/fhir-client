@@ -19,6 +19,7 @@ import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // リハビリオーダーの入力フォーム。食事と同じく明細も伝票レイアウトも無いので
 // 1 枚のフォームで完結する。
@@ -275,7 +276,7 @@ export function RehabOrderForm({
                 update("comment", "");
               }}
             >
-              ×
+              <TrashIcon />
             </button>
           </div>
         ) : (

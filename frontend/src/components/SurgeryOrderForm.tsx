@@ -534,9 +534,9 @@ export function SurgeryOrderForm({
                   <button
                     type="button"
                     className="rp-card__icon-button"
-                    title="外す"
-                    aria-label={`${item.name} を外す`}
                     onClick={() => removeItem(item.code)}
+                    title={`${item.name}を削除`}
+                    aria-label={`${item.name}を削除`}
                   >
                     <TrashIcon />
                   </button>

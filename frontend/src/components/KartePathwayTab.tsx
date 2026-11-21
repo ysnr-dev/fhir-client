@@ -39,6 +39,7 @@ import { Modal } from "./Modal";
 import { NursingPerformModal } from "./NursingPerformModal";
 import { usePathway } from "../api/masterQueries";
 import { currentPhaseKeyOf, nextPhasesOf } from "../fhir/pathwayApplyHelpers";
+import { PathwayPhasePanel } from "./PathwayApplyPanel";
 import { PathwayCancelPanel } from "./PathwayCancelPanel";
 import { PathwayNextPhaseModal } from "./PathwayNextPhaseModal";
 import { PathwayClosePanel } from "./PathwayClosePanel";
@@ -81,8 +82,6 @@ interface KartePathwayTabProps {
   onViewChange: (view: string | null) => void;
   /** オーダー詳細の「編集」。そのオーダーの編集フォームを右ペインで開く。 */
   onOpenOrder: (kind: PathwayOrderKind, srId: string) => void;
-  /** 次のフェーズの適用(右ペインで開く)。 */
-  onApplyPhase: (applyId: string, phaseKey: string) => void;
 }
 
 /** 病日の列幅の下限と上限。表の幅に収まるだけ広げ、収まらなければ下限のまま表の中だけ横に送る。 */
@@ -109,7 +108,7 @@ function sheetUnitIdOf(
   return (unitRow?.cells.get(eventId) as SheetUnitCell | undefined)?.unitId ?? null;
 }
 
-export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, onApplyPhase, baseDate }: KartePathwayTabProps) {
+export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, baseDate }: KartePathwayTabProps) {
   const current = parsePathwaySheetView(view);
   const applications = usePathwayApplications(patientId);
   const list = applications.data?.applications ?? [];
@@ -134,6 +133,8 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [nextPhaseOpen, setNextPhaseOpen] = useState(false);
+  // 次のフェーズの適用。選んだフェーズの key。
+  const [applyPhaseKey, setApplyPhaseKey] = useState<string | null>(null);
   const [phaseCancelOpen, setPhaseCancelOpen] = useState(false);
   const [nursingPerform, setNursingPerform] = useState<{ orders: fhir4.ServiceRequest[]; date: string } | null>(null);
   const nursingPerformsOfDay = useNursingPerformsOn(nursingPerform?.date ?? "", nursingPerform ? [patientId] : []);
@@ -903,7 +904,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
         </Modal>
       )}
 
-      {/* フェーズの終わりで次を選ぶ。適用は右ペインなので、全画面は解いてから開く。 */}
+      {/* フェーズの終わりで次を選ぶ。選んだフェーズの適用は続けてモーダルで開く。 */}
       {nextPhaseOpen && application && pathwayMaster.data && nextPhases && (
         <PathwayNextPhaseModal
           pathway={pathwayMaster.data}
@@ -911,8 +912,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
           candidates={nextPhases.candidates}
           onSelectPhase={(phaseKey) => {
             setNextPhaseOpen(false);
-            if (fullscreen) updateView({ fullscreen: false });
-            onApplyPhase(application.id, phaseKey);
+            setApplyPhaseKey(phaseKey);
           }}
           onSelectClose={() => {
             setNextPhaseOpen(false);
@@ -920,6 +920,22 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
           }}
           onClose={() => setNextPhaseOpen(false)}
         />
+      )}
+
+      {/* 次のフェーズの適用(オーダーの初期値は適用のときと同じフォームで決める)。 */}
+      {applyPhaseKey && application && (
+        <Modal
+          title="クリニカルパス(次のフェーズ)"
+          className="modal--wide"
+          onClose={() => setApplyPhaseKey(null)}
+        >
+          <PathwayPhasePanel
+            patientId={patientId}
+            applyId={application.id}
+            phaseKey={applyPhaseKey}
+            onSaved={() => setApplyPhaseKey(null)}
+          />
+        </Modal>
       )}
 
       {/* 選び間違えた分岐を戻す(最後に適用したフェーズだけ)。 */}

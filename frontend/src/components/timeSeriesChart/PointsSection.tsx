@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { nowInput, type ChartPoint, type ChartPointFormValues, type ChartSpec } from "../../fhir/timeSeriesChartHelpers";
 import { TimeField } from "./TimeField";
+import { TrashIcon } from "../icons/TrashIcon";
 
 // 打点の表(列 = 時点、行 = 項目)と追加フォーム。入力した項目だけが Observation になる。
 
@@ -62,10 +63,11 @@ export function PointsSection({ spec, points, readOnly, legend, defaultTime, onA
                       <button
                         type="button"
                         className="time-chart__cell-delete"
-                        title="この時点の打点を削除"
+                        title={`${point.time.slice(11, 16)} の打点を削除`}
+                        aria-label={`${point.time.slice(11, 16)} の打点を削除`}
                         onClick={() => onDeletePoint(point)}
                       >
-                        ×
+                        <TrashIcon />
                       </button>
                     )}
                   </th>

@@ -314,7 +314,7 @@ function PathwayOatUnitCard({
           >
             ↓
           </button>
-          <button type="button" className="rp-card__icon-button" onClick={onRemove} aria-label="OAT ユニットを削除">
+          <button type="button" className="rp-card__icon-button" onClick={onRemove} title="OAT ユニットを削除" aria-label="OAT ユニットを削除">
             <TrashIcon />
           </button>
         </div>
@@ -497,7 +497,7 @@ function PathwayOatUnitCard({
                       >
                         ↓
                       </button>
-                      <button type="button" className="rp-card__icon-button" onClick={() => removeAssessment(a)} aria-label="削除">
+                      <button type="button" className="rp-card__icon-button" onClick={() => removeAssessment(a)} title="観察項目を削除" aria-label="観察項目を削除">
                         <TrashIcon />
                       </button>
                     </td>
@@ -634,7 +634,8 @@ function PathwayOatUnitCard({
                         type="button"
                         className="rp-card__icon-button"
                         onClick={() => onChange({ tasks: unit.tasks.filter((x) => x.key !== t.key) })}
-                        aria-label="削除"
+                        title="タスクを削除"
+                        aria-label="タスクを削除"
                       >
                         <TrashIcon />
                       </button>

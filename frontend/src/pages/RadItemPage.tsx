@@ -990,9 +990,9 @@ function SetItemsEditor({ setItemCode, setItems, elements }: SetItemsEditorProps
                   <button
                     type="button"
                     className="rp-card__icon-button"
-                    title="外す"
-                    aria-label="外す"
                     onClick={() => mutations.remove.mutate(member.id)}
+                    title="頻用コードを削除"
+                    aria-label="頻用コードを削除"
                   >
                     <TrashIcon />
                   </button>

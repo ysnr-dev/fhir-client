@@ -34,6 +34,7 @@ import { AntimicrobialImportModal } from "./AntimicrobialImportModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 細菌検査オーダーの入力フォーム。1 オーダー = 1 検体(血液培養の 2 セット目は
 // DO して採取部位を変える運用)。検査項目は 10 項目前後の小マスタなので、
@@ -290,7 +291,7 @@ export function MicroOrderForm({
                 update("comment", "");
               }}
             >
-              ×
+              <TrashIcon />
             </button>
           </div>
         ) : (

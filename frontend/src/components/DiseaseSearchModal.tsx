@@ -30,7 +30,7 @@ export function DiseaseSearchModal({ onSelect, onClose }: DiseaseSearchModalProp
             type="text"
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
-            placeholder="部分一致で検索(索引語・かな・全半角の違いも吸収)"
+            placeholder="部分一致で検索(索引語・かな・全半角の違いは無視)"
           />
         </label>
       </div>

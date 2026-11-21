@@ -26,6 +26,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { NursingItemSearchModal } from "./NursingItemSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
+import { TrashIcon } from "./icons/TrashIcon";
 
 interface Props {
   patientId: string;
@@ -373,10 +374,12 @@ function NursingScheduleFields({
               {schedule.kind === "times" && schedule.times.length > 1 && (
                 <button
                   type="button"
+                  className="rp-card__icon-button"
                   onClick={() => updateTimes(schedule.times.filter((_, i) => i !== index))}
-                  aria-label="この時刻を削除"
+                  title={`${index + 1} 回目の時刻を削除`}
+                  aria-label={`${index + 1} 回目の時刻を削除`}
                 >
-                  ×
+                  <TrashIcon />
                 </button>
               )}
             </span>

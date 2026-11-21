@@ -41,15 +41,16 @@ import { RegimenCyclePanel } from "./RegimenApplyPanel";
 import { RegimenDecisionFields } from "./RegimenDecision";
 import { PotencyMark } from "./MedicineWarnings";
 
-// カルテ右ペインの、適用済みレジメンに対する操作。
-//   RegimenCycleLoader … 次クールの登録(左ペインの詳細ビューから開く)
-//   RegimenDayPanel    … 暦の 1 日。その日のオーダーの投与可否・編集・移動・中止
+// 適用済みレジメンに対する操作。どれも化学療法タブから開く。
+//   RegimenCycleLoader … 次クールの登録(タブのモーダル)
+//   RegimenDayPanel    … 暦の 1 日。その日のオーダーの投与可否・編集・移動・中止(タブのモーダル)
 //   RegimenMoveModal   … 暦のドラッグ＆ドロップで落としたときの確認
-// 適用の概要とクール一覧は左ペイン(RegimenDetailView)の担当。
+//   RegimenHeaderPanel … 適用のヘッダの編集(右ペインで登録した適用の編集なので右ペイン)
+// 適用の概要とクール一覧はタブの詳細ビュー(RegimenDetailView)の担当。
 
 /**
- * 適用済みレジメンに次のクールを登録する(右ペイン)。左ペインの詳細ビューから開くので
- * 受け取るのはヘッダの id だけで、何クール目か・Day 1 をいつにするかはここで出す。
+ * 適用済みレジメンに次のクールを登録する。暦・詳細ビューから開くので受け取るのは
+ * ヘッダの id だけで、何クール目か・Day 1 をいつにするかはここで出す。
  */
 export function RegimenCycleLoader({
   patientId,
@@ -252,7 +253,7 @@ export function RegimenDayPanel({
             <div className="regimen-day__move-row">
               <input type="date" value={moveTo} onChange={(e) => setMoveTo(e.target.value)} />
               <span className="injection-scope__note">
-                {delta === 0 ? "移動先の日付を選んでください" : delta > 0 ? `${delta} 日後へ` : `${-delta} 日前へ`}
+                {delta === 0 ? "" : delta > 0 ? `${delta} 日後へ` : `${-delta} 日前へ`}
               </span>
               <button
                 type="button"
@@ -600,7 +601,7 @@ function RegimenDayBooking({
 }
 
 /**
- * 適用のヘッダの編集(右ペイン、§7.6 C-6)。左ペインの詳細ビューから開く。
+ * 適用のヘッダの編集(右ペイン、§7.6 C-6)。タブの詳細ビューから開く。
  *
  * ［決定］直せるのは**適用の枠**(入外区分・予定クール数・プロブレム・コメント)だけ。投与内容は
  * レジメンマスタのもので、体格は登録済みの投与量の根拠なので直させない(§7.6 B-8)。
@@ -675,7 +676,7 @@ export function RegimenHeaderPanel({
               min="1"
               value={current.plannedCycles}
               onChange={(e) => set("plannedCycles", e.target.value)}
-              placeholder="空欄は継続"
+              placeholder="空欄なら継続"
             />
           </label>
           <label>

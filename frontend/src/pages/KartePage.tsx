@@ -43,6 +43,7 @@ import { KarteRightPane, type KartePaneState } from "../components/KarteRightPan
 import { KarteSplitter } from "../components/KarteSplitter";
 import { KarteTodayPane } from "../components/KarteTodayPane";
 import { KarteImportantDayModal } from "../components/KarteImportantDayModal";
+import { TreatmentRecordModal, type TreatmentRecordTarget } from "../components/TreatmentRecordModal";
 import { useKarteImportantDays } from "../api/masterQueries";
 import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
@@ -372,6 +373,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   );
 
   const [pane, setPane] = useState<KartePaneState>({ kind: "empty" });
+  // 治療の記録(有害事象・放射線治療の週次レビュー)のモーダル。カードのメニュー・通知のリンクから開く。
+  const [treatmentRecord, setTreatmentRecord] = useState<TreatmentRecordTarget | null>(null);
 
   // 右ペインでフォームを開く。別タブには右ペインが無いので、メインタブに頼んで
   // そちらで開いてもらう(同じ患者を 2 画面で同時に編集させない)。
@@ -402,14 +405,15 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     });
   }, [detached, patientId]);
 
-  // 一覧・通知のリンクから右ペインのフォームを開く(退院時サマリー、DPC 様式1、放射線治療の週次レビュー、
-  // 入退院文書の作成状況からの看護サマリー・入院診療計画書)。
+  // 一覧・通知のリンクから右ペインのフォームを開く(退院時サマリー、DPC 様式1、
+  // 入退院文書の作成状況からの看護サマリー・入院診療計画書)。放射線治療の週次レビューはモーダルで開く。
   // 一回限りの引数なので、読んだら URL から消す(フォームを URL に載せない方針)。
   const openValue = searchParams.get(KARTE_OPEN_PARAM);
   const openTarget = parseKarteOpen(openValue);
   useEffect(() => {
     if (!openTarget) return;
-    openForm(
+    if (openTarget.kind === "radiotherapy-review") setTreatmentRecord({ kind: "radiotherapy-review", srId: openTarget.srId });
+    else openForm(
       openTarget.kind === "discharge-summary"
         ? { kind: "summary-create", encounterId: openTarget.encounterId }
         : openTarget.kind === "dpc-form1"
@@ -451,9 +455,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             ? { kind: "qr-create", templateCanonical: openTarget.url, encounterId: openTarget.encounterId }
           : openTarget.kind === "questionnaire-response"
             ? { kind: "qr-edit", qrId: openTarget.responseId }
-          : openTarget.kind === "intake"
-            ? { kind: "intake-review", responseId: openTarget.responseId }
-            : { kind: "radiotherapy-review", srId: openTarget.srId },
+          : { kind: "intake-review", responseId: openTarget.responseId },
     );
     updateParams((params) => params.delete(KARTE_OPEN_PARAM));
     // URL から消した時点で openValue は null になる(同じ対象で再発火しない)。
@@ -898,10 +900,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     else if (item.kind === "vital") openForm({ kind: "vital-edit", entryId: item.id });
     // パス評価はパスタブの日めくりでその病日を開く(記載はそこから評価で書き直す)。
     else if (item.kind === "pathway-evaluation") openPathwayDayRef.current(item.evaluation.applyId, item.evaluation.eventId);
-    // 有害事象は治療の側の記録パネル(そのクール・その治療処方の一覧と編集)で直す。
+    // 有害事象は治療の側の記録のモーダル(そのクール・その治療処方の一覧と編集)で直す。
     else if (item.kind === "adverse-event") {
       const { record } = item;
-      openForm(
+      setTreatmentRecord(
         record.treatmentType === "radiotherapy"
           ? { kind: "radiotherapy-adverse", srId: record.treatmentSrId }
           : { kind: "regimen-adverse", regimenSrId: record.treatmentSrId, cycle: record.cycle ?? 1 },
@@ -965,11 +967,11 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     [detailTarget, closeDetail],
   );
 
-  // 放射線治療の有害事象・週次レビューは右ペインで開く。
-  const openRadiotherapyPane = useCallback(
+  // 放射線治療の有害事象・週次レビューはモーダルで開く(治療の評価なので右ペインは使わない)。
+  const openRadiotherapyRecord = useCallback(
     (kind: "adverse" | "review", srId: string) =>
-      openForm(kind === "review" ? { kind: "radiotherapy-review", srId } : { kind: "radiotherapy-adverse", srId }),
-    [openForm],
+      setTreatmentRecord(kind === "review" ? { kind: "radiotherapy-review", srId } : { kind: "radiotherapy-adverse", srId }),
+    [],
   );
 
   // タブの中から右ペイン・詳細モーダルを開くための操作の束(KarteTabPanel)。
@@ -981,9 +983,9 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
       openDay,
       selectedProblem,
       examEncounterId,
-      timeline: { onEdit: handleEdit, onDo: handleDo, onDeleted: handleDeleted, onOpenRadiotherapyPane: openRadiotherapyPane },
+      timeline: { onEdit: handleEdit, onDo: handleDo, onDeleted: handleDeleted, onOpenRadiotherapyRecord: openRadiotherapyRecord },
     }),
-    [openForm, openDetail, openDay, selectedProblem, examEncounterId, handleEdit, handleDo, handleDeleted, openRadiotherapyPane],
+    [openForm, openDetail, openDay, selectedProblem, examEncounterId, handleEdit, handleDo, handleDeleted, openRadiotherapyRecord],
   );
 
   function toggleDayList() {
@@ -1087,7 +1089,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
           onEdit={handleEdit}
           onDo={handleDo}
           onOpenDetail={openDetail}
-          onOpenRadiotherapyPane={openRadiotherapyPane}
+          onOpenRadiotherapyRecord={openRadiotherapyRecord}
           onDeleted={handleDeleted}
           containerRef={timelineRef}
           problemsById={problemsById}
@@ -1188,7 +1190,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
       onEdit={handleEdit}
       onDo={handleDo}
       onOpenDetail={openDetail}
-      onOpenRadiotherapyPane={openRadiotherapyPane}
+      onOpenRadiotherapyRecord={openRadiotherapyRecord}
       onDeleted={handleDeleted}
       problemsById={problemsById}
       selectedProblemIds={activeProblemIds}
@@ -1307,6 +1309,13 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
               setPane({ kind: kind === "injection" ? "injection-edit" : "prescription-edit", srId });
             }}
             onClose={closeDetail}
+          />
+        )}
+        {treatmentRecord && (
+          <TreatmentRecordModal
+            patientId={patientId}
+            target={treatmentRecord}
+            onClose={() => setTreatmentRecord(null)}
           />
         )}
         {pendingExamOrders && (

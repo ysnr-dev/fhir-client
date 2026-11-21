@@ -58,7 +58,7 @@ import { displayOf } from "../fhir/shared";
 // 決めて適用する。適用は CarePlan の木と未実施のタスクを 1 transaction で登録する
 // (fhir/pathwayApplyHelpers.ts)。設計は docs/clinical-pathway-design.md §7。
 // 適用はフェーズ単位で進める。最初は開始フェーズだけを登録し、続きは同じフォームを
-// 「次のフェーズ」として開いて足す(PathwayPhasePanel)。
+// 「次のフェーズ」としてパスタブのモーダルで開いて足す(PathwayPhasePanel)。
 
 interface PathwayApplyPanelProps {
   patientId: string;
