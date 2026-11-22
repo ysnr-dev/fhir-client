@@ -294,6 +294,26 @@ const STAFF: StaffSpec[] = [
     department: "薬剤部",
     account: "PHARMACIST",
   },
+  // 検査部の写真(検体検査一覧・到着確認・結果取込)を撮る臨床検査技師。
+  {
+    familyKanji: "検査",
+    givenKanji: "春子",
+    familyKana: "ケンサ",
+    givenKana: "ハルコ",
+    roleCode: "medical-technologist",
+    department: "臨床検査科",
+    account: "LAB_TECH",
+  },
+  // 病理の写真で診断レポートを書く病理医。
+  {
+    familyKanji: "病理",
+    givenKanji: "六郎",
+    familyKana: "ビョウリ",
+    givenKana: "ロクロウ",
+    roleCode: "doctor",
+    department: "病理診断科",
+    account: "PATHOLOGIST",
+  },
 ];
 
 // 外来の見本 花子の受診歴(カルテの見方の写真に使う)。高血圧症で 4 週ごとに通い、アムロジピンを出している。
