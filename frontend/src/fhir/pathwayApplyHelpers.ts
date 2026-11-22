@@ -91,6 +91,14 @@ export const PATHWAY_CODE_SYSTEM = {
 /** 「タスクのみの観察項目」を表す固定コード(ePath)。観察項目の識別子にも使う。 */
 export const EMPTY_ASSESSMENT_CODE = "ZZZZZZZZZZ";
 
+/**
+ * パスのタスク(Procedure)か。タスクは basedOn でパスから出たオーダーも指すが、計画の項目で
+ * オーダーの実施記録ではない(オーダーを結んだタスクの実施はオーダーの側で決まる)。
+ */
+export function isPathwayTaskProcedure(procedure: fhir4.Procedure): boolean {
+  return procedure.category?.coding?.some((c) => c.system === PATHWAY_CODE_SYSTEM.taskCategoryLv1) ?? false;
+}
+
 // ［決定］どの階層の CarePlan かを category のローカルコードで示す。partOf の本数でも
 // 導けるが、木を全部読まないと分からない。階層コードがあれば「この患者のパス適用一覧」
 // (level=apply)も「この日の OAT ユニット」も 1 回の検索で引ける。

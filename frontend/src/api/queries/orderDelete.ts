@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { isPathwayTaskProcedure } from "../../fhir/pathwayApplyHelpers";
 import { postBundle } from "../fhirClient";
 import { resourcesOfType, searchAllPages, WORKLIST_PAGE } from "./core";
 import { rxVerificationDeleteEntries } from "./rxVerification";
@@ -12,7 +13,8 @@ import { rxVerificationDeleteEntries } from "./rxVerification";
 //   - 実施記録(Procedure / MedicationAdministration)と結果(DiagnosticReport / Observation)は
 //     診療の記録なので消さず、付いているオーダーは削除させない。実施の取消・結果の削除が先。
 //     ただし Bundle 自身が同じ transaction で消す実施記録は数えない(登録と同時に実施済にする
-//     指導・管理料は、オーダーと実施記録を一緒に消す)。
+//     指導・管理料は、オーダーと実施記録を一緒に消す)。パスのタスク(Procedure)も、オーダーを
+//     指していても計画の項目なので数えない。タスクはそのまま残し、パスの取り消しでは木と一緒に消える。
 // ラベル発行済みの Specimen は発行・到着の記録として残す(結果の削除と同じ扱い)。
 
 const DEPENDENT_MAX_PAGES = 4;
@@ -70,7 +72,8 @@ export async function postOrderDeleteBundle(bundle: fhir4.Bundle) {
   const remaining = <T extends fhir4.Resource>(type: T["resourceType"]) =>
     ofType<T>(type).filter((r) => !alreadyDeleted.has(`${type}/${r.id}`));
 
-  if (remaining("Procedure").length > 0 || remaining("MedicationAdministration").length > 0) {
+  const performed = remaining<fhir4.Procedure>("Procedure").filter((p) => !isPathwayTaskProcedure(p));
+  if (performed.length > 0 || remaining("MedicationAdministration").length > 0) {
     throw new Error("実施記録があるため削除できません。実施を取り消してから削除してください。");
   }
   if (ofType("DiagnosticReport").length > 0 || ofType("Observation").length > 0) {
