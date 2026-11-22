@@ -5,7 +5,7 @@
 // fhir-client-docs の shots/lib/session.mjs の撮影日と揃える。
 //
 // 開発環境専用。既定の全シナリオには入れず、`--only manualShots` で明示したときだけ流す。
-// 主治医は撮影の医師(医師 四郎)にする。開発の検証に使う医師は通知やホームの設定を持っていて写真に写るので、
+// 主治医は撮影の医師(医師 四郎)、看護の患者の担当看護師は撮影の看護師(看護 次郎)にする。開発の検証に使う医師は通知やホームの設定を持っていて写真に写るので、
 // 撮影の医師はこのシナリオで作った、ほかで使わないアカウントにする。流すアカウントは医療従事者なら誰でもよい。
 // 職員のログインは、fhir-client-docs の .env の SHOTS_<役割>_LOGIN / SHOTS_<役割>_PASSWORD が環境変数にあるときだけ作る
 // (無ければ医療従事者だけ作る)。
@@ -19,10 +19,29 @@ import {
   fetchSupervisorGroups,
   holidayClient,
   searchJfagyAllergens,
+  searchNursingObservations,
+  type NursingObservation,
 } from "../api/masterClient";
 import { emptyAdmissionRoute } from "../fhir/admissionRouteHelpers";
 import { buildAllergy, emptyAllergyForm } from "../fhir/allergyHelpers";
+import type { ProblemRef } from "../fhir/conditionHelpers";
 import { buildAdmissionEncounter } from "../fhir/encounterHelpers";
+import { buildInjectionBundle, emptyInjectionForm, emptyInjectionRp, methodForRoute } from "../fhir/injectionHelpers";
+import { buildInjectionPerformBundle, emptyInjectionPerformForm } from "../fhir/injectionPerformHelpers";
+import { withInsulinUnit, type InsulinScaleRow } from "../fhir/insulinScaleHelpers";
+import {
+  buildNursingOrderBundle,
+  emptyNursingOrderLine,
+  type NursingItemRef,
+} from "../fhir/nursingOrderHelpers";
+import {
+  buildNursingPerformBundle,
+  emptyNursingPerformForm,
+  nursingObservationInputSpec,
+  type NursingObservationInputSpec,
+} from "../fhir/nursingPerformHelpers";
+import type { NursingScheduleValues } from "../fhir/nursingScheduleHelpers";
+import type { OrderAttribution } from "../fhir/orderHeader";
 import {
   buildPractitionerSaveBundle,
   createdPractitionerId,
@@ -53,6 +72,7 @@ import {
 import { addDays } from "../lib/dates";
 import {
   at,
+  createdOf,
   createPatient,
   createProblem,
   departmentOf,
@@ -64,6 +84,7 @@ import {
   prescriptionBundle,
   requesterOf,
   SHOOTING_WARD_NAME,
+  stampAuthoredOn,
   vitalEntries,
   type Named,
   type PatientSpec,
@@ -113,8 +134,92 @@ const CHEMO_LABS: [code: string, value: number][] = [
   ["160019210", 0.82],
 ];
 
-// 入院の見本 太郎の入院時の測定(食事の熱量の目安や看護の写真に使う)。
+// 入院の見本 太郎の入院時の測定(食事の熱量の目安などに使う)。
 const INPATIENT_ADMISSION_VITALS = { height: 170, weight: 64.2, systolic: 132, diastolic: 80, pulse: 74, temperature: 36.8, spo2: 97 };
+
+// 看護の写真に使う入院の患者。誤嚥性肺炎で撮影日の 3 日前に入院し、2 型糖尿病がある。看護指示(指示受け済み)と
+// 抗菌薬の点滴を持ち、入院日から撮影日の朝(深夜勤の 8 時前)までの実施を記録してある。撮影日のそれより後の予定は
+// 未実施のまま残す。看護のシーンは撮影日に自分で作った記録だけを消して使う(オーダーを丸ごと消すシーンでは使わない)。
+const NURSING_PATIENT: PatientSpec = {
+  familyKanji: "見本",
+  givenKanji: "秋子",
+  familyKana: "ミホン",
+  givenKana: "アキコ",
+  gender: "female",
+  birthDate: "1946-10-08",
+};
+const NURSING_ADMISSION_DAYS_BEFORE = 3;
+const NURSING_ADMISSION_TIME = "09:30";
+const NURSING_PATIENT_BODY = { height: 148, weight: 46.5 };
+
+// 撮影日は、この時刻より前の予定(深夜勤の分)だけを実施済みにする。
+const NURSING_SHOOTING_DAY_DONE_BEFORE = "08:00";
+
+// 入院日から撮影日の朝までの測定の値。[日][予定の何回目か](日は入院日を 0 とする)。熱が下がっていく経過にする。
+const NURSING_TEMPERATURE = [["", "38.4", "38.1"], ["37.9", "37.8", "37.6"], ["37.4", "37.2", "37.1"], ["36.9"]];
+const NURSING_PULSE = [["", "102", "98"], ["94", "92", "88"], ["86", "84", "80"], ["78"]];
+const NURSING_BLOOD_PRESSURE = [["", "138/76", "134/78"], ["130/74", "128/72", "126/74"], ["124/70", "122/72", "120/70"], ["118/68"]];
+const NURSING_SPO2 = [["", "92", "93"], ["93", "94", "94"], ["95", "96", "96"], ["97"]];
+const NURSING_GLUCOSE = [["", "212", "238", "196"], ["168", "224", "205", "182"], ["152", "198", "186", "170"], ["148"]];
+
+const THREE_TIMES: NursingScheduleValues = { kind: "daily", timesPerDay: 3, times: ["06:00", "14:00", "20:00"] };
+
+interface StandingNursingOrder {
+  /** 看護観察の管理番号、看護行為は 16 桁コード。null は自由記載。 */
+  observation?: string;
+  act?: { code16: string; manageNo: string; display: string };
+  text?: string;
+  schedule: NursingScheduleValues;
+  condition?: string;
+  /** 対象プロブレム(0: 誤嚥性肺炎、1: 2 型糖尿病)。 */
+  problem: 0 | 1;
+  /** 入院日から数えた日と、その日の予定の何回目かから、記録する値。空なら記録しない。行為は "done"。 */
+  value: (day: number, slot: number) => string;
+}
+
+const STANDING_NURSING_ORDERS: StandingNursingOrder[] = [
+  { observation: "31001368", schedule: THREE_TIMES, problem: 0, value: (d, s) => NURSING_TEMPERATURE[d]?.[s] ?? "" },
+  { observation: "31001390", schedule: THREE_TIMES, problem: 0, value: (d, s) => NURSING_PULSE[d]?.[s] ?? "" },
+  { observation: "31002365", schedule: THREE_TIMES, problem: 0, value: (d, s) => NURSING_BLOOD_PRESSURE[d]?.[s] ?? "" },
+  {
+    observation: "31000001",
+    schedule: THREE_TIMES,
+    condition: "90%未満で報告",
+    problem: 0,
+    value: (d, s) => NURSING_SPO2[d]?.[s] ?? "",
+  },
+  {
+    observation: "31000303",
+    schedule: { kind: "times", times: ["07:30", "11:30", "17:30", "21:00"] },
+    condition: "70未満・300以上で報告",
+    problem: 1,
+    value: (d, s) => NURSING_GLUCOSE[d]?.[s] ?? "",
+  },
+  {
+    act: { code16: "A001B001C011D000", manageNo: "12000020", display: "口腔清拭" },
+    schedule: { kind: "daily", timesPerDay: 3, times: ["08:30", "12:30", "18:30"] },
+    problem: 0,
+    value: () => "done",
+  },
+  { text: "安静度: 病棟内歩行(付き添い)", schedule: null, problem: 0, value: () => "" },
+];
+
+// 血糖スケールのインスリン(ヒューマリンR)。撮影日から 7 日、毎食前に血糖値で単位を決める(血糖インスリンの写真に使う)。
+const NURSING_INSULIN = "620008909";
+const NURSING_INSULIN_TIMES = ["07:30", "11:30", "17:30"];
+const NURSING_INSULIN_DAYS = 7;
+const NURSING_INSULIN_SCALE: InsulinScaleRow[] = [
+  { low: "", high: "150", condition: "", dose: "0", note: "" },
+  { low: "151", high: "200", condition: "", dose: "2", note: "" },
+  { low: "201", high: "250", condition: "", dose: "4", note: "" },
+  { low: "251", high: "300", condition: "", dose: "6", note: "" },
+  { low: "301", high: "", condition: "", dose: "8", note: "Drコール" },
+];
+
+// 抗菌薬の点滴(スルバクタム・アンピシリン)。入院日から 7 日、1 日 2 回。
+const NURSING_ANTIBIOTIC = "620004776";
+const NURSING_ANTIBIOTIC_TIMES = ["10:00", "22:00"];
+const NURSING_ANTIBIOTIC_DAYS = 7;
 
 interface StaffSpec {
   familyKanji: string;
@@ -150,12 +255,36 @@ const RESIDENT: StaffSpec = {
   traineeLevel: "resident",
 };
 
+// 撮影の看護師。看護の患者の担当看護師で、指示受けと実施の記録の記録者。
+const NURSE: StaffSpec = {
+  familyKanji: "看護",
+  givenKanji: "次郎",
+  familyKana: "カンゴ",
+  givenKana: "ジロウ",
+  roleCode: "nurse",
+  department: "内科",
+  account: "NURSE",
+};
+
+// 看護サマリーを承認する看護師(書いた人と別の看護職でないと承認できない)。
+const HEAD_NURSE: StaffSpec = {
+  familyKanji: "看護",
+  givenKanji: "夏子",
+  familyKana: "カンゴ",
+  givenKana: "ナツコ",
+  roleCode: "nurse",
+  department: "内科",
+  account: "HEAD_NURSE",
+};
+
 // 研修医のカルテ承認の写真に使う。指導医は撮影の医師。
 const SUPERVISOR_GROUP_NAME = "見本 内科研修";
 
 const STAFF: StaffSpec[] = [
   DOCTOR,
   RESIDENT,
+  NURSE,
+  HEAD_NURSE,
   {
     familyKanji: "薬剤",
     givenKanji: "三郎",
@@ -196,8 +325,9 @@ export async function seedManualShots(env: SeedEnv): Promise<void> {
   const staff = [];
   for (const spec of STAFF) staff.push(await ensureStaff(env, spec, selfOrganizationId));
   const doctor = staff[STAFF.indexOf(DOCTOR)];
+  const nurse = staff[STAFF.indexOf(NURSE)];
   await ensureSupervisorGroup(env, doctor, staff[STAFF.indexOf(RESIDENT)]);
-  const beds = await ensureWard(env, selfOrganizationId);
+  const { ward, beds } = await ensureWard(env, selfOrganizationId);
   await ensureDoctorSchedule(env, doctor);
   await ensureDepartmentSlots(env);
 
@@ -234,6 +364,278 @@ export async function seedManualShots(env: SeedEnv): Promise<void> {
     env.log(`${INPATIENT.familyKanji} ${INPATIENT.givenKanji} を ${bed.label} に入院(${addDays(SHOOTING_DATE, -4)}〜)`);
   }
   await ensureInpatientRecords(env);
+
+  const nursingPatient = await createPatient(env, NURSING_PATIENT);
+  if (nursingPatient?.id) {
+    const bed = beds[1] ?? beds[0];
+    const department = departmentOf(env, "内科");
+    const admitted = addDays(SHOOTING_DATE, -NURSING_ADMISSION_DAYS_BEFORE);
+    const encounter = buildAdmissionEncounter(
+      nursingPatient,
+      { bedId: bed.id, bedLabel: bed.label, departmentName: department.name, practitionerName: doctor.name, nurses: [nurse] },
+      {
+        departmentId: department.id,
+        practitionerId: doctor.id,
+        nurseIds: [nurse.id],
+        admissionDate: `${admitted}T${NURSING_ADMISSION_TIME}`,
+        note: "",
+        route: emptyAdmissionRoute(),
+      },
+    );
+    await createResource(encounter);
+    env.log(`${NURSING_PATIENT.familyKanji} ${NURSING_PATIENT.givenKanji} を ${bed.label} に入院(${admitted}〜)`);
+  }
+  await ensureNursingRecords(env, doctor, nurse, ward);
+  await ensureNursingInsulin(env, doctor, ward);
+}
+
+/** 看護の患者の血糖スケールのインスリン。撮影日から始まる指示で、まだ無いときだけ作る。 */
+async function ensureNursingInsulin(env: SeedEnv, doctor: Named, ward: Named): Promise<void> {
+  const patient = await findPatient(NURSING_PATIENT);
+  if (!patient?.id) return;
+  const name = `${NURSING_PATIENT.familyKanji} ${NURSING_PATIENT.givenKanji}`;
+  const { data: requests } = await searchResource<fhir4.MedicationRequest>(
+    "MedicationRequest",
+    new URLSearchParams({ patient: patient.id, code: NURSING_INSULIN, _summary: "count" }),
+  );
+  if (requests.total) {
+    env.log(`${name} はインスリンの指示があるので作りません`);
+    return;
+  }
+  const { data: encounters } = await searchResource<fhir4.Encounter>(
+    "Encounter",
+    new URLSearchParams({ patient: patient.id, status: "in-progress" }),
+  );
+  const encounterId = encounters.entry?.find((e) => e.resource?.resourceType === "Encounter")?.resource?.id;
+  const { data: conditions } = await searchResource<fhir4.Condition>("Condition", new URLSearchParams({ patient: patient.id }));
+  const diabetes = conditions.entry?.map((e) => e.resource).find((c) => c?.code?.text === "２型糖尿病");
+  const department = departmentOf(env, "内科");
+  const requester: OrderAttribution = { ...requesterOf(env, department, doctor), wardId: ward.id, wardName: ward.name, encounterId };
+  const drugs = new DrugMaster();
+  await drugs.load([NURSING_INSULIN], []);
+  const values = {
+    ...emptyInjectionForm(diabetes?.id ? { conditionId: diabetes.id, display: "#2 ２型糖尿病" } : null, "inpatient"),
+    startDate: SHOOTING_DATE,
+    endDate: addDays(SHOOTING_DATE, NURSING_INSULIN_DAYS - 1),
+    rps: [
+      {
+        ...emptyInjectionRp,
+        usageType: "one-shot" as const,
+        routeCode: "SC",
+        methodCode: methodForRoute("SC", ""),
+        times: NURSING_INSULIN_TIMES.map((time) => ({ start: time, end: "" })),
+        medicines: [
+          {
+            medicine: withInsulinUnit(drugs.medicine(NURSING_INSULIN)),
+            dose: "",
+            comment: "",
+            insulinScale: { kind: "glucose" as const, rows: NURSING_INSULIN_SCALE },
+          },
+        ],
+      },
+    ],
+  };
+  const orderedAt = at(addDays(SHOOTING_DATE, -1), "16:00");
+  await post(stampTasks(stampAuthoredOn(buildInjectionBundle(values, patient.id, requester), orderedAt), orderedAt));
+  env.log(`${name} に血糖スケールのインスリン(${SHOOTING_DATE}〜)を登録`);
+}
+
+/**
+ * 看護の患者の病名・入院時の身長と体重・看護指示・抗菌薬の点滴と、入院日から撮影日の前日までの実施の記録。
+ * 病名がまだ無いときだけ作る(撮影日の記録はシーンが作って消す)。
+ */
+async function ensureNursingRecords(env: SeedEnv, doctor: Named, nurse: Named, ward: Named): Promise<void> {
+  const patient = await findPatient(NURSING_PATIENT);
+  if (!patient?.id) return;
+  const patientId = patient.id;
+  const name = `${NURSING_PATIENT.familyKanji} ${NURSING_PATIENT.givenKanji}`;
+  const { data: conditions } = await searchResource<fhir4.Condition>(
+    "Condition",
+    new URLSearchParams({ patient: patientId, _summary: "count" }),
+  );
+  if (conditions.total) {
+    env.log(`${name} は病名があるので看護の記録を作りません`);
+    return;
+  }
+  const { data: encounters } = await searchResource<fhir4.Encounter>(
+    "Encounter",
+    new URLSearchParams({ patient: patientId, status: "in-progress" }),
+  );
+  const encounterId = encounters.entry?.find((e) => e.resource?.resourceType === "Encounter")?.resource?.id;
+  if (!encounterId) throw new Error(`${name} の入院が見つかりません`);
+
+  const admitted = addDays(SHOOTING_DATE, -NURSING_ADMISSION_DAYS_BEFORE);
+  const problems: ProblemRef[] = [
+    await createProblem(patientId, 1, { disease: await findDisease("誤嚥性肺炎"), start: admitted }),
+    await createProblem(patientId, 2, { disease: await findDisease("２型糖尿病"), start: addDays(SHOOTING_DATE, -3650) }),
+  ];
+  const department = departmentOf(env, "内科");
+  await post({
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: vitalEntries(patientId, department, at(admitted, "10:00"), NURSING_PATIENT_BODY),
+  });
+
+  const requester: OrderAttribution = {
+    ...requesterOf(env, department, doctor),
+    wardId: ward.id,
+    wardName: ward.name,
+    encounterId,
+  };
+  const orders = await createStandingNursingOrders(patientId, requester, encounterId, problems, nurse, admitted);
+  await recordNursingPerforms(orders, nurse, admitted);
+  await createAntibiotic(patientId, requester, problems[0], nurse, admitted);
+  env.log(`${name} に病名・看護指示 ${orders.length} 件・抗菌薬の点滴と ${admitted}〜${SHOOTING_DATE} の朝の実施を登録`);
+}
+
+/** 継続中の看護指示を、入院日に指示受け済みで出す。対象プロブレムごとに 1 回の登録にする。 */
+async function createStandingNursingOrders(
+  patientId: string,
+  requester: OrderAttribution,
+  encounterId: string,
+  problems: ProblemRef[],
+  nurse: Named,
+  admitted: string,
+): Promise<{ spec: StandingNursingOrder; order: fhir4.ServiceRequest; master?: NursingObservation }[]> {
+  const masters = new Map<string, NursingObservation>();
+  for (const spec of STANDING_NURSING_ORDERS) {
+    if (!spec.observation) continue;
+    const { items } = await searchNursingObservations({ manage_no: spec.observation, per: 1 });
+    if (!items[0]) throw new Error(`看護観察マスタに ${spec.observation} がありません`);
+    masters.set(spec.observation, items[0]);
+  }
+  const created: { spec: StandingNursingOrder; order: fhir4.ServiceRequest; master?: NursingObservation }[] = [];
+  for (const problemIndex of [0, 1] as const) {
+    const specs = STANDING_NURSING_ORDERS.filter((spec) => spec.problem === problemIndex);
+    const lines = specs.map((spec) => {
+      const master = spec.observation ? masters.get(spec.observation) : undefined;
+      const item: NursingItemRef = master
+        ? { kind: "observation", manageNo: master.manage_no, display: master.name }
+        : spec.act
+          ? { kind: "act", ...spec.act }
+          : null;
+      return {
+        ...emptyNursingOrderLine(),
+        item,
+        text: master?.name ?? spec.act?.display ?? spec.text ?? "",
+        schedule: spec.schedule,
+        condition: spec.condition ?? "",
+        startDate: admitted,
+      };
+    });
+    const bundle = buildNursingOrderBundle({ lines, problem: problems[problemIndex] }, patientId, requester, encounterId, {
+      practitionerId: nurse.id,
+      display: nurse.name,
+    });
+    const ids = await post(stampTasks(stampAuthoredOn(bundle, at(admitted, NURSING_ADMISSION_TIME)), at(admitted, NURSING_ADMISSION_TIME)));
+    const orders = (await createdOf(ids, "ServiceRequest")) as fhir4.ServiceRequest[];
+    // 応答の順は登録の順。指示の文言で突き合わせる。
+    for (const spec of specs) {
+      const master = spec.observation ? masters.get(spec.observation) : undefined;
+      const text = master?.name ?? spec.act?.display ?? spec.text ?? "";
+      const order = orders.find((o) => o.code?.text === text || o.code?.coding?.some((c) => c.display === text));
+      if (!order) throw new Error(`看護指示「${text}」が作れませんでした`);
+      created.push({ spec, order, master });
+    }
+  }
+  return created;
+}
+
+/** 入院日から撮影日の朝まで、予定の時刻ごとに 1 回の記録(その時刻の指示をまとめて)を入れる。 */
+async function recordNursingPerforms(
+  orders: { spec: StandingNursingOrder; order: fhir4.ServiceRequest; master?: NursingObservation }[],
+  nurse: Named,
+  admitted: string,
+): Promise<void> {
+  const specs = new Map<string, NursingObservationInputSpec>(
+    orders.map(({ order, master }) => [order.id ?? "", nursingObservationInputSpec(master)]),
+  );
+  const entries: fhir4.BundleEntry[] = [];
+  for (let day = 0; day <= NURSING_ADMISSION_DAYS_BEFORE; day++) {
+    const date = addDays(admitted, day);
+    const slots = new Map<string, { order: fhir4.ServiceRequest; value: string }[]>();
+    for (const { spec, order } of orders) {
+      const times = spec.schedule && "times" in spec.schedule ? spec.schedule.times : [];
+      times.forEach((time, slot) => {
+        if (day === 0 && time <= NURSING_ADMISSION_TIME) return;
+        if (date === SHOOTING_DATE && time >= NURSING_SHOOTING_DAY_DONE_BEFORE) return;
+        const value = spec.value(day, slot);
+        if (!value) return;
+        slots.set(time, [...(slots.get(time) ?? []), { order, value }]);
+      });
+    }
+    for (const [time, items] of slots) {
+      const targets = items.map((item) => item.order);
+      const values = { ...emptyNursingPerformForm(targets, `${date}T${time}`), performerId: nurse.id, performerName: nurse.name };
+      for (const { order, value } of items) {
+        const id = order.id ?? "";
+        if (values.acts[id]) values.acts[id] = { done: true, note: "" };
+        else values.observations[id] = { values: value.includes("/") ? (value.split("/") as [string, string]) : [value, ""], note: "" };
+      }
+      entries.push(...(buildNursingPerformBundle(values, targets, specs).entry ?? []));
+    }
+  }
+  for (let i = 0; i < entries.length; i += 100) {
+    await post({ resourceType: "Bundle", type: "transaction", entry: entries.slice(i, i + 100) });
+  }
+}
+
+/** 抗菌薬の点滴を入院日から出し、撮影日の前日までの回を実施済みにする。 */
+async function createAntibiotic(
+  patientId: string,
+  requester: OrderAttribution,
+  problem: ProblemRef,
+  nurse: Named,
+  admitted: string,
+): Promise<void> {
+  const drugs = new DrugMaster();
+  await drugs.load([NURSING_ANTIBIOTIC], []);
+  const values = {
+    ...emptyInjectionForm(problem, "inpatient"),
+    startDate: admitted,
+    endDate: addDays(admitted, NURSING_ANTIBIOTIC_DAYS - 1),
+    rps: [
+      {
+        ...emptyInjectionRp,
+        usageType: "drip" as const,
+        routeCode: "IV",
+        methodCode: "30",
+        lineCode: "peripheral",
+        rate: "200",
+        times: NURSING_ANTIBIOTIC_TIMES.map((time) => ({ start: time, end: "" })),
+        medicines: [{ medicine: drugs.medicine(NURSING_ANTIBIOTIC), dose: "1", comment: "" }],
+      },
+    ],
+  };
+  const orderedAt = at(admitted, NURSING_ADMISSION_TIME);
+  const ids = await post(stampTasks(stampAuthoredOn(buildInjectionBundle(values, patientId, requester), orderedAt), orderedAt));
+  const orders = (await createdOf(ids, "ServiceRequest")) as fhir4.ServiceRequest[];
+  const requests = (await createdOf(ids, "MedicationRequest")) as fhir4.MedicationRequest[];
+  const entries: fhir4.BundleEntry[] = [];
+  for (const order of orders) {
+    const day = order.occurrenceDateTime?.slice(0, 10) ?? "";
+    if (!day || day >= SHOOTING_DATE) continue;
+    const own = requests.filter((mr) => mr.basedOn?.some((ref) => ref.reference === `ServiceRequest/${order.id}`));
+    NURSING_ANTIBIOTIC_TIMES.forEach((time, k) => {
+      const perform = { ...emptyInjectionPerformForm(own), startedAt: `${day}T${time}`, performerId: nurse.id, performerName: nurse.name };
+      const bundle = buildInjectionPerformBundle(perform, order, own, undefined, k);
+      entries.push(...(stampTasks(bundle, at(day, time)).entry ?? []));
+    });
+  }
+  if (entries.length) await post({ resourceType: "Bundle", type: "transaction", entry: entries });
+}
+
+/** 組み立て関数が「いま」を入れる Task の日時(指示受けや進捗の日時として画面に出る)を、記録の日時に合わせる。 */
+function stampTasks(bundle: fhir4.Bundle, dateTime: string): fhir4.Bundle {
+  for (const entry of bundle.entry ?? []) {
+    const task = entry.resource as fhir4.Task | undefined;
+    if (task?.resourceType !== "Task") continue;
+    if (!task.id) task.authoredOn = dateTime;
+    task.lastModified = dateTime;
+    if (task.executionPeriod?.start) task.executionPeriod.start = dateTime;
+    if (task.executionPeriod?.end) task.executionPeriod.end = dateTime;
+  }
+  return bundle;
 }
 
 /** 氏名と生年月日で登録済みの患者を引く。 */
@@ -500,11 +902,11 @@ async function ensureSlots(env: SeedEnv, schedule: fhir4.Schedule, pattern: Slot
   if (slots.length) env.log(`${scheduleName(schedule)}: 予約枠 ${slots.length} 件を作成(${range.from}〜${range.to})`);
 }
 
-/** 撮影用の病棟・病室・ベッド。同じ名前の病棟があればそれを使う。ベッドを番号順に返す。 */
+/** 撮影用の病棟・病室・ベッド。同じ名前の病棟があればそれを使う。病棟と、ベッドを番号順に返す。 */
 async function ensureWard(
   env: SeedEnv,
   selfOrganizationId: string,
-): Promise<{ id: string; label: string }[]> {
+): Promise<{ ward: Named; beds: { id: string; label: string }[] }> {
   const locations = async (params: Record<string, string>) => {
     const { data } = await searchResource<fhir4.Location>("Location", new URLSearchParams({ _count: "100", ...params }));
     return (data.entry ?? []).map((entry) => entry.resource).filter((r): r is fhir4.Location => Boolean(r));
@@ -541,5 +943,8 @@ async function ensureWard(
     .filter((l) => isPhysical(l, BED_PHYSICAL_TYPE.code))
     .sort((a, b) => (bedNumber(a) ?? 0) - (bedNumber(b) ?? 0));
   if (beds.length === 0) throw new Error(`病室 ${ROOM_NAME} にベッドがありません`);
-  return beds.map((bed) => ({ id: bed.id ?? "", label: bedDisplayName(bed, ROOM_NAME) }));
+  return {
+    ward: { id: wardId, name: ward.name ?? SHOOTING_WARD_NAME },
+    beds: beds.map((bed) => ({ id: bed.id ?? "", label: bedDisplayName(bed, ROOM_NAME) })),
+  };
 }
