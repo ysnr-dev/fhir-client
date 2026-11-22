@@ -13,7 +13,13 @@
 import { upsertLoginAccount } from "../api/authClient";
 import { fetchFacilitySettings } from "../api/facilityClient";
 import { createResource, postBundle, searchResource } from "../api/fhirClient";
-import { searchJfagyAllergens } from "../api/masterClient";
+import {
+  createSupervisorGroup,
+  createSupervisorGroupMember,
+  fetchSupervisorGroups,
+  holidayClient,
+  searchJfagyAllergens,
+} from "../api/masterClient";
 import { emptyAdmissionRoute } from "../fhir/admissionRouteHelpers";
 import { buildAllergy, emptyAllergyForm } from "../fhir/allergyHelpers";
 import { buildAdmissionEncounter } from "../fhir/encounterHelpers";
@@ -21,7 +27,16 @@ import {
   buildPractitionerSaveBundle,
   createdPractitionerId,
   emptyPractitionerForm,
+  type TraineeLevel,
 } from "../fhir/practitionerHelpers";
+import {
+  buildSchedule,
+  buildSlotCreateBundle,
+  emptyScheduleForm,
+  generateSlots,
+  scheduleName,
+  type SlotPattern,
+} from "../fhir/scheduleHelpers";
 import {
   BED_PHYSICAL_TYPE,
   WARD_PHYSICAL_TYPE,
@@ -82,6 +97,8 @@ interface StaffSpec {
   department: string;
   /** ログインの ID とパスワードを読む環境変数の役割(SHOTS_<役割>_LOGIN / SHOTS_<役割>_PASSWORD)。 */
   account: string;
+  /** 研修区分。研修医は指導医のカウンターサインの対象になる。 */
+  traineeLevel?: TraineeLevel;
 }
 
 const DOCTOR: StaffSpec = {
@@ -94,8 +111,23 @@ const DOCTOR: StaffSpec = {
   account: "DOCTOR",
 };
 
+const RESIDENT: StaffSpec = {
+  familyKanji: "研修",
+  givenKanji: "五郎",
+  familyKana: "ケンシュウ",
+  givenKana: "ゴロウ",
+  roleCode: "doctor",
+  department: "内科",
+  account: "RESIDENT",
+  traineeLevel: "resident",
+};
+
+// 研修医のカルテ承認の写真に使う。指導医は撮影の医師。
+const SUPERVISOR_GROUP_NAME = "見本 内科研修";
+
 const STAFF: StaffSpec[] = [
   DOCTOR,
+  RESIDENT,
   {
     familyKanji: "薬剤",
     givenKanji: "三郎",
@@ -117,12 +149,24 @@ const OUTPATIENT_VISITS = [
 
 const PHYSICAL_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/location-physical-type";
 
+// 撮影の医師の診察予約の枠。平日午前の 15 分枠で、撮影日から 8 週ぶん。
+const SCHEDULE_NAME = "内科 午前";
+const SCHEDULE_PATTERN: SlotPattern = {
+  weekdays: [1, 2, 3, 4, 5],
+  blocks: [{ start: "09:00", end: "12:00" }],
+  durationMinutes: 15,
+  capacity: 1,
+};
+const SCHEDULE_WEEKS = 8;
+
 export async function seedManualShots(env: SeedEnv): Promise<void> {
   const selfOrganizationId = (await fetchFacilitySettings()).self_organization_id ?? "";
   const staff = [];
   for (const spec of STAFF) staff.push(await ensureStaff(env, spec, selfOrganizationId));
   const doctor = staff[STAFF.indexOf(DOCTOR)];
+  await ensureSupervisorGroup(env, doctor, staff[STAFF.indexOf(RESIDENT)]);
   const beds = await ensureWard(env, selfOrganizationId);
+  await ensureDoctorSchedule(env, doctor);
 
   const outpatient = await createPatient(env, OUTPATIENT);
   if (outpatient?.id) await addDrugAllergy(env, outpatient.id);
@@ -249,6 +293,7 @@ async function ensureStaff(env: SeedEnv, staff: StaffSpec, selfOrganizationId: s
         familyKana: staff.familyKana,
         givenKana: staff.givenKana,
         roleCode: staff.roleCode,
+        traineeLevel: staff.traineeLevel ?? "",
         organizationId: selfOrganizationId,
         departments: [{ organizationId: department.id, name: department.name, code: department.code, primary: true }],
       },
@@ -268,6 +313,78 @@ async function ensureStaff(env: SeedEnv, staff: StaffSpec, selfOrganizationId: s
     env.log(`ログイン ${loginId} を設定`);
   }
   return { id: practitionerId, name: `${staff.familyKanji} ${staff.givenKanji}` };
+}
+
+/** 撮影の医師を指導医、研修医を研修医にした指導医グループ。同じ名前のグループがあれば足りないメンバーだけ足す。 */
+async function ensureSupervisorGroup(env: SeedEnv, supervisor: Named, trainee: Named): Promise<void> {
+  let group = (await fetchSupervisorGroups()).find((g) => g.name === SUPERVISOR_GROUP_NAME);
+  if (!group) {
+    group = await createSupervisorGroup({ name: SUPERVISOR_GROUP_NAME });
+    env.log(`指導医グループ ${SUPERVISOR_GROUP_NAME} を作成`);
+  }
+  for (const [member, role] of [
+    [supervisor, "supervisor"],
+    [trainee, "trainee"],
+  ] as const) {
+    if (group.members.some((m) => m.practitioner_fhir_id === member.id)) continue;
+    await createSupervisorGroupMember({
+      supervisor_group_id: group.id,
+      practitioner_fhir_id: member.id,
+      display_name: member.name,
+      role,
+    });
+    env.log(`${SUPERVISOR_GROUP_NAME} に ${member.name} を追加`);
+  }
+}
+
+/**
+ * 撮影の医師の診察予約の枠表と枠(予約の写真に使う)。枠表が無ければ作り、撮影日から SCHEDULE_WEEKS 週の枠を
+ * 足りない分だけ作る(祝日・休診日には作らない)。予約の担当医の選択肢にほかの医師の枠表を写さないため、撮影の医師の枠表を持たせる。
+ */
+async function ensureDoctorSchedule(env: SeedEnv, doctor: Named): Promise<void> {
+  const department = departmentOf(env, "内科");
+  const { data } = await searchResource<fhir4.Schedule>(
+    "Schedule",
+    new URLSearchParams({ actor: `Practitioner/${doctor.id}` }),
+  );
+  let schedule = (data.entry ?? [])
+    .map((entry) => entry.resource)
+    .find((s) => s?.resourceType === "Schedule" && scheduleName(s) === SCHEDULE_NAME);
+  if (!schedule) {
+    const { data: created } = await createResource(
+      buildSchedule(
+        {
+          ...emptyScheduleForm,
+          name: SCHEDULE_NAME,
+          practitionerId: doctor.id,
+          departmentCode: department.code,
+          departmentName: department.name,
+          pattern: SCHEDULE_PATTERN,
+        },
+        { practitioner: doctor.name },
+      ),
+    );
+    schedule = created;
+    env.log(`予約枠表 ${SCHEDULE_NAME} を作成`);
+  }
+  const scheduleId = schedule.id ?? "";
+  const range = { from: SHOOTING_DATE, to: addDays(SHOOTING_DATE, SCHEDULE_WEEKS * 7 - 1) };
+  const { data: existing } = await searchResource<fhir4.Slot>(
+    "Slot",
+    new URLSearchParams([
+      ["schedule", `Schedule/${scheduleId}`],
+      ["start", `ge${range.from}`],
+      ["start", `lt${addDays(range.to, 1)}`],
+      ["_count", "500"],
+    ]),
+  );
+  const existingSlots = (existing.entry ?? [])
+    .map((entry) => entry.resource)
+    .filter((r): r is fhir4.Slot => r?.resourceType === "Slot");
+  const closedDays = new Map((await holidayClient.search(range.from, range.to)).map((h) => [h.holiday_date, h]));
+  const slots = generateSlots(scheduleId, SCHEDULE_PATTERN, range, existingSlots, closedDays);
+  for (let i = 0; i < slots.length; i += 200) await post(buildSlotCreateBundle(slots.slice(i, i + 200)));
+  if (slots.length) env.log(`予約枠 ${slots.length} 件を作成(${range.from}〜${range.to})`);
 }
 
 /** 撮影用の病棟・病室・ベッド。同じ名前の病棟があればそれを使う。ベッドを番号順に返す。 */
