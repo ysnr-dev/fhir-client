@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { documentIdOfResponse } from "../fhir/documentFormQuestionnaire";
+import { documentDraftOfResponse, documentIdOfResponse } from "../fhir/documentFormQuestionnaire";
 import {
   useKarteConditions,
   useKarteDayIndex,
@@ -914,6 +914,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
       // 様式文書は文書の側(右ペインの文書編集)で直す。回答だけを直すと PDF と食い違うため。
       openForm({ kind: "document-edit", documentId: documentIdOfResponse(item.response) as string });
     }
+    // 様式文書の下書きは、同じ文書編集で開き直す(「作成」で PDF を作って文書にする)。
+    else if (item.kind === "qr" && documentDraftOfResponse(item.response)) {
+      openForm({ kind: "document-edit", draftResponseId: item.id });
+    }
     else openForm({ kind: "qr-edit", qrId: item.id });
   }, [openForm]);
 
@@ -956,7 +960,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
               : current.kind === "qr-edit"
                 ? current.qrId
                 : current.kind === "document-edit" && item.kind === "qr"
-                  ? documentIdOfResponse(item.response) === current.documentId
+                  ? current.draftResponseId === item.id ||
+                    (current.documentId !== undefined && documentIdOfResponse(item.response) === current.documentId)
                     ? item.id
                     : undefined
                   : undefined;

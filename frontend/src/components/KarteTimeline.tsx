@@ -16,7 +16,7 @@ import {
   useReportLayoutStatus,
 } from "../api/reportsClient";
 import { fetchBinaryBlob, readResource } from "../api/fhirClient";
-import { documentIdOfResponse } from "../fhir/documentFormQuestionnaire";
+import { documentIdOfResponse, isDocumentFormResponse } from "../fhir/documentFormQuestionnaire";
 import { parsePatientFile } from "../fhir/patientFileHelpers";
 import {
   isDischargeSummary,
@@ -405,9 +405,11 @@ const KarteCard = memo(function KarteCard({
   // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
   // 他の種別では canonical を渡さないので照会自体が走らない。
   // 様式文書の回答は、作成時に保存した PDF(文書の本体)を開く。帳票レイアウトは照会しない。
+  // 下書きの様式文書はまだ PDF が無いので、PDF のボタンを出さない。
   const formDocumentId = item.kind === "qr" ? documentIdOfResponse(item.response) : null;
+  const isFormDocument = item.kind === "qr" && isDocumentFormResponse(item.response);
   const { data: layoutStatus } = useReportLayoutStatus(
-    item.kind === "qr" && !formDocumentId ? item.response.questionnaire : undefined,
+    item.kind === "qr" && !isFormDocument ? item.response.questionnaire : undefined,
   );
   const pdfReady = Boolean(layoutStatus?.registered && item.id);
   const [documentPdfError, setDocumentPdfError] = useState<unknown>(null);
@@ -578,6 +580,7 @@ const KarteCard = memo(function KarteCard({
               <span className="karte-card__icon-label">PDF</span>
             </a>
           ) : item.kind === "qr" &&
+            !isFormDocument &&
             (pdfReady ? (
               <a
                 className="button karte-card__icon-button karte-card__icon-button--labeled"
@@ -946,7 +949,7 @@ const KarteCard = memo(function KarteCard({
       {item.kind === "injection" && <ErrorBanner error={cancelInjectionPerforms.error} />}
 
       {/* 様式文書は PDF が本体なので、カードには見出しだけを出す(内容は PDF・詳細表示で見る)。 */}
-      {!formDocumentId && (
+      {!isFormDocument && (
         <CollapsibleBody>
           <KarteCardBody item={item} />
         </CollapsibleBody>

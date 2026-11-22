@@ -81,7 +81,7 @@ import {
   type ConsultTaskStatus,
 } from "./consultTaskHelpers";
 import { isTeamRequestServiceRequest, teamRequestResponseIds } from "./teamRequestHelpers";
-import { documentIdOfResponse } from "./documentFormQuestionnaire";
+import { isDocumentFormResponse } from "./documentFormQuestionnaire";
 import { teamRequestTaskStatus, teamRequestTasksByOrderId, type TeamRequestTaskStatus } from "./teamRequestTaskHelpers";
 import {
   injectionTaskStatus,
@@ -278,7 +278,7 @@ export function karteItemKindLabel(
   if (item.kind === "note" && item.note && isDischargeSummary(item.note)) return "退院時サマリー";
   if (item.kind === "note" && item.note && isNursingSummary(item.note)) return "看護サマリー";
   // 様式テンプレートで作った文書の回答は、テンプレート回答ではなく文書として見せる。
-  if (item.kind === "qr" && item.response && documentIdOfResponse(item.response)) return "文書作成";
+  if (item.kind === "qr" && item.response && isDocumentFormResponse(item.response)) return "文書作成";
   return KARTE_KIND_LABELS[item.kind];
 }
 

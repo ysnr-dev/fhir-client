@@ -27,6 +27,7 @@ import {
   buildDocumentFormResponseItems,
   documentFormQuestionnaireUrl,
   nextQuestionnaireVersion,
+  responseDocumentDraftExtension,
   responseDocumentExtension,
 } from "../../fhir/documentFormQuestionnaire";
 import { buildKarteTimeline, type KarteTimelineItem } from "../../fhir/karteTimeline";
@@ -237,6 +238,13 @@ export interface SaveDocumentFormDocumentArgs {
    * 引数は作る文書の参照(urn:uuid)。オーダーが入るので来歴も添える。
    */
   extraEntries?: (documentReference: string) => Promise<fhir4.BundleEntry[]>;
+  /**
+   * 下書きとして保存する。回答(in-progress)だけを書き、PDF・文書・extraEntries は作らない
+   * (書きかけの文書をファイルに並べない・算定しない・督促を閉じないため)。
+   */
+  draft?: boolean;
+  /** 下書きを開き直しているなら、読んだ時点の下書きの回答。下書きの保存し直しも「作成」もこの回答を更新する。 */
+  draftResponse?: { response: fhir4.QuestionnaireResponse; responseEtag: string };
   /** 再編集なら、読んだ時点の文書と回答(版を固定したもの)。 */
   existing?: {
     doc: fhir4.DocumentReference;
@@ -249,12 +257,40 @@ export interface SaveDocumentFormDocumentArgs {
 /**
  * 表示用 PDF を backend で作り、回答(QuestionnaireResponse)と一緒に 1 本の transaction で保存する。
  * 再編集は回答を PUT、PDF は新しい Binary、DocumentReference を向け替え(旧 Binary は履歴が参照するので残す)。
+ * 下書き(draft)は回答だけを保存して null を返す。
  */
 export function useSaveDocumentFormDocument() {
   const queryClient = useQueryClient();
   const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: async (args: SaveDocumentFormDocumentArgs): Promise<Blob> => {
+    mutationFn: async (args: SaveDocumentFormDocumentArgs): Promise<Blob | null> => {
+      if (args.draft) {
+        const response = buildQuestionnaireResponse({
+          questionnaire: args.questionnaire,
+          patient: args.patient,
+          items: buildDocumentFormResponseItems(args.layout, args.values, args.questionnaire),
+          meta: args.meta,
+          existing: args.draftResponse?.response,
+          extension: [responseDocumentDraftExtension({ title: args.title, date: args.date })],
+          draft: true,
+        });
+        const entry: fhir4.BundleEntry = args.draftResponse
+          ? {
+              resource: response,
+              request: {
+                method: "PUT",
+                url: `QuestionnaireResponse/${response.id}`,
+                ifMatch: args.draftResponse.responseEtag,
+              },
+            }
+          : {
+              fullUrl: `urn:uuid:${crypto.randomUUID()}`,
+              resource: response,
+              request: { method: "POST", url: "QuestionnaireResponse" },
+            };
+        await postBundle({ resourceType: "Bundle", type: "transaction", entry: [entry] });
+        return null;
+      }
       const blob = await postDocumentFormPdf(args.template.id, pdfFieldPayload(args.layout, args.values));
       if (blob.size > PATIENT_FILE_MAX_BYTES) {
         throw new Error(`${formatFileSize(PATIENT_FILE_MAX_BYTES)}を超える文書は保存できません。`);
@@ -271,7 +307,7 @@ export function useSaveDocumentFormDocument() {
         patient: args.patient,
         items: buildDocumentFormResponseItems(args.layout, args.values, args.questionnaire),
         meta: args.meta,
-        existing: args.existing?.response,
+        existing: args.existing?.response ?? args.draftResponse?.response,
         extension: [responseDocumentExtension(documentUrl)],
       });
 
@@ -300,6 +336,7 @@ export function useSaveDocumentFormDocument() {
             practitionerId: args.practitionerId,
             practitionerName: args.practitionerName,
             documentType,
+            responseEtag: args.draftResponse?.responseEtag,
           });
       if (args.extraEntries && !args.existing) {
         const extra = await args.extraEntries(documentUrl);

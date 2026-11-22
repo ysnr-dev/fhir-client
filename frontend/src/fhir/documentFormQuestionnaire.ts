@@ -43,6 +43,43 @@ export function documentIdOfResponse(response: fhir4.QuestionnaireResponse): str
   return reference?.match(/^DocumentReference\/(.+)$/)?.[1] ?? null;
 }
 
+/**
+ * 様式文書の下書きの印。下書きは回答(in-progress)だけを保存し、PDF と文書(DocumentReference)は「作成」まで作らない。
+ * 文書が持つはずの表示名と診療日を、開き直すときのためにここに持つ。
+ */
+export const RESPONSE_DOCUMENT_DRAFT_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/questionnaire-response-document-draft";
+
+export function responseDocumentDraftExtension(draft: { title: string; date: string }): fhir4.Extension {
+  return {
+    url: RESPONSE_DOCUMENT_DRAFT_EXT_URL,
+    extension: [
+      { url: "title", valueString: draft.title },
+      { url: "date", valueDate: draft.date },
+    ],
+  };
+}
+
+/** 様式文書の下書きの回答なら、その様式の code と表示名・診療日。それ以外は null。 */
+export function documentDraftOfResponse(
+  response: fhir4.QuestionnaireResponse,
+): { templateCode: string; title: string; date: string } | null {
+  const draft = response.extension?.find((e) => e.url === RESPONSE_DOCUMENT_DRAFT_EXT_URL);
+  const templateCode = response.questionnaire?.match(/\/Questionnaire\/document-form\/([^|]+)/)?.[1];
+  if (!draft || !templateCode) return null;
+  const part = (url: string) => draft.extension?.find((e) => e.url === url);
+  return {
+    templateCode,
+    title: part("title")?.valueString ?? "",
+    date: part("date")?.valueDate ?? "",
+  };
+}
+
+/** 様式テンプレートで作った文書(下書きを含む)の回答か。カルテでは「文書作成」のカードにする。 */
+export function isDocumentFormResponse(response: fhir4.QuestionnaireResponse): boolean {
+  return Boolean(documentIdOfResponse(response) ?? documentDraftOfResponse(response));
+}
+
 /** 様式文書の回答と文書(DocumentReference)を一緒に消す transaction。Binary は旧版が参照するので残す。 */
 export function responseWithDocumentDeleteBundle(responseId: string, documentId: string): fhir4.Bundle {
   return {

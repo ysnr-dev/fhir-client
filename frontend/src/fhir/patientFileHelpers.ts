@@ -191,15 +191,21 @@ export function buildDocumentFormBundle(args: {
   practitionerId?: string;
   practitionerName?: string;
   documentType: PatientFileDocumentType;
+  /** 下書きから作るとき、下書きの回答を読んだ版。回答を作らずに更新する(楽観ロック)。 */
+  responseEtag?: string;
 }): fhir4.Bundle {
-  const responseUrl = `urn:uuid:${crypto.randomUUID()}`;
+  const updating = args.responseEtag !== undefined && Boolean(args.response.id);
+  const responseUrl = updating ? `QuestionnaireResponse/${args.response.id}` : `urn:uuid:${crypto.randomUUID()}`;
   const { placeholder, entry } = imageBinaryEntry(args.draft.dataUrl, args.draft.contentType);
   const doc = buildDocumentReference({ ...args, attachmentUrl: placeholder, related: [responseUrl] });
+  const responseEntry: fhir4.BundleEntry = updating
+    ? { resource: args.response, request: { method: "PUT", url: responseUrl, ifMatch: args.responseEtag } }
+    : { fullUrl: responseUrl, resource: args.response, request: { method: "POST", url: "QuestionnaireResponse" } };
   return {
     resourceType: "Bundle",
     type: "transaction",
     entry: [
-      { fullUrl: responseUrl, resource: args.response, request: { method: "POST", url: "QuestionnaireResponse" } },
+      responseEntry,
       entry,
       { fullUrl: args.documentUrl, resource: doc, request: { method: "POST", url: "DocumentReference" } },
     ],

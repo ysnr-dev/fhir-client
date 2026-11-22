@@ -107,7 +107,8 @@ export type KartePaneState =
   // templateCode は選んでおくテンプレート(文書作成の督促から)。
   | { kind: "document-create"; templateCode?: string }
   // 様式テンプレートから作った文書の内容を直す(ファイルタブの「内容編集」)。documentId は DocumentReference。
-  | { kind: "document-edit"; documentId: string }
+  // 作成済みの文書(documentId)か、下書きの回答(draftResponseId)のどちらかを指す。
+  | { kind: "document-edit"; documentId?: string; draftResponseId?: string }
   | { kind: "vital-create"; problem?: ProblemRef }
   // 1 回の測定は複数の Observation なので、束ねている identifier で対象を指す。
   | { kind: "vital-edit"; entryId: string }
@@ -578,7 +579,11 @@ function PaneContent({
       return <DocumentCreatePanel patientId={patientId} templateCode={state.templateCode} onSaved={onSaved} />;
     case "document-edit":
       return (
-        <DocumentCreatePanel patientId={patientId} edit={{ documentId: state.documentId }} onSaved={onSaved} />
+        <DocumentCreatePanel
+          patientId={patientId}
+          edit={{ documentId: state.documentId, draftResponseId: state.draftResponseId }}
+          onSaved={onSaved}
+        />
       );
     case "note-edit":
       return (

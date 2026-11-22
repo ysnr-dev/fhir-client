@@ -21,6 +21,7 @@ import {
   type DocumentFormValues,
 } from "../fhir/documentFormLayout";
 import {
+  documentDraftOfResponse,
   copyPreviousDocumentFormValues,
   documentFormCanonicalsUpTo,
   documentFormValuesFromResponse,
@@ -91,11 +92,16 @@ export function DocumentCreatePanel({
   patientId: string;
   /** 選んでおくテンプレートの code(文書作成の督促から開くとき)。 */
   templateCode?: string;
-  /** 様式文書の再編集。作成した文書(DocumentReference)の id。 */
-  edit?: { documentId: string };
+  /** 様式文書の再編集。作成した文書(DocumentReference)の id か、下書きの回答の id。 */
+  edit?: { documentId?: string; draftResponseId?: string };
   onSaved: () => void;
 }) {
-  if (edit) return <DocumentFormEditPanel patientId={patientId} documentId={edit.documentId} onSaved={onSaved} />;
+  if (edit?.draftResponseId) {
+    return <DocumentFormDraftPanel patientId={patientId} responseId={edit.draftResponseId} onSaved={onSaved} />;
+  }
+  if (edit?.documentId) {
+    return <DocumentFormEditPanel patientId={patientId} documentId={edit.documentId} onSaved={onSaved} />;
+  }
   return <DocumentCreateBody patientId={patientId} templateCode={templateCode} onSaved={onSaved} />;
 }
 
@@ -366,8 +372,15 @@ interface ExistingDocument {
   responseEtag: string;
 }
 
+/** 開き直した下書き(回答だけ。文書はまだ無い)。 */
+interface DraftResponse {
+  response: fhir4.QuestionnaireResponse;
+  responseEtag: string;
+}
+
 /**
- * 様式の入力と保存。新規は初期値式を評価して値を入れ、再編集は保存済みの回答から復元する。
+ * 様式の入力と保存。新規は初期値式を評価して値を入れ、再編集と下書きは保存済みの回答から復元する。
+ * 「下書き保存」は回答だけを書きかけで残し、「作成」で PDF を作って文書にする(下書きは必須・算定を問わない)。
  * Questionnaire はテンプレートの現在の版を使う(再編集も現在の版に付け替える)。
  */
 function DocumentFormEntry({
@@ -378,6 +391,7 @@ function DocumentFormEntry({
   title,
   date,
   existing,
+  draft,
   onSaved,
 }: {
   patientId: string;
@@ -388,6 +402,7 @@ function DocumentFormEntry({
   title: string;
   date: string;
   existing?: ExistingDocument;
+  draft?: DraftResponse;
   onSaved: () => void;
 }) {
   const layout = useMemo<DocumentFormLayout>(() => normalizeLayout(template.layout), [template.layout]);
@@ -403,14 +418,15 @@ function DocumentFormEntry({
   // 算定の候補は新規のときだけ出す(再編集では算定も督促も動かさない)。
   const fee = useDocumentFeeLink(patientId, existing ? undefined : template.code);
   const [confirming, setConfirming] = useState(false);
+  const saved = existing?.response ?? draft?.response;
   const [values, setValues] = useState<DocumentFormValues | null>(
-    existing ? documentFormValuesFromResponse(existing.response, layout) : null,
+    saved ? documentFormValuesFromResponse(saved, layout) : null,
   );
   const [message, setMessage] = useState<string | null>(null);
 
   // 前回の回答(新規のみ)。自動では入れず、ボタンで重ねる。取消で重ねる前の値に戻す。
   const { latest } = useLatestQuestionnaireResponse(
-    existing ? undefined : patientId,
+    saved ? undefined : patientId,
     template.questionnaire_url && template.questionnaire_version
       ? documentFormCanonicalsUpTo(template.questionnaire_url, template.questionnaire_version)
       : undefined,
@@ -430,9 +446,9 @@ function DocumentFormEntry({
 
   // 初期値式は開いた時点の値で 1 回だけ入れる(入力中に読み直されても上書きしない)。
   useEffect(() => {
-    if (values !== null || existing || !context) return;
+    if (values !== null || saved || !context) return;
     setValues(documentFormInitialValues(layout.fields, context));
-  }, [values, existing, context, layout]);
+  }, [values, saved, context, layout]);
 
   /** 必須項目を確かめ、算定の候補があれば確認を挟んでから保存する。 */
   function handleSubmit() {
@@ -447,8 +463,9 @@ function DocumentFormEntry({
     else void handleSave([]);
   }
 
-  async function handleSave(feeItems: ManagementFeeItem[]) {
+  async function handleSave(feeItems: ManagementFeeItem[], asDraft = false) {
     if (!values || !questionnaire) return;
+    setMessage(null);
     const documentTitle = title.trim() || template.name;
     try {
       await save.mutateAsync({
@@ -459,7 +476,10 @@ function DocumentFormEntry({
         values,
         title: documentTitle,
         date,
-        extraEntries: existing ? undefined : fee.extraEntries({ items: feeItems, date, title: documentTitle }),
+        draft: asDraft,
+        draftResponse: draft,
+        extraEntries:
+          existing || asDraft ? undefined : fee.extraEntries({ items: feeItems, date, title: documentTitle }),
         meta: {
           status: "completed",
           authorName: practitioner ? practitionerDisplayName(practitioner) : "",
@@ -485,6 +505,7 @@ function DocumentFormEntry({
 
   const busy = save.isPending;
   const ready = values !== null && Boolean(questionnaire) && (Boolean(existing) || fee.ready);
+  const draftReady = values !== null && Boolean(questionnaire);
   const notice = (
     <>
       {!existing && <ErrorBanner error={fee.error} />}
@@ -508,7 +529,7 @@ function DocumentFormEntry({
       {canonical && !questionnaireLoading && !questionnaire && (
         <p className="order-select__muted">テンプレートの項目定義が見つかりません。</p>
       )}
-      {values === null && !existing && <p>読み込み中...</p>}
+      {values === null && !saved && <p>読み込み中...</p>}
       {values !== null && (
         <DocumentFormFill
           patientId={patientId}
@@ -534,6 +555,11 @@ function DocumentFormEntry({
                   )}
                 </button>
               )}
+              {!existing && (
+                <button type="button" disabled={busy || !draftReady} onClick={() => void handleSave([], true)}>
+                  下書き保存
+                </button>
+              )}
               <button type="button" disabled={busy || !ready} onClick={handleSubmit}>
                 {busy ? "保存中..." : existing ? "更新" : "作成"}
               </button>
@@ -555,6 +581,74 @@ function DocumentFormEntry({
         />
       )}
     </>
+  );
+}
+
+/** 下書きの様式文書を開き直す。回答を開いた時点の版に固定し、表示名と診療日は下書きに持たせた値から戻す。 */
+function DocumentFormDraftPanel({
+  patientId,
+  responseId,
+  onSaved,
+}: {
+  patientId: string;
+  responseId: string;
+  onSaved: () => void;
+}) {
+  const responseQuery = useEditSnapshot(useQuestionnaireResponse(responseId), responseId);
+  const templates = useDocumentTemplates(false);
+  const { data: patientResult, error: patientError } = usePatient(patientId);
+
+  const response = responseQuery.data?.data;
+  const saved = response ? documentDraftOfResponse(response) : null;
+  const template = templates.data?.find((item) => item.code === saved?.templateCode);
+  const [title, setTitle] = useState<string | null>(null);
+  const [date, setDate] = useState<string | null>(null);
+
+  const loading = responseQuery.isLoading || templates.isLoading;
+  const draft: DraftResponse | undefined =
+    response && responseQuery.data?.etag ? { response, responseEtag: responseQuery.data.etag } : undefined;
+
+  let notice: string | null = null;
+  if (!loading) {
+    if (response && isPatientMismatch(patientId, response.subject)) notice = "指定された文書は別の患者のものです。";
+    else if (response && !saved) notice = "この回答は様式文書の下書きではありません。";
+    else if (saved && !template) notice = "この文書のテンプレートが見つかりません。";
+    else if (template && template.kind !== "form") notice = "このテンプレートは様式ではありません。";
+  }
+  const currentTitle = title ?? saved?.title ?? "";
+  const currentDate = date ?? (saved?.date || today());
+
+  return (
+    <div className="karte-file-form document-create">
+      <ErrorBanner error={responseQuery.error} />
+      <ErrorBanner error={templates.error} />
+      <ErrorBanner error={patientError} />
+      {notice && <p className="order-select__muted">{notice}</p>}
+      {loading && <p>読み込み中...</p>}
+      {!notice && saved && template && draft && patientResult?.data && (
+        <>
+          <div className="karte-file-form__fields">
+            <label className="document-create__title">
+              表示名
+              <input type="text" value={currentTitle} onChange={(e) => setTitle(e.target.value)} />
+            </label>
+            <label>
+              診療日
+              <input type="date" value={currentDate} onChange={(e) => setDate(e.target.value)} />
+            </label>
+          </div>
+          <DocumentFormEntry
+            patientId={patientId}
+            patient={patientResult.data}
+            template={template}
+            title={currentTitle}
+            date={currentDate}
+            draft={draft}
+            onSaved={onSaved}
+          />
+        </>
+      )}
+    </div>
   );
 }
 
