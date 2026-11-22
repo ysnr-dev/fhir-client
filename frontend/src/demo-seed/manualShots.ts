@@ -96,6 +96,9 @@ export const SHOOTING_DATE = "2027-02-01";
 
 const ROOM_NAME = "101";
 const BED_COUNT = 2;
+// 入院患者一覧・病棟マップ・ベッドスケジュールの写真で、空床への入院と転床に使う病室。撮影用データでは誰も入れない。
+const SPARE_ROOM_NAME = "102";
+const SPARE_BED_COUNT = 2;
 
 const OUTPATIENT: PatientSpec = {
   familyKanji: "見本",
@@ -124,6 +127,19 @@ const CHEMO_PATIENT: PatientSpec = {
   gender: "male",
   birthDate: "1963-06-15",
 };
+
+// 外来患者一覧の写真に並べる外来の患者と、入院患者一覧の写真で入院する・入院予定を入れる患者。記録は持たせず、
+// 予約・受付・入院はシーンが撮影日に作って消す。
+const VISIT_PATIENTS: PatientSpec[] = [
+  { familyKanji: "見本", givenKanji: "健一", familyKana: "ミホン", givenKana: "ケンイチ", gender: "male", birthDate: "1984-11-20" },
+  { familyKanji: "見本", givenKanji: "和子", familyKana: "ミホン", givenKana: "カズコ", gender: "female", birthDate: "1949-03-08" },
+];
+
+// 救急患者一覧の写真で救急受付する患者。受診はシーンが撮影日に作って消す。
+const EMERGENCY_PATIENTS: PatientSpec[] = [
+  { familyKanji: "見本", givenKanji: "勇", familyKana: "ミホン", givenKana: "イサム", gender: "male", birthDate: "1951-07-02" },
+  { familyKanji: "見本", givenKanji: "秀子", familyKana: "ミホン", givenKana: "ヒデコ", gender: "female", birthDate: "1940-01-25" },
+];
 
 // 適用の体格と、投与前チェック(白血球・血小板・総ビリルビン・クレアチニン)に使う撮影日の 2 日前の測定。
 const CHEMO_WORKUP_DAYS_BEFORE = 2;
@@ -437,6 +453,7 @@ export async function seedManualShots(env: SeedEnv): Promise<void> {
 
   await createPatient(env, CHEMO_PATIENT);
   await ensureChemoWorkup(env, doctor);
+  for (const spec of [...VISIT_PATIENTS, ...EMERGENCY_PATIENTS]) await createPatient(env, spec);
 
   const inpatient = await createPatient(env, INPATIENT);
   if (inpatient?.id) {
@@ -1037,18 +1054,23 @@ async function ensureWard(
   }
   const wardId = ward.id ?? "";
 
-  let room = (await locations({ partof: `Location/${wardId}` })).find((l) => l.name === ROOM_NAME);
-  if (!room) {
-    await postBundle(
-      buildRoomSaveBundle({
-        values: { ...emptyRoomForm, name: ROOM_NAME, bedCount: String(BED_COUNT), managingOrganizationId: selfOrganizationId },
-        wardId,
-      }),
-    );
-    room = (await locations({ partof: `Location/${wardId}` })).find((l) => l.name === ROOM_NAME);
-    env.log(`病室 ${ROOM_NAME}(${BED_COUNT} 床)を作成`);
-  }
-  if (!room?.id) throw new Error(`病室 ${ROOM_NAME} を作れませんでした`);
+  const ensureRoom = async (name: string, bedCount: number) => {
+    let room = (await locations({ partof: `Location/${wardId}` })).find((l) => l.name === name);
+    if (!room) {
+      await postBundle(
+        buildRoomSaveBundle({
+          values: { ...emptyRoomForm, name, bedCount: String(bedCount), managingOrganizationId: selfOrganizationId },
+          wardId,
+        }),
+      );
+      room = (await locations({ partof: `Location/${wardId}` })).find((l) => l.name === name);
+      env.log(`病室 ${name}(${bedCount} 床)を作成`);
+    }
+    if (!room?.id) throw new Error(`病室 ${name} を作れませんでした`);
+    return room;
+  };
+  const room = await ensureRoom(ROOM_NAME, BED_COUNT);
+  await ensureRoom(SPARE_ROOM_NAME, SPARE_BED_COUNT);
 
   const beds = (await locations({ partof: `Location/${room.id}` }))
     .filter((l) => isPhysical(l, BED_PHYSICAL_TYPE.code))
