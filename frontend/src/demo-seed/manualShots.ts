@@ -26,6 +26,7 @@ import { emptyAdmissionRoute } from "../fhir/admissionRouteHelpers";
 import { buildAllergy, emptyAllergyForm } from "../fhir/allergyHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { buildAdmissionEncounter } from "../fhir/encounterHelpers";
+import { buildOrganization, emptyOrganizationForm } from "../fhir/organizationHelpers";
 import { buildInjectionBundle, emptyInjectionForm, emptyInjectionRp, methodForRoute } from "../fhir/injectionHelpers";
 import { buildInjectionPerformBundle, emptyInjectionPerformForm } from "../fhir/injectionPerformHelpers";
 import { withInsulinUnit, type InsulinScaleRow } from "../fhir/insulinScaleHelpers";
@@ -314,6 +315,76 @@ const STAFF: StaffSpec[] = [
     department: "病理診断科",
     account: "PATHOLOGIST",
   },
+  // 放射線部の写真(放射線検査の実施入力・放射線治療カレンダー)を撮る診療放射線技師。
+  {
+    familyKanji: "放射",
+    givenKanji: "七郎",
+    familyKana: "ホウシャ",
+    givenKana: "シチロウ",
+    roleCode: "radiological-technologist",
+    department: "放射線科",
+    account: "RAD_TECH",
+  },
+  // 放射線検査の読影レポートを書く放射線科医。
+  {
+    familyKanji: "読影",
+    givenKanji: "八郎",
+    familyKana: "ドクエイ",
+    givenKana: "ハチロウ",
+    roleCode: "doctor",
+    department: "放射線科",
+    account: "RADIOLOGIST",
+  },
+  // 手術の写真で麻酔科医に立ち、麻酔チャートと術前診察を書く麻酔科医。
+  {
+    familyKanji: "麻酔",
+    givenKanji: "九郎",
+    familyKana: "マスイ",
+    givenKana: "クロウ",
+    roleCode: "doctor",
+    department: "麻酔科",
+    account: "ANESTHESIOLOGIST",
+  },
+  // リハビリ一覧で実施を記録する理学療法士。
+  {
+    familyKanji: "理学",
+    givenKanji: "冬子",
+    familyKana: "リガク",
+    givenKana: "フユコ",
+    roleCode: "physio",
+    department: "リハビリテーション科",
+    account: "THERAPIST",
+  },
+  // 透析一覧で透析の記録を付ける臨床工学技士。
+  {
+    familyKanji: "工学",
+    givenKanji: "十郎",
+    familyKana: "コウガク",
+    givenKana: "ジュウロウ",
+    roleCode: "clinical-engineer",
+    department: "血液透析科",
+    account: "CLINICAL_ENGINEER",
+  },
+  // 栄養指導・食事・栄養管理の写真を撮る管理栄養士。
+  {
+    familyKanji: "栄養",
+    givenKanji: "桃子",
+    familyKana: "エイヨウ",
+    givenKana: "モモコ",
+    roleCode: "dietitian",
+    department: "栄養指導科",
+    account: "DIETITIAN",
+  },
+  // 地域連携の台帳を回す地域連携室の職員(社会福祉士)。
+  {
+    familyKanji: "連携",
+    givenKanji: "菊子",
+    familyKana: "レンケイ",
+    givenKana: "キクコ",
+    roleCode: "social-worker",
+    department: "地域医療連携部",
+    account: "LIAISON",
+  },
 ];
 
 // 外来の見本 花子の受診歴(カルテの見方の写真に使う)。高血圧症で 4 週ごとに通い、アムロジピンを出している。
@@ -340,6 +411,14 @@ const SCHEDULE_WEEKS = 8;
 const DEPARTMENT_SERVICE_TYPES = ["exam", "rehab", "nutrition-guidance", "dialysis"];
 const DEPARTMENT_SLOT_WEEKS = 4;
 
+// 地域連携の写真に使う連携先の医療機関(架空)。
+const PARTNER_CLINIC = {
+  name: "見本内科クリニック",
+  phone: "03-0000-1234",
+  postalCode: "100-0000",
+  addressText: "東京都見本区見本町 1-2-3",
+};
+
 export async function seedManualShots(env: SeedEnv): Promise<void> {
   const selfOrganizationId = (await fetchFacilitySettings()).self_organization_id ?? "";
   const staff = [];
@@ -350,6 +429,7 @@ export async function seedManualShots(env: SeedEnv): Promise<void> {
   const { ward, beds } = await ensureWard(env, selfOrganizationId);
   await ensureDoctorSchedule(env, doctor);
   await ensureDepartmentSlots(env);
+  await ensurePartnerClinic(env);
 
   const outpatient = await createPatient(env, OUTPATIENT);
   if (outpatient?.id) await addDrugAllergy(env, outpatient.id);
@@ -920,6 +1000,17 @@ async function ensureSlots(env: SeedEnv, schedule: fhir4.Schedule, pattern: Slot
   const slots = generateSlots(scheduleId, pattern, range, existingSlots, closedDays);
   for (let i = 0; i < slots.length; i += 200) await post(buildSlotCreateBundle(slots.slice(i, i + 200)));
   if (slots.length) env.log(`${scheduleName(schedule)}: 予約枠 ${slots.length} 件を作成(${range.from}〜${range.to})`);
+}
+
+/** 地域連携の写真に使う連携先の医療機関。同じ名前の医療機関があればそれを使う。 */
+async function ensurePartnerClinic(env: SeedEnv): Promise<void> {
+  const { data } = await searchResource<fhir4.Organization>(
+    "Organization",
+    new URLSearchParams({ name: PARTNER_CLINIC.name, "partof:missing": "true", _count: "10" }),
+  );
+  if (data.entry?.some((entry) => entry.resource?.name === PARTNER_CLINIC.name)) return;
+  await createResource(buildOrganization({ ...emptyOrganizationForm, ...PARTNER_CLINIC }));
+  env.log(`連携先 ${PARTNER_CLINIC.name} を作成`);
 }
 
 /** 撮影用の病棟・病室・ベッド。同じ名前の病棟があればそれを使う。病棟と、ベッドを番号順に返す。 */
