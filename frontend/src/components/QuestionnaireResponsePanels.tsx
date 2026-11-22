@@ -77,6 +77,11 @@ interface QuestionnaireResponseCreatePanelProps {
   extension?: fhir4.Extension[];
   /** 回答の用途の印(透析の患者メモ)。 */
   tag?: fhir4.Coding[];
+  /**
+   * 「下書き保存」を出す。何日かかけて書き進める文書(院内がん登録・NCD 症例登録・入院診療計画書など)の入口で使う。
+   * 保存と同時に通知を閉じる・取込済みにするなど、書き終えた前提の処理をする入口では出さない。
+   */
+  allowDraft?: boolean;
   /** 保存後。保存した回答を受け取れる(Web 問診の取込済みの書き戻しに使う)。 */
   onSaved: (saved?: fhir4.QuestionnaireResponse) => void;
 }
@@ -95,6 +100,7 @@ export function QuestionnaireResponseCreatePanel({
   authored,
   extension,
   tag,
+  allowDraft = false,
   onSaved,
 }: QuestionnaireResponseCreatePanelProps) {
   const { data: patientResult } = usePatient(patientId);
@@ -232,6 +238,7 @@ export function QuestionnaireResponseCreatePanel({
   function handleSubmit(
     items: fhir4.QuestionnaireResponseItem[],
     imageEntries: fhir4.BundleEntry[],
+    { draft }: { draft: boolean },
   ) {
     if (!questionnaire || !patient) return;
     const metaError = validateQuestionnaireResponseMeta(meta);
@@ -256,6 +263,7 @@ export function QuestionnaireResponseCreatePanel({
           authored,
           extension,
           tag,
+          draft,
         }),
         imageEntries,
         extraEntries,
@@ -314,6 +322,7 @@ export function QuestionnaireResponseCreatePanel({
             initialResponse={copied ?? initialResponse}
             onSubmit={handleSubmit}
             submitLabel="登録"
+            draftLabel={allowDraft ? "下書き保存" : undefined}
             submitting={createResponse.isPending}
             expressionContext={expressionContext}
             loginAutofill={loginAutofill.source}
@@ -417,9 +426,13 @@ function EditForm({
   );
   const problemOptions = useProblemOptions(patient.id ?? "");
 
+  // 下書きの回答は、下書きのまま保存し直すか、「登録」で完了にする。
+  const isDraft = response.status === "in-progress";
+
   function handleSubmit(
     items: fhir4.QuestionnaireResponseItem[],
     imageEntries: fhir4.BundleEntry[],
+    { draft }: { draft: boolean },
   ) {
     const metaError = validateQuestionnaireResponseMeta(meta);
     if (metaError) {
@@ -438,6 +451,7 @@ function EditForm({
           meta,
           problem,
           existing: response,
+          draft,
         }),
         etag,
         imageEntries,
@@ -473,7 +487,8 @@ function EditForm({
         questionnaire={questionnaire}
         initialResponse={response}
         onSubmit={handleSubmit}
-        submitLabel="更新"
+        submitLabel={isDraft ? "登録" : "更新"}
+        draftLabel={isDraft ? "下書き保存" : undefined}
         submitting={updateResponse.isPending}
       >
         <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />

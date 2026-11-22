@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode, type Ref } from "react";
+import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type Ref } from "react";
 import fhirpath from "fhirpath";
 // value[x] を "value" で参照できるようにする R4 のモデル情報。
 import fhirpathR4Model from "fhirpath/fhir-context/r4";
@@ -432,11 +432,15 @@ interface QuestionnaireResponseFormProps {
   // 指定時は form として描画し、送信時に保存用の item ツリーを渡す。
   // imageEntries は新しく描き込んだシェーマ画像の Binary 作成エントリで、
   // 回答本体と同じ transaction Bundle で保存する。
+  // draft は「下書き保存」で送ったとき true(必須の項目が空でも送る)。
   onSubmit?: (
     items: fhir4.QuestionnaireResponseItem[],
     imageEntries: fhir4.BundleEntry[],
+    options: { draft: boolean },
   ) => void;
   submitLabel?: string;
+  // 指定すると送信ボタンの左に下書き保存のボタンを出す(ボタンの名前)。
+  draftLabel?: string;
   submitting?: boolean;
   // 初期値式・計算式から参照できる実行時コンテキスト(%変数名 → 値)。
   // 新規作成時に与えると initialExpression を評価して初期回答にする
@@ -467,6 +471,7 @@ export function QuestionnaireResponseForm({
   readOnly = false,
   onSubmit,
   submitLabel = "登録",
+  draftLabel,
   submitting = false,
   expressionContext,
   loginAutofill,
@@ -552,6 +557,25 @@ export function QuestionnaireResponseForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    submit(false);
+  }
+
+  // 下書きは必須の項目だけを問わずに送る。数値の範囲などほかの入力チェックは送信と同じく効かせる。
+  function handleDraft(e: MouseEvent<HTMLButtonElement>) {
+    const form = e.currentTarget.form;
+    if (!form) return;
+    const invalid = Array.from(form.elements).find(
+      (element): element is HTMLInputElement =>
+        element instanceof HTMLInputElement && !element.validity.valid && !element.validity.valueMissing,
+    );
+    if (invalid) {
+      invalid.reportValidity();
+      return;
+    }
+    submit(true);
+  }
+
+  function submit(draft: boolean) {
     if (!onSubmit) return;
 
     // 未保存の描き込み(dataUrl のみ)は Binary 作成エントリにして、回答本体と
@@ -573,6 +597,7 @@ export function QuestionnaireResponseForm({
         annotations: resolved,
       }),
       imageEntries,
+      { draft },
     );
   }
 
@@ -1102,6 +1127,11 @@ export function QuestionnaireResponseForm({
       {children}
       {body}
       <div className="prescription-form__submit">
+        {draftLabel && (
+          <button type="button" onClick={handleDraft} disabled={submitting}>
+            {draftLabel}
+          </button>
+        )}
         <button type="submit" disabled={submitting}>
           {submitting ? "送信中..." : submitLabel}
         </button>

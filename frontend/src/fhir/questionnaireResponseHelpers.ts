@@ -15,8 +15,9 @@ export const JASPEHR_QUESTIONNAIRE_RESPONSE_PROFILE_URL =
 export const INSTITUTION_NUMBER_PATTERN = /^[0-4][0-9][1-3][0-9]{7}$/;
 export const DEFAULT_INSTITUTION_NUMBER = "1310000001";
 
+// 登録情報のステータスで選べる値。書きかけ(in-progress)は選ばせず、「下書き保存」で保存したときだけ付ける
+// (buildQuestionnaireResponse の draft)。
 export const QR_STATUS_OPTIONS = [
-  { code: "in-progress", label: "入力中" },
   { code: "completed", label: "完了" },
   { code: "amended", label: "修正済" },
 ] as const;
@@ -77,6 +78,7 @@ export function containedPractitionerName(qr: fhir4.QuestionnaireResponse): stri
 export function parseQuestionnaireResponseMeta(
   qr: fhir4.QuestionnaireResponse,
 ): QuestionnaireResponseMetaValues {
+  // 書きかけ(in-progress)の回答は、開き直して「登録」すると完了にするので、ステータスの初期値は完了。
   const status = QR_STATUS_OPTIONS.some((s) => s.code === qr.status)
     ? (qr.status as QuestionnaireResponseStatus)
     : "completed";
@@ -144,6 +146,11 @@ export interface BuildQuestionnaireResponseArgs {
   encounterId?: string;
   // 更新時は id と identifier(報告単位ID)を引き継ぐ。
   existing?: fhir4.QuestionnaireResponse;
+  /**
+   * 下書き(書きかけ)として保存する。status を in-progress にし、登録情報のステータスは使わない。
+   * テンプレートの必須の項目は完了の回答にだけ求めるので、下書きは必須が空でも保存できる。
+   */
+  draft?: boolean;
   /** 回答の日時。省くと今(Web 問診の取込は患者が答えた日時を渡す)。 */
   authored?: string;
   /** 回答の出どころなど、付け足す拡張。 */
@@ -184,7 +191,7 @@ export function buildQuestionnaireResponse(
       value: existing?.identifier?.value ?? buildIdentifierValue(meta, patient),
     },
     questionnaire: questionnaireCanonical(questionnaire),
-    status: meta.status,
+    status: args.draft ? "in-progress" : meta.status,
     subject: { reference: `Patient/${patient.id}` },
     authored: args.authored ?? nowFhirDateTime(),
     author: { reference: `#${CONTAINED_PRACTITIONER_ID}` },

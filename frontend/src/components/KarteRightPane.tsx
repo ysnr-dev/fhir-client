@@ -456,6 +456,7 @@ function AdmissionPlanCreatePanel({
       patientId={patientId}
       defaultQuestionnaireCanonical={facility.data?.admission_documents?.admission_plan_template || undefined}
       encounterId={encounterId}
+      allowDraft
       onSaved={onSaved}
     />
   );
@@ -652,6 +653,7 @@ function PaneContent({
           partOf={state.partOf}
           basedOn={state.basedOn}
           encounterId={state.encounterId}
+          allowDraft
           onSaved={onSaved}
         />
       );
