@@ -34,7 +34,10 @@ import {
   buildSlotCreateBundle,
   emptyScheduleForm,
   generateSlots,
+  isWithinHorizon,
   scheduleName,
+  serviceTypeCode,
+  slotPatternOf,
   type SlotPattern,
 } from "../fhir/scheduleHelpers";
 import {
@@ -55,6 +58,8 @@ import {
   departmentOf,
   DrugMaster,
   findDisease,
+  LabMaster,
+  labResultBundle,
   post,
   prescriptionBundle,
   requesterOf,
@@ -87,6 +92,26 @@ const INPATIENT: PatientSpec = {
   gender: "male",
   birthDate: "1958-09-03",
 };
+
+// 化学療法の写真に使う外来の患者。結腸癌で、撮影日にレジメンを適用する(適用はシーンが画面で行う)。
+const CHEMO_PATIENT: PatientSpec = {
+  familyKanji: "見本",
+  givenKanji: "次郎",
+  familyKana: "ミホン",
+  givenKana: "ジロウ",
+  gender: "male",
+  birthDate: "1963-06-15",
+};
+
+// 適用の体格と、投与前チェック(白血球・血小板・総ビリルビン・クレアチニン)に使う撮影日の 2 日前の測定。
+const CHEMO_WORKUP_DAYS_BEFORE = 2;
+const CHEMO_VITALS = { height: 168, weight: 62.5, systolic: 128, diastolic: 78, pulse: 70 };
+const CHEMO_LABS: [code: string, value: number][] = [
+  ["160008010-01", 5.6],
+  ["160008010-05", 218],
+  ["160017010", 0.6],
+  ["160019210", 0.82],
+];
 
 interface StaffSpec {
   familyKanji: string;
@@ -159,6 +184,10 @@ const SCHEDULE_PATTERN: SlotPattern = {
 };
 const SCHEDULE_WEEKS = 8;
 
+// 部門の予約(検査・リハビリ・栄養指導・透析)の写真に使う枠。開発環境の部門の枠表に、撮影日から 4 週ぶんの枠を足す。
+const DEPARTMENT_SERVICE_TYPES = ["exam", "rehab", "nutrition-guidance", "dialysis"];
+const DEPARTMENT_SLOT_WEEKS = 4;
+
 export async function seedManualShots(env: SeedEnv): Promise<void> {
   const selfOrganizationId = (await fetchFacilitySettings()).self_organization_id ?? "";
   const staff = [];
@@ -167,10 +196,14 @@ export async function seedManualShots(env: SeedEnv): Promise<void> {
   await ensureSupervisorGroup(env, doctor, staff[STAFF.indexOf(RESIDENT)]);
   const beds = await ensureWard(env, selfOrganizationId);
   await ensureDoctorSchedule(env, doctor);
+  await ensureDepartmentSlots(env);
 
   const outpatient = await createPatient(env, OUTPATIENT);
   if (outpatient?.id) await addDrugAllergy(env, outpatient.id);
   await ensureOutpatientHistory(env, doctor);
+
+  await createPatient(env, CHEMO_PATIENT);
+  await ensureChemoWorkup(env, doctor);
 
   const inpatient = await createPatient(env, INPATIENT);
   if (inpatient?.id) {
@@ -250,6 +283,30 @@ async function ensureOutpatientHistory(env: SeedEnv, doctor: Named): Promise<voi
     });
   }
   env.log(`${OUTPATIENT.familyKanji} ${OUTPATIENT.givenKanji} に高血圧症と受診 ${OUTPATIENT_VISITS.length} 回を登録`);
+}
+
+/** 化学療法の患者の病名と、適用前の体格・検査値。プロブレムがまだ無いときだけ作る。 */
+async function ensureChemoWorkup(env: SeedEnv, doctor: Named): Promise<void> {
+  const patient = await findPatient(CHEMO_PATIENT);
+  if (!patient?.id) return;
+  const name = `${CHEMO_PATIENT.familyKanji} ${CHEMO_PATIENT.givenKanji}`;
+  const { data } = await searchResource<fhir4.Condition>("Condition", new URLSearchParams({ patient: patient.id }));
+  if (data.entry?.length) {
+    env.log(`${name} は病名があるので体格と検査値を作りません`);
+    return;
+  }
+  const department = departmentOf(env, "内科");
+  const date = addDays(SHOOTING_DATE, -CHEMO_WORKUP_DAYS_BEFORE);
+  await createProblem(patient.id, 1, { disease: await findDisease("結腸癌"), start: addDays(SHOOTING_DATE, -42) });
+  const labs = new LabMaster();
+  await labs.load(CHEMO_LABS.map(([code]) => code));
+  const labBundle = labResultBundle({ ...env, practitioner: doctor }, labs, patient, department, date, CHEMO_LABS);
+  await post({
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [...(labBundle?.entry ?? []), ...vitalEntries(patient.id, department, at(date, "09:30"), CHEMO_VITALS)],
+  });
+  env.log(`${name} に結腸癌と ${date} の体格・検査値を登録`);
 }
 
 /** 外来の患者の薬剤アレルギー(処方の警告の写真に使う)。 */
@@ -367,8 +424,30 @@ async function ensureDoctorSchedule(env: SeedEnv, doctor: Named): Promise<void> 
     schedule = created;
     env.log(`予約枠表 ${SCHEDULE_NAME} を作成`);
   }
+  await ensureSlots(env, schedule, SCHEDULE_PATTERN, SCHEDULE_WEEKS);
+}
+
+/** 部門の枠表(枠のパターンを持つもの)に、撮影日から DEPARTMENT_SLOT_WEEKS 週の枠を足りない分だけ作る。 */
+async function ensureDepartmentSlots(env: SeedEnv): Promise<void> {
+  const { data } = await searchResource<fhir4.Schedule>(
+    "Schedule",
+    new URLSearchParams({ "service-type": DEPARTMENT_SERVICE_TYPES.join(","), active: "true", _count: "100" }),
+  );
+  const schedules = (data.entry ?? [])
+    .map((entry) => entry.resource)
+    .filter((s): s is fhir4.Schedule => s?.resourceType === "Schedule")
+    .filter((s) => s.active !== false && DEPARTMENT_SERVICE_TYPES.includes(serviceTypeCode(s)))
+    .filter((s) => isWithinHorizon(s, SHOOTING_DATE));
+  for (const schedule of schedules) {
+    const pattern = slotPatternOf(schedule);
+    if (pattern) await ensureSlots(env, schedule, pattern, DEPARTMENT_SLOT_WEEKS);
+  }
+}
+
+/** 枠表に、撮影日から weeks 週の枠を足りない分だけ作る(祝日・休診日には作らない)。 */
+async function ensureSlots(env: SeedEnv, schedule: fhir4.Schedule, pattern: SlotPattern, weeks: number): Promise<void> {
   const scheduleId = schedule.id ?? "";
-  const range = { from: SHOOTING_DATE, to: addDays(SHOOTING_DATE, SCHEDULE_WEEKS * 7 - 1) };
+  const range = { from: SHOOTING_DATE, to: addDays(SHOOTING_DATE, weeks * 7 - 1) };
   const { data: existing } = await searchResource<fhir4.Slot>(
     "Slot",
     new URLSearchParams([
@@ -382,9 +461,9 @@ async function ensureDoctorSchedule(env: SeedEnv, doctor: Named): Promise<void> 
     .map((entry) => entry.resource)
     .filter((r): r is fhir4.Slot => r?.resourceType === "Slot");
   const closedDays = new Map((await holidayClient.search(range.from, range.to)).map((h) => [h.holiday_date, h]));
-  const slots = generateSlots(scheduleId, SCHEDULE_PATTERN, range, existingSlots, closedDays);
+  const slots = generateSlots(scheduleId, pattern, range, existingSlots, closedDays);
   for (let i = 0; i < slots.length; i += 200) await post(buildSlotCreateBundle(slots.slice(i, i + 200)));
-  if (slots.length) env.log(`予約枠 ${slots.length} 件を作成(${range.from}〜${range.to})`);
+  if (slots.length) env.log(`${scheduleName(schedule)}: 予約枠 ${slots.length} 件を作成(${range.from}〜${range.to})`);
 }
 
 /** 撮影用の病棟・病室・ベッド。同じ名前の病棟があればそれを使う。ベッドを番号順に返す。 */

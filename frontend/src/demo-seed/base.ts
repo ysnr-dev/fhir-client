@@ -413,7 +413,15 @@ export function vitalEntries(
   patientId: string,
   department: Named,
   dateTime: string,
-  values: { weight?: number; systolic?: number; diastolic?: number; pulse?: number; temperature?: number; spo2?: number },
+  values: {
+    height?: number;
+    weight?: number;
+    systolic?: number;
+    diastolic?: number;
+    pulse?: number;
+    temperature?: number;
+    spo2?: number;
+  },
 ): fhir4.BundleEntry[] {
   const text = (value: number | undefined) => (value == null ? "" : String(value));
   const observations = buildVitalObservations({
@@ -424,6 +432,7 @@ export function vitalEntries(
     values: {
       ...emptyVitalFormValues(),
       measuredAt: dateTime,
+      height: text(values.height),
       weight: text(values.weight),
       systolic: text(values.systolic),
       diastolic: text(values.diastolic),
