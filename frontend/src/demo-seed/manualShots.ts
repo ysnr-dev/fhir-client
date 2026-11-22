@@ -113,6 +113,9 @@ const CHEMO_LABS: [code: string, value: number][] = [
   ["160019210", 0.82],
 ];
 
+// 入院の見本 太郎の入院時の測定(食事の熱量の目安や看護の写真に使う)。
+const INPATIENT_ADMISSION_VITALS = { height: 170, weight: 64.2, systolic: 132, diastolic: 80, pulse: 74, temperature: 36.8, spo2: 97 };
+
 interface StaffSpec {
   familyKanji: string;
   givenKanji: string;
@@ -230,6 +233,7 @@ export async function seedManualShots(env: SeedEnv): Promise<void> {
     await createResource(encounter);
     env.log(`${INPATIENT.familyKanji} ${INPATIENT.givenKanji} を ${bed.label} に入院(${addDays(SHOOTING_DATE, -4)}〜)`);
   }
+  await ensureInpatientRecords(env);
 }
 
 /** 氏名と生年月日で登録済みの患者を引く。 */
@@ -307,6 +311,36 @@ async function ensureChemoWorkup(env: SeedEnv, doctor: Named): Promise<void> {
     entry: [...(labBundle?.entry ?? []), ...vitalEntries(patient.id, department, at(date, "09:30"), CHEMO_VITALS)],
   });
   env.log(`${name} に結腸癌と ${date} の体格・検査値を登録`);
+}
+
+/**
+ * 入院の患者の病名(早期胃癌。胃 ESD のクリニカルパスの対象病名)と、入院時の身長・体重・バイタル。
+ * それぞれ、まだ無いときだけ作る。
+ */
+async function ensureInpatientRecords(env: SeedEnv): Promise<void> {
+  const patient = await findPatient(INPATIENT);
+  if (!patient?.id) return;
+  const name = `${INPATIENT.familyKanji} ${INPATIENT.givenKanji}`;
+  const { data: conditions } = await searchResource<fhir4.Condition>(
+    "Condition",
+    new URLSearchParams({ patient: patient.id, _summary: "count" }),
+  );
+  if (!conditions.total) {
+    await createProblem(patient.id, 1, { disease: await findDisease("早期胃癌"), start: addDays(SHOOTING_DATE, -18) });
+    env.log(`${name} に早期胃癌を登録`);
+  }
+  const { data } = await searchResource<fhir4.Observation>(
+    "Observation",
+    new URLSearchParams({ patient: patient.id, category: "vital-signs", _summary: "count" }),
+  );
+  if (data.total) {
+    env.log(`${name} は測定があるので入院時のバイタルを作りません`);
+    return;
+  }
+  const department = departmentOf(env, "内科");
+  const dateTime = at(addDays(SHOOTING_DATE, -4), "11:00");
+  await post({ resourceType: "Bundle", type: "transaction", entry: vitalEntries(patient.id, department, dateTime, INPATIENT_ADMISSION_VITALS) });
+  env.log(`${name} に入院時の身長・体重・バイタルを登録`);
 }
 
 /** 外来の患者の薬剤アレルギー(処方の警告の写真に使う)。 */
