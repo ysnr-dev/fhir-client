@@ -210,7 +210,12 @@ export function AllergyPictogramBadges({
               <li key={row.summary.id}>
                 <span className="patient-header__popover-name">{row.summary.name}</span>
                 <span className="patient-header__popover-text">
-                  {[row.summary.categoryLabel, row.summary.criticalityLabel && `重篤化リスク ${row.summary.criticalityLabel}`, row.summary.reaction]
+                  {[
+                    row.summary.categoryLabel,
+                    row.summary.typeLabel,
+                    row.summary.criticalityLabel && `重篤化リスク ${row.summary.criticalityLabel}`,
+                    row.summary.reaction,
+                  ]
                     .filter(Boolean)
                     .join(" ・ ")}
                 </span>
