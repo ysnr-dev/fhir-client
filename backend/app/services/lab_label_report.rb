@@ -1,12 +1,14 @@
 # 検体ラベル PDF 生成のオーケストレータ(docs/lab-label-design.md)。
 # 上流 FHIR サーバーから検体検査オーダー一式を取得し、検体・採取管ごとの
-# グループ(採取管 1 本 = ラベル 1 枚)に畳んで PDF を組む。
+# グループ(採取管 1 本 = ラベル 1 枚)に畳んで PDF を組む。同じ検体でも行き先(院内 / 外注先)が
+# 違えば別の管にする(docs/lab-outsource-design.md §6)。
 #   1. GET /ServiceRequest?_id={ids} -- オーダー + 患者(_include)+ 明細・発行済み Specimen(_revinclude)
 #   2. batch Bundle POST /           -- まだ発行していない管の Specimen 作成(再発行では走らない)
 # オーダーは 1 件でも複数でもよく(一括発行)、複数なら渡された順に 1 つの PDF へ並べる。
 #
 # 採取管 1 本の台帳は上流の Specimen リソース(docs/lab-arrival-design.md §6-1)。
-# 発行 = そのオーダー(request)と検体(type)の Specimen を作ること。番号は
+# 発行 = そのオーダー(request)と検体(type)と行き先の Specimen を作ること。外注に出す管は
+# 行き先を identifier(TUBE_DESTINATION_SYSTEM)に持ち、院内の管は持たない。番号は
 # accessionIdentifier に持たせ、再発行では既存の Specimen の番号をそのまま刷る。
 # 採番も上流が行う(Fhir::AccessionAssigner。LABEL_NUMBER_SYSTEM の
 # accessionIdentifier を値なしで POST すると、作成時に連番 10 桁 + M10W3 の
@@ -37,13 +39,17 @@ class LabLabelReport
   JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11-specimen".freeze
   CONTAINER_SYSTEM = "http://fhir-client.local/CodeSystem/lab-container".freeze
   ITEM_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/lab-order-item-number".freeze
+  # 管の行き先(外注先の Organization.id)。frontend の fhir/labSpecimenHelpers.ts と同じ値。
+  TUBE_DESTINATION_SYSTEM = "http://fhir-client.local/IdSystem/lab-tube-destination".freeze
   # 検体・採取管を拡張に持つ明細の読み出し用(書き込みは contained の Specimen)。
   SPECIMEN_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-specimen".freeze
   CONTAINER_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-container".freeze
 
-  # ラベル 1 枚ぶん。オーダー内の同じ検体(= 同じ採取管)の項目をまとめたもの。
+  # ラベル 1 枚ぶん。オーダー内の同じ検体・同じ行き先(= 同じ採取管)の項目をまとめたもの。
+  # outsource_id は外注先の Organization.id で、院内で測る管は空。
   LabelGroup = Struct.new(
     :specimen_code, :specimen_name, :container_code, :container_name, :item_labels,
+    :outsource_id, :outsource_name,
     keyword_init: true
   )
 
@@ -100,7 +106,9 @@ class LabLabelReport
       order_reference = "ServiceRequest/#{order_id}"
       specimens = specimens_by_order.fetch(order_reference, []).select { |s| label_specimen?(s) }
       build_groups(items_by_order.fetch(order_reference, [])).map do |group|
-        specimen = specimens.find { |s| specimen_type_code(s) == group.specimen_code }
+        specimen = specimens.find do |s|
+          specimen_type_code(s) == group.specimen_code && tube_destination(s) == group.outsource_id
+        end
         Tube.new(order:, patient:, group:, specimen:)
       end
     end
@@ -160,6 +168,11 @@ class LabLabelReport
     coding_by_system(specimen.dig("type", "coding"), JLAC11_SPECIMEN_SYSTEM)&.dig("code").to_s
   end
 
+  # 管の行き先(外注先の Organization.id)。院内の管は空。
+  def tube_destination(specimen)
+    identifier_value(specimen, TUBE_DESTINATION_SYSTEM).to_s
+  end
+
   def accession_number(specimen)
     number = specimen.dig("accessionIdentifier", "value").to_s
     # 番号の無い Specimen に番号を刷ることはできない(刷ってもスキャンで引けない)。
@@ -182,7 +195,8 @@ class LabLabelReport
       # 採番は上流が作成時に行うので、合流(200)でも新規(201)でも応答の番号を使えばよく、
       # 番号が無駄に消費されることもない。
       if group.specimen_code.present?
-        request["ifNoneExist"] = "request=ServiceRequest/#{tube.order['id']}&type=#{group.specimen_code}"
+        request["ifNoneExist"] =
+          "request=ServiceRequest/#{tube.order['id']}&type=#{group.specimen_code}&#{destination_condition(group)}"
       end
       { "resource" => build_label_specimen(group, tube.order), "request" => request }
     end
@@ -196,6 +210,13 @@ class LabLabelReport
     results = Array(JSON.parse(upstream.body)["entry"])
 
     tubes.each_index.map { |index| entry_resource!(results[index], "Specimen create") }
+  end
+
+  # 同じ検体の院内の管と外注の管を取り違えないよう、行き先も合流の条件にする。
+  def destination_condition(group)
+    return "identifier:missing=true" if group.outsource_id.blank?
+
+    "identifier=#{CGI.escape("#{TUBE_DESTINATION_SYSTEM}|#{group.outsource_id}")}"
   end
 
   # 発行時点の Specimen。まだ採取していないので status は付けない
@@ -219,20 +240,27 @@ class LabLabelReport
       coding["display"] = group.container_name if group.container_name.present?
       resource["container"] = [{ "type" => { "coding" => [coding] } }]
     end
+    if group.outsource_id.present?
+      resource["identifier"] = [{ "system" => TUBE_DESTINATION_SYSTEM, "value" => group.outsource_id }]
+    end
     resource
   end
 
   # ---- 明細のグルーピング ----
 
-  # 明細を検体コードでまとめる。frontend の groupBySpecimen と同じ規則で、
-  # 伝票の並び(明細番号 identifier)を保ち、検体未設定のグループは最後に置く。
+  # 明細を検体コードと行き先でまとめる。frontend の groupBySpecimen と同じ規則で、
+  # 伝票の並び(明細番号 identifier)を保ち、同じ検体は院内の管を先に、検体未設定の
+  # グループは最後に置く。
   def build_groups(items)
     groups = {}
     sorted = items.sort_by { |item| item_number(item) }
 
     sorted.each do |item|
       specimen = specimen_of(item)
-      group = groups[specimen[:specimen_code]] ||= LabelGroup.new(
+      outsource = outsource_of(item)
+      group = groups[[specimen[:specimen_code], outsource[:id]]] ||= LabelGroup.new(
+        outsource_id: outsource[:id],
+        outsource_name: outsource[:name],
         specimen_code: specimen[:specimen_code],
         specimen_name: specimen[:specimen_name],
         container_code: specimen[:container_code],
@@ -247,7 +275,15 @@ class LabLabelReport
       end
     end
 
-    groups.values.sort_by { |group| group.specimen_code.present? ? [0, group.specimen_code] : [1, ""] }
+    groups.values.sort_by do |group|
+      [group.specimen_code.present? ? 0 : 1, group.specimen_code, group.outsource_id]
+    end
+  end
+
+  # 明細の外注先(ServiceRequest.performer の Organization)。院内で測る明細は空。
+  def outsource_of(item)
+    performer = Array(item["performer"]).find { |p| p["reference"].to_s.start_with?("Organization/") }
+    { id: performer.to_h["reference"].to_s.delete_prefix("Organization/"), name: performer.to_h["display"].to_s }
   end
 
   def item_number(item)

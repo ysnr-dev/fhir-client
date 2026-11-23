@@ -40,5 +40,6 @@
 | `order_date` | text-block | 検査日(オーダー開始日 = occurrenceDateTime。無ければ authoredOn の日付) |
 | `specimen_name` | text-block | 検体名(未設定なら「検体未設定」) |
 | `container_name` | text-block | 採取管(色)。「EDTA管（紫）」。採取管マスタの short_name と cap_color |
-| `items` | text-block | グループ内の検査項目(略称優先、「・」区切り) |
+| `items` | text-block | グループ内の検査項目(略称優先、「・」区切り)。外注に出す管は頭に「［外注先の名称］」が付く |
 | `urgent` | text(静的文字) | 「至急」。通常オーダーでは hide される |
+| `outsourced` | text(静的文字) | 「外注」。院内で測る管では hide される |

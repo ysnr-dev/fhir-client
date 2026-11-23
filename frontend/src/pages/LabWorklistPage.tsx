@@ -459,7 +459,9 @@ function FilterForm({
  * 採取管まで添えないのは、行が伸びると 1 行に収まらなくなるため。
  */
 function specimenNames(groups: LabSpecimenGroup[]): string {
-  return groups.map((group) => group.specimenName || group.specimenCode || "検体未設定").join("・");
+  // 同じ検体が院内と外注の管に分かれていても、名前は 1 回だけ出す。
+  const names = groups.map((group) => group.specimenName || group.specimenCode || "検体未設定");
+  return Array.from(new Set(names)).join("・");
 }
 
 interface WorklistRowActions {

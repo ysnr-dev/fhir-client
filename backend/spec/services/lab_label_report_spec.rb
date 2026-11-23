@@ -145,8 +145,8 @@ RSpec.describe LabLabelReport do
         bodies = bundle["entry"].map { |e| e["resource"] }
         bundle["type"] == "batch" &&
           requests == [
-            { "method" => "POST", "url" => "Specimen", "ifNoneExist" => "request=ServiceRequest/o1&type=212" },
-            { "method" => "POST", "url" => "Specimen", "ifNoneExist" => "request=ServiceRequest/o1&type=250" }
+            { "method" => "POST", "url" => "Specimen", "ifNoneExist" => "request=ServiceRequest/o1&type=212&identifier:missing=true" },
+            { "method" => "POST", "url" => "Specimen", "ifNoneExist" => "request=ServiceRequest/o1&type=250&identifier:missing=true" }
           ] &&
           bodies.all? do |body|
             # 番号は送らない(上流が作成時に採番する)。
@@ -183,9 +183,75 @@ RSpec.describe LabLabelReport do
     expect(
       a_request(:post, "#{base_url}/").with { |req|
         JSON.parse(req.body)["entry"].map { |e| e.dig("request", "ifNoneExist") } ==
-          ["request=ServiceRequest/o1&type=212"]
+          ["request=ServiceRequest/o1&type=212&identifier:missing=true"]
       }
     ).to have_been_made.once
+  end
+
+  describe "外注に出す管" do
+    let(:serum) { { code: "250", name: "血清", container: "T01", container_name: "分離剤管" } }
+    let(:lab) { { "reference" => "Organization/lab1", "display" => "検査センター" } }
+    let(:destination) { "#{described_class::TUBE_DESTINATION_SYSTEM}|lab1" }
+
+    def capture_labels
+      captured = nil
+      allow(Reports::LabLabelRenderer).to receive(:new) do |args|
+        captured = args
+        instance_double(Reports::LabLabelRenderer, render: "%PDF")
+      end
+      yield
+      captured[:labels]
+    end
+
+    it "splits the same specimen into an in-house tube and an outsourced tube" do
+      stub_search([
+        item("i1", number: 1, name: "AST", specimen: serum).merge("performer" => [lab]),
+        item("i2", number: 2, name: "TP", specimen: serum),
+        item("i3", number: 3, name: "ALT", specimen: serum).merge("performer" => [lab])
+      ])
+      stub_specimen_batch
+
+      labels = capture_labels { described_class.new("o1", gateway: gateway).generate }
+
+      # 同じ検体は院内の管が先。
+      expect(labels.map { |l| [l[:group].outsource_id, l[:group].outsource_name, l[:group].item_labels] })
+        .to eq([["", "", ["TP"]], ["lab1", "検査センター", %w[AST ALT]]])
+      expect(labels.map { |l| l[:number] }.uniq.length).to eq(2)
+      expect(
+        a_request(:post, "#{base_url}/").with { |req|
+          entries = JSON.parse(req.body)["entry"]
+          entries.map { |e| e.dig("request", "ifNoneExist") } == [
+            "request=ServiceRequest/o1&type=250&identifier:missing=true",
+            "request=ServiceRequest/o1&type=250&identifier=#{CGI.escape(destination)}"
+          ] &&
+            entries.map { |e| e.dig("resource", "identifier") } == [
+              nil, [{ "system" => described_class::TUBE_DESTINATION_SYSTEM, "value" => "lab1" }]
+            ]
+        }
+      ).to have_been_made.once
+    end
+
+    it "matches issued tubes by destination and creates only the missing one" do
+      issued = label_specimen("s1", number: "00000000017", specimen_code: "250")
+      stub_search(
+        [item("i1", number: 1, name: "AST", specimen: serum).merge("performer" => [lab]),
+         item("i2", number: 2, name: "TP", specimen: serum)],
+        specimens: [issued]
+      )
+      stub_specimen_batch
+
+      labels = capture_labels { described_class.new("o1", gateway: gateway).generate }
+
+      # 行き先の識別子が無い発行済みの管は院内の管。
+      expect(labels.map { |l| l[:group].outsource_id }).to eq(["", "lab1"])
+      expect(labels[0][:number]).to eq("00000000017")
+      expect(
+        a_request(:post, "#{base_url}/").with { |req|
+          JSON.parse(req.body)["entry"].map { |e| e.dig("request", "ifNoneExist") } ==
+            ["request=ServiceRequest/o1&type=250&identifier=#{CGI.escape(destination)}"]
+        }
+      ).to have_been_made.once
+    end
   end
 
   it "raises UpstreamError when a Specimen create in the batch fails" do
@@ -296,7 +362,7 @@ RSpec.describe LabLabelReport do
       expect(
         a_request(:post, "#{base_url}/").with { |req|
           JSON.parse(req.body)["entry"].map { |e| e.dig("request", "ifNoneExist") } ==
-            ["request=ServiceRequest/o2&type=212", "request=ServiceRequest/o1&type=250"]
+            ["request=ServiceRequest/o2&type=212&identifier:missing=true", "request=ServiceRequest/o1&type=250&identifier:missing=true"]
         }
       ).to have_been_made.once
     end

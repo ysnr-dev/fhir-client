@@ -65,7 +65,7 @@ export function LabOrderViewModal({ row, onClose }: { row: LabWorklistRow; onClo
           const tube = tubeOfGroup(row.specimens, group);
           const number = tube ? labelNumberOf(tube) : "";
           return (
-            <div className="karte-rp" key={group.specimenCode || `unset-${index}`}>
+            <div className="karte-rp" key={group.key}>
               <div className="karte-rp__head">
                 <span className="karte-rp__number">{`GP${index + 1}`}</span>
                 <TubeBadge specimen={tube} />

@@ -122,7 +122,8 @@ export function emptyLabOrderForm(
 // ---- 親子・検体ごとのまとめ ----
 //
 // 採血の現場は「どの容器に何を採るか」の単位で動くので、オーダー内容は
-// 検体ごとにまとめて見せる(オーダー画面のプレビュー・カルテのカード・詳細で共用)。
+// 採取管(検体と行き先の組)ごとにまとめて見せる(オーダー画面のプレビュー・カルテの
+// カード・詳細で共用)。同じ検体でも院内で測る分と外注に出す分は別の管にする。
 // パネル検査の構成項目は、検体でばらさず親のパネルにぶら下げて見せる。
 
 /** オーダーの 1 単位。パネルなら members にその構成項目が入る。 */
@@ -132,9 +133,14 @@ export interface LabOrderEntry {
 }
 
 export interface LabSpecimenGroup {
+  /** グループの鍵(検体コードと行き先)。一覧の key に使う。 */
+  key: string;
   specimenCode: string;
   specimenName: string;
   containerName: string;
+  /** 管の行き先(外注先の Organization.id)。院内で測る管は空。 */
+  outsourceOrganizationId: string;
+  outsourceOrganizationName: string;
   entries: LabOrderEntry[];
 }
 
@@ -153,26 +159,36 @@ export function groupBySpecimen(items: LabOrderItemLine[]): LabSpecimenGroup[] {
 
   for (const item of topLevelItems(items)) {
     const entry: LabOrderEntry = { item, members: membersOf(items, item.code) };
-    const group = groups.get(item.specimenCode);
+    // 行き先は単独で選んだ項目(パネルならパネル自身)で決める。
+    const key = `${item.specimenCode}|${item.outsourceOrganizationId ?? ""}`;
+    const group = groups.get(key);
     if (group) {
       group.entries.push(entry);
       // 同じ検体で採取管が食い違うことは無い想定だが、先に入った空を埋める。
       if (!group.containerName) group.containerName = item.containerName;
     } else {
-      groups.set(item.specimenCode, {
+      groups.set(key, {
+        key,
         specimenCode: item.specimenCode,
         specimenName: item.specimenName,
         containerName: item.containerName,
+        outsourceOrganizationId: item.outsourceOrganizationId ?? "",
+        outsourceOrganizationName: item.outsourceOrganizationName ?? "",
         entries: [entry],
       });
     }
   }
 
-  // 検体が決まっていないもの(マスタで検体未設定の項目)は最後に置く。
+  // 検体が決まっていないもの(マスタで検体未設定の項目)は最後に置く。同じ検体は
+  // 院内の管を先にする(backend の LabLabelReport と同じ並び)。
   return Array.from(groups.values()).sort((a, b) => {
-    if (!a.specimenCode) return 1;
-    if (!b.specimenCode) return -1;
-    return a.specimenCode.localeCompare(b.specimenCode);
+    if (a.specimenCode !== b.specimenCode) {
+      if (!a.specimenCode) return 1;
+      if (!b.specimenCode) return -1;
+      return a.specimenCode < b.specimenCode ? -1 : 1;
+    }
+    if (a.outsourceOrganizationId === b.outsourceOrganizationId) return 0;
+    return a.outsourceOrganizationId < b.outsourceOrganizationId ? -1 : 1;
   });
 }
 
@@ -226,10 +242,15 @@ export function labOrderLabel(sr: fhir4.ServiceRequest, items: LabOrderItemLine[
   return `${date} ${urgent}${shown || "(項目なし)"}${rest}`;
 }
 
-/** 検体グループの見出し(「血清（生化学用分離剤入り管）」)。 */
+/**
+ * 検体グループの見出し(「血清（生化学用分離剤入り管）」)。外注に出す管は行き先を添える
+ * (「血清（生化学用分離剤入り管）外注: 検査センター」)。
+ */
 export function specimenGroupLabel(group: LabSpecimenGroup): string {
   const name = group.specimenName || group.specimenCode || "検体未設定";
-  return group.containerName ? `${name}（${group.containerName}）` : name;
+  const tube = group.containerName ? `${name}（${group.containerName}）` : name;
+  if (!group.outsourceOrganizationId) return tube;
+  return group.outsourceOrganizationName ? `${tube}外注: ${group.outsourceOrganizationName}` : `${tube}外注`;
 }
 
 // ---- FHIR リソースの組み立て ----

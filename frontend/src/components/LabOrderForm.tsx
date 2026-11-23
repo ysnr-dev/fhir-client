@@ -209,7 +209,8 @@ export function LabOrderForm({
       clinicalLabs.organizations.map((organization) => [organization.id ?? "", organization.name ?? ""]),
     );
     return values.items.map((line) => {
-      const master = line.id ? undefined : catalogByCode.get(line.code);
+      // パネルの構成項目は親と同じ管で出すので、行き先も親のパネルに合わせる。
+      const master = line.id ? undefined : catalogByCode.get(line.parentCode || line.code);
       if (!master) return line;
       const organizationId = outsourceOrganizationIdOf(master, settings);
       return {
@@ -672,7 +673,7 @@ function SelectionPreview({
       </h3>
       {items.length === 0 && <p className="order-select__muted">検査項目を選択してください</p>}
       {groups.map((group, index) => (
-        <div key={group.specimenCode || "unset"} className="order-select__group">
+        <div key={group.key} className="order-select__group">
           <h4>
             GP{index + 1} {specimenGroupLabel(group)}
           </h4>

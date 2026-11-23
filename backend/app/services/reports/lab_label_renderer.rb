@@ -11,6 +11,7 @@ module Reports
   #   order_date / specimen_name / container_name / items / label_number ... text-block
   #   barcode_img ... バーコード画像(image-block)
   #   urgent ... 至急表示(id 付きの text。通常オーダーでは hide する)
+  #   outsourced ... 外注表示(id 付きの text。院内で測る管では hide する)
   # レイアウトに存在しないプレースホルダーは黙って捨てる(既存レンダラと同じ)。
   class LabLabelRenderer
     # layout_path: 同梱の .tlf のパス、
@@ -35,6 +36,9 @@ module Reports
           if all_ids.include?("urgent")
             label[:order]["priority"] == "urgent" ? page.item("urgent").show : page.item("urgent").hide
           end
+          if all_ids.include?("outsourced")
+            label[:group].outsource_id.present? ? page.item("outsourced").show : page.item("outsourced").hide
+          end
         end
       end
       report.generate
@@ -55,9 +59,15 @@ module Reports
         "order_date" => PatientMeta.format_date(OrderDates.order_day(label[:order])),
         "specimen_name" => group.specimen_name.presence || "検体未設定",
         "container_name" => container_display(group),
-        "items" => group.item_labels.join("・"),
+        "items" => items_text(group),
         "label_number" => label[:number].to_s
       }
+    end
+
+    # 項目の並び。外注に出す管は、送り先が分かるよう外注先の名称を頭に付ける。
+    def items_text(group)
+      items = group.item_labels.join("・")
+      group.outsource_name.present? ? "［#{group.outsource_name}］#{items}" : items
     end
 
     # 採取管(色)。「EDTA管（紫）」の形。色と略称はオーダーに写していないので

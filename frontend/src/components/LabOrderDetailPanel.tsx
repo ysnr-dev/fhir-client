@@ -58,7 +58,7 @@ export function LabOrderDetailPanel({
       </fieldset>
 
       {groups.map((group, index) => (
-        <fieldset className="rp-card" key={group.specimenCode || `unset-${index}`}>
+        <fieldset className="rp-card" key={group.key}>
           <legend>{`GP${index + 1} ${specimenGroupLabel(group)}`}</legend>
           <table className="rp-card__medicines rp-card__medicines--detail">
             <thead>

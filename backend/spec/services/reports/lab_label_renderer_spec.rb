@@ -21,8 +21,8 @@ RSpec.describe Reports::LabLabelRenderer do
     }
   end
 
-  def label(number: "12345678901", label_order: order, label_patient: patient)
-    { order: label_order, patient: label_patient, group: group, number: number }
+  def label(number: "12345678901", label_order: order, label_patient: patient, label_group: group)
+    { order: label_order, patient: label_patient, group: label_group, number: number }
   end
 
   def render(labels)
@@ -72,5 +72,20 @@ RSpec.describe Reports::LabLabelRenderer do
     urgent = render([label(label_order: order.merge("priority" => "urgent"))])
 
     expect(urgent.bytesize).not_to eq(normal.bytesize)
+  end
+
+  it "shows the outsourced mark and the destination only for outsourced tubes" do
+    outsourced = group.dup.tap do |g|
+      g.outsource_id = "lab1"
+      g.outsource_name = "検査センター"
+    end
+    pages = PDF::Inspector::Page.analyze(render([label, label(label_group: outsourced)]))
+                                .pages.map { |page| page[:strings].join }
+
+    expect(pages[0]).not_to include("検査センター")
+    expect(pages[1]).to include("［検査センター］CBC・AST")
+    # 外注の印(固定の文字)は院内の管では隠す。
+    unnamed = outsourced.dup.tap { |g| g.outsource_name = "" }
+    expect(render([label(label_group: unnamed)]).bytesize).not_to eq(render([label]).bytesize)
   end
 end

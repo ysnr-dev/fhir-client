@@ -15,6 +15,10 @@ import { codingBySystem } from "./prescriptionHelpers";
 
 export { LAB_LABEL_NUMBER_SYSTEM, isLabelSpecimen };
 
+// 管の行き先(外注先の Organization.id)。外注に出す管だけが identifier に持ち、院内で
+// 測る管は持たない。backend の LabLabelReport::TUBE_DESTINATION_SYSTEM と同じ値。
+const TUBE_DESTINATION_SYSTEM = "http://fhir-client.local/IdSystem/lab-tube-destination";
+
 // 到着を記録したユーザー。FHIR の Specimen に「受け取った人」を表す標準要素が
 // 無いため(collection.collector は採取した人)、ローカル拡張で持つ。
 const ARRIVAL_RECORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-arrival-recorder";
@@ -55,12 +59,25 @@ export function specimenOrderIdOf(specimen: fhir4.Specimen): string {
   return reference.match(/^ServiceRequest\/(.+)$/)?.[1] ?? "";
 }
 
+/** 管の行き先(外注先の Organization.id)。院内で測る管は空。 */
+export function tubeDestinationOf(specimen: fhir4.Specimen): string {
+  return specimen.identifier?.find((i) => i.system === TUBE_DESTINATION_SYSTEM)?.value ?? "";
+}
+
+/** 管が検体グループのものか(検体と行き先が同じ)。 */
+export function tubeMatchesGroup(specimen: fhir4.Specimen, group: LabSpecimenGroup): boolean {
+  return (
+    specimenTypeCodeOf(specimen) === group.specimenCode &&
+    tubeDestinationOf(specimen) === group.outsourceOrganizationId
+  );
+}
+
 /** 検体グループに対応する管(ラベル発行が作った Specimen)。未発行なら無い。 */
 export function tubeOfGroup(
   specimens: fhir4.Specimen[],
   group: LabSpecimenGroup,
 ): fhir4.Specimen | undefined {
-  return specimens.find((s) => specimenTypeCodeOf(s) === group.specimenCode);
+  return specimens.find((s) => tubeMatchesGroup(s, group));
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   specimenArrived,
   specimenOrderIdOf,
   specimenTypeCodeOf,
+  tubeMatchesGroup,
 } from "../fhir/labSpecimenHelpers";
 import { buildLabTaskUpdate, labTaskStatus } from "../fhir/labTaskHelpers";
 import {
@@ -103,7 +104,7 @@ async function labArrivalProgress(specimen: fhir4.Specimen, entry: ScanEntry): P
 
   const groups = groupBySpecimen(labOrderItems(order, itemRequests));
   const scannedCode = specimenTypeCodeOf(specimen);
-  const group = groups.find((g) => g.specimenCode === scannedCode);
+  const group = groups.find((g) => tubeMatchesGroup(specimen, g));
   entry.specimenLabel = group ? specimenGroupLabel(group) : scannedCode || "検体未設定";
   if (!group) entry.warnings.push("オーダーにこの検体はありません(訂正で外れた可能性)");
 
@@ -111,9 +112,9 @@ async function labArrivalProgress(specimen: fhir4.Specimen, entry: ScanEntry): P
   if (status === "cancelled") entry.warnings.push("このオーダーは中止されています");
 
   // 今回の管も織り込む。
-  const arrivedCodes = new Set(specimens.filter(specimenArrived).map((s) => specimenTypeCodeOf(s)));
-  arrivedCodes.add(scannedCode);
-  const allArrived = groups.length > 0 && groups.every((g) => arrivedCodes.has(g.specimenCode));
+  const arrived = [...specimens.filter(specimenArrived), specimen];
+  const allArrived =
+    groups.length > 0 && groups.every((g) => arrived.some((s) => tubeMatchesGroup(s, g)));
   if (!allArrived || status !== "accepted") return {};
   return { task: buildLabTaskUpdate(task, order, "completed"), label: "全検体到着 → 実施済" };
 }

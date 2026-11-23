@@ -26,7 +26,7 @@ export function LabOrderCardBody({
   return (
     <>
       {groups.map((group, index) => (
-        <div className="karte-rp" key={group.specimenCode || `unset-${index}`}>
+        <div className="karte-rp" key={group.key}>
           <div className="karte-rp__head">
             <span className="karte-rp__number">{`GP${index + 1}`}</span>
             <span className="karte-order__group-name">{specimenGroupLabel(group)}</span>

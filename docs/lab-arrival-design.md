@@ -154,7 +154,8 @@ Task の進捗の必要条件にはしない。
    上流の Specimen へ移した。現行の形:
    - **発行**(`LabLabelReport`)が管ごとに独立 Specimen を作る。accessionIdentifier =
      ラベル番号、request = ヘッダオーダー、type / container = 検体・採取管。二重発行は
-     conditional create(`If-None-Exist: request=...&type=...`)で防ぎ、再発行は既存
+     conditional create(`If-None-Exist: request=...&type=...` に行き先の条件を足したもの。
+     `docs/lab-outsource-design.md` §6)で防ぎ、再発行は既存
      Specimen の番号をそのまま刷る。発行時点では status を付けない(未採取)。
    - backend に残るのは番号の採番だけ(`lab_label_numbers`。行 = 採番 1 回で、番号は
      id + チェックデジット)。`/lab_labels` の到着・照会 API は廃止し、frontend は
