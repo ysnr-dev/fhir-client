@@ -4,7 +4,7 @@ import { summarizeAllergy } from "../fhir/allergyHelpers";
 import { summarizeFlag } from "../fhir/flagHelpers";
 import type { InfectionRow } from "../fhir/infectionHelpers";
 import { CautionPictogram } from "./icons/cautionPictograms";
-import { PictogramPopover } from "./PictogramPopover";
+import { PictogramPopover, PopoverRows, type PopoverRow } from "./PictogramPopover";
 
 // 患者のピクトグラム(注意区分・アレルギー・感染症)の描画。
 // 患者帯(PatientHeader)は 1 人ぶんを個別に引いてここへ渡し、病棟マップは
@@ -85,19 +85,23 @@ export function CautionPictogramBadges({
           count={badge.lines.length}
           portal={portal}
         >
-          <ul className="patient-header__popover-list">
-            {badge.lines.map((line, index) => (
-              <li key={index}>
-                <span className="patient-header__popover-name">{line.name}</span>
-                {line.text && <span className="patient-header__popover-text">{line.text}</span>}
-              </li>
-            ))}
-          </ul>
+          <PopoverRows rows={groupLinesByName(badge.lines)} />
           <ProfileLink patientId={patientId} />
         </PictogramPopover>
       ))}
     </span>
   );
+}
+
+/** 同じ注意区分の注意は名前を 1 回だけ出し、内容を下に並べる。 */
+function groupLinesByName(lines: CautionBadge["lines"]): PopoverRow[] {
+  const rows = new Map<string, PopoverRow>();
+  for (const line of lines) {
+    const row = rows.get(line.name) ?? { key: line.name, name: line.name, details: [] };
+    row.details!.push(line.text);
+    rows.set(line.name, row);
+  }
+  return [...rows.values()];
 }
 
 /** 吹き出しの下に置く、プロファイルタブへの導線。 */
@@ -144,16 +148,15 @@ export function InfectionPictogramBadge({
         count={positives.length}
         portal={portal}
       >
-        <ul className="patient-header__popover-list">
-          {positives.map((row) => (
-            <li key={row.type}>
-              <span className="patient-header__popover-name">{row.typeLabel} 陽性</span>
-              <span className="patient-header__popover-text">
-                {[row.sourceLabel, row.effectiveDate].filter(Boolean).join(" ")}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <PopoverRows
+          rows={positives.map((row) => ({
+            key: row.type,
+            name: row.typeLabel,
+            tags: [{ label: "陽性", tone: "danger" }],
+            // 出所の文言(「本人・家族の申告」)に中黒があるので、日付とは空白で区切る。
+            details: [[row.sourceLabel, row.effectiveDate].filter(Boolean).join(" ")],
+          }))}
+        />
         <ProfileLink patientId={patientId} />
       </PictogramPopover>
     </span>
@@ -207,33 +210,28 @@ export function AllergyPictogramBadges({
           count={group.rows.length}
           portal={portal}
         >
-          {/* 1 行目に名前と目印(不耐症・重篤化リスク)、2 行目に区分と症状。薬剤の側は区分が全行「医薬品」なので出さない。 */}
-          <ul className="patient-header__popover-list allergy-popover">
-            {group.rows.map((row) => {
-              const detail = [row.medication ? "" : row.summary.categoryLabel, row.summary.reaction]
-                .filter(Boolean)
-                .join(" ・ ");
-              return (
-                <li key={row.summary.id} className="allergy-popover__row">
-                  <span className="allergy-popover__head">
-                    <span className="patient-header__popover-name">{row.summary.name}</span>
-                    <span className="allergy-popover__tags">
-                      {row.intolerance && <span className="allergy-popover__tag">不耐症</span>}
-                      {row.summary.criticalityLabel && (
-                        <span
-                          className={`allergy-popover__tag allergy-popover__tag--risk${row.high ? " allergy-popover__tag--high" : ""}`}
-                          title="重篤化リスク"
-                        >
-                          リスク{row.summary.criticalityLabel}
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                  {detail && <span className="patient-header__popover-text">{detail}</span>}
-                </li>
-              );
-            })}
-          </ul>
+          {/* 目印は不耐症と重篤化リスク、詳細は区分と症状。薬剤の側は区分が全行「医薬品」なので出さない。 */}
+          <PopoverRows
+            rows={group.rows.map((row) => ({
+              key: row.summary.id,
+              name: row.summary.name,
+              tags: [
+                ...(row.intolerance ? [{ label: "不耐症" }] : []),
+                ...(row.summary.criticalityLabel
+                  ? [
+                      {
+                        label: `リスク${row.summary.criticalityLabel}`,
+                        tone: row.high ? ("danger" as const) : undefined,
+                        title: "重篤化リスク",
+                      },
+                    ]
+                  : []),
+              ],
+              details: [
+                [row.medication ? "" : row.summary.categoryLabel, row.summary.reaction].filter(Boolean).join(" ・ "),
+              ],
+            }))}
+          />
           <AllergyLink patientId={patientId} />
         </PictogramPopover>
       ))}

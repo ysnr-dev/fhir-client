@@ -125,3 +125,58 @@ export function PictogramPopover({
     </span>
   );
 }
+
+export interface PopoverTag {
+  label: string;
+  /** danger は赤、warning は橙。無ければ控えめに出す。 */
+  tone?: "danger" | "warning";
+  title?: string;
+}
+
+export interface PopoverRow {
+  key: string;
+  name: string;
+  /** 名前の右に寄せる目印(状態・程度・日数など、拾い読みしたいもの)。 */
+  tags?: PopoverTag[];
+  /** 名前の下に 1 行ずつ出す詳細。空文字は出さない。 */
+  details?: string[];
+}
+
+/**
+ * 吹き出しの中身の一覧。1 件ごとに罫線で区切り、名前と目印を 1 行目、詳細を下に積む。
+ * 目印は折り返さず右端にそろえるので、何件あっても縦に拾い読みできる。
+ */
+export function PopoverRows({ rows }: { rows: PopoverRow[] }) {
+  return (
+    <ul className="patient-header__popover-list patient-header__popover-rows">
+      {rows.map((row) => {
+        const details = (row.details ?? []).filter(Boolean);
+        return (
+          <li key={row.key} className="patient-header__popover-row">
+            <span className="patient-header__popover-head">
+              <span className="patient-header__popover-name">{row.name}</span>
+              {row.tags && row.tags.length > 0 && (
+                <span className="patient-header__popover-tags">
+                  {row.tags.map((tag) => (
+                    <span
+                      key={tag.label}
+                      className={`patient-header__popover-tag${tag.tone ? ` patient-header__popover-tag--${tag.tone}` : ""}`}
+                      title={tag.title}
+                    >
+                      {tag.label}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </span>
+            {details.map((detail, index) => (
+              <span key={index} className="patient-header__popover-text">
+                {detail}
+              </span>
+            ))}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}

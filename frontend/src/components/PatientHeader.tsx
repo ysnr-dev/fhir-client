@@ -56,7 +56,7 @@ import {
   InfectionPictogramBadge,
 } from "./PatientPictograms";
 import { PathwayNameLinks } from "./PathwayNameLinks";
-import { PictogramPopover } from "./PictogramPopover";
+import { PictogramPopover, PopoverRows } from "./PictogramPopover";
 import { AdvisoryRulePictogram } from "./AdvisoryRulePictogram";
 import { CdsPictogram } from "./CdsPictogram";
 
@@ -262,16 +262,19 @@ function LineDrainPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }:
         count={current.length}
         portal={portal}
       >
-        <ul className="patient-header__popover-list">
-          {current.map((record) => (
-            <li key={record.id}>
-              <span className="patient-header__popover-name">{lineDrainLabel(record)}</span>
-              <span className="patient-header__popover-text">
-                {[record.deviceLabel, daysInsertedLabel(record, todayValue)].filter(Boolean).join(" / ")}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <PopoverRows
+          rows={current.map((record) => ({
+            key: record.id,
+            name: lineDrainLabel(record),
+            tags: [
+              {
+                label: daysInsertedLabel(record, todayValue),
+                tone: isOverWarnDays(record, types, todayValue) ? ("danger" as const) : undefined,
+              },
+            ],
+            details: [record.deviceLabel],
+          }))}
+        />
         <Link className="patient-header__popover-link" to={`/patients/${patientId}/karte?tab=profile`}>
           プロファイルを開く
         </Link>
@@ -301,20 +304,24 @@ function ChemotherapyPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal
         count={running.length}
         portal={portal}
       >
-        <ul className="patient-header__popover-list">
-          {running.map((application) => (
-            <li key={application.id}>
-              <span className="patient-header__popover-name">{application.name}</span>
-              <span className="patient-header__popover-text">
-                {[
-                  regimenStatusLabel(application.status),
-                  `開始 ${application.startDate}`,
-                  application.plannedCycles !== null ? `予定 ${application.plannedCycles} クール` : "継続",
-                ].join(" / ")}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <PopoverRows
+          rows={running.map((application) => ({
+            key: application.id,
+            name: application.name,
+            tags: [
+              {
+                label: regimenStatusLabel(application.status),
+                tone: application.status === "on-hold" ? ("warning" as const) : undefined,
+              },
+            ],
+            details: [
+              [
+                `開始 ${application.startDate}`,
+                application.plannedCycles !== null ? `予定 ${application.plannedCycles} クール` : "継続",
+              ].join(" ・ "),
+            ],
+          }))}
+        />
         <Link className="patient-header__popover-link" to={`/patients/${patientId}/karte?tab=chemo`}>
           化学療法タブを開く
         </Link>
@@ -343,23 +350,17 @@ function DialysisPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal }: 
         count={running.length}
         portal={portal}
       >
-        <ul className="patient-header__popover-list">
-          {running.map(({ id, summary }) => (
-            <li key={id}>
-              <span className="patient-header__popover-name">{summary.modalityDisplay}</span>
-              <span className="patient-header__popover-text">
-                {[
-                  summary.scheduleLabel,
-                  summary.periodLabel,
-                  summary.accessLabel,
-                  dryWeight.data ? `DW ${dryWeight.data.value}kg(${shortDate(dryWeight.data.date)})` : "",
-                ]
-                  .filter(Boolean)
-                  .join(" / ")}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <PopoverRows
+          rows={running.map(({ id, summary }, index) => ({
+            key: id ?? String(index),
+            name: summary.modalityDisplay,
+            details: [
+              [summary.scheduleLabel, summary.periodLabel].filter(Boolean).join(" ・ "),
+              summary.accessLabel,
+              dryWeight.data ? `DW ${dryWeight.data.value}kg(${shortDate(dryWeight.data.date)})` : "",
+            ],
+          }))}
+        />
       </PictogramPopover>
     </span>
   );
@@ -385,14 +386,15 @@ function EarlyWarningPictogram({ patientId, size = HEADER_PICTOGRAM_SIZE, portal
         icon={<CautionPictogram pictogram="early-warning" size={size} />}
         portal={portal}
       >
-        <ul className="patient-header__popover-list">
-          <li>
-            <span className="patient-header__popover-name">{earlyWarningText(score)}</span>
-            <span className="patient-header__popover-text">
-              {[dateTimeLabel(score.at), items, missing ? `欠測: ${missing}` : ""].filter(Boolean).join(" / ")}
-            </span>
-          </li>
-        </ul>
+        <PopoverRows
+          rows={[
+            {
+              key: "news2",
+              name: earlyWarningText(score),
+              details: [dateTimeLabel(score.at), items, missing ? `欠測: ${missing}` : ""],
+            },
+          ]}
+        />
         <Link className="patient-header__popover-link" to={`/patients/${patientId}/karte?tab=flowsheet`}>
           経過表タブを開く
         </Link>
