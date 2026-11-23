@@ -455,6 +455,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
             ? { kind: "qr-create", templateCanonical: openTarget.url, encounterId: openTarget.encounterId }
           : openTarget.kind === "questionnaire-response"
             ? { kind: "qr-edit", qrId: openTarget.responseId }
+          : openTarget.kind === "document-draft"
+            ? { kind: "document-edit", draftResponseId: openTarget.responseId }
           : { kind: "intake-review", responseId: openTarget.responseId },
     );
     updateParams((params) => params.delete(KARTE_OPEN_PARAM));

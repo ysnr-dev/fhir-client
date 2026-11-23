@@ -151,6 +151,11 @@ export interface BuildQuestionnaireResponseArgs {
    * テンプレートの必須の項目は完了の回答にだけ求めるので、下書きは必須が空でも保存できる。
    */
   draft?: boolean;
+  /**
+   * 下書きを保存した医療従事者(ログイン中の Practitioner の id)。`source` に入れ、未完了記録一覧で下書きの担当者に使う
+   * (記入者は JASPEHR に合わせて contained の氏名だけなので、利用者と結び付かない)。更新では保存済みの値を引き継ぐ。
+   */
+  sourcePractitionerId?: string | null;
   /** 回答の日時。省くと今(Web 問診の取込は患者が答えた日時を渡す)。 */
   authored?: string;
   /** 回答の出どころなど、付け足す拡張。 */
@@ -198,6 +203,9 @@ export function buildQuestionnaireResponse(
   };
 
   if (existing?.id) response.id = existing.id;
+  const source =
+    existing?.source ?? (args.sourcePractitionerId ? { reference: `Practitioner/${args.sourcePractitionerId}` } : undefined);
+  if (source) response.source = source;
   const tag = args.tag ?? existing?.meta?.tag?.filter((coding) => coding.system === QR_PURPOSE_SYSTEM);
   if (tag?.length) response.meta = { ...response.meta, tag };
   const encounter = encounterId ? { reference: `Encounter/${encounterId}` } : existing?.encounter;

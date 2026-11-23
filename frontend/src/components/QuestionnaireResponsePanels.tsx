@@ -1,5 +1,6 @@
 import { localDay } from "../lib/dates";
 import { useEffect, useMemo, useState } from "react";
+import { useCurrentPractitioner } from "../api/authQueries";
 import { FhirError } from "../api/fhirClient";
 import {
   useCreateQuestionnaireResponse,
@@ -217,6 +218,7 @@ export function QuestionnaireResponseCreatePanel({
   );
 
   const createResponse = useCreateQuestionnaireResponse();
+  const { practitionerId } = useCurrentPractitioner();
 
   const copyPreviousButton = latest && (
     <button
@@ -264,6 +266,7 @@ export function QuestionnaireResponseCreatePanel({
           extension,
           tag,
           draft,
+          sourcePractitionerId: draft ? practitionerId : null,
         }),
         imageEntries,
         extraEntries,
@@ -421,6 +424,7 @@ function EditForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const updateResponse = useUpdateQuestionnaireResponse();
+  const { practitionerId } = useCurrentPractitioner();
   const [problem, setProblem] = useState<ProblemRef | null>(() =>
     questionnaireResponseProblem(response),
   );
@@ -452,6 +456,7 @@ function EditForm({
           problem,
           existing: response,
           draft,
+          sourcePractitionerId: draft ? practitionerId : null,
         }),
         etag,
         imageEntries,

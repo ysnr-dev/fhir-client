@@ -4,6 +4,7 @@ import { useCurrentPractitioner } from "../api/authQueries";
 import {
   useDeficiencyCellTasks,
   useDeficiencyDraftNotes,
+  useDeficiencyDraftResponses,
   useDeficiencyOwners,
   useRecordDeficiencyItems,
   useSelfDepartments,
@@ -13,7 +14,9 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { StatCell } from "../components/StatSummary";
 import { notificationKindOf } from "../components/notifications/notificationRegistry";
+import { documentDraftOfResponse } from "../fhir/documentFormQuestionnaire";
 import { displayName, patientNumberOf } from "../fhir/patientHelpers";
+import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import {
   aggregateRecordDeficiencies,
   deficiencyTasksOfKind,
@@ -26,11 +29,11 @@ import {
   taskDueDateOf,
 } from "../fhir/recordDeficiencyHelpers";
 import { referenceId } from "../fhir/shared";
-import { formatKarteDetail, KARTE_DETAIL_PARAM } from "../karteUrl";
+import { formatKarteDetail, formatKarteOpen, KARTE_DETAIL_PARAM, KARTE_OPEN_PARAM } from "../karteUrl";
 import { localDay, today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
 
-// 未完了記録一覧(docs/features/notifications.md「未完了記録一覧」)。下書きの診療記録と、承認待ち・差戻し・作成待ちの文書・
+// 未完了記録一覧(docs/features/notifications.md「未完了記録一覧」)。下書きの診療記録・テンプレートの回答と、承認待ち・差戻し・作成待ちの文書・
 // 未確認の結果などの未対応の Task を担当者 × 種別で数える。件数を押すとその担当者・種別の一覧をモーダルで開き、行からカルテへ移る。
 
 const ALL_DEPARTMENTS = "";
@@ -66,7 +69,7 @@ export function RecordDeficiencyPage() {
     [allRows, departmentId, ownerMap],
   );
   const total = sumDeficiencyRows(rows);
-  // 表示中の行に 1 件も無い種別の列は出さない(13 種別すべてを並べると横に長くなりすぎる)。
+  // 表示中の行に 1 件も無い種別の列は出さない(種別すべてを並べると横に長くなりすぎる)。
   const kinds = RECORD_DEFICIENCY_KINDS.filter((kind) => total.cells.has(kind.code));
 
   return (
@@ -296,6 +299,42 @@ function draftNoteLines(
   });
 }
 
+/**
+ * 下書きのテンプレートの回答は、カルテの右ペインでその下書きを開き直した状態へ移る(様式文書は文書作成、
+ * ほかはテンプレートの編集)。
+ */
+function draftResponseLines(
+  responses: readonly fhir4.QuestionnaireResponse[],
+  questionnaires: readonly fhir4.Questionnaire[],
+  patients: Map<string, fhir4.Patient>,
+): CellLine[] {
+  return responses.map((response) => {
+    const patientId = referenceId(response.subject?.reference) ?? "";
+    const documentDraft = documentDraftOfResponse(response);
+    const questionnaire = questionnaires.find(
+      (q) => questionnaireCanonical(q) === response.questionnaire || q.url === response.questionnaire,
+    );
+    const params = new URLSearchParams();
+    params.set(
+      KARTE_OPEN_PARAM,
+      formatKarteOpen(
+        documentDraft
+          ? { kind: "document-draft", responseId: response.id ?? "" }
+          : { kind: "questionnaire-response", responseId: response.id ?? "" },
+      ),
+    );
+    return {
+      id: response.id ?? "",
+      patientId,
+      patient: patients.get(patientId),
+      since: response.authored ? localDay(response.authored) : "",
+      due: "",
+      content: documentDraft?.title || questionnaire?.title || questionnaire?.name || "",
+      karteLink: patientId ? `/patients/${patientId}/karte?${params.toString()}` : null,
+    };
+  });
+}
+
 /** 担当者 × 種別の一覧。古い順で、行からカルテへ移る。 */
 function DeficiencyCellModal({
   ownerId,
@@ -308,19 +347,29 @@ function DeficiencyCellModal({
   kind: RecordDeficiencyKind;
   onClose: () => void;
 }) {
-  const isDraft = kind.source === "draft-note";
+  const isDraft = kind.source !== "task";
   const taskList = useDeficiencyCellTasks(isDraft ? null : kind.code, ownerId);
-  const draftList = useDeficiencyDraftNotes(ownerId, isDraft);
-  const list = isDraft ? draftList : taskList;
+  const draftList = useDeficiencyDraftNotes(ownerId, kind.source === "draft-note");
+  const draftResponseList = useDeficiencyDraftResponses(ownerId, kind.source === "draft-response");
+  const list = kind.source === "draft-note" ? draftList : kind.source === "draft-response" ? draftResponseList : taskList;
   const linkState = useReturnLinkState();
   const todayValue = today();
-  const lines = isDraft
-    ? draftList.data
-      ? draftNoteLines(draftList.data.notes, draftList.data.patients)
-      : []
-    : taskList.data
-      ? taskLines(deficiencyTasksOfKind(taskList.data.tasks, kind, todayValue), taskList.data.patients)
-      : [];
+  const lines =
+    kind.source === "draft-note"
+      ? draftList.data
+        ? draftNoteLines(draftList.data.notes, draftList.data.patients)
+        : []
+      : kind.source === "draft-response"
+        ? draftResponseList.data
+          ? draftResponseLines(
+              draftResponseList.data.responses,
+              draftResponseList.data.questionnaires,
+              draftResponseList.data.patients,
+            )
+          : []
+        : taskList.data
+          ? taskLines(deficiencyTasksOfKind(taskList.data.tasks, kind, todayValue), taskList.data.patients)
+          : [];
 
   return (
     <Modal

@@ -1,13 +1,15 @@
 // 未完了記録一覧(docs/features/notifications.md「未完了記録一覧」)。
 //
-// 承認待ち・差戻し・作成待ちの文書・未確認の結果などの未対応の Task と、下書きのままの診療記録(Composition)を
-// 種別 × 担当者で数える。担当者は Task.owner、診療記録は記載者(author)。種別はここに 1 要素足せば画面と
+// 承認待ち・差戻し・作成待ちの文書・未確認の結果などの未対応の Task と、下書きのままの診療記録(Composition)・
+// テンプレートの回答(QuestionnaireResponse)を種別 × 担当者で数える。担当者は Task.owner、診療記録は記載者(author)、
+// 回答は下書きを保存した医療従事者(source)。種別はここに 1 要素足せば画面と
 // ホームのカードに乗る。緊急異常値・早期警告のような臨床の警報は記録の不備ではないので入れない。
 import { localDay, today as todayString, diffDays } from "../lib/dates";
 import { ANTIMICROBIAL_NOTIFICATION_TASK_CODE } from "./antimicrobialNotificationHelpers";
 import { CONSULT_NOTE_TYPE, PROGRESS_NOTE_TYPE } from "./clinicalNoteHelpers";
 import { NOTE_COUNTERSIGN_TASK_CODE, NOTE_RETURNED_TASK_CODE } from "./countersignHelpers";
-import { DOCUMENT_DUE_TASK_CODE } from "./documentDueHelpers";
+import { DOCUMENT_DUE_TASK_CODE, documentDueTemplateCodes } from "./documentDueHelpers";
+import { documentDraftOfResponse } from "./documentFormQuestionnaire";
 import { DPC_RECODING_DUE_TASK_CODE } from "./dpcRecodingDueHelpers";
 import { FOLLOW_UP_TASK_CODE } from "./followUpHelpers";
 import { notificationCodeOf, taskInputOf } from "./notificationHelpers";
@@ -22,8 +24,8 @@ import { TASK_CODE_SYSTEM } from "./taskHelpers";
 
 export type RecordDeficiencyGroup = "記録" | "結果" | "照会・届出";
 
-/** 数える元。task は Task.code の種別、draft-note は下書きの診療記録。 */
-export type RecordDeficiencySource = "task" | "draft-note";
+/** 数える元。task は Task.code の種別、draft-note は下書きの診療記録、draft-response は下書きのテンプレートの回答。 */
+export type RecordDeficiencySource = "task" | "draft-note" | "draft-response";
 
 export interface RecordDeficiencyKind {
   /** 種別のキー。task は Task.code のコード(system は TASK_CODE_SYSTEM)。 */
@@ -43,9 +45,18 @@ export interface RecordDeficiencyKind {
 
 /** 下書きの診療記録の種別キー(Task.code とは重ならない)。 */
 export const DRAFT_NOTE_KIND_CODE = "draft-note";
+/** 下書きのテンプレートの回答(様式文書の下書きを含む)の種別キー。 */
+export const DRAFT_RESPONSE_KIND_CODE = "draft-response";
 
 export const RECORD_DEFICIENCY_KINDS: RecordDeficiencyKind[] = [
   { code: DRAFT_NOTE_KIND_CODE, source: "draft-note", label: "記録の下書き", group: "記録", link: null },
+  {
+    code: DRAFT_RESPONSE_KIND_CODE,
+    source: "draft-response",
+    label: "テンプレートの下書き",
+    group: "記録",
+    link: null,
+  },
   { code: NOTE_COUNTERSIGN_TASK_CODE.code, source: "task", label: "カルテ承認", group: "記録", link: "/countersigns" },
   { code: ORDER_APPROVAL_TASK_CODE.code, source: "task", label: "オーダー承認", group: "記録", link: "/countersigns" },
   { code: NOTE_RETURNED_TASK_CODE.code, source: "task", label: "カルテ差戻し", group: "記録", link: "/notifications" },
@@ -91,7 +102,7 @@ export const RECORD_DEFICIENCY_CODES = RECORD_DEFICIENCY_KINDS.filter((kind) => 
   .join(",");
 
 /** 集計に要る要素だけを読む(_elements は JSON キー完全一致)。 */
-export const RECORD_DEFICIENCY_ELEMENTS = "code,owner,authoredOn,restriction,input,focus";
+export const RECORD_DEFICIENCY_ELEMENTS = "code,owner,authoredOn,restriction,input,focus,for";
 
 /**
  * 下書きを数える診療記録の種別(経過記録と他科依頼の回答。看護記録・チーム回診記録も経過記録の type)。
@@ -102,6 +113,8 @@ export const DRAFT_NOTE_TYPE_SEARCH = [PROGRESS_NOTE_TYPE, CONSULT_NOTE_TYPE]
   .map((type) => `${codingOf(type).system}|${codingOf(type).code}`)
   .join(",");
 export const DRAFT_NOTE_ELEMENTS = "author,date";
+/** 下書きの回答の集計に要る要素。様式文書の下書きは questionnaire と拡張で見分ける。 */
+export const DRAFT_RESPONSE_ELEMENTS = "source,authored,subject,questionnaire,extension";
 
 export function recordDeficiencyKindOf(code: string): RecordDeficiencyKind | undefined {
   return RECORD_DEFICIENCY_KINDS.find((kind) => kind.code === code);
@@ -123,9 +136,22 @@ export interface DeficiencyItem {
   since: string;
   /** 期限(YYYY-MM-DD)。無ければ空。 */
   due: string;
-  /** 診療記録の id。下書きは自身、カルテ差戻しは差し戻した記録(Task.focus)。他は空。 */
-  noteId: string;
+  /** 下書きが表す記録のキー(draftKeyOf)。Task は空。 */
+  recordKey: string;
+  /**
+   * この Task が数えている記録のキー。同じキーの下書きは数えない(同じ記録を 2 度数えない)。
+   * カルテ差戻しは差し戻した記録、文書作成の督促は待っている様式文書。
+   */
+  covers: string[];
 }
+
+/**
+ * 記録のキー。診療記録はその id。様式文書は担当者・患者・様式で決める(督促の Task は文書の id を持たないので、
+ * 同じ人が同じ患者のその様式の督促と下書きを持っていれば同じ文書とみなす)。
+ */
+const noteKey = (compositionId: string) => `Composition/${compositionId}`;
+const documentKey = (ownerId: string, patientId: string, templateCode: string) =>
+  `document:${ownerId}|${patientId}|${templateCode}`;
 
 /** Task を数える形にする。数える種別でなければ null。 */
 export function taskDeficiencyItem(task: fhir4.Task): DeficiencyItem | null {
@@ -136,8 +162,23 @@ export function taskDeficiencyItem(task: fhir4.Task): DeficiencyItem | null {
     ownerId: referenceId(task.owner?.reference) ?? NO_OWNER,
     since: task.authoredOn ? localDay(task.authoredOn) : "",
     due: taskDueDateOf(task),
-    noteId: kind.code === NOTE_RETURNED_TASK_CODE.code ? returnedNoteIdOf(task) : "",
+    recordKey: "",
+    covers: taskCovers(task, kind.code),
   };
+}
+
+function taskCovers(task: fhir4.Task, kindCode: string): string[] {
+  if (kindCode === NOTE_RETURNED_TASK_CODE.code) {
+    const noteId = returnedNoteIdOf(task);
+    return noteId ? [noteKey(noteId)] : [];
+  }
+  if (kindCode === DOCUMENT_DUE_TASK_CODE.code) {
+    const ownerId = referenceId(task.owner?.reference);
+    const patientId = referenceId(task.for?.reference);
+    if (!ownerId || !patientId) return [];
+    return documentDueTemplateCodes(task).map((code) => documentKey(ownerId, patientId, code));
+  }
+  return [];
 }
 
 /** カルテ差戻しの Task が指す診療記録の id。 */
@@ -158,8 +199,43 @@ export function draftNoteDeficiencyItem(composition: fhir4.Composition): Deficie
     ownerId: draftNoteOwnerId(composition),
     since: composition.date ? localDay(composition.date) : "",
     due: "",
-    noteId: composition.id ?? "",
+    recordKey: noteKey(composition.id ?? ""),
+    covers: [],
   };
+}
+
+/** 下書きの回答を保存した医療従事者(source が Practitioner のときだけ。ほかは数えない)。 */
+export function draftResponseOwnerId(response: fhir4.QuestionnaireResponse): string | null {
+  const reference = response.source?.reference;
+  return reference?.startsWith("Practitioner/") ? (referenceId(reference) ?? null) : null;
+}
+
+/** 下書きの回答が様式文書の下書きなら、文書作成の督促と突き合わせるキー。ほかは回答自身。 */
+export function draftResponseKey(response: fhir4.QuestionnaireResponse, ownerId: string): string {
+  const templateCode = documentDraftOfResponse(response)?.templateCode;
+  const patientId = referenceId(response.subject?.reference);
+  return templateCode && patientId
+    ? documentKey(ownerId, patientId, templateCode)
+    : `QuestionnaireResponse/${response.id ?? ""}`;
+}
+
+/** 下書きの回答を数える形にする。保存した医療従事者が分からないものは null。 */
+export function draftResponseDeficiencyItem(response: fhir4.QuestionnaireResponse): DeficiencyItem | null {
+  const ownerId = draftResponseOwnerId(response);
+  if (!ownerId) return null;
+  return {
+    kindCode: DRAFT_RESPONSE_KIND_CODE,
+    ownerId,
+    since: response.authored ? localDay(response.authored) : "",
+    due: "",
+    recordKey: draftResponseKey(response, ownerId),
+    covers: [],
+  };
+}
+
+/** 文書作成の督促が待っている様式文書のキー。下書きの一覧から督促で数えるものを除くのに使う。 */
+export function documentDueCovers(tasks: readonly fhir4.Task[]): Set<string> {
+  return new Set(tasks.flatMap((task) => taskCovers(task, DOCUMENT_DUE_TASK_CODE.code)));
 }
 
 export interface DeficiencyCell {
@@ -197,12 +273,11 @@ export function aggregateRecordDeficiencies(
   today: string = todayString(),
 ): DeficiencyOwnerRow[] {
   const rows = new Map<string, DeficiencyOwnerRow>();
-  // 差し戻された記録は下書きに戻っているが、「カルテ差戻し」で数えるので下書きでは数えない(同じ記録を 2 度数えない)。
-  const returned = new Set(
-    items.filter((item) => item.kindCode === NOTE_RETURNED_TASK_CODE.code && item.noteId).map((item) => item.noteId),
-  );
+  // 差し戻された記録は下書きに戻っているが「カルテ差戻し」で、督促の出ている様式文書の下書きは「文書作成」で数えるので、
+  // 下書きでは数えない(同じ記録を 2 度数えない)。
+  const covered = new Set(items.flatMap((item) => item.covers));
   for (const item of items) {
-    if (item.kindCode === DRAFT_NOTE_KIND_CODE && returned.has(item.noteId)) continue;
+    if (item.recordKey && covered.has(item.recordKey)) continue;
     const kind = recordDeficiencyKindOf(item.kindCode);
     if (!kind) continue;
     const overdue = Boolean(item.due) && item.due < today;

@@ -273,6 +273,7 @@ export function useSaveDocumentFormDocument() {
           existing: args.draftResponse?.response,
           extension: [responseDocumentDraftExtension({ title: args.title, date: args.date })],
           draft: true,
+          sourcePractitionerId: args.practitionerId,
         });
         const entry: fhir4.BundleEntry = args.draftResponse
           ? {

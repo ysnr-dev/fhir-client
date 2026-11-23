@@ -84,14 +84,16 @@
 
 ## 未完了記録一覧
 
-**診療業務 > 未完了記録一覧**(`/record-deficiencies`)は、下書きのままの診療記録と、記録が閉じていないことを表す未対応の `Task` を
-**担当者 × 種別**で数える画面です。担当者は Task の宛先(`owner`)、診療記録の記載者(`author` の最初の医療従事者)です。
+**診療業務 > 未完了記録一覧**(`/record-deficiencies`)は、下書きのままの診療記録・テンプレートの回答と、記録が閉じていないことを表す
+未対応の `Task` を**担当者 × 種別**で数える画面です。担当者は Task の宛先(`owner`)、診療記録の記載者(`author` の最初の医療従事者)、
+テンプレートの回答は下書きを保存した医療従事者(`source`)です。
 海外 EHR の記録不備の監査(TrakCare の Clinical Quality Monitoring)にあたり、退院カルテの点検(`docs/functional-gap-backlog.md` §6.1)の
 前段です。新しいデータは作らず、既にある記録と Task を数えます。
 
 | 区分 | 種別 | 一覧 |
 |---|---|---|
 | 記録 | 記録の下書き(`Composition` の `status=preliminary`、`type` = 経過記録 11506-3・他科依頼回答 11488-4) | –(行からカルテの詳細へ) |
+| 記録 | テンプレートの下書き(`QuestionnaireResponse` の `status=in-progress` で `source` が医療従事者のもの。様式文書の下書きを含む) | –(行からカルテの右ペインで下書きを開き直す) |
 | 記録 | カルテ承認 `note-countersign`、オーダー承認 `order-approval` | カルテ承認 |
 | 記録 | カルテ差戻し `note-returned`、看護サマリー差戻し `nursing-summary-returned`、DPC再判定 `dpc-recoding-due`、放射線治療レビュー `radiotherapy-review-due` | 通知 |
 | 記録 | 文書作成 `document-due` | 入退院文書 |
@@ -105,22 +107,32 @@
 - **下書き**: 看護記録・チーム回診記録も経過記録の `type` なので含みます。退院時サマリーの下書きは「文書作成」の Task で数えるので含みません。
   カウンターサインで差し戻された記録は下書きに戻りますが、「カルテ差戻し」で数え、下書きでは数えません(同じ記録を 2 度数えない)。
   最長の日数は記録日からです。
+- **テンプレートの下書き**: 「下書き保存」(`docs/features/templates.md`「回答の下書き」)で保存した回答です。記入者は JASPEHR に合わせて
+  contained の氏名だけで利用者と結び付かないので、下書きを保存した医療従事者を `source` に入れ、それで担当者を決めます(最初に下書きを
+  保存した人。開き直して保存しても変えません)。`source` の無い `in-progress` の回答(DPC 様式1 の未確定など、下書き保存の入口以外で
+  書く回答)は数えません。最長の日数は最後に保存した日(`authored`)からです。指導・管理料の要件の文書のように文書作成の督促が出ている
+  様式文書の下書きは、督促の宛先が下書きを保存した人と同じなら「文書作成」で数え、下書きでは数えません(督促は文書の id を持たないので、
+  担当者・患者・様式が同じものを同じ文書とみなします)。
 - 表は担当者ごとの 1 行で、担当者が 2 人以上なら末尾に合計の行を置きます。件数の無いセルは薄い「-」です。列は担当者(所属科を氏名の下に添える)・合計(期限超過の件数を添える)・
   最長(最も古いものからの日数)・種別ごとの件数です。種別の列は、表示中の行に 1 件も無いものを出しません。
   分類(記録・結果・照会・届出)の変わり目に区切りの罫線を引きます。並びは合計の多い順です。宛先・記載者の無いものは「宛先なし」の行にまとめます。自分の行は色を付けます。
 - **絞り込み**: 診療科(担当者の所属ロールで振り分けます。科を持たない「宛先なし」は科を選ぶと消えます)と「自分あてのみ」。
 - 担当者の行の**件数はボタン**で、押すとその担当者 × 種別の一覧をモーダルで開きます(合計の行は押せないので数字だけ。期限超過はボタンの下に赤字)。
   一覧は古い順に 200 件までで、患者・発生日(下書きは記録日)・期限・内容(下書きはタイトル)・カルテへのリンクを出します。
-  下書きのリンクはカルテの詳細でその記録を開きます。見出しの「一覧」で種別ごとの一覧画面へ移ります(下書きには一覧画面がないので出しません)。
+  記録の下書きのリンクはカルテの詳細でその記録を開き、テンプレートの下書きのリンクはカルテの右ペインで下書きを開き直します
+  (様式文書は文書作成、ほかはテンプレートの編集)。見出しの「一覧」で種別ごとの一覧画面へ移ります(下書きには一覧画面がないので出しません)。
   期限を過ぎたものだけを数える種別は、モーダルでも期限前のものを出しません。
 - 期限は文書作成が `input`「期限」、ほかは `restriction.period.end` です。期限を過ぎたものは赤で出します。
 - 読み込み: 上流に「担当者ごとの件数」を返す検索が無いので、全件を集計に要る要素だけで読んで画面で数えます(どちらも 500 件 × 20 ページまで。
   合計に使うので、超えたら欠けたまま出さずにエラーにします)。
-  - `Task?code=<13 種別のうち Task の 12 種別の OR>&status=requested&_elements=code,owner,authoredOn,restriction,input,focus`
+  - `Task?code=<Task の 12 種別の OR>&status=requested&_elements=code,owner,authoredOn,restriction,input,focus,for`
   - `Composition?status=preliminary&type=<経過記録,他科依頼回答>&_elements=author,date`
+  - `QuestionnaireResponse?status=in-progress&source:missing=false&_elements=source,authored,subject,questionnaire,extension`
+    (「自分あてのみ」では `source=Practitioner/<自分>`)
   - 担当者の氏名と所属科は `PractitionerRole?practitioner=<OR>&_include=PractitionerRole:practitioner` で 50 人ずつ引きます。
-  - モーダルだけ `_include=Task:subject`(下書きは `Composition:subject`)で患者を添えます。
+  - モーダルだけ `_include=Task:subject`(記録の下書きは `Composition:subject`、テンプレートの下書きは `QuestionnaireResponse:subject` と
+    テンプレート名のための `QuestionnaireResponse:questionnaire`)で患者を添えます。
 - **閲覧範囲**: ログインした人なら誰でも全員分を見られます(通知一覧で「自分あてのみ」を外したときと同じ範囲)。
-- **ホームのカード**「未完了記録」(既定の並びには入れていません): 自分あての Task と自分が記載者の下書きの件数・期限超過・最長日数と、種別ごとの内訳。
+- **ホームのカード**「未完了記録」(既定の並びには入れていません): 自分あての Task と自分が記載者(テンプレートは下書きを保存した人)の下書きの件数・期限超過・最長日数と、種別ごとの内訳。
 - 種別を足すときは `fhir/recordDeficiencyHelpers.ts` の `RECORD_DEFICIENCY_KINDS` に 1 要素足します。Task の種別は `source: "task"` で
   それだけで動きます。Task 以外を数えるときは `source` を足し、`useRecordDeficiencyItems` で `DeficiencyItem` にそろえます。
