@@ -11,8 +11,11 @@ module LabImport
     Result = Struct.new(:import, :duplicate_ids, keyword_init: true)
 
     # @param imported_by [Hash] { login_id:, practitioner_id: }
-    def initialize(file:, file_name: nil, format: "hl7_v25", encoding: "auto", imported_by: {})
+    # outsource_organization_id は取り込む結果を測った外注先(Organization.id)。空なら院内。
+    def initialize(file:, file_name: nil, format: "hl7_v25", encoding: "auto", imported_by: {},
+                   outsource_organization_id: nil)
       @file = file
+      @outsource_organization_id = outsource_organization_id.presence
       @file_name = file_name
       @format = format.presence || "hl7_v25"
       @encoding = encoding.presence || "auto"
@@ -54,6 +57,7 @@ module LabImport
           message_datetime: message.sent_at,
           imported_by_login_id: @imported_by[:login_id],
           imported_by_practitioner_id: @imported_by[:practitioner_id],
+          outsource_organization_id: @outsource_organization_id,
           row_count: rows.size,
           skipped_count: skipped_count
         )

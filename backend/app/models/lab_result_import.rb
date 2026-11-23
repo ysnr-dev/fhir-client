@@ -11,6 +11,8 @@ class LabResultImport < ApplicationRecord
                   foreign_key: :lab_result_import_id, inverse_of: :import
 
   validates :format, inclusion: { in: FORMATS }
+  # FHIR の id の形(上流の Organization.id)。
+  validates :outsource_organization_id, format: { with: /\A[A-Za-z0-9\-.]{1,64}\z/ }, allow_nil: true
 
   scope :recent, -> { order(created_at: :desc, id: :desc) }
 

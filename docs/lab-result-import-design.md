@@ -200,6 +200,7 @@ JLAC は施設をまたいで同じ意味を持つ標準コードなので、対
 | `file_name` | |
 | `message_control_id` / `message_datetime` | MSH-10 / MSH-7 |
 | `imported_by_login_id` / `imported_by_practitioner_id` | 取り込んだ人(認証なし運用では空)|
+| `outsource_organization_id` | 取り込んだ結果を測った外注先(Organization.id)。空なら院内(`docs/lab-outsource-design.md` §8)|
 | `row_count` / `skipped_count` | 行数 / OBX-11 が X・D で読み飛ばした数 |
 
 index: `created_at`、`source`、`message_control_id`。
@@ -293,8 +294,8 @@ index: `[lab_result_import_id, group_no, sequence]`、`[lab_result_import_id, st
 
 ### 8-1. 検査結果取込(部門業務 > 臨床検査部門 > 検査結果取込、`/lab-result-imports`)
 
-上にアップロード(ファイル選択 + 文字コードの選択。`pages/MasterImportPage.tsx` と同じ形)、
-下にバッチ一覧(取込日時・取込元・ファイル名・文字コード・件数(保留 / 登録待ち / 登録済み /
+上にアップロード(ファイル選択 + 文字コード + 外注先の選択。`pages/MasterImportPage.tsx` と同じ形)、
+下にバッチ一覧(取込日時・取込元・外注先・ファイル名・文字コード・件数(保留 / 登録待ち / 登録済み /
 対象外)・削除)。取り込むと詳細へ移る。
 
 ### 8-2. バッチの詳細(`/lab-result-imports/:id`)
@@ -371,9 +372,8 @@ index: `[lab_result_import_id, group_no, sequence]`、`[lab_result_import_id, st
 5. **到着していない検体の結果が来たとき**。いまは何もしない(結果登録と到着の接続は
    `docs/lab-arrival-design.md` §6-4 で保留のまま)。検査室の運用が固まってから、
    「未到着の管の結果です」と画面に出すか、到着済みに進めるかを決める。
-6. **外注(B-2)**。外注ラボの結果ファイルもこの器で取り込む。取込元が外注先 Organization に
-   対応するので、`source` から実施施設(`DiagnosticReport.performer`)を引けるようにするのが
-   そのときの追加になる(いまは自院とログインユーザーが入る)。
+6. **外注(B-2)**。外注先は取込のたびに画面で選ぶ(`outsource_organization_id`。2026-11-23 実装)。
+   `source`(MSH-4)から自動で決める対応表は持っていない。送信元が外注先ごとに固定と分かれば足せる。
 7. **装置固有コードしか来ない取込元**。そのときは取込元ごとのコード対応表を引き当ての
    0 番目に足す(§4 の設計判断)。
 8. **入外区分の食い違い**。オーダーの区分を優先し、ファイルの PV1-2 は

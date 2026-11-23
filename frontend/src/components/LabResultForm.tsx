@@ -27,6 +27,7 @@ import {
 } from "../fhir/labResultHelpers";
 import { useLabResultPerformerDefaults } from "../hooks/useLabResultPerformerDefaults";
 import { ErrorBanner } from "./ErrorBanner";
+import { LabOutsourceBadge } from "./LabOutsourceBadge";
 import { LabResultItemSearchModal } from "./LabResultItemSearchModal";
 import { TrashIcon } from "./icons/TrashIcon";
 import { NoteIcon } from "./icons/NoteIcon";
@@ -51,6 +52,13 @@ interface LabResultFormProps {
 
 type ModalState = { lineIndex: number } | null;
 
+/** 行の外注先(印に渡す形)。院内の行は空。 */
+function lineOutsource(line: LabResultLineValues): { id: string; name: string }[] {
+  return line.outsourceOrganizationId
+    ? [{ id: line.outsourceOrganizationId, name: line.outsourceOrganizationName ?? "" }]
+    : [];
+}
+
 /**
  * オーダーから展開した項目を、いま入力中の行に反映する。
  * ・並びはオーダーの項目順にし、すでに入力済みの結果値(と Observation の id)は引き継ぐ
@@ -67,7 +75,15 @@ function mergeExpandedLines(
 
   const merged = expanded.map((line) => {
     const existing = currentByKey.get(lineKeyOf(line.item));
-    return existing ? { ...existing, item: line.item } : line;
+    // 行き先はオーダーの明細が決めるので、入力中の行の値を残しつつ展開側に合わせる。
+    return existing
+      ? {
+          ...existing,
+          item: line.item,
+          outsourceOrganizationId: line.outsourceOrganizationId,
+          outsourceOrganizationName: line.outsourceOrganizationName,
+        }
+      : line;
   });
   const kept = current.filter(
     (line) => line.item && line.value && !expandedKeys.has(lineKeyOf(line.item)),
@@ -463,6 +479,7 @@ export function LabResultForm({
                     ) : (
                       <span className="rp-card__usage-value--empty">未選択</span>
                     )}
+                    {line.item && <LabOutsourceBadge organizations={lineOutsource(line)} />}
                   </div>
                 </td>
                 {/* 材料名は長いものがあるので、はみ出す分は見切って全文はツールチップで読む。 */}

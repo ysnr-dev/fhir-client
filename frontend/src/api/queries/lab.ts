@@ -46,8 +46,8 @@ export interface LabWorklistRow {
   specimens: fhir4.Specimen[];
   /** このオーダーを元に登録済みの検査結果の id。空なら結果はまだ無い。 */
   reportId: string;
-  /** その検査結果の報告区分(DiagnosticReport.status)。結果が無ければ空。 */
-  reportStatus: string;
+  /** その検査結果の項目(Observation)。外注検査の一覧だけが読む(検体検査一覧では空)。 */
+  observations: fhir4.Observation[];
 }
 
 export interface LabWorklistResult {
@@ -60,12 +60,16 @@ const LAB_ORDER_CATEGORY = `${ORDER_TYPE_SYSTEM}|${LAB_ORDER_TYPE.code}`;
 
 // 検体検査オーダーのヘッダ検索を、行(オーダー 1 件 + 明細・管・進捗・結果)に組む。
 // buildParams はヘッダを絞る条件だけを決め、添えてもらうリソースはここで足す。
+// withObservations なら検査結果の項目(Observation)も添えてもらう(外注の管ごとに結果が
+// 着いたかを見るため)。
 async function fetchLabRows(
   buildParams: (page: number) => URLSearchParams,
+  { withObservations = false }: { withObservations?: boolean } = {},
 ): Promise<LabWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
   const specimens: fhir4.Specimen[] = [];
+  const observationsById = new Map<string, fhir4.Observation>();
   // オーダー id → そのオーダーを元にした検査結果(結果登録が済んだかの判定用)。
   const reportByOrderId = new Map<string, fhir4.DiagnosticReport>();
 
@@ -77,10 +81,13 @@ async function fetchLabRows(
       params.append("_revinclude", "Task:focus");
       params.append("_revinclude", "Specimen:request");
       params.append("_revinclude", "DiagnosticReport:based-on");
+      if (withObservations) params.append("_include:iterate", "DiagnosticReport:result");
       return params;
     },
     (resource) => {
-      if (resource.resourceType === "Specimen") {
+      if (resource.resourceType === "Observation") {
+        if (resource.id) observationsById.set(resource.id, resource as fhir4.Observation);
+      } else if (resource.resourceType === "Specimen") {
         specimens.push(resource as fhir4.Specimen);
       } else if (resource.resourceType === "DiagnosticReport") {
         const report = resource as fhir4.DiagnosticReport;
@@ -111,7 +118,10 @@ async function fetchLabRows(
     task: labTaskByOrderId.get(order.id ?? ""),
     specimens: specimensByOrderId.get(order.id ?? "") ?? [],
     reportId: reportByOrderId.get(order.id ?? "")?.id ?? "",
-    reportStatus: reportByOrderId.get(order.id ?? "")?.status ?? "",
+    observations: (reportByOrderId.get(order.id ?? "")?.result ?? []).flatMap((reference) => {
+      const observation = observationsById.get(reference.reference?.split("/").pop() ?? "");
+      return observation ? [observation] : [];
+    }),
   }));
 
   // 検体検査オーダーは時刻を持たない(検査日だけ)ので、患者番号順に並べる。
@@ -165,7 +175,7 @@ function fetchLabOutsourceWorklist({
     params.append("occurrence", `le${to}`);
     params.set("performer", organizationIds.join(","));
     return params;
-  });
+  }, { withObservations: true });
 }
 
 export function useLabOutsourceWorklist(query: LabOutsourceWorklistQuery) {

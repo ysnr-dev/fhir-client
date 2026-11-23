@@ -27,7 +27,8 @@ module Master
         file_name: file.try(:original_filename),
         format: params[:format],
         encoding: params[:encoding],
-        imported_by: imported_by
+        imported_by: imported_by,
+        outsource_organization_id: params[:outsource_organization_id]
       ).call
 
       render json: { import: summary(result.import), duplicate_ids: result.duplicate_ids },

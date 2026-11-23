@@ -12,6 +12,7 @@ import {
   mergeImportLines,
   reportIdFromTransactionResponse,
   type LabImportGroup,
+  type LabImportOutsource,
 } from "../fhir/labImportHelpers";
 import {
   hydrateLabResultForm,
@@ -44,7 +45,8 @@ export function registrationBlocker(
   return null;
 }
 
-export function useLabImportRegistration() {
+/** outsource は取込バッチの外注先(院内の取込なら id が空)。 */
+export function useLabImportRegistration(outsource: LabImportOutsource) {
   const createLabResult = useCreateLabResult();
   const updateLabResult = useUpdateLabResult();
   const { bulkUpdateRows } = useLabResultImportMutations();
@@ -58,7 +60,7 @@ export function useLabImportRegistration() {
 
       const subject = labResultSubjectOf(context.patient);
       const items = await fetchImportItems(group);
-      const lines = importLinesOf(group, items, subject);
+      const lines = importLinesOf(group, items, subject, outsource);
       if (lines.length === 0) throw new Error("登録できる行がありません。");
 
       const reportId = context.existingReportId
@@ -76,7 +78,9 @@ export function useLabImportRegistration() {
       });
       return reportId;
     },
-    [bulkUpdateRows, fillPerformer, practitionerId],
+    // outsource は描画のたびに作り直されるので、中身で見張る。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bulkUpdateRows, fillPerformer, practitionerId, outsource.id, outsource.name],
   );
 
   /**

@@ -87,7 +87,13 @@ function expand(
       const key = lineKeyOf(resultItem);
       if (added.has(key)) continue;
       added.add(key);
-      lines.push({ ...emptyLabResultLine, item: resultItem });
+      // 行き先はオーダーの明細に焼き付けたもの(外注なら外注先)を引き継ぐ。
+      lines.push({
+        ...emptyLabResultLine,
+        item: resultItem,
+        outsourceOrganizationId: item.outsourceOrganizationId,
+        outsourceOrganizationName: item.outsourceOrganizationName,
+      });
     }
   }
 

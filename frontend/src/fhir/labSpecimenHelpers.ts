@@ -1,7 +1,12 @@
 import { nowFhirDateTime } from "../lib/dates";
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import type { LabSpecimenGroup } from "./labOrderHelpers";
-import { JLAC11_SPECIMEN_SYSTEM, LAB_LABEL_NUMBER_SYSTEM, isLabelSpecimen } from "./labResultHelpers";
+import {
+  JLAC11_SPECIMEN_SYSTEM,
+  LAB_LABEL_NUMBER_SYSTEM,
+  isLabelSpecimen,
+  tubeDestinationOf,
+} from "./labResultHelpers";
 import { codingBySystem } from "./prescriptionHelpers";
 
 // 検体ラベルの台帳 = 上流の Specimen リソース(docs/lab-arrival-design.md §6-1)。
@@ -14,11 +19,7 @@ import { codingBySystem } from "./prescriptionHelpers";
 // あること。結果登録はこの Specimen を参照する(所有はしない。labResultHelpers の
 // isLabelSpecimen を参照)。
 
-export { LAB_LABEL_NUMBER_SYSTEM, isLabelSpecimen };
-
-// 管の行き先(外注先の Organization.id)。外注に出す管だけが identifier に持ち、院内で
-// 測る管は持たない。backend の LabLabelReport::TUBE_DESTINATION_SYSTEM と同じ値。
-const TUBE_DESTINATION_SYSTEM = "http://fhir-client.local/IdSystem/lab-tube-destination";
+export { LAB_LABEL_NUMBER_SYSTEM, isLabelSpecimen, tubeDestinationOf };
 
 // 到着を記録したユーザー。FHIR の Specimen に「受け取った人」を表す標準要素が
 // 無いため(collection.collector は採取した人)、ローカル拡張で持つ。
@@ -65,11 +66,6 @@ export function specimenArrived(specimen: fhir4.Specimen): boolean {
 export function specimenOrderIdOf(specimen: fhir4.Specimen): string {
   const reference = specimen.request?.[0]?.reference ?? "";
   return reference.match(/^ServiceRequest\/(.+)$/)?.[1] ?? "";
-}
-
-/** 管の行き先(外注先の Organization.id)。院内で測る管は空。 */
-export function tubeDestinationOf(specimen: fhir4.Specimen): string {
-  return specimen.identifier?.find((i) => i.system === TUBE_DESTINATION_SYSTEM)?.value ?? "";
 }
 
 /** 管が検体グループのものか(検体と行き先が同じ)。 */

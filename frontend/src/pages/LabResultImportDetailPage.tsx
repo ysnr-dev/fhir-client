@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { LabResultItem } from "../api/masterClient";
+import { useOrganization } from "../api/queries";
 import {
   useLabResultImport,
   useLabResultImportMutations,
@@ -31,7 +32,16 @@ export function LabResultImportDetailPage() {
   const importId = Number(id);
   const detail = useLabResultImport(Number.isFinite(importId) ? importId : undefined);
   const { resolve } = useLabResultImportMutations();
-  const { registerGroup, registerAll, registering } = useLabImportRegistration();
+  // 取込バッチの外注先。登録する結果の項目ごとの実施施設になる(空なら院内)。
+  const outsourceId = detail.data?.outsource_organization_id ?? "";
+  const outsourceOrganization = useOrganization(outsourceId || undefined);
+  const outsourceName = outsourceOrganization.data?.data.name ?? "";
+  const { registerGroup, registerAll, registering } = useLabImportRegistration({
+    id: outsourceId,
+    name: outsourceName,
+  });
+  // 外注先の名称を読み終えるまでは登録させない(名称の無い実施施設を書かないように)。
+  const outsourcePending = Boolean(outsourceId) && !outsourceOrganization.data;
   const [failures, setFailures] = useState<Record<number, string>>({});
   const [error, setError] = useState<unknown>(null);
   // カードが解決した文脈。「すべて登録」がここから対象を集める。
@@ -103,7 +113,11 @@ export function LabResultImportDetailPage() {
           >
             再引当
           </button>
-          <button type="button" disabled={registering || groups.length === 0} onClick={handleRegisterAll}>
+          <button
+            type="button"
+            disabled={registering || outsourcePending || groups.length === 0}
+            onClick={handleRegisterAll}
+          >
             {registering ? "登録中..." : "すべて登録"}
           </button>
         </div>
@@ -112,7 +126,7 @@ export function LabResultImportDetailPage() {
       {batch && (
         <p className="lab-import-summary">
           {batch.file_name ?? ""} / {batch.message_type ?? batch.format} / 取込元{" "}
-          {batch.source ?? "(不明)"} / 文字コード {batch.encoding}(
+          {batch.source ?? "(不明)"} / 外注先 {outsourceId ? outsourceName || "-" : "院内"} / 文字コード {batch.encoding}(
           {ENCODING_REASONS[batch.encoding_reason ?? ""] ?? batch.encoding_reason}) / 取込日時{" "}
           {labInstantLabel(batch.created_at)} / {batch.row_count} 行
           {batch.skipped_count > 0 && `(結果なし・削除で読み飛ばし ${batch.skipped_count} 行)`}
@@ -142,7 +156,7 @@ export function LabResultImportDetailPage() {
           itemsByCode={itemsByCode}
           onRegister={handleRegister}
           onContextResolved={handleContextResolved}
-          registering={registering}
+          registering={registering || outsourcePending}
           failure={failures[group.groupNo] || undefined}
         />
       ))}

@@ -25,6 +25,7 @@ import {
 } from "../fhir/labResultHelpers";
 import { copyKarteLink } from "../lib/copyKarteLink";
 import { ErrorBanner } from "./ErrorBanner";
+import { LabOutsourceBadge } from "./LabOutsourceBadge";
 import { FhirJsonView } from "./FhirJsonView";
 import { LAB_CATEGORIES } from "./labOrderItemOptions";
 import { LabResultHistoryModal } from "./LabResultHistoryModal";
@@ -358,6 +359,13 @@ export function LabResultDetailPanel({
                           <span title={itemTooltip(line.name, line.method)}>
                             {line.abbreviation || line.name || "-"}
                           </span>
+                          {line.outsourceOrganizationId && (
+                            <LabOutsourceBadge
+                              organizations={[
+                                { id: line.outsourceOrganizationId, name: line.outsourceOrganizationName },
+                              ]}
+                            />
+                          )}
                         </td>
                         {/* 材料名称は長いものがあるので、はみ出す分は見切って全文はツールチップで読む。 */}
                         <td>

@@ -53,6 +53,16 @@ export function isLabelSpecimen(specimen: fhir4.Specimen): boolean {
   return specimen.accessionIdentifier?.system === LAB_LABEL_NUMBER_SYSTEM;
 }
 
+// 管の行き先(外注先の Organization.id)。外注に出す管だけが identifier に持ち、院内で
+// 測る管は持たない。backend の LabLabelReport::TUBE_DESTINATION_SYSTEM と同じ値。
+// 結果登録が自分で作る Specimen も、外注の結果なら同じ識別子を持つ。
+export const TUBE_DESTINATION_SYSTEM = "http://fhir-client.local/IdSystem/lab-tube-destination";
+
+/** 管の行き先(外注先の Organization.id)。院内で測る管は空。 */
+export function tubeDestinationOf(specimen: fhir4.Specimen): string {
+  return specimen.identifier?.find((i) => i.system === TUBE_DESTINATION_SYSTEM)?.value ?? "";
+}
+
 /**
  * 報告区分。中間報告(preliminary)→ 最終報告(final)→ 確定後に値を直したら訂正(corrected)。
  * 訂正への遷移は build 側が行うので、フォームの選択肢は中間・最終の 2 つ(病理
@@ -183,9 +193,11 @@ export function lineKeyOf(item: LabResultItem): string {
   return `name:${item.name}`;
 }
 
-// 更新時に既存の Specimen を使い回すための、材料コード → リソース id の対応。
+// 更新時に既存の Specimen を使い回すための、材料コード・行き先 → リソース id の対応。
 export interface SpecimenRef {
   code: string;
+  /** 外注先の Organization.id。院内の検体は空。 */
+  destination?: string;
   id: string;
 }
 
@@ -285,6 +297,17 @@ export interface LabResultLineValues {
   interpretation: LabInterpretation;
   // 項目ごとのコメント(溶血・乳び・再検など)。空なら Observation.note を書かない。
   note: string;
+  /**
+   * 外注先(Organization.id)と名称。空なら院内で測った項目。オーダーの明細の行き先、
+   * 取込なら取込バッチの外注先から入り、Observation.performer に書く。
+   */
+  outsourceOrganizationId?: string;
+  outsourceOrganizationName?: string;
+}
+
+/** 結果の行の材料と行き先の鍵。同じ材料でも院内と外注は別の検体(管)になる。 */
+function specimenKeyOf(code: string, destination: string | undefined): string {
+  return `${code}|${destination ?? ""}`;
 }
 
 export interface LabResultFormValues {
@@ -403,6 +426,8 @@ function buildObservationValue(line: LabResultLineValues): Partial<fhir4.Observa
 // (発行前に結果が来た・オーダー未紐付け)は結果側で作って所有する。
 interface SpecimenPlan {
   code: string;
+  /** 外注先の Organization.id。院内の検体は空。 */
+  destination: string;
   display: string;
   fullUrl: string;
   id?: string;
@@ -415,19 +440,25 @@ function planSpecimens(
   originalSpecimens: SpecimenRef[],
   labelSpecimens: fhir4.Specimen[],
 ): Map<string, SpecimenPlan> {
-  const idByCode = new Map(originalSpecimens.map((s) => [s.code, s.id]));
+  const idByKey = new Map(originalSpecimens.map((s) => [specimenKeyOf(s.code, s.destination), s.id]));
   const plans = new Map<string, SpecimenPlan>();
 
   for (const line of values.lines) {
     const code = specimenCodeOf(line.item);
-    if (!code || plans.has(code)) continue;
+    const destination = line.outsourceOrganizationId ?? "";
+    const key = specimenKeyOf(code, destination);
+    if (!code || plans.has(key)) continue;
 
+    // 管は材料と行き先の両方で探す(同じ材料でも院内の管と外注の管は別)。
     const label = labelSpecimens.find(
-      (s) => codingBySystem(s.type?.coding, JLAC11_SPECIMEN_SYSTEM)?.code === code,
+      (s) =>
+        codingBySystem(s.type?.coding, JLAC11_SPECIMEN_SYSTEM)?.code === code &&
+        tubeDestinationOf(s) === destination,
     );
     if (label?.id) {
-      plans.set(code, {
+      plans.set(key, {
         code,
+        destination,
         display: line.item?.specimen_name ?? "",
         fullUrl: `Specimen/${label.id}`,
         id: label.id,
@@ -436,9 +467,10 @@ function planSpecimens(
       continue;
     }
 
-    const id = idByCode.get(code);
-    plans.set(code, {
+    const id = idByKey.get(key);
+    plans.set(key, {
       code,
+      destination,
       display: line.item?.specimen_name ?? "",
       id,
       fullUrl: id ? `Specimen/${id}` : `urn:uuid:${crypto.randomUUID()}`,
@@ -466,6 +498,9 @@ function buildSpecimen(plan: SpecimenPlan, patientId: string, collected: string)
     collection: { collectedDateTime: collected },
   };
 
+  if (plan.destination) {
+    resource.identifier = [{ system: TUBE_DESTINATION_SYSTEM, value: plan.destination }];
+  }
   if (plan.id) resource.id = plan.id;
   return resource;
 }
@@ -559,6 +594,15 @@ function buildObservation(
   };
 
   if (specimenReference) resource.specimen = { reference: specimenReference };
+  // 外注の項目だけ実施施設(外注先)を項目に持つ。院内の項目はレポートの実施施設(自院)に従う。
+  if (line.outsourceOrganizationId) {
+    resource.performer = [
+      {
+        reference: `Organization/${line.outsourceOrganizationId}`,
+        display: line.outsourceOrganizationName || undefined,
+      },
+    ];
+  }
   if (item && range && item.data_type === "PQ") {
     resource.referenceRange = [buildReferenceRange(item, range)];
   }
@@ -670,7 +714,9 @@ function buildLabResultTransactionBundle(
   const keptObservationIds = new Set<string>();
 
   for (const line of values.lines) {
-    const specimenReference = specimenPlans.get(specimenCodeOf(line.item))?.fullUrl;
+    const specimenReference = specimenPlans.get(
+      specimenKeyOf(specimenCodeOf(line.item), line.outsourceOrganizationId),
+    )?.fullUrl;
     const range = matchReferenceRange(line.item, subject, values.specimenDate);
     const resource = buildObservation(line, patientId, effective, status, specimenReference, range);
     const fullUrl = line.id ? `Observation/${line.id}` : `urn:uuid:${crypto.randomUUID()}`;
@@ -1010,6 +1056,9 @@ export interface LabResultLineDisplay {
   method: string;
   // 項目ごとのコメント。あれば項目の下に 1 行で出す。
   note: string;
+  // 外注先(Organization.id)と名称。院内で測った項目は空。項目名に「外注」の印を付ける。
+  outsourceOrganizationId: string;
+  outsourceOrganizationName: string;
 }
 
 function specimenName(specimen: fhir4.Specimen): string {
@@ -1073,6 +1122,22 @@ export function observationLineDisplay(
     interpretation: formInterpretationOf(obs),
     method: obs.method?.text ?? obs.method?.coding?.[0]?.display ?? "",
     note: (obs.note ?? []).map((note) => note.text).filter(Boolean).join(" / "),
+    ...observationOutsourceOf(obs),
+  };
+}
+
+/**
+ * 項目の外注先(Observation.performer の Organization)。院内で測った項目は空。
+ * 院内の項目は performer を持たない(実施施設はレポートに持つ)。
+ */
+export function observationOutsourceOf(obs: fhir4.Observation): {
+  outsourceOrganizationId: string;
+  outsourceOrganizationName: string;
+} {
+  const performer = obs.performer?.find((p) => p.reference?.startsWith("Organization/"));
+  return {
+    outsourceOrganizationId: performer?.reference?.split("/").pop() ?? "",
+    outsourceOrganizationName: performer?.display ?? "",
   };
 }
 
@@ -1303,6 +1368,7 @@ export function parseLabResultForm(
     value: lineValueFromObservation(obs),
     interpretation: formInterpretationOf(obs),
     note: (obs.note ?? []).map((note) => note.text).filter(Boolean).join(" / "),
+    ...observationOutsourceOf(obs),
   }));
 
   return {
@@ -1340,6 +1406,7 @@ export function buildDoLabResultForm(
     originalStatus: "",
     conclusion: "",
     performer: { ...emptyLabResultPerformer },
+    // オーダーに紐付かない結果になるので、行き先(外注先)も引き継がない。
     lines: values.lines.map((line) => ({
       item: line.item,
       value: "",
@@ -1359,7 +1426,7 @@ export function specimenRefsFrom(specimens: fhir4.Specimen[]): SpecimenRef[] {
   return specimens.flatMap((s) => {
     if (isLabelSpecimen(s)) return [];
     const code = codingBySystem(s.type?.coding, JLAC11_SPECIMEN_SYSTEM)?.code;
-    return code && s.id ? [{ code, id: s.id }] : [];
+    return code && s.id ? [{ code, destination: tubeDestinationOf(s), id: s.id }] : [];
   });
 }
 

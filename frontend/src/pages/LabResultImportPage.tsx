@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useLabResultImportMutations, useLabResultImports } from "../api/masterQueries";
 import type { LabResultImport } from "../api/masterClient";
+import { useClinicalLabOptions } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { labInstantLabel } from "../fhir/labResultHelpers";
 
@@ -23,6 +24,10 @@ export function LabResultImportPage() {
   const [page, setPage] = useState(1);
   const [file, setFile] = useState<File | null>(null);
   const [encoding, setEncoding] = useState("auto");
+  // 取り込む結果を測った外注先。空なら院内。
+  const [outsourceOrganizationId, setOutsourceOrganizationId] = useState("");
+  const labs = useClinicalLabOptions();
+  const labNames = new Map(labs.organizations.map((organization) => [organization.id, organization.name]));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imports = useLabResultImports(page);
 
@@ -37,7 +42,7 @@ export function LabResultImportPage() {
     event.preventDefault();
     if (!file) return;
     importFile.mutate(
-      { file, encoding },
+      { file, encoding, outsourceOrganizationId },
       {
         onSuccess: (created) => {
           setFile(null);
@@ -85,12 +90,26 @@ export function LabResultImportPage() {
             ))}
           </select>
         </label>
+        <label>
+          外注先
+          <select
+            value={outsourceOrganizationId}
+            onChange={(event) => setOutsourceOrganizationId(event.target.value)}
+          >
+            <option value="">院内</option>
+            {labs.organizations.map((organization) => (
+              <option key={organization.id} value={organization.id}>
+                {organization.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="master-import-form__actions">
           <button type="submit" disabled={!file || importFile.isPending}>
             {importFile.isPending ? "取込中..." : "取込実行"}
           </button>
         </div>
-        <ErrorBanner error={importFile.error} />
+        <ErrorBanner error={importFile.error ?? labs.error} />
       </form>
 
       <ErrorBanner error={imports.error ?? remove.error} />
@@ -100,6 +119,7 @@ export function LabResultImportPage() {
           <tr>
             <th>取込日時</th>
             <th>取込元</th>
+            <th>外注先</th>
             <th>ファイル</th>
             <th>形式</th>
             <th>文字コード</th>
@@ -119,6 +139,11 @@ export function LabResultImportPage() {
                 </Link>
               </td>
               <td>{batch.source ?? ""}</td>
+              <td>
+                {batch.outsource_organization_id
+                  ? (labNames.get(batch.outsource_organization_id) ?? "外注先")
+                  : "院内"}
+              </td>
               <td>{batch.file_name ?? ""}</td>
               <td>{batch.message_type ?? batch.format}</td>
               <td>{batch.encoding ?? ""}</td>

@@ -40,6 +40,19 @@ RSpec.describe "Master::LabResultImports", type: :request do
       expect(body["duplicate_ids"]).to eq([first_id])
     end
 
+    it "外注先を指定して取り込める" do
+      upload("oru_r01_utf8.hl7", outsource_organization_id: "lab-1")
+
+      expect(response).to have_http_status(:created)
+      expect(body["import"]["outsource_organization_id"]).to eq("lab-1")
+    end
+
+    it "外注先を指定しなければ院内の取込になる" do
+      upload("oru_r01_utf8.hl7", outsource_organization_id: "")
+
+      expect(body["import"]["outsource_organization_id"]).to be_nil
+    end
+
     it "ファイルが無ければ 422" do
       post "/master/lab_result_imports"
       expect(response).to have_http_status(:unprocessable_content)

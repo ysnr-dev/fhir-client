@@ -39,6 +39,8 @@ export interface LabResultImport {
   message_datetime: string | null;
   imported_by_login_id: string | null;
   imported_by_practitioner_id: string | null;
+  /** 取り込んだ結果を測った外注先(Organization.id)。空なら院内で測った結果。 */
+  outsource_organization_id: string | null;
   row_count: number;
   /** OBX-11 が X(結果なし)・D(削除)で読み飛ばした数。 */
   skipped_count: number;
@@ -134,12 +136,14 @@ export interface LabResultImportRowsUpdated {
 export async function createLabResultImport(
   file: File,
   encoding: string,
+  outsourceOrganizationId = "",
   format = "hl7_v25",
 ): Promise<LabResultImportCreated> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("encoding", encoding);
   formData.append("format", format);
+  formData.append("outsource_organization_id", outsourceOrganizationId);
   // Content-Type は指定しない（ブラウザが multipart boundary 付きで設定する）
   const res = await masterFetch("/master/lab_result_imports", { method: "POST", body: formData });
   if (!res.ok) throw await buildError(res);

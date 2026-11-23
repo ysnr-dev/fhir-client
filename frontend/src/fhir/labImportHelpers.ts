@@ -127,11 +127,21 @@ export function importInterpretationOf(
   return FILE_FLAGS[(row.abnormal_flag ?? "").toUpperCase()] ?? "";
 }
 
-/** 登録する行(ready)だけをフォームの行に直す。マスタに無い項目は落とす。 */
+/** 取込バッチの外注先。院内で測った結果の取込なら id が空。 */
+export interface LabImportOutsource {
+  id: string;
+  name: string;
+}
+
+/**
+ * 登録する行(ready)だけをフォームの行に直す。マスタに無い項目は落とす。
+ * 外注先を指定した取込なら、全行がその外注先で測った結果になる。
+ */
 export function importLinesOf(
   group: LabImportGroup,
   itemsByCode: Map<string, LabResultItem>,
   subject: LabResultSubject | undefined,
+  outsource: LabImportOutsource = { id: "", name: "" },
 ): LabResultLineValues[] {
   return group.rows
     .filter((row) => row.status === "ready" || row.status === "registered")
@@ -144,6 +154,8 @@ export function importLinesOf(
           value: row.value ?? "",
           interpretation: importInterpretationOf(row, item, subject, group.collectedDate),
           note: row.note ?? "",
+          outsourceOrganizationId: outsource.id,
+          outsourceOrganizationName: outsource.name,
         },
       ];
     });
@@ -191,7 +203,15 @@ export function mergeImportLines(
     const replacement = line.item ? incoming.get(lineKeyOf(line.item)) : undefined;
     if (!replacement) return line;
     incoming.delete(lineKeyOf(line.item!));
-    return { ...line, value: replacement.value, interpretation: replacement.interpretation, note: replacement.note };
+    // 実施施設は取り込んだ側(どこで測った結果か)に合わせる。
+    return {
+      ...line,
+      value: replacement.value,
+      interpretation: replacement.interpretation,
+      note: replacement.note,
+      outsourceOrganizationId: replacement.outsourceOrganizationId,
+      outsourceOrganizationName: replacement.outsourceOrganizationName,
+    };
   });
 
   return {

@@ -56,8 +56,16 @@ export function useLabResultImportMutations() {
   };
 
   const importFile = useMutation({
-    mutationFn: ({ file, encoding }: { file: File; encoding: string }) =>
-      createLabResultImport(file, encoding),
+    mutationFn: ({
+      file,
+      encoding,
+      outsourceOrganizationId,
+    }: {
+      file: File;
+      encoding: string;
+      /** 取り込む結果を測った外注先。空なら院内。 */
+      outsourceOrganizationId: string;
+    }) => createLabResultImport(file, encoding, outsourceOrganizationId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: LAB_RESULT_IMPORTS_KEY });
     },
