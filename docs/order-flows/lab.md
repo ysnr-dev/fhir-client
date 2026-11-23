@@ -12,7 +12,8 @@
 
 このページで使う呼び名です。
 
-- **管(採取管)**: 検体を入れる容器 1 本です。ラベルは管 1 本に 1 枚刷り、到着も管ごとに記録します。
+- **管(採取管)**: 検体を入れる容器 1 本です。ラベルは管 1 本に 1 枚刷り、到着も管ごとに記録します。同じ検体でも、院内で測る分と外注先に出す分は別の管になります。
+- **外注**: 外部の検査センター(外注先)に出して測る検査です。どの検査項目を外注にするか、どこに出すかは、あらかじめマスタと施設設定で決めておきます(「外注検査の流れ」)。
 - **依頼医**: オーダーを指示した医師です(画面では「依頼医師」「指示医師」)。結果の通知の宛先になります。
 - **状態**: 採血室・検査室の作業がどこまで進んだかを示します(依頼済・受付済・実施済・中止)。検体検査一覧の「ステータス」の列に出ます。
 - **パニック値**: 結果項目ごとに決めた、すぐに知らせるべき危険な値の範囲です。外れると判定が HH / LL になり、依頼医に「緊急異常値」の通知が届きます。
@@ -70,6 +71,7 @@ flowchart TD
 - **報告区分**: 中間報告は何度でも出し直せます。最終報告にすると、依頼医に通知が届きます。確定した結果を直すと訂正報告になり、通知は未確認に戻ります。
 - **パニック値**: 報告区分に関わらず、緊急異常値の通知が届きます。中間報告のうちに確認しても、結果の確認は済みません(「結果の確認」)。
 - **結果の入れ方**: 手入力のほか、分析装置・外注のファイルを取り込めます(「結果取込の流れ」)。
+- **外注**: 外注の検査も、ラベル発行・採取・到着確認までは院内の検査と同じ画面と手順です。届いた管を外注先に提出し、返ってきた結果を入れます(「外注検査の流れ」)。
 
 ### 検体検査の状態
 
@@ -90,6 +92,7 @@ flowchart TD
 
 管 1 本ごとにも状態があり、未発行 → 発行済 → 到着済と進みます。検体検査一覧の検査内容の欄に出ます。
 オーダーの状態は作業がどこまで進んだかを、管の状態は現物がどこにあるかを示します。ラベルを刷り直しても、管の状態は変わりません。
+外注の管は、到着の後に外注先への提出を記録します。提出と結果の届き具合は「外注検査」の画面で追います(「外注検査の流れ」)。
 
 ### 登録の判定
 
@@ -123,6 +126,7 @@ flowchart TD
 - **警告**: 処方・注射で出る重複・回数・施設の規則の警告は、検体検査では出ません。外部の判断支援への問い合わせもありません。
 - **検査項目の選び方**: 検査伝票(レイアウト)のタブか「検査項目検索」から選びます。「肝機能セット」のような項目のまとまりも、ほかの項目と同じくここから選びます。オーダーセットは、カルテの右ペインの「セット」から出します。
 - **パネル**: パネルを選ぶと、その構成項目も一緒に入ります。構成項目を外すと、その項目だけを除いてオーダーできます。
+- **外注の項目**: 「選択中」で、外注の項目に「外注」の印が付きます。院内の項目と同じ検体でも、別の管(GP)に分かれます。外注先は登録した時点のマスタと施設設定で決まり、後でマスタを変えても登録済みのオーダーは変わりません。
 - **承認待ち**: 承認待ちのあいだも、オーダーは検体検査一覧に出ます。承認は通知の一覧か、カルテの詳細から行います。
 - **セット・パス・レジメン**: オーダーセット・クリニカルパス・レジメンから出した検体検査も、ここと同じ判定で登録されます。
 
@@ -179,6 +183,68 @@ flowchart TD
 - **到着の取消**: 行の「取消」は、その管の到着を消します。実施済まで進んでいたオーダーは受付済に戻ります。検体検査一覧の「取消」とは別の操作です。
 - **細菌検査**: 細菌検査の容器も同じ画面で読みます。細菌検査は、容器が揃うと実施済ではなく受付済になります。
 
+### 外注検査の流れ
+
+外注の管を外注先に渡し、結果が返ってくるまでを追います。画面は「部門業務 > 臨床検査部門 > 外注検査」です。外注の管を 1 本 1 行で並べます。
+
+```mermaid
+flowchart TD
+  arrived(("外注の管が届いた"))
+  finish((("結果済")))
+
+  subgraph lab["検査室"]
+    submit["「外注検査」で管を選んで<br/>「提出」(結果未着になる)"]
+    slip["「外注伝票」を刷る"]
+    hand["検体と外注伝票を<br/>外注先に渡す"]
+    how{"結果はファイルで届いた?"}
+    import["「検査結果取込」で<br/>外注先を選んで取り込む"]
+    manual["カルテで結果を入力"]
+  end
+
+  subgraph outlab["外注先"]
+    measure["測定して結果を返す"]
+  end
+
+  arrived --> submit --> slip --> hand --> measure --> how
+  how -- "はい" --> import --> finish
+  how -- "いいえ(紙など)" --> manual --> finish
+```
+
+「外注検査」の画面の「状況」です。
+
+| 外注の管の状況 | 意味 |
+|---|---|
+| ラベル未発行 | まだラベルを刷っていない。提出できない |
+| 提出待ち | ラベルを刷ったが、まだ提出していない |
+| 結果未着 | 提出したが、その管の結果がまだ確定していない |
+| 結果済 | その管の結果が確定した |
+
+**日々の操作**
+
+- **提出**: 提出待ちの管にチェックを付けて「提出」を押すと、提出した日時と記録した人が残ります。到着確認とは別の操作で、到着を記録していなくても提出できます。
+- **提出の取消**: 結果未着の行の「取消」で、提出待ちに戻ります。
+- **外注伝票**: 外注先と提出日を選んで「外注伝票」を押すと、その日にその外注先へ提出した管の一覧(外注検査依頼書)が別のタブで開きます。ブラウザから A4 縦で印刷し、検体と一緒に渡します。
+- **絞り込み**: 外注先・検査日の期間・状況で絞ります。期間ははじめは今日までの 30 日、状況ははじめは提出待ちです。中止した検査は出ません。
+
+**結果の届き具合**
+
+- 管ごとに見ます。院内の項目だけを先に確定しても、外注の管は結果未着に残ります。
+- 外注先が一部の項目だけ先に返したときも、1 項目でも確定すれば結果済になります。項目ごとの未着は追いません。
+- 外注の結果は、取込で外注先を選ぶか、オーダーの項目を並べて手入力したときに、その管の結果として数えられます。
+
+**ほかの画面での見え方**
+
+- **検体検査一覧**: 外注の項目を含むオーダーの検査内容に「外注」の印が付きます。「実施区分」で院内・外注に絞れます。院内と外注が混ざるオーダーは、どちらで絞っても出ます。
+- **表示・カルテ**: 外注の管(GP)の見出しに「外注: 外注先の名前」が付きます。
+- **検体ラベル**: 外注の管のラベルには「外注」と外注先の名前が刷られます。
+
+**準備(マスタと施設設定を管理する人)**
+
+- **外注先**: 「マスタメンテ > 連携先 > 連携先医療機関」で、外注先の医療機関に「検査委託先」のチェックを付けます。
+- **外注にする検査項目**: 「マスタメンテ > 検体検査 > 検査オーダー項目」で、実施区分を「外注」にします。出す先がほかと違う項目だけ「外注先」を選びます。
+- **既定の外注先**: 「管理 > 施設設定」の「検体検査の外注」で決めます。外注先を選んでいない外注の項目は、ここに出します。
+- 項目にも施設設定にも外注先が無い外注の項目は、院内の検査として扱われます。
+
 ### 結果の登録と報告
 
 結果を入れる場所は 3 つあります。
@@ -233,7 +299,9 @@ flowchart TD
 
 **記録されること**
 
-- 実施施設は自院、実施者はログインした人が入ります。編集しても、最初の実施者が残ります。
+- 実施施設は自院、実施者はログインした人が入ります。編集しても、最初の実施者が残ります。実施者は画面には出ません。
+- 外注の項目は、項目ごとに外注先が実施施設として残ります。オーダーの項目を並べて入力したときと、外注先を選んで取り込んだときに入ります。登録画面と内容表示で、項目名の横に「外注」の印が付きます。
+- 画面で足した項目、オーダーに紐付けない結果、DO で作った結果は、院内の結果になります。
 - 報告日時は、保存のたびに更新されます。
 
 **印刷**
@@ -271,6 +339,7 @@ flowchart TD
 **読み込み**
 
 - ファイルの文字コードは自動で判定します。外れるときは、取込の画面で文字コードを指定できます。
+- 取込の画面で「外注先」を選びます。外注先から届いたファイルはその外注先を、院内の分析装置のファイルは「院内」を選びます。外注先を選ぶと、そのファイルの結果はすべてその外注先で測った結果になります。
 - 結果項目は、ファイルの検査項目コード(JLAC)で結果項目マスタから引き当てます。
 
 **保留の行**
@@ -362,6 +431,7 @@ flowchart TD
 |---|---|---|
 | 検体ラベル | 検体検査一覧の行の「ラベル発行」、「ラベル一括発行」 | 管 1 本に 1 枚 |
 | 検査結果報告書 | カルテの「検体検査」タブの内容表示の「印刷」 | 結果 1 件に 1 枚(A4 縦・2 段) |
+| 外注伝票(外注検査依頼書) | 「外注検査」の「外注伝票」 | 外注先 1 つ・提出日 1 日ぶんで 1 枚(A4 縦)。ブラウザから印刷する |
 
 検体ラベルに刷る内容です。
 
@@ -370,8 +440,11 @@ flowchart TD
 - 検体・採取管(色)
 - 検査日・至急
 - 検査項目の略称
+- 外注の管は「外注」と外注先の名前
 
-検査結果報告書には、検査項目・結果値・判定・単位・基準値と、コメント・総合所見を刷ります。
+検査結果報告書には、検査項目・結果値・判定・単位・基準値と、コメント・総合所見を刷ります。外注の印はまだ刷れません。
+
+外注伝票には、依頼先・依頼元・提出日・本数と、管ごとに採取番号・患者番号・氏名・性別・生年月日・検査日・検体・検査項目を刷ります。
 
 ## 開発者向け
 
@@ -408,14 +481,19 @@ flowchart TD
 | リソース | 要素 | 中身 |
 |---|---|---|
 | 明細 `ServiceRequest` | `code` ほか | オーダー時点のマスタの内容(項目コード・名称・JLAC・検体・採取管)を写す |
+| 明細 `ServiceRequest` | `performer` | 外注の項目だけ、外注先の `Organization`。院内は持たない |
+| ヘッダ `ServiceRequest` | `performer` | 明細の外注先を重複なしで写す(外注検査の画面が外注先で引くため) |
+| 管の Specimen | `identifier`(`lab-tube-destination`) | 外注の管の行き先(外注先の id)。院内の管は持たない |
+| 管の Specimen | 拡張 `lab-outsource-shipped-at`・`lab-outsource-shipment-recorder` | 外注先への提出の日時と記録した人 |
+| `Observation` | `performer` | 外注の項目だけ、外注先の `Organization`。院内は持たない |
 | 管の Specimen | `accessionIdentifier` | ラベル番号 |
 | 管の Specimen | `receivedTime` と `status: available` | 到着 |
 | 管の Specimen | 拡張 `lab-arrival-recorder` | 到着を記録した人 |
 | `DiagnosticReport` | `status` | 報告区分(`preliminary` / `final` / `corrected`) |
 | `DiagnosticReport` | `effectiveDateTime` | 採取日 |
 | `DiagnosticReport` | `issued` | 報告日時 |
-| 結果の Specimen | (参照するとき) | 材料の一致する管の Specimen を参照する。書き換えない |
-| 結果の Specimen | (作るとき) | 材料の一致する管が無いときと、紐付けの無い結果のとき。結果側が作って所有する |
+| 結果の Specimen | (参照するとき) | 材料と行き先の一致する管の Specimen を参照する。書き換えない |
+| 結果の Specimen | (作るとき) | 材料と行き先の一致する管が無いときと、紐付けの無い結果のとき。結果側が作って所有し、外注なら行き先の `identifier` を付ける |
 | 緊急異常値の通知 Task | `owner`・`priority` | 依頼医、`stat` |
 | 緊急異常値の通知 Task | `input` | パニック値の項目・値・判定 |
 | 検査結果確認の通知 Task | `owner` | 依頼医。最終報告と訂正報告のときだけ作る |
@@ -453,6 +531,8 @@ flowchart TD
 | 到着確認 | `pages/LabArrivalPage.tsx` | `buildSpecimenArrival` / `buildSpecimenArrivalCancel`(`fhir/labSpecimenHelpers.ts`) | `useUpdateLabArrival`、`fetchLabelSpecimenByNumber` / `fetchLabArrivalContext` |
 | 結果登録・訂正・削除 | `components/LabResultEntryModal.tsx`(一覧)・`KarteLabResultTab.tsx`・`LabResultForm.tsx` | `buildLabResultBundle` / `buildLabResultUpdateBundle` / `buildLabResultDeleteBundle`(`fhir/labResultHelpers.ts`) | `useCreateLabResult` / `useUpdateLabResult` / `useDeleteLabResult`(`api/queries/labResult.ts`) |
 | 結果の通知 | 同上 | `fhir/labPanicHelpers.ts`・`fhir/resultReviewHelpers.ts` | 同上 |
+| 外注検査・提出 | `pages/LabOutsourcePage.tsx` | `labOutsourceTubes`(`fhir/labOutsourceHelpers.ts`)、`buildSpecimenShipment` / `buildSpecimenShipmentCancel`(`fhir/labSpecimenHelpers.ts`) | `useLabOutsourceWorklist` / `useUpdateLabShipment`(`api/queries/lab.ts`) |
+| 外注伝票 | `pages/LabOutsourceSlipPage.tsx`(印刷用の別タブ) | 同上 | `useLabOutsourceWorklist` |
 | 結果取込 | `pages/LabResultImportPage.tsx`・`LabResultImportDetailPage.tsx` | `fhir/labImportHelpers.ts`、`hooks/useLabImportGroupContext.ts`、backend の `LabImport::*` | `useCreateLabResult` / `useUpdateLabResult` |
 | 結果確認(通知から) | `pages/NotificationPage.tsx`(`components/notifications/notificationRegistry.tsx`) | `urgentConfirmationEntries`(`api/notificationActions.ts`) | `useMarkResultReviewed` |
 | 結果確認(カルテから) | `KarteLabResultTab.tsx` の `ResultReviewAction` | `buildReviewProvenance`(`fhir/provenanceHelpers.ts`) | `useMarkResultReviewed` |
@@ -587,7 +667,7 @@ sequenceDiagram
 | 一覧の検索 | 検査日 1 日ぶんの `ServiceRequest`・`Task`・`Specimen`・`DiagnosticReport`・患者 |
 | ラベルの PDF | `GET /reports/lab_labels/:order_id/pdf` |
 | backend の検索 | `ServiceRequest?_id` に、患者・明細・発行済みの管の Specimen を含める |
-| 管の Specimen の作成 | 未発行の管だけ。`If-None-Exist` を添える |
+| 管の Specimen の作成 | 未発行の管だけ。`If-None-Exist`(オーダー・検体・行き先)を添える。院内の管は `identifier:missing=true` |
 | `Task` `lab-exam` = `accepted` | 依頼済のときだけ |
 
 「ラベル一括発行」です。
@@ -668,7 +748,7 @@ sequenceDiagram
 | 番号の検証 | 11 桁で、末尾のチェックデジット(M10W3)が合うか |
 | 管の検索 | `Specimen?accession=番号`。無ければ「この番号の発行記録がありません」 |
 | オーダー一式の検索 | `ServiceRequest?_id` に、明細・`Task`・`Specimen`・患者を含める |
-| 揃ったかの判定 | オーダーの検体のどれにも、到着した管があるか。今回の管も数える |
+| 揃ったかの判定 | オーダーの管(検体と行き先の組)のどれにも、到着した管があるか。今回の管も数える |
 | PUT 管の Specimen | `receivedTime`・`status: available`・記録者 |
 | `Task` `lab-exam` = `completed` | 全部の管が揃い、`Task` が `accepted` のとき |
 
@@ -704,6 +784,37 @@ sequenceDiagram
 
 画面を開いたまま別の端末で状態が変わっていることがあるので、取消でも管と進捗を読み直します。
 
+### シーケンス図: 外注の提出
+
+外注検査の画面で、選んだ管の提出を記録するときです。
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Tech as 検査室
+  participant UI as ブラウザ
+  participant BE as backend
+  participant FHIR as 上流 FHIR
+
+  Tech->>UI: 外注検査を開く
+  UI->>BE: GET /fhir(外注先・検査日の期間)
+  BE->>FHIR: 検索
+  FHIR-->>UI: オーダー一式と結果の項目
+  UI->>UI: 外注の管ごとに状況を決める
+  Tech->>UI: 管を選んで「提出」
+  UI->>BE: POST /fhir(transaction)
+  BE->>FHIR: POST /
+  FHIR-->>UI: 結果
+```
+
+| 読む・書くもの | 条件 |
+|---|---|
+| 一覧の検索 | `ServiceRequest?performer=外注先`(「すべて」は検査委託先の id をカンマ OR)と `occurrence` の期間。明細・`Task`・管の `Specimen`・`DiagnosticReport` に加え、`_include:iterate=DiagnosticReport:result` で `Observation` を含める |
+| 状況の判定 | 管の `Specimen` が無ければラベル未発行、提出の拡張が無ければ提出待ち。その管を参照する確定した `Observation` があれば結果済、無ければ結果未着 |
+| PUT 管の Specimen × 選んだ管 | 提出の拡張(日時・記録した人)を足す。取消は拡張を外す |
+
+外注伝票は同じ検索を印刷用の別タブで行い、指定した外注先と提出日の管だけを並べます。
+
 ### シーケンス図: 結果登録・訂正
 
 新規です。
@@ -735,7 +846,7 @@ sequenceDiagram
 | 管の検索 | `Specimen:request` でオーダーの管を引く |
 | `DiagnosticReport` | `status`・`issued`・`performer` |
 | `Observation` × 項目 | `referenceRange`・`interpretation`・`method` |
-| 結果の Specimen | 材料の一致する管があれば参照し、無ければ作る |
+| 結果の Specimen | 材料と行き先の一致する管があれば参照し、無ければ作る |
 | `Task` `lab-panic`(依頼医) | パニック値があるとき。報告区分によらない |
 | `Task` `result-review`(依頼医) | 最終報告で、未確認の緊急異常値の通知が無いとき |
 
@@ -823,6 +934,7 @@ sequenceDiagram
 | 候補 | ORC・OBR 群 1 件が結果 1 件 |
 | 行の状態 | 保留 / 登録待ち / 対象外 |
 | 同じメッセージ ID | 詳細画面で知らせるが、取込は止めない(訂正版が同じ ID で来ることがあるため) |
+| 外注先 | 取込の画面で選んだ外注先をバッチに持つ。登録する `Observation` の `performer` になる |
 
 候補ごとの登録です。
 

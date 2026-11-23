@@ -11,7 +11,7 @@
 // (無ければ医療従事者だけ作る)。
 
 import { upsertLoginAccount } from "../api/authClient";
-import { fetchFacilitySettings } from "../api/facilityClient";
+import { fetchFacilitySettings, updateFacilitySettings } from "../api/facilityClient";
 import { createResource, postBundle, searchResource } from "../api/fhirClient";
 import {
   createSupervisorGroup,
@@ -435,6 +435,14 @@ const PARTNER_CLINIC = {
   addressText: "東京都見本区見本町 1-2-3",
 };
 
+// 外注検査の写真に使う検体検査の外注先(架空)。施設の既定の外注先にする。
+const CLINICAL_LAB = {
+  name: "見本検査センター",
+  phone: "03-0000-5678",
+  postalCode: "100-0000",
+  addressText: "東京都見本区見本町 4-5-6",
+};
+
 export async function seedManualShots(env: SeedEnv): Promise<void> {
   const selfOrganizationId = (await fetchFacilitySettings()).self_organization_id ?? "";
   const staff = [];
@@ -446,6 +454,7 @@ export async function seedManualShots(env: SeedEnv): Promise<void> {
   await ensureDoctorSchedule(env, doctor);
   await ensureDepartmentSlots(env);
   await ensurePartnerClinic(env);
+  await ensureClinicalLab(env);
 
   const outpatient = await createPatient(env, OUTPATIENT);
   if (outpatient?.id) await addDrugAllergy(env, outpatient.id);
@@ -1028,6 +1037,30 @@ async function ensurePartnerClinic(env: SeedEnv): Promise<void> {
   if (data.entry?.some((entry) => entry.resource?.name === PARTNER_CLINIC.name)) return;
   await createResource(buildOrganization({ ...emptyOrganizationForm, ...PARTNER_CLINIC }));
   env.log(`連携先 ${PARTNER_CLINIC.name} を作成`);
+}
+
+/**
+ * 外注検査の写真に使う検査委託先。同じ名前の医療機関があればそれを使う。施設の既定の外注先を
+ * これにそろえる(外注の項目のうち、項目に外注先を決めていないものがここに出る)。
+ */
+async function ensureClinicalLab(env: SeedEnv): Promise<void> {
+  const { data } = await searchResource<fhir4.Organization>(
+    "Organization",
+    new URLSearchParams({ name: CLINICAL_LAB.name, "partof:missing": "true", _count: "10" }),
+  );
+  let id = data.entry?.find((entry) => entry.resource?.name === CLINICAL_LAB.name)?.resource?.id;
+  if (!id) {
+    const { data: created } = await createResource(
+      buildOrganization({ ...emptyOrganizationForm, ...CLINICAL_LAB, clinicalLab: true }),
+    );
+    id = created.id;
+    env.log(`検査委託先 ${CLINICAL_LAB.name} を作成`);
+  }
+  if (!id) return;
+  const settings = await fetchFacilitySettings();
+  if (settings.lab_outsource.default_organization_id === id) return;
+  await updateFacilitySettings({ lab_outsource: { default_organization_id: id } });
+  env.log(`施設の既定の外注先を ${CLINICAL_LAB.name} にした`);
 }
 
 /** 撮影用の病棟・病室・ベッド。同じ名前の病棟があればそれを使う。病棟と、ベッドを番号順に返す。 */
