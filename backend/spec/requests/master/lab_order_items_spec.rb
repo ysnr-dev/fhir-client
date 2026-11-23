@@ -111,6 +111,18 @@ RSpec.describe "Master::LabOrderItems", type: :request do
       expect(response).to have_http_status(:no_content)
     end
 
+    it "外注先は実施区分が外注の項目だけが持つ" do
+      post "/master/lab_order_items", params: {
+        order_item_code: "L0011", name: "ビタミンB12", kind: "single",
+        execution_type: "outsourced", outsource_organization_id: "org-lab-1",
+      }, as: :json
+      expect(response).to have_http_status(:created)
+      expect(body["outsource_organization_id"]).to eq("org-lab-1")
+
+      patch "/master/lab_order_items/#{body['id']}", params: { execution_type: "in_house" }, as: :json
+      expect(body["outsource_organization_id"]).to be_nil
+    end
+
     it "コードの二重登録・不正な体系・逆転した有効期間は登録できない" do
       create_item("L0010")
 

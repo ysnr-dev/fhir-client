@@ -332,13 +332,13 @@ function App() {
           <Route
             path="/partner-organizations/new"
             element={
-              <OrganizationCreatePage backTo="/partner-organizations" title="連携先医療機関登録" />
+              <OrganizationCreatePage backTo="/partner-organizations" title="連携先医療機関登録" partner />
             }
           />
           <Route
             path="/partner-organizations/:id/edit"
             element={
-              <OrganizationEditPage backTo="/partner-organizations" title="連携先医療機関編集" />
+              <OrganizationEditPage backTo="/partner-organizations" title="連携先医療機関編集" partner />
             }
           />
           <Route path="/partner-practitioners" element={<PartnerPractitionerListPage />} />

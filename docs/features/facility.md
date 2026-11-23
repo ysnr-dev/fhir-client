@@ -29,7 +29,7 @@
 自院の Organization 以外の施設設定（看護指示の既定時刻・食事の提供時刻・バイタルの異常値・
 内服の与薬の時刻・処方区分の初期値・処方箋の印刷(院外処方箋の QR コード)・文書作成の督促・水分出納の対象項目・他科依頼の
 依頼先ごとの既定テンプレート・看護プロファイルの区画・経過表一括入力の列・DPC の医療機関別係数・
-Web 問診の質問票と有効時間・カルテカードの並び順・院内がん登録・感染症発生届・NCD 症例登録のテンプレート・注射の3点認証・輸血オーダーの不規則抗体の有効日数と投与時の照合と自己血の採血前の Hb の下限・透析室のシフト・透析患者一覧の採血項目・SS-MIX2 標準化ストレージへの出力の有無と出力先）は、
+Web 問診の質問票と有効時間・カルテカードの並び順・院内がん登録・感染症発生届・NCD 症例登録のテンプレート・注射の3点認証・輸血オーダーの不規則抗体の有効日数と投与時の照合と自己血の採血前の Hb の下限・透析室のシフト・透析患者一覧の採血項目・検体検査の既定の外注先・SS-MIX2 標準化ストレージへの出力の有無と出力先）は、
 **`settings` jsonb 1 列**にまとめて入れます。backend はこれらを検索にも集計にも使わず（読むのは
 frontend と、会計送信のコード引き当て・DPC の推定包括額だけ）、列に分けても索引も WHERE も使わないためです。
 例外は「待合表示板」の区画で、発行したリンクは `settings` ではなく別テーブル(`waiting_board_links`)に持ち、
@@ -118,6 +118,7 @@ JP Core の `JP_Organization` プロファイルを想定した項目構成で�
 | 医療機関名（必須） | `name` |
 | 保険医療機関番号 | `identifier`（system は `http://jpfhir.jp/fhir/core/IdSystem/insurance-medical-institution-no` 固定。JP_Organization の `medicalInstitutionCode` スライス） |
 | 種別 | `type`（`http://terminology.hl7.org/CodeSystem/organization-type`。binding は example） |
+| 検査委託先（連携先のみ） | `type` の 2 つ目の要素（`http://fhir-client.local/CodeSystem/organization-role` / `clinical-lab`）。検体検査の外注先の選択肢になります（`features/lab.md`「検体検査の外注」） |
 | 有効 | `active` |
 | 電話番号 / FAX | `telecom`（`system=phone` / `system=fax`） |
 | 郵便番号 / 所在地 | `address[0].postalCode` / `address[0].text` |

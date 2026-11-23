@@ -7,11 +7,14 @@ interface OrganizationCreatePageProps {
   /** 登録後・「一覧に戻る」の戻り先。連携先医療機関の登録で差し替える。 */
   backTo?: string;
   title?: string;
+  /** 連携先の登録・編集(検査委託先の印を選べる)。 */
+  partner?: boolean;
 }
 
 export function OrganizationCreatePage({
   backTo = "/organizations",
   title = "医療機関登録",
+  partner = false,
 }: OrganizationCreatePageProps = {}) {
   const navigate = useNavigate();
   const createOrganization = useCreateOrganization();
@@ -35,6 +38,7 @@ export function OrganizationCreatePage({
         submitting={createOrganization.isPending}
         submitError={createOrganization.error}
         submitLabel="登録"
+        partner={partner}
       />
     </div>
   );

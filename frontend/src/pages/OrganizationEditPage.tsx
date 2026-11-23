@@ -15,11 +15,14 @@ interface OrganizationEditPageProps {
   /** 保存後・「一覧に戻る」の戻り先。連携先医療機関の編集で差し替える。 */
   backTo?: string;
   title?: string;
+  /** 連携先の登録・編集(検査委託先の印を選べる)。 */
+  partner?: boolean;
 }
 
 export function OrganizationEditPage({
   backTo = "/organizations",
   title = "医療機関編集",
+  partner = false,
 }: OrganizationEditPageProps = {}) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -80,6 +83,7 @@ export function OrganizationEditPage({
         submitting={updateOrganization.isPending}
         submitError={conflict ? undefined : updateOrganization.error}
         submitLabel="更新"
+        partner={partner}
       />
     </div>
   );

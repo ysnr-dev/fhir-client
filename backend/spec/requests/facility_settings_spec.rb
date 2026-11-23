@@ -475,6 +475,26 @@ RSpec.describe "FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /facility_settings (lab_outsource)" do
+    it "既定の外注先を保存し、既定は未設定" do
+      with_admin_token(nil) { get "/facility_settings" }
+      expect(JSON.parse(response.body)["lab_outsource"]).to eq("default_organization_id" => "")
+
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { lab_outsource: { default_organization_id: "org-lab-1" } }, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["lab_outsource"]).to eq("default_organization_id" => "org-lab-1")
+    end
+
+    it "id の形でない値は弾く" do
+      with_admin_token(nil) do
+        patch "/facility_settings", params: { lab_outsource: { default_organization_id: "Organization/1 2" } }, as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "PATCH /facility_settings (anesthesia_preop)" do
     it "術前診察のテンプレートの url を保存し、既定は同梱の SUR_ANESPRE_01" do
       with_admin_token(nil) { get "/facility_settings" }

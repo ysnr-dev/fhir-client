@@ -13,6 +13,7 @@ import {
   type FacilitySettingsPayload,
   updateFacilitySettings,
 } from "../facilityClient";
+import { CLINICAL_LAB_ROLE, ORGANIZATION_ROLE_SYSTEM } from "../../fhir/organizationHelpers";
 import { hasRelation, resourcesOfType } from "./core";
 
 // --- 自院 --------------------------------------------------------------------
@@ -120,6 +121,25 @@ export function useOrganizationOptions() {
     ...query,
     organizations:
       resourcesOfType<fhir4.Organization>(query.data?.data, "Organization"),
+  };
+}
+
+// 検体検査の外注先(連携先のうち検査委託先の印を持つ医療機関)。有効なものだけを返す。
+export function useClinicalLabOptions() {
+  const params = new URLSearchParams();
+  params.set("type", `${ORGANIZATION_ROLE_SYSTEM}|${CLINICAL_LAB_ROLE.code}`);
+  params.set("active", "true");
+  params.set("_count", "500");
+  params.set("_sort", "name");
+
+  const query = useQuery({
+    queryKey: ["Organization", "search", "clinical-labs"],
+    queryFn: () => searchResource<fhir4.Organization>("Organization", params),
+  });
+
+  return {
+    ...query,
+    organizations: resourcesOfType<fhir4.Organization>(query.data?.data, "Organization"),
   };
 }
 

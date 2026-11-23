@@ -12,11 +12,14 @@ import {
   useLabSpecimenOptions,
   type LabOrderItemFilters,
 } from "../api/masterQueries";
+import { useClinicalLabOptions, useFacilitySettings } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { JlacItemSearchModal } from "../components/JlacItemSearchModal";
 import { LabResultItemSearchModal } from "../components/LabResultItemSearchModal";
 import { LAB_CATEGORIES, LAB_DATA_TYPE_LABELS, LAB_KIND_LABELS } from "../components/labOrderItemOptions";
 import { Modal } from "../components/Modal";
+import { DEFAULT_LAB_OUTSOURCE } from "../fhir/labOutsourceHelpers";
+import { organizationDisplayName } from "../fhir/organizationHelpers";
 import { MasterBackLink } from "../components/MasterBackLink";
 
 const MEMBER_TYPE_LABELS: Record<string, string> = {
@@ -40,6 +43,7 @@ interface Draft {
   valid_from: string;
   valid_to: string;
   execution_type: string;
+  outsource_organization_id: string;
   receipt_code: string;
   display_order: string;
   note: string;
@@ -59,6 +63,7 @@ const emptyDraft: Draft = {
   valid_from: "",
   valid_to: "",
   execution_type: "",
+  outsource_organization_id: "",
   receipt_code: "",
   display_order: "",
   note: "",
@@ -79,6 +84,8 @@ function toPayload(draft: Draft): LabOrderItemPayload {
     valid_from: draft.valid_from || null,
     valid_to: draft.valid_to || null,
     execution_type: draft.execution_type || null,
+    outsource_organization_id:
+      draft.execution_type === "outsourced" ? draft.outsource_organization_id || null : null,
     receipt_code: draft.receipt_code || null,
     display_order: draft.display_order ? Number(draft.display_order) : null,
     note: draft.note || null,
@@ -276,6 +283,8 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
   const mutations = useLabOrderItemMutations();
   const specimens = useLabSpecimenOptions();
   const containers = useLabContainers();
+  const labs = useClinicalLabOptions();
+  const facility = useFacilitySettings();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [searchingJlac, setSearchingJlac] = useState(false);
 
@@ -296,6 +305,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       valid_from: d.valid_from ?? "",
       valid_to: d.valid_to ?? "",
       execution_type: d.execution_type ?? "",
+      outsource_organization_id: d.outsource_organization_id ?? "",
       receipt_code: d.receipt_code ?? "",
       display_order: d.display_order === null ? "" : String(d.display_order),
       note: d.note ?? "",
@@ -320,6 +330,17 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
     );
     return container?.name ?? specimen.default_container_code;
   }, [containers.data, draft.specimen_code, specimens.data]);
+
+  // 外注先の選択肢。選べなくなった外注先(無効・検査委託先の印を外した)が保存済みでも、
+  // 開いただけで値が消えないよう末尾に足す。
+  const labOptions = useMemo(() => {
+    const options = labs.organizations.map((lab) => ({ id: lab.id ?? "", name: organizationDisplayName(lab) }));
+    const saved = draft.outsource_organization_id;
+    if (saved && !options.some((o) => o.id === saved)) options.push({ id: saved, name: "選択肢に無い外注先" });
+    return options;
+  }, [draft.outsource_organization_id, labs.organizations]);
+  const defaultLabId = (facility.data?.lab_outsource ?? DEFAULT_LAB_OUTSOURCE).default_organization_id;
+  const defaultLabName = labOptions.find((o) => o.id === defaultLabId)?.name ?? null;
 
   // 共有項目JLACコードマスタの材料名(「血清」など)から検体マスタのコードを引く。
   // どちらも JLAC11 の材料表が元なので名称で一致する。
@@ -487,6 +508,22 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
               <option value="outsourced">外注</option>
             </select>
           </label>
+          {draft.execution_type === "outsourced" && (
+            <label>
+              外注先
+              <select
+                value={draft.outsource_organization_id}
+                onChange={(e) => setDraft({ ...draft, outsource_organization_id: e.target.value })}
+              >
+                <option value="">{defaultLabName ? `施設の既定(${defaultLabName})` : "未設定"}</option>
+                {labOptions.map((lab) => (
+                  <option key={lab.id} value={lab.id}>
+                    {lab.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             レセ電算コード
             <input

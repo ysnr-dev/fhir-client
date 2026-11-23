@@ -24,6 +24,8 @@ export interface LabOrderItem {
   valid_to: string | null;
   // in_house=院内 / outsourced=外注
   execution_type: string | null;
+  // 外注先(Organization.id)。空なら施設設定の既定の外注先。
+  outsource_organization_id: string | null;
   receipt_code: string | null;
   display_order: number | null;
   note: string | null;
@@ -97,6 +99,7 @@ export interface LabOrderItemPayload {
   valid_from?: string | null;
   valid_to?: string | null;
   execution_type?: string | null;
+  outsource_organization_id?: string | null;
   receipt_code?: string | null;
   display_order?: number | null;
   note?: string | null;

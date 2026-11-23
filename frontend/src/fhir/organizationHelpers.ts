@@ -17,6 +17,11 @@ export const ORGANIZATION_TYPE_OPTIONS = [
   { code: "other", label: "その他" },
 ] as const;
 
+// 連携先としての役割。HL7 の organization-type に検査センターを表すコードが無いので、
+// Organization.type の 2 つ目の要素にローカルのコードで持つ(type の検索はどの要素にも当たる)。
+export const ORGANIZATION_ROLE_SYSTEM = "http://fhir-client.local/CodeSystem/organization-role";
+export const CLINICAL_LAB_ROLE = { code: "clinical-lab", display: "検査委託先" } as const;
+
 // 「部門・診療科」は診療科登録画面(所属医療機関 partOf が必須)の担当なので、
 // 医療機関のフォームでは選べないようにする。ラベル引きには元の一覧を使う。
 export const FACILITY_TYPE_OPTIONS = ORGANIZATION_TYPE_OPTIONS.filter((o) => o.code !== "dept");
@@ -30,6 +35,8 @@ export interface OrganizationFormValues {
   institutionNumber: string;
   name: string;
   typeCode: string;
+  /** 検体検査の外注先(検査委託先)として選べるようにする。 */
+  clinicalLab: boolean;
   active: boolean;
   phone: string;
   fax: string;
@@ -41,6 +48,7 @@ export const emptyOrganizationForm: OrganizationFormValues = {
   institutionNumber: "",
   name: "",
   typeCode: "prov",
+  clinicalLab: false,
   active: true,
   phone: "",
   fax: "",
@@ -73,19 +81,22 @@ export function buildOrganization(values: OrganizationFormValues, id?: string): 
     ];
   }
 
+  const types: fhir4.CodeableConcept[] = [];
   if (values.typeCode) {
-    organization.type = [
-      {
-        coding: [
-          {
-            system: ORGANIZATION_TYPE_SYSTEM,
-            code: values.typeCode,
-            display: organizationTypeLabel(values.typeCode),
-          },
-        ],
-      },
-    ];
+    types.push({
+      coding: [
+        {
+          system: ORGANIZATION_TYPE_SYSTEM,
+          code: values.typeCode,
+          display: organizationTypeLabel(values.typeCode),
+        },
+      ],
+    });
   }
+  if (values.clinicalLab) {
+    types.push({ coding: [{ system: ORGANIZATION_ROLE_SYSTEM, ...CLINICAL_LAB_ROLE }] });
+  }
+  if (types.length) organization.type = types;
 
   const telecom: fhir4.ContactPoint[] = [];
   if (values.phone) telecom.push({ system: "phone", value: values.phone });
@@ -112,6 +123,7 @@ export function parseOrganization(organization: fhir4.Organization): Organizatio
     institutionNumber: identifier?.value ?? "",
     name: organization.name ?? "",
     typeCode: organizationTypeCode(organization) ?? "",
+    clinicalLab: isClinicalLab(organization),
     active: organization.active ?? true,
     phone: organization.telecom?.find((t) => t.system === "phone")?.value ?? "",
     fax: organization.telecom?.find((t) => t.system === "fax")?.value ?? "",
@@ -121,9 +133,16 @@ export function parseOrganization(organization: fhir4.Organization): Organizatio
 }
 
 export function organizationTypeCode(organization: fhir4.Organization): string | undefined {
-  const coding = organization.type?.[0]?.coding;
-  return (
-    coding?.find((c) => c.system === ORGANIZATION_TYPE_SYSTEM)?.code ?? coding?.[0]?.code ?? undefined
+  const codings = (organization.type ?? [])
+    .flatMap((type) => type.coding ?? [])
+    .filter((c) => c.system !== ORGANIZATION_ROLE_SYSTEM);
+  return codings.find((c) => c.system === ORGANIZATION_TYPE_SYSTEM)?.code ?? codings[0]?.code ?? undefined;
+}
+
+/** 検体検査の外注先(検査委託先)として登録されているか。 */
+export function isClinicalLab(organization: fhir4.Organization): boolean {
+  return (organization.type ?? []).some((type) =>
+    type.coding?.some((c) => c.system === ORGANIZATION_ROLE_SYSTEM && c.code === CLINICAL_LAB_ROLE.code),
   );
 }
 

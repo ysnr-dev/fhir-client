@@ -14,6 +14,7 @@ import type { WaterBalanceSettings } from "../fhir/flowsheetWaterBalanceHelpers"
 import type { MedicationScheduleSettings } from "../fhir/medicationScheduleHelpers";
 import type { DocumentReminderSettings } from "../fhir/documentDueHelpers";
 import type { AdmissionDocumentSettings } from "../fhir/admissionDocumentHelpers";
+import type { LabOutsourceSettings } from "../fhir/labOutsourceHelpers";
 import type { PressureUlcerSettings } from "../fhir/pressureUlcerHelpers";
 import type { CancerRegistrySettings } from "../fhir/cancerRegistryHelpers";
 import type { InfectiousDiseaseReportSettings } from "../fhir/infectiousDiseaseReportHelpers";
@@ -134,6 +135,8 @@ export interface FacilitySettings {
   dialysis_shifts: DialysisShiftSettings;
   /** 透析患者一覧に並べる採血の項目。 */
   dialysis_lab_items: DialysisLabItemSettings;
+  /** 検体検査の外注(既定の外注先)。 */
+  lab_outsource: LabOutsourceSettings;
   /** SS-MIX2 標準化ストレージへの出力(有無・出力先・医療施設 ID)。 */
   ssmix2: Ssmix2Settings;
 }
@@ -172,6 +175,7 @@ export type FacilitySettingsPayload = Partial<{
   transfusion: TransfusionSettings;
   dialysis_shifts: DialysisShiftSettings;
   dialysis_lab_items: DialysisLabItemSettings;
+  lab_outsource: LabOutsourceSettings;
   ssmix2: Ssmix2Settings;
 }>;
 

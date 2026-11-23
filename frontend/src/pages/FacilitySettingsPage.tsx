@@ -2,6 +2,7 @@ import { Fragment, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useBedWardIndex,
+  useClinicalLabOptions,
   useFacilitySettings,
   useOrganizationOptions,
   useQuestionnaireOptions,
@@ -72,6 +73,7 @@ import {
   type InfectiousDiseaseReportSettings,
 } from "../fhir/infectiousDiseaseReportHelpers";
 import { DEFAULT_ANESTHESIA_PREOP, type AnesthesiaPreopSettings } from "../fhir/anesthesiaPreopHelpers";
+import { DEFAULT_LAB_OUTSOURCE, type LabOutsourceSettings } from "../fhir/labOutsourceHelpers";
 import { DEFAULT_NCD_REGISTRATION, type NcdRegistrationSettings } from "../fhir/ncdHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import {
@@ -200,6 +202,7 @@ const FACILITY_SECTIONS = [
   { key: "infectious_disease_report", label: "感染症発生届" },
   { key: "ncd_registration", label: "NCD症例登録" },
   { key: "anesthesia_preop", label: "麻酔科術前診察" },
+  { key: "lab_outsource", label: "検体検査の外注" },
   { key: "radiotherapy_review", label: "放射線治療の週次レビュー" },
   { key: "intake", label: "Web 問診" },
   { key: "waiting_board", label: "待合表示板" },
@@ -349,6 +352,10 @@ export function FacilitySettingsPage() {
   const [anesthesiaPreopDraft, setAnesthesiaPreopDraft] = useState<AnesthesiaPreopSettings | undefined>(undefined);
   const anesthesiaPreop = anesthesiaPreopDraft ?? settings.data?.anesthesia_preop ?? DEFAULT_ANESTHESIA_PREOP;
   const anesthesiaPreopValid = /^https?:\/\/[^\s|]+$/.test(anesthesiaPreop.template);
+  // 検体検査の既定の外注先(連携先のうち検査委託先)。
+  const clinicalLabs = useClinicalLabOptions();
+  const [labOutsourceDraft, setLabOutsourceDraft] = useState<LabOutsourceSettings | undefined>(undefined);
+  const labOutsource = labOutsourceDraft ?? settings.data?.lab_outsource ?? DEFAULT_LAB_OUTSOURCE;
 
   // 看護必要度の評価票の版と該当患者の基準。基準は組("A3" "A2+B3" "#A2")を空白区切りで入れる(組の OR)。
   const [acuityDraft, setAcuityDraft] = useState<
@@ -716,6 +723,7 @@ export function FacilitySettingsPage() {
       infectious_disease_report: infectiousReport,
       ncd_registration: ncdRegistration,
       anesthesia_preop: anesthesiaPreop,
+      lab_outsource: labOutsource,
       early_warning: earlyWarning,
       rx_verification: rxVerification,
       injection_verification: injectionVerification,
@@ -1579,6 +1587,36 @@ export function FacilitySettingsPage() {
                       {templateOptions.questionnaires.find((q) => q.url === url)?.title ?? url}
                     </option>
                   ))}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {/* 検体検査の外注。項目マスタで外注先を決めていない外注項目の行き先。 */}
+          {section === "lab_outsource" && (
+            <div className="facility-settings__schedule-body">
+              <label>
+                既定の外注先
+                <select
+                  value={labOutsource.default_organization_id}
+                  onChange={(e) => setLabOutsourceDraft({ default_organization_id: e.target.value })}
+                >
+                  <option value="">未設定</option>
+                  {[
+                    ...new Set([
+                      ...clinicalLabs.organizations.map((lab) => lab.id ?? ""),
+                      labOutsource.default_organization_id,
+                    ]),
+                  ]
+                    .filter(Boolean)
+                    .map((id) => {
+                      const lab = clinicalLabs.organizations.find((o) => o.id === id);
+                      return (
+                        <option key={id} value={id}>
+                          {lab ? organizationDisplayName(lab) : "選択肢に無い外注先"}
+                        </option>
+                      );
+                    })}
                 </select>
               </label>
             </div>

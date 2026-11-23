@@ -338,6 +338,12 @@ class FacilitySettings < ApplicationRecord
     }
   }.freeze
 
+  # 検体検査の外注(docs/lab-outsource-design.md)。default_organization_id は既定の外注先
+  # (連携先のうち検査委託先の Organization.id)。項目マスタで外注先を決めていない外注項目の行き先になる。
+  # オーダーには登録時の行き先が焼き付くので、ここを変えても登録済みのオーダーは動かない。
+  DEFAULT_LAB_OUTSOURCE = { "default_organization_id" => "" }.freeze
+  FHIR_ID_OR_BLANK = { pattern: /\A[A-Za-z0-9\-.]{0,64}\z/, label: "Organization の id(空可)" }.freeze
+
   # SS-MIX2 標準化ストレージへの出力(docs/ssmix2-export-design.md)。enabled で中継の書き込みを記録し始め、
   # 院内エージェントが取りに来て root_path(エージェントが解釈する絶対パス)の下に HL7 ファイルを置く。
   # facility_id は医療施設 ID 10 桁(SS-MIX ヘッダー用)、patient_id_digits は患者 ID の前ゼロの桁数、
@@ -585,6 +591,10 @@ class FacilitySettings < ApplicationRecord
           "kinds" => { list: KARTE_CARD_KIND, unique: true }
         }
       }
+    },
+    "lab_outsource" => {
+      default: DEFAULT_LAB_OUTSOURCE,
+      shape: { fields: { "default_organization_id" => FHIR_ID_OR_BLANK } }
     },
     "ssmix2" => {
       default: DEFAULT_SSMIX2,

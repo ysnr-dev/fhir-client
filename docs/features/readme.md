@@ -9,7 +9,7 @@
 | [outpatient.md](outpatient.md) | 外来患者一覧(受付・受付番号・診察開始)、待合表示板 |
 | [orders-common.md](orders-common.md) | オーダーの日付、代行入力と承認、カウンターサイン、日付未定オーダー、オーダーセット、レジメン・クリニカルパスのマスタ |
 | [medication.md](medication.md) | 処方、疑義照会、処方監査、持参薬、服薬指導、薬剤付加情報、ロット番号、注射 |
-| [lab.md](lab.md) | 検体検査の結果項目マスタ、パニック値、既読、基準値と H/L、報告区分、結果取込、読影・所見レポート |
+| [lab.md](lab.md) | 検体検査の結果項目マスタ、パニック値、既読、基準値と H/L、報告区分、結果取込、外注、読影・所見レポート |
 | [notifications.md](notifications.md) | 通知(Task)の種別と画面 |
 | [nursing.md](nursing.md) | 看護計画・看護サマリー・看護記録(フォーカスチャーティング)・看護プロファイル・ワークシート・看護必要度・チーム医療・褥瘡・留置物、看護マスタ |
 | [templates.md](templates.md) | シェーマ、テンプレートカテゴリ・入出力、文書作成(Word / Excel・様式)、帳票 PDF、基礎データ・初期計画、項目コード、回答の複写、Observation 生成 |

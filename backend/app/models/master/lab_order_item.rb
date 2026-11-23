@@ -17,9 +17,15 @@ module Master
     validates :execution_type, inclusion: { in: EXECUTION_TYPES }, allow_blank: true
     validate :valid_period_is_ordered
 
+    before_validation :clear_outsource_organization_unless_outsourced
     before_save :set_search_columns
 
     private
+
+    # 外注先は実施区分が外注の項目だけが持つ。
+    def clear_outsource_organization_unless_outsourced
+      self.outsource_organization_id = nil unless execution_type == "outsourced"
+    end
 
     def set_search_columns
       self.search_name = SearchNormalizer.normalize(name)

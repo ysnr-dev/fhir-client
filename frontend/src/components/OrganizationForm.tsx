@@ -14,6 +14,8 @@ interface OrganizationFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel: string;
+  /** 連携先の登録・編集。検査委託先の印を選べるようにする(自院には付けない)。 */
+  partner?: boolean;
 }
 
 export function OrganizationForm({
@@ -22,6 +24,7 @@ export function OrganizationForm({
   submitting,
   submitError,
   submitLabel,
+  partner = false,
 }: OrganizationFormProps) {
   const [values, setValues] = useState<OrganizationFormValues>(
     initialValues ?? emptyOrganizationForm,
@@ -82,6 +85,17 @@ export function OrganizationForm({
           ))}
         </select>
       </label>
+
+      {partner && (
+        <label className="patient-form__checkbox">
+          <input
+            type="checkbox"
+            checked={values.clinicalLab}
+            onChange={(e) => update("clinicalLab", e.target.checked)}
+          />
+          検査委託先
+        </label>
+      )}
 
       <label className="patient-form__checkbox">
         <input

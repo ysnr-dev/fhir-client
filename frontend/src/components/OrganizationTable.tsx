@@ -3,6 +3,8 @@ import { useDeleteOrganization } from "../api/queries";
 import {
   organizationDisplayName,
   organizationInstitutionNumber,
+  CLINICAL_LAB_ROLE,
+  isClinicalLab,
   organizationTypeCode,
   organizationTypeLabel,
 } from "../fhir/organizationHelpers";
@@ -55,7 +57,10 @@ export function OrganizationTable({
             <tr key={organization.id}>
               <td>{organizationInstitutionNumber(organization) || "-"}</td>
               <td>{organizationDisplayName(organization)}</td>
-              <td>{organizationTypeLabel(organizationTypeCode(organization))}</td>
+              <td>
+                {organizationTypeLabel(organizationTypeCode(organization))}
+                {isClinicalLab(organization) && `・${CLINICAL_LAB_ROLE.display}`}
+              </td>
               <td>{organization.telecom?.find((t) => t.system === "phone")?.value ?? "-"}</td>
               <td>{organization.address?.[0]?.text ?? "-"}</td>
               <td>{organization.active === false ? "無効" : "有効"}</td>
