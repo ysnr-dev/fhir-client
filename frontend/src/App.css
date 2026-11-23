@@ -6613,9 +6613,7 @@ button.populate-expression__option--active {
 .populate-expression__condition select,
 .populate-expression__condition input {
   --control-height: 28px;
-  font: inherit;
   font-size: 14px;
-  padding: 4px 6px;
 }
 
 .populate-expression__condition input {
@@ -31614,15 +31612,11 @@ input.nursing-picker__search {
   color: var(--text);
 }
 
-/* 入力欄は他のフォーム(.patient-form)と同じ余白。 */
 .document-form-designer__head input:not([type="file"]),
 .document-form-designer__head select,
 .document-form-props input:not([type="checkbox"]),
 .document-form-props select,
 .document-form-props textarea {
-  font: inherit;
-  font-size: 15px;
-  padding: 6px 8px;
   min-width: 0;
 }
 
