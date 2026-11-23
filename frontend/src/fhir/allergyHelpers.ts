@@ -390,6 +390,8 @@ export interface AllergyMatch {
   criticalityLabel: string;
   /** 重篤度が「高」か(強く出す判定に使う)。 */
   high: boolean;
+  /** タイプが不耐症か(未指定はアレルギーとして出す)。 */
+  intolerance: boolean;
   reaction: string;
 }
 
@@ -426,10 +428,16 @@ export function matchMedicationAllergies(
       name: summary.name,
       criticalityLabel: summary.criticalityLabel,
       high: allergy.criticality === "high",
+      intolerance: allergy.type === "intolerance",
       reaction: summary.reaction,
     });
   }
   return matches;
+}
+
+/** 警告の見出し。タイプが不耐症なら「不耐症」、それ以外は「アレルギー」。 */
+export function allergyMatchHeading(match: AllergyMatch): string {
+  return match.intolerance ? "不耐症" : "アレルギー";
 }
 
 /** 「アスピリン(高)」。警告の 1 行に出す。 */

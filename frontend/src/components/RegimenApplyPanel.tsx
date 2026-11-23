@@ -19,7 +19,7 @@ import {
 } from "../api/queries";
 import { adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import { type Advisory, advisoriesOfScope, advisoryKey, severityOf, unscopedAdvisories } from "../fhir/advisoryHelpers";
-import { allergyMatchLabel, matchMedicationAllergies } from "../fhir/allergyHelpers";
+import { allergyMatchHeading, allergyMatchLabel, matchMedicationAllergies } from "../fhir/allergyHelpers";
 import { summarizeBodyMeasures, summarizeRenal, uncorrectedGfr } from "../fhir/bodyMeasureHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { calculateAge } from "../fhir/patientHelpers";
@@ -412,7 +412,7 @@ function RegimenApplyForm({
             key: advisoryKey("allergy", drug.yj_code, m.allergyId),
             kind: "allergy",
             severity: severityOf("allergy", true),
-            message: `アレルギー: ${allergyMatchLabel(m)}`,
+            message: `${allergyMatchHeading(m)}: ${allergyMatchLabel(m)}`,
             detail: m.reaction || undefined,
             scope: { rp, line },
           });

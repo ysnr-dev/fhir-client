@@ -2,6 +2,7 @@ import type { Medicine } from "../api/masterClient";
 import { type Advisory, type AdvisoryKind, advisoryKey, severityOf } from "./advisoryHelpers";
 import {
   allergenIngredient,
+  allergyMatchHeading,
   allergyMatchLabel,
   medicationAllergenCodes,
   summarizeAllergy,
@@ -90,6 +91,7 @@ export function matchContrastAllergies(
       name: summary.name,
       criticalityLabel: summary.criticalityLabel,
       high: allergy.criticality === "high",
+      intolerance: allergy.type === "intolerance",
       reaction: summary.reaction,
     });
   }
@@ -140,7 +142,7 @@ export function buildRadSafetyNotes(args: {
       notes.push({
         key: `allergy-${match.allergyId}`,
         kind: "contrast-allergy",
-        text: `造影剤アレルギー: ${allergyMatchLabel(match)}${reaction}`,
+        text: `造影剤${allergyMatchHeading(match)}: ${allergyMatchLabel(match)}${reaction}`,
         high: match.high,
       });
     }

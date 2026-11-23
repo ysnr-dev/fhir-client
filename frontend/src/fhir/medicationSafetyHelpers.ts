@@ -1,6 +1,6 @@
 import type { Medicine } from "../api/masterClient";
 import { type Advisory, advisoryKey, severityOf } from "./advisoryHelpers";
-import { allergyMatchLabel, matchMedicationAllergies } from "./allergyHelpers";
+import { allergyMatchHeading, allergyMatchLabel, matchMedicationAllergies } from "./allergyHelpers";
 import {
   drugIdentity,
   type DrugIdentity,
@@ -301,7 +301,7 @@ export function buildMedicationWarnings(args: {
       for (const match of matchMedicationAllergies(ingredientSourceCode(line.medicine), allergies, ingredients)) {
         warnings.push({
           kind: "allergy",
-          text: `アレルギー: ${allergyMatchLabel(match)}`,
+          text: `${allergyMatchHeading(match)}: ${allergyMatchLabel(match)}`,
           high: match.high,
           detail: match.reaction || undefined,
         });
