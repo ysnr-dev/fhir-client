@@ -746,6 +746,53 @@
   font-size: 12px;
 }
 
+/* アレルギーの吹き出し。行を罫線で区切り、目印は名前の右に寄せて縦にそろえる。 */
+.patient-header__popover-list.allergy-popover {
+  min-width: 280px;
+  gap: 0;
+}
+
+.allergy-popover__row {
+  padding: 6px 0;
+}
+
+.allergy-popover__row + .allergy-popover__row {
+  border-top: 1px solid var(--border);
+}
+
+.allergy-popover__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.allergy-popover__tags {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.allergy-popover__tag {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  color: var(--text-h);
+}
+
+.allergy-popover__tag--risk {
+  color: var(--text);
+}
+
+.allergy-popover__tag--high {
+  border-color: var(--danger);
+  color: var(--danger);
+  font-weight: 600;
+}
+
 /* プロファイルタブ・注意区分マスタのピクトグラム。帯と同じ色分けを使う。 */
 .flag-table__pictogram,
 .flag-form__pictogram {

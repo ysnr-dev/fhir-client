@@ -186,6 +186,8 @@ export function AllergyPictogramBadges({
   const rows = allergies.map((allergy) => ({
     summary: summarizeAllergy(allergy),
     medication: allergy.category?.includes("medication") ?? false,
+    high: allergy.criticality === "high",
+    intolerance: allergy.type === "intolerance",
   }));
 
   const groups = [
@@ -205,22 +207,32 @@ export function AllergyPictogramBadges({
           count={group.rows.length}
           portal={portal}
         >
-          <ul className="patient-header__popover-list">
-            {group.rows.map((row) => (
-              <li key={row.summary.id}>
-                <span className="patient-header__popover-name">{row.summary.name}</span>
-                <span className="patient-header__popover-text">
-                  {[
-                    row.summary.categoryLabel,
-                    row.summary.typeLabel,
-                    row.summary.criticalityLabel && `重篤化リスク ${row.summary.criticalityLabel}`,
-                    row.summary.reaction,
-                  ]
-                    .filter(Boolean)
-                    .join(" ・ ")}
-                </span>
-              </li>
-            ))}
+          {/* 1 行目に名前と目印(不耐症・重篤化リスク)、2 行目に区分と症状。薬剤の側は区分が全行「医薬品」なので出さない。 */}
+          <ul className="patient-header__popover-list allergy-popover">
+            {group.rows.map((row) => {
+              const detail = [row.medication ? "" : row.summary.categoryLabel, row.summary.reaction]
+                .filter(Boolean)
+                .join(" ・ ");
+              return (
+                <li key={row.summary.id} className="allergy-popover__row">
+                  <span className="allergy-popover__head">
+                    <span className="patient-header__popover-name">{row.summary.name}</span>
+                    <span className="allergy-popover__tags">
+                      {row.intolerance && <span className="allergy-popover__tag">不耐症</span>}
+                      {row.summary.criticalityLabel && (
+                        <span
+                          className={`allergy-popover__tag allergy-popover__tag--risk${row.high ? " allergy-popover__tag--high" : ""}`}
+                          title="重篤化リスク"
+                        >
+                          リスク{row.summary.criticalityLabel}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                  {detail && <span className="patient-header__popover-text">{detail}</span>}
+                </li>
+              );
+            })}
           </ul>
           <AllergyLink patientId={patientId} />
         </PictogramPopover>
