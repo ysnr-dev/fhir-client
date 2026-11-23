@@ -9102,6 +9102,25 @@ body.karte-wide {
     box-shadow 0.5s ease;
 }
 
+/* 確定前の下書き。読み流していても確定済みの記録と取り違えないよう、枠を破線にし、
+   左端に注意色の帯を引く(診療日パネルから飛んだ先の枠は下の --highlight が上書きする)。 */
+.karte-card--draft {
+  border-style: dashed;
+  border-color: var(--warning);
+  border-left: 3px solid var(--warning);
+}
+
+.karte-card__draft-badge {
+  flex: none;
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  white-space: nowrap;
+}
+
 /* 診療日パネルから飛んだ先。スクロール後にどれを選んだのか分かるよう、
    一定時間だけ枠をアクセント色にする(時間切れで上の transition で消える)。 */
 .karte-card--highlight {

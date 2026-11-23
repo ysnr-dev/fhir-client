@@ -12,7 +12,7 @@ import {
 } from "../fhir/karteTimeline";
 import { dateTimeLabel } from "../lib/dates";
 import { ClinicalNoteDetailPanel } from "./ClinicalNoteDetailPanel";
-import { cardMeta, cardStatus, cardTitle } from "./karteCardLabels";
+import { cardMeta, cardStatus, cardTitle, isKarteDraft } from "./karteCardLabels";
 import { KarteCardBody, KarteCardVersionView } from "./KarteTimeline";
 import { VersionDiffView } from "./VersionDiffView";
 
@@ -127,7 +127,7 @@ function KartePrintCard({
 }) {
   // 削除したオーダーは進捗(Task)も一緒に消えているので、進捗は出さない。
   const status = deletion ? undefined : cardStatus(item);
-  const meta = [status?.label, cardMeta(item)].filter(Boolean).join(" | ");
+  const meta = [isKarteDraft(item) ? "下書き" : "", status?.label, cardMeta(item)].filter(Boolean).join(" | ");
   return (
     <section className={`karte-print__card${deletion ? " karte-print__card--deleted" : ""}`}>
       <div className="karte-print__card-head">

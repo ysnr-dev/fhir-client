@@ -76,7 +76,7 @@ import { vitalDisplayRows } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { AnesthesiaChartModal } from "./AnesthesiaChartModal";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
-import { cardMeta, cardStatus, cardTitle } from "./karteCardLabels";
+import { cardMeta, cardStatus, cardTitle, isKarteDraft } from "./karteCardLabels";
 import { KarteCardHistoryModal } from "./KarteCardHistoryModal";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { InjectionCancelModal } from "./InjectionCancelModal";
@@ -458,12 +458,13 @@ const KarteCard = memo(function KarteCard({
   // プロブレム選択中は、そのプロブレムを参照しない情報を控えめに表示する
   // (件数が減ると読み込み位置が動くので、隠さず減光にとどめる)。
   const dimmed = Boolean(selectedProblemIds?.size) && !referencesProblem(item, selectedProblemIds);
+  const draft = isKarteDraft(item);
 
   return (
     <article
-      className={`karte-card karte-card--${item.kind}${dimmed ? " karte-card--dimmed" : ""}${
-        highlighted ? " karte-card--highlight" : ""
-      }`}
+      className={`karte-card karte-card--${item.kind}${draft ? " karte-card--draft" : ""}${
+        dimmed ? " karte-card--dimmed" : ""
+      }${highlighted ? " karte-card--highlight" : ""}`}
       {...{ [KARTE_TARGET_ATTR]: karteItemKey(item) }}
     >
       <header className="karte-card__header">
@@ -473,6 +474,7 @@ const KarteCard = memo(function KarteCard({
           <span className={`karte-card__badge karte-card__badge--${item.kind}`}>
             {karteItemKindLabel(item)}
           </span>
+          {draft && <span className="karte-card__draft-badge">下書き</span>}
           <span className="karte-card__title">{cardTitle(item)}</span>
           <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
           <PathwayBadge pathway={itemPathway(item)} />

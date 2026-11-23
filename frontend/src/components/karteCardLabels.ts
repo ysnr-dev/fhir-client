@@ -24,6 +24,16 @@ export function cardStatus(item: KarteTimelineItem): { code: string; label: stri
   return isOrderItem(item) ? orderKindDefOf(item).status?.(item) : undefined;
 }
 
+/**
+ * 確定前の下書き(診療記録・退院時サマリーの preliminary、テンプレート・様式文書の in-progress)か。
+ * カードでは見出しの印と枠で出すので、メタには状態を重ねて出さない。
+ */
+export function isKarteDraft(item: KarteTimelineItem): boolean {
+  if (item.kind === "note") return item.note.status === "preliminary";
+  if (item.kind === "qr") return item.response.status === "in-progress";
+  return false;
+}
+
 export function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "note") return item.note.title ?? "";
   // パス評価はどのアウトカムの評価かが見出し(パス名・病日は本文の先頭に出す)。
@@ -48,10 +58,11 @@ export function cardTitle(item: KarteTimelineItem): string {
 export function cardMeta(item: KarteTimelineItem): string {
   const time = clockTime(item.dateTime);
   // 記録系のカードも、オーダーの「依頼科 | 依頼医師」と同じ並びで診療科・記入者を出す。
+  const draft = isKarteDraft(item);
   if (item.kind === "note") {
     return [
       time,
-      statusLabel(item.note.status),
+      draft ? "" : statusLabel(item.note.status),
       departmentOf(item.note).departmentName,
       item.note.author?.[0]?.display,
     ]
@@ -60,7 +71,7 @@ export function cardMeta(item: KarteTimelineItem): string {
   }
   if (item.kind === "qr") {
     const summary = summarizeQuestionnaireResponse(item.response);
-    return [time, summary.statusLabel, departmentOf(item.response).departmentName, summary.authorName]
+    return [time, draft ? "" : summary.statusLabel, departmentOf(item.response).departmentName, summary.authorName]
       .filter(Boolean)
       .join(" | ");
   }
