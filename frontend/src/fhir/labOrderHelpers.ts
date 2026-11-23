@@ -88,6 +88,9 @@ export interface LabOrderItemLine {
    * 単独としても入ることはない(選択時にどちらか一方へ寄せる)。
    */
   parentCode: string;
+  /** 外注先の Organization.id。空なら院内で測る項目。 */
+  outsourceOrganizationId: string;
+  outsourceOrganizationName: string;
 }
 
 export interface LabOrderFormValues {
@@ -171,6 +174,32 @@ export function groupBySpecimen(items: LabOrderItemLine[]): LabSpecimenGroup[] {
     if (!b.specimenCode) return -1;
     return a.specimenCode.localeCompare(b.specimenCode);
   });
+}
+
+/** 外注に出す項目か。 */
+export function isOutsourcedItem(item: LabOrderItemLine): boolean {
+  return Boolean(item.outsourceOrganizationId);
+}
+
+/**
+ * 項目の並びに含まれる外注先(重複なし)。院内の項目だけなら空。
+ * ヘッダへの写しと、外注の印に添える名称に使う。
+ */
+export function outsourceOrganizationsOf(
+  items: LabOrderItemLine[],
+): { id: string; name: string }[] {
+  const byId = new Map<string, string>();
+  for (const item of items) {
+    if (isOutsourcedItem(item) && !byId.has(item.outsourceOrganizationId)) {
+      byId.set(item.outsourceOrganizationId, item.outsourceOrganizationName);
+    }
+  }
+  return Array.from(byId, ([id, name]) => ({ id, name }));
+}
+
+/** オーダーの 1 単位(パネルは構成項目まで)の外注先。 */
+export function entryOutsourceOrganizations(entry: LabOrderEntry): { id: string; name: string }[] {
+  return outsourceOrganizationsOf([entry.item, ...entry.members]);
 }
 
 /** 構成項目を 1 行に並べたラベル(「WBC, RBC」)。狭い場所で親に添える。 */
@@ -259,7 +288,22 @@ function buildItemRequest(
     ];
   }
 
+  const performers = outsourcePerformers([item]);
+  if (performers.length > 0) resource.performer = performers;
+
   return resource;
+}
+
+// 外注先は ServiceRequest.performer に Organization として入れる。院内で測るものには付けない。
+function outsourcePerformers(items: LabOrderItemLine[]): fhir4.Reference[] {
+  return outsourceOrganizationsOf(items).map(({ id, name }) => ({
+    reference: `Organization/${id}`,
+    display: name || undefined,
+  }));
+}
+
+function outsourcePerformerOf(request: fhir4.ServiceRequest): fhir4.Reference | undefined {
+  return request.performer?.find((performer) => performer.reference?.startsWith("Organization/"));
 }
 
 // 明細に contained する Specimen。検体も採取管も決まっていない項目には付けない。
@@ -334,6 +378,7 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): La
   const container =
     codingBySystem(contained?.container?.[0]?.type?.coding, CONTAINER_SYSTEM) ??
     request.extension?.find((e) => e.url === CONTAINER_EXT_URL)?.valueCodeableConcept?.coding?.[0];
+  const performer = outsourcePerformerOf(request);
 
   return {
     id,
@@ -347,6 +392,8 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): La
     containerCode: container?.code ?? "",
     containerName: container?.display ?? "",
     parentCode,
+    outsourceOrganizationId: performer?.reference?.split("/").pop() ?? "",
+    outsourceOrganizationName: performer?.display ?? "",
   };
 }
 
@@ -422,6 +469,8 @@ function parseLegacyOrderDetail(detail: fhir4.CodeableConcept): LabOrderItemLine
     containerCode: container?.code ?? "",
     containerName: container?.display ?? "",
     parentCode: "",
+    outsourceOrganizationId: "",
+    outsourceOrganizationName: "",
   };
 }
 
@@ -489,6 +538,9 @@ function buildLabOrderServiceRequest(
     ];
   }
   applyOrderContext(resource, requester);
+  // 明細の外注先をヘッダにも写す(外注先からオーダーを 1 回の検索で引けるように)。
+  const performers = outsourcePerformers(values.items);
+  if (performers.length > 0) resource.performer = performers;
   if (values.comment) {
     resource.note = [{ text: values.comment }];
   }

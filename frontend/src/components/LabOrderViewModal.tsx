@@ -1,5 +1,6 @@
 import type { LabWorklistRow } from "../api/queries";
 import {
+  entryOutsourceOrganizations,
   groupBySpecimen,
   labOrderComment,
   labOrderItems,
@@ -11,6 +12,7 @@ import { labelNumberOf, specimenArrived, tubeOfGroup } from "../fhir/labSpecimen
 import { labTaskStatus, labTaskStatusDisplay } from "../fhir/labTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, orderRequester } from "../fhir/orderHeader";
+import { LabOutsourceBadge } from "./LabOutsourceBadge";
 import { Modal } from "./Modal";
 import { orderDay } from "../fhir/shared";
 
@@ -76,6 +78,7 @@ export function LabOrderViewModal({ row, onClose }: { row: LabWorklistRow; onClo
                 {group.entries.map((entry) => (
                   <li key={entry.item.code}>
                     <span className="karte-rp__medicine-name">{entry.item.name}</span>
+                    <LabOutsourceBadge organizations={entryOutsourceOrganizations(entry)} />
                     {entry.members.length > 0 && (
                       <span className="karte-rp__comment">{`（${memberSummary(entry.members)}）`}</span>
                     )}

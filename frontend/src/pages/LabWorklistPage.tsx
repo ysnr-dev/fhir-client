@@ -18,6 +18,7 @@ import {
 import { labLabelPdfUrl } from "../api/reportsClient";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { LabOutsourceBadge } from "../components/LabOutsourceBadge";
 import { LabLabelBatchModal } from "../components/LabLabelBatchModal";
 import { LabOrderViewModal } from "../components/LabOrderViewModal";
 import { LabResultEntryModal } from "../components/LabResultEntryModal";
@@ -31,7 +32,9 @@ import {
 import { RowPictograms } from "../components/PatientListRowParts";
 import {
   groupBySpecimen,
+  isOutsourcedItem,
   labOrderItems,
+  outsourceOrganizationsOf,
   summarizeLabOrder,
   type LabSpecimenGroup,
 } from "../fhir/labOrderHelpers";
@@ -67,6 +70,8 @@ import {
 
 interface Filters {
   specimenCode: string;
+  /** 実施区分。in_house は院内で測る項目を含むオーダー、outsourced は外注の項目を含むオーダー。 */
+  execution: string;
   setting: string;
   wardId: string;
   departmentId: string;
@@ -75,6 +80,7 @@ interface Filters {
 
 const emptyFilters: Filters = {
   specimenCode: "",
+  execution: "",
   setting: "",
   wardId: "",
   departmentId: "",
@@ -306,6 +312,12 @@ function matchesFilters(row: LabWorklistRow, filters: Filters): boolean {
     return false;
   }
 
+  if (filters.execution) {
+    const outsourced = filters.execution === "outsourced";
+    const items = labOrderItems(row.order, row.itemRequests);
+    if (!items.some((item) => isOutsourcedItem(item) === outsourced)) return false;
+  }
+
   const summary = summarizeLabOrder(row.order);
   if (filters.setting && summary.settingCode !== filters.setting) return false;
 
@@ -363,6 +375,17 @@ function FilterForm({
               {specimen.name}
             </option>
           ))}
+        </select>
+      </label>
+      <label>
+        実施区分
+        <select
+          value={filters.execution}
+          onChange={(e) => onChange({ ...filters, execution: e.target.value })}
+        >
+          <option value="">すべて</option>
+          <option value="in_house">院内</option>
+          <option value="outsourced">外注</option>
         </select>
       </label>
       <label>
@@ -469,7 +492,8 @@ function WorklistRow({
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
   const summary = summarizeLabOrder(order);
-  const groups = groupBySpecimen(labOrderItems(order, row.itemRequests));
+  const items = labOrderItems(order, row.itemRequests);
+  const groups = groupBySpecimen(items);
   const requester = orderRequester(order);
   const status = labTaskStatus(row.task);
 
@@ -492,7 +516,10 @@ function WorklistRow({
       <PatientProfileCells patient={patient} />
       <td className="lab-worklist__content">
         {groups.length > 0 ? (
-          specimenNames(groups)
+          <>
+            {specimenNames(groups)}
+            <LabOutsourceBadge organizations={outsourceOrganizationsOf(items)} />
+          </>
         ) : (
           <span className="order-select__muted">検査項目なし</span>
         )}

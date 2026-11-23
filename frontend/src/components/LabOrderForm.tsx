@@ -18,10 +18,12 @@ import {
   useLabPanelMembers,
   useLabSpecimenOptions,
 } from "../api/masterQueries";
+import { useClinicalLabOptions, useFacilitySettings } from "../api/queries";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   PRIORITY_OPTIONS,
   emptyLabOrderForm,
+  entryOutsourceOrganizations,
   groupBySpecimen,
   specimenGroupLabel,
   topLevelItems,
@@ -29,12 +31,14 @@ import {
   type LabOrderItemLine,
   type LabOrderPriority,
 } from "../fhir/labOrderHelpers";
+import { DEFAULT_LAB_OUTSOURCE, outsourceOrganizationIdOf } from "../fhir/labOutsourceHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import type { ValidationFailure } from "../lib/validation";
 import { ErrorBanner } from "./ErrorBanner";
+import { LabOutsourceBadge } from "./LabOutsourceBadge";
 import { shownValidationError, useFieldAlert } from "./FieldAlert";
 import { ProblemSelect } from "./ProblemSelect";
 import { TrashIcon } from "./icons/TrashIcon";
@@ -187,10 +191,36 @@ export function LabOrderForm({
         containerCode,
         containerName: container?.name ?? "",
         parentCode,
+        outsourceOrganizationId: "",
+        outsourceOrganizationName: "",
       };
     },
     [containers.data, specimens.data],
   );
+
+  // 行き先(院内 / 外注先)は、新しく登録する明細に限り登録時点のマスタと施設設定で決める。
+  // セット・DO から来た明細も同じ。登録済みの明細(id あり)は焼き付けた行き先を保つ。
+  const facility = useFacilitySettings();
+  const clinicalLabs = useClinicalLabOptions();
+  const routingReady = Boolean(facility.data && clinicalLabs.data) && !catalog.isFetching;
+  const routedItems = useMemo(() => {
+    const settings = facility.data?.lab_outsource ?? DEFAULT_LAB_OUTSOURCE;
+    const labNames = new Map(
+      clinicalLabs.organizations.map((organization) => [organization.id ?? "", organization.name ?? ""]),
+    );
+    return values.items.map((line) => {
+      const master = line.id ? undefined : catalogByCode.get(line.code);
+      if (!master) return line;
+      const organizationId = outsourceOrganizationIdOf(master, settings);
+      return {
+        ...line,
+        outsourceOrganizationId: organizationId,
+        outsourceOrganizationName: labNames.get(organizationId) ?? "",
+      };
+    });
+    // organizations は描画のたびに別の配列になるので、元の data で見張る。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [values.items, catalogByCode, facility.data, clinicalLabs.data]);
 
   const selectedCodes = useMemo(
     () => new Set(values.items.map((item) => item.code)),
@@ -290,8 +320,16 @@ export function LabOrderForm({
       setValidationError(failure.message, failure.field);
       return;
     }
+    if (!routingReady) {
+      setValidationError("検査項目のマスタを読み込み中です。");
+      return;
+    }
     setValidationError(null);
-    onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
+    onSubmit({
+      ...values,
+      items: routedItems,
+      problem: refreshProblemDisplay(values.problem, problemOptions),
+    });
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
@@ -309,7 +347,15 @@ export function LabOrderForm({
         </div>
       )}
       <ErrorBanner error={submitError} />
-      <ErrorBanner error={layouts.error ?? panelMembers.error ?? catalog.error} />
+      <ErrorBanner
+        error={
+          layouts.error ??
+          panelMembers.error ??
+          catalog.error ??
+          facility.error ??
+          clinicalLabs.error
+        }
+      />
 
       <fieldset>
         <legend>検査共通</legend>
@@ -439,7 +485,7 @@ export function LabOrderForm({
         />
       )}
 
-      <SelectionPreview items={values.items} onRemove={remove} alert={fieldAlert.icon("items")} />
+      <SelectionPreview items={routedItems} onRemove={remove} alert={fieldAlert.icon("items")} />
 
       {!hideSubmit && (
         <div className="prescription-form__submit">
@@ -634,6 +680,7 @@ function SelectionPreview({
             {group.entries.map((entry) => (
               <li key={entry.item.code}>
                 {entry.item.name}
+                <LabOutsourceBadge organizations={entryOutsourceOrganizations(entry)} />
                 <button
                   type="button"
                   className="order-select__remove"

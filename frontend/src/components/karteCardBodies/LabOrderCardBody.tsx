@@ -1,10 +1,12 @@
 import {
+  entryOutsourceOrganizations,
   groupBySpecimen,
   labOrderComment,
   labOrderItems,
   memberSummary,
   specimenGroupLabel,
 } from "../../fhir/labOrderHelpers";
+import { LabOutsourceBadge } from "../LabOutsourceBadge";
 
 // 検体検査は検体(採血管)ごとにまとめて出す。採血の現場が動く単位に合わせる。
 // パネル検査は構成項目もオーダーに入っているので、親の後ろに並べて添える
@@ -33,6 +35,7 @@ export function LabOrderCardBody({
             {group.entries.map((entry) => (
               <li key={entry.item.code}>
                 <span className="karte-rp__medicine-name">{entry.item.name}</span>
+                <LabOutsourceBadge organizations={entryOutsourceOrganizations(entry)} />
                 {entry.members.length > 0 && (
                   <span className="karte-rp__comment">{`（${memberSummary(entry.members)}）`}</span>
                 )}

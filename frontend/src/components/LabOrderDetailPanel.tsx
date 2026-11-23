@@ -1,5 +1,6 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import {
+  entryOutsourceOrganizations,
   groupBySpecimen,
   labOrderComment,
   labOrderItems,
@@ -66,6 +67,7 @@ export function LabOrderDetailPanel({
                 <th>構成項目</th>
                 <th>項目コード</th>
                 <th>JLACコード</th>
+                <th>外注先</th>
               </tr>
             </thead>
             <tbody>
@@ -76,6 +78,11 @@ export function LabOrderDetailPanel({
                   <td>{entry.members.map((member) => member.name).join(", ") || "-"}</td>
                   <td>{entry.item.code}</td>
                   <td>{entry.item.jlacCode || "-"}</td>
+                  <td>
+                    {entryOutsourceOrganizations(entry)
+                      .map((organization) => organization.name || "外注")
+                      .join("・") || "-"}
+                  </td>
                 </tr>
               ))}
             </tbody>
