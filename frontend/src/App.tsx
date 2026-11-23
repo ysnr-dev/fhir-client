@@ -219,6 +219,9 @@ import { NcdRegistrationPage } from "./pages/NcdRegistrationPage";
 import { InfectionSurveillancePage } from "./pages/InfectionSurveillancePage";
 import { DpcTablesPage } from "./pages/DpcTablesPage";
 
+// 操作マニュアル(fhir-client-docs の GitHub Pages)。
+const HELP_URL = "https://ysnr-dev.github.io/fhir-client-docs/";
+
 // 患者配下の未定義パスをその患者のカルテへ寄せる。
 function KarteRedirect() {
   const { patientId } = useParams<{ patientId: string }>();
@@ -298,6 +301,9 @@ function App() {
               </Link>
             ))}
           </HoverMenu>
+          <a href={HELP_URL} target="_blank" rel="noopener noreferrer">
+            ヘルプ
+          </a>
         </nav>
         {/* オーダーはカルテ以外(手術カレンダーなど)からも登録するので、
             依頼科・依頼医師の選択はどの画面でも切り替えられるようにする。 */}
