@@ -7,6 +7,7 @@ import {
   ANESTHESIA_CHART_PRINT_PATH,
   DIALYSIS_CHART_PRINT_PATH,
   INJECTION_PRINT_PATH,
+  LAB_OUTSOURCE_SLIP_PATH,
   PATHWAY_PRINT_PATH,
 } from "../api/reportsClient";
 
@@ -30,6 +31,7 @@ const FIXED_TITLES: Array<{ path: string; title: string }> = [
   { path: KARTE_PANE_PATH, title: "カルテ" },
   { path: INJECTION_PRINT_PATH, title: "注射箋" },
   { path: PATHWAY_PRINT_PATH, title: "クリニカルパス印刷" },
+  { path: LAB_OUTSOURCE_SLIP_PATH, title: "外注伝票" },
   { path: DIALYSIS_CHART_PRINT_PATH, title: "透析経過表印刷" },
   { path: ANESTHESIA_CHART_PRINT_PATH, title: "麻酔チャート印刷" },
   { path: INTAKE_PATH, title: "Web 問診" },

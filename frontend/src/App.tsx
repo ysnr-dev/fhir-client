@@ -43,6 +43,8 @@ import { RegimenEditorPage } from "./pages/RegimenEditorPage";
 import { PathwayListPage } from "./pages/PathwayListPage";
 import { PathwayEditorPage } from "./pages/PathwayEditorPage";
 import { PathwayPrintPage } from "./pages/PathwayPrintPage";
+import { LabOutsourcePage } from "./pages/LabOutsourcePage";
+import { LabOutsourceSlipPage } from "./pages/LabOutsourceSlipPage";
 import { PhysioWorklistPage } from "./pages/PhysioWorklistPage";
 import { PhysioExamTypePage } from "./pages/PhysioExamTypePage";
 import { PhysioItemPage } from "./pages/PhysioItemPage";
@@ -197,6 +199,7 @@ import {
   ANESTHESIA_CHART_PRINT_PATH,
   DIALYSIS_CHART_PRINT_PATH,
   INJECTION_PRINT_PATH,
+  LAB_OUTSOURCE_SLIP_PATH,
   PATHWAY_PRINT_PATH,
 } from "./api/reportsClient";
 import { InjectionPrintPage } from "./pages/InjectionPrintPage";
@@ -240,6 +243,7 @@ function App() {
     pathname.startsWith(KARTE_PRINT_PATH) ||
     pathname.startsWith(INJECTION_PRINT_PATH) ||
     pathname.startsWith(PATHWAY_PRINT_PATH) ||
+    pathname.startsWith(LAB_OUTSOURCE_SLIP_PATH) ||
     pathname.startsWith(DIALYSIS_CHART_PRINT_PATH) ||
     pathname.startsWith(ANESTHESIA_CHART_PRINT_PATH);
   // Web 問診の患者画面。ログインの外(AuthGate の外)で、トークンだけで開く。
@@ -396,6 +400,8 @@ function App() {
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
           <Route path="/lab-worklist" element={<LabWorklistPage />} />
           <Route path="/lab-arrivals" element={<LabArrivalPage />} />
+          <Route path="/lab-outsource" element={<LabOutsourcePage />} />
+          <Route path={LAB_OUTSOURCE_SLIP_PATH} element={<LabOutsourceSlipPage />} />
           <Route path="/lab-result-imports" element={<LabResultImportPage />} />
           <Route path="/lab-result-imports/:id" element={<LabResultImportDetailPage />} />
           <Route path="/micro-worklist" element={<MicroWorklistPage />} />

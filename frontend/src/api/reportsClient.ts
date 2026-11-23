@@ -143,6 +143,26 @@ export function pathwayPrintUrl(pathwayId: number | string): string {
   return `${PATHWAY_PRINT_PATH}/${encodeURIComponent(pathwayId)}`;
 }
 
+/** 外注伝票を紙に出す画面(pages/LabOutsourceSlipPage)。外注先 1 つ・提出日 1 日ぶん。 */
+export const LAB_OUTSOURCE_SLIP_PATH = "/lab-outsource-slip";
+
+export function labOutsourceSlipUrl({
+  organizationId,
+  date,
+  from,
+  to,
+}: {
+  organizationId: string;
+  /** 提出日。 */
+  date: string;
+  /** 読みに行く検査日の期間。 */
+  from: string;
+  to: string;
+}): string {
+  const params = new URLSearchParams({ organization: organizationId, date, from, to });
+  return `${LAB_OUTSOURCE_SLIP_PATH}?${params}`;
+}
+
 /** 透析経過表を紙に出す画面(pages/DialysisChartPrintPage)。sessionId は実施記録のハブの id。 */
 export const DIALYSIS_CHART_PRINT_PATH = "/dialysis-chart-print";
 

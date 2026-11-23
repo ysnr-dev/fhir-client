@@ -102,6 +102,8 @@ export const APP_MENU: AppMenuEntry[] = [
           { label: "検体検査一覧", to: "/lab-worklist" },
           { label: "細菌検査一覧", to: "/micro-worklist" },
           { label: "検体到着確認", to: "/lab-arrivals" },
+          // 外注に出す管の提出と、結果の未着(docs/lab-outsource-design.md §7)。
+          { label: "外注検査", to: "/lab-outsource" },
           // 検査室・分析装置・外注ラボから受け取った結果ファイルを読み込む(docs/lab-result-import-design.md)。
           { label: "検査結果取込", to: "/lab-result-imports" },
         ],

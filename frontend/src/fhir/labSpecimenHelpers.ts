@@ -1,3 +1,4 @@
+import { nowFhirDateTime } from "../lib/dates";
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import type { LabSpecimenGroup } from "./labOrderHelpers";
 import { JLAC11_SPECIMEN_SYSTEM, LAB_LABEL_NUMBER_SYSTEM, isLabelSpecimen } from "./labResultHelpers";
@@ -22,6 +23,13 @@ const TUBE_DESTINATION_SYSTEM = "http://fhir-client.local/IdSystem/lab-tube-dest
 // 到着を記録したユーザー。FHIR の Specimen に「受け取った人」を表す標準要素が
 // 無いため(collection.collector は採取した人)、ローカル拡張で持つ。
 const ARRIVAL_RECORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-arrival-recorder";
+
+// 外注先への提出(docs/lab-outsource-design.md §7)。提出した日時と記録したユーザーを
+// 管にローカル拡張で持つ。提出していない管には無い。
+const SHIPPED_AT_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-outsource-shipped-at";
+const SHIPMENT_RECORDER_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/lab-outsource-shipment-recorder";
+const SHIPMENT_EXT_URLS = [SHIPPED_AT_EXT_URL, SHIPMENT_RECORDER_EXT_URL];
 
 /**
  * スキャン入力の形式検証(11 桁 + M10W3 チェックデジット)。上流の採番
@@ -160,5 +168,38 @@ export function buildSpecimenArrivalCancel(specimen: fhir4.Specimen): fhir4.Spec
   if (extensions.length > 0) next.extension = extensions;
   else delete next.extension;
 
+  return next;
+}
+
+/** 外注先へ提出した日時。提出していない管は空。 */
+export function specimenShippedAt(specimen: fhir4.Specimen): string {
+  return specimen.extension?.find((e) => e.url === SHIPPED_AT_EXT_URL)?.valueDateTime ?? "";
+}
+
+/** 提出を書き込んだ Specimen。日時はいま。 */
+export function buildSpecimenShipment(
+  specimen: fhir4.Specimen,
+  recorder?: ArrivalRecorder,
+): fhir4.Specimen {
+  const extensions = (specimen.extension ?? []).filter((e) => !SHIPMENT_EXT_URLS.includes(e.url));
+  extensions.push({ url: SHIPPED_AT_EXT_URL, valueDateTime: nowFhirDateTime() });
+  if (recorder) {
+    extensions.push({
+      url: SHIPMENT_RECORDER_EXT_URL,
+      valueReference: {
+        reference: `Practitioner/${recorder.practitionerId}`,
+        display: recorder.display || undefined,
+      },
+    });
+  }
+  return { ...specimen, extension: extensions };
+}
+
+/** 提出の取消。提出待ちに戻す。 */
+export function buildSpecimenShipmentCancel(specimen: fhir4.Specimen): fhir4.Specimen {
+  const next: fhir4.Specimen = { ...specimen };
+  const extensions = (specimen.extension ?? []).filter((e) => !SHIPMENT_EXT_URLS.includes(e.url));
+  if (extensions.length > 0) next.extension = extensions;
+  else delete next.extension;
   return next;
 }

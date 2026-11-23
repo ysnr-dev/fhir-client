@@ -1,6 +1,12 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { buildLabOrderDeleteBundle, isLabServiceRequest, LAB_ORDER_TYPE, labOrderItemRequests } from "../../fhir/labOrderHelpers";
-import { labelSpecimensByOrderId, type LabLabelScope } from "../../fhir/labSpecimenHelpers";
+import {
+  buildSpecimenShipment,
+  buildSpecimenShipmentCancel,
+  labelSpecimensByOrderId,
+  type ArrivalRecorder,
+  type LabLabelScope,
+} from "../../fhir/labSpecimenHelpers";
 import {
   buildLabTaskUpdate,
   labTaskStatus,
@@ -40,6 +46,8 @@ export interface LabWorklistRow {
   specimens: fhir4.Specimen[];
   /** このオーダーを元に登録済みの検査結果の id。空なら結果はまだ無い。 */
   reportId: string;
+  /** その検査結果の報告区分(DiagnosticReport.status)。結果が無ければ空。 */
+  reportStatus: string;
 }
 
 export interface LabWorklistResult {
@@ -48,21 +56,22 @@ export interface LabWorklistResult {
   truncated: boolean;
 }
 
-async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
+const LAB_ORDER_CATEGORY = `${ORDER_TYPE_SYSTEM}|${LAB_ORDER_TYPE.code}`;
+
+// 検体検査オーダーのヘッダ検索を、行(オーダー 1 件 + 明細・管・進捗・結果)に組む。
+// buildParams はヘッダを絞る条件だけを決め、添えてもらうリソースはここで足す。
+async function fetchLabRows(
+  buildParams: (page: number) => URLSearchParams,
+): Promise<LabWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
   const specimens: fhir4.Specimen[] = [];
-  // オーダー id → そのオーダーを元にした検査結果の id(結果登録が済んだかの判定用)。
-  const reportIdByOrderId = new Map<string, string>();
+  // オーダー id → そのオーダーを元にした検査結果(結果登録が済んだかの判定用)。
+  const reportByOrderId = new Map<string, fhir4.DiagnosticReport>();
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
     (page) => {
-      const params = worklistParams(
-        `${ORDER_TYPE_SYSTEM}|${LAB_ORDER_TYPE.code}`,
-        date,
-        page,
-        "occurrence",
-      );
+      const params = buildParams(page);
       // 検査項目・管(発行済み Specimen)・検査結果も同じ応答に添えてもらう。
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
       params.append("_revinclude", "Task:focus");
@@ -77,7 +86,7 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
         const report = resource as fhir4.DiagnosticReport;
         for (const reference of report.basedOn ?? []) {
           const orderId = reference.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
-          if (orderId && report.id) reportIdByOrderId.set(orderId, report.id);
+          if (orderId && report.id) reportByOrderId.set(orderId, report);
         }
       } else if (resource.resourceType === "ServiceRequest") {
         const request = resource as fhir4.ServiceRequest;
@@ -101,13 +110,18 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: labTaskByOrderId.get(order.id ?? ""),
     specimens: specimensByOrderId.get(order.id ?? "") ?? [],
-    reportId: reportIdByOrderId.get(order.id ?? "") ?? "",
+    reportId: reportByOrderId.get(order.id ?? "")?.id ?? "",
+    reportStatus: reportByOrderId.get(order.id ?? "")?.status ?? "",
   }));
 
   // 検体検査オーダーは時刻を持たない(検査日だけ)ので、患者番号順に並べる。
   rows.sort(comparePatientNumber);
 
   return { rows, truncated };
+}
+
+function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
+  return fetchLabRows((page) => worklistParams(LAB_ORDER_CATEGORY, date, page, "occurrence"));
 }
 
 /** 検査日 1 日ぶんの検体検査オーダー。日付が未選択の間は読みに行かない。 */
@@ -125,6 +139,73 @@ export const useUpdateLabTaskStatus = makeUpdateTaskStatusHook<LabTaskStatus>(
   buildLabTaskUpdate,
   "lab-worklist",
 );
+
+// ---- 外注検査(docs/lab-outsource-design.md §7) ----
+//
+// 外注先を performer に持つオーダー(ヘッダに明細の外注先を写してある)を、検査日の期間で読む。
+// 提出は管の Specimen に書くが、上流は Specimen の拡張で引けないので、提出待ち・
+// 結果未着の振り分けは読んだ後に画面側で行う。
+
+export interface LabOutsourceWorklistQuery {
+  /** 外注先(Organization.id)。複数ならどれかに出すオーダー。空なら読まない。 */
+  organizationIds: string[];
+  /** 検査日の期間(両端を含む)。 */
+  from: string;
+  to: string;
+}
+
+function fetchLabOutsourceWorklist({
+  organizationIds,
+  from,
+  to,
+}: LabOutsourceWorklistQuery): Promise<LabWorklistResult> {
+  return fetchLabRows((page) => {
+    const params = worklistParams(LAB_ORDER_CATEGORY, from, page, "occurrence");
+    params.set("occurrence", `ge${from}`);
+    params.append("occurrence", `le${to}`);
+    params.set("performer", organizationIds.join(","));
+    return params;
+  });
+}
+
+export function useLabOutsourceWorklist(query: LabOutsourceWorklistQuery) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "lab-outsource", query],
+    queryFn: () => fetchLabOutsourceWorklist(query),
+    enabled: query.organizationIds.length > 0 && Boolean(query.from && query.to),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** 外注の管の提出をまとめて記録する(cancel なら取り消す)。1 つの transaction で書く。 */
+export function useUpdateLabShipment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      specimens,
+      cancel,
+      recorder,
+    }: {
+      specimens: fhir4.Specimen[];
+      cancel?: boolean;
+      recorder?: ArrivalRecorder;
+    }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: specimens.map((specimen) => ({
+          resource: cancel
+            ? buildSpecimenShipmentCancel(specimen)
+            : buildSpecimenShipment(specimen, recorder),
+          request: { method: "PUT" as const, url: `Specimen/${specimen.id}` },
+        })),
+      }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "lab-outsource"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "lab-worklist"] });
+    },
+  });
+}
 
 /**
  * 複数オーダーの検体ラベルをまとめて発行し、PDF を返す。行の「ラベル発行」と同じく発行が
